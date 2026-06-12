@@ -1,6 +1,6 @@
 # FreeFSM — Free Field Service Manager
 
-Self-hosted, open-source field service management software. Clone of FieldPulse.
+Self-hosted, open-source field service management software.
 
 Built for FreeBSD and Linux. Single Go binary, PostgreSQL backend.
 
