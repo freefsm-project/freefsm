@@ -304,6 +304,28 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+created+from+job", inv.ID), http.StatusSeeOther)
 }
 
+func (h *InvoiceHandler) PDF(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	i, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "invoice")
+	var customer *ent.Customer
+	if i.CustomerID != nil && *i.CustomerID > 0 {
+		c, _ := h.custSvc.GetByID(r.Context(), *i.CustomerID)
+		customer = c
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="INV-%05d.pdf"`, id))
+	services.GenerateInvoicePDF(w, i, customer, statuses)
+}
+
 func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

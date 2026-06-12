@@ -8,6 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/joho/godotenv v1.5.1
+	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/justinas/nosurf v1.2.0
 	golang.org/x/crypto v0.0.0-20220517005047-85d78b3ac167
 )

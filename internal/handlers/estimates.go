@@ -201,6 +201,28 @@ func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) 
 	http.Redirect(w, r, fmt.Sprintf("/estimates/%d?flash=Estimate+created+from+job", est.ID), http.StatusSeeOther)
 }
 
+func (h *EstimateHandler) PDF(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	e, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "estimate")
+	var customer *ent.Customer
+	if e.CustomerID != nil && *e.CustomerID > 0 {
+		c, _ := h.custSvc.GetByID(r.Context(), *e.CustomerID)
+		customer = c
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="EST-%05d.pdf"`, id))
+	services.GenerateEstimatePDF(w, e, customer, statuses)
+}
+
 func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

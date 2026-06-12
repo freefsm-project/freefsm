@@ -98,6 +98,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/estimates/{id}", estimateHandler.Update)
 		r.Post("/estimates/{id}/delete", estimateHandler.Delete)
 		r.Post("/estimates/{id}/convert-to-invoice", estimateHandler.ConvertToInvoice)
+		r.Get("/estimates/{id}/pdf", estimateHandler.PDF)
 		r.Get("/invoices", invoiceHandler.List)
 		r.Get("/invoices/new", invoiceHandler.Create)
 		r.Post("/invoices", invoiceHandler.Create)
@@ -106,6 +107,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/invoices/{id}", invoiceHandler.Update)
 		r.Post("/invoices/{id}/delete", invoiceHandler.Delete)
 		r.Post("/invoices/{id}/payments", invoiceHandler.RecordPayment)
+		r.Get("/invoices/{id}/pdf", invoiceHandler.PDF)
 	})
 
 	authHandler := NewAuthHandler(db, sessions)
