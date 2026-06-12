@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
@@ -39,8 +41,8 @@ func (Job) Fields() []ent.Field {
 		field.String("visits").Default("[]"),
 		field.String("assignments").Default("[]"),
 		field.String("custom_fields").Default("[]"),
-		field.Time("created_at"),
-		field.Time("updated_at"),
+		field.Time("created_at").Default(time.Now).Immutable(),
+		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}
 }
 

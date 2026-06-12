@@ -5,10 +5,10 @@ import "fmt"
 templ JobForm(p JobFormPageData) {
 	@Layout(jobFormTitle(p.IsNew)) {
 		<h1>{ jobFormTitle(p.IsNew) }</h1>
-		<form action="" method="post" autocomplete="off">
+		<form action={ templ.URL(jobFormAction(p.IsNew, p.Job.ID)) } method="post" autocomplete="off">
 			<label>
 				Customer
-				<select name="customer_id" required>
+				<select name="customer_id" id="job-customer-select" required>
 					<option value="">Select a customer...</option>
 					for _, c := range p.Customers {
 						<option value={ fmt.Sprintf("%d", c.Value) } selected?={ p.Job.CustomerID == c.Value }>{ c.Label }</option>
@@ -17,6 +17,32 @@ templ JobForm(p JobFormPageData) {
 				if p.Errors["customer_id"] != "" {
 					<small class="error-msg">{ p.Errors["customer_id"] }</small>
 				}
+			</label>
+			<div class="grid">
+				<label>
+					Project (optional)
+					<select name="project_id">
+						<option value="0">No project</option>
+						for _, pr := range p.Projects {
+							<option value={ fmt.Sprintf("%d", pr.Value) } selected?={ p.Job.ProjectID == pr.Value }>{ pr.Label }</option>
+						}
+					</select>
+				</label>
+				<label>
+					Location (optional)
+					<select name="location_id">
+						<option value="0">No location</option>
+						for _, l := range p.Locations {
+							<option value={ fmt.Sprintf("%d", l.Value) } selected?={ p.Job.LocationID == l.Value }>{ l.Label }</option>
+						}
+					</select>
+				</label>
+			</div>
+			<label>
+				Contact (optional)
+				<select name="customer_contact_id" id="contact-select">
+					<option value="0">No contact</option>
+				</select>
 			</label>
 			<div class="grid">
 				<label>
@@ -51,6 +77,16 @@ templ JobForm(p JobFormPageData) {
 			</div>
 			<div class="grid">
 				<label>
+					Arrival Window Start
+					<input type="datetime-local" name="arrival_start" value={ p.Job.ArrivalStart }/>
+				</label>
+				<label>
+					Arrival Window End
+					<input type="datetime-local" name="arrival_end" value={ p.Job.ArrivalEnd }/>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
 					Start Time
 					<input type="datetime-local" name="start_time" value={ p.Job.StartTime }/>
 				</label>
@@ -76,5 +112,17 @@ templ JobForm(p JobFormPageData) {
 				<a href="/jobs" role="button" class="outline">Cancel</a>
 			</div>
 		</form>
+		@templ.Raw(`<script>
+			const jobCustomer = document.getElementById('job-customer-select');
+			const contactSelect = document.getElementById('contact-select');
+			function loadContacts(customerID) {
+				if (!customerID) { contactSelect.innerHTML = '<option value="0">No contact</option>'; return; }
+				fetch('/customers/' + customerID + '/contacts')
+					.then(r => r.text())
+					.then(html => contactSelect.innerHTML = html);
+			}
+			jobCustomer.addEventListener('change', function() { loadContacts(this.value); });
+			if (jobCustomer.value) loadContacts(jobCustomer.value);
+		</script>`)
 	}
 }

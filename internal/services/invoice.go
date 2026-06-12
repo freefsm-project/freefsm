@@ -167,3 +167,25 @@ func (s *InvoiceService) LineItems(i *ent.Invoice) []LineItem {
 	}
 	return items
 }
+
+func (s *InvoiceService) Payments(i *ent.Invoice) []Payment {
+	p, _ := ParsePayments(i.Payments)
+	if p == nil {
+		return []Payment{}
+	}
+	return p
+}
+
+func (s *InvoiceService) RecordPayment(ctx context.Context, invoiceID int64, payment Payment) error {
+	i, err := s.client.Invoice.Get(ctx, invoiceID)
+	if err != nil {
+		return fmt.Errorf("get invoice %d: %w", invoiceID, err)
+	}
+	existing := s.Payments(i)
+	existing = append(existing, payment)
+	_, err = s.client.Invoice.UpdateOneID(invoiceID).SetPayments(SerializePayments(existing)).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("record payment: %w", err)
+	}
+	return nil
+}

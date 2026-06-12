@@ -136,9 +136,25 @@ func (_c *ProjectCreate) SetCreatedAt(v time.Time) *ProjectCreate {
 	return _c
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *ProjectCreate) SetNillableCreatedAt(v *time.Time) *ProjectCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_c *ProjectCreate) SetUpdatedAt(v time.Time) *ProjectCreate {
 	_c.mutation.SetUpdatedAt(v)
+	return _c
+}
+
+// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
+func (_c *ProjectCreate) SetNillableUpdatedAt(v *time.Time) *ProjectCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
+	}
 	return _c
 }
 
@@ -194,6 +210,14 @@ func (_c *ProjectCreate) defaults() {
 	if _, ok := _c.mutation.Notes(); !ok {
 		v := project.DefaultNotes
 		_c.mutation.SetNotes(v)
+	}
+	if _, ok := _c.mutation.CreatedAt(); !ok {
+		v := project.DefaultCreatedAt()
+		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
+		v := project.DefaultUpdatedAt()
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 

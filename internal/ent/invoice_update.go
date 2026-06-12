@@ -248,31 +248,9 @@ func (_u *InvoiceUpdate) SetNillableDisplaySettings(v *string) *InvoiceUpdate {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *InvoiceUpdate) SetCreatedAt(v time.Time) *InvoiceUpdate {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *InvoiceUpdate) SetNillableCreatedAt(v *time.Time) *InvoiceUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *InvoiceUpdate) SetUpdatedAt(v time.Time) *InvoiceUpdate {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *InvoiceUpdate) SetNillableUpdatedAt(v *time.Time) *InvoiceUpdate {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -283,6 +261,7 @@ func (_u *InvoiceUpdate) Mutation() *InvoiceMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *InvoiceUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -305,6 +284,14 @@ func (_u *InvoiceUpdate) Exec(ctx context.Context) error {
 func (_u *InvoiceUpdate) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *InvoiceUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := invoice.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -376,9 +363,6 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.DisplaySettings(); ok {
 		_spec.SetField(invoice.FieldDisplaySettings, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(invoice.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoice.FieldUpdatedAt, field.TypeTime, value)
@@ -623,31 +607,9 @@ func (_u *InvoiceUpdateOne) SetNillableDisplaySettings(v *string) *InvoiceUpdate
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *InvoiceUpdateOne) SetCreatedAt(v time.Time) *InvoiceUpdateOne {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *InvoiceUpdateOne) SetNillableCreatedAt(v *time.Time) *InvoiceUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *InvoiceUpdateOne) SetUpdatedAt(v time.Time) *InvoiceUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *InvoiceUpdateOne) SetNillableUpdatedAt(v *time.Time) *InvoiceUpdateOne {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -671,6 +633,7 @@ func (_u *InvoiceUpdateOne) Select(field string, fields ...string) *InvoiceUpdat
 
 // Save executes the query and returns the updated Invoice entity.
 func (_u *InvoiceUpdateOne) Save(ctx context.Context) (*Invoice, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -693,6 +656,14 @@ func (_u *InvoiceUpdateOne) Exec(ctx context.Context) error {
 func (_u *InvoiceUpdateOne) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *InvoiceUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := invoice.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -781,9 +752,6 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	}
 	if value, ok := _u.mutation.DisplaySettings(); ok {
 		_spec.SetField(invoice.FieldDisplaySettings, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(invoice.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoice.FieldUpdatedAt, field.TypeTime, value)

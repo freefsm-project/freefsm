@@ -182,31 +182,9 @@ func (_u *ItemUpdate) SetNillableIsActive(v *bool) *ItemUpdate {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *ItemUpdate) SetCreatedAt(v time.Time) *ItemUpdate {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *ItemUpdate) SetNillableCreatedAt(v *time.Time) *ItemUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ItemUpdate) SetUpdatedAt(v time.Time) *ItemUpdate {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *ItemUpdate) SetNillableUpdatedAt(v *time.Time) *ItemUpdate {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -217,6 +195,7 @@ func (_u *ItemUpdate) Mutation() *ItemMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *ItemUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -239,6 +218,14 @@ func (_u *ItemUpdate) Exec(ctx context.Context) error {
 func (_u *ItemUpdate) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *ItemUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := item.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -299,9 +286,6 @@ func (_u *ItemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(item.FieldIsActive, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(item.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(item.FieldUpdatedAt, field.TypeTime, value)
@@ -480,31 +464,9 @@ func (_u *ItemUpdateOne) SetNillableIsActive(v *bool) *ItemUpdateOne {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *ItemUpdateOne) SetCreatedAt(v time.Time) *ItemUpdateOne {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *ItemUpdateOne) SetNillableCreatedAt(v *time.Time) *ItemUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ItemUpdateOne) SetUpdatedAt(v time.Time) *ItemUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *ItemUpdateOne) SetNillableUpdatedAt(v *time.Time) *ItemUpdateOne {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -528,6 +490,7 @@ func (_u *ItemUpdateOne) Select(field string, fields ...string) *ItemUpdateOne {
 
 // Save executes the query and returns the updated Item entity.
 func (_u *ItemUpdateOne) Save(ctx context.Context) (*Item, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -550,6 +513,14 @@ func (_u *ItemUpdateOne) Exec(ctx context.Context) error {
 func (_u *ItemUpdateOne) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *ItemUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := item.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -627,9 +598,6 @@ func (_u *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) {
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(item.FieldIsActive, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(item.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(item.FieldUpdatedAt, field.TypeTime, value)

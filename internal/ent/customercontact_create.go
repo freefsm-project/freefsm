@@ -116,9 +116,25 @@ func (_c *CustomerContactCreate) SetCreatedAt(v time.Time) *CustomerContactCreat
 	return _c
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *CustomerContactCreate) SetNillableCreatedAt(v *time.Time) *CustomerContactCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_c *CustomerContactCreate) SetUpdatedAt(v time.Time) *CustomerContactCreate {
 	_c.mutation.SetUpdatedAt(v)
+	return _c
+}
+
+// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
+func (_c *CustomerContactCreate) SetNillableUpdatedAt(v *time.Time) *CustomerContactCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
+	}
 	return _c
 }
 
@@ -186,6 +202,14 @@ func (_c *CustomerContactCreate) defaults() {
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		v := customercontact.DefaultSortOrder
 		_c.mutation.SetSortOrder(v)
+	}
+	if _, ok := _c.mutation.CreatedAt(); !ok {
+		v := customercontact.DefaultCreatedAt()
+		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
+		v := customercontact.DefaultUpdatedAt()
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 

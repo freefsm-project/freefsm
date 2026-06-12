@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
@@ -23,7 +25,7 @@ func (StatusWorkflow) Fields() []ent.Field {
 		field.Int64("id"),
 		field.String("name").NotEmpty(),
 		field.String("object_type").NotEmpty(),
-		field.Time("created_at"),
+		field.Time("created_at").Default(time.Now),
 	}
 }
 

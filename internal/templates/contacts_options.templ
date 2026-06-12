@@ -1,0 +1,10 @@
+package templates
+
+import "fmt"
+
+templ ContactOptions(contacts []SelectOption, selectedID int64) {
+	<option value="0">No contact</option>
+	for _, c := range contacts {
+		<option value={ fmt.Sprintf("%d", c.Value) } selected?={ selectedID == c.Value }>{ c.Label }</option>
+	}
+}

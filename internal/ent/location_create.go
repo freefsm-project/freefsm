@@ -142,9 +142,25 @@ func (_c *LocationCreate) SetCreatedAt(v time.Time) *LocationCreate {
 	return _c
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *LocationCreate) SetNillableCreatedAt(v *time.Time) *LocationCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_c *LocationCreate) SetUpdatedAt(v time.Time) *LocationCreate {
 	_c.mutation.SetUpdatedAt(v)
+	return _c
+}
+
+// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
+func (_c *LocationCreate) SetNillableUpdatedAt(v *time.Time) *LocationCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
+	}
 	return _c
 }
 
@@ -216,6 +232,14 @@ func (_c *LocationCreate) defaults() {
 	if _, ok := _c.mutation.IsPrimary(); !ok {
 		v := location.DefaultIsPrimary
 		_c.mutation.SetIsPrimary(v)
+	}
+	if _, ok := _c.mutation.CreatedAt(); !ok {
+		v := location.DefaultCreatedAt()
+		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
+		v := location.DefaultUpdatedAt()
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 

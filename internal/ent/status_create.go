@@ -67,6 +67,14 @@ func (_c *StatusCreate) SetCreatedAt(v time.Time) *StatusCreate {
 	return _c
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *StatusCreate) SetNillableCreatedAt(v *time.Time) *StatusCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *StatusCreate) SetID(v int64) *StatusCreate {
 	_c.mutation.SetID(v)
@@ -120,6 +128,10 @@ func (_c *StatusCreate) defaults() {
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		v := status.DefaultSortOrder
 		_c.mutation.SetSortOrder(v)
+	}
+	if _, ok := _c.mutation.CreatedAt(); !ok {
+		v := status.DefaultCreatedAt()
+		_c.mutation.SetCreatedAt(v)
 	}
 }
 

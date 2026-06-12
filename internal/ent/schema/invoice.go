@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
@@ -33,8 +35,8 @@ func (Invoice) Fields() []ent.Field {
 		field.String("line_items").Default("[]"),
 		field.String("payments").Default("[]"),
 		field.String("display_settings").Default("{}"),
-		field.Time("created_at"),
-		field.Time("updated_at"),
+		field.Time("created_at").Default(time.Now).Immutable(),
+		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}
 }
 

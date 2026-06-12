@@ -140,31 +140,9 @@ func (_u *CustomerContactUpdate) AddSortOrder(v int) *CustomerContactUpdate {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *CustomerContactUpdate) SetCreatedAt(v time.Time) *CustomerContactUpdate {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *CustomerContactUpdate) SetNillableCreatedAt(v *time.Time) *CustomerContactUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CustomerContactUpdate) SetUpdatedAt(v time.Time) *CustomerContactUpdate {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *CustomerContactUpdate) SetNillableUpdatedAt(v *time.Time) *CustomerContactUpdate {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -175,6 +153,7 @@ func (_u *CustomerContactUpdate) Mutation() *CustomerContactMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *CustomerContactUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -197,6 +176,14 @@ func (_u *CustomerContactUpdate) Exec(ctx context.Context) error {
 func (_u *CustomerContactUpdate) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *CustomerContactUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := customercontact.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -235,9 +222,6 @@ func (_u *CustomerContactUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.AddedSortOrder(); ok {
 		_spec.AddField(customercontact.FieldSortOrder, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(customercontact.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(customercontact.FieldUpdatedAt, field.TypeTime, value)
@@ -374,31 +358,9 @@ func (_u *CustomerContactUpdateOne) AddSortOrder(v int) *CustomerContactUpdateOn
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *CustomerContactUpdateOne) SetCreatedAt(v time.Time) *CustomerContactUpdateOne {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *CustomerContactUpdateOne) SetNillableCreatedAt(v *time.Time) *CustomerContactUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CustomerContactUpdateOne) SetUpdatedAt(v time.Time) *CustomerContactUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *CustomerContactUpdateOne) SetNillableUpdatedAt(v *time.Time) *CustomerContactUpdateOne {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -422,6 +384,7 @@ func (_u *CustomerContactUpdateOne) Select(field string, fields ...string) *Cust
 
 // Save executes the query and returns the updated CustomerContact entity.
 func (_u *CustomerContactUpdateOne) Save(ctx context.Context) (*CustomerContact, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -444,6 +407,14 @@ func (_u *CustomerContactUpdateOne) Exec(ctx context.Context) error {
 func (_u *CustomerContactUpdateOne) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *CustomerContactUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := customercontact.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -499,9 +470,6 @@ func (_u *CustomerContactUpdateOne) sqlSave(ctx context.Context) (_node *Custome
 	}
 	if value, ok := _u.mutation.AddedSortOrder(); ok {
 		_spec.AddField(customercontact.FieldSortOrder, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(customercontact.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(customercontact.FieldUpdatedAt, field.TypeTime, value)

@@ -3,6 +3,8 @@
 package statusworkflow
 
 import (
+	"time"
+
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 )
@@ -54,6 +56,8 @@ var (
 	NameValidator func(string) error
 	// ObjectTypeValidator is a validator for the "object_type" field. It is called by the builders before save.
 	ObjectTypeValidator func(string) error
+	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
+	DefaultCreatedAt func() time.Time
 )
 
 // OrderOption defines the ordering options for the StatusWorkflow queries.

@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
@@ -30,8 +32,8 @@ func (Project) Fields() []ent.Field {
 		field.Time("start_time").Optional().Nillable(),
 		field.Time("end_time").Optional().Nillable(),
 		field.String("notes").Default(""),
-		field.Time("created_at"),
-		field.Time("updated_at"),
+		field.Time("created_at").Default(time.Now).Immutable(),
+		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}
 }
 

@@ -124,9 +124,25 @@ func (_c *EstimateCreate) SetCreatedAt(v time.Time) *EstimateCreate {
 	return _c
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableCreatedAt(v *time.Time) *EstimateCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_c *EstimateCreate) SetUpdatedAt(v time.Time) *EstimateCreate {
 	_c.mutation.SetUpdatedAt(v)
+	return _c
+}
+
+// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableUpdatedAt(v *time.Time) *EstimateCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
+	}
 	return _c
 }
 
@@ -186,6 +202,14 @@ func (_c *EstimateCreate) defaults() {
 	if _, ok := _c.mutation.LineItems(); !ok {
 		v := estimate.DefaultLineItems
 		_c.mutation.SetLineItems(v)
+	}
+	if _, ok := _c.mutation.CreatedAt(); !ok {
+		v := estimate.DefaultCreatedAt()
+		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
+		v := estimate.DefaultUpdatedAt()
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 

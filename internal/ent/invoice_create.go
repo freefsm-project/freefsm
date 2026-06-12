@@ -178,9 +178,25 @@ func (_c *InvoiceCreate) SetCreatedAt(v time.Time) *InvoiceCreate {
 	return _c
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *InvoiceCreate) SetNillableCreatedAt(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_c *InvoiceCreate) SetUpdatedAt(v time.Time) *InvoiceCreate {
 	_c.mutation.SetUpdatedAt(v)
+	return _c
+}
+
+// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
+func (_c *InvoiceCreate) SetNillableUpdatedAt(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
+	}
 	return _c
 }
 
@@ -248,6 +264,14 @@ func (_c *InvoiceCreate) defaults() {
 	if _, ok := _c.mutation.DisplaySettings(); !ok {
 		v := invoice.DefaultDisplaySettings
 		_c.mutation.SetDisplaySettings(v)
+	}
+	if _, ok := _c.mutation.CreatedAt(); !ok {
+		v := invoice.DefaultCreatedAt()
+		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
+		v := invoice.DefaultUpdatedAt()
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 

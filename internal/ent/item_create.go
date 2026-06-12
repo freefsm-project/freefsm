@@ -158,9 +158,25 @@ func (_c *ItemCreate) SetCreatedAt(v time.Time) *ItemCreate {
 	return _c
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *ItemCreate) SetNillableCreatedAt(v *time.Time) *ItemCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_c *ItemCreate) SetUpdatedAt(v time.Time) *ItemCreate {
 	_c.mutation.SetUpdatedAt(v)
+	return _c
+}
+
+// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
+func (_c *ItemCreate) SetNillableUpdatedAt(v *time.Time) *ItemCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
+	}
 	return _c
 }
 
@@ -240,6 +256,14 @@ func (_c *ItemCreate) defaults() {
 	if _, ok := _c.mutation.IsActive(); !ok {
 		v := item.DefaultIsActive
 		_c.mutation.SetIsActive(v)
+	}
+	if _, ok := _c.mutation.CreatedAt(); !ok {
+		v := item.DefaultCreatedAt()
+		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
+		v := item.DefaultUpdatedAt()
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 

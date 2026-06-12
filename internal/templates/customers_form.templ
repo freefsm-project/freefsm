@@ -3,7 +3,7 @@ package templates
 templ CustomerForm(p CustomerFormPageData) {
 	@Layout(customerFormTitle(p.IsNew)) {
 		<h1>{ customerFormTitle(p.IsNew) }</h1>
-		<form action="" method="post" autocomplete="off">
+		<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off">
 			<fieldset>
 				<legend>Customer Info</legend>
 				<label>

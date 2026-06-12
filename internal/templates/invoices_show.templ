@@ -56,6 +56,63 @@ templ InvoiceShow(p InvoiceDetail) {
 				<p><strong>Total: { fmt.Sprintf("$%.2f", lineItemsTotal(p.LineItems)) }</strong></p>
 			</div>
 		}
+		if len(p.Payments) > 0 {
+			<h3>Payments</h3>
+			<table>
+				<thead>
+					<tr><th>Date</th><th>Method</th><th>Reference</th><th>Amount</th></tr>
+				</thead>
+				<tbody>
+					for _, pmt := range p.Payments {
+						<tr>
+							<td>{ pmt.Date }</td>
+							<td>{ pmt.Method }</td>
+							<td>{ pmt.Reference }</td>
+							<td>{ fmt.Sprintf("$%.2f", pmt.Amount) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+			<div style="text-align:right;margin-top:0.5rem">
+				<p><strong>Total Paid: { fmt.Sprintf("$%.2f", paymentsTotal(p.Payments)) }</strong></p>
+			</div>
+		}
+		<details open>
+			<summary>Record Payment</summary>
+			<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments", p.ID)) } method="post" style="margin-top:0.5rem">
+				<div class="grid">
+					<label>
+						Amount
+						<input type="number" name="amount" step="0.01" min="0.01" required/>
+					</label>
+					<label>
+						Method
+						<select name="method">
+							<option value="cash">Cash</option>
+							<option value="check">Check</option>
+							<option value="credit_card">Credit Card</option>
+							<option value="transfer">Transfer</option>
+							<option value="other">Other</option>
+						</select>
+					</label>
+				</div>
+				<div class="grid">
+					<label>
+						Date
+						<input type="date" name="date" value={ today() }/>
+					</label>
+					<label>
+						Reference
+						<input type="text" name="reference" placeholder="Check #, transaction ID"/>
+					</label>
+				</div>
+				<label>
+					Notes
+					<input type="text" name="notes" placeholder="Optional"/>
+				</label>
+				<button type="submit">Record Payment</button>
+			</form>
+		</details>
 		if p.Notes != "" {
 			<h3>Notes</h3>
 			<p>{ p.Notes }</p>

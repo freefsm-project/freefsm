@@ -15,13 +15,16 @@ import (
 )
 
 type JobHandler struct {
-	svc       *services.JobService
-	custSvc   *services.CustomerService
-	statusSvc *services.StatusService
+	svc        *services.JobService
+	custSvc    *services.CustomerService
+	statusSvc  *services.StatusService
+	projectSvc *services.ProjectService
+	locSvc     *services.LocationService
+	contactSvc *services.CustomerContactService
 }
 
-func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService) *JobHandler {
-	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc}
+func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService) *JobHandler {
+	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc}
 }
 
 func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -92,17 +95,25 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
+	projectID, _ := strconv.ParseInt(r.FormValue("project_id"), 10, 64)
+	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
+	contactID, _ := strconv.ParseInt(r.FormValue("customer_contact_id"), 10, 64)
 	params := services.JobCreateParams{
-		CustomerID:  custID,
-		JobType:     r.FormValue("job_type"),
-		Subtitle:    r.FormValue("subtitle"),
-		StatusID:    statusID,
-		BillingType: r.FormValue("billing_type"),
-		StartTime:   parseTime(r.FormValue("start_time")),
-		EndTime:     parseTime(r.FormValue("end_time")),
-		DueDate:     parseDate(r.FormValue("due_date")),
-		Notes:       r.FormValue("notes"),
-		TechNotes:   r.FormValue("tech_notes"),
+		CustomerID:        custID,
+		ProjectID:         projectID,
+		LocationID:        locationID,
+		CustomerContactID: contactID,
+		JobType:           r.FormValue("job_type"),
+		Subtitle:          r.FormValue("subtitle"),
+		StatusID:          statusID,
+		BillingType:       r.FormValue("billing_type"),
+		StartTime:         parseTime(r.FormValue("start_time")),
+		EndTime:           parseTime(r.FormValue("end_time")),
+		DueDate:           parseDate(r.FormValue("due_date")),
+		ArrivalStart:      parseTime(r.FormValue("arrival_start")),
+		ArrivalEnd:        parseTime(r.FormValue("arrival_end")),
+		Notes:             r.FormValue("notes"),
+		TechNotes:         r.FormValue("tech_notes"),
 	}
 	if params.BillingType == "" {
 		params.BillingType = "flat_rate"
@@ -138,14 +149,20 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
+	projectID, _ := strconv.ParseInt(r.FormValue("project_id"), 10, 64)
+	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
+	contactID, _ := strconv.ParseInt(r.FormValue("customer_contact_id"), 10, 64)
 	params := services.JobUpdateParams{
-		CustomerID:  int64Ptr(custID),
-		JobType:     formPtr(r.FormValue("job_type")),
-		Subtitle:    formPtr(r.FormValue("subtitle")),
-		StatusID:    int64Ptr(statusID),
-		BillingType: formPtr(r.FormValue("billing_type")),
-		Notes:       formPtr(r.FormValue("notes")),
-		TechNotes:   formPtr(r.FormValue("tech_notes")),
+		CustomerID:        int64Ptr(custID),
+		ProjectID:         int64Ptr(projectID),
+		LocationID:        int64Ptr(locationID),
+		CustomerContactID: int64Ptr(contactID),
+		JobType:           formPtr(r.FormValue("job_type")),
+		Subtitle:          formPtr(r.FormValue("subtitle")),
+		StatusID:          int64Ptr(statusID),
+		BillingType:       formPtr(r.FormValue("billing_type")),
+		Notes:             formPtr(r.FormValue("notes")),
+		TechNotes:         formPtr(r.FormValue("tech_notes")),
 	}
 	if st := r.FormValue("start_time"); st != "" {
 		t := parseTime(st)
@@ -158,6 +175,14 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if dd := r.FormValue("due_date"); dd != "" {
 		t := parseDate(dd)
 		params.DueDate = &t
+	}
+	if as := r.FormValue("arrival_start"); as != "" {
+		t := parseTime(as)
+		params.ArrivalStart = &t
+	}
+	if ae := r.FormValue("arrival_end"); ae != "" {
+		t := parseTime(ae)
+		params.ArrivalEnd = &t
 	}
 	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
 		http.Error(w, err.Error(), 500)
@@ -187,12 +212,16 @@ func (h *JobHandler) statusesForSelect(ctx context.Context) []*ent.Status {
 func (h *JobHandler) newJobForm(ctx context.Context) templates.JobFormPageData {
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
+	projects, _ := h.projectSvc.ListAll(ctx)
+	locations, _ := h.locSvc.ListAll(ctx)
 	return templates.JobFormPageData{
 		Job: &templates.JobDetail{
 			BillingType: "flat_rate",
 		},
 		IsNew:        true,
 		Customers:    customerOptions(customers),
+		Projects:     projectOptions(projects),
+		Locations:    locationOptions(locations),
 		Statuses:     statusOptions(statuses),
 		BillingTypes: services.JobBillingTypes,
 	}
@@ -200,49 +229,34 @@ func (h *JobHandler) newJobForm(ctx context.Context) templates.JobFormPageData {
 
 func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses []*ent.Status) templates.JobFormPageData {
 	customers, _ := h.custSvc.ListAll(ctx)
+	projects, _ := h.projectSvc.ListAll(ctx)
+	locations, _ := h.locSvc.ListAll(ctx)
 	d := jobToDetail(j, statuses)
 	return templates.JobFormPageData{
 		Job:          &d,
 		IsNew:        false,
 		Customers:    customerOptions(customers),
+		Projects:     projectOptions(projects),
+		Locations:    locationOptions(locations),
 		Statuses:     statusOptions(statuses),
 		BillingTypes: services.JobBillingTypes,
 	}
 }
 
-func statusOptions(statuses []*ent.Status) []templates.SelectOption {
-	opts := make([]templates.SelectOption, len(statuses))
-	for i, s := range statuses {
-		opts[i] = templates.SelectOption{Value: s.ID, Label: s.Name}
+func projectOptions(projects []*ent.Project) []templates.SelectOption {
+	opts := make([]templates.SelectOption, len(projects))
+	for i, p := range projects {
+		opts[i] = templates.SelectOption{Value: p.ID, Label: p.Name}
 	}
 	return opts
 }
 
-func customerOptions(customers []*ent.Customer) []templates.SelectOption {
-	opts := make([]templates.SelectOption, len(customers))
-	for i, c := range customers {
-		opts[i] = templates.SelectOption{Value: c.ID, Label: c.DisplayName}
+func locationOptions(locations []*ent.Location) []templates.SelectOption {
+	opts := make([]templates.SelectOption, len(locations))
+	for i, l := range locations {
+		opts[i] = templates.SelectOption{Value: l.ID, Label: l.Title}
 	}
 	return opts
-}
-
-func statusID(j *ent.Job) int64 {
-	if j.StatusID == nil {
-		return 0
-	}
-	return *j.StatusID
-}
-
-func statusName(statuses []*ent.Status, id *int64) string {
-	if id == nil {
-		return ""
-	}
-	for _, s := range statuses {
-		if s.ID == *id {
-			return s.Name
-		}
-	}
-	return "Unknown"
 }
 
 func jobToDetail(j *ent.Job, statuses []*ent.Status) templates.JobDetail {
@@ -257,24 +271,31 @@ func jobToDetail(j *ent.Job, statuses []*ent.Status) templates.JobDetail {
 		Notes:       j.Notes,
 		TechNotes:   j.TechNotes,
 	}
-	if !j.StartTime.IsZero() {
+	if j.ProjectID != nil {
+		d.ProjectID = *j.ProjectID
+	}
+	if j.LocationID != nil {
+		d.LocationID = *j.LocationID
+	}
+	if j.CustomerContactID != nil {
+		d.ContactID = *j.CustomerContactID
+	}
+	if j.StartTime != nil && !j.StartTime.IsZero() {
 		d.StartTime = j.StartTime.Format("2006-01-02T15:04")
 	}
-	if !j.EndTime.IsZero() {
+	if j.EndTime != nil && !j.EndTime.IsZero() {
 		d.EndTime = j.EndTime.Format("2006-01-02T15:04")
 	}
-	if !j.DueDate.IsZero() {
+	if j.DueDate != nil && !j.DueDate.IsZero() {
 		d.DueDate = j.DueDate.Format("2006-01-02")
 	}
-	return d
-}
-
-func customerMap(customers []*ent.Customer) map[int64]string {
-	m := make(map[int64]string, len(customers))
-	for _, c := range customers {
-		m[c.ID] = c.DisplayName
+	if j.ArrivalWindowStart != nil && !j.ArrivalWindowStart.IsZero() {
+		d.ArrivalStart = j.ArrivalWindowStart.Format("2006-01-02T15:04")
 	}
-	return m
+	if j.ArrivalWindowEnd != nil && !j.ArrivalWindowEnd.IsZero() {
+		d.ArrivalEnd = j.ArrivalWindowEnd.Format("2006-01-02T15:04")
+	}
+	return d
 }
 
 func jobRow(j *ent.Job, statuses []*ent.Status, custMap map[int64]string) templates.JobRow {
@@ -290,8 +311,11 @@ func jobRow(j *ent.Job, statuses []*ent.Status, custMap map[int64]string) templa
 	if j.Subtitle != "" {
 		r.DisplayName = j.JobType + " — " + j.Subtitle
 	}
-	if !j.StartTime.IsZero() {
+	if j.StartTime != nil && !j.StartTime.IsZero() {
 		r.StartTime = j.StartTime.Format("Jan 2, 2006 3:04 PM")
+	}
+	if j.ArrivalWindowStart != nil && !j.ArrivalWindowStart.IsZero() {
+		r.ArrivalTime = j.ArrivalWindowStart.Format("3:04 PM")
 	}
 	return r
 }
@@ -306,9 +330,9 @@ func parseDate(v string) time.Time {
 	return t
 }
 
-func int64Ptr(v int64) *int64 {
-	if v == 0 {
-		return nil
+func statusID(j *ent.Job) int64 {
+	if j.StatusID == nil {
+		return 0
 	}
-	return &v
+	return *j.StatusID
 }

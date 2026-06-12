@@ -175,31 +175,9 @@ func (_u *LocationUpdate) SetNillableIsPrimary(v *bool) *LocationUpdate {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *LocationUpdate) SetCreatedAt(v time.Time) *LocationUpdate {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *LocationUpdate) SetNillableCreatedAt(v *time.Time) *LocationUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *LocationUpdate) SetUpdatedAt(v time.Time) *LocationUpdate {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *LocationUpdate) SetNillableUpdatedAt(v *time.Time) *LocationUpdate {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -210,6 +188,7 @@ func (_u *LocationUpdate) Mutation() *LocationMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *LocationUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -232,6 +211,14 @@ func (_u *LocationUpdate) Exec(ctx context.Context) error {
 func (_u *LocationUpdate) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *LocationUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := location.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -276,9 +263,6 @@ func (_u *LocationUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.IsPrimary(); ok {
 		_spec.SetField(location.FieldIsPrimary, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(location.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(location.FieldUpdatedAt, field.TypeTime, value)
@@ -450,31 +434,9 @@ func (_u *LocationUpdateOne) SetNillableIsPrimary(v *bool) *LocationUpdateOne {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *LocationUpdateOne) SetCreatedAt(v time.Time) *LocationUpdateOne {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *LocationUpdateOne) SetNillableCreatedAt(v *time.Time) *LocationUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *LocationUpdateOne) SetUpdatedAt(v time.Time) *LocationUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *LocationUpdateOne) SetNillableUpdatedAt(v *time.Time) *LocationUpdateOne {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -498,6 +460,7 @@ func (_u *LocationUpdateOne) Select(field string, fields ...string) *LocationUpd
 
 // Save executes the query and returns the updated Location entity.
 func (_u *LocationUpdateOne) Save(ctx context.Context) (*Location, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -520,6 +483,14 @@ func (_u *LocationUpdateOne) Exec(ctx context.Context) error {
 func (_u *LocationUpdateOne) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *LocationUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := location.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -581,9 +552,6 @@ func (_u *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err 
 	}
 	if value, ok := _u.mutation.IsPrimary(); ok {
 		_spec.SetField(location.FieldIsPrimary, field.TypeBool, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(location.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(location.FieldUpdatedAt, field.TypeTime, value)

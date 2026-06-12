@@ -2,6 +2,8 @@ package templates
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
@@ -153,23 +155,29 @@ type JobRow struct {
 	StatusID    int64
 	StatusName  string
 	StartTime   string
+	ArrivalTime string
 	BillingType string
 }
 
 type JobDetail struct {
-	ID          int64
-	CustomerID  int64
-	Customer    string
-	JobType     string
-	Subtitle    string
-	StatusID    int64
-	StatusName  string
-	BillingType string
-	StartTime   string
-	EndTime     string
-	DueDate     string
-	Notes       string
-	TechNotes   string
+	ID              int64
+	CustomerID      int64
+	Customer        string
+	ProjectID       int64
+	LocationID      int64
+	ContactID       int64
+	JobType         string
+	Subtitle        string
+	StatusID        int64
+	StatusName      string
+	BillingType     string
+	StartTime       string
+	EndTime         string
+	DueDate         string
+	ArrivalStart    string
+	ArrivalEnd      string
+	Notes           string
+	TechNotes       string
 }
 
 type SelectOption struct {
@@ -193,6 +201,8 @@ type JobFormPageData struct {
 	Errors       map[string]string
 	IsNew        bool
 	Customers    []SelectOption
+	Projects     []SelectOption
+	Locations    []SelectOption
 	Statuses     []SelectOption
 	BillingTypes []string
 }
@@ -280,6 +290,7 @@ type InvoiceDetail struct {
 	DueDate     string
 	TaxRate     string
 	LineItems   []services.LineItem
+	Payments    []services.Payment
 }
 
 type InvoiceListPageData struct {
@@ -338,4 +349,51 @@ func lineItemsTotal(items []services.LineItem) float64 {
 		total += lineItemTotal(li)
 	}
 	return total
+}
+
+func customerFormAction(isNew bool, id int64) string {
+	if isNew {
+		return "/customers"
+	}
+	return fmt.Sprintf("/customers/%d", id)
+}
+
+func itemFormAction(isNew bool, id int64) string {
+	if isNew {
+		return "/items"
+	}
+	return fmt.Sprintf("/items/%d", id)
+}
+
+func jobFormAction(isNew bool, id int64) string {
+	if isNew {
+		return "/jobs"
+	}
+	return fmt.Sprintf("/jobs/%d", id)
+}
+
+func estimateFormAction(isNew bool, id int64) string {
+	if isNew {
+		return "/estimates"
+	}
+	return fmt.Sprintf("/estimates/%d", id)
+}
+
+func invoiceFormAction(isNew bool, id int64) string {
+	if isNew {
+		return "/invoices"
+	}
+	return fmt.Sprintf("/invoices/%d", id)
+}
+
+func paymentsTotal(payments []services.Payment) float64 {
+	var total float64
+	for _, p := range payments {
+		total += p.Amount
+	}
+	return total
+}
+
+func today() string {
+	return time.Now().Format("2006-01-02")
 }

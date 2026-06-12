@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
@@ -26,7 +28,7 @@ func (Status) Fields() []ent.Field {
 		field.String("name").NotEmpty(),
 		field.String("color").Default("#6B7280"),
 		field.Int("sort_order").Default(0),
-		field.Time("created_at"),
+		field.Time("created_at").Default(time.Now),
 	}
 }
 

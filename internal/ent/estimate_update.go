@@ -165,31 +165,9 @@ func (_u *EstimateUpdate) SetNillableLineItems(v *string) *EstimateUpdate {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *EstimateUpdate) SetCreatedAt(v time.Time) *EstimateUpdate {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *EstimateUpdate) SetNillableCreatedAt(v *time.Time) *EstimateUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *EstimateUpdate) SetUpdatedAt(v time.Time) *EstimateUpdate {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *EstimateUpdate) SetNillableUpdatedAt(v *time.Time) *EstimateUpdate {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -200,6 +178,7 @@ func (_u *EstimateUpdate) Mutation() *EstimateMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *EstimateUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -222,6 +201,14 @@ func (_u *EstimateUpdate) Exec(ctx context.Context) error {
 func (_u *EstimateUpdate) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *EstimateUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := estimate.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -272,9 +259,6 @@ func (_u *EstimateUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.LineItems(); ok {
 		_spec.SetField(estimate.FieldLineItems, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(estimate.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(estimate.FieldUpdatedAt, field.TypeTime, value)
@@ -436,31 +420,9 @@ func (_u *EstimateUpdateOne) SetNillableLineItems(v *string) *EstimateUpdateOne 
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *EstimateUpdateOne) SetCreatedAt(v time.Time) *EstimateUpdateOne {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *EstimateUpdateOne) SetNillableCreatedAt(v *time.Time) *EstimateUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *EstimateUpdateOne) SetUpdatedAt(v time.Time) *EstimateUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *EstimateUpdateOne) SetNillableUpdatedAt(v *time.Time) *EstimateUpdateOne {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -484,6 +446,7 @@ func (_u *EstimateUpdateOne) Select(field string, fields ...string) *EstimateUpd
 
 // Save executes the query and returns the updated Estimate entity.
 func (_u *EstimateUpdateOne) Save(ctx context.Context) (*Estimate, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -506,6 +469,14 @@ func (_u *EstimateUpdateOne) Exec(ctx context.Context) error {
 func (_u *EstimateUpdateOne) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *EstimateUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := estimate.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -573,9 +544,6 @@ func (_u *EstimateUpdateOne) sqlSave(ctx context.Context) (_node *Estimate, err 
 	}
 	if value, ok := _u.mutation.LineItems(); ok {
 		_spec.SetField(estimate.FieldLineItems, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(estimate.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(estimate.FieldUpdatedAt, field.TypeTime, value)

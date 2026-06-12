@@ -97,6 +97,10 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	lineItems, _ := services.ParseLineItems(r.FormValue("line_items"))
+	taxRate := r.FormValue("tax_rate")
+	if taxRate == "" {
+		taxRate = "0"
+	}
 
 	params := services.EstimateCreateParams{
 		CustomerID: custID,
@@ -104,7 +108,7 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		StatusID:   statusID,
 		Title:      r.FormValue("title"),
 		Notes:      r.FormValue("notes"),
-		TaxRate:    r.FormValue("tax_rate"),
+		TaxRate:    taxRate,
 		LineItems:  lineItems,
 	}
 	if params.LineItems == nil {
@@ -143,6 +147,12 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	lineItems, _ := services.ParseLineItems(r.FormValue("line_items"))
+	taxRate := r.FormValue("tax_rate")
+	taxRatePtr := formPtr(taxRate)
+	if taxRate == "" {
+		t := "0"
+		taxRatePtr = &t
+	}
 
 	params := services.EstimateUpdateParams{
 		CustomerID: int64Ptr(custID),
@@ -150,7 +160,7 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		StatusID:   int64Ptr(statusID),
 		Title:      formPtr(r.FormValue("title")),
 		Notes:      formPtr(r.FormValue("notes")),
-		TaxRate:    formPtr(r.FormValue("tax_rate")),
+		TaxRate:    taxRatePtr,
 	}
 	if lineItems != nil {
 		params.LineItems = &lineItems

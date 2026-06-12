@@ -262,9 +262,25 @@ func (_c *JobCreate) SetCreatedAt(v time.Time) *JobCreate {
 	return _c
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *JobCreate) SetNillableCreatedAt(v *time.Time) *JobCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_c *JobCreate) SetUpdatedAt(v time.Time) *JobCreate {
 	_c.mutation.SetUpdatedAt(v)
+	return _c
+}
+
+// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
+func (_c *JobCreate) SetNillableUpdatedAt(v *time.Time) *JobCreate {
+	if v != nil {
+		_c.SetUpdatedAt(*v)
+	}
 	return _c
 }
 
@@ -336,6 +352,14 @@ func (_c *JobCreate) defaults() {
 	if _, ok := _c.mutation.CustomFields(); !ok {
 		v := job.DefaultCustomFields
 		_c.mutation.SetCustomFields(v)
+	}
+	if _, ok := _c.mutation.CreatedAt(); !ok {
+		v := job.DefaultCreatedAt()
+		_c.mutation.SetCreatedAt(v)
+	}
+	if _, ok := _c.mutation.UpdatedAt(); !ok {
+		v := job.DefaultUpdatedAt()
+		_c.mutation.SetUpdatedAt(v)
 	}
 }
 

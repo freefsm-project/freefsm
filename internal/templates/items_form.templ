@@ -5,7 +5,7 @@ import "fmt"
 templ ItemForm(p ItemFormPageData) {
 	@Layout(itemFormTitle(p.IsNew)) {
 		<h1>{ itemFormTitle(p.IsNew) }</h1>
-		<form action="" method="post" autocomplete="off">
+		<form action={ templ.URL(itemFormAction(p.IsNew, p.Item.ID)) } method="post" autocomplete="off">
 			<label>
 				Name
 				<input type="text" name="name" value={ p.Item.Name } required autofocus/>

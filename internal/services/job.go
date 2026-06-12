@@ -19,29 +19,39 @@ func NewJobService(client *ent.Client) *JobService {
 }
 
 type JobCreateParams struct {
-	CustomerID  int64
-	JobType     string
-	Subtitle    string
-	StatusID    int64
-	BillingType string
-	StartTime   time.Time
-	EndTime     time.Time
-	DueDate     time.Time
-	Notes       string
-	TechNotes   string
+	CustomerID        int64
+	ProjectID         int64
+	LocationID        int64
+	CustomerContactID int64
+	JobType           string
+	Subtitle          string
+	StatusID          int64
+	BillingType       string
+	StartTime         time.Time
+	EndTime           time.Time
+	DueDate           time.Time
+	ArrivalStart      time.Time
+	ArrivalEnd        time.Time
+	Notes             string
+	TechNotes         string
 }
 
 type JobUpdateParams struct {
-	CustomerID  *int64
-	JobType     *string
-	Subtitle    *string
-	StatusID    *int64
-	BillingType *string
-	StartTime   *time.Time
-	EndTime     *time.Time
-	DueDate     *time.Time
-	Notes       *string
-	TechNotes   *string
+	CustomerID        *int64
+	ProjectID         *int64
+	LocationID        *int64
+	CustomerContactID *int64
+	JobType           *string
+	Subtitle          *string
+	StatusID          *int64
+	BillingType       *string
+	StartTime         *time.Time
+	EndTime           *time.Time
+	DueDate           *time.Time
+	ArrivalStart      *time.Time
+	ArrivalEnd        *time.Time
+	Notes             *string
+	TechNotes         *string
 }
 
 func (s *JobService) ListAll(ctx context.Context) ([]*ent.Job, error) {
@@ -101,6 +111,15 @@ func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.J
 		SetNotes(params.Notes).
 		SetTechNotes(params.TechNotes)
 
+	if params.ProjectID > 0 {
+		b.SetProjectID(params.ProjectID)
+	}
+	if params.LocationID > 0 {
+		b.SetLocationID(params.LocationID)
+	}
+	if params.CustomerContactID > 0 {
+		b.SetCustomerContactID(params.CustomerContactID)
+	}
 	if !params.StartTime.IsZero() {
 		b.SetStartTime(params.StartTime)
 	}
@@ -109,6 +128,12 @@ func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.J
 	}
 	if !params.DueDate.IsZero() {
 		b.SetDueDate(params.DueDate)
+	}
+	if !params.ArrivalStart.IsZero() {
+		b.SetArrivalWindowStart(params.ArrivalStart)
+	}
+	if !params.ArrivalEnd.IsZero() {
+		b.SetArrivalWindowEnd(params.ArrivalEnd)
 	}
 
 	j, err := b.Save(ctx)
@@ -144,6 +169,21 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 	}
 	if params.DueDate != nil {
 		u.SetDueDate(*params.DueDate)
+	}
+	if params.ProjectID != nil {
+		u.SetProjectID(*params.ProjectID)
+	}
+	if params.LocationID != nil {
+		u.SetLocationID(*params.LocationID)
+	}
+	if params.CustomerContactID != nil {
+		u.SetCustomerContactID(*params.CustomerContactID)
+	}
+	if params.ArrivalStart != nil {
+		u.SetArrivalWindowStart(*params.ArrivalStart)
+	}
+	if params.ArrivalEnd != nil {
+		u.SetArrivalWindowEnd(*params.ArrivalEnd)
 	}
 	if params.Notes != nil {
 		u.SetNotes(*params.Notes)

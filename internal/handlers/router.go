@@ -34,9 +34,12 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	statusService := services.NewStatusService(entClient)
 	jobService := services.NewJobService(entClient)
 	itemService := services.NewItemService(entClient)
-	customerHandler := NewCustomerHandler(customerService)
+	contactSvc := services.NewCustomerContactService(entClient)
+	projectSvc := services.NewProjectService(entClient)
+	locationSvc := services.NewLocationService(entClient)
+	customerHandler := NewCustomerHandler(customerService, contactSvc)
 	itemHandler := NewItemHandler(itemService)
-	jobHandler := NewJobHandler(jobService, customerService, statusService)
+	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc)
 	estimateHandler := NewEstimateHandler(services.NewEstimateService(entClient), customerService, jobService, statusService, itemService)
 	invoiceHandler := NewInvoiceHandler(services.NewInvoiceService(entClient), customerService, jobService, statusService, itemService)
 
@@ -53,13 +56,21 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/customers/{id}/edit", customerHandler.Update)
 		r.Post("/customers/{id}", customerHandler.Update)
 		r.Post("/customers/{id}/delete", customerHandler.Delete)
-		r.Get("/items", itemHandler.List)
-		r.Get("/items/new", itemHandler.Create)
-		r.Post("/items", itemHandler.Create)
-		r.Get("/items/{id}", itemHandler.Show)
-		r.Get("/items/{id}/edit", itemHandler.Update)
-		r.Post("/items/{id}", itemHandler.Update)
-		r.Post("/items/{id}/delete", itemHandler.Delete)
+		r.Get("/customers/{id}/contacts", customerHandler.Contacts)
+		r.Route("/items", func(r chi.Router) {
+			r.Get("/", itemHandler.List)
+			r.Post("/", itemHandler.Create)
+			r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
+				if chi.URLParam(r, "id") == "new" {
+					itemHandler.Create(w, r)
+					return
+				}
+				itemHandler.Show(w, r)
+			})
+			r.Get("/{id}/edit", itemHandler.Update)
+			r.Post("/{id}", itemHandler.Update)
+			r.Post("/{id}/delete", itemHandler.Delete)
+		})
 		r.Get("/jobs", jobHandler.List)
 		r.Get("/jobs/new", jobHandler.Create)
 		r.Post("/jobs", jobHandler.Create)
@@ -81,6 +92,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/invoices/{id}/edit", invoiceHandler.Update)
 		r.Post("/invoices/{id}", invoiceHandler.Update)
 		r.Post("/invoices/{id}/delete", invoiceHandler.Delete)
+		r.Post("/invoices/{id}/payments", invoiceHandler.RecordPayment)
 	})
 
 	authHandler := NewAuthHandler(db, sessions)

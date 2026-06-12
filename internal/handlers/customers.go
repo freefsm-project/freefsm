@@ -11,11 +11,12 @@ import (
 )
 
 type CustomerHandler struct {
-	svc *services.CustomerService
+	svc        *services.CustomerService
+	contactSvc *services.CustomerContactService
 }
 
-func NewCustomerHandler(svc *services.CustomerService) *CustomerHandler {
-	return &CustomerHandler{svc: svc}
+func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.CustomerContactService) *CustomerHandler {
+	return &CustomerHandler{svc: svc, contactSvc: contactSvc}
 }
 
 func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -175,13 +176,6 @@ func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/customers?flash=Customer+deleted", http.StatusSeeOther)
 }
 
-func formPtr(v string) *string {
-	if v == "" {
-		return nil
-	}
-	return &v
-}
-
 func customerToDetail(c *ent.Customer) templates.CustomerDetail {
 	return templates.CustomerDetail{
 		ID:              c.ID,
@@ -229,6 +223,21 @@ func formDataFromCustomer(c *ent.Customer) templates.CustomerFormPageData {
 		Statuses:     services.CustomerStatuses,
 		AccountTypes: services.CustomerAccountTypes,
 	}
+}
+
+func (h *CustomerHandler) Contacts(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	contacts, _ := h.contactSvc.ListByCustomer(r.Context(), id)
+	opts := make([]templates.SelectOption, len(contacts))
+	for i, c := range contacts {
+		label := c.FirstName + " " + c.LastName
+		opts[i] = templates.SelectOption{Value: c.ID, Label: label}
+	}
+	templates.ContactOptions(opts, 0).Render(r.Context(), w)
 }
 
 func newFormData() templates.CustomerFormPageData {

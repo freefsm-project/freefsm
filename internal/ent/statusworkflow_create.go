@@ -39,6 +39,14 @@ func (_c *StatusWorkflowCreate) SetCreatedAt(v time.Time) *StatusWorkflowCreate 
 	return _c
 }
 
+// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
+func (_c *StatusWorkflowCreate) SetNillableCreatedAt(v *time.Time) *StatusWorkflowCreate {
+	if v != nil {
+		_c.SetCreatedAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *StatusWorkflowCreate) SetID(v int64) *StatusWorkflowCreate {
 	_c.mutation.SetID(v)
@@ -67,6 +75,7 @@ func (_c *StatusWorkflowCreate) Mutation() *StatusWorkflowMutation {
 
 // Save creates the StatusWorkflow in the database.
 func (_c *StatusWorkflowCreate) Save(ctx context.Context) (*StatusWorkflow, error) {
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -89,6 +98,14 @@ func (_c *StatusWorkflowCreate) Exec(ctx context.Context) error {
 func (_c *StatusWorkflowCreate) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_c *StatusWorkflowCreate) defaults() {
+	if _, ok := _c.mutation.CreatedAt(); !ok {
+		v := statusworkflow.DefaultCreatedAt()
+		_c.mutation.SetCreatedAt(v)
 	}
 }
 
@@ -194,6 +211,7 @@ func (_c *StatusWorkflowCreateBulk) Save(ctx context.Context) ([]*StatusWorkflow
 	for i := range _c.builders {
 		func(i int, root context.Context) {
 			builder := _c.builders[i]
+			builder.defaults()
 			var mut Mutator = MutateFunc(func(ctx context.Context, m Mutation) (Value, error) {
 				mutation, ok := m.(*StatusWorkflowMutation)
 				if !ok {

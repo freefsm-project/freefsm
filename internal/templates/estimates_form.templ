@@ -5,7 +5,7 @@ import "fmt"
 templ EstimateForm(p EstimateFormPageData) {
 	@Layout(estimateFormTitle(p.IsNew)) {
 		<h1>{ estimateFormTitle(p.IsNew) }</h1>
-		<form action="" method="post" autocomplete="off">
+		<form action={ templ.URL(estimateFormAction(p.IsNew, p.Estimate.ID)) } method="post" autocomplete="off">
 			<label>
 				Customer
 				<select name="customer_id" required>
@@ -74,7 +74,7 @@ templ EstimateForm(p EstimateFormPageData) {
 							get subtotal() { return this.items.reduce((s, i) => s + (i.unit_price * i.quantity), 0); },
 							get tax() { return this.items.reduce((s, i) => { if (i.taxable && i.tax_rate) { const r = parseFloat(i.tax_rate) || 0; return s + (i.unit_price * i.quantity * r / 100); } return s; }, 0); },
 							get total() { return this.subtotal + this.tax - this.items.reduce((s, i) => s + (i.discount || 0), 0) + this.items.reduce((s, i) => s + (i.surcharge || 0), 0); },
-							get json() { return JSON.stringify(this.items.filter(i => i.item_id > 0 || i.title)); },
+							get json() { return JSON.stringify(this.items.filter(i => i.item_id > 0 || i.title).map(i => ({ item_id: Number(i.item_id) || 0, title: i.title, description: i.description, unit_price: Number(i.unit_price) || 0, quantity: Number(i.quantity) || 1, taxable: Boolean(i.taxable), tax_rate: i.tax_rate, discount: Number(i.discount) || 0, surcharge: Number(i.surcharge) || 0 }))); },
 						};
 					});
 				});

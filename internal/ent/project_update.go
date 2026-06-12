@@ -206,31 +206,9 @@ func (_u *ProjectUpdate) SetNillableNotes(v *string) *ProjectUpdate {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *ProjectUpdate) SetCreatedAt(v time.Time) *ProjectUpdate {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *ProjectUpdate) SetNillableCreatedAt(v *time.Time) *ProjectUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ProjectUpdate) SetUpdatedAt(v time.Time) *ProjectUpdate {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *ProjectUpdate) SetNillableUpdatedAt(v *time.Time) *ProjectUpdate {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -241,6 +219,7 @@ func (_u *ProjectUpdate) Mutation() *ProjectMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *ProjectUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -263,6 +242,14 @@ func (_u *ProjectUpdate) Exec(ctx context.Context) error {
 func (_u *ProjectUpdate) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *ProjectUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := project.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -338,9 +325,6 @@ func (_u *ProjectUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(project.FieldNotes, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(project.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(project.FieldUpdatedAt, field.TypeTime, value)
@@ -543,31 +527,9 @@ func (_u *ProjectUpdateOne) SetNillableNotes(v *string) *ProjectUpdateOne {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *ProjectUpdateOne) SetCreatedAt(v time.Time) *ProjectUpdateOne {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *ProjectUpdateOne) SetNillableCreatedAt(v *time.Time) *ProjectUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ProjectUpdateOne) SetUpdatedAt(v time.Time) *ProjectUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *ProjectUpdateOne) SetNillableUpdatedAt(v *time.Time) *ProjectUpdateOne {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -591,6 +553,7 @@ func (_u *ProjectUpdateOne) Select(field string, fields ...string) *ProjectUpdat
 
 // Save executes the query and returns the updated Project entity.
 func (_u *ProjectUpdateOne) Save(ctx context.Context) (*Project, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -613,6 +576,14 @@ func (_u *ProjectUpdateOne) Exec(ctx context.Context) error {
 func (_u *ProjectUpdateOne) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *ProjectUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := project.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -705,9 +676,6 @@ func (_u *ProjectUpdateOne) sqlSave(ctx context.Context) (_node *Project, err er
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(project.FieldNotes, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(project.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(project.FieldUpdatedAt, field.TypeTime, value)

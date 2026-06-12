@@ -80,6 +80,7 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	statuses := h.statusesForSelect(r.Context())
 	d := invoiceToDetail(i, statuses)
 	d.LineItems = h.svc.LineItems(i)
+	d.Payments = h.svc.Payments(i)
 	templates.InvoiceShow(d).Render(r.Context(), w)
 }
 
@@ -96,6 +97,10 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	lineItems, _ := services.ParseLineItems(r.FormValue("line_items"))
+	taxRate := r.FormValue("tax_rate")
+	if taxRate == "" {
+		taxRate = "0"
+	}
 
 	params := services.InvoiceCreateParams{
 		CustomerID:  custID,
@@ -105,7 +110,7 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Notes:       r.FormValue("notes"),
 		InvoiceDate: parseDate(r.FormValue("invoice_date")),
 		DueDate:     parseDate(r.FormValue("due_date")),
-		TaxRate:     r.FormValue("tax_rate"),
+		TaxRate:     taxRate,
 		LineItems:   lineItems,
 	}
 	if params.LineItems == nil {
@@ -144,6 +149,12 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	lineItems, _ := services.ParseLineItems(r.FormValue("line_items"))
+	taxRate := r.FormValue("tax_rate")
+	taxRatePtr := formPtr(taxRate)
+	if taxRate == "" {
+		t := "0"
+		taxRatePtr = &t
+	}
 
 	params := services.InvoiceUpdateParams{
 		CustomerID: int64Ptr(custID),
@@ -151,7 +162,7 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		StatusID:   int64Ptr(statusID),
 		Title:      formPtr(r.FormValue("title")),
 		Notes:      formPtr(r.FormValue("notes")),
-		TaxRate:    formPtr(r.FormValue("tax_rate")),
+		TaxRate:    taxRatePtr,
 	}
 	if d := r.FormValue("invoice_date"); d != "" {
 		t := parseDate(d)
@@ -277,4 +288,29 @@ func invStatusID(i *ent.Invoice) int64 {
 		return 0
 	}
 	return *i.StatusID
+}
+
+func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", 400)
+		return
+	}
+	amount, _ := strconv.ParseFloat(r.FormValue("amount"), 64)
+	payment := services.Payment{
+		Amount:    amount,
+		Method:    r.FormValue("method"),
+		Reference: r.FormValue("reference"),
+		Date:      r.FormValue("date"),
+		Notes:     r.FormValue("notes"),
+	}
+	if err := h.svc.RecordPayment(r.Context(), id, payment); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+recorded", id), http.StatusSeeOther)
 }

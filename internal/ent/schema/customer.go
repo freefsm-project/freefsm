@@ -1,6 +1,8 @@
 package schema
 
 import (
+	"time"
+
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
@@ -44,8 +46,8 @@ func (Customer) Fields() []ent.Field {
 		field.String("service_state").Default(""),
 		field.String("service_zip_code").Default(""),
 		field.String("custom_fields").Default("[]"),
-		field.Time("created_at"),
-		field.Time("updated_at"),
+		field.Time("created_at").Default(time.Now).Immutable(),
+		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}
 }
 

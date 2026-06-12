@@ -389,31 +389,9 @@ func (_u *CustomerUpdate) SetNillableCustomFields(v *string) *CustomerUpdate {
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *CustomerUpdate) SetCreatedAt(v time.Time) *CustomerUpdate {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *CustomerUpdate) SetNillableCreatedAt(v *time.Time) *CustomerUpdate {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CustomerUpdate) SetUpdatedAt(v time.Time) *CustomerUpdate {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *CustomerUpdate) SetNillableUpdatedAt(v *time.Time) *CustomerUpdate {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -424,6 +402,7 @@ func (_u *CustomerUpdate) Mutation() *CustomerMutation {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *CustomerUpdate) Save(ctx context.Context) (int, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -446,6 +425,14 @@ func (_u *CustomerUpdate) Exec(ctx context.Context) error {
 func (_u *CustomerUpdate) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *CustomerUpdate) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := customer.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -557,9 +544,6 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(customer.FieldCustomFields, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(customer.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(customer.FieldUpdatedAt, field.TypeTime, value)
@@ -945,31 +929,9 @@ func (_u *CustomerUpdateOne) SetNillableCustomFields(v *string) *CustomerUpdateO
 	return _u
 }
 
-// SetCreatedAt sets the "created_at" field.
-func (_u *CustomerUpdateOne) SetCreatedAt(v time.Time) *CustomerUpdateOne {
-	_u.mutation.SetCreatedAt(v)
-	return _u
-}
-
-// SetNillableCreatedAt sets the "created_at" field if the given value is not nil.
-func (_u *CustomerUpdateOne) SetNillableCreatedAt(v *time.Time) *CustomerUpdateOne {
-	if v != nil {
-		_u.SetCreatedAt(*v)
-	}
-	return _u
-}
-
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CustomerUpdateOne) SetUpdatedAt(v time.Time) *CustomerUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
-	return _u
-}
-
-// SetNillableUpdatedAt sets the "updated_at" field if the given value is not nil.
-func (_u *CustomerUpdateOne) SetNillableUpdatedAt(v *time.Time) *CustomerUpdateOne {
-	if v != nil {
-		_u.SetUpdatedAt(*v)
-	}
 	return _u
 }
 
@@ -993,6 +955,7 @@ func (_u *CustomerUpdateOne) Select(field string, fields ...string) *CustomerUpd
 
 // Save executes the query and returns the updated Customer entity.
 func (_u *CustomerUpdateOne) Save(ctx context.Context) (*Customer, error) {
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -1015,6 +978,14 @@ func (_u *CustomerUpdateOne) Exec(ctx context.Context) error {
 func (_u *CustomerUpdateOne) ExecX(ctx context.Context) {
 	if err := _u.Exec(ctx); err != nil {
 		panic(err)
+	}
+}
+
+// defaults sets the default values of the builder before save.
+func (_u *CustomerUpdateOne) defaults() {
+	if _, ok := _u.mutation.UpdatedAt(); !ok {
+		v := customer.UpdateDefaultUpdatedAt()
+		_u.mutation.SetUpdatedAt(v)
 	}
 }
 
@@ -1143,9 +1114,6 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(customer.FieldCustomFields, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.CreatedAt(); ok {
-		_spec.SetField(customer.FieldCreatedAt, field.TypeTime, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(customer.FieldUpdatedAt, field.TypeTime, value)
