@@ -9,6 +9,7 @@ templ ItemShow(p ItemDetail) {
 			<div style="display:flex;gap:0.5rem">
 				<a href={ templ.URL(fmt.Sprintf("/items/%d/edit", p.ID)) } role="button" class="outline">Edit</a>
 				<form action={ templ.URL(fmt.Sprintf("/items/%d/delete", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this item?')">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast">Delete</button>
 				</form>
 			</div>

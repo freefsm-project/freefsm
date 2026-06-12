@@ -28,7 +28,7 @@ templ Layout(title string) {
 				if getUser(ctx) != nil {
 					<ul>
 						<li><a href="#">{ getUser(ctx).Name }</a></li>
-						<li><form action="/logout" method="post"><button type="submit" class="outline">Logout</button></form></li>
+						<li><form action="/logout" method="post"><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><button type="submit" class="outline">Logout</button></form></li>
 					</ul>
 				}
 			</nav>

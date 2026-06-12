@@ -144,6 +144,11 @@ func CustomFields(v string) predicate.Job {
 	return predicate.Job(sql.FieldEQ(FieldCustomFields, v))
 }
 
+// LineItems applies equality check predicate on the "line_items" field. It's identical to LineItemsEQ.
+func LineItems(v string) predicate.Job {
+	return predicate.Job(sql.FieldEQ(FieldLineItems, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Job {
 	return predicate.Job(sql.FieldEQ(FieldCreatedAt, v))
@@ -1162,6 +1167,71 @@ func CustomFieldsEqualFold(v string) predicate.Job {
 // CustomFieldsContainsFold applies the ContainsFold predicate on the "custom_fields" field.
 func CustomFieldsContainsFold(v string) predicate.Job {
 	return predicate.Job(sql.FieldContainsFold(FieldCustomFields, v))
+}
+
+// LineItemsEQ applies the EQ predicate on the "line_items" field.
+func LineItemsEQ(v string) predicate.Job {
+	return predicate.Job(sql.FieldEQ(FieldLineItems, v))
+}
+
+// LineItemsNEQ applies the NEQ predicate on the "line_items" field.
+func LineItemsNEQ(v string) predicate.Job {
+	return predicate.Job(sql.FieldNEQ(FieldLineItems, v))
+}
+
+// LineItemsIn applies the In predicate on the "line_items" field.
+func LineItemsIn(vs ...string) predicate.Job {
+	return predicate.Job(sql.FieldIn(FieldLineItems, vs...))
+}
+
+// LineItemsNotIn applies the NotIn predicate on the "line_items" field.
+func LineItemsNotIn(vs ...string) predicate.Job {
+	return predicate.Job(sql.FieldNotIn(FieldLineItems, vs...))
+}
+
+// LineItemsGT applies the GT predicate on the "line_items" field.
+func LineItemsGT(v string) predicate.Job {
+	return predicate.Job(sql.FieldGT(FieldLineItems, v))
+}
+
+// LineItemsGTE applies the GTE predicate on the "line_items" field.
+func LineItemsGTE(v string) predicate.Job {
+	return predicate.Job(sql.FieldGTE(FieldLineItems, v))
+}
+
+// LineItemsLT applies the LT predicate on the "line_items" field.
+func LineItemsLT(v string) predicate.Job {
+	return predicate.Job(sql.FieldLT(FieldLineItems, v))
+}
+
+// LineItemsLTE applies the LTE predicate on the "line_items" field.
+func LineItemsLTE(v string) predicate.Job {
+	return predicate.Job(sql.FieldLTE(FieldLineItems, v))
+}
+
+// LineItemsContains applies the Contains predicate on the "line_items" field.
+func LineItemsContains(v string) predicate.Job {
+	return predicate.Job(sql.FieldContains(FieldLineItems, v))
+}
+
+// LineItemsHasPrefix applies the HasPrefix predicate on the "line_items" field.
+func LineItemsHasPrefix(v string) predicate.Job {
+	return predicate.Job(sql.FieldHasPrefix(FieldLineItems, v))
+}
+
+// LineItemsHasSuffix applies the HasSuffix predicate on the "line_items" field.
+func LineItemsHasSuffix(v string) predicate.Job {
+	return predicate.Job(sql.FieldHasSuffix(FieldLineItems, v))
+}
+
+// LineItemsEqualFold applies the EqualFold predicate on the "line_items" field.
+func LineItemsEqualFold(v string) predicate.Job {
+	return predicate.Job(sql.FieldEqualFold(FieldLineItems, v))
+}
+
+// LineItemsContainsFold applies the ContainsFold predicate on the "line_items" field.
+func LineItemsContainsFold(v string) predicate.Job {
+	return predicate.Job(sql.FieldContainsFold(FieldLineItems, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

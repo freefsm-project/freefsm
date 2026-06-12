@@ -256,6 +256,20 @@ func (_c *JobCreate) SetNillableCustomFields(v *string) *JobCreate {
 	return _c
 }
 
+// SetLineItems sets the "line_items" field.
+func (_c *JobCreate) SetLineItems(v string) *JobCreate {
+	_c.mutation.SetLineItems(v)
+	return _c
+}
+
+// SetNillableLineItems sets the "line_items" field if the given value is not nil.
+func (_c *JobCreate) SetNillableLineItems(v *string) *JobCreate {
+	if v != nil {
+		_c.SetLineItems(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *JobCreate) SetCreatedAt(v time.Time) *JobCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -353,6 +367,10 @@ func (_c *JobCreate) defaults() {
 		v := job.DefaultCustomFields
 		_c.mutation.SetCustomFields(v)
 	}
+	if _, ok := _c.mutation.LineItems(); !ok {
+		v := job.DefaultLineItems
+		_c.mutation.SetLineItems(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := job.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -396,6 +414,9 @@ func (_c *JobCreate) check() error {
 	}
 	if _, ok := _c.mutation.CustomFields(); !ok {
 		return &ValidationError{Name: "custom_fields", err: errors.New(`ent: missing required field "Job.custom_fields"`)}
+	}
+	if _, ok := _c.mutation.LineItems(); !ok {
+		return &ValidationError{Name: "line_items", err: errors.New(`ent: missing required field "Job.line_items"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Job.created_at"`)}
@@ -506,6 +527,10 @@ func (_c *JobCreate) createSpec() (*Job, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CustomFields(); ok {
 		_spec.SetField(job.FieldCustomFields, field.TypeString, value)
 		_node.CustomFields = value
+	}
+	if value, ok := _c.mutation.LineItems(); ok {
+		_spec.SetField(job.FieldLineItems, field.TypeString, value)
+		_node.LineItems = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(job.FieldCreatedAt, field.TypeTime, value)

@@ -1,0 +1,1 @@
+ALTER TABLE jobs ADD COLUMN line_items JSONB NOT NULL DEFAULT '[]';

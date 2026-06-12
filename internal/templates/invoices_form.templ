@@ -6,6 +6,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 	@Layout(invoiceFormTitle(p.IsNew)) {
 		<h1>{ invoiceFormTitle(p.IsNew) }</h1>
 		<form action={ templ.URL(invoiceFormAction(p.IsNew, p.Invoice.ID)) } method="post" autocomplete="off">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
 				Customer
 				<select name="customer_id" required>

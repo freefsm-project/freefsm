@@ -11,6 +11,7 @@ templ SetupPage(p SetupPageData) {
 				<div class="error-msg">{ p.Error }</div>
 			}
 			<form action="/setup" method="post">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<label>
 					Setup Token
 					<input type="password" name="token" placeholder="Setup token from server admin" required/>

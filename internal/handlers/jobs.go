@@ -81,7 +81,9 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	statuses := h.statusesForSelect(r.Context())
-	templates.JobShow(jobToDetail(j, statuses)).Render(r.Context(), w)
+	d := jobToDetail(j, statuses)
+	d.LineItems = h.svc.LineItems(j)
+	templates.JobShow(d).Render(r.Context(), w)
 }
 
 func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {

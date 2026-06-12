@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/MartialM1nd/freefsm/internal/services"
+	"github.com/justinas/nosurf"
 )
 
 type contextKey string
@@ -12,6 +13,7 @@ type contextKey string
 const (
 	UserKey  contextKey = "user"
 	FlashKey contextKey = "flash"
+	CSRFKey  contextKey = "csrf"
 )
 
 type UserInfo struct {
@@ -70,4 +72,16 @@ func Flash(next http.Handler) http.Handler {
 func FlashFromContext(ctx context.Context) (string, bool) {
 	f, ok := ctx.Value(FlashKey).(string)
 	return f, ok
+}
+
+func CSRFToken(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx := context.WithValue(r.Context(), CSRFKey, nosurf.Token(r))
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func CSRFFromContext(ctx context.Context) string {
+	t, _ := ctx.Value(CSRFKey).(string)
+	return t
 }

@@ -8,7 +8,14 @@ templ JobShow(p JobDetail) {
 			<h1>{ p.JobType }</h1>
 			<div style="display:flex;gap:0.5rem">
 				<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", p.ID)) } role="button" class="outline">Edit</a>
+				if p.StatusName == "Completed" {
+					<form action={ templ.URL(fmt.Sprintf("/jobs/%d/convert-to-invoice", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Convert this job to an invoice?')">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button>Convert to Invoice</button>
+					</form>
+				}
 				<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this job?')">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast">Delete</button>
 				</form>
 			</div>
@@ -42,6 +49,24 @@ templ JobShow(p JobDetail) {
 		if p.TechNotes != "" {
 			<h3>Tech Notes</h3>
 			<p>{ p.TechNotes }</p>
+		}
+		if len(p.LineItems) > 0 {
+			<h3>Line Items</h3>
+			<table>
+				<thead>
+					<tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+				</thead>
+				<tbody>
+					for _, li := range p.LineItems {
+						<tr>
+							<td>{ li.Title }</td>
+							<td>{ fmt.Sprintf("%d", li.Quantity) }</td>
+							<td>{ fmt.Sprintf("$%.2f", li.UnitPrice) }</td>
+							<td>{ fmt.Sprintf("$%.2f", lineItemTotal(li)) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
 		}
 		<p><a href="/jobs">&larr; Back to Jobs</a></p>
 	}

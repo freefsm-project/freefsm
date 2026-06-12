@@ -6,6 +6,7 @@ templ JobForm(p JobFormPageData) {
 	@Layout(jobFormTitle(p.IsNew)) {
 		<h1>{ jobFormTitle(p.IsNew) }</h1>
 		<form action={ templ.URL(jobFormAction(p.IsNew, p.Job.ID)) } method="post" autocomplete="off">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
 				Customer
 				<select name="customer_id" id="job-customer-select" required>

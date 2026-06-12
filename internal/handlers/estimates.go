@@ -172,6 +172,20 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/estimates/%d?flash=Estimate+updated", id), http.StatusSeeOther)
 }
 
+func (h *EstimateHandler) ConvertToJob(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	job, err := h.jobSvc.ConvertFromEstimate(r.Context(), id, h.statusSvc)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/jobs/%d?flash=Job+created+from+estimate", job.ID), http.StatusSeeOther)
+}
+
 func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

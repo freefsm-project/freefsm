@@ -11,6 +11,7 @@ templ LoginPage(p LoginPageData) {
 				<div class="error-msg">{ p.Error }</div>
 			}
 			<form action="/login" method="post">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<label>
 					Email
 					<input type="email" name="email" placeholder="email@example.com" required autofocus/>

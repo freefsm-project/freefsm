@@ -54,6 +54,7 @@ templ JobsTable(p JobListPageData) {
 						<td style="text-align:right">
 							<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", j.ID)) } role="button" class="outline small">Edit</a>
 							<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", j.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this job?')">
+								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small">Del</button>
 							</form>
 						</td>

@@ -164,6 +164,7 @@ type JobDetail struct {
 	CustomerID      int64
 	Customer        string
 	ProjectID       int64
+	LineItems       []services.LineItem
 	LocationID      int64
 	ContactID       int64
 	JobType         string
@@ -392,6 +393,10 @@ func paymentsTotal(payments []services.Payment) float64 {
 		total += p.Amount
 	}
 	return total
+}
+
+func csrfToken(ctx context.Context) string {
+	return middleware.CSRFFromContext(ctx)
 }
 
 func today() string {

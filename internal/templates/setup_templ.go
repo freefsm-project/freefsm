@@ -64,7 +64,20 @@ func SetupPage(p SetupPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<form action=\"/setup\" method=\"post\"><label>Setup Token <input type=\"password\" name=\"token\" placeholder=\"Setup token from server admin\" required></label> <label>Name <input type=\"text\" name=\"name\" placeholder=\"Your name\" required></label> <label>Email <input type=\"email\" name=\"email\" placeholder=\"email@example.com\" required></label> <label>Password <input type=\"password\" name=\"password\" placeholder=\"Password\" required minlength=\"8\"></label> <button type=\"submit\">Create Admin Account</button></form></article>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<form action=\"/setup\" method=\"post\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var4 string
+			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/setup.templ`, Line: 14, Col: 65}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"> <label>Setup Token <input type=\"password\" name=\"token\" placeholder=\"Setup token from server admin\" required></label> <label>Name <input type=\"text\" name=\"name\" placeholder=\"Your name\" required></label> <label>Email <input type=\"email\" name=\"email\" placeholder=\"email@example.com\" required></label> <label>Password <input type=\"password\" name=\"password\" placeholder=\"Password\" required minlength=\"8\"></label> <button type=\"submit\">Create Admin Account</button></form></article>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

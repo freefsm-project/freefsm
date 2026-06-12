@@ -41,6 +41,7 @@ func (Job) Fields() []ent.Field {
 		field.String("visits").Default("[]"),
 		field.String("assignments").Default("[]"),
 		field.String("custom_fields").Default("[]"),
+		field.String("line_items").Default("[]"),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

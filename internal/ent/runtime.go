@@ -301,12 +301,16 @@ func init() {
 	jobDescCustomFields := jobFields[18].Descriptor()
 	// job.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	job.DefaultCustomFields = jobDescCustomFields.Default.(string)
+	// jobDescLineItems is the schema descriptor for line_items field.
+	jobDescLineItems := jobFields[19].Descriptor()
+	// job.DefaultLineItems holds the default value on creation for the line_items field.
+	job.DefaultLineItems = jobDescLineItems.Default.(string)
 	// jobDescCreatedAt is the schema descriptor for created_at field.
-	jobDescCreatedAt := jobFields[19].Descriptor()
+	jobDescCreatedAt := jobFields[20].Descriptor()
 	// job.DefaultCreatedAt holds the default value on creation for the created_at field.
 	job.DefaultCreatedAt = jobDescCreatedAt.Default.(func() time.Time)
 	// jobDescUpdatedAt is the schema descriptor for updated_at field.
-	jobDescUpdatedAt := jobFields[20].Descriptor()
+	jobDescUpdatedAt := jobFields[21].Descriptor()
 	// job.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	job.DefaultUpdatedAt = jobDescUpdatedAt.Default.(func() time.Time)
 	// job.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

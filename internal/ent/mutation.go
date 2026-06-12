@@ -5878,6 +5878,7 @@ type JobMutation struct {
 	visits                 *string
 	assignments            *string
 	custom_fields          *string
+	line_items             *string
 	created_at             *time.Time
 	updated_at             *time.Time
 	clearedFields          map[string]struct{}
@@ -6859,6 +6860,42 @@ func (m *JobMutation) ResetCustomFields() {
 	m.custom_fields = nil
 }
 
+// SetLineItems sets the "line_items" field.
+func (m *JobMutation) SetLineItems(s string) {
+	m.line_items = &s
+}
+
+// LineItems returns the value of the "line_items" field in the mutation.
+func (m *JobMutation) LineItems() (r string, exists bool) {
+	v := m.line_items
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLineItems returns the old "line_items" field's value of the Job entity.
+// If the Job object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *JobMutation) OldLineItems(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLineItems is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLineItems requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLineItems: %w", err)
+	}
+	return oldValue.LineItems, nil
+}
+
+// ResetLineItems resets all changes to the "line_items" field.
+func (m *JobMutation) ResetLineItems() {
+	m.line_items = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *JobMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -6965,7 +7002,7 @@ func (m *JobMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *JobMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 21)
 	if m.customer_id != nil {
 		fields = append(fields, job.FieldCustomerID)
 	}
@@ -7020,6 +7057,9 @@ func (m *JobMutation) Fields() []string {
 	if m.custom_fields != nil {
 		fields = append(fields, job.FieldCustomFields)
 	}
+	if m.line_items != nil {
+		fields = append(fields, job.FieldLineItems)
+	}
 	if m.created_at != nil {
 		fields = append(fields, job.FieldCreatedAt)
 	}
@@ -7070,6 +7110,8 @@ func (m *JobMutation) Field(name string) (ent.Value, bool) {
 		return m.Assignments()
 	case job.FieldCustomFields:
 		return m.CustomFields()
+	case job.FieldLineItems:
+		return m.LineItems()
 	case job.FieldCreatedAt:
 		return m.CreatedAt()
 	case job.FieldUpdatedAt:
@@ -7119,6 +7161,8 @@ func (m *JobMutation) OldField(ctx context.Context, name string) (ent.Value, err
 		return m.OldAssignments(ctx)
 	case job.FieldCustomFields:
 		return m.OldCustomFields(ctx)
+	case job.FieldLineItems:
+		return m.OldLineItems(ctx)
 	case job.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case job.FieldUpdatedAt:
@@ -7257,6 +7301,13 @@ func (m *JobMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCustomFields(v)
+		return nil
+	case job.FieldLineItems:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLineItems(v)
 		return nil
 	case job.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -7494,6 +7545,9 @@ func (m *JobMutation) ResetField(name string) error {
 		return nil
 	case job.FieldCustomFields:
 		m.ResetCustomFields()
+		return nil
+	case job.FieldLineItems:
+		m.ResetLineItems()
 		return nil
 	case job.FieldCreatedAt:
 		m.ResetCreatedAt()

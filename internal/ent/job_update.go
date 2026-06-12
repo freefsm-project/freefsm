@@ -369,6 +369,20 @@ func (_u *JobUpdate) SetNillableCustomFields(v *string) *JobUpdate {
 	return _u
 }
 
+// SetLineItems sets the "line_items" field.
+func (_u *JobUpdate) SetLineItems(v string) *JobUpdate {
+	_u.mutation.SetLineItems(v)
+	return _u
+}
+
+// SetNillableLineItems sets the "line_items" field if the given value is not nil.
+func (_u *JobUpdate) SetNillableLineItems(v *string) *JobUpdate {
+	if v != nil {
+		_u.SetLineItems(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *JobUpdate) SetUpdatedAt(v time.Time) *JobUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -533,6 +547,9 @@ func (_u *JobUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(job.FieldCustomFields, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LineItems(); ok {
+		_spec.SetField(job.FieldLineItems, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(job.FieldUpdatedAt, field.TypeTime, value)
@@ -898,6 +915,20 @@ func (_u *JobUpdateOne) SetNillableCustomFields(v *string) *JobUpdateOne {
 	return _u
 }
 
+// SetLineItems sets the "line_items" field.
+func (_u *JobUpdateOne) SetLineItems(v string) *JobUpdateOne {
+	_u.mutation.SetLineItems(v)
+	return _u
+}
+
+// SetNillableLineItems sets the "line_items" field if the given value is not nil.
+func (_u *JobUpdateOne) SetNillableLineItems(v *string) *JobUpdateOne {
+	if v != nil {
+		_u.SetLineItems(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *JobUpdateOne) SetUpdatedAt(v time.Time) *JobUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -1092,6 +1123,9 @@ func (_u *JobUpdateOne) sqlSave(ctx context.Context) (_node *Job, err error) {
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(job.FieldCustomFields, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LineItems(); ok {
+		_spec.SetField(job.FieldLineItems, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(job.FieldUpdatedAt, field.TypeTime, value)

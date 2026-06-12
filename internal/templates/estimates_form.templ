@@ -6,6 +6,7 @@ templ EstimateForm(p EstimateFormPageData) {
 	@Layout(estimateFormTitle(p.IsNew)) {
 		<h1>{ estimateFormTitle(p.IsNew) }</h1>
 		<form action={ templ.URL(estimateFormAction(p.IsNew, p.Estimate.ID)) } method="post" autocomplete="off">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
 				Customer
 				<select name="customer_id" required>

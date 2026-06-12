@@ -34,6 +34,7 @@ type JobCreateParams struct {
 	ArrivalEnd        time.Time
 	Notes             string
 	TechNotes         string
+	LineItems         []LineItem
 }
 
 type JobUpdateParams struct {
@@ -52,6 +53,7 @@ type JobUpdateParams struct {
 	ArrivalEnd        *time.Time
 	Notes             *string
 	TechNotes         *string
+	LineItems         *[]LineItem
 }
 
 func (s *JobService) ListAll(ctx context.Context) ([]*ent.Job, error) {
@@ -116,7 +118,8 @@ func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.J
 		SetStatusID(params.StatusID).
 		SetBillingType(params.BillingType).
 		SetNotes(params.Notes).
-		SetTechNotes(params.TechNotes)
+		SetTechNotes(params.TechNotes).
+		SetLineItems(SerializeLineItems(params.LineItems))
 
 	if params.ProjectID > 0 {
 		b.SetProjectID(params.ProjectID)
@@ -198,6 +201,9 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 	if params.TechNotes != nil {
 		u.SetTechNotes(*params.TechNotes)
 	}
+	if params.LineItems != nil {
+		u.SetLineItems(SerializeLineItems(*params.LineItems))
+	}
 
 	j, err := u.Save(ctx)
 	if err != nil {
@@ -215,6 +221,44 @@ func (s *JobService) Delete(ctx context.Context, id int64) error {
 
 func JobPaginationTotalPages(total, perPage int) int {
 	return int(math.Ceil(float64(total) / float64(perPage)))
+}
+
+func (s *JobService) LineItems(j *ent.Job) []LineItem {
+	items, _ := ParseLineItems(j.LineItems)
+	if items == nil {
+		return []LineItem{}
+	}
+	return items
+}
+
+func (s *JobService) ConvertFromEstimate(ctx context.Context, estimateID int64, statusSvc *StatusService) (*ent.Job, error) {
+	e, err := s.client.Estimate.Get(ctx, estimateID)
+	if err != nil {
+		return nil, fmt.Errorf("get estimate %d: %w", estimateID, err)
+	}
+
+	newStatus, err := statusSvc.FindByName(ctx, "job", "New")
+	if err != nil {
+		return nil, fmt.Errorf("find status: %w", err)
+	}
+
+	items, _ := ParseLineItems(e.LineItems)
+
+	return s.Create(ctx, JobCreateParams{
+		CustomerID:  estCustID(e),
+		JobType:     e.Title,
+		StatusID:    newStatus.ID,
+		BillingType: "flat_rate",
+		Notes:       e.Notes,
+		LineItems:   items,
+	})
+}
+
+func estCustID(e *ent.Estimate) int64 {
+	if e.CustomerID == nil {
+		return 0
+	}
+	return *e.CustomerID
 }
 
 var JobBillingTypes = []string{"flat_rate", "hourly", "t_and_m"}

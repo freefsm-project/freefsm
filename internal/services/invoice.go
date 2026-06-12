@@ -176,6 +176,32 @@ func (s *InvoiceService) Payments(i *ent.Invoice) []Payment {
 	return p
 }
 
+func (s *InvoiceService) ConvertFromJob(ctx context.Context, jobID int64, statusSvc *StatusService) (*ent.Invoice, error) {
+	j, err := s.client.Job.Get(ctx, jobID)
+	if err != nil {
+		return nil, fmt.Errorf("get job %d: %w", jobID, err)
+	}
+
+	newStatus, err := statusSvc.FindByName(ctx, "invoice", "Draft")
+	if err != nil {
+		return nil, fmt.Errorf("find status: %w", err)
+	}
+
+	items, _ := ParseLineItems(j.LineItems)
+	now := time.Now()
+
+	return s.Create(ctx, InvoiceCreateParams{
+		CustomerID:  j.CustomerID,
+		JobID:       j.ID,
+		StatusID:    newStatus.ID,
+		Title:       j.JobType,
+		Notes:       j.Notes,
+		InvoiceDate: now,
+		DueDate:     now.AddDate(0, 0, 30),
+		LineItems:   items,
+	})
+}
+
 func (s *InvoiceService) RecordPayment(ctx context.Context, invoiceID int64, payment Payment) error {
 	i, err := s.client.Invoice.Get(ctx, invoiceID)
 	if err != nil {
