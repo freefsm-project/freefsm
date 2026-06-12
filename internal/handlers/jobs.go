@@ -325,12 +325,12 @@ func jobRow(j *ent.Job, statuses []*ent.Status, custMap map[int64]string) templa
 }
 
 func parseTime(v string) time.Time {
-	t, _ := time.Parse("2006-01-02T15:04", strings.TrimSpace(v))
+	t, _ := time.ParseInLocation("2006-01-02T15:04", strings.TrimSpace(v), time.Local)
 	return t
 }
 
 func parseDate(v string) time.Time {
-	t, _ := time.Parse("2006-01-02", strings.TrimSpace(v))
+	t, _ := time.ParseInLocation("2006-01-02", strings.TrimSpace(v), time.Local)
 	return t
 }
 
