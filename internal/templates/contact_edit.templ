@@ -1,0 +1,29 @@
+package templates
+
+import "fmt"
+
+templ ContactEditRow(customerID, contactID int64, firstName, lastName, email, phone, notes string) {
+	<tr id={ templ.SafeURL(fmt.Sprintf("contact-%d", contactID)) }>
+		<td colspan="4">
+			<form hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d", customerID, contactID)) }
+				hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", contactID)) }
+				hx-swap="outerHTML" style="padding:0.25rem">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<div class="grid">
+					<label>First <input type="text" name="first_name" value={ firstName } required/></label>
+					<label>Last <input type="text" name="last_name" value={ lastName } required/></label>
+				</div>
+				<div class="grid">
+					<label>Email <input type="email" name="email" value={ email }/></label>
+					<label>Phone <input type="tel" name="phone" value={ phone }/></label>
+				</div>
+				<label>Notes <input type="text" name="notes" value={ notes }/></label>
+				<button type="submit" class="small">Save</button>
+				<button type="button" class="outline small"
+					hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts", customerID)) }
+					hx-target="#contacts-section"
+					hx-swap="outerHTML">Cancel</button>
+			</form>
+		</td>
+	</tr>
+}

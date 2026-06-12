@@ -1,0 +1,22 @@
+package templates
+
+import "fmt"
+
+templ ContactViewRow(customerID int64, c ContactRow) {
+	<tr id={ templ.SafeURL(fmt.Sprintf("contact-%d", c.ID)) }>
+		<td>{ c.FirstName } { c.LastName }</td>
+		<td>{ c.Email }</td>
+		<td>{ c.Phone }</td>
+		<td style="text-align:right">
+			<button class="outline small"
+				hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/edit", customerID, c.ID)) }
+				hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", c.ID)) }
+				hx-swap="outerHTML">Edit</button>
+			<button class="outline contrast small"
+				hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/delete", customerID, c.ID)) }
+				hx-confirm="Delete this contact?"
+				hx-target="#contacts-section"
+				hx-swap="outerHTML">Del</button>
+		</td>
+	</tr>
+}

@@ -237,7 +237,84 @@ func (h *CustomerHandler) Contacts(w http.ResponseWriter, r *http.Request) {
 		label := c.FirstName + " " + c.LastName
 		opts[i] = templates.SelectOption{Value: c.ID, Label: label}
 	}
-	templates.ContactOptions(opts, 0).Render(r.Context(), w)
+	selected, _ := strconv.ParseInt(r.URL.Query().Get("selected"), 10, 64)
+	templates.ContactOptions(opts, selected).Render(r.Context(), w)
+}
+
+func (h *CustomerHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	contacts, _ := h.contactSvc.ListByCustomer(r.Context(), id)
+	rows := make([]templates.ContactRow, len(contacts))
+	for i, c := range contacts {
+		rows[i] = templates.ContactRow{
+			ID: c.ID, FirstName: c.FirstName, LastName: c.LastName,
+			Email: c.Email, Phone: c.Phone,
+		}
+	}
+	templates.ContactsList(rows, id).Render(r.Context(), w)
+}
+
+func (h *CustomerHandler) NewContactForm(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	templates.ContactForm(id).Render(r.Context(), w)
+}
+
+func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	r.ParseForm()
+	_, err := h.contactSvc.Create(r.Context(), id, services.ContactCreateParams{
+		FirstName: r.FormValue("first_name"),
+		LastName:  r.FormValue("last_name"),
+		Email:     r.FormValue("email"),
+		Phone:     r.FormValue("phone"),
+		Notes:     r.FormValue("notes"),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	h.ListContacts(w, r)
+}
+
+func (h *CustomerHandler) EditContactForm(w http.ResponseWriter, r *http.Request) {
+	custID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	cid, _ := strconv.ParseInt(chi.URLParam(r, "cid"), 10, 64)
+	contacts, _ := h.contactSvc.ListByCustomer(r.Context(), custID)
+	for _, c := range contacts {
+		if c.ID == cid {
+			templates.ContactEditRow(custID, cid, c.FirstName, c.LastName, c.Email, c.Phone, c.Notes).Render(r.Context(), w)
+			return
+		}
+	}
+	http.NotFound(w, r)
+}
+
+func (h *CustomerHandler) UpdateContact(w http.ResponseWriter, r *http.Request) {
+	custID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	cid, _ := strconv.ParseInt(chi.URLParam(r, "cid"), 10, 64)
+	r.ParseForm()
+	c, err := h.contactSvc.Update(r.Context(), cid, services.ContactUpdateParams{
+		FirstName: formPtr(r.FormValue("first_name")),
+		LastName:  formPtr(r.FormValue("last_name")),
+		Email:     formPtr(r.FormValue("email")),
+		Phone:     formPtr(r.FormValue("phone")),
+		Notes:     formPtr(r.FormValue("notes")),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	row := templates.ContactRow{
+		ID: c.ID, FirstName: c.FirstName, LastName: c.LastName,
+		Email: c.Email, Phone: c.Phone,
+	}
+	templates.ContactViewRow(custID, row).Render(r.Context(), w)
+}
+
+func (h *CustomerHandler) DeleteContact(w http.ResponseWriter, r *http.Request) {
+	cid, _ := strconv.ParseInt(chi.URLParam(r, "cid"), 10, 64)
+	h.contactSvc.Delete(r.Context(), cid)
+	h.ListContacts(w, r)
 }
 
 func newFormData() templates.CustomerFormPageData {

@@ -41,7 +41,7 @@ templ JobForm(p JobFormPageData) {
 			</div>
 			<label>
 				Contact (optional)
-				<select name="customer_contact_id" id="contact-select">
+				<select name="customer_contact_id" id="contact-select" data-selected={ fmt.Sprintf("%d", p.Job.ContactID) }>
 					<option value="0">No contact</option>
 				</select>
 			</label>
@@ -118,7 +118,8 @@ templ JobForm(p JobFormPageData) {
 			const contactSelect = document.getElementById('contact-select');
 			function loadContacts(customerID) {
 				if (!customerID) { contactSelect.innerHTML = '<option value="0">No contact</option>'; return; }
-				fetch('/customers/' + customerID + '/contacts')
+				const sel = contactSelect.dataset.selected || 0;
+				fetch('/customers/' + customerID + '/contacts/options?selected=' + sel)
 					.then(r => r.text())
 					.then(html => contactSelect.innerHTML = html);
 			}

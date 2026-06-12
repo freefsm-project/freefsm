@@ -166,9 +166,12 @@ type JobDetail struct {
 	CustomerID      int64
 	Customer        string
 	ProjectID       int64
-	LineItems       []services.LineItem
+	ProjectName     string
 	LocationID      int64
+	LocationName    string
 	ContactID       int64
+	ContactName     string
+	LineItems       []services.LineItem
 	JobType         string
 	Subtitle        string
 	StatusID        int64
@@ -403,6 +406,14 @@ func csrfToken(ctx context.Context) string {
 
 func today() string {
 	return time.Now().Format("2006-01-02")
+}
+
+type ContactRow struct {
+	ID        int64
+	FirstName string
+	LastName  string
+	Email     string
+	Phone     string
 }
 
 type CalendarJob struct {

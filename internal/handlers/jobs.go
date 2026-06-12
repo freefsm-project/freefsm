@@ -83,6 +83,26 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	statuses := h.statusesForSelect(r.Context())
 	d := jobToDetail(j, statuses)
 	d.LineItems = h.svc.LineItems(j)
+	projects, _ := h.projectSvc.ListAll(r.Context())
+	locations, _ := h.locSvc.ListAll(r.Context())
+	if j.CustomerID > 0 {
+		contacts, _ := h.contactSvc.ListByCustomer(r.Context(), j.CustomerID)
+		for _, p := range projects {
+			if j.ProjectID != nil && p.ID == *j.ProjectID {
+				d.ProjectName = p.Name
+			}
+		}
+		for _, l := range locations {
+			if j.LocationID != nil && l.ID == *j.LocationID {
+				d.LocationName = l.Title
+			}
+		}
+		for _, c := range contacts {
+			if j.CustomerContactID != nil && c.ID == *j.CustomerContactID {
+				d.ContactName = c.FirstName + " " + c.LastName
+			}
+		}
+	}
 	templates.JobShow(d).Render(r.Context(), w)
 }
 

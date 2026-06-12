@@ -28,6 +28,15 @@ templ JobShow(p JobDetail) {
 				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
 				<tr><th>Status</th><td><mark>{ p.StatusName }</mark></td></tr>
 				<tr><th>Billing Type</th><td>{ p.BillingType }</td></tr>
+				if p.ProjectName != "" {
+					<tr><th>Project</th><td>{ p.ProjectName }</td></tr>
+				}
+				if p.LocationName != "" {
+					<tr><th>Location</th><td>{ p.LocationName }</td></tr>
+				}
+				if p.ContactName != "" {
+					<tr><th>Contact</th><td>{ p.ContactName }</td></tr>
+				}
 				if p.StartTime != "" {
 					<tr><th>Start Time</th><td>{ p.StartTime }</td></tr>
 				}

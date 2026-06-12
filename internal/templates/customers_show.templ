@@ -47,6 +47,10 @@ templ CustomerShow(p CustomerShowPageData) {
 			}
 			{ p.Customer.ServiceCity }, { p.Customer.ServiceState } { p.Customer.ServiceZipCode }
 		</p>
-		<p><a href="/customers">&larr; Back to Customers</a></p>
+		<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts", p.Customer.ID)) }
+		hx-trigger="load" hx-swap="innerHTML">
+		<p>Loading contacts...</p>
+	</div>
+	<p><a href="/customers">&larr; Back to Customers</a></p>
 	}
 }
