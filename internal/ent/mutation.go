@@ -9606,20 +9606,20 @@ func (m *ProjectMutation) ResetEdge(name string) error {
 // StatusMutation represents an operation that mutates the Status nodes in the graph.
 type StatusMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *int64
-	workflow_id    *int64
-	addworkflow_id *int64
-	name           *string
-	color          *string
-	sort_order     *int
-	addsort_order  *int
-	created_at     *time.Time
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*Status, error)
-	predicates     []predicate.Status
+	op              Op
+	typ             string
+	id              *int64
+	name            *string
+	color           *string
+	sort_order      *int
+	addsort_order   *int
+	created_at      *time.Time
+	clearedFields   map[string]struct{}
+	workflow        *int64
+	clearedworkflow bool
+	done            bool
+	oldValue        func(context.Context) (*Status, error)
+	predicates      []predicate.Status
 }
 
 var _ ent.Mutation = (*StatusMutation)(nil)
@@ -9728,13 +9728,12 @@ func (m *StatusMutation) IDs(ctx context.Context) ([]int64, error) {
 
 // SetWorkflowID sets the "workflow_id" field.
 func (m *StatusMutation) SetWorkflowID(i int64) {
-	m.workflow_id = &i
-	m.addworkflow_id = nil
+	m.workflow = &i
 }
 
 // WorkflowID returns the value of the "workflow_id" field in the mutation.
 func (m *StatusMutation) WorkflowID() (r int64, exists bool) {
-	v := m.workflow_id
+	v := m.workflow
 	if v == nil {
 		return
 	}
@@ -9758,28 +9757,9 @@ func (m *StatusMutation) OldWorkflowID(ctx context.Context) (v int64, err error)
 	return oldValue.WorkflowID, nil
 }
 
-// AddWorkflowID adds i to the "workflow_id" field.
-func (m *StatusMutation) AddWorkflowID(i int64) {
-	if m.addworkflow_id != nil {
-		*m.addworkflow_id += i
-	} else {
-		m.addworkflow_id = &i
-	}
-}
-
-// AddedWorkflowID returns the value that was added to the "workflow_id" field in this mutation.
-func (m *StatusMutation) AddedWorkflowID() (r int64, exists bool) {
-	v := m.addworkflow_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ResetWorkflowID resets all changes to the "workflow_id" field.
 func (m *StatusMutation) ResetWorkflowID() {
-	m.workflow_id = nil
-	m.addworkflow_id = nil
+	m.workflow = nil
 }
 
 // SetName sets the "name" field.
@@ -9946,6 +9926,33 @@ func (m *StatusMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
+// ClearWorkflow clears the "workflow" edge to the StatusWorkflow entity.
+func (m *StatusMutation) ClearWorkflow() {
+	m.clearedworkflow = true
+	m.clearedFields[status.FieldWorkflowID] = struct{}{}
+}
+
+// WorkflowCleared reports if the "workflow" edge to the StatusWorkflow entity was cleared.
+func (m *StatusMutation) WorkflowCleared() bool {
+	return m.clearedworkflow
+}
+
+// WorkflowIDs returns the "workflow" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkflowID instead. It exists only for internal usage by the builders.
+func (m *StatusMutation) WorkflowIDs() (ids []int64) {
+	if id := m.workflow; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkflow resets all changes to the "workflow" edge.
+func (m *StatusMutation) ResetWorkflow() {
+	m.workflow = nil
+	m.clearedworkflow = false
+}
+
 // Where appends a list predicates to the StatusMutation builder.
 func (m *StatusMutation) Where(ps ...predicate.Status) {
 	m.predicates = append(m.predicates, ps...)
@@ -9981,7 +9988,7 @@ func (m *StatusMutation) Type() string {
 // AddedFields().
 func (m *StatusMutation) Fields() []string {
 	fields := make([]string, 0, 5)
-	if m.workflow_id != nil {
+	if m.workflow != nil {
 		fields = append(fields, status.FieldWorkflowID)
 	}
 	if m.name != nil {
@@ -10085,9 +10092,6 @@ func (m *StatusMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *StatusMutation) AddedFields() []string {
 	var fields []string
-	if m.addworkflow_id != nil {
-		fields = append(fields, status.FieldWorkflowID)
-	}
 	if m.addsort_order != nil {
 		fields = append(fields, status.FieldSortOrder)
 	}
@@ -10099,8 +10103,6 @@ func (m *StatusMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *StatusMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
-	case status.FieldWorkflowID:
-		return m.AddedWorkflowID()
 	case status.FieldSortOrder:
 		return m.AddedSortOrder()
 	}
@@ -10112,13 +10114,6 @@ func (m *StatusMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *StatusMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case status.FieldWorkflowID:
-		v, ok := value.(int64)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddWorkflowID(v)
-		return nil
 	case status.FieldSortOrder:
 		v, ok := value.(int)
 		if !ok {
@@ -10174,19 +10169,28 @@ func (m *StatusMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *StatusMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.workflow != nil {
+		edges = append(edges, status.EdgeWorkflow)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *StatusMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case status.EdgeWorkflow:
+		if id := m.workflow; id != nil {
+			return []ent.Value{*id}
+		}
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *StatusMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -10198,41 +10202,61 @@ func (m *StatusMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *StatusMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedworkflow {
+		edges = append(edges, status.EdgeWorkflow)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *StatusMutation) EdgeCleared(name string) bool {
+	switch name {
+	case status.EdgeWorkflow:
+		return m.clearedworkflow
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *StatusMutation) ClearEdge(name string) error {
+	switch name {
+	case status.EdgeWorkflow:
+		m.ClearWorkflow()
+		return nil
+	}
 	return fmt.Errorf("unknown Status unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *StatusMutation) ResetEdge(name string) error {
+	switch name {
+	case status.EdgeWorkflow:
+		m.ResetWorkflow()
+		return nil
+	}
 	return fmt.Errorf("unknown Status edge %s", name)
 }
 
 // StatusWorkflowMutation represents an operation that mutates the StatusWorkflow nodes in the graph.
 type StatusWorkflowMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *int64
-	name          *string
-	object_type   *string
-	created_at    *time.Time
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*StatusWorkflow, error)
-	predicates    []predicate.StatusWorkflow
+	op              Op
+	typ             string
+	id              *int64
+	name            *string
+	object_type     *string
+	created_at      *time.Time
+	clearedFields   map[string]struct{}
+	statuses        map[int64]struct{}
+	removedstatuses map[int64]struct{}
+	clearedstatuses bool
+	done            bool
+	oldValue        func(context.Context) (*StatusWorkflow, error)
+	predicates      []predicate.StatusWorkflow
 }
 
 var _ ent.Mutation = (*StatusWorkflowMutation)(nil)
@@ -10447,6 +10471,60 @@ func (m *StatusWorkflowMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
+// AddStatusIDs adds the "statuses" edge to the Status entity by ids.
+func (m *StatusWorkflowMutation) AddStatusIDs(ids ...int64) {
+	if m.statuses == nil {
+		m.statuses = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.statuses[ids[i]] = struct{}{}
+	}
+}
+
+// ClearStatuses clears the "statuses" edge to the Status entity.
+func (m *StatusWorkflowMutation) ClearStatuses() {
+	m.clearedstatuses = true
+}
+
+// StatusesCleared reports if the "statuses" edge to the Status entity was cleared.
+func (m *StatusWorkflowMutation) StatusesCleared() bool {
+	return m.clearedstatuses
+}
+
+// RemoveStatusIDs removes the "statuses" edge to the Status entity by IDs.
+func (m *StatusWorkflowMutation) RemoveStatusIDs(ids ...int64) {
+	if m.removedstatuses == nil {
+		m.removedstatuses = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.statuses, ids[i])
+		m.removedstatuses[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedStatuses returns the removed IDs of the "statuses" edge to the Status entity.
+func (m *StatusWorkflowMutation) RemovedStatusesIDs() (ids []int64) {
+	for id := range m.removedstatuses {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// StatusesIDs returns the "statuses" edge IDs in the mutation.
+func (m *StatusWorkflowMutation) StatusesIDs() (ids []int64) {
+	for id := range m.statuses {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetStatuses resets all changes to the "statuses" edge.
+func (m *StatusWorkflowMutation) ResetStatuses() {
+	m.statuses = nil
+	m.clearedstatuses = false
+	m.removedstatuses = nil
+}
+
 // Where appends a list predicates to the StatusWorkflowMutation builder.
 func (m *StatusWorkflowMutation) Where(ps ...predicate.StatusWorkflow) {
 	m.predicates = append(m.predicates, ps...)
@@ -10614,49 +10692,85 @@ func (m *StatusWorkflowMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *StatusWorkflowMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.statuses != nil {
+		edges = append(edges, statusworkflow.EdgeStatuses)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *StatusWorkflowMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case statusworkflow.EdgeStatuses:
+		ids := make([]ent.Value, 0, len(m.statuses))
+		for id := range m.statuses {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *StatusWorkflowMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.removedstatuses != nil {
+		edges = append(edges, statusworkflow.EdgeStatuses)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *StatusWorkflowMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case statusworkflow.EdgeStatuses:
+		ids := make([]ent.Value, 0, len(m.removedstatuses))
+		for id := range m.removedstatuses {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *StatusWorkflowMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedstatuses {
+		edges = append(edges, statusworkflow.EdgeStatuses)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *StatusWorkflowMutation) EdgeCleared(name string) bool {
+	switch name {
+	case statusworkflow.EdgeStatuses:
+		return m.clearedstatuses
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *StatusWorkflowMutation) ClearEdge(name string) error {
+	switch name {
+	}
 	return fmt.Errorf("unknown StatusWorkflow unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *StatusWorkflowMutation) ResetEdge(name string) error {
+	switch name {
+	case statusworkflow.EdgeStatuses:
+		m.ResetStatuses()
+		return nil
+	}
 	return fmt.Errorf("unknown StatusWorkflow edge %s", name)
 }
 

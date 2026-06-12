@@ -22,8 +22,29 @@ type StatusWorkflow struct {
 	// ObjectType holds the value of the "object_type" field.
 	ObjectType string `json:"object_type,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
-	CreatedAt    time.Time `json:"created_at,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the StatusWorkflowQuery when eager-loading is set.
+	Edges        StatusWorkflowEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// StatusWorkflowEdges holds the relations/edges for other nodes in the graph.
+type StatusWorkflowEdges struct {
+	// Statuses holds the value of the statuses edge.
+	Statuses []*Status `json:"statuses,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// StatusesOrErr returns the Statuses value or an error if the edge
+// was not loaded in eager-loading.
+func (e StatusWorkflowEdges) StatusesOrErr() ([]*Status, error) {
+	if e.loadedTypes[0] {
+		return e.Statuses, nil
+	}
+	return nil, &NotLoadedError{edge: "statuses"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -87,6 +108,11 @@ func (_m *StatusWorkflow) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *StatusWorkflow) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryStatuses queries the "statuses" edge of the StatusWorkflow entity.
+func (_m *StatusWorkflow) QueryStatuses() *StatusQuery {
+	return NewStatusWorkflowClient(_m.config).QueryStatuses(_m)
 }
 
 // Update returns a builder for updating this StatusWorkflow.

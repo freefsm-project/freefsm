@@ -10,6 +10,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/MartialM1nd/freefsm/internal/ent/status"
+	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 )
 
 // Status is the model entity for the Status schema.
@@ -26,8 +27,31 @@ type Status struct {
 	// SortOrder holds the value of the "sort_order" field.
 	SortOrder int `json:"sort_order,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
-	CreatedAt    time.Time `json:"created_at,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the StatusQuery when eager-loading is set.
+	Edges        StatusEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// StatusEdges holds the relations/edges for other nodes in the graph.
+type StatusEdges struct {
+	// Workflow holds the value of the workflow edge.
+	Workflow *StatusWorkflow `json:"workflow,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// WorkflowOrErr returns the Workflow value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e StatusEdges) WorkflowOrErr() (*StatusWorkflow, error) {
+	if e.Workflow != nil {
+		return e.Workflow, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: statusworkflow.Label}
+	}
+	return nil, &NotLoadedError{edge: "workflow"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -103,6 +127,11 @@ func (_m *Status) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *Status) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryWorkflow queries the "workflow" edge of the Status entity.
+func (_m *Status) QueryWorkflow() *StatusWorkflowQuery {
+	return NewStatusClient(_m.config).QueryWorkflow(_m)
 }
 
 // Update returns a builder for updating this Status.

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/MartialM1nd/freefsm/internal/ent/status"
+	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 )
 
 // StatusCreate is the builder for creating a Status entity.
@@ -70,6 +71,11 @@ func (_c *StatusCreate) SetCreatedAt(v time.Time) *StatusCreate {
 func (_c *StatusCreate) SetID(v int64) *StatusCreate {
 	_c.mutation.SetID(v)
 	return _c
+}
+
+// SetWorkflow sets the "workflow" edge to the StatusWorkflow entity.
+func (_c *StatusCreate) SetWorkflow(v *StatusWorkflow) *StatusCreate {
+	return _c.SetWorkflowID(v.ID)
 }
 
 // Mutation returns the StatusMutation object of the builder.
@@ -139,6 +145,9 @@ func (_c *StatusCreate) check() error {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Status.created_at"`)}
 	}
+	if len(_c.mutation.WorkflowIDs()) == 0 {
+		return &ValidationError{Name: "workflow", err: errors.New(`ent: missing required edge "Status.workflow"`)}
+	}
 	return nil
 }
 
@@ -171,10 +180,6 @@ func (_c *StatusCreate) createSpec() (*Status, *sqlgraph.CreateSpec) {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
-	if value, ok := _c.mutation.WorkflowID(); ok {
-		_spec.SetField(status.FieldWorkflowID, field.TypeInt64, value)
-		_node.WorkflowID = value
-	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(status.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -190,6 +195,23 @@ func (_c *StatusCreate) createSpec() (*Status, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(status.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
+	}
+	if nodes := _c.mutation.WorkflowIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   status.WorkflowTable,
+			Columns: []string{status.WorkflowColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(statusworkflow.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.WorkflowID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

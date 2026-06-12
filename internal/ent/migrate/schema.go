@@ -305,22 +305,30 @@ var (
 	// StatusesColumns holds the columns for the "statuses" table.
 	StatusesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "workflow_id", Type: field.TypeInt64},
 		{Name: "name", Type: field.TypeString},
 		{Name: "color", Type: field.TypeString, Default: "#6B7280"},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "workflow_id", Type: field.TypeInt64},
 	}
 	// StatusesTable holds the schema information for the "statuses" table.
 	StatusesTable = &schema.Table{
 		Name:       "statuses",
 		Columns:    StatusesColumns,
 		PrimaryKey: []*schema.Column{StatusesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "statuses_status_workflows_statuses",
+				Columns:    []*schema.Column{StatusesColumns[5]},
+				RefColumns: []*schema.Column{StatusWorkflowsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "status_workflow_id",
 				Unique:  false,
-				Columns: []*schema.Column{StatusesColumns[1]},
+				Columns: []*schema.Column{StatusesColumns[5]},
 			},
 		},
 	}
@@ -336,13 +344,6 @@ var (
 		Name:       "status_workflows",
 		Columns:    StatusWorkflowsColumns,
 		PrimaryKey: []*schema.Column{StatusWorkflowsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "statusworkflow_object_type",
-				Unique:  false,
-				Columns: []*schema.Column{StatusWorkflowsColumns[2]},
-			},
-		},
 	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
@@ -402,6 +403,7 @@ func init() {
 	ProjectsTable.Annotation = &entsql.Annotation{
 		Table: "projects",
 	}
+	StatusesTable.ForeignKeys[0].RefTable = StatusWorkflowsTable
 	StatusesTable.Annotation = &entsql.Annotation{
 		Table: "statuses",
 	}

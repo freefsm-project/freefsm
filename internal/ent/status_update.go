@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
 	"github.com/MartialM1nd/freefsm/internal/ent/status"
+	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 )
 
 // StatusUpdate is the builder for updating Status entities.
@@ -30,7 +31,6 @@ func (_u *StatusUpdate) Where(ps ...predicate.Status) *StatusUpdate {
 
 // SetWorkflowID sets the "workflow_id" field.
 func (_u *StatusUpdate) SetWorkflowID(v int64) *StatusUpdate {
-	_u.mutation.ResetWorkflowID()
 	_u.mutation.SetWorkflowID(v)
 	return _u
 }
@@ -40,12 +40,6 @@ func (_u *StatusUpdate) SetNillableWorkflowID(v *int64) *StatusUpdate {
 	if v != nil {
 		_u.SetWorkflowID(*v)
 	}
-	return _u
-}
-
-// AddWorkflowID adds value to the "workflow_id" field.
-func (_u *StatusUpdate) AddWorkflowID(v int64) *StatusUpdate {
-	_u.mutation.AddWorkflowID(v)
 	return _u
 }
 
@@ -112,9 +106,20 @@ func (_u *StatusUpdate) SetNillableCreatedAt(v *time.Time) *StatusUpdate {
 	return _u
 }
 
+// SetWorkflow sets the "workflow" edge to the StatusWorkflow entity.
+func (_u *StatusUpdate) SetWorkflow(v *StatusWorkflow) *StatusUpdate {
+	return _u.SetWorkflowID(v.ID)
+}
+
 // Mutation returns the StatusMutation object of the builder.
 func (_u *StatusUpdate) Mutation() *StatusMutation {
 	return _u.mutation
+}
+
+// ClearWorkflow clears the "workflow" edge to the StatusWorkflow entity.
+func (_u *StatusUpdate) ClearWorkflow() *StatusUpdate {
+	_u.mutation.ClearWorkflow()
+	return _u
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -151,6 +156,9 @@ func (_u *StatusUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Status.name": %w`, err)}
 		}
 	}
+	if _u.mutation.WorkflowCleared() && len(_u.mutation.WorkflowIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Status.workflow"`)
+	}
 	return nil
 }
 
@@ -166,12 +174,6 @@ func (_u *StatusUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
-	if value, ok := _u.mutation.WorkflowID(); ok {
-		_spec.SetField(status.FieldWorkflowID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedWorkflowID(); ok {
-		_spec.AddField(status.FieldWorkflowID, field.TypeInt64, value)
-	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(status.FieldName, field.TypeString, value)
 	}
@@ -186,6 +188,35 @@ func (_u *StatusUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(status.FieldCreatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.WorkflowCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   status.WorkflowTable,
+			Columns: []string{status.WorkflowColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(statusworkflow.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.WorkflowIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   status.WorkflowTable,
+			Columns: []string{status.WorkflowColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(statusworkflow.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -209,7 +240,6 @@ type StatusUpdateOne struct {
 
 // SetWorkflowID sets the "workflow_id" field.
 func (_u *StatusUpdateOne) SetWorkflowID(v int64) *StatusUpdateOne {
-	_u.mutation.ResetWorkflowID()
 	_u.mutation.SetWorkflowID(v)
 	return _u
 }
@@ -219,12 +249,6 @@ func (_u *StatusUpdateOne) SetNillableWorkflowID(v *int64) *StatusUpdateOne {
 	if v != nil {
 		_u.SetWorkflowID(*v)
 	}
-	return _u
-}
-
-// AddWorkflowID adds value to the "workflow_id" field.
-func (_u *StatusUpdateOne) AddWorkflowID(v int64) *StatusUpdateOne {
-	_u.mutation.AddWorkflowID(v)
 	return _u
 }
 
@@ -291,9 +315,20 @@ func (_u *StatusUpdateOne) SetNillableCreatedAt(v *time.Time) *StatusUpdateOne {
 	return _u
 }
 
+// SetWorkflow sets the "workflow" edge to the StatusWorkflow entity.
+func (_u *StatusUpdateOne) SetWorkflow(v *StatusWorkflow) *StatusUpdateOne {
+	return _u.SetWorkflowID(v.ID)
+}
+
 // Mutation returns the StatusMutation object of the builder.
 func (_u *StatusUpdateOne) Mutation() *StatusMutation {
 	return _u.mutation
+}
+
+// ClearWorkflow clears the "workflow" edge to the StatusWorkflow entity.
+func (_u *StatusUpdateOne) ClearWorkflow() *StatusUpdateOne {
+	_u.mutation.ClearWorkflow()
+	return _u
 }
 
 // Where appends a list predicates to the StatusUpdate builder.
@@ -343,6 +378,9 @@ func (_u *StatusUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Status.name": %w`, err)}
 		}
 	}
+	if _u.mutation.WorkflowCleared() && len(_u.mutation.WorkflowIDs()) > 0 {
+		return errors.New(`ent: clearing a required unique edge "Status.workflow"`)
+	}
 	return nil
 }
 
@@ -375,12 +413,6 @@ func (_u *StatusUpdateOne) sqlSave(ctx context.Context) (_node *Status, err erro
 			}
 		}
 	}
-	if value, ok := _u.mutation.WorkflowID(); ok {
-		_spec.SetField(status.FieldWorkflowID, field.TypeInt64, value)
-	}
-	if value, ok := _u.mutation.AddedWorkflowID(); ok {
-		_spec.AddField(status.FieldWorkflowID, field.TypeInt64, value)
-	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(status.FieldName, field.TypeString, value)
 	}
@@ -395,6 +427,35 @@ func (_u *StatusUpdateOne) sqlSave(ctx context.Context) (_node *Status, err erro
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(status.FieldCreatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.WorkflowCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   status.WorkflowTable,
+			Columns: []string{status.WorkflowColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(statusworkflow.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.WorkflowIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   status.WorkflowTable,
+			Columns: []string{status.WorkflowColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(statusworkflow.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &Status{config: _u.config}
 	_spec.Assign = _node.assignValues

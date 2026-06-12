@@ -42,7 +42,7 @@ func Layout(title string, children ...templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " - FreeFSM</title><link rel=\"stylesheet\" href=\"/static/css/pico.min.css\"><link rel=\"stylesheet\" href=\"/static/css/app.css\"><script src=\"/static/js/htmx.min.js\"></script><script src=\"/static/js/alpine.min.js\" defer></script></head><body><nav class=\"container-fluid\"><ul><li><strong>FreeFSM</strong></li><li><a href=\"/\">Dashboard</a></li><li><a href=\"/customers\">Customers</a></li><li><a href=\"/jobs\">Jobs</a></li><li><a href=\"/items\">Items</a></li></ul>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " - FreeFSM</title><link rel=\"stylesheet\" href=\"/static/css/pico.min.css\"><link rel=\"stylesheet\" href=\"/static/css/app.css\"><script src=\"/static/js/htmx.min.js\"></script><script src=\"/static/js/alpine.min.js\" defer></script></head><body><nav class=\"container-fluid\"><ul><li><strong>FreeFSM</strong></li><li><a href=\"/\">Dashboard</a></li><li><a href=\"/customers\">Customers</a></li><li><a href=\"/jobs\">Jobs</a></li><li><a href=\"/estimates\">Estimates</a></li><li><a href=\"/invoices\">Invoices</a></li><li><a href=\"/items\">Items</a></li></ul>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -54,7 +54,7 @@ func Layout(title string, children ...templ.Component) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(getUser(ctx).Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 26, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 28, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -77,7 +77,7 @@ func Layout(title string, children ...templ.Component) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(getFlash(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 33, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 35, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {

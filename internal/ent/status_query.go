@@ -13,15 +13,17 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
 	"github.com/MartialM1nd/freefsm/internal/ent/status"
+	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 )
 
 // StatusQuery is the builder for querying Status entities.
 type StatusQuery struct {
 	config
-	ctx        *QueryContext
-	order      []status.OrderOption
-	inters     []Interceptor
-	predicates []predicate.Status
+	ctx          *QueryContext
+	order        []status.OrderOption
+	inters       []Interceptor
+	predicates   []predicate.Status
+	withWorkflow *StatusWorkflowQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -56,6 +58,28 @@ func (_q *StatusQuery) Unique(unique bool) *StatusQuery {
 func (_q *StatusQuery) Order(o ...status.OrderOption) *StatusQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryWorkflow chains the current query on the "workflow" edge.
+func (_q *StatusQuery) QueryWorkflow() *StatusWorkflowQuery {
+	query := (&StatusWorkflowClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(status.Table, status.FieldID, selector),
+			sqlgraph.To(statusworkflow.Table, statusworkflow.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, status.WorkflowTable, status.WorkflowColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // First returns the first Status entity from the query.
@@ -245,15 +269,27 @@ func (_q *StatusQuery) Clone() *StatusQuery {
 		return nil
 	}
 	return &StatusQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]status.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.Status{}, _q.predicates...),
+		config:       _q.config,
+		ctx:          _q.ctx.Clone(),
+		order:        append([]status.OrderOption{}, _q.order...),
+		inters:       append([]Interceptor{}, _q.inters...),
+		predicates:   append([]predicate.Status{}, _q.predicates...),
+		withWorkflow: _q.withWorkflow.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithWorkflow tells the query-builder to eager-load the nodes that are connected to
+// the "workflow" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *StatusQuery) WithWorkflow(opts ...func(*StatusWorkflowQuery)) *StatusQuery {
+	query := (&StatusWorkflowClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withWorkflow = query
+	return _q
 }
 
 // GroupBy is used to group vertices by one or more fields/columns.
@@ -332,8 +368,11 @@ func (_q *StatusQuery) prepareQuery(ctx context.Context) error {
 
 func (_q *StatusQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Status, error) {
 	var (
-		nodes = []*Status{}
-		_spec = _q.querySpec()
+		nodes       = []*Status{}
+		_spec       = _q.querySpec()
+		loadedTypes = [1]bool{
+			_q.withWorkflow != nil,
+		}
 	)
 	_spec.ScanValues = func(columns []string) ([]any, error) {
 		return (*Status).scanValues(nil, columns)
@@ -341,6 +380,7 @@ func (_q *StatusQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Statu
 	_spec.Assign = func(columns []string, values []any) error {
 		node := &Status{config: _q.config}
 		nodes = append(nodes, node)
+		node.Edges.loadedTypes = loadedTypes
 		return node.assignValues(columns, values)
 	}
 	for i := range hooks {
@@ -352,7 +392,43 @@ func (_q *StatusQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Statu
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withWorkflow; query != nil {
+		if err := _q.loadWorkflow(ctx, query, nodes, nil,
+			func(n *Status, e *StatusWorkflow) { n.Edges.Workflow = e }); err != nil {
+			return nil, err
+		}
+	}
 	return nodes, nil
+}
+
+func (_q *StatusQuery) loadWorkflow(ctx context.Context, query *StatusWorkflowQuery, nodes []*Status, init func(*Status), assign func(*Status, *StatusWorkflow)) error {
+	ids := make([]int64, 0, len(nodes))
+	nodeids := make(map[int64][]*Status)
+	for i := range nodes {
+		fk := nodes[i].WorkflowID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(statusworkflow.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "workflow_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
 }
 
 func (_q *StatusQuery) sqlCount(ctx context.Context) (int, error) {
@@ -379,6 +455,9 @@ func (_q *StatusQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != status.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withWorkflow != nil {
+			_spec.Node.AddColumnOnce(status.FieldWorkflowID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

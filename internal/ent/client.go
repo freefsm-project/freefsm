@@ -14,6 +14,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
@@ -1458,6 +1459,22 @@ func (c *StatusClient) GetX(ctx context.Context, id int64) *Status {
 	return obj
 }
 
+// QueryWorkflow queries the workflow edge of a Status.
+func (c *StatusClient) QueryWorkflow(_m *Status) *StatusWorkflowQuery {
+	query := (&StatusWorkflowClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(status.Table, status.FieldID, id),
+			sqlgraph.To(statusworkflow.Table, statusworkflow.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, status.WorkflowTable, status.WorkflowColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *StatusClient) Hooks() []Hook {
 	return c.hooks.Status
@@ -1589,6 +1606,22 @@ func (c *StatusWorkflowClient) GetX(ctx context.Context, id int64) *StatusWorkfl
 		panic(err)
 	}
 	return obj
+}
+
+// QueryStatuses queries the statuses edge of a StatusWorkflow.
+func (c *StatusWorkflowClient) QueryStatuses(_m *StatusWorkflow) *StatusQuery {
+	query := (&StatusClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(statusworkflow.Table, statusworkflow.FieldID, id),
+			sqlgraph.To(status.Table, status.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, statusworkflow.StatusesTable, statusworkflow.StatusesColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // Hooks returns the client hooks.

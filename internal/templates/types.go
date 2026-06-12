@@ -210,9 +210,110 @@ func itemFormTitle(isNew bool) string {
 	return "Edit Item"
 }
 
+type EstimateRow struct {
+	ID         int64
+	Title      string
+	Customer   string
+	CustomerID int64
+	StatusID   int64
+	StatusName string
+	CreatedAt  string
+}
+
+type EstimateDetail struct {
+	ID         int64
+	CustomerID int64
+	Customer   string
+	JobID      int64
+	StatusID   int64
+	StatusName string
+	Title      string
+	Notes      string
+	TaxRate    string
+}
+
+type EstimateListPageData struct {
+	Estimates  []EstimateRow
+	Page       int
+	PerPage    int
+	Total      int
+	TotalPages int
+	Search     string
+	StatusID   int64
+	Statuses   []SelectOption
+}
+
+type EstimateFormPageData struct {
+	Estimate *EstimateDetail
+	Errors   map[string]string
+	IsNew    bool
+	Customers []SelectOption
+	Jobs      []SelectOption
+	Statuses  []SelectOption
+}
+
+type InvoiceRow struct {
+	ID          int64
+	Title       string
+	Customer    string
+	CustomerID  int64
+	StatusID    int64
+	StatusName  string
+	InvoiceDate string
+	DueDate     string
+}
+
+type InvoiceDetail struct {
+	ID          int64
+	CustomerID  int64
+	Customer    string
+	JobID       int64
+	StatusID    int64
+	StatusName  string
+	Title       string
+	Notes       string
+	InvoiceDate string
+	DueDate     string
+	TaxRate     string
+}
+
+type InvoiceListPageData struct {
+	Invoices   []InvoiceRow
+	Page       int
+	PerPage    int
+	Total      int
+	TotalPages int
+	Search     string
+	StatusID   int64
+	Statuses   []SelectOption
+}
+
+type InvoiceFormPageData struct {
+	Invoice   *InvoiceDetail
+	Errors    map[string]string
+	IsNew     bool
+	Customers []SelectOption
+	Jobs      []SelectOption
+	Statuses  []SelectOption
+}
+
 func jobFormTitle(isNew bool) string {
 	if isNew {
 		return "New Job"
 	}
 	return "Edit Job"
+}
+
+func estimateFormTitle(isNew bool) string {
+	if isNew {
+		return "New Estimate"
+	}
+	return "Edit Estimate"
+}
+
+func invoiceFormTitle(isNew bool) string {
+	if isNew {
+		return "New Invoice"
+	}
+	return "Edit Invoice"
 }

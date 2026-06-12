@@ -1,0 +1,66 @@
+package templates
+
+import "fmt"
+
+templ InvoicesIndex(p InvoiceListPageData) {
+	@Layout("Invoices") {
+		<h1>Invoices</h1>
+		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+			<form hx-get="/invoices" hx-target="#invoice-table-wrap" hx-swap="outerHTML" hx-push-url="true" style="display:flex;gap:0.5rem;align-items:center;flex:1">
+				<input type="search" name="search" placeholder="Search by title..."
+					value={ p.Search } style="max-width:300px"
+					hx-trigger="input changed delay:300ms"/>
+				<select name="status_id" hx-trigger="change">
+					<option value="0">All Statuses</option>
+					for _, s := range p.Statuses {
+						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
+					}
+				</select>
+			</form>
+			<a href="/invoices/new" role="button">New Invoice</a>
+		</div>
+		@InvoicesTable(p)
+	}
+}
+
+templ InvoicesTable(p InvoiceListPageData) {
+	<div id="invoice-table-wrap">
+		<table>
+			<thead>
+				<tr>
+					<th>Title</th>
+					<th>Customer</th>
+					<th>Status</th>
+					<th>Invoice Date</th>
+					<th>Due Date</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				if len(p.Invoices) == 0 {
+					<tr><td colspan="6" style="text-align:center">No invoices found.</td></tr>
+				}
+				for _, i := range p.Invoices {
+					<tr>
+						<td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) }>{ i.Title }</a></td>
+						<td>{ i.Customer }</td>
+						<td><mark>{ i.StatusName }</mark></td>
+						<td>{ i.InvoiceDate }</td>
+						<td>{ i.DueDate }</td>
+						<td style="text-align:right">
+							<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", i.ID)) } role="button" class="outline small">Edit</a>
+							<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", i.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this invoice?')">
+								<button class="outline contrast small">Del</button>
+							</form>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		@Pagination(PaginationData{
+			CurrentPage: p.Page,
+			TotalPages:  p.TotalPages,
+			BaseURL:     "/invoices",
+		})
+	</div>
+}

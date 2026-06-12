@@ -1,0 +1,64 @@
+package templates
+
+import "fmt"
+
+templ EstimatesIndex(p EstimateListPageData) {
+	@Layout("Estimates") {
+		<h1>Estimates</h1>
+		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+			<form hx-get="/estimates" hx-target="#estimate-table-wrap" hx-swap="outerHTML" hx-push-url="true" style="display:flex;gap:0.5rem;align-items:center;flex:1">
+				<input type="search" name="search" placeholder="Search by title..."
+					value={ p.Search } style="max-width:300px"
+					hx-trigger="input changed delay:300ms"/>
+				<select name="status_id" hx-trigger="change">
+					<option value="0">All Statuses</option>
+					for _, s := range p.Statuses {
+						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
+					}
+				</select>
+			</form>
+			<a href="/estimates/new" role="button">New Estimate</a>
+		</div>
+		@EstimatesTable(p)
+	}
+}
+
+templ EstimatesTable(p EstimateListPageData) {
+	<div id="estimate-table-wrap">
+		<table>
+			<thead>
+				<tr>
+					<th>Title</th>
+					<th>Customer</th>
+					<th>Status</th>
+					<th>Created</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				if len(p.Estimates) == 0 {
+					<tr><td colspan="5" style="text-align:center">No estimates found.</td></tr>
+				}
+				for _, e := range p.Estimates {
+					<tr>
+						<td><a href={ templ.URL(fmt.Sprintf("/estimates/%d", e.ID)) }>{ e.Title }</a></td>
+						<td>{ e.Customer }</td>
+						<td><mark>{ e.StatusName }</mark></td>
+						<td>{ e.CreatedAt }</td>
+						<td style="text-align:right">
+							<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", e.ID)) } role="button" class="outline small">Edit</a>
+							<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", e.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this estimate?')">
+								<button class="outline contrast small">Del</button>
+							</form>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		@Pagination(PaginationData{
+			CurrentPage: p.Page,
+			TotalPages:  p.TotalPages,
+			BaseURL:     "/estimates",
+		})
+	</div>
+}

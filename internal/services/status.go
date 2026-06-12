@@ -6,6 +6,7 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/ent/status"
+	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 )
 
 type StatusService struct {
@@ -16,8 +17,9 @@ func NewStatusService(client *ent.Client) *StatusService {
 	return &StatusService{client: client}
 }
 
-func (s *StatusService) All(ctx context.Context) ([]*ent.Status, error) {
+func (s *StatusService) ByObjectType(ctx context.Context, objectType string) ([]*ent.Status, error) {
 	statuses, err := s.client.Status.Query().
+		Where(status.HasWorkflowWith(statusworkflow.ObjectTypeEQ(objectType))).
 		Order(ent.Asc(status.FieldSortOrder)).
 		All(ctx)
 	if err != nil {

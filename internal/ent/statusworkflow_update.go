@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
+	"github.com/MartialM1nd/freefsm/internal/ent/status"
 	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 )
 
@@ -70,9 +71,45 @@ func (_u *StatusWorkflowUpdate) SetNillableCreatedAt(v *time.Time) *StatusWorkfl
 	return _u
 }
 
+// AddStatusIDs adds the "statuses" edge to the Status entity by IDs.
+func (_u *StatusWorkflowUpdate) AddStatusIDs(ids ...int64) *StatusWorkflowUpdate {
+	_u.mutation.AddStatusIDs(ids...)
+	return _u
+}
+
+// AddStatuses adds the "statuses" edges to the Status entity.
+func (_u *StatusWorkflowUpdate) AddStatuses(v ...*Status) *StatusWorkflowUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddStatusIDs(ids...)
+}
+
 // Mutation returns the StatusWorkflowMutation object of the builder.
 func (_u *StatusWorkflowUpdate) Mutation() *StatusWorkflowMutation {
 	return _u.mutation
+}
+
+// ClearStatuses clears all "statuses" edges to the Status entity.
+func (_u *StatusWorkflowUpdate) ClearStatuses() *StatusWorkflowUpdate {
+	_u.mutation.ClearStatuses()
+	return _u
+}
+
+// RemoveStatusIDs removes the "statuses" edge to Status entities by IDs.
+func (_u *StatusWorkflowUpdate) RemoveStatusIDs(ids ...int64) *StatusWorkflowUpdate {
+	_u.mutation.RemoveStatusIDs(ids...)
+	return _u
+}
+
+// RemoveStatuses removes "statuses" edges to Status entities.
+func (_u *StatusWorkflowUpdate) RemoveStatuses(v ...*Status) *StatusWorkflowUpdate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveStatusIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -138,6 +175,51 @@ func (_u *StatusWorkflowUpdate) sqlSave(ctx context.Context) (_node int, err err
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(statusworkflow.FieldCreatedAt, field.TypeTime, value)
 	}
+	if _u.mutation.StatusesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   statusworkflow.StatusesTable,
+			Columns: []string{statusworkflow.StatusesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(status.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedStatusesIDs(); len(nodes) > 0 && !_u.mutation.StatusesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   statusworkflow.StatusesTable,
+			Columns: []string{statusworkflow.StatusesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(status.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.StatusesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   statusworkflow.StatusesTable,
+			Columns: []string{statusworkflow.StatusesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(status.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
 			err = &NotFoundError{statusworkflow.Label}
@@ -200,9 +282,45 @@ func (_u *StatusWorkflowUpdateOne) SetNillableCreatedAt(v *time.Time) *StatusWor
 	return _u
 }
 
+// AddStatusIDs adds the "statuses" edge to the Status entity by IDs.
+func (_u *StatusWorkflowUpdateOne) AddStatusIDs(ids ...int64) *StatusWorkflowUpdateOne {
+	_u.mutation.AddStatusIDs(ids...)
+	return _u
+}
+
+// AddStatuses adds the "statuses" edges to the Status entity.
+func (_u *StatusWorkflowUpdateOne) AddStatuses(v ...*Status) *StatusWorkflowUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddStatusIDs(ids...)
+}
+
 // Mutation returns the StatusWorkflowMutation object of the builder.
 func (_u *StatusWorkflowUpdateOne) Mutation() *StatusWorkflowMutation {
 	return _u.mutation
+}
+
+// ClearStatuses clears all "statuses" edges to the Status entity.
+func (_u *StatusWorkflowUpdateOne) ClearStatuses() *StatusWorkflowUpdateOne {
+	_u.mutation.ClearStatuses()
+	return _u
+}
+
+// RemoveStatusIDs removes the "statuses" edge to Status entities by IDs.
+func (_u *StatusWorkflowUpdateOne) RemoveStatusIDs(ids ...int64) *StatusWorkflowUpdateOne {
+	_u.mutation.RemoveStatusIDs(ids...)
+	return _u
+}
+
+// RemoveStatuses removes "statuses" edges to Status entities.
+func (_u *StatusWorkflowUpdateOne) RemoveStatuses(v ...*Status) *StatusWorkflowUpdateOne {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveStatusIDs(ids...)
 }
 
 // Where appends a list predicates to the StatusWorkflowUpdate builder.
@@ -297,6 +415,51 @@ func (_u *StatusWorkflowUpdateOne) sqlSave(ctx context.Context) (_node *StatusWo
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(statusworkflow.FieldCreatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.StatusesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   statusworkflow.StatusesTable,
+			Columns: []string{statusworkflow.StatusesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(status.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedStatusesIDs(); len(nodes) > 0 && !_u.mutation.StatusesCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   statusworkflow.StatusesTable,
+			Columns: []string{statusworkflow.StatusesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(status.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.StatusesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   statusworkflow.StatusesTable,
+			Columns: []string{statusworkflow.StatusesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(status.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	_node = &StatusWorkflow{config: _u.config}
 	_spec.Assign = _node.assignValues

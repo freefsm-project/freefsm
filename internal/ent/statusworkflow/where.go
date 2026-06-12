@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
 )
 
@@ -237,6 +238,29 @@ func CreatedAtLT(v time.Time) predicate.StatusWorkflow {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.StatusWorkflow {
 	return predicate.StatusWorkflow(sql.FieldLTE(FieldCreatedAt, v))
+}
+
+// HasStatuses applies the HasEdge predicate on the "statuses" edge.
+func HasStatuses() predicate.StatusWorkflow {
+	return predicate.StatusWorkflow(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, StatusesTable, StatusesColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasStatusesWith applies the HasEdge predicate on the "statuses" edge with a given conditions (other predicates).
+func HasStatusesWith(preds ...predicate.Status) predicate.StatusWorkflow {
+	return predicate.StatusWorkflow(func(s *sql.Selector) {
+		step := newStatusesStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

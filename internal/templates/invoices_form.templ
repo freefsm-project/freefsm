@@ -1,0 +1,71 @@
+package templates
+
+import "fmt"
+
+templ InvoiceForm(p InvoiceFormPageData) {
+	@Layout(invoiceFormTitle(p.IsNew)) {
+		<h1>{ invoiceFormTitle(p.IsNew) }</h1>
+		<form action="" method="post" autocomplete="off">
+			<label>
+				Customer
+				<select name="customer_id" required>
+					<option value="">Select a customer...</option>
+					for _, c := range p.Customers {
+						<option value={ fmt.Sprintf("%d", c.Value) } selected?={ p.Invoice.CustomerID == c.Value }>{ c.Label }</option>
+					}
+				</select>
+				if p.Errors["customer_id"] != "" {
+					<small class="error-msg">{ p.Errors["customer_id"] }</small>
+				}
+			</label>
+			<label>
+				Job (optional)
+				<select name="job_id">
+					<option value="0">No job</option>
+					for _, j := range p.Jobs {
+						<option value={ fmt.Sprintf("%d", j.Value) } selected?={ p.Invoice.JobID == j.Value }>{ j.Label }</option>
+					}
+				</select>
+			</label>
+			<div class="grid">
+				<label>
+					Title
+					<input type="text" name="title" value={ p.Invoice.Title } required autofocus/>
+					if p.Errors["title"] != "" {
+						<small class="error-msg">{ p.Errors["title"] }</small>
+					}
+				</label>
+				<label>
+					Status
+					<select name="status_id">
+						for _, s := range p.Statuses {
+							<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.Invoice.StatusID == s.Value }>{ s.Label }</option>
+						}
+					</select>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Invoice Date
+					<input type="date" name="invoice_date" value={ p.Invoice.InvoiceDate }/>
+				</label>
+				<label>
+					Due Date
+					<input type="date" name="due_date" value={ p.Invoice.DueDate }/>
+				</label>
+			</div>
+			<label>
+				Tax Rate
+				<input type="text" name="tax_rate" value={ p.Invoice.TaxRate } placeholder="e.g. 8.25%"/>
+			</label>
+			<label>
+				Notes
+				<textarea name="notes" rows="3">{ p.Invoice.Notes }</textarea>
+			</label>
+			<div style="display:flex;gap:0.5rem;margin-top:1rem">
+				<button type="submit">Save</button>
+				<a href="/invoices" role="button" class="outline">Cancel</a>
+			</div>
+		</form>
+	}
+}

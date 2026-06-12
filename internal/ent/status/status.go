@@ -4,6 +4,7 @@ package status
 
 import (
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -21,8 +22,17 @@ const (
 	FieldSortOrder = "sort_order"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// EdgeWorkflow holds the string denoting the workflow edge name in mutations.
+	EdgeWorkflow = "workflow"
 	// Table holds the table name of the status in the database.
 	Table = "statuses"
+	// WorkflowTable is the table that holds the workflow relation/edge.
+	WorkflowTable = "statuses"
+	// WorkflowInverseTable is the table name for the StatusWorkflow entity.
+	// It exists in this package in order to avoid circular dependency with the "statusworkflow" package.
+	WorkflowInverseTable = "status_workflows"
+	// WorkflowColumn is the table column denoting the workflow relation/edge.
+	WorkflowColumn = "workflow_id"
 )
 
 // Columns holds all SQL columns for status fields.
@@ -85,4 +95,18 @@ func BySortOrder(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByWorkflowField orders the results by workflow field.
+func ByWorkflowField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newWorkflowStep(), sql.OrderByField(field, opts...))
+	}
+}
+func newWorkflowStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkflowInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, WorkflowTable, WorkflowColumn),
+	)
 }

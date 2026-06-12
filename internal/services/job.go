@@ -44,6 +44,10 @@ type JobUpdateParams struct {
 	TechNotes   *string
 }
 
+func (s *JobService) ListAll(ctx context.Context) ([]*ent.Job, error) {
+	return s.client.Job.Query().Order(ent.Desc(job.FieldStartTime)).All(ctx)
+}
+
 func (s *JobService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Job, int, error) {
 	q := s.client.Job.Query()
 

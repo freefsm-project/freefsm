@@ -10,6 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/MartialM1nd/freefsm/internal/ent/status"
 	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 )
 
@@ -42,6 +43,21 @@ func (_c *StatusWorkflowCreate) SetCreatedAt(v time.Time) *StatusWorkflowCreate 
 func (_c *StatusWorkflowCreate) SetID(v int64) *StatusWorkflowCreate {
 	_c.mutation.SetID(v)
 	return _c
+}
+
+// AddStatusIDs adds the "statuses" edge to the Status entity by IDs.
+func (_c *StatusWorkflowCreate) AddStatusIDs(ids ...int64) *StatusWorkflowCreate {
+	_c.mutation.AddStatusIDs(ids...)
+	return _c
+}
+
+// AddStatuses adds the "statuses" edges to the Status entity.
+func (_c *StatusWorkflowCreate) AddStatuses(v ...*Status) *StatusWorkflowCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddStatusIDs(ids...)
 }
 
 // Mutation returns the StatusWorkflowMutation object of the builder.
@@ -140,6 +156,22 @@ func (_c *StatusWorkflowCreate) createSpec() (*StatusWorkflow, *sqlgraph.CreateS
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(statusworkflow.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
+	}
+	if nodes := _c.mutation.StatusesIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   statusworkflow.StatusesTable,
+			Columns: []string{statusworkflow.StatusesColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(status.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
 }

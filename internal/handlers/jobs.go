@@ -180,7 +180,7 @@ func (h *JobHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *JobHandler) statusesForSelect(ctx context.Context) []*ent.Status {
-	statuses, _ := h.statusSvc.All(ctx)
+	statuses, _ := h.statusSvc.ByObjectType(ctx, "job")
 	return statuses
 }
 

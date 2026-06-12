@@ -1,0 +1,29 @@
+package templates
+
+import "fmt"
+
+templ EstimateShow(p EstimateDetail) {
+	@Layout("Estimate - "+p.Title) {
+		<div style="display:flex;justify-content:space-between;align-items:center">
+			<h1>{ p.Title }</h1>
+			<div style="display:flex;gap:0.5rem">
+				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", p.ID)) } role="button" class="outline">Edit</a>
+				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this estimate?')">
+					<button class="outline contrast">Delete</button>
+				</form>
+			</div>
+		</div>
+		<table>
+			<tbody>
+				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
+				<tr><th>Status</th><td><mark>{ p.StatusName }</mark></td></tr>
+				<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
+			</tbody>
+		</table>
+		if p.Notes != "" {
+			<h3>Notes</h3>
+			<p>{ p.Notes }</p>
+		}
+		<p><a href="/estimates">&larr; Back to Estimates</a></p>
+	}
+}

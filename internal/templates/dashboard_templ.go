@@ -41,7 +41,7 @@ func DashboardPage() templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<h1>Dashboard</h1><p>Welcome to FreeFSM. Select a module from the navigation to get started.</p><div class=\"grid\"><article><header>Customers</header><p>Manage your customer database</p><footer><a href=\"/customers\" role=\"button\" class=\"outline\">View Customers</a></footer></article><article><header>Jobs</header><p>Track jobs and field service</p><footer><a href=\"/jobs\" role=\"button\" class=\"outline\">View Jobs</a></footer></article><article><header>Invoices</header><p>Create and manage invoices</p><footer><a href=\"/invoices\" role=\"button\" class=\"outline\">View Invoices</a></footer></article></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<h1>Dashboard</h1><p>Welcome to FreeFSM. Select a module from the navigation to get started.</p><div class=\"grid\"><article><header>Customers</header><p>Manage your customer database</p><footer><a href=\"/customers\" role=\"button\" class=\"outline\">View Customers</a></footer></article><article><header>Jobs</header><p>Track jobs and field service</p><footer><a href=\"/jobs\" role=\"button\" class=\"outline\">View Jobs</a></footer></article><article><header>Estimates</header><p>Create and send estimates</p><footer><a href=\"/estimates\" role=\"button\" class=\"outline\">View Estimates</a></footer></article><article><header>Invoices</header><p>Create and manage invoices</p><footer><a href=\"/invoices\" role=\"button\" class=\"outline\">View Invoices</a></footer></article></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

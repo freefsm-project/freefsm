@@ -4,6 +4,7 @@ package statusworkflow
 
 import (
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 const (
@@ -17,8 +18,17 @@ const (
 	FieldObjectType = "object_type"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// EdgeStatuses holds the string denoting the statuses edge name in mutations.
+	EdgeStatuses = "statuses"
 	// Table holds the table name of the statusworkflow in the database.
 	Table = "status_workflows"
+	// StatusesTable is the table that holds the statuses relation/edge.
+	StatusesTable = "statuses"
+	// StatusesInverseTable is the table name for the Status entity.
+	// It exists in this package in order to avoid circular dependency with the "status" package.
+	StatusesInverseTable = "statuses"
+	// StatusesColumn is the table column denoting the statuses relation/edge.
+	StatusesColumn = "workflow_id"
 )
 
 // Columns holds all SQL columns for statusworkflow fields.
@@ -67,4 +77,25 @@ func ByObjectType(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByStatusesCount orders the results by statuses count.
+func ByStatusesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newStatusesStep(), opts...)
+	}
+}
+
+// ByStatuses orders the results by statuses terms.
+func ByStatuses(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newStatusesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+func newStatusesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(StatusesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, StatusesTable, StatusesColumn),
+	)
 }

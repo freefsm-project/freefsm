@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
 )
 
@@ -97,26 +98,6 @@ func WorkflowIDIn(vs ...int64) predicate.Status {
 // WorkflowIDNotIn applies the NotIn predicate on the "workflow_id" field.
 func WorkflowIDNotIn(vs ...int64) predicate.Status {
 	return predicate.Status(sql.FieldNotIn(FieldWorkflowID, vs...))
-}
-
-// WorkflowIDGT applies the GT predicate on the "workflow_id" field.
-func WorkflowIDGT(v int64) predicate.Status {
-	return predicate.Status(sql.FieldGT(FieldWorkflowID, v))
-}
-
-// WorkflowIDGTE applies the GTE predicate on the "workflow_id" field.
-func WorkflowIDGTE(v int64) predicate.Status {
-	return predicate.Status(sql.FieldGTE(FieldWorkflowID, v))
-}
-
-// WorkflowIDLT applies the LT predicate on the "workflow_id" field.
-func WorkflowIDLT(v int64) predicate.Status {
-	return predicate.Status(sql.FieldLT(FieldWorkflowID, v))
-}
-
-// WorkflowIDLTE applies the LTE predicate on the "workflow_id" field.
-func WorkflowIDLTE(v int64) predicate.Status {
-	return predicate.Status(sql.FieldLTE(FieldWorkflowID, v))
 }
 
 // NameEQ applies the EQ predicate on the "name" field.
@@ -327,6 +308,29 @@ func CreatedAtLT(v time.Time) predicate.Status {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.Status {
 	return predicate.Status(sql.FieldLTE(FieldCreatedAt, v))
+}
+
+// HasWorkflow applies the HasEdge predicate on the "workflow" edge.
+func HasWorkflow() predicate.Status {
+	return predicate.Status(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, WorkflowTable, WorkflowColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasWorkflowWith applies the HasEdge predicate on the "workflow" edge with a given conditions (other predicates).
+func HasWorkflowWith(preds ...predicate.StatusWorkflow) predicate.Status {
+	return predicate.Status(func(s *sql.Selector) {
+		step := newWorkflowStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.
