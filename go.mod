@@ -6,7 +6,6 @@ require (
 	entgo.io/ent v0.14.6
 	github.com/a-h/templ v0.3.1020
 	github.com/go-chi/chi/v5 v5.3.0
-	github.com/go-chi/cors v1.2.2
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/joho/godotenv v1.5.1
 	golang.org/x/crypto v0.0.0-20220517005047-85d78b3ac167

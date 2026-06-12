@@ -1,0 +1,72 @@
+package templates
+
+import "fmt"
+
+templ CustomerIndex(p CustomerListPageData) {
+	@Layout("Customers", &User{Name: "Admin"}) {
+		<h1>Customers</h1>
+		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+			<form hx-get="/customers" hx-target="#customer-table-wrap" hx-swap="outerHTML" hx-push-url="true" style="display:flex;gap:0.5rem;align-items:center;flex:1">
+				<input type="search" name="search" placeholder="Search customers..."
+					value={ p.Search } style="max-width:300px"/>
+				<select name="status">
+					<option value="">All Statuses</option>
+					for _, s := range []string{"lead", "opportunity", "customer", "lost", "inactive"} {
+						<option value={ s } selected?={ p.StatusFilter == s }>{ s }</option>
+					}
+				</select>
+			</form>
+			<a href="/customers/new" role="button">New Customer</a>
+		</div>
+		@CustomerTable(p)
+	}
+}
+
+templ CustomerTable(p CustomerListPageData) {
+	<div id="customer-table-wrap">
+		<table>
+			<thead>
+				<tr>
+					<th>Name</th>
+					<th>Email</th>
+					<th>Phone</th>
+					<th>Status</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				if len(p.Customers) == 0 {
+					<tr><td colspan="5" style="text-align:center">No customers found.</td></tr>
+				}
+				for _, c := range p.Customers {
+					<tr>
+						<td>
+							<a href={ templ.URL(fmt.Sprintf("/customers/%d", c.ID)) }>
+								{ c.DisplayName }
+							</a>
+							if c.CompanyName != "" {
+								<br/><small>{ c.CompanyName }</small>
+							}
+						</td>
+						<td>{ c.Email }</td>
+						<td>{ c.Phone }</td>
+						<td><mark>{ c.Status }</mark></td>
+						<td style="text-align:right">
+							<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", c.ID)) } role="button" class="outline small">Edit</a>
+							<button class="outline contrast small"
+								hx-post={ templ.URL(fmt.Sprintf("/customers/%d/delete", c.ID)) }
+								hx-confirm="Delete this customer?"
+								hx-target="body"
+							>Del</button>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		@Pagination(PaginationData{
+			CurrentPage: p.Page,
+			TotalPages:  p.TotalPages,
+			BaseURL:     "/customers",
+		})
+	</div>
+}

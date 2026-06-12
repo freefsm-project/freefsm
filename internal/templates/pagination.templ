@@ -1,0 +1,30 @@
+package templates
+
+import "fmt"
+
+templ Pagination(p PaginationData) {
+	if p.TotalPages <= 1 {
+		return
+	}
+	<nav aria-label="Pagination" style="display:flex;justify-content:center;gap:0.5rem;margin-top:1rem">
+		if p.CurrentPage > 1 {
+			<a href={ templ.URL(fmt.Sprintf("%s?page=%d", p.BaseURL, p.CurrentPage-1)) }
+				role="button" class="outline"
+				hx-get={ templ.URL(fmt.Sprintf("%s?page=%d", p.BaseURL, p.CurrentPage-1)) }
+				hx-target="#customer-table-wrap"
+				hx-swap="outerHTML"
+				hx-push-url="true"
+			>Previous</a>
+		}
+		<small>Page { fmt.Sprintf("%d", p.CurrentPage) } of { fmt.Sprintf("%d", p.TotalPages) }</small>
+		if p.CurrentPage < p.TotalPages {
+			<a href={ templ.URL(fmt.Sprintf("%s?page=%d", p.BaseURL, p.CurrentPage+1)) }
+				role="button" class="outline"
+				hx-get={ templ.URL(fmt.Sprintf("%s?page=%d", p.BaseURL, p.CurrentPage+1)) }
+				hx-target="#customer-table-wrap"
+				hx-swap="outerHTML"
+				hx-push-url="true"
+			>Next</a>
+		}
+	</nav>
+}
