@@ -30,5 +30,11 @@ type Location func(*sql.Selector)
 // Project is the predicate function for project builders.
 type Project func(*sql.Selector)
 
+// Status is the predicate function for status builders.
+type Status func(*sql.Selector)
+
+// StatusWorkflow is the predicate function for statusworkflow builders.
+type StatusWorkflow func(*sql.Selector)
+
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

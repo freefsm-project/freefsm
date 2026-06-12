@@ -12,6 +12,8 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/location"
 	"github.com/MartialM1nd/freefsm/internal/ent/project"
 	"github.com/MartialM1nd/freefsm/internal/ent/schema"
+	"github.com/MartialM1nd/freefsm/internal/ent/status"
+	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 	"github.com/MartialM1nd/freefsm/internal/ent/user"
 )
 
@@ -295,6 +297,30 @@ func init() {
 	projectDescNotes := projectFields[9].Descriptor()
 	// project.DefaultNotes holds the default value on creation for the notes field.
 	project.DefaultNotes = projectDescNotes.Default.(string)
+	statusFields := schema.Status{}.Fields()
+	_ = statusFields
+	// statusDescName is the schema descriptor for name field.
+	statusDescName := statusFields[2].Descriptor()
+	// status.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	status.NameValidator = statusDescName.Validators[0].(func(string) error)
+	// statusDescColor is the schema descriptor for color field.
+	statusDescColor := statusFields[3].Descriptor()
+	// status.DefaultColor holds the default value on creation for the color field.
+	status.DefaultColor = statusDescColor.Default.(string)
+	// statusDescSortOrder is the schema descriptor for sort_order field.
+	statusDescSortOrder := statusFields[4].Descriptor()
+	// status.DefaultSortOrder holds the default value on creation for the sort_order field.
+	status.DefaultSortOrder = statusDescSortOrder.Default.(int)
+	statusworkflowFields := schema.StatusWorkflow{}.Fields()
+	_ = statusworkflowFields
+	// statusworkflowDescName is the schema descriptor for name field.
+	statusworkflowDescName := statusworkflowFields[1].Descriptor()
+	// statusworkflow.NameValidator is a validator for the "name" field. It is called by the builders before save.
+	statusworkflow.NameValidator = statusworkflowDescName.Validators[0].(func(string) error)
+	// statusworkflowDescObjectType is the schema descriptor for object_type field.
+	statusworkflowDescObjectType := statusworkflowFields[2].Descriptor()
+	// statusworkflow.ObjectTypeValidator is a validator for the "object_type" field. It is called by the builders before save.
+	statusworkflow.ObjectTypeValidator = statusworkflowDescObjectType.Validators[0].(func(string) error)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescEmail is the schema descriptor for email field.

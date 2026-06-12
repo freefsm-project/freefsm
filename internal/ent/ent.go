@@ -20,6 +20,8 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
 	"github.com/MartialM1nd/freefsm/internal/ent/location"
 	"github.com/MartialM1nd/freefsm/internal/ent/project"
+	"github.com/MartialM1nd/freefsm/internal/ent/status"
+	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 	"github.com/MartialM1nd/freefsm/internal/ent/user"
 )
 
@@ -89,6 +91,8 @@ func checkColumn(t, c string) error {
 			job.Table:             job.ValidColumn,
 			location.Table:        location.ValidColumn,
 			project.Table:         project.ValidColumn,
+			status.Table:          status.ValidColumn,
+			statusworkflow.Table:  statusworkflow.ValidColumn,
 			user.Table:            user.ValidColumn,
 		})
 	})

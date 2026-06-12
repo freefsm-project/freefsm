@@ -144,6 +144,58 @@ type ItemFormPageData struct {
 	Types    []string
 }
 
+type JobRow struct {
+	ID          int64
+	DisplayName string
+	Customer    string
+	JobType     string
+	StatusID    int64
+	StatusName  string
+	StartTime   string
+	BillingType string
+}
+
+type JobDetail struct {
+	ID          int64
+	CustomerID  int64
+	Customer    string
+	JobType     string
+	Subtitle    string
+	StatusID    int64
+	StatusName  string
+	BillingType string
+	StartTime   string
+	EndTime     string
+	DueDate     string
+	Notes       string
+	TechNotes   string
+}
+
+type SelectOption struct {
+	Value int64
+	Label string
+}
+
+type JobListPageData struct {
+	Jobs       []JobRow
+	Page       int
+	PerPage    int
+	Total      int
+	TotalPages int
+	Search     string
+	StatusID   int64
+	Statuses   []SelectOption
+}
+
+type JobFormPageData struct {
+	Job          *JobDetail
+	Errors       map[string]string
+	IsNew        bool
+	Customers    []SelectOption
+	Statuses     []SelectOption
+	BillingTypes []string
+}
+
 func customerFormTitle(isNew bool) string {
 	if isNew {
 		return "New Customer"
@@ -156,4 +208,11 @@ func itemFormTitle(isNew bool) string {
 		return "New Item"
 	}
 	return "Edit Item"
+}
+
+func jobFormTitle(isNew bool) string {
+	if isNew {
+		return "New Job"
+	}
+	return "Edit Job"
 }

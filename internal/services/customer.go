@@ -61,6 +61,10 @@ type CustomerUpdateParams struct {
 	ServiceZipCode  *string
 }
 
+func (s *CustomerService) ListAll(ctx context.Context) ([]*ent.Customer, error) {
+	return s.client.Customer.Query().Order(ent.Asc(customer.FieldDisplayName)).All(ctx)
+}
+
 func (s *CustomerService) List(ctx context.Context, search, status string, page, perPage int) ([]*ent.Customer, int, error) {
 	q := s.client.Customer.Query()
 

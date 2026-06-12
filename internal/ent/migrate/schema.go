@@ -302,6 +302,48 @@ var (
 			},
 		},
 	}
+	// StatusesColumns holds the columns for the "statuses" table.
+	StatusesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "workflow_id", Type: field.TypeInt64},
+		{Name: "name", Type: field.TypeString},
+		{Name: "color", Type: field.TypeString, Default: "#6B7280"},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// StatusesTable holds the schema information for the "statuses" table.
+	StatusesTable = &schema.Table{
+		Name:       "statuses",
+		Columns:    StatusesColumns,
+		PrimaryKey: []*schema.Column{StatusesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "status_workflow_id",
+				Unique:  false,
+				Columns: []*schema.Column{StatusesColumns[1]},
+			},
+		},
+	}
+	// StatusWorkflowsColumns holds the columns for the "status_workflows" table.
+	StatusWorkflowsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "name", Type: field.TypeString},
+		{Name: "object_type", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// StatusWorkflowsTable holds the schema information for the "status_workflows" table.
+	StatusWorkflowsTable = &schema.Table{
+		Name:       "status_workflows",
+		Columns:    StatusWorkflowsColumns,
+		PrimaryKey: []*schema.Column{StatusWorkflowsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "statusworkflow_object_type",
+				Unique:  false,
+				Columns: []*schema.Column{StatusWorkflowsColumns[2]},
+			},
+		},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -329,6 +371,8 @@ var (
 		JobsTable,
 		LocationsTable,
 		ProjectsTable,
+		StatusesTable,
+		StatusWorkflowsTable,
 		UsersTable,
 	}
 )
@@ -357,6 +401,12 @@ func init() {
 	}
 	ProjectsTable.Annotation = &entsql.Annotation{
 		Table: "projects",
+	}
+	StatusesTable.Annotation = &entsql.Annotation{
+		Table: "statuses",
+	}
+	StatusWorkflowsTable.Annotation = &entsql.Annotation{
+		Table: "status_workflows",
 	}
 	UsersTable.Annotation = &entsql.Annotation{
 		Table: "users",

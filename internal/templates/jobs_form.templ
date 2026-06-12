@@ -1,0 +1,80 @@
+package templates
+
+import "fmt"
+
+templ JobForm(p JobFormPageData) {
+	@Layout(jobFormTitle(p.IsNew)) {
+		<h1>{ jobFormTitle(p.IsNew) }</h1>
+		<form action="" method="post" autocomplete="off">
+			<label>
+				Customer
+				<select name="customer_id" required>
+					<option value="">Select a customer...</option>
+					for _, c := range p.Customers {
+						<option value={ fmt.Sprintf("%d", c.Value) } selected?={ p.Job.CustomerID == c.Value }>{ c.Label }</option>
+					}
+				</select>
+				if p.Errors["customer_id"] != "" {
+					<small class="error-msg">{ p.Errors["customer_id"] }</small>
+				}
+			</label>
+			<div class="grid">
+				<label>
+					Job Type
+					<input type="text" name="job_type" value={ p.Job.JobType } placeholder="e.g. Installation, Repair" required/>
+					if p.Errors["job_type"] != "" {
+						<small class="error-msg">{ p.Errors["job_type"] }</small>
+					}
+				</label>
+				<label>
+					Subtitle
+					<input type="text" name="subtitle" value={ p.Job.Subtitle } placeholder="Optional"/>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Status
+					<select name="status_id">
+						for _, s := range p.Statuses {
+							<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.Job.StatusID == s.Value }>{ s.Label }</option>
+						}
+					</select>
+				</label>
+				<label>
+					Billing Type
+					<select name="billing_type">
+						for _, b := range p.BillingTypes {
+							<option value={ b } selected?={ p.Job.BillingType == b }>{ b }</option>
+						}
+					</select>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Start Time
+					<input type="datetime-local" name="start_time" value={ p.Job.StartTime }/>
+				</label>
+				<label>
+					End Time
+					<input type="datetime-local" name="end_time" value={ p.Job.EndTime }/>
+				</label>
+			</div>
+			<label>
+				Due Date
+				<input type="date" name="due_date" value={ p.Job.DueDate }/>
+			</label>
+			<label>
+				Notes
+				<textarea name="notes" rows="3">{ p.Job.Notes }</textarea>
+			</label>
+			<label>
+				Tech Notes
+				<textarea name="tech_notes" rows="3">{ p.Job.TechNotes }</textarea>
+			</label>
+			<div style="display:flex;gap:0.5rem;margin-top:1rem">
+				<button type="submit">Save</button>
+				<a href="/jobs" role="button" class="outline">Cancel</a>
+			</div>
+		</form>
+	}
+}

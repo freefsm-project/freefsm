@@ -22,6 +22,8 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
 	"github.com/MartialM1nd/freefsm/internal/ent/location"
 	"github.com/MartialM1nd/freefsm/internal/ent/project"
+	"github.com/MartialM1nd/freefsm/internal/ent/status"
+	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 	"github.com/MartialM1nd/freefsm/internal/ent/user"
 )
 
@@ -46,6 +48,10 @@ type Client struct {
 	Location *LocationClient
 	// Project is the client for interacting with the Project builders.
 	Project *ProjectClient
+	// Status is the client for interacting with the Status builders.
+	Status *StatusClient
+	// StatusWorkflow is the client for interacting with the StatusWorkflow builders.
+	StatusWorkflow *StatusWorkflowClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 }
@@ -67,6 +73,8 @@ func (c *Client) init() {
 	c.Job = NewJobClient(c.config)
 	c.Location = NewLocationClient(c.config)
 	c.Project = NewProjectClient(c.config)
+	c.Status = NewStatusClient(c.config)
+	c.StatusWorkflow = NewStatusWorkflowClient(c.config)
 	c.User = NewUserClient(c.config)
 }
 
@@ -168,6 +176,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Job:             NewJobClient(cfg),
 		Location:        NewLocationClient(cfg),
 		Project:         NewProjectClient(cfg),
+		Status:          NewStatusClient(cfg),
+		StatusWorkflow:  NewStatusWorkflowClient(cfg),
 		User:            NewUserClient(cfg),
 	}, nil
 }
@@ -196,6 +206,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Job:             NewJobClient(cfg),
 		Location:        NewLocationClient(cfg),
 		Project:         NewProjectClient(cfg),
+		Status:          NewStatusClient(cfg),
+		StatusWorkflow:  NewStatusWorkflowClient(cfg),
 		User:            NewUserClient(cfg),
 	}, nil
 }
@@ -227,7 +239,7 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.Customer, c.CustomerContact, c.Estimate, c.Invoice, c.Item, c.Job, c.Location,
-		c.Project, c.User,
+		c.Project, c.Status, c.StatusWorkflow, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -238,7 +250,7 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.Customer, c.CustomerContact, c.Estimate, c.Invoice, c.Item, c.Job, c.Location,
-		c.Project, c.User,
+		c.Project, c.Status, c.StatusWorkflow, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -263,6 +275,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Location.mutate(ctx, m)
 	case *ProjectMutation:
 		return c.Project.mutate(ctx, m)
+	case *StatusMutation:
+		return c.Status.mutate(ctx, m)
+	case *StatusWorkflowMutation:
+		return c.StatusWorkflow.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	default:
@@ -1334,6 +1350,272 @@ func (c *ProjectClient) mutate(ctx context.Context, m *ProjectMutation) (Value, 
 	}
 }
 
+// StatusClient is a client for the Status schema.
+type StatusClient struct {
+	config
+}
+
+// NewStatusClient returns a client for the Status from the given config.
+func NewStatusClient(c config) *StatusClient {
+	return &StatusClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `status.Hooks(f(g(h())))`.
+func (c *StatusClient) Use(hooks ...Hook) {
+	c.hooks.Status = append(c.hooks.Status, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `status.Intercept(f(g(h())))`.
+func (c *StatusClient) Intercept(interceptors ...Interceptor) {
+	c.inters.Status = append(c.inters.Status, interceptors...)
+}
+
+// Create returns a builder for creating a Status entity.
+func (c *StatusClient) Create() *StatusCreate {
+	mutation := newStatusMutation(c.config, OpCreate)
+	return &StatusCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of Status entities.
+func (c *StatusClient) CreateBulk(builders ...*StatusCreate) *StatusCreateBulk {
+	return &StatusCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *StatusClient) MapCreateBulk(slice any, setFunc func(*StatusCreate, int)) *StatusCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &StatusCreateBulk{err: fmt.Errorf("calling to StatusClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*StatusCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &StatusCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for Status.
+func (c *StatusClient) Update() *StatusUpdate {
+	mutation := newStatusMutation(c.config, OpUpdate)
+	return &StatusUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *StatusClient) UpdateOne(_m *Status) *StatusUpdateOne {
+	mutation := newStatusMutation(c.config, OpUpdateOne, withStatus(_m))
+	return &StatusUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *StatusClient) UpdateOneID(id int64) *StatusUpdateOne {
+	mutation := newStatusMutation(c.config, OpUpdateOne, withStatusID(id))
+	return &StatusUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for Status.
+func (c *StatusClient) Delete() *StatusDelete {
+	mutation := newStatusMutation(c.config, OpDelete)
+	return &StatusDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *StatusClient) DeleteOne(_m *Status) *StatusDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *StatusClient) DeleteOneID(id int64) *StatusDeleteOne {
+	builder := c.Delete().Where(status.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &StatusDeleteOne{builder}
+}
+
+// Query returns a query builder for Status.
+func (c *StatusClient) Query() *StatusQuery {
+	return &StatusQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeStatus},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a Status entity by its id.
+func (c *StatusClient) Get(ctx context.Context, id int64) (*Status, error) {
+	return c.Query().Where(status.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *StatusClient) GetX(ctx context.Context, id int64) *Status {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *StatusClient) Hooks() []Hook {
+	return c.hooks.Status
+}
+
+// Interceptors returns the client interceptors.
+func (c *StatusClient) Interceptors() []Interceptor {
+	return c.inters.Status
+}
+
+func (c *StatusClient) mutate(ctx context.Context, m *StatusMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&StatusCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&StatusUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&StatusUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&StatusDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown Status mutation op: %q", m.Op())
+	}
+}
+
+// StatusWorkflowClient is a client for the StatusWorkflow schema.
+type StatusWorkflowClient struct {
+	config
+}
+
+// NewStatusWorkflowClient returns a client for the StatusWorkflow from the given config.
+func NewStatusWorkflowClient(c config) *StatusWorkflowClient {
+	return &StatusWorkflowClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `statusworkflow.Hooks(f(g(h())))`.
+func (c *StatusWorkflowClient) Use(hooks ...Hook) {
+	c.hooks.StatusWorkflow = append(c.hooks.StatusWorkflow, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `statusworkflow.Intercept(f(g(h())))`.
+func (c *StatusWorkflowClient) Intercept(interceptors ...Interceptor) {
+	c.inters.StatusWorkflow = append(c.inters.StatusWorkflow, interceptors...)
+}
+
+// Create returns a builder for creating a StatusWorkflow entity.
+func (c *StatusWorkflowClient) Create() *StatusWorkflowCreate {
+	mutation := newStatusWorkflowMutation(c.config, OpCreate)
+	return &StatusWorkflowCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of StatusWorkflow entities.
+func (c *StatusWorkflowClient) CreateBulk(builders ...*StatusWorkflowCreate) *StatusWorkflowCreateBulk {
+	return &StatusWorkflowCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *StatusWorkflowClient) MapCreateBulk(slice any, setFunc func(*StatusWorkflowCreate, int)) *StatusWorkflowCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &StatusWorkflowCreateBulk{err: fmt.Errorf("calling to StatusWorkflowClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*StatusWorkflowCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &StatusWorkflowCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for StatusWorkflow.
+func (c *StatusWorkflowClient) Update() *StatusWorkflowUpdate {
+	mutation := newStatusWorkflowMutation(c.config, OpUpdate)
+	return &StatusWorkflowUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *StatusWorkflowClient) UpdateOne(_m *StatusWorkflow) *StatusWorkflowUpdateOne {
+	mutation := newStatusWorkflowMutation(c.config, OpUpdateOne, withStatusWorkflow(_m))
+	return &StatusWorkflowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *StatusWorkflowClient) UpdateOneID(id int64) *StatusWorkflowUpdateOne {
+	mutation := newStatusWorkflowMutation(c.config, OpUpdateOne, withStatusWorkflowID(id))
+	return &StatusWorkflowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for StatusWorkflow.
+func (c *StatusWorkflowClient) Delete() *StatusWorkflowDelete {
+	mutation := newStatusWorkflowMutation(c.config, OpDelete)
+	return &StatusWorkflowDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *StatusWorkflowClient) DeleteOne(_m *StatusWorkflow) *StatusWorkflowDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *StatusWorkflowClient) DeleteOneID(id int64) *StatusWorkflowDeleteOne {
+	builder := c.Delete().Where(statusworkflow.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &StatusWorkflowDeleteOne{builder}
+}
+
+// Query returns a query builder for StatusWorkflow.
+func (c *StatusWorkflowClient) Query() *StatusWorkflowQuery {
+	return &StatusWorkflowQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeStatusWorkflow},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a StatusWorkflow entity by its id.
+func (c *StatusWorkflowClient) Get(ctx context.Context, id int64) (*StatusWorkflow, error) {
+	return c.Query().Where(statusworkflow.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *StatusWorkflowClient) GetX(ctx context.Context, id int64) *StatusWorkflow {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *StatusWorkflowClient) Hooks() []Hook {
+	return c.hooks.StatusWorkflow
+}
+
+// Interceptors returns the client interceptors.
+func (c *StatusWorkflowClient) Interceptors() []Interceptor {
+	return c.inters.StatusWorkflow
+}
+
+func (c *StatusWorkflowClient) mutate(ctx context.Context, m *StatusWorkflowMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&StatusWorkflowCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&StatusWorkflowUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&StatusWorkflowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&StatusWorkflowDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown StatusWorkflow mutation op: %q", m.Op())
+	}
+}
+
 // UserClient is a client for the User schema.
 type UserClient struct {
 	config
@@ -1471,10 +1753,10 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 type (
 	hooks struct {
 		Customer, CustomerContact, Estimate, Invoice, Item, Job, Location, Project,
-		User []ent.Hook
+		Status, StatusWorkflow, User []ent.Hook
 	}
 	inters struct {
 		Customer, CustomerContact, Estimate, Invoice, Item, Job, Location, Project,
-		User []ent.Interceptor
+		Status, StatusWorkflow, User []ent.Interceptor
 	}
 )

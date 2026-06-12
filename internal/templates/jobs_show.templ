@@ -1,0 +1,45 @@
+package templates
+
+import "fmt"
+
+templ JobShow(p JobDetail) {
+	@Layout("Job - "+p.JobType) {
+		<div style="display:flex;justify-content:space-between;align-items:center">
+			<h1>{ p.JobType }</h1>
+			<div style="display:flex;gap:0.5rem">
+				<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", p.ID)) } role="button" class="outline">Edit</a>
+				<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this job?')">
+					<button class="outline contrast">Delete</button>
+				</form>
+			</div>
+		</div>
+		if p.Subtitle != "" {
+			<p><em>{ p.Subtitle }</em></p>
+		}
+		<table>
+			<tbody>
+				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
+				<tr><th>Status</th><td><mark>{ p.StatusName }</mark></td></tr>
+				<tr><th>Billing Type</th><td>{ p.BillingType }</td></tr>
+				if p.StartTime != "" {
+					<tr><th>Start Time</th><td>{ p.StartTime }</td></tr>
+				}
+				if p.EndTime != "" {
+					<tr><th>End Time</th><td>{ p.EndTime }</td></tr>
+				}
+				if p.DueDate != "" {
+					<tr><th>Due Date</th><td>{ p.DueDate }</td></tr>
+				}
+			</tbody>
+		</table>
+		if p.Notes != "" {
+			<h3>Notes</h3>
+			<p>{ p.Notes }</p>
+		}
+		if p.TechNotes != "" {
+			<h3>Tech Notes</h3>
+			<p>{ p.TechNotes }</p>
+		}
+		<p><a href="/jobs">&larr; Back to Jobs</a></p>
+	}
+}

@@ -28,6 +28,10 @@ type Tx struct {
 	Location *LocationClient
 	// Project is the client for interacting with the Project builders.
 	Project *ProjectClient
+	// Status is the client for interacting with the Status builders.
+	Status *StatusClient
+	// StatusWorkflow is the client for interacting with the StatusWorkflow builders.
+	StatusWorkflow *StatusWorkflowClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 
@@ -169,6 +173,8 @@ func (tx *Tx) init() {
 	tx.Job = NewJobClient(tx.config)
 	tx.Location = NewLocationClient(tx.config)
 	tx.Project = NewProjectClient(tx.config)
+	tx.Status = NewStatusClient(tx.config)
+	tx.StatusWorkflow = NewStatusWorkflowClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }
 
