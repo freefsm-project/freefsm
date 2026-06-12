@@ -7,41 +7,121 @@ templ SchedulePage(p SchedulePageData) {
 		<h1>Schedule</h1>
 		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
 			<div style="display:flex;gap:0.5rem;align-items:center">
-				<a href={ templ.URL(fmt.Sprintf("/schedule?year=%d&month=%d", p.PrevYear, p.PrevMonth)) } role="button" class="outline">&larr;</a>
-				<h3 style="margin:0">{ p.Title }</h3>
-				<a href={ templ.URL(fmt.Sprintf("/schedule?year=%d&month=%d", p.NextYear, p.NextMonth)) } role="button" class="outline">&rarr;</a>
+				if p.IsMonth {
+					<a href={ templ.URL(fmt.Sprintf("/schedule?year=%d&month=%d", p.PrevYear, p.PrevMonth)) } role="button" class="outline">&larr;</a>
+					<h3 style="margin:0">{ p.Title }</h3>
+					<a href={ templ.URL(fmt.Sprintf("/schedule?year=%d&month=%d", p.NextYear, p.NextMonth)) } role="button" class="outline">&rarr;</a>
+				} else if p.IsWeek || p.IsDay {
+					<a href={ templ.URL(fmt.Sprintf("/schedule?view=%s&date=%s", func() string { if p.IsWeek { return "week" } else { return "day" } }(), p.PrevDate)) } role="button" class="outline">&larr;</a>
+					<h3 style="margin:0">{ p.Title }</h3>
+					<a href={ templ.URL(fmt.Sprintf("/schedule?view=%s&date=%s", func() string { if p.IsWeek { return "week" } else { return "day" } }(), p.NextDate)) } role="button" class="outline">&rarr;</a>
+				}
 			</div>
-			<a href="/jobs/new" role="button">New Job</a>
+			<div style="display:flex;gap:0.5rem">
+				<a href="/schedule" role="button" class={ "outline", !p.IsMonth }>Month</a>
+				<a href={ templ.URL("/schedule?view=week&date="+p.Date) } role="button" class={ "outline", !p.IsWeek }>Week</a>
+				<a href={ templ.URL("/schedule?view=day&date="+p.Date) } role="button" class={ "outline", !p.IsDay }>Day</a>
+				<a href="/jobs/new" role="button">New Job</a>
+			</div>
 		</div>
-		<table class="calendar">
-			<thead>
+		if p.IsMonth {
+			@monthView(p)
+		} else if p.IsWeek {
+			@weekView(p)
+		} else if p.IsDay {
+			@dayView(p)
+		}
+	}
+}
+
+templ monthView(p SchedulePageData) {
+	<table class="calendar">
+		<thead>
+			<tr>
+				<th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+			</tr>
+		</thead>
+		<tbody>
+			for _, week := range p.Weeks {
 				<tr>
-					<th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
+					for _, day := range week.Days {
+						if day.DayNum == 0 {
+							<td class="empty"></td>
+						} else {
+							<td class={ "today", day.IsToday }>
+								<div class="day-num">{ fmt.Sprintf("%d", day.DayNum) }</div>
+								for _, j := range day.Jobs {
+									<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job">
+										<mark>{ j.StatusName }</mark>
+										<strong>{ j.JobType }</strong>
+										<small>{ j.Customer }</small>
+										<small>{ j.Time }</small>
+									</a>
+								}
+							</td>
+						}
+					}
 				</tr>
-			</thead>
-			<tbody>
-				for _, week := range p.Weeks {
-					<tr>
-						for _, day := range week.Days {
-							if day.DayNum == 0 {
-								<td class="empty"></td>
-							} else {
-								<td class={ "today", day.IsToday }>
-									<div class="day-num">{ fmt.Sprintf("%d", day.DayNum) }</div>
-									for _, j := range day.Jobs {
-										<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job">
-											<mark>{ j.StatusName }</mark>
-											<strong>{ j.JobType }</strong>
-											<small>{ j.Customer }</small>
-											<small>{ j.Time }</small>
-										</a>
-									}
-								</td>
+			}
+		</tbody>
+	</table>
+}
+
+templ weekView(p SchedulePageData) {
+	<table class="calendar week-view">
+		<thead>
+			<tr>
+				<th></th>
+				for _, day := range p.Days {
+					<th class={ "today", day.IsToday }>
+						{ day.DayName }<br/><strong>{ fmt.Sprintf("%d", day.DayNum) }</strong>
+					</th>
+				}
+			</tr>
+		</thead>
+		<tbody>
+			for hour := 0; hour <= 23; hour++ {
+				<tr>
+					<td class="hour">{ fmt.Sprintf("%02d:00", hour) }</td>
+					for _, day := range p.Days {
+						<td class={ "today", day.IsToday }>
+							for _, j := range day.Jobs {
+								if j.Hour == hour {
+									<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job">
+										<strong>{ j.JobType }</strong>
+										<small>{ j.Customer }</small>
+									</a>
+								}
+							}
+						</td>
+					}
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+templ dayView(p SchedulePageData) {
+	<table class="calendar day-view">
+		<thead>
+			<tr><th>Time</th><th>Jobs</th></tr>
+		</thead>
+		<tbody>
+			for hour := 0; hour <= 23; hour++ {
+				<tr>
+					<td class="hour">{ fmt.Sprintf("%02d:00", hour) }</td>
+					<td>
+						for _, j := range p.Jobs {
+							if j.Hour == hour {
+								<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job">
+									<strong>{ j.JobType }</strong> &mdash; { j.Customer }
+									<small>{ j.Time }</small>
+								</a>
 							}
 						}
-					</tr>
-				}
-			</tbody>
-		</table>
-	}
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
 }

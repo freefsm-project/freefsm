@@ -32,14 +32,13 @@ templ JobsTable(p JobListPageData) {
 					<th>Customer</th>
 					<th>Status</th>
 					<th>Scheduled</th>
-					<th>Arrival</th>
 					<th>Billing</th>
 					<th></th>
 				</tr>
 			</thead>
 			<tbody>
 				if len(p.Jobs) == 0 {
-					<tr><td colspan="7" style="text-align:center">No jobs found.</td></tr>
+					<tr><td colspan="6" style="text-align:center">No jobs found.</td></tr>
 				}
 				for _, j := range p.Jobs {
 					<tr>
@@ -49,7 +48,6 @@ templ JobsTable(p JobListPageData) {
 						<td>{ j.Customer }</td>
 						<td><mark>{ j.StatusName }</mark></td>
 						<td>{ j.StartTime }</td>
-						<td>{ j.ArrivalTime }</td>
 						<td>{ j.BillingType }</td>
 						<td style="text-align:right">
 							<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", j.ID)) } role="button" class="outline small">Edit</a>

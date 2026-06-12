@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -18,6 +19,18 @@ type ScheduleHandler struct {
 
 func NewScheduleHandler(jobSvc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService) *ScheduleHandler {
 	return &ScheduleHandler{jobSvc: jobSvc, custSvc: custSvc, statusSvc: statusSvc}
+}
+
+func (h *ScheduleHandler) Index(w http.ResponseWriter, r *http.Request) {
+	view := r.URL.Query().Get("view")
+	switch view {
+	case "week":
+		h.Week(w, r)
+	case "day":
+		h.Day(w, r)
+	default:
+		h.Month(w, r)
+	}
 }
 
 func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
@@ -49,6 +62,79 @@ func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
 	templates.SchedulePage(data).Render(r.Context(), w)
 }
 
+func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
+	date := parseDateParam(r, "date")
+	start, end := weekRange(date)
+
+	jobs, _ := h.jobSvc.ListByDateRange(r.Context(), start, end)
+	customers, _ := h.custSvc.ListAll(r.Context())
+	custMap := customerMap(customers)
+	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
+	statusNameMap := statusNameMapFunc(statuses)
+
+	var days []templates.ScheduleDay
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		day := templates.ScheduleDay{
+			Date:    d.Format("2006-01-02"),
+			DayName: d.Format("Mon"),
+			DayNum:  d.Day(),
+			IsToday: isToday(d),
+		}
+		for _, j := range jobs {
+			cj := calendarJob(j, custMap, statusNameMap)
+			cj.Hour = j.StartTime.Hour()
+			if j.StartTime == nil { continue }
+			if j.StartTime.Year() == d.Year() && j.StartTime.YearDay() == d.YearDay() {
+				day.Jobs = append(day.Jobs, cj)
+			}
+		}
+		days = append(days, day)
+	}
+
+	prev := date.AddDate(0, 0, -7)
+	next := date.AddDate(0, 0, 7)
+	data := templates.SchedulePageData{
+		Title:   fmt.Sprintf("%s %d — %s %d, %d", start.Format("Jan 2"), start.Day(), end.Format("Jan 2"), end.Day(), end.Year()),
+		Days:    days,
+		PrevDate: prev.Format("2006-01-02"),
+		NextDate: next.Format("2006-01-02"),
+		Date:     date.Format("2006-01-02"),
+		IsWeek:   true,
+	}
+	templates.SchedulePage(data).Render(r.Context(), w)
+}
+
+func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
+	date := parseDateParam(r, "date")
+	start := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.Local)
+	end := start.AddDate(0, 0, 1).Add(-time.Second)
+
+	jobs, _ := h.jobSvc.ListByDateRange(r.Context(), start, end)
+	customers, _ := h.custSvc.ListAll(r.Context())
+	custMap := customerMap(customers)
+	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
+	statusNameMap := statusNameMapFunc(statuses)
+
+	var calJobs []templates.CalendarJob
+	for _, j := range jobs {
+		cj := calendarJob(j, custMap, statusNameMap)
+		cj.Hour = j.StartTime.Hour()
+		calJobs = append(calJobs, cj)
+	}
+
+	prev := date.AddDate(0, 0, -1)
+	next := date.AddDate(0, 0, 1)
+	data := templates.SchedulePageData{
+		Title:    date.Format("Monday, January 2, 2006"),
+		Jobs:     calJobs,
+		PrevDate: prev.Format("2006-01-02"),
+		NextDate: next.Format("2006-01-02"),
+		Date:     date.Format("2006-01-02"),
+		IsDay:    true,
+	}
+	templates.SchedulePage(data).Render(r.Context(), w)
+}
+
 func calendarJob(j *ent.Job, custMap map[int64]string, statusMap map[int64]string) templates.CalendarJob {
 	cj := templates.CalendarJob{
 		ID:      j.ID,
@@ -65,6 +151,26 @@ func calendarJob(j *ent.Job, custMap map[int64]string, statusMap map[int64]strin
 		cj.Day = j.StartTime.Day()
 	}
 	return cj
+}
+
+func parseDateParam(r *http.Request, key string) time.Time {
+	ds := r.URL.Query().Get(key)
+	if ds == "" {
+		return time.Now()
+	}
+	t, err := time.Parse("2006-01-02", ds)
+	if err != nil {
+		return time.Now()
+	}
+	return t
+}
+
+func weekRange(date time.Time) (time.Time, time.Time) {
+	weekday := int(date.Weekday())
+	start := date.AddDate(0, 0, -weekday)
+	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.Local)
+	end := start.AddDate(0, 0, 7).Add(-time.Second)
+	return start, end
 }
 
 func statusNameMapFunc(statuses []*ent.Status) map[int64]string {
@@ -96,30 +202,22 @@ func monthRange(year int, month time.Month) (time.Time, time.Time) {
 }
 
 func prevMonthYear(year int, month time.Month) int {
-	if month == 1 {
-		return year - 1
-	}
+	if month == 1 { return year - 1 }
 	return year
 }
 
 func prevMonthMonth(year int, month time.Month) int {
-	if month == 1 {
-		return 12
-	}
+	if month == 1 { return 12 }
 	return int(month) - 1
 }
 
 func nextMonthYear(year int, month time.Month) int {
-	if month == 12 {
-		return year + 1
-	}
+	if month == 12 { return year + 1 }
 	return year
 }
 
 func nextMonthMonth(year int, month time.Month) int {
-	if month == 12 {
-		return 1
-	}
+	if month == 12 { return 1 }
 	return int(month) + 1
 }
 

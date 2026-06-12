@@ -49,7 +49,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	r.Group(func(r chi.Router) {
 		r.Use(authMW)
 		r.Get("/", dashboardHandler.Index)
-		r.Get("/schedule", scheduleHandler.Month)
+		r.Get("/schedule", scheduleHandler.Index)
 		r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {
 			handleLogout(w, r, sessions)
 		})

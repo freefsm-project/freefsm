@@ -157,7 +157,6 @@ type JobRow struct {
 	StatusID    int64
 	StatusName  string
 	StartTime   string
-	ArrivalTime string
 	BillingType string
 }
 
@@ -180,8 +179,6 @@ type JobDetail struct {
 	StartTime       string
 	EndTime         string
 	DueDate         string
-	ArrivalStart    string
-	ArrivalEnd      string
 	Notes           string
 	TechNotes       string
 }
@@ -419,6 +416,7 @@ type ContactRow struct {
 type CalendarJob struct {
 	ID         int64
 	Day        int
+	Hour       int
 	JobType    string
 	Customer   string
 	Time       string
@@ -436,12 +434,27 @@ type WeekData struct {
 	Days []DayData
 }
 
+type ScheduleDay struct {
+	Date    string
+	DayName string
+	DayNum  int
+	IsToday bool
+	Jobs    []CalendarJob
+}
+
 type SchedulePageData struct {
 	Title     string
 	Weeks     []WeekData
+	Days      []ScheduleDay
+	Jobs      []CalendarJob
 	PrevYear  int
 	PrevMonth int
 	NextYear  int
 	NextMonth int
+	PrevDate  string
+	NextDate  string
+	Date      string
 	IsMonth   bool
+	IsWeek    bool
+	IsDay     bool
 }

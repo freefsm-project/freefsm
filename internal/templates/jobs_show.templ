@@ -48,9 +48,6 @@ templ JobShow(p JobDetail) {
 				if p.DueDate != "" {
 					<tr><th>Due Date</th><td>{ p.DueDate }</td></tr>
 				}
-				if p.ArrivalStart != "" {
-					<tr><th>Arrival Window</th><td>{ p.ArrivalStart } &ndash; { p.ArrivalEnd }</td></tr>
-				}
 			</tbody>
 		</table>
 		if p.Notes != "" {

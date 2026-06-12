@@ -78,22 +78,12 @@ templ JobForm(p JobFormPageData) {
 			</div>
 			<div class="grid">
 				<label>
-					Arrival Window Start
-					<input type="datetime-local" name="arrival_start" value={ p.Job.ArrivalStart }/>
-				</label>
-				<label>
-					Arrival Window End
-					<input type="datetime-local" name="arrival_end" value={ p.Job.ArrivalEnd }/>
-				</label>
-			</div>
-			<div class="grid">
-				<label>
 					Start Time
-					<input type="datetime-local" name="start_time" value={ p.Job.StartTime }/>
+					<input type="datetime-local" name="start_time" step="900" value={ p.Job.StartTime }/>
 				</label>
 				<label>
 					End Time
-					<input type="datetime-local" name="end_time" value={ p.Job.EndTime }/>
+					<input type="datetime-local" name="end_time" step="900" value={ p.Job.EndTime }/>
 				</label>
 			</div>
 			<label>
@@ -125,6 +115,15 @@ templ JobForm(p JobFormPageData) {
 			}
 			jobCustomer.addEventListener('change', function() { loadContacts(this.value); });
 			if (jobCustomer.value) loadContacts(jobCustomer.value);
+			const startEl = document.querySelector('[name=start_time]');
+			const endEl = document.querySelector('[name=end_time]');
+			const pad = n => String(n).padStart(2, '0');
+			startEl.addEventListener('change', function() {
+				if (!this.value) return;
+				const st = new Date(this.value);
+				st.setHours(st.getHours()+1);
+				endEl.value = st.getFullYear() + '-' + pad(st.getMonth()+1) + '-' + pad(st.getDate()) + 'T' + pad(st.getHours()) + ':' + pad(st.getMinutes());
+			});
 		</script>`)
 	}
 }

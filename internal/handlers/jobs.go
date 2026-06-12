@@ -129,12 +129,10 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Subtitle:          r.FormValue("subtitle"),
 		StatusID:          statusID,
 		BillingType:       r.FormValue("billing_type"),
-		StartTime:         parseTime(r.FormValue("start_time")),
-		EndTime:           parseTime(r.FormValue("end_time")),
-		DueDate:           parseDate(r.FormValue("due_date")),
-		ArrivalStart:      parseTime(r.FormValue("arrival_start")),
-		ArrivalEnd:        parseTime(r.FormValue("arrival_end")),
-		Notes:             r.FormValue("notes"),
+		StartTime: parseTime(r.FormValue("start_time")),
+		EndTime:   parseTime(r.FormValue("end_time")),
+		DueDate:   parseDate(r.FormValue("due_date")),
+		Notes:     r.FormValue("notes"),
 		TechNotes:         r.FormValue("tech_notes"),
 	}
 	if params.BillingType == "" {
@@ -198,14 +196,6 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		t := parseDate(dd)
 		params.DueDate = &t
 	}
-	if as := r.FormValue("arrival_start"); as != "" {
-		t := parseTime(as)
-		params.ArrivalStart = &t
-	}
-	if ae := r.FormValue("arrival_end"); ae != "" {
-		t := parseTime(ae)
-		params.ArrivalEnd = &t
-	}
 	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -239,6 +229,7 @@ func (h *JobHandler) newJobForm(ctx context.Context) templates.JobFormPageData {
 	return templates.JobFormPageData{
 		Job: &templates.JobDetail{
 			BillingType: "flat_rate",
+			StartTime:   time.Now().Format("2006-01-02") + "T08:00",
 		},
 		IsNew:        true,
 		Customers:    customerOptions(customers),
@@ -311,12 +302,6 @@ func jobToDetail(j *ent.Job, statuses []*ent.Status) templates.JobDetail {
 	if j.DueDate != nil && !j.DueDate.IsZero() {
 		d.DueDate = j.DueDate.Format("2006-01-02")
 	}
-	if j.ArrivalWindowStart != nil && !j.ArrivalWindowStart.IsZero() {
-		d.ArrivalStart = j.ArrivalWindowStart.Format("2006-01-02T15:04")
-	}
-	if j.ArrivalWindowEnd != nil && !j.ArrivalWindowEnd.IsZero() {
-		d.ArrivalEnd = j.ArrivalWindowEnd.Format("2006-01-02T15:04")
-	}
 	return d
 }
 
@@ -335,9 +320,6 @@ func jobRow(j *ent.Job, statuses []*ent.Status, custMap map[int64]string) templa
 	}
 	if j.StartTime != nil && !j.StartTime.IsZero() {
 		r.StartTime = j.StartTime.Format("Jan 2, 2006 3:04 PM")
-	}
-	if j.ArrivalWindowStart != nil && !j.ArrivalWindowStart.IsZero() {
-		r.ArrivalTime = j.ArrivalWindowStart.Format("3:04 PM")
 	}
 	return r
 }
