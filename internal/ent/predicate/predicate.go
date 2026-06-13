@@ -6,6 +6,9 @@ import (
 	"entgo.io/ent/dialect/sql"
 )
 
+// CompanySettings is the predicate function for companysettings builders.
+type CompanySettings func(*sql.Selector)
+
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 

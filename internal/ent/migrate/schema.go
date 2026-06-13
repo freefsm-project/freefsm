@@ -9,6 +9,30 @@ import (
 )
 
 var (
+	// CompanySettingsColumns holds the columns for the "company_settings" table.
+	CompanySettingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "business_name", Type: field.TypeString, Default: ""},
+		{Name: "address", Type: field.TypeString, Default: ""},
+		{Name: "city", Type: field.TypeString, Default: ""},
+		{Name: "state", Type: field.TypeString, Default: ""},
+		{Name: "zip", Type: field.TypeString, Default: ""},
+		{Name: "phone", Type: field.TypeString, Default: ""},
+		{Name: "email", Type: field.TypeString, Default: ""},
+		{Name: "tax_id", Type: field.TypeString, Default: ""},
+		{Name: "default_tax_rate", Type: field.TypeString, Default: "0"},
+		{Name: "invoice_prefix", Type: field.TypeString, Default: "INV-"},
+		{Name: "estimate_prefix", Type: field.TypeString, Default: "EST-"},
+		{Name: "default_due_days", Type: field.TypeInt, Default: 30},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// CompanySettingsTable holds the schema information for the "company_settings" table.
+	CompanySettingsTable = &schema.Table{
+		Name:       "company_settings",
+		Columns:    CompanySettingsColumns,
+		PrimaryKey: []*schema.Column{CompanySettingsColumns[0]},
+	}
 	// CustomersColumns holds the columns for the "customers" table.
 	CustomersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -365,6 +389,7 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		CompanySettingsTable,
 		CustomersTable,
 		CustomerContactsTable,
 		EstimatesTable,
@@ -380,6 +405,9 @@ var (
 )
 
 func init() {
+	CompanySettingsTable.Annotation = &entsql.Annotation{
+		Table: "company_settings",
+	}
 	CustomersTable.Annotation = &entsql.Annotation{
 		Table: "customers",
 	}

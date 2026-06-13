@@ -12,6 +12,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/MartialM1nd/freefsm/internal/ent/companysettings"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
@@ -83,6 +84,7 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
+			companysettings.Table: companysettings.ValidColumn,
 			customer.Table:        customer.ValidColumn,
 			customercontact.Table: customercontact.ValidColumn,
 			estimate.Table:        estimate.ValidColumn,

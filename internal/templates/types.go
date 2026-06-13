@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 )
@@ -311,6 +312,11 @@ type InvoiceListPageData struct {
 	Statuses   []SelectOption
 }
 
+type SettingsPageData struct {
+	Settings *ent.CompanySettings
+	IsSetup  bool
+}
+
 type InvoiceFormPageData struct {
 	Invoice          *InvoiceDetail
 	Errors           map[string]string
@@ -403,6 +409,48 @@ func paymentsTotal(payments []services.Payment) float64 {
 
 func csrfToken(ctx context.Context) string {
 	return middleware.CSRFFromContext(ctx)
+}
+
+func companyBrandName(cs *ent.CompanySettings) string {
+	if cs == nil || cs.BusinessName == "" {
+		return "FreeFSM"
+	}
+	return cs.BusinessName
+}
+
+func companyFromCtx(ctx context.Context) *ent.CompanySettings {
+	cs := middleware.CompanyFromContext(ctx)
+	return cs
+}
+
+func invoicePrefix(ctx context.Context) string {
+	cs := middleware.CompanyFromContext(ctx)
+	if cs == nil || cs.InvoicePrefix == "" {
+		return "INV-"
+	}
+	return cs.InvoicePrefix
+}
+
+func estimatePrefix(ctx context.Context) string {
+	cs := middleware.CompanyFromContext(ctx)
+	if cs == nil || cs.EstimatePrefix == "" {
+		return "EST-"
+	}
+	return cs.EstimatePrefix
+}
+
+func settingsButtonText(isSetup bool) string {
+	if isSetup {
+		return "Complete Setup"
+	}
+	return "Save"
+}
+
+func settingsFormAction(isSetup bool) string {
+	if isSetup {
+		return "/setup/company"
+	}
+	return "/settings"
 }
 
 func today() string {

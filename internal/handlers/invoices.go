@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -323,7 +324,7 @@ func (h *InvoiceHandler) PDF(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="INV-%05d.pdf"`, id))
-	services.GenerateInvoicePDF(w, i, customer, statuses)
+	services.GenerateInvoicePDF(w, i, customer, statuses, middleware.CompanyFromContext(r.Context()))
 }
 
 func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {

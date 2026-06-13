@@ -1,0 +1,70 @@
+package templates
+
+import "fmt"
+
+templ SettingsPage(p SettingsPageData) {
+	@Layout("Company Settings") {
+		<h1>Company Settings</h1>
+		<form action={ templ.URL(settingsFormAction(p.IsSetup)) } method="post">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<label>
+				Business Name
+				<input type="text" name="business_name" value={ p.Settings.BusinessName } required/>
+			</label>
+			<label>
+				Address
+				<input type="text" name="address" value={ p.Settings.Address }/>
+			</label>
+			<div class="grid">
+				<label>
+					City
+					<input type="text" name="city" value={ p.Settings.City }/>
+				</label>
+				<label>
+					State
+					<input type="text" name="state" value={ p.Settings.State }/>
+				</label>
+				<label>
+					ZIP
+					<input type="text" name="zip" value={ p.Settings.Zip }/>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Phone
+					<input type="tel" name="phone" value={ p.Settings.Phone }/>
+				</label>
+				<label>
+					Email
+					<input type="email" name="email" value={ p.Settings.Email }/>
+				</label>
+			</div>
+			<label>
+				Tax ID (EIN)
+				<input type="text" name="tax_id" value={ p.Settings.TaxID }/>
+			</label>
+			<h3>Document Settings</h3>
+			<div class="grid">
+				<label>
+					Invoice Prefix
+					<input type="text" name="invoice_prefix" value={ p.Settings.InvoicePrefix }/>
+				</label>
+				<label>
+					Estimate Prefix
+					<input type="text" name="estimate_prefix" value={ p.Settings.EstimatePrefix }/>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Default Tax Rate
+					<input type="text" name="default_tax_rate" value={ p.Settings.DefaultTaxRate } placeholder="e.g. 8.25%"/>
+				</label>
+				<label>
+					Default Due Days
+					<input type="number" name="default_due_days" value={ fmt.Sprintf("%d", p.Settings.DefaultDueDays) }/>
+				</label>
+			</div>
+			<button type="submit">{ settingsButtonText(p.IsSetup) }</button>
+		</form>
+	}
+}

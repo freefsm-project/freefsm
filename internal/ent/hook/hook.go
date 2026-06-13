@@ -9,6 +9,18 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent"
 )
 
+// The CompanySettingsFunc type is an adapter to allow the use of ordinary
+// function as CompanySettings mutator.
+type CompanySettingsFunc func(context.Context, *ent.CompanySettingsMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CompanySettingsFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CompanySettingsMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CompanySettingsMutation", m)
+}
+
 // The CustomerFunc type is an adapter to allow the use of ordinary
 // function as Customer mutator.
 type CustomerFunc func(context.Context, *ent.CustomerMutation) (ent.Value, error)

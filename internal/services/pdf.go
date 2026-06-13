@@ -10,13 +10,13 @@ import (
 	"github.com/jung-kurt/gofpdf"
 )
 
-func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, statuses []*ent.Status) {
+func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, statuses []*ent.Status, cs *ent.CompanySettings) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
 
 	items, _ := ParseLineItems(e.LineItems)
-	writeHeader(pdf, "ESTIMATE", fmt.Sprintf("%05d", e.ID))
+	writeHeader(pdf, "ESTIMATE", fmt.Sprintf("%05d", e.ID), cs)
 	writeCustomer(pdf, customer)
 	writeLineItems(pdf, items, parseTaxRate(e.TaxRate))
 	writeNotes(pdf, e.Notes)
@@ -25,14 +25,14 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, s
 	pdf.Output(w)
 }
 
-func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, statuses []*ent.Status) {
+func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, statuses []*ent.Status, cs *ent.CompanySettings) {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
 
 	items, _ := ParseLineItems(i.LineItems)
 	payments, _ := ParsePayments(i.Payments)
-	writeHeader(pdf, "INVOICE", fmt.Sprintf("%05d", i.ID))
+	writeHeader(pdf, "INVOICE", fmt.Sprintf("%05d", i.ID), cs)
 	writeCustomer(pdf, customer)
 	writeInvoiceDates(pdf, i)
 	writeLineItems(pdf, items, parseTaxRate(i.TaxRate))
@@ -43,10 +43,35 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, sta
 	pdf.Output(w)
 }
 
-func writeHeader(pdf *gofpdf.Fpdf, docType, number string) {
+func writeHeader(pdf *gofpdf.Fpdf, docType, number string, cs *ent.CompanySettings) {
 	pdf.SetFont("Helvetica", "B", 20)
-	pdf.Cell(0, 10, "FreeFSM")
-	pdf.Ln(8)
+	if cs != nil && cs.BusinessName != "" {
+		pdf.Cell(0, 10, cs.BusinessName)
+	} else {
+		pdf.Cell(0, 10, "FreeFSM")
+	}
+	pdf.Ln(6)
+	pdf.SetFont("Helvetica", "", 9)
+	if cs != nil {
+		addr := strings.TrimSpace(cs.Address)
+		if addr != "" {
+			loc := strings.TrimSpace(cs.City + " " + cs.State + " " + cs.Zip)
+			if loc != "" {
+				addr += ", " + loc
+			}
+			pdf.Cell(0, 5, addr)
+			pdf.Ln(5)
+		}
+		if phone := strings.TrimSpace(cs.Phone); phone != "" {
+			pdf.Cell(0, 5, phone)
+			pdf.Ln(5)
+		}
+		if email := strings.TrimSpace(cs.Email); email != "" {
+			pdf.Cell(0, 5, email)
+			pdf.Ln(5)
+		}
+	}
+	pdf.Ln(4)
 	pdf.SetFont("Helvetica", "B", 14)
 	pdf.Cell(0, 8, docType+" #"+number)
 	pdf.Ln(12)

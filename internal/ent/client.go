@@ -15,6 +15,7 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/MartialM1nd/freefsm/internal/ent/companysettings"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
@@ -33,6 +34,8 @@ type Client struct {
 	config
 	// Schema is the client for creating, migrating and dropping schema.
 	Schema *migrate.Schema
+	// CompanySettings is the client for interacting with the CompanySettings builders.
+	CompanySettings *CompanySettingsClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
 	// CustomerContact is the client for interacting with the CustomerContact builders.
@@ -66,6 +69,7 @@ func NewClient(opts ...Option) *Client {
 
 func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
+	c.CompanySettings = NewCompanySettingsClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
 	c.CustomerContact = NewCustomerContactClient(c.config)
 	c.Estimate = NewEstimateClient(c.config)
@@ -169,6 +173,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	return &Tx{
 		ctx:             ctx,
 		config:          cfg,
+		CompanySettings: NewCompanySettingsClient(cfg),
 		Customer:        NewCustomerClient(cfg),
 		CustomerContact: NewCustomerContactClient(cfg),
 		Estimate:        NewEstimateClient(cfg),
@@ -199,6 +204,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	return &Tx{
 		ctx:             ctx,
 		config:          cfg,
+		CompanySettings: NewCompanySettingsClient(cfg),
 		Customer:        NewCustomerClient(cfg),
 		CustomerContact: NewCustomerContactClient(cfg),
 		Estimate:        NewEstimateClient(cfg),
@@ -216,7 +222,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 // Debug returns a new debug-client. It's used to get verbose logging on specific operations.
 //
 //	client.Debug().
-//		Customer.
+//		CompanySettings.
 //		Query().
 //		Count(ctx)
 func (c *Client) Debug() *Client {
@@ -239,8 +245,8 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Customer, c.CustomerContact, c.Estimate, c.Invoice, c.Item, c.Job, c.Location,
-		c.Project, c.Status, c.StatusWorkflow, c.User,
+		c.CompanySettings, c.Customer, c.CustomerContact, c.Estimate, c.Invoice, c.Item,
+		c.Job, c.Location, c.Project, c.Status, c.StatusWorkflow, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -250,8 +256,8 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Customer, c.CustomerContact, c.Estimate, c.Invoice, c.Item, c.Job, c.Location,
-		c.Project, c.Status, c.StatusWorkflow, c.User,
+		c.CompanySettings, c.Customer, c.CustomerContact, c.Estimate, c.Invoice, c.Item,
+		c.Job, c.Location, c.Project, c.Status, c.StatusWorkflow, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -260,6 +266,8 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 // Mutate implements the ent.Mutator interface.
 func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 	switch m := m.(type) {
+	case *CompanySettingsMutation:
+		return c.CompanySettings.mutate(ctx, m)
 	case *CustomerMutation:
 		return c.Customer.mutate(ctx, m)
 	case *CustomerContactMutation:
@@ -284,6 +292,139 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.User.mutate(ctx, m)
 	default:
 		return nil, fmt.Errorf("ent: unknown mutation type %T", m)
+	}
+}
+
+// CompanySettingsClient is a client for the CompanySettings schema.
+type CompanySettingsClient struct {
+	config
+}
+
+// NewCompanySettingsClient returns a client for the CompanySettings from the given config.
+func NewCompanySettingsClient(c config) *CompanySettingsClient {
+	return &CompanySettingsClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `companysettings.Hooks(f(g(h())))`.
+func (c *CompanySettingsClient) Use(hooks ...Hook) {
+	c.hooks.CompanySettings = append(c.hooks.CompanySettings, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `companysettings.Intercept(f(g(h())))`.
+func (c *CompanySettingsClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CompanySettings = append(c.inters.CompanySettings, interceptors...)
+}
+
+// Create returns a builder for creating a CompanySettings entity.
+func (c *CompanySettingsClient) Create() *CompanySettingsCreate {
+	mutation := newCompanySettingsMutation(c.config, OpCreate)
+	return &CompanySettingsCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CompanySettings entities.
+func (c *CompanySettingsClient) CreateBulk(builders ...*CompanySettingsCreate) *CompanySettingsCreateBulk {
+	return &CompanySettingsCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CompanySettingsClient) MapCreateBulk(slice any, setFunc func(*CompanySettingsCreate, int)) *CompanySettingsCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CompanySettingsCreateBulk{err: fmt.Errorf("calling to CompanySettingsClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CompanySettingsCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CompanySettingsCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CompanySettings.
+func (c *CompanySettingsClient) Update() *CompanySettingsUpdate {
+	mutation := newCompanySettingsMutation(c.config, OpUpdate)
+	return &CompanySettingsUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CompanySettingsClient) UpdateOne(_m *CompanySettings) *CompanySettingsUpdateOne {
+	mutation := newCompanySettingsMutation(c.config, OpUpdateOne, withCompanySettings(_m))
+	return &CompanySettingsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CompanySettingsClient) UpdateOneID(id int64) *CompanySettingsUpdateOne {
+	mutation := newCompanySettingsMutation(c.config, OpUpdateOne, withCompanySettingsID(id))
+	return &CompanySettingsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CompanySettings.
+func (c *CompanySettingsClient) Delete() *CompanySettingsDelete {
+	mutation := newCompanySettingsMutation(c.config, OpDelete)
+	return &CompanySettingsDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CompanySettingsClient) DeleteOne(_m *CompanySettings) *CompanySettingsDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CompanySettingsClient) DeleteOneID(id int64) *CompanySettingsDeleteOne {
+	builder := c.Delete().Where(companysettings.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CompanySettingsDeleteOne{builder}
+}
+
+// Query returns a query builder for CompanySettings.
+func (c *CompanySettingsClient) Query() *CompanySettingsQuery {
+	return &CompanySettingsQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCompanySettings},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CompanySettings entity by its id.
+func (c *CompanySettingsClient) Get(ctx context.Context, id int64) (*CompanySettings, error) {
+	return c.Query().Where(companysettings.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CompanySettingsClient) GetX(ctx context.Context, id int64) *CompanySettings {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CompanySettingsClient) Hooks() []Hook {
+	return c.hooks.CompanySettings
+}
+
+// Interceptors returns the client interceptors.
+func (c *CompanySettingsClient) Interceptors() []Interceptor {
+	return c.inters.CompanySettings
+}
+
+func (c *CompanySettingsClient) mutate(ctx context.Context, m *CompanySettingsMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CompanySettingsCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CompanySettingsUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CompanySettingsUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CompanySettingsDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CompanySettings mutation op: %q", m.Op())
 	}
 }
 
@@ -1785,11 +1926,11 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Customer, CustomerContact, Estimate, Invoice, Item, Job, Location, Project,
-		Status, StatusWorkflow, User []ent.Hook
+		CompanySettings, Customer, CustomerContact, Estimate, Invoice, Item, Job,
+		Location, Project, Status, StatusWorkflow, User []ent.Hook
 	}
 	inters struct {
-		Customer, CustomerContact, Estimate, Invoice, Item, Job, Location, Project,
-		Status, StatusWorkflow, User []ent.Interceptor
+		CompanySettings, Customer, CustomerContact, Estimate, Invoice, Item, Job,
+		Location, Project, Status, StatusWorkflow, User []ent.Interceptor
 	}
 )

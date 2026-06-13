@@ -45,10 +45,14 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	invoiceService := services.NewInvoiceService(entClient)
 	estimateHandler := NewEstimateHandler(services.NewEstimateService(entClient), customerService, jobService, statusService, itemService, invoiceService)
 	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, statusService, itemService)
+	companySettingsSvc := services.NewCompanySettingsService(entClient)
+	settingsHandler := NewSettingsHandler(companySettingsSvc)
 
 	r.Group(func(r chi.Router) {
 		r.Use(authMW)
 		r.Get("/", dashboardHandler.Index)
+		r.Get("/settings", settingsHandler.Show)
+		r.Post("/settings", settingsHandler.Save)
 		r.Get("/schedule", scheduleHandler.Index)
 		r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {
 			handleLogout(w, r, sessions)
@@ -117,6 +121,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	setupHandler := NewSetupHandler(db, sessions, cfg)
 	r.Get("/setup", setupHandler.ServeHTTP)
 	r.Post("/setup", setupHandler.ServeHTTP)
+	r.Get("/setup/company", settingsHandler.Show)
+	r.Post("/setup/company", settingsHandler.Save)
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

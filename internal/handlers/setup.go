@@ -91,7 +91,7 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 		MaxAge: 604800,
 	})
 
-	http.Redirect(w, r, "/", http.StatusSeeOther)
+	http.Redirect(w, r, "/setup/company", http.StatusSeeOther)
 }
 
 func needsSetup(ctx context.Context, db *pgxpool.Pool) bool {

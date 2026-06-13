@@ -11,6 +11,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
+	"github.com/MartialM1nd/freefsm/internal/ent/companysettings"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
@@ -34,6 +35,7 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
+	TypeCompanySettings = "CompanySettings"
 	TypeCustomer        = "Customer"
 	TypeCustomerContact = "CustomerContact"
 	TypeEstimate        = "Estimate"
@@ -46,6 +48,1076 @@ const (
 	TypeStatusWorkflow  = "StatusWorkflow"
 	TypeUser            = "User"
 )
+
+// CompanySettingsMutation represents an operation that mutates the CompanySettings nodes in the graph.
+type CompanySettingsMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *int64
+	business_name       *string
+	address             *string
+	city                *string
+	state               *string
+	zip                 *string
+	phone               *string
+	email               *string
+	tax_id              *string
+	default_tax_rate    *string
+	invoice_prefix      *string
+	estimate_prefix     *string
+	default_due_days    *int
+	adddefault_due_days *int
+	created_at          *time.Time
+	updated_at          *time.Time
+	clearedFields       map[string]struct{}
+	done                bool
+	oldValue            func(context.Context) (*CompanySettings, error)
+	predicates          []predicate.CompanySettings
+}
+
+var _ ent.Mutation = (*CompanySettingsMutation)(nil)
+
+// companysettingsOption allows management of the mutation configuration using functional options.
+type companysettingsOption func(*CompanySettingsMutation)
+
+// newCompanySettingsMutation creates new mutation for the CompanySettings entity.
+func newCompanySettingsMutation(c config, op Op, opts ...companysettingsOption) *CompanySettingsMutation {
+	m := &CompanySettingsMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCompanySettings,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCompanySettingsID sets the ID field of the mutation.
+func withCompanySettingsID(id int64) companysettingsOption {
+	return func(m *CompanySettingsMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CompanySettings
+		)
+		m.oldValue = func(ctx context.Context) (*CompanySettings, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CompanySettings.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCompanySettings sets the old CompanySettings of the mutation.
+func withCompanySettings(node *CompanySettings) companysettingsOption {
+	return func(m *CompanySettingsMutation) {
+		m.oldValue = func(context.Context) (*CompanySettings, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CompanySettingsMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CompanySettingsMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of CompanySettings entities.
+func (m *CompanySettingsMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CompanySettingsMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CompanySettingsMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CompanySettings.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetBusinessName sets the "business_name" field.
+func (m *CompanySettingsMutation) SetBusinessName(s string) {
+	m.business_name = &s
+}
+
+// BusinessName returns the value of the "business_name" field in the mutation.
+func (m *CompanySettingsMutation) BusinessName() (r string, exists bool) {
+	v := m.business_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBusinessName returns the old "business_name" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldBusinessName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBusinessName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBusinessName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBusinessName: %w", err)
+	}
+	return oldValue.BusinessName, nil
+}
+
+// ResetBusinessName resets all changes to the "business_name" field.
+func (m *CompanySettingsMutation) ResetBusinessName() {
+	m.business_name = nil
+}
+
+// SetAddress sets the "address" field.
+func (m *CompanySettingsMutation) SetAddress(s string) {
+	m.address = &s
+}
+
+// Address returns the value of the "address" field in the mutation.
+func (m *CompanySettingsMutation) Address() (r string, exists bool) {
+	v := m.address
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAddress returns the old "address" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldAddress(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAddress is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAddress requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAddress: %w", err)
+	}
+	return oldValue.Address, nil
+}
+
+// ResetAddress resets all changes to the "address" field.
+func (m *CompanySettingsMutation) ResetAddress() {
+	m.address = nil
+}
+
+// SetCity sets the "city" field.
+func (m *CompanySettingsMutation) SetCity(s string) {
+	m.city = &s
+}
+
+// City returns the value of the "city" field in the mutation.
+func (m *CompanySettingsMutation) City() (r string, exists bool) {
+	v := m.city
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCity returns the old "city" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldCity(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCity is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCity requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCity: %w", err)
+	}
+	return oldValue.City, nil
+}
+
+// ResetCity resets all changes to the "city" field.
+func (m *CompanySettingsMutation) ResetCity() {
+	m.city = nil
+}
+
+// SetState sets the "state" field.
+func (m *CompanySettingsMutation) SetState(s string) {
+	m.state = &s
+}
+
+// State returns the value of the "state" field in the mutation.
+func (m *CompanySettingsMutation) State() (r string, exists bool) {
+	v := m.state
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldState returns the old "state" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldState(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldState is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldState requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldState: %w", err)
+	}
+	return oldValue.State, nil
+}
+
+// ResetState resets all changes to the "state" field.
+func (m *CompanySettingsMutation) ResetState() {
+	m.state = nil
+}
+
+// SetZip sets the "zip" field.
+func (m *CompanySettingsMutation) SetZip(s string) {
+	m.zip = &s
+}
+
+// Zip returns the value of the "zip" field in the mutation.
+func (m *CompanySettingsMutation) Zip() (r string, exists bool) {
+	v := m.zip
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldZip returns the old "zip" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldZip(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldZip is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldZip requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldZip: %w", err)
+	}
+	return oldValue.Zip, nil
+}
+
+// ResetZip resets all changes to the "zip" field.
+func (m *CompanySettingsMutation) ResetZip() {
+	m.zip = nil
+}
+
+// SetPhone sets the "phone" field.
+func (m *CompanySettingsMutation) SetPhone(s string) {
+	m.phone = &s
+}
+
+// Phone returns the value of the "phone" field in the mutation.
+func (m *CompanySettingsMutation) Phone() (r string, exists bool) {
+	v := m.phone
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPhone returns the old "phone" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldPhone(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPhone is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPhone requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPhone: %w", err)
+	}
+	return oldValue.Phone, nil
+}
+
+// ResetPhone resets all changes to the "phone" field.
+func (m *CompanySettingsMutation) ResetPhone() {
+	m.phone = nil
+}
+
+// SetEmail sets the "email" field.
+func (m *CompanySettingsMutation) SetEmail(s string) {
+	m.email = &s
+}
+
+// Email returns the value of the "email" field in the mutation.
+func (m *CompanySettingsMutation) Email() (r string, exists bool) {
+	v := m.email
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEmail returns the old "email" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldEmail(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEmail is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEmail requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEmail: %w", err)
+	}
+	return oldValue.Email, nil
+}
+
+// ResetEmail resets all changes to the "email" field.
+func (m *CompanySettingsMutation) ResetEmail() {
+	m.email = nil
+}
+
+// SetTaxID sets the "tax_id" field.
+func (m *CompanySettingsMutation) SetTaxID(s string) {
+	m.tax_id = &s
+}
+
+// TaxID returns the value of the "tax_id" field in the mutation.
+func (m *CompanySettingsMutation) TaxID() (r string, exists bool) {
+	v := m.tax_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxID returns the old "tax_id" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldTaxID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxID: %w", err)
+	}
+	return oldValue.TaxID, nil
+}
+
+// ResetTaxID resets all changes to the "tax_id" field.
+func (m *CompanySettingsMutation) ResetTaxID() {
+	m.tax_id = nil
+}
+
+// SetDefaultTaxRate sets the "default_tax_rate" field.
+func (m *CompanySettingsMutation) SetDefaultTaxRate(s string) {
+	m.default_tax_rate = &s
+}
+
+// DefaultTaxRate returns the value of the "default_tax_rate" field in the mutation.
+func (m *CompanySettingsMutation) DefaultTaxRate() (r string, exists bool) {
+	v := m.default_tax_rate
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultTaxRate returns the old "default_tax_rate" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldDefaultTaxRate(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultTaxRate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultTaxRate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultTaxRate: %w", err)
+	}
+	return oldValue.DefaultTaxRate, nil
+}
+
+// ResetDefaultTaxRate resets all changes to the "default_tax_rate" field.
+func (m *CompanySettingsMutation) ResetDefaultTaxRate() {
+	m.default_tax_rate = nil
+}
+
+// SetInvoicePrefix sets the "invoice_prefix" field.
+func (m *CompanySettingsMutation) SetInvoicePrefix(s string) {
+	m.invoice_prefix = &s
+}
+
+// InvoicePrefix returns the value of the "invoice_prefix" field in the mutation.
+func (m *CompanySettingsMutation) InvoicePrefix() (r string, exists bool) {
+	v := m.invoice_prefix
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoicePrefix returns the old "invoice_prefix" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldInvoicePrefix(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoicePrefix is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoicePrefix requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoicePrefix: %w", err)
+	}
+	return oldValue.InvoicePrefix, nil
+}
+
+// ResetInvoicePrefix resets all changes to the "invoice_prefix" field.
+func (m *CompanySettingsMutation) ResetInvoicePrefix() {
+	m.invoice_prefix = nil
+}
+
+// SetEstimatePrefix sets the "estimate_prefix" field.
+func (m *CompanySettingsMutation) SetEstimatePrefix(s string) {
+	m.estimate_prefix = &s
+}
+
+// EstimatePrefix returns the value of the "estimate_prefix" field in the mutation.
+func (m *CompanySettingsMutation) EstimatePrefix() (r string, exists bool) {
+	v := m.estimate_prefix
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEstimatePrefix returns the old "estimate_prefix" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldEstimatePrefix(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEstimatePrefix is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEstimatePrefix requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEstimatePrefix: %w", err)
+	}
+	return oldValue.EstimatePrefix, nil
+}
+
+// ResetEstimatePrefix resets all changes to the "estimate_prefix" field.
+func (m *CompanySettingsMutation) ResetEstimatePrefix() {
+	m.estimate_prefix = nil
+}
+
+// SetDefaultDueDays sets the "default_due_days" field.
+func (m *CompanySettingsMutation) SetDefaultDueDays(i int) {
+	m.default_due_days = &i
+	m.adddefault_due_days = nil
+}
+
+// DefaultDueDays returns the value of the "default_due_days" field in the mutation.
+func (m *CompanySettingsMutation) DefaultDueDays() (r int, exists bool) {
+	v := m.default_due_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultDueDays returns the old "default_due_days" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldDefaultDueDays(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultDueDays is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultDueDays requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultDueDays: %w", err)
+	}
+	return oldValue.DefaultDueDays, nil
+}
+
+// AddDefaultDueDays adds i to the "default_due_days" field.
+func (m *CompanySettingsMutation) AddDefaultDueDays(i int) {
+	if m.adddefault_due_days != nil {
+		*m.adddefault_due_days += i
+	} else {
+		m.adddefault_due_days = &i
+	}
+}
+
+// AddedDefaultDueDays returns the value that was added to the "default_due_days" field in this mutation.
+func (m *CompanySettingsMutation) AddedDefaultDueDays() (r int, exists bool) {
+	v := m.adddefault_due_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDefaultDueDays resets all changes to the "default_due_days" field.
+func (m *CompanySettingsMutation) ResetDefaultDueDays() {
+	m.default_due_days = nil
+	m.adddefault_due_days = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CompanySettingsMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CompanySettingsMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CompanySettingsMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CompanySettingsMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CompanySettingsMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CompanySettingsMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the CompanySettingsMutation builder.
+func (m *CompanySettingsMutation) Where(ps ...predicate.CompanySettings) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CompanySettingsMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CompanySettingsMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CompanySettings, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CompanySettingsMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CompanySettingsMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CompanySettings).
+func (m *CompanySettingsMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CompanySettingsMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.business_name != nil {
+		fields = append(fields, companysettings.FieldBusinessName)
+	}
+	if m.address != nil {
+		fields = append(fields, companysettings.FieldAddress)
+	}
+	if m.city != nil {
+		fields = append(fields, companysettings.FieldCity)
+	}
+	if m.state != nil {
+		fields = append(fields, companysettings.FieldState)
+	}
+	if m.zip != nil {
+		fields = append(fields, companysettings.FieldZip)
+	}
+	if m.phone != nil {
+		fields = append(fields, companysettings.FieldPhone)
+	}
+	if m.email != nil {
+		fields = append(fields, companysettings.FieldEmail)
+	}
+	if m.tax_id != nil {
+		fields = append(fields, companysettings.FieldTaxID)
+	}
+	if m.default_tax_rate != nil {
+		fields = append(fields, companysettings.FieldDefaultTaxRate)
+	}
+	if m.invoice_prefix != nil {
+		fields = append(fields, companysettings.FieldInvoicePrefix)
+	}
+	if m.estimate_prefix != nil {
+		fields = append(fields, companysettings.FieldEstimatePrefix)
+	}
+	if m.default_due_days != nil {
+		fields = append(fields, companysettings.FieldDefaultDueDays)
+	}
+	if m.created_at != nil {
+		fields = append(fields, companysettings.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, companysettings.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case companysettings.FieldBusinessName:
+		return m.BusinessName()
+	case companysettings.FieldAddress:
+		return m.Address()
+	case companysettings.FieldCity:
+		return m.City()
+	case companysettings.FieldState:
+		return m.State()
+	case companysettings.FieldZip:
+		return m.Zip()
+	case companysettings.FieldPhone:
+		return m.Phone()
+	case companysettings.FieldEmail:
+		return m.Email()
+	case companysettings.FieldTaxID:
+		return m.TaxID()
+	case companysettings.FieldDefaultTaxRate:
+		return m.DefaultTaxRate()
+	case companysettings.FieldInvoicePrefix:
+		return m.InvoicePrefix()
+	case companysettings.FieldEstimatePrefix:
+		return m.EstimatePrefix()
+	case companysettings.FieldDefaultDueDays:
+		return m.DefaultDueDays()
+	case companysettings.FieldCreatedAt:
+		return m.CreatedAt()
+	case companysettings.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case companysettings.FieldBusinessName:
+		return m.OldBusinessName(ctx)
+	case companysettings.FieldAddress:
+		return m.OldAddress(ctx)
+	case companysettings.FieldCity:
+		return m.OldCity(ctx)
+	case companysettings.FieldState:
+		return m.OldState(ctx)
+	case companysettings.FieldZip:
+		return m.OldZip(ctx)
+	case companysettings.FieldPhone:
+		return m.OldPhone(ctx)
+	case companysettings.FieldEmail:
+		return m.OldEmail(ctx)
+	case companysettings.FieldTaxID:
+		return m.OldTaxID(ctx)
+	case companysettings.FieldDefaultTaxRate:
+		return m.OldDefaultTaxRate(ctx)
+	case companysettings.FieldInvoicePrefix:
+		return m.OldInvoicePrefix(ctx)
+	case companysettings.FieldEstimatePrefix:
+		return m.OldEstimatePrefix(ctx)
+	case companysettings.FieldDefaultDueDays:
+		return m.OldDefaultDueDays(ctx)
+	case companysettings.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case companysettings.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown CompanySettings field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case companysettings.FieldBusinessName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBusinessName(v)
+		return nil
+	case companysettings.FieldAddress:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAddress(v)
+		return nil
+	case companysettings.FieldCity:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCity(v)
+		return nil
+	case companysettings.FieldState:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetState(v)
+		return nil
+	case companysettings.FieldZip:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetZip(v)
+		return nil
+	case companysettings.FieldPhone:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPhone(v)
+		return nil
+	case companysettings.FieldEmail:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEmail(v)
+		return nil
+	case companysettings.FieldTaxID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxID(v)
+		return nil
+	case companysettings.FieldDefaultTaxRate:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultTaxRate(v)
+		return nil
+	case companysettings.FieldInvoicePrefix:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoicePrefix(v)
+		return nil
+	case companysettings.FieldEstimatePrefix:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEstimatePrefix(v)
+		return nil
+	case companysettings.FieldDefaultDueDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultDueDays(v)
+		return nil
+	case companysettings.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case companysettings.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CompanySettings field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CompanySettingsMutation) AddedFields() []string {
+	var fields []string
+	if m.adddefault_due_days != nil {
+		fields = append(fields, companysettings.FieldDefaultDueDays)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CompanySettingsMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case companysettings.FieldDefaultDueDays:
+		return m.AddedDefaultDueDays()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CompanySettingsMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case companysettings.FieldDefaultDueDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDefaultDueDays(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CompanySettings numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CompanySettingsMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CompanySettingsMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CompanySettingsMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown CompanySettings nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CompanySettingsMutation) ResetField(name string) error {
+	switch name {
+	case companysettings.FieldBusinessName:
+		m.ResetBusinessName()
+		return nil
+	case companysettings.FieldAddress:
+		m.ResetAddress()
+		return nil
+	case companysettings.FieldCity:
+		m.ResetCity()
+		return nil
+	case companysettings.FieldState:
+		m.ResetState()
+		return nil
+	case companysettings.FieldZip:
+		m.ResetZip()
+		return nil
+	case companysettings.FieldPhone:
+		m.ResetPhone()
+		return nil
+	case companysettings.FieldEmail:
+		m.ResetEmail()
+		return nil
+	case companysettings.FieldTaxID:
+		m.ResetTaxID()
+		return nil
+	case companysettings.FieldDefaultTaxRate:
+		m.ResetDefaultTaxRate()
+		return nil
+	case companysettings.FieldInvoicePrefix:
+		m.ResetInvoicePrefix()
+		return nil
+	case companysettings.FieldEstimatePrefix:
+		m.ResetEstimatePrefix()
+		return nil
+	case companysettings.FieldDefaultDueDays:
+		m.ResetDefaultDueDays()
+		return nil
+	case companysettings.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case companysettings.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CompanySettings field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CompanySettingsMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CompanySettingsMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CompanySettingsMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CompanySettingsMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CompanySettingsMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CompanySettingsMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CompanySettingsMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown CompanySettings unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CompanySettingsMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown CompanySettings edge %s", name)
+}
 
 // CustomerMutation represents an operation that mutates the Customer nodes in the graph.
 type CustomerMutation struct {

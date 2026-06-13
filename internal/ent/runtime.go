@@ -5,6 +5,7 @@ package ent
 import (
 	"time"
 
+	"github.com/MartialM1nd/freefsm/internal/ent/companysettings"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
@@ -23,6 +24,66 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	companysettingsFields := schema.CompanySettings{}.Fields()
+	_ = companysettingsFields
+	// companysettingsDescBusinessName is the schema descriptor for business_name field.
+	companysettingsDescBusinessName := companysettingsFields[1].Descriptor()
+	// companysettings.DefaultBusinessName holds the default value on creation for the business_name field.
+	companysettings.DefaultBusinessName = companysettingsDescBusinessName.Default.(string)
+	// companysettingsDescAddress is the schema descriptor for address field.
+	companysettingsDescAddress := companysettingsFields[2].Descriptor()
+	// companysettings.DefaultAddress holds the default value on creation for the address field.
+	companysettings.DefaultAddress = companysettingsDescAddress.Default.(string)
+	// companysettingsDescCity is the schema descriptor for city field.
+	companysettingsDescCity := companysettingsFields[3].Descriptor()
+	// companysettings.DefaultCity holds the default value on creation for the city field.
+	companysettings.DefaultCity = companysettingsDescCity.Default.(string)
+	// companysettingsDescState is the schema descriptor for state field.
+	companysettingsDescState := companysettingsFields[4].Descriptor()
+	// companysettings.DefaultState holds the default value on creation for the state field.
+	companysettings.DefaultState = companysettingsDescState.Default.(string)
+	// companysettingsDescZip is the schema descriptor for zip field.
+	companysettingsDescZip := companysettingsFields[5].Descriptor()
+	// companysettings.DefaultZip holds the default value on creation for the zip field.
+	companysettings.DefaultZip = companysettingsDescZip.Default.(string)
+	// companysettingsDescPhone is the schema descriptor for phone field.
+	companysettingsDescPhone := companysettingsFields[6].Descriptor()
+	// companysettings.DefaultPhone holds the default value on creation for the phone field.
+	companysettings.DefaultPhone = companysettingsDescPhone.Default.(string)
+	// companysettingsDescEmail is the schema descriptor for email field.
+	companysettingsDescEmail := companysettingsFields[7].Descriptor()
+	// companysettings.DefaultEmail holds the default value on creation for the email field.
+	companysettings.DefaultEmail = companysettingsDescEmail.Default.(string)
+	// companysettingsDescTaxID is the schema descriptor for tax_id field.
+	companysettingsDescTaxID := companysettingsFields[8].Descriptor()
+	// companysettings.DefaultTaxID holds the default value on creation for the tax_id field.
+	companysettings.DefaultTaxID = companysettingsDescTaxID.Default.(string)
+	// companysettingsDescDefaultTaxRate is the schema descriptor for default_tax_rate field.
+	companysettingsDescDefaultTaxRate := companysettingsFields[9].Descriptor()
+	// companysettings.DefaultDefaultTaxRate holds the default value on creation for the default_tax_rate field.
+	companysettings.DefaultDefaultTaxRate = companysettingsDescDefaultTaxRate.Default.(string)
+	// companysettingsDescInvoicePrefix is the schema descriptor for invoice_prefix field.
+	companysettingsDescInvoicePrefix := companysettingsFields[10].Descriptor()
+	// companysettings.DefaultInvoicePrefix holds the default value on creation for the invoice_prefix field.
+	companysettings.DefaultInvoicePrefix = companysettingsDescInvoicePrefix.Default.(string)
+	// companysettingsDescEstimatePrefix is the schema descriptor for estimate_prefix field.
+	companysettingsDescEstimatePrefix := companysettingsFields[11].Descriptor()
+	// companysettings.DefaultEstimatePrefix holds the default value on creation for the estimate_prefix field.
+	companysettings.DefaultEstimatePrefix = companysettingsDescEstimatePrefix.Default.(string)
+	// companysettingsDescDefaultDueDays is the schema descriptor for default_due_days field.
+	companysettingsDescDefaultDueDays := companysettingsFields[12].Descriptor()
+	// companysettings.DefaultDefaultDueDays holds the default value on creation for the default_due_days field.
+	companysettings.DefaultDefaultDueDays = companysettingsDescDefaultDueDays.Default.(int)
+	// companysettingsDescCreatedAt is the schema descriptor for created_at field.
+	companysettingsDescCreatedAt := companysettingsFields[13].Descriptor()
+	// companysettings.DefaultCreatedAt holds the default value on creation for the created_at field.
+	companysettings.DefaultCreatedAt = companysettingsDescCreatedAt.Default.(func() time.Time)
+	// companysettingsDescUpdatedAt is the schema descriptor for updated_at field.
+	companysettingsDescUpdatedAt := companysettingsFields[14].Descriptor()
+	// companysettings.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	companysettings.DefaultUpdatedAt = companysettingsDescUpdatedAt.Default.(func() time.Time)
+	// companysettings.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	companysettings.UpdateDefaultUpdatedAt = companysettingsDescUpdatedAt.UpdateDefault.(func() time.Time)
 	customerFields := schema.Customer{}.Fields()
 	_ = customerFields
 	// customerDescFirstName is the schema descriptor for first_name field.

@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -220,7 +221,7 @@ func (h *EstimateHandler) PDF(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="EST-%05d.pdf"`, id))
-	services.GenerateEstimatePDF(w, e, customer, statuses)
+	services.GenerateEstimatePDF(w, e, customer, statuses, middleware.CompanyFromContext(r.Context()))
 }
 
 func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {
