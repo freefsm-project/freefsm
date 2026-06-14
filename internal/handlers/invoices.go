@@ -242,7 +242,8 @@ func invoiceToDetail(i *ent.Invoice, statuses []*ent.Status) templates.InvoiceDe
 		ID:         i.ID,
 		CustomerID: invCustID(i),
 		StatusID:   invStatusID(i),
-		StatusName: statusName(statuses, i.StatusID),
+		StatusName:  statusName(statuses, i.StatusID),
+		StatusColor: statusColor(statuses, i.StatusID),
 		Title:      i.Title,
 		Notes:      i.Notes,
 		TaxRate:    i.TaxRate,
@@ -266,7 +267,8 @@ func invoiceRow(i *ent.Invoice, statuses []*ent.Status, custMap map[int64]string
 		CustomerID: invCustID(i),
 		Customer:   custMap[invCustID(i)],
 		StatusID:   invStatusID(i),
-		StatusName: statusName(statuses, i.StatusID),
+		StatusName:  statusName(statuses, i.StatusID),
+		StatusColor: statusColor(statuses, i.StatusID),
 	}
 	if !i.InvoiceDate.IsZero() {
 		r.InvoiceDate = i.InvoiceDate.Format("Jan 2, 2006")

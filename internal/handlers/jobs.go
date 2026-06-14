@@ -296,6 +296,7 @@ func jobToDetail(j *ent.Job, statuses []*ent.Status) templates.JobDetail {
 		Subtitle:    j.Subtitle,
 		StatusID:    statusID(j),
 		StatusName:  statusName(statuses, j.StatusID),
+		StatusColor: statusColor(statuses, j.StatusID),
 		BillingType: j.BillingType,
 		Notes:       j.Notes,
 		TechNotes:   j.TechNotes,
@@ -329,6 +330,7 @@ func jobRow(j *ent.Job, statuses []*ent.Status, custMap map[int64]string) templa
 		Customer:    custMap[j.CustomerID],
 		StatusID:    statusID(j),
 		StatusName:  statusName(statuses, j.StatusID),
+		StatusColor: statusColor(statuses, j.StatusID),
 		BillingType: j.BillingType,
 	}
 	if j.Subtitle != "" {

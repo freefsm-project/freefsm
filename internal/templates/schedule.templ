@@ -52,7 +52,7 @@ templ monthView(p SchedulePageData) {
 								<div class="day-num">{ fmt.Sprintf("%d", day.DayNum) }</div>
 								for _, j := range day.Jobs {
 									<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job">
-										<mark>{ j.StatusName }</mark>
+										<span class="status-badge" style="background:{ j.StatusColor };color:{ j.StatusColor };border-color:{ j.StatusColor };opacity:0.25">{ j.StatusName }</span>
 										<strong>{ j.JobType }</strong>
 										<small>{ j.Customer }</small>
 										<small>{ j.Time }</small>

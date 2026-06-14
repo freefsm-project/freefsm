@@ -287,7 +287,8 @@ func estimateToDetail(e *ent.Estimate, statuses []*ent.Status) templates.Estimat
 		ID:         e.ID,
 		CustomerID: estCustID(e),
 		StatusID:   estStatusID(e),
-		StatusName: statusName(statuses, e.StatusID),
+		StatusName:  statusName(statuses, e.StatusID),
+		StatusColor: statusColor(statuses, e.StatusID),
 		Title:      e.Title,
 		Notes:      e.Notes,
 		TaxRate:    e.TaxRate,
@@ -305,7 +306,8 @@ func estimateRow(e *ent.Estimate, statuses []*ent.Status, custMap map[int64]stri
 		CustomerID: estCustID(e),
 		Customer:   custMap[estCustID(e)],
 		StatusID:   estStatusID(e),
-		StatusName: statusName(statuses, e.StatusID),
+		StatusName:  statusName(statuses, e.StatusID),
+		StatusColor: statusColor(statuses, e.StatusID),
 	}
 	if !e.CreatedAt.IsZero() {
 		r.CreatedAt = e.CreatedAt.Format("Jan 2, 2006")

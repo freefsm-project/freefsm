@@ -22,13 +22,13 @@ templ Layout(title string, children ...templ.Component) {
 				</div>
 				<hr class="sidebar-divider"/>
 				<nav>
-					<a href="/">Dashboard</a>
-					<a href="/schedule">Schedule</a>
-					<a href="/customers">Customers</a>
-					<a href="/jobs">Jobs</a>
-					<a href="/estimates">Estimates</a>
-					<a href="/invoices">Invoices</a>
-					<a href="/items">Items</a>
+					<a href="/" class={ "active", isActivePath(ctx, "/") }>Dashboard</a>
+					<a href="/schedule" class={ "active", isActivePath(ctx, "/schedule") }>Schedule</a>
+					<a href="/customers" class={ "active", isActivePath(ctx, "/customers") }>Customers</a>
+					<a href="/jobs" class={ "active", isActivePath(ctx, "/jobs") }>Jobs</a>
+					<a href="/estimates" class={ "active", isActivePath(ctx, "/estimates") }>Estimates</a>
+					<a href="/invoices" class={ "active", isActivePath(ctx, "/invoices") }>Invoices</a>
+					<a href="/items" class={ "active", isActivePath(ctx, "/items") }>Items</a>
 				</nav>
 				if getUser(ctx) != nil && getUser(ctx).Role == "admin" {
 					<hr class="sidebar-divider"/>
@@ -57,6 +57,20 @@ templ Layout(title string, children ...templ.Component) {
 				}
 			</aside>
 			<div class="main-content">
+				<div id="loading-bar"></div>
+				<script>
+			let loadingTimer;
+			document.body.addEventListener('htmx:beforeRequest', () => {
+				clearTimeout(loadingTimer);
+				document.getElementById('loading-bar').style.display = 'block';
+			});
+			document.body.addEventListener('htmx:afterRequest', () => {
+				loadingTimer = setTimeout(() => document.getElementById('loading-bar').style.display = 'none', 300);
+			});
+			document.body.addEventListener('htmx:responseError', () => {
+				loadingTimer = setTimeout(() => document.getElementById('loading-bar').style.display = 'none', 300);
+			});
+		</script>
 				if getFlash(ctx) != "" {
 					<div class="flash-banner" role="alert">{ getFlash(ctx) }</div>
 				}

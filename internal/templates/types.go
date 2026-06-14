@@ -3,6 +3,8 @@ package templates
 import (
 	"context"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
@@ -157,6 +159,7 @@ type JobRow struct {
 	JobType     string
 	StatusID    int64
 	StatusName  string
+	StatusColor string
 	StartTime   string
 	BillingType string
 }
@@ -178,6 +181,7 @@ type JobDetail struct {
 	Subtitle        string
 	StatusID        int64
 	StatusName      string
+	StatusColor     string
 	BillingType     string
 	StartTime       string
 	EndTime         string
@@ -230,26 +234,28 @@ func itemFormTitle(isNew bool) string {
 }
 
 type EstimateRow struct {
-	ID         int64
-	Title      string
-	Customer   string
-	CustomerID int64
-	StatusID   int64
-	StatusName string
-	CreatedAt  string
+	ID          int64
+	Title       string
+	Customer    string
+	CustomerID  int64
+	StatusID    int64
+	StatusName  string
+	StatusColor string
+	CreatedAt   string
 }
 
 type EstimateDetail struct {
-	ID         int64
-	CustomerID int64
-	Customer   string
-	JobID      int64
-	StatusID   int64
-	StatusName string
-	Title      string
-	Notes      string
-	TaxRate    string
-	LineItems  []services.LineItem
+	ID          int64
+	CustomerID  int64
+	Customer    string
+	JobID       int64
+	StatusID    int64
+	StatusName  string
+	StatusColor string
+	Title       string
+	Notes       string
+	TaxRate     string
+	LineItems   []services.LineItem
 }
 
 type EstimateListPageData struct {
@@ -281,6 +287,7 @@ type InvoiceRow struct {
 	CustomerID  int64
 	StatusID    int64
 	StatusName  string
+	StatusColor string
 	InvoiceDate string
 	DueDate     string
 }
@@ -292,6 +299,7 @@ type InvoiceDetail struct {
 	JobID       int64
 	StatusID    int64
 	StatusName  string
+	StatusColor string
 	Title       string
 	Notes       string
 	InvoiceDate string
@@ -488,6 +496,21 @@ func userFormAction(isNew bool, id int64) string {
 	return fmt.Sprintf("/users/%d", id)
 }
 
+func customerStatusColor(status string) string {
+	switch status {
+	case "lead": return "#3B82F6"
+	case "opportunity": return "#F59E0B"
+	case "customer": return "#10B981"
+	case "lost": return "#EF4444"
+	case "inactive": return "#6B7280"
+	default: return "#6B7280"
+	}
+}
+
+func isActivePath(ctx context.Context, prefix string) bool {
+	return middleware.IsActivePath(ctx, prefix)
+}
+
 func settingsButtonText(isSetup bool) string {
 	if isSetup {
 		return "Complete Setup"
@@ -500,6 +523,17 @@ func settingsFormAction(isSetup bool) string {
 		return "/setup/company"
 	}
 	return "/settings"
+}
+
+func hexToRGBA(hex string, alpha float64) string {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) == 6 {
+		r, _ := strconv.ParseInt(hex[0:2], 16, 64)
+		g, _ := strconv.ParseInt(hex[2:4], 16, 64)
+		b, _ := strconv.ParseInt(hex[4:6], 16, 64)
+		return fmt.Sprintf("rgba(%d, %d, %d, %.2f)", r, g, b, alpha)
+	}
+	return "rgba(0, 0, 0, 0)"
 }
 
 func today() string {
@@ -515,13 +549,14 @@ type ContactRow struct {
 }
 
 type CalendarJob struct {
-	ID         int64
-	Day        int
-	Hour       int
-	JobType    string
-	Customer   string
-	Time       string
-	StatusName string
+	ID          int64
+	Day         int
+	Hour        int
+	JobType     string
+	Customer    string
+	Time        string
+	StatusName  string
+	StatusColor string
 }
 
 type DayData struct {

@@ -30,15 +30,19 @@ func customerOptions(customers []*ent.Customer) []templates.SelectOption {
 }
 
 func statusName(statuses []*ent.Status, id *int64) string {
-	if id == nil {
-		return ""
-	}
+	if id == nil { return "" }
 	for _, s := range statuses {
-		if s.ID == *id {
-			return s.Name
-		}
+		if s.ID == *id { return s.Name }
 	}
 	return "Unknown"
+}
+
+func statusColor(statuses []*ent.Status, id *int64) string {
+	if id == nil { return "#6B7280" }
+	for _, s := range statuses {
+		if s.ID == *id { return s.Color }
+	}
+	return "#6B7280"
 }
 
 func int64Ptr(v int64) *int64 {

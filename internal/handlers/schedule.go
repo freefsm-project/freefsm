@@ -42,11 +42,9 @@ func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
 	customers, _ := h.custSvc.ListAll(r.Context())
 	custMap := customerMap(customers)
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
-	statusNameMap := statusNameMapFunc(statuses)
-
 	calJobs := make([]templates.CalendarJob, len(jobs))
 	for i, j := range jobs {
-		calJobs[i] = calendarJob(j, custMap, statusNameMap)
+		calJobs[i] = calendarJob(j, custMap, statuses)
 	}
 
 	weeks := buildMonthGrid(year, month, calJobs)
@@ -70,8 +68,6 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 	customers, _ := h.custSvc.ListAll(r.Context())
 	custMap := customerMap(customers)
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
-	statusNameMap := statusNameMapFunc(statuses)
-
 	var days []templates.ScheduleDay
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		day := templates.ScheduleDay{
@@ -81,7 +77,7 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 			IsToday: isToday(d),
 		}
 		for _, j := range jobs {
-			cj := calendarJob(j, custMap, statusNameMap)
+			cj := calendarJob(j, custMap, statuses)
 			cj.Hour = j.StartTime.Hour()
 			if j.StartTime == nil { continue }
 			if j.StartTime.Year() == d.Year() && j.StartTime.YearDay() == d.YearDay() {
@@ -113,11 +109,9 @@ func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
 	customers, _ := h.custSvc.ListAll(r.Context())
 	custMap := customerMap(customers)
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
-	statusNameMap := statusNameMapFunc(statuses)
-
 	var calJobs []templates.CalendarJob
 	for _, j := range jobs {
-		cj := calendarJob(j, custMap, statusNameMap)
+		cj := calendarJob(j, custMap, statuses)
 		cj.Hour = j.StartTime.Hour()
 		calJobs = append(calJobs, cj)
 	}
@@ -135,7 +129,7 @@ func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
 	templates.SchedulePage(data).Render(r.Context(), w)
 }
 
-func calendarJob(j *ent.Job, custMap map[int64]string, statusMap map[int64]string) templates.CalendarJob {
+func calendarJob(j *ent.Job, custMap map[int64]string, statuses []*ent.Status) templates.CalendarJob {
 	cj := templates.CalendarJob{
 		ID:      j.ID,
 		JobType: j.JobType,
@@ -143,9 +137,8 @@ func calendarJob(j *ent.Job, custMap map[int64]string, statusMap map[int64]strin
 	if j.CustomerID > 0 {
 		cj.Customer = custMap[j.CustomerID]
 	}
-	if sID := statusID(j); sID > 0 {
-		cj.StatusName = statusMap[sID]
-	}
+	cj.StatusName = statusName(statuses, j.StatusID)
+	cj.StatusColor = statusColor(statuses, j.StatusID)
 	if j.StartTime != nil && !j.StartTime.IsZero() {
 		cj.Time = j.StartTime.Format("3:04 PM")
 		cj.Day = j.StartTime.Day()
@@ -171,14 +164,6 @@ func weekRange(date time.Time) (time.Time, time.Time) {
 	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.Local)
 	end := start.AddDate(0, 0, 7).Add(-time.Second)
 	return start, end
-}
-
-func statusNameMapFunc(statuses []*ent.Status) map[int64]string {
-	m := make(map[int64]string, len(statuses))
-	for _, s := range statuses {
-		m[s.ID] = s.Name
-	}
-	return m
 }
 
 func parseYearMonth(r *http.Request, now time.Time) (int, time.Month) {

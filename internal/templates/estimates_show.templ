@@ -22,7 +22,7 @@ templ EstimateShow(p EstimateDetail) {
 		<table>
 			<tbody>
 				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
-				<tr><th>Status</th><td><mark>{ p.StatusName }</mark></td></tr>
+				<tr><th>Status</th><td><span class="status-badge" style="background:{ p.StatusColor };color:{ p.StatusColor };border-color:{ p.StatusColor };opacity:0.25">{ p.StatusName }</span></td></tr>
 				<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
 			</tbody>
 		</table>

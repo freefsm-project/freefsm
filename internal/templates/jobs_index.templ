@@ -46,7 +46,7 @@ templ JobsTable(p JobListPageData) {
 							<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) }>{ j.DisplayName }</a>
 						</td>
 						<td>{ j.Customer }</td>
-						<td><mark>{ j.StatusName }</mark></td>
+						<td><span class="status-badge" style="background:{ j.StatusColor };color:{ j.StatusColor };border-color:{ j.StatusColor };opacity:0.25">{ j.StatusName }</span></td>
 						<td>{ j.StartTime }</td>
 						<td>{ j.BillingType }</td>
 						<td style="text-align:right">
