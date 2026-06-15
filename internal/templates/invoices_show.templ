@@ -55,7 +55,11 @@ templ InvoiceShow(p InvoiceDetail) {
 				</tbody>
 			</table>
 			<div style="text-align:right;margin-top:0.5rem">
-				<p><strong>Total: { fmt.Sprintf("$%.2f", lineItemsTotal(p.LineItems)) }</strong></p>
+				<p><strong>Subtotal: { fmt.Sprintf("$%.2f", lineItemsTotal(p.LineItems)) }</strong></p>
+				if t := taxAmount(p.LineItems, p.TaxRate); t > 0 {
+					<p><strong>Tax: { fmt.Sprintf("$%.2f", t) }</strong></p>
+				}
+				<p><strong>Grand Total: { fmt.Sprintf("$%.2f", lineItemsTotal(p.LineItems)+taxAmount(p.LineItems, p.TaxRate)) }</strong></p>
 			</div>
 		}
 		if len(p.Payments) > 0 {

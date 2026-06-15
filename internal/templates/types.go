@@ -508,6 +508,27 @@ func lineItemsTotal(items []services.LineItem) float64 {
 	return total
 }
 
+func taxAmount(items []services.LineItem, taxRate string) float64 {
+	tr := parseTaxRate(taxRate)
+	if tr <= 0 {
+		return 0
+	}
+	var taxableTotal float64
+	for _, li := range items {
+		if li.Taxable {
+			taxableTotal += lineItemTotal(li)
+		}
+	}
+	return taxableTotal * tr
+}
+
+func parseTaxRate(s string) float64 {
+	s = strings.TrimSuffix(s, "%")
+	s = strings.TrimSpace(s)
+	f, _ := strconv.ParseFloat(s, 64)
+	return f / 100
+}
+
 func customerFormAction(isNew bool, id int64) string {
 	if isNew {
 		return "/customers"

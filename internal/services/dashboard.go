@@ -87,6 +87,7 @@ func (s *DashboardService) Stats(ctx context.Context) (DashboardStats, error) {
 
 	// Find status IDs
 	paidStatusID := s.statusIDByName(ctx, "invoice", "Paid")
+	voidStatusID := s.statusIDByName(ctx, "invoice", "Void")
 	draftStatusID := s.statusIDByName(ctx, "invoice", "Draft")
 	inProgressStatusID := s.statusIDByName(ctx, "project", "In Progress")
 	completedStatusID := s.statusIDByName(ctx, "project", "Completed")
@@ -126,18 +127,22 @@ func (s *DashboardService) Stats(ctx context.Context) (DashboardStats, error) {
 		}
 	}
 
-	// Financial totals (exclude draft invoices)
+	// Financial totals (exclude draft, paid, and void invoices)
 	allInvoices, _ := s.client.Invoice.Query().
-		Where(invoice.StatusIDNEQ(draftStatusID)).
+		Where(
+			invoice.StatusIDNEQ(draftStatusID),
+			invoice.StatusIDNEQ(paidStatusID),
+			invoice.StatusIDNEQ(voidStatusID),
+		).
 		All(ctx)
 	var outstanding, overdue float64
 	for _, i := range allInvoices {
 		balance := s.invoiceBalance(i)
 		if balance > 0 {
 			outstanding += balance
-		if !i.DueDate.IsZero() && i.DueDate.Before(now) {
-			overdue += balance
-		}
+			if !i.DueDate.IsZero() && i.DueDate.Before(now) {
+				overdue += balance
+			}
 		}
 	}
 
@@ -204,7 +209,7 @@ func (s *DashboardService) statusIDByName(ctx context.Context, objectType, name 
 	return st.ID
 }
 
-func (s *DashboardService) invoiceTotal(i *ent.Invoice) float64 {
+func (s *DashboardService) invoiceSubtotal(i *ent.Invoice) float64 {
 	items, _ := ParseLineItems(i.LineItems)
 	var total float64
 	for _, li := range items {
@@ -212,8 +217,13 @@ func (s *DashboardService) invoiceTotal(i *ent.Invoice) float64 {
 		total -= li.Discount
 		total += li.Surcharge
 	}
-	// Apply tax
-	if taxRate := parseTaxRate(i.TaxRate); taxRate > 0 {
+	return total
+}
+
+func (s *DashboardService) invoiceTotal(i *ent.Invoice) float64 {
+	total := s.invoiceSubtotal(i)
+		if taxRate := parseTaxRate(i.TaxRate); taxRate > 0 {
+		items, _ := ParseLineItems(i.LineItems)
 		var taxableTotal float64
 		for _, li := range items {
 			if li.Taxable {
@@ -222,7 +232,7 @@ func (s *DashboardService) invoiceTotal(i *ent.Invoice) float64 {
 				taxableTotal += li.Surcharge
 			}
 		}
-		total += taxableTotal * taxRate
+		total += taxableTotal * taxRate / 100
 	}
 	return total
 }
@@ -307,7 +317,7 @@ func (s *DashboardService) estimateTotal(e *ent.Estimate) float64 {
 		total -= li.Discount
 		total += li.Surcharge
 	}
-	if taxRate := parseTaxRate(e.TaxRate); taxRate > 0 {
+		if taxRate := parseTaxRate(e.TaxRate); taxRate > 0 {
 		var taxableTotal float64
 		for _, li := range items {
 			if li.Taxable {
@@ -316,7 +326,7 @@ func (s *DashboardService) estimateTotal(e *ent.Estimate) float64 {
 				taxableTotal += li.Surcharge
 			}
 		}
-		total += taxableTotal * taxRate
+		total += taxableTotal * taxRate / 100
 	}
 	return total
 }

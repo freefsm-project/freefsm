@@ -127,10 +127,14 @@ func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate float64) {
 	pdf.Ln(7)
 
 	var subtotal float64
+	var taxableSubtotal float64
 	pdf.SetFont("Helvetica", "", 9)
 	for _, li := range items {
 		lineTotal := li.UnitPrice * float64(li.Quantity)
 		subtotal += lineTotal
+		if li.Taxable {
+			taxableSubtotal += lineTotal
+		}
 		pdf.CellFormat(widths[0], 6, li.Title, "1", 0, "L", false, 0, "")
 		pdf.CellFormat(widths[1], 6, strconv.Itoa(li.Quantity), "1", 0, "C", false, 0, "")
 		pdf.CellFormat(widths[2], 6, fmt.Sprintf("$%.2f", li.UnitPrice), "1", 0, "R", false, 0, "")
@@ -146,7 +150,7 @@ func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate float64) {
 	pdf.CellFormat(40, 6, fmt.Sprintf("$%.2f", subtotal), "", 1, "R", false, 0, "")
 
 	if taxRate > 0 {
-		tax := subtotal * taxRate / 100
+		tax := taxableSubtotal * taxRate / 100
 		pdf.SetX(x)
 		pdf.CellFormat(40, 6, fmt.Sprintf("Tax (%.2f%%):", taxRate), "", 0, "R", false, 0, "")
 		pdf.CellFormat(40, 6, fmt.Sprintf("$%.2f", tax), "", 1, "R", false, 0, "")
