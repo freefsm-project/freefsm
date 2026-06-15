@@ -49,6 +49,32 @@ type DashboardData struct {
 	Stats services.DashboardStats
 }
 
+type RecentJob struct {
+	ID          int64
+	DisplayName string
+	Customer    string
+	CreatedAt   string
+}
+
+type RecentInvoice struct {
+	ID        int64
+	Title     string
+	Customer  string
+	Total     float64
+	Status    string
+	CreatedAt string
+}
+
+type RecentEstimate struct {
+	ID        int64
+	Title     string
+	Customer  string
+	Total     float64
+	CreatedAt string
+}
+
+
+
 type CustomerListPageData struct {
 	Customers     []CustomerRow
 	Page          int
