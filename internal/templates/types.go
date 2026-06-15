@@ -536,6 +536,10 @@ func hexToRGBA(hex string, alpha float64) string {
 	return "rgba(0, 0, 0, 0)"
 }
 
+func badgeStyle(color string) string {
+	return "background:" + hexToRGBA(color, 0.15) + ";color:" + color + ";border-color:" + color
+}
+
 func today() string {
 	return time.Now().Format("2006-01-02")
 }

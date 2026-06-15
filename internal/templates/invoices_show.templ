@@ -18,7 +18,7 @@ templ InvoiceShow(p InvoiceDetail) {
 		<table>
 			<tbody>
 				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
-				<tr><th>Status</th><td><span class="status-badge" style="background:{ hexToRGBA(p.StatusColor, 0.15) };color:{ p.StatusColor };border-color:{ p.StatusColor }">{ p.StatusName }</span></td></tr>
+				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(p.StatusColor) }>{ p.StatusName }</span></td></tr>
 				<tr><th>Invoice Date</th><td>{ p.InvoiceDate }</td></tr>
 				<tr><th>Due Date</th><td>{ p.DueDate }</td></tr>
 				<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>

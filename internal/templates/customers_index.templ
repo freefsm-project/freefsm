@@ -52,7 +52,7 @@ templ CustomerTable(p CustomerListPageData) {
 						</td>
 						<td>{ c.Email }</td>
 						<td>{ c.Phone }</td>
-						<td><span class="status-badge" style="background:{ hexToRGBA(customerStatusColor(c.Status), 0.15) };color:{ customerStatusColor(c.Status) };border-color:{ customerStatusColor(c.Status) }">{ c.Status }</span></td>
+						<td><span class="status-badge" style={ badgeStyle(customerStatusColor(c.Status)) }>{ c.Status }</span></td>
 						<td style="text-align:right">
 							<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", c.ID)) } role="button" class="outline small">Edit</a>
 							<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", c.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this customer?')">

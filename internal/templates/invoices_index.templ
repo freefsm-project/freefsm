@@ -44,7 +44,7 @@ templ InvoicesTable(p InvoiceListPageData) {
 					<tr>
 						<td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) }>{ i.Title }</a></td>
 						<td>{ i.Customer }</td>
-						<td><span class="status-badge" style="background:{ hexToRGBA(i.StatusColor, 0.15) };color:{ i.StatusColor };border-color:{ i.StatusColor }">{ i.StatusName }</span></td>
+						<td><span class="status-badge" style={ badgeStyle(i.StatusColor) }>{ i.StatusName }</span></td>
 						<td>{ i.InvoiceDate }</td>
 						<td>{ i.DueDate }</td>
 						<td style="text-align:right">

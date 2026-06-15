@@ -43,7 +43,7 @@ templ EstimatesTable(p EstimateListPageData) {
 					<tr>
 						<td><a href={ templ.URL(fmt.Sprintf("/estimates/%d", e.ID)) }>{ e.Title }</a></td>
 						<td>{ e.Customer }</td>
-						<td><span class="status-badge" style="background:{ hexToRGBA(e.StatusColor, 0.15) };color:{ e.StatusColor };border-color:{ e.StatusColor }">{ e.StatusName }</span></td>
+						<td><span class="status-badge" style={ badgeStyle(e.StatusColor) }>{ e.StatusName }</span></td>
 						<td>{ e.CreatedAt }</td>
 						<td style="text-align:right">
 							<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", e.ID)) } role="button" class="outline small">Edit</a>

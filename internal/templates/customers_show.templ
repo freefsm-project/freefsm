@@ -23,7 +23,7 @@ templ CustomerShow(p CustomerShowPageData) {
 				<tr><th>Last Name</th><td>{ p.Customer.LastName }</td></tr>
 				<tr><th>Email</th><td>{ p.Customer.Email }</td></tr>
 				<tr><th>Phone</th><td>{ p.Customer.Phone }</td></tr>
-				<tr><th>Status</th><td><span class="status-badge" style="background:{ hexToRGBA(customerStatusColor(p.Customer.Status), 0.15) };color:{ customerStatusColor(p.Customer.Status) };border-color:{ customerStatusColor(p.Customer.Status) }">{ p.Customer.Status }</span></td></tr>
+				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(customerStatusColor(p.Customer.Status)) }>{ p.Customer.Status }</span></td></tr>
 				<tr><th>Account Type</th><td>{ p.Customer.AccountType }</td></tr>
 			</tbody>
 		</table>
