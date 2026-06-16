@@ -69,10 +69,14 @@ templ SettingsPage(p SettingsPageData) {
 				<input type="email" name="smtp_from" value={ p.Settings.SMTPFrom } placeholder="freefsm@example.com"/>
 			</label>
 			<div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
-				<form hx-post="/settings/test-email" hx-target="#test-email-result" hx-swap="innerHTML" style="display:inline">
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button type="submit" class="outline">Send Test Email</button>
-				</form>
+				<button type="button"
+					hx-post="/settings/test-email"
+					hx-target="#test-email-result"
+					hx-swap="innerHTML"
+					hx-include="[name='csrf_token']"
+					class="outline">
+					Send Test Email
+				</button>
 			</div>
 			<div id="test-email-result"></div>
 			<h3>Document Settings</h3>
