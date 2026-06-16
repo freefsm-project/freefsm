@@ -548,6 +548,18 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
   opacity: 1;
 }
 
+/* Sidebar Search */
+.sidebar-search {
+  margin: 0 0 0.75rem 0;
+}
+.sidebar-search input[type="search"] {
+  margin: 0;
+  width: 100%;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.5rem;
+  padding-left: 2.25rem;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .sidebar {

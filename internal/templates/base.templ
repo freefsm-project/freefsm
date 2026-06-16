@@ -39,6 +39,9 @@ templ Layout(title string, children ...templ.Component) {
 					<img src="/static/img/favicon.svg" alt=""/>
 					<strong>{ companyBrandName(companyFromCtx(ctx)) }</strong>
 				</div>
+				<form class="sidebar-search" action="/search" method="get">
+					<input type="search" name="q" placeholder="Search..." required/>
+				</form>
 				<hr class="sidebar-divider"/>
 				<nav>
 					<a href="/" class={ templ.KV("active", isActivePath(ctx, "/")) }>Dashboard</a>
@@ -66,10 +69,10 @@ templ Layout(title string, children ...templ.Component) {
 			</aside>
 			<div class="main-content">
 				<header class="page-header">
-					<div class="header-left">
-						<span class="page-title">{ pageTitleFromPath(ctx) }</span>
-					</div>
-					<div class="header-right">
+				<div class="header-left">
+					<span class="page-title">{ pageTitleFromPath(ctx) }</span>
+				</div>
+				<div class="header-right">
 						<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
 							if themeFromCtx(ctx) == "dark" {
 								☀️

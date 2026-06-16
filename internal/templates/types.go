@@ -832,3 +832,12 @@ type TagWidgetData struct {
 	Tags    []TagRow
 	AllTags []TagRow
 }
+
+type SearchPageData struct {
+	Query     string
+	Customers []services.SearchResult
+	Jobs      []services.SearchResult
+	Projects  []services.SearchResult
+	Invoices  []services.SearchResult
+	Estimates []services.SearchResult
+}
