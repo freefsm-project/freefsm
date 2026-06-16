@@ -126,6 +126,9 @@ templ InvoiceShow(p InvoiceDetail) {
 			<h3>Notes</h3>
 			<p>{ p.Notes }</p>
 		}
+		<div hx-get={ templ.URL(fmt.Sprintf("/invoices/%d/comments", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
+			<p>Loading comments...</p>
+		</div>
 		<p><a href="/invoices">&larr; Back to Invoices</a></p>
 	}
 }

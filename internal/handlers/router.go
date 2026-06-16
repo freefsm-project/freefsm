@@ -39,6 +39,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	locationSvc := services.NewLocationService(entClient)
 	tagSvc := services.NewTagService(entClient)
 	tagLinkSvc := services.NewTagLinkService(entClient)
+	commentSvc := services.NewCommentService(entClient)
+	commentHandler := NewCommentHandler(commentSvc, userService)
 	dashboardHandler := NewDashboardHandler(services.NewDashboardService(entClient))
 	customerHandler := NewCustomerHandler(customerService, contactSvc, tagSvc, tagLinkSvc)
 	itemHandler := NewItemHandler(itemService)
@@ -160,6 +162,19 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/estimates/{id}/tags/{tag_id}/detach", estimateHandler.DetachTag)
 		r.Post("/invoices/{id}/tags/{tag_id}/attach", invoiceHandler.AttachTag)
 		r.Post("/invoices/{id}/tags/{tag_id}/detach", invoiceHandler.DetachTag)
+
+		// Entity comments (list, create, delete)
+		for _, e := range []struct{ prefix, objType string }{
+			{"/customers", "customer"},
+			{"/jobs", "job"},
+			{"/projects", "project"},
+			{"/estimates", "estimate"},
+			{"/invoices", "invoice"},
+		} {
+			r.Get(e.prefix+"/{id}/comments", commentHandler.List(e.objType))
+			r.Post(e.prefix+"/{id}/comments", commentHandler.Create(e.objType))
+			r.Post(e.prefix+"/{id}/comments/{cid}/delete", commentHandler.Delete(e.objType))
+		}
 
 		// Dispatcher or Admin routes
 		r.Group(func(r chi.Router) {

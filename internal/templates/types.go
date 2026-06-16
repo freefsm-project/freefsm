@@ -833,6 +833,21 @@ type TagWidgetData struct {
 	AllTags []TagRow
 }
 
+type CommentRow struct {
+	ID        int64
+	Author    string
+	Content   string
+	CreatedAt string
+	CanDelete bool
+}
+
+type CommentsWidgetData struct {
+	BaseURL    string
+	ObjectType string
+	ObjectID   int64
+	Comments   []CommentRow
+}
+
 type SearchPageData struct {
 	Query     string
 	Customers []services.SearchResult

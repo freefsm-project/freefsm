@@ -9,6 +9,29 @@ import (
 )
 
 var (
+	// CommentsColumns holds the columns for the "comments" table.
+	CommentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "object_type", Type: field.TypeString},
+		{Name: "object_id", Type: field.TypeInt64},
+		{Name: "author_id", Type: field.TypeInt64},
+		{Name: "content", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// CommentsTable holds the schema information for the "comments" table.
+	CommentsTable = &schema.Table{
+		Name:       "comments",
+		Columns:    CommentsColumns,
+		PrimaryKey: []*schema.Column{CommentsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "comment_object_type_object_id",
+				Unique:  false,
+				Columns: []*schema.Column{CommentsColumns[1], CommentsColumns[2]},
+			},
+		},
+	}
 	// CompanySettingsColumns holds the columns for the "company_settings" table.
 	CompanySettingsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -460,6 +483,7 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		CommentsTable,
 		CompanySettingsTable,
 		CustomersTable,
 		CustomerContactsTable,
@@ -479,6 +503,9 @@ var (
 )
 
 func init() {
+	CommentsTable.Annotation = &entsql.Annotation{
+		Table: "comments",
+	}
 	CompanySettingsTable.Annotation = &entsql.Annotation{
 		Table: "company_settings",
 	}

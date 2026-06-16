@@ -1,0 +1,46 @@
+package templates
+
+import "fmt"
+
+templ CommentsWidget(p CommentsWidgetData) {
+	<div id={ fmt.Sprintf("comments-%s-%d", p.ObjectType, p.ObjectID) } style="margin-top:1.5rem">
+		<h4>Comments</h4>
+		if len(p.Comments) == 0 {
+			<p>No comments yet.</p>
+		} else {
+			for _, c := range p.Comments {
+				<div style="border-left:3px solid var(--pico-primary);padding-left:0.75rem;margin-bottom:0.75rem">
+					<div style="display:flex;justify-content:space-between;align-items:baseline">
+						<strong>{ c.Author }</strong>
+						<div style="display:flex;gap:0.5rem;align-items:center">
+							<small style="color:var(--pico-muted-color)">{ c.CreatedAt }</small>
+							if c.CanDelete {
+								<button
+									class="outline contrast"
+									style="font-size:0.7rem;padding:0 0.35rem;margin:0"
+									hx-post={ fmt.Sprintf("%s/comments/%d/delete", p.BaseURL, c.ID) }
+									hx-target={ fmt.Sprintf("closest #comments-%s-%d", p.ObjectType, p.ObjectID) }
+									hx-swap="outerHTML"
+									onclick="return confirm('Delete this comment?')"
+								>×</button>
+							}
+						</div>
+					</div>
+					<p style="margin:0.25rem 0 0 0;white-space:pre-wrap">{ c.Content }</p>
+				</div>
+			}
+		}
+		<form
+			hx-post={ fmt.Sprintf("%s/comments", p.BaseURL) }
+			hx-target={ fmt.Sprintf("#comments-%s-%d", p.ObjectType, p.ObjectID) }
+			hx-swap="outerHTML"
+			style="margin-top:1rem"
+		>
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<label>
+				<textarea name="content" rows="2" placeholder="Add a comment..." style="margin-bottom:0.25rem"></textarea>
+			</label>
+			<button type="submit" class="outline" style="font-size:0.85rem">Add Comment</button>
+		</form>
+	</div>
+}

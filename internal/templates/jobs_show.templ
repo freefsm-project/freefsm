@@ -111,6 +111,9 @@ templ JobShow(p JobDetail) {
 				</tbody>
 			</table>
 		}
+		<div hx-get={ templ.URL(fmt.Sprintf("/jobs/%d/comments", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
+			<p>Loading comments...</p>
+		</div>
 		<p><a href="/jobs">&larr; Back to Jobs</a></p>
 	}
 }

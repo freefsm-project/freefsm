@@ -5,6 +5,7 @@ package ent
 import (
 	"time"
 
+	"github.com/MartialM1nd/freefsm/internal/ent/comment"
 	"github.com/MartialM1nd/freefsm/internal/ent/companysettings"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
@@ -27,6 +28,26 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	commentFields := schema.Comment{}.Fields()
+	_ = commentFields
+	// commentDescObjectType is the schema descriptor for object_type field.
+	commentDescObjectType := commentFields[1].Descriptor()
+	// comment.ObjectTypeValidator is a validator for the "object_type" field. It is called by the builders before save.
+	comment.ObjectTypeValidator = commentDescObjectType.Validators[0].(func(string) error)
+	// commentDescContent is the schema descriptor for content field.
+	commentDescContent := commentFields[4].Descriptor()
+	// comment.ContentValidator is a validator for the "content" field. It is called by the builders before save.
+	comment.ContentValidator = commentDescContent.Validators[0].(func(string) error)
+	// commentDescCreatedAt is the schema descriptor for created_at field.
+	commentDescCreatedAt := commentFields[5].Descriptor()
+	// comment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	comment.DefaultCreatedAt = commentDescCreatedAt.Default.(func() time.Time)
+	// commentDescUpdatedAt is the schema descriptor for updated_at field.
+	commentDescUpdatedAt := commentFields[6].Descriptor()
+	// comment.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	comment.DefaultUpdatedAt = commentDescUpdatedAt.Default.(func() time.Time)
+	// comment.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	comment.UpdateDefaultUpdatedAt = commentDescUpdatedAt.UpdateDefault.(func() time.Time)
 	companysettingsFields := schema.CompanySettings{}.Fields()
 	_ = companysettingsFields
 	// companysettingsDescBusinessName is the schema descriptor for business_name field.

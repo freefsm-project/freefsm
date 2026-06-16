@@ -9,6 +9,18 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent"
 )
 
+// The CommentFunc type is an adapter to allow the use of ordinary
+// function as Comment mutator.
+type CommentFunc func(context.Context, *ent.CommentMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CommentFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CommentMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CommentMutation", m)
+}
+
 // The CompanySettingsFunc type is an adapter to allow the use of ordinary
 // function as CompanySettings mutator.
 type CompanySettingsFunc func(context.Context, *ent.CompanySettingsMutation) (ent.Value, error)
