@@ -2,7 +2,7 @@ package templates
 
 templ UserForm(p UserFormData) {
 	@Layout(userFormTitle(p.IsNew)) {
-		<h1>{ userFormTitle(p.IsNew) }</h1>
+
 		<form action={ templ.URL(userFormAction(p.IsNew, p.User.User.ID)) } method="post">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>

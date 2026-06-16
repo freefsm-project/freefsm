@@ -5,7 +5,6 @@ import "fmt"
 templ UserShow(p UserDetailPage) {
 	@Layout("User - "+p.User.Name) {
 		<div style="display:flex;justify-content:space-between;align-items:center">
-			<h1>{ p.User.Name }</h1>
 			<div style="display:flex;gap:0.5rem">
 				<a href={ templ.URL(fmt.Sprintf("/users/%d/edit", p.User.ID)) } role="button" class="outline">Edit</a>
 				<form action={ templ.URL(fmt.Sprintf("/users/%d/disable", p.User.ID)) } method="post" style="display:inline">

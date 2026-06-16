@@ -5,7 +5,6 @@ import "fmt"
 templ InvoiceShow(p InvoiceDetail) {
 	@Layout(invoicePrefix(ctx)+fmt.Sprintf("%05d", p.ID)+": "+p.Title) {
 		<div style="display:flex;justify-content:space-between;align-items:center">
-			<h1>{ invoicePrefix(ctx)+fmt.Sprintf("%05d", p.ID) }: { p.Title }</h1>
 			<div style="display:flex;gap:0.5rem">
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/pdf", p.ID)) } role="button" class="outline" target="_blank">PDF</a>
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", p.ID)) } role="button" class="outline">Edit</a>

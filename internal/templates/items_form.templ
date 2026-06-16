@@ -4,7 +4,7 @@ import "fmt"
 
 templ ItemForm(p ItemFormPageData) {
 	@Layout(itemFormTitle(p.IsNew)) {
-		<h1>{ itemFormTitle(p.IsNew) }</h1>
+
 		<form action={ templ.URL(itemFormAction(p.IsNew, p.Item.ID)) } method="post" autocomplete="off">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>

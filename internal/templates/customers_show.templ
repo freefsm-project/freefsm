@@ -5,7 +5,6 @@ import "fmt"
 templ CustomerShow(p CustomerShowPageData) {
 	@Layout("Customer - "+p.Customer.DisplayName) {
 		<div style="display:flex;justify-content:space-between;align-items:center">
-			<h1>{ p.Customer.DisplayName }</h1>
 			<div style="display:flex;gap:0.5rem">
 				<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", p.Customer.ID)) } role="button" class="outline">Edit</a>
 				<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", p.Customer.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this customer?')">

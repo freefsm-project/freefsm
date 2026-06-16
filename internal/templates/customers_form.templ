@@ -2,7 +2,7 @@ package templates
 
 templ CustomerForm(p CustomerFormPageData) {
 	@Layout(customerFormTitle(p.IsNew)) {
-		<h1>{ customerFormTitle(p.IsNew) }</h1>
+
 		<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<fieldset>

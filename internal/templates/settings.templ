@@ -4,7 +4,7 @@ import "fmt"
 
 templ SettingsPage(p SettingsPageData) {
 	@Layout("Company Settings") {
-		<h1>Company Settings</h1>
+
 		<form action={ templ.URL(settingsFormAction(p.IsSetup)) } method="post">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>

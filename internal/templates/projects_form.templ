@@ -4,7 +4,7 @@ import "fmt"
 
 templ ProjectForm(p ProjectFormPageData) {
 	@Layout(projectFormTitle(p.IsNew)) {
-		<h1>{ projectFormTitle(p.IsNew) }</h1>
+
 		<form action={ templ.URL(projectFormAction(p.IsNew, p.Project.ID)) } method="post">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<fieldset>

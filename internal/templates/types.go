@@ -629,6 +629,68 @@ func isActivePath(ctx context.Context, prefix string) bool {
 	return middleware.IsActivePath(ctx, prefix)
 }
 
+func themeFromCtx(ctx context.Context) string {
+	return middleware.ThemeFromContext(ctx)
+}
+
+func pageTitleFromPath(ctx context.Context) string {
+	path := middleware.PathFromContext(ctx)
+	switch path {
+	case "/":
+		return "Dashboard"
+	case "/schedule":
+		return "Schedule"
+	case "/customers":
+		return "Customers"
+	case "/jobs":
+		return "Jobs"
+	case "/projects":
+		return "Projects"
+	case "/estimates":
+		return "Estimates"
+	case "/invoices":
+		return "Invoices"
+	case "/items":
+		return "Items"
+	case "/settings":
+		return "Company Settings"
+	case "/setup", "/setup/company":
+		return "Company Setup"
+	case "/users":
+		return "Users"
+	case "/login":
+		return "Login"
+	case "/forgot-password":
+		return "Forgot Password"
+	default:
+		if strings.HasPrefix(path, "/jobs/") {
+			return "Job"
+		}
+		if strings.HasPrefix(path, "/customers/") {
+			return "Customer"
+		}
+		if strings.HasPrefix(path, "/projects/") {
+			return "Project"
+		}
+		if strings.HasPrefix(path, "/estimates/") {
+			return "Estimate"
+		}
+		if strings.HasPrefix(path, "/invoices/") {
+			return "Invoice"
+		}
+		if strings.HasPrefix(path, "/items/") {
+			return "Item"
+		}
+		if strings.HasPrefix(path, "/users/") {
+			return "User"
+		}
+		if strings.HasPrefix(path, "/reset-password") {
+			return "Reset Password"
+		}
+		return "FreeFSM"
+	}
+}
+
 func settingsButtonText(isSetup bool) string {
 	if isSetup {
 		return "Complete Setup"

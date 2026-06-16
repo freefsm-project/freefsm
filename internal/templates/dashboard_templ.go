@@ -43,7 +43,7 @@ func DashboardPage(p DashboardData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<h1>Dashboard</h1><div class=\"grid\" style=\"margin-bottom:2rem\"><article><header>Customers</header><p style=\"font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"grid\" style=\"margin-bottom:2rem\"><article><header>Customers</header><p style=\"font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

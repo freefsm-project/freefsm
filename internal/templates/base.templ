@@ -2,7 +2,7 @@ package templates
 
 templ Layout(title string, children ...templ.Component) {
 	<!DOCTYPE html>
-	<html lang="en" data-theme="light">
+	<html lang="en" data-theme={ themeFromCtx(ctx) }>
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -12,22 +12,31 @@ templ Layout(title string, children ...templ.Component) {
 			<link rel="stylesheet" href="/static/css/app.css"/>
 			<script src="/static/js/htmx.min.js"></script>
 			<script src="/static/js/alpine.min.js" defer></script>
+			<script>
+				function toggleTheme() {
+					var html = document.documentElement;
+					var current = html.getAttribute('data-theme');
+					var next = current === 'dark' ? 'light' : 'dark';
+					html.setAttribute('data-theme', next);
+					document.cookie = 'theme=' + next + ';path=/;max-age=31536000';
+				}
+			</script>
 		</head>
 		<body hx-boost="true">
-			<button class="hamburger" onclick="document.getElementById('sidebar').classList.toggle('open')">&#9776;</button>
 			<aside class="sidebar" id="sidebar">
-			<div class="sidebar-brand">
-				<img src="/static/img/favicon.svg" alt=""/>
-				<strong>{ companyBrandName(companyFromCtx(ctx)) }</strong>
-			</div>
-			<hr class="sidebar-divider"/>
-			<nav>
+				<button class="hamburger" onclick="document.getElementById('sidebar').classList.toggle('open')">&#9776;</button>
+				<div class="sidebar-brand">
+					<img src="/static/img/favicon.svg" alt=""/>
+					<strong>{ companyBrandName(companyFromCtx(ctx)) }</strong>
+				</div>
+				<hr class="sidebar-divider"/>
+				<nav>
 					<a href="/" class={ templ.KV("active", isActivePath(ctx, "/")) }>Dashboard</a>
 					<a href="/schedule" class={ templ.KV("active", isActivePath(ctx, "/schedule")) }>Schedule</a>
 					<a href="/customers" class={ templ.KV("active", isActivePath(ctx, "/customers")) }>Customers</a>
-				<a href="/jobs" class={ templ.KV("active", isActivePath(ctx, "/jobs")) }>Jobs</a>
-				<a href="/projects" class={ templ.KV("active", isActivePath(ctx, "/projects")) }>Projects</a>
-				<a href="/estimates" class={ templ.KV("active", isActivePath(ctx, "/estimates")) }>Estimates</a>
+					<a href="/jobs" class={ templ.KV("active", isActivePath(ctx, "/jobs")) }>Jobs</a>
+					<a href="/projects" class={ templ.KV("active", isActivePath(ctx, "/projects")) }>Projects</a>
+					<a href="/estimates" class={ templ.KV("active", isActivePath(ctx, "/estimates")) }>Estimates</a>
 					<a href="/invoices" class={ templ.KV("active", isActivePath(ctx, "/invoices")) }>Invoices</a>
 					<a href="/items" class={ templ.KV("active", isActivePath(ctx, "/items")) }>Items</a>
 				</nav>
@@ -41,27 +50,41 @@ templ Layout(title string, children ...templ.Component) {
 						</ul>
 					</details>
 				}
-				if getUser(ctx) != nil {
-					<div class="sidebar-footer">
-						<details class="dropdown">
-							<summary>{ getUser(ctx).Name }</summary>
-							<ul>
-								<li>
-									<form action="/logout" method="post" hx-boost="false">
-										<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-										<button type="submit">Logout</button>
-									</form>
-								</li>
-							</ul>
-						</details>
-					</div>
-				}
 			</aside>
-		<div class="main-content">
+			<div class="main-content">
+				<header class="page-header">
+					<div class="header-left">
+						<span class="page-title">{ pageTitleFromPath(ctx) }</span>
+					</div>
+					<div class="header-right">
+						<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+							if themeFromCtx(ctx) == "dark" {
+								☀️
+							} else {
+								🌙
+							}
+						</button>
+						if getUser(ctx) != nil {
+							<details class="dropdown">
+								<summary>{ getUser(ctx).Name }</summary>
+								<ul>
+									<li>
+										<form action="/logout" method="post" hx-boost="false">
+											<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+											<button type="submit">Logout</button>
+										</form>
+									</li>
+								</ul>
+							</details>
+						}
+					</div>
+				</header>
 				if getFlash(ctx) != "" {
 					<div class="flash-banner" role="alert">{ getFlash(ctx) }</div>
 				}
-				{ children... }
+				<div class="page-body">
+					{ children... }
+				</div>
 			</div>
 		</body>
 	</html>

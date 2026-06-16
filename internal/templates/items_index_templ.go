@@ -43,7 +43,7 @@ func ItemsIndex(p ItemListPageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<h1>Items</h1><div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem\"><form hx-get=\"/items\" hx-target=\"#item-table-wrap\" hx-swap=\"outerHTML\" hx-push-url=\"true\" style=\"display:flex;gap:0.5rem;align-items:center;flex:1\"><input type=\"search\" name=\"search\" placeholder=\"Search by name or SKU...\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem\"><form hx-get=\"/items\" hx-target=\"#item-table-wrap\" hx-swap=\"outerHTML\" hx-push-url=\"true\" style=\"display:flex;gap:0.5rem;align-items:center;flex:1\"><input type=\"search\" name=\"search\" placeholder=\"Search by name or SKU...\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
