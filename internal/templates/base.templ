@@ -6,11 +6,21 @@ templ Layout(title string, children ...templ.Component) {
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="csrf-token" content={ csrfToken(ctx) }/>
+			<script>if (history.scrollRestoration) { history.scrollRestoration = 'manual'; }</script>
 			<title>{ title } - { companyBrandName(companyFromCtx(ctx)) }</title>
 			<link rel="icon" type="image/svg+xml" href="/static/img/favicon.svg"/>
 			<link rel="stylesheet" href="/static/css/pico.min.css"/>
 			<link rel="stylesheet" href="/static/css/app.css"/>
 			<script src="/static/js/htmx.min.js"></script>
+			<script>
+				document.addEventListener('htmx:configRequest', function(evt) {
+					var csrf = document.querySelector('meta[name="csrf-token"]');
+					if (csrf) {
+						evt.detail.headers['X-CSRF-Token'] = csrf.getAttribute('content');
+					}
+				});
+			</script>
 			<script src="/static/js/alpine.min.js" defer></script>
 			<script>
 				function toggleTheme() {

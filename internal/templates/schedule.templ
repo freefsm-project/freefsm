@@ -31,6 +31,33 @@ templ SchedulePage(p SchedulePageData) {
 		} else if p.IsDay {
 			@dayView(p)
 		}
+		if p.IsWeek || p.IsDay {
+			<script>
+				function scrollTo8AM() {
+					var scroll = document.getElementById('schedule-scroll');
+					var hour08 = document.getElementById('hour-08');
+					if (!scroll || !hour08) return;
+					var header = scroll.querySelector('.grid-header');
+					var headerHeight = header ? header.offsetHeight : 0;
+					scroll.scrollTop = hour08.offsetTop - headerHeight - 10;
+				}
+					document.addEventListener('DOMContentLoaded', function() {
+					requestAnimationFrame(function() {
+						requestAnimationFrame(scrollTo8AM);
+					});
+				});
+				document.body.addEventListener('htmx:afterSettle', function() {
+					requestAnimationFrame(function() {
+						requestAnimationFrame(scrollTo8AM);
+					});
+				});
+				window.addEventListener('load', function() {
+					requestAnimationFrame(function() {
+						requestAnimationFrame(scrollTo8AM);
+					});
+				});
+			</script>
+		}
 	}
 }
 
@@ -68,60 +95,52 @@ templ monthView(p SchedulePageData) {
 }
 
 templ weekView(p SchedulePageData) {
-	<table class="calendar week-view">
-		<thead>
-			<tr>
-				<th></th>
-				for _, day := range p.Days {
-					<th class={ "today", day.IsToday }>
-						{ day.DayName }<br/><strong>{ fmt.Sprintf("%d", day.DayNum) }</strong>
-					</th>
-				}
-			</tr>
-		</thead>
-		<tbody>
-			for hour := 0; hour <= 23; hour++ {
-				<tr>
-					<td class="hour">{ fmt.Sprintf("%02d:00", hour) }</td>
-					for _, day := range p.Days {
-						<td class={ "today", day.IsToday }>
-							for _, j := range day.Jobs {
-								if j.Hour == hour {
-									<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job">
-										<strong>{ j.JobType }</strong>
-										<small>{ j.Customer }</small>
-									</a>
-								}
-							}
-						</td>
-					}
-				</tr>
+	<div class="schedule-scroll-wrapper" id="schedule-scroll">
+		<div class="schedule-grid week-view">
+			<div class="grid-header grid-header-empty"></div>
+			for _, day := range p.Days {
+				<div class={ "grid-header", "today", day.IsToday }>
+					{ day.DayName }<br/><strong>{ fmt.Sprintf("%d", day.DayNum) }</strong>
+				</div>
 			}
-		</tbody>
-	</table>
+			for hour := 0; hour <= 23; hour++ {
+				<div class="grid-hour" id={ fmt.Sprintf("hour-%02d", hour) } style={ fmt.Sprintf("grid-row: %d; grid-column: 1;", hour + 2) }>{ fmt.Sprintf("%02d:00", hour) }</div>
+				for dayIndex, day := range p.Days {
+					<div class={ "grid-slot", "today", day.IsToday } style={ fmt.Sprintf("grid-row: %d; grid-column: %d;", hour + 2, dayIndex + 2) }></div>
+				}
+			}
+			for dayIndex, day := range p.Days {
+				for _, j := range day.Jobs {
+					<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="grid-job cal-job"
+						style={ fmt.Sprintf("grid-row: %d / span %d; grid-column: %d;", j.Hour + 2, j.Duration, dayIndex + 2) }>
+						<span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span>
+						<strong>{ j.JobType }</strong>
+						<small>{ j.Customer }</small>
+						<small>{ j.Time }</small>
+					</a>
+				}
+			}
+		</div>
+	</div>
 }
 
 templ dayView(p SchedulePageData) {
-	<table class="calendar day-view">
-		<thead>
-			<tr><th>Time</th><th>Jobs</th></tr>
-		</thead>
-		<tbody>
+	<div class="schedule-scroll-wrapper" id="schedule-scroll">
+		<div class="schedule-grid day-view">
+			<div class="grid-header grid-header-empty"></div>
+			<div class="grid-header">Jobs</div>
 			for hour := 0; hour <= 23; hour++ {
-				<tr>
-					<td class="hour">{ fmt.Sprintf("%02d:00", hour) }</td>
-					<td>
-						for _, j := range p.Jobs {
-							if j.Hour == hour {
-								<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job">
-									<strong>{ j.JobType }</strong> &mdash; { j.Customer }
-									<small>{ j.Time }</small>
-								</a>
-							}
-						}
-					</td>
-				</tr>
+				<div class="grid-hour" id={ fmt.Sprintf("hour-%02d", hour) } style={ fmt.Sprintf("grid-row: %d; grid-column: 1;", hour + 2) }>{ fmt.Sprintf("%02d:00", hour) }</div>
+				<div class="grid-slot" style={ fmt.Sprintf("grid-row: %d; grid-column: 2;", hour + 2) }></div>
 			}
-		</tbody>
-	</table>
+			for _, j := range p.Jobs {
+				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="grid-job cal-job"
+					style={ fmt.Sprintf("grid-row: %d / span %d; grid-column: 2;", j.Hour + 2, j.Duration) }>
+					<span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span>
+					<strong>{ j.JobType }</strong> &mdash; { j.Customer }
+					<small>{ j.Time }</small>
+				</a>
+			}
+		</div>
+	</div>
 }
