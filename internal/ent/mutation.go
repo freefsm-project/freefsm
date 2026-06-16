@@ -15,6 +15,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/companysettings"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
+	"github.com/MartialM1nd/freefsm/internal/ent/customfielddefinition"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
 	"github.com/MartialM1nd/freefsm/internal/ent/item"
@@ -39,22 +40,23 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeComment            = "Comment"
-	TypeCompanySettings    = "CompanySettings"
-	TypeCustomer           = "Customer"
-	TypeCustomerContact    = "CustomerContact"
-	TypeEstimate           = "Estimate"
-	TypeInvoice            = "Invoice"
-	TypeItem               = "Item"
-	TypeJob                = "Job"
-	TypeLocation           = "Location"
-	TypePasswordResetToken = "PasswordResetToken"
-	TypeProject            = "Project"
-	TypeStatus             = "Status"
-	TypeStatusWorkflow     = "StatusWorkflow"
-	TypeTag                = "Tag"
-	TypeTagLink            = "TagLink"
-	TypeUser               = "User"
+	TypeComment               = "Comment"
+	TypeCompanySettings       = "CompanySettings"
+	TypeCustomFieldDefinition = "CustomFieldDefinition"
+	TypeCustomer              = "Customer"
+	TypeCustomerContact       = "CustomerContact"
+	TypeEstimate              = "Estimate"
+	TypeInvoice               = "Invoice"
+	TypeItem                  = "Item"
+	TypeJob                   = "Job"
+	TypeLocation              = "Location"
+	TypePasswordResetToken    = "PasswordResetToken"
+	TypeProject               = "Project"
+	TypeStatus                = "Status"
+	TypeStatusWorkflow        = "StatusWorkflow"
+	TypeTag                   = "Tag"
+	TypeTagLink               = "TagLink"
+	TypeUser                  = "User"
 )
 
 // CommentMutation represents an operation that mutates the Comment nodes in the graph.
@@ -2099,6 +2101,752 @@ func (m *CompanySettingsMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *CompanySettingsMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown CompanySettings edge %s", name)
+}
+
+// CustomFieldDefinitionMutation represents an operation that mutates the CustomFieldDefinition nodes in the graph.
+type CustomFieldDefinitionMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	object_type   *string
+	name          *string
+	field_type    *string
+	required      *bool
+	options       *string
+	sort_order    *int
+	addsort_order *int
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*CustomFieldDefinition, error)
+	predicates    []predicate.CustomFieldDefinition
+}
+
+var _ ent.Mutation = (*CustomFieldDefinitionMutation)(nil)
+
+// customfielddefinitionOption allows management of the mutation configuration using functional options.
+type customfielddefinitionOption func(*CustomFieldDefinitionMutation)
+
+// newCustomFieldDefinitionMutation creates new mutation for the CustomFieldDefinition entity.
+func newCustomFieldDefinitionMutation(c config, op Op, opts ...customfielddefinitionOption) *CustomFieldDefinitionMutation {
+	m := &CustomFieldDefinitionMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCustomFieldDefinition,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCustomFieldDefinitionID sets the ID field of the mutation.
+func withCustomFieldDefinitionID(id int64) customfielddefinitionOption {
+	return func(m *CustomFieldDefinitionMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CustomFieldDefinition
+		)
+		m.oldValue = func(ctx context.Context) (*CustomFieldDefinition, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CustomFieldDefinition.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCustomFieldDefinition sets the old CustomFieldDefinition of the mutation.
+func withCustomFieldDefinition(node *CustomFieldDefinition) customfielddefinitionOption {
+	return func(m *CustomFieldDefinitionMutation) {
+		m.oldValue = func(context.Context) (*CustomFieldDefinition, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CustomFieldDefinitionMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CustomFieldDefinitionMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of CustomFieldDefinition entities.
+func (m *CustomFieldDefinitionMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CustomFieldDefinitionMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CustomFieldDefinitionMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CustomFieldDefinition.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetObjectType sets the "object_type" field.
+func (m *CustomFieldDefinitionMutation) SetObjectType(s string) {
+	m.object_type = &s
+}
+
+// ObjectType returns the value of the "object_type" field in the mutation.
+func (m *CustomFieldDefinitionMutation) ObjectType() (r string, exists bool) {
+	v := m.object_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldObjectType returns the old "object_type" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldObjectType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldObjectType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldObjectType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldObjectType: %w", err)
+	}
+	return oldValue.ObjectType, nil
+}
+
+// ResetObjectType resets all changes to the "object_type" field.
+func (m *CustomFieldDefinitionMutation) ResetObjectType() {
+	m.object_type = nil
+}
+
+// SetName sets the "name" field.
+func (m *CustomFieldDefinitionMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *CustomFieldDefinitionMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *CustomFieldDefinitionMutation) ResetName() {
+	m.name = nil
+}
+
+// SetFieldType sets the "field_type" field.
+func (m *CustomFieldDefinitionMutation) SetFieldType(s string) {
+	m.field_type = &s
+}
+
+// FieldType returns the value of the "field_type" field in the mutation.
+func (m *CustomFieldDefinitionMutation) FieldType() (r string, exists bool) {
+	v := m.field_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFieldType returns the old "field_type" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldFieldType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFieldType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFieldType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFieldType: %w", err)
+	}
+	return oldValue.FieldType, nil
+}
+
+// ResetFieldType resets all changes to the "field_type" field.
+func (m *CustomFieldDefinitionMutation) ResetFieldType() {
+	m.field_type = nil
+}
+
+// SetRequired sets the "required" field.
+func (m *CustomFieldDefinitionMutation) SetRequired(b bool) {
+	m.required = &b
+}
+
+// Required returns the value of the "required" field in the mutation.
+func (m *CustomFieldDefinitionMutation) Required() (r bool, exists bool) {
+	v := m.required
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequired returns the old "required" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldRequired(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequired is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequired requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequired: %w", err)
+	}
+	return oldValue.Required, nil
+}
+
+// ResetRequired resets all changes to the "required" field.
+func (m *CustomFieldDefinitionMutation) ResetRequired() {
+	m.required = nil
+}
+
+// SetOptions sets the "options" field.
+func (m *CustomFieldDefinitionMutation) SetOptions(s string) {
+	m.options = &s
+}
+
+// Options returns the value of the "options" field in the mutation.
+func (m *CustomFieldDefinitionMutation) Options() (r string, exists bool) {
+	v := m.options
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOptions returns the old "options" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldOptions(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOptions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOptions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOptions: %w", err)
+	}
+	return oldValue.Options, nil
+}
+
+// ResetOptions resets all changes to the "options" field.
+func (m *CustomFieldDefinitionMutation) ResetOptions() {
+	m.options = nil
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (m *CustomFieldDefinitionMutation) SetSortOrder(i int) {
+	m.sort_order = &i
+	m.addsort_order = nil
+}
+
+// SortOrder returns the value of the "sort_order" field in the mutation.
+func (m *CustomFieldDefinitionMutation) SortOrder() (r int, exists bool) {
+	v := m.sort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSortOrder returns the old "sort_order" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldSortOrder(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSortOrder is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSortOrder requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSortOrder: %w", err)
+	}
+	return oldValue.SortOrder, nil
+}
+
+// AddSortOrder adds i to the "sort_order" field.
+func (m *CustomFieldDefinitionMutation) AddSortOrder(i int) {
+	if m.addsort_order != nil {
+		*m.addsort_order += i
+	} else {
+		m.addsort_order = &i
+	}
+}
+
+// AddedSortOrder returns the value that was added to the "sort_order" field in this mutation.
+func (m *CustomFieldDefinitionMutation) AddedSortOrder() (r int, exists bool) {
+	v := m.addsort_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSortOrder resets all changes to the "sort_order" field.
+func (m *CustomFieldDefinitionMutation) ResetSortOrder() {
+	m.sort_order = nil
+	m.addsort_order = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CustomFieldDefinitionMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CustomFieldDefinitionMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CustomFieldDefinitionMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CustomFieldDefinitionMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CustomFieldDefinitionMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CustomFieldDefinitionMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the CustomFieldDefinitionMutation builder.
+func (m *CustomFieldDefinitionMutation) Where(ps ...predicate.CustomFieldDefinition) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CustomFieldDefinitionMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CustomFieldDefinitionMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CustomFieldDefinition, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CustomFieldDefinitionMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CustomFieldDefinitionMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CustomFieldDefinition).
+func (m *CustomFieldDefinitionMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CustomFieldDefinitionMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.object_type != nil {
+		fields = append(fields, customfielddefinition.FieldObjectType)
+	}
+	if m.name != nil {
+		fields = append(fields, customfielddefinition.FieldName)
+	}
+	if m.field_type != nil {
+		fields = append(fields, customfielddefinition.FieldFieldType)
+	}
+	if m.required != nil {
+		fields = append(fields, customfielddefinition.FieldRequired)
+	}
+	if m.options != nil {
+		fields = append(fields, customfielddefinition.FieldOptions)
+	}
+	if m.sort_order != nil {
+		fields = append(fields, customfielddefinition.FieldSortOrder)
+	}
+	if m.created_at != nil {
+		fields = append(fields, customfielddefinition.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, customfielddefinition.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CustomFieldDefinitionMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case customfielddefinition.FieldObjectType:
+		return m.ObjectType()
+	case customfielddefinition.FieldName:
+		return m.Name()
+	case customfielddefinition.FieldFieldType:
+		return m.FieldType()
+	case customfielddefinition.FieldRequired:
+		return m.Required()
+	case customfielddefinition.FieldOptions:
+		return m.Options()
+	case customfielddefinition.FieldSortOrder:
+		return m.SortOrder()
+	case customfielddefinition.FieldCreatedAt:
+		return m.CreatedAt()
+	case customfielddefinition.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CustomFieldDefinitionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case customfielddefinition.FieldObjectType:
+		return m.OldObjectType(ctx)
+	case customfielddefinition.FieldName:
+		return m.OldName(ctx)
+	case customfielddefinition.FieldFieldType:
+		return m.OldFieldType(ctx)
+	case customfielddefinition.FieldRequired:
+		return m.OldRequired(ctx)
+	case customfielddefinition.FieldOptions:
+		return m.OldOptions(ctx)
+	case customfielddefinition.FieldSortOrder:
+		return m.OldSortOrder(ctx)
+	case customfielddefinition.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case customfielddefinition.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown CustomFieldDefinition field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CustomFieldDefinitionMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case customfielddefinition.FieldObjectType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetObjectType(v)
+		return nil
+	case customfielddefinition.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case customfielddefinition.FieldFieldType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFieldType(v)
+		return nil
+	case customfielddefinition.FieldRequired:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequired(v)
+		return nil
+	case customfielddefinition.FieldOptions:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOptions(v)
+		return nil
+	case customfielddefinition.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSortOrder(v)
+		return nil
+	case customfielddefinition.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case customfielddefinition.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CustomFieldDefinition field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CustomFieldDefinitionMutation) AddedFields() []string {
+	var fields []string
+	if m.addsort_order != nil {
+		fields = append(fields, customfielddefinition.FieldSortOrder)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CustomFieldDefinitionMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case customfielddefinition.FieldSortOrder:
+		return m.AddedSortOrder()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CustomFieldDefinitionMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case customfielddefinition.FieldSortOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSortOrder(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CustomFieldDefinition numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CustomFieldDefinitionMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CustomFieldDefinitionMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CustomFieldDefinitionMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown CustomFieldDefinition nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CustomFieldDefinitionMutation) ResetField(name string) error {
+	switch name {
+	case customfielddefinition.FieldObjectType:
+		m.ResetObjectType()
+		return nil
+	case customfielddefinition.FieldName:
+		m.ResetName()
+		return nil
+	case customfielddefinition.FieldFieldType:
+		m.ResetFieldType()
+		return nil
+	case customfielddefinition.FieldRequired:
+		m.ResetRequired()
+		return nil
+	case customfielddefinition.FieldOptions:
+		m.ResetOptions()
+		return nil
+	case customfielddefinition.FieldSortOrder:
+		m.ResetSortOrder()
+		return nil
+	case customfielddefinition.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case customfielddefinition.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown CustomFieldDefinition field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CustomFieldDefinitionMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CustomFieldDefinitionMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CustomFieldDefinitionMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CustomFieldDefinitionMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CustomFieldDefinitionMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CustomFieldDefinitionMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CustomFieldDefinitionMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown CustomFieldDefinition unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CustomFieldDefinitionMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown CustomFieldDefinition edge %s", name)
 }
 
 // CustomerMutation represents an operation that mutates the Customer nodes in the graph.
@@ -4743,6 +5491,7 @@ type EstimateMutation struct {
 	notes          *string
 	tax_rate       *string
 	line_items     *string
+	custom_fields  *string
 	created_at     *time.Time
 	updated_at     *time.Time
 	clearedFields  map[string]struct{}
@@ -5209,6 +5958,42 @@ func (m *EstimateMutation) ResetLineItems() {
 	m.line_items = nil
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (m *EstimateMutation) SetCustomFields(s string) {
+	m.custom_fields = &s
+}
+
+// CustomFields returns the value of the "custom_fields" field in the mutation.
+func (m *EstimateMutation) CustomFields() (r string, exists bool) {
+	v := m.custom_fields
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomFields returns the old "custom_fields" field's value of the Estimate entity.
+// If the Estimate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EstimateMutation) OldCustomFields(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomFields is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomFields requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomFields: %w", err)
+	}
+	return oldValue.CustomFields, nil
+}
+
+// ResetCustomFields resets all changes to the "custom_fields" field.
+func (m *EstimateMutation) ResetCustomFields() {
+	m.custom_fields = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *EstimateMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -5315,7 +6100,7 @@ func (m *EstimateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EstimateMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.customer_id != nil {
 		fields = append(fields, estimate.FieldCustomerID)
 	}
@@ -5336,6 +6121,9 @@ func (m *EstimateMutation) Fields() []string {
 	}
 	if m.line_items != nil {
 		fields = append(fields, estimate.FieldLineItems)
+	}
+	if m.custom_fields != nil {
+		fields = append(fields, estimate.FieldCustomFields)
 	}
 	if m.created_at != nil {
 		fields = append(fields, estimate.FieldCreatedAt)
@@ -5365,6 +6153,8 @@ func (m *EstimateMutation) Field(name string) (ent.Value, bool) {
 		return m.TaxRate()
 	case estimate.FieldLineItems:
 		return m.LineItems()
+	case estimate.FieldCustomFields:
+		return m.CustomFields()
 	case estimate.FieldCreatedAt:
 		return m.CreatedAt()
 	case estimate.FieldUpdatedAt:
@@ -5392,6 +6182,8 @@ func (m *EstimateMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldTaxRate(ctx)
 	case estimate.FieldLineItems:
 		return m.OldLineItems(ctx)
+	case estimate.FieldCustomFields:
+		return m.OldCustomFields(ctx)
 	case estimate.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case estimate.FieldUpdatedAt:
@@ -5453,6 +6245,13 @@ func (m *EstimateMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetLineItems(v)
+		return nil
+	case estimate.FieldCustomFields:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomFields(v)
 		return nil
 	case estimate.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -5598,6 +6397,9 @@ func (m *EstimateMutation) ResetField(name string) error {
 	case estimate.FieldLineItems:
 		m.ResetLineItems()
 		return nil
+	case estimate.FieldCustomFields:
+		m.ResetCustomFields()
+		return nil
 	case estimate.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
@@ -5678,6 +6480,7 @@ type InvoiceMutation struct {
 	line_items       *string
 	payments         *string
 	display_settings *string
+	custom_fields    *string
 	created_at       *time.Time
 	updated_at       *time.Time
 	clearedFields    map[string]struct{}
@@ -6358,6 +7161,42 @@ func (m *InvoiceMutation) ResetDisplaySettings() {
 	m.display_settings = nil
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (m *InvoiceMutation) SetCustomFields(s string) {
+	m.custom_fields = &s
+}
+
+// CustomFields returns the value of the "custom_fields" field in the mutation.
+func (m *InvoiceMutation) CustomFields() (r string, exists bool) {
+	v := m.custom_fields
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomFields returns the old "custom_fields" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldCustomFields(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomFields is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomFields requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomFields: %w", err)
+	}
+	return oldValue.CustomFields, nil
+}
+
+// ResetCustomFields resets all changes to the "custom_fields" field.
+func (m *InvoiceMutation) ResetCustomFields() {
+	m.custom_fields = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *InvoiceMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -6464,7 +7303,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 15)
 	if m.customer_id != nil {
 		fields = append(fields, invoice.FieldCustomerID)
 	}
@@ -6500,6 +7339,9 @@ func (m *InvoiceMutation) Fields() []string {
 	}
 	if m.display_settings != nil {
 		fields = append(fields, invoice.FieldDisplaySettings)
+	}
+	if m.custom_fields != nil {
+		fields = append(fields, invoice.FieldCustomFields)
 	}
 	if m.created_at != nil {
 		fields = append(fields, invoice.FieldCreatedAt)
@@ -6539,6 +7381,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.Payments()
 	case invoice.FieldDisplaySettings:
 		return m.DisplaySettings()
+	case invoice.FieldCustomFields:
+		return m.CustomFields()
 	case invoice.FieldCreatedAt:
 		return m.CreatedAt()
 	case invoice.FieldUpdatedAt:
@@ -6576,6 +7420,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldPayments(ctx)
 	case invoice.FieldDisplaySettings:
 		return m.OldDisplaySettings(ctx)
+	case invoice.FieldCustomFields:
+		return m.OldCustomFields(ctx)
 	case invoice.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case invoice.FieldUpdatedAt:
@@ -6672,6 +7518,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDisplaySettings(v)
+		return nil
+	case invoice.FieldCustomFields:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomFields(v)
 		return nil
 	case invoice.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -6849,6 +7702,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldDisplaySettings:
 		m.ResetDisplaySettings()
+		return nil
+	case invoice.FieldCustomFields:
+		m.ResetCustomFields()
 		return nil
 	case invoice.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -11226,6 +12082,7 @@ type ProjectMutation struct {
 	start_time               *time.Time
 	end_time                 *time.Time
 	notes                    *string
+	custom_fields            *string
 	created_at               *time.Time
 	updated_at               *time.Time
 	clearedFields            map[string]struct{}
@@ -11796,6 +12653,42 @@ func (m *ProjectMutation) ResetNotes() {
 	m.notes = nil
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (m *ProjectMutation) SetCustomFields(s string) {
+	m.custom_fields = &s
+}
+
+// CustomFields returns the value of the "custom_fields" field in the mutation.
+func (m *ProjectMutation) CustomFields() (r string, exists bool) {
+	v := m.custom_fields
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCustomFields returns the old "custom_fields" field's value of the Project entity.
+// If the Project object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProjectMutation) OldCustomFields(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCustomFields is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCustomFields requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCustomFields: %w", err)
+	}
+	return oldValue.CustomFields, nil
+}
+
+// ResetCustomFields resets all changes to the "custom_fields" field.
+func (m *ProjectMutation) ResetCustomFields() {
+	m.custom_fields = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *ProjectMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -11902,7 +12795,7 @@ func (m *ProjectMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProjectMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 12)
 	if m.customer_id != nil {
 		fields = append(fields, project.FieldCustomerID)
 	}
@@ -11929,6 +12822,9 @@ func (m *ProjectMutation) Fields() []string {
 	}
 	if m.notes != nil {
 		fields = append(fields, project.FieldNotes)
+	}
+	if m.custom_fields != nil {
+		fields = append(fields, project.FieldCustomFields)
 	}
 	if m.created_at != nil {
 		fields = append(fields, project.FieldCreatedAt)
@@ -11962,6 +12858,8 @@ func (m *ProjectMutation) Field(name string) (ent.Value, bool) {
 		return m.EndTime()
 	case project.FieldNotes:
 		return m.Notes()
+	case project.FieldCustomFields:
+		return m.CustomFields()
 	case project.FieldCreatedAt:
 		return m.CreatedAt()
 	case project.FieldUpdatedAt:
@@ -11993,6 +12891,8 @@ func (m *ProjectMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldEndTime(ctx)
 	case project.FieldNotes:
 		return m.OldNotes(ctx)
+	case project.FieldCustomFields:
+		return m.OldCustomFields(ctx)
 	case project.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case project.FieldUpdatedAt:
@@ -12068,6 +12968,13 @@ func (m *ProjectMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetNotes(v)
+		return nil
+	case project.FieldCustomFields:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCustomFields(v)
 		return nil
 	case project.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -12236,6 +13143,9 @@ func (m *ProjectMutation) ResetField(name string) error {
 		return nil
 	case project.FieldNotes:
 		m.ResetNotes()
+		return nil
+	case project.FieldCustomFields:
+		m.ResetCustomFields()
 		return nil
 	case project.FieldCreatedAt:
 		m.ResetCreatedAt()

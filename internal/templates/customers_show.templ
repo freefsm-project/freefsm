@@ -16,6 +16,9 @@ templ CustomerShow(p CustomerShowPageData) {
 		if len(p.Tags) > 0 || true {
 			@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags})
 		}
+		if len(p.CustomFields) > 0 {
+			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
+		}
 		<table>
 			<tbody>
 				if p.Customer.CompanyName != "" {

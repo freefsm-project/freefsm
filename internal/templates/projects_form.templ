@@ -59,12 +59,13 @@ templ ProjectForm(p ProjectFormPageData) {
 						<input type="date" name="end_time" value={ p.Project.EndTime }/>
 					</label>
 				</div>
-				<label>
-					Notes
-					<textarea name="notes">{ p.Project.Notes }</textarea>
-				</label>
-			</fieldset>
-			<div style="display:flex;gap:0.5rem;justify-content:flex-end">
+			<label>
+				Notes
+				<textarea name="notes">{ p.Project.Notes }</textarea>
+			</label>
+			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
+		</fieldset>
+		<div style="display:flex;gap:0.5rem;justify-content:flex-end">
 				<a href="/projects" role="button" class="outline">Cancel</a>
 				<button type="submit">Save</button>
 			</div>

@@ -1,0 +1,64 @@
+package templates
+
+import "fmt"
+
+templ CustomFieldsWidget(p CustomFieldsWidgetData) {
+	if len(p.Fields) > 0 {
+		<div style="margin-top:1.5rem">
+			<h4>Custom Fields</h4>
+			<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem">
+				for _, f := range p.Fields {
+					<div>
+						if p.EditMode {
+							<label>
+								<strong>{ f.Name }</strong>
+								if f.Required {
+									<small style="color:var(--pico-primary)"> *</small>
+								}
+								if f.FieldType == "text" {
+									<input type="text" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value={ f.Value }/>
+								} else if f.FieldType == "number" {
+									<input type="number" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value={ f.Value } step="any"/>
+								} else if f.FieldType == "date" {
+									<input type="date" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value={ f.Value }/>
+								} else if f.FieldType == "textarea" {
+									<textarea name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } rows="3">{ f.Value }</textarea>
+								} else if f.FieldType == "select" {
+									<select name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) }>
+										<option value="">Select...</option>
+										for _, o := range f.Options {
+											<option value={ o } selected?={ f.Value == o }>{ o }</option>
+										}
+									</select>
+								} else if f.FieldType == "checkbox" {
+									<div style="display:flex;align-items:center;gap:0.5rem;margin-top:0.25rem">
+										<input type="hidden" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value=""/>
+										<input type="checkbox" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value="true" checked?={ f.Value == "true" }/>
+										<small>{ f.Name }</small>
+									</div>
+								}
+							</label>
+						} else {
+							<label>
+								<strong>{ f.Name }</strong>
+							</label>
+							if f.FieldType == "checkbox" {
+								<p>
+									if f.Value == "true" {
+										Yes
+									} else {
+										No
+									}
+								</p>
+							} else if f.Value != "" {
+								<p>{ f.Value }</p>
+							} else {
+								<p style="color:var(--pico-muted-color)"><em>Not set</em></p>
+							}
+						}
+					</div>
+				}
+			</div>
+		</div>
+	}
+}

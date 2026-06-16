@@ -57,12 +57,13 @@ templ CustomerForm(p CustomerFormPageData) {
 						</select>
 					</label>
 				</div>
-				<label>
-					Notes
-					<textarea name="notes" rows="3">{ p.Customer.Notes }</textarea>
-				</label>
-			</fieldset>
-			<fieldset>
+			<label>
+				Notes
+				<textarea name="notes" rows="3">{ p.Customer.Notes }</textarea>
+			</label>
+			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
+		</fieldset>
+		<fieldset>
 				<legend>Billing Address</legend>
 				<label>
 					Address Line 1

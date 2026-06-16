@@ -118,6 +118,20 @@ func (_c *EstimateCreate) SetNillableLineItems(v *string) *EstimateCreate {
 	return _c
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (_c *EstimateCreate) SetCustomFields(v string) *EstimateCreate {
+	_c.mutation.SetCustomFields(v)
+	return _c
+}
+
+// SetNillableCustomFields sets the "custom_fields" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableCustomFields(v *string) *EstimateCreate {
+	if v != nil {
+		_c.SetCustomFields(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *EstimateCreate) SetCreatedAt(v time.Time) *EstimateCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -203,6 +217,10 @@ func (_c *EstimateCreate) defaults() {
 		v := estimate.DefaultLineItems
 		_c.mutation.SetLineItems(v)
 	}
+	if _, ok := _c.mutation.CustomFields(); !ok {
+		v := estimate.DefaultCustomFields
+		_c.mutation.SetCustomFields(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := estimate.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -226,6 +244,9 @@ func (_c *EstimateCreate) check() error {
 	}
 	if _, ok := _c.mutation.LineItems(); !ok {
 		return &ValidationError{Name: "line_items", err: errors.New(`ent: missing required field "Estimate.line_items"`)}
+	}
+	if _, ok := _c.mutation.CustomFields(); !ok {
+		return &ValidationError{Name: "custom_fields", err: errors.New(`ent: missing required field "Estimate.custom_fields"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Estimate.created_at"`)}
@@ -292,6 +313,10 @@ func (_c *EstimateCreate) createSpec() (*Estimate, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.LineItems(); ok {
 		_spec.SetField(estimate.FieldLineItems, field.TypeString, value)
 		_node.LineItems = value
+	}
+	if value, ok := _c.mutation.CustomFields(); ok {
+		_spec.SetField(estimate.FieldCustomFields, field.TypeString, value)
+		_node.CustomFields = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(estimate.FieldCreatedAt, field.TypeTime, value)

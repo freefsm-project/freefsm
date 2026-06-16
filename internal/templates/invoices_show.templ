@@ -17,6 +17,9 @@ templ InvoiceShow(p InvoiceDetail) {
 		if len(p.Tags) > 0 || true {
 			@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/invoices/%d", p.ID), Tags: p.Tags, AllTags: p.AllTags})
 		}
+		if len(p.CustomFields) > 0 {
+			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
+		}
 		<table>
 			<tbody>
 				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>

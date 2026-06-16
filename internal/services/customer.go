@@ -37,6 +37,7 @@ type CustomerCreateParams struct {
 	ServiceCity     string
 	ServiceState    string
 	ServiceZipCode  string
+	CustomFields    string
 }
 
 type CustomerUpdateParams struct {
@@ -59,6 +60,7 @@ type CustomerUpdateParams struct {
 	ServiceCity     *string
 	ServiceState    *string
 	ServiceZipCode  *string
+	CustomFields    *string
 }
 
 func (s *CustomerService) ListAll(ctx context.Context) ([]*ent.Customer, error) {
@@ -145,6 +147,7 @@ func (s *CustomerService) Create(ctx context.Context, params CustomerCreateParam
 		SetServiceCity(params.ServiceCity).
 		SetServiceState(params.ServiceState).
 		SetServiceZipCode(params.ServiceZipCode).
+		SetCustomFields(params.CustomFields).
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create customer: %w", err)
@@ -211,6 +214,9 @@ func (s *CustomerService) Update(ctx context.Context, id int64, params CustomerU
 	}
 	if params.ServiceZipCode != nil {
 		u.SetServiceZipCode(*params.ServiceZipCode)
+	}
+	if params.CustomFields != nil {
+		u.SetCustomFields(*params.CustomFields)
 	}
 
 	c, err := u.Save(ctx)

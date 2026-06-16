@@ -38,6 +38,7 @@ type JobCreateParams struct {
 	Visits            []JobVisit
 	Assignments       []JobAssignment
 	Subtasks          []JobSubtask
+	CustomFields      string
 }
 
 type JobUpdateParams struct {
@@ -60,6 +61,7 @@ type JobUpdateParams struct {
 	Visits            *[]JobVisit
 	Assignments       *[]JobAssignment
 	Subtasks          *[]JobSubtask
+	CustomFields      *string
 }
 
 func (s *JobService) ListAll(ctx context.Context) ([]*ent.Job, error) {
@@ -134,7 +136,8 @@ func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.J
 		SetLineItems(SerializeLineItems(params.LineItems)).
 		SetVisits(SerializeVisits(params.Visits)).
 		SetAssignments(SerializeAssignments(params.Assignments)).
-		SetSubtasks(SerializeSubtasks(params.Subtasks))
+		SetSubtasks(SerializeSubtasks(params.Subtasks)).
+		SetCustomFields(params.CustomFields)
 
 	if params.StatusID > 0 {
 		b.SetStatusID(params.StatusID)
@@ -223,6 +226,10 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 	if params.LineItems != nil {
 		u.SetLineItems(SerializeLineItems(*params.LineItems))
 	}
+	if params.CustomFields != nil {
+		u.SetCustomFields(*params.CustomFields)
+	}
+
 	if params.Visits != nil {
 		u.SetVisits(SerializeVisits(*params.Visits))
 	}

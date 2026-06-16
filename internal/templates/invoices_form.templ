@@ -63,6 +63,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 				Notes
 				<textarea name="notes" rows="3">{ p.Invoice.Notes }</textarea>
 			</label>
+			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
 			@templ.Raw(`<script type="application/json" id="items-catalog">` + p.ItemsJSON + `</script>`)
 			@templ.Raw(`<script type="application/json" id="existing-items">` + p.ExistingItemsJSON + `</script>`)
 			<script>

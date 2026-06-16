@@ -114,6 +114,11 @@ func DisplaySettings(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldDisplaySettings, v))
 }
 
+// CustomFields applies equality check predicate on the "custom_fields" field. It's identical to CustomFieldsEQ.
+func CustomFields(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldCustomFields, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldCreatedAt, v))
@@ -792,6 +797,71 @@ func DisplaySettingsEqualFold(v string) predicate.Invoice {
 // DisplaySettingsContainsFold applies the ContainsFold predicate on the "display_settings" field.
 func DisplaySettingsContainsFold(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldContainsFold(FieldDisplaySettings, v))
+}
+
+// CustomFieldsEQ applies the EQ predicate on the "custom_fields" field.
+func CustomFieldsEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldCustomFields, v))
+}
+
+// CustomFieldsNEQ applies the NEQ predicate on the "custom_fields" field.
+func CustomFieldsNEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldCustomFields, v))
+}
+
+// CustomFieldsIn applies the In predicate on the "custom_fields" field.
+func CustomFieldsIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldCustomFields, vs...))
+}
+
+// CustomFieldsNotIn applies the NotIn predicate on the "custom_fields" field.
+func CustomFieldsNotIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldCustomFields, vs...))
+}
+
+// CustomFieldsGT applies the GT predicate on the "custom_fields" field.
+func CustomFieldsGT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldCustomFields, v))
+}
+
+// CustomFieldsGTE applies the GTE predicate on the "custom_fields" field.
+func CustomFieldsGTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldCustomFields, v))
+}
+
+// CustomFieldsLT applies the LT predicate on the "custom_fields" field.
+func CustomFieldsLT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldCustomFields, v))
+}
+
+// CustomFieldsLTE applies the LTE predicate on the "custom_fields" field.
+func CustomFieldsLTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldCustomFields, v))
+}
+
+// CustomFieldsContains applies the Contains predicate on the "custom_fields" field.
+func CustomFieldsContains(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContains(FieldCustomFields, v))
+}
+
+// CustomFieldsHasPrefix applies the HasPrefix predicate on the "custom_fields" field.
+func CustomFieldsHasPrefix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasPrefix(FieldCustomFields, v))
+}
+
+// CustomFieldsHasSuffix applies the HasSuffix predicate on the "custom_fields" field.
+func CustomFieldsHasSuffix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasSuffix(FieldCustomFields, v))
+}
+
+// CustomFieldsEqualFold applies the EqualFold predicate on the "custom_fields" field.
+func CustomFieldsEqualFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEqualFold(FieldCustomFields, v))
+}
+
+// CustomFieldsContainsFold applies the ContainsFold predicate on the "custom_fields" field.
+func CustomFieldsContainsFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContainsFold(FieldCustomFields, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

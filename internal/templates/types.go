@@ -98,9 +98,10 @@ type CustomerRow struct {
 }
 
 type CustomerShowPageData struct {
-	Customer CustomerDetail
-	Tags     []TagRow
-	AllTags  []TagRow
+	Customer     CustomerDetail
+	Tags         []TagRow
+	AllTags      []TagRow
+	CustomFields []CustomFieldDisplay
 }
 
 type CustomerDetail struct {
@@ -132,6 +133,7 @@ type CustomerFormPageData struct {
 	IsNew         bool
 	Statuses      []string
 	AccountTypes  []string
+	CustomFields  []CustomFieldDisplay
 }
 
 type PaginationData struct {
@@ -184,10 +186,11 @@ type ProjectListPageData struct {
 }
 
 type ProjectShowPageData struct {
-	Project ProjectDetail
-	Jobs    []JobRow
-	Tags    []TagRow
-	AllTags []TagRow
+	Project      ProjectDetail
+	Jobs         []JobRow
+	Tags         []TagRow
+	AllTags      []TagRow
+	CustomFields []CustomFieldDisplay
 }
 
 type ProjectFormPageData struct {
@@ -197,6 +200,7 @@ type ProjectFormPageData struct {
 	Customers     []SelectOption
 	Statuses      []SelectOption
 	Locations     []SelectOption
+	CustomFields  []CustomFieldDisplay
 }
 
 type ItemRow struct {
@@ -267,6 +271,7 @@ type JobDetail struct {
 	Subtasks        []services.JobSubtask
 	Tags            []TagRow
 	AllTags         []TagRow
+	CustomFields    []CustomFieldDisplay
 	JobType         string
 	Subtitle        string
 	StatusID        int64
@@ -305,9 +310,10 @@ type JobFormPageData struct {
 	Locations             []SelectOption
 	Statuses              []SelectOption
 	BillingTypes          []string
-	ExistingVisitsJSON    string
+	ExistingVisitsJSON     string
 	ExistingAssignmentsJSON string
-	ExistingSubtasksJSON    string
+	ExistingSubtasksJSON   string
+	CustomFields           []CustomFieldDisplay
 }
 
 func customerFormTitle(isNew bool) string {
@@ -349,6 +355,7 @@ type EstimateDetail struct {
 	LineItems   []services.LineItem
 	Tags        []TagRow
 	AllTags     []TagRow
+	CustomFields []CustomFieldDisplay
 }
 
 type EstimateListPageData struct {
@@ -371,6 +378,7 @@ type EstimateFormPageData struct {
 	Statuses          []SelectOption
 	ItemsJSON         string
 	ExistingItemsJSON string
+	CustomFields      []CustomFieldDisplay
 }
 
 type InvoiceRow struct {
@@ -402,6 +410,7 @@ type InvoiceDetail struct {
 	Payments    []services.Payment
 	Tags        []TagRow
 	AllTags     []TagRow
+	CustomFields []CustomFieldDisplay
 }
 
 type InvoiceListPageData struct {
@@ -468,6 +477,7 @@ type InvoiceFormPageData struct {
 	Statuses         []SelectOption
 	ItemsJSON        string
 	ExistingItemsJSON string
+	CustomFields     []CustomFieldDisplay
 }
 
 func jobFormTitle(isNew bool) string {
@@ -846,6 +856,42 @@ type CommentsWidgetData struct {
 	ObjectType string
 	ObjectID   int64
 	Comments   []CommentRow
+}
+
+type CustomFieldDefRow struct {
+	ID         int64
+	ObjectType string
+	Name       string
+	FieldType  string
+	Required   bool
+	Options    string
+	SortOrder  int
+}
+
+type CustomFieldDefFormData struct {
+	Def         CustomFieldDefRow
+	IsNew       bool
+	Errors      map[string]string
+	ObjectTypes []string
+	FieldTypes  []string
+}
+
+type CustomFieldDefListPageData struct {
+	Definitions []CustomFieldDefRow
+}
+
+type CustomFieldDisplay struct {
+	DefinitionID int64
+	Name         string
+	FieldType    string
+	Value        string
+	Options      []string
+	Required     bool
+}
+
+type CustomFieldsWidgetData struct {
+	Fields   []CustomFieldDisplay
+	EditMode bool
 }
 
 type SearchPageData struct {

@@ -16,6 +16,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/companysettings"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
+	"github.com/MartialM1nd/freefsm/internal/ent/customfielddefinition"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
 	"github.com/MartialM1nd/freefsm/internal/ent/item"
@@ -88,22 +89,23 @@ var (
 func checkColumn(t, c string) error {
 	initCheck.Do(func() {
 		columnCheck = sql.NewColumnCheck(map[string]func(string) bool{
-			comment.Table:            comment.ValidColumn,
-			companysettings.Table:    companysettings.ValidColumn,
-			customer.Table:           customer.ValidColumn,
-			customercontact.Table:    customercontact.ValidColumn,
-			estimate.Table:           estimate.ValidColumn,
-			invoice.Table:            invoice.ValidColumn,
-			item.Table:               item.ValidColumn,
-			job.Table:                job.ValidColumn,
-			location.Table:           location.ValidColumn,
-			passwordresettoken.Table: passwordresettoken.ValidColumn,
-			project.Table:            project.ValidColumn,
-			status.Table:             status.ValidColumn,
-			statusworkflow.Table:     statusworkflow.ValidColumn,
-			tag.Table:                tag.ValidColumn,
-			taglink.Table:            taglink.ValidColumn,
-			user.Table:               user.ValidColumn,
+			comment.Table:               comment.ValidColumn,
+			companysettings.Table:       companysettings.ValidColumn,
+			customfielddefinition.Table: customfielddefinition.ValidColumn,
+			customer.Table:              customer.ValidColumn,
+			customercontact.Table:       customercontact.ValidColumn,
+			estimate.Table:              estimate.ValidColumn,
+			invoice.Table:               invoice.ValidColumn,
+			item.Table:                  item.ValidColumn,
+			job.Table:                   job.ValidColumn,
+			location.Table:              location.ValidColumn,
+			passwordresettoken.Table:    passwordresettoken.ValidColumn,
+			project.Table:               project.ValidColumn,
+			status.Table:                status.ValidColumn,
+			statusworkflow.Table:        statusworkflow.ValidColumn,
+			tag.Table:                   tag.ValidColumn,
+			taglink.Table:               taglink.ValidColumn,
+			user.Table:                  user.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

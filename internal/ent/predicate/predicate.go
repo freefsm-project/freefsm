@@ -12,6 +12,9 @@ type Comment func(*sql.Selector)
 // CompanySettings is the predicate function for companysettings builders.
 type CompanySettings func(*sql.Selector)
 
+// CustomFieldDefinition is the predicate function for customfielddefinition builders.
+type CustomFieldDefinition func(*sql.Selector)
+
 // Customer is the predicate function for customer builders.
 type Customer func(*sql.Selector)
 

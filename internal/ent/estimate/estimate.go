@@ -27,6 +27,8 @@ const (
 	FieldTaxRate = "tax_rate"
 	// FieldLineItems holds the string denoting the line_items field in the database.
 	FieldLineItems = "line_items"
+	// FieldCustomFields holds the string denoting the custom_fields field in the database.
+	FieldCustomFields = "custom_fields"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -45,6 +47,7 @@ var Columns = []string{
 	FieldNotes,
 	FieldTaxRate,
 	FieldLineItems,
+	FieldCustomFields,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -68,6 +71,8 @@ var (
 	DefaultTaxRate string
 	// DefaultLineItems holds the default value on creation for the "line_items" field.
 	DefaultLineItems string
+	// DefaultCustomFields holds the default value on creation for the "custom_fields" field.
+	DefaultCustomFields string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -117,6 +122,11 @@ func ByTaxRate(opts ...sql.OrderTermOption) OrderOption {
 // ByLineItems orders the results by the line_items field.
 func ByLineItems(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLineItems, opts...).ToFunc()
+}
+
+// ByCustomFields orders the results by the custom_fields field.
+func ByCustomFields(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomFields, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

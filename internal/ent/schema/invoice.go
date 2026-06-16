@@ -35,6 +35,7 @@ func (Invoice) Fields() []ent.Field {
 		field.String("line_items").Default("[]"),
 		field.String("payments").Default("[]"),
 		field.String("display_settings").Default("{}"),
+		field.String("custom_fields").Default("[]"),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

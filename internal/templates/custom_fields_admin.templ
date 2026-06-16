@@ -1,0 +1,111 @@
+package templates
+
+import "fmt"
+
+templ CustomFieldDefIndex(p CustomFieldDefListPageData) {
+	@Layout("Custom Fields") {
+		<div style="display:flex;justify-content:space-between;align-items:center">
+			<h2>Custom Fields</h2>
+			<a href="/settings/custom-fields/new" role="button">New Field</a>
+		</div>
+		<table>
+			<thead>
+				<tr><th>Name</th><th>Entity</th><th>Type</th><th>Required</th><th>Order</th><th></th></tr>
+			</thead>
+			<tbody>
+				if len(p.Definitions) == 0 {
+					<tr><td colspan="6">No custom fields defined yet.</td></tr>
+				} else {
+					for _, d := range p.Definitions {
+						<tr>
+							<td><strong>{ d.Name }</strong></td>
+							<td>{ d.ObjectType }</td>
+							<td>{ d.FieldType }</td>
+							<td>
+								if d.Required {
+									Yes
+								} else {
+									No
+								}
+							</td>
+							<td>{ fmt.Sprintf("%d", d.SortOrder) }</td>
+							<td style="display:flex;gap:0.25rem">
+								<a href={ templ.URL(fmt.Sprintf("/settings/custom-fields/%d/edit", d.ID)) } role="button" class="outline" style="font-size:0.8rem;padding:0 0.5rem">Edit</a>
+								<form action={ templ.URL(fmt.Sprintf("/settings/custom-fields/%d/delete", d.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this custom field? This cannot be undone.')">
+									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+									<button class="outline contrast" style="font-size:0.8rem;padding:0 0.5rem">Delete</button>
+								</form>
+							</td>
+						</tr>
+					}
+				}
+			</tbody>
+		</table>
+		<a href="/settings">&larr; Back to Settings</a>
+	}
+}
+
+templ CustomFieldDefForm(p CustomFieldDefFormData) {
+	@Layout("Custom Field - " + formTitle(p)) {
+		<form action="/settings/custom-fields" method="post" autocomplete="off">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			if !p.IsNew {
+				<input type="hidden" name="id" value={ fmt.Sprintf("%d", p.Def.ID) }/>
+			}
+			<label>
+				Name
+				<input type="text" name="name" value={ p.Def.Name }/>
+				if p.Errors["name"] != "" {
+					<small class="error-msg">{ p.Errors["name"] }</small>
+				}
+			</label>
+			<div class="grid">
+				<label>
+					Entity Type
+					<select name="object_type">
+						for _, ot := range p.ObjectTypes {
+							<option value={ ot } selected?={ p.Def.ObjectType == ot }>{ ot }</option>
+						}
+					</select>
+				</label>
+				<label>
+					Field Type
+					<select name="field_type">
+						for _, ft := range p.FieldTypes {
+							<option value={ ft } selected?={ p.Def.FieldType == ft }>{ ft }</option>
+						}
+					</select>
+				</label>
+			</div>
+			<div class="grid">
+				<label>
+					Required
+					<select name="required">
+						<option value="false" selected?={ !p.Def.Required }>No</option>
+						<option value="true" selected?={ p.Def.Required }>Yes</option>
+					</select>
+				</label>
+				<label>
+					Sort Order
+					<input type="number" name="sort_order" value={ fmt.Sprintf("%d", p.Def.SortOrder) } min="0"/>
+				</label>
+			</div>
+			<label>
+				Options (JSON array, for select type)
+				<input type="text" name="options" value={ p.Def.Options } placeholder='["Option 1","Option 2"]'/>
+				<small>JSON array of strings. Only used for select/checkbox field types.</small>
+			</label>
+			<div style="display:flex;gap:0.5rem;margin-top:1rem">
+				<button type="submit">Save</button>
+				<a href="/settings/custom-fields" role="button" class="outline">Cancel</a>
+			</div>
+		</form>
+	}
+}
+
+func formTitle(p CustomFieldDefFormData) string {
+	if p.IsNew {
+		return "New Field"
+	}
+	return "Edit " + p.Def.Name
+}

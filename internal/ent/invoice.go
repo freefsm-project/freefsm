@@ -41,6 +41,8 @@ type Invoice struct {
 	Payments string `json:"payments,omitempty"`
 	// DisplaySettings holds the value of the "display_settings" field.
 	DisplaySettings string `json:"display_settings,omitempty"`
+	// CustomFields holds the value of the "custom_fields" field.
+	CustomFields string `json:"custom_fields,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -55,7 +57,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoice.FieldID, invoice.FieldCustomerID, invoice.FieldJobID, invoice.FieldEstimateID, invoice.FieldStatusID:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldTitle, invoice.FieldNotes, invoice.FieldTaxRate, invoice.FieldLineItems, invoice.FieldPayments, invoice.FieldDisplaySettings:
+		case invoice.FieldTitle, invoice.FieldNotes, invoice.FieldTaxRate, invoice.FieldLineItems, invoice.FieldPayments, invoice.FieldDisplaySettings, invoice.FieldCustomFields:
 			values[i] = new(sql.NullString)
 		case invoice.FieldInvoiceDate, invoice.FieldDueDate, invoice.FieldCreatedAt, invoice.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -156,6 +158,12 @@ func (_m *Invoice) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.DisplaySettings = value.String
 			}
+		case invoice.FieldCustomFields:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_fields", values[i])
+			} else if value.Valid {
+				_m.CustomFields = value.String
+			}
 		case invoice.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -247,6 +255,9 @@ func (_m *Invoice) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("display_settings=")
 	builder.WriteString(_m.DisplaySettings)
+	builder.WriteString(", ")
+	builder.WriteString("custom_fields=")
+	builder.WriteString(_m.CustomFields)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

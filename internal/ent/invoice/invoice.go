@@ -37,6 +37,8 @@ const (
 	FieldPayments = "payments"
 	// FieldDisplaySettings holds the string denoting the display_settings field in the database.
 	FieldDisplaySettings = "display_settings"
+	// FieldCustomFields holds the string denoting the custom_fields field in the database.
+	FieldCustomFields = "custom_fields"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -60,6 +62,7 @@ var Columns = []string{
 	FieldLineItems,
 	FieldPayments,
 	FieldDisplaySettings,
+	FieldCustomFields,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -87,6 +90,8 @@ var (
 	DefaultPayments string
 	// DefaultDisplaySettings holds the default value on creation for the "display_settings" field.
 	DefaultDisplaySettings string
+	// DefaultCustomFields holds the default value on creation for the "custom_fields" field.
+	DefaultCustomFields string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -161,6 +166,11 @@ func ByPayments(opts ...sql.OrderTermOption) OrderOption {
 // ByDisplaySettings orders the results by the display_settings field.
 func ByDisplaySettings(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDisplaySettings, opts...).ToFunc()
+}
+
+// ByCustomFields orders the results by the custom_fields field.
+func ByCustomFields(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomFields, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

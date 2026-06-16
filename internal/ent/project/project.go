@@ -31,6 +31,8 @@ const (
 	FieldEndTime = "end_time"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// FieldCustomFields holds the string denoting the custom_fields field in the database.
+	FieldCustomFields = "custom_fields"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -51,6 +53,7 @@ var Columns = []string{
 	FieldStartTime,
 	FieldEndTime,
 	FieldNotes,
+	FieldCustomFields,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -74,6 +77,8 @@ var (
 	DefaultCompletionPercentage float64
 	// DefaultNotes holds the default value on creation for the "notes" field.
 	DefaultNotes string
+	// DefaultCustomFields holds the default value on creation for the "custom_fields" field.
+	DefaultCustomFields string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -133,6 +138,11 @@ func ByEndTime(opts ...sql.OrderTermOption) OrderOption {
 // ByNotes orders the results by the notes field.
 func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNotes, opts...).ToFunc()
+}
+
+// ByCustomFields orders the results by the custom_fields field.
+func ByCustomFields(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCustomFields, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

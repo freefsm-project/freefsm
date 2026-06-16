@@ -61,6 +61,31 @@ var (
 		Columns:    CompanySettingsColumns,
 		PrimaryKey: []*schema.Column{CompanySettingsColumns[0]},
 	}
+	// CustomFieldDefinitionsColumns holds the columns for the "custom_field_definitions" table.
+	CustomFieldDefinitionsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "object_type", Type: field.TypeString},
+		{Name: "name", Type: field.TypeString},
+		{Name: "field_type", Type: field.TypeString},
+		{Name: "required", Type: field.TypeBool, Default: false},
+		{Name: "options", Type: field.TypeString, Default: "[]"},
+		{Name: "sort_order", Type: field.TypeInt, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// CustomFieldDefinitionsTable holds the schema information for the "custom_field_definitions" table.
+	CustomFieldDefinitionsTable = &schema.Table{
+		Name:       "custom_field_definitions",
+		Columns:    CustomFieldDefinitionsColumns,
+		PrimaryKey: []*schema.Column{CustomFieldDefinitionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "customfielddefinition_object_type_sort_order",
+				Unique:  false,
+				Columns: []*schema.Column{CustomFieldDefinitionsColumns[1], CustomFieldDefinitionsColumns[6]},
+			},
+		},
+	}
 	// CustomersColumns holds the columns for the "customers" table.
 	CustomersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -154,6 +179,7 @@ var (
 		{Name: "notes", Type: field.TypeString, Default: ""},
 		{Name: "tax_rate", Type: field.TypeString, Default: "0"},
 		{Name: "line_items", Type: field.TypeString, Default: "[]"},
+		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -190,6 +216,7 @@ var (
 		{Name: "line_items", Type: field.TypeString, Default: "[]"},
 		{Name: "payments", Type: field.TypeString, Default: "[]"},
 		{Name: "display_settings", Type: field.TypeString, Default: "{}"},
+		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -366,6 +393,7 @@ var (
 		{Name: "start_time", Type: field.TypeTime, Nullable: true},
 		{Name: "end_time", Type: field.TypeTime, Nullable: true},
 		{Name: "notes", Type: field.TypeString, Default: ""},
+		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -485,6 +513,7 @@ var (
 	Tables = []*schema.Table{
 		CommentsTable,
 		CompanySettingsTable,
+		CustomFieldDefinitionsTable,
 		CustomersTable,
 		CustomerContactsTable,
 		EstimatesTable,
@@ -508,6 +537,9 @@ func init() {
 	}
 	CompanySettingsTable.Annotation = &entsql.Annotation{
 		Table: "company_settings",
+	}
+	CustomFieldDefinitionsTable.Annotation = &entsql.Annotation{
+		Table: "custom_field_definitions",
 	}
 	CustomersTable.Annotation = &entsql.Annotation{
 		Table: "customers",

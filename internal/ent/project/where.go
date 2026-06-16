@@ -99,6 +99,11 @@ func Notes(v string) predicate.Project {
 	return predicate.Project(sql.FieldEQ(FieldNotes, v))
 }
 
+// CustomFields applies equality check predicate on the "custom_fields" field. It's identical to CustomFieldsEQ.
+func CustomFields(v string) predicate.Project {
+	return predicate.Project(sql.FieldEQ(FieldCustomFields, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Project {
 	return predicate.Project(sql.FieldEQ(FieldCreatedAt, v))
@@ -582,6 +587,71 @@ func NotesEqualFold(v string) predicate.Project {
 // NotesContainsFold applies the ContainsFold predicate on the "notes" field.
 func NotesContainsFold(v string) predicate.Project {
 	return predicate.Project(sql.FieldContainsFold(FieldNotes, v))
+}
+
+// CustomFieldsEQ applies the EQ predicate on the "custom_fields" field.
+func CustomFieldsEQ(v string) predicate.Project {
+	return predicate.Project(sql.FieldEQ(FieldCustomFields, v))
+}
+
+// CustomFieldsNEQ applies the NEQ predicate on the "custom_fields" field.
+func CustomFieldsNEQ(v string) predicate.Project {
+	return predicate.Project(sql.FieldNEQ(FieldCustomFields, v))
+}
+
+// CustomFieldsIn applies the In predicate on the "custom_fields" field.
+func CustomFieldsIn(vs ...string) predicate.Project {
+	return predicate.Project(sql.FieldIn(FieldCustomFields, vs...))
+}
+
+// CustomFieldsNotIn applies the NotIn predicate on the "custom_fields" field.
+func CustomFieldsNotIn(vs ...string) predicate.Project {
+	return predicate.Project(sql.FieldNotIn(FieldCustomFields, vs...))
+}
+
+// CustomFieldsGT applies the GT predicate on the "custom_fields" field.
+func CustomFieldsGT(v string) predicate.Project {
+	return predicate.Project(sql.FieldGT(FieldCustomFields, v))
+}
+
+// CustomFieldsGTE applies the GTE predicate on the "custom_fields" field.
+func CustomFieldsGTE(v string) predicate.Project {
+	return predicate.Project(sql.FieldGTE(FieldCustomFields, v))
+}
+
+// CustomFieldsLT applies the LT predicate on the "custom_fields" field.
+func CustomFieldsLT(v string) predicate.Project {
+	return predicate.Project(sql.FieldLT(FieldCustomFields, v))
+}
+
+// CustomFieldsLTE applies the LTE predicate on the "custom_fields" field.
+func CustomFieldsLTE(v string) predicate.Project {
+	return predicate.Project(sql.FieldLTE(FieldCustomFields, v))
+}
+
+// CustomFieldsContains applies the Contains predicate on the "custom_fields" field.
+func CustomFieldsContains(v string) predicate.Project {
+	return predicate.Project(sql.FieldContains(FieldCustomFields, v))
+}
+
+// CustomFieldsHasPrefix applies the HasPrefix predicate on the "custom_fields" field.
+func CustomFieldsHasPrefix(v string) predicate.Project {
+	return predicate.Project(sql.FieldHasPrefix(FieldCustomFields, v))
+}
+
+// CustomFieldsHasSuffix applies the HasSuffix predicate on the "custom_fields" field.
+func CustomFieldsHasSuffix(v string) predicate.Project {
+	return predicate.Project(sql.FieldHasSuffix(FieldCustomFields, v))
+}
+
+// CustomFieldsEqualFold applies the EqualFold predicate on the "custom_fields" field.
+func CustomFieldsEqualFold(v string) predicate.Project {
+	return predicate.Project(sql.FieldEqualFold(FieldCustomFields, v))
+}
+
+// CustomFieldsContainsFold applies the ContainsFold predicate on the "custom_fields" field.
+func CustomFieldsContainsFold(v string) predicate.Project {
+	return predicate.Project(sql.FieldContainsFold(FieldCustomFields, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

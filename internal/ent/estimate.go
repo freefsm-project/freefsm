@@ -31,6 +31,8 @@ type Estimate struct {
 	TaxRate string `json:"tax_rate,omitempty"`
 	// LineItems holds the value of the "line_items" field.
 	LineItems string `json:"line_items,omitempty"`
+	// CustomFields holds the value of the "custom_fields" field.
+	CustomFields string `json:"custom_fields,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -45,7 +47,7 @@ func (*Estimate) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case estimate.FieldID, estimate.FieldCustomerID, estimate.FieldJobID, estimate.FieldStatusID:
 			values[i] = new(sql.NullInt64)
-		case estimate.FieldTitle, estimate.FieldNotes, estimate.FieldTaxRate, estimate.FieldLineItems:
+		case estimate.FieldTitle, estimate.FieldNotes, estimate.FieldTaxRate, estimate.FieldLineItems, estimate.FieldCustomFields:
 			values[i] = new(sql.NullString)
 		case estimate.FieldCreatedAt, estimate.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -114,6 +116,12 @@ func (_m *Estimate) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field line_items", values[i])
 			} else if value.Valid {
 				_m.LineItems = value.String
+			}
+		case estimate.FieldCustomFields:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_fields", values[i])
+			} else if value.Valid {
+				_m.CustomFields = value.String
 			}
 		case estimate.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -189,6 +197,9 @@ func (_m *Estimate) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("line_items=")
 	builder.WriteString(_m.LineItems)
+	builder.WriteString(", ")
+	builder.WriteString("custom_fields=")
+	builder.WriteString(_m.CustomFields)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

@@ -16,10 +16,11 @@ type CustomerHandler struct {
 	contactSvc *services.CustomerContactService
 	tagSvc     *services.TagService
 	tagLinkSvc *services.TagLinkService
+	defSvc     *services.CustomFieldDefinitionService
 }
 
-func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService) *CustomerHandler {
-	return &CustomerHandler{svc: svc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc}
+func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService) *CustomerHandler {
+	return &CustomerHandler{svc: svc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc}
 }
 
 func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -72,16 +73,21 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "customer", c.ID)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
+	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
 	templates.CustomerShow(templates.CustomerShowPageData{
-		Customer: customerToDetail(c),
-		Tags:     tagsToRows(tags),
-		AllTags:  tagsToRows(allTags),
+		Customer:     customerToDetail(c),
+		Tags:         tagsToRows(tags),
+		AllTags:      tagsToRows(allTags),
+		CustomFields: buildCustomFieldDisplay(defs, c.CustomFields),
 	}).Render(r.Context(), w)
 }
 
 func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		templates.CustomerForm(newFormData()).Render(r.Context(), w)
+		data := newFormData()
+		defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
+		data.CustomFields = buildCustomFieldDisplay(defs, "[]")
+		templates.CustomerForm(data).Render(r.Context(), w)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -108,6 +114,7 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		ServiceCity:     r.FormValue("service_city"),
 		ServiceState:    r.FormValue("service_state"),
 		ServiceZipCode:  r.FormValue("service_zip_code"),
+		CustomFields:    parseCustomFieldValues(r),
 	}
 	if params.Status == "" {
 		params.Status = "lead"
@@ -135,7 +142,10 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		templates.CustomerForm(formDataFromCustomer(c)).Render(r.Context(), w)
+		data := formDataFromCustomer(c)
+		defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
+		data.CustomFields = buildCustomFieldDisplay(defs, c.CustomFields)
+		templates.CustomerForm(data).Render(r.Context(), w)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -162,6 +172,7 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ServiceCity:     formPtr(r.FormValue("service_city")),
 		ServiceState:    formPtr(r.FormValue("service_state")),
 		ServiceZipCode:  formPtr(r.FormValue("service_zip_code")),
+		CustomFields:    strPtr(parseCustomFieldValues(r)),
 	}
 	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
 		http.Error(w, err.Error(), 500)

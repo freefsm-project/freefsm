@@ -206,6 +206,20 @@ func (_u *ProjectUpdate) SetNillableNotes(v *string) *ProjectUpdate {
 	return _u
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (_u *ProjectUpdate) SetCustomFields(v string) *ProjectUpdate {
+	_u.mutation.SetCustomFields(v)
+	return _u
+}
+
+// SetNillableCustomFields sets the "custom_fields" field if the given value is not nil.
+func (_u *ProjectUpdate) SetNillableCustomFields(v *string) *ProjectUpdate {
+	if v != nil {
+		_u.SetCustomFields(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ProjectUpdate) SetUpdatedAt(v time.Time) *ProjectUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -325,6 +339,9 @@ func (_u *ProjectUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(project.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.CustomFields(); ok {
+		_spec.SetField(project.FieldCustomFields, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(project.FieldUpdatedAt, field.TypeTime, value)
@@ -527,6 +544,20 @@ func (_u *ProjectUpdateOne) SetNillableNotes(v *string) *ProjectUpdateOne {
 	return _u
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (_u *ProjectUpdateOne) SetCustomFields(v string) *ProjectUpdateOne {
+	_u.mutation.SetCustomFields(v)
+	return _u
+}
+
+// SetNillableCustomFields sets the "custom_fields" field if the given value is not nil.
+func (_u *ProjectUpdateOne) SetNillableCustomFields(v *string) *ProjectUpdateOne {
+	if v != nil {
+		_u.SetCustomFields(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ProjectUpdateOne) SetUpdatedAt(v time.Time) *ProjectUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -676,6 +707,9 @@ func (_u *ProjectUpdateOne) sqlSave(ctx context.Context) (_node *Project, err er
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(project.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.CustomFields(); ok {
+		_spec.SetField(project.FieldCustomFields, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(project.FieldUpdatedAt, field.TypeTime, value)

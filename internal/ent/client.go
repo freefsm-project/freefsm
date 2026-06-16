@@ -19,6 +19,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/companysettings"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
+	"github.com/MartialM1nd/freefsm/internal/ent/customfielddefinition"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
 	"github.com/MartialM1nd/freefsm/internal/ent/item"
@@ -42,6 +43,8 @@ type Client struct {
 	Comment *CommentClient
 	// CompanySettings is the client for interacting with the CompanySettings builders.
 	CompanySettings *CompanySettingsClient
+	// CustomFieldDefinition is the client for interacting with the CustomFieldDefinition builders.
+	CustomFieldDefinition *CustomFieldDefinitionClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
 	// CustomerContact is the client for interacting with the CustomerContact builders.
@@ -83,6 +86,7 @@ func (c *Client) init() {
 	c.Schema = migrate.NewSchema(c.driver)
 	c.Comment = NewCommentClient(c.config)
 	c.CompanySettings = NewCompanySettingsClient(c.config)
+	c.CustomFieldDefinition = NewCustomFieldDefinitionClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
 	c.CustomerContact = NewCustomerContactClient(c.config)
 	c.Estimate = NewEstimateClient(c.config)
@@ -187,24 +191,25 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                ctx,
-		config:             cfg,
-		Comment:            NewCommentClient(cfg),
-		CompanySettings:    NewCompanySettingsClient(cfg),
-		Customer:           NewCustomerClient(cfg),
-		CustomerContact:    NewCustomerContactClient(cfg),
-		Estimate:           NewEstimateClient(cfg),
-		Invoice:            NewInvoiceClient(cfg),
-		Item:               NewItemClient(cfg),
-		Job:                NewJobClient(cfg),
-		Location:           NewLocationClient(cfg),
-		PasswordResetToken: NewPasswordResetTokenClient(cfg),
-		Project:            NewProjectClient(cfg),
-		Status:             NewStatusClient(cfg),
-		StatusWorkflow:     NewStatusWorkflowClient(cfg),
-		Tag:                NewTagClient(cfg),
-		TagLink:            NewTagLinkClient(cfg),
-		User:               NewUserClient(cfg),
+		ctx:                   ctx,
+		config:                cfg,
+		Comment:               NewCommentClient(cfg),
+		CompanySettings:       NewCompanySettingsClient(cfg),
+		CustomFieldDefinition: NewCustomFieldDefinitionClient(cfg),
+		Customer:              NewCustomerClient(cfg),
+		CustomerContact:       NewCustomerContactClient(cfg),
+		Estimate:              NewEstimateClient(cfg),
+		Invoice:               NewInvoiceClient(cfg),
+		Item:                  NewItemClient(cfg),
+		Job:                   NewJobClient(cfg),
+		Location:              NewLocationClient(cfg),
+		PasswordResetToken:    NewPasswordResetTokenClient(cfg),
+		Project:               NewProjectClient(cfg),
+		Status:                NewStatusClient(cfg),
+		StatusWorkflow:        NewStatusWorkflowClient(cfg),
+		Tag:                   NewTagClient(cfg),
+		TagLink:               NewTagLinkClient(cfg),
+		User:                  NewUserClient(cfg),
 	}, nil
 }
 
@@ -222,24 +227,25 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                ctx,
-		config:             cfg,
-		Comment:            NewCommentClient(cfg),
-		CompanySettings:    NewCompanySettingsClient(cfg),
-		Customer:           NewCustomerClient(cfg),
-		CustomerContact:    NewCustomerContactClient(cfg),
-		Estimate:           NewEstimateClient(cfg),
-		Invoice:            NewInvoiceClient(cfg),
-		Item:               NewItemClient(cfg),
-		Job:                NewJobClient(cfg),
-		Location:           NewLocationClient(cfg),
-		PasswordResetToken: NewPasswordResetTokenClient(cfg),
-		Project:            NewProjectClient(cfg),
-		Status:             NewStatusClient(cfg),
-		StatusWorkflow:     NewStatusWorkflowClient(cfg),
-		Tag:                NewTagClient(cfg),
-		TagLink:            NewTagLinkClient(cfg),
-		User:               NewUserClient(cfg),
+		ctx:                   ctx,
+		config:                cfg,
+		Comment:               NewCommentClient(cfg),
+		CompanySettings:       NewCompanySettingsClient(cfg),
+		CustomFieldDefinition: NewCustomFieldDefinitionClient(cfg),
+		Customer:              NewCustomerClient(cfg),
+		CustomerContact:       NewCustomerContactClient(cfg),
+		Estimate:              NewEstimateClient(cfg),
+		Invoice:               NewInvoiceClient(cfg),
+		Item:                  NewItemClient(cfg),
+		Job:                   NewJobClient(cfg),
+		Location:              NewLocationClient(cfg),
+		PasswordResetToken:    NewPasswordResetTokenClient(cfg),
+		Project:               NewProjectClient(cfg),
+		Status:                NewStatusClient(cfg),
+		StatusWorkflow:        NewStatusWorkflowClient(cfg),
+		Tag:                   NewTagClient(cfg),
+		TagLink:               NewTagLinkClient(cfg),
+		User:                  NewUserClient(cfg),
 	}, nil
 }
 
@@ -269,9 +275,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.Comment, c.CompanySettings, c.Customer, c.CustomerContact, c.Estimate,
-		c.Invoice, c.Item, c.Job, c.Location, c.PasswordResetToken, c.Project,
-		c.Status, c.StatusWorkflow, c.Tag, c.TagLink, c.User,
+		c.Comment, c.CompanySettings, c.CustomFieldDefinition, c.Customer,
+		c.CustomerContact, c.Estimate, c.Invoice, c.Item, c.Job, c.Location,
+		c.PasswordResetToken, c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink,
+		c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -281,9 +288,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.Comment, c.CompanySettings, c.Customer, c.CustomerContact, c.Estimate,
-		c.Invoice, c.Item, c.Job, c.Location, c.PasswordResetToken, c.Project,
-		c.Status, c.StatusWorkflow, c.Tag, c.TagLink, c.User,
+		c.Comment, c.CompanySettings, c.CustomFieldDefinition, c.Customer,
+		c.CustomerContact, c.Estimate, c.Invoice, c.Item, c.Job, c.Location,
+		c.PasswordResetToken, c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink,
+		c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -296,6 +304,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Comment.mutate(ctx, m)
 	case *CompanySettingsMutation:
 		return c.CompanySettings.mutate(ctx, m)
+	case *CustomFieldDefinitionMutation:
+		return c.CustomFieldDefinition.mutate(ctx, m)
 	case *CustomerMutation:
 		return c.Customer.mutate(ctx, m)
 	case *CustomerContactMutation:
@@ -592,6 +602,139 @@ func (c *CompanySettingsClient) mutate(ctx context.Context, m *CompanySettingsMu
 		return (&CompanySettingsDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CompanySettings mutation op: %q", m.Op())
+	}
+}
+
+// CustomFieldDefinitionClient is a client for the CustomFieldDefinition schema.
+type CustomFieldDefinitionClient struct {
+	config
+}
+
+// NewCustomFieldDefinitionClient returns a client for the CustomFieldDefinition from the given config.
+func NewCustomFieldDefinitionClient(c config) *CustomFieldDefinitionClient {
+	return &CustomFieldDefinitionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `customfielddefinition.Hooks(f(g(h())))`.
+func (c *CustomFieldDefinitionClient) Use(hooks ...Hook) {
+	c.hooks.CustomFieldDefinition = append(c.hooks.CustomFieldDefinition, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `customfielddefinition.Intercept(f(g(h())))`.
+func (c *CustomFieldDefinitionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CustomFieldDefinition = append(c.inters.CustomFieldDefinition, interceptors...)
+}
+
+// Create returns a builder for creating a CustomFieldDefinition entity.
+func (c *CustomFieldDefinitionClient) Create() *CustomFieldDefinitionCreate {
+	mutation := newCustomFieldDefinitionMutation(c.config, OpCreate)
+	return &CustomFieldDefinitionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CustomFieldDefinition entities.
+func (c *CustomFieldDefinitionClient) CreateBulk(builders ...*CustomFieldDefinitionCreate) *CustomFieldDefinitionCreateBulk {
+	return &CustomFieldDefinitionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CustomFieldDefinitionClient) MapCreateBulk(slice any, setFunc func(*CustomFieldDefinitionCreate, int)) *CustomFieldDefinitionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CustomFieldDefinitionCreateBulk{err: fmt.Errorf("calling to CustomFieldDefinitionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CustomFieldDefinitionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CustomFieldDefinitionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CustomFieldDefinition.
+func (c *CustomFieldDefinitionClient) Update() *CustomFieldDefinitionUpdate {
+	mutation := newCustomFieldDefinitionMutation(c.config, OpUpdate)
+	return &CustomFieldDefinitionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CustomFieldDefinitionClient) UpdateOne(_m *CustomFieldDefinition) *CustomFieldDefinitionUpdateOne {
+	mutation := newCustomFieldDefinitionMutation(c.config, OpUpdateOne, withCustomFieldDefinition(_m))
+	return &CustomFieldDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CustomFieldDefinitionClient) UpdateOneID(id int64) *CustomFieldDefinitionUpdateOne {
+	mutation := newCustomFieldDefinitionMutation(c.config, OpUpdateOne, withCustomFieldDefinitionID(id))
+	return &CustomFieldDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CustomFieldDefinition.
+func (c *CustomFieldDefinitionClient) Delete() *CustomFieldDefinitionDelete {
+	mutation := newCustomFieldDefinitionMutation(c.config, OpDelete)
+	return &CustomFieldDefinitionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CustomFieldDefinitionClient) DeleteOne(_m *CustomFieldDefinition) *CustomFieldDefinitionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CustomFieldDefinitionClient) DeleteOneID(id int64) *CustomFieldDefinitionDeleteOne {
+	builder := c.Delete().Where(customfielddefinition.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CustomFieldDefinitionDeleteOne{builder}
+}
+
+// Query returns a query builder for CustomFieldDefinition.
+func (c *CustomFieldDefinitionClient) Query() *CustomFieldDefinitionQuery {
+	return &CustomFieldDefinitionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCustomFieldDefinition},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CustomFieldDefinition entity by its id.
+func (c *CustomFieldDefinitionClient) Get(ctx context.Context, id int64) (*CustomFieldDefinition, error) {
+	return c.Query().Where(customfielddefinition.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CustomFieldDefinitionClient) GetX(ctx context.Context, id int64) *CustomFieldDefinition {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CustomFieldDefinitionClient) Hooks() []Hook {
+	return c.hooks.CustomFieldDefinition
+}
+
+// Interceptors returns the client interceptors.
+func (c *CustomFieldDefinitionClient) Interceptors() []Interceptor {
+	return c.inters.CustomFieldDefinition
+}
+
+func (c *CustomFieldDefinitionClient) mutate(ctx context.Context, m *CustomFieldDefinitionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CustomFieldDefinitionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CustomFieldDefinitionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CustomFieldDefinitionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CustomFieldDefinitionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CustomFieldDefinition mutation op: %q", m.Op())
 	}
 }
 
@@ -2492,13 +2635,13 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		Comment, CompanySettings, Customer, CustomerContact, Estimate, Invoice, Item,
-		Job, Location, PasswordResetToken, Project, Status, StatusWorkflow, Tag,
-		TagLink, User []ent.Hook
+		Comment, CompanySettings, CustomFieldDefinition, Customer, CustomerContact,
+		Estimate, Invoice, Item, Job, Location, PasswordResetToken, Project, Status,
+		StatusWorkflow, Tag, TagLink, User []ent.Hook
 	}
 	inters struct {
-		Comment, CompanySettings, Customer, CustomerContact, Estimate, Invoice, Item,
-		Job, Location, PasswordResetToken, Project, Status, StatusWorkflow, Tag,
-		TagLink, User []ent.Interceptor
+		Comment, CompanySettings, CustomFieldDefinition, Customer, CustomerContact,
+		Estimate, Invoice, Item, Job, Location, PasswordResetToken, Project, Status,
+		StatusWorkflow, Tag, TagLink, User []ent.Interceptor
 	}
 )

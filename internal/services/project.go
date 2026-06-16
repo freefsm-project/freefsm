@@ -77,6 +77,7 @@ type ProjectCreateParams struct {
 	StartTime            *time.Time
 	EndTime              *time.Time
 	Notes                string
+	CustomFields         string
 }
 
 func (s *ProjectService) Create(ctx context.Context, params ProjectCreateParams) (*ent.Project, error) {
@@ -85,7 +86,8 @@ func (s *ProjectService) Create(ctx context.Context, params ProjectCreateParams)
 		SetName(params.Name).
 		SetDescription(params.Description).
 		SetCompletionPercentage(params.CompletionPercentage).
-		SetNotes(params.Notes)
+		SetNotes(params.Notes).
+		SetCustomFields(params.CustomFields)
 
 	if params.StatusID > 0 {
 		b.SetStatusID(params.StatusID)
@@ -117,6 +119,7 @@ type ProjectUpdateParams struct {
 	StartTime            *time.Time
 	EndTime              *time.Time
 	Notes                *string
+	CustomFields         *string
 }
 
 func (s *ProjectService) Update(ctx context.Context, id int64, params ProjectUpdateParams) (*ent.Project, error) {

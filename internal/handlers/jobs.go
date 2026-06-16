@@ -23,10 +23,11 @@ type JobHandler struct {
 	contactSvc *services.CustomerContactService
 	tagSvc     *services.TagService
 	tagLinkSvc *services.TagLinkService
+	defSvc     *services.CustomFieldDefinitionService
 }
 
-func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService) *JobHandler {
-	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc}
+func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService) *JobHandler {
+	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc}
 }
 
 func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -118,6 +119,8 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	defs, _ := h.defSvc.ListForObjectType(r.Context(), "job")
+	d.CustomFields = buildCustomFieldDisplay(defs, j.CustomFields)
 	templates.JobShow(d).Render(r.Context(), w)
 }
 
@@ -152,6 +155,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Visits:      services.ParseVisits(r.FormValue("visits")),
 		Assignments: services.ParseAssignments(r.FormValue("assignments")),
 		Subtasks:    services.ParseSubtasks(r.FormValue("subtasks")),
+		CustomFields: parseCustomFieldValues(r),
 	}
 	if params.BillingType == "" {
 		params.BillingType = "flat_rate"
@@ -201,6 +205,7 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		BillingType:       formPtr(r.FormValue("billing_type")),
 		Notes:             formPtr(r.FormValue("notes")),
 		TechNotes:         formPtr(r.FormValue("tech_notes")),
+		CustomFields:      strPtr(parseCustomFieldValues(r)),
 	}
 	if v := r.FormValue("visits"); v != "" {
 		visits := services.ParseVisits(v)
@@ -291,6 +296,7 @@ func (h *JobHandler) newJobForm(ctx context.Context) templates.JobFormPageData {
 	customers, _ := h.custSvc.ListAll(ctx)
 	projects, _ := h.projectSvc.ListAll(ctx)
 	locations, _ := h.locSvc.ListAll(ctx)
+	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	return templates.JobFormPageData{
 		Job: &templates.JobDetail{
 			BillingType: "flat_rate",
@@ -305,6 +311,7 @@ func (h *JobHandler) newJobForm(ctx context.Context) templates.JobFormPageData {
 		ExistingVisitsJSON:    "[]",
 		ExistingAssignmentsJSON: "[]",
 		ExistingSubtasksJSON:    "[]",
+		CustomFields:          buildCustomFieldDisplay(defs, "[]"),
 	}
 }
 
@@ -312,6 +319,7 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses [
 	customers, _ := h.custSvc.ListAll(ctx)
 	projects, _ := h.projectSvc.ListAll(ctx)
 	locations, _ := h.locSvc.ListAll(ctx)
+	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	d := jobToDetail(j, statuses)
 	return templates.JobFormPageData{
 		Job:          &d,
@@ -324,6 +332,7 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses [
 		ExistingVisitsJSON:    services.SerializeVisits(services.ParseVisits(j.Visits)),
 		ExistingAssignmentsJSON: services.SerializeAssignments(services.ParseAssignments(j.Assignments)),
 		ExistingSubtasksJSON:    services.SerializeSubtasks(services.ParseSubtasks(j.Subtasks)),
+		CustomFields:          buildCustomFieldDisplay(defs, j.CustomFields),
 	}
 }
 

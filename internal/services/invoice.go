@@ -29,6 +29,7 @@ type InvoiceCreateParams struct {
 	DueDate     time.Time
 	TaxRate     string
 	LineItems   []LineItem
+	CustomFields string
 }
 
 type InvoiceUpdateParams struct {
@@ -42,6 +43,7 @@ type InvoiceUpdateParams struct {
 	DueDate     *time.Time
 	TaxRate     *string
 	LineItems   *[]LineItem
+	CustomFields *string
 }
 
 func (s *InvoiceService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Invoice, int, error) {
@@ -89,7 +91,8 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		SetInvoiceDate(params.InvoiceDate).
 		SetDueDate(params.DueDate).
 		SetTaxRate(params.TaxRate).
-		SetLineItems(SerializeLineItems(params.LineItems))
+		SetLineItems(SerializeLineItems(params.LineItems)).
+		SetCustomFields(params.CustomFields)
 
 	if params.JobID > 0 {
 		b.SetJobID(params.JobID)
@@ -140,6 +143,9 @@ func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpd
 	}
 	if params.LineItems != nil {
 		u.SetLineItems(SerializeLineItems(*params.LineItems))
+	}
+	if params.CustomFields != nil {
+		u.SetCustomFields(*params.CustomFields)
 	}
 
 	i, err := u.Save(ctx)

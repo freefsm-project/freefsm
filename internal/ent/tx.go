@@ -16,6 +16,8 @@ type Tx struct {
 	Comment *CommentClient
 	// CompanySettings is the client for interacting with the CompanySettings builders.
 	CompanySettings *CompanySettingsClient
+	// CustomFieldDefinition is the client for interacting with the CustomFieldDefinition builders.
+	CustomFieldDefinition *CustomFieldDefinitionClient
 	// Customer is the client for interacting with the Customer builders.
 	Customer *CustomerClient
 	// CustomerContact is the client for interacting with the CustomerContact builders.
@@ -177,6 +179,7 @@ func (tx *Tx) Client() *Client {
 func (tx *Tx) init() {
 	tx.Comment = NewCommentClient(tx.config)
 	tx.CompanySettings = NewCompanySettingsClient(tx.config)
+	tx.CustomFieldDefinition = NewCustomFieldDefinitionClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
 	tx.CustomerContact = NewCustomerContactClient(tx.config)
 	tx.Estimate = NewEstimateClient(tx.config)

@@ -23,10 +23,11 @@ type EstimateHandler struct {
 	invoiceSvc *services.InvoiceService
 	tagSvc     *services.TagService
 	tagLinkSvc *services.TagLinkService
+	defSvc     *services.CustomFieldDefinitionService
 }
 
-func NewEstimateHandler(svc *services.EstimateService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, invoiceSvc *services.InvoiceService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService) *EstimateHandler {
-	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc}
+func NewEstimateHandler(svc *services.EstimateService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, invoiceSvc *services.InvoiceService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService) *EstimateHandler {
+	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc}
 }
 
 func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -95,6 +96,8 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	d.Tags = tagsToRows(tags)
 	d.AllTags = tagsToRows(allTags)
+	defs, _ := h.defSvc.ListForObjectType(r.Context(), "estimate")
+	d.CustomFields = buildCustomFieldDisplay(defs, e.CustomFields)
 	templates.EstimateShow(d).Render(r.Context(), w)
 }
 
@@ -156,7 +159,8 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:      r.FormValue("title"),
 		Notes:      r.FormValue("notes"),
 		TaxRate:    taxRate,
-		LineItems:  lineItems,
+		LineItems:   lineItems,
+		CustomFields: parseCustomFieldValues(r),
 	}
 	if params.LineItems == nil {
 		params.LineItems = []services.LineItem{}
@@ -207,7 +211,8 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		StatusID:   int64Ptr(statusID),
 		Title:      formPtr(r.FormValue("title")),
 		Notes:      formPtr(r.FormValue("notes")),
-		TaxRate:    taxRatePtr,
+		TaxRate:      taxRatePtr,
+		CustomFields: strPtr(parseCustomFieldValues(r)),
 	}
 	if lineItems != nil {
 		params.LineItems = &lineItems
@@ -300,6 +305,7 @@ func (h *EstimateHandler) newEstimateForm(ctx context.Context) templates.Estimat
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
+	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
 	return templates.EstimateFormPageData{
 		Estimate:          &templates.EstimateDetail{},
 		IsNew:             true,
@@ -308,12 +314,14 @@ func (h *EstimateHandler) newEstimateForm(ctx context.Context) templates.Estimat
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         h.itemsCatalog(ctx),
 		ExistingItemsJSON: "[]",
+		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
 	}
 }
 
 func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estimate, statuses []*ent.Status) templates.EstimateFormPageData {
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
+	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
 	d := estimateToDetail(e, statuses)
 	items := h.svc.LineItems(e)
 	return templates.EstimateFormPageData{
@@ -324,6 +332,7 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         h.itemsCatalog(ctx),
 		ExistingItemsJSON: h.existingItemsJSON(items),
+		CustomFields:      buildCustomFieldDisplay(defs, e.CustomFields),
 	}
 }
 

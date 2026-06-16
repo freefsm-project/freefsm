@@ -25,6 +25,7 @@ type EstimateCreateParams struct {
 	Notes      string
 	TaxRate    string
 	LineItems  []LineItem
+	CustomFields string
 }
 
 type EstimateUpdateParams struct {
@@ -35,6 +36,7 @@ type EstimateUpdateParams struct {
 	Notes      *string
 	TaxRate    *string
 	LineItems  *[]LineItem
+	CustomFields *string
 }
 
 func (s *EstimateService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Estimate, int, error) {
@@ -80,7 +82,8 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 		SetTitle(params.Title).
 		SetNotes(params.Notes).
 		SetTaxRate(params.TaxRate).
-		SetLineItems(SerializeLineItems(params.LineItems))
+		SetLineItems(SerializeLineItems(params.LineItems)).
+		SetCustomFields(params.CustomFields)
 
 	if params.JobID > 0 {
 		b.SetJobID(params.JobID)
@@ -119,6 +122,9 @@ func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateU
 	}
 	if params.LineItems != nil {
 		u.SetLineItems(SerializeLineItems(*params.LineItems))
+	}
+	if params.CustomFields != nil {
+		u.SetCustomFields(*params.CustomFields)
 	}
 
 	e, err := u.Save(ctx)

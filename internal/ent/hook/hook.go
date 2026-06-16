@@ -33,6 +33,18 @@ func (f CompanySettingsFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CompanySettingsMutation", m)
 }
 
+// The CustomFieldDefinitionFunc type is an adapter to allow the use of ordinary
+// function as CustomFieldDefinition mutator.
+type CustomFieldDefinitionFunc func(context.Context, *ent.CustomFieldDefinitionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CustomFieldDefinitionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CustomFieldDefinitionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomFieldDefinitionMutation", m)
+}
+
 // The CustomerFunc type is an adapter to allow the use of ordinary
 // function as Customer mutator.
 type CustomerFunc func(context.Context, *ent.CustomerMutation) (ent.Value, error)

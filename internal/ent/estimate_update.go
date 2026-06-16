@@ -165,6 +165,20 @@ func (_u *EstimateUpdate) SetNillableLineItems(v *string) *EstimateUpdate {
 	return _u
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (_u *EstimateUpdate) SetCustomFields(v string) *EstimateUpdate {
+	_u.mutation.SetCustomFields(v)
+	return _u
+}
+
+// SetNillableCustomFields sets the "custom_fields" field if the given value is not nil.
+func (_u *EstimateUpdate) SetNillableCustomFields(v *string) *EstimateUpdate {
+	if v != nil {
+		_u.SetCustomFields(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *EstimateUpdate) SetUpdatedAt(v time.Time) *EstimateUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -259,6 +273,9 @@ func (_u *EstimateUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.LineItems(); ok {
 		_spec.SetField(estimate.FieldLineItems, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.CustomFields(); ok {
+		_spec.SetField(estimate.FieldCustomFields, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(estimate.FieldUpdatedAt, field.TypeTime, value)
@@ -420,6 +437,20 @@ func (_u *EstimateUpdateOne) SetNillableLineItems(v *string) *EstimateUpdateOne 
 	return _u
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (_u *EstimateUpdateOne) SetCustomFields(v string) *EstimateUpdateOne {
+	_u.mutation.SetCustomFields(v)
+	return _u
+}
+
+// SetNillableCustomFields sets the "custom_fields" field if the given value is not nil.
+func (_u *EstimateUpdateOne) SetNillableCustomFields(v *string) *EstimateUpdateOne {
+	if v != nil {
+		_u.SetCustomFields(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *EstimateUpdateOne) SetUpdatedAt(v time.Time) *EstimateUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -544,6 +575,9 @@ func (_u *EstimateUpdateOne) sqlSave(ctx context.Context) (_node *Estimate, err 
 	}
 	if value, ok := _u.mutation.LineItems(); ok {
 		_spec.SetField(estimate.FieldLineItems, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.CustomFields(); ok {
+		_spec.SetField(estimate.FieldCustomFields, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(estimate.FieldUpdatedAt, field.TypeTime, value)

@@ -27,6 +27,9 @@ templ JobShow(p JobDetail) {
 		if p.Subtitle != "" {
 			<p><em>{ p.Subtitle }</em></p>
 		}
+		if len(p.CustomFields) > 0 {
+			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
+		}
 		<table>
 			<tbody>
 				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>

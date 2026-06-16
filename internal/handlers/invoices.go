@@ -21,10 +21,11 @@ type InvoiceHandler struct {
 	itemSvc    *services.ItemService
 	tagSvc     *services.TagService
 	tagLinkSvc *services.TagLinkService
+	defSvc     *services.CustomFieldDefinitionService
 }
 
-func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService) *InvoiceHandler {
-	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc}
+func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService) *InvoiceHandler {
+	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc}
 }
 
 func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -94,6 +95,8 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	d.Tags = tagsToRows(tags)
 	d.AllTags = tagsToRows(allTags)
+	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
+	d.CustomFields = buildCustomFieldDisplay(defs, i.CustomFields)
 	templates.InvoiceShow(d).Render(r.Context(), w)
 }
 
@@ -157,7 +160,8 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		InvoiceDate: parseDate(r.FormValue("invoice_date")),
 		DueDate:     parseDate(r.FormValue("due_date")),
 		TaxRate:     taxRate,
-		LineItems:   lineItems,
+		LineItems:    lineItems,
+		CustomFields: parseCustomFieldValues(r),
 	}
 	if params.LineItems == nil {
 		params.LineItems = []services.LineItem{}
@@ -221,6 +225,7 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if lineItems != nil {
 		params.LineItems = &lineItems
 	}
+	params.CustomFields = strPtr(parseCustomFieldValues(r))
 	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -255,6 +260,7 @@ func (h *InvoiceHandler) newInvoiceForm(ctx context.Context) templates.InvoiceFo
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
+	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
 	return templates.InvoiceFormPageData{
 		Invoice:           &templates.InvoiceDetail{},
 		IsNew:             true,
@@ -263,12 +269,14 @@ func (h *InvoiceHandler) newInvoiceForm(ctx context.Context) templates.InvoiceFo
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         h.itemsCatalog(ctx),
 		ExistingItemsJSON: "[]",
+		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
 	}
 }
 
 func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice, statuses []*ent.Status) templates.InvoiceFormPageData {
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
+	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
 	d := invoiceToDetail(i, statuses)
 	items := h.svc.LineItems(i)
 	return templates.InvoiceFormPageData{
@@ -279,6 +287,7 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         h.itemsCatalog(ctx),
 		ExistingItemsJSON: services.SerializeLineItems(items),
+		CustomFields:      buildCustomFieldDisplay(defs, i.CustomFields),
 	}
 }
 

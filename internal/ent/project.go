@@ -35,6 +35,8 @@ type Project struct {
 	EndTime *time.Time `json:"end_time,omitempty"`
 	// Notes holds the value of the "notes" field.
 	Notes string `json:"notes,omitempty"`
+	// CustomFields holds the value of the "custom_fields" field.
+	CustomFields string `json:"custom_fields,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -51,7 +53,7 @@ func (*Project) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case project.FieldID, project.FieldCustomerID, project.FieldStatusID, project.FieldLocationID:
 			values[i] = new(sql.NullInt64)
-		case project.FieldName, project.FieldDescription, project.FieldNotes:
+		case project.FieldName, project.FieldDescription, project.FieldNotes, project.FieldCustomFields:
 			values[i] = new(sql.NullString)
 		case project.FieldStartTime, project.FieldEndTime, project.FieldCreatedAt, project.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -133,6 +135,12 @@ func (_m *Project) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field notes", values[i])
 			} else if value.Valid {
 				_m.Notes = value.String
+			}
+		case project.FieldCustomFields:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field custom_fields", values[i])
+			} else if value.Valid {
+				_m.CustomFields = value.String
 			}
 		case project.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -216,6 +224,9 @@ func (_m *Project) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("notes=")
 	builder.WriteString(_m.Notes)
+	builder.WriteString(", ")
+	builder.WriteString("custom_fields=")
+	builder.WriteString(_m.CustomFields)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

@@ -248,6 +248,20 @@ func (_u *InvoiceUpdate) SetNillableDisplaySettings(v *string) *InvoiceUpdate {
 	return _u
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (_u *InvoiceUpdate) SetCustomFields(v string) *InvoiceUpdate {
+	_u.mutation.SetCustomFields(v)
+	return _u
+}
+
+// SetNillableCustomFields sets the "custom_fields" field if the given value is not nil.
+func (_u *InvoiceUpdate) SetNillableCustomFields(v *string) *InvoiceUpdate {
+	if v != nil {
+		_u.SetCustomFields(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *InvoiceUpdate) SetUpdatedAt(v time.Time) *InvoiceUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -363,6 +377,9 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.DisplaySettings(); ok {
 		_spec.SetField(invoice.FieldDisplaySettings, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.CustomFields(); ok {
+		_spec.SetField(invoice.FieldCustomFields, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoice.FieldUpdatedAt, field.TypeTime, value)
@@ -607,6 +624,20 @@ func (_u *InvoiceUpdateOne) SetNillableDisplaySettings(v *string) *InvoiceUpdate
 	return _u
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (_u *InvoiceUpdateOne) SetCustomFields(v string) *InvoiceUpdateOne {
+	_u.mutation.SetCustomFields(v)
+	return _u
+}
+
+// SetNillableCustomFields sets the "custom_fields" field if the given value is not nil.
+func (_u *InvoiceUpdateOne) SetNillableCustomFields(v *string) *InvoiceUpdateOne {
+	if v != nil {
+		_u.SetCustomFields(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *InvoiceUpdateOne) SetUpdatedAt(v time.Time) *InvoiceUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -752,6 +783,9 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	}
 	if value, ok := _u.mutation.DisplaySettings(); ok {
 		_spec.SetField(invoice.FieldDisplaySettings, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.CustomFields(); ok {
+		_spec.SetField(invoice.FieldCustomFields, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoice.FieldUpdatedAt, field.TypeTime, value)

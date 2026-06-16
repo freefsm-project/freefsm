@@ -89,6 +89,11 @@ func LineItems(v string) predicate.Estimate {
 	return predicate.Estimate(sql.FieldEQ(FieldLineItems, v))
 }
 
+// CustomFields applies equality check predicate on the "custom_fields" field. It's identical to CustomFieldsEQ.
+func CustomFields(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldCustomFields, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Estimate {
 	return predicate.Estimate(sql.FieldEQ(FieldCreatedAt, v))
@@ -507,6 +512,71 @@ func LineItemsEqualFold(v string) predicate.Estimate {
 // LineItemsContainsFold applies the ContainsFold predicate on the "line_items" field.
 func LineItemsContainsFold(v string) predicate.Estimate {
 	return predicate.Estimate(sql.FieldContainsFold(FieldLineItems, v))
+}
+
+// CustomFieldsEQ applies the EQ predicate on the "custom_fields" field.
+func CustomFieldsEQ(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldCustomFields, v))
+}
+
+// CustomFieldsNEQ applies the NEQ predicate on the "custom_fields" field.
+func CustomFieldsNEQ(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNEQ(FieldCustomFields, v))
+}
+
+// CustomFieldsIn applies the In predicate on the "custom_fields" field.
+func CustomFieldsIn(vs ...string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldIn(FieldCustomFields, vs...))
+}
+
+// CustomFieldsNotIn applies the NotIn predicate on the "custom_fields" field.
+func CustomFieldsNotIn(vs ...string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNotIn(FieldCustomFields, vs...))
+}
+
+// CustomFieldsGT applies the GT predicate on the "custom_fields" field.
+func CustomFieldsGT(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGT(FieldCustomFields, v))
+}
+
+// CustomFieldsGTE applies the GTE predicate on the "custom_fields" field.
+func CustomFieldsGTE(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGTE(FieldCustomFields, v))
+}
+
+// CustomFieldsLT applies the LT predicate on the "custom_fields" field.
+func CustomFieldsLT(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLT(FieldCustomFields, v))
+}
+
+// CustomFieldsLTE applies the LTE predicate on the "custom_fields" field.
+func CustomFieldsLTE(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLTE(FieldCustomFields, v))
+}
+
+// CustomFieldsContains applies the Contains predicate on the "custom_fields" field.
+func CustomFieldsContains(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldContains(FieldCustomFields, v))
+}
+
+// CustomFieldsHasPrefix applies the HasPrefix predicate on the "custom_fields" field.
+func CustomFieldsHasPrefix(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldHasPrefix(FieldCustomFields, v))
+}
+
+// CustomFieldsHasSuffix applies the HasSuffix predicate on the "custom_fields" field.
+func CustomFieldsHasSuffix(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldHasSuffix(FieldCustomFields, v))
+}
+
+// CustomFieldsEqualFold applies the EqualFold predicate on the "custom_fields" field.
+func CustomFieldsEqualFold(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEqualFold(FieldCustomFields, v))
+}
+
+// CustomFieldsContainsFold applies the ContainsFold predicate on the "custom_fields" field.
+func CustomFieldsContainsFold(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldContainsFold(FieldCustomFields, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

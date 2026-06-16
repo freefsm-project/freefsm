@@ -22,10 +22,11 @@ type ProjectHandler struct {
 	jobSvc     *services.JobService
 	tagSvc     *services.TagService
 	tagLinkSvc *services.TagLinkService
+	defSvc     *services.CustomFieldDefinitionService
 }
 
-func NewProjectHandler(svc *services.ProjectService, custSvc *services.CustomerService, statusSvc *services.StatusService, locSvc *services.LocationService, jobSvc *services.JobService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService) *ProjectHandler {
-	return &ProjectHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, locSvc: locSvc, jobSvc: jobSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc}
+func NewProjectHandler(svc *services.ProjectService, custSvc *services.CustomerService, statusSvc *services.StatusService, locSvc *services.LocationService, jobSvc *services.JobService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService) *ProjectHandler {
+	return &ProjectHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, locSvc: locSvc, jobSvc: jobSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc}
 }
 
 func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -124,11 +125,13 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "project", id)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
+	defs, _ := h.defSvc.ListForObjectType(r.Context(), "project")
 	templates.ProjectShow(templates.ProjectShowPageData{
-		Project: d,
-		Jobs:    jobRows,
-		Tags:    tagsToRows(tags),
-		AllTags: tagsToRows(allTags),
+		Project:      d,
+		Jobs:         jobRows,
+		Tags:         tagsToRows(tags),
+		AllTags:      tagsToRows(allTags),
+		CustomFields: buildCustomFieldDisplay(defs, p.CustomFields),
 	}).Render(r.Context(), w)
 }
 
@@ -188,6 +191,7 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		StartTime:            parseDatePtr(r.FormValue("start_time")),
 		EndTime:              parseDatePtr(r.FormValue("end_time")),
 		Notes:                r.FormValue("notes"),
+		CustomFields:         parseCustomFieldValues(r),
 	}
 	_, err := h.svc.Create(r.Context(), params)
 	if err != nil {
@@ -231,6 +235,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		StartTime:            parseDatePtr(r.FormValue("start_time")),
 		EndTime:              parseDatePtr(r.FormValue("end_time")),
 		Notes:                formPtr(r.FormValue("notes")),
+		CustomFields:         strPtr(parseCustomFieldValues(r)),
 	}
 	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
 		http.Error(w, err.Error(), 500)
@@ -261,20 +266,23 @@ func (h *ProjectHandler) newProjectForm(ctx context.Context) templates.ProjectFo
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
 	locations, _ := h.locSvc.ListAll(ctx)
+	defs, _ := h.defSvc.ListForObjectType(ctx, "project")
 	return templates.ProjectFormPageData{
 		Project: &templates.ProjectDetail{
 			CompletionPercentage: 0,
 		},
-		IsNew:     true,
-		Customers: customerOptions(customers),
-		Statuses:  statusOptions(statuses),
-		Locations: locationOptions(locations),
+		IsNew:        true,
+		Customers:    customerOptions(customers),
+		Statuses:     statusOptions(statuses),
+		Locations:    locationOptions(locations),
+		CustomFields: buildCustomFieldDisplay(defs, "[]"),
 	}
 }
 
 func (h *ProjectHandler) formDataFromProject(ctx context.Context, p *ent.Project, statuses []*ent.Status) templates.ProjectFormPageData {
 	customers, _ := h.custSvc.ListAll(ctx)
 	locations, _ := h.locSvc.ListAll(ctx)
+	defs, _ := h.defSvc.ListForObjectType(ctx, "project")
 	statusesMap := statusMap(statuses)
 	d := templates.ProjectDetail{
 		ID:                   p.ID,
@@ -297,11 +305,12 @@ func (h *ProjectHandler) formDataFromProject(ctx context.Context, p *ent.Project
 		d.EndTime = p.EndTime.Format("2006-01-02")
 	}
 	return templates.ProjectFormPageData{
-		Project:   &d,
-		IsNew:     false,
-		Customers: customerOptions(customers),
-		Statuses:  statusOptions(statuses),
-		Locations: locationOptions(locations),
+		Project:      &d,
+		IsNew:        false,
+		Customers:    customerOptions(customers),
+		Statuses:     statusOptions(statuses),
+		Locations:    locationOptions(locations),
+		CustomFields: buildCustomFieldDisplay(defs, p.CustomFields),
 	}
 }
 

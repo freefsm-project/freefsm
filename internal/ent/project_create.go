@@ -130,6 +130,20 @@ func (_c *ProjectCreate) SetNillableNotes(v *string) *ProjectCreate {
 	return _c
 }
 
+// SetCustomFields sets the "custom_fields" field.
+func (_c *ProjectCreate) SetCustomFields(v string) *ProjectCreate {
+	_c.mutation.SetCustomFields(v)
+	return _c
+}
+
+// SetNillableCustomFields sets the "custom_fields" field if the given value is not nil.
+func (_c *ProjectCreate) SetNillableCustomFields(v *string) *ProjectCreate {
+	if v != nil {
+		_c.SetCustomFields(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *ProjectCreate) SetCreatedAt(v time.Time) *ProjectCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -211,6 +225,10 @@ func (_c *ProjectCreate) defaults() {
 		v := project.DefaultNotes
 		_c.mutation.SetNotes(v)
 	}
+	if _, ok := _c.mutation.CustomFields(); !ok {
+		v := project.DefaultCustomFields
+		_c.mutation.SetCustomFields(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := project.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -242,6 +260,9 @@ func (_c *ProjectCreate) check() error {
 	}
 	if _, ok := _c.mutation.Notes(); !ok {
 		return &ValidationError{Name: "notes", err: errors.New(`ent: missing required field "Project.notes"`)}
+	}
+	if _, ok := _c.mutation.CustomFields(); !ok {
+		return &ValidationError{Name: "custom_fields", err: errors.New(`ent: missing required field "Project.custom_fields"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Project.created_at"`)}
@@ -316,6 +337,10 @@ func (_c *ProjectCreate) createSpec() (*Project, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Notes(); ok {
 		_spec.SetField(project.FieldNotes, field.TypeString, value)
 		_node.Notes = value
+	}
+	if value, ok := _c.mutation.CustomFields(); ok {
+		_spec.SetField(project.FieldCustomFields, field.TypeString, value)
+		_node.CustomFields = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(project.FieldCreatedAt, field.TypeTime, value)
