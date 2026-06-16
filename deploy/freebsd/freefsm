@@ -1,0 +1,41 @@
+#!/bin/sh
+
+# PROVIDE: freefsm
+# REQUIRE: LOGIN postgresql
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="freefsm"
+rcvar="freefsm_enable"
+
+load_rc_config "$name"
+
+: ${freefsm_enable:="NO"}
+: ${freefsm_user:="freefsm"}
+: ${freefsm_group:="freefsm"}
+: ${freefsm_db_host:="localhost"}
+: ${freefsm_db_port:="5432"}
+: ${freefsm_db_name:="freefsm"}
+: ${freefsm_db_user:="freefsm"}
+: ${freefsm_db_password:=""}
+: ${freefsm_addr:=":3000"}
+: ${freefsm_log_level:="info"}
+: ${freefsm_session_secret:=""}
+: ${freefsm_setup_token:=""}
+
+pidfile="/var/run/freefsm.pid"
+command="/usr/local/bin/freefsm"
+command_args=""
+
+export FREEFSM_DB_HOST="${freefsm_db_host}"
+export FREEFSM_DB_PORT="${freefsm_db_port}"
+export FREEFSM_DB_NAME="${freefsm_db_name}"
+export FREEFSM_DB_USER="${freefsm_db_user}"
+export FREEFSM_DB_PASSWORD="${freefsm_db_password}"
+export FREEFSM_ADDR="${freefsm_addr}"
+export FREEFSM_LOG_LEVEL="${freefsm_log_level}"
+export FREEFSM_SESSION_SECRET="${freefsm_session_secret}"
+export FREEFSM_SETUP_TOKEN="${freefsm_setup_token}"
+
+run_rc_command "$1"

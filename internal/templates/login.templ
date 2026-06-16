@@ -10,7 +10,7 @@ templ LoginPage(p LoginPageData) {
 			if p.Error != "" {
 				<div class="error-msg">{ p.Error }</div>
 			}
-			<form action="/login" method="post">
+			<form action="/login" method="post" hx-boost="false">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<label>
 					Email

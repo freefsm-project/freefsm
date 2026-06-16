@@ -1,6 +1,6 @@
 # Binary
-freefsm
-freefsm.exe
+/freefsm
+/freefsm.exe
 
 # Env
 .env
