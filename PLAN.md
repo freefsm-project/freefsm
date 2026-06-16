@@ -316,12 +316,12 @@ freefsm/
 - Basic PDF generation via maroto
 
 ### Phase 2 — Support Entities + Polish
-- Projects (grouping jobs under a customer)
+- Projects (grouping jobs under a customer) ✅
 - Subtasks (job checklists)
 - Polymorphic tags system (admin-configurable)
 - Polymorphic custom fields (admin-configurable)
 - Polymorphic comments
-- Dashboard with real KPIs (revenue, job counts, status breakdown)
+- Dashboard with real KPIs (revenue, job counts, status breakdown) ✅
 - Global search across customers, jobs, invoices
 - Nginx reverse proxy config in deploy/
 

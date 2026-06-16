@@ -80,6 +80,12 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := invoiceToDetail(i, statuses)
+	if i.CustomerID != nil && *i.CustomerID > 0 {
+		customer, _ := h.custSvc.GetByID(r.Context(), *i.CustomerID)
+		if customer != nil {
+			d.Customer = customer.DisplayName
+		}
+	}
 	d.LineItems = h.svc.LineItems(i)
 	d.Payments = h.svc.Payments(i)
 	templates.InvoiceShow(d).Render(r.Context(), w)

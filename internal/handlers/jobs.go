@@ -82,9 +82,16 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := jobToDetail(j, statuses)
+	if j.CustomerID > 0 {
+		customer, _ := h.custSvc.GetByID(r.Context(), j.CustomerID)
+		if customer != nil {
+			d.Customer = customer.DisplayName
+		}
+	}
 	d.LineItems = h.svc.LineItems(j)
 	d.Visits = services.ParseVisits(j.Visits)
 	d.Assignments = services.ParseAssignments(j.Assignments)
+	d.Subtasks = services.ParseSubtasks(j.Subtasks)
 	projects, _ := h.projectSvc.ListAll(r.Context())
 	locations, _ := h.locSvc.ListAll(r.Context())
 	if j.CustomerID > 0 {
@@ -138,6 +145,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TechNotes:   r.FormValue("tech_notes"),
 		Visits:      services.ParseVisits(r.FormValue("visits")),
 		Assignments: services.ParseAssignments(r.FormValue("assignments")),
+		Subtasks:    services.ParseSubtasks(r.FormValue("subtasks")),
 	}
 	if params.BillingType == "" {
 		params.BillingType = "flat_rate"
@@ -196,6 +204,10 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		assignments := services.ParseAssignments(a)
 		params.Assignments = &assignments
 	}
+	if s := r.FormValue("subtasks"); s != "" {
+		subtasks := services.ParseSubtasks(s)
+		params.Subtasks = &subtasks
+	}
 	if st := r.FormValue("start_time"); st != "" {
 		t := parseTime(st)
 		params.StartTime = &t
@@ -228,6 +240,41 @@ func (h *JobHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/jobs?flash=Job+deleted", http.StatusSeeOther)
 }
 
+func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	idx, err := strconv.Atoi(chi.URLParam(r, "idx"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	j, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	subtasks := services.ParseSubtasks(j.Subtasks)
+	if idx < 0 || idx >= len(subtasks) {
+		http.NotFound(w, r)
+		return
+	}
+	subtasks[idx].Completed = !subtasks[idx].Completed
+	params := services.JobUpdateParams{
+		Subtasks: &subtasks,
+	}
+	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	statuses := h.statusesForSelect(r.Context())
+	d := jobToDetail(j, statuses)
+	d.Subtasks = subtasks
+	templates.JobSubtasks(d).Render(r.Context(), w)
+}
+
 func (h *JobHandler) statusesForSelect(ctx context.Context) []*ent.Status {
 	statuses, _ := h.statusSvc.ByObjectType(ctx, "job")
 	return statuses
@@ -251,6 +298,7 @@ func (h *JobHandler) newJobForm(ctx context.Context) templates.JobFormPageData {
 		BillingTypes: services.JobBillingTypes,
 		ExistingVisitsJSON:    "[]",
 		ExistingAssignmentsJSON: "[]",
+		ExistingSubtasksJSON:    "[]",
 	}
 }
 
@@ -269,6 +317,7 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses [
 		BillingTypes: services.JobBillingTypes,
 		ExistingVisitsJSON:    services.SerializeVisits(services.ParseVisits(j.Visits)),
 		ExistingAssignmentsJSON: services.SerializeAssignments(services.ParseAssignments(j.Assignments)),
+		ExistingSubtasksJSON:    services.SerializeSubtasks(services.ParseSubtasks(j.Subtasks)),
 	}
 }
 

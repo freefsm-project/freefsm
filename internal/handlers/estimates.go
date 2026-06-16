@@ -82,6 +82,12 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := estimateToDetail(e, statuses)
+	if e.CustomerID != nil && *e.CustomerID > 0 {
+		customer, _ := h.custSvc.GetByID(r.Context(), *e.CustomerID)
+		if customer != nil {
+			d.Customer = customer.DisplayName
+		}
+	}
 	d.LineItems = h.svc.LineItems(e)
 	templates.EstimateShow(d).Render(r.Context(), w)
 }
