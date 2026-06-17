@@ -46,7 +46,8 @@ type SetupPageData struct {
 }
 
 type DashboardData struct {
-	Stats services.DashboardStats
+	Stats      services.DashboardStats
+	ClockWidget ClockWidgetData
 }
 
 type RecentJob struct {
@@ -696,6 +697,8 @@ func pageTitleFromPath(ctx context.Context) string {
 		return "Invoices"
 	case "/items":
 		return "Items"
+	case "/time-entries":
+		return "Timesheets"
 	case "/settings":
 		return "Company Settings"
 	case "/setup", "/setup/company":
@@ -744,6 +747,12 @@ func pageTitleFromPath(ctx context.Context) string {
 				return "Edit Item"
 			}
 			return "Item"
+		}
+		if strings.HasPrefix(path, "/time-entries/") {
+			if strings.HasSuffix(path, "/edit") {
+				return "Edit Time Entry"
+			}
+			return "Timesheet"
 		}
 		if strings.HasPrefix(path, "/users/") {
 			if strings.HasSuffix(path, "/edit") {
@@ -933,4 +942,55 @@ type SearchPageData struct {
 	Projects  []services.SearchResult
 	Invoices  []services.SearchResult
 	Estimates []services.SearchResult
+}
+
+type ClockWidgetData struct {
+	IsClockedIn bool
+	Duration    string
+	ClockInTime string
+}
+
+type TimeEntryRow struct {
+	ID       int64
+	UserName string
+	IsManual bool
+	ClockIn  string
+	ClockOut string
+	Duration string
+	Notes    string
+	CanEdit  bool
+}
+
+type TimeEntryListPageData struct {
+	Entries        []TimeEntryRow
+	Page           int
+	PerPage        int
+	Total          int
+	TotalPages     int
+	Search         string
+	UserID         int64
+	DateFrom       string
+	DateTo         string
+	ShowUserFilter bool
+	Users          []UserRow
+}
+
+type TimeEntryFormEntry struct {
+	ID       int64
+	ClockIn  string
+	ClockOut string
+	Notes    string
+}
+
+type TimeEntryFormPageData struct {
+	Entry  *TimeEntryFormEntry
+	Errors map[string]string
+}
+
+func timeEntryFormTitle() string {
+	return "Edit Time Entry"
+}
+
+func timeEntryFormAction(id int64) string {
+	return fmt.Sprintf("/time-entries/%d", id)
 }

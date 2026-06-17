@@ -31,6 +31,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 	"github.com/MartialM1nd/freefsm/internal/ent/tag"
 	"github.com/MartialM1nd/freefsm/internal/ent/taglink"
+	"github.com/MartialM1nd/freefsm/internal/ent/timeentry"
 	"github.com/MartialM1nd/freefsm/internal/ent/user"
 )
 
@@ -71,6 +72,8 @@ type Client struct {
 	Tag *TagClient
 	// TagLink is the client for interacting with the TagLink builders.
 	TagLink *TagLinkClient
+	// TimeEntry is the client for interacting with the TimeEntry builders.
+	TimeEntry *TimeEntryClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 }
@@ -100,6 +103,7 @@ func (c *Client) init() {
 	c.StatusWorkflow = NewStatusWorkflowClient(c.config)
 	c.Tag = NewTagClient(c.config)
 	c.TagLink = NewTagLinkClient(c.config)
+	c.TimeEntry = NewTimeEntryClient(c.config)
 	c.User = NewUserClient(c.config)
 }
 
@@ -209,6 +213,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		StatusWorkflow:        NewStatusWorkflowClient(cfg),
 		Tag:                   NewTagClient(cfg),
 		TagLink:               NewTagLinkClient(cfg),
+		TimeEntry:             NewTimeEntryClient(cfg),
 		User:                  NewUserClient(cfg),
 	}, nil
 }
@@ -245,6 +250,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		StatusWorkflow:        NewStatusWorkflowClient(cfg),
 		Tag:                   NewTagClient(cfg),
 		TagLink:               NewTagLinkClient(cfg),
+		TimeEntry:             NewTimeEntryClient(cfg),
 		User:                  NewUserClient(cfg),
 	}, nil
 }
@@ -278,7 +284,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Comment, c.CompanySettings, c.CustomFieldDefinition, c.Customer,
 		c.CustomerContact, c.Estimate, c.Invoice, c.Item, c.Job, c.Location,
 		c.PasswordResetToken, c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink,
-		c.User,
+		c.TimeEntry, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -291,7 +297,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Comment, c.CompanySettings, c.CustomFieldDefinition, c.Customer,
 		c.CustomerContact, c.Estimate, c.Invoice, c.Item, c.Job, c.Location,
 		c.PasswordResetToken, c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink,
-		c.User,
+		c.TimeEntry, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -332,6 +338,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Tag.mutate(ctx, m)
 	case *TagLinkMutation:
 		return c.TagLink.mutate(ctx, m)
+	case *TimeEntryMutation:
+		return c.TimeEntry.mutate(ctx, m)
 	case *UserMutation:
 		return c.User.mutate(ctx, m)
 	default:
@@ -2499,6 +2507,139 @@ func (c *TagLinkClient) mutate(ctx context.Context, m *TagLinkMutation) (Value, 
 	}
 }
 
+// TimeEntryClient is a client for the TimeEntry schema.
+type TimeEntryClient struct {
+	config
+}
+
+// NewTimeEntryClient returns a client for the TimeEntry from the given config.
+func NewTimeEntryClient(c config) *TimeEntryClient {
+	return &TimeEntryClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `timeentry.Hooks(f(g(h())))`.
+func (c *TimeEntryClient) Use(hooks ...Hook) {
+	c.hooks.TimeEntry = append(c.hooks.TimeEntry, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `timeentry.Intercept(f(g(h())))`.
+func (c *TimeEntryClient) Intercept(interceptors ...Interceptor) {
+	c.inters.TimeEntry = append(c.inters.TimeEntry, interceptors...)
+}
+
+// Create returns a builder for creating a TimeEntry entity.
+func (c *TimeEntryClient) Create() *TimeEntryCreate {
+	mutation := newTimeEntryMutation(c.config, OpCreate)
+	return &TimeEntryCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of TimeEntry entities.
+func (c *TimeEntryClient) CreateBulk(builders ...*TimeEntryCreate) *TimeEntryCreateBulk {
+	return &TimeEntryCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *TimeEntryClient) MapCreateBulk(slice any, setFunc func(*TimeEntryCreate, int)) *TimeEntryCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &TimeEntryCreateBulk{err: fmt.Errorf("calling to TimeEntryClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*TimeEntryCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &TimeEntryCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for TimeEntry.
+func (c *TimeEntryClient) Update() *TimeEntryUpdate {
+	mutation := newTimeEntryMutation(c.config, OpUpdate)
+	return &TimeEntryUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *TimeEntryClient) UpdateOne(_m *TimeEntry) *TimeEntryUpdateOne {
+	mutation := newTimeEntryMutation(c.config, OpUpdateOne, withTimeEntry(_m))
+	return &TimeEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *TimeEntryClient) UpdateOneID(id int64) *TimeEntryUpdateOne {
+	mutation := newTimeEntryMutation(c.config, OpUpdateOne, withTimeEntryID(id))
+	return &TimeEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for TimeEntry.
+func (c *TimeEntryClient) Delete() *TimeEntryDelete {
+	mutation := newTimeEntryMutation(c.config, OpDelete)
+	return &TimeEntryDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *TimeEntryClient) DeleteOne(_m *TimeEntry) *TimeEntryDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *TimeEntryClient) DeleteOneID(id int64) *TimeEntryDeleteOne {
+	builder := c.Delete().Where(timeentry.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &TimeEntryDeleteOne{builder}
+}
+
+// Query returns a query builder for TimeEntry.
+func (c *TimeEntryClient) Query() *TimeEntryQuery {
+	return &TimeEntryQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeTimeEntry},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a TimeEntry entity by its id.
+func (c *TimeEntryClient) Get(ctx context.Context, id int64) (*TimeEntry, error) {
+	return c.Query().Where(timeentry.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *TimeEntryClient) GetX(ctx context.Context, id int64) *TimeEntry {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *TimeEntryClient) Hooks() []Hook {
+	return c.hooks.TimeEntry
+}
+
+// Interceptors returns the client interceptors.
+func (c *TimeEntryClient) Interceptors() []Interceptor {
+	return c.inters.TimeEntry
+}
+
+func (c *TimeEntryClient) mutate(ctx context.Context, m *TimeEntryMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&TimeEntryCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&TimeEntryUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&TimeEntryUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&TimeEntryDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown TimeEntry mutation op: %q", m.Op())
+	}
+}
+
 // UserClient is a client for the User schema.
 type UserClient struct {
 	config
@@ -2637,11 +2778,11 @@ type (
 	hooks struct {
 		Comment, CompanySettings, CustomFieldDefinition, Customer, CustomerContact,
 		Estimate, Invoice, Item, Job, Location, PasswordResetToken, Project, Status,
-		StatusWorkflow, Tag, TagLink, User []ent.Hook
+		StatusWorkflow, Tag, TagLink, TimeEntry, User []ent.Hook
 	}
 	inters struct {
 		Comment, CompanySettings, CustomFieldDefinition, Customer, CustomerContact,
 		Estimate, Invoice, Item, Job, Location, PasswordResetToken, Project, Status,
-		StatusWorkflow, Tag, TagLink, User []ent.Interceptor
+		StatusWorkflow, Tag, TagLink, TimeEntry, User []ent.Interceptor
 	}
 )

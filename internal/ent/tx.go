@@ -44,6 +44,8 @@ type Tx struct {
 	Tag *TagClient
 	// TagLink is the client for interacting with the TagLink builders.
 	TagLink *TagLinkClient
+	// TimeEntry is the client for interacting with the TimeEntry builders.
+	TimeEntry *TimeEntryClient
 	// User is the client for interacting with the User builders.
 	User *UserClient
 
@@ -193,6 +195,7 @@ func (tx *Tx) init() {
 	tx.StatusWorkflow = NewStatusWorkflowClient(tx.config)
 	tx.Tag = NewTagClient(tx.config)
 	tx.TagLink = NewTagLinkClient(tx.config)
+	tx.TimeEntry = NewTimeEntryClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 }
 

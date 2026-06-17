@@ -643,3 +643,9 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
     padding: 1rem;
   }
 }
+
+.manual-badge {
+  font-size: 0.7rem;
+  padding: 0.05rem 0.3rem;
+  margin-right: 0.25rem;
+}

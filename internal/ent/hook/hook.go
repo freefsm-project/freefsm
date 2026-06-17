@@ -201,6 +201,18 @@ func (f TagLinkFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, err
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TagLinkMutation", m)
 }
 
+// The TimeEntryFunc type is an adapter to allow the use of ordinary
+// function as TimeEntry mutator.
+type TimeEntryFunc func(context.Context, *ent.TimeEntryMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f TimeEntryFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.TimeEntryMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TimeEntryMutation", m)
+}
+
 // The UserFunc type is an adapter to allow the use of ordinary
 // function as User mutator.
 type UserFunc func(context.Context, *ent.UserMutation) (ent.Value, error)

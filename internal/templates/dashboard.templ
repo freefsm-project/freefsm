@@ -6,6 +6,7 @@ templ DashboardPage(p DashboardData) {
 	@Layout("Dashboard") {
 
 		<div class="grid" style="margin-bottom:2rem">
+			@ClockWidget(p.ClockWidget)
 			<article>
 				<header>Customers</header>
 				<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalCustomers) }</p>

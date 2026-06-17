@@ -1,0 +1,30 @@
+package templates
+
+templ ClockWidget(p ClockWidgetData) {
+	if p.IsClockedIn {
+		<article style="text-align:center" id="clock-widget">
+			<header>Time Clock</header>
+			<p style="font-size:1.25rem;margin-bottom:0.25rem">Clocked in</p>
+			<p style="font-size:2rem;font-weight:bold;margin-bottom:0.25rem" id="clock-duration">{ p.Duration }</p>
+			<p style="color:var(--pico-muted-color);font-size:0.85rem;margin-bottom:1rem">
+				Since { p.ClockInTime }
+			</p>
+			<form action="/time-entries/clock-out" method="post" style="display:inline">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<button type="submit" class="contrast" style="width:100%">Clock Out</button>
+			</form>
+			<footer><a href="/time-entries" role="button" class="outline small">View Timesheets</a></footer>
+		</article>
+	} else {
+		<article style="text-align:center" id="clock-widget">
+			<header>Time Clock</header>
+			<p style="font-size:2rem;font-weight:bold;margin-bottom:0.5rem">&ndash;:&ndash;&ndash;</p>
+			<p style="color:var(--pico-muted-color);font-size:0.85rem;margin-bottom:1rem">Not clocked in</p>
+			<form action="/time-entries/clock-in" method="post" style="display:inline">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<button type="submit" style="width:100%">Clock In</button>
+			</form>
+			<footer><a href="/time-entries" role="button" class="outline small">View Timesheets</a></footer>
+		</article>
+	}
+}

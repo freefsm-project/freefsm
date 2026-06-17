@@ -28,6 +28,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 	"github.com/MartialM1nd/freefsm/internal/ent/tag"
 	"github.com/MartialM1nd/freefsm/internal/ent/taglink"
+	"github.com/MartialM1nd/freefsm/internal/ent/timeentry"
 	"github.com/MartialM1nd/freefsm/internal/ent/user"
 )
 
@@ -105,6 +106,7 @@ func checkColumn(t, c string) error {
 			statusworkflow.Table:        statusworkflow.ValidColumn,
 			tag.Table:                   tag.ValidColumn,
 			taglink.Table:               taglink.ValidColumn,
+			timeentry.Table:             timeentry.ValidColumn,
 			user.Table:                  user.ValidColumn,
 		})
 	})

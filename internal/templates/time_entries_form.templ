@@ -1,0 +1,30 @@
+package templates
+
+import "fmt"
+
+templ TimeEntryForm(p TimeEntryFormPageData) {
+	@Layout("Edit Time Entry") {
+
+		<form action={ templ.URL(fmt.Sprintf("/time-entries/%d", p.Entry.ID)) } method="post" autocomplete="off">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<div class="grid">
+				<label>
+					Clock In <small style="color:var(--pico-primary)">*</small>
+					<input type="datetime-local" name="clock_in" value={ p.Entry.ClockIn } required/>
+				</label>
+				<label>
+					Clock Out
+					<input type="datetime-local" name="clock_out" value={ p.Entry.ClockOut }/>
+				</label>
+			</div>
+			<label>
+				Notes
+				<textarea name="notes" rows="3">{ p.Entry.Notes }</textarea>
+			</label>
+			<div style="display:flex;gap:0.5rem;margin-top:1rem">
+				<button type="submit">Save</button>
+				<a href="/time-entries" role="button" class="outline">Cancel</a>
+			</div>
+		</form>
+	}
+}

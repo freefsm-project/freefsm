@@ -492,6 +492,37 @@ var (
 			},
 		},
 	}
+	// TimeEntriesColumns holds the columns for the "time_entries" table.
+	TimeEntriesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "is_manual", Type: field.TypeBool, Default: false},
+		{Name: "clock_in", Type: field.TypeTime},
+		{Name: "clock_out", Type: field.TypeTime, Nullable: true},
+		{Name: "latitude", Type: field.TypeFloat64, Nullable: true},
+		{Name: "longitude", Type: field.TypeFloat64, Nullable: true},
+		{Name: "notes", Type: field.TypeString, Default: ""},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// TimeEntriesTable holds the schema information for the "time_entries" table.
+	TimeEntriesTable = &schema.Table{
+		Name:       "time_entries",
+		Columns:    TimeEntriesColumns,
+		PrimaryKey: []*schema.Column{TimeEntriesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "timeentry_user_id_clock_out",
+				Unique:  false,
+				Columns: []*schema.Column{TimeEntriesColumns[1], TimeEntriesColumns[4]},
+			},
+			{
+				Name:    "timeentry_clock_in",
+				Unique:  false,
+				Columns: []*schema.Column{TimeEntriesColumns[3]},
+			},
+		},
+	}
 	// UsersColumns holds the columns for the "users" table.
 	UsersColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -527,6 +558,7 @@ var (
 		StatusWorkflowsTable,
 		TagsTable,
 		TagLinksTable,
+		TimeEntriesTable,
 		UsersTable,
 	}
 )
@@ -580,6 +612,9 @@ func init() {
 	}
 	TagLinksTable.Annotation = &entsql.Annotation{
 		Table: "tag_links",
+	}
+	TimeEntriesTable.Annotation = &entsql.Annotation{
+		Table: "time_entries",
 	}
 	UsersTable.Annotation = &entsql.Annotation{
 		Table: "users",

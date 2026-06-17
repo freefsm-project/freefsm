@@ -54,5 +54,8 @@ type Tag func(*sql.Selector)
 // TagLink is the predicate function for taglink builders.
 type TagLink func(*sql.Selector)
 
+// TimeEntry is the predicate function for timeentry builders.
+type TimeEntry func(*sql.Selector)
+
 // User is the predicate function for user builders.
 type User func(*sql.Selector)

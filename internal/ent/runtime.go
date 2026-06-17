@@ -22,6 +22,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
 	"github.com/MartialM1nd/freefsm/internal/ent/tag"
 	"github.com/MartialM1nd/freefsm/internal/ent/taglink"
+	"github.com/MartialM1nd/freefsm/internal/ent/timeentry"
 	"github.com/MartialM1nd/freefsm/internal/ent/user"
 )
 
@@ -607,6 +608,26 @@ func init() {
 	taglinkDescCreatedAt := taglinkFields[4].Descriptor()
 	// taglink.DefaultCreatedAt holds the default value on creation for the created_at field.
 	taglink.DefaultCreatedAt = taglinkDescCreatedAt.Default.(func() time.Time)
+	timeentryFields := schema.TimeEntry{}.Fields()
+	_ = timeentryFields
+	// timeentryDescIsManual is the schema descriptor for is_manual field.
+	timeentryDescIsManual := timeentryFields[2].Descriptor()
+	// timeentry.DefaultIsManual holds the default value on creation for the is_manual field.
+	timeentry.DefaultIsManual = timeentryDescIsManual.Default.(bool)
+	// timeentryDescNotes is the schema descriptor for notes field.
+	timeentryDescNotes := timeentryFields[7].Descriptor()
+	// timeentry.DefaultNotes holds the default value on creation for the notes field.
+	timeentry.DefaultNotes = timeentryDescNotes.Default.(string)
+	// timeentryDescCreatedAt is the schema descriptor for created_at field.
+	timeentryDescCreatedAt := timeentryFields[8].Descriptor()
+	// timeentry.DefaultCreatedAt holds the default value on creation for the created_at field.
+	timeentry.DefaultCreatedAt = timeentryDescCreatedAt.Default.(func() time.Time)
+	// timeentryDescUpdatedAt is the schema descriptor for updated_at field.
+	timeentryDescUpdatedAt := timeentryFields[9].Descriptor()
+	// timeentry.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	timeentry.DefaultUpdatedAt = timeentryDescUpdatedAt.Default.(func() time.Time)
+	// timeentry.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	timeentry.UpdateDefaultUpdatedAt = timeentryDescUpdatedAt.UpdateDefault.(func() time.Time)
 	userFields := schema.User{}.Fields()
 	_ = userFields
 	// userDescEmail is the schema descriptor for email field.
