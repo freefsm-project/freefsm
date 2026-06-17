@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -126,13 +127,14 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "project", id)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "project")
+	ctx := middleware.WithPageHeaderTitle(r.Context(), p.Name)
 	templates.ProjectShow(templates.ProjectShowPageData{
 		Project:      d,
 		Jobs:         jobRows,
 		Tags:         tagsToRows(tags),
 		AllTags:      tagsToRows(allTags),
 		CustomFields: buildCustomFieldDisplay(defs, p.CustomFields),
-	}).Render(r.Context(), w)
+	}).Render(ctx, w)
 }
 
 func (h *ProjectHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
@@ -181,9 +183,50 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	completion, _ := strconv.ParseFloat(r.FormValue("completion_percentage"), 64)
+	name := r.FormValue("name")
+
+	errors := make(map[string]string)
+	if custID == 0 {
+		errors["customer_id"] = "Customer is required"
+	}
+	if name == "" {
+		errors["name"] = "Project name is required"
+	}
+
+	if len(errors) > 0 {
+		statuses := h.statusesForSelect(r.Context())
+		customers, _ := h.custSvc.ListAll(r.Context())
+		locations, _ := h.locSvc.ListAll(r.Context())
+		defs, _ := h.defSvc.ListForObjectType(r.Context(), "project")
+		d := &templates.ProjectDetail{
+			Name:                 name,
+			CustomerID:           custID,
+			StatusID:             statusID,
+			LocationID:           locationID,
+			CompletionPercentage: completion,
+			Notes:                r.FormValue("notes"),
+		}
+		if t := r.FormValue("start_time"); t != "" {
+			d.StartTime = t
+		}
+		if t := r.FormValue("end_time"); t != "" {
+			d.EndTime = t
+		}
+		templates.ProjectForm(templates.ProjectFormPageData{
+			Project:      d,
+			Errors:       errors,
+			IsNew:        true,
+			Customers:    customerOptions(customers),
+			Statuses:     statusOptions(statuses),
+			Locations:    locationOptions(locations),
+			CustomFields: buildCustomFieldDisplay(defs, parseCustomFieldValues(r)),
+		}).Render(r.Context(), w)
+		return
+	}
+
 	params := services.ProjectCreateParams{
 		CustomerID:           custID,
-		Name:                 r.FormValue("name"),
+		Name:                 name,
 		Description:          r.FormValue("description"),
 		StatusID:             statusID,
 		LocationID:           locationID,
@@ -225,6 +268,48 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	completion, _ := strconv.ParseFloat(r.FormValue("completion_percentage"), 64)
+	name := r.FormValue("name")
+
+	errors := make(map[string]string)
+	if custID == 0 {
+		errors["customer_id"] = "Customer is required"
+	}
+	if name == "" {
+		errors["name"] = "Project name is required"
+	}
+
+	if len(errors) > 0 {
+		statuses := h.statusesForSelect(r.Context())
+		customers, _ := h.custSvc.ListAll(r.Context())
+		locations, _ := h.locSvc.ListAll(r.Context())
+		defs, _ := h.defSvc.ListForObjectType(r.Context(), "project")
+		d := &templates.ProjectDetail{
+			ID:                   id,
+			Name:                 name,
+			CustomerID:           custID,
+			StatusID:             statusID,
+			LocationID:           locationID,
+			CompletionPercentage: completion,
+			Notes:                r.FormValue("notes"),
+		}
+		if t := r.FormValue("start_time"); t != "" {
+			d.StartTime = t
+		}
+		if t := r.FormValue("end_time"); t != "" {
+			d.EndTime = t
+		}
+		templates.ProjectForm(templates.ProjectFormPageData{
+			Project:      d,
+			Errors:       errors,
+			IsNew:        false,
+			Customers:    customerOptions(customers),
+			Statuses:     statusOptions(statuses),
+			Locations:    locationOptions(locations),
+			CustomFields: buildCustomFieldDisplay(defs, parseCustomFieldValues(r)),
+		}).Render(r.Context(), w)
+		return
+	}
+
 	params := services.ProjectUpdateParams{
 		CustomerID:           int64Ptr(custID),
 		Name:                 formPtr(r.FormValue("name")),

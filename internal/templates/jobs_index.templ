@@ -6,7 +6,7 @@ templ JobsIndex(p JobListPageData) {
 	@Layout("Jobs") {
 
 		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-			<form hx-get="/jobs" hx-target="#job-table-wrap" hx-swap="outerHTML" hx-push-url="true" style="display:flex;gap:0.5rem;align-items:center;flex:1">
+			<form hx-get="/jobs" hx-target="#job-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner" style="display:flex;gap:0.5rem;align-items:center;flex:1">
 				<input type="search" name="search" placeholder="Search by type or subtitle..."
 					value={ p.Search } style="max-width:300px"
 					hx-trigger="input changed delay:300ms"/>
@@ -16,6 +16,7 @@ templ JobsIndex(p JobListPageData) {
 						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
 					}
 				</select>
+				<span id="search-spinner" class="spinner htmx-indicator"></span>
 			</form>
 			<a href="/jobs/new" role="button">New Job</a>
 		</div>
@@ -38,7 +39,10 @@ templ JobsTable(p JobListPageData) {
 			</thead>
 			<tbody>
 				if len(p.Jobs) == 0 {
-					<tr><td colspan="6" style="text-align:center">No jobs found.</td></tr>
+					<tr><td colspan="6" style="text-align:center">
+						<p>No jobs found.</p>
+						<a href="/jobs/new" role="button" class="outline" style="font-size:0.85rem">Create your first job</a>
+					</td></tr>
 				}
 				for _, j := range p.Jobs {
 					<tr>
@@ -50,10 +54,10 @@ templ JobsTable(p JobListPageData) {
 						<td>{ j.StartTime }</td>
 						<td>{ j.BillingType }</td>
 						<td style="text-align:right">
-							<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", j.ID)) } role="button" class="outline small">Edit</a>
+							<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", j.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", j.DisplayName) }>Edit</a>
 							<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", j.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this job?')">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<button class="outline contrast small">Del</button>
+								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", j.DisplayName) }>Del</button>
 							</form>
 						</td>
 					</tr>

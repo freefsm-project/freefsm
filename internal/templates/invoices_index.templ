@@ -6,7 +6,7 @@ templ InvoicesIndex(p InvoiceListPageData) {
 	@Layout("Invoices") {
 
 		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-			<form hx-get="/invoices" hx-target="#invoice-table-wrap" hx-swap="outerHTML" hx-push-url="true" style="display:flex;gap:0.5rem;align-items:center;flex:1">
+			<form hx-get="/invoices" hx-target="#invoice-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner" style="display:flex;gap:0.5rem;align-items:center;flex:1">
 				<input type="search" name="search" placeholder="Search by title..."
 					value={ p.Search } style="max-width:300px"
 					hx-trigger="input changed delay:300ms"/>
@@ -16,6 +16,7 @@ templ InvoicesIndex(p InvoiceListPageData) {
 						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
 					}
 				</select>
+				<span id="search-spinner" class="spinner htmx-indicator"></span>
 			</form>
 			<a href="/invoices/new" role="button">New Invoice</a>
 		</div>
@@ -38,7 +39,10 @@ templ InvoicesTable(p InvoiceListPageData) {
 			</thead>
 			<tbody>
 				if len(p.Invoices) == 0 {
-					<tr><td colspan="6" style="text-align:center">No invoices found.</td></tr>
+					<tr><td colspan="6" style="text-align:center">
+						<p>No invoices found.</p>
+						<a href="/invoices/new" role="button" class="outline" style="font-size:0.85rem">Create your first invoice</a>
+					</td></tr>
 				}
 				for _, i := range p.Invoices {
 					<tr>
@@ -48,10 +52,10 @@ templ InvoicesTable(p InvoiceListPageData) {
 						<td>{ i.InvoiceDate }</td>
 						<td>{ i.DueDate }</td>
 						<td style="text-align:right">
-							<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", i.ID)) } role="button" class="outline small">Edit</a>
+							<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", i.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", i.Title) }>Edit</a>
 							<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", i.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this invoice?')">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<button class="outline contrast small">Del</button>
+								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", i.Title) }>Del</button>
 							</form>
 						</td>
 					</tr>

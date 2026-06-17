@@ -675,6 +675,9 @@ func themeFromCtx(ctx context.Context) string {
 }
 
 func pageTitleFromPath(ctx context.Context) string {
+	if t, ok := middleware.PageHeaderTitleFromContext(ctx); ok && t != "" {
+		return t
+	}
 	path := middleware.PathFromContext(ctx)
 	switch path {
 	case "/":
@@ -703,30 +706,59 @@ func pageTitleFromPath(ctx context.Context) string {
 		return "Login"
 	case "/forgot-password":
 		return "Forgot Password"
+	case "/tags":
+		return "Tags"
 	default:
-		if strings.HasPrefix(path, "/jobs/") {
-			return "Job"
-		}
 		if strings.HasPrefix(path, "/customers/") {
+			if strings.HasSuffix(path, "/edit") {
+				return "Edit Customer"
+			}
 			return "Customer"
 		}
+		if strings.HasPrefix(path, "/jobs/") {
+			if strings.HasSuffix(path, "/edit") {
+				return "Edit Job"
+			}
+			return "Job"
+		}
 		if strings.HasPrefix(path, "/projects/") {
+			if strings.HasSuffix(path, "/edit") {
+				return "Edit Project"
+			}
 			return "Project"
 		}
 		if strings.HasPrefix(path, "/estimates/") {
+			if strings.HasSuffix(path, "/edit") {
+				return "Edit Estimate"
+			}
 			return "Estimate"
 		}
 		if strings.HasPrefix(path, "/invoices/") {
+			if strings.HasSuffix(path, "/edit") {
+				return "Edit Invoice"
+			}
 			return "Invoice"
 		}
 		if strings.HasPrefix(path, "/items/") {
+			if strings.HasSuffix(path, "/edit") {
+				return "Edit Item"
+			}
 			return "Item"
 		}
 		if strings.HasPrefix(path, "/users/") {
+			if strings.HasSuffix(path, "/edit") {
+				return "Edit User"
+			}
 			return "User"
 		}
 		if strings.HasPrefix(path, "/reset-password") {
 			return "Reset Password"
+		}
+		if strings.HasPrefix(path, "/settings/custom-fields") {
+			if strings.HasSuffix(path, "/edit") {
+				return "Edit Custom Field"
+			}
+			return "Custom Fields"
 		}
 		return "FreeFSM"
 	}

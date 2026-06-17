@@ -7,13 +7,13 @@ templ CustomerForm(p CustomerFormPageData) {
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<fieldset>
 				<legend>Customer Info</legend>
-				<label>
-					First Name
-					<input type="text" name="first_name" value={ p.Customer.FirstName }/>
-					if p.Errors["first_name"] != "" {
-						<small class="error-msg">{ p.Errors["first_name"] }</small>
-					}
-				</label>
+			<label>
+				First Name
+				<input type="text" name="first_name" value={ p.Customer.FirstName }/>
+				if p.Errors["first_name"] != "" {
+					<small class="error-msg">{ p.Errors["first_name"] }</small>
+				}
+			</label>
 				<label>
 					Last Name
 					<input type="text" name="last_name" value={ p.Customer.LastName }/>
@@ -26,10 +26,10 @@ templ CustomerForm(p CustomerFormPageData) {
 					}
 				</label>
 				<div class="grid">
-					<label>
-						Email
-						<input type="email" name="email" value={ p.Customer.Email }/>
-					</label>
+				<label>
+					Email
+					<input type="email" name="email" value={ p.Customer.Email }/>
+				</label>
 					<label>
 						Phone
 						<input type="tel" name="phone" value={ p.Customer.Phone }/>

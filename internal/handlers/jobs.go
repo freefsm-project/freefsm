@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -121,7 +122,8 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "job")
 	d.CustomFields = buildCustomFieldDisplay(defs, j.CustomFields)
-	templates.JobShow(d).Render(r.Context(), w)
+	ctx := middleware.WithPageHeaderTitle(r.Context(), j.JobType)
+	templates.JobShow(d).Render(ctx, w)
 }
 
 func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {

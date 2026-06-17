@@ -98,7 +98,8 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.AllTags = tagsToRows(allTags)
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "estimate")
 	d.CustomFields = buildCustomFieldDisplay(defs, e.CustomFields)
-	templates.EstimateShow(d).Render(r.Context(), w)
+	ctx := middleware.WithPageHeaderTitle(r.Context(), e.Title)
+	templates.EstimateShow(d).Render(ctx, w)
 }
 
 func (h *EstimateHandler) AttachTag(w http.ResponseWriter, r *http.Request) {

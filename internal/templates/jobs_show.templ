@@ -6,7 +6,7 @@ templ JobShow(p JobDetail) {
 	@Layout("Job - "+p.JobType) {
 		<div style="display:flex;justify-content:space-between;align-items:center">
 			<div style="display:flex;gap:0.5rem">
-				<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", p.ID)) } role="button" class="outline">Edit</a>
+				<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.JobType) }>Edit</a>
 				<form action={ templ.URL(fmt.Sprintf("/jobs/%d/create-invoice", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Create an invoice from this job?')">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button>Create Invoice</button>
@@ -17,7 +17,7 @@ templ JobShow(p JobDetail) {
 				</form>
 				<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this job?')">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button class="outline contrast">Delete</button>
+					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.JobType) }>Delete</button>
 				</form>
 			</div>
 		</div>

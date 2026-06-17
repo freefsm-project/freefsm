@@ -12,6 +12,7 @@ templ Pagination(p PaginationData) {
 					hx-target={ p.Target }
 					hx-swap="outerHTML"
 					hx-push-url="true"
+					hx-indicator="this"
 				>Previous</a>
 			}
 			<small>Page { fmt.Sprintf("%d", p.CurrentPage) } of { fmt.Sprintf("%d", p.TotalPages) }</small>
@@ -22,6 +23,7 @@ templ Pagination(p PaginationData) {
 					hx-target={ p.Target }
 					hx-swap="outerHTML"
 					hx-push-url="true"
+					hx-indicator="this"
 				>Next</a>
 			}
 		</nav>

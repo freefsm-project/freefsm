@@ -97,7 +97,8 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.AllTags = tagsToRows(allTags)
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
 	d.CustomFields = buildCustomFieldDisplay(defs, i.CustomFields)
-	templates.InvoiceShow(d).Render(r.Context(), w)
+	ctx := middleware.WithPageHeaderTitle(r.Context(), i.Title)
+	templates.InvoiceShow(d).Render(ctx, w)
 }
 
 func (h *InvoiceHandler) AttachTag(w http.ResponseWriter, r *http.Request) {

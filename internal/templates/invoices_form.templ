@@ -8,7 +8,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 		<form action={ templ.URL(invoiceFormAction(p.IsNew, p.Invoice.ID)) } method="post" autocomplete="off">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
-				Customer
+				Customer <small style="color:var(--pico-primary)">*</small>
 				<select name="customer_id" required>
 					<option value="">Select a customer...</option>
 					for _, c := range p.Customers {
@@ -30,7 +30,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 			</label>
 			<div class="grid">
 				<label>
-					Title
+					Title <small style="color:var(--pico-primary)">*</small>
 					<input type="text" name="title" value={ p.Invoice.Title } required autofocus/>
 					if p.Errors["title"] != "" {
 						<small class="error-msg">{ p.Errors["title"] }</small>

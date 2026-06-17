@@ -90,9 +90,9 @@ templ Layout(title string, children ...templ.Component) {
 				<div class="header-right">
 						<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
 							if themeFromCtx(ctx) == "dark" {
-								☀️
+								&#9788;
 							} else {
-								🌙
+								&#9790;
 							}
 						</button>
 						if getUser(ctx) != nil {
@@ -111,7 +111,13 @@ templ Layout(title string, children ...templ.Component) {
 					</div>
 				</header>
 				if getFlash(ctx) != "" {
-					<div class="flash-banner" role="alert">{ getFlash(ctx) }</div>
+					<div class="flash-banner" role="alert" id="flash-banner">
+						<span>{ getFlash(ctx) }</span>
+						<button class="flash-close" onclick="this.parentElement.remove()" aria-label="Dismiss">&times;</button>
+					</div>
+					<script>
+						setTimeout(function(){ var f=document.getElementById('flash-banner'); if(f){ f.style.opacity='0'; f.style.transition='opacity 0.5s'; setTimeout(function(){ if(f) f.remove(); },500); } }, 4000);
+					</script>
 				}
 				<div class="page-body">
 					{ children... }

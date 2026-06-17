@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -74,12 +75,13 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "customer", c.ID)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
+	ctx := middleware.WithPageHeaderTitle(r.Context(), c.DisplayName)
 	templates.CustomerShow(templates.CustomerShowPageData{
 		Customer:     customerToDetail(c),
 		Tags:         tagsToRows(tags),
 		AllTags:      tagsToRows(allTags),
 		CustomFields: buildCustomFieldDisplay(defs, c.CustomFields),
-	}).Render(r.Context(), w)
+	}).Render(ctx, w)
 }
 
 func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {

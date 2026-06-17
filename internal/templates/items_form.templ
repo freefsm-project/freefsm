@@ -7,8 +7,8 @@ templ ItemForm(p ItemFormPageData) {
 
 		<form action={ templ.URL(itemFormAction(p.IsNew, p.Item.ID)) } method="post" autocomplete="off">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-			<label>
-				Name
+				<label>
+					Name <small style="color:var(--pico-primary)">*</small>
 				<input type="text" name="name" value={ p.Item.Name } required autofocus/>
 				if p.Errors["name"] != "" {
 					<small class="error-msg">{ p.Errors["name"] }</small>

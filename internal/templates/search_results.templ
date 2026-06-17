@@ -10,7 +10,9 @@ templ SearchResults(p SearchPageData) {
 		}
 
 		if len(p.Customers) == 0 && len(p.Jobs) == 0 && len(p.Projects) == 0 && len(p.Invoices) == 0 && len(p.Estimates) == 0 {
-			<p>No results found.</p>
+			<div style="text-align:center;margin-top:2rem">
+				<p>No results found. Try broadening your search terms.</p>
+			</div>
 		} else {
 			if len(p.Customers) > 0 {
 				<h3>Customers</h3>

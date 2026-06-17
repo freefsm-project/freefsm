@@ -6,10 +6,11 @@ templ ItemsIndex(p ItemListPageData) {
 	@Layout("Items") {
 
 		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-			<form hx-get="/items" hx-target="#item-table-wrap" hx-swap="outerHTML" hx-push-url="true" style="display:flex;gap:0.5rem;align-items:center;flex:1">
+			<form hx-get="/items" hx-target="#item-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner" style="display:flex;gap:0.5rem;align-items:center;flex:1">
 				<input type="search" name="search" placeholder="Search by name or SKU..."
 					value={ p.Search } style="max-width:300px"
 					hx-trigger="input changed delay:300ms"/>
+				<span id="search-spinner" class="spinner htmx-indicator"></span>
 			</form>
 			<a href="/items/new" role="button">New Item</a>
 		</div>
@@ -32,7 +33,10 @@ templ ItemsTable(p ItemListPageData) {
 			</thead>
 			<tbody>
 				if len(p.Items) == 0 {
-					<tr><td colspan="6" style="text-align:center">No items found.</td></tr>
+					<tr><td colspan="6" style="text-align:center">
+						<p>No items found.</p>
+						<a href="/items/new" role="button" class="outline" style="font-size:0.85rem">Create your first item</a>
+					</td></tr>
 				}
 				for _, i := range p.Items {
 					<tr>
@@ -50,10 +54,10 @@ templ ItemsTable(p ItemListPageData) {
 							}
 						</td>
 						<td style="text-align:right">
-							<a href={ templ.URL(fmt.Sprintf("/items/%d/edit", i.ID)) } role="button" class="outline small">Edit</a>
+							<a href={ templ.URL(fmt.Sprintf("/items/%d/edit", i.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", i.Name) }>Edit</a>
 							<form action={ templ.URL(fmt.Sprintf("/items/%d/delete", i.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this item?')">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<button class="outline contrast small">Del</button>
+								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", i.Name) }>Del</button>
 							</form>
 						</td>
 					</tr>

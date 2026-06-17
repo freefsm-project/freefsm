@@ -8,7 +8,7 @@ templ JobForm(p JobFormPageData) {
 		<form action={ templ.URL(jobFormAction(p.IsNew, p.Job.ID)) } method="post" autocomplete="off">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
-				Customer
+				Customer <small style="color:var(--pico-primary)">*</small>
 				<select name="customer_id" id="job-customer-select" required>
 					<option value="">Select a customer...</option>
 					for _, c := range p.Customers {
@@ -47,7 +47,7 @@ templ JobForm(p JobFormPageData) {
 			</label>
 			<div class="grid">
 				<label>
-					Job Type
+					Job Type <small style="color:var(--pico-primary)">*</small>
 					<input type="text" name="job_type" value={ p.Job.JobType } placeholder="e.g. Installation, Repair" required/>
 					if p.Errors["job_type"] != "" {
 						<small class="error-msg">{ p.Errors["job_type"] }</small>

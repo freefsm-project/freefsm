@@ -7,14 +7,14 @@ templ EstimateShow(p EstimateDetail) {
 		<div style="display:flex;justify-content:space-between;align-items:center">
 			<div style="display:flex;gap:0.5rem">
 				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/pdf", p.ID)) } role="button" class="outline" target="_blank">PDF</a>
-				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", p.ID)) } role="button" class="outline">Edit</a>
+				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Title) }>Edit</a>
 				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/convert-to-invoice", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Convert this estimate to an invoice? The estimate will be removed.')">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button>Convert to Invoice</button>
 				</form>
 				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this estimate?')">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button class="outline contrast">Delete</button>
+					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Title) }>Delete</button>
 				</form>
 			</div>
 		</div>
