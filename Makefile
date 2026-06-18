@@ -11,7 +11,7 @@ LDFLAGS   := -s -w -X $(MODULE)/internal/config.Version=$(VERSION) -X $(MODULE)/
 export CGO_ENABLED=0
 _PATH_EXTRA := $(HOME)/go/bin
 
-.PHONY: all build clean install generate ent templ sqlc
+.PHONY: all build compile clean install generate ent templ sqlc
 
 all: generate build
 
@@ -34,7 +34,12 @@ build: generate
 	mkdir -p $(BUILD_DIR)
 	PATH="$(_PATH_EXTRA):$$PATH" $(GO) build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/freefsm/
 
-install: build
+compile:
+	@echo "building $(BINARY)..."
+	mkdir -p $(BUILD_DIR)
+	PATH="$(_PATH_EXTRA):$$PATH" $(GO) build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/freefsm/
+
+install: compile
 	@echo "installing..."
 	install -m 755 $(BUILD_DIR)/$(BINARY) /usr/local/bin/$(BINARY)
 
