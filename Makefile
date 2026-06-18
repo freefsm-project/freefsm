@@ -8,10 +8,8 @@ COMMIT    ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "dev")
 VERSION   ?= $(shell git describe --tags 2>/dev/null || echo "0.1.0")
 LDFLAGS   := -s -w -X $(MODULE)/internal/config.Version=$(VERSION) -X $(MODULE)/internal/config.Commit=$(COMMIT)
 
-export CGO_ENABLED
+export CGO_ENABLED=0
 _PATH_EXTRA := $(HOME)/go/bin
-PATH := $(_PATH_EXTRA):$(PATH)
-export PATH
 
 .PHONY: all build clean install generate ent templ sqlc
 
@@ -23,11 +21,11 @@ ENT_CMD := $(shell which ent 2>/dev/null || echo "$(GOPATH)/bin/ent")
 
 ent:
 	@echo "generating ent schema..."
-	$(ENT_CMD) generate ./internal/ent/schema
+	PATH="$(_PATH_EXTRA):$$PATH" $(ENT_CMD) generate ./internal/ent/schema
 
 templ:
 	@echo "generating templ templates..."
-	templ generate
+	PATH="$(_PATH_EXTRA):$$PATH" templ generate
 
 sqlc:
 	@echo "generating sqlc queries..."
@@ -36,7 +34,7 @@ sqlc:
 build: generate
 	@echo "building $(BINARY)..."
 	mkdir -p $(BUILD_DIR)
-	$(GO) build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/freefsm/
+	PATH="$(_PATH_EXTRA):$$PATH" $(GO) build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/freefsm/
 
 install: build
 	@echo "installing..."
