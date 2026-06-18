@@ -9,6 +9,7 @@
 name="freefsm"
 rcvar="freefsm_enable"
 
+[ -f /usr/local/etc/freefsm.conf ] && . /usr/local/etc/freefsm.conf
 load_rc_config "$name"
 
 : ${freefsm_enable:="NO"}

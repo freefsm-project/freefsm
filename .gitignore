@@ -4,6 +4,7 @@
 
 # Env
 .env
+freefsm.conf
 
 # IDE
 .idea/

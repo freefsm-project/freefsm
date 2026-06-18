@@ -45,6 +45,11 @@ install: compile
 
 install-freebsd: install
 	install -m 755 deploy/freebsd/freefsm /etc/rc.d/freefsm
+	install -m 644 deploy/freebsd/freefsm.conf.sample /usr/local/etc/freefsm.conf.sample
+	@if [ ! -f /usr/local/etc/freefsm.conf ]; then \
+		cp /usr/local/etc/freefsm.conf.sample /usr/local/etc/freefsm.conf; \
+		echo "Created /usr/local/etc/freefsm.conf — edit it with your secrets"; \
+	fi
 
 install-linux: install
 	install -m 644 deploy/linux/freefsm.service /etc/systemd/system/freefsm.service

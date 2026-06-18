@@ -1,0 +1,13 @@
+# FreeFSM Configuration
+# Copy or install to /usr/local/etc/freefsm.conf
+
+FREEFSM_DB_HOST=localhost
+FREEFSM_DB_PORT=5432
+FREEFSM_DB_NAME=freefsm
+FREEFSM_DB_USER=freefsm
+FREEFSM_DB_PASSWORD=changeme
+FREEFSM_DB_SSLMODE=disable
+
+FREEFSM_ADDR=:3000
+FREEFSM_LOG_LEVEL=info
+FREEFSM_SESSION_SECRET=generate-a-random-secret-here
