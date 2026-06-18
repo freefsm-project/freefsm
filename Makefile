@@ -17,11 +17,9 @@ all: generate build
 
 generate: ent templ
 
-ENT_CMD := $(shell which ent 2>/dev/null || echo "$(GOPATH)/bin/ent")
-
 ent:
 	@echo "generating ent schema..."
-	PATH="$(_PATH_EXTRA):$$PATH" $(ENT_CMD) generate ./internal/ent/schema
+	PATH="$(_PATH_EXTRA):$$PATH" ent generate ./internal/ent/schema
 
 templ:
 	@echo "generating templ templates..."
