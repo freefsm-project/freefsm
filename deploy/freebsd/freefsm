@@ -20,6 +20,7 @@ load_rc_config "$name"
 : ${freefsm_db_name:="freefsm"}
 : ${freefsm_db_user:="freefsm"}
 : ${freefsm_db_password:=""}
+: ${freefsm_db_sslmode:="disable"}
 : ${freefsm_addr:=":3000"}
 : ${freefsm_log_level:="info"}
 : ${freefsm_session_secret:=""}
@@ -34,6 +35,7 @@ export FREEFSM_DB_PORT="${freefsm_db_port}"
 export FREEFSM_DB_NAME="${freefsm_db_name}"
 export FREEFSM_DB_USER="${freefsm_db_user}"
 export FREEFSM_DB_PASSWORD="${freefsm_db_password}"
+export FREEFSM_DB_SSLMODE="${freefsm_db_sslmode}"
 export FREEFSM_ADDR="${freefsm_addr}"
 export FREEFSM_LOG_LEVEL="${freefsm_log_level}"
 export FREEFSM_SESSION_SECRET="${freefsm_session_secret}"
