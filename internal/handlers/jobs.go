@@ -140,6 +140,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	projectID, _ := strconv.ParseInt(r.FormValue("project_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	contactID, _ := strconv.ParseInt(r.FormValue("customer_contact_id"), 10, 64)
+	loc := middleware.CompanyLocation(r.Context())
 	params := services.JobCreateParams{
 		CustomerID:        custID,
 		ProjectID:         projectID,
@@ -149,9 +150,9 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Subtitle:          r.FormValue("subtitle"),
 		StatusID:          statusID,
 		BillingType:       r.FormValue("billing_type"),
-		StartTime: parseTime(r.FormValue("start_time")),
-		EndTime:   parseTime(r.FormValue("end_time")),
-		DueDate:   parseDate(r.FormValue("due_date")),
+		StartTime: parseTime(r.FormValue("start_time"), loc),
+		EndTime:   parseTime(r.FormValue("end_time"), loc),
+		DueDate:   parseDate(r.FormValue("due_date"), loc),
 		Notes:       r.FormValue("notes"),
 		TechNotes:   r.FormValue("tech_notes"),
 		Visits:      services.ParseVisits(r.FormValue("visits")),
@@ -221,16 +222,17 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		subtasks := services.ParseSubtasks(s)
 		params.Subtasks = &subtasks
 	}
+	loc := middleware.CompanyLocation(r.Context())
 	if st := r.FormValue("start_time"); st != "" {
-		t := parseTime(st)
+		t := parseTime(st, loc)
 		params.StartTime = &t
 	}
 	if et := r.FormValue("end_time"); et != "" {
-		t := parseTime(et)
+		t := parseTime(et, loc)
 		params.EndTime = &t
 	}
 	if dd := r.FormValue("due_date"); dd != "" {
-		t := parseDate(dd)
+		t := parseDate(dd, loc)
 		params.DueDate = &t
 	}
 	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
@@ -408,13 +410,13 @@ func jobRow(j *ent.Job, statuses []*ent.Status, custMap map[int64]string) templa
 	return r
 }
 
-func parseTime(v string) time.Time {
-	t, _ := time.ParseInLocation("2006-01-02T15:04", strings.TrimSpace(v), time.Local)
+func parseTime(v string, loc *time.Location) time.Time {
+	t, _ := time.ParseInLocation("2006-01-02T15:04", strings.TrimSpace(v), loc)
 	return t
 }
 
-func parseDate(v string) time.Time {
-	t, _ := time.ParseInLocation("2006-01-02", strings.TrimSpace(v), time.Local)
+func parseDate(v string, loc *time.Location) time.Time {
+	t, _ := time.ParseInLocation("2006-01-02", strings.TrimSpace(v), loc)
 	return t
 }
 

@@ -152,14 +152,15 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		taxRate = "0"
 	}
 
+	loc := middleware.CompanyLocation(r.Context())
 	params := services.InvoiceCreateParams{
 		CustomerID:  custID,
 		JobID:       jobID,
 		StatusID:    statusID,
 		Title:       r.FormValue("title"),
 		Notes:       r.FormValue("notes"),
-		InvoiceDate: parseDate(r.FormValue("invoice_date")),
-		DueDate:     parseDate(r.FormValue("due_date")),
+		InvoiceDate: parseDate(r.FormValue("invoice_date"), loc),
+		DueDate:     parseDate(r.FormValue("due_date"), loc),
 		TaxRate:     taxRate,
 		LineItems:    lineItems,
 		CustomFields: parseCustomFieldValues(r),
@@ -215,12 +216,13 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Notes:      formPtr(r.FormValue("notes")),
 		TaxRate:    taxRatePtr,
 	}
+	loc := middleware.CompanyLocation(r.Context())
 	if d := r.FormValue("invoice_date"); d != "" {
-		t := parseDate(d)
+		t := parseDate(d, loc)
 		params.InvoiceDate = &t
 	}
 	if d := r.FormValue("due_date"); d != "" {
-		t := parseDate(d)
+		t := parseDate(d, loc)
 		params.DueDate = &t
 	}
 	if lineItems != nil {

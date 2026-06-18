@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/services"
@@ -25,4 +26,15 @@ func Company(svc *services.CompanySettingsService) func(http.Handler) http.Handl
 func CompanyFromContext(ctx context.Context) *ent.CompanySettings {
 	cs, _ := ctx.Value(companyKey).(*ent.CompanySettings)
 	return cs
+}
+
+func CompanyLocation(ctx context.Context) *time.Location {
+	cs := CompanyFromContext(ctx)
+	if cs != nil && cs.Timezone != "" {
+		loc, err := time.LoadLocation(cs.Timezone)
+		if err == nil {
+			return loc
+		}
+	}
+	return time.UTC
 }

@@ -224,6 +224,7 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loc := middleware.CompanyLocation(r.Context())
 	params := services.ProjectCreateParams{
 		CustomerID:           custID,
 		Name:                 name,
@@ -231,8 +232,8 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		StatusID:             statusID,
 		LocationID:           locationID,
 		CompletionPercentage: completion,
-		StartTime:            parseDatePtr(r.FormValue("start_time")),
-		EndTime:              parseDatePtr(r.FormValue("end_time")),
+		StartTime:            parseDatePtr(r.FormValue("start_time"), loc),
+		EndTime:              parseDatePtr(r.FormValue("end_time"), loc),
 		Notes:                r.FormValue("notes"),
 		CustomFields:         parseCustomFieldValues(r),
 	}
@@ -310,6 +311,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loc := middleware.CompanyLocation(r.Context())
 	params := services.ProjectUpdateParams{
 		CustomerID:           int64Ptr(custID),
 		Name:                 formPtr(r.FormValue("name")),
@@ -317,8 +319,8 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		StatusID:             int64Ptr(statusID),
 		LocationID:           int64Ptr(locationID),
 		CompletionPercentage: &completion,
-		StartTime:            parseDatePtr(r.FormValue("start_time")),
-		EndTime:              parseDatePtr(r.FormValue("end_time")),
+		StartTime:            parseDatePtr(r.FormValue("start_time"), loc),
+		EndTime:              parseDatePtr(r.FormValue("end_time"), loc),
 		Notes:                formPtr(r.FormValue("notes")),
 		CustomFields:         strPtr(parseCustomFieldValues(r)),
 	}
@@ -422,12 +424,12 @@ func projectStatusID(p *ent.Project) int64 {
 	return *p.StatusID
 }
 
-func parseDatePtr(v string) *time.Time {
+func parseDatePtr(v string, loc *time.Location) *time.Time {
 	v = strings.TrimSpace(v)
 	if v == "" {
 		return nil
 	}
-	t, _ := time.ParseInLocation("2006-01-02", v, time.Local)
+	t, _ := time.ParseInLocation("2006-01-02", v, loc)
 	return &t
 }
 

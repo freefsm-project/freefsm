@@ -802,8 +802,8 @@ func badgeStyle(color string) string {
 	return "background:" + hexToRGBA(color, 0.15) + ";color:" + color + ";border-color:" + color
 }
 
-func today() string {
-	return time.Now().Format("2006-01-02")
+func today(ctx context.Context) string {
+	return time.Now().In(middleware.CompanyLocation(ctx)).Format("2006-01-02")
 }
 
 type ContactRow struct {
@@ -993,4 +993,52 @@ func timeEntryFormTitle() string {
 
 func timeEntryFormAction(id int64) string {
 	return fmt.Sprintf("/time-entries/%d", id)
+}
+
+func companyTimeLocation(ctx context.Context) *time.Location {
+	return middleware.CompanyLocation(ctx)
+}
+
+func commonTimezones() []string {
+	return []string{
+		"UTC",
+		"America/New_York",
+		"America/Chicago",
+		"America/Denver",
+		"America/Phoenix",
+		"America/Los_Angeles",
+		"America/Anchorage",
+		"Pacific/Honolulu",
+		"America/Toronto",
+		"America/Vancouver",
+		"America/Edmonton",
+		"America/Winnipeg",
+		"America/Halifax",
+		"America/St_Johns",
+		"America/Mexico_City",
+		"America/Puerto_Rico",
+		"America/Sao_Paulo",
+		"America/Argentina/Buenos_Aires",
+		"Europe/London",
+		"Europe/Paris",
+		"Europe/Berlin",
+		"Europe/Madrid",
+		"Europe/Rome",
+		"Europe/Amsterdam",
+		"Europe/Stockholm",
+		"Europe/Moscow",
+		"Europe/Istanbul",
+		"Asia/Dubai",
+		"Asia/Kolkata",
+		"Asia/Bangkok",
+		"Asia/Singapore",
+		"Asia/Shanghai",
+		"Asia/Tokyo",
+		"Asia/Seoul",
+		"Australia/Sydney",
+		"Australia/Melbourne",
+		"Australia/Perth",
+		"Pacific/Auckland",
+		"Pacific/Fiji",
+	}
 }

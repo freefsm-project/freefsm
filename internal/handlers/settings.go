@@ -49,6 +49,7 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		SmtpUser:       r.FormValue("smtp_user"),
 		SmtpPassword:   r.FormValue("smtp_password"),
 		SmtpFrom:       r.FormValue("smtp_from"),
+		Timezone:       r.FormValue("timezone"),
 	})
 	if r.URL.Path == "/setup/company" {
 		http.Redirect(w, r, "/?flash=Setup+complete", http.StatusSeeOther)

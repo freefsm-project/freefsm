@@ -47,6 +47,8 @@ const (
 	FieldSMTPPassword = "smtp_password"
 	// FieldSMTPFrom holds the string denoting the smtp_from field in the database.
 	FieldSMTPFrom = "smtp_from"
+	// FieldTimezone holds the string denoting the timezone field in the database.
+	FieldTimezone = "timezone"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -75,6 +77,7 @@ var Columns = []string{
 	FieldSMTPUser,
 	FieldSMTPPassword,
 	FieldSMTPFrom,
+	FieldTimezone,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -124,6 +127,8 @@ var (
 	DefaultSMTPPassword string
 	// DefaultSMTPFrom holds the default value on creation for the "smtp_from" field.
 	DefaultSMTPFrom string
+	// DefaultTimezone holds the default value on creation for the "timezone" field.
+	DefaultTimezone string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -223,6 +228,11 @@ func BySMTPPassword(opts ...sql.OrderTermOption) OrderOption {
 // BySMTPFrom orders the results by the smtp_from field.
 func BySMTPFrom(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSMTPFrom, opts...).ToFunc()
+}
+
+// ByTimezone orders the results by the timezone field.
+func ByTimezone(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTimezone, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

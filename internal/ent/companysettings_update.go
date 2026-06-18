@@ -280,6 +280,20 @@ func (_u *CompanySettingsUpdate) SetNillableSMTPFrom(v *string) *CompanySettings
 	return _u
 }
 
+// SetTimezone sets the "timezone" field.
+func (_u *CompanySettingsUpdate) SetTimezone(v string) *CompanySettingsUpdate {
+	_u.mutation.SetTimezone(v)
+	return _u
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (_u *CompanySettingsUpdate) SetNillableTimezone(v *string) *CompanySettingsUpdate {
+	if v != nil {
+		_u.SetTimezone(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CompanySettingsUpdate) SetUpdatedAt(v time.Time) *CompanySettingsUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -392,6 +406,9 @@ func (_u *CompanySettingsUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.SMTPFrom(); ok {
 		_spec.SetField(companysettings.FieldSMTPFrom, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Timezone(); ok {
+		_spec.SetField(companysettings.FieldTimezone, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(companysettings.FieldUpdatedAt, field.TypeTime, value)
@@ -668,6 +685,20 @@ func (_u *CompanySettingsUpdateOne) SetNillableSMTPFrom(v *string) *CompanySetti
 	return _u
 }
 
+// SetTimezone sets the "timezone" field.
+func (_u *CompanySettingsUpdateOne) SetTimezone(v string) *CompanySettingsUpdateOne {
+	_u.mutation.SetTimezone(v)
+	return _u
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (_u *CompanySettingsUpdateOne) SetNillableTimezone(v *string) *CompanySettingsUpdateOne {
+	if v != nil {
+		_u.SetTimezone(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CompanySettingsUpdateOne) SetUpdatedAt(v time.Time) *CompanySettingsUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -810,6 +841,9 @@ func (_u *CompanySettingsUpdateOne) sqlSave(ctx context.Context) (_node *Company
 	}
 	if value, ok := _u.mutation.SMTPFrom(); ok {
 		_spec.SetField(companysettings.FieldSMTPFrom, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Timezone(); ok {
+		_spec.SetField(companysettings.FieldTimezone, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(companysettings.FieldUpdatedAt, field.TypeTime, value)

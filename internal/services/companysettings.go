@@ -36,6 +36,7 @@ type CompanySettingsParams struct {
 	SmtpUser        string
 	SmtpPassword    string
 	SmtpFrom        string
+	Timezone        string
 }
 
 func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsParams) error {
@@ -61,6 +62,7 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetSMTPUser(p.SmtpUser).
 		SetSMTPPassword(p.SmtpPassword).
 		SetSMTPFrom(p.SmtpFrom).
+		SetTimezone(p.Timezone).
 		Save(ctx)
 	return err
 }

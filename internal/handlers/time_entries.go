@@ -59,9 +59,10 @@ func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	loc := middleware.CompanyLocation(r.Context())
 	rows := make([]templates.TimeEntryRow, len(entries))
 	for i, e := range entries {
-		rows[i] = timeEntryToRow(e, userNames, user)
+		rows[i] = timeEntryToRow(e, userNames, user, loc)
 	}
 
 	var users []templates.UserRow
@@ -186,15 +187,16 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
+		loc := middleware.CompanyLocation(r.Context())
 		clockOutStr := ""
 		if entry.ClockOut != nil {
-			clockOutStr = entry.ClockOut.Format("2006-01-02T15:04")
+			clockOutStr = entry.ClockOut.In(loc).Format("2006-01-02T15:04:05")
 		}
 
 		data := templates.TimeEntryFormPageData{
 			Entry: &templates.TimeEntryFormEntry{
 				ID:       entry.ID,
-				ClockIn:  entry.ClockIn.Format("2006-01-02T15:04"),
+				ClockIn:  entry.ClockIn.In(loc).Format("2006-01-02T15:04:05"),
 				ClockOut: clockOutStr,
 				Notes:    entry.Notes,
 			},
@@ -211,13 +213,14 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	params := services.TimeEntryUpdateParams{
 		IsManual: boolPtr(true),
 	}
+	loc := middleware.CompanyLocation(r.Context())
 	if clockIn := r.FormValue("clock_in"); clockIn != "" {
-		if t, err := time.Parse("2006-01-02T15:04", clockIn); err == nil {
+		if t, err := time.ParseInLocation("2006-01-02T15:04:05", clockIn, loc); err == nil {
 			params.ClockIn = &t
 		}
 	}
 	if clockOut := r.FormValue("clock_out"); clockOut != "" {
-		if t, err := time.Parse("2006-01-02T15:04", clockOut); err == nil {
+		if t, err := time.ParseInLocation("2006-01-02T15:04:05", clockOut, loc); err == nil {
 			params.ClockOut = &t
 		}
 	}
@@ -265,11 +268,11 @@ func (h *TimeEntryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/time-entries?flash=Time+entry+deleted", http.StatusSeeOther)
 }
 
-func timeEntryToRow(e *ent.TimeEntry, userNames map[int64]string, currentUser *middleware.UserInfo) templates.TimeEntryRow {
-	clockIn := e.ClockIn.Format("Jan 2, 2006 3:04 PM")
+func timeEntryToRow(e *ent.TimeEntry, userNames map[int64]string, currentUser *middleware.UserInfo, loc *time.Location) templates.TimeEntryRow {
+	clockIn := e.ClockIn.In(loc).Format("Jan 2, 2006 3:04 PM")
 	clockOut := ""
 	if e.ClockOut != nil {
-		clockOut = e.ClockOut.Format("Jan 2, 2006 3:04 PM")
+		clockOut = e.ClockOut.In(loc).Format("Jan 2, 2006 3:04 PM")
 	}
 
 	duration := services.TimeEntryDuration(e.ClockIn, safeTime(e.ClockOut))

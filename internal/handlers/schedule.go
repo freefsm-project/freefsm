@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 )
@@ -34,9 +35,10 @@ func (h *ScheduleHandler) Index(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
-	now := time.Now()
-	year, month := parseYearMonth(r, now)
-	start, end := monthRange(year, month)
+	loc := middleware.CompanyLocation(r.Context())
+	now := time.Now().In(loc)
+	year, month := now.Year(), now.Month()
+	start, end := monthRange(year, month, loc)
 	jobs, _ := h.jobSvc.ListByDateRange(r.Context(), start, end)
 
 	customers, _ := h.custSvc.ListAll(r.Context())
@@ -47,9 +49,9 @@ func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
 		calJobs[i] = calendarJob(j, custMap, statuses)
 	}
 
-	weeks := buildMonthGrid(year, month, calJobs)
+	weeks := buildMonthGrid(year, month, calJobs, loc)
 	data := templates.SchedulePageData{
-		Title:     time.Date(year, month, 1, 0, 0, 0, 0, time.Local).Format("January 2006"),
+		Title:     time.Date(year, month, 1, 0, 0, 0, 0, loc).Format("January 2006"),
 		Weeks:     weeks,
 		PrevYear:  prevMonthYear(year, month),
 		PrevMonth: prevMonthMonth(year, month),
@@ -61,8 +63,9 @@ func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
-	date := parseDateParam(r, "date")
-	start, end := weekRange(date)
+	loc := middleware.CompanyLocation(r.Context())
+	date := parseDateParam(r, "date", loc)
+	start, end := weekRange(date, loc)
 
 	jobs, _ := h.jobSvc.ListByDateRange(r.Context(), start, end)
 	customers, _ := h.custSvc.ListAll(r.Context())
@@ -74,7 +77,7 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 			Date:    d.Format("2006-01-02"),
 			DayName: d.Format("Mon"),
 			DayNum:  d.Day(),
-			IsToday: isToday(d),
+			IsToday: isToday(d, loc),
 		}
 		for _, j := range jobs {
 			cj := calendarJob(j, custMap, statuses)
@@ -101,8 +104,9 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
-	date := parseDateParam(r, "date")
-	start := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.Local)
+	loc := middleware.CompanyLocation(r.Context())
+	date := parseDateParam(r, "date", loc)
+	start := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
 	end := start.AddDate(0, 0, 1).Add(-time.Second)
 
 	jobs, _ := h.jobSvc.ListByDateRange(r.Context(), start, end)
@@ -162,22 +166,22 @@ func calendarJob(j *ent.Job, custMap map[int64]string, statuses []*ent.Status) t
 	return cj
 }
 
-func parseDateParam(r *http.Request, key string) time.Time {
+func parseDateParam(r *http.Request, key string, loc *time.Location) time.Time {
 	ds := r.URL.Query().Get(key)
 	if ds == "" {
-		return time.Now()
+		return time.Now().In(loc)
 	}
-	t, err := time.Parse("2006-01-02", ds)
+	t, err := time.ParseInLocation("2006-01-02", ds, loc)
 	if err != nil {
-		return time.Now()
+		return time.Now().In(loc)
 	}
 	return t
 }
 
-func weekRange(date time.Time) (time.Time, time.Time) {
+func weekRange(date time.Time, loc *time.Location) (time.Time, time.Time) {
 	weekday := int(date.Weekday())
 	start := date.AddDate(0, 0, -weekday)
-	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.Local)
+	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, loc)
 	end := start.AddDate(0, 0, 7).Add(-time.Second)
 	return start, end
 }
@@ -196,8 +200,8 @@ func parseYearMonth(r *http.Request, now time.Time) (int, time.Month) {
 	return now.Year(), now.Month()
 }
 
-func monthRange(year int, month time.Month) (time.Time, time.Time) {
-	start := time.Date(year, month, 1, 0, 0, 0, 0, time.Local)
+func monthRange(year int, month time.Month, loc *time.Location) (time.Time, time.Time) {
+	start := time.Date(year, month, 1, 0, 0, 0, 0, loc)
 	end := start.AddDate(0, 1, 0).Add(-time.Second)
 	return start, end
 }
@@ -222,10 +226,10 @@ func nextMonthMonth(year int, month time.Month) int {
 	return int(month) + 1
 }
 
-func buildMonthGrid(year int, month time.Month, jobs []templates.CalendarJob) []templates.WeekData {
-	first := time.Date(year, month, 1, 0, 0, 0, 0, time.Local)
+func buildMonthGrid(year int, month time.Month, jobs []templates.CalendarJob, loc *time.Location) []templates.WeekData {
+	first := time.Date(year, month, 1, 0, 0, 0, 0, loc)
 	startDay := int(first.Weekday())
-	daysInMonth := time.Date(year, month+1, 0, 0, 0, 0, 0, time.Local).Day()
+	daysInMonth := time.Date(year, month+1, 0, 0, 0, 0, 0, loc).Day()
 
 	jobsByDay := make(map[int][]templates.CalendarJob)
 	for _, j := range jobs {
@@ -240,10 +244,10 @@ func buildMonthGrid(year int, month time.Month, jobs []templates.CalendarJob) []
 			if (w == 0 && d < startDay) || day > daysInMonth {
 				days = append(days, templates.DayData{DayNum: 0, IsToday: false})
 			} else {
-				date := time.Date(year, month, day, 0, 0, 0, 0, time.Local)
+				date := time.Date(year, month, day, 0, 0, 0, 0, loc)
 				days = append(days, templates.DayData{
 					DayNum:  day,
-					IsToday: isToday(date),
+					IsToday: isToday(date, loc),
 					Date:    date.Format("2006-01-02"),
 					Jobs:    jobsByDay[day],
 				})
@@ -255,7 +259,7 @@ func buildMonthGrid(year int, month time.Month, jobs []templates.CalendarJob) []
 	return weeks
 }
 
-func isToday(d time.Time) bool {
-	n := time.Now()
+func isToday(d time.Time, loc *time.Location) bool {
+	n := time.Now().In(loc)
 	return d.Year() == n.Year() && d.Month() == n.Month() && d.Day() == n.Day()
 }

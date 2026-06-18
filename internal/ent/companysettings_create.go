@@ -258,6 +258,20 @@ func (_c *CompanySettingsCreate) SetNillableSMTPFrom(v *string) *CompanySettings
 	return _c
 }
 
+// SetTimezone sets the "timezone" field.
+func (_c *CompanySettingsCreate) SetTimezone(v string) *CompanySettingsCreate {
+	_c.mutation.SetTimezone(v)
+	return _c
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableTimezone(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetTimezone(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *CompanySettingsCreate) SetCreatedAt(v time.Time) *CompanySettingsCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -395,6 +409,10 @@ func (_c *CompanySettingsCreate) defaults() {
 		v := companysettings.DefaultSMTPFrom
 		_c.mutation.SetSMTPFrom(v)
 	}
+	if _, ok := _c.mutation.Timezone(); !ok {
+		v := companysettings.DefaultTimezone
+		_c.mutation.SetTimezone(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := companysettings.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -457,6 +475,9 @@ func (_c *CompanySettingsCreate) check() error {
 	}
 	if _, ok := _c.mutation.SMTPFrom(); !ok {
 		return &ValidationError{Name: "smtp_from", err: errors.New(`ent: missing required field "CompanySettings.smtp_from"`)}
+	}
+	if _, ok := _c.mutation.Timezone(); !ok {
+		return &ValidationError{Name: "timezone", err: errors.New(`ent: missing required field "CompanySettings.timezone"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "CompanySettings.created_at"`)}
@@ -563,6 +584,10 @@ func (_c *CompanySettingsCreate) createSpec() (*CompanySettings, *sqlgraph.Creat
 	if value, ok := _c.mutation.SMTPFrom(); ok {
 		_spec.SetField(companysettings.FieldSMTPFrom, field.TypeString, value)
 		_node.SMTPFrom = value
+	}
+	if value, ok := _c.mutation.Timezone(); ok {
+		_spec.SetField(companysettings.FieldTimezone, field.TypeString, value)
+		_node.Timezone = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(companysettings.FieldCreatedAt, field.TypeTime, value)

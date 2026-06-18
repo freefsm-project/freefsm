@@ -52,6 +52,7 @@ var (
 		{Name: "smtp_user", Type: field.TypeString, Default: ""},
 		{Name: "smtp_password", Type: field.TypeString, Default: ""},
 		{Name: "smtp_from", Type: field.TypeString, Default: ""},
+		{Name: "timezone", Type: field.TypeString, Default: "UTC"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}

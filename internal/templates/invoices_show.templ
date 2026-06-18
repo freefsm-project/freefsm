@@ -111,7 +111,7 @@ templ InvoiceShow(p InvoiceDetail) {
 				<div class="grid">
 					<label>
 						Date
-						<input type="date" name="date" value={ today() }/>
+						<input type="date" name="date" value={ today(ctx) }/>
 					</label>
 					<label>
 						Reference

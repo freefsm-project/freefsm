@@ -757,6 +757,7 @@ type CompanySettingsMutation struct {
 	smtp_user           *string
 	smtp_password       *string
 	smtp_from           *string
+	timezone            *string
 	created_at          *time.Time
 	updated_at          *time.Time
 	clearedFields       map[string]struct{}
@@ -1521,6 +1522,42 @@ func (m *CompanySettingsMutation) ResetSMTPFrom() {
 	m.smtp_from = nil
 }
 
+// SetTimezone sets the "timezone" field.
+func (m *CompanySettingsMutation) SetTimezone(s string) {
+	m.timezone = &s
+}
+
+// Timezone returns the value of the "timezone" field in the mutation.
+func (m *CompanySettingsMutation) Timezone() (r string, exists bool) {
+	v := m.timezone
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTimezone returns the old "timezone" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldTimezone(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTimezone is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTimezone requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTimezone: %w", err)
+	}
+	return oldValue.Timezone, nil
+}
+
+// ResetTimezone resets all changes to the "timezone" field.
+func (m *CompanySettingsMutation) ResetTimezone() {
+	m.timezone = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *CompanySettingsMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -1627,7 +1664,7 @@ func (m *CompanySettingsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompanySettingsMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 20)
 	if m.business_name != nil {
 		fields = append(fields, companysettings.FieldBusinessName)
 	}
@@ -1679,6 +1716,9 @@ func (m *CompanySettingsMutation) Fields() []string {
 	if m.smtp_from != nil {
 		fields = append(fields, companysettings.FieldSMTPFrom)
 	}
+	if m.timezone != nil {
+		fields = append(fields, companysettings.FieldTimezone)
+	}
 	if m.created_at != nil {
 		fields = append(fields, companysettings.FieldCreatedAt)
 	}
@@ -1727,6 +1767,8 @@ func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 		return m.SMTPPassword()
 	case companysettings.FieldSMTPFrom:
 		return m.SMTPFrom()
+	case companysettings.FieldTimezone:
+		return m.Timezone()
 	case companysettings.FieldCreatedAt:
 		return m.CreatedAt()
 	case companysettings.FieldUpdatedAt:
@@ -1774,6 +1816,8 @@ func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (en
 		return m.OldSMTPPassword(ctx)
 	case companysettings.FieldSMTPFrom:
 		return m.OldSMTPFrom(ctx)
+	case companysettings.FieldTimezone:
+		return m.OldTimezone(ctx)
 	case companysettings.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case companysettings.FieldUpdatedAt:
@@ -1905,6 +1949,13 @@ func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSMTPFrom(v)
+		return nil
+	case companysettings.FieldTimezone:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTimezone(v)
 		return nil
 	case companysettings.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -2046,6 +2097,9 @@ func (m *CompanySettingsMutation) ResetField(name string) error {
 		return nil
 	case companysettings.FieldSMTPFrom:
 		m.ResetSMTPFrom()
+		return nil
+	case companysettings.FieldTimezone:
+		m.ResetTimezone()
 		return nil
 	case companysettings.FieldCreatedAt:
 		m.ResetCreatedAt()

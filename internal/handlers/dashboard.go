@@ -19,8 +19,9 @@ func NewDashboardHandler(dashboardSvc *services.DashboardService, timeEntrySvc *
 }
 
 func (h *DashboardHandler) Index(w http.ResponseWriter, r *http.Request) {
-	stats, _ := h.dashboardSvc.Stats(r.Context())
+	stats, _ := h.dashboardSvc.Stats(r.Context(), middleware.CompanyLocation(r.Context()))
 
+	loc := middleware.CompanyLocation(r.Context())
 	clockWidget := templates.ClockWidgetData{}
 	user, _ := middleware.UserFromContext(r.Context())
 	if user != nil {
@@ -30,7 +31,7 @@ func (h *DashboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 			clockWidget = templates.ClockWidgetData{
 				IsClockedIn: true,
 				Duration:    duration,
-				ClockInTime: activeEntry.ClockIn.Format("Jan 2, 2006 3:04 PM"),
+				ClockInTime: activeEntry.ClockIn.In(loc).Format("Jan 2, 2006 3:04 PM"),
 			}
 		}
 	}

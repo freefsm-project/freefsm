@@ -79,6 +79,15 @@ templ SettingsPage(p SettingsPageData) {
 				</button>
 			</div>
 			<div id="test-email-result"></div>
+			<h3>Regional Settings</h3>
+			<label>
+				Timezone
+				<select name="timezone">
+					for _, tz := range commonTimezones() {
+						<option value={ tz } selected?={ p.Settings.Timezone == tz }>{ tz }</option>
+					}
+				</select>
+			</label>
 			<h3>Document Settings</h3>
 			<div class="grid">
 				<label>

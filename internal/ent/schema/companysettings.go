@@ -39,6 +39,7 @@ func (CompanySettings) Fields() []ent.Field {
 		field.String("smtp_user").Default(""),
 		field.String("smtp_password").Default(""),
 		field.String("smtp_from").Default(""),
+		field.String("timezone").Default("UTC"),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

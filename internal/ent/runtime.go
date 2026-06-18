@@ -120,12 +120,16 @@ func init() {
 	companysettingsDescSMTPFrom := companysettingsFields[17].Descriptor()
 	// companysettings.DefaultSMTPFrom holds the default value on creation for the smtp_from field.
 	companysettings.DefaultSMTPFrom = companysettingsDescSMTPFrom.Default.(string)
+	// companysettingsDescTimezone is the schema descriptor for timezone field.
+	companysettingsDescTimezone := companysettingsFields[18].Descriptor()
+	// companysettings.DefaultTimezone holds the default value on creation for the timezone field.
+	companysettings.DefaultTimezone = companysettingsDescTimezone.Default.(string)
 	// companysettingsDescCreatedAt is the schema descriptor for created_at field.
-	companysettingsDescCreatedAt := companysettingsFields[18].Descriptor()
+	companysettingsDescCreatedAt := companysettingsFields[19].Descriptor()
 	// companysettings.DefaultCreatedAt holds the default value on creation for the created_at field.
 	companysettings.DefaultCreatedAt = companysettingsDescCreatedAt.Default.(func() time.Time)
 	// companysettingsDescUpdatedAt is the schema descriptor for updated_at field.
-	companysettingsDescUpdatedAt := companysettingsFields[19].Descriptor()
+	companysettingsDescUpdatedAt := companysettingsFields[20].Descriptor()
 	// companysettings.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	companysettings.DefaultUpdatedAt = companysettingsDescUpdatedAt.Default.(func() time.Time)
 	// companysettings.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

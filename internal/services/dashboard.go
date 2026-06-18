@@ -66,9 +66,9 @@ func NewDashboardService(client *ent.Client) *DashboardService {
 	return &DashboardService{client: client}
 }
 
-func (s *DashboardService) Stats(ctx context.Context) (DashboardStats, error) {
-	now := time.Now()
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.Local)
+func (s *DashboardService) Stats(ctx context.Context, loc *time.Location) (DashboardStats, error) {
+	now := time.Now().In(loc)
+	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
 
 	// Basic counts
 	totalCustomers, _ := s.client.Customer.Query().Count(ctx)

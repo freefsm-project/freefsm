@@ -9,7 +9,9 @@ VERSION   ?= $(shell git describe --tags 2>/dev/null || echo "0.1.0")
 LDFLAGS   := -s -w -X $(MODULE)/internal/config.Version=$(VERSION) -X $(MODULE)/internal/config.Commit=$(COMMIT)
 
 export CGO_ENABLED
-export PATH := $(HOME)/go/bin:$(PATH)
+_PATH_EXTRA := $(HOME)/go/bin
+PATH := $(_PATH_EXTRA):$(PATH)
+export PATH
 
 .PHONY: all build clean install generate ent templ sqlc
 
