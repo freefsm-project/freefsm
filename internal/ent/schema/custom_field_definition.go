@@ -23,6 +23,7 @@ func (CustomFieldDefinition) Annotations() []schema.Annotation {
 func (CustomFieldDefinition) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.String("object_type").NotEmpty(),
 		field.String("name").NotEmpty(),
 		field.String("field_type").NotEmpty(),

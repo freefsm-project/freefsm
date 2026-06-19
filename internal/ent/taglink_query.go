@@ -262,12 +262,12 @@ func (_q *TagLinkQuery) Clone() *TagLinkQuery {
 // Example:
 //
 //	var v []struct {
-//		TagID int64 `json:"tag_id,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.TagLink.Query().
-//		GroupBy(taglink.FieldTagID).
+//		GroupBy(taglink.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *TagLinkQuery) GroupBy(field string, fields ...string) *TagLinkGroupBy {
@@ -285,11 +285,11 @@ func (_q *TagLinkQuery) GroupBy(field string, fields ...string) *TagLinkGroupBy 
 // Example:
 //
 //	var v []struct {
-//		TagID int64 `json:"tag_id,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.TagLink.Query().
-//		Select(taglink.FieldTagID).
+//		Select(taglink.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *TagLinkQuery) Select(fields ...string) *TagLinkSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

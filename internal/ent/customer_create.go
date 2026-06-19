@@ -20,6 +20,20 @@ type CustomerCreate struct {
 	hooks    []Hook
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_c *CustomerCreate) SetCompanyID(v int64) *CustomerCreate {
+	_c.mutation.SetCompanyID(v)
+	return _c
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_c *CustomerCreate) SetNillableCompanyID(v *int64) *CustomerCreate {
+	if v != nil {
+		_c.SetCompanyID(*v)
+	}
+	return _c
+}
+
 // SetFirstName sets the "first_name" field.
 func (_c *CustomerCreate) SetFirstName(v string) *CustomerCreate {
 	_c.mutation.SetFirstName(v)
@@ -593,6 +607,10 @@ func (_c *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.CompanyID(); ok {
+		_spec.SetField(customer.FieldCompanyID, field.TypeInt64, value)
+		_node.CompanyID = &value
 	}
 	if value, ok := _c.mutation.FirstName(); ok {
 		_spec.SetField(customer.FieldFirstName, field.TypeString, value)

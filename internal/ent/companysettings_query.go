@@ -262,12 +262,12 @@ func (_q *CompanySettingsQuery) Clone() *CompanySettingsQuery {
 // Example:
 //
 //	var v []struct {
-//		BusinessName string `json:"business_name,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.CompanySettings.Query().
-//		GroupBy(companysettings.FieldBusinessName).
+//		GroupBy(companysettings.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *CompanySettingsQuery) GroupBy(field string, fields ...string) *CompanySettingsGroupBy {
@@ -285,11 +285,11 @@ func (_q *CompanySettingsQuery) GroupBy(field string, fields ...string) *Company
 // Example:
 //
 //	var v []struct {
-//		BusinessName string `json:"business_name,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.CompanySettings.Query().
-//		Select(companysettings.FieldBusinessName).
+//		Select(companysettings.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *CompanySettingsQuery) Select(fields ...string) *CompanySettingsSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

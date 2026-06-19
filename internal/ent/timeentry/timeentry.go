@@ -13,6 +13,8 @@ const (
 	Label = "time_entry"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldCompanyID holds the string denoting the company_id field in the database.
+	FieldCompanyID = "company_id"
 	// FieldUserID holds the string denoting the user_id field in the database.
 	FieldUserID = "user_id"
 	// FieldIsManual holds the string denoting the is_manual field in the database.
@@ -38,6 +40,7 @@ const (
 // Columns holds all SQL columns for timeentry fields.
 var Columns = []string{
 	FieldID,
+	FieldCompanyID,
 	FieldUserID,
 	FieldIsManual,
 	FieldClockIn,
@@ -78,6 +81,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByCompanyID orders the results by the company_id field.
+func ByCompanyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCompanyID, opts...).ToFunc()
 }
 
 // ByUserID orders the results by the user_id field.

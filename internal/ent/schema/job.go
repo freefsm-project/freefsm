@@ -23,6 +23,7 @@ func (Job) Annotations() []schema.Annotation {
 func (Job) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.Int64("customer_id"),
 		field.Int64("project_id").Optional().Nillable(),
 		field.Int64("location_id").Optional().Nillable(),

@@ -262,12 +262,12 @@ func (_q *ItemQuery) Clone() *ItemQuery {
 // Example:
 //
 //	var v []struct {
-//		Name string `json:"name,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Item.Query().
-//		GroupBy(item.FieldName).
+//		GroupBy(item.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *ItemQuery) GroupBy(field string, fields ...string) *ItemGroupBy {
@@ -285,11 +285,11 @@ func (_q *ItemQuery) GroupBy(field string, fields ...string) *ItemGroupBy {
 // Example:
 //
 //	var v []struct {
-//		Name string `json:"name,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.Item.Query().
-//		Select(item.FieldName).
+//		Select(item.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *ItemQuery) Select(fields ...string) *ItemSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

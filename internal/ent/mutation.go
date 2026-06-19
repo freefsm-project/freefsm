@@ -67,6 +67,8 @@ type CommentMutation struct {
 	op            Op
 	typ           string
 	id            *int64
+	company_id    *int64
+	addcompany_id *int64
 	object_type   *string
 	object_id     *int64
 	addobject_id  *int64
@@ -183,6 +185,76 @@ func (m *CommentMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *CommentMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *CommentMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the Comment entity.
+// If the Comment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CommentMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *CommentMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *CommentMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *CommentMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[comment.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *CommentMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[comment.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *CommentMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, comment.FieldCompanyID)
 }
 
 // SetObjectType sets the "object_type" field.
@@ -475,7 +547,10 @@ func (m *CommentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CommentMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 7)
+	if m.company_id != nil {
+		fields = append(fields, comment.FieldCompanyID)
+	}
 	if m.object_type != nil {
 		fields = append(fields, comment.FieldObjectType)
 	}
@@ -502,6 +577,8 @@ func (m *CommentMutation) Fields() []string {
 // schema.
 func (m *CommentMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case comment.FieldCompanyID:
+		return m.CompanyID()
 	case comment.FieldObjectType:
 		return m.ObjectType()
 	case comment.FieldObjectID:
@@ -523,6 +600,8 @@ func (m *CommentMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *CommentMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case comment.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case comment.FieldObjectType:
 		return m.OldObjectType(ctx)
 	case comment.FieldObjectID:
@@ -544,6 +623,13 @@ func (m *CommentMutation) OldField(ctx context.Context, name string) (ent.Value,
 // type.
 func (m *CommentMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case comment.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case comment.FieldObjectType:
 		v, ok := value.(string)
 		if !ok {
@@ -594,6 +680,9 @@ func (m *CommentMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *CommentMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, comment.FieldCompanyID)
+	}
 	if m.addobject_id != nil {
 		fields = append(fields, comment.FieldObjectID)
 	}
@@ -608,6 +697,8 @@ func (m *CommentMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *CommentMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case comment.FieldCompanyID:
+		return m.AddedCompanyID()
 	case comment.FieldObjectID:
 		return m.AddedObjectID()
 	case comment.FieldAuthorID:
@@ -621,6 +712,13 @@ func (m *CommentMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *CommentMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case comment.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case comment.FieldObjectID:
 		v, ok := value.(int64)
 		if !ok {
@@ -642,7 +740,11 @@ func (m *CommentMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *CommentMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(comment.FieldCompanyID) {
+		fields = append(fields, comment.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -655,6 +757,11 @@ func (m *CommentMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *CommentMutation) ClearField(name string) error {
+	switch name {
+	case comment.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown Comment nullable field %s", name)
 }
 
@@ -662,6 +769,9 @@ func (m *CommentMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *CommentMutation) ResetField(name string) error {
 	switch name {
+	case comment.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case comment.FieldObjectType:
 		m.ResetObjectType()
 		return nil
@@ -738,6 +848,8 @@ type CompanySettingsMutation struct {
 	op                         Op
 	typ                        string
 	id                         *int64
+	company_id                 *int64
+	addcompany_id              *int64
 	business_name              *string
 	address                    *string
 	city                       *string
@@ -874,6 +986,76 @@ func (m *CompanySettingsMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *CompanySettingsMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *CompanySettingsMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *CompanySettingsMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *CompanySettingsMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *CompanySettingsMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[companysettings.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *CompanySettingsMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[companysettings.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *CompanySettingsMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, companysettings.FieldCompanyID)
 }
 
 // SetBusinessName sets the "business_name" field.
@@ -1870,7 +2052,10 @@ func (m *CompanySettingsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompanySettingsMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
+	if m.company_id != nil {
+		fields = append(fields, companysettings.FieldCompanyID)
+	}
 	if m.business_name != nil {
 		fields = append(fields, companysettings.FieldBusinessName)
 	}
@@ -1954,6 +2139,8 @@ func (m *CompanySettingsMutation) Fields() []string {
 // schema.
 func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case companysettings.FieldCompanyID:
+		return m.CompanyID()
 	case companysettings.FieldBusinessName:
 		return m.BusinessName()
 	case companysettings.FieldAddress:
@@ -2013,6 +2200,8 @@ func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case companysettings.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case companysettings.FieldBusinessName:
 		return m.OldBusinessName(ctx)
 	case companysettings.FieldAddress:
@@ -2072,6 +2261,13 @@ func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (en
 // type.
 func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case companysettings.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case companysettings.FieldBusinessName:
 		v, ok := value.(string)
 		if !ok {
@@ -2255,6 +2451,9 @@ func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *CompanySettingsMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, companysettings.FieldCompanyID)
+	}
 	if m.adddefault_due_days != nil {
 		fields = append(fields, companysettings.FieldDefaultDueDays)
 	}
@@ -2272,6 +2471,8 @@ func (m *CompanySettingsMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *CompanySettingsMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case companysettings.FieldCompanyID:
+		return m.AddedCompanyID()
 	case companysettings.FieldDefaultDueDays:
 		return m.AddedDefaultDueDays()
 	case companysettings.FieldSMTPPort:
@@ -2287,6 +2488,13 @@ func (m *CompanySettingsMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *CompanySettingsMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case companysettings.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case companysettings.FieldDefaultDueDays:
 		v, ok := value.(int)
 		if !ok {
@@ -2315,7 +2523,11 @@ func (m *CompanySettingsMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *CompanySettingsMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(companysettings.FieldCompanyID) {
+		fields = append(fields, companysettings.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -2328,6 +2540,11 @@ func (m *CompanySettingsMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *CompanySettingsMutation) ClearField(name string) error {
+	switch name {
+	case companysettings.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown CompanySettings nullable field %s", name)
 }
 
@@ -2335,6 +2552,9 @@ func (m *CompanySettingsMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *CompanySettingsMutation) ResetField(name string) error {
 	switch name {
+	case companysettings.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case companysettings.FieldBusinessName:
 		m.ResetBusinessName()
 		return nil
@@ -2468,6 +2688,8 @@ type CustomFieldDefinitionMutation struct {
 	op            Op
 	typ           string
 	id            *int64
+	company_id    *int64
+	addcompany_id *int64
 	object_type   *string
 	name          *string
 	field_type    *string
@@ -2585,6 +2807,76 @@ func (m *CustomFieldDefinitionMutation) IDs(ctx context.Context) ([]int64, error
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *CustomFieldDefinitionMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *CustomFieldDefinitionMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *CustomFieldDefinitionMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *CustomFieldDefinitionMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *CustomFieldDefinitionMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[customfielddefinition.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *CustomFieldDefinitionMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[customfielddefinition.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *CustomFieldDefinitionMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, customfielddefinition.FieldCompanyID)
 }
 
 // SetObjectType sets the "object_type" field.
@@ -2929,7 +3221,10 @@ func (m *CustomFieldDefinitionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomFieldDefinitionMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
+	if m.company_id != nil {
+		fields = append(fields, customfielddefinition.FieldCompanyID)
+	}
 	if m.object_type != nil {
 		fields = append(fields, customfielddefinition.FieldObjectType)
 	}
@@ -2962,6 +3257,8 @@ func (m *CustomFieldDefinitionMutation) Fields() []string {
 // schema.
 func (m *CustomFieldDefinitionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case customfielddefinition.FieldCompanyID:
+		return m.CompanyID()
 	case customfielddefinition.FieldObjectType:
 		return m.ObjectType()
 	case customfielddefinition.FieldName:
@@ -2987,6 +3284,8 @@ func (m *CustomFieldDefinitionMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *CustomFieldDefinitionMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case customfielddefinition.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case customfielddefinition.FieldObjectType:
 		return m.OldObjectType(ctx)
 	case customfielddefinition.FieldName:
@@ -3012,6 +3311,13 @@ func (m *CustomFieldDefinitionMutation) OldField(ctx context.Context, name strin
 // type.
 func (m *CustomFieldDefinitionMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case customfielddefinition.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case customfielddefinition.FieldObjectType:
 		v, ok := value.(string)
 		if !ok {
@@ -3076,6 +3382,9 @@ func (m *CustomFieldDefinitionMutation) SetField(name string, value ent.Value) e
 // this mutation.
 func (m *CustomFieldDefinitionMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, customfielddefinition.FieldCompanyID)
+	}
 	if m.addsort_order != nil {
 		fields = append(fields, customfielddefinition.FieldSortOrder)
 	}
@@ -3087,6 +3396,8 @@ func (m *CustomFieldDefinitionMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *CustomFieldDefinitionMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case customfielddefinition.FieldCompanyID:
+		return m.AddedCompanyID()
 	case customfielddefinition.FieldSortOrder:
 		return m.AddedSortOrder()
 	}
@@ -3098,6 +3409,13 @@ func (m *CustomFieldDefinitionMutation) AddedField(name string) (ent.Value, bool
 // type.
 func (m *CustomFieldDefinitionMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case customfielddefinition.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case customfielddefinition.FieldSortOrder:
 		v, ok := value.(int)
 		if !ok {
@@ -3112,7 +3430,11 @@ func (m *CustomFieldDefinitionMutation) AddField(name string, value ent.Value) e
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *CustomFieldDefinitionMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(customfielddefinition.FieldCompanyID) {
+		fields = append(fields, customfielddefinition.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -3125,6 +3447,11 @@ func (m *CustomFieldDefinitionMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *CustomFieldDefinitionMutation) ClearField(name string) error {
+	switch name {
+	case customfielddefinition.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown CustomFieldDefinition nullable field %s", name)
 }
 
@@ -3132,6 +3459,9 @@ func (m *CustomFieldDefinitionMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *CustomFieldDefinitionMutation) ResetField(name string) error {
 	switch name {
+	case customfielddefinition.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case customfielddefinition.FieldObjectType:
 		m.ResetObjectType()
 		return nil
@@ -3214,6 +3544,8 @@ type CustomerMutation struct {
 	op                    Op
 	typ                   string
 	id                    *int64
+	company_id            *int64
+	addcompany_id         *int64
 	first_name            *string
 	last_name             *string
 	display_name          *string
@@ -3350,6 +3682,76 @@ func (m *CustomerMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *CustomerMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *CustomerMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *CustomerMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *CustomerMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *CustomerMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[customer.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *CustomerMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[customer.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *CustomerMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, customer.FieldCompanyID)
 }
 
 // SetFirstName sets the "first_name" field.
@@ -4388,7 +4790,10 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 25)
+	fields := make([]string, 0, 26)
+	if m.company_id != nil {
+		fields = append(fields, customer.FieldCompanyID)
+	}
 	if m.first_name != nil {
 		fields = append(fields, customer.FieldFirstName)
 	}
@@ -4472,6 +4877,8 @@ func (m *CustomerMutation) Fields() []string {
 // schema.
 func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case customer.FieldCompanyID:
+		return m.CompanyID()
 	case customer.FieldFirstName:
 		return m.FirstName()
 	case customer.FieldLastName:
@@ -4531,6 +4938,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case customer.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case customer.FieldFirstName:
 		return m.OldFirstName(ctx)
 	case customer.FieldLastName:
@@ -4590,6 +4999,13 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case customer.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case customer.FieldFirstName:
 		v, ok := value.(string)
 		if !ok {
@@ -4773,6 +5189,9 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *CustomerMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, customer.FieldCompanyID)
+	}
 	if m.addassigned_to != nil {
 		fields = append(fields, customer.FieldAssignedTo)
 	}
@@ -4790,6 +5209,8 @@ func (m *CustomerMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *CustomerMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case customer.FieldCompanyID:
+		return m.AddedCompanyID()
 	case customer.FieldAssignedTo:
 		return m.AddedAssignedTo()
 	case customer.FieldPipelineStatusID:
@@ -4805,6 +5226,13 @@ func (m *CustomerMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *CustomerMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case customer.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case customer.FieldAssignedTo:
 		v, ok := value.(int64)
 		if !ok {
@@ -4834,6 +5262,9 @@ func (m *CustomerMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *CustomerMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(customer.FieldCompanyID) {
+		fields = append(fields, customer.FieldCompanyID)
+	}
 	if m.FieldCleared(customer.FieldAssignedTo) {
 		fields = append(fields, customer.FieldAssignedTo)
 	}
@@ -4857,6 +5288,9 @@ func (m *CustomerMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *CustomerMutation) ClearField(name string) error {
 	switch name {
+	case customer.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
 	case customer.FieldAssignedTo:
 		m.ClearAssignedTo()
 		return nil
@@ -4874,6 +5308,9 @@ func (m *CustomerMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *CustomerMutation) ResetField(name string) error {
 	switch name {
+	case customer.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case customer.FieldFirstName:
 		m.ResetFirstName()
 		return nil
@@ -5007,6 +5444,8 @@ type CustomerContactMutation struct {
 	op             Op
 	typ            string
 	id             *int64
+	company_id     *int64
+	addcompany_id  *int64
 	customer_id    *int64
 	addcustomer_id *int64
 	first_name     *string
@@ -5126,6 +5565,76 @@ func (m *CustomerContactMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *CustomerContactMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *CustomerContactMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the CustomerContact entity.
+// If the CustomerContact object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerContactMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *CustomerContactMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *CustomerContactMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *CustomerContactMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[customercontact.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *CustomerContactMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[customercontact.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *CustomerContactMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, customercontact.FieldCompanyID)
 }
 
 // SetCustomerID sets the "customer_id" field.
@@ -5526,7 +6035,10 @@ func (m *CustomerContactMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerContactMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
+	if m.company_id != nil {
+		fields = append(fields, customercontact.FieldCompanyID)
+	}
 	if m.customer_id != nil {
 		fields = append(fields, customercontact.FieldCustomerID)
 	}
@@ -5562,6 +6074,8 @@ func (m *CustomerContactMutation) Fields() []string {
 // schema.
 func (m *CustomerContactMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case customercontact.FieldCompanyID:
+		return m.CompanyID()
 	case customercontact.FieldCustomerID:
 		return m.CustomerID()
 	case customercontact.FieldFirstName:
@@ -5589,6 +6103,8 @@ func (m *CustomerContactMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *CustomerContactMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case customercontact.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case customercontact.FieldCustomerID:
 		return m.OldCustomerID(ctx)
 	case customercontact.FieldFirstName:
@@ -5616,6 +6132,13 @@ func (m *CustomerContactMutation) OldField(ctx context.Context, name string) (en
 // type.
 func (m *CustomerContactMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case customercontact.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case customercontact.FieldCustomerID:
 		v, ok := value.(int64)
 		if !ok {
@@ -5687,6 +6210,9 @@ func (m *CustomerContactMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *CustomerContactMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, customercontact.FieldCompanyID)
+	}
 	if m.addcustomer_id != nil {
 		fields = append(fields, customercontact.FieldCustomerID)
 	}
@@ -5701,6 +6227,8 @@ func (m *CustomerContactMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *CustomerContactMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case customercontact.FieldCompanyID:
+		return m.AddedCompanyID()
 	case customercontact.FieldCustomerID:
 		return m.AddedCustomerID()
 	case customercontact.FieldSortOrder:
@@ -5714,6 +6242,13 @@ func (m *CustomerContactMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *CustomerContactMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case customercontact.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case customercontact.FieldCustomerID:
 		v, ok := value.(int64)
 		if !ok {
@@ -5735,7 +6270,11 @@ func (m *CustomerContactMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *CustomerContactMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(customercontact.FieldCompanyID) {
+		fields = append(fields, customercontact.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -5748,6 +6287,11 @@ func (m *CustomerContactMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *CustomerContactMutation) ClearField(name string) error {
+	switch name {
+	case customercontact.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown CustomerContact nullable field %s", name)
 }
 
@@ -5755,6 +6299,9 @@ func (m *CustomerContactMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *CustomerContactMutation) ResetField(name string) error {
 	switch name {
+	case customercontact.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case customercontact.FieldCustomerID:
 		m.ResetCustomerID()
 		return nil
@@ -5840,6 +6387,8 @@ type EstimateMutation struct {
 	op             Op
 	typ            string
 	id             *int64
+	company_id     *int64
+	addcompany_id  *int64
 	customer_id    *int64
 	addcustomer_id *int64
 	job_id         *int64
@@ -5961,6 +6510,76 @@ func (m *EstimateMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *EstimateMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *EstimateMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the Estimate entity.
+// If the Estimate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EstimateMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *EstimateMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *EstimateMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *EstimateMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[estimate.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *EstimateMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[estimate.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *EstimateMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, estimate.FieldCompanyID)
 }
 
 // SetCustomerID sets the "customer_id" field.
@@ -6459,7 +7078,10 @@ func (m *EstimateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EstimateMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
+	if m.company_id != nil {
+		fields = append(fields, estimate.FieldCompanyID)
+	}
 	if m.customer_id != nil {
 		fields = append(fields, estimate.FieldCustomerID)
 	}
@@ -6498,6 +7120,8 @@ func (m *EstimateMutation) Fields() []string {
 // schema.
 func (m *EstimateMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case estimate.FieldCompanyID:
+		return m.CompanyID()
 	case estimate.FieldCustomerID:
 		return m.CustomerID()
 	case estimate.FieldJobID:
@@ -6527,6 +7151,8 @@ func (m *EstimateMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *EstimateMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case estimate.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case estimate.FieldCustomerID:
 		return m.OldCustomerID(ctx)
 	case estimate.FieldJobID:
@@ -6556,6 +7182,13 @@ func (m *EstimateMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *EstimateMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case estimate.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case estimate.FieldCustomerID:
 		v, ok := value.(int64)
 		if !ok {
@@ -6634,6 +7267,9 @@ func (m *EstimateMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *EstimateMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, estimate.FieldCompanyID)
+	}
 	if m.addcustomer_id != nil {
 		fields = append(fields, estimate.FieldCustomerID)
 	}
@@ -6651,6 +7287,8 @@ func (m *EstimateMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *EstimateMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case estimate.FieldCompanyID:
+		return m.AddedCompanyID()
 	case estimate.FieldCustomerID:
 		return m.AddedCustomerID()
 	case estimate.FieldJobID:
@@ -6666,6 +7304,13 @@ func (m *EstimateMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *EstimateMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case estimate.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case estimate.FieldCustomerID:
 		v, ok := value.(int64)
 		if !ok {
@@ -6695,6 +7340,9 @@ func (m *EstimateMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *EstimateMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(estimate.FieldCompanyID) {
+		fields = append(fields, estimate.FieldCompanyID)
+	}
 	if m.FieldCleared(estimate.FieldCustomerID) {
 		fields = append(fields, estimate.FieldCustomerID)
 	}
@@ -6718,6 +7366,9 @@ func (m *EstimateMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *EstimateMutation) ClearField(name string) error {
 	switch name {
+	case estimate.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
 	case estimate.FieldCustomerID:
 		m.ClearCustomerID()
 		return nil
@@ -6735,6 +7386,9 @@ func (m *EstimateMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *EstimateMutation) ResetField(name string) error {
 	switch name {
+	case estimate.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case estimate.FieldCustomerID:
 		m.ResetCustomerID()
 		return nil
@@ -6823,6 +7477,8 @@ type InvoiceMutation struct {
 	op               Op
 	typ              string
 	id               *int64
+	company_id       *int64
+	addcompany_id    *int64
 	customer_id      *int64
 	addcustomer_id   *int64
 	job_id           *int64
@@ -6950,6 +7606,76 @@ func (m *InvoiceMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *InvoiceMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *InvoiceMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *InvoiceMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *InvoiceMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *InvoiceMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[invoice.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *InvoiceMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *InvoiceMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, invoice.FieldCompanyID)
 }
 
 // SetCustomerID sets the "customer_id" field.
@@ -7662,7 +8388,10 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 16)
+	if m.company_id != nil {
+		fields = append(fields, invoice.FieldCompanyID)
+	}
 	if m.customer_id != nil {
 		fields = append(fields, invoice.FieldCustomerID)
 	}
@@ -7716,6 +8445,8 @@ func (m *InvoiceMutation) Fields() []string {
 // schema.
 func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case invoice.FieldCompanyID:
+		return m.CompanyID()
 	case invoice.FieldCustomerID:
 		return m.CustomerID()
 	case invoice.FieldJobID:
@@ -7755,6 +8486,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case invoice.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case invoice.FieldCustomerID:
 		return m.OldCustomerID(ctx)
 	case invoice.FieldJobID:
@@ -7794,6 +8527,13 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 // type.
 func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case invoice.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case invoice.FieldCustomerID:
 		v, ok := value.(int64)
 		if !ok {
@@ -7907,6 +8647,9 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *InvoiceMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, invoice.FieldCompanyID)
+	}
 	if m.addcustomer_id != nil {
 		fields = append(fields, invoice.FieldCustomerID)
 	}
@@ -7927,6 +8670,8 @@ func (m *InvoiceMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *InvoiceMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case invoice.FieldCompanyID:
+		return m.AddedCompanyID()
 	case invoice.FieldCustomerID:
 		return m.AddedCustomerID()
 	case invoice.FieldJobID:
@@ -7944,6 +8689,13 @@ func (m *InvoiceMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *InvoiceMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case invoice.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case invoice.FieldCustomerID:
 		v, ok := value.(int64)
 		if !ok {
@@ -7980,6 +8732,9 @@ func (m *InvoiceMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *InvoiceMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(invoice.FieldCompanyID) {
+		fields = append(fields, invoice.FieldCompanyID)
+	}
 	if m.FieldCleared(invoice.FieldCustomerID) {
 		fields = append(fields, invoice.FieldCustomerID)
 	}
@@ -8006,6 +8761,9 @@ func (m *InvoiceMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *InvoiceMutation) ClearField(name string) error {
 	switch name {
+	case invoice.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
 	case invoice.FieldCustomerID:
 		m.ClearCustomerID()
 		return nil
@@ -8026,6 +8784,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *InvoiceMutation) ResetField(name string) error {
 	switch name {
+	case invoice.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case invoice.FieldCustomerID:
 		m.ResetCustomerID()
 		return nil
@@ -8129,6 +8890,8 @@ type ItemMutation struct {
 	op              Op
 	typ             string
 	id              *int64
+	company_id      *int64
+	addcompany_id   *int64
 	name            *string
 	_type           *string
 	sku             *string
@@ -8251,6 +9014,76 @@ func (m *ItemMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *ItemMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *ItemMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the Item entity.
+// If the Item object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ItemMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *ItemMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *ItemMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *ItemMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[item.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *ItemMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[item.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *ItemMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, item.FieldCompanyID)
 }
 
 // SetName sets the "name" field.
@@ -8759,7 +9592,10 @@ func (m *ItemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ItemMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
+	if m.company_id != nil {
+		fields = append(fields, item.FieldCompanyID)
+	}
 	if m.name != nil {
 		fields = append(fields, item.FieldName)
 	}
@@ -8804,6 +9640,8 @@ func (m *ItemMutation) Fields() []string {
 // schema.
 func (m *ItemMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case item.FieldCompanyID:
+		return m.CompanyID()
 	case item.FieldName:
 		return m.Name()
 	case item.FieldType:
@@ -8837,6 +9675,8 @@ func (m *ItemMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ItemMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case item.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case item.FieldName:
 		return m.OldName(ctx)
 	case item.FieldType:
@@ -8870,6 +9710,13 @@ func (m *ItemMutation) OldField(ctx context.Context, name string) (ent.Value, er
 // type.
 func (m *ItemMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case item.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case item.FieldName:
 		v, ok := value.(string)
 		if !ok {
@@ -8962,6 +9809,9 @@ func (m *ItemMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ItemMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, item.FieldCompanyID)
+	}
 	if m.addunit_price != nil {
 		fields = append(fields, item.FieldUnitPrice)
 	}
@@ -8976,6 +9826,8 @@ func (m *ItemMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ItemMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case item.FieldCompanyID:
+		return m.AddedCompanyID()
 	case item.FieldUnitPrice:
 		return m.AddedUnitPrice()
 	case item.FieldUnitCost:
@@ -8989,6 +9841,13 @@ func (m *ItemMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ItemMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case item.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case item.FieldUnitPrice:
 		v, ok := value.(float64)
 		if !ok {
@@ -9010,7 +9869,11 @@ func (m *ItemMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *ItemMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(item.FieldCompanyID) {
+		fields = append(fields, item.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -9023,6 +9886,11 @@ func (m *ItemMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *ItemMutation) ClearField(name string) error {
+	switch name {
+	case item.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown Item nullable field %s", name)
 }
 
@@ -9030,6 +9898,9 @@ func (m *ItemMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ItemMutation) ResetField(name string) error {
 	switch name {
+	case item.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case item.FieldName:
 		m.ResetName()
 		return nil
@@ -9124,6 +9995,8 @@ type JobMutation struct {
 	op                     Op
 	typ                    string
 	id                     *int64
+	company_id             *int64
+	addcompany_id          *int64
 	customer_id            *int64
 	addcustomer_id         *int64
 	project_id             *int64
@@ -9259,6 +10132,76 @@ func (m *JobMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *JobMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *JobMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the Job entity.
+// If the Job object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *JobMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *JobMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *JobMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *JobMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[job.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *JobMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[job.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *JobMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, job.FieldCompanyID)
 }
 
 // SetCustomerID sets the "customer_id" field.
@@ -10308,7 +11251,10 @@ func (m *JobMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *JobMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
+	if m.company_id != nil {
+		fields = append(fields, job.FieldCompanyID)
+	}
 	if m.customer_id != nil {
 		fields = append(fields, job.FieldCustomerID)
 	}
@@ -10383,6 +11329,8 @@ func (m *JobMutation) Fields() []string {
 // schema.
 func (m *JobMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case job.FieldCompanyID:
+		return m.CompanyID()
 	case job.FieldCustomerID:
 		return m.CustomerID()
 	case job.FieldProjectID:
@@ -10436,6 +11384,8 @@ func (m *JobMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *JobMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case job.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case job.FieldCustomerID:
 		return m.OldCustomerID(ctx)
 	case job.FieldProjectID:
@@ -10489,6 +11439,13 @@ func (m *JobMutation) OldField(ctx context.Context, name string) (ent.Value, err
 // type.
 func (m *JobMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case job.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case job.FieldCustomerID:
 		v, ok := value.(int64)
 		if !ok {
@@ -10651,6 +11608,9 @@ func (m *JobMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *JobMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, job.FieldCompanyID)
+	}
 	if m.addcustomer_id != nil {
 		fields = append(fields, job.FieldCustomerID)
 	}
@@ -10674,6 +11634,8 @@ func (m *JobMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *JobMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case job.FieldCompanyID:
+		return m.AddedCompanyID()
 	case job.FieldCustomerID:
 		return m.AddedCustomerID()
 	case job.FieldProjectID:
@@ -10693,6 +11655,13 @@ func (m *JobMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *JobMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case job.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case job.FieldCustomerID:
 		v, ok := value.(int64)
 		if !ok {
@@ -10736,6 +11705,9 @@ func (m *JobMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *JobMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(job.FieldCompanyID) {
+		fields = append(fields, job.FieldCompanyID)
+	}
 	if m.FieldCleared(job.FieldProjectID) {
 		fields = append(fields, job.FieldProjectID)
 	}
@@ -10777,6 +11749,9 @@ func (m *JobMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *JobMutation) ClearField(name string) error {
 	switch name {
+	case job.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
 	case job.FieldProjectID:
 		m.ClearProjectID()
 		return nil
@@ -10812,6 +11787,9 @@ func (m *JobMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *JobMutation) ResetField(name string) error {
 	switch name {
+	case job.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case job.FieldCustomerID:
 		m.ResetCustomerID()
 		return nil
@@ -10936,6 +11914,8 @@ type LocationMutation struct {
 	op            Op
 	typ           string
 	id            *int64
+	company_id    *int64
+	addcompany_id *int64
 	object_type   *string
 	object_id     *int64
 	addobject_id  *int64
@@ -11057,6 +12037,76 @@ func (m *LocationMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *LocationMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *LocationMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the Location entity.
+// If the Location object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LocationMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *LocationMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *LocationMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *LocationMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[location.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *LocationMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[location.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *LocationMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, location.FieldCompanyID)
 }
 
 // SetObjectType sets the "object_type" field.
@@ -11545,7 +12595,10 @@ func (m *LocationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *LocationMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
+	if m.company_id != nil {
+		fields = append(fields, location.FieldCompanyID)
+	}
 	if m.object_type != nil {
 		fields = append(fields, location.FieldObjectType)
 	}
@@ -11590,6 +12643,8 @@ func (m *LocationMutation) Fields() []string {
 // schema.
 func (m *LocationMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case location.FieldCompanyID:
+		return m.CompanyID()
 	case location.FieldObjectType:
 		return m.ObjectType()
 	case location.FieldObjectID:
@@ -11623,6 +12678,8 @@ func (m *LocationMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *LocationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case location.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case location.FieldObjectType:
 		return m.OldObjectType(ctx)
 	case location.FieldObjectID:
@@ -11656,6 +12713,13 @@ func (m *LocationMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *LocationMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case location.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case location.FieldObjectType:
 		v, ok := value.(string)
 		if !ok {
@@ -11748,6 +12812,9 @@ func (m *LocationMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *LocationMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, location.FieldCompanyID)
+	}
 	if m.addobject_id != nil {
 		fields = append(fields, location.FieldObjectID)
 	}
@@ -11759,6 +12826,8 @@ func (m *LocationMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *LocationMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case location.FieldCompanyID:
+		return m.AddedCompanyID()
 	case location.FieldObjectID:
 		return m.AddedObjectID()
 	}
@@ -11770,6 +12839,13 @@ func (m *LocationMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *LocationMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case location.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case location.FieldObjectID:
 		v, ok := value.(int64)
 		if !ok {
@@ -11784,7 +12860,11 @@ func (m *LocationMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *LocationMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(location.FieldCompanyID) {
+		fields = append(fields, location.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -11797,6 +12877,11 @@ func (m *LocationMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *LocationMutation) ClearField(name string) error {
+	switch name {
+	case location.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown Location nullable field %s", name)
 }
 
@@ -11804,6 +12889,9 @@ func (m *LocationMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *LocationMutation) ResetField(name string) error {
 	switch name {
+	case location.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case location.FieldObjectType:
 		m.ResetObjectType()
 		return nil
@@ -11898,6 +12986,8 @@ type PasswordResetTokenMutation struct {
 	op            Op
 	typ           string
 	id            *int64
+	company_id    *int64
+	addcompany_id *int64
 	token_hash    *string
 	user_id       *int64
 	adduser_id    *int64
@@ -12011,6 +13101,76 @@ func (m *PasswordResetTokenMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *PasswordResetTokenMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *PasswordResetTokenMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the PasswordResetToken entity.
+// If the PasswordResetToken object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PasswordResetTokenMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *PasswordResetTokenMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *PasswordResetTokenMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *PasswordResetTokenMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[passwordresettoken.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *PasswordResetTokenMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[passwordresettoken.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *PasswordResetTokenMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, passwordresettoken.FieldCompanyID)
 }
 
 // SetTokenHash sets the "token_hash" field.
@@ -12211,7 +13371,10 @@ func (m *PasswordResetTokenMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *PasswordResetTokenMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
+	if m.company_id != nil {
+		fields = append(fields, passwordresettoken.FieldCompanyID)
+	}
 	if m.token_hash != nil {
 		fields = append(fields, passwordresettoken.FieldTokenHash)
 	}
@@ -12232,6 +13395,8 @@ func (m *PasswordResetTokenMutation) Fields() []string {
 // schema.
 func (m *PasswordResetTokenMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case passwordresettoken.FieldCompanyID:
+		return m.CompanyID()
 	case passwordresettoken.FieldTokenHash:
 		return m.TokenHash()
 	case passwordresettoken.FieldUserID:
@@ -12249,6 +13414,8 @@ func (m *PasswordResetTokenMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *PasswordResetTokenMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case passwordresettoken.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case passwordresettoken.FieldTokenHash:
 		return m.OldTokenHash(ctx)
 	case passwordresettoken.FieldUserID:
@@ -12266,6 +13433,13 @@ func (m *PasswordResetTokenMutation) OldField(ctx context.Context, name string) 
 // type.
 func (m *PasswordResetTokenMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case passwordresettoken.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case passwordresettoken.FieldTokenHash:
 		v, ok := value.(string)
 		if !ok {
@@ -12302,6 +13476,9 @@ func (m *PasswordResetTokenMutation) SetField(name string, value ent.Value) erro
 // this mutation.
 func (m *PasswordResetTokenMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, passwordresettoken.FieldCompanyID)
+	}
 	if m.adduser_id != nil {
 		fields = append(fields, passwordresettoken.FieldUserID)
 	}
@@ -12313,6 +13490,8 @@ func (m *PasswordResetTokenMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *PasswordResetTokenMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case passwordresettoken.FieldCompanyID:
+		return m.AddedCompanyID()
 	case passwordresettoken.FieldUserID:
 		return m.AddedUserID()
 	}
@@ -12324,6 +13503,13 @@ func (m *PasswordResetTokenMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *PasswordResetTokenMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case passwordresettoken.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case passwordresettoken.FieldUserID:
 		v, ok := value.(int64)
 		if !ok {
@@ -12338,7 +13524,11 @@ func (m *PasswordResetTokenMutation) AddField(name string, value ent.Value) erro
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *PasswordResetTokenMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(passwordresettoken.FieldCompanyID) {
+		fields = append(fields, passwordresettoken.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -12351,6 +13541,11 @@ func (m *PasswordResetTokenMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *PasswordResetTokenMutation) ClearField(name string) error {
+	switch name {
+	case passwordresettoken.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown PasswordResetToken nullable field %s", name)
 }
 
@@ -12358,6 +13553,9 @@ func (m *PasswordResetTokenMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *PasswordResetTokenMutation) ResetField(name string) error {
 	switch name {
+	case passwordresettoken.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case passwordresettoken.FieldTokenHash:
 		m.ResetTokenHash()
 		return nil
@@ -12428,6 +13626,8 @@ type ProjectMutation struct {
 	op                       Op
 	typ                      string
 	id                       *int64
+	company_id               *int64
+	addcompany_id            *int64
 	customer_id              *int64
 	addcustomer_id           *int64
 	name                     *string
@@ -12552,6 +13752,76 @@ func (m *ProjectMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *ProjectMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *ProjectMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the Project entity.
+// If the Project object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProjectMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *ProjectMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *ProjectMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *ProjectMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[project.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *ProjectMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[project.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *ProjectMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, project.FieldCompanyID)
 }
 
 // SetCustomerID sets the "customer_id" field.
@@ -13154,7 +14424,10 @@ func (m *ProjectMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProjectMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
+	if m.company_id != nil {
+		fields = append(fields, project.FieldCompanyID)
+	}
 	if m.customer_id != nil {
 		fields = append(fields, project.FieldCustomerID)
 	}
@@ -13199,6 +14472,8 @@ func (m *ProjectMutation) Fields() []string {
 // schema.
 func (m *ProjectMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case project.FieldCompanyID:
+		return m.CompanyID()
 	case project.FieldCustomerID:
 		return m.CustomerID()
 	case project.FieldName:
@@ -13232,6 +14507,8 @@ func (m *ProjectMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ProjectMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case project.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case project.FieldCustomerID:
 		return m.OldCustomerID(ctx)
 	case project.FieldName:
@@ -13265,6 +14542,13 @@ func (m *ProjectMutation) OldField(ctx context.Context, name string) (ent.Value,
 // type.
 func (m *ProjectMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case project.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case project.FieldCustomerID:
 		v, ok := value.(int64)
 		if !ok {
@@ -13357,6 +14641,9 @@ func (m *ProjectMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ProjectMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, project.FieldCompanyID)
+	}
 	if m.addcustomer_id != nil {
 		fields = append(fields, project.FieldCustomerID)
 	}
@@ -13377,6 +14664,8 @@ func (m *ProjectMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ProjectMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case project.FieldCompanyID:
+		return m.AddedCompanyID()
 	case project.FieldCustomerID:
 		return m.AddedCustomerID()
 	case project.FieldStatusID:
@@ -13394,6 +14683,13 @@ func (m *ProjectMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ProjectMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case project.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case project.FieldCustomerID:
 		v, ok := value.(int64)
 		if !ok {
@@ -13430,6 +14726,9 @@ func (m *ProjectMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ProjectMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(project.FieldCompanyID) {
+		fields = append(fields, project.FieldCompanyID)
+	}
 	if m.FieldCleared(project.FieldStatusID) {
 		fields = append(fields, project.FieldStatusID)
 	}
@@ -13456,6 +14755,9 @@ func (m *ProjectMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ProjectMutation) ClearField(name string) error {
 	switch name {
+	case project.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
 	case project.FieldStatusID:
 		m.ClearStatusID()
 		return nil
@@ -13476,6 +14778,9 @@ func (m *ProjectMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ProjectMutation) ResetField(name string) error {
 	switch name {
+	case project.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case project.FieldCustomerID:
 		m.ResetCustomerID()
 		return nil
@@ -13570,6 +14875,8 @@ type StatusMutation struct {
 	op              Op
 	typ             string
 	id              *int64
+	company_id      *int64
+	addcompany_id   *int64
 	name            *string
 	color           *string
 	sort_order      *int
@@ -13685,6 +14992,76 @@ func (m *StatusMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *StatusMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *StatusMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the Status entity.
+// If the Status object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StatusMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *StatusMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *StatusMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *StatusMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[status.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *StatusMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[status.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *StatusMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, status.FieldCompanyID)
 }
 
 // SetWorkflowID sets the "workflow_id" field.
@@ -13948,7 +15325,10 @@ func (m *StatusMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *StatusMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
+	if m.company_id != nil {
+		fields = append(fields, status.FieldCompanyID)
+	}
 	if m.workflow != nil {
 		fields = append(fields, status.FieldWorkflowID)
 	}
@@ -13972,6 +15352,8 @@ func (m *StatusMutation) Fields() []string {
 // schema.
 func (m *StatusMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case status.FieldCompanyID:
+		return m.CompanyID()
 	case status.FieldWorkflowID:
 		return m.WorkflowID()
 	case status.FieldName:
@@ -13991,6 +15373,8 @@ func (m *StatusMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *StatusMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case status.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case status.FieldWorkflowID:
 		return m.OldWorkflowID(ctx)
 	case status.FieldName:
@@ -14010,6 +15394,13 @@ func (m *StatusMutation) OldField(ctx context.Context, name string) (ent.Value, 
 // type.
 func (m *StatusMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case status.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case status.FieldWorkflowID:
 		v, ok := value.(int64)
 		if !ok {
@@ -14053,6 +15444,9 @@ func (m *StatusMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *StatusMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, status.FieldCompanyID)
+	}
 	if m.addsort_order != nil {
 		fields = append(fields, status.FieldSortOrder)
 	}
@@ -14064,6 +15458,8 @@ func (m *StatusMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *StatusMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case status.FieldCompanyID:
+		return m.AddedCompanyID()
 	case status.FieldSortOrder:
 		return m.AddedSortOrder()
 	}
@@ -14075,6 +15471,13 @@ func (m *StatusMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *StatusMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case status.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case status.FieldSortOrder:
 		v, ok := value.(int)
 		if !ok {
@@ -14089,7 +15492,11 @@ func (m *StatusMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *StatusMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(status.FieldCompanyID) {
+		fields = append(fields, status.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -14102,6 +15509,11 @@ func (m *StatusMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *StatusMutation) ClearField(name string) error {
+	switch name {
+	case status.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown Status nullable field %s", name)
 }
 
@@ -14109,6 +15521,9 @@ func (m *StatusMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *StatusMutation) ResetField(name string) error {
 	switch name {
+	case status.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case status.FieldWorkflowID:
 		m.ResetWorkflowID()
 		return nil
@@ -14208,6 +15623,8 @@ type StatusWorkflowMutation struct {
 	op              Op
 	typ             string
 	id              *int64
+	company_id      *int64
+	addcompany_id   *int64
 	name            *string
 	object_type     *string
 	created_at      *time.Time
@@ -14322,6 +15739,76 @@ func (m *StatusWorkflowMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *StatusWorkflowMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *StatusWorkflowMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the StatusWorkflow entity.
+// If the StatusWorkflow object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StatusWorkflowMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *StatusWorkflowMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *StatusWorkflowMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *StatusWorkflowMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[statusworkflow.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *StatusWorkflowMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[statusworkflow.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *StatusWorkflowMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, statusworkflow.FieldCompanyID)
 }
 
 // SetName sets the "name" field.
@@ -14520,7 +16007,10 @@ func (m *StatusWorkflowMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *StatusWorkflowMutation) Fields() []string {
-	fields := make([]string, 0, 3)
+	fields := make([]string, 0, 4)
+	if m.company_id != nil {
+		fields = append(fields, statusworkflow.FieldCompanyID)
+	}
 	if m.name != nil {
 		fields = append(fields, statusworkflow.FieldName)
 	}
@@ -14538,6 +16028,8 @@ func (m *StatusWorkflowMutation) Fields() []string {
 // schema.
 func (m *StatusWorkflowMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case statusworkflow.FieldCompanyID:
+		return m.CompanyID()
 	case statusworkflow.FieldName:
 		return m.Name()
 	case statusworkflow.FieldObjectType:
@@ -14553,6 +16045,8 @@ func (m *StatusWorkflowMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *StatusWorkflowMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case statusworkflow.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case statusworkflow.FieldName:
 		return m.OldName(ctx)
 	case statusworkflow.FieldObjectType:
@@ -14568,6 +16062,13 @@ func (m *StatusWorkflowMutation) OldField(ctx context.Context, name string) (ent
 // type.
 func (m *StatusWorkflowMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case statusworkflow.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case statusworkflow.FieldName:
 		v, ok := value.(string)
 		if !ok {
@@ -14596,13 +16097,21 @@ func (m *StatusWorkflowMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *StatusWorkflowMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, statusworkflow.FieldCompanyID)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *StatusWorkflowMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case statusworkflow.FieldCompanyID:
+		return m.AddedCompanyID()
+	}
 	return nil, false
 }
 
@@ -14611,6 +16120,13 @@ func (m *StatusWorkflowMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *StatusWorkflowMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case statusworkflow.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown StatusWorkflow numeric field %s", name)
 }
@@ -14618,7 +16134,11 @@ func (m *StatusWorkflowMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *StatusWorkflowMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(statusworkflow.FieldCompanyID) {
+		fields = append(fields, statusworkflow.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -14631,6 +16151,11 @@ func (m *StatusWorkflowMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *StatusWorkflowMutation) ClearField(name string) error {
+	switch name {
+	case statusworkflow.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown StatusWorkflow nullable field %s", name)
 }
 
@@ -14638,6 +16163,9 @@ func (m *StatusWorkflowMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *StatusWorkflowMutation) ResetField(name string) error {
 	switch name {
+	case statusworkflow.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case statusworkflow.FieldName:
 		m.ResetName()
 		return nil
@@ -14741,6 +16269,8 @@ type TagMutation struct {
 	op            Op
 	typ           string
 	id            *int64
+	company_id    *int64
+	addcompany_id *int64
 	name          *string
 	color         *string
 	created_at    *time.Time
@@ -14852,6 +16382,76 @@ func (m *TagMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *TagMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *TagMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the Tag entity.
+// If the Tag object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *TagMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *TagMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *TagMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[tag.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *TagMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[tag.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *TagMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, tag.FieldCompanyID)
 }
 
 // SetName sets the "name" field.
@@ -14996,7 +16596,10 @@ func (m *TagMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TagMutation) Fields() []string {
-	fields := make([]string, 0, 3)
+	fields := make([]string, 0, 4)
+	if m.company_id != nil {
+		fields = append(fields, tag.FieldCompanyID)
+	}
 	if m.name != nil {
 		fields = append(fields, tag.FieldName)
 	}
@@ -15014,6 +16617,8 @@ func (m *TagMutation) Fields() []string {
 // schema.
 func (m *TagMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case tag.FieldCompanyID:
+		return m.CompanyID()
 	case tag.FieldName:
 		return m.Name()
 	case tag.FieldColor:
@@ -15029,6 +16634,8 @@ func (m *TagMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *TagMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case tag.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case tag.FieldName:
 		return m.OldName(ctx)
 	case tag.FieldColor:
@@ -15044,6 +16651,13 @@ func (m *TagMutation) OldField(ctx context.Context, name string) (ent.Value, err
 // type.
 func (m *TagMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case tag.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case tag.FieldName:
 		v, ok := value.(string)
 		if !ok {
@@ -15072,13 +16686,21 @@ func (m *TagMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *TagMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, tag.FieldCompanyID)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *TagMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case tag.FieldCompanyID:
+		return m.AddedCompanyID()
+	}
 	return nil, false
 }
 
@@ -15087,6 +16709,13 @@ func (m *TagMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *TagMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case tag.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Tag numeric field %s", name)
 }
@@ -15094,7 +16723,11 @@ func (m *TagMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *TagMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(tag.FieldCompanyID) {
+		fields = append(fields, tag.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -15107,6 +16740,11 @@ func (m *TagMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *TagMutation) ClearField(name string) error {
+	switch name {
+	case tag.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown Tag nullable field %s", name)
 }
 
@@ -15114,6 +16752,9 @@ func (m *TagMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *TagMutation) ResetField(name string) error {
 	switch name {
+	case tag.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case tag.FieldName:
 		m.ResetName()
 		return nil
@@ -15181,6 +16822,8 @@ type TagLinkMutation struct {
 	op            Op
 	typ           string
 	id            *int64
+	company_id    *int64
+	addcompany_id *int64
 	tag_id        *int64
 	addtag_id     *int64
 	object_type   *string
@@ -15295,6 +16938,76 @@ func (m *TagLinkMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *TagLinkMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *TagLinkMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the TagLink entity.
+// If the TagLink object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagLinkMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *TagLinkMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *TagLinkMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *TagLinkMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[taglink.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *TagLinkMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[taglink.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *TagLinkMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, taglink.FieldCompanyID)
 }
 
 // SetTagID sets the "tag_id" field.
@@ -15515,7 +17228,10 @@ func (m *TagLinkMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TagLinkMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
+	if m.company_id != nil {
+		fields = append(fields, taglink.FieldCompanyID)
+	}
 	if m.tag_id != nil {
 		fields = append(fields, taglink.FieldTagID)
 	}
@@ -15536,6 +17252,8 @@ func (m *TagLinkMutation) Fields() []string {
 // schema.
 func (m *TagLinkMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case taglink.FieldCompanyID:
+		return m.CompanyID()
 	case taglink.FieldTagID:
 		return m.TagID()
 	case taglink.FieldObjectType:
@@ -15553,6 +17271,8 @@ func (m *TagLinkMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *TagLinkMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case taglink.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case taglink.FieldTagID:
 		return m.OldTagID(ctx)
 	case taglink.FieldObjectType:
@@ -15570,6 +17290,13 @@ func (m *TagLinkMutation) OldField(ctx context.Context, name string) (ent.Value,
 // type.
 func (m *TagLinkMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case taglink.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case taglink.FieldTagID:
 		v, ok := value.(int64)
 		if !ok {
@@ -15606,6 +17333,9 @@ func (m *TagLinkMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *TagLinkMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, taglink.FieldCompanyID)
+	}
 	if m.addtag_id != nil {
 		fields = append(fields, taglink.FieldTagID)
 	}
@@ -15620,6 +17350,8 @@ func (m *TagLinkMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *TagLinkMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case taglink.FieldCompanyID:
+		return m.AddedCompanyID()
 	case taglink.FieldTagID:
 		return m.AddedTagID()
 	case taglink.FieldObjectID:
@@ -15633,6 +17365,13 @@ func (m *TagLinkMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *TagLinkMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case taglink.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case taglink.FieldTagID:
 		v, ok := value.(int64)
 		if !ok {
@@ -15654,7 +17393,11 @@ func (m *TagLinkMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *TagLinkMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(taglink.FieldCompanyID) {
+		fields = append(fields, taglink.FieldCompanyID)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -15667,6 +17410,11 @@ func (m *TagLinkMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *TagLinkMutation) ClearField(name string) error {
+	switch name {
+	case taglink.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	}
 	return fmt.Errorf("unknown TagLink nullable field %s", name)
 }
 
@@ -15674,6 +17422,9 @@ func (m *TagLinkMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *TagLinkMutation) ResetField(name string) error {
 	switch name {
+	case taglink.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case taglink.FieldTagID:
 		m.ResetTagID()
 		return nil
@@ -15744,6 +17495,8 @@ type TimeEntryMutation struct {
 	op            Op
 	typ           string
 	id            *int64
+	company_id    *int64
+	addcompany_id *int64
 	user_id       *int64
 	adduser_id    *int64
 	is_manual     *bool
@@ -15864,6 +17617,76 @@ func (m *TimeEntryMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *TimeEntryMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *TimeEntryMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the TimeEntry entity.
+// If the TimeEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TimeEntryMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *TimeEntryMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *TimeEntryMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *TimeEntryMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[timeentry.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *TimeEntryMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[timeentry.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *TimeEntryMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, timeentry.FieldCompanyID)
 }
 
 // SetUserID sets the "user_id" field.
@@ -16325,7 +18148,10 @@ func (m *TimeEntryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TimeEntryMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
+	if m.company_id != nil {
+		fields = append(fields, timeentry.FieldCompanyID)
+	}
 	if m.user_id != nil {
 		fields = append(fields, timeentry.FieldUserID)
 	}
@@ -16361,6 +18187,8 @@ func (m *TimeEntryMutation) Fields() []string {
 // schema.
 func (m *TimeEntryMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case timeentry.FieldCompanyID:
+		return m.CompanyID()
 	case timeentry.FieldUserID:
 		return m.UserID()
 	case timeentry.FieldIsManual:
@@ -16388,6 +18216,8 @@ func (m *TimeEntryMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *TimeEntryMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case timeentry.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case timeentry.FieldUserID:
 		return m.OldUserID(ctx)
 	case timeentry.FieldIsManual:
@@ -16415,6 +18245,13 @@ func (m *TimeEntryMutation) OldField(ctx context.Context, name string) (ent.Valu
 // type.
 func (m *TimeEntryMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case timeentry.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case timeentry.FieldUserID:
 		v, ok := value.(int64)
 		if !ok {
@@ -16486,6 +18323,9 @@ func (m *TimeEntryMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *TimeEntryMutation) AddedFields() []string {
 	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, timeentry.FieldCompanyID)
+	}
 	if m.adduser_id != nil {
 		fields = append(fields, timeentry.FieldUserID)
 	}
@@ -16503,6 +18343,8 @@ func (m *TimeEntryMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *TimeEntryMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case timeentry.FieldCompanyID:
+		return m.AddedCompanyID()
 	case timeentry.FieldUserID:
 		return m.AddedUserID()
 	case timeentry.FieldLatitude:
@@ -16518,6 +18360,13 @@ func (m *TimeEntryMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *TimeEntryMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case timeentry.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	case timeentry.FieldUserID:
 		v, ok := value.(int64)
 		if !ok {
@@ -16547,6 +18396,9 @@ func (m *TimeEntryMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *TimeEntryMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(timeentry.FieldCompanyID) {
+		fields = append(fields, timeentry.FieldCompanyID)
+	}
 	if m.FieldCleared(timeentry.FieldClockOut) {
 		fields = append(fields, timeentry.FieldClockOut)
 	}
@@ -16570,6 +18422,9 @@ func (m *TimeEntryMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *TimeEntryMutation) ClearField(name string) error {
 	switch name {
+	case timeentry.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
 	case timeentry.FieldClockOut:
 		m.ClearClockOut()
 		return nil
@@ -16587,6 +18442,9 @@ func (m *TimeEntryMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *TimeEntryMutation) ResetField(name string) error {
 	switch name {
+	case timeentry.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case timeentry.FieldUserID:
 		m.ResetUserID()
 		return nil
@@ -16672,6 +18530,8 @@ type UserMutation struct {
 	op                    Op
 	typ                   string
 	id                    *int64
+	company_id            *int64
+	addcompany_id         *int64
 	email                 *string
 	password_hash         *string
 	name                  *string
@@ -16789,6 +18649,76 @@ func (m *UserMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *UserMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *UserMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *UserMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *UserMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *UserMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[user.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *UserMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[user.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *UserMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, user.FieldCompanyID)
 }
 
 // SetEmail sets the "email" field.
@@ -17162,7 +19092,10 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
+	if m.company_id != nil {
+		fields = append(fields, user.FieldCompanyID)
+	}
 	if m.email != nil {
 		fields = append(fields, user.FieldEmail)
 	}
@@ -17198,6 +19131,8 @@ func (m *UserMutation) Fields() []string {
 // schema.
 func (m *UserMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case user.FieldCompanyID:
+		return m.CompanyID()
 	case user.FieldEmail:
 		return m.Email()
 	case user.FieldPasswordHash:
@@ -17225,6 +19160,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case user.FieldCompanyID:
+		return m.OldCompanyID(ctx)
 	case user.FieldEmail:
 		return m.OldEmail(ctx)
 	case user.FieldPasswordHash:
@@ -17252,6 +19189,13 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 // type.
 func (m *UserMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case user.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
 	case user.FieldEmail:
 		v, ok := value.(string)
 		if !ok {
@@ -17322,13 +19266,21 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 // AddedFields returns all numeric fields that were incremented/decremented during
 // this mutation.
 func (m *UserMutation) AddedFields() []string {
-	return nil
+	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, user.FieldCompanyID)
+	}
+	return fields
 }
 
 // AddedField returns the numeric value that was incremented/decremented on a field
 // with the given name. The second boolean return value indicates that this field
 // was not set, or was not defined in the schema.
 func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case user.FieldCompanyID:
+		return m.AddedCompanyID()
+	}
 	return nil, false
 }
 
@@ -17337,6 +19289,13 @@ func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *UserMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case user.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown User numeric field %s", name)
 }
@@ -17345,6 +19304,9 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *UserMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(user.FieldCompanyID) {
+		fields = append(fields, user.FieldCompanyID)
+	}
 	if m.FieldCleared(user.FieldWelcomeEmailSentAt) {
 		fields = append(fields, user.FieldWelcomeEmailSentAt)
 	}
@@ -17362,6 +19324,9 @@ func (m *UserMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *UserMutation) ClearField(name string) error {
 	switch name {
+	case user.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
 	case user.FieldWelcomeEmailSentAt:
 		m.ClearWelcomeEmailSentAt()
 		return nil
@@ -17373,6 +19338,9 @@ func (m *UserMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *UserMutation) ResetField(name string) error {
 	switch name {
+	case user.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
 	case user.FieldEmail:
 		m.ResetEmail()
 		return nil

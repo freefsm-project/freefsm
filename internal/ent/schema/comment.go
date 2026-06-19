@@ -23,6 +23,7 @@ func (Comment) Annotations() []schema.Annotation {
 func (Comment) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.String("object_type").NotEmpty(),
 		field.Int64("object_id"),
 		field.Int64("author_id"),

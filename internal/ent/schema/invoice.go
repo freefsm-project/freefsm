@@ -23,6 +23,7 @@ func (Invoice) Annotations() []schema.Annotation {
 func (Invoice) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.Int64("customer_id").Optional().Nillable(),
 		field.Int64("job_id").Optional().Nillable(),
 		field.Int64("estimate_id").Optional().Nillable(),

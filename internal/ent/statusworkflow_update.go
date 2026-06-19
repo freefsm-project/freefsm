@@ -29,6 +29,33 @@ func (_u *StatusWorkflowUpdate) Where(ps ...predicate.StatusWorkflow) *StatusWor
 	return _u
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_u *StatusWorkflowUpdate) SetCompanyID(v int64) *StatusWorkflowUpdate {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *StatusWorkflowUpdate) SetNillableCompanyID(v *int64) *StatusWorkflowUpdate {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *StatusWorkflowUpdate) AddCompanyID(v int64) *StatusWorkflowUpdate {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *StatusWorkflowUpdate) ClearCompanyID() *StatusWorkflowUpdate {
+	_u.mutation.ClearCompanyID()
+	return _u
+}
+
 // SetName sets the "name" field.
 func (_u *StatusWorkflowUpdate) SetName(v string) *StatusWorkflowUpdate {
 	_u.mutation.SetName(v)
@@ -166,6 +193,15 @@ func (_u *StatusWorkflowUpdate) sqlSave(ctx context.Context) (_node int, err err
 			}
 		}
 	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(statusworkflow.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(statusworkflow.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(statusworkflow.FieldCompanyID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(statusworkflow.FieldName, field.TypeString, value)
 	}
@@ -238,6 +274,33 @@ type StatusWorkflowUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *StatusWorkflowMutation
+}
+
+// SetCompanyID sets the "company_id" field.
+func (_u *StatusWorkflowUpdateOne) SetCompanyID(v int64) *StatusWorkflowUpdateOne {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *StatusWorkflowUpdateOne) SetNillableCompanyID(v *int64) *StatusWorkflowUpdateOne {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *StatusWorkflowUpdateOne) AddCompanyID(v int64) *StatusWorkflowUpdateOne {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *StatusWorkflowUpdateOne) ClearCompanyID() *StatusWorkflowUpdateOne {
+	_u.mutation.ClearCompanyID()
+	return _u
 }
 
 // SetName sets the "name" field.
@@ -406,6 +469,15 @@ func (_u *StatusWorkflowUpdateOne) sqlSave(ctx context.Context) (_node *StatusWo
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(statusworkflow.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(statusworkflow.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(statusworkflow.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(statusworkflow.FieldName, field.TypeString, value)

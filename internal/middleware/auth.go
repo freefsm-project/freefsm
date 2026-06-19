@@ -17,10 +17,11 @@ const (
 )
 
 type UserInfo struct {
-	ID    int64
-	Name  string
-	Email string
-	Role  string
+	ID        int64
+	Name      string
+	Email     string
+	Role      string
+	CompanyID int64 // future multi-tenant: populated from user.company_id
 }
 
 type UserProvider func(ctx context.Context, userID int64) (*UserInfo, error)

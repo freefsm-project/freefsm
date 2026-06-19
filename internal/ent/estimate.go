@@ -17,6 +17,8 @@ type Estimate struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
+	// CompanyID holds the value of the "company_id" field.
+	CompanyID *int64 `json:"company_id,omitempty"`
 	// CustomerID holds the value of the "customer_id" field.
 	CustomerID *int64 `json:"customer_id,omitempty"`
 	// JobID holds the value of the "job_id" field.
@@ -45,7 +47,7 @@ func (*Estimate) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case estimate.FieldID, estimate.FieldCustomerID, estimate.FieldJobID, estimate.FieldStatusID:
+		case estimate.FieldID, estimate.FieldCompanyID, estimate.FieldCustomerID, estimate.FieldJobID, estimate.FieldStatusID:
 			values[i] = new(sql.NullInt64)
 		case estimate.FieldTitle, estimate.FieldNotes, estimate.FieldTaxRate, estimate.FieldLineItems, estimate.FieldCustomFields:
 			values[i] = new(sql.NullString)
@@ -72,6 +74,13 @@ func (_m *Estimate) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int64(value.Int64)
+		case estimate.FieldCompanyID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field company_id", values[i])
+			} else if value.Valid {
+				_m.CompanyID = new(int64)
+				*_m.CompanyID = value.Int64
+			}
 		case estimate.FieldCustomerID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
@@ -171,6 +180,11 @@ func (_m *Estimate) String() string {
 	var builder strings.Builder
 	builder.WriteString("Estimate(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.CompanyID; v != nil {
+		builder.WriteString("company_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	if v := _m.CustomerID; v != nil {
 		builder.WriteString("customer_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))

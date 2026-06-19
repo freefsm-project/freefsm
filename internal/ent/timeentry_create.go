@@ -20,6 +20,20 @@ type TimeEntryCreate struct {
 	hooks    []Hook
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_c *TimeEntryCreate) SetCompanyID(v int64) *TimeEntryCreate {
+	_c.mutation.SetCompanyID(v)
+	return _c
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_c *TimeEntryCreate) SetNillableCompanyID(v *int64) *TimeEntryCreate {
+	if v != nil {
+		_c.SetCompanyID(*v)
+	}
+	return _c
+}
+
 // SetUserID sets the "user_id" field.
 func (_c *TimeEntryCreate) SetUserID(v int64) *TimeEntryCreate {
 	_c.mutation.SetUserID(v)
@@ -240,6 +254,10 @@ func (_c *TimeEntryCreate) createSpec() (*TimeEntry, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.CompanyID(); ok {
+		_spec.SetField(timeentry.FieldCompanyID, field.TypeInt64, value)
+		_node.CompanyID = &value
 	}
 	if value, ok := _c.mutation.UserID(); ok {
 		_spec.SetField(timeentry.FieldUserID, field.TypeInt64, value)

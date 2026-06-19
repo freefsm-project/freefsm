@@ -23,6 +23,7 @@ func (PasswordResetToken) Annotations() []schema.Annotation {
 func (PasswordResetToken) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.String("token_hash").Unique().NotEmpty(),
 		field.Int64("user_id"),
 		field.Time("expires_at"),

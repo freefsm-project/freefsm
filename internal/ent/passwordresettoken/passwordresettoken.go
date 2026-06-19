@@ -13,6 +13,8 @@ const (
 	Label = "password_reset_token"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldCompanyID holds the string denoting the company_id field in the database.
+	FieldCompanyID = "company_id"
 	// FieldTokenHash holds the string denoting the token_hash field in the database.
 	FieldTokenHash = "token_hash"
 	// FieldUserID holds the string denoting the user_id field in the database.
@@ -28,6 +30,7 @@ const (
 // Columns holds all SQL columns for passwordresettoken fields.
 var Columns = []string{
 	FieldID,
+	FieldCompanyID,
 	FieldTokenHash,
 	FieldUserID,
 	FieldExpiresAt,
@@ -57,6 +60,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByCompanyID orders the results by the company_id field.
+func ByCompanyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCompanyID, opts...).ToFunc()
 }
 
 // ByTokenHash orders the results by the token_hash field.

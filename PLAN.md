@@ -342,6 +342,48 @@ freefsm/
 - Zapier-compatible webhook triggers
 - Mobile-responsive UI refinements
 
+## Future Multi-Tenant Architecture (SaaS-Ready)
+
+The codebase is designed for a **single-tenant, self-hosted deployment** today, but is future-proofed for a multi-tenant SaaS model. The core project remains single-tenant; a future `saas` branch will implement the full tenant isolation.
+
+### Approach: Row-Level Tenant Isolation (Shared Database)
+
+Every entity table has a `company_id` column (nullable, no-op in single-tenant mode). In a future multi-tenant deployment:
+
+1. **Tenant Resolution** — `Host` header parsed for subdomain (`acme.freefsm.com` → `acme` slug)
+2. **Tenant Lookup** — Subdomain resolved to `company_id` via a `companies` table
+3. **Query Scoping** — All service queries add `.Where(table.CompanyIDEQ(tenantID))`
+4. **User Isolation** — `users.company_id` FK ensures each user belongs to exactly one company
+5. **Settings Isolation** — `company_settings` becomes one row per company instead of a singleton
+
+### Tenant-Aware Infrastructure (Already in Place)
+
+- **`company_id` on all schemas** — `ent` schemas have `field.Int64("company_id").Optional().Nillable()` on every entity table
+- **`Tenant` middleware** — `internal/middleware/tenant.go` is a no-op in single-tenant mode; future branch implements subdomain → `company_id` lookup
+- **`UserInfo.CompanyID`** — `middleware.UserInfo` carries `CompanyID` for future tenant context propagation
+- **`companies` table** — Created via migration; stores `name`, `slug`, `hostname`, `is_active`
+- **Handlers require zero changes** — All tenant logic lives in services and middleware
+
+### What a SaaS Branch Would Change
+
+| Layer | Change | Effort |
+|-------|--------|--------|
+| **Schema** | `company_id` becomes non-nullable | Migration only |
+| **Middleware** | Implement subdomain lookup in `Tenant` middleware | Small |
+| **Auth** | Session cookies scoped to tenant or hostname | Small |
+| **Services** | Add `.Where(table.CompanyIDEQ(tenantID))` to all queries | Medium (mechanical) |
+| **Handlers** | No changes | Zero |
+| **Router** | Add chi host-based routing if needed | Small |
+| **Setup** | New company signup flow, super-admin role | Medium |
+
+### Self-Hosted Backward Compatibility
+
+Existing single-tenant installs will continue to work because:
+- `company_id` is nullable (all existing rows are NULL)
+- `Tenant` middleware is a no-op
+- `CompanySettings` service still queries the single row (future: `WHERE company_id = ?`)
+- Migration can backfill `company_id = 1` for all existing data when upgrading
+
 ## Key Architectural Patterns
 
 1. **Polymorphic Relations** — Tags, custom fields, comments, and locations use `object_type` + `object_id` to attach to multiple entities. Built via `entpoly`.

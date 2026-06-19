@@ -20,6 +20,20 @@ type JobCreate struct {
 	hooks    []Hook
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_c *JobCreate) SetCompanyID(v int64) *JobCreate {
+	_c.mutation.SetCompanyID(v)
+	return _c
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_c *JobCreate) SetNillableCompanyID(v *int64) *JobCreate {
+	if v != nil {
+		_c.SetCompanyID(*v)
+	}
+	return _c
+}
+
 // SetCustomerID sets the "customer_id" field.
 func (_c *JobCreate) SetCustomerID(v int64) *JobCreate {
 	_c.mutation.SetCustomerID(v)
@@ -476,6 +490,10 @@ func (_c *JobCreate) createSpec() (*Job, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.CompanyID(); ok {
+		_spec.SetField(job.FieldCompanyID, field.TypeInt64, value)
+		_node.CompanyID = &value
 	}
 	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(job.FieldCustomerID, field.TypeInt64, value)

@@ -23,6 +23,7 @@ func (TimeEntry) Annotations() []schema.Annotation {
 func (TimeEntry) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.Int64("user_id"),
 		field.Bool("is_manual").Default(false),
 		field.Time("clock_in"),

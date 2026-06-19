@@ -28,6 +28,33 @@ func (_u *CustomFieldDefinitionUpdate) Where(ps ...predicate.CustomFieldDefiniti
 	return _u
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_u *CustomFieldDefinitionUpdate) SetCompanyID(v int64) *CustomFieldDefinitionUpdate {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdate) SetNillableCompanyID(v *int64) *CustomFieldDefinitionUpdate {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *CustomFieldDefinitionUpdate) AddCompanyID(v int64) *CustomFieldDefinitionUpdate {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *CustomFieldDefinitionUpdate) ClearCompanyID() *CustomFieldDefinitionUpdate {
+	_u.mutation.ClearCompanyID()
+	return _u
+}
+
 // SetObjectType sets the "object_type" field.
 func (_u *CustomFieldDefinitionUpdate) SetObjectType(v string) *CustomFieldDefinitionUpdate {
 	_u.mutation.SetObjectType(v)
@@ -198,6 +225,15 @@ func (_u *CustomFieldDefinitionUpdate) sqlSave(ctx context.Context) (_node int, 
 			}
 		}
 	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(customfielddefinition.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(customfielddefinition.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(customfielddefinition.FieldCompanyID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.ObjectType(); ok {
 		_spec.SetField(customfielddefinition.FieldObjectType, field.TypeString, value)
 	}
@@ -240,6 +276,33 @@ type CustomFieldDefinitionUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *CustomFieldDefinitionMutation
+}
+
+// SetCompanyID sets the "company_id" field.
+func (_u *CustomFieldDefinitionUpdateOne) SetCompanyID(v int64) *CustomFieldDefinitionUpdateOne {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdateOne) SetNillableCompanyID(v *int64) *CustomFieldDefinitionUpdateOne {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *CustomFieldDefinitionUpdateOne) AddCompanyID(v int64) *CustomFieldDefinitionUpdateOne {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *CustomFieldDefinitionUpdateOne) ClearCompanyID() *CustomFieldDefinitionUpdateOne {
+	_u.mutation.ClearCompanyID()
+	return _u
 }
 
 // SetObjectType sets the "object_type" field.
@@ -441,6 +504,15 @@ func (_u *CustomFieldDefinitionUpdateOne) sqlSave(ctx context.Context) (_node *C
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(customfielddefinition.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(customfielddefinition.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(customfielddefinition.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ObjectType(); ok {
 		_spec.SetField(customfielddefinition.FieldObjectType, field.TypeString, value)

@@ -262,12 +262,12 @@ func (_q *CommentQuery) Clone() *CommentQuery {
 // Example:
 //
 //	var v []struct {
-//		ObjectType string `json:"object_type,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Comment.Query().
-//		GroupBy(comment.FieldObjectType).
+//		GroupBy(comment.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *CommentQuery) GroupBy(field string, fields ...string) *CommentGroupBy {
@@ -285,11 +285,11 @@ func (_q *CommentQuery) GroupBy(field string, fields ...string) *CommentGroupBy 
 // Example:
 //
 //	var v []struct {
-//		ObjectType string `json:"object_type,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.Comment.Query().
-//		Select(comment.FieldObjectType).
+//		Select(comment.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *CommentQuery) Select(fields ...string) *CommentSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

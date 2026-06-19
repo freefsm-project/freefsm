@@ -21,6 +21,20 @@ type StatusCreate struct {
 	hooks    []Hook
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_c *StatusCreate) SetCompanyID(v int64) *StatusCreate {
+	_c.mutation.SetCompanyID(v)
+	return _c
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_c *StatusCreate) SetNillableCompanyID(v *int64) *StatusCreate {
+	if v != nil {
+		_c.SetCompanyID(*v)
+	}
+	return _c
+}
+
 // SetWorkflowID sets the "workflow_id" field.
 func (_c *StatusCreate) SetWorkflowID(v int64) *StatusCreate {
 	_c.mutation.SetWorkflowID(v)
@@ -191,6 +205,10 @@ func (_c *StatusCreate) createSpec() (*Status, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.CompanyID(); ok {
+		_spec.SetField(status.FieldCompanyID, field.TypeInt64, value)
+		_node.CompanyID = &value
 	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(status.FieldName, field.TypeString, value)

@@ -23,6 +23,7 @@ func (Estimate) Annotations() []schema.Annotation {
 func (Estimate) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.Int64("customer_id").Optional().Nillable(),
 		field.Int64("job_id").Optional().Nillable(),
 		field.Int64("status_id").Optional().Nillable(),

@@ -28,6 +28,33 @@ func (_u *TimeEntryUpdate) Where(ps ...predicate.TimeEntry) *TimeEntryUpdate {
 	return _u
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_u *TimeEntryUpdate) SetCompanyID(v int64) *TimeEntryUpdate {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *TimeEntryUpdate) SetNillableCompanyID(v *int64) *TimeEntryUpdate {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *TimeEntryUpdate) AddCompanyID(v int64) *TimeEntryUpdate {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *TimeEntryUpdate) ClearCompanyID() *TimeEntryUpdate {
+	_u.mutation.ClearCompanyID()
+	return _u
+}
+
 // SetUserID sets the "user_id" field.
 func (_u *TimeEntryUpdate) SetUserID(v int64) *TimeEntryUpdate {
 	_u.mutation.ResetUserID()
@@ -221,6 +248,15 @@ func (_u *TimeEntryUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(timeentry.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(timeentry.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(timeentry.FieldCompanyID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.UserID(); ok {
 		_spec.SetField(timeentry.FieldUserID, field.TypeInt64, value)
 	}
@@ -281,6 +317,33 @@ type TimeEntryUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *TimeEntryMutation
+}
+
+// SetCompanyID sets the "company_id" field.
+func (_u *TimeEntryUpdateOne) SetCompanyID(v int64) *TimeEntryUpdateOne {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *TimeEntryUpdateOne) SetNillableCompanyID(v *int64) *TimeEntryUpdateOne {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *TimeEntryUpdateOne) AddCompanyID(v int64) *TimeEntryUpdateOne {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *TimeEntryUpdateOne) ClearCompanyID() *TimeEntryUpdateOne {
+	_u.mutation.ClearCompanyID()
+	return _u
 }
 
 // SetUserID sets the "user_id" field.
@@ -505,6 +568,15 @@ func (_u *TimeEntryUpdateOne) sqlSave(ctx context.Context) (_node *TimeEntry, er
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(timeentry.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(timeentry.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(timeentry.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.UserID(); ok {
 		_spec.SetField(timeentry.FieldUserID, field.TypeInt64, value)

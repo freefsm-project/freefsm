@@ -20,6 +20,20 @@ type TagLinkCreate struct {
 	hooks    []Hook
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_c *TagLinkCreate) SetCompanyID(v int64) *TagLinkCreate {
+	_c.mutation.SetCompanyID(v)
+	return _c
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_c *TagLinkCreate) SetNillableCompanyID(v *int64) *TagLinkCreate {
+	if v != nil {
+		_c.SetCompanyID(*v)
+	}
+	return _c
+}
+
 // SetTagID sets the "tag_id" field.
 func (_c *TagLinkCreate) SetTagID(v int64) *TagLinkCreate {
 	_c.mutation.SetTagID(v)
@@ -149,6 +163,10 @@ func (_c *TagLinkCreate) createSpec() (*TagLink, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.CompanyID(); ok {
+		_spec.SetField(taglink.FieldCompanyID, field.TypeInt64, value)
+		_node.CompanyID = &value
 	}
 	if value, ok := _c.mutation.TagID(); ok {
 		_spec.SetField(taglink.FieldTagID, field.TypeInt64, value)

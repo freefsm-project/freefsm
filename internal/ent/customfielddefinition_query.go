@@ -262,12 +262,12 @@ func (_q *CustomFieldDefinitionQuery) Clone() *CustomFieldDefinitionQuery {
 // Example:
 //
 //	var v []struct {
-//		ObjectType string `json:"object_type,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.CustomFieldDefinition.Query().
-//		GroupBy(customfielddefinition.FieldObjectType).
+//		GroupBy(customfielddefinition.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *CustomFieldDefinitionQuery) GroupBy(field string, fields ...string) *CustomFieldDefinitionGroupBy {
@@ -285,11 +285,11 @@ func (_q *CustomFieldDefinitionQuery) GroupBy(field string, fields ...string) *C
 // Example:
 //
 //	var v []struct {
-//		ObjectType string `json:"object_type,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.CustomFieldDefinition.Query().
-//		Select(customfielddefinition.FieldObjectType).
+//		Select(customfielddefinition.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *CustomFieldDefinitionQuery) Select(fields ...string) *CustomFieldDefinitionSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

@@ -28,6 +28,33 @@ func (_u *CustomerContactUpdate) Where(ps ...predicate.CustomerContact) *Custome
 	return _u
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_u *CustomerContactUpdate) SetCompanyID(v int64) *CustomerContactUpdate {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *CustomerContactUpdate) SetNillableCompanyID(v *int64) *CustomerContactUpdate {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *CustomerContactUpdate) AddCompanyID(v int64) *CustomerContactUpdate {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *CustomerContactUpdate) ClearCompanyID() *CustomerContactUpdate {
+	_u.mutation.ClearCompanyID()
+	return _u
+}
+
 // SetCustomerID sets the "customer_id" field.
 func (_u *CustomerContactUpdate) SetCustomerID(v int64) *CustomerContactUpdate {
 	_u.mutation.ResetCustomerID()
@@ -196,6 +223,15 @@ func (_u *CustomerContactUpdate) sqlSave(ctx context.Context) (_node int, err er
 			}
 		}
 	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(customercontact.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(customercontact.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(customercontact.FieldCompanyID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(customercontact.FieldCustomerID, field.TypeInt64, value)
 	}
@@ -244,6 +280,33 @@ type CustomerContactUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *CustomerContactMutation
+}
+
+// SetCompanyID sets the "company_id" field.
+func (_u *CustomerContactUpdateOne) SetCompanyID(v int64) *CustomerContactUpdateOne {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *CustomerContactUpdateOne) SetNillableCompanyID(v *int64) *CustomerContactUpdateOne {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *CustomerContactUpdateOne) AddCompanyID(v int64) *CustomerContactUpdateOne {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *CustomerContactUpdateOne) ClearCompanyID() *CustomerContactUpdateOne {
+	_u.mutation.ClearCompanyID()
+	return _u
 }
 
 // SetCustomerID sets the "customer_id" field.
@@ -443,6 +506,15 @@ func (_u *CustomerContactUpdateOne) sqlSave(ctx context.Context) (_node *Custome
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(customercontact.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(customercontact.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(customercontact.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(customercontact.FieldCustomerID, field.TypeInt64, value)

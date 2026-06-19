@@ -262,12 +262,12 @@ func (_q *TimeEntryQuery) Clone() *TimeEntryQuery {
 // Example:
 //
 //	var v []struct {
-//		UserID int64 `json:"user_id,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.TimeEntry.Query().
-//		GroupBy(timeentry.FieldUserID).
+//		GroupBy(timeentry.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *TimeEntryQuery) GroupBy(field string, fields ...string) *TimeEntryGroupBy {
@@ -285,11 +285,11 @@ func (_q *TimeEntryQuery) GroupBy(field string, fields ...string) *TimeEntryGrou
 // Example:
 //
 //	var v []struct {
-//		UserID int64 `json:"user_id,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.TimeEntry.Query().
-//		Select(timeentry.FieldUserID).
+//		Select(timeentry.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *TimeEntryQuery) Select(fields ...string) *TimeEntrySelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

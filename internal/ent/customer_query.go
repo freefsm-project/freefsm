@@ -262,12 +262,12 @@ func (_q *CustomerQuery) Clone() *CustomerQuery {
 // Example:
 //
 //	var v []struct {
-//		FirstName string `json:"first_name,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Customer.Query().
-//		GroupBy(customer.FieldFirstName).
+//		GroupBy(customer.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *CustomerQuery) GroupBy(field string, fields ...string) *CustomerGroupBy {
@@ -285,11 +285,11 @@ func (_q *CustomerQuery) GroupBy(field string, fields ...string) *CustomerGroupB
 // Example:
 //
 //	var v []struct {
-//		FirstName string `json:"first_name,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.Customer.Query().
-//		Select(customer.FieldFirstName).
+//		Select(customer.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *CustomerQuery) Select(fields ...string) *CustomerSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

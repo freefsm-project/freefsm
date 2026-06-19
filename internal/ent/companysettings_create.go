@@ -20,6 +20,20 @@ type CompanySettingsCreate struct {
 	hooks    []Hook
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_c *CompanySettingsCreate) SetCompanyID(v int64) *CompanySettingsCreate {
+	_c.mutation.SetCompanyID(v)
+	return _c
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableCompanyID(v *int64) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetCompanyID(*v)
+	}
+	return _c
+}
+
 // SetBusinessName sets the "business_name" field.
 func (_c *CompanySettingsCreate) SetBusinessName(v string) *CompanySettingsCreate {
 	_c.mutation.SetBusinessName(v)
@@ -621,6 +635,10 @@ func (_c *CompanySettingsCreate) createSpec() (*CompanySettings, *sqlgraph.Creat
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.CompanyID(); ok {
+		_spec.SetField(companysettings.FieldCompanyID, field.TypeInt64, value)
+		_node.CompanyID = &value
 	}
 	if value, ok := _c.mutation.BusinessName(); ok {
 		_spec.SetField(companysettings.FieldBusinessName, field.TypeString, value)

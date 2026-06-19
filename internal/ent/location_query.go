@@ -262,12 +262,12 @@ func (_q *LocationQuery) Clone() *LocationQuery {
 // Example:
 //
 //	var v []struct {
-//		ObjectType string `json:"object_type,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Location.Query().
-//		GroupBy(location.FieldObjectType).
+//		GroupBy(location.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *LocationQuery) GroupBy(field string, fields ...string) *LocationGroupBy {
@@ -285,11 +285,11 @@ func (_q *LocationQuery) GroupBy(field string, fields ...string) *LocationGroupB
 // Example:
 //
 //	var v []struct {
-//		ObjectType string `json:"object_type,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.Location.Query().
-//		Select(location.FieldObjectType).
+//		Select(location.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *LocationQuery) Select(fields ...string) *LocationSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

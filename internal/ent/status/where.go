@@ -55,6 +55,11 @@ func IDLTE(id int64) predicate.Status {
 	return predicate.Status(sql.FieldLTE(FieldID, id))
 }
 
+// CompanyID applies equality check predicate on the "company_id" field. It's identical to CompanyIDEQ.
+func CompanyID(v int64) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldCompanyID, v))
+}
+
 // WorkflowID applies equality check predicate on the "workflow_id" field. It's identical to WorkflowIDEQ.
 func WorkflowID(v int64) predicate.Status {
 	return predicate.Status(sql.FieldEQ(FieldWorkflowID, v))
@@ -78,6 +83,56 @@ func SortOrder(v int) predicate.Status {
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Status {
 	return predicate.Status(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// CompanyIDEQ applies the EQ predicate on the "company_id" field.
+func CompanyIDEQ(v int64) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldCompanyID, v))
+}
+
+// CompanyIDNEQ applies the NEQ predicate on the "company_id" field.
+func CompanyIDNEQ(v int64) predicate.Status {
+	return predicate.Status(sql.FieldNEQ(FieldCompanyID, v))
+}
+
+// CompanyIDIn applies the In predicate on the "company_id" field.
+func CompanyIDIn(vs ...int64) predicate.Status {
+	return predicate.Status(sql.FieldIn(FieldCompanyID, vs...))
+}
+
+// CompanyIDNotIn applies the NotIn predicate on the "company_id" field.
+func CompanyIDNotIn(vs ...int64) predicate.Status {
+	return predicate.Status(sql.FieldNotIn(FieldCompanyID, vs...))
+}
+
+// CompanyIDGT applies the GT predicate on the "company_id" field.
+func CompanyIDGT(v int64) predicate.Status {
+	return predicate.Status(sql.FieldGT(FieldCompanyID, v))
+}
+
+// CompanyIDGTE applies the GTE predicate on the "company_id" field.
+func CompanyIDGTE(v int64) predicate.Status {
+	return predicate.Status(sql.FieldGTE(FieldCompanyID, v))
+}
+
+// CompanyIDLT applies the LT predicate on the "company_id" field.
+func CompanyIDLT(v int64) predicate.Status {
+	return predicate.Status(sql.FieldLT(FieldCompanyID, v))
+}
+
+// CompanyIDLTE applies the LTE predicate on the "company_id" field.
+func CompanyIDLTE(v int64) predicate.Status {
+	return predicate.Status(sql.FieldLTE(FieldCompanyID, v))
+}
+
+// CompanyIDIsNil applies the IsNil predicate on the "company_id" field.
+func CompanyIDIsNil() predicate.Status {
+	return predicate.Status(sql.FieldIsNull(FieldCompanyID))
+}
+
+// CompanyIDNotNil applies the NotNil predicate on the "company_id" field.
+func CompanyIDNotNil() predicate.Status {
+	return predicate.Status(sql.FieldNotNull(FieldCompanyID))
 }
 
 // WorkflowIDEQ applies the EQ predicate on the "workflow_id" field.

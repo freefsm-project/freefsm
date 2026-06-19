@@ -28,6 +28,33 @@ func (_u *PasswordResetTokenUpdate) Where(ps ...predicate.PasswordResetToken) *P
 	return _u
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_u *PasswordResetTokenUpdate) SetCompanyID(v int64) *PasswordResetTokenUpdate {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *PasswordResetTokenUpdate) SetNillableCompanyID(v *int64) *PasswordResetTokenUpdate {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *PasswordResetTokenUpdate) AddCompanyID(v int64) *PasswordResetTokenUpdate {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *PasswordResetTokenUpdate) ClearCompanyID() *PasswordResetTokenUpdate {
+	_u.mutation.ClearCompanyID()
+	return _u
+}
+
 // SetTokenHash sets the "token_hash" field.
 func (_u *PasswordResetTokenUpdate) SetTokenHash(v string) *PasswordResetTokenUpdate {
 	_u.mutation.SetTokenHash(v)
@@ -145,6 +172,15 @@ func (_u *PasswordResetTokenUpdate) sqlSave(ctx context.Context) (_node int, err
 			}
 		}
 	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(passwordresettoken.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(passwordresettoken.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(passwordresettoken.FieldCompanyID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.TokenHash(); ok {
 		_spec.SetField(passwordresettoken.FieldTokenHash, field.TypeString, value)
 	}
@@ -178,6 +214,33 @@ type PasswordResetTokenUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *PasswordResetTokenMutation
+}
+
+// SetCompanyID sets the "company_id" field.
+func (_u *PasswordResetTokenUpdateOne) SetCompanyID(v int64) *PasswordResetTokenUpdateOne {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *PasswordResetTokenUpdateOne) SetNillableCompanyID(v *int64) *PasswordResetTokenUpdateOne {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *PasswordResetTokenUpdateOne) AddCompanyID(v int64) *PasswordResetTokenUpdateOne {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *PasswordResetTokenUpdateOne) ClearCompanyID() *PasswordResetTokenUpdateOne {
+	_u.mutation.ClearCompanyID()
+	return _u
 }
 
 // SetTokenHash sets the "token_hash" field.
@@ -326,6 +389,15 @@ func (_u *PasswordResetTokenUpdateOne) sqlSave(ctx context.Context) (_node *Pass
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(passwordresettoken.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(passwordresettoken.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(passwordresettoken.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.TokenHash(); ok {
 		_spec.SetField(passwordresettoken.FieldTokenHash, field.TypeString, value)

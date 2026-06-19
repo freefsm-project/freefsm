@@ -22,6 +22,7 @@ func (User) Annotations() []schema.Annotation {
 func (User) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.String("email").Unique().NotEmpty(),
 		field.String("password_hash").NotEmpty(),
 		field.String("name").NotEmpty(),

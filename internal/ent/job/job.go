@@ -13,6 +13,8 @@ const (
 	Label = "job"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldCompanyID holds the string denoting the company_id field in the database.
+	FieldCompanyID = "company_id"
 	// FieldCustomerID holds the string denoting the customer_id field in the database.
 	FieldCustomerID = "customer_id"
 	// FieldProjectID holds the string denoting the project_id field in the database.
@@ -64,6 +66,7 @@ const (
 // Columns holds all SQL columns for job fields.
 var Columns = []string{
 	FieldID,
+	FieldCompanyID,
 	FieldCustomerID,
 	FieldProjectID,
 	FieldLocationID,
@@ -133,6 +136,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByCompanyID orders the results by the company_id field.
+func ByCompanyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCompanyID, opts...).ToFunc()
 }
 
 // ByCustomerID orders the results by the customer_id field.

@@ -13,6 +13,8 @@ const (
 	Label = "comment"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldCompanyID holds the string denoting the company_id field in the database.
+	FieldCompanyID = "company_id"
 	// FieldObjectType holds the string denoting the object_type field in the database.
 	FieldObjectType = "object_type"
 	// FieldObjectID holds the string denoting the object_id field in the database.
@@ -32,6 +34,7 @@ const (
 // Columns holds all SQL columns for comment fields.
 var Columns = []string{
 	FieldID,
+	FieldCompanyID,
 	FieldObjectType,
 	FieldObjectID,
 	FieldAuthorID,
@@ -69,6 +72,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByCompanyID orders the results by the company_id field.
+func ByCompanyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCompanyID, opts...).ToFunc()
 }
 
 // ByObjectType orders the results by the object_type field.

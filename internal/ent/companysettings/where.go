@@ -54,6 +54,11 @@ func IDLTE(id int64) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldLTE(FieldID, id))
 }
 
+// CompanyID applies equality check predicate on the "company_id" field. It's identical to CompanyIDEQ.
+func CompanyID(v int64) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldCompanyID, v))
+}
+
 // BusinessName applies equality check predicate on the "business_name" field. It's identical to BusinessNameEQ.
 func BusinessName(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldBusinessName, v))
@@ -177,6 +182,56 @@ func CreatedAt(v time.Time) predicate.CompanySettings {
 // UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
 func UpdatedAt(v time.Time) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldUpdatedAt, v))
+}
+
+// CompanyIDEQ applies the EQ predicate on the "company_id" field.
+func CompanyIDEQ(v int64) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldCompanyID, v))
+}
+
+// CompanyIDNEQ applies the NEQ predicate on the "company_id" field.
+func CompanyIDNEQ(v int64) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldCompanyID, v))
+}
+
+// CompanyIDIn applies the In predicate on the "company_id" field.
+func CompanyIDIn(vs ...int64) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldCompanyID, vs...))
+}
+
+// CompanyIDNotIn applies the NotIn predicate on the "company_id" field.
+func CompanyIDNotIn(vs ...int64) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldCompanyID, vs...))
+}
+
+// CompanyIDGT applies the GT predicate on the "company_id" field.
+func CompanyIDGT(v int64) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldCompanyID, v))
+}
+
+// CompanyIDGTE applies the GTE predicate on the "company_id" field.
+func CompanyIDGTE(v int64) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldCompanyID, v))
+}
+
+// CompanyIDLT applies the LT predicate on the "company_id" field.
+func CompanyIDLT(v int64) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldCompanyID, v))
+}
+
+// CompanyIDLTE applies the LTE predicate on the "company_id" field.
+func CompanyIDLTE(v int64) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldCompanyID, v))
+}
+
+// CompanyIDIsNil applies the IsNil predicate on the "company_id" field.
+func CompanyIDIsNil() predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIsNull(FieldCompanyID))
+}
+
+// CompanyIDNotNil applies the NotNil predicate on the "company_id" field.
+func CompanyIDNotNil() predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotNull(FieldCompanyID))
 }
 
 // BusinessNameEQ applies the EQ predicate on the "business_name" field.

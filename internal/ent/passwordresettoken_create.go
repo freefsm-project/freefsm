@@ -20,6 +20,20 @@ type PasswordResetTokenCreate struct {
 	hooks    []Hook
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_c *PasswordResetTokenCreate) SetCompanyID(v int64) *PasswordResetTokenCreate {
+	_c.mutation.SetCompanyID(v)
+	return _c
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_c *PasswordResetTokenCreate) SetNillableCompanyID(v *int64) *PasswordResetTokenCreate {
+	if v != nil {
+		_c.SetCompanyID(*v)
+	}
+	return _c
+}
+
 // SetTokenHash sets the "token_hash" field.
 func (_c *PasswordResetTokenCreate) SetTokenHash(v string) *PasswordResetTokenCreate {
 	_c.mutation.SetTokenHash(v)
@@ -149,6 +163,10 @@ func (_c *PasswordResetTokenCreate) createSpec() (*PasswordResetToken, *sqlgraph
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.CompanyID(); ok {
+		_spec.SetField(passwordresettoken.FieldCompanyID, field.TypeInt64, value)
+		_node.CompanyID = &value
 	}
 	if value, ok := _c.mutation.TokenHash(); ok {
 		_spec.SetField(passwordresettoken.FieldTokenHash, field.TypeString, value)

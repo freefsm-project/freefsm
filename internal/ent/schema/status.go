@@ -24,6 +24,7 @@ func (Status) Annotations() []schema.Annotation {
 func (Status) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.Int64("workflow_id"),
 		field.String("name").NotEmpty(),
 		field.String("color").Default("#6B7280"),

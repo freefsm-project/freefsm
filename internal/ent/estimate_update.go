@@ -28,6 +28,33 @@ func (_u *EstimateUpdate) Where(ps ...predicate.Estimate) *EstimateUpdate {
 	return _u
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_u *EstimateUpdate) SetCompanyID(v int64) *EstimateUpdate {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *EstimateUpdate) SetNillableCompanyID(v *int64) *EstimateUpdate {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *EstimateUpdate) AddCompanyID(v int64) *EstimateUpdate {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *EstimateUpdate) ClearCompanyID() *EstimateUpdate {
+	_u.mutation.ClearCompanyID()
+	return _u
+}
+
 // SetCustomerID sets the "customer_id" field.
 func (_u *EstimateUpdate) SetCustomerID(v int64) *EstimateUpdate {
 	_u.mutation.ResetCustomerID()
@@ -235,6 +262,15 @@ func (_u *EstimateUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(estimate.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(estimate.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(estimate.FieldCompanyID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(estimate.FieldCustomerID, field.TypeInt64, value)
 	}
@@ -298,6 +334,33 @@ type EstimateUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *EstimateMutation
+}
+
+// SetCompanyID sets the "company_id" field.
+func (_u *EstimateUpdateOne) SetCompanyID(v int64) *EstimateUpdateOne {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *EstimateUpdateOne) SetNillableCompanyID(v *int64) *EstimateUpdateOne {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *EstimateUpdateOne) AddCompanyID(v int64) *EstimateUpdateOne {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *EstimateUpdateOne) ClearCompanyID() *EstimateUpdateOne {
+	_u.mutation.ClearCompanyID()
+	return _u
 }
 
 // SetCustomerID sets the "customer_id" field.
@@ -536,6 +599,15 @@ func (_u *EstimateUpdateOne) sqlSave(ctx context.Context) (_node *Estimate, err 
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(estimate.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(estimate.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(estimate.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(estimate.FieldCustomerID, field.TypeInt64, value)

@@ -20,6 +20,20 @@ type CommentCreate struct {
 	hooks    []Hook
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_c *CommentCreate) SetCompanyID(v int64) *CommentCreate {
+	_c.mutation.SetCompanyID(v)
+	return _c
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_c *CommentCreate) SetNillableCompanyID(v *int64) *CommentCreate {
+	if v != nil {
+		_c.SetCompanyID(*v)
+	}
+	return _c
+}
+
 // SetObjectType sets the "object_type" field.
 func (_c *CommentCreate) SetObjectType(v string) *CommentCreate {
 	_c.mutation.SetObjectType(v)
@@ -184,6 +198,10 @@ func (_c *CommentCreate) createSpec() (*Comment, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.CompanyID(); ok {
+		_spec.SetField(comment.FieldCompanyID, field.TypeInt64, value)
+		_node.CompanyID = &value
 	}
 	if value, ok := _c.mutation.ObjectType(); ok {
 		_spec.SetField(comment.FieldObjectType, field.TypeString, value)

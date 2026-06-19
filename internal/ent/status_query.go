@@ -298,12 +298,12 @@ func (_q *StatusQuery) WithWorkflow(opts ...func(*StatusWorkflowQuery)) *StatusQ
 // Example:
 //
 //	var v []struct {
-//		WorkflowID int64 `json:"workflow_id,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Status.Query().
-//		GroupBy(status.FieldWorkflowID).
+//		GroupBy(status.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *StatusQuery) GroupBy(field string, fields ...string) *StatusGroupBy {
@@ -321,11 +321,11 @@ func (_q *StatusQuery) GroupBy(field string, fields ...string) *StatusGroupBy {
 // Example:
 //
 //	var v []struct {
-//		WorkflowID int64 `json:"workflow_id,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.Status.Query().
-//		Select(status.FieldWorkflowID).
+//		Select(status.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *StatusQuery) Select(fields ...string) *StatusSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

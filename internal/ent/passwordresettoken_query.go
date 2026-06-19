@@ -262,12 +262,12 @@ func (_q *PasswordResetTokenQuery) Clone() *PasswordResetTokenQuery {
 // Example:
 //
 //	var v []struct {
-//		TokenHash string `json:"token_hash,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.PasswordResetToken.Query().
-//		GroupBy(passwordresettoken.FieldTokenHash).
+//		GroupBy(passwordresettoken.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *PasswordResetTokenQuery) GroupBy(field string, fields ...string) *PasswordResetTokenGroupBy {
@@ -285,11 +285,11 @@ func (_q *PasswordResetTokenQuery) GroupBy(field string, fields ...string) *Pass
 // Example:
 //
 //	var v []struct {
-//		TokenHash string `json:"token_hash,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.PasswordResetToken.Query().
-//		Select(passwordresettoken.FieldTokenHash).
+//		Select(passwordresettoken.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *PasswordResetTokenQuery) Select(fields ...string) *PasswordResetTokenSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

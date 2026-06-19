@@ -28,6 +28,33 @@ func (_u *ProjectUpdate) Where(ps ...predicate.Project) *ProjectUpdate {
 	return _u
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_u *ProjectUpdate) SetCompanyID(v int64) *ProjectUpdate {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *ProjectUpdate) SetNillableCompanyID(v *int64) *ProjectUpdate {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *ProjectUpdate) AddCompanyID(v int64) *ProjectUpdate {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *ProjectUpdate) ClearCompanyID() *ProjectUpdate {
+	_u.mutation.ClearCompanyID()
+	return _u
+}
+
 // SetCustomerID sets the "customer_id" field.
 func (_u *ProjectUpdate) SetCustomerID(v int64) *ProjectUpdate {
 	_u.mutation.ResetCustomerID()
@@ -289,6 +316,15 @@ func (_u *ProjectUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(project.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(project.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(project.FieldCompanyID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(project.FieldCustomerID, field.TypeInt64, value)
 	}
@@ -364,6 +400,33 @@ type ProjectUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *ProjectMutation
+}
+
+// SetCompanyID sets the "company_id" field.
+func (_u *ProjectUpdateOne) SetCompanyID(v int64) *ProjectUpdateOne {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *ProjectUpdateOne) SetNillableCompanyID(v *int64) *ProjectUpdateOne {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *ProjectUpdateOne) AddCompanyID(v int64) *ProjectUpdateOne {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *ProjectUpdateOne) ClearCompanyID() *ProjectUpdateOne {
+	_u.mutation.ClearCompanyID()
+	return _u
 }
 
 // SetCustomerID sets the "customer_id" field.
@@ -656,6 +719,15 @@ func (_u *ProjectUpdateOne) sqlSave(ctx context.Context) (_node *Project, err er
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(project.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(project.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(project.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.CustomerID(); ok {
 		_spec.SetField(project.FieldCustomerID, field.TypeInt64, value)

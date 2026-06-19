@@ -23,6 +23,7 @@ func (StatusWorkflow) Annotations() []schema.Annotation {
 func (StatusWorkflow) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.String("name").NotEmpty(),
 		field.String("object_type").NotEmpty(),
 		field.Time("created_at").Default(time.Now),

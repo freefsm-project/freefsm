@@ -13,6 +13,8 @@ const (
 	Label = "company_settings"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldCompanyID holds the string denoting the company_id field in the database.
+	FieldCompanyID = "company_id"
 	// FieldBusinessName holds the string denoting the business_name field in the database.
 	FieldBusinessName = "business_name"
 	// FieldAddress holds the string denoting the address field in the database.
@@ -70,6 +72,7 @@ const (
 // Columns holds all SQL columns for companysettings fields.
 var Columns = []string{
 	FieldID,
+	FieldCompanyID,
 	FieldBusinessName,
 	FieldAddress,
 	FieldCity,
@@ -168,6 +171,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByCompanyID orders the results by the company_id field.
+func ByCompanyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCompanyID, opts...).ToFunc()
 }
 
 // ByBusinessName orders the results by the business_name field.

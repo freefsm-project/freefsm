@@ -262,12 +262,12 @@ func (_q *CustomerContactQuery) Clone() *CustomerContactQuery {
 // Example:
 //
 //	var v []struct {
-//		CustomerID int64 `json:"customer_id,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.CustomerContact.Query().
-//		GroupBy(customercontact.FieldCustomerID).
+//		GroupBy(customercontact.FieldCompanyID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *CustomerContactQuery) GroupBy(field string, fields ...string) *CustomerContactGroupBy {
@@ -285,11 +285,11 @@ func (_q *CustomerContactQuery) GroupBy(field string, fields ...string) *Custome
 // Example:
 //
 //	var v []struct {
-//		CustomerID int64 `json:"customer_id,omitempty"`
+//		CompanyID int64 `json:"company_id,omitempty"`
 //	}
 //
 //	client.CustomerContact.Query().
-//		Select(customercontact.FieldCustomerID).
+//		Select(customercontact.FieldCompanyID).
 //		Scan(ctx, &v)
 func (_q *CustomerContactQuery) Select(fields ...string) *CustomerContactSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

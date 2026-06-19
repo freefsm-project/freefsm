@@ -28,6 +28,33 @@ func (_u *LocationUpdate) Where(ps ...predicate.Location) *LocationUpdate {
 	return _u
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_u *LocationUpdate) SetCompanyID(v int64) *LocationUpdate {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *LocationUpdate) SetNillableCompanyID(v *int64) *LocationUpdate {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *LocationUpdate) AddCompanyID(v int64) *LocationUpdate {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *LocationUpdate) ClearCompanyID() *LocationUpdate {
+	_u.mutation.ClearCompanyID()
+	return _u
+}
+
 // SetObjectType sets the "object_type" field.
 func (_u *LocationUpdate) SetObjectType(v string) *LocationUpdate {
 	_u.mutation.SetObjectType(v)
@@ -231,6 +258,15 @@ func (_u *LocationUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(location.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(location.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(location.FieldCompanyID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.ObjectType(); ok {
 		_spec.SetField(location.FieldObjectType, field.TypeString, value)
 	}
@@ -285,6 +321,33 @@ type LocationUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *LocationMutation
+}
+
+// SetCompanyID sets the "company_id" field.
+func (_u *LocationUpdateOne) SetCompanyID(v int64) *LocationUpdateOne {
+	_u.mutation.ResetCompanyID()
+	_u.mutation.SetCompanyID(v)
+	return _u
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_u *LocationUpdateOne) SetNillableCompanyID(v *int64) *LocationUpdateOne {
+	if v != nil {
+		_u.SetCompanyID(*v)
+	}
+	return _u
+}
+
+// AddCompanyID adds value to the "company_id" field.
+func (_u *LocationUpdateOne) AddCompanyID(v int64) *LocationUpdateOne {
+	_u.mutation.AddCompanyID(v)
+	return _u
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (_u *LocationUpdateOne) ClearCompanyID() *LocationUpdateOne {
+	_u.mutation.ClearCompanyID()
+	return _u
 }
 
 // SetObjectType sets the "object_type" field.
@@ -519,6 +582,15 @@ func (_u *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err 
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.CompanyID(); ok {
+		_spec.SetField(location.FieldCompanyID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedCompanyID(); ok {
+		_spec.AddField(location.FieldCompanyID, field.TypeInt64, value)
+	}
+	if _u.mutation.CompanyIDCleared() {
+		_spec.ClearField(location.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ObjectType(); ok {
 		_spec.SetField(location.FieldObjectType, field.TypeString, value)

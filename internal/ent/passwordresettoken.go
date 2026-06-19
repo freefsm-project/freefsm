@@ -17,6 +17,8 @@ type PasswordResetToken struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
+	// CompanyID holds the value of the "company_id" field.
+	CompanyID *int64 `json:"company_id,omitempty"`
 	// TokenHash holds the value of the "token_hash" field.
 	TokenHash string `json:"token_hash,omitempty"`
 	// UserID holds the value of the "user_id" field.
@@ -33,7 +35,7 @@ func (*PasswordResetToken) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case passwordresettoken.FieldID, passwordresettoken.FieldUserID:
+		case passwordresettoken.FieldID, passwordresettoken.FieldCompanyID, passwordresettoken.FieldUserID:
 			values[i] = new(sql.NullInt64)
 		case passwordresettoken.FieldTokenHash:
 			values[i] = new(sql.NullString)
@@ -60,6 +62,13 @@ func (_m *PasswordResetToken) assignValues(columns []string, values []any) error
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int64(value.Int64)
+		case passwordresettoken.FieldCompanyID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field company_id", values[i])
+			} else if value.Valid {
+				_m.CompanyID = new(int64)
+				*_m.CompanyID = value.Int64
+			}
 		case passwordresettoken.FieldTokenHash:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field token_hash", values[i])
@@ -120,6 +129,11 @@ func (_m *PasswordResetToken) String() string {
 	var builder strings.Builder
 	builder.WriteString("PasswordResetToken(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.CompanyID; v != nil {
+		builder.WriteString("company_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("token_hash=")
 	builder.WriteString(_m.TokenHash)
 	builder.WriteString(", ")

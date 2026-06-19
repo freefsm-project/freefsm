@@ -22,6 +22,7 @@ func (CompanySettings) Annotations() []schema.Annotation {
 func (CompanySettings) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.String("business_name").Default(""),
 		field.String("address").Default(""),
 		field.String("city").Default(""),

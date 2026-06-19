@@ -13,6 +13,8 @@ const (
 	Label = "tag_link"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldCompanyID holds the string denoting the company_id field in the database.
+	FieldCompanyID = "company_id"
 	// FieldTagID holds the string denoting the tag_id field in the database.
 	FieldTagID = "tag_id"
 	// FieldObjectType holds the string denoting the object_type field in the database.
@@ -28,6 +30,7 @@ const (
 // Columns holds all SQL columns for taglink fields.
 var Columns = []string{
 	FieldID,
+	FieldCompanyID,
 	FieldTagID,
 	FieldObjectType,
 	FieldObjectID,
@@ -57,6 +60,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByCompanyID orders the results by the company_id field.
+func ByCompanyID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldCompanyID, opts...).ToFunc()
 }
 
 // ByTagID orders the results by the tag_id field.

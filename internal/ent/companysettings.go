@@ -17,6 +17,8 @@ type CompanySettings struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
+	// CompanyID holds the value of the "company_id" field.
+	CompanyID *int64 `json:"company_id,omitempty"`
 	// BusinessName holds the value of the "business_name" field.
 	BusinessName string `json:"business_name,omitempty"`
 	// Address holds the value of the "address" field.
@@ -77,7 +79,7 @@ func (*CompanySettings) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case companysettings.FieldPasswordRequireUppercase, companysettings.FieldPasswordRequireLowercase, companysettings.FieldPasswordRequireDigit, companysettings.FieldPasswordRequireSpecial:
 			values[i] = new(sql.NullBool)
-		case companysettings.FieldID, companysettings.FieldDefaultDueDays, companysettings.FieldSMTPPort, companysettings.FieldPasswordMinLength:
+		case companysettings.FieldID, companysettings.FieldCompanyID, companysettings.FieldDefaultDueDays, companysettings.FieldSMTPPort, companysettings.FieldPasswordMinLength:
 			values[i] = new(sql.NullInt64)
 		case companysettings.FieldBusinessName, companysettings.FieldAddress, companysettings.FieldCity, companysettings.FieldState, companysettings.FieldZip, companysettings.FieldPhone, companysettings.FieldEmail, companysettings.FieldTaxID, companysettings.FieldDefaultTaxRate, companysettings.FieldInvoicePrefix, companysettings.FieldEstimatePrefix, companysettings.FieldSMTPHost, companysettings.FieldSMTPUser, companysettings.FieldSMTPPassword, companysettings.FieldSMTPFrom, companysettings.FieldTimezone:
 			values[i] = new(sql.NullString)
@@ -104,6 +106,13 @@ func (_m *CompanySettings) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int64(value.Int64)
+		case companysettings.FieldCompanyID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field company_id", values[i])
+			} else if value.Valid {
+				_m.CompanyID = new(int64)
+				*_m.CompanyID = value.Int64
+			}
 		case companysettings.FieldBusinessName:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field business_name", values[i])
@@ -290,6 +299,11 @@ func (_m *CompanySettings) String() string {
 	var builder strings.Builder
 	builder.WriteString("CompanySettings(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.CompanyID; v != nil {
+		builder.WriteString("company_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("business_name=")
 	builder.WriteString(_m.BusinessName)
 	builder.WriteString(", ")

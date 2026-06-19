@@ -23,6 +23,7 @@ func (Item) Annotations() []schema.Annotation {
 func (Item) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.Int64("company_id").Optional().Nillable(),
 		field.String("name").NotEmpty(),
 		field.String("type").Default("service"),
 		field.String("sku").Default(""),

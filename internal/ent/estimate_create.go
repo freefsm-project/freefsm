@@ -20,6 +20,20 @@ type EstimateCreate struct {
 	hooks    []Hook
 }
 
+// SetCompanyID sets the "company_id" field.
+func (_c *EstimateCreate) SetCompanyID(v int64) *EstimateCreate {
+	_c.mutation.SetCompanyID(v)
+	return _c
+}
+
+// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableCompanyID(v *int64) *EstimateCreate {
+	if v != nil {
+		_c.SetCompanyID(*v)
+	}
+	return _c
+}
+
 // SetCustomerID sets the "customer_id" field.
 func (_c *EstimateCreate) SetCustomerID(v int64) *EstimateCreate {
 	_c.mutation.SetCustomerID(v)
@@ -285,6 +299,10 @@ func (_c *EstimateCreate) createSpec() (*Estimate, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.CompanyID(); ok {
+		_spec.SetField(estimate.FieldCompanyID, field.TypeInt64, value)
+		_node.CompanyID = &value
 	}
 	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(estimate.FieldCustomerID, field.TypeInt64, value)
