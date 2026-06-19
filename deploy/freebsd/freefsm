@@ -27,7 +27,7 @@ load_rc_config "$name"
 : ${freefsm_session_secret:=""}
 : ${freefsm_setup_token:=""}
 
-pidfile="/var/run/freefsm.pid"
+pidfile="/var/run/freefsm/freefsm.pid"
 command="/usr/sbin/daemon"
 command_args="-f -p ${pidfile} /usr/local/bin/freefsm"
 procname="/usr/local/bin/freefsm"
