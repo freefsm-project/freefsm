@@ -9,16 +9,12 @@
 name="freefsm"
 rcvar="freefsm_enable"
 
+command="/usr/local/bin/freefsm"
+command_args="-config /usr/local/etc/freefsm.conf"
+pidfile="/var/run/freefsm.pid"
+
 load_rc_config "$name"
 
 : ${freefsm_enable:="NO"}
-: ${freefsm_user:="freefsm"}
-: ${freefsm_group:="freefsm"}
-
-pidfile="/var/run/${name}.pid"
-rc_bg="YES"
-command="/usr/local/bin/freefsm"
-command_args="-config /usr/local/etc/${name}.conf"
-freefsm_user="${freefsm_user}"
 
 run_rc_command "$1"
