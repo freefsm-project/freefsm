@@ -14,12 +14,12 @@ templ UserForm(p UserFormData) {
 				<input type="email" name="email" value={ p.User.User.Email } required/>
 			</label>
 			if p.IsNew {
-				<label>
+				<label id="password_field" style="display:none">
 					Password
-					<input type="password" name="password" required minlength="8"/>
+					<input type="password" name="password" minlength="8"/>
 				</label>
 				<label>
-					<input type="checkbox" name="send_welcome_email" checked/>
+					<input type="checkbox" name="send_welcome_email" id="send_welcome_email" checked/>
 					Send welcome email with temporary password
 				</label>
 			}
@@ -36,5 +36,22 @@ templ UserForm(p UserFormData) {
 				<a href="/users" role="button" class="outline">Cancel</a>
 			</div>
 		</form>
+		if p.IsNew {
+			<script>
+			(function() {
+				var cb = document.getElementById('send_welcome_email');
+				var pw = document.getElementById('password_field');
+				var input = pw.querySelector('input');
+				function sync() {
+					var show = !cb.checked;
+					pw.style.display = show ? '' : 'none';
+					if (show) input.setAttribute('required', '');
+					else input.removeAttribute('required');
+				}
+				cb.addEventListener('change', sync);
+				sync();
+			})();
+			</script>
+		}
 	}
 }

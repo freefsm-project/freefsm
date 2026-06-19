@@ -98,7 +98,7 @@ func UserForm(p UserFormData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if p.IsNew {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<label>Password <input type=\"password\" name=\"password\" required minlength=\"8\"></label> <label><input type=\"checkbox\" name=\"send_welcome_email\" checked> Send welcome email with temporary password</label> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<label id=\"password_field\" style=\"display:none\">Password <input type=\"password\" name=\"password\" minlength=\"8\"></label> <label><input type=\"checkbox\" name=\"send_welcome_email\" id=\"send_welcome_email\" checked> Send welcome email with temporary password</label> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -152,6 +152,12 @@ func UserForm(p UserFormData) templ.Component {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</select></label><div style=\"display:flex;gap:0.5rem;margin-top:1rem\"><button type=\"submit\">Save</button> <a href=\"/users\" role=\"button\" class=\"outline\">Cancel</a></div></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
+			}
+			if p.IsNew {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<script>\n\t\t\t(function() {\n\t\t\t\tvar cb = document.getElementById('send_welcome_email');\n\t\t\t\tvar pw = document.getElementById('password_field');\n\t\t\t\tvar input = pw.querySelector('input');\n\t\t\t\tfunction sync() {\n\t\t\t\t\tvar show = !cb.checked;\n\t\t\t\t\tpw.style.display = show ? '' : 'none';\n\t\t\t\t\tif (show) input.setAttribute('required', '');\n\t\t\t\t\telse input.removeAttribute('required');\n\t\t\t\t}\n\t\t\t\tcb.addEventListener('change', sync);\n\t\t\t\tsync();\n\t\t\t})();\n\t\t\t</script>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
 			return nil
 		})
