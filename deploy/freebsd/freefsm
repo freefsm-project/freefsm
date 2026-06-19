@@ -1,5 +1,5 @@
 #!/bin/sh
-
+#
 # PROVIDE: freefsm
 # REQUIRE: LOGIN postgresql
 # KEYWORD: shutdown
@@ -9,12 +9,21 @@
 name="freefsm"
 rcvar="freefsm_enable"
 
-command="/usr/local/bin/freefsm"
-command_args="-config /usr/local/etc/freefsm.conf"
-pidfile="/var/run/freefsm.pid"
-
 load_rc_config "$name"
 
 : ${freefsm_enable:="NO"}
+: ${freefsm_user:="freefsm"}
+
+pidfile="/var/run/freefsm.pid"
+procname="/usr/local/bin/freefsm"
+
+start_cmd="freefsm_start"
+
+freefsm_start() {
+    echo "Starting ${name}."
+    /usr/sbin/daemon -P ${pidfile} -u ${freefsm_user} \
+        -o /var/log/freefsm/freefsm.log \
+        ${procname} -config /usr/local/etc/freefsm.conf
+}
 
 run_rc_command "$1"
