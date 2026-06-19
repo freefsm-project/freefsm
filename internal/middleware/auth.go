@@ -107,3 +107,32 @@ func DispatcherOrAdmin(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+type ForcePasswordChecker interface {
+	MustChangePassword(ctx context.Context, userID int64) (bool, error)
+}
+
+func ForcePasswordChange(checker ForcePasswordChecker) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/change-password" || r.URL.Path == "/logout" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			u, ok := UserFromContext(r.Context())
+			if !ok || u == nil {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			mustChange, err := checker.MustChangePassword(r.Context(), u.ID)
+			if err == nil && mustChange {
+				http.Redirect(w, r, "/change-password", http.StatusSeeOther)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}

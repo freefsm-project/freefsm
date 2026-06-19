@@ -53,6 +53,16 @@ type CompanySettings struct {
 	SMTPFrom string `json:"smtp_from,omitempty"`
 	// Timezone holds the value of the "timezone" field.
 	Timezone string `json:"timezone,omitempty"`
+	// PasswordMinLength holds the value of the "password_min_length" field.
+	PasswordMinLength int `json:"password_min_length,omitempty"`
+	// PasswordRequireUppercase holds the value of the "password_require_uppercase" field.
+	PasswordRequireUppercase bool `json:"password_require_uppercase,omitempty"`
+	// PasswordRequireLowercase holds the value of the "password_require_lowercase" field.
+	PasswordRequireLowercase bool `json:"password_require_lowercase,omitempty"`
+	// PasswordRequireDigit holds the value of the "password_require_digit" field.
+	PasswordRequireDigit bool `json:"password_require_digit,omitempty"`
+	// PasswordRequireSpecial holds the value of the "password_require_special" field.
+	PasswordRequireSpecial bool `json:"password_require_special,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -65,7 +75,9 @@ func (*CompanySettings) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case companysettings.FieldID, companysettings.FieldDefaultDueDays, companysettings.FieldSMTPPort:
+		case companysettings.FieldPasswordRequireUppercase, companysettings.FieldPasswordRequireLowercase, companysettings.FieldPasswordRequireDigit, companysettings.FieldPasswordRequireSpecial:
+			values[i] = new(sql.NullBool)
+		case companysettings.FieldID, companysettings.FieldDefaultDueDays, companysettings.FieldSMTPPort, companysettings.FieldPasswordMinLength:
 			values[i] = new(sql.NullInt64)
 		case companysettings.FieldBusinessName, companysettings.FieldAddress, companysettings.FieldCity, companysettings.FieldState, companysettings.FieldZip, companysettings.FieldPhone, companysettings.FieldEmail, companysettings.FieldTaxID, companysettings.FieldDefaultTaxRate, companysettings.FieldInvoicePrefix, companysettings.FieldEstimatePrefix, companysettings.FieldSMTPHost, companysettings.FieldSMTPUser, companysettings.FieldSMTPPassword, companysettings.FieldSMTPFrom, companysettings.FieldTimezone:
 			values[i] = new(sql.NullString)
@@ -200,6 +212,36 @@ func (_m *CompanySettings) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Timezone = value.String
 			}
+		case companysettings.FieldPasswordMinLength:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field password_min_length", values[i])
+			} else if value.Valid {
+				_m.PasswordMinLength = int(value.Int64)
+			}
+		case companysettings.FieldPasswordRequireUppercase:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field password_require_uppercase", values[i])
+			} else if value.Valid {
+				_m.PasswordRequireUppercase = value.Bool
+			}
+		case companysettings.FieldPasswordRequireLowercase:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field password_require_lowercase", values[i])
+			} else if value.Valid {
+				_m.PasswordRequireLowercase = value.Bool
+			}
+		case companysettings.FieldPasswordRequireDigit:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field password_require_digit", values[i])
+			} else if value.Valid {
+				_m.PasswordRequireDigit = value.Bool
+			}
+		case companysettings.FieldPasswordRequireSpecial:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field password_require_special", values[i])
+			} else if value.Valid {
+				_m.PasswordRequireSpecial = value.Bool
+			}
 		case companysettings.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -301,6 +343,21 @@ func (_m *CompanySettings) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("timezone=")
 	builder.WriteString(_m.Timezone)
+	builder.WriteString(", ")
+	builder.WriteString("password_min_length=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PasswordMinLength))
+	builder.WriteString(", ")
+	builder.WriteString("password_require_uppercase=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PasswordRequireUppercase))
+	builder.WriteString(", ")
+	builder.WriteString("password_require_lowercase=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PasswordRequireLowercase))
+	builder.WriteString(", ")
+	builder.WriteString("password_require_digit=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PasswordRequireDigit))
+	builder.WriteString(", ")
+	builder.WriteString("password_require_special=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PasswordRequireSpecial))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

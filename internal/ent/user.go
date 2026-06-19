@@ -27,6 +27,10 @@ type User struct {
 	Role string `json:"role,omitempty"`
 	// IsActive holds the value of the "is_active" field.
 	IsActive bool `json:"is_active,omitempty"`
+	// ForcePasswordChange holds the value of the "force_password_change" field.
+	ForcePasswordChange bool `json:"force_password_change,omitempty"`
+	// WelcomeEmailSentAt holds the value of the "welcome_email_sent_at" field.
+	WelcomeEmailSentAt *time.Time `json:"welcome_email_sent_at,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -39,13 +43,13 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldIsActive:
+		case user.FieldIsActive, user.FieldForcePasswordChange:
 			values[i] = new(sql.NullBool)
 		case user.FieldID:
 			values[i] = new(sql.NullInt64)
 		case user.FieldEmail, user.FieldPasswordHash, user.FieldName, user.FieldRole:
 			values[i] = new(sql.NullString)
-		case user.FieldCreatedAt, user.FieldUpdatedAt:
+		case user.FieldWelcomeEmailSentAt, user.FieldCreatedAt, user.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -97,6 +101,19 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field is_active", values[i])
 			} else if value.Valid {
 				_m.IsActive = value.Bool
+			}
+		case user.FieldForcePasswordChange:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field force_password_change", values[i])
+			} else if value.Valid {
+				_m.ForcePasswordChange = value.Bool
+			}
+		case user.FieldWelcomeEmailSentAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field welcome_email_sent_at", values[i])
+			} else if value.Valid {
+				_m.WelcomeEmailSentAt = new(time.Time)
+				*_m.WelcomeEmailSentAt = value.Time
 			}
 		case user.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -160,6 +177,14 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("is_active=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsActive))
+	builder.WriteString(", ")
+	builder.WriteString("force_password_change=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ForcePasswordChange))
+	builder.WriteString(", ")
+	if v := _m.WelcomeEmailSentAt; v != nil {
+		builder.WriteString("welcome_email_sent_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

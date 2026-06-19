@@ -7,6 +7,10 @@ templ UserShow(p UserDetailPage) {
 		<div style="display:flex;justify-content:space-between;align-items:center">
 			<div style="display:flex;gap:0.5rem">
 				<a href={ templ.URL(fmt.Sprintf("/users/%d/edit", p.User.ID)) } role="button" class="outline">Edit</a>
+				<form action={ templ.URL(fmt.Sprintf("/users/%d/resend-welcome", p.User.ID)) } method="post" style="display:inline">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<button class="outline">Resend Welcome</button>
+				</form>
 				<form action={ templ.URL(fmt.Sprintf("/users/%d/disable", p.User.ID)) } method="post" style="display:inline">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast">

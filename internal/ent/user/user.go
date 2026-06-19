@@ -23,6 +23,10 @@ const (
 	FieldRole = "role"
 	// FieldIsActive holds the string denoting the is_active field in the database.
 	FieldIsActive = "is_active"
+	// FieldForcePasswordChange holds the string denoting the force_password_change field in the database.
+	FieldForcePasswordChange = "force_password_change"
+	// FieldWelcomeEmailSentAt holds the string denoting the welcome_email_sent_at field in the database.
+	FieldWelcomeEmailSentAt = "welcome_email_sent_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -39,6 +43,8 @@ var Columns = []string{
 	FieldName,
 	FieldRole,
 	FieldIsActive,
+	FieldForcePasswordChange,
+	FieldWelcomeEmailSentAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -64,6 +70,8 @@ var (
 	DefaultRole string
 	// DefaultIsActive holds the default value on creation for the "is_active" field.
 	DefaultIsActive bool
+	// DefaultForcePasswordChange holds the default value on creation for the "force_password_change" field.
+	DefaultForcePasswordChange bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -103,6 +111,16 @@ func ByRole(opts ...sql.OrderTermOption) OrderOption {
 // ByIsActive orders the results by the is_active field.
 func ByIsActive(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsActive, opts...).ToFunc()
+}
+
+// ByForcePasswordChange orders the results by the force_password_change field.
+func ByForcePasswordChange(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldForcePasswordChange, opts...).ToFunc()
+}
+
+// ByWelcomeEmailSentAt orders the results by the welcome_email_sent_at field.
+func ByWelcomeEmailSentAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWelcomeEmailSentAt, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

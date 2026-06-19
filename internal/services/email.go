@@ -44,6 +44,36 @@ If you received this email, your email configuration is ready to use.
 	return s.sendPlain(addr, cs.SMTPHost, cs.SMTPUser, cs.SMTPPassword, cs.SMTPFrom, to, msg)
 }
 
+func (s *EmailService) SendWelcomeEmail(ctx context.Context, to, name, tempPassword, loginURL string) error {
+	cs, err := s.svc.Get(ctx)
+	if err != nil || cs == nil || cs.SMTPHost == "" {
+		return fmt.Errorf("SMTP not configured")
+	}
+
+	subject := "Welcome to FreeFSM"
+	body := fmt.Sprintf(`Hi %s,
+
+Your FreeFSM account has been created.
+
+Login: %s
+Email: %s
+Temporary Password: %s
+
+You'll be required to change this on first login.
+
+- FreeFSM`, name, loginURL, to, tempPassword)
+
+	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
+		cs.SMTPFrom, to, subject, body)
+
+	addr := fmt.Sprintf("%s:%d", cs.SMTPHost, cs.SMTPPort)
+
+	if cs.SMTPPort == 587 || cs.SMTPPort == 465 {
+		return s.sendWithSTARTTLS(addr, cs.SMTPUser, cs.SMTPPassword, cs.SMTPFrom, to, msg)
+	}
+	return s.sendPlain(addr, cs.SMTPHost, cs.SMTPUser, cs.SMTPPassword, cs.SMTPFrom, to, msg)
+}
+
 func (s *EmailService) SendPasswordReset(ctx context.Context, to, name, link string) error {
 	cs, err := s.svc.Get(ctx)
 	if err != nil || cs == nil || cs.SMTPHost == "" {

@@ -66,6 +66,34 @@ func (_c *UserCreate) SetNillableIsActive(v *bool) *UserCreate {
 	return _c
 }
 
+// SetForcePasswordChange sets the "force_password_change" field.
+func (_c *UserCreate) SetForcePasswordChange(v bool) *UserCreate {
+	_c.mutation.SetForcePasswordChange(v)
+	return _c
+}
+
+// SetNillableForcePasswordChange sets the "force_password_change" field if the given value is not nil.
+func (_c *UserCreate) SetNillableForcePasswordChange(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetForcePasswordChange(*v)
+	}
+	return _c
+}
+
+// SetWelcomeEmailSentAt sets the "welcome_email_sent_at" field.
+func (_c *UserCreate) SetWelcomeEmailSentAt(v time.Time) *UserCreate {
+	_c.mutation.SetWelcomeEmailSentAt(v)
+	return _c
+}
+
+// SetNillableWelcomeEmailSentAt sets the "welcome_email_sent_at" field if the given value is not nil.
+func (_c *UserCreate) SetNillableWelcomeEmailSentAt(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetWelcomeEmailSentAt(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *UserCreate) SetCreatedAt(v time.Time) *UserCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -143,6 +171,10 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultIsActive
 		_c.mutation.SetIsActive(v)
 	}
+	if _, ok := _c.mutation.ForcePasswordChange(); !ok {
+		v := user.DefaultForcePasswordChange
+		_c.mutation.SetForcePasswordChange(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := user.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -184,6 +216,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.IsActive(); !ok {
 		return &ValidationError{Name: "is_active", err: errors.New(`ent: missing required field "User.is_active"`)}
+	}
+	if _, ok := _c.mutation.ForcePasswordChange(); !ok {
+		return &ValidationError{Name: "force_password_change", err: errors.New(`ent: missing required field "User.force_password_change"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "User.created_at"`)}
@@ -242,6 +277,14 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.IsActive(); ok {
 		_spec.SetField(user.FieldIsActive, field.TypeBool, value)
 		_node.IsActive = value
+	}
+	if value, ok := _c.mutation.ForcePasswordChange(); ok {
+		_spec.SetField(user.FieldForcePasswordChange, field.TypeBool, value)
+		_node.ForcePasswordChange = value
+	}
+	if value, ok := _c.mutation.WelcomeEmailSentAt(); ok {
+		_spec.SetField(user.FieldWelcomeEmailSentAt, field.TypeTime, value)
+		_node.WelcomeEmailSentAt = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(user.FieldCreatedAt, field.TypeTime, value)

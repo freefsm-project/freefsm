@@ -735,35 +735,41 @@ func (m *CommentMutation) ResetEdge(name string) error {
 // CompanySettingsMutation represents an operation that mutates the CompanySettings nodes in the graph.
 type CompanySettingsMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *int64
-	business_name       *string
-	address             *string
-	city                *string
-	state               *string
-	zip                 *string
-	phone               *string
-	email               *string
-	tax_id              *string
-	default_tax_rate    *string
-	invoice_prefix      *string
-	estimate_prefix     *string
-	default_due_days    *int
-	adddefault_due_days *int
-	smtp_host           *string
-	smtp_port           *int
-	addsmtp_port        *int
-	smtp_user           *string
-	smtp_password       *string
-	smtp_from           *string
-	timezone            *string
-	created_at          *time.Time
-	updated_at          *time.Time
-	clearedFields       map[string]struct{}
-	done                bool
-	oldValue            func(context.Context) (*CompanySettings, error)
-	predicates          []predicate.CompanySettings
+	op                         Op
+	typ                        string
+	id                         *int64
+	business_name              *string
+	address                    *string
+	city                       *string
+	state                      *string
+	zip                        *string
+	phone                      *string
+	email                      *string
+	tax_id                     *string
+	default_tax_rate           *string
+	invoice_prefix             *string
+	estimate_prefix            *string
+	default_due_days           *int
+	adddefault_due_days        *int
+	smtp_host                  *string
+	smtp_port                  *int
+	addsmtp_port               *int
+	smtp_user                  *string
+	smtp_password              *string
+	smtp_from                  *string
+	timezone                   *string
+	password_min_length        *int
+	addpassword_min_length     *int
+	password_require_uppercase *bool
+	password_require_lowercase *bool
+	password_require_digit     *bool
+	password_require_special   *bool
+	created_at                 *time.Time
+	updated_at                 *time.Time
+	clearedFields              map[string]struct{}
+	done                       bool
+	oldValue                   func(context.Context) (*CompanySettings, error)
+	predicates                 []predicate.CompanySettings
 }
 
 var _ ent.Mutation = (*CompanySettingsMutation)(nil)
@@ -1558,6 +1564,206 @@ func (m *CompanySettingsMutation) ResetTimezone() {
 	m.timezone = nil
 }
 
+// SetPasswordMinLength sets the "password_min_length" field.
+func (m *CompanySettingsMutation) SetPasswordMinLength(i int) {
+	m.password_min_length = &i
+	m.addpassword_min_length = nil
+}
+
+// PasswordMinLength returns the value of the "password_min_length" field in the mutation.
+func (m *CompanySettingsMutation) PasswordMinLength() (r int, exists bool) {
+	v := m.password_min_length
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPasswordMinLength returns the old "password_min_length" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldPasswordMinLength(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPasswordMinLength is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPasswordMinLength requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPasswordMinLength: %w", err)
+	}
+	return oldValue.PasswordMinLength, nil
+}
+
+// AddPasswordMinLength adds i to the "password_min_length" field.
+func (m *CompanySettingsMutation) AddPasswordMinLength(i int) {
+	if m.addpassword_min_length != nil {
+		*m.addpassword_min_length += i
+	} else {
+		m.addpassword_min_length = &i
+	}
+}
+
+// AddedPasswordMinLength returns the value that was added to the "password_min_length" field in this mutation.
+func (m *CompanySettingsMutation) AddedPasswordMinLength() (r int, exists bool) {
+	v := m.addpassword_min_length
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPasswordMinLength resets all changes to the "password_min_length" field.
+func (m *CompanySettingsMutation) ResetPasswordMinLength() {
+	m.password_min_length = nil
+	m.addpassword_min_length = nil
+}
+
+// SetPasswordRequireUppercase sets the "password_require_uppercase" field.
+func (m *CompanySettingsMutation) SetPasswordRequireUppercase(b bool) {
+	m.password_require_uppercase = &b
+}
+
+// PasswordRequireUppercase returns the value of the "password_require_uppercase" field in the mutation.
+func (m *CompanySettingsMutation) PasswordRequireUppercase() (r bool, exists bool) {
+	v := m.password_require_uppercase
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPasswordRequireUppercase returns the old "password_require_uppercase" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldPasswordRequireUppercase(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPasswordRequireUppercase is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPasswordRequireUppercase requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPasswordRequireUppercase: %w", err)
+	}
+	return oldValue.PasswordRequireUppercase, nil
+}
+
+// ResetPasswordRequireUppercase resets all changes to the "password_require_uppercase" field.
+func (m *CompanySettingsMutation) ResetPasswordRequireUppercase() {
+	m.password_require_uppercase = nil
+}
+
+// SetPasswordRequireLowercase sets the "password_require_lowercase" field.
+func (m *CompanySettingsMutation) SetPasswordRequireLowercase(b bool) {
+	m.password_require_lowercase = &b
+}
+
+// PasswordRequireLowercase returns the value of the "password_require_lowercase" field in the mutation.
+func (m *CompanySettingsMutation) PasswordRequireLowercase() (r bool, exists bool) {
+	v := m.password_require_lowercase
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPasswordRequireLowercase returns the old "password_require_lowercase" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldPasswordRequireLowercase(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPasswordRequireLowercase is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPasswordRequireLowercase requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPasswordRequireLowercase: %w", err)
+	}
+	return oldValue.PasswordRequireLowercase, nil
+}
+
+// ResetPasswordRequireLowercase resets all changes to the "password_require_lowercase" field.
+func (m *CompanySettingsMutation) ResetPasswordRequireLowercase() {
+	m.password_require_lowercase = nil
+}
+
+// SetPasswordRequireDigit sets the "password_require_digit" field.
+func (m *CompanySettingsMutation) SetPasswordRequireDigit(b bool) {
+	m.password_require_digit = &b
+}
+
+// PasswordRequireDigit returns the value of the "password_require_digit" field in the mutation.
+func (m *CompanySettingsMutation) PasswordRequireDigit() (r bool, exists bool) {
+	v := m.password_require_digit
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPasswordRequireDigit returns the old "password_require_digit" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldPasswordRequireDigit(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPasswordRequireDigit is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPasswordRequireDigit requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPasswordRequireDigit: %w", err)
+	}
+	return oldValue.PasswordRequireDigit, nil
+}
+
+// ResetPasswordRequireDigit resets all changes to the "password_require_digit" field.
+func (m *CompanySettingsMutation) ResetPasswordRequireDigit() {
+	m.password_require_digit = nil
+}
+
+// SetPasswordRequireSpecial sets the "password_require_special" field.
+func (m *CompanySettingsMutation) SetPasswordRequireSpecial(b bool) {
+	m.password_require_special = &b
+}
+
+// PasswordRequireSpecial returns the value of the "password_require_special" field in the mutation.
+func (m *CompanySettingsMutation) PasswordRequireSpecial() (r bool, exists bool) {
+	v := m.password_require_special
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPasswordRequireSpecial returns the old "password_require_special" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldPasswordRequireSpecial(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPasswordRequireSpecial is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPasswordRequireSpecial requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPasswordRequireSpecial: %w", err)
+	}
+	return oldValue.PasswordRequireSpecial, nil
+}
+
+// ResetPasswordRequireSpecial resets all changes to the "password_require_special" field.
+func (m *CompanySettingsMutation) ResetPasswordRequireSpecial() {
+	m.password_require_special = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *CompanySettingsMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -1664,7 +1870,7 @@ func (m *CompanySettingsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompanySettingsMutation) Fields() []string {
-	fields := make([]string, 0, 20)
+	fields := make([]string, 0, 25)
 	if m.business_name != nil {
 		fields = append(fields, companysettings.FieldBusinessName)
 	}
@@ -1719,6 +1925,21 @@ func (m *CompanySettingsMutation) Fields() []string {
 	if m.timezone != nil {
 		fields = append(fields, companysettings.FieldTimezone)
 	}
+	if m.password_min_length != nil {
+		fields = append(fields, companysettings.FieldPasswordMinLength)
+	}
+	if m.password_require_uppercase != nil {
+		fields = append(fields, companysettings.FieldPasswordRequireUppercase)
+	}
+	if m.password_require_lowercase != nil {
+		fields = append(fields, companysettings.FieldPasswordRequireLowercase)
+	}
+	if m.password_require_digit != nil {
+		fields = append(fields, companysettings.FieldPasswordRequireDigit)
+	}
+	if m.password_require_special != nil {
+		fields = append(fields, companysettings.FieldPasswordRequireSpecial)
+	}
 	if m.created_at != nil {
 		fields = append(fields, companysettings.FieldCreatedAt)
 	}
@@ -1769,6 +1990,16 @@ func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 		return m.SMTPFrom()
 	case companysettings.FieldTimezone:
 		return m.Timezone()
+	case companysettings.FieldPasswordMinLength:
+		return m.PasswordMinLength()
+	case companysettings.FieldPasswordRequireUppercase:
+		return m.PasswordRequireUppercase()
+	case companysettings.FieldPasswordRequireLowercase:
+		return m.PasswordRequireLowercase()
+	case companysettings.FieldPasswordRequireDigit:
+		return m.PasswordRequireDigit()
+	case companysettings.FieldPasswordRequireSpecial:
+		return m.PasswordRequireSpecial()
 	case companysettings.FieldCreatedAt:
 		return m.CreatedAt()
 	case companysettings.FieldUpdatedAt:
@@ -1818,6 +2049,16 @@ func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (en
 		return m.OldSMTPFrom(ctx)
 	case companysettings.FieldTimezone:
 		return m.OldTimezone(ctx)
+	case companysettings.FieldPasswordMinLength:
+		return m.OldPasswordMinLength(ctx)
+	case companysettings.FieldPasswordRequireUppercase:
+		return m.OldPasswordRequireUppercase(ctx)
+	case companysettings.FieldPasswordRequireLowercase:
+		return m.OldPasswordRequireLowercase(ctx)
+	case companysettings.FieldPasswordRequireDigit:
+		return m.OldPasswordRequireDigit(ctx)
+	case companysettings.FieldPasswordRequireSpecial:
+		return m.OldPasswordRequireSpecial(ctx)
 	case companysettings.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case companysettings.FieldUpdatedAt:
@@ -1957,6 +2198,41 @@ func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTimezone(v)
 		return nil
+	case companysettings.FieldPasswordMinLength:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPasswordMinLength(v)
+		return nil
+	case companysettings.FieldPasswordRequireUppercase:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPasswordRequireUppercase(v)
+		return nil
+	case companysettings.FieldPasswordRequireLowercase:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPasswordRequireLowercase(v)
+		return nil
+	case companysettings.FieldPasswordRequireDigit:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPasswordRequireDigit(v)
+		return nil
+	case companysettings.FieldPasswordRequireSpecial:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPasswordRequireSpecial(v)
+		return nil
 	case companysettings.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -1985,6 +2261,9 @@ func (m *CompanySettingsMutation) AddedFields() []string {
 	if m.addsmtp_port != nil {
 		fields = append(fields, companysettings.FieldSMTPPort)
 	}
+	if m.addpassword_min_length != nil {
+		fields = append(fields, companysettings.FieldPasswordMinLength)
+	}
 	return fields
 }
 
@@ -1997,6 +2276,8 @@ func (m *CompanySettingsMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedDefaultDueDays()
 	case companysettings.FieldSMTPPort:
 		return m.AddedSMTPPort()
+	case companysettings.FieldPasswordMinLength:
+		return m.AddedPasswordMinLength()
 	}
 	return nil, false
 }
@@ -2019,6 +2300,13 @@ func (m *CompanySettingsMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddSMTPPort(v)
+		return nil
+	case companysettings.FieldPasswordMinLength:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPasswordMinLength(v)
 		return nil
 	}
 	return fmt.Errorf("unknown CompanySettings numeric field %s", name)
@@ -2100,6 +2388,21 @@ func (m *CompanySettingsMutation) ResetField(name string) error {
 		return nil
 	case companysettings.FieldTimezone:
 		m.ResetTimezone()
+		return nil
+	case companysettings.FieldPasswordMinLength:
+		m.ResetPasswordMinLength()
+		return nil
+	case companysettings.FieldPasswordRequireUppercase:
+		m.ResetPasswordRequireUppercase()
+		return nil
+	case companysettings.FieldPasswordRequireLowercase:
+		m.ResetPasswordRequireLowercase()
+		return nil
+	case companysettings.FieldPasswordRequireDigit:
+		m.ResetPasswordRequireDigit()
+		return nil
+	case companysettings.FieldPasswordRequireSpecial:
+		m.ResetPasswordRequireSpecial()
 		return nil
 	case companysettings.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -16366,20 +16669,22 @@ func (m *TimeEntryMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *int64
-	email         *string
-	password_hash *string
-	name          *string
-	role          *string
-	is_active     *bool
-	created_at    *time.Time
-	updated_at    *time.Time
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*User, error)
-	predicates    []predicate.User
+	op                    Op
+	typ                   string
+	id                    *int64
+	email                 *string
+	password_hash         *string
+	name                  *string
+	role                  *string
+	is_active             *bool
+	force_password_change *bool
+	welcome_email_sent_at *time.Time
+	created_at            *time.Time
+	updated_at            *time.Time
+	clearedFields         map[string]struct{}
+	done                  bool
+	oldValue              func(context.Context) (*User, error)
+	predicates            []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -16666,6 +16971,91 @@ func (m *UserMutation) ResetIsActive() {
 	m.is_active = nil
 }
 
+// SetForcePasswordChange sets the "force_password_change" field.
+func (m *UserMutation) SetForcePasswordChange(b bool) {
+	m.force_password_change = &b
+}
+
+// ForcePasswordChange returns the value of the "force_password_change" field in the mutation.
+func (m *UserMutation) ForcePasswordChange() (r bool, exists bool) {
+	v := m.force_password_change
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldForcePasswordChange returns the old "force_password_change" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldForcePasswordChange(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldForcePasswordChange is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldForcePasswordChange requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldForcePasswordChange: %w", err)
+	}
+	return oldValue.ForcePasswordChange, nil
+}
+
+// ResetForcePasswordChange resets all changes to the "force_password_change" field.
+func (m *UserMutation) ResetForcePasswordChange() {
+	m.force_password_change = nil
+}
+
+// SetWelcomeEmailSentAt sets the "welcome_email_sent_at" field.
+func (m *UserMutation) SetWelcomeEmailSentAt(t time.Time) {
+	m.welcome_email_sent_at = &t
+}
+
+// WelcomeEmailSentAt returns the value of the "welcome_email_sent_at" field in the mutation.
+func (m *UserMutation) WelcomeEmailSentAt() (r time.Time, exists bool) {
+	v := m.welcome_email_sent_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWelcomeEmailSentAt returns the old "welcome_email_sent_at" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldWelcomeEmailSentAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWelcomeEmailSentAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWelcomeEmailSentAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWelcomeEmailSentAt: %w", err)
+	}
+	return oldValue.WelcomeEmailSentAt, nil
+}
+
+// ClearWelcomeEmailSentAt clears the value of the "welcome_email_sent_at" field.
+func (m *UserMutation) ClearWelcomeEmailSentAt() {
+	m.welcome_email_sent_at = nil
+	m.clearedFields[user.FieldWelcomeEmailSentAt] = struct{}{}
+}
+
+// WelcomeEmailSentAtCleared returns if the "welcome_email_sent_at" field was cleared in this mutation.
+func (m *UserMutation) WelcomeEmailSentAtCleared() bool {
+	_, ok := m.clearedFields[user.FieldWelcomeEmailSentAt]
+	return ok
+}
+
+// ResetWelcomeEmailSentAt resets all changes to the "welcome_email_sent_at" field.
+func (m *UserMutation) ResetWelcomeEmailSentAt() {
+	m.welcome_email_sent_at = nil
+	delete(m.clearedFields, user.FieldWelcomeEmailSentAt)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *UserMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -16772,7 +17162,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 9)
 	if m.email != nil {
 		fields = append(fields, user.FieldEmail)
 	}
@@ -16787,6 +17177,12 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.is_active != nil {
 		fields = append(fields, user.FieldIsActive)
+	}
+	if m.force_password_change != nil {
+		fields = append(fields, user.FieldForcePasswordChange)
+	}
+	if m.welcome_email_sent_at != nil {
+		fields = append(fields, user.FieldWelcomeEmailSentAt)
 	}
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
@@ -16812,6 +17208,10 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Role()
 	case user.FieldIsActive:
 		return m.IsActive()
+	case user.FieldForcePasswordChange:
+		return m.ForcePasswordChange()
+	case user.FieldWelcomeEmailSentAt:
+		return m.WelcomeEmailSentAt()
 	case user.FieldCreatedAt:
 		return m.CreatedAt()
 	case user.FieldUpdatedAt:
@@ -16835,6 +17235,10 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldRole(ctx)
 	case user.FieldIsActive:
 		return m.OldIsActive(ctx)
+	case user.FieldForcePasswordChange:
+		return m.OldForcePasswordChange(ctx)
+	case user.FieldWelcomeEmailSentAt:
+		return m.OldWelcomeEmailSentAt(ctx)
 	case user.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case user.FieldUpdatedAt:
@@ -16883,6 +17287,20 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetIsActive(v)
 		return nil
+	case user.FieldForcePasswordChange:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetForcePasswordChange(v)
+		return nil
+	case user.FieldWelcomeEmailSentAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWelcomeEmailSentAt(v)
+		return nil
 	case user.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -16926,7 +17344,11 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *UserMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(user.FieldWelcomeEmailSentAt) {
+		fields = append(fields, user.FieldWelcomeEmailSentAt)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -16939,6 +17361,11 @@ func (m *UserMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *UserMutation) ClearField(name string) error {
+	switch name {
+	case user.FieldWelcomeEmailSentAt:
+		m.ClearWelcomeEmailSentAt()
+		return nil
+	}
 	return fmt.Errorf("unknown User nullable field %s", name)
 }
 
@@ -16960,6 +17387,12 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldIsActive:
 		m.ResetIsActive()
+		return nil
+	case user.FieldForcePasswordChange:
+		m.ResetForcePasswordChange()
+		return nil
+	case user.FieldWelcomeEmailSentAt:
+		m.ResetWelcomeEmailSentAt()
 		return nil
 	case user.FieldCreatedAt:
 		m.ResetCreatedAt()

@@ -88,27 +88,50 @@ templ SettingsPage(p SettingsPageData) {
 					}
 				</select>
 			</label>
-			<h3>Document Settings</h3>
-			<div class="grid">
-				<label>
-					Invoice Prefix
-					<input type="text" name="invoice_prefix" value={ p.Settings.InvoicePrefix }/>
-				</label>
-				<label>
-					Estimate Prefix
-					<input type="text" name="estimate_prefix" value={ p.Settings.EstimatePrefix }/>
-				</label>
-			</div>
-			<div class="grid">
-				<label>
-					Default Tax Rate
-					<input type="text" name="default_tax_rate" value={ p.Settings.DefaultTaxRate } placeholder="e.g. 8.25%"/>
-				</label>
-				<label>
-					Default Due Days
-					<input type="number" name="default_due_days" value={ fmt.Sprintf("%d", p.Settings.DefaultDueDays) }/>
-				</label>
-			</div>
+		<h3>Document Settings</h3>
+		<div class="grid">
+			<label>
+				Invoice Prefix
+				<input type="text" name="invoice_prefix" value={ p.Settings.InvoicePrefix }/>
+			</label>
+			<label>
+				Estimate Prefix
+				<input type="text" name="estimate_prefix" value={ p.Settings.EstimatePrefix }/>
+			</label>
+		</div>
+		<div class="grid">
+			<label>
+				Default Tax Rate
+				<input type="text" name="default_tax_rate" value={ p.Settings.DefaultTaxRate } placeholder="e.g. 8.25%"/>
+			</label>
+			<label>
+				Default Due Days
+				<input type="number" name="default_due_days" value={ fmt.Sprintf("%d", p.Settings.DefaultDueDays) }/>
+			</label>
+		</div>
+		<h3>Security — Password Policy</h3>
+		<div class="grid">
+			<label>
+				Minimum Length
+				<input type="number" name="password_min_length" value={ fmt.Sprintf("%d", p.Settings.PasswordMinLength) } min="1" max="128"/>
+			</label>
+		</div>
+		<label>
+			<input type="checkbox" name="password_require_uppercase" checked?={ p.Settings.PasswordRequireUppercase }/>
+			Require uppercase letter (A–Z)
+		</label>
+		<label>
+			<input type="checkbox" name="password_require_lowercase" checked?={ p.Settings.PasswordRequireLowercase }/>
+			Require lowercase letter (a–z)
+		</label>
+		<label>
+			<input type="checkbox" name="password_require_digit" checked?={ p.Settings.PasswordRequireDigit }/>
+			Require digit (0–9)
+		</label>
+		<label>
+			<input type="checkbox" name="password_require_special" checked?={ p.Settings.PasswordRequireSpecial }/>
+			Require special character (!@#$%^&* etc.)
+		</label>
 			<button type="submit">{ settingsButtonText(p.IsSetup) }</button>
 		</form>
 	}

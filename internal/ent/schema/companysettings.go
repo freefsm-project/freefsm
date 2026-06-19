@@ -40,6 +40,11 @@ func (CompanySettings) Fields() []ent.Field {
 		field.String("smtp_password").Default(""),
 		field.String("smtp_from").Default(""),
 		field.String("timezone").Default("UTC"),
+		field.Int("password_min_length").Default(8),
+		field.Bool("password_require_uppercase").Default(true),
+		field.Bool("password_require_lowercase").Default(true),
+		field.Bool("password_require_digit").Default(true),
+		field.Bool("password_require_special").Default(true),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

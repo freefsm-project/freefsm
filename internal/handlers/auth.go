@@ -54,9 +54,10 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 
 	var id int64
 	var hash string
+	var forceChange bool
 	err := h.db.QueryRow(r.Context(),
-		"SELECT id, password_hash FROM users WHERE email = $1 AND is_active = true", email,
-	).Scan(&id, &hash)
+		"SELECT id, password_hash, force_password_change FROM users WHERE email = $1 AND is_active = true", email,
+	).Scan(&id, &hash, &forceChange)
 	if err != nil {
 		http.Redirect(w, r, "/login?error=invalid+credentials", http.StatusSeeOther)
 		return
@@ -78,6 +79,11 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true, SameSite: http.SameSiteLaxMode,
 		MaxAge: 604800,
 	})
+
+	if forceChange {
+		http.Redirect(w, r, "/change-password", http.StatusSeeOther)
+		return
+	}
 
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }

@@ -272,6 +272,76 @@ func (_c *CompanySettingsCreate) SetNillableTimezone(v *string) *CompanySettings
 	return _c
 }
 
+// SetPasswordMinLength sets the "password_min_length" field.
+func (_c *CompanySettingsCreate) SetPasswordMinLength(v int) *CompanySettingsCreate {
+	_c.mutation.SetPasswordMinLength(v)
+	return _c
+}
+
+// SetNillablePasswordMinLength sets the "password_min_length" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillablePasswordMinLength(v *int) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetPasswordMinLength(*v)
+	}
+	return _c
+}
+
+// SetPasswordRequireUppercase sets the "password_require_uppercase" field.
+func (_c *CompanySettingsCreate) SetPasswordRequireUppercase(v bool) *CompanySettingsCreate {
+	_c.mutation.SetPasswordRequireUppercase(v)
+	return _c
+}
+
+// SetNillablePasswordRequireUppercase sets the "password_require_uppercase" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillablePasswordRequireUppercase(v *bool) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetPasswordRequireUppercase(*v)
+	}
+	return _c
+}
+
+// SetPasswordRequireLowercase sets the "password_require_lowercase" field.
+func (_c *CompanySettingsCreate) SetPasswordRequireLowercase(v bool) *CompanySettingsCreate {
+	_c.mutation.SetPasswordRequireLowercase(v)
+	return _c
+}
+
+// SetNillablePasswordRequireLowercase sets the "password_require_lowercase" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillablePasswordRequireLowercase(v *bool) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetPasswordRequireLowercase(*v)
+	}
+	return _c
+}
+
+// SetPasswordRequireDigit sets the "password_require_digit" field.
+func (_c *CompanySettingsCreate) SetPasswordRequireDigit(v bool) *CompanySettingsCreate {
+	_c.mutation.SetPasswordRequireDigit(v)
+	return _c
+}
+
+// SetNillablePasswordRequireDigit sets the "password_require_digit" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillablePasswordRequireDigit(v *bool) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetPasswordRequireDigit(*v)
+	}
+	return _c
+}
+
+// SetPasswordRequireSpecial sets the "password_require_special" field.
+func (_c *CompanySettingsCreate) SetPasswordRequireSpecial(v bool) *CompanySettingsCreate {
+	_c.mutation.SetPasswordRequireSpecial(v)
+	return _c
+}
+
+// SetNillablePasswordRequireSpecial sets the "password_require_special" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillablePasswordRequireSpecial(v *bool) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetPasswordRequireSpecial(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *CompanySettingsCreate) SetCreatedAt(v time.Time) *CompanySettingsCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -413,6 +483,26 @@ func (_c *CompanySettingsCreate) defaults() {
 		v := companysettings.DefaultTimezone
 		_c.mutation.SetTimezone(v)
 	}
+	if _, ok := _c.mutation.PasswordMinLength(); !ok {
+		v := companysettings.DefaultPasswordMinLength
+		_c.mutation.SetPasswordMinLength(v)
+	}
+	if _, ok := _c.mutation.PasswordRequireUppercase(); !ok {
+		v := companysettings.DefaultPasswordRequireUppercase
+		_c.mutation.SetPasswordRequireUppercase(v)
+	}
+	if _, ok := _c.mutation.PasswordRequireLowercase(); !ok {
+		v := companysettings.DefaultPasswordRequireLowercase
+		_c.mutation.SetPasswordRequireLowercase(v)
+	}
+	if _, ok := _c.mutation.PasswordRequireDigit(); !ok {
+		v := companysettings.DefaultPasswordRequireDigit
+		_c.mutation.SetPasswordRequireDigit(v)
+	}
+	if _, ok := _c.mutation.PasswordRequireSpecial(); !ok {
+		v := companysettings.DefaultPasswordRequireSpecial
+		_c.mutation.SetPasswordRequireSpecial(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := companysettings.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -478,6 +568,21 @@ func (_c *CompanySettingsCreate) check() error {
 	}
 	if _, ok := _c.mutation.Timezone(); !ok {
 		return &ValidationError{Name: "timezone", err: errors.New(`ent: missing required field "CompanySettings.timezone"`)}
+	}
+	if _, ok := _c.mutation.PasswordMinLength(); !ok {
+		return &ValidationError{Name: "password_min_length", err: errors.New(`ent: missing required field "CompanySettings.password_min_length"`)}
+	}
+	if _, ok := _c.mutation.PasswordRequireUppercase(); !ok {
+		return &ValidationError{Name: "password_require_uppercase", err: errors.New(`ent: missing required field "CompanySettings.password_require_uppercase"`)}
+	}
+	if _, ok := _c.mutation.PasswordRequireLowercase(); !ok {
+		return &ValidationError{Name: "password_require_lowercase", err: errors.New(`ent: missing required field "CompanySettings.password_require_lowercase"`)}
+	}
+	if _, ok := _c.mutation.PasswordRequireDigit(); !ok {
+		return &ValidationError{Name: "password_require_digit", err: errors.New(`ent: missing required field "CompanySettings.password_require_digit"`)}
+	}
+	if _, ok := _c.mutation.PasswordRequireSpecial(); !ok {
+		return &ValidationError{Name: "password_require_special", err: errors.New(`ent: missing required field "CompanySettings.password_require_special"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "CompanySettings.created_at"`)}
@@ -588,6 +693,26 @@ func (_c *CompanySettingsCreate) createSpec() (*CompanySettings, *sqlgraph.Creat
 	if value, ok := _c.mutation.Timezone(); ok {
 		_spec.SetField(companysettings.FieldTimezone, field.TypeString, value)
 		_node.Timezone = value
+	}
+	if value, ok := _c.mutation.PasswordMinLength(); ok {
+		_spec.SetField(companysettings.FieldPasswordMinLength, field.TypeInt, value)
+		_node.PasswordMinLength = value
+	}
+	if value, ok := _c.mutation.PasswordRequireUppercase(); ok {
+		_spec.SetField(companysettings.FieldPasswordRequireUppercase, field.TypeBool, value)
+		_node.PasswordRequireUppercase = value
+	}
+	if value, ok := _c.mutation.PasswordRequireLowercase(); ok {
+		_spec.SetField(companysettings.FieldPasswordRequireLowercase, field.TypeBool, value)
+		_node.PasswordRequireLowercase = value
+	}
+	if value, ok := _c.mutation.PasswordRequireDigit(); ok {
+		_spec.SetField(companysettings.FieldPasswordRequireDigit, field.TypeBool, value)
+		_node.PasswordRequireDigit = value
+	}
+	if value, ok := _c.mutation.PasswordRequireSpecial(); ok {
+		_spec.SetField(companysettings.FieldPasswordRequireSpecial, field.TypeBool, value)
+		_node.PasswordRequireSpecial = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(companysettings.FieldCreatedAt, field.TypeTime, value)

@@ -31,6 +31,7 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	dueDays, _ := strconv.Atoi(r.FormValue("default_due_days"))
 	smtpPort, _ := strconv.Atoi(r.FormValue("smtp_port"))
+	pwMinLen, _ := strconv.Atoi(r.FormValue("password_min_length"))
 	h.svc.Save(r.Context(), services.CompanySettingsParams{
 		BusinessName:   r.FormValue("business_name"),
 		Address:        r.FormValue("address"),
@@ -50,6 +51,11 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		SmtpPassword:   r.FormValue("smtp_password"),
 		SmtpFrom:       r.FormValue("smtp_from"),
 		Timezone:       r.FormValue("timezone"),
+		PasswordMinLength:         pwMinLen,
+		PasswordRequireUppercase:  r.FormValue("password_require_uppercase") == "on",
+		PasswordRequireLowercase:  r.FormValue("password_require_lowercase") == "on",
+		PasswordRequireDigit:        r.FormValue("password_require_digit") == "on",
+		PasswordRequireSpecial:      r.FormValue("password_require_special") == "on",
 	})
 	if r.URL.Path == "/setup/company" {
 		http.Redirect(w, r, "/?flash=Setup+complete", http.StatusSeeOther)

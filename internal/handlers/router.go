@@ -57,9 +57,10 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc)
-	userHandler := NewUserHandler(userService)
+	userHandler := NewUserHandler(userService, emailSvc, companySettingsSvc)
 	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService)
 	authHandler := NewAuthHandler(db, sessions, userService, emailSvc, services.NewPasswordResetService(entClient))
+	passwordHandler := NewPasswordHandler(userService, companySettingsSvc)
 
 	// Public routes
 	r.Get("/login", authHandler.ServeHTTP)
@@ -85,6 +86,9 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	// Authenticated routes
 	r.Group(func(r chi.Router) {
 		r.Use(authMW)
+		r.Use(middleware.ForcePasswordChange(userService))
+		r.Get("/change-password", passwordHandler.ChangePassword)
+		r.Post("/change-password", passwordHandler.ChangePassword)
 		r.Get("/", dashboardHandler.Index)
 		r.Get("/search", searchHandler.Search)
 		r.Get("/schedule", scheduleHandler.Index)
@@ -216,6 +220,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Get("/users/{id}/edit", userHandler.Update)
 			r.Post("/users/{id}", userHandler.Update)
 			r.Post("/users/{id}/disable", userHandler.Disable)
+			r.Post("/users/{id}/resend-welcome", userHandler.ResendWelcome)
 			r.Post("/users/{id}/reset-password", userHandler.ResetPassword)
 		})
 	})

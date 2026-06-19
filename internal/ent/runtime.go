@@ -124,12 +124,32 @@ func init() {
 	companysettingsDescTimezone := companysettingsFields[18].Descriptor()
 	// companysettings.DefaultTimezone holds the default value on creation for the timezone field.
 	companysettings.DefaultTimezone = companysettingsDescTimezone.Default.(string)
+	// companysettingsDescPasswordMinLength is the schema descriptor for password_min_length field.
+	companysettingsDescPasswordMinLength := companysettingsFields[19].Descriptor()
+	// companysettings.DefaultPasswordMinLength holds the default value on creation for the password_min_length field.
+	companysettings.DefaultPasswordMinLength = companysettingsDescPasswordMinLength.Default.(int)
+	// companysettingsDescPasswordRequireUppercase is the schema descriptor for password_require_uppercase field.
+	companysettingsDescPasswordRequireUppercase := companysettingsFields[20].Descriptor()
+	// companysettings.DefaultPasswordRequireUppercase holds the default value on creation for the password_require_uppercase field.
+	companysettings.DefaultPasswordRequireUppercase = companysettingsDescPasswordRequireUppercase.Default.(bool)
+	// companysettingsDescPasswordRequireLowercase is the schema descriptor for password_require_lowercase field.
+	companysettingsDescPasswordRequireLowercase := companysettingsFields[21].Descriptor()
+	// companysettings.DefaultPasswordRequireLowercase holds the default value on creation for the password_require_lowercase field.
+	companysettings.DefaultPasswordRequireLowercase = companysettingsDescPasswordRequireLowercase.Default.(bool)
+	// companysettingsDescPasswordRequireDigit is the schema descriptor for password_require_digit field.
+	companysettingsDescPasswordRequireDigit := companysettingsFields[22].Descriptor()
+	// companysettings.DefaultPasswordRequireDigit holds the default value on creation for the password_require_digit field.
+	companysettings.DefaultPasswordRequireDigit = companysettingsDescPasswordRequireDigit.Default.(bool)
+	// companysettingsDescPasswordRequireSpecial is the schema descriptor for password_require_special field.
+	companysettingsDescPasswordRequireSpecial := companysettingsFields[23].Descriptor()
+	// companysettings.DefaultPasswordRequireSpecial holds the default value on creation for the password_require_special field.
+	companysettings.DefaultPasswordRequireSpecial = companysettingsDescPasswordRequireSpecial.Default.(bool)
 	// companysettingsDescCreatedAt is the schema descriptor for created_at field.
-	companysettingsDescCreatedAt := companysettingsFields[19].Descriptor()
+	companysettingsDescCreatedAt := companysettingsFields[24].Descriptor()
 	// companysettings.DefaultCreatedAt holds the default value on creation for the created_at field.
 	companysettings.DefaultCreatedAt = companysettingsDescCreatedAt.Default.(func() time.Time)
 	// companysettingsDescUpdatedAt is the schema descriptor for updated_at field.
-	companysettingsDescUpdatedAt := companysettingsFields[20].Descriptor()
+	companysettingsDescUpdatedAt := companysettingsFields[25].Descriptor()
 	// companysettings.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	companysettings.DefaultUpdatedAt = companysettingsDescUpdatedAt.Default.(func() time.Time)
 	// companysettings.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -654,12 +674,16 @@ func init() {
 	userDescIsActive := userFields[5].Descriptor()
 	// user.DefaultIsActive holds the default value on creation for the is_active field.
 	user.DefaultIsActive = userDescIsActive.Default.(bool)
+	// userDescForcePasswordChange is the schema descriptor for force_password_change field.
+	userDescForcePasswordChange := userFields[6].Descriptor()
+	// user.DefaultForcePasswordChange holds the default value on creation for the force_password_change field.
+	user.DefaultForcePasswordChange = userDescForcePasswordChange.Default.(bool)
 	// userDescCreatedAt is the schema descriptor for created_at field.
-	userDescCreatedAt := userFields[6].Descriptor()
+	userDescCreatedAt := userFields[8].Descriptor()
 	// user.DefaultCreatedAt holds the default value on creation for the created_at field.
 	user.DefaultCreatedAt = userDescCreatedAt.Default.(func() time.Time)
 	// userDescUpdatedAt is the schema descriptor for updated_at field.
-	userDescUpdatedAt := userFields[7].Descriptor()
+	userDescUpdatedAt := userFields[9].Descriptor()
 	// user.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	user.DefaultUpdatedAt = userDescUpdatedAt.Default.(func() time.Time)
 	// user.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

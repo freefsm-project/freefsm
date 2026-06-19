@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -12,11 +13,13 @@ import (
 )
 
 type UserHandler struct {
-	svc *services.UserService
+	svc     *services.UserService
+	emailSvc *services.EmailService
+	csSvc   *services.CompanySettingsService
 }
 
-func NewUserHandler(svc *services.UserService) *UserHandler {
-	return &UserHandler{svc: svc}
+func NewUserHandler(svc *services.UserService, emailSvc *services.EmailService, csSvc *services.CompanySettingsService) *UserHandler {
+	return &UserHandler{svc: svc, emailSvc: emailSvc, csSvc: csSvc}
 }
 
 func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -41,14 +44,30 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.ParseForm()
-	_, err := h.svc.Create(r.Context(), services.UserCreateParams{
-		Name: r.FormValue("name"), Email: r.FormValue("email"),
-		Password: r.FormValue("password"), Role: r.FormValue("role"),
+	u, tempPass, err := h.svc.Create(r.Context(), services.UserCreateParams{
+		Name:             r.FormValue("name"),
+		Email:            r.FormValue("email"),
+		Password:         r.FormValue("password"),
+		Role:             r.FormValue("role"),
+		SendWelcomeEmail: r.FormValue("send_welcome_email") == "on",
 	})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
+	if r.FormValue("send_welcome_email") == "on" {
+		scheme := "http"
+		if r.TLS != nil {
+			scheme = "https"
+		}
+		loginURL := fmt.Sprintf("%s://%s/login", scheme, r.Host)
+		if err := h.emailSvc.SendWelcomeEmail(r.Context(), u.Email, u.Name, tempPass, loginURL); err != nil {
+			// Log but don't fail — user was created
+			slog.Error("send welcome email", "error", err, "user", u.Email)
+		}
+	}
+
 	http.Redirect(w, r, "/users?flash=User+created", http.StatusSeeOther)
 }
 
@@ -105,6 +124,28 @@ func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	h.svc.SetPassword(r.Context(), id, r.FormValue("password"))
 	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Password+reset", id), http.StatusSeeOther)
+}
+
+func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	u, tempPass, err := h.svc.ResendWelcomeEmail(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	loginURL := fmt.Sprintf("%s://%s/login", scheme, r.Host)
+	if err := h.emailSvc.SendWelcomeEmail(r.Context(), u.Email, u.Name, tempPass, loginURL); err != nil {
+		slog.Error("resend welcome email", "error", err, "user", u.Email)
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+failed", id), http.StatusSeeOther)
+		return
+	}
+
+	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+resent", id), http.StatusSeeOther)
 }
 
 func userToRow(u *ent.User) templates.UserRow {

@@ -49,6 +49,16 @@ const (
 	FieldSMTPFrom = "smtp_from"
 	// FieldTimezone holds the string denoting the timezone field in the database.
 	FieldTimezone = "timezone"
+	// FieldPasswordMinLength holds the string denoting the password_min_length field in the database.
+	FieldPasswordMinLength = "password_min_length"
+	// FieldPasswordRequireUppercase holds the string denoting the password_require_uppercase field in the database.
+	FieldPasswordRequireUppercase = "password_require_uppercase"
+	// FieldPasswordRequireLowercase holds the string denoting the password_require_lowercase field in the database.
+	FieldPasswordRequireLowercase = "password_require_lowercase"
+	// FieldPasswordRequireDigit holds the string denoting the password_require_digit field in the database.
+	FieldPasswordRequireDigit = "password_require_digit"
+	// FieldPasswordRequireSpecial holds the string denoting the password_require_special field in the database.
+	FieldPasswordRequireSpecial = "password_require_special"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -78,6 +88,11 @@ var Columns = []string{
 	FieldSMTPPassword,
 	FieldSMTPFrom,
 	FieldTimezone,
+	FieldPasswordMinLength,
+	FieldPasswordRequireUppercase,
+	FieldPasswordRequireLowercase,
+	FieldPasswordRequireDigit,
+	FieldPasswordRequireSpecial,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -129,6 +144,16 @@ var (
 	DefaultSMTPFrom string
 	// DefaultTimezone holds the default value on creation for the "timezone" field.
 	DefaultTimezone string
+	// DefaultPasswordMinLength holds the default value on creation for the "password_min_length" field.
+	DefaultPasswordMinLength int
+	// DefaultPasswordRequireUppercase holds the default value on creation for the "password_require_uppercase" field.
+	DefaultPasswordRequireUppercase bool
+	// DefaultPasswordRequireLowercase holds the default value on creation for the "password_require_lowercase" field.
+	DefaultPasswordRequireLowercase bool
+	// DefaultPasswordRequireDigit holds the default value on creation for the "password_require_digit" field.
+	DefaultPasswordRequireDigit bool
+	// DefaultPasswordRequireSpecial holds the default value on creation for the "password_require_special" field.
+	DefaultPasswordRequireSpecial bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -233,6 +258,31 @@ func BySMTPFrom(opts ...sql.OrderTermOption) OrderOption {
 // ByTimezone orders the results by the timezone field.
 func ByTimezone(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTimezone, opts...).ToFunc()
+}
+
+// ByPasswordMinLength orders the results by the password_min_length field.
+func ByPasswordMinLength(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPasswordMinLength, opts...).ToFunc()
+}
+
+// ByPasswordRequireUppercase orders the results by the password_require_uppercase field.
+func ByPasswordRequireUppercase(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPasswordRequireUppercase, opts...).ToFunc()
+}
+
+// ByPasswordRequireLowercase orders the results by the password_require_lowercase field.
+func ByPasswordRequireLowercase(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPasswordRequireLowercase, opts...).ToFunc()
+}
+
+// ByPasswordRequireDigit orders the results by the password_require_digit field.
+func ByPasswordRequireDigit(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPasswordRequireDigit, opts...).ToFunc()
+}
+
+// ByPasswordRequireSpecial orders the results by the password_require_special field.
+func ByPasswordRequireSpecial(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPasswordRequireSpecial, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

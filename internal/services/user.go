@@ -2,7 +2,12 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
+	"math/big"
+	"strings"
+	"time"
+	"unicode"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/ent/user"
@@ -38,28 +43,49 @@ func (s *UserService) ListAll(ctx context.Context) ([]*ent.User, error) {
 }
 
 type UserCreateParams struct {
-	Name     string
-	Email    string
-	Password string
-	Role     string
+	Name             string
+	Email            string
+	Password         string
+	Role             string
+	SendWelcomeEmail bool
 }
 
-func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(p.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("hash password: %w", err)
+func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User, string, error) {
+	password := p.Password
+	forceChange := false
+
+	if p.SendWelcomeEmail {
+		password = generateTempPassword()
+		forceChange = true
 	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, "", fmt.Errorf("hash password: %w", err)
+	}
+
 	u, err := s.client.User.Create().
 		SetName(p.Name).
 		SetEmail(p.Email).
 		SetPasswordHash(string(hash)).
 		SetRole(p.Role).
 		SetIsActive(true).
+		SetForcePasswordChange(forceChange).
 		Save(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
+		return nil, "", fmt.Errorf("create user: %w", err)
 	}
-	return u, nil
+
+	if p.SendWelcomeEmail {
+		_, err = s.client.User.UpdateOne(u).
+			SetWelcomeEmailSentAt(time.Now()).
+			Save(ctx)
+		if err != nil {
+			return nil, "", fmt.Errorf("update welcome sent at: %w", err)
+		}
+	}
+
+	return u, password, nil
 }
 
 type UserUpdateParams struct {
@@ -92,4 +118,82 @@ func (s *UserService) SetPassword(ctx context.Context, id int64, password string
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil { return fmt.Errorf("hash password: %w", err) }
 	return s.client.User.UpdateOneID(id).SetPasswordHash(string(hash)).Exec(ctx)
+}
+
+func (s *UserService) Authenticate(ctx context.Context, email, password string) error {
+	u, err := s.client.User.Query().Where(user.EmailEQ(email)).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("invalid credentials")
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
+		return fmt.Errorf("invalid credentials")
+	}
+	return nil
+}
+
+func (s *UserService) ClearForcePasswordChange(ctx context.Context, id int64) error {
+	return s.client.User.UpdateOneID(id).SetForcePasswordChange(false).Exec(ctx)
+}
+
+func (s *UserService) MustChangePassword(ctx context.Context, userID int64) (bool, error) {
+	u, err := s.client.User.Query().Where(user.IDEQ(userID)).Only(ctx)
+	if err != nil {
+		return false, err
+	}
+	return u.ForcePasswordChange, nil
+}
+
+func (s *UserService) ValidatePassword(password string, cs *ent.CompanySettings) error {
+	if cs == nil {
+		cs = &ent.CompanySettings{PasswordMinLength: 8, PasswordRequireUppercase: true, PasswordRequireLowercase: true, PasswordRequireDigit: true, PasswordRequireSpecial: true}
+	}
+	if len(password) < cs.PasswordMinLength {
+		return fmt.Errorf("password must be at least %d characters", cs.PasswordMinLength)
+	}
+	hasUpper := false
+	hasLower := false
+	hasDigit := false
+	hasSpecial := false
+	for _, r := range password {
+		if unicode.IsUpper(r) { hasUpper = true }
+		if unicode.IsLower(r) { hasLower = true }
+		if unicode.IsDigit(r) { hasDigit = true }
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) { hasSpecial = true }
+	}
+	if cs.PasswordRequireUppercase && !hasUpper { return fmt.Errorf("password must contain an uppercase letter") }
+	if cs.PasswordRequireLowercase && !hasLower { return fmt.Errorf("password must contain a lowercase letter") }
+	if cs.PasswordRequireDigit && !hasDigit { return fmt.Errorf("password must contain a digit") }
+	if cs.PasswordRequireSpecial && !hasSpecial { return fmt.Errorf("password must contain a special character") }
+	return nil
+}
+
+func (s *UserService) ResendWelcomeEmail(ctx context.Context, id int64) (*ent.User, string, error) {
+	u, err := s.GetByID(ctx, id)
+	if err != nil {
+		return nil, "", err
+	}
+	tempPass := generateTempPassword()
+	hash, err := bcrypt.GenerateFromPassword([]byte(tempPass), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, "", fmt.Errorf("hash password: %w", err)
+	}
+	_, err = s.client.User.UpdateOne(u).
+		SetPasswordHash(string(hash)).
+		SetForcePasswordChange(true).
+		SetWelcomeEmailSentAt(time.Now()).
+		Save(ctx)
+	if err != nil {
+		return nil, "", fmt.Errorf("update user: %w", err)
+	}
+	return u, tempPass, nil
+}
+
+func generateTempPassword() string {
+	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	var sb strings.Builder
+	for i := 1; i <= 12; i++ {
+		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		sb.WriteByte(chars[n.Int64()])
+	}
+	return sb.String()
 }

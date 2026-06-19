@@ -18,6 +18,10 @@ templ UserForm(p UserFormData) {
 					Password
 					<input type="password" name="password" required minlength="8"/>
 				</label>
+				<label>
+					<input type="checkbox" name="send_welcome_email" checked/>
+					Send welcome email with temporary password
+				</label>
 			}
 			<label>
 				Role

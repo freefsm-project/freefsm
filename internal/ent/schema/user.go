@@ -27,6 +27,8 @@ func (User) Fields() []ent.Field {
 		field.String("name").NotEmpty(),
 		field.String("role").Default("tech"),
 		field.Bool("is_active").Default(true),
+		field.Bool("force_password_change").Default(false),
+		field.Time("welcome_email_sent_at").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

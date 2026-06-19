@@ -37,6 +37,11 @@ type CompanySettingsParams struct {
 	SmtpPassword    string
 	SmtpFrom        string
 	Timezone        string
+	PasswordMinLength       int
+	PasswordRequireUppercase bool
+	PasswordRequireLowercase bool
+	PasswordRequireDigit     bool
+	PasswordRequireSpecial   bool
 }
 
 func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsParams) error {
@@ -63,6 +68,11 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetSMTPPassword(p.SmtpPassword).
 		SetSMTPFrom(p.SmtpFrom).
 		SetTimezone(p.Timezone).
+		SetPasswordMinLength(p.PasswordMinLength).
+		SetPasswordRequireUppercase(p.PasswordRequireUppercase).
+		SetPasswordRequireLowercase(p.PasswordRequireLowercase).
+		SetPasswordRequireDigit(p.PasswordRequireDigit).
+		SetPasswordRequireSpecial(p.PasswordRequireSpecial).
 		Save(ctx)
 	return err
 }

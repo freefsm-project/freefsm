@@ -53,6 +53,11 @@ var (
 		{Name: "smtp_password", Type: field.TypeString, Default: ""},
 		{Name: "smtp_from", Type: field.TypeString, Default: ""},
 		{Name: "timezone", Type: field.TypeString, Default: "UTC"},
+		{Name: "password_min_length", Type: field.TypeInt, Default: 8},
+		{Name: "password_require_uppercase", Type: field.TypeBool, Default: true},
+		{Name: "password_require_lowercase", Type: field.TypeBool, Default: true},
+		{Name: "password_require_digit", Type: field.TypeBool, Default: true},
+		{Name: "password_require_special", Type: field.TypeBool, Default: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -532,6 +537,8 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "role", Type: field.TypeString, Default: "tech"},
 		{Name: "is_active", Type: field.TypeBool, Default: true},
+		{Name: "force_password_change", Type: field.TypeBool, Default: false},
+		{Name: "welcome_email_sent_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}

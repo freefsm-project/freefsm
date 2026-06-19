@@ -79,6 +79,16 @@ func IsActive(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldIsActive, v))
 }
 
+// ForcePasswordChange applies equality check predicate on the "force_password_change" field. It's identical to ForcePasswordChangeEQ.
+func ForcePasswordChange(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldForcePasswordChange, v))
+}
+
+// WelcomeEmailSentAt applies equality check predicate on the "welcome_email_sent_at" field. It's identical to WelcomeEmailSentAtEQ.
+func WelcomeEmailSentAt(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldWelcomeEmailSentAt, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldCreatedAt, v))
@@ -357,6 +367,66 @@ func IsActiveEQ(v bool) predicate.User {
 // IsActiveNEQ applies the NEQ predicate on the "is_active" field.
 func IsActiveNEQ(v bool) predicate.User {
 	return predicate.User(sql.FieldNEQ(FieldIsActive, v))
+}
+
+// ForcePasswordChangeEQ applies the EQ predicate on the "force_password_change" field.
+func ForcePasswordChangeEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldForcePasswordChange, v))
+}
+
+// ForcePasswordChangeNEQ applies the NEQ predicate on the "force_password_change" field.
+func ForcePasswordChangeNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldForcePasswordChange, v))
+}
+
+// WelcomeEmailSentAtEQ applies the EQ predicate on the "welcome_email_sent_at" field.
+func WelcomeEmailSentAtEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldWelcomeEmailSentAt, v))
+}
+
+// WelcomeEmailSentAtNEQ applies the NEQ predicate on the "welcome_email_sent_at" field.
+func WelcomeEmailSentAtNEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldWelcomeEmailSentAt, v))
+}
+
+// WelcomeEmailSentAtIn applies the In predicate on the "welcome_email_sent_at" field.
+func WelcomeEmailSentAtIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldIn(FieldWelcomeEmailSentAt, vs...))
+}
+
+// WelcomeEmailSentAtNotIn applies the NotIn predicate on the "welcome_email_sent_at" field.
+func WelcomeEmailSentAtNotIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldWelcomeEmailSentAt, vs...))
+}
+
+// WelcomeEmailSentAtGT applies the GT predicate on the "welcome_email_sent_at" field.
+func WelcomeEmailSentAtGT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGT(FieldWelcomeEmailSentAt, v))
+}
+
+// WelcomeEmailSentAtGTE applies the GTE predicate on the "welcome_email_sent_at" field.
+func WelcomeEmailSentAtGTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldWelcomeEmailSentAt, v))
+}
+
+// WelcomeEmailSentAtLT applies the LT predicate on the "welcome_email_sent_at" field.
+func WelcomeEmailSentAtLT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLT(FieldWelcomeEmailSentAt, v))
+}
+
+// WelcomeEmailSentAtLTE applies the LTE predicate on the "welcome_email_sent_at" field.
+func WelcomeEmailSentAtLTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldWelcomeEmailSentAt, v))
+}
+
+// WelcomeEmailSentAtIsNil applies the IsNil predicate on the "welcome_email_sent_at" field.
+func WelcomeEmailSentAtIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldWelcomeEmailSentAt))
+}
+
+// WelcomeEmailSentAtNotNil applies the NotNil predicate on the "welcome_email_sent_at" field.
+func WelcomeEmailSentAtNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldWelcomeEmailSentAt))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

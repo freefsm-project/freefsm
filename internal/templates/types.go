@@ -451,6 +451,15 @@ type UserFormData struct {
 	Roles []string
 }
 
+type ChangePasswordData struct {
+	Error          string
+	MinLength      int
+	RequireUpper   bool
+	RequireLower   bool
+	RequireDigit   bool
+	RequireSpecial bool
+}
+
 type ForgotPasswordData struct {
 	Error    string
 	Success  bool

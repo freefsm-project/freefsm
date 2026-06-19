@@ -144,6 +144,31 @@ func Timezone(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldTimezone, v))
 }
 
+// PasswordMinLength applies equality check predicate on the "password_min_length" field. It's identical to PasswordMinLengthEQ.
+func PasswordMinLength(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordMinLength, v))
+}
+
+// PasswordRequireUppercase applies equality check predicate on the "password_require_uppercase" field. It's identical to PasswordRequireUppercaseEQ.
+func PasswordRequireUppercase(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordRequireUppercase, v))
+}
+
+// PasswordRequireLowercase applies equality check predicate on the "password_require_lowercase" field. It's identical to PasswordRequireLowercaseEQ.
+func PasswordRequireLowercase(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordRequireLowercase, v))
+}
+
+// PasswordRequireDigit applies equality check predicate on the "password_require_digit" field. It's identical to PasswordRequireDigitEQ.
+func PasswordRequireDigit(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordRequireDigit, v))
+}
+
+// PasswordRequireSpecial applies equality check predicate on the "password_require_special" field. It's identical to PasswordRequireSpecialEQ.
+func PasswordRequireSpecial(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordRequireSpecial, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldCreatedAt, v))
@@ -1272,6 +1297,86 @@ func TimezoneEqualFold(v string) predicate.CompanySettings {
 // TimezoneContainsFold applies the ContainsFold predicate on the "timezone" field.
 func TimezoneContainsFold(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldContainsFold(FieldTimezone, v))
+}
+
+// PasswordMinLengthEQ applies the EQ predicate on the "password_min_length" field.
+func PasswordMinLengthEQ(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordMinLength, v))
+}
+
+// PasswordMinLengthNEQ applies the NEQ predicate on the "password_min_length" field.
+func PasswordMinLengthNEQ(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldPasswordMinLength, v))
+}
+
+// PasswordMinLengthIn applies the In predicate on the "password_min_length" field.
+func PasswordMinLengthIn(vs ...int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldPasswordMinLength, vs...))
+}
+
+// PasswordMinLengthNotIn applies the NotIn predicate on the "password_min_length" field.
+func PasswordMinLengthNotIn(vs ...int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldPasswordMinLength, vs...))
+}
+
+// PasswordMinLengthGT applies the GT predicate on the "password_min_length" field.
+func PasswordMinLengthGT(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldPasswordMinLength, v))
+}
+
+// PasswordMinLengthGTE applies the GTE predicate on the "password_min_length" field.
+func PasswordMinLengthGTE(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldPasswordMinLength, v))
+}
+
+// PasswordMinLengthLT applies the LT predicate on the "password_min_length" field.
+func PasswordMinLengthLT(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldPasswordMinLength, v))
+}
+
+// PasswordMinLengthLTE applies the LTE predicate on the "password_min_length" field.
+func PasswordMinLengthLTE(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldPasswordMinLength, v))
+}
+
+// PasswordRequireUppercaseEQ applies the EQ predicate on the "password_require_uppercase" field.
+func PasswordRequireUppercaseEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordRequireUppercase, v))
+}
+
+// PasswordRequireUppercaseNEQ applies the NEQ predicate on the "password_require_uppercase" field.
+func PasswordRequireUppercaseNEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldPasswordRequireUppercase, v))
+}
+
+// PasswordRequireLowercaseEQ applies the EQ predicate on the "password_require_lowercase" field.
+func PasswordRequireLowercaseEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordRequireLowercase, v))
+}
+
+// PasswordRequireLowercaseNEQ applies the NEQ predicate on the "password_require_lowercase" field.
+func PasswordRequireLowercaseNEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldPasswordRequireLowercase, v))
+}
+
+// PasswordRequireDigitEQ applies the EQ predicate on the "password_require_digit" field.
+func PasswordRequireDigitEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordRequireDigit, v))
+}
+
+// PasswordRequireDigitNEQ applies the NEQ predicate on the "password_require_digit" field.
+func PasswordRequireDigitNEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldPasswordRequireDigit, v))
+}
+
+// PasswordRequireSpecialEQ applies the EQ predicate on the "password_require_special" field.
+func PasswordRequireSpecialEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordRequireSpecial, v))
+}
+
+// PasswordRequireSpecialNEQ applies the NEQ predicate on the "password_require_special" field.
+func PasswordRequireSpecialNEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldPasswordRequireSpecial, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

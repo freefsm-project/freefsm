@@ -98,6 +98,40 @@ func (_u *UserUpdate) SetNillableIsActive(v *bool) *UserUpdate {
 	return _u
 }
 
+// SetForcePasswordChange sets the "force_password_change" field.
+func (_u *UserUpdate) SetForcePasswordChange(v bool) *UserUpdate {
+	_u.mutation.SetForcePasswordChange(v)
+	return _u
+}
+
+// SetNillableForcePasswordChange sets the "force_password_change" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableForcePasswordChange(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetForcePasswordChange(*v)
+	}
+	return _u
+}
+
+// SetWelcomeEmailSentAt sets the "welcome_email_sent_at" field.
+func (_u *UserUpdate) SetWelcomeEmailSentAt(v time.Time) *UserUpdate {
+	_u.mutation.SetWelcomeEmailSentAt(v)
+	return _u
+}
+
+// SetNillableWelcomeEmailSentAt sets the "welcome_email_sent_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableWelcomeEmailSentAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetWelcomeEmailSentAt(*v)
+	}
+	return _u
+}
+
+// ClearWelcomeEmailSentAt clears the value of the "welcome_email_sent_at" field.
+func (_u *UserUpdate) ClearWelcomeEmailSentAt() *UserUpdate {
+	_u.mutation.ClearWelcomeEmailSentAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *UserUpdate) SetUpdatedAt(v time.Time) *UserUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -192,6 +226,15 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(user.FieldIsActive, field.TypeBool, value)
 	}
+	if value, ok := _u.mutation.ForcePasswordChange(); ok {
+		_spec.SetField(user.FieldForcePasswordChange, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WelcomeEmailSentAt(); ok {
+		_spec.SetField(user.FieldWelcomeEmailSentAt, field.TypeTime, value)
+	}
+	if _u.mutation.WelcomeEmailSentAtCleared() {
+		_spec.ClearField(user.FieldWelcomeEmailSentAt, field.TypeTime)
+	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
 	}
@@ -282,6 +325,40 @@ func (_u *UserUpdateOne) SetNillableIsActive(v *bool) *UserUpdateOne {
 	if v != nil {
 		_u.SetIsActive(*v)
 	}
+	return _u
+}
+
+// SetForcePasswordChange sets the "force_password_change" field.
+func (_u *UserUpdateOne) SetForcePasswordChange(v bool) *UserUpdateOne {
+	_u.mutation.SetForcePasswordChange(v)
+	return _u
+}
+
+// SetNillableForcePasswordChange sets the "force_password_change" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableForcePasswordChange(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetForcePasswordChange(*v)
+	}
+	return _u
+}
+
+// SetWelcomeEmailSentAt sets the "welcome_email_sent_at" field.
+func (_u *UserUpdateOne) SetWelcomeEmailSentAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetWelcomeEmailSentAt(v)
+	return _u
+}
+
+// SetNillableWelcomeEmailSentAt sets the "welcome_email_sent_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableWelcomeEmailSentAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetWelcomeEmailSentAt(*v)
+	}
+	return _u
+}
+
+// ClearWelcomeEmailSentAt clears the value of the "welcome_email_sent_at" field.
+func (_u *UserUpdateOne) ClearWelcomeEmailSentAt() *UserUpdateOne {
+	_u.mutation.ClearWelcomeEmailSentAt()
 	return _u
 }
 
@@ -408,6 +485,15 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(user.FieldIsActive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.ForcePasswordChange(); ok {
+		_spec.SetField(user.FieldForcePasswordChange, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.WelcomeEmailSentAt(); ok {
+		_spec.SetField(user.FieldWelcomeEmailSentAt, field.TypeTime, value)
+	}
+	if _u.mutation.WelcomeEmailSentAtCleared() {
+		_spec.ClearField(user.FieldWelcomeEmailSentAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
