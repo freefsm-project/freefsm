@@ -29,9 +29,8 @@ load_rc_config "$name"
 
 pidfile="/var/run/freefsm/freefsm.pid"
 command="/usr/sbin/daemon"
-command_args="-f -p ${pidfile} /usr/local/bin/freefsm"
+command_args="-f -p ${pidfile} -u ${freefsm_user} /usr/local/bin/freefsm"
 procname="/usr/local/bin/freefsm"
-command_user="${freefsm_user}"
 command_env="\
 FREEFSM_DB_HOST=${freefsm_db_host} \
 FREEFSM_DB_PORT=${freefsm_db_port} \
