@@ -30,6 +30,7 @@ import (
 
 func main() {
 	configFile := flag.String("config", "", "path to config file (optional)")
+	seedFlag := flag.Bool("seed", false, "seed demo data and exit")
 	flag.Parse()
 
 	if *configFile != "" {
@@ -90,6 +91,22 @@ func main() {
 		os.Exit(1)
 	}
 	slog.Info("database migrations applied")
+
+	if *seedFlag {
+		sqldb, err := sql.Open("pgx", cfg.DSN())
+		if err != nil {
+			slog.Error("ent database connect", "error", err)
+			os.Exit(1)
+		}
+		entClient := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, sqldb)))
+		defer entClient.Close()
+		if err := database.Seed(context.Background(), entClient); err != nil {
+			slog.Error("seed demo data", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("demo data seeded successfully")
+		return
+	}
 
 	sessions := services.NewSessionService(db.Pool)
 
