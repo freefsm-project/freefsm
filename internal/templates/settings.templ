@@ -4,136 +4,181 @@ import "fmt"
 
 templ SettingsPage(p SettingsPageData) {
 	@Layout("Company Settings") {
-
 		<form action={ templ.URL(settingsFormAction(p.IsSetup)) } method="post">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-			<label>
-				Business Name
-				<input type="text" name="business_name" value={ p.Settings.BusinessName } required/>
-			</label>
-			<label>
-				Address
-				<input type="text" name="address" value={ p.Settings.Address }/>
-			</label>
-			<div class="grid">
-				<label>
-					City
-					<input type="text" name="city" value={ p.Settings.City }/>
-				</label>
-				<label>
-					State
-					<input type="text" name="state" value={ p.Settings.State }/>
-				</label>
-				<label>
-					ZIP
-					<input type="text" name="zip" value={ p.Settings.Zip }/>
-				</label>
+			
+			<!-- Tab Navigation -->
+			<div class="settings-tabs">
+				<button type="button" class="active" data-tab="company" onclick="switchSettingsTab('company')">Company</button>
+				<button type="button" data-tab="email" onclick="switchSettingsTab('email')">Email</button>
+				<button type="button" data-tab="regional" onclick="switchSettingsTab('regional')">Regional</button>
+				<button type="button" data-tab="documents" onclick="switchSettingsTab('documents')">Documents</button>
+				<button type="button" data-tab="security" onclick="switchSettingsTab('security')">Security</button>
 			</div>
-			<div class="grid">
+			
+			<!-- Company Tab -->
+			<div class="settings-tab-content active" id="tab-company">
 				<label>
-					Phone
-					<input type="tel" name="phone" value={ p.Settings.Phone }/>
+					Business Name
+					<input type="text" name="business_name" value={ p.Settings.BusinessName } required/>
 				</label>
 				<label>
-					Email
-					<input type="email" name="email" value={ p.Settings.Email }/>
+					Address
+					<input type="text" name="address" value={ p.Settings.Address }/>
 				</label>
+				<div class="grid">
+					<label>
+						City
+						<input type="text" name="city" value={ p.Settings.City }/>
+					</label>
+					<label>
+						State
+						<input type="text" name="state" value={ p.Settings.State }/>
+					</label>
+					<label>
+						ZIP
+						<input type="text" name="zip" value={ p.Settings.Zip }/>
+					</label>
+				</div>
+				<div class="grid">
+					<label>
+						Phone
+						<input type="tel" name="phone" value={ p.Settings.Phone }/>
+					</label>
+					<label>
+						Email
+						<input type="email" name="email" value={ p.Settings.Email }/>
+					</label>
+				</div>
+				<label>
+					Tax ID (EIN)
+					<input type="text" name="tax_id" value={ p.Settings.TaxID }/>
+				</label>
+				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
-			<label>
-				Tax ID (EIN)
-				<input type="text" name="tax_id" value={ p.Settings.TaxID }/>
-			</label>
-			<h3>Email (SMTP)</h3>
-			<div class="grid">
+			
+			<!-- Email Tab -->
+			<div class="settings-tab-content" id="tab-email">
+				<h3>Email (SMTP)</h3>
+				<div class="grid">
+					<label>
+						SMTP Host
+						<input type="text" name="smtp_host" value={ p.Settings.SMTPHost } placeholder="smtp.example.com"/>
+					</label>
+					<label>
+						SMTP Port
+						<input type="number" name="smtp_port" value={ fmt.Sprintf("%d", p.Settings.SMTPPort) }/>
+					</label>
+				</div>
+				<div class="grid">
+					<label>
+						Username
+						<input type="text" name="smtp_user" value={ p.Settings.SMTPUser }/>
+					</label>
+					<label>
+						Password
+						<input type="password" name="smtp_password" value={ p.Settings.SMTPPassword }/>
+					</label>
+				</div>
 				<label>
-					SMTP Host
-					<input type="text" name="smtp_host" value={ p.Settings.SMTPHost } placeholder="smtp.example.com"/>
+					From Address
+					<input type="email" name="smtp_from" value={ p.Settings.SMTPFrom } placeholder="freefsm@example.com"/>
 				</label>
-				<label>
-					SMTP Port
-					<input type="number" name="smtp_port" value={ fmt.Sprintf("%d", p.Settings.SMTPPort) }/>
-				</label>
+				<div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
+					<button type="button"
+						hx-post="/settings/test-email"
+						hx-target="#test-email-result"
+						hx-swap="innerHTML"
+						hx-include="[name='csrf_token']"
+						class="outline">
+						Send Test Email
+					</button>
+				</div>
+				<div id="test-email-result"></div>
+				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
-			<div class="grid">
+			
+			<!-- Regional Tab -->
+			<div class="settings-tab-content" id="tab-regional">
+				<h3>Regional Settings</h3>
 				<label>
-					Username
-					<input type="text" name="smtp_user" value={ p.Settings.SMTPUser }/>
+					Timezone
+					<select name="timezone">
+						for _, tz := range commonTimezones() {
+							<option value={ tz } selected?={ p.Settings.Timezone == tz }>{ tz }</option>
+						}
+					</select>
+				</label>
+				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
+			</div>
+			
+			<!-- Documents Tab -->
+			<div class="settings-tab-content" id="tab-documents">
+				<h3>Document Settings</h3>
+				<div class="grid">
+					<label>
+						Invoice Prefix
+						<input type="text" name="invoice_prefix" value={ p.Settings.InvoicePrefix }/>
+					</label>
+					<label>
+						Estimate Prefix
+						<input type="text" name="estimate_prefix" value={ p.Settings.EstimatePrefix }/>
+					</label>
+				</div>
+				<div class="grid">
+					<label>
+						Default Tax Rate
+						<input type="text" name="default_tax_rate" value={ p.Settings.DefaultTaxRate } placeholder="e.g. 8.25%"/>
+					</label>
+					<label>
+						Default Due Days
+						<input type="number" name="default_due_days" value={ fmt.Sprintf("%d", p.Settings.DefaultDueDays) }/>
+					</label>
+				</div>
+				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
+			</div>
+			
+			<!-- Security Tab -->
+			<div class="settings-tab-content" id="tab-security">
+				<h3>Security — Password Policy</h3>
+				<div class="grid">
+					<label>
+						Minimum Length
+						<input type="number" name="password_min_length" value={ fmt.Sprintf("%d", p.Settings.PasswordMinLength) } min="1" max="128"/>
+					</label>
+				</div>
+				<label>
+					<input type="checkbox" name="password_require_uppercase" checked?={ p.Settings.PasswordRequireUppercase }/>
+					Require uppercase letter (A–Z)
 				</label>
 				<label>
-					Password
-					<input type="password" name="smtp_password" value={ p.Settings.SMTPPassword }/>
+					<input type="checkbox" name="password_require_lowercase" checked?={ p.Settings.PasswordRequireLowercase }/>
+					Require lowercase letter (a–z)
 				</label>
+				<label>
+					<input type="checkbox" name="password_require_digit" checked?={ p.Settings.PasswordRequireDigit }/>
+					Require digit (0–9)
+				</label>
+				<label>
+					<input type="checkbox" name="password_require_special" checked?={ p.Settings.PasswordRequireSpecial }/>
+					Require special character (!@#$%^&* etc.)
+				</label>
+				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
-			<label>
-				From Address
-				<input type="email" name="smtp_from" value={ p.Settings.SMTPFrom } placeholder="freefsm@example.com"/>
-			</label>
-			<div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
-				<button type="button"
-					hx-post="/settings/test-email"
-					hx-target="#test-email-result"
-					hx-swap="innerHTML"
-					hx-include="[name='csrf_token']"
-					class="outline">
-					Send Test Email
-				</button>
-			</div>
-			<div id="test-email-result"></div>
-			<h3>Regional Settings</h3>
-			<label>
-				Timezone
-				<select name="timezone">
-					for _, tz := range commonTimezones() {
-						<option value={ tz } selected?={ p.Settings.Timezone == tz }>{ tz }</option>
-					}
-				</select>
-			</label>
-		<h3>Document Settings</h3>
-		<div class="grid">
-			<label>
-				Invoice Prefix
-				<input type="text" name="invoice_prefix" value={ p.Settings.InvoicePrefix }/>
-			</label>
-			<label>
-				Estimate Prefix
-				<input type="text" name="estimate_prefix" value={ p.Settings.EstimatePrefix }/>
-			</label>
-		</div>
-		<div class="grid">
-			<label>
-				Default Tax Rate
-				<input type="text" name="default_tax_rate" value={ p.Settings.DefaultTaxRate } placeholder="e.g. 8.25%"/>
-			</label>
-			<label>
-				Default Due Days
-				<input type="number" name="default_due_days" value={ fmt.Sprintf("%d", p.Settings.DefaultDueDays) }/>
-			</label>
-		</div>
-		<h3>Security — Password Policy</h3>
-		<div class="grid">
-			<label>
-				Minimum Length
-				<input type="number" name="password_min_length" value={ fmt.Sprintf("%d", p.Settings.PasswordMinLength) } min="1" max="128"/>
-			</label>
-		</div>
-		<label>
-			<input type="checkbox" name="password_require_uppercase" checked?={ p.Settings.PasswordRequireUppercase }/>
-			Require uppercase letter (A–Z)
-		</label>
-		<label>
-			<input type="checkbox" name="password_require_lowercase" checked?={ p.Settings.PasswordRequireLowercase }/>
-			Require lowercase letter (a–z)
-		</label>
-		<label>
-			<input type="checkbox" name="password_require_digit" checked?={ p.Settings.PasswordRequireDigit }/>
-			Require digit (0–9)
-		</label>
-		<label>
-			<input type="checkbox" name="password_require_special" checked?={ p.Settings.PasswordRequireSpecial }/>
-			Require special character (!@#$%^&* etc.)
-		</label>
-			<button type="submit">{ settingsButtonText(p.IsSetup) }</button>
 		</form>
+		
+		<script>
+			function switchSettingsTab(name) {
+				document.querySelectorAll('.settings-tab-content').forEach(function(el) {
+					el.classList.remove('active');
+				});
+				document.querySelectorAll('.settings-tabs button').forEach(function(el) {
+					el.classList.remove('active');
+				});
+				document.getElementById('tab-' + name).classList.add('active');
+				document.querySelector('[data-tab="' + name + '"]').classList.add('active');
+			}
+		</script>
 	}
 }
 

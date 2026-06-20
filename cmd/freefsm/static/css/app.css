@@ -664,3 +664,41 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
 .policy-item.valid {
   color: var(--pico-color-green-500);
 }
+
+/* Settings Tab Navigation */
+.settings-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  margin-bottom: 1.5rem;
+}
+
+.settings-tabs button {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.75rem 1.25rem;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--pico-muted-color);
+  transition: all 0.15s;
+  margin-bottom: -1px;
+}
+
+.settings-tabs button:hover {
+  color: var(--pico-color);
+}
+
+.settings-tabs button.active {
+  color: var(--pico-primary);
+  border-bottom-color: var(--pico-primary);
+  font-weight: 500;
+}
+
+.settings-tab-content {
+  display: none;
+}
+
+.settings-tab-content.active {
+  display: block;
+}
