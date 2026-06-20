@@ -3,6 +3,10 @@
 # PROVIDE: freefsm
 # REQUIRE: LOGIN postgresql
 # KEYWORD: shutdown
+#
+# FreeBSD rc.d script for FreeFSM.
+# Build the binary with GNU Make: gmake build
+# Install with: gmake install-freebsd
 
 . /etc/rc.subr
 
@@ -13,6 +17,7 @@ load_rc_config "$name"
 
 : ${freefsm_enable:="NO"}
 : ${freefsm_user:="freefsm"}
+: ${freefsm_config:="/usr/local/etc/freefsm.conf"}
 
 pidfile="/var/run/freefsm.pid"
 command="/usr/local/bin/freefsm"
@@ -25,7 +30,7 @@ freefsm_start() {
     echo "Starting ${name}."
     /usr/sbin/daemon -P ${pidfile} -u ${freefsm_user} \
         -o /var/log/freefsm/freefsm.log \
-        ${command} -config /usr/local/etc/freefsm.conf
+        ${command} -config ${freefsm_config}
 }
 
 freefsm_stop() {

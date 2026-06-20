@@ -6,6 +6,26 @@ Deploy
 - PostgreSQL 16+
 - FreeFSM binary (build with `make build`)
 
+## Build
+
+The Makefile is written for **GNU Make**. On FreeBSD, install `gmake` first:
+
+```sh
+# FreeBSD
+sudo pkg install gmake
+
+# Build on both Linux and FreeBSD
+gmake build
+# or on Linux
+make build
+```
+
+After building, verify the binary checksum to confirm identical output:
+
+```sh
+gmake checksum
+```
+
 ## Setup
 
 After first start, visit `/setup` on your server and enter the `SETUP_TOKEN`
@@ -18,20 +38,15 @@ token from the config and restart.
     `sudo useradd --system --user-group --create-home --home-dir /var/lib/freefsm freefsm`
 
 2.  Copy the binary:
-    `sudo cp freefsm /usr/local/bin/freefsm`
+    `sudo cp dist/freefsm /usr/local/bin/freefsm`
     `sudo chmod +x /usr/local/bin/freefsm`
 
-3.  Copy the systemd service file:
-    `sudo cp deploy/linux/freefsm.service /etc/systemd/system/freefsm.service`
+3.  Install the service and config:
+    `sudo make install-linux`
 
-4.  Create and edit the environment file:
-    `sudo cp deploy/linux/freefsm.conf.sample /etc/freefsm.conf`
-    `sudo chown root:root /etc/freefsm.conf`
-    `sudo chmod 600 /etc/freefsm.conf`
-    Edit `/etc/freefsm.conf` with your database credentials and session secret.
+4.  Edit `/etc/freefsm.conf` with your database credentials and session secret.
 
 5.  Start the service:
-    `sudo systemctl daemon-reload`
     `sudo systemctl enable --now freefsm`
 
 6.  (Optional) Set up the Nginx reverse proxy:
@@ -42,16 +57,41 @@ token from the config and restart.
 
 ## FreeBSD (rc.d)
 
-1.  Create the `freefsm` user:
+1.  Install prerequisites:
+    `sudo pkg install gmake`
+
+2.  Create the `freefsm` user:
     `sudo pw useradd freefsm -s /usr/sbin/nologin -d /var/db/freefsm -m`
 
-3.  Copy the rc.d script:
-    `sudo cp deploy/freebsd/freefsm /etc/rc.d/freefsm`
-    `sudo chmod +x /etc/rc.d/freefsm`
+3.  Copy the binary:
+    `sudo cp dist/freefsm /usr/local/bin/freefsm`
+    `sudo chmod +x /usr/local/bin/freefsm`
 
-4.  Add to `/etc/rc.conf`:
+4.  Install the service and config:
+    `sudo gmake install-freebsd`
+
+5.  Add to `/etc/rc.conf`:
     `freefsm_enable="YES"`
     `freefsm_config="/usr/local/etc/freefsm.conf"`
 
-5.  Start the service:
+6.  Edit `/usr/local/etc/freefsm.conf` with your database credentials and session secret.
+
+7.  Start the service:
     `sudo service freefsm start`
+
+## Cross-Platform Check
+
+To verify both platforms produce identical binaries:
+
+```sh
+# On Linux
+make build && make checksum
+# On FreeBSD
+gmake build && gmake checksum
+# Compare the SHA256 hashes
+```
+
+If the checksums differ, check that:
+- Both platforms use the same `go` version (`go version`)
+- Both use GNU Make (not BSD `make` on FreeBSD)
+- Both checked out the same git commit
