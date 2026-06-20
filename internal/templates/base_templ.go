@@ -164,7 +164,7 @@ func Layout(title string, children ...templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var13 = []any{templ.KV("sub", true), templ.KV("active", isActivePath(ctx, "/assets"))}
+		var templ_7745c5c3_Var13 = []any{templ.KV("active", isActivePath(ctx, "/assets"))}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var13...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

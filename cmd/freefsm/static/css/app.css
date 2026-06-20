@@ -215,20 +215,6 @@ html[data-theme="dark"] .theme-icon-moon {
   border-left: 3px solid var(--pico-primary);
 }
 
-.sidebar nav a.sub {
-  padding-left: 1.75rem;
-  font-size: 0.85rem;
-  border-left: 3px solid var(--pico-muted-border-color);
-}
-
-.sidebar nav a.sub:hover {
-  border-left-color: var(--pico-primary);
-}
-
-.sidebar nav a.sub.active {
-  border-left-color: var(--pico-primary);
-}
-
 .sidebar .dropdown summary {
   list-style: none;
   cursor: pointer;
