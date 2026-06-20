@@ -89,6 +89,8 @@ body {
   position: absolute;
   top: 100%;
   right: 0.5rem;
+  left: auto;
+  width: auto;
   background: var(--pico-background-color);
   border: 1px solid var(--pico-muted-border-color);
   border-radius: var(--pico-border-radius);
@@ -107,8 +109,14 @@ body {
   list-style: none;
 }
 
-.header-right .dropdown ul a,
-.header-right .dropdown ul button {
+.header-right .dropdown ul li:first-of-type,
+.header-right .dropdown ul li:last-of-type {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.header-right .dropdown ul a {
+  box-sizing: border-box;
   background: var(--pico-background-color);
   border: 1px solid var(--pico-muted-border-color);
   cursor: pointer;
@@ -121,18 +129,18 @@ body {
   border-radius: var(--pico-border-radius);
   display: block;
   text-decoration: none;
+  margin: 0;
+  overflow: visible;
 }
 
-.header-right .dropdown ul a:hover,
-.header-right .dropdown ul button:hover {
+.header-right .dropdown ul a:hover {
   background: var(--pico-primary-hover);
   color: var(--pico-primary-inverse);
   border-color: var(--pico-primary-hover);
 }
 
-.header-right .dropdown ul form {
-  margin: 0;
-  padding: 0;
+.header-right .dropdown ul li + li {
+  margin-top: 0.25rem;
 }
 
 .theme-toggle {

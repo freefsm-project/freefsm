@@ -709,7 +709,7 @@ func pageTitleFromPath(ctx context.Context) string {
 	case "/time-entries":
 		return "Timesheets"
 	case "/settings":
-		return "Company Settings"
+		return "Settings"
 	case "/setup", "/setup/company":
 		return "Company Setup"
 	case "/users":

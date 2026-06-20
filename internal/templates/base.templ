@@ -74,7 +74,7 @@ templ Layout(title string, children ...templ.Component) {
 					<details class="dropdown">
 						<summary>Administration</summary>
 						<ul>
-							<a href="/settings">Company Settings</a>
+							<a href="/settings">Settings</a>
 							<a href="/settings/custom-fields">Custom Fields</a>
 							<a href="/users">Users</a>
 						</ul>
@@ -101,12 +101,7 @@ templ Layout(title string, children ...templ.Component) {
 								<summary>{ getUser(ctx).Name }</summary>
 								<ul>
 									<li><a href="/change-password">Change Password</a></li>
-									<li>
-										<form action="/logout" method="post" hx-boost="false">
-											<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-											<button type="submit">Logout</button>
-										</form>
-									</li>
+									<li><a href="/logout" hx-post="/logout">Logout</a></li>
 								</ul>
 							</details>
 						}

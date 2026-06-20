@@ -3,7 +3,7 @@ package templates
 import "fmt"
 
 templ SettingsPage(p SettingsPageData) {
-	@Layout("Company Settings") {
+	@Layout("Settings") {
 		<form action={ templ.URL(settingsFormAction(p.IsSetup)) } method="post">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			
@@ -11,7 +11,6 @@ templ SettingsPage(p SettingsPageData) {
 			<div class="settings-tabs">
 				<button type="button" class="active" data-tab="company" onclick="switchSettingsTab('company')">Company</button>
 				<button type="button" data-tab="email" onclick="switchSettingsTab('email')">Email</button>
-				<button type="button" data-tab="regional" onclick="switchSettingsTab('regional')">Regional</button>
 				<button type="button" data-tab="documents" onclick="switchSettingsTab('documents')">Documents</button>
 				<button type="button" data-tab="security" onclick="switchSettingsTab('security')">Security</button>
 			</div>
@@ -54,12 +53,20 @@ templ SettingsPage(p SettingsPageData) {
 					Tax ID (EIN)
 					<input type="text" name="tax_id" value={ p.Settings.TaxID }/>
 				</label>
+				<label>
+					Timezone
+					<select name="timezone">
+						for _, tz := range commonTimezones() {
+							<option value={ tz } selected?={ p.Settings.Timezone == tz }>{ tz }</option>
+						}
+					</select>
+				</label>
 				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
 			
 			<!-- Email Tab -->
 			<div class="settings-tab-content" id="tab-email">
-				<h3>Email (SMTP)</h3>
+				<h3>Settings</h3>
 				<div class="grid">
 					<label>
 						SMTP Host
@@ -98,23 +105,11 @@ templ SettingsPage(p SettingsPageData) {
 				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
 			
-			<!-- Regional Tab -->
-			<div class="settings-tab-content" id="tab-regional">
-				<h3>Regional Settings</h3>
-				<label>
-					Timezone
-					<select name="timezone">
-						for _, tz := range commonTimezones() {
-							<option value={ tz } selected?={ p.Settings.Timezone == tz }>{ tz }</option>
-						}
-					</select>
-				</label>
-				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
-			</div>
+
 			
 			<!-- Documents Tab -->
 			<div class="settings-tab-content" id="tab-documents">
-				<h3>Document Settings</h3>
+				<h3>Settings</h3>
 				<div class="grid">
 					<label>
 						Invoice Prefix
@@ -140,7 +135,7 @@ templ SettingsPage(p SettingsPageData) {
 			
 			<!-- Security Tab -->
 			<div class="settings-tab-content" id="tab-security">
-				<h3>Security — Password Policy</h3>
+				<h3>Settings</h3>
 				<div class="grid">
 					<label>
 						Minimum Length
