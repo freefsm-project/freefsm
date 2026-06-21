@@ -61,6 +61,14 @@ const (
 	FieldPasswordRequireDigit = "password_require_digit"
 	// FieldPasswordRequireSpecial holds the string denoting the password_require_special field in the database.
 	FieldPasswordRequireSpecial = "password_require_special"
+	// FieldInvoiceColor holds the string denoting the invoice_color field in the database.
+	FieldInvoiceColor = "invoice_color"
+	// FieldInvoiceFooter holds the string denoting the invoice_footer field in the database.
+	FieldInvoiceFooter = "invoice_footer"
+	// FieldInvoiceLogoPath holds the string denoting the invoice_logo_path field in the database.
+	FieldInvoiceLogoPath = "invoice_logo_path"
+	// FieldInvoicePaymentTerms holds the string denoting the invoice_payment_terms field in the database.
+	FieldInvoicePaymentTerms = "invoice_payment_terms"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -96,6 +104,10 @@ var Columns = []string{
 	FieldPasswordRequireLowercase,
 	FieldPasswordRequireDigit,
 	FieldPasswordRequireSpecial,
+	FieldInvoiceColor,
+	FieldInvoiceFooter,
+	FieldInvoiceLogoPath,
+	FieldInvoicePaymentTerms,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -157,6 +169,14 @@ var (
 	DefaultPasswordRequireDigit bool
 	// DefaultPasswordRequireSpecial holds the default value on creation for the "password_require_special" field.
 	DefaultPasswordRequireSpecial bool
+	// DefaultInvoiceColor holds the default value on creation for the "invoice_color" field.
+	DefaultInvoiceColor string
+	// DefaultInvoiceFooter holds the default value on creation for the "invoice_footer" field.
+	DefaultInvoiceFooter string
+	// DefaultInvoiceLogoPath holds the default value on creation for the "invoice_logo_path" field.
+	DefaultInvoiceLogoPath string
+	// DefaultInvoicePaymentTerms holds the default value on creation for the "invoice_payment_terms" field.
+	DefaultInvoicePaymentTerms string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -291,6 +311,26 @@ func ByPasswordRequireDigit(opts ...sql.OrderTermOption) OrderOption {
 // ByPasswordRequireSpecial orders the results by the password_require_special field.
 func ByPasswordRequireSpecial(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPasswordRequireSpecial, opts...).ToFunc()
+}
+
+// ByInvoiceColor orders the results by the invoice_color field.
+func ByInvoiceColor(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoiceColor, opts...).ToFunc()
+}
+
+// ByInvoiceFooter orders the results by the invoice_footer field.
+func ByInvoiceFooter(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoiceFooter, opts...).ToFunc()
+}
+
+// ByInvoiceLogoPath orders the results by the invoice_logo_path field.
+func ByInvoiceLogoPath(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoiceLogoPath, opts...).ToFunc()
+}
+
+// ByInvoicePaymentTerms orders the results by the invoice_payment_terms field.
+func ByInvoicePaymentTerms(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvoicePaymentTerms, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

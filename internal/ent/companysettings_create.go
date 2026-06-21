@@ -356,6 +356,62 @@ func (_c *CompanySettingsCreate) SetNillablePasswordRequireSpecial(v *bool) *Com
 	return _c
 }
 
+// SetInvoiceColor sets the "invoice_color" field.
+func (_c *CompanySettingsCreate) SetInvoiceColor(v string) *CompanySettingsCreate {
+	_c.mutation.SetInvoiceColor(v)
+	return _c
+}
+
+// SetNillableInvoiceColor sets the "invoice_color" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableInvoiceColor(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetInvoiceColor(*v)
+	}
+	return _c
+}
+
+// SetInvoiceFooter sets the "invoice_footer" field.
+func (_c *CompanySettingsCreate) SetInvoiceFooter(v string) *CompanySettingsCreate {
+	_c.mutation.SetInvoiceFooter(v)
+	return _c
+}
+
+// SetNillableInvoiceFooter sets the "invoice_footer" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableInvoiceFooter(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetInvoiceFooter(*v)
+	}
+	return _c
+}
+
+// SetInvoiceLogoPath sets the "invoice_logo_path" field.
+func (_c *CompanySettingsCreate) SetInvoiceLogoPath(v string) *CompanySettingsCreate {
+	_c.mutation.SetInvoiceLogoPath(v)
+	return _c
+}
+
+// SetNillableInvoiceLogoPath sets the "invoice_logo_path" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableInvoiceLogoPath(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetInvoiceLogoPath(*v)
+	}
+	return _c
+}
+
+// SetInvoicePaymentTerms sets the "invoice_payment_terms" field.
+func (_c *CompanySettingsCreate) SetInvoicePaymentTerms(v string) *CompanySettingsCreate {
+	_c.mutation.SetInvoicePaymentTerms(v)
+	return _c
+}
+
+// SetNillableInvoicePaymentTerms sets the "invoice_payment_terms" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableInvoicePaymentTerms(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetInvoicePaymentTerms(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *CompanySettingsCreate) SetCreatedAt(v time.Time) *CompanySettingsCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -517,6 +573,22 @@ func (_c *CompanySettingsCreate) defaults() {
 		v := companysettings.DefaultPasswordRequireSpecial
 		_c.mutation.SetPasswordRequireSpecial(v)
 	}
+	if _, ok := _c.mutation.InvoiceColor(); !ok {
+		v := companysettings.DefaultInvoiceColor
+		_c.mutation.SetInvoiceColor(v)
+	}
+	if _, ok := _c.mutation.InvoiceFooter(); !ok {
+		v := companysettings.DefaultInvoiceFooter
+		_c.mutation.SetInvoiceFooter(v)
+	}
+	if _, ok := _c.mutation.InvoiceLogoPath(); !ok {
+		v := companysettings.DefaultInvoiceLogoPath
+		_c.mutation.SetInvoiceLogoPath(v)
+	}
+	if _, ok := _c.mutation.InvoicePaymentTerms(); !ok {
+		v := companysettings.DefaultInvoicePaymentTerms
+		_c.mutation.SetInvoicePaymentTerms(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := companysettings.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -597,6 +669,18 @@ func (_c *CompanySettingsCreate) check() error {
 	}
 	if _, ok := _c.mutation.PasswordRequireSpecial(); !ok {
 		return &ValidationError{Name: "password_require_special", err: errors.New(`ent: missing required field "CompanySettings.password_require_special"`)}
+	}
+	if _, ok := _c.mutation.InvoiceColor(); !ok {
+		return &ValidationError{Name: "invoice_color", err: errors.New(`ent: missing required field "CompanySettings.invoice_color"`)}
+	}
+	if _, ok := _c.mutation.InvoiceFooter(); !ok {
+		return &ValidationError{Name: "invoice_footer", err: errors.New(`ent: missing required field "CompanySettings.invoice_footer"`)}
+	}
+	if _, ok := _c.mutation.InvoiceLogoPath(); !ok {
+		return &ValidationError{Name: "invoice_logo_path", err: errors.New(`ent: missing required field "CompanySettings.invoice_logo_path"`)}
+	}
+	if _, ok := _c.mutation.InvoicePaymentTerms(); !ok {
+		return &ValidationError{Name: "invoice_payment_terms", err: errors.New(`ent: missing required field "CompanySettings.invoice_payment_terms"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "CompanySettings.created_at"`)}
@@ -731,6 +815,22 @@ func (_c *CompanySettingsCreate) createSpec() (*CompanySettings, *sqlgraph.Creat
 	if value, ok := _c.mutation.PasswordRequireSpecial(); ok {
 		_spec.SetField(companysettings.FieldPasswordRequireSpecial, field.TypeBool, value)
 		_node.PasswordRequireSpecial = value
+	}
+	if value, ok := _c.mutation.InvoiceColor(); ok {
+		_spec.SetField(companysettings.FieldInvoiceColor, field.TypeString, value)
+		_node.InvoiceColor = value
+	}
+	if value, ok := _c.mutation.InvoiceFooter(); ok {
+		_spec.SetField(companysettings.FieldInvoiceFooter, field.TypeString, value)
+		_node.InvoiceFooter = value
+	}
+	if value, ok := _c.mutation.InvoiceLogoPath(); ok {
+		_spec.SetField(companysettings.FieldInvoiceLogoPath, field.TypeString, value)
+		_node.InvoiceLogoPath = value
+	}
+	if value, ok := _c.mutation.InvoicePaymentTerms(); ok {
+		_spec.SetField(companysettings.FieldInvoicePaymentTerms, field.TypeString, value)
+		_node.InvoicePaymentTerms = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(companysettings.FieldCreatedAt, field.TypeTime, value)

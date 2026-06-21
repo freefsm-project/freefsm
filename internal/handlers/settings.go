@@ -1,9 +1,14 @@
 package handlers
 
 import (
+	"fmt"
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
@@ -15,10 +20,12 @@ type SettingsHandler struct {
 	svc         *services.CompanySettingsService
 	emailSvc    *services.EmailService
 	activitySvc *services.ActivityService
+	entClient   *ent.Client
+	uploadDir   string
 }
 
-func NewSettingsHandler(svc *services.CompanySettingsService, emailSvc *services.EmailService, activitySvc *services.ActivityService) *SettingsHandler {
-	return &SettingsHandler{svc: svc, emailSvc: emailSvc, activitySvc: activitySvc}
+func NewSettingsHandler(svc *services.CompanySettingsService, emailSvc *services.EmailService, activitySvc *services.ActivityService, entClient *ent.Client, uploadDir string) *SettingsHandler {
+	return &SettingsHandler{svc: svc, emailSvc: emailSvc, activitySvc: activitySvc, entClient: entClient, uploadDir: uploadDir}
 }
 
 func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +68,10 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		PasswordRequireLowercase:  r.FormValue("password_require_lowercase") == "on",
 		PasswordRequireDigit:        r.FormValue("password_require_digit") == "on",
 		PasswordRequireSpecial:      r.FormValue("password_require_special") == "on",
+		InvoiceColor:                r.FormValue("invoice_color"),
+		InvoiceFooter:               r.FormValue("invoice_footer"),
+		InvoiceLogoPath:             r.FormValue("invoice_logo_path"),
+		InvoicePaymentTerms:         r.FormValue("invoice_payment_terms"),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -141,6 +152,18 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 			if oldSettings.PasswordRequireSpecial != newSettings.PasswordRequireSpecial {
 				changed = append(changed, "password_require_special")
 			}
+			if oldSettings.InvoiceColor != newSettings.InvoiceColor {
+				changed = append(changed, "invoice_color")
+			}
+			if oldSettings.InvoiceFooter != newSettings.InvoiceFooter {
+				changed = append(changed, "invoice_footer")
+			}
+			if oldSettings.InvoiceLogoPath != newSettings.InvoiceLogoPath {
+				changed = append(changed, "invoice_logo_path")
+			}
+			if oldSettings.InvoicePaymentTerms != newSettings.InvoicePaymentTerms {
+				changed = append(changed, "invoice_payment_terms")
+			}
 			if len(changed) > 0 {
 				h.activitySvc.Record(r.Context(), u.ID, "settings_updated", "company_settings", newSettings.ID, map[string]interface{}{
 					"entity_name": "Company Settings",
@@ -170,6 +193,88 @@ func (h *SettingsHandler) TestEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	templates.TestEmailResult(true, "").Render(r.Context(), w)
+}
+
+func (h *SettingsHandler) UploadInvoiceLogo(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseMultipartForm(25 << 20); err != nil {
+		http.Error(w, "File too large", 413)
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+
+	files := r.MultipartForm.File["file"]
+	if len(files) == 0 {
+		http.Error(w, "No file", 400)
+		return
+	}
+
+	fh := files[0]
+	mimeType := fh.Header.Get("Content-Type")
+	if !strings.HasPrefix(mimeType, "image/") {
+		http.Error(w, "Only image files allowed", 400)
+		return
+	}
+
+	f, err := fh.Open()
+	if err != nil {
+		http.Error(w, "Cannot open file", 500)
+		return
+	}
+	defer f.Close()
+
+	ext := strings.ToLower(filepath.Ext(fh.Filename))
+	if ext == "" {
+		ext = ".png"
+	}
+	logoPath := filepath.Join(h.uploadDir, "invoice-logo"+ext)
+
+	dst, err := os.Create(logoPath)
+	if err != nil {
+		http.Error(w, "Cannot save file: "+err.Error(), 500)
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, f); err != nil {
+		http.Error(w, "Cannot write file", 500)
+		return
+	}
+
+	cs, err := h.svc.Get(r.Context())
+	if err != nil {
+		http.Error(w, "Cannot load settings", 500)
+		return
+	}
+
+	if _, err := h.entClient.CompanySettings.UpdateOneID(cs.ID).SetInvoiceLogoPath(logoPath).Save(r.Context()); err != nil {
+		http.Error(w, "Cannot update settings: "+err.Error(), 500)
+		return
+	}
+
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "logo_uploaded", "company_settings", cs.ID, map[string]interface{}{
+			"entity_name": "Company Settings",
+			"actor_name":  u.Name,
+		})
+	}
+
+	logoURL := "/settings/invoice-logo?t=" + strconv.FormatInt(time.Now().UnixMilli(), 10)
+	if logoPath != "" {
+		fmt.Fprintf(w, `<input type="text" name="invoice_logo_path" value="%s" placeholder="File path" readonly style="font-family:monospace;font-size:0.85rem"/><div style="margin-top:0.5rem"><img src="%s" alt="Logo preview" style="max-height:64px;max-width:200px"/></div>`, logoPath, logoURL)
+	} else {
+		fmt.Fprintf(w, `<input type="text" name="invoice_logo_path" value="" placeholder="File path" readonly style="font-family:monospace;font-size:0.85rem"/>`)
+	}
+}
+
+func (h *SettingsHandler) InvoiceLogo(w http.ResponseWriter, r *http.Request) {
+	cs, err := h.svc.Get(r.Context())
+	if err != nil || cs.InvoiceLogoPath == "" {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	http.ServeFile(w, r, cs.InvoiceLogoPath)
 }
 
 func companyName(cs *ent.CompanySettings) string {

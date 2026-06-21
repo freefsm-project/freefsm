@@ -248,6 +248,8 @@ func activityIcon(action string) string {
 		return "🔑"
 	case "logged_out":
 		return "🚪"
+	case "logo_uploaded":
+		return "🖼"
 	case "restored":
 		return "↩"
 	case "contact_created", "contact_updated":

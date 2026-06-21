@@ -235,12 +235,28 @@ func init() {
 	companysettingsDescPasswordRequireSpecial := companysettingsFields[24].Descriptor()
 	// companysettings.DefaultPasswordRequireSpecial holds the default value on creation for the password_require_special field.
 	companysettings.DefaultPasswordRequireSpecial = companysettingsDescPasswordRequireSpecial.Default.(bool)
+	// companysettingsDescInvoiceColor is the schema descriptor for invoice_color field.
+	companysettingsDescInvoiceColor := companysettingsFields[25].Descriptor()
+	// companysettings.DefaultInvoiceColor holds the default value on creation for the invoice_color field.
+	companysettings.DefaultInvoiceColor = companysettingsDescInvoiceColor.Default.(string)
+	// companysettingsDescInvoiceFooter is the schema descriptor for invoice_footer field.
+	companysettingsDescInvoiceFooter := companysettingsFields[26].Descriptor()
+	// companysettings.DefaultInvoiceFooter holds the default value on creation for the invoice_footer field.
+	companysettings.DefaultInvoiceFooter = companysettingsDescInvoiceFooter.Default.(string)
+	// companysettingsDescInvoiceLogoPath is the schema descriptor for invoice_logo_path field.
+	companysettingsDescInvoiceLogoPath := companysettingsFields[27].Descriptor()
+	// companysettings.DefaultInvoiceLogoPath holds the default value on creation for the invoice_logo_path field.
+	companysettings.DefaultInvoiceLogoPath = companysettingsDescInvoiceLogoPath.Default.(string)
+	// companysettingsDescInvoicePaymentTerms is the schema descriptor for invoice_payment_terms field.
+	companysettingsDescInvoicePaymentTerms := companysettingsFields[28].Descriptor()
+	// companysettings.DefaultInvoicePaymentTerms holds the default value on creation for the invoice_payment_terms field.
+	companysettings.DefaultInvoicePaymentTerms = companysettingsDescInvoicePaymentTerms.Default.(string)
 	// companysettingsDescCreatedAt is the schema descriptor for created_at field.
-	companysettingsDescCreatedAt := companysettingsFields[25].Descriptor()
+	companysettingsDescCreatedAt := companysettingsFields[29].Descriptor()
 	// companysettings.DefaultCreatedAt holds the default value on creation for the created_at field.
 	companysettings.DefaultCreatedAt = companysettingsDescCreatedAt.Default.(func() time.Time)
 	// companysettingsDescUpdatedAt is the schema descriptor for updated_at field.
-	companysettingsDescUpdatedAt := companysettingsFields[26].Descriptor()
+	companysettingsDescUpdatedAt := companysettingsFields[30].Descriptor()
 	// companysettings.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	companysettings.DefaultUpdatedAt = companysettingsDescUpdatedAt.Default.(func() time.Time)
 	// companysettings.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

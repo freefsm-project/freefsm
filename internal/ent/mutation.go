@@ -4323,6 +4323,10 @@ type CompanySettingsMutation struct {
 	password_require_lowercase *bool
 	password_require_digit     *bool
 	password_require_special   *bool
+	invoice_color              *string
+	invoice_footer             *string
+	invoice_logo_path          *string
+	invoice_payment_terms      *string
 	created_at                 *time.Time
 	updated_at                 *time.Time
 	clearedFields              map[string]struct{}
@@ -5393,6 +5397,150 @@ func (m *CompanySettingsMutation) ResetPasswordRequireSpecial() {
 	m.password_require_special = nil
 }
 
+// SetInvoiceColor sets the "invoice_color" field.
+func (m *CompanySettingsMutation) SetInvoiceColor(s string) {
+	m.invoice_color = &s
+}
+
+// InvoiceColor returns the value of the "invoice_color" field in the mutation.
+func (m *CompanySettingsMutation) InvoiceColor() (r string, exists bool) {
+	v := m.invoice_color
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceColor returns the old "invoice_color" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldInvoiceColor(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceColor is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceColor requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceColor: %w", err)
+	}
+	return oldValue.InvoiceColor, nil
+}
+
+// ResetInvoiceColor resets all changes to the "invoice_color" field.
+func (m *CompanySettingsMutation) ResetInvoiceColor() {
+	m.invoice_color = nil
+}
+
+// SetInvoiceFooter sets the "invoice_footer" field.
+func (m *CompanySettingsMutation) SetInvoiceFooter(s string) {
+	m.invoice_footer = &s
+}
+
+// InvoiceFooter returns the value of the "invoice_footer" field in the mutation.
+func (m *CompanySettingsMutation) InvoiceFooter() (r string, exists bool) {
+	v := m.invoice_footer
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceFooter returns the old "invoice_footer" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldInvoiceFooter(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceFooter is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceFooter requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceFooter: %w", err)
+	}
+	return oldValue.InvoiceFooter, nil
+}
+
+// ResetInvoiceFooter resets all changes to the "invoice_footer" field.
+func (m *CompanySettingsMutation) ResetInvoiceFooter() {
+	m.invoice_footer = nil
+}
+
+// SetInvoiceLogoPath sets the "invoice_logo_path" field.
+func (m *CompanySettingsMutation) SetInvoiceLogoPath(s string) {
+	m.invoice_logo_path = &s
+}
+
+// InvoiceLogoPath returns the value of the "invoice_logo_path" field in the mutation.
+func (m *CompanySettingsMutation) InvoiceLogoPath() (r string, exists bool) {
+	v := m.invoice_logo_path
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoiceLogoPath returns the old "invoice_logo_path" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldInvoiceLogoPath(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoiceLogoPath is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoiceLogoPath requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoiceLogoPath: %w", err)
+	}
+	return oldValue.InvoiceLogoPath, nil
+}
+
+// ResetInvoiceLogoPath resets all changes to the "invoice_logo_path" field.
+func (m *CompanySettingsMutation) ResetInvoiceLogoPath() {
+	m.invoice_logo_path = nil
+}
+
+// SetInvoicePaymentTerms sets the "invoice_payment_terms" field.
+func (m *CompanySettingsMutation) SetInvoicePaymentTerms(s string) {
+	m.invoice_payment_terms = &s
+}
+
+// InvoicePaymentTerms returns the value of the "invoice_payment_terms" field in the mutation.
+func (m *CompanySettingsMutation) InvoicePaymentTerms() (r string, exists bool) {
+	v := m.invoice_payment_terms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvoicePaymentTerms returns the old "invoice_payment_terms" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldInvoicePaymentTerms(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvoicePaymentTerms is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvoicePaymentTerms requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvoicePaymentTerms: %w", err)
+	}
+	return oldValue.InvoicePaymentTerms, nil
+}
+
+// ResetInvoicePaymentTerms resets all changes to the "invoice_payment_terms" field.
+func (m *CompanySettingsMutation) ResetInvoicePaymentTerms() {
+	m.invoice_payment_terms = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *CompanySettingsMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -5499,7 +5647,7 @@ func (m *CompanySettingsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompanySettingsMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 30)
 	if m.company_id != nil {
 		fields = append(fields, companysettings.FieldCompanyID)
 	}
@@ -5572,6 +5720,18 @@ func (m *CompanySettingsMutation) Fields() []string {
 	if m.password_require_special != nil {
 		fields = append(fields, companysettings.FieldPasswordRequireSpecial)
 	}
+	if m.invoice_color != nil {
+		fields = append(fields, companysettings.FieldInvoiceColor)
+	}
+	if m.invoice_footer != nil {
+		fields = append(fields, companysettings.FieldInvoiceFooter)
+	}
+	if m.invoice_logo_path != nil {
+		fields = append(fields, companysettings.FieldInvoiceLogoPath)
+	}
+	if m.invoice_payment_terms != nil {
+		fields = append(fields, companysettings.FieldInvoicePaymentTerms)
+	}
 	if m.created_at != nil {
 		fields = append(fields, companysettings.FieldCreatedAt)
 	}
@@ -5634,6 +5794,14 @@ func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 		return m.PasswordRequireDigit()
 	case companysettings.FieldPasswordRequireSpecial:
 		return m.PasswordRequireSpecial()
+	case companysettings.FieldInvoiceColor:
+		return m.InvoiceColor()
+	case companysettings.FieldInvoiceFooter:
+		return m.InvoiceFooter()
+	case companysettings.FieldInvoiceLogoPath:
+		return m.InvoiceLogoPath()
+	case companysettings.FieldInvoicePaymentTerms:
+		return m.InvoicePaymentTerms()
 	case companysettings.FieldCreatedAt:
 		return m.CreatedAt()
 	case companysettings.FieldUpdatedAt:
@@ -5695,6 +5863,14 @@ func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (en
 		return m.OldPasswordRequireDigit(ctx)
 	case companysettings.FieldPasswordRequireSpecial:
 		return m.OldPasswordRequireSpecial(ctx)
+	case companysettings.FieldInvoiceColor:
+		return m.OldInvoiceColor(ctx)
+	case companysettings.FieldInvoiceFooter:
+		return m.OldInvoiceFooter(ctx)
+	case companysettings.FieldInvoiceLogoPath:
+		return m.OldInvoiceLogoPath(ctx)
+	case companysettings.FieldInvoicePaymentTerms:
+		return m.OldInvoicePaymentTerms(ctx)
 	case companysettings.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case companysettings.FieldUpdatedAt:
@@ -5875,6 +6051,34 @@ func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetPasswordRequireSpecial(v)
+		return nil
+	case companysettings.FieldInvoiceColor:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceColor(v)
+		return nil
+	case companysettings.FieldInvoiceFooter:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceFooter(v)
+		return nil
+	case companysettings.FieldInvoiceLogoPath:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoiceLogoPath(v)
+		return nil
+	case companysettings.FieldInvoicePaymentTerms:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvoicePaymentTerms(v)
 		return nil
 	case companysettings.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -6070,6 +6274,18 @@ func (m *CompanySettingsMutation) ResetField(name string) error {
 		return nil
 	case companysettings.FieldPasswordRequireSpecial:
 		m.ResetPasswordRequireSpecial()
+		return nil
+	case companysettings.FieldInvoiceColor:
+		m.ResetInvoiceColor()
+		return nil
+	case companysettings.FieldInvoiceFooter:
+		m.ResetInvoiceFooter()
+		return nil
+	case companysettings.FieldInvoiceLogoPath:
+		m.ResetInvoiceLogoPath()
+		return nil
+	case companysettings.FieldInvoicePaymentTerms:
+		m.ResetInvoicePaymentTerms()
 		return nil
 	case companysettings.FieldCreatedAt:
 		m.ResetCreatedAt()

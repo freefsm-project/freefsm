@@ -97,6 +97,8 @@ func activityVerb(action string) string {
 		return "logged in"
 	case "logged_out":
 		return "logged out"
+	case "logo_uploaded":
+		return "updated logo for"
 	case "restored":
 		return "restored"
 	default:
@@ -140,6 +142,8 @@ func activityActionClass(action string) string {
 		return "activity-created"
 	case "logged_out":
 		return "activity-deleted"
+	case "logo_uploaded":
+		return "activity-file"
 	case "restored":
 		return "activity-created"
 	default:

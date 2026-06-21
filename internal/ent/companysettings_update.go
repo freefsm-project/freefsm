@@ -398,6 +398,62 @@ func (_u *CompanySettingsUpdate) SetNillablePasswordRequireSpecial(v *bool) *Com
 	return _u
 }
 
+// SetInvoiceColor sets the "invoice_color" field.
+func (_u *CompanySettingsUpdate) SetInvoiceColor(v string) *CompanySettingsUpdate {
+	_u.mutation.SetInvoiceColor(v)
+	return _u
+}
+
+// SetNillableInvoiceColor sets the "invoice_color" field if the given value is not nil.
+func (_u *CompanySettingsUpdate) SetNillableInvoiceColor(v *string) *CompanySettingsUpdate {
+	if v != nil {
+		_u.SetInvoiceColor(*v)
+	}
+	return _u
+}
+
+// SetInvoiceFooter sets the "invoice_footer" field.
+func (_u *CompanySettingsUpdate) SetInvoiceFooter(v string) *CompanySettingsUpdate {
+	_u.mutation.SetInvoiceFooter(v)
+	return _u
+}
+
+// SetNillableInvoiceFooter sets the "invoice_footer" field if the given value is not nil.
+func (_u *CompanySettingsUpdate) SetNillableInvoiceFooter(v *string) *CompanySettingsUpdate {
+	if v != nil {
+		_u.SetInvoiceFooter(*v)
+	}
+	return _u
+}
+
+// SetInvoiceLogoPath sets the "invoice_logo_path" field.
+func (_u *CompanySettingsUpdate) SetInvoiceLogoPath(v string) *CompanySettingsUpdate {
+	_u.mutation.SetInvoiceLogoPath(v)
+	return _u
+}
+
+// SetNillableInvoiceLogoPath sets the "invoice_logo_path" field if the given value is not nil.
+func (_u *CompanySettingsUpdate) SetNillableInvoiceLogoPath(v *string) *CompanySettingsUpdate {
+	if v != nil {
+		_u.SetInvoiceLogoPath(*v)
+	}
+	return _u
+}
+
+// SetInvoicePaymentTerms sets the "invoice_payment_terms" field.
+func (_u *CompanySettingsUpdate) SetInvoicePaymentTerms(v string) *CompanySettingsUpdate {
+	_u.mutation.SetInvoicePaymentTerms(v)
+	return _u
+}
+
+// SetNillableInvoicePaymentTerms sets the "invoice_payment_terms" field if the given value is not nil.
+func (_u *CompanySettingsUpdate) SetNillableInvoicePaymentTerms(v *string) *CompanySettingsUpdate {
+	if v != nil {
+		_u.SetInvoicePaymentTerms(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CompanySettingsUpdate) SetUpdatedAt(v time.Time) *CompanySettingsUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -540,6 +596,18 @@ func (_u *CompanySettingsUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.PasswordRequireSpecial(); ok {
 		_spec.SetField(companysettings.FieldPasswordRequireSpecial, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.InvoiceColor(); ok {
+		_spec.SetField(companysettings.FieldInvoiceColor, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InvoiceFooter(); ok {
+		_spec.SetField(companysettings.FieldInvoiceFooter, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InvoiceLogoPath(); ok {
+		_spec.SetField(companysettings.FieldInvoiceLogoPath, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InvoicePaymentTerms(); ok {
+		_spec.SetField(companysettings.FieldInvoicePaymentTerms, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(companysettings.FieldUpdatedAt, field.TypeTime, value)
@@ -934,6 +1002,62 @@ func (_u *CompanySettingsUpdateOne) SetNillablePasswordRequireSpecial(v *bool) *
 	return _u
 }
 
+// SetInvoiceColor sets the "invoice_color" field.
+func (_u *CompanySettingsUpdateOne) SetInvoiceColor(v string) *CompanySettingsUpdateOne {
+	_u.mutation.SetInvoiceColor(v)
+	return _u
+}
+
+// SetNillableInvoiceColor sets the "invoice_color" field if the given value is not nil.
+func (_u *CompanySettingsUpdateOne) SetNillableInvoiceColor(v *string) *CompanySettingsUpdateOne {
+	if v != nil {
+		_u.SetInvoiceColor(*v)
+	}
+	return _u
+}
+
+// SetInvoiceFooter sets the "invoice_footer" field.
+func (_u *CompanySettingsUpdateOne) SetInvoiceFooter(v string) *CompanySettingsUpdateOne {
+	_u.mutation.SetInvoiceFooter(v)
+	return _u
+}
+
+// SetNillableInvoiceFooter sets the "invoice_footer" field if the given value is not nil.
+func (_u *CompanySettingsUpdateOne) SetNillableInvoiceFooter(v *string) *CompanySettingsUpdateOne {
+	if v != nil {
+		_u.SetInvoiceFooter(*v)
+	}
+	return _u
+}
+
+// SetInvoiceLogoPath sets the "invoice_logo_path" field.
+func (_u *CompanySettingsUpdateOne) SetInvoiceLogoPath(v string) *CompanySettingsUpdateOne {
+	_u.mutation.SetInvoiceLogoPath(v)
+	return _u
+}
+
+// SetNillableInvoiceLogoPath sets the "invoice_logo_path" field if the given value is not nil.
+func (_u *CompanySettingsUpdateOne) SetNillableInvoiceLogoPath(v *string) *CompanySettingsUpdateOne {
+	if v != nil {
+		_u.SetInvoiceLogoPath(*v)
+	}
+	return _u
+}
+
+// SetInvoicePaymentTerms sets the "invoice_payment_terms" field.
+func (_u *CompanySettingsUpdateOne) SetInvoicePaymentTerms(v string) *CompanySettingsUpdateOne {
+	_u.mutation.SetInvoicePaymentTerms(v)
+	return _u
+}
+
+// SetNillableInvoicePaymentTerms sets the "invoice_payment_terms" field if the given value is not nil.
+func (_u *CompanySettingsUpdateOne) SetNillableInvoicePaymentTerms(v *string) *CompanySettingsUpdateOne {
+	if v != nil {
+		_u.SetInvoicePaymentTerms(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CompanySettingsUpdateOne) SetUpdatedAt(v time.Time) *CompanySettingsUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -1106,6 +1230,18 @@ func (_u *CompanySettingsUpdateOne) sqlSave(ctx context.Context) (_node *Company
 	}
 	if value, ok := _u.mutation.PasswordRequireSpecial(); ok {
 		_spec.SetField(companysettings.FieldPasswordRequireSpecial, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.InvoiceColor(); ok {
+		_spec.SetField(companysettings.FieldInvoiceColor, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InvoiceFooter(); ok {
+		_spec.SetField(companysettings.FieldInvoiceFooter, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InvoiceLogoPath(); ok {
+		_spec.SetField(companysettings.FieldInvoiceLogoPath, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.InvoicePaymentTerms(); ok {
+		_spec.SetField(companysettings.FieldInvoicePaymentTerms, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(companysettings.FieldUpdatedAt, field.TypeTime, value)

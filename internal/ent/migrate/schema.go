@@ -185,6 +185,10 @@ var (
 		{Name: "password_require_lowercase", Type: field.TypeBool, Default: true},
 		{Name: "password_require_digit", Type: field.TypeBool, Default: true},
 		{Name: "password_require_special", Type: field.TypeBool, Default: true},
+		{Name: "invoice_color", Type: field.TypeString, Default: "#1a56db"},
+		{Name: "invoice_footer", Type: field.TypeString, Default: ""},
+		{Name: "invoice_logo_path", Type: field.TypeString, Default: ""},
+		{Name: "invoice_payment_terms", Type: field.TypeString, Default: "Net 30"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}

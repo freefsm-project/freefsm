@@ -11,7 +11,7 @@ templ SettingsPage(p SettingsPageData) {
 			<div class="settings-tabs">
 				<button type="button" class="active" data-tab="company" onclick="switchSettingsTab('company')">Company</button>
 				<button type="button" data-tab="email" onclick="switchSettingsTab('email')">Email</button>
-				<button type="button" data-tab="documents" onclick="switchSettingsTab('documents')">Documents</button>
+				<button type="button" data-tab="pdf" onclick="switchSettingsTab('pdf')">PDF</button>
 				<button type="button" data-tab="security" onclick="switchSettingsTab('security')">Security</button>
 			</div>
 			
@@ -61,10 +61,20 @@ templ SettingsPage(p SettingsPageData) {
 						}
 					</select>
 				</label>
-				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
+			<div class="grid">
+				<label>
+					Invoice Prefix
+					<input type="text" name="invoice_prefix" value={ p.Settings.InvoicePrefix }/>
+				</label>
+				<label>
+					Estimate Prefix
+					<input type="text" name="estimate_prefix" value={ p.Settings.EstimatePrefix }/>
+				</label>
 			</div>
-			
-			<!-- Email Tab -->
+			<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
+		</div>
+		
+		<!-- Email Tab -->
 			<div class="settings-tab-content" id="tab-email">
 				<div class="grid">
 					<label>
@@ -104,30 +114,46 @@ templ SettingsPage(p SettingsPageData) {
 				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
 			
-
-			
-			<!-- Documents Tab -->
-			<div class="settings-tab-content" id="tab-documents">
-				<div class="grid">
-					<label>
-						Invoice Prefix
-						<input type="text" name="invoice_prefix" value={ p.Settings.InvoicePrefix }/>
-					</label>
-					<label>
-						Estimate Prefix
-						<input type="text" name="estimate_prefix" value={ p.Settings.EstimatePrefix }/>
-					</label>
+			<!-- PDF Tab -->
+			<div class="settings-tab-content" id="tab-pdf">
+				<label>Invoice Logo</label>
+				<div style="display:flex;gap:0.5rem;align-items:end;margin-bottom:1rem">
+					<input type="file" name="file" id="logo-file-input" accept="image/png,image/jpeg"/>
+					<button type="button" class="outline" style="margin:0"
+						hx-encoding="multipart/form-data"
+						hx-post="/settings/invoice-logo"
+						hx-include="#logo-file-input, [name='csrf_token']"
+						hx-target="#logo-preview" hx-swap="innerHTML">Upload</button>
+					<span id="logo-upload-status" style="font-size:0.85rem;color:var(--pico-muted-color)"></span>
 				</div>
-				<div class="grid">
-					<label>
-						Default Tax Rate
-						<input type="text" name="default_tax_rate" value={ p.Settings.DefaultTaxRate } placeholder="e.g. 8.25%"/>
-					</label>
-					<label>
-						Default Due Days
-						<input type="number" name="default_due_days" value={ fmt.Sprintf("%d", p.Settings.DefaultDueDays) }/>
-					</label>
+				<div id="logo-preview">
+					<input type="text" name="invoice_logo_path" value={ p.Settings.InvoiceLogoPath } placeholder="File path" readonly style="font-family:monospace;font-size:0.85rem"/>
+					if p.Settings.InvoiceLogoPath != "" {
+						<div style="margin-top:0.5rem">
+							<img src="/settings/invoice-logo" alt="Logo preview" style="max-height:64px;max-width:200px"/>
+						</div>
+					}
 				</div>
+				<label>
+					Accent Color
+					<input type="color" name="invoice_color" value={ p.Settings.InvoiceColor }/>
+				</label>
+				<label>
+					Default Tax Rate
+					<input type="text" name="default_tax_rate" value={ p.Settings.DefaultTaxRate } placeholder="e.g. 8.25%"/>
+				</label>
+				<label>
+					Default Due Days
+					<input type="number" name="default_due_days" value={ fmt.Sprintf("%d", p.Settings.DefaultDueDays) }/>
+				</label>
+				<label>
+					Default Payment Terms
+					<input type="text" name="invoice_payment_terms" value={ p.Settings.InvoicePaymentTerms } placeholder="Net 30"/>
+				</label>
+				<label>
+					Footer Text
+					<textarea name="invoice_footer" rows="2" placeholder="Thank you for your business!">{ p.Settings.InvoiceFooter }</textarea>
+				</label>
 				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
 			
@@ -162,6 +188,12 @@ templ SettingsPage(p SettingsPageData) {
 			<p>Loading recent activity...</p>
 		</div>
 		<script>
+			(function() {
+				var hash = window.location.hash;
+				if (hash && hash.indexOf('#tab-') === 0) {
+					switchSettingsTab(hash.substring(5));
+				}
+			})();
 			function switchSettingsTab(name) {
 				document.querySelectorAll('.settings-tab-content').forEach(function(el) {
 					el.classList.remove('active');

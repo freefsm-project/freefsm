@@ -46,6 +46,10 @@ func (CompanySettings) Fields() []ent.Field {
 		field.Bool("password_require_lowercase").Default(true),
 		field.Bool("password_require_digit").Default(true),
 		field.Bool("password_require_special").Default(true),
+		field.String("invoice_color").Default("#1a56db"),
+		field.String("invoice_footer").Default(""),
+		field.String("invoice_logo_path").Default(""),
+		field.String("invoice_payment_terms").Default("Net 30"),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

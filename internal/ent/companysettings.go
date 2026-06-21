@@ -65,6 +65,14 @@ type CompanySettings struct {
 	PasswordRequireDigit bool `json:"password_require_digit,omitempty"`
 	// PasswordRequireSpecial holds the value of the "password_require_special" field.
 	PasswordRequireSpecial bool `json:"password_require_special,omitempty"`
+	// InvoiceColor holds the value of the "invoice_color" field.
+	InvoiceColor string `json:"invoice_color,omitempty"`
+	// InvoiceFooter holds the value of the "invoice_footer" field.
+	InvoiceFooter string `json:"invoice_footer,omitempty"`
+	// InvoiceLogoPath holds the value of the "invoice_logo_path" field.
+	InvoiceLogoPath string `json:"invoice_logo_path,omitempty"`
+	// InvoicePaymentTerms holds the value of the "invoice_payment_terms" field.
+	InvoicePaymentTerms string `json:"invoice_payment_terms,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -81,7 +89,7 @@ func (*CompanySettings) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case companysettings.FieldID, companysettings.FieldCompanyID, companysettings.FieldDefaultDueDays, companysettings.FieldSMTPPort, companysettings.FieldPasswordMinLength:
 			values[i] = new(sql.NullInt64)
-		case companysettings.FieldBusinessName, companysettings.FieldAddress, companysettings.FieldCity, companysettings.FieldState, companysettings.FieldZip, companysettings.FieldPhone, companysettings.FieldEmail, companysettings.FieldTaxID, companysettings.FieldDefaultTaxRate, companysettings.FieldInvoicePrefix, companysettings.FieldEstimatePrefix, companysettings.FieldSMTPHost, companysettings.FieldSMTPUser, companysettings.FieldSMTPPassword, companysettings.FieldSMTPFrom, companysettings.FieldTimezone:
+		case companysettings.FieldBusinessName, companysettings.FieldAddress, companysettings.FieldCity, companysettings.FieldState, companysettings.FieldZip, companysettings.FieldPhone, companysettings.FieldEmail, companysettings.FieldTaxID, companysettings.FieldDefaultTaxRate, companysettings.FieldInvoicePrefix, companysettings.FieldEstimatePrefix, companysettings.FieldSMTPHost, companysettings.FieldSMTPUser, companysettings.FieldSMTPPassword, companysettings.FieldSMTPFrom, companysettings.FieldTimezone, companysettings.FieldInvoiceColor, companysettings.FieldInvoiceFooter, companysettings.FieldInvoiceLogoPath, companysettings.FieldInvoicePaymentTerms:
 			values[i] = new(sql.NullString)
 		case companysettings.FieldCreatedAt, companysettings.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -251,6 +259,30 @@ func (_m *CompanySettings) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.PasswordRequireSpecial = value.Bool
 			}
+		case companysettings.FieldInvoiceColor:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field invoice_color", values[i])
+			} else if value.Valid {
+				_m.InvoiceColor = value.String
+			}
+		case companysettings.FieldInvoiceFooter:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field invoice_footer", values[i])
+			} else if value.Valid {
+				_m.InvoiceFooter = value.String
+			}
+		case companysettings.FieldInvoiceLogoPath:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field invoice_logo_path", values[i])
+			} else if value.Valid {
+				_m.InvoiceLogoPath = value.String
+			}
+		case companysettings.FieldInvoicePaymentTerms:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field invoice_payment_terms", values[i])
+			} else if value.Valid {
+				_m.InvoicePaymentTerms = value.String
+			}
 		case companysettings.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -372,6 +404,18 @@ func (_m *CompanySettings) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("password_require_special=")
 	builder.WriteString(fmt.Sprintf("%v", _m.PasswordRequireSpecial))
+	builder.WriteString(", ")
+	builder.WriteString("invoice_color=")
+	builder.WriteString(_m.InvoiceColor)
+	builder.WriteString(", ")
+	builder.WriteString("invoice_footer=")
+	builder.WriteString(_m.InvoiceFooter)
+	builder.WriteString(", ")
+	builder.WriteString("invoice_logo_path=")
+	builder.WriteString(_m.InvoiceLogoPath)
+	builder.WriteString(", ")
+	builder.WriteString("invoice_payment_terms=")
+	builder.WriteString(_m.InvoicePaymentTerms)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

@@ -174,6 +174,26 @@ func PasswordRequireSpecial(v bool) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordRequireSpecial, v))
 }
 
+// InvoiceColor applies equality check predicate on the "invoice_color" field. It's identical to InvoiceColorEQ.
+func InvoiceColor(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldInvoiceColor, v))
+}
+
+// InvoiceFooter applies equality check predicate on the "invoice_footer" field. It's identical to InvoiceFooterEQ.
+func InvoiceFooter(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldInvoiceFooter, v))
+}
+
+// InvoiceLogoPath applies equality check predicate on the "invoice_logo_path" field. It's identical to InvoiceLogoPathEQ.
+func InvoiceLogoPath(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldInvoiceLogoPath, v))
+}
+
+// InvoicePaymentTerms applies equality check predicate on the "invoice_payment_terms" field. It's identical to InvoicePaymentTermsEQ.
+func InvoicePaymentTerms(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldInvoicePaymentTerms, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldCreatedAt, v))
@@ -1432,6 +1452,266 @@ func PasswordRequireSpecialEQ(v bool) predicate.CompanySettings {
 // PasswordRequireSpecialNEQ applies the NEQ predicate on the "password_require_special" field.
 func PasswordRequireSpecialNEQ(v bool) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldNEQ(FieldPasswordRequireSpecial, v))
+}
+
+// InvoiceColorEQ applies the EQ predicate on the "invoice_color" field.
+func InvoiceColorEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldInvoiceColor, v))
+}
+
+// InvoiceColorNEQ applies the NEQ predicate on the "invoice_color" field.
+func InvoiceColorNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldInvoiceColor, v))
+}
+
+// InvoiceColorIn applies the In predicate on the "invoice_color" field.
+func InvoiceColorIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldInvoiceColor, vs...))
+}
+
+// InvoiceColorNotIn applies the NotIn predicate on the "invoice_color" field.
+func InvoiceColorNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldInvoiceColor, vs...))
+}
+
+// InvoiceColorGT applies the GT predicate on the "invoice_color" field.
+func InvoiceColorGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldInvoiceColor, v))
+}
+
+// InvoiceColorGTE applies the GTE predicate on the "invoice_color" field.
+func InvoiceColorGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldInvoiceColor, v))
+}
+
+// InvoiceColorLT applies the LT predicate on the "invoice_color" field.
+func InvoiceColorLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldInvoiceColor, v))
+}
+
+// InvoiceColorLTE applies the LTE predicate on the "invoice_color" field.
+func InvoiceColorLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldInvoiceColor, v))
+}
+
+// InvoiceColorContains applies the Contains predicate on the "invoice_color" field.
+func InvoiceColorContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldInvoiceColor, v))
+}
+
+// InvoiceColorHasPrefix applies the HasPrefix predicate on the "invoice_color" field.
+func InvoiceColorHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldInvoiceColor, v))
+}
+
+// InvoiceColorHasSuffix applies the HasSuffix predicate on the "invoice_color" field.
+func InvoiceColorHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldInvoiceColor, v))
+}
+
+// InvoiceColorEqualFold applies the EqualFold predicate on the "invoice_color" field.
+func InvoiceColorEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldInvoiceColor, v))
+}
+
+// InvoiceColorContainsFold applies the ContainsFold predicate on the "invoice_color" field.
+func InvoiceColorContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldInvoiceColor, v))
+}
+
+// InvoiceFooterEQ applies the EQ predicate on the "invoice_footer" field.
+func InvoiceFooterEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldInvoiceFooter, v))
+}
+
+// InvoiceFooterNEQ applies the NEQ predicate on the "invoice_footer" field.
+func InvoiceFooterNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldInvoiceFooter, v))
+}
+
+// InvoiceFooterIn applies the In predicate on the "invoice_footer" field.
+func InvoiceFooterIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldInvoiceFooter, vs...))
+}
+
+// InvoiceFooterNotIn applies the NotIn predicate on the "invoice_footer" field.
+func InvoiceFooterNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldInvoiceFooter, vs...))
+}
+
+// InvoiceFooterGT applies the GT predicate on the "invoice_footer" field.
+func InvoiceFooterGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldInvoiceFooter, v))
+}
+
+// InvoiceFooterGTE applies the GTE predicate on the "invoice_footer" field.
+func InvoiceFooterGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldInvoiceFooter, v))
+}
+
+// InvoiceFooterLT applies the LT predicate on the "invoice_footer" field.
+func InvoiceFooterLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldInvoiceFooter, v))
+}
+
+// InvoiceFooterLTE applies the LTE predicate on the "invoice_footer" field.
+func InvoiceFooterLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldInvoiceFooter, v))
+}
+
+// InvoiceFooterContains applies the Contains predicate on the "invoice_footer" field.
+func InvoiceFooterContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldInvoiceFooter, v))
+}
+
+// InvoiceFooterHasPrefix applies the HasPrefix predicate on the "invoice_footer" field.
+func InvoiceFooterHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldInvoiceFooter, v))
+}
+
+// InvoiceFooterHasSuffix applies the HasSuffix predicate on the "invoice_footer" field.
+func InvoiceFooterHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldInvoiceFooter, v))
+}
+
+// InvoiceFooterEqualFold applies the EqualFold predicate on the "invoice_footer" field.
+func InvoiceFooterEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldInvoiceFooter, v))
+}
+
+// InvoiceFooterContainsFold applies the ContainsFold predicate on the "invoice_footer" field.
+func InvoiceFooterContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldInvoiceFooter, v))
+}
+
+// InvoiceLogoPathEQ applies the EQ predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldInvoiceLogoPath, v))
+}
+
+// InvoiceLogoPathNEQ applies the NEQ predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldInvoiceLogoPath, v))
+}
+
+// InvoiceLogoPathIn applies the In predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldInvoiceLogoPath, vs...))
+}
+
+// InvoiceLogoPathNotIn applies the NotIn predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldInvoiceLogoPath, vs...))
+}
+
+// InvoiceLogoPathGT applies the GT predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldInvoiceLogoPath, v))
+}
+
+// InvoiceLogoPathGTE applies the GTE predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldInvoiceLogoPath, v))
+}
+
+// InvoiceLogoPathLT applies the LT predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldInvoiceLogoPath, v))
+}
+
+// InvoiceLogoPathLTE applies the LTE predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldInvoiceLogoPath, v))
+}
+
+// InvoiceLogoPathContains applies the Contains predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldInvoiceLogoPath, v))
+}
+
+// InvoiceLogoPathHasPrefix applies the HasPrefix predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldInvoiceLogoPath, v))
+}
+
+// InvoiceLogoPathHasSuffix applies the HasSuffix predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldInvoiceLogoPath, v))
+}
+
+// InvoiceLogoPathEqualFold applies the EqualFold predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldInvoiceLogoPath, v))
+}
+
+// InvoiceLogoPathContainsFold applies the ContainsFold predicate on the "invoice_logo_path" field.
+func InvoiceLogoPathContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldInvoiceLogoPath, v))
+}
+
+// InvoicePaymentTermsEQ applies the EQ predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldInvoicePaymentTerms, v))
+}
+
+// InvoicePaymentTermsNEQ applies the NEQ predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldInvoicePaymentTerms, v))
+}
+
+// InvoicePaymentTermsIn applies the In predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldInvoicePaymentTerms, vs...))
+}
+
+// InvoicePaymentTermsNotIn applies the NotIn predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldInvoicePaymentTerms, vs...))
+}
+
+// InvoicePaymentTermsGT applies the GT predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldInvoicePaymentTerms, v))
+}
+
+// InvoicePaymentTermsGTE applies the GTE predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldInvoicePaymentTerms, v))
+}
+
+// InvoicePaymentTermsLT applies the LT predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldInvoicePaymentTerms, v))
+}
+
+// InvoicePaymentTermsLTE applies the LTE predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldInvoicePaymentTerms, v))
+}
+
+// InvoicePaymentTermsContains applies the Contains predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldInvoicePaymentTerms, v))
+}
+
+// InvoicePaymentTermsHasPrefix applies the HasPrefix predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldInvoicePaymentTerms, v))
+}
+
+// InvoicePaymentTermsHasSuffix applies the HasSuffix predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldInvoicePaymentTerms, v))
+}
+
+// InvoicePaymentTermsEqualFold applies the EqualFold predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldInvoicePaymentTerms, v))
+}
+
+// InvoicePaymentTermsContainsFold applies the ContainsFold predicate on the "invoice_payment_terms" field.
+func InvoicePaymentTermsContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldInvoicePaymentTerms, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

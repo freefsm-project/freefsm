@@ -22,6 +22,14 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, s
 	writeNotes(pdf, e.Notes)
 	writeStatus(pdf, statusNameForPDF(statuses, e.StatusID))
 
+	if cs.InvoiceFooter != "" {
+		pdf.SetY(-30)
+		pdf.SetFont("Helvetica", "I", 8)
+		pdf.SetTextColor(128, 128, 128)
+		pdf.Cell(0, 5, cs.InvoiceFooter)
+		pdf.Ln(5)
+	}
+
 	pdf.Output(w)
 }
 
@@ -36,19 +44,40 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, sta
 	writeCustomer(pdf, customer)
 	writeInvoiceDates(pdf, i)
 	writeLineItems(pdf, items, parseTaxRate(i.TaxRate))
+	if cs.InvoicePaymentTerms != "" {
+		pdf.SetFont("Helvetica", "", 9)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.Cell(0, 6, "Payment Terms: "+cs.InvoicePaymentTerms)
+		pdf.Ln(8)
+	}
 	writePayments(pdf, payments)
 	writeNotes(pdf, i.Notes)
 	writeStatus(pdf, statusNameForPDF(statuses, i.StatusID))
+
+	if cs.InvoiceFooter != "" {
+		pdf.SetY(-30)
+		pdf.SetFont("Helvetica", "I", 8)
+		pdf.SetTextColor(128, 128, 128)
+		pdf.Cell(0, 5, cs.InvoiceFooter)
+		pdf.Ln(5)
+	}
 
 	pdf.Output(w)
 }
 
 func writeHeader(pdf *gofpdf.Fpdf, docType, number string, cs *ent.CompanySettings) {
 	pdf.SetFont("Helvetica", "B", 20)
+	if cs != nil {
+		r, g, b := hexToRGB(cs.InvoiceColor)
+		pdf.SetTextColor(r, g, b)
+	}
 	if cs != nil && cs.BusinessName != "" {
 		pdf.Cell(0, 10, cs.BusinessName)
 	} else {
 		pdf.Cell(0, 10, "FreeFSM")
+	}
+	if cs != nil && cs.InvoiceLogoPath != "" {
+		pdf.ImageOptions(cs.InvoiceLogoPath, 170, 10, 0, 20, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
 	}
 	pdf.Ln(6)
 	pdf.SetFont("Helvetica", "", 9)
@@ -228,4 +257,15 @@ func statusNameForPDF(statuses []*ent.Status, id *int64) string {
 		}
 	}
 	return ""
+}
+
+func hexToRGB(hex string) (int, int, int) {
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return 0, 0, 0
+	}
+	r, _ := strconv.ParseInt(hex[0:2], 16, 64)
+	g, _ := strconv.ParseInt(hex[2:4], 16, 64)
+	b, _ := strconv.ParseInt(hex[4:6], 16, 64)
+	return int(r), int(g), int(b)
 }
