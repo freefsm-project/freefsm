@@ -15,6 +15,10 @@ templ ItemsIndex(p ItemListPageData) {
 			<a href="/items/new" role="button">New Item</a>
 		</div>
 		@ItemsTable(p)
+
+		<div hx-get="/items/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+			<p>Loading recent activity...</p>
+		</div>
 	}
 }
 

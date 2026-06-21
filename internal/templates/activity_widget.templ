@@ -1,0 +1,62 @@
+package templates
+
+templ ActivityWidget(p ActivityWidgetData) {
+	<div id={ "activity-" + p.ObjectType + "-" + sprintHTML(p.ObjectID) } style="margin-top:1.5rem">
+		<h4>Activity</h4>
+		if len(p.Entries) == 0 {
+			<p>No activity yet.</p>
+		} else {
+			<div style="display:flex;flex-direction:column;gap:0.5rem">
+				for _, e := range p.Entries {
+					<div class="activity-item" style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.4rem 0;border-bottom:1px solid var(--pico-muted-border-color)">
+						<span class="activity-icon" style={ "font-size:1.1rem;flex-shrink:0;width:1.5rem;text-align:center" }>{ e.Icon }</span>
+						<div style="flex:1;min-width:0">
+							<span style="line-height:1.5">
+								<strong>{ e.ActorName }</strong>
+								{" "}
+								<span class={ activityActionClass(e.Action) }>{ activityVerb(e.Action) }</span>
+								{" "}
+								if e.Action == "tag_attached" {
+									{ "tag " }
+									<strong>{ e.Metadata.TagName }</strong>
+									{ " to " }
+								} else if e.Action == "tag_detached" {
+									{ "tag " }
+									<strong>{ e.Metadata.TagName }</strong>
+									{ " from " }
+								} else if e.Action == "file_uploaded" {
+									{ "file " }
+									<strong>{ e.Metadata.FileName }</strong>
+									{ " to " }
+								} else if e.Action == "file_deleted" {
+									{ "file " }
+									<strong>{ e.Metadata.FileName }</strong>
+									{ " from " }
+								} else if e.Action == "status_changed" {
+									{ "status from " }
+									<em>{ e.Metadata.OldStatus }</em>
+									{ " to " }
+									<em>{ e.Metadata.NewStatus }</em>
+									{ " on " }
+								} else if e.Action == "payment_recorded" {
+									{ "payment of $" + e.Metadata.Amount + " to " }
+								} else if e.Action == "comment_added" || e.Action == "comment_deleted" {
+									{ "a comment on " }
+								} else if e.Action == "settings_updated" && e.Metadata.Changed != "" {
+									{ "(" + e.Metadata.Changed + ") of " }
+								}
+								if e.Action != "password_changed" {
+									<a href={ e.EntityURL }>{ e.EntityName }</a>
+								}
+							</span>
+							if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
+								<p style="margin:0.15rem 0 0 0;font-size:0.85rem;color:var(--pico-muted-color);font-style:italic">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>
+							}
+						</div>
+						<small style="flex-shrink:0;color:var(--pico-muted-color);font-size:0.8rem" title={ e.CreatedAt }>{ e.RelativeTime }</small>
+					</div>
+				}
+			</div>
+		}
+	</div>
+}

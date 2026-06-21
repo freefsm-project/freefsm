@@ -14,19 +14,20 @@ import (
 )
 
 type InvoiceHandler struct {
-	svc        *services.InvoiceService
-	custSvc    *services.CustomerService
-	jobSvc     *services.JobService
-	statusSvc  *services.StatusService
-	itemSvc    *services.ItemService
-	tagSvc     *services.TagService
-	tagLinkSvc *services.TagLinkService
-	defSvc     *services.CustomFieldDefinitionService
-	fileSvc    *services.FileService
+	svc         *services.InvoiceService
+	custSvc     *services.CustomerService
+	jobSvc      *services.JobService
+	statusSvc   *services.StatusService
+	itemSvc     *services.ItemService
+	tagSvc      *services.TagService
+	tagLinkSvc  *services.TagLinkService
+	defSvc      *services.CustomFieldDefinitionService
+	fileSvc     *services.FileService
+	activitySvc *services.ActivityService
 }
 
-func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService) *InvoiceHandler {
-	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc}
+func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, activitySvc *services.ActivityService) *InvoiceHandler {
+	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, activitySvc: activitySvc}
 }
 
 func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -107,10 +108,18 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 func (h *InvoiceHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
+	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, "invoice", id)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "invoice", id, map[string]interface{}{
+			"actor_name": u.Name,
+			"tag_name":   tag.Name,
+		})
 	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "invoice", id)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
@@ -124,9 +133,17 @@ func (h *InvoiceHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 func (h *InvoiceHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
+	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "invoice", id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "invoice", id, map[string]interface{}{
+			"actor_name": u.Name,
+			"tag_name":   tag.Name,
+		})
 	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "invoice", id)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
@@ -171,10 +188,17 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if params.LineItems == nil {
 		params.LineItems = []services.LineItem{}
 	}
-	_, err := h.svc.Create(r.Context(), params)
+	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "invoice", result.ID, map[string]interface{}{
+			"entity_name": result.Title,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/invoices?flash=Invoice+created", http.StatusSeeOther)
 }
@@ -232,9 +256,17 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.LineItems = &lineItems
 	}
 	params.CustomFields = strPtr(parseCustomFieldValues(r))
-	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
+	result, err := h.svc.Update(r.Context(), id, params)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "updated", "invoice", id, map[string]interface{}{
+			"entity_name": result.Title,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+updated", id), http.StatusSeeOther)
 }
@@ -245,9 +277,22 @@ func (h *InvoiceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	inv, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	title := inv.Title
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "deleted", "invoice", id, map[string]interface{}{
+			"entity_name": title,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/invoices?flash=Invoice+deleted", http.StatusSeeOther)
 }
@@ -364,7 +409,35 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "invoice", inv.ID, map[string]interface{}{
+			"entity_name": inv.Title,
+			"actor_name":  u.Name,
+		})
+	}
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+created+from+job", inv.ID), http.StatusSeeOther)
+}
+
+func (h *InvoiceHandler) CreateFromEstimate(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	inv, err := h.svc.CreateFromEstimate(r.Context(), id, h.statusSvc)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "invoice", inv.ID, map[string]interface{}{
+			"entity_name": inv.Title,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+created+from+estimate", inv.ID), http.StatusSeeOther)
 }
 
 func (h *InvoiceHandler) PDF(w http.ResponseWriter, r *http.Request) {
@@ -410,6 +483,13 @@ func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.RecordPayment(r.Context(), id, payment); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "payment_recorded", "invoice", id, map[string]interface{}{
+			"actor_name": u.Name,
+			"amount":     fmt.Sprintf("%.2f", amount),
+		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+recorded", id), http.StatusSeeOther)
 }

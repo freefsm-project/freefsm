@@ -21,6 +21,10 @@ templ ProjectIndex(p ProjectListPageData) {
 			<a href="/projects/new" role="button">New Project</a>
 		</div>
 		@ProjectTable(p)
+
+		<div hx-get="/projects/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+			<p>Loading recent activity...</p>
+		</div>
 	}
 }
 

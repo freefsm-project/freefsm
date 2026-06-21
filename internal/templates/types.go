@@ -726,6 +726,8 @@ func pageTitleFromPath(ctx context.Context) string {
 		return "Login"
 	case "/forgot-password":
 		return "Forgot Password"
+	case "/activity":
+		return "Activity"
 	case "/tags":
 		return "Tags"
 	default:
@@ -1002,6 +1004,18 @@ type TimeEntryFormEntry struct {
 type TimeEntryFormPageData struct {
 	Entry  *TimeEntryFormEntry
 	Errors map[string]string
+}
+
+type TimeEntryShowPageData struct {
+	ID       int64
+	UserName string
+	ClockIn  string
+	ClockOut string
+	Duration string
+	IsManual bool
+	Notes    string
+	GPSLat   string
+	GPSLon   string
 }
 
 func timeEntryFormTitle() string {

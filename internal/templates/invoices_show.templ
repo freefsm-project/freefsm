@@ -133,7 +133,10 @@ templ InvoiceShow(p InvoiceDetail) {
 			<p>Loading comments...</p>
 		</div>
 		@FileUploadWidget("invoice", p.ID, fmt.Sprintf("/invoices/%d", p.ID))
-		@FileList(p.FileList)
-		<p><a href="/invoices">&larr; Back to Invoices</a></p>
+	@FileList(p.FileList)
+	<div hx-get={ templ.URL(fmt.Sprintf("/invoices/%d/activity", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
+		<p>Loading activity...</p>
+	</div>
+	<p><a href="/invoices">&larr; Back to Invoices</a></p>
 	}
 }

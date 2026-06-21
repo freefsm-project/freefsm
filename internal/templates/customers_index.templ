@@ -22,6 +22,10 @@ templ CustomerIndex(p CustomerListPageData) {
 			<a href="/customers/new" role="button">New Customer</a>
 		</div>
 		@CustomerTable(p)
+
+		<div hx-get="/customers/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+			<p>Loading recent activity...</p>
+		</div>
 	}
 }
 

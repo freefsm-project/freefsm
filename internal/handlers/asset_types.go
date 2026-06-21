@@ -5,18 +5,20 @@ import (
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
 
 type AssetTypeHandler struct {
-	svc           *services.AssetTypeService
+	svc            *services.AssetTypeService
 	assetStatusSvc *services.AssetStatusService
+	activitySvc    *services.ActivityService
 }
 
-func NewAssetTypeHandler(svc *services.AssetTypeService, assetStatusSvc *services.AssetStatusService) *AssetTypeHandler {
-	return &AssetTypeHandler{svc: svc, assetStatusSvc: assetStatusSvc}
+func NewAssetTypeHandler(svc *services.AssetTypeService, assetStatusSvc *services.AssetStatusService, activitySvc *services.ActivityService) *AssetTypeHandler {
+	return &AssetTypeHandler{svc: svc, assetStatusSvc: assetStatusSvc, activitySvc: activitySvc}
 }
 
 func (h *AssetTypeHandler) Show(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +32,7 @@ func (h *AssetTypeHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	
+
 	typeRows := make([]templates.AssetTypeRow, len(types))
 	for i, t := range types {
 		typeRows[i] = templates.AssetTypeRow{
@@ -39,7 +41,7 @@ func (h *AssetTypeHandler) Show(w http.ResponseWriter, r *http.Request) {
 			SortOrder: t.SortOrder,
 		}
 	}
-	
+
 	statusRows := make([]templates.AssetStatusRow, len(statuses))
 	for i, s := range statuses {
 		statusRows[i] = templates.AssetStatusRow{
@@ -49,7 +51,7 @@ func (h *AssetTypeHandler) Show(w http.ResponseWriter, r *http.Request) {
 			SortOrder: s.SortOrder,
 		}
 	}
-	
+
 	templates.AssetSettingsPage(
 		templates.AssetTypeListPageData{Types: typeRows},
 		templates.AssetStatusListPageData{Statuses: statusRows},
@@ -67,11 +69,19 @@ func (h *AssetTypeHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sortOrder, _ := strconv.Atoi(r.FormValue("sort_order"))
-	if _, err := h.svc.Create(r.Context(), name, sortOrder); err != nil {
+	result, err := h.svc.Create(r.Context(), name, sortOrder)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	http.Redirect(w, r, "/settings/asset-types?flash=Type+created", http.StatusSeeOther)
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "type_created", "asset_type", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/settings/assets?flash=Type+created", http.StatusSeeOther)
 }
 
 func (h *AssetTypeHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -90,11 +100,19 @@ func (h *AssetTypeHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sortOrder, _ := strconv.Atoi(r.FormValue("sort_order"))
-	if _, err := h.svc.Update(r.Context(), id, name, sortOrder); err != nil {
+	result, err := h.svc.Update(r.Context(), id, name, sortOrder)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	http.Redirect(w, r, "/settings/asset-types?flash=Type+updated", http.StatusSeeOther)
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "type_updated", "asset_type", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/settings/assets?flash=Type+updated", http.StatusSeeOther)
 }
 
 func (h *AssetTypeHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -103,19 +121,32 @@ func (h *AssetTypeHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	existing, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "type_deleted", "asset_type", existing.ID, map[string]interface{}{
+			"entity_name": existing.Name,
+			"actor_name":  u.Name,
+		})
+	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	http.Redirect(w, r, "/settings/asset-types?flash=Type+deleted", http.StatusSeeOther)
+	http.Redirect(w, r, "/settings/assets?flash=Type+deleted", http.StatusSeeOther)
 }
 
 type AssetStatusHandler struct {
-	svc *services.AssetStatusService
+	svc         *services.AssetStatusService
+	activitySvc *services.ActivityService
 }
 
-func NewAssetStatusHandler(svc *services.AssetStatusService) *AssetStatusHandler {
-	return &AssetStatusHandler{svc: svc}
+func NewAssetStatusHandler(svc *services.AssetStatusService, activitySvc *services.ActivityService) *AssetStatusHandler {
+	return &AssetStatusHandler{svc: svc, activitySvc: activitySvc}
 }
 
 func (h *AssetStatusHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -151,11 +182,19 @@ func (h *AssetStatusHandler) Create(w http.ResponseWriter, r *http.Request) {
 		color = "#6B7280"
 	}
 	sortOrder, _ := strconv.Atoi(r.FormValue("sort_order"))
-	if _, err := h.svc.Create(r.Context(), name, color, sortOrder); err != nil {
+	result, err := h.svc.Create(r.Context(), name, color, sortOrder)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	http.Redirect(w, r, "/settings/asset-statuses?flash=Status+created", http.StatusSeeOther)
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "status_created", "asset_status", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/settings/assets?flash=Status+created", http.StatusSeeOther)
 }
 
 func (h *AssetStatusHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -178,11 +217,19 @@ func (h *AssetStatusHandler) Update(w http.ResponseWriter, r *http.Request) {
 		color = "#6B7280"
 	}
 	sortOrder, _ := strconv.Atoi(r.FormValue("sort_order"))
-	if _, err := h.svc.Update(r.Context(), id, name, color, sortOrder); err != nil {
+	result, err := h.svc.Update(r.Context(), id, name, color, sortOrder)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	http.Redirect(w, r, "/settings/asset-statuses?flash=Status+updated", http.StatusSeeOther)
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "status_updated", "asset_status", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/settings/assets?flash=Status+updated", http.StatusSeeOther)
 }
 
 func (h *AssetStatusHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -191,11 +238,23 @@ func (h *AssetStatusHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	existing, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "status_deleted", "asset_status", existing.ID, map[string]interface{}{
+			"entity_name": existing.Name,
+			"actor_name":  u.Name,
+		})
+	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	http.Redirect(w, r, "/settings/asset-statuses?flash=Status+deleted", http.StatusSeeOther)
+	http.Redirect(w, r, "/settings/assets?flash=Status+deleted", http.StatusSeeOther)
 }
 
 func assetTypeRow(t *ent.AssetType) templates.AssetTypeRow {

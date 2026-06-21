@@ -4,18 +4,20 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
 
 type TagHandler struct {
-	svc       *services.TagService
-	linkSvc   *services.TagLinkService
+	svc         *services.TagService
+	linkSvc     *services.TagLinkService
+	activitySvc *services.ActivityService
 }
 
-func NewTagHandler(svc *services.TagService, linkSvc *services.TagLinkService) *TagHandler {
-	return &TagHandler{svc: svc, linkSvc: linkSvc}
+func NewTagHandler(svc *services.TagService, linkSvc *services.TagLinkService, activitySvc *services.ActivityService) *TagHandler {
+	return &TagHandler{svc: svc, linkSvc: linkSvc, activitySvc: activitySvc}
 }
 
 func (h *TagHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -64,10 +66,17 @@ func (h *TagHandler) Create(w http.ResponseWriter, r *http.Request) {
 		templates.TagForm(data).Render(r.Context(), w)
 		return
 	}
-	_, err := h.svc.Create(r.Context(), name, color)
+	result, err := h.svc.Create(r.Context(), name, color)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_created", "tag", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/tags?flash=Tag+created", http.StatusSeeOther)
 }
@@ -120,6 +129,13 @@ func (h *TagHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_updated", "tag", id, map[string]interface{}{
+			"entity_name": name,
+			"actor_name":  u.Name,
+		})
+	}
 	http.Redirect(w, r, "/tags?flash=Tag+updated", http.StatusSeeOther)
 }
 
@@ -128,6 +144,18 @@ func (h *TagHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "invalid id", 400)
 		return
+	}
+	tag, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, "tag not found", 404)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_deleted", "tag", id, map[string]interface{}{
+			"entity_name": tag.Name,
+			"actor_name":  u.Name,
+		})
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)

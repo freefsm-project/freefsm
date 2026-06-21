@@ -40,6 +40,14 @@ func (s *CommentService) Create(ctx context.Context, objectType string, objectID
 	return c, nil
 }
 
+func (s *CommentService) GetByID(ctx context.Context, id int64) (*ent.Comment, error) {
+	c, err := s.client.Comment.Get(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get comment %d: %w", id, err)
+	}
+	return c, nil
+}
+
 func (s *CommentService) Delete(ctx context.Context, id int64) error {
 	if err := s.client.Comment.DeleteOneID(id).Exec(ctx); err != nil {
 		return fmt.Errorf("delete comment %d: %w", id, err)

@@ -11,11 +11,12 @@ import (
 )
 
 type FileHandler struct {
-	svc *services.FileService
+	svc         *services.FileService
+	activitySvc *services.ActivityService
 }
 
-func NewFileHandler(svc *services.FileService) *FileHandler {
-	return &FileHandler{svc: svc}
+func NewFileHandler(svc *services.FileService, activitySvc *services.ActivityService) *FileHandler {
+	return &FileHandler{svc: svc, activitySvc: activitySvc}
 }
 
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +68,13 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	entityName := h.activitySvc.LookupEntityName(r.Context(), objectType, objectID)
+	h.activitySvc.Record(r.Context(), u.ID, "file_uploaded", objectType, objectID, map[string]interface{}{
+		"entity_name": entityName,
+		"actor_name":  u.Name,
+		"file_name":   fh.Filename,
+	})
+
 	redirect := r.MultipartForm.Value["redirect"][0]
 	if redirect == "" {
 		redirect = "/"
@@ -111,6 +119,12 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	f, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
 	redirect := r.FormValue("redirect")
 	if redirect == "" {
 		redirect = "/"
@@ -119,6 +133,16 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		entityName := h.activitySvc.LookupEntityName(r.Context(), f.ObjectType, f.ObjectID)
+		h.activitySvc.Record(r.Context(), u.ID, "file_deleted", f.ObjectType, f.ObjectID, map[string]interface{}{
+			"entity_name": entityName,
+			"actor_name":  u.Name,
+			"file_name":   f.OriginalName,
+		})
 	}
 
 	w.Header().Set("HX-Redirect", redirect)

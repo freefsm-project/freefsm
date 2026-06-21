@@ -8,17 +8,19 @@ import (
 	"strings"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
 
 type CustomFieldHandler struct {
-	svc *services.CustomFieldDefinitionService
+	svc         *services.CustomFieldDefinitionService
+	activitySvc *services.ActivityService
 }
 
-func NewCustomFieldHandler(svc *services.CustomFieldDefinitionService) *CustomFieldHandler {
-	return &CustomFieldHandler{svc: svc}
+func NewCustomFieldHandler(svc *services.CustomFieldDefinitionService, activitySvc *services.ActivityService) *CustomFieldHandler {
+	return &CustomFieldHandler{svc: svc, activitySvc: activitySvc}
 }
 
 func (h *CustomFieldHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -74,10 +76,19 @@ func (h *CustomFieldHandler) Create(w http.ResponseWriter, r *http.Request) {
 		SortOrder:  sortOrder,
 	}
 
-	if _, err := h.svc.Create(r.Context(), params); err != nil {
+	result, err := h.svc.Create(r.Context(), params)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
+	if u, ok := middleware.UserFromContext(r.Context()); ok && h.activitySvc != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "field_created", "custom_field", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
+	}
+
 	http.Redirect(w, r, "/settings/custom-fields?flash=Field+created", http.StatusSeeOther)
 }
 
@@ -161,10 +172,19 @@ func (h *CustomFieldHandler) Update(w http.ResponseWriter, r *http.Request) {
 		SortOrder: &sortOrder,
 	}
 
-	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
+	result, err := h.svc.Update(r.Context(), id, params)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
+	if u, ok := middleware.UserFromContext(r.Context()); ok && h.activitySvc != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "field_updated", "custom_field", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
+	}
+
 	http.Redirect(w, r, "/settings/custom-fields?flash=Field+updated", http.StatusSeeOther)
 }
 
@@ -174,10 +194,30 @@ func (h *CustomFieldHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+
+	var entityName string
+	if h.activitySvc != nil {
+		defs, _ := h.svc.ListAll(r.Context())
+		for _, d := range defs {
+			if d.ID == id {
+				entityName = d.Name
+				break
+			}
+		}
+	}
+
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
+	if u, ok := middleware.UserFromContext(r.Context()); ok && h.activitySvc != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "field_deleted", "custom_field", id, map[string]interface{}{
+			"entity_name": entityName,
+			"actor_name":  u.Name,
+		})
+	}
+
 	http.Redirect(w, r, "/settings/custom-fields?flash=Field+deleted", http.StatusSeeOther)
 }
 

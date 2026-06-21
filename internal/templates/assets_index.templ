@@ -26,6 +26,10 @@ templ AssetIndex(p AssetListPageData) {
 			<a href="/assets/new" role="button">New Asset</a>
 		</div>
 		@AssetTable(p)
+
+		<div hx-get="/assets/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+			<p>Loading recent activity...</p>
+		</div>
 	}
 }
 

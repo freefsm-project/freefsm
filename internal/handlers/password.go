@@ -10,12 +10,13 @@ import (
 )
 
 type PasswordHandler struct {
-	userSvc *services.UserService
-	csSvc   *services.CompanySettingsService
+	userSvc     *services.UserService
+	csSvc       *services.CompanySettingsService
+	activitySvc *services.ActivityService
 }
 
-func NewPasswordHandler(userSvc *services.UserService, csSvc *services.CompanySettingsService) *PasswordHandler {
-	return &PasswordHandler{userSvc: userSvc, csSvc: csSvc}
+func NewPasswordHandler(userSvc *services.UserService, csSvc *services.CompanySettingsService, activitySvc *services.ActivityService) *PasswordHandler {
+	return &PasswordHandler{userSvc: userSvc, csSvc: csSvc, activitySvc: activitySvc}
 }
 
 func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -73,6 +74,13 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 	}
 	if err := h.userSvc.ClearForcePasswordChange(r.Context(), user.ID); err != nil {
 		slog.Error("clear force_password_change", "error", err)
+	}
+
+	if user != nil {
+		h.activitySvc.Record(r.Context(), user.ID, "password_changed", "user", user.ID, map[string]interface{}{
+			"entity_name": user.Name,
+			"actor_name":  user.Name,
+		})
 	}
 
 	http.Redirect(w, r, "/?flash=Password+changed", http.StatusSeeOther)

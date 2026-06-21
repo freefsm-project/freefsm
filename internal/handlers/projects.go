@@ -16,18 +16,19 @@ import (
 )
 
 type ProjectHandler struct {
-	svc        *services.ProjectService
-	custSvc    *services.CustomerService
-	statusSvc  *services.StatusService
-	locSvc     *services.LocationService
-	jobSvc     *services.JobService
-	tagSvc     *services.TagService
-	tagLinkSvc *services.TagLinkService
-	defSvc     *services.CustomFieldDefinitionService
+	svc         *services.ProjectService
+	custSvc     *services.CustomerService
+	statusSvc   *services.StatusService
+	locSvc      *services.LocationService
+	jobSvc      *services.JobService
+	tagSvc      *services.TagService
+	tagLinkSvc  *services.TagLinkService
+	defSvc      *services.CustomFieldDefinitionService
+	activitySvc *services.ActivityService
 }
 
-func NewProjectHandler(svc *services.ProjectService, custSvc *services.CustomerService, statusSvc *services.StatusService, locSvc *services.LocationService, jobSvc *services.JobService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService) *ProjectHandler {
-	return &ProjectHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, locSvc: locSvc, jobSvc: jobSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc}
+func NewProjectHandler(svc *services.ProjectService, custSvc *services.CustomerService, statusSvc *services.StatusService, locSvc *services.LocationService, jobSvc *services.JobService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, activitySvc *services.ActivityService) *ProjectHandler {
+	return &ProjectHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, locSvc: locSvc, jobSvc: jobSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, activitySvc: activitySvc}
 }
 
 func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +146,18 @@ func (h *ProjectHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
+	tagName := ""
+	if tag != nil {
+		tagName = tag.Name
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "project", id, map[string]interface{}{
+			"tag_name":   tagName,
+			"actor_name": u.Name,
+		})
+	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "project", id)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	templates.TagWidget(templates.TagWidgetData{
@@ -157,9 +170,21 @@ func (h *ProjectHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 func (h *ProjectHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
+	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
+	tagName := ""
+	if tag != nil {
+		tagName = tag.Name
+	}
 	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "project", id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "project", id, map[string]interface{}{
+			"tag_name":   tagName,
+			"actor_name": u.Name,
+		})
 	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "project", id)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
@@ -237,10 +262,17 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Notes:                r.FormValue("notes"),
 		CustomFields:         parseCustomFieldValues(r),
 	}
-	_, err := h.svc.Create(r.Context(), params)
+	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "project", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/projects?flash=Project+created", http.StatusSeeOther)
 }
@@ -324,9 +356,17 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Notes:                formPtr(r.FormValue("notes")),
 		CustomFields:         strPtr(parseCustomFieldValues(r)),
 	}
-	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
+	result, err := h.svc.Update(r.Context(), id, params)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "updated", "project", id, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/projects/%d?flash=Project+updated", id), http.StatusSeeOther)
 }
@@ -337,9 +377,22 @@ func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	p, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	entityName := p.Name
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "deleted", "project", id, map[string]interface{}{
+			"entity_name": entityName,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/projects?flash=Project+deleted", http.StatusSeeOther)
 }

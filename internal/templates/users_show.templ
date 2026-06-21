@@ -46,6 +46,9 @@ templ UserShow(p UserDetailPage) {
 				<button type="submit">Reset Password</button>
 			</form>
 		</details>
-		<p><a href="/users">&larr; Back to Users</a></p>
+		<div hx-get={ templ.URL(fmt.Sprintf("/users/%d/activity", p.User.ID)) } hx-trigger="load" hx-swap="innerHTML">
+		<p>Loading activity...</p>
+	</div>
+	<p><a href="/users">&larr; Back to Users</a></p>
 	}
 }

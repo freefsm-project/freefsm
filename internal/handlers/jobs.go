@@ -16,21 +16,22 @@ import (
 )
 
 type JobHandler struct {
-	svc        *services.JobService
-	custSvc    *services.CustomerService
-	statusSvc  *services.StatusService
-	projectSvc *services.ProjectService
-	locSvc     *services.LocationService
-	contactSvc *services.CustomerContactService
-	tagSvc     *services.TagService
-	tagLinkSvc *services.TagLinkService
-	defSvc     *services.CustomFieldDefinitionService
-	assetSvc   *services.AssetService
-	fileSvc    *services.FileService
+	svc         *services.JobService
+	custSvc     *services.CustomerService
+	statusSvc   *services.StatusService
+	projectSvc  *services.ProjectService
+	locSvc      *services.LocationService
+	contactSvc  *services.CustomerContactService
+	tagSvc      *services.TagService
+	tagLinkSvc  *services.TagLinkService
+	defSvc      *services.CustomFieldDefinitionService
+	assetSvc    *services.AssetService
+	fileSvc     *services.FileService
+	activitySvc *services.ActivityService
 }
 
-func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, fileSvc *services.FileService) *JobHandler {
-	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, assetSvc: assetSvc, fileSvc: fileSvc}
+func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, fileSvc *services.FileService, activitySvc *services.ActivityService) *JobHandler {
+	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, assetSvc: assetSvc, fileSvc: fileSvc, activitySvc: activitySvc}
 }
 
 func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -175,10 +176,17 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if params.BillingType == "" {
 		params.BillingType = "flat_rate"
 	}
-	_, err := h.svc.Create(r.Context(), params)
+	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "job", result.ID, map[string]interface{}{
+			"entity_name": result.JobType,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/jobs?flash=Job+created", http.StatusSeeOther)
 }
@@ -249,9 +257,17 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		t := parseDate(dd, loc)
 		params.DueDate = &t
 	}
-	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
+	result, err := h.svc.Update(r.Context(), id, params)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "updated", "job", id, map[string]interface{}{
+			"entity_name": result.JobType,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/jobs/%d?flash=Job+updated", id), http.StatusSeeOther)
 }
@@ -262,9 +278,22 @@ func (h *JobHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	j, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	entityName := j.JobType
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "deleted", "job", id, map[string]interface{}{
+			"entity_name": entityName,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/jobs?flash=Job+deleted", http.StatusSeeOther)
 }
@@ -297,6 +326,17 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		action := "subtask_completed"
+		if !subtasks[idx].Completed {
+			action = "subtask_uncompleted"
+		}
+		h.activitySvc.Record(r.Context(), u.ID, action, "job", id, map[string]interface{}{
+			"actor_name":  u.Name,
+			"entity_name": subtasks[idx].Title,
+		})
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := jobToDetail(j, statuses)
@@ -459,10 +499,18 @@ func statusID(j *ent.Job) int64 {
 func (h *JobHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
+	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, "job", id)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil && tag != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "job", id, map[string]interface{}{
+			"actor_name": u.Name,
+			"tag_name":   tag.Name,
+		})
 	}
 	h.loadTagWidget(w, r, id)
 }
@@ -470,9 +518,17 @@ func (h *JobHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 func (h *JobHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
+	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "job", id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil && tag != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "job", id, map[string]interface{}{
+			"actor_name": u.Name,
+			"tag_name":   tag.Name,
+		})
 	}
 	h.loadTagWidget(w, r, id)
 }

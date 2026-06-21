@@ -119,7 +119,10 @@ templ JobShow(p JobDetail) {
 			<p>Loading comments...</p>
 		</div>
 		@FileUploadWidget("job", p.ID, fmt.Sprintf("/jobs/%d", p.ID))
-		@FileList(p.FileList)
-		<p><a href="/jobs">&larr; Back to Jobs</a></p>
+	@FileList(p.FileList)
+	<div hx-get={ templ.URL(fmt.Sprintf("/jobs/%d/activity", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
+		<p>Loading activity...</p>
+	</div>
+	<p><a href="/jobs">&larr; Back to Jobs</a></p>
 	}
 }

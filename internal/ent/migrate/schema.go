@@ -9,6 +9,35 @@ import (
 )
 
 var (
+	// ActivityLogsColumns holds the columns for the "activity_logs" table.
+	ActivityLogsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "actor_id", Type: field.TypeInt64},
+		{Name: "action", Type: field.TypeString},
+		{Name: "object_type", Type: field.TypeString},
+		{Name: "object_id", Type: field.TypeInt64},
+		{Name: "metadata", Type: field.TypeString, Default: "{}"},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// ActivityLogsTable holds the schema information for the "activity_logs" table.
+	ActivityLogsTable = &schema.Table{
+		Name:       "activity_logs",
+		Columns:    ActivityLogsColumns,
+		PrimaryKey: []*schema.Column{ActivityLogsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "activitylog_object_type_object_id",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityLogsColumns[4], ActivityLogsColumns[5]},
+			},
+			{
+				Name:    "activitylog_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityLogsColumns[7]},
+			},
+		},
+	}
 	// AssetsColumns holds the columns for the "assets" table.
 	AssetsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -701,6 +730,7 @@ var (
 	}
 	// Tables holds all the tables in the schema.
 	Tables = []*schema.Table{
+		ActivityLogsTable,
 		AssetsTable,
 		AssetStatusesTable,
 		AssetTypesTable,
@@ -727,6 +757,9 @@ var (
 )
 
 func init() {
+	ActivityLogsTable.Annotation = &entsql.Annotation{
+		Table: "activity_logs",
+	}
 	AssetsTable.Annotation = &entsql.Annotation{
 		Table: "assets",
 	}

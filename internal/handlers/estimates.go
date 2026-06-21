@@ -15,20 +15,21 @@ import (
 )
 
 type EstimateHandler struct {
-	svc        *services.EstimateService
-	custSvc    *services.CustomerService
-	jobSvc     *services.JobService
-	statusSvc  *services.StatusService
-	itemSvc    *services.ItemService
-	invoiceSvc *services.InvoiceService
-	tagSvc     *services.TagService
-	tagLinkSvc *services.TagLinkService
-	defSvc     *services.CustomFieldDefinitionService
-	fileSvc    *services.FileService
+	svc         *services.EstimateService
+	custSvc     *services.CustomerService
+	jobSvc      *services.JobService
+	statusSvc   *services.StatusService
+	itemSvc     *services.ItemService
+	invoiceSvc  *services.InvoiceService
+	tagSvc      *services.TagService
+	tagLinkSvc  *services.TagLinkService
+	defSvc      *services.CustomFieldDefinitionService
+	fileSvc     *services.FileService
+	activitySvc *services.ActivityService
 }
 
-func NewEstimateHandler(svc *services.EstimateService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, invoiceSvc *services.InvoiceService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService) *EstimateHandler {
-	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc}
+func NewEstimateHandler(svc *services.EstimateService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, invoiceSvc *services.InvoiceService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, activitySvc *services.ActivityService) *EstimateHandler {
+	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, activitySvc: activitySvc}
 }
 
 func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -108,10 +109,18 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 func (h *EstimateHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
+	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, "estimate", id)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "estimate", id, map[string]interface{}{
+			"actor_name": u.Name,
+			"tag_name":   tag.Name,
+		})
 	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "estimate", id)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
@@ -125,9 +134,17 @@ func (h *EstimateHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 func (h *EstimateHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
+	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "estimate", id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "estimate", id, map[string]interface{}{
+			"actor_name": u.Name,
+			"tag_name":   tag.Name,
+		})
 	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "estimate", id)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
@@ -169,10 +186,17 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if params.LineItems == nil {
 		params.LineItems = []services.LineItem{}
 	}
-	_, err := h.svc.Create(r.Context(), params)
+	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "estimate", result.ID, map[string]interface{}{
+			"entity_name": result.Title,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/estimates?flash=Estimate+created", http.StatusSeeOther)
 }
@@ -221,9 +245,17 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if lineItems != nil {
 		params.LineItems = &lineItems
 	}
-	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
+	result, err := h.svc.Update(r.Context(), id, params)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "updated", "estimate", id, map[string]interface{}{
+			"entity_name": result.Title,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/estimates/%d?flash=Estimate+updated", id), http.StatusSeeOther)
 }
@@ -239,6 +271,14 @@ func (h *EstimateHandler) ConvertToInvoice(w http.ResponseWriter, r *http.Reques
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "converted", "estimate", id, map[string]interface{}{
+			"entity_name":  inv.Title,
+			"actor_name":   u.Name,
+			"invoice_id":  inv.ID,
+		})
+	}
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+created+from+estimate", inv.ID), http.StatusSeeOther)
 }
 
@@ -252,6 +292,14 @@ func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "estimate", est.ID, map[string]interface{}{
+			"entity_name": est.Title,
+			"actor_name":  u.Name,
+			"job_id":      id,
+		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/estimates/%d?flash=Estimate+created+from+job", est.ID), http.StatusSeeOther)
 }
@@ -284,9 +332,22 @@ func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	e, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	entityName := e.Title
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "deleted", "estimate", id, map[string]interface{}{
+			"entity_name": entityName,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/estimates?flash=Estimate+deleted", http.StatusSeeOther)
 }

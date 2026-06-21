@@ -5,6 +5,7 @@ package ent
 import (
 	"time"
 
+	"github.com/MartialM1nd/freefsm/internal/ent/activitylog"
 	"github.com/MartialM1nd/freefsm/internal/ent/asset"
 	"github.com/MartialM1nd/freefsm/internal/ent/assetstatus"
 	"github.com/MartialM1nd/freefsm/internal/ent/assettype"
@@ -34,6 +35,24 @@ import (
 // (default values, validators, hooks and policies) and stitches it
 // to their package variables.
 func init() {
+	activitylogFields := schema.ActivityLog{}.Fields()
+	_ = activitylogFields
+	// activitylogDescAction is the schema descriptor for action field.
+	activitylogDescAction := activitylogFields[3].Descriptor()
+	// activitylog.ActionValidator is a validator for the "action" field. It is called by the builders before save.
+	activitylog.ActionValidator = activitylogDescAction.Validators[0].(func(string) error)
+	// activitylogDescObjectType is the schema descriptor for object_type field.
+	activitylogDescObjectType := activitylogFields[4].Descriptor()
+	// activitylog.ObjectTypeValidator is a validator for the "object_type" field. It is called by the builders before save.
+	activitylog.ObjectTypeValidator = activitylogDescObjectType.Validators[0].(func(string) error)
+	// activitylogDescMetadata is the schema descriptor for metadata field.
+	activitylogDescMetadata := activitylogFields[6].Descriptor()
+	// activitylog.DefaultMetadata holds the default value on creation for the metadata field.
+	activitylog.DefaultMetadata = activitylogDescMetadata.Default.(string)
+	// activitylogDescCreatedAt is the schema descriptor for created_at field.
+	activitylogDescCreatedAt := activitylogFields[7].Descriptor()
+	// activitylog.DefaultCreatedAt holds the default value on creation for the created_at field.
+	activitylog.DefaultCreatedAt = activitylogDescCreatedAt.Default.(func() time.Time)
 	assetFields := schema.Asset{}.Fields()
 	_ = assetFields
 	// assetDescName is the schema descriptor for name field.

@@ -20,12 +20,13 @@ var typeToPrefix = map[string]string{
 }
 
 type CommentHandler struct {
-	svc     *services.CommentService
-	userSvc *services.UserService
+	svc         *services.CommentService
+	userSvc     *services.UserService
+	activitySvc *services.ActivityService
 }
 
-func NewCommentHandler(svc *services.CommentService, userSvc *services.UserService) *CommentHandler {
-	return &CommentHandler{svc: svc, userSvc: userSvc}
+func NewCommentHandler(svc *services.CommentService, userSvc *services.UserService, activitySvc *services.ActivityService) *CommentHandler {
+	return &CommentHandler{svc: svc, userSvc: userSvc, activitySvc: activitySvc}
 }
 
 func (h *CommentHandler) List(objectType string) http.HandlerFunc {
@@ -104,6 +105,16 @@ func (h *CommentHandler) Create(objectType string) http.HandlerFunc {
 			return
 		}
 
+		entityName := h.activitySvc.LookupEntityName(r.Context(), objectType, objectID)
+		preview := content
+		if len(preview) > 100 {
+			preview = preview[:100]
+		}
+		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_added", objectType, objectID, map[string]interface{}{
+			"entity_name":     entityName,
+			"comment_preview": preview,
+		})
+
 		h.List(objectType).ServeHTTP(w, r)
 	}
 }
@@ -116,9 +127,29 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 			return
 		}
 
+		comment, err := h.svc.GetByID(r.Context(), commentID)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+
+		entityName := h.activitySvc.LookupEntityName(r.Context(), objectType, comment.ObjectID)
+		preview := comment.Content
+		if len(preview) > 100 {
+			preview = preview[:100]
+		}
+
 		if err := h.svc.Delete(r.Context(), commentID); err != nil {
 			http.Error(w, err.Error(), 500)
 			return
+		}
+
+		u, _ := middleware.UserFromContext(r.Context())
+		if u != nil {
+			_ = h.activitySvc.Record(r.Context(), u.ID, "comment_deleted", objectType, comment.ObjectID, map[string]interface{}{
+				"entity_name":     entityName,
+				"comment_preview": preview,
+			})
 		}
 
 		h.List(objectType).ServeHTTP(w, r)

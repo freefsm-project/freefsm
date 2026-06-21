@@ -66,6 +66,7 @@ templ Layout(title string, children ...templ.Component) {
 					<a href="/invoices" class={ templ.KV("active", isActivePath(ctx, "/invoices")) }>Invoices</a>
 				<a href="/items" class={ templ.KV("active", isActivePath(ctx, "/items")) }>Items</a>
 			<a href="/time-entries" class={ templ.KV("active", isActivePath(ctx, "/time-entries")) }>Timesheets</a>
+			<a href="/activity" class={ templ.KV("active", isActivePath(ctx, "/activity")) }>Activity</a>
 			if getUser(ctx) != nil && (getUser(ctx).Role == "admin" || getUser(ctx).Role == "dispatcher") {
 				<a href="/tags" class={ templ.KV("active", isActivePath(ctx, "/tags")) }>Tags</a>
 			}

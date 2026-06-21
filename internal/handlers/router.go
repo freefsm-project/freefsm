@@ -40,41 +40,43 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	tagSvc := services.NewTagService(entClient)
 	tagLinkSvc := services.NewTagLinkService(entClient)
 	commentSvc := services.NewCommentService(entClient)
-	commentHandler := NewCommentHandler(commentSvc, userService)
+	activitySvc := services.NewActivityService(entClient)
+	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc)
 	defSvc := services.NewCustomFieldDefinitionService(entClient)
-	cfHandler := NewCustomFieldHandler(defSvc)
+	cfHandler := NewCustomFieldHandler(defSvc, activitySvc)
 	timeEntrySvc := services.NewTimeEntryService(entClient)
 	dashboardHandler := NewDashboardHandler(services.NewDashboardService(entClient), timeEntrySvc)
 	// File service
 	fileSvc := services.NewFileService(entClient, cfg.UploadDir, cfg.MaxUploadSize)
-	fileHandler := NewFileHandler(fileSvc)
+	fileHandler := NewFileHandler(fileSvc, activitySvc)
+	activityHandler := NewActivityHandler(activitySvc, userService)
 
-	customerHandler := NewCustomerHandler(customerService, contactSvc, tagSvc, tagLinkSvc, defSvc, fileSvc)
-	itemHandler := NewItemHandler(itemService)
+	customerHandler := NewCustomerHandler(customerService, contactSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
+	itemHandler := NewItemHandler(itemService, activitySvc)
 	// Asset services
 	assetTypeSvc := services.NewAssetTypeService(entClient)
 	assetStatusSvc := services.NewAssetStatusService(entClient)
 	assetSvc := services.NewAssetService(entClient)
 
-	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, fileSvc)
-	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc)
+	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, fileSvc, activitySvc)
+	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc)
 	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService)
 	invoiceService := services.NewInvoiceService(entClient)
-	estimateHandler := NewEstimateHandler(services.NewEstimateService(entClient), customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc)
-	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc)
-	tagHandler := NewTagHandler(tagSvc, tagLinkSvc)
+	estimateHandler := NewEstimateHandler(services.NewEstimateService(entClient), customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
+	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
+	tagHandler := NewTagHandler(tagSvc, tagLinkSvc, activitySvc)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
-	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc)
-	userHandler := NewUserHandler(userService, emailSvc, companySettingsSvc)
-	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService)
+	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc)
+	userHandler := NewUserHandler(userService, emailSvc, companySettingsSvc, activitySvc)
+	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, activitySvc)
 	authHandler := NewAuthHandler(db, sessions, userService, emailSvc, services.NewPasswordResetService(entClient))
-	passwordHandler := NewPasswordHandler(userService, companySettingsSvc)
+	passwordHandler := NewPasswordHandler(userService, companySettingsSvc, activitySvc)
 
 	// Asset handlers
-	assetHandler := NewAssetHandler(assetSvc, assetTypeSvc, assetStatusSvc, customerService, tagSvc, tagLinkSvc, defSvc, fileSvc)
-	assetTypeHandler := NewAssetTypeHandler(assetTypeSvc, assetStatusSvc)
-	assetStatusHandler := NewAssetStatusHandler(assetStatusSvc)
+	assetHandler := NewAssetHandler(assetSvc, assetTypeSvc, assetStatusSvc, customerService, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
+	assetTypeHandler := NewAssetTypeHandler(assetTypeSvc, assetStatusSvc, activitySvc)
+	assetStatusHandler := NewAssetStatusHandler(assetStatusSvc, activitySvc)
 
 	// Public routes
 	r.Get("/login", authHandler.ServeHTTP)
@@ -112,6 +114,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/projects", projectHandler.List)
 		r.Get("/projects/new", projectHandler.Create)
 		r.Post("/projects", projectHandler.Create)
+		r.Get("/projects/activity", activityHandler.ListByType("project"))
 		r.Get("/projects/{id}", projectHandler.Show)
 		r.Get("/projects/{id}/edit", projectHandler.Update)
 		r.Post("/projects/{id}", projectHandler.Update)
@@ -119,6 +122,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/customers", customerHandler.List)
 		r.Get("/customers/new", customerHandler.Create)
 		r.Post("/customers", customerHandler.Create)
+		r.Get("/customers/activity", activityHandler.ListByType("customer"))
 		r.Get("/customers/{id}", customerHandler.Show)
 		r.Get("/customers/{id}/edit", customerHandler.Update)
 		r.Post("/customers/{id}", customerHandler.Update)
@@ -132,6 +136,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/customers/{id}/contacts/{cid}/delete", customerHandler.DeleteContact)
 		r.Route("/items", func(r chi.Router) {
 			r.Get("/", itemHandler.List)
+			r.Get("/activity", activityHandler.ListByType("item"))
 			r.Post("/", itemHandler.Create)
 			r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
 				if chi.URLParam(r, "id") == "new" {
@@ -147,12 +152,15 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/time-entries", timeEntryHandler.List)
 		r.Post("/time-entries/clock-in", timeEntryHandler.ClockIn)
 		r.Post("/time-entries/clock-out", timeEntryHandler.ClockOut)
+		r.Get("/time-entries/activity", activityHandler.ListByType("time_entry"))
 		r.Get("/time-entries/{id}/edit", timeEntryHandler.Update)
 		r.Post("/time-entries/{id}", timeEntryHandler.Update)
+		r.Get("/time-entries/{id}", timeEntryHandler.Show)
 		r.Post("/time-entries/{id}/delete", timeEntryHandler.Delete)
 		r.Get("/jobs", jobHandler.List)
 		r.Get("/jobs/new", jobHandler.Create)
 		r.Post("/jobs", jobHandler.Create)
+		r.Get("/jobs/activity", activityHandler.ListByType("job"))
 		r.Get("/jobs/{id}", jobHandler.Show)
 		r.Get("/jobs/{id}/edit", jobHandler.Update)
 		r.Post("/jobs/{id}", jobHandler.Update)
@@ -163,6 +171,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/assets", assetHandler.List)
 		r.Get("/assets/new", assetHandler.Create)
 		r.Post("/assets", assetHandler.Create)
+		r.Get("/assets/activity", activityHandler.ListByType("asset"))
 		r.Get("/assets/{id}", assetHandler.Show)
 		r.Get("/assets/{id}/edit", assetHandler.Update)
 		r.Post("/assets/{id}", assetHandler.Update)
@@ -171,6 +180,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/estimates", estimateHandler.List)
 		r.Get("/estimates/new", estimateHandler.Create)
 		r.Post("/estimates", estimateHandler.Create)
+		r.Get("/estimates/activity", activityHandler.ListByType("estimate"))
 		r.Get("/estimates/{id}", estimateHandler.Show)
 		r.Get("/estimates/{id}/edit", estimateHandler.Update)
 		r.Post("/estimates/{id}", estimateHandler.Update)
@@ -180,6 +190,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/invoices", invoiceHandler.List)
 		r.Get("/invoices/new", invoiceHandler.Create)
 		r.Post("/invoices", invoiceHandler.Create)
+		r.Get("/invoices/activity", activityHandler.ListByType("invoice"))
 		r.Get("/invoices/{id}", invoiceHandler.Show)
 		r.Get("/invoices/{id}/edit", invoiceHandler.Update)
 		r.Post("/invoices/{id}", invoiceHandler.Update)
@@ -215,6 +226,21 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post(e.prefix+"/{id}/comments/{cid}/delete", commentHandler.Delete(e.objType))
 		}
 
+		// Activity
+		r.Get("/activity", activityHandler.ListAll)
+		for _, e := range []struct{ prefix, objType string }{
+			{"/customers", "customer"},
+			{"/jobs", "job"},
+			{"/projects", "project"},
+			{"/estimates", "estimate"},
+			{"/invoices", "invoice"},
+			{"/assets", "asset"},
+			{"/items", "item"},
+			{"/time-entries", "time_entry"},
+		} {
+			r.Get(e.prefix+"/{id}/activity", activityHandler.ListForObject(e.objType))
+		}
+
 		// File uploads
 		r.Post("/files", fileHandler.Upload)
 		r.Get("/files/{id}", fileHandler.Download)
@@ -245,9 +271,11 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/settings/custom-fields/{id}/delete", cfHandler.Delete)
 			r.Get("/settings/assets", assetTypeHandler.Show)
 			r.Post("/settings/asset-types", assetTypeHandler.Create)
-			r.Post("/settings/asset-types/{id}/delete", assetTypeHandler.Delete)
+			r.Post("/settings/asset-types/{id}", assetTypeHandler.Update)
+		r.Post("/settings/asset-types/{id}/delete", assetTypeHandler.Delete)
 			r.Post("/settings/asset-statuses", assetStatusHandler.Create)
-			r.Post("/settings/asset-statuses/{id}/delete", assetStatusHandler.Delete)
+			r.Post("/settings/asset-statuses/{id}", assetStatusHandler.Update)
+		r.Post("/settings/asset-statuses/{id}/delete", assetStatusHandler.Delete)
 			r.Get("/users", userHandler.List)
 			r.Get("/users/new", userHandler.Create)
 			r.Post("/users", userHandler.Create)

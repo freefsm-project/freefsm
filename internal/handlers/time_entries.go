@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -13,12 +14,13 @@ import (
 )
 
 type TimeEntryHandler struct {
-	svc     *services.TimeEntryService
-	userSvc *services.UserService
+	svc         *services.TimeEntryService
+	userSvc     *services.UserService
+	activitySvc *services.ActivityService
 }
 
-func NewTimeEntryHandler(svc *services.TimeEntryService, userSvc *services.UserService) *TimeEntryHandler {
-	return &TimeEntryHandler{svc: svc, userSvc: userSvc}
+func NewTimeEntryHandler(svc *services.TimeEntryService, userSvc *services.UserService, activitySvc *services.ActivityService) *TimeEntryHandler {
+	return &TimeEntryHandler{svc: svc, userSvc: userSvc, activitySvc: activitySvc}
 }
 
 func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +94,55 @@ func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
 	templates.TimeEntriesIndex(data).Render(r.Context(), w)
 }
 
+func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	entry, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	userName := "Unknown"
+	if u, err := h.userSvc.GetByID(r.Context(), entry.UserID); err == nil {
+		userName = u.Name
+	}
+
+	loc := middleware.CompanyLocation(r.Context())
+	clockInStr := entry.ClockIn.In(loc).Format("Jan 2, 2006 3:04 PM")
+	clockOutStr := ""
+	if entry.ClockOut != nil {
+		clockOutStr = entry.ClockOut.In(loc).Format("Jan 2, 2006 3:04 PM")
+	}
+	duration := services.TimeEntryDuration(entry.ClockIn, safeTime(entry.ClockOut))
+
+	gpsLat := ""
+	gpsLon := ""
+	if entry.Latitude != nil {
+		gpsLat = fmt.Sprintf("%.6f", *entry.Latitude)
+	}
+	if entry.Longitude != nil {
+		gpsLon = fmt.Sprintf("%.6f", *entry.Longitude)
+	}
+
+	data := templates.TimeEntryShowPageData{
+		ID:       entry.ID,
+		UserName: userName,
+		ClockIn:  clockInStr,
+		ClockOut: clockOutStr,
+		Duration: duration,
+		IsManual: entry.IsManual,
+		Notes:    entry.Notes,
+		GPSLat:   gpsLat,
+		GPSLon:   gpsLon,
+	}
+	templates.TimeEntryShow(data).Render(r.Context(), w)
+}
+
 func (h *TimeEntryHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", 405)
@@ -123,13 +174,19 @@ func (h *TimeEntryHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		_, _ = h.svc.ClockOut(r.Context(), activeEntry.ID)
 	}
 
-	_, err = h.svc.ClockIn(r.Context(), services.TimeEntryCreateParams{
+	result, err := h.svc.ClockIn(r.Context(), services.TimeEntryCreateParams{
 		UserID: user.ID,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	loc := middleware.CompanyLocation(r.Context())
+	clockInStr := result.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	h.activitySvc.Record(r.Context(), user.ID, "clocked_in", "time_entry", result.ID, map[string]interface{}{
+		"entity_name": fmt.Sprintf("%s — %s", user.Name, clockInStr),
+		"actor_name":  user.Name,
+	})
 
 	http.Redirect(w, r, "/?flash=Clocked+in", http.StatusSeeOther)
 }
@@ -151,11 +208,18 @@ func (h *TimeEntryHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.svc.ClockOut(r.Context(), activeEntry.ID)
+	result, err := h.svc.ClockOut(r.Context(), activeEntry.ID)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	loc := middleware.CompanyLocation(r.Context())
+	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
+	clockInStr := result.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	h.activitySvc.Record(r.Context(), user.ID, "clocked_out", "time_entry", result.ID, map[string]interface{}{
+		"entity_name": fmt.Sprintf("%s — %s (%s)", user.Name, clockInStr, duration),
+		"actor_name":  user.Name,
+	})
 
 	http.Redirect(w, r, "/?flash=Clocked+out", http.StatusSeeOther)
 }
@@ -226,10 +290,21 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	params.Notes = formPtr(r.FormValue("notes"))
 
-	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
+	result, err := h.svc.Update(r.Context(), id, params)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	loc = middleware.CompanyLocation(r.Context())
+	clockInStr := result.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	entityName := fmt.Sprintf("%s — %s", user.Name, clockInStr)
+	if result.ClockOut != nil {
+		entityName += fmt.Sprintf(" — %s", result.ClockOut.In(loc).Format("3:04 PM"))
+	}
+	h.activitySvc.Record(r.Context(), user.ID, "updated", "time_entry", id, map[string]interface{}{
+		"entity_name": entityName,
+		"actor_name":  user.Name,
+	})
 
 	http.Redirect(w, r, "/time-entries?flash=Time+entry+updated", http.StatusSeeOther)
 }
@@ -260,10 +335,20 @@ func (h *TimeEntryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loc := middleware.CompanyLocation(r.Context())
+	clockInStr := entry.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	entityName := clockInStr
+	if entry.ClockOut != nil {
+		entityName += " — " + entry.ClockOut.In(loc).Format("3:04 PM")
+	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+	h.activitySvc.Record(r.Context(), user.ID, "deleted", "time_entry", id, map[string]interface{}{
+		"entity_name": entityName,
+		"actor_name":  user.Name,
+	})
 
 	http.Redirect(w, r, "/time-entries?flash=Time+entry+deleted", http.StatusSeeOther)
 }

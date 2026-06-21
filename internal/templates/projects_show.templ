@@ -68,6 +68,9 @@ templ ProjectShow(p ProjectShowPageData) {
 		<div hx-get={ templ.URL(fmt.Sprintf("/projects/%d/comments", p.Project.ID)) } hx-trigger="load" hx-swap="innerHTML">
 			<p>Loading comments...</p>
 		</div>
-		<p><a href="/projects">&larr; Back to Projects</a></p>
+		<div hx-get={ templ.URL(fmt.Sprintf("/projects/%d/activity", p.Project.ID)) } hx-trigger="load" hx-swap="innerHTML">
+		<p>Loading activity...</p>
+	</div>
+	<p><a href="/projects">&larr; Back to Projects</a></p>
 	}
 }

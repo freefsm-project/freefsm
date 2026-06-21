@@ -6,17 +6,19 @@ import (
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
 
 type ItemHandler struct {
-	svc *services.ItemService
+	svc         *services.ItemService
+	activitySvc *services.ActivityService
 }
 
-func NewItemHandler(svc *services.ItemService) *ItemHandler {
-	return &ItemHandler{svc: svc}
+func NewItemHandler(svc *services.ItemService, activitySvc *services.ActivityService) *ItemHandler {
+	return &ItemHandler{svc: svc, activitySvc: activitySvc}
 }
 
 func (h *ItemHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -92,10 +94,17 @@ func (h *ItemHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if params.Type == "" {
 		params.Type = "service"
 	}
-	_, err := h.svc.Create(r.Context(), params)
+	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "item", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/items?flash=Item+created", http.StatusSeeOther)
 }
@@ -131,9 +140,17 @@ func (h *ItemHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Description:    formPtr(r.FormValue("description")),
 		IsActive:       boolPtr(r.FormValue("is_active") == "true"),
 	}
-	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
+	result, err := h.svc.Update(r.Context(), id, params)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "updated", "item", id, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/items/%d?flash=Item+updated", id), http.StatusSeeOther)
 }
@@ -144,9 +161,22 @@ func (h *ItemHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	item, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	entityName := item.Name
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "deleted", "item", id, map[string]interface{}{
+			"entity_name": entityName,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/items?flash=Item+deleted", http.StatusSeeOther)
 }

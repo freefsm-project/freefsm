@@ -7,19 +7,21 @@ import (
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
 
 type UserHandler struct {
-	svc     *services.UserService
-	emailSvc *services.EmailService
-	csSvc   *services.CompanySettingsService
+	svc         *services.UserService
+	emailSvc    *services.EmailService
+	csSvc       *services.CompanySettingsService
+	activitySvc *services.ActivityService
 }
 
-func NewUserHandler(svc *services.UserService, emailSvc *services.EmailService, csSvc *services.CompanySettingsService) *UserHandler {
-	return &UserHandler{svc: svc, emailSvc: emailSvc, csSvc: csSvc}
+func NewUserHandler(svc *services.UserService, emailSvc *services.EmailService, csSvc *services.CompanySettingsService, activitySvc *services.ActivityService) *UserHandler {
+	return &UserHandler{svc: svc, emailSvc: emailSvc, csSvc: csSvc, activitySvc: activitySvc}
 }
 
 func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -44,7 +46,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.ParseForm()
-	u, tempPass, err := h.svc.Create(r.Context(), services.UserCreateParams{
+	result, tempPass, err := h.svc.Create(r.Context(), services.UserCreateParams{
 		Name:             r.FormValue("name"),
 		Email:            r.FormValue("email"),
 		Password:         r.FormValue("password"),
@@ -56,15 +58,22 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	a, _ := middleware.UserFromContext(r.Context())
+	if a != nil && h.activitySvc != nil {
+		h.activitySvc.Record(r.Context(), a.ID, "user_created", "user", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  a.Name,
+		})
+	}
+
 	if r.FormValue("send_welcome_email") == "on" {
 		scheme := "http"
 		if r.TLS != nil {
 			scheme = "https"
 		}
 		loginURL := fmt.Sprintf("%s://%s/login", scheme, r.Host)
-		if err := h.emailSvc.SendWelcomeEmail(r.Context(), u.Email, u.Name, tempPass, loginURL); err != nil {
-			// Log but don't fail — user was created
-			slog.Error("send welcome email", "error", err, "user", u.Email)
+		if err := h.emailSvc.SendWelcomeEmail(r.Context(), result.Email, result.Name, tempPass, loginURL); err != nil {
+			slog.Error("send welcome email", "error", err, "user", result.Email)
 		}
 	}
 
@@ -105,17 +114,35 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
+
+	a, _ := middleware.UserFromContext(r.Context())
+	if a != nil && h.activitySvc != nil {
+		h.activitySvc.Record(r.Context(), a.ID, "user_updated", "user", id, map[string]interface{}{
+			"entity_name": r.FormValue("name"),
+			"actor_name":  a.Name,
+		})
+	}
+
 	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=User+updated", id), http.StatusSeeOther)
 }
 
 func (h *UserHandler) Disable(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	u, err := h.svc.GetByID(r.Context(), id)
+	user, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	h.svc.SetActive(r.Context(), id, !u.IsActive)
+	h.svc.SetActive(r.Context(), id, !user.IsActive)
+
+	a, _ := middleware.UserFromContext(r.Context())
+	if a != nil && h.activitySvc != nil {
+		h.activitySvc.Record(r.Context(), a.ID, "user_disabled", "user", id, map[string]interface{}{
+			"entity_name": user.Name,
+			"actor_name":  a.Name,
+		})
+	}
+
 	http.Redirect(w, r, "/users?flash=User+toggled", http.StatusSeeOther)
 }
 
@@ -123,15 +150,35 @@ func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	r.ParseForm()
 	h.svc.SetPassword(r.Context(), id, r.FormValue("password"))
+
+	user, err := h.svc.GetByID(r.Context(), id)
+	if err == nil {
+		a, _ := middleware.UserFromContext(r.Context())
+		if a != nil && h.activitySvc != nil {
+			h.activitySvc.Record(r.Context(), a.ID, "password_reset", "user", id, map[string]interface{}{
+				"entity_name": user.Name,
+				"actor_name":  a.Name,
+			})
+		}
+	}
+
 	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Password+reset", id), http.StatusSeeOther)
 }
 
 func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	u, tempPass, err := h.svc.ResendWelcomeEmail(r.Context(), id)
+	user, tempPass, err := h.svc.ResendWelcomeEmail(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+
+	a, _ := middleware.UserFromContext(r.Context())
+	if a != nil && h.activitySvc != nil {
+		h.activitySvc.Record(r.Context(), a.ID, "welcome_resent", "user", id, map[string]interface{}{
+			"entity_name": user.Name,
+			"actor_name":  a.Name,
+		})
 	}
 
 	scheme := "http"
@@ -139,8 +186,8 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 		scheme = "https"
 	}
 	loginURL := fmt.Sprintf("%s://%s/login", scheme, r.Host)
-	if err := h.emailSvc.SendWelcomeEmail(r.Context(), u.Email, u.Name, tempPass, loginURL); err != nil {
-		slog.Error("resend welcome email", "error", err, "user", u.Email)
+	if err := h.emailSvc.SendWelcomeEmail(r.Context(), user.Email, user.Name, tempPass, loginURL); err != nil {
+		slog.Error("resend welcome email", "error", err, "user", user.Email)
 		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+failed", id), http.StatusSeeOther)
 		return
 	}

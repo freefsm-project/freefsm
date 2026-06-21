@@ -21,6 +21,10 @@ templ JobsIndex(p JobListPageData) {
 			<a href="/jobs/new" role="button">New Job</a>
 		</div>
 		@JobsTable(p)
+
+		<div hx-get="/jobs/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+			<p>Loading recent activity...</p>
+		</div>
 	}
 }
 

@@ -12,6 +12,8 @@ import (
 // Tx is a transactional client that is created by calling Client.Tx().
 type Tx struct {
 	config
+	// ActivityLog is the client for interacting with the ActivityLog builders.
+	ActivityLog *ActivityLogClient
 	// Asset is the client for interacting with the Asset builders.
 	Asset *AssetClient
 	// AssetStatus is the client for interacting with the AssetStatus builders.
@@ -187,6 +189,7 @@ func (tx *Tx) Client() *Client {
 }
 
 func (tx *Tx) init() {
+	tx.ActivityLog = NewActivityLogClient(tx.config)
 	tx.Asset = NewAssetClient(tx.config)
 	tx.AssetStatus = NewAssetStatusClient(tx.config)
 	tx.AssetType = NewAssetTypeClient(tx.config)
@@ -218,7 +221,7 @@ func (tx *Tx) init() {
 // of them in order to commit or rollback the transaction.
 //
 // If a closed transaction is embedded in one of the generated entities, and the entity
-// applies a query, for example: Asset.QueryXXX(), the query will be executed
+// applies a query, for example: ActivityLog.QueryXXX(), the query will be executed
 // through the driver which created this transaction.
 //
 // Note that txDriver is not goroutine safe.

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -20,6 +21,7 @@ type AssetHandler struct {
 	tagLinkSvc     *services.TagLinkService
 	cfSvc          *services.CustomFieldDefinitionService
 	fileSvc        *services.FileService
+	activitySvc    *services.ActivityService
 }
 
 func NewAssetHandler(
@@ -31,6 +33,7 @@ func NewAssetHandler(
 	tagLinkSvc *services.TagLinkService,
 	cfSvc *services.CustomFieldDefinitionService,
 	fileSvc *services.FileService,
+	activitySvc *services.ActivityService,
 ) *AssetHandler {
 	return &AssetHandler{
 		svc:            svc,
@@ -41,6 +44,7 @@ func NewAssetHandler(
 		tagLinkSvc:     tagLinkSvc,
 		cfSvc:          cfSvc,
 		fileSvc:        fileSvc,
+		activitySvc:    activitySvc,
 	}
 }
 
@@ -204,9 +208,17 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CustomFields:  parseCustomFieldValues(r),
 	}
 
-	if _, err := h.svc.Create(r.Context(), params); err != nil {
+	result, err := h.svc.Create(r.Context(), params)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "asset", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/assets?flash=Asset+created", http.StatusSeeOther)
 }
@@ -268,9 +280,17 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		CustomFields:  strPtr(parseCustomFieldValues(r)),
 	}
 
-	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
+	result, err := h.svc.Update(r.Context(), id, params)
+	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "updated", "asset", id, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/assets/%d?flash=Asset+updated", id), http.StatusSeeOther)
 }
@@ -281,9 +301,22 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	asset, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	entityName := asset.Name
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "deleted", "asset", id, map[string]interface{}{
+			"entity_name": entityName,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/assets?flash=Asset+deleted", http.StatusSeeOther)
 }
@@ -291,9 +324,17 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *AssetHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
+	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	if _, err := h.tagLinkSvc.Attach(r.Context(), tagID, "asset", id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil && tag != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "asset", id, map[string]interface{}{
+			"actor_name": u.Name,
+			"tag_name":   tag.Name,
+		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/assets/%d?flash=Tag+attached", id), http.StatusSeeOther)
 }
@@ -301,9 +342,17 @@ func (h *AssetHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 func (h *AssetHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
+	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "asset", id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil && tag != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "asset", id, map[string]interface{}{
+			"actor_name": u.Name,
+			"tag_name":   tag.Name,
+		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/assets/%d?flash=Tag+detached", id), http.StatusSeeOther)
 }
