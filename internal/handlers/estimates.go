@@ -338,18 +338,43 @@ func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	entityName := e.Title
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Archive(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "deleted", "estimate", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", "estimate", id, map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
 	}
-	http.Redirect(w, r, "/estimates?flash=Estimate+deleted", http.StatusSeeOther)
+	http.Redirect(w, r, "/estimates?flash=Estimate+archived", http.StatusSeeOther)
+}
+
+func (h *EstimateHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	e, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.svc.Restore(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "restored", "estimate", id, map[string]interface{}{
+			"entity_name": e.Title,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/estimates/"+strconv.FormatInt(id, 10)+"?flash=Estimate+restored", http.StatusSeeOther)
 }
 
 func (h *EstimateHandler) statusesForSelect(ctx context.Context) []*ent.Status {
@@ -414,6 +439,9 @@ func estimateToDetail(e *ent.Estimate, statuses []*ent.Status) templates.Estimat
 	}
 	if e.JobID != nil {
 		d.JobID = *e.JobID
+	}
+	if e.DeletedAt != nil && !e.DeletedAt.IsZero() {
+		d.ArchivedAt = e.DeletedAt.Format("Jan 2, 2006")
 	}
 	return d
 }

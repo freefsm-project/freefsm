@@ -31,6 +31,8 @@ const (
 	FieldLineItems = "line_items"
 	// FieldCustomFields holds the string denoting the custom_fields field in the database.
 	FieldCustomFields = "custom_fields"
+	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
+	FieldDeletedAt = "deleted_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -51,6 +53,7 @@ var Columns = []string{
 	FieldTaxRate,
 	FieldLineItems,
 	FieldCustomFields,
+	FieldDeletedAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -135,6 +138,11 @@ func ByLineItems(opts ...sql.OrderTermOption) OrderOption {
 // ByCustomFields orders the results by the custom_fields field.
 func ByCustomFields(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCustomFields, opts...).ToFunc()
+}
+
+// ByDeletedAt orders the results by the deleted_at field.
+func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

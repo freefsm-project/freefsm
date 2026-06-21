@@ -54,6 +54,7 @@ var (
 		{Name: "installed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "warranty_expires", Type: field.TypeTime, Nullable: true},
 		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -246,6 +247,7 @@ var (
 		{Name: "service_state", Type: field.TypeString, Default: ""},
 		{Name: "service_zip_code", Type: field.TypeString, Default: ""},
 		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -316,6 +318,7 @@ var (
 		{Name: "tax_rate", Type: field.TypeString, Default: "0"},
 		{Name: "line_items", Type: field.TypeString, Default: "[]"},
 		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -386,6 +389,7 @@ var (
 		{Name: "payments", Type: field.TypeString, Default: "[]"},
 		{Name: "display_settings", Type: field.TypeString, Default: "{}"},
 		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -426,6 +430,7 @@ var (
 		{Name: "track_inventory", Type: field.TypeBool, Default: false},
 		{Name: "description", Type: field.TypeString, Default: ""},
 		{Name: "is_active", Type: field.TypeBool, Default: true},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -467,6 +472,7 @@ var (
 		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
 		{Name: "line_items", Type: field.TypeString, Default: "[]"},
 		{Name: "subtasks", Type: field.TypeString, Default: "[]"},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -574,6 +580,7 @@ var (
 		{Name: "end_time", Type: field.TypeTime, Nullable: true},
 		{Name: "notes", Type: field.TypeString, Default: ""},
 		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}

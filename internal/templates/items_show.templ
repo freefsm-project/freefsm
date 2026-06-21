@@ -13,6 +13,15 @@ templ ItemShow(p ItemDetail) {
 				</form>
 			</div>
 		</div>
+		if p.ArchivedAt != "" {
+			<div style="background:var(--pico-muted-background);border:1px solid var(--pico-muted-border-color);border-radius:0.25rem;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
+				<span style="color:var(--pico-muted-color)">Archived on { p.ArchivedAt }</span>
+				<form action={ templ.URL(fmt.Sprintf("/items/%d/restore", p.ID)) } method="post" style="display:inline">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
+				</form>
+			</div>
+		}
 		<table>
 			<tbody>
 				<tr><th>Type</th><td><mark>{ p.Type }</mark></td></tr>

@@ -275,6 +275,26 @@ func (_u *AssetUpdate) SetNillableCustomFields(v *string) *AssetUpdate {
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *AssetUpdate) SetDeletedAt(v time.Time) *AssetUpdate {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *AssetUpdate) SetNillableDeletedAt(v *time.Time) *AssetUpdate {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *AssetUpdate) ClearDeletedAt() *AssetUpdate {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *AssetUpdate) SetUpdatedAt(v time.Time) *AssetUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -412,6 +432,12 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(asset.FieldCustomFields, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(asset.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(asset.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(asset.FieldUpdatedAt, field.TypeTime, value)
@@ -683,6 +709,26 @@ func (_u *AssetUpdateOne) SetNillableCustomFields(v *string) *AssetUpdateOne {
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *AssetUpdateOne) SetDeletedAt(v time.Time) *AssetUpdateOne {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *AssetUpdateOne) SetNillableDeletedAt(v *time.Time) *AssetUpdateOne {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *AssetUpdateOne) ClearDeletedAt() *AssetUpdateOne {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *AssetUpdateOne) SetUpdatedAt(v time.Time) *AssetUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -850,6 +896,12 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(asset.FieldCustomFields, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(asset.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(asset.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(asset.FieldUpdatedAt, field.TypeTime, value)

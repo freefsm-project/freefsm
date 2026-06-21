@@ -178,6 +178,20 @@ func (_c *AssetCreate) SetNillableCustomFields(v *string) *AssetCreate {
 	return _c
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_c *AssetCreate) SetDeletedAt(v time.Time) *AssetCreate {
+	_c.mutation.SetDeletedAt(v)
+	return _c
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableDeletedAt(v *time.Time) *AssetCreate {
+	if v != nil {
+		_c.SetDeletedAt(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *AssetCreate) SetCreatedAt(v time.Time) *AssetCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -397,6 +411,10 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CustomFields(); ok {
 		_spec.SetField(asset.FieldCustomFields, field.TypeString, value)
 		_node.CustomFields = value
+	}
+	if value, ok := _c.mutation.DeletedAt(); ok {
+		_spec.SetField(asset.FieldDeletedAt, field.TypeTime, value)
+		_node.DeletedAt = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(asset.FieldCreatedAt, field.TypeTime, value)

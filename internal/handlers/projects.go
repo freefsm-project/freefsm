@@ -124,6 +124,9 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 	if p.EndTime != nil && !p.EndTime.IsZero() {
 		d.EndTime = p.EndTime.Format("2006-01-02")
 	}
+	if p.DeletedAt != nil && !p.DeletedAt.IsZero() {
+		d.ArchivedAt = p.DeletedAt.Format("Jan 2, 2006")
+	}
 
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "project", id)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
@@ -383,18 +386,43 @@ func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	entityName := p.Name
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Archive(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "deleted", "project", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", "project", id, map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
 	}
-	http.Redirect(w, r, "/projects?flash=Project+deleted", http.StatusSeeOther)
+	http.Redirect(w, r, "/projects?flash=Project+archived", http.StatusSeeOther)
+}
+
+func (h *ProjectHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	p, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.svc.Restore(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "restored", "project", id, map[string]interface{}{
+			"entity_name": p.Name,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/projects/"+strconv.FormatInt(id, 10)+"?flash=Project+restored", http.StatusSeeOther)
 }
 
 func (h *ProjectHandler) statusesForSelect(ctx context.Context) []*ent.Status {

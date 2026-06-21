@@ -34,6 +34,7 @@ func (Project) Fields() []ent.Field {
 		field.Time("end_time").Optional().Nillable(),
 		field.String("notes").Default(""),
 		field.String("custom_fields").Default("[]"),
+		field.Time("deleted_at").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

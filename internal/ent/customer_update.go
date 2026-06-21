@@ -416,6 +416,26 @@ func (_u *CustomerUpdate) SetNillableCustomFields(v *string) *CustomerUpdate {
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *CustomerUpdate) SetDeletedAt(v time.Time) *CustomerUpdate {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *CustomerUpdate) SetNillableDeletedAt(v *time.Time) *CustomerUpdate {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *CustomerUpdate) ClearDeletedAt() *CustomerUpdate {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CustomerUpdate) SetUpdatedAt(v time.Time) *CustomerUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -580,6 +600,12 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(customer.FieldCustomFields, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(customer.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(customer.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(customer.FieldUpdatedAt, field.TypeTime, value)
@@ -992,6 +1018,26 @@ func (_u *CustomerUpdateOne) SetNillableCustomFields(v *string) *CustomerUpdateO
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *CustomerUpdateOne) SetDeletedAt(v time.Time) *CustomerUpdateOne {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *CustomerUpdateOne) SetNillableDeletedAt(v *time.Time) *CustomerUpdateOne {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *CustomerUpdateOne) ClearDeletedAt() *CustomerUpdateOne {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CustomerUpdateOne) SetUpdatedAt(v time.Time) *CustomerUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -1186,6 +1232,12 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(customer.FieldCustomFields, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(customer.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(customer.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(customer.FieldUpdatedAt, field.TypeTime, value)

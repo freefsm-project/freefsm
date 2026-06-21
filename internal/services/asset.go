@@ -50,7 +50,7 @@ type AssetUpdateParams struct {
 }
 
 func (s *AssetService) List(ctx context.Context, search string, customerID, assetTypeID, assetStatusID int64, page, perPage int) ([]*ent.Asset, int, error) {
-	q := s.client.Asset.Query()
+	q := s.client.Asset.Query().Where(asset.DeletedAtIsNil())
 
 	if search != "" {
 		q = q.Where(
@@ -100,6 +100,7 @@ func (s *AssetService) ListForCustomer(ctx context.Context, customerID int64) ([
 
 func (s *AssetService) ListAll(ctx context.Context) ([]*ent.Asset, error) {
 	return s.client.Asset.Query().
+		Where(asset.DeletedAtIsNil()).
 		Order(ent.Asc(asset.FieldName)).
 		All(ctx)
 }
@@ -201,6 +202,23 @@ func (s *AssetService) Update(ctx context.Context, id int64, params AssetUpdateP
 func (s *AssetService) Delete(ctx context.Context, id int64) error {
 	if err := s.client.Asset.DeleteOneID(id).Exec(ctx); err != nil {
 		return fmt.Errorf("delete asset %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *AssetService) Archive(ctx context.Context, id int64) error {
+	now := time.Now()
+	_, err := s.client.Asset.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("archive asset %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *AssetService) Restore(ctx context.Context, id int64) error {
+	_, err := s.client.Asset.UpdateOneID(id).ClearDeletedAt().Save(ctx)
+	if err != nil {
+		return fmt.Errorf("restore asset %d: %w", id, err)
 	}
 	return nil
 }

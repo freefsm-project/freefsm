@@ -47,6 +47,7 @@ func (Customer) Fields() []ent.Field {
 		field.String("service_state").Default(""),
 		field.String("service_zip_code").Default(""),
 		field.String("custom_fields").Default("[]"),
+		field.Time("deleted_at").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

@@ -146,6 +146,20 @@ func (_c *EstimateCreate) SetNillableCustomFields(v *string) *EstimateCreate {
 	return _c
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_c *EstimateCreate) SetDeletedAt(v time.Time) *EstimateCreate {
+	_c.mutation.SetDeletedAt(v)
+	return _c
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableDeletedAt(v *time.Time) *EstimateCreate {
+	if v != nil {
+		_c.SetDeletedAt(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *EstimateCreate) SetCreatedAt(v time.Time) *EstimateCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -335,6 +349,10 @@ func (_c *EstimateCreate) createSpec() (*Estimate, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CustomFields(); ok {
 		_spec.SetField(estimate.FieldCustomFields, field.TypeString, value)
 		_node.CustomFields = value
+	}
+	if value, ok := _c.mutation.DeletedAt(); ok {
+		_spec.SetField(estimate.FieldDeletedAt, field.TypeTime, value)
+		_node.DeletedAt = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(estimate.FieldCreatedAt, field.TypeTime, value)

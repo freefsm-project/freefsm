@@ -284,18 +284,43 @@ func (h *JobHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	entityName := j.JobType
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Archive(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "deleted", "job", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", "job", id, map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
 	}
-	http.Redirect(w, r, "/jobs?flash=Job+deleted", http.StatusSeeOther)
+	http.Redirect(w, r, "/jobs?flash=Job+archived", http.StatusSeeOther)
+}
+
+func (h *JobHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	j, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.svc.Restore(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "restored", "job", id, map[string]interface{}{
+			"entity_name": j.JobType,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/jobs/"+strconv.FormatInt(id, 10)+"?flash=Job+restored", http.StatusSeeOther)
 }
 
 func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
@@ -455,6 +480,9 @@ func jobToDetail(j *ent.Job, statuses []*ent.Status) templates.JobDetail {
 	}
 	if j.DueDate != nil && !j.DueDate.IsZero() {
 		d.DueDate = j.DueDate.Format("2006-01-02")
+	}
+	if j.DeletedAt != nil && !j.DeletedAt.IsZero() {
+		d.ArchivedAt = j.DeletedAt.Format("Jan 2, 2006")
 	}
 	return d
 }

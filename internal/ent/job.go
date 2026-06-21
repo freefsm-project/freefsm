@@ -61,6 +61,8 @@ type Job struct {
 	LineItems string `json:"line_items,omitempty"`
 	// Subtasks holds the value of the "subtasks" field.
 	Subtasks string `json:"subtasks,omitempty"`
+	// DeletedAt holds the value of the "deleted_at" field.
+	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -77,7 +79,7 @@ func (*Job) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case job.FieldJobType, job.FieldSubtitle, job.FieldNotes, job.FieldTechNotes, job.FieldBillingType, job.FieldVisits, job.FieldAssignments, job.FieldCustomFields, job.FieldLineItems, job.FieldSubtasks:
 			values[i] = new(sql.NullString)
-		case job.FieldStartTime, job.FieldEndTime, job.FieldDueDate, job.FieldArrivalWindowStart, job.FieldArrivalWindowEnd, job.FieldCreatedAt, job.FieldUpdatedAt:
+		case job.FieldStartTime, job.FieldEndTime, job.FieldDueDate, job.FieldArrivalWindowStart, job.FieldArrivalWindowEnd, job.FieldDeletedAt, job.FieldCreatedAt, job.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -243,6 +245,13 @@ func (_m *Job) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Subtasks = value.String
 			}
+		case job.FieldDeletedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field deleted_at", values[i])
+			} else if value.Valid {
+				_m.DeletedAt = new(time.Time)
+				*_m.DeletedAt = value.Time
+			}
 		case job.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -378,6 +387,11 @@ func (_m *Job) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("subtasks=")
 	builder.WriteString(_m.Subtasks)
+	builder.WriteString(", ")
+	if v := _m.DeletedAt; v != nil {
+		builder.WriteString("deleted_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

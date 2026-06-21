@@ -283,18 +283,43 @@ func (h *InvoiceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	title := inv.Title
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Archive(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "deleted", "invoice", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", "invoice", id, map[string]interface{}{
 			"entity_name": title,
 			"actor_name":  u.Name,
 		})
 	}
-	http.Redirect(w, r, "/invoices?flash=Invoice+deleted", http.StatusSeeOther)
+	http.Redirect(w, r, "/invoices?flash=Invoice+archived", http.StatusSeeOther)
+}
+
+func (h *InvoiceHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	i, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.svc.Restore(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "restored", "invoice", id, map[string]interface{}{
+			"entity_name": i.Title,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/invoices/"+strconv.FormatInt(id, 10)+"?flash=Invoice+restored", http.StatusSeeOther)
 }
 
 func (h *InvoiceHandler) statusesForSelect(ctx context.Context) []*ent.Status {
@@ -361,6 +386,9 @@ func invoiceToDetail(i *ent.Invoice, statuses []*ent.Status) templates.InvoiceDe
 	}
 	if !i.DueDate.IsZero() {
 		d.DueDate = i.DueDate.Format("2006-01-02")
+	}
+	if i.DeletedAt != nil && !i.DeletedAt.IsZero() {
+		d.ArchivedAt = i.DeletedAt.Format("Jan 2, 2006")
 	}
 	return d
 }

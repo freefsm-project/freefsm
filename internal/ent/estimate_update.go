@@ -206,6 +206,26 @@ func (_u *EstimateUpdate) SetNillableCustomFields(v *string) *EstimateUpdate {
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *EstimateUpdate) SetDeletedAt(v time.Time) *EstimateUpdate {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *EstimateUpdate) SetNillableDeletedAt(v *time.Time) *EstimateUpdate {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *EstimateUpdate) ClearDeletedAt() *EstimateUpdate {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *EstimateUpdate) SetUpdatedAt(v time.Time) *EstimateUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -312,6 +332,12 @@ func (_u *EstimateUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(estimate.FieldCustomFields, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(estimate.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(estimate.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(estimate.FieldUpdatedAt, field.TypeTime, value)
@@ -514,6 +540,26 @@ func (_u *EstimateUpdateOne) SetNillableCustomFields(v *string) *EstimateUpdateO
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *EstimateUpdateOne) SetDeletedAt(v time.Time) *EstimateUpdateOne {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *EstimateUpdateOne) SetNillableDeletedAt(v *time.Time) *EstimateUpdateOne {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *EstimateUpdateOne) ClearDeletedAt() *EstimateUpdateOne {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *EstimateUpdateOne) SetUpdatedAt(v time.Time) *EstimateUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -650,6 +696,12 @@ func (_u *EstimateUpdateOne) sqlSave(ctx context.Context) (_node *Estimate, err 
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(estimate.FieldCustomFields, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(estimate.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(estimate.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(estimate.FieldUpdatedAt, field.TypeTime, value)

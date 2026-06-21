@@ -200,6 +200,20 @@ func (_c *InvoiceCreate) SetNillableCustomFields(v *string) *InvoiceCreate {
 	return _c
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_c *InvoiceCreate) SetDeletedAt(v time.Time) *InvoiceCreate {
+	_c.mutation.SetDeletedAt(v)
+	return _c
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_c *InvoiceCreate) SetNillableDeletedAt(v *time.Time) *InvoiceCreate {
+	if v != nil {
+		_c.SetDeletedAt(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *InvoiceCreate) SetCreatedAt(v time.Time) *InvoiceCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -429,6 +443,10 @@ func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CustomFields(); ok {
 		_spec.SetField(invoice.FieldCustomFields, field.TypeString, value)
 		_node.CustomFields = value
+	}
+	if value, ok := _c.mutation.DeletedAt(); ok {
+		_spec.SetField(invoice.FieldDeletedAt, field.TypeTime, value)
+		_node.DeletedAt = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(invoice.FieldCreatedAt, field.TypeTime, value)

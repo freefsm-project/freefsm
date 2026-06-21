@@ -247,6 +247,26 @@ func (_u *ProjectUpdate) SetNillableCustomFields(v *string) *ProjectUpdate {
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *ProjectUpdate) SetDeletedAt(v time.Time) *ProjectUpdate {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *ProjectUpdate) SetNillableDeletedAt(v *time.Time) *ProjectUpdate {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *ProjectUpdate) ClearDeletedAt() *ProjectUpdate {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ProjectUpdate) SetUpdatedAt(v time.Time) *ProjectUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -378,6 +398,12 @@ func (_u *ProjectUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(project.FieldCustomFields, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(project.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(project.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(project.FieldUpdatedAt, field.TypeTime, value)
@@ -621,6 +647,26 @@ func (_u *ProjectUpdateOne) SetNillableCustomFields(v *string) *ProjectUpdateOne
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *ProjectUpdateOne) SetDeletedAt(v time.Time) *ProjectUpdateOne {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *ProjectUpdateOne) SetNillableDeletedAt(v *time.Time) *ProjectUpdateOne {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *ProjectUpdateOne) ClearDeletedAt() *ProjectUpdateOne {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ProjectUpdateOne) SetUpdatedAt(v time.Time) *ProjectUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -782,6 +828,12 @@ func (_u *ProjectUpdateOne) sqlSave(ctx context.Context) (_node *Project, err er
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(project.FieldCustomFields, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(project.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(project.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(project.FieldUpdatedAt, field.TypeTime, value)

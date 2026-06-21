@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
@@ -40,7 +41,7 @@ type EstimateUpdateParams struct {
 }
 
 func (s *EstimateService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Estimate, int, error) {
-	q := s.client.Estimate.Query()
+	q := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil())
 
 	if search != "" {
 		q = q.Where(estimate.TitleContainsFold(search))
@@ -137,6 +138,23 @@ func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateU
 func (s *EstimateService) Delete(ctx context.Context, id int64) error {
 	if err := s.client.Estimate.DeleteOneID(id).Exec(ctx); err != nil {
 		return fmt.Errorf("delete estimate %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *EstimateService) Archive(ctx context.Context, id int64) error {
+	now := time.Now()
+	_, err := s.client.Estimate.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("archive estimate %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *EstimateService) Restore(ctx context.Context, id int64) error {
+	_, err := s.client.Estimate.UpdateOneID(id).ClearDeletedAt().Save(ctx)
+	if err != nil {
+		return fmt.Errorf("restore estimate %d: %w", id, err)
 	}
 	return nil
 }

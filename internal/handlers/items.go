@@ -167,18 +167,43 @@ func (h *ItemHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	entityName := item.Name
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Archive(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "deleted", "item", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", "item", id, map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
 	}
-	http.Redirect(w, r, "/items?flash=Item+deleted", http.StatusSeeOther)
+	http.Redirect(w, r, "/items?flash=Item+archived", http.StatusSeeOther)
+}
+
+func (h *ItemHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	i, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.svc.Restore(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "restored", "item", id, map[string]interface{}{
+			"entity_name": i.Name,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/items/"+strconv.FormatInt(id, 10)+"?flash=Item+restored", http.StatusSeeOther)
 }
 
 func parseFloat(v string) float64 {
@@ -195,7 +220,7 @@ func boolPtr(v bool) *bool {
 }
 
 func itemToDetail(i *ent.Item) templates.ItemDetail {
-	return templates.ItemDetail{
+	d := templates.ItemDetail{
 		ID:             i.ID,
 		Name:           i.Name,
 		Type:           i.Type,
@@ -208,6 +233,10 @@ func itemToDetail(i *ent.Item) templates.ItemDetail {
 		Description:    i.Description,
 		IsActive:       i.IsActive,
 	}
+	if i.DeletedAt != nil && !i.DeletedAt.IsZero() {
+		d.ArchivedAt = i.DeletedAt.Format("Jan 2, 2006")
+	}
+	return d
 }
 
 func itemRow(i *ent.Item) templates.ItemRow {

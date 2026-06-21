@@ -103,7 +103,7 @@ type CustomerShowPageData struct {
 	Tags         []TagRow
 	AllTags      []TagRow
 	CustomFields []CustomFieldDisplay
-	FileList     FileListPageData
+	FileList        FileListPageData
 }
 
 type CustomerDetail struct {
@@ -127,6 +127,7 @@ type CustomerDetail struct {
 	ServiceCity     string
 	ServiceState    string
 	ServiceZipCode  string
+	ArchivedAt      string
 }
 
 type CustomerFormPageData struct {
@@ -174,6 +175,7 @@ type ProjectDetail struct {
 	StartTime            string
 	EndTime              string
 	Notes                string
+	ArchivedAt           string
 }
 
 type ProjectListPageData struct {
@@ -228,6 +230,7 @@ type ItemDetail struct {
 	TrackInventory bool
 	Description    string
 	IsActive       bool
+	ArchivedAt     string
 }
 
 type ItemListPageData struct {
@@ -289,6 +292,7 @@ type JobDetail struct {
 	Notes           string
 	TechNotes       string
 	FileList        FileListPageData
+	ArchivedAt      string
 }
 
 type SelectOption struct {
@@ -364,6 +368,7 @@ type EstimateDetail struct {
 	AllTags     []TagRow
 	CustomFields []CustomFieldDisplay
 	FileList    FileListPageData
+	ArchivedAt  string
 }
 
 type EstimateListPageData struct {
@@ -420,6 +425,7 @@ type InvoiceDetail struct {
 	AllTags     []TagRow
 	CustomFields []CustomFieldDisplay
 	FileList    FileListPageData
+	ArchivedAt  string
 }
 
 type InvoiceListPageData struct {
@@ -1129,6 +1135,7 @@ type AssetDetail struct {
 	AssetStatusColor string
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
+	ArchivedAt       string
 }
 
 type AssetFormPageData struct {

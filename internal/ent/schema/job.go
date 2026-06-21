@@ -45,6 +45,7 @@ func (Job) Fields() []ent.Field {
 		field.String("custom_fields").Default("[]"),
 		field.String("line_items").Default("[]"),
 		field.String("subtasks").Default("[]"),
+		field.Time("deleted_at").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

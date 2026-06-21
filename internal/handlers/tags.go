@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/middleware"
@@ -14,10 +15,11 @@ type TagHandler struct {
 	svc         *services.TagService
 	linkSvc     *services.TagLinkService
 	activitySvc *services.ActivityService
+	depSvc      *services.DependencyService
 }
 
-func NewTagHandler(svc *services.TagService, linkSvc *services.TagLinkService, activitySvc *services.ActivityService) *TagHandler {
-	return &TagHandler{svc: svc, linkSvc: linkSvc, activitySvc: activitySvc}
+func NewTagHandler(svc *services.TagService, linkSvc *services.TagLinkService, activitySvc *services.ActivityService, depSvc *services.DependencyService) *TagHandler {
+	return &TagHandler{svc: svc, linkSvc: linkSvc, activitySvc: activitySvc, depSvc: depSvc}
 }
 
 func (h *TagHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -143,6 +145,11 @@ func (h *TagHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
+		return
+	}
+	canDelete, reason := h.depSvc.CanDeleteTag(r.Context(), id)
+	if !canDelete {
+		http.Redirect(w, r, "/tags?flash="+url.QueryEscape(reason), http.StatusSeeOther)
 		return
 	}
 	tag, err := h.svc.GetByID(r.Context(), id)

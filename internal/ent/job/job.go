@@ -57,6 +57,8 @@ const (
 	FieldLineItems = "line_items"
 	// FieldSubtasks holds the string denoting the subtasks field in the database.
 	FieldSubtasks = "subtasks"
+	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
+	FieldDeletedAt = "deleted_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -90,6 +92,7 @@ var Columns = []string{
 	FieldCustomFields,
 	FieldLineItems,
 	FieldSubtasks,
+	FieldDeletedAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -249,6 +252,11 @@ func ByLineItems(opts ...sql.OrderTermOption) OrderOption {
 // BySubtasks orders the results by the subtasks field.
 func BySubtasks(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubtasks, opts...).ToFunc()
+}
+
+// ByDeletedAt orders the results by the deleted_at field.
+func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

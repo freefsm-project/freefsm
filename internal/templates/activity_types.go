@@ -53,6 +53,8 @@ func activityVerb(action string) string {
 		return "updated"
 	case "deleted", "type_deleted", "status_deleted", "field_deleted", "tag_deleted", "contact_deleted":
 		return "deleted"
+	case "archived":
+		return "archived"
 	case "settings_updated":
 		return "updated"
 	case "status_changed":
@@ -89,6 +91,8 @@ func activityVerb(action string) string {
 		return "completed a subtask on"
 	case "subtask_uncompleted":
 		return "uncompleted a subtask on"
+	case "restored":
+		return "restored"
 	default:
 		return action
 	}
@@ -101,6 +105,8 @@ func activityActionClass(action string) string {
 	case "updated", "type_updated", "status_updated", "field_updated", "tag_updated", "user_updated", "contact_updated", "settings_updated":
 		return "activity-updated"
 	case "deleted", "type_deleted", "status_deleted", "field_deleted", "tag_deleted", "contact_deleted":
+		return "activity-deleted"
+	case "archived":
 		return "activity-deleted"
 	case "status_changed":
 		return "activity-status"
@@ -122,6 +128,8 @@ func activityActionClass(action string) string {
 		return "activity-email"
 	case "subtask_completed", "subtask_uncompleted":
 		return "activity-subtask"
+	case "restored":
+		return "activity-created"
 	default:
 		return ""
 	}

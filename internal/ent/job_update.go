@@ -451,6 +451,26 @@ func (_u *JobUpdate) SetNillableSubtasks(v *string) *JobUpdate {
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *JobUpdate) SetDeletedAt(v time.Time) *JobUpdate {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *JobUpdate) SetNillableDeletedAt(v *time.Time) *JobUpdate {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *JobUpdate) ClearDeletedAt() *JobUpdate {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *JobUpdate) SetUpdatedAt(v time.Time) *JobUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -639,6 +659,12 @@ func (_u *JobUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Subtasks(); ok {
 		_spec.SetField(job.FieldSubtasks, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(job.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(job.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(job.FieldUpdatedAt, field.TypeTime, value)
@@ -1086,6 +1112,26 @@ func (_u *JobUpdateOne) SetNillableSubtasks(v *string) *JobUpdateOne {
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *JobUpdateOne) SetDeletedAt(v time.Time) *JobUpdateOne {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *JobUpdateOne) SetNillableDeletedAt(v *time.Time) *JobUpdateOne {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *JobUpdateOne) ClearDeletedAt() *JobUpdateOne {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *JobUpdateOne) SetUpdatedAt(v time.Time) *JobUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -1304,6 +1350,12 @@ func (_u *JobUpdateOne) sqlSave(ctx context.Context) (_node *Job, err error) {
 	}
 	if value, ok := _u.mutation.Subtasks(); ok {
 		_spec.SetField(job.FieldSubtasks, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(job.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(job.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(job.FieldUpdatedAt, field.TypeTime, value)

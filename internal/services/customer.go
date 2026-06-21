@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
@@ -64,11 +65,11 @@ type CustomerUpdateParams struct {
 }
 
 func (s *CustomerService) ListAll(ctx context.Context) ([]*ent.Customer, error) {
-	return s.client.Customer.Query().Order(ent.Asc(customer.FieldDisplayName)).All(ctx)
+	return s.client.Customer.Query().Where(customer.DeletedAtIsNil()).Order(ent.Asc(customer.FieldDisplayName)).All(ctx)
 }
 
 func (s *CustomerService) List(ctx context.Context, search, status string, page, perPage int) ([]*ent.Customer, int, error) {
-	q := s.client.Customer.Query()
+	q := s.client.Customer.Query().Where(customer.DeletedAtIsNil())
 
 	if search != "" {
 		q = q.Where(
@@ -229,6 +230,23 @@ func (s *CustomerService) Update(ctx context.Context, id int64, params CustomerU
 func (s *CustomerService) Delete(ctx context.Context, id int64) error {
 	if err := s.client.Customer.DeleteOneID(id).Exec(ctx); err != nil {
 		return fmt.Errorf("delete customer %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *CustomerService) Archive(ctx context.Context, id int64) error {
+	now := time.Now()
+	_, err := s.client.Customer.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("archive customer %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *CustomerService) Restore(ctx context.Context, id int64) error {
+	_, err := s.client.Customer.UpdateOneID(id).ClearDeletedAt().Save(ctx)
+	if err != nil {
+		return fmt.Errorf("restore customer %d: %w", id, err)
 	}
 	return nil
 }

@@ -41,9 +41,10 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	tagLinkSvc := services.NewTagLinkService(entClient)
 	commentSvc := services.NewCommentService(entClient)
 	activitySvc := services.NewActivityService(entClient)
+	depSvc := services.NewDependencyService(entClient)
 	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc)
 	defSvc := services.NewCustomFieldDefinitionService(entClient)
-	cfHandler := NewCustomFieldHandler(defSvc, activitySvc)
+	cfHandler := NewCustomFieldHandler(defSvc, activitySvc, depSvc)
 	timeEntrySvc := services.NewTimeEntryService(entClient)
 	dashboardHandler := NewDashboardHandler(services.NewDashboardService(entClient), timeEntrySvc)
 	// File service
@@ -64,7 +65,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	invoiceService := services.NewInvoiceService(entClient)
 	estimateHandler := NewEstimateHandler(services.NewEstimateService(entClient), customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
 	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
-	tagHandler := NewTagHandler(tagSvc, tagLinkSvc, activitySvc)
+	tagHandler := NewTagHandler(tagSvc, tagLinkSvc, activitySvc, depSvc)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc)
@@ -75,8 +76,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 
 	// Asset handlers
 	assetHandler := NewAssetHandler(assetSvc, assetTypeSvc, assetStatusSvc, customerService, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
-	assetTypeHandler := NewAssetTypeHandler(assetTypeSvc, assetStatusSvc, activitySvc)
-	assetStatusHandler := NewAssetStatusHandler(assetStatusSvc, activitySvc)
+	assetTypeHandler := NewAssetTypeHandler(assetTypeSvc, assetStatusSvc, activitySvc, depSvc)
+	assetStatusHandler := NewAssetStatusHandler(assetStatusSvc, activitySvc, depSvc)
 
 	// Public routes
 	r.Get("/login", authHandler.ServeHTTP)
@@ -260,6 +261,14 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		// Admin-only routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AdminOnly)
+			// Restore archived entities
+			r.Post("/customers/{id}/restore", customerHandler.Restore)
+			r.Post("/jobs/{id}/restore", jobHandler.Restore)
+			r.Post("/projects/{id}/restore", projectHandler.Restore)
+			r.Post("/estimates/{id}/restore", estimateHandler.Restore)
+			r.Post("/invoices/{id}/restore", invoiceHandler.Restore)
+			r.Post("/assets/{id}/restore", assetHandler.Restore)
+			r.Post("/items/{id}/restore", itemHandler.Restore)
 			r.Get("/settings", settingsHandler.Show)
 			r.Post("/settings", settingsHandler.Save)
 			r.Post("/settings/test-email", settingsHandler.TestEmail)

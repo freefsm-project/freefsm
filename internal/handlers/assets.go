@@ -307,18 +307,43 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	entityName := asset.Name
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Archive(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "deleted", "asset", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", "asset", id, map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
 	}
-	http.Redirect(w, r, "/assets?flash=Asset+deleted", http.StatusSeeOther)
+	http.Redirect(w, r, "/assets?flash=Asset+archived", http.StatusSeeOther)
+}
+
+func (h *AssetHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	a, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.svc.Restore(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "restored", "asset", id, map[string]interface{}{
+			"entity_name": a.Name,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/assets/"+strconv.FormatInt(id, 10)+"?flash=Asset+restored", http.StatusSeeOther)
 }
 
 func (h *AssetHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
@@ -394,7 +419,7 @@ func assetToDetail(a *ent.Asset, assetTypes []*ent.AssetType, assetStatuses []*e
 		}
 	}
 
-	return &templates.AssetDetail{
+	d := &templates.AssetDetail{
 		ID:               a.ID,
 		CustomerID:       a.CustomerID,
 		LocationID:       a.LocationID,
@@ -414,6 +439,10 @@ func assetToDetail(a *ent.Asset, assetTypes []*ent.AssetType, assetStatuses []*e
 		CreatedAt:        a.CreatedAt,
 		UpdatedAt:        a.UpdatedAt,
 	}
+	if a.DeletedAt != nil && !a.DeletedAt.IsZero() {
+		d.ArchivedAt = a.DeletedAt.Format("Jan 2, 2006")
+	}
+	return d
 }
 
 func jobRowForAsset(j *ent.Job) templates.JobRow {

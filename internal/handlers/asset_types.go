@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
@@ -15,10 +16,11 @@ type AssetTypeHandler struct {
 	svc            *services.AssetTypeService
 	assetStatusSvc *services.AssetStatusService
 	activitySvc    *services.ActivityService
+	depSvc         *services.DependencyService
 }
 
-func NewAssetTypeHandler(svc *services.AssetTypeService, assetStatusSvc *services.AssetStatusService, activitySvc *services.ActivityService) *AssetTypeHandler {
-	return &AssetTypeHandler{svc: svc, assetStatusSvc: assetStatusSvc, activitySvc: activitySvc}
+func NewAssetTypeHandler(svc *services.AssetTypeService, assetStatusSvc *services.AssetStatusService, activitySvc *services.ActivityService, depSvc *services.DependencyService) *AssetTypeHandler {
+	return &AssetTypeHandler{svc: svc, assetStatusSvc: assetStatusSvc, activitySvc: activitySvc, depSvc: depSvc}
 }
 
 func (h *AssetTypeHandler) Show(w http.ResponseWriter, r *http.Request) {
@@ -121,6 +123,11 @@ func (h *AssetTypeHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	canDelete, reason := h.depSvc.CanDeleteAssetType(r.Context(), id)
+	if !canDelete {
+		http.Redirect(w, r, "/settings/assets?flash="+url.QueryEscape(reason), http.StatusSeeOther)
+		return
+	}
 	existing, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -143,10 +150,11 @@ func (h *AssetTypeHandler) Delete(w http.ResponseWriter, r *http.Request) {
 type AssetStatusHandler struct {
 	svc         *services.AssetStatusService
 	activitySvc *services.ActivityService
+	depSvc      *services.DependencyService
 }
 
-func NewAssetStatusHandler(svc *services.AssetStatusService, activitySvc *services.ActivityService) *AssetStatusHandler {
-	return &AssetStatusHandler{svc: svc, activitySvc: activitySvc}
+func NewAssetStatusHandler(svc *services.AssetStatusService, activitySvc *services.ActivityService, depSvc *services.DependencyService) *AssetStatusHandler {
+	return &AssetStatusHandler{svc: svc, activitySvc: activitySvc, depSvc: depSvc}
 }
 
 func (h *AssetStatusHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -236,6 +244,11 @@ func (h *AssetStatusHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
+		return
+	}
+	canDelete, reason := h.depSvc.CanDeleteAssetStatus(r.Context(), id)
+	if !canDelete {
+		http.Redirect(w, r, "/settings/assets?flash="+url.QueryEscape(reason), http.StatusSeeOther)
 		return
 	}
 	existing, err := h.svc.GetByID(r.Context(), id)

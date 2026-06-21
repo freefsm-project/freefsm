@@ -17,10 +17,11 @@ import (
 type CustomFieldHandler struct {
 	svc         *services.CustomFieldDefinitionService
 	activitySvc *services.ActivityService
+	depSvc      *services.DependencyService
 }
 
-func NewCustomFieldHandler(svc *services.CustomFieldDefinitionService, activitySvc *services.ActivityService) *CustomFieldHandler {
-	return &CustomFieldHandler{svc: svc, activitySvc: activitySvc}
+func NewCustomFieldHandler(svc *services.CustomFieldDefinitionService, activitySvc *services.ActivityService, depSvc *services.DependencyService) *CustomFieldHandler {
+	return &CustomFieldHandler{svc: svc, activitySvc: activitySvc, depSvc: depSvc}
 }
 
 func (h *CustomFieldHandler) List(w http.ResponseWriter, r *http.Request) {

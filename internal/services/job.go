@@ -67,7 +67,7 @@ type JobUpdateParams struct {
 }
 
 func (s *JobService) ListAll(ctx context.Context) ([]*ent.Job, error) {
-	return s.client.Job.Query().Order(ent.Desc(job.FieldStartTime)).All(ctx)
+	return s.client.Job.Query().Where(job.DeletedAtIsNil()).Order(ent.Desc(job.FieldStartTime)).All(ctx)
 }
 
 func (s *JobService) ListByDateRange(ctx context.Context, start, end time.Time) ([]*ent.Job, error) {
@@ -85,7 +85,7 @@ func (s *JobService) ListByProject(ctx context.Context, projectID int64) ([]*ent
 }
 
 func (s *JobService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Job, int, error) {
-	q := s.client.Job.Query()
+	q := s.client.Job.Query().Where(job.DeletedAtIsNil())
 
 	if search != "" {
 		q = q.Where(
@@ -258,6 +258,23 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 func (s *JobService) Delete(ctx context.Context, id int64) error {
 	if err := s.client.Job.DeleteOneID(id).Exec(ctx); err != nil {
 		return fmt.Errorf("delete job %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *JobService) Archive(ctx context.Context, id int64) error {
+	now := time.Now()
+	_, err := s.client.Job.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("archive job %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *JobService) Restore(ctx context.Context, id int64) error {
+	_, err := s.client.Job.UpdateOneID(id).ClearDeletedAt().Save(ctx)
+	if err != nil {
+		return fmt.Errorf("restore job %d: %w", id, err)
 	}
 	return nil
 }

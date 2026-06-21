@@ -18,11 +18,11 @@ func NewProjectService(client *ent.Client) *ProjectService {
 }
 
 func (s *ProjectService) ListAll(ctx context.Context) ([]*ent.Project, error) {
-	return s.client.Project.Query().Order(ent.Asc(project.FieldName)).All(ctx)
+	return s.client.Project.Query().Where(project.DeletedAtIsNil()).Order(ent.Asc(project.FieldName)).All(ctx)
 }
 
 func (s *ProjectService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Project, int, error) {
-	q := s.client.Project.Query()
+	q := s.client.Project.Query().Where(project.DeletedAtIsNil())
 
 	if search != "" {
 		q = q.Where(
@@ -179,6 +179,23 @@ func (s *ProjectService) Update(ctx context.Context, id int64, params ProjectUpd
 func (s *ProjectService) Delete(ctx context.Context, id int64) error {
 	if err := s.client.Project.DeleteOneID(id).Exec(ctx); err != nil {
 		return fmt.Errorf("delete project %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *ProjectService) Archive(ctx context.Context, id int64) error {
+	now := time.Now()
+	_, err := s.client.Project.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("archive project %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *ProjectService) Restore(ctx context.Context, id int64) error {
+	_, err := s.client.Project.UpdateOneID(id).ClearDeletedAt().Save(ctx)
+	if err != nil {
+		return fmt.Errorf("restore project %d: %w", id, err)
 	}
 	return nil
 }

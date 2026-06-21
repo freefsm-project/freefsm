@@ -47,7 +47,7 @@ type InvoiceUpdateParams struct {
 }
 
 func (s *InvoiceService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Invoice, int, error) {
-	q := s.client.Invoice.Query()
+	q := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil())
 
 	if search != "" {
 		q = q.Where(invoice.TitleContainsFold(search))
@@ -158,6 +158,23 @@ func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpd
 func (s *InvoiceService) Delete(ctx context.Context, id int64) error {
 	if err := s.client.Invoice.DeleteOneID(id).Exec(ctx); err != nil {
 		return fmt.Errorf("delete invoice %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *InvoiceService) Archive(ctx context.Context, id int64) error {
+	now := time.Now()
+	_, err := s.client.Invoice.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("archive invoice %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *InvoiceService) Restore(ctx context.Context, id int64) error {
+	_, err := s.client.Invoice.UpdateOneID(id).ClearDeletedAt().Save(ctx)
+	if err != nil {
+		return fmt.Errorf("restore invoice %d: %w", id, err)
 	}
 	return nil
 }

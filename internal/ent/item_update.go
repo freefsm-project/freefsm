@@ -209,6 +209,26 @@ func (_u *ItemUpdate) SetNillableIsActive(v *bool) *ItemUpdate {
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *ItemUpdate) SetDeletedAt(v time.Time) *ItemUpdate {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *ItemUpdate) SetNillableDeletedAt(v *time.Time) *ItemUpdate {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *ItemUpdate) ClearDeletedAt() *ItemUpdate {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ItemUpdate) SetUpdatedAt(v time.Time) *ItemUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -322,6 +342,12 @@ func (_u *ItemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(item.FieldIsActive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(item.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(item.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(item.FieldUpdatedAt, field.TypeTime, value)
@@ -527,6 +553,26 @@ func (_u *ItemUpdateOne) SetNillableIsActive(v *bool) *ItemUpdateOne {
 	return _u
 }
 
+// SetDeletedAt sets the "deleted_at" field.
+func (_u *ItemUpdateOne) SetDeletedAt(v time.Time) *ItemUpdateOne {
+	_u.mutation.SetDeletedAt(v)
+	return _u
+}
+
+// SetNillableDeletedAt sets the "deleted_at" field if the given value is not nil.
+func (_u *ItemUpdateOne) SetNillableDeletedAt(v *time.Time) *ItemUpdateOne {
+	if v != nil {
+		_u.SetDeletedAt(*v)
+	}
+	return _u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (_u *ItemUpdateOne) ClearDeletedAt() *ItemUpdateOne {
+	_u.mutation.ClearDeletedAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *ItemUpdateOne) SetUpdatedAt(v time.Time) *ItemUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -670,6 +716,12 @@ func (_u *ItemUpdateOne) sqlSave(ctx context.Context) (_node *Item, err error) {
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(item.FieldIsActive, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.DeletedAt(); ok {
+		_spec.SetField(item.FieldDeletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.DeletedAtCleared() {
+		_spec.ClearField(item.FieldDeletedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(item.FieldUpdatedAt, field.TypeTime, value)

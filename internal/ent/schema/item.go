@@ -34,6 +34,7 @@ func (Item) Fields() []ent.Field {
 		field.Bool("track_inventory").Default(false),
 		field.String("description").Default(""),
 		field.Bool("is_active").Default(true),
+		field.Time("deleted_at").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

@@ -181,6 +181,8 @@ func activityIcon(action string) string {
 		return "✎"
 	case "deleted", "type_deleted", "status_deleted", "field_deleted", "tag_deleted", "contact_deleted":
 		return "🗑"
+	case "archived":
+		return "📦"
 	case "status_changed":
 		return "↻"
 	case "tag_attached", "tag_detached":
@@ -205,6 +207,8 @@ func activityIcon(action string) string {
 		return "☑"
 	case "subtask_uncompleted":
 		return "☐"
+	case "restored":
+		return "↩"
 	case "contact_created", "contact_updated":
 		return "👤"
 	default:

@@ -80,11 +80,11 @@ func init() {
 	// asset.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	asset.DefaultCustomFields = assetDescCustomFields.Default.(string)
 	// assetDescCreatedAt is the schema descriptor for created_at field.
-	assetDescCreatedAt := assetFields[14].Descriptor()
+	assetDescCreatedAt := assetFields[15].Descriptor()
 	// asset.DefaultCreatedAt holds the default value on creation for the created_at field.
 	asset.DefaultCreatedAt = assetDescCreatedAt.Default.(func() time.Time)
 	// assetDescUpdatedAt is the schema descriptor for updated_at field.
-	assetDescUpdatedAt := assetFields[15].Descriptor()
+	assetDescUpdatedAt := assetFields[16].Descriptor()
 	// asset.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	asset.DefaultUpdatedAt = assetDescUpdatedAt.Default.(func() time.Time)
 	// asset.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -364,11 +364,11 @@ func init() {
 	// customer.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	customer.DefaultCustomFields = customerDescCustomFields.Default.(string)
 	// customerDescCreatedAt is the schema descriptor for created_at field.
-	customerDescCreatedAt := customerFields[25].Descriptor()
+	customerDescCreatedAt := customerFields[26].Descriptor()
 	// customer.DefaultCreatedAt holds the default value on creation for the created_at field.
 	customer.DefaultCreatedAt = customerDescCreatedAt.Default.(func() time.Time)
 	// customerDescUpdatedAt is the schema descriptor for updated_at field.
-	customerDescUpdatedAt := customerFields[26].Descriptor()
+	customerDescUpdatedAt := customerFields[27].Descriptor()
 	// customer.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	customer.DefaultUpdatedAt = customerDescUpdatedAt.Default.(func() time.Time)
 	// customer.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -432,11 +432,11 @@ func init() {
 	// estimate.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	estimate.DefaultCustomFields = estimateDescCustomFields.Default.(string)
 	// estimateDescCreatedAt is the schema descriptor for created_at field.
-	estimateDescCreatedAt := estimateFields[10].Descriptor()
+	estimateDescCreatedAt := estimateFields[11].Descriptor()
 	// estimate.DefaultCreatedAt holds the default value on creation for the created_at field.
 	estimate.DefaultCreatedAt = estimateDescCreatedAt.Default.(func() time.Time)
 	// estimateDescUpdatedAt is the schema descriptor for updated_at field.
-	estimateDescUpdatedAt := estimateFields[11].Descriptor()
+	estimateDescUpdatedAt := estimateFields[12].Descriptor()
 	// estimate.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	estimate.DefaultUpdatedAt = estimateDescUpdatedAt.Default.(func() time.Time)
 	// estimate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -498,11 +498,11 @@ func init() {
 	// invoice.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	invoice.DefaultCustomFields = invoiceDescCustomFields.Default.(string)
 	// invoiceDescCreatedAt is the schema descriptor for created_at field.
-	invoiceDescCreatedAt := invoiceFields[15].Descriptor()
+	invoiceDescCreatedAt := invoiceFields[16].Descriptor()
 	// invoice.DefaultCreatedAt holds the default value on creation for the created_at field.
 	invoice.DefaultCreatedAt = invoiceDescCreatedAt.Default.(func() time.Time)
 	// invoiceDescUpdatedAt is the schema descriptor for updated_at field.
-	invoiceDescUpdatedAt := invoiceFields[16].Descriptor()
+	invoiceDescUpdatedAt := invoiceFields[17].Descriptor()
 	// invoice.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	invoice.DefaultUpdatedAt = invoiceDescUpdatedAt.Default.(func() time.Time)
 	// invoice.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -550,11 +550,11 @@ func init() {
 	// item.DefaultIsActive holds the default value on creation for the is_active field.
 	item.DefaultIsActive = itemDescIsActive.Default.(bool)
 	// itemDescCreatedAt is the schema descriptor for created_at field.
-	itemDescCreatedAt := itemFields[12].Descriptor()
+	itemDescCreatedAt := itemFields[13].Descriptor()
 	// item.DefaultCreatedAt holds the default value on creation for the created_at field.
 	item.DefaultCreatedAt = itemDescCreatedAt.Default.(func() time.Time)
 	// itemDescUpdatedAt is the schema descriptor for updated_at field.
-	itemDescUpdatedAt := itemFields[13].Descriptor()
+	itemDescUpdatedAt := itemFields[14].Descriptor()
 	// item.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	item.DefaultUpdatedAt = itemDescUpdatedAt.Default.(func() time.Time)
 	// item.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -602,11 +602,11 @@ func init() {
 	// job.DefaultSubtasks holds the default value on creation for the subtasks field.
 	job.DefaultSubtasks = jobDescSubtasks.Default.(string)
 	// jobDescCreatedAt is the schema descriptor for created_at field.
-	jobDescCreatedAt := jobFields[23].Descriptor()
+	jobDescCreatedAt := jobFields[24].Descriptor()
 	// job.DefaultCreatedAt holds the default value on creation for the created_at field.
 	job.DefaultCreatedAt = jobDescCreatedAt.Default.(func() time.Time)
 	// jobDescUpdatedAt is the schema descriptor for updated_at field.
-	jobDescUpdatedAt := jobFields[24].Descriptor()
+	jobDescUpdatedAt := jobFields[25].Descriptor()
 	// job.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	job.DefaultUpdatedAt = jobDescUpdatedAt.Default.(func() time.Time)
 	// job.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -684,11 +684,11 @@ func init() {
 	// project.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	project.DefaultCustomFields = projectDescCustomFields.Default.(string)
 	// projectDescCreatedAt is the schema descriptor for created_at field.
-	projectDescCreatedAt := projectFields[12].Descriptor()
+	projectDescCreatedAt := projectFields[13].Descriptor()
 	// project.DefaultCreatedAt holds the default value on creation for the created_at field.
 	project.DefaultCreatedAt = projectDescCreatedAt.Default.(func() time.Time)
 	// projectDescUpdatedAt is the schema descriptor for updated_at field.
-	projectDescUpdatedAt := projectFields[13].Descriptor()
+	projectDescUpdatedAt := projectFields[14].Descriptor()
 	// project.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	project.DefaultUpdatedAt = projectDescUpdatedAt.Default.(func() time.Time)
 	// project.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

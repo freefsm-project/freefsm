@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/ent/item"
@@ -48,7 +49,7 @@ type ItemUpdateParams struct {
 }
 
 func (s *ItemService) List(ctx context.Context, search string, page, perPage int) ([]*ent.Item, int, error) {
-	q := s.client.Item.Query()
+	q := s.client.Item.Query().Where(item.DeletedAtIsNil())
 
 	if search != "" {
 		q = q.Where(
@@ -150,6 +151,23 @@ func (s *ItemService) Update(ctx context.Context, id int64, params ItemUpdatePar
 func (s *ItemService) Delete(ctx context.Context, id int64) error {
 	if err := s.client.Item.DeleteOneID(id).Exec(ctx); err != nil {
 		return fmt.Errorf("delete item %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *ItemService) Archive(ctx context.Context, id int64) error {
+	now := time.Now()
+	_, err := s.client.Item.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
+	if err != nil {
+		return fmt.Errorf("archive item %d: %w", id, err)
+	}
+	return nil
+}
+
+func (s *ItemService) Restore(ctx context.Context, id int64) error {
+	_, err := s.client.Item.UpdateOneID(id).ClearDeletedAt().Save(ctx)
+	if err != nil {
+		return fmt.Errorf("restore item %d: %w", id, err)
 	}
 	return nil
 }

@@ -214,22 +214,47 @@ func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	entityName := c.DisplayName
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Archive(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "deleted", "customer", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", "customer", id, map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
 	}
-	http.Redirect(w, r, "/customers?flash=Customer+deleted", http.StatusSeeOther)
+	http.Redirect(w, r, "/customers?flash=Customer+archived", http.StatusSeeOther)
+}
+
+func (h *CustomerHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	c, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.svc.Restore(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "restored", "customer", id, map[string]interface{}{
+			"entity_name": c.DisplayName,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/customers/"+strconv.FormatInt(id, 10)+"?flash=Customer+restored", http.StatusSeeOther)
 }
 
 func customerToDetail(c *ent.Customer) templates.CustomerDetail {
-	return templates.CustomerDetail{
+	d := templates.CustomerDetail{
 		ID:              c.ID,
 		FirstName:       c.FirstName,
 		LastName:        c.LastName,
@@ -251,6 +276,10 @@ func customerToDetail(c *ent.Customer) templates.CustomerDetail {
 		ServiceState:    c.ServiceState,
 		ServiceZipCode:  c.ServiceZipCode,
 	}
+	if c.DeletedAt != nil && !c.DeletedAt.IsZero() {
+		d.ArchivedAt = c.DeletedAt.Format("Jan 2, 2006")
+	}
+	return d
 }
 
 func customerRow(c *ent.Customer) templates.CustomerRow {
