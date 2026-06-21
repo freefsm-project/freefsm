@@ -133,11 +133,16 @@ func (h *UserHandler) Disable(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	h.svc.SetActive(r.Context(), id, !user.IsActive)
+	newState := !user.IsActive
+	h.svc.SetActive(r.Context(), id, newState)
 
 	a, _ := middleware.UserFromContext(r.Context())
 	if a != nil && h.activitySvc != nil {
-		h.activitySvc.Record(r.Context(), a.ID, "user_disabled", "user", id, map[string]interface{}{
+		action := "user_disabled"
+		if newState {
+			action = "user_enabled"
+		}
+		h.activitySvc.Record(r.Context(), a.ID, action, "user", id, map[string]interface{}{
 			"entity_name": user.Name,
 			"actor_name":  a.Name,
 		})

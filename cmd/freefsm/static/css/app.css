@@ -216,18 +216,7 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 .sidebar .dropdown summary {
-  list-style: none;
   cursor: pointer;
-}
-
-.sidebar .dropdown summary::after {
-  content: " ▾";
-  float: right;
-  font-size: 0.7rem;
-}
-
-.sidebar .dropdown[open] summary::after {
-  content: " ▴";
 }
 
 .sidebar .dropdown ul {
@@ -238,8 +227,8 @@ html[data-theme="dark"] .theme-icon-moon {
   gap: 0.1rem;
 }
 
-.sidebar .dropdown ul a,
-.sidebar .dropdown ul button {
+.sidebar .dropdown ul li a,
+.sidebar .dropdown ul li button {
   display: block;
   padding: 0.35rem 0.5rem;
   font-size: 0.85rem;
@@ -248,7 +237,7 @@ html[data-theme="dark"] .theme-icon-moon {
   text-decoration: none;
 }
 
-.sidebar .dropdown ul button {
+.sidebar .dropdown ul li button {
   background: none;
   border: none;
   cursor: pointer;
@@ -256,8 +245,8 @@ html[data-theme="dark"] .theme-icon-moon {
   text-align: left;
 }
 
-.sidebar .dropdown ul a:hover,
-.sidebar .dropdown ul button:hover {
+.sidebar .dropdown ul li a:hover,
+.sidebar .dropdown ul li button:hover {
   background: rgba(0, 0, 0, 0.05);
 }
 

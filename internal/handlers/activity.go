@@ -104,6 +104,41 @@ func (h *ActivityHandler) ListByType(objectType string) http.HandlerFunc {
 	}
 }
 
+func (h *ActivityHandler) ListForAssetSettings(w http.ResponseWriter, r *http.Request) {
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		page, _ = strconv.Atoi(p)
+	}
+	perPage := 10
+	offset := (page - 1) * perPage
+
+	entries, total, err := h.svc.ListByTypes(r.Context(), []string{"asset_type", "asset_status"}, offset, perPage)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	totalPages := (total + perPage - 1) / perPage
+	rows := h.entriesToRows(r.Context(), entries)
+	if rows == nil {
+		rows = []templates.ActivityEntry{}
+	}
+
+	data := templates.ActivityPageData{
+		Entries:    rows,
+		Page:       page,
+		PerPage:    perPage,
+		Total:      total,
+		TotalPages: totalPages,
+	}
+
+	if r.Header.Get("HX-Request") == "true" {
+		templates.ActivityRecentList(data).Render(r.Context(), w)
+		return
+	}
+	templates.ActivityIndex(data).Render(r.Context(), w)
+}
+
 func (h *ActivityHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	page := 1
 	if p := r.URL.Query().Get("page"); p != "" {
@@ -199,6 +234,8 @@ func activityIcon(action string) string {
 		return "$"
 	case "user_disabled":
 		return "🚫"
+	case "user_enabled":
+		return "✔"
 	case "password_reset", "password_changed":
 		return "🔒"
 	case "welcome_resent":

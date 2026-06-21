@@ -67,19 +67,17 @@ templ Layout(title string, children ...templ.Component) {
 				<a href="/items" class={ templ.KV("active", isActivePath(ctx, "/items")) }>Items</a>
 			<a href="/time-entries" class={ templ.KV("active", isActivePath(ctx, "/time-entries")) }>Timesheets</a>
 			<a href="/activity" class={ templ.KV("active", isActivePath(ctx, "/activity")) }>Activity</a>
-			if getUser(ctx) != nil && (getUser(ctx).Role == "admin" || getUser(ctx).Role == "dispatcher") {
-				<a href="/tags" class={ templ.KV("active", isActivePath(ctx, "/tags")) }>Tags</a>
-			}
 			</nav>
 			if getUser(ctx) != nil && getUser(ctx).Role == "admin" {
 					<hr class="sidebar-divider"/>
 					<details class="dropdown">
 						<summary>Administration</summary>
 						<ul>
-							<a href="/settings">Settings</a>
-							<a href="/settings/custom-fields">Custom Fields</a>
-							<a href="/settings/assets">Assets</a>
-							<a href="/users">Users</a>
+							<li><a href="/settings">Settings</a></li>
+							<li><a href="/tags">Tags</a></li>
+							<li><a href="/settings/custom-fields">Custom Fields</a></li>
+							<li><a href="/settings/assets">Assets</a></li>
+							<li><a href="/users">Users</a></li>
 						</ul>
 					</details>
 				}

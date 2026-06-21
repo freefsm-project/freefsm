@@ -42,5 +42,8 @@ templ UsersIndex(p UserListData) {
 				}
 			</tbody>
 		</table>
+		<div hx-get="/users/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+			<p>Loading recent activity...</p>
+		</div>
 	}
 }

@@ -201,6 +201,24 @@ func (s *ActivityService) ListByType(ctx context.Context, objectType string, off
 	return entries, total, nil
 }
 
+func (s *ActivityService) ListByTypes(ctx context.Context, objectTypes []string, offset, limit int) ([]*ent.ActivityLog, int, error) {
+	q := s.client.ActivityLog.Query().
+		Where(activitylog.ObjectTypeIn(objectTypes...))
+	total, err := q.Count(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count activity by types: %w", err)
+	}
+	entries, err := q.
+		Order(ent.Desc(activitylog.FieldCreatedAt)).
+		Limit(limit).
+		Offset(offset).
+		All(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list activity by types: %w", err)
+	}
+	return entries, total, nil
+}
+
 func ActivityRelativeTime(t time.Time) string {
 	d := time.Since(t)
 	switch {

@@ -10,5 +10,8 @@ templ AssetSettingsPage(types AssetTypeListPageData, statuses AssetStatusListPag
 			@AssetTypeList(types)
 			@AssetStatusList(statuses)
 		</div>
+		<div hx-get="/settings/assets/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+			<p>Loading recent activity...</p>
+		</div>
 	}
 }

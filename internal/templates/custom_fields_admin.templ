@@ -42,6 +42,9 @@ templ CustomFieldDefIndex(p CustomFieldDefListPageData) {
 			</tbody>
 		</table>
 		<a href="/settings">&larr; Back to Settings</a>
+		<div hx-get="/settings/custom-fields/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+			<p>Loading recent activity...</p>
+		</div>
 	}
 }
 

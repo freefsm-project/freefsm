@@ -81,6 +81,8 @@ func activityVerb(action string) string {
 		return "converted"
 	case "user_disabled":
 		return "disabled"
+	case "user_enabled":
+		return "enabled"
 	case "password_reset":
 		return "reset password of"
 	case "password_changed":
@@ -122,6 +124,8 @@ func activityActionClass(action string) string {
 		return "activity-payment"
 	case "user_disabled":
 		return "activity-user"
+	case "user_enabled":
+		return "activity-created"
 	case "password_reset", "password_changed":
 		return "activity-security"
 	case "welcome_resent":

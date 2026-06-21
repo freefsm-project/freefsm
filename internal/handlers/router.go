@@ -238,6 +238,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			{"/assets", "asset"},
 			{"/items", "item"},
 			{"/time-entries", "time_entry"},
+			{"/users", "user"},
 		} {
 			r.Get(e.prefix+"/{id}/activity", activityHandler.ListForObject(e.objType))
 		}
@@ -246,17 +247,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/files", fileHandler.Upload)
 		r.Get("/files/{id}", fileHandler.Download)
 		r.Post("/files/{id}/delete", fileHandler.Delete)
-
-		// Dispatcher or Admin routes
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.DispatcherOrAdmin)
-			r.Get("/tags", tagHandler.List)
-			r.Get("/tags/new", tagHandler.Create)
-			r.Post("/tags", tagHandler.Create)
-			r.Get("/tags/{id}/edit", tagHandler.Update)
-			r.Post("/tags/{id}", tagHandler.Update)
-			r.Post("/tags/{id}/delete", tagHandler.Delete)
-		})
 
 		// Admin-only routes
 		r.Group(func(r chi.Router) {
@@ -269,6 +259,18 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/invoices/{id}/restore", invoiceHandler.Restore)
 			r.Post("/assets/{id}/restore", assetHandler.Restore)
 			r.Post("/items/{id}/restore", itemHandler.Restore)
+			// Admin activity feeds
+			r.Get("/settings/activity", activityHandler.ListByType("company_settings"))
+			r.Get("/settings/custom-fields/activity", activityHandler.ListByType("custom_field"))
+			r.Get("/settings/assets/activity", activityHandler.ListForAssetSettings)
+			r.Get("/tags/activity", activityHandler.ListByType("tag"))
+			r.Get("/users/activity", activityHandler.ListByType("user"))
+			r.Get("/tags", tagHandler.List)
+			r.Get("/tags/new", tagHandler.Create)
+			r.Post("/tags", tagHandler.Create)
+			r.Get("/tags/{id}/edit", tagHandler.Update)
+			r.Post("/tags/{id}", tagHandler.Update)
+			r.Post("/tags/{id}/delete", tagHandler.Delete)
 			r.Get("/settings", settingsHandler.Show)
 			r.Post("/settings", settingsHandler.Save)
 			r.Post("/settings/test-email", settingsHandler.TestEmail)

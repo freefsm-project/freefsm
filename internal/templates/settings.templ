@@ -161,7 +161,9 @@ templ SettingsPage(p SettingsPageData) {
 				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
 		</form>
-		
+		<div hx-get="/settings/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+			<p>Loading recent activity...</p>
+		</div>
 		<script>
 			function switchSettingsTab(name) {
 				document.querySelectorAll('.settings-tab-content').forEach(function(el) {
