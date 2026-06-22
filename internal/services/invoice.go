@@ -258,7 +258,7 @@ func (s *InvoiceService) CreateFromEstimate(ctx context.Context, estimateID int6
 	return i, nil
 }
 
-func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService) (*ent.Invoice, error) {
+func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService, defaultTaxRate string) (*ent.Invoice, error) {
 	j, err := s.client.Job.Get(ctx, jobID)
 	if err != nil {
 		return nil, fmt.Errorf("get job %d: %w", jobID, err)
@@ -281,7 +281,7 @@ func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusS
 		Notes:       j.Notes,
 		InvoiceDate: now,
 		DueDate:     now.AddDate(0, 0, 30),
-		TaxRate:      "0",
+		TaxRate:      defaultTaxRate,
 		CustomFields: "[]",
 		LineItems:    items,
 	})

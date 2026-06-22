@@ -18,7 +18,7 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, s
 	items, _ := ParseLineItems(e.LineItems)
 	writeHeader(pdf, "ESTIMATE", fmt.Sprintf("%05d", e.ID), cs)
 	writeCustomer(pdf, customer)
-	writeLineItems(pdf, items, parseTaxRate(e.TaxRate))
+	writeLineItems(pdf, items, parseTaxRate(e.TaxRate), cs)
 	writeNotes(pdf, e.Notes)
 	writeStatus(pdf, statusNameForPDF(statuses, e.StatusID))
 
@@ -43,14 +43,14 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, sta
 	writeHeader(pdf, "INVOICE", fmt.Sprintf("%05d", i.ID), cs)
 	writeCustomer(pdf, customer)
 	writeInvoiceDates(pdf, i)
-	writeLineItems(pdf, items, parseTaxRate(i.TaxRate))
+	writeLineItems(pdf, items, parseTaxRate(i.TaxRate), cs)
 	if cs.InvoicePaymentTerms != "" {
 		pdf.SetFont("Helvetica", "", 9)
 		pdf.SetTextColor(0, 0, 0)
 		pdf.Cell(0, 6, "Payment Terms: "+cs.InvoicePaymentTerms)
 		pdf.Ln(8)
 	}
-	writePayments(pdf, payments)
+	writePayments(pdf, payments, cs)
 	writeNotes(pdf, i.Notes)
 	writeStatus(pdf, statusNameForPDF(statuses, i.StatusID))
 
@@ -67,19 +67,16 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, sta
 
 func writeHeader(pdf *gofpdf.Fpdf, docType, number string, cs *ent.CompanySettings) {
 	pdf.SetFont("Helvetica", "B", 20)
-	if cs != nil {
-		r, g, b := hexToRGB(cs.InvoiceColor)
-		pdf.SetTextColor(r, g, b)
-	}
+	pdf.SetTextColor(0, 0, 0)
 	if cs != nil && cs.BusinessName != "" {
 		pdf.Cell(0, 10, cs.BusinessName)
 	} else {
 		pdf.Cell(0, 10, "FreeFSM")
 	}
 	if cs != nil && cs.InvoiceLogoPath != "" {
-		pdf.ImageOptions(cs.InvoiceLogoPath, 170, 10, 0, 20, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
+		pdf.ImageOptions(cs.InvoiceLogoPath, 160, 10, 30, 0, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
 	}
-	pdf.Ln(6)
+	pdf.Ln(8)
 	pdf.SetFont("Helvetica", "", 9)
 	if cs != nil {
 		addr := strings.TrimSpace(cs.Address)
@@ -100,7 +97,13 @@ func writeHeader(pdf *gofpdf.Fpdf, docType, number string, cs *ent.CompanySettin
 			pdf.Ln(5)
 		}
 	}
-	pdf.Ln(4)
+	pdf.Ln(2)
+	if cs != nil {
+		r, g, b := hexToRGB(cs.InvoiceColor)
+		pdf.SetDrawColor(r, g, b)
+		pdf.CellFormat(190, 1, "", "B", 1, "L", false, 0, "")
+		pdf.Ln(4)
+	}
 	pdf.SetFont("Helvetica", "B", 14)
 	pdf.Cell(0, 8, docType+" #"+number)
 	pdf.Ln(12)
@@ -141,7 +144,7 @@ func writeInvoiceDates(pdf *gofpdf.Fpdf, i *ent.Invoice) {
 	}
 }
 
-func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate float64) {
+func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate float64, cs *ent.CompanySettings) {
 	if len(items) == 0 {
 		return
 	}
@@ -149,10 +152,18 @@ func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate float64) {
 	headers := []string{"Item", "Qty", "Price", "Total"}
 	widths := []float64{80, 20, 40, 40}
 	pdf.SetFont("Helvetica", "B", 9)
-	pdf.SetFillColor(230, 230, 230)
+	if cs != nil && cs.InvoiceColor != "" {
+		r, g, b := hexToRGB(cs.InvoiceColor)
+		pdf.SetFillColor(r, g, b)
+		pdf.SetTextColor(255, 255, 255)
+	} else {
+		pdf.SetFillColor(230, 230, 230)
+		pdf.SetTextColor(0, 0, 0)
+	}
 	for i, h := range headers {
 		pdf.CellFormat(widths[i], 7, h, "1", 0, "C", true, 0, "")
 	}
+	pdf.SetTextColor(0, 0, 0)
 	pdf.Ln(7)
 
 	var subtotal float64
@@ -192,7 +203,7 @@ func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate float64) {
 	pdf.Ln(6)
 }
 
-func writePayments(pdf *gofpdf.Fpdf, payments []Payment) {
+func writePayments(pdf *gofpdf.Fpdf, payments []Payment, cs *ent.CompanySettings) {
 	if len(payments) == 0 {
 		return
 	}
@@ -202,9 +213,17 @@ func writePayments(pdf *gofpdf.Fpdf, payments []Payment) {
 	pdf.SetFont("Helvetica", "", 9)
 	headers := []string{"Date", "Method", "Reference", "Amount"}
 	widths := []float64{35, 40, 60, 45}
+	if cs != nil {
+		r, g, b := hexToRGB(cs.InvoiceColor)
+		pdf.SetFillColor(r, g, b)
+		pdf.SetTextColor(255, 255, 255)
+	} else {
+		pdf.SetFillColor(230, 230, 230)
+	}
 	for i, h := range headers {
 		pdf.CellFormat(widths[i], 6, h, "1", 0, "C", true, 0, "")
 	}
+	pdf.SetTextColor(0, 0, 0)
 	pdf.Ln(6)
 	var total float64
 	for _, p := range payments {

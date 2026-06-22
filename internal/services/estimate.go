@@ -171,7 +171,7 @@ func EstimatePaginationTotalPages(total, perPage int) int {
 	return int(math.Ceil(float64(total) / float64(perPage)))
 }
 
-func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService) (*ent.Estimate, error) {
+func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService, defaultTaxRate string) (*ent.Estimate, error) {
 	j, err := s.client.Job.Get(ctx, jobID)
 	if err != nil {
 		return nil, fmt.Errorf("get job %d: %w", jobID, err)
@@ -191,7 +191,7 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 		StatusID:     statusID,
 		Title:        j.JobType,
 		Notes:        j.Notes,
-		TaxRate:      "0",
+		TaxRate:      defaultTaxRate,
 		CustomFields: "[]",
 		LineItems:    items,
 	})

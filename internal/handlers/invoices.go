@@ -432,7 +432,12 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	inv, err := h.svc.CreateFromJob(r.Context(), id, h.statusSvc)
+	cs := middleware.CompanyFromContext(r.Context())
+	defaultTaxRate := "0"
+	if cs != nil {
+		defaultTaxRate = cs.DefaultTaxRate
+	}
+	inv, err := h.svc.CreateFromJob(r.Context(), id, h.statusSvc, defaultTaxRate)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return

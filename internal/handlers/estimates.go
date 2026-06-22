@@ -288,7 +288,12 @@ func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	est, err := h.svc.CreateFromJob(r.Context(), id, h.statusSvc)
+	cs := middleware.CompanyFromContext(r.Context())
+	defaultTaxRate := "0"
+	if cs != nil {
+		defaultTaxRate = cs.DefaultTaxRate
+	}
+	est, err := h.svc.CreateFromJob(r.Context(), id, h.statusSvc, defaultTaxRate)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
