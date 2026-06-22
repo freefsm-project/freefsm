@@ -162,7 +162,7 @@ templ SettingsPage(p SettingsPageData) {
 				<div class="grid">
 					<label>
 						Minimum Length
-						<input type="number" name="password_min_length" value={ fmt.Sprintf("%d", p.Settings.PasswordMinLength) } min="1" max="128"/>
+						<input type="number" name="password_min_length" value={ fmt.Sprintf("%d", p.Settings.PasswordMinLength) } min="6" max="128" required/>
 					</label>
 				</div>
 				<label>

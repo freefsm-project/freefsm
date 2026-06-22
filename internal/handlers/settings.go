@@ -41,6 +41,10 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 	dueDays, _ := strconv.Atoi(r.FormValue("default_due_days"))
 	smtpPort, _ := strconv.Atoi(r.FormValue("smtp_port"))
 	pwMinLen, _ := strconv.Atoi(r.FormValue("password_min_length"))
+	if pwMinLen < 6 {
+		http.Redirect(w, r, "/settings?flash=Password+minimum+length+must+be+at+least+6", http.StatusSeeOther)
+		return
+	}
 
 	oldSettings, _ := h.svc.Get(r.Context())
 
