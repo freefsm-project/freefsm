@@ -121,10 +121,10 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/customers/{id}/contacts", customerHandler.ListContacts)
 		r.Get("/customers/{id}/contacts/options", customerHandler.Contacts)
 		r.Route("/items", func(r chi.Router) {
-			r.Get("/", itemHandler.List)
+			r.With(middleware.DispatcherOrAdmin).Get("/", itemHandler.List)
 			r.With(middleware.DispatcherOrAdmin).Get("/activity", activityHandler.ListByType("item"))
 			r.Post("/", itemHandler.Create)
-			r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
+			r.With(middleware.DispatcherOrAdmin).Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
 				if chi.URLParam(r, "id") == "new" {
 					itemHandler.Create(w, r)
 					return

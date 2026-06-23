@@ -32,10 +32,6 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role,
 			return false
 		}
 	}
-	if objectType == "item" && action == "read" {
-		return true
-	}
-
 	switch objectType {
 	case "job":
 		return s.IsUserAssignedToJob(ctx, objectID, userID)
