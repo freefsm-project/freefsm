@@ -44,6 +44,10 @@ type ContactUpdateParams struct {
 }
 
 func (s *CustomerContactService) Create(ctx context.Context, customerID int64, params ContactCreateParams) (*ent.CustomerContact, error) {
+	if err := validateActiveCustomer(ctx, s.client, customerID); err != nil {
+		return nil, err
+	}
+
 	c, err := s.client.CustomerContact.Create().
 		SetCustomerID(customerID).
 		SetFirstName(params.FirstName).

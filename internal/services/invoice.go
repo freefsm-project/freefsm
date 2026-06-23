@@ -83,10 +83,10 @@ func (s *InvoiceService) GetByID(ctx context.Context, id int64) (*ent.Invoice, e
 }
 
 func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams) (*ent.Invoice, error) {
-	if err := validateJobCustomer(ctx, s.client, params.CustomerID, params.JobID); err != nil {
+	if err := validateJobCustomer(ctx, s.client, params.CustomerID, params.JobID, true); err != nil {
 		return nil, err
 	}
-	if err := validateEstimateCustomer(ctx, s.client, params.CustomerID, params.EstimateID); err != nil {
+	if err := validateEstimateCustomer(ctx, s.client, params.CustomerID, params.EstimateID, true); err != nil {
 		return nil, err
 	}
 
@@ -142,10 +142,10 @@ func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpd
 	if params.EstimateID != nil {
 		estimateID = *params.EstimateID
 	}
-	if err := validateJobCustomer(ctx, s.client, customerID, jobID); err != nil {
+	if err := validateJobCustomer(ctx, s.client, customerID, jobID, params.JobID != nil && jobID != int64Value(current.JobID)); err != nil {
 		return nil, err
 	}
-	if err := validateEstimateCustomer(ctx, s.client, customerID, estimateID); err != nil {
+	if err := validateEstimateCustomer(ctx, s.client, customerID, estimateID, params.EstimateID != nil && estimateID != int64Value(current.EstimateID)); err != nil {
 		return nil, err
 	}
 
@@ -261,6 +261,9 @@ func (s *InvoiceService) CreateFromEstimate(ctx context.Context, estimateID int6
 
 	custID := e.CustomerID
 	jobID := e.JobID
+	if err := validateJobCustomer(ctx, s.client, int64Value(custID), int64Value(jobID), false); err != nil {
+		return nil, err
+	}
 
 	tx, err := s.client.Tx(ctx)
 	if err != nil {

@@ -275,7 +275,16 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 	if params.AssetID != nil {
 		assetID = *params.AssetID
 	}
-	if err := validateJobCustomerLinks(ctx, s.client, customerID, projectID, locationID, contactID, assetID); err != nil {
+	if err := validateProjectCustomer(ctx, s.client, customerID, projectID, params.ProjectID != nil && projectID != int64Value(current.ProjectID)); err != nil {
+		return nil, err
+	}
+	if err := validateCustomerLocation(ctx, s.client, customerID, locationID); err != nil {
+		return nil, err
+	}
+	if err := validateContactCustomer(ctx, s.client, customerID, contactID); err != nil {
+		return nil, err
+	}
+	if err := validateAssetCustomer(ctx, s.client, customerID, assetID, params.AssetID != nil && assetID != int64Value(current.AssetID)); err != nil {
 		return nil, err
 	}
 

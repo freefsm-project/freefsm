@@ -77,7 +77,7 @@ func (s *EstimateService) GetByID(ctx context.Context, id int64) (*ent.Estimate,
 }
 
 func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParams) (*ent.Estimate, error) {
-	if err := validateJobCustomer(ctx, s.client, params.CustomerID, params.JobID); err != nil {
+	if err := validateJobCustomer(ctx, s.client, params.CustomerID, params.JobID, true); err != nil {
 		return nil, err
 	}
 
@@ -124,7 +124,7 @@ func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateU
 	if params.JobID != nil {
 		jobID = *params.JobID
 	}
-	if err := validateJobCustomer(ctx, s.client, customerID, jobID); err != nil {
+	if err := validateJobCustomer(ctx, s.client, customerID, jobID, params.JobID != nil && jobID != int64Value(current.JobID)); err != nil {
 		return nil, err
 	}
 

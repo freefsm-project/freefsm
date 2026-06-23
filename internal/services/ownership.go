@@ -6,6 +6,7 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/ent/asset"
+	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
@@ -29,13 +30,29 @@ func validateCustomerLocation(ctx context.Context, client *ent.Client, customerI
 	return nil
 }
 
-func validateProjectCustomer(ctx context.Context, client *ent.Client, customerID, projectID int64) error {
+func validateActiveCustomer(ctx context.Context, client *ent.Client, customerID int64) error {
+	if customerID <= 0 {
+		return fmt.Errorf("customer is required")
+	}
+	exists, err := client.Customer.Query().Where(customer.IDEQ(customerID), customer.DeletedAtIsNil()).Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("validate customer: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("customer does not exist or is archived")
+	}
+	return nil
+}
+
+func validateProjectCustomer(ctx context.Context, client *ent.Client, customerID, projectID int64, requireActive bool) error {
 	if projectID <= 0 {
 		return nil
 	}
-	exists, err := client.Project.Query().
-		Where(project.IDEQ(projectID), project.CustomerIDEQ(customerID), project.DeletedAtIsNil()).
-		Exist(ctx)
+	q := client.Project.Query().Where(project.IDEQ(projectID), project.CustomerIDEQ(customerID))
+	if requireActive {
+		q = q.Where(project.DeletedAtIsNil())
+	}
+	exists, err := q.Exist(ctx)
 	if err != nil {
 		return fmt.Errorf("validate project customer: %w", err)
 	}
@@ -45,13 +62,15 @@ func validateProjectCustomer(ctx context.Context, client *ent.Client, customerID
 	return nil
 }
 
-func validateAssetCustomer(ctx context.Context, client *ent.Client, customerID, assetID int64) error {
+func validateAssetCustomer(ctx context.Context, client *ent.Client, customerID, assetID int64, requireActive bool) error {
 	if assetID <= 0 {
 		return nil
 	}
-	exists, err := client.Asset.Query().
-		Where(asset.IDEQ(assetID), asset.CustomerID(customerID), asset.DeletedAtIsNil()).
-		Exist(ctx)
+	q := client.Asset.Query().Where(asset.IDEQ(assetID), asset.CustomerID(customerID))
+	if requireActive {
+		q = q.Where(asset.DeletedAtIsNil())
+	}
+	exists, err := q.Exist(ctx)
 	if err != nil {
 		return fmt.Errorf("validate asset customer: %w", err)
 	}
@@ -77,13 +96,15 @@ func validateContactCustomer(ctx context.Context, client *ent.Client, customerID
 	return nil
 }
 
-func validateJobCustomer(ctx context.Context, client *ent.Client, customerID, jobID int64) error {
+func validateJobCustomer(ctx context.Context, client *ent.Client, customerID, jobID int64, requireActive bool) error {
 	if jobID <= 0 {
 		return nil
 	}
-	exists, err := client.Job.Query().
-		Where(job.IDEQ(jobID), job.CustomerIDEQ(customerID), job.DeletedAtIsNil()).
-		Exist(ctx)
+	q := client.Job.Query().Where(job.IDEQ(jobID), job.CustomerIDEQ(customerID))
+	if requireActive {
+		q = q.Where(job.DeletedAtIsNil())
+	}
+	exists, err := q.Exist(ctx)
 	if err != nil {
 		return fmt.Errorf("validate job customer: %w", err)
 	}
@@ -93,13 +114,15 @@ func validateJobCustomer(ctx context.Context, client *ent.Client, customerID, jo
 	return nil
 }
 
-func validateEstimateCustomer(ctx context.Context, client *ent.Client, customerID, estimateID int64) error {
+func validateEstimateCustomer(ctx context.Context, client *ent.Client, customerID, estimateID int64, requireActive bool) error {
 	if estimateID <= 0 {
 		return nil
 	}
-	exists, err := client.Estimate.Query().
-		Where(estimate.IDEQ(estimateID), estimate.CustomerIDEQ(customerID), estimate.DeletedAtIsNil()).
-		Exist(ctx)
+	q := client.Estimate.Query().Where(estimate.IDEQ(estimateID), estimate.CustomerIDEQ(customerID))
+	if requireActive {
+		q = q.Where(estimate.DeletedAtIsNil())
+	}
+	exists, err := q.Exist(ctx)
 	if err != nil {
 		return fmt.Errorf("validate estimate customer: %w", err)
 	}
@@ -110,7 +133,7 @@ func validateEstimateCustomer(ctx context.Context, client *ent.Client, customerI
 }
 
 func validateJobCustomerLinks(ctx context.Context, client *ent.Client, customerID, projectID, locationID, contactID, assetID int64) error {
-	if err := validateProjectCustomer(ctx, client, customerID, projectID); err != nil {
+	if err := validateProjectCustomer(ctx, client, customerID, projectID, true); err != nil {
 		return err
 	}
 	if err := validateCustomerLocation(ctx, client, customerID, locationID); err != nil {
@@ -119,7 +142,7 @@ func validateJobCustomerLinks(ctx context.Context, client *ent.Client, customerI
 	if err := validateContactCustomer(ctx, client, customerID, contactID); err != nil {
 		return err
 	}
-	if err := validateAssetCustomer(ctx, client, customerID, assetID); err != nil {
+	if err := validateAssetCustomer(ctx, client, customerID, assetID, true); err != nil {
 		return err
 	}
 	return nil

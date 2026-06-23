@@ -153,6 +153,38 @@ func TestServicesRejectCustomerChangeWithExistingForeignLinkIntegration(t *testi
 	}
 }
 
+func TestServicesAllowUnchangedArchivedLinksIntegration(t *testing.T) {
+	client := openPolicyTestClient(t)
+	defer client.Close()
+
+	ctx := context.Background()
+	data := createOwnershipFixture(ctx, t, client)
+	client.Project.UpdateOneID(data.projectA.ID).SetDeletedAt(time.Now()).SaveX(ctx)
+
+	notes := "unchanged archived project link should not block notes edit"
+	if _, err := NewJobService(client).Update(ctx, data.jobA.ID, JobUpdateParams{Notes: &notes}); err != nil {
+		t.Fatalf("update with unchanged archived link: %v", err)
+	}
+}
+
+func TestInvoiceCreateFromEstimateRejectsForeignJobIntegration(t *testing.T) {
+	client := openPolicyTestClient(t)
+	defer client.Close()
+
+	ctx := context.Background()
+	data := createOwnershipFixture(ctx, t, client)
+	badEstimate := client.Estimate.Create().
+		SetCustomerID(data.customerB.ID).
+		SetJobID(data.jobA.ID).
+		SetTitle("Bad Estimate").
+		SaveX(ctx)
+
+	_, err := NewInvoiceService(client).CreateFromEstimate(ctx, badEstimate.ID, NewStatusService(client))
+	if err == nil || !strings.Contains(err.Error(), "job does not belong to customer") {
+		t.Fatalf("CreateFromEstimate error = %v, want job ownership error", err)
+	}
+}
+
 func TestServicesClearOptionalLinkedIDsIntegration(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
@@ -212,6 +244,18 @@ func TestCustomerContactGetByCustomerRejectsForeignContactIntegration(t *testing
 
 	if _, err := NewCustomerContactService(client).GetByCustomer(ctx, data.customerA.ID, contactB.ID); err == nil {
 		t.Fatal("GetByCustomer returned foreign contact")
+	}
+}
+
+func TestCustomerContactCreateRejectsArchivedCustomerIntegration(t *testing.T) {
+	client := openPolicyTestClient(t)
+	defer client.Close()
+
+	ctx := context.Background()
+	customer := client.Customer.Create().SetDisplayName("Archived Customer").SetDeletedAt(time.Now()).SaveX(ctx)
+	_, err := NewCustomerContactService(client).Create(ctx, customer.ID, ContactCreateParams{FirstName: "Archived"})
+	if err == nil || !strings.Contains(err.Error(), "customer does not exist or is archived") {
+		t.Fatalf("Create contact error = %v, want archived customer error", err)
 	}
 }
 
