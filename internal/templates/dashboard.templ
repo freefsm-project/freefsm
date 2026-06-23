@@ -4,28 +4,27 @@ import "fmt"
 
 templ DashboardPage(p DashboardData) {
 	@Layout("Dashboard") {
-
 		<div class="grid" style="margin-bottom:2rem">
 			@ClockWidget(p.ClockWidget)
-			<article>
-				<header>Customers</header>
-				<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalCustomers) }</p>
-				<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">{ fmt.Sprintf("%d new this month", p.Stats.NewCustomersThisMonth) }</p>
-				<footer><a href="/customers" role="button" class="outline">View Customers</a></footer>
-			</article>
-			<article>
-				<header>Jobs</header>
-				<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalJobs) }</p>
-				<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">
-					if p.Stats.JobsOverdue > 0 {
-						<span style="color:var(--pico-del-color)">{ fmt.Sprintf("%d overdue", p.Stats.JobsOverdue) }</span>
-					} else {
-						<span>No overdue jobs</span>
-					}
-				</p>
-				<footer><a href="/jobs" role="button" class="outline">View Jobs</a></footer>
-			</article>
 			if canManageOperational(ctx) {
+				<article>
+					<header>Customers</header>
+					<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalCustomers) }</p>
+					<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">{ fmt.Sprintf("%d new this month", p.Stats.NewCustomersThisMonth) }</p>
+					<footer><a href="/customers" role="button" class="outline">View Customers</a></footer>
+				</article>
+				<article>
+					<header>Jobs</header>
+					<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalJobs) }</p>
+					<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">
+						if p.Stats.JobsOverdue > 0 {
+							<span style="color:var(--pico-del-color)">{ fmt.Sprintf("%d overdue", p.Stats.JobsOverdue) }</span>
+						} else {
+							<span>No overdue jobs</span>
+						}
+					</p>
+					<footer><a href="/jobs" role="button" class="outline">View Jobs</a></footer>
+				</article>
 				<article>
 					<header>Invoices</header>
 					<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalInvoices) }</p>
@@ -37,37 +36,47 @@ templ DashboardPage(p DashboardData) {
 					</p>
 					<footer><a href="/invoices" role="button" class="outline">View Invoices</a></footer>
 				</article>
+				<article>
+					<header>Projects</header>
+					<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalProjects) }</p>
+					<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">{ fmt.Sprintf("%d active, %d completed", p.Stats.ProjectsActive, p.Stats.ProjectsCompleted) }</p>
+					<footer><a href="/projects" role="button" class="outline">View Projects</a></footer>
+				</article>
 			}
-			<article>
-				<header>Projects</header>
-				<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalProjects) }</p>
-				<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">{ fmt.Sprintf("%d active, %d completed", p.Stats.ProjectsActive, p.Stats.ProjectsCompleted) }</p>
-				<footer><a href="/projects" role="button" class="outline">View Projects</a></footer>
-			</article>
 		</div>
-		<h3>Recent Activity</h3>
-		<div class="grid">
+		if !canManageOperational(ctx) {
 			<article>
-				<header>Recent Jobs</header>
-				<table>
-					<thead>
-						<tr><th>Job</th><th>Customer</th><th>Date</th></tr>
-					</thead>
-					<tbody>
-						if len(p.Stats.RecentJobs) == 0 {
-							<tr><td colspan="3" style="text-align:center">No recent jobs</td></tr>
-						}
-						for _, j := range p.Stats.RecentJobs {
-							<tr>
-								<td><a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) }>{ j.DisplayName }</a></td>
-								<td>{ j.Customer }</td>
-								<td><small>{ j.CreatedAt }</small></td>
-							</tr>
-						}
-					</tbody>
-				</table>
+				<header>Assigned Work</header>
+				<p>Use Jobs or Schedule to view work assigned to you.</p>
+				<footer style="display:flex;gap:0.5rem;flex-wrap:wrap">
+					<a href="/jobs" role="button" class="outline">View Jobs</a>
+					<a href="/schedule" role="button" class="outline">View Schedule</a>
+				</footer>
 			</article>
-			if canManageOperational(ctx) {
+		}
+		if canManageOperational(ctx) {
+			<h3>Recent Activity</h3>
+			<div class="grid">
+				<article>
+					<header>Recent Jobs</header>
+					<table>
+						<thead>
+							<tr><th>Job</th><th>Customer</th><th>Date</th></tr>
+						</thead>
+						<tbody>
+							if len(p.Stats.RecentJobs) == 0 {
+								<tr><td colspan="3" style="text-align:center">No recent jobs</td></tr>
+							}
+							for _, j := range p.Stats.RecentJobs {
+								<tr>
+									<td><a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) }>{ j.DisplayName }</a></td>
+									<td>{ j.Customer }</td>
+									<td><small>{ j.CreatedAt }</small></td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</article>
 				<article>
 					<header>Recent Invoices</header>
 					<table>
@@ -108,9 +117,7 @@ templ DashboardPage(p DashboardData) {
 						</tbody>
 					</table>
 				</article>
-			}
-		</div>
-		if canManageOperational(ctx) {
+			</div>
 			<h3>Financial Summary</h3>
 			<div class="grid" style="margin-bottom:2rem">
 				<article>
