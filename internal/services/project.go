@@ -42,10 +42,7 @@ func (s *ProjectService) List(ctx context.Context, search string, statusID int64
 		return nil, 0, fmt.Errorf("count projects: %w", err)
 	}
 
-	offset := (page - 1) * perPage
-	if offset < 0 {
-		offset = 0
-	}
+	offset := PaginationOffset(page, perPage)
 
 	projects, err := q.
 		Order(ent.Desc(project.FieldUpdatedAt)).
@@ -201,12 +198,5 @@ func (s *ProjectService) Restore(ctx context.Context, id int64) error {
 }
 
 func ProjectPaginationTotalPages(total, perPage int) int {
-	if perPage <= 0 {
-		return 1
-	}
-	pages := (total + perPage - 1) / perPage
-	if pages < 1 {
-		pages = 1
-	}
-	return pages
+	return TotalPages(total, perPage)
 }

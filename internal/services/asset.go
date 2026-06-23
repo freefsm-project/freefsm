@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
@@ -78,7 +77,7 @@ func (s *AssetService) List(ctx context.Context, search string, customerID, asse
 		return nil, 0, fmt.Errorf("count assets: %w", err)
 	}
 
-	offset := (page - 1) * perPage
+	offset := PaginationOffset(page, perPage)
 	assets, err := q.
 		Order(ent.Desc(asset.FieldUpdatedAt)).
 		Limit(perPage).
@@ -231,5 +230,5 @@ func (s *AssetService) GetServiceHistory(ctx context.Context, assetID int64) ([]
 }
 
 func AssetPaginationTotalPages(total, perPage int) int {
-	return int(math.Ceil(float64(total) / float64(perPage)))
+	return TotalPages(total, perPage)
 }

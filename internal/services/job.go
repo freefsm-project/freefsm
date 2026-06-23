@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
@@ -105,7 +104,7 @@ func (s *JobService) List(ctx context.Context, search string, statusID int64, pa
 		return nil, 0, fmt.Errorf("count jobs: %w", err)
 	}
 
-	offset := (page - 1) * perPage
+	offset := PaginationOffset(page, perPage)
 	jobs, err := q.
 		Order(ent.Desc(job.FieldStartTime)).
 		Order(ent.Desc(job.FieldCreatedAt)).
@@ -280,7 +279,7 @@ func (s *JobService) Restore(ctx context.Context, id int64) error {
 }
 
 func JobPaginationTotalPages(total, perPage int) int {
-	return int(math.Ceil(float64(total) / float64(perPage)))
+	return TotalPages(total, perPage)
 }
 
 func (s *JobService) LineItems(j *ent.Job) []LineItem {

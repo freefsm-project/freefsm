@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
@@ -19,24 +18,24 @@ func NewEstimateService(client *ent.Client) *EstimateService {
 }
 
 type EstimateCreateParams struct {
-	CustomerID int64
-	JobID      int64
-	StatusID   int64
-	Title      string
-	Notes      string
-	TaxRate    string
-	LineItems  []LineItem
+	CustomerID   int64
+	JobID        int64
+	StatusID     int64
+	Title        string
+	Notes        string
+	TaxRate      string
+	LineItems    []LineItem
 	CustomFields string
 }
 
 type EstimateUpdateParams struct {
-	CustomerID *int64
-	JobID      *int64
-	StatusID   *int64
-	Title      *string
-	Notes      *string
-	TaxRate    *string
-	LineItems  *[]LineItem
+	CustomerID   *int64
+	JobID        *int64
+	StatusID     *int64
+	Title        *string
+	Notes        *string
+	TaxRate      *string
+	LineItems    *[]LineItem
 	CustomFields *string
 }
 
@@ -56,7 +55,7 @@ func (s *EstimateService) List(ctx context.Context, search string, statusID int6
 		return nil, 0, fmt.Errorf("count estimates: %w", err)
 	}
 
-	offset := (page - 1) * perPage
+	offset := PaginationOffset(page, perPage)
 	estimates, err := q.
 		Order(ent.Desc(estimate.FieldCreatedAt)).
 		Limit(perPage).
@@ -168,7 +167,7 @@ func (s *EstimateService) Restore(ctx context.Context, id int64) error {
 }
 
 func EstimatePaginationTotalPages(total, perPage int) int {
-	return int(math.Ceil(float64(total) / float64(perPage)))
+	return TotalPages(total, perPage)
 }
 
 func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService, defaultTaxRate string) (*ent.Estimate, error) {

@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
@@ -66,7 +65,7 @@ func (s *ItemService) List(ctx context.Context, search string, page, perPage int
 		return nil, 0, fmt.Errorf("count items: %w", err)
 	}
 
-	offset := (page - 1) * perPage
+	offset := PaginationOffset(page, perPage)
 	items, err := q.
 		Order(ent.Asc(item.FieldName)).
 		Limit(perPage).
@@ -173,7 +172,7 @@ func (s *ItemService) Restore(ctx context.Context, id int64) error {
 }
 
 func ItemPaginationTotalPages(total, perPage int) int {
-	return int(math.Ceil(float64(total) / float64(perPage)))
+	return TotalPages(total, perPage)
 }
 
 var ItemTypes = []string{"service", "product"}

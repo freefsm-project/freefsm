@@ -52,7 +52,7 @@ func (s *TimeEntryService) List(ctx context.Context, userID int64, search string
 		return nil, 0, fmt.Errorf("count time entries: %w", err)
 	}
 
-	offset := (page - 1) * perPage
+	offset := PaginationOffset(page, perPage)
 	entries, err := q.
 		Limit(perPage).
 		Offset(offset).
@@ -188,5 +188,5 @@ func TimeEntryDuration(clockIn, clockOut time.Time) string {
 }
 
 func TimeEntryPaginationTotalPages(total, perPage int) int {
-	return int(math.Ceil(float64(total) / float64(perPage)))
+	return TotalPages(total, perPage)
 }

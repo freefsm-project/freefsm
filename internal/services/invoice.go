@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
@@ -19,30 +18,30 @@ func NewInvoiceService(client *ent.Client) *InvoiceService {
 }
 
 type InvoiceCreateParams struct {
-	CustomerID  int64
-	JobID       int64
-	EstimateID  int64
-	StatusID    int64
-	Title       string
-	Notes       string
-	InvoiceDate time.Time
-	DueDate     time.Time
-	TaxRate     string
-	LineItems   []LineItem
+	CustomerID   int64
+	JobID        int64
+	EstimateID   int64
+	StatusID     int64
+	Title        string
+	Notes        string
+	InvoiceDate  time.Time
+	DueDate      time.Time
+	TaxRate      string
+	LineItems    []LineItem
 	CustomFields string
 }
 
 type InvoiceUpdateParams struct {
-	CustomerID  *int64
-	JobID       *int64
-	EstimateID  *int64
-	StatusID    *int64
-	Title       *string
-	Notes       *string
-	InvoiceDate *time.Time
-	DueDate     *time.Time
-	TaxRate     *string
-	LineItems   *[]LineItem
+	CustomerID   *int64
+	JobID        *int64
+	EstimateID   *int64
+	StatusID     *int64
+	Title        *string
+	Notes        *string
+	InvoiceDate  *time.Time
+	DueDate      *time.Time
+	TaxRate      *string
+	LineItems    *[]LineItem
 	CustomFields *string
 }
 
@@ -62,7 +61,7 @@ func (s *InvoiceService) List(ctx context.Context, search string, statusID int64
 		return nil, 0, fmt.Errorf("count invoices: %w", err)
 	}
 
-	offset := (page - 1) * perPage
+	offset := PaginationOffset(page, perPage)
 	invoices, err := q.
 		Order(ent.Desc(invoice.FieldCreatedAt)).
 		Limit(perPage).
@@ -188,7 +187,7 @@ func (s *InvoiceService) Restore(ctx context.Context, id int64) error {
 }
 
 func InvoicePaginationTotalPages(total, perPage int) int {
-	return int(math.Ceil(float64(total) / float64(perPage)))
+	return TotalPages(total, perPage)
 }
 
 func (s *InvoiceService) LineItems(i *ent.Invoice) []LineItem {
@@ -274,13 +273,13 @@ func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusS
 	now := time.Now()
 
 	return s.Create(ctx, InvoiceCreateParams{
-		CustomerID:  j.CustomerID,
-		JobID:       j.ID,
-		StatusID:    statusID,
-		Title:       j.JobType,
-		Notes:       j.Notes,
-		InvoiceDate: now,
-		DueDate:     now.AddDate(0, 0, 30),
+		CustomerID:   j.CustomerID,
+		JobID:        j.ID,
+		StatusID:     statusID,
+		Title:        j.JobType,
+		Notes:        j.Notes,
+		InvoiceDate:  now,
+		DueDate:      now.AddDate(0, 0, 30),
 		TaxRate:      defaultTaxRate,
 		CustomFields: "[]",
 		LineItems:    items,
