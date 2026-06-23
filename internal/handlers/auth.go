@@ -14,13 +14,14 @@ type AuthHandler struct {
 	db          *pgxpool.Pool
 	sessions    *services.SessionService
 	userSvc     *services.UserService
+	csSvc       *services.CompanySettingsService
 	emailSvc    *services.EmailService
 	resetSvc    *services.PasswordResetService
 	activitySvc *services.ActivityService
 }
 
-func NewAuthHandler(db *pgxpool.Pool, sessions *services.SessionService, userSvc *services.UserService, emailSvc *services.EmailService, resetSvc *services.PasswordResetService, activitySvc *services.ActivityService) *AuthHandler {
-	return &AuthHandler{db: db, sessions: sessions, userSvc: userSvc, emailSvc: emailSvc, resetSvc: resetSvc, activitySvc: activitySvc}
+func NewAuthHandler(db *pgxpool.Pool, sessions *services.SessionService, userSvc *services.UserService, csSvc *services.CompanySettingsService, emailSvc *services.EmailService, resetSvc *services.PasswordResetService, activitySvc *services.ActivityService) *AuthHandler {
+	return &AuthHandler{db: db, sessions: sessions, userSvc: userSvc, csSvc: csSvc, emailSvc: emailSvc, resetSvc: resetSvc, activitySvc: activitySvc}
 }
 
 func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +146,13 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	uid, err := h.resetSvc.Validate(r.Context(), token)
 	if err != nil {
 		http.Error(w, "invalid token", 400)
+		return
+	}
+	cs, _ := h.csSvc.Get(r.Context())
+	if err := h.userSvc.ValidatePassword(password, cs); err != nil {
+		templates.ResetPasswordPage(templates.ResetPasswordData{
+			Token: token, Valid: true, Error: err.Error(),
+		}).Render(r.Context(), w)
 		return
 	}
 	if err := h.userSvc.SetPassword(r.Context(), uid, password); err != nil {

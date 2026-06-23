@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
@@ -154,7 +155,16 @@ func (h *UserHandler) Disable(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	r.ParseForm()
-	h.svc.SetPassword(r.Context(), id, r.FormValue("password"))
+	password := r.FormValue("password")
+	cs, _ := h.csSvc.Get(r.Context())
+	if err := h.svc.ValidatePassword(password, cs); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=%s", id, url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+	if err := h.svc.SetPassword(r.Context(), id, password); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
 
 	user, err := h.svc.GetByID(r.Context(), id)
 	if err == nil {

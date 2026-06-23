@@ -71,7 +71,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc, cfg.UploadDir)
 	userHandler := NewUserHandler(userService, emailSvc, companySettingsSvc, activitySvc)
 	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, activitySvc)
-	authHandler := NewAuthHandler(db, sessions, userService, emailSvc, services.NewPasswordResetService(entClient), activitySvc)
+	authHandler := NewAuthHandler(db, sessions, userService, companySettingsSvc, emailSvc, services.NewPasswordResetService(entClient), activitySvc)
 	passwordHandler := NewPasswordHandler(userService, companySettingsSvc, activitySvc)
 
 	// Asset handlers
