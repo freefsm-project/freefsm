@@ -79,6 +79,7 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "session", Value: token, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		Secure: r.TLS != nil,
 		MaxAge: 604800,
 	})
 
@@ -104,7 +105,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("email")
 	u, err := h.userSvc.GetByEmail(r.Context(), email)
 	if err != nil {
-		templates.ForgotPasswordPage(templates.ForgotPasswordData{Error: "Email not found"}).Render(r.Context(), w)
+		templates.ForgotPasswordPage(templates.ForgotPasswordData{Success: true}).Render(r.Context(), w)
 		return
 	}
 	tok, err := h.resetSvc.CreateToken(r.Context(), u.ID)
@@ -113,7 +114,9 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scheme := "http"
-	if r.TLS != nil { scheme = "https" }
+	if r.TLS != nil {
+		scheme = "https"
+	}
 	link := fmt.Sprintf("%s://%s/reset-password?token=%s", scheme, r.Host, tok)
 	var emailErr string
 	if err := h.emailSvc.SendPasswordReset(r.Context(), email, u.Name, link); err != nil {
@@ -122,7 +125,6 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	templates.ForgotPasswordPage(templates.ForgotPasswordData{
 		Success:  true,
 		EMailErr: emailErr,
-		ResetURL: link,
 	}).Render(r.Context(), w)
 }
 

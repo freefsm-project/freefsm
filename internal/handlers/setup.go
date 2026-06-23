@@ -88,6 +88,7 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "session", Value: token, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		Secure: r.TLS != nil,
 		MaxAge: 604800,
 	})
 

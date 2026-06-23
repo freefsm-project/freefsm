@@ -106,6 +106,15 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	currentUser, ok := middleware.UserFromContext(r.Context())
+	if !ok || currentUser == nil {
+		http.Error(w, "unauthorized", 401)
+		return
+	}
+	if currentUser.Role != "admin" && entry.UserID != currentUser.ID {
+		http.Error(w, "forbidden", 403)
+		return
+	}
 
 	userName := "Unknown"
 	if u, err := h.userSvc.GetByID(r.Context(), entry.UserID); err == nil {

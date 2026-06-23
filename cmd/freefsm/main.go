@@ -12,18 +12,18 @@ import (
 	"path/filepath"
 	"syscall"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/MartialM1nd/freefsm/internal/config"
 	"github.com/MartialM1nd/freefsm/internal/database"
-	"github.com/joho/godotenv"
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/handlers"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
+	"github.com/joho/godotenv"
 	"github.com/justinas/nosurf"
-	"entgo.io/ent/dialect"
-	entsql "entgo.io/ent/dialect/sql"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -143,14 +143,6 @@ func main() {
 	r.Mount("/", handlers.New(db.Pool, entClient, sessions, cfg))
 
 	csrfHandler := nosurf.New(r)
-	csrfHandler.ExemptFunc(func(r *http.Request) bool {
-		return r.URL.Path == "/settings/test-email" ||
-			r.URL.Path == "/login" ||
-			r.URL.Path == "/forgot-password" ||
-			r.URL.Path == "/reset-password" ||
-			r.URL.Path == "/setup" ||
-			r.URL.Path == "/setup/company"
-	})
 	csrfHandler.SetIsTLSFunc(func(r *http.Request) bool {
 		return r.TLS != nil
 	})

@@ -90,8 +90,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	setupHandler := NewSetupHandler(db, sessions, cfg)
 	r.Get("/setup", setupHandler.ServeHTTP)
 	r.Post("/setup", setupHandler.ServeHTTP)
-	r.Get("/setup/company", settingsHandler.Show)
-	r.Post("/setup/company", settingsHandler.Save)
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -274,6 +272,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/tags/{id}/delete", tagHandler.Delete)
 			r.Get("/settings", settingsHandler.Show)
 			r.Post("/settings", settingsHandler.Save)
+			r.Get("/setup/company", settingsHandler.Show)
+			r.Post("/setup/company", settingsHandler.Save)
 			r.Post("/settings/invoice-logo", settingsHandler.UploadInvoiceLogo)
 			r.Post("/settings/test-email", settingsHandler.TestEmail)
 			r.Get("/settings/custom-fields", cfHandler.List)

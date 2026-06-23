@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
@@ -26,6 +28,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, h.svc.MaxSize()+1024*1024)
 	if err := r.ParseMultipartForm(h.svc.MaxSize()); err != nil {
 		http.Error(w, "File too large", 413)
 		return
@@ -39,8 +42,21 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	fh := fileHeader[0]
-	objectType := r.MultipartForm.Value["object_type"][0]
-	objectID, _ := strconv.ParseInt(r.MultipartForm.Value["object_id"][0], 10, 64)
+	objectType, ok := multipartValue(r, "object_type")
+	if !ok || !h.svc.ValidObjectType(objectType) {
+		http.Error(w, "Invalid object type", 400)
+		return
+	}
+	objectIDStr, ok := multipartValue(r, "object_id")
+	if !ok {
+		http.Error(w, "Invalid object ID", 400)
+		return
+	}
+	objectID, err := strconv.ParseInt(objectIDStr, 10, 64)
+	if err != nil || objectID <= 0 {
+		http.Error(w, "Invalid object ID", 400)
+		return
+	}
 
 	f, err := fh.Open()
 	if err != nil {
@@ -49,19 +65,24 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 	defer f.Close()
 
-	mimeType := fh.Header.Get("Content-Type")
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
+	mimeType, err := detectUploadedFileMime(f)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
 	}
 
 	_, err = h.svc.Create(r.Context(), objectType, objectID, fh.Filename, mimeType, fh.Size, f, u.ID)
 	if err != nil {
-		if err.Error() == fmt.Sprintf("invalid MIME type: %s", mimeType) {
+		if strings.HasPrefix(err.Error(), "invalid MIME type:") {
 			http.Error(w, "Invalid file type", 400)
 			return
 		}
-		if err.Error() == fmt.Sprintf("file size %d exceeds maximum %d", fh.Size, h.svc.MaxSize()) {
+		if strings.HasPrefix(err.Error(), "file size ") {
 			http.Error(w, "File too large", 413)
+			return
+		}
+		if strings.HasPrefix(err.Error(), "target ") || strings.HasPrefix(err.Error(), "invalid object type:") {
+			http.Error(w, "Invalid attachment target", 400)
 			return
 		}
 		http.Error(w, err.Error(), 500)
@@ -75,10 +96,8 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		"file_name":   fh.Filename,
 	})
 
-	redirect := r.MultipartForm.Value["redirect"][0]
-	if redirect == "" {
-		redirect = "/"
-	}
+	redirect, _ := multipartValue(r, "redirect")
+	redirect = safeLocalRedirect(redirect)
 	w.Header().Set("HX-Redirect", redirect)
 	w.WriteHeader(200)
 }
@@ -96,9 +115,8 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	data, err := services.ReadFile(f.FilePath)
-	if err != nil {
-		http.Error(w, "Cannot read file", 500)
+	if !h.svc.ValidObjectType(f.ObjectType) || !h.svc.TargetExists(r.Context(), f.ObjectType, f.ObjectID) {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -107,9 +125,10 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 	} else {
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", f.OriginalName))
 	}
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Type", f.MimeType)
 	w.Header().Set("Content-Length", strconv.FormatInt(f.FileSize, 10))
-	w.Write(data)
+	http.ServeFile(w, r, f.FilePath)
 }
 
 func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -125,26 +144,64 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redirect := r.FormValue("redirect")
-	if redirect == "" {
-		redirect = "/"
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "Unauthorized", 401)
+		return
 	}
+	if !h.svc.ValidObjectType(f.ObjectType) || !h.svc.TargetExists(r.Context(), f.ObjectType, f.ObjectID) {
+		http.NotFound(w, r)
+		return
+	}
+	if u.Role != "admin" && u.Role != "dispatcher" && f.UploadedBy != u.ID {
+		http.Error(w, "Forbidden", 403)
+		return
+	}
+
+	redirect := safeLocalRedirect(r.FormValue("redirect"))
 
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
 
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		entityName := h.activitySvc.LookupEntityName(r.Context(), f.ObjectType, f.ObjectID)
-		h.activitySvc.Record(r.Context(), u.ID, "file_deleted", f.ObjectType, f.ObjectID, map[string]interface{}{
-			"entity_name": entityName,
-			"actor_name":  u.Name,
-			"file_name":   f.OriginalName,
-		})
-	}
+	entityName := h.activitySvc.LookupEntityName(r.Context(), f.ObjectType, f.ObjectID)
+	h.activitySvc.Record(r.Context(), u.ID, "file_deleted", f.ObjectType, f.ObjectID, map[string]interface{}{
+		"entity_name": entityName,
+		"actor_name":  u.Name,
+		"file_name":   f.OriginalName,
+	})
 
 	w.Header().Set("HX-Redirect", redirect)
 	w.WriteHeader(200)
+}
+
+func multipartValue(r *http.Request, key string) (string, bool) {
+	values := r.MultipartForm.Value[key]
+	if len(values) == 0 {
+		return "", false
+	}
+	return values[0], true
+}
+
+func detectUploadedFileMime(f io.ReadSeeker) (string, error) {
+	buf := make([]byte, 512)
+	n, err := f.Read(buf)
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	if n == 0 {
+		return "", fmt.Errorf("empty file")
+	}
+	return http.DetectContentType(buf[:n]), nil
+}
+
+func safeLocalRedirect(redirect string) string {
+	if redirect == "" || !strings.HasPrefix(redirect, "/") || strings.HasPrefix(redirect, "//") {
+		return "/"
+	}
+	return redirect
 }

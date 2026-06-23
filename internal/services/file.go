@@ -15,22 +15,26 @@ import (
 )
 
 var allowedMIMETypes = []string{
-	"image/",
+	"image/png",
+	"image/jpeg",
+	"image/gif",
 	"application/pdf",
-	"text/",
+	"text/plain; charset=utf-8",
+	"text/plain",
 	"application/msword",
-	"application/vnd.ms-",
-	"application/vnd.openxmlformats-",
+	"application/vnd.ms-excel",
+	"application/vnd.ms-powerpoint",
+	"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	"application/vnd.openxmlformats-officedocument.presentationml.presentation",
 	"application/zip",
 	"application/json",
-	"application/xml",
-	"application/octet-stream",
 }
 
 type FileService struct {
-	client     *ent.Client
-	uploadDir  string
-	maxSize    int64
+	client    *ent.Client
+	uploadDir string
+	maxSize   int64
 }
 
 func NewFileService(client *ent.Client, uploadDir string, maxSize int64) *FileService {
@@ -38,12 +42,49 @@ func NewFileService(client *ent.Client, uploadDir string, maxSize int64) *FileSe
 }
 
 func (s *FileService) ValidateMIMEType(mimeType string) bool {
-	for _, prefix := range allowedMIMETypes {
-		if strings.HasPrefix(mimeType, prefix) {
+	for _, allowed := range allowedMIMETypes {
+		if mimeType == allowed {
 			return true
 		}
 	}
 	return false
+}
+
+func (s *FileService) ValidObjectType(objectType string) bool {
+	switch objectType {
+	case "customer", "job", "project", "estimate", "invoice", "asset":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *FileService) TargetExists(ctx context.Context, objectType string, objectID int64) bool {
+	if objectID <= 0 {
+		return false
+	}
+	switch objectType {
+	case "customer":
+		_, err := s.client.Customer.Get(ctx, objectID)
+		return err == nil
+	case "job":
+		_, err := s.client.Job.Get(ctx, objectID)
+		return err == nil
+	case "project":
+		_, err := s.client.Project.Get(ctx, objectID)
+		return err == nil
+	case "estimate":
+		_, err := s.client.Estimate.Get(ctx, objectID)
+		return err == nil
+	case "invoice":
+		_, err := s.client.Invoice.Get(ctx, objectID)
+		return err == nil
+	case "asset":
+		_, err := s.client.Asset.Get(ctx, objectID)
+		return err == nil
+	default:
+		return false
+	}
 }
 
 func (s *FileService) MaxSize() int64 {
@@ -70,6 +111,12 @@ func (s *FileService) GetByID(ctx context.Context, id int64) (*ent.File, error) 
 }
 
 func (s *FileService) Create(ctx context.Context, objectType string, objectID int64, originalName string, mimeType string, fileSize int64, reader io.Reader, uploadedBy int64) (*ent.File, error) {
+	if !s.ValidObjectType(objectType) {
+		return nil, fmt.Errorf("invalid object type: %s", objectType)
+	}
+	if !s.TargetExists(ctx, objectType, objectID) {
+		return nil, fmt.Errorf("target %s %d not found", objectType, objectID)
+	}
 	if !s.ValidateMIMEType(mimeType) {
 		return nil, fmt.Errorf("invalid MIME type: %s", mimeType)
 	}
@@ -136,7 +183,7 @@ func (s *FileService) GetDiskPath(storedName string) string {
 }
 
 func IsInlineMimeType(mimeType string) bool {
-	return strings.HasPrefix(mimeType, "image/") || mimeType == "application/pdf"
+	return mimeType == "image/png" || mimeType == "image/jpeg" || mimeType == "image/gif" || mimeType == "application/pdf"
 }
 
 func ReadFile(path string) ([]byte, error) {
