@@ -75,69 +75,79 @@ func TagWidget(p TagWidgetData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, " <button class=\"tag-remove\" hx-post=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, " ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var5 string
-			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%s/tags/%d/detach", p.BaseURL, t.ID))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 13, Col: 65}
+			if canManageOperational(ctx) {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<button class=\"tag-remove\" hx-post=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var5 string
+				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%s/tags/%d/detach", p.BaseURL, t.ID))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 14, Col: 66}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" hx-target=\"#tag-widget\" hx-swap=\"outerHTML\" style=\"margin-left:0.25rem;background:none;border:none;color:inherit;cursor:pointer;font-size:0.7rem;padding:0\">×</button>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\" hx-target=\"#tag-widget\" hx-swap=\"outerHTML\" style=\"margin-left:0.25rem;background:none;border:none;color:inherit;cursor:pointer;font-size:0.7rem;padding:0\">×</button></span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		if len(p.AllTags) > len(p.Tags) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<select style=\"width:auto;font-size:0.8rem;padding:0.25rem\" hx-on:change=\"htmx.trigger(this, 'addTag')\"><option value=\"\">+ Add tag</option> ")
+		if canManageOperational(ctx) && len(p.AllTags) > len(p.Tags) {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<select style=\"width:auto;font-size:0.8rem;padding:0.25rem\" hx-on:change=\"htmx.trigger(this, 'addTag')\"><option value=\"\">+ Add tag</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, t := range p.AllTags {
 				if !tagInList(t.ID, p.Tags) {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<option value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<option value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", t.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 28, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 30, Col: 46}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(t.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 28, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 30, Col: 57}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</option>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</option>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</select><script>\n\t\t\t\t\tdocument.addEventListener('addTag', function(evt) {\n\t\t\t\t\t\tvar select = evt.target;\n\t\t\t\t\t\tvar tagID = select.value;\n\t\t\t\t\t\tif (!tagID) return;\n\t\t\t\t\t\tvar url = select.closest('#tag-widget').dataset.baseUrl + '/tags/' + tagID + '/attach';\n\t\t\t\t\t\thtmx.ajax('POST', url, {target: '#tag-widget', swap: 'outerHTML'});\n\t\t\t\t\t\tselect.value = '';\n\t\t\t\t\t});\n\t\t\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</select><script>\n\t\t\t\t\tdocument.addEventListener('addTag', function(evt) {\n\t\t\t\t\t\tvar select = evt.target;\n\t\t\t\t\t\tvar tagID = select.value;\n\t\t\t\t\t\tif (!tagID) return;\n\t\t\t\t\t\tvar url = select.closest('#tag-widget').dataset.baseUrl + '/tags/' + tagID + '/attach';\n\t\t\t\t\t\thtmx.ajax('POST', url, {target: '#tag-widget', swap: 'outerHTML'});\n\t\t\t\t\t\tselect.value = '';\n\t\t\t\t\t});\n\t\t\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

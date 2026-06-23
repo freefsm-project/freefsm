@@ -138,7 +138,10 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "project", id)
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	var allTags []*ent.Tag
+	if isAdminOrDispatcher(u) {
+		allTags, _ = h.tagSvc.ListAll(r.Context())
+	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "project")
 	ctx := middleware.WithPageHeaderTitle(r.Context(), p.Name)
 	templates.ProjectShow(templates.ProjectShowPageData{

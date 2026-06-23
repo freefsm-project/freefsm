@@ -129,7 +129,10 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 	// Get tags
 	tagLinks, _ := h.tagLinkSvc.ListForObject(r.Context(), "asset", id)
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	var allTags []*ent.Tag
+	if isAdminOrDispatcher(u) {
+		allTags, _ = h.tagSvc.ListAll(r.Context())
+	}
 	assignedTags := make([]templates.TagRow, 0, len(tagLinks))
 	for _, tl := range tagLinks {
 		assignedTags = append(assignedTags, templates.TagRow{

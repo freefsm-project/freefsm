@@ -80,7 +80,11 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "customer", c.ID)
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	var allTags []*ent.Tag
+	u, _ := middleware.UserFromContext(r.Context())
+	if isAdminOrDispatcher(u) {
+		allTags, _ = h.tagSvc.ListAll(r.Context())
+	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
 	files, _ := h.fileSvc.List(r.Context(), "customer", c.ID)
 	ctx := middleware.WithPageHeaderTitle(r.Context(), c.DisplayName)

@@ -126,7 +126,10 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.Assignments = assignments
 	d.Subtasks = services.ParseSubtasks(j.Subtasks)
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "job", j.ID)
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	var allTags []*ent.Tag
+	if isAdminOrDispatcher(u) {
+		allTags, _ = h.tagSvc.ListAll(r.Context())
+	}
 	d.Tags = tagsToRows(tags)
 	d.AllTags = tagsToRows(allTags)
 	projects, _ := h.projectSvc.ListAll(r.Context())
