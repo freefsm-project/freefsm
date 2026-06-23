@@ -39,7 +39,7 @@ func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().In(loc)
 	year, month := parseYearMonth(r, now)
 	start, end := monthRange(year, month, loc)
-	jobs, _ := h.jobSvc.ListByDateRange(r.Context(), start, end)
+	jobs, _ := h.jobsByDateRange(r, start, end)
 
 	customers, _ := h.custSvc.ListAll(r.Context())
 	custMap := customerMap(customers)
@@ -67,7 +67,7 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 	date := parseDateParam(r, "date", loc)
 	start, end := weekRange(date, loc)
 
-	jobs, _ := h.jobSvc.ListByDateRange(r.Context(), start, end)
+	jobs, _ := h.jobsByDateRange(r, start, end)
 	customers, _ := h.custSvc.ListAll(r.Context())
 	custMap := customerMap(customers)
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
@@ -82,7 +82,9 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 		for _, j := range jobs {
 			cj := calendarJob(j, custMap, statuses)
 			cj.Hour = j.StartTime.Hour()
-			if j.StartTime == nil { continue }
+			if j.StartTime == nil {
+				continue
+			}
 			if j.StartTime.Year() == d.Year() && j.StartTime.YearDay() == d.YearDay() {
 				day.Jobs = append(day.Jobs, cj)
 			}
@@ -93,8 +95,8 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 	prev := date.AddDate(0, 0, -7)
 	next := date.AddDate(0, 0, 7)
 	data := templates.SchedulePageData{
-		Title:   fmt.Sprintf("%s — %s, %d", start.Format("Jan 2"), end.Format("Jan 2"), end.Year()),
-		Days:    days,
+		Title:    fmt.Sprintf("%s — %s, %d", start.Format("Jan 2"), end.Format("Jan 2"), end.Year()),
+		Days:     days,
 		PrevDate: prev.Format("2006-01-02"),
 		NextDate: next.Format("2006-01-02"),
 		Date:     date.Format("2006-01-02"),
@@ -109,7 +111,7 @@ func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
 	start := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
 	end := start.AddDate(0, 0, 1).Add(-time.Second)
 
-	jobs, _ := h.jobSvc.ListByDateRange(r.Context(), start, end)
+	jobs, _ := h.jobsByDateRange(r, start, end)
 	customers, _ := h.custSvc.ListAll(r.Context())
 	custMap := customerMap(customers)
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
@@ -133,6 +135,17 @@ func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
 	templates.SchedulePage(data).Render(r.Context(), w)
 }
 
+func (h *ScheduleHandler) jobsByDateRange(r *http.Request, start, end time.Time) ([]*ent.Job, error) {
+	u, _ := middleware.UserFromContext(r.Context())
+	if isAdminOrDispatcher(u) {
+		return h.jobSvc.ListByDateRange(r.Context(), start, end)
+	}
+	if u == nil {
+		return nil, nil
+	}
+	return h.jobSvc.ListAssignedByDateRange(r.Context(), u.ID, start, end)
+}
+
 func calendarJob(j *ent.Job, custMap map[int64]string, statuses []*ent.Status) templates.CalendarJob {
 	cj := templates.CalendarJob{
 		ID:      j.ID,
@@ -147,7 +160,7 @@ func calendarJob(j *ent.Job, custMap map[int64]string, statuses []*ent.Status) t
 		cj.Time = j.StartTime.Format("3:04 PM")
 		cj.Day = j.StartTime.Day()
 		cj.Hour = j.StartTime.Hour()
-		
+
 		// Calculate duration, cap at end of day
 		if j.EndTime != nil && !j.EndTime.IsZero() {
 			duration := j.EndTime.Hour() - j.StartTime.Hour()
@@ -207,22 +220,30 @@ func monthRange(year int, month time.Month, loc *time.Location) (time.Time, time
 }
 
 func prevMonthYear(year int, month time.Month) int {
-	if month == 1 { return year - 1 }
+	if month == 1 {
+		return year - 1
+	}
 	return year
 }
 
 func prevMonthMonth(year int, month time.Month) int {
-	if month == 1 { return 12 }
+	if month == 1 {
+		return 12
+	}
 	return int(month) - 1
 }
 
 func nextMonthYear(year int, month time.Month) int {
-	if month == 12 { return year + 1 }
+	if month == 12 {
+		return year + 1
+	}
 	return year
 }
 
 func nextMonthMonth(year int, month time.Month) int {
-	if month == 12 { return 1 }
+	if month == 12 {
+		return 1
+	}
 	return int(month) + 1
 }
 

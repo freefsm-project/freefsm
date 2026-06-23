@@ -26,6 +26,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
 	"github.com/MartialM1nd/freefsm/internal/ent/item"
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
+	"github.com/MartialM1nd/freefsm/internal/ent/jobassignment"
 	"github.com/MartialM1nd/freefsm/internal/ent/location"
 	"github.com/MartialM1nd/freefsm/internal/ent/passwordresettoken"
 	"github.com/MartialM1nd/freefsm/internal/ent/project"
@@ -109,6 +110,7 @@ func checkColumn(t, c string) error {
 			invoice.Table:               invoice.ValidColumn,
 			item.Table:                  item.ValidColumn,
 			job.Table:                   job.ValidColumn,
+			jobassignment.Table:         jobassignment.ValidColumn,
 			location.Table:              location.ValidColumn,
 			passwordresettoken.Table:    passwordresettoken.ValidColumn,
 			project.Table:               project.ValidColumn,

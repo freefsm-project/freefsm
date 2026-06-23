@@ -28,10 +28,12 @@ type JobHandler struct {
 	assetSvc    *services.AssetService
 	fileSvc     *services.FileService
 	activitySvc *services.ActivityService
+	userSvc     *services.UserService
+	policySvc   *services.PolicyService
 }
 
-func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, fileSvc *services.FileService, activitySvc *services.ActivityService) *JobHandler {
-	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, assetSvc: assetSvc, fileSvc: fileSvc, activitySvc: activitySvc}
+func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, fileSvc *services.FileService, activitySvc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService) *JobHandler {
+	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, assetSvc: assetSvc, fileSvc: fileSvc, activitySvc: activitySvc, userSvc: userSvc, policySvc: policySvc}
 }
 
 func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +45,18 @@ func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	statusID, _ := strconv.ParseInt(r.URL.Query().Get("status_id"), 10, 64)
 
-	jobs, total, err := h.svc.List(r.Context(), search, statusID, page, perPage)
+	u, _ := middleware.UserFromContext(r.Context())
+	var jobs []*ent.Job
+	var total int
+	var err error
+	if isAdminOrDispatcher(u) {
+		jobs, total, err = h.svc.List(r.Context(), search, statusID, page, perPage)
+	} else if u != nil {
+		jobs, total, err = h.svc.ListAssigned(r.Context(), u.ID, search, statusID, page, perPage)
+	} else {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -87,6 +100,15 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "job", id, policyRead) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	statuses := h.statusesForSelect(r.Context())
 	d := jobToDetail(j, statuses)
 	if j.CustomerID > 0 {
@@ -97,7 +119,11 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	d.LineItems = h.svc.LineItems(j)
 	d.Visits = services.ParseVisits(j.Visits)
-	d.Assignments = services.ParseAssignments(j.Assignments)
+	assignments, _ := h.svc.Assignments(r.Context(), j.ID)
+	if len(assignments) == 0 {
+		assignments = services.ParseAssignments(j.Assignments)
+	}
+	d.Assignments = assignments
 	d.Subtasks = services.ParseSubtasks(j.Subtasks)
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "job", j.ID)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
@@ -163,15 +189,15 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Subtitle:          r.FormValue("subtitle"),
 		StatusID:          statusID,
 		BillingType:       r.FormValue("billing_type"),
-		StartTime: parseTime(r.FormValue("start_time"), loc),
-		EndTime:   parseTime(r.FormValue("end_time"), loc),
-		DueDate:   parseDate(r.FormValue("due_date"), loc),
-		Notes:       r.FormValue("notes"),
-		TechNotes:   r.FormValue("tech_notes"),
-		Visits:      services.ParseVisits(r.FormValue("visits")),
-		Assignments: services.ParseAssignments(r.FormValue("assignments")),
-		Subtasks:    services.ParseSubtasks(r.FormValue("subtasks")),
-		CustomFields: parseCustomFieldValues(r),
+		StartTime:         parseTime(r.FormValue("start_time"), loc),
+		EndTime:           parseTime(r.FormValue("end_time"), loc),
+		DueDate:           parseDate(r.FormValue("due_date"), loc),
+		Notes:             r.FormValue("notes"),
+		TechNotes:         r.FormValue("tech_notes"),
+		Visits:            services.ParseVisits(r.FormValue("visits")),
+		Assignments:       services.ParseAssignments(r.FormValue("assignments")),
+		Subtasks:          services.ParseSubtasks(r.FormValue("subtasks")),
+		CustomFields:      parseCustomFieldValues(r),
 	}
 	if params.BillingType == "" {
 		params.BillingType = "flat_rate"
@@ -380,23 +406,25 @@ func (h *JobHandler) newJobForm(ctx context.Context) templates.JobFormPageData {
 	projects, _ := h.projectSvc.ListAll(ctx)
 	locations, _ := h.locSvc.ListAll(ctx)
 	assets, _ := h.assetSvc.ListAll(ctx)
+	users, _ := h.userSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	return templates.JobFormPageData{
 		Job: &templates.JobDetail{
 			BillingType: "flat_rate",
 			StartTime:   time.Now().Format("2006-01-02") + "T08:00",
 		},
-		IsNew:        true,
-		Customers:    customerOptions(customers),
-		Projects:     projectOptions(projects),
-		Locations:    locationOptions(locations),
-		Assets:       assetOptions(assets),
-		Statuses:     statusOptions(statuses),
-		BillingTypes: services.JobBillingTypes,
-		ExistingVisitsJSON:    "[]",
+		IsNew:                   true,
+		Customers:               customerOptions(customers),
+		Projects:                projectOptions(projects),
+		Locations:               locationOptions(locations),
+		Assets:                  assetOptions(assets),
+		Users:                   userOptions(users),
+		Statuses:                statusOptions(statuses),
+		BillingTypes:            services.JobBillingTypes,
+		ExistingVisitsJSON:      "[]",
 		ExistingAssignmentsJSON: "[]",
 		ExistingSubtasksJSON:    "[]",
-		CustomFields:          buildCustomFieldDisplay(defs, "[]"),
+		CustomFields:            buildCustomFieldDisplay(defs, "[]"),
 	}
 }
 
@@ -405,22 +433,43 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses [
 	projects, _ := h.projectSvc.ListAll(ctx)
 	locations, _ := h.locSvc.ListAll(ctx)
 	assets, _ := h.assetSvc.ListAll(ctx)
+	users, _ := h.userSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	d := jobToDetail(j, statuses)
-	return templates.JobFormPageData{
-		Job:          &d,
-		IsNew:        false,
-		Customers:    customerOptions(customers),
-		Projects:     projectOptions(projects),
-		Locations:    locationOptions(locations),
-		Assets:       assetOptions(assets),
-		Statuses:     statusOptions(statuses),
-		BillingTypes: services.JobBillingTypes,
-		ExistingVisitsJSON:    services.SerializeVisits(services.ParseVisits(j.Visits)),
-		ExistingAssignmentsJSON: services.SerializeAssignments(services.ParseAssignments(j.Assignments)),
-		ExistingSubtasksJSON:    services.SerializeSubtasks(services.ParseSubtasks(j.Subtasks)),
-		CustomFields:          buildCustomFieldDisplay(defs, j.CustomFields),
+	assignments, _ := h.svc.Assignments(ctx, j.ID)
+	if len(assignments) == 0 {
+		assignments = services.ParseAssignments(j.Assignments)
 	}
+	return templates.JobFormPageData{
+		Job:                     &d,
+		IsNew:                   false,
+		Customers:               customerOptions(customers),
+		Projects:                projectOptions(projects),
+		Locations:               locationOptions(locations),
+		Assets:                  assetOptions(assets),
+		Users:                   userOptions(users),
+		Statuses:                statusOptions(statuses),
+		BillingTypes:            services.JobBillingTypes,
+		ExistingVisitsJSON:      services.SerializeVisits(services.ParseVisits(j.Visits)),
+		ExistingAssignmentsJSON: services.SerializeAssignments(assignments),
+		ExistingSubtasksJSON:    services.SerializeSubtasks(services.ParseSubtasks(j.Subtasks)),
+		CustomFields:            buildCustomFieldDisplay(defs, j.CustomFields),
+	}
+}
+
+func userOptions(users []*ent.User) []templates.SelectOption {
+	opts := make([]templates.SelectOption, 0, len(users))
+	for _, u := range users {
+		if !u.IsActive {
+			continue
+		}
+		label := u.Name
+		if u.Role != "" {
+			label = fmt.Sprintf("%s (%s)", u.Name, u.Role)
+		}
+		opts = append(opts, templates.SelectOption{Value: u.ID, Label: label})
+	}
+	return opts
 }
 
 func projectOptions(projects []*ent.Project) []templates.SelectOption {

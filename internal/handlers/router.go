@@ -42,15 +42,16 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	commentSvc := services.NewCommentService(entClient)
 	activitySvc := services.NewActivityService(entClient)
 	depSvc := services.NewDependencyService(entClient)
-	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc)
+	policySvc := services.NewPolicyService(entClient)
+	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc, policySvc)
 	defSvc := services.NewCustomFieldDefinitionService(entClient)
 	cfHandler := NewCustomFieldHandler(defSvc, activitySvc, depSvc)
 	timeEntrySvc := services.NewTimeEntryService(entClient)
 	dashboardHandler := NewDashboardHandler(services.NewDashboardService(entClient), timeEntrySvc)
 	// File service
 	fileSvc := services.NewFileService(entClient, cfg.UploadDir, cfg.MaxUploadSize)
-	fileHandler := NewFileHandler(fileSvc, activitySvc)
-	activityHandler := NewActivityHandler(activitySvc, userService)
+	fileHandler := NewFileHandler(fileSvc, activitySvc, policySvc)
+	activityHandler := NewActivityHandler(activitySvc, userService, policySvc)
 
 	customerHandler := NewCustomerHandler(customerService, contactSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
 	itemHandler := NewItemHandler(itemService, activitySvc)
@@ -59,7 +60,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	assetStatusSvc := services.NewAssetStatusService(entClient)
 	assetSvc := services.NewAssetService(entClient)
 
-	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, fileSvc, activitySvc)
+	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, fileSvc, activitySvc, userService, policySvc)
 	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc)
 	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService)
 	invoiceService := services.NewInvoiceService(entClient)

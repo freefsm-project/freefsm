@@ -3,10 +3,13 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
+	"github.com/MartialM1nd/freefsm/internal/ent/jobassignment"
+	"github.com/MartialM1nd/freefsm/internal/ent/user"
 )
 
 type JobService struct {
@@ -76,6 +79,20 @@ func (s *JobService) ListByDateRange(ctx context.Context, start, end time.Time) 
 		All(ctx)
 }
 
+func (s *JobService) ListAssignedByDateRange(ctx context.Context, userID int64, start, end time.Time) ([]*ent.Job, error) {
+	jobIDs, err := s.assignedJobIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(jobIDs) == 0 {
+		return nil, nil
+	}
+	return s.client.Job.Query().
+		Where(job.IDIn(jobIDs...), job.StartTimeNotNil(), job.StartTimeGTE(start), job.StartTimeLTE(end)).
+		Order(ent.Asc(job.FieldStartTime)).
+		All(ctx)
+}
+
 func (s *JobService) ListByProject(ctx context.Context, projectID int64) ([]*ent.Job, error) {
 	return s.client.Job.Query().
 		Where(job.ProjectIDEQ(projectID)).
@@ -113,6 +130,47 @@ func (s *JobService) List(ctx context.Context, search string, statusID int64, pa
 		All(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list jobs: %w", err)
+	}
+
+	return jobs, total, nil
+}
+
+func (s *JobService) ListAssigned(ctx context.Context, userID int64, search string, statusID int64, page, perPage int) ([]*ent.Job, int, error) {
+	jobIDs, err := s.assignedJobIDs(ctx, userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(jobIDs) == 0 {
+		return nil, 0, nil
+	}
+	q := s.client.Job.Query().Where(job.DeletedAtIsNil(), job.IDIn(jobIDs...))
+
+	if search != "" {
+		q = q.Where(
+			job.Or(
+				job.JobTypeContainsFold(search),
+				job.SubtitleContainsFold(search),
+			),
+		)
+	}
+
+	if statusID > 0 {
+		q = q.Where(job.StatusIDEQ(statusID))
+	}
+
+	total, err := q.Count(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count assigned jobs: %w", err)
+	}
+
+	jobs, err := q.
+		Order(ent.Desc(job.FieldStartTime)).
+		Order(ent.Desc(job.FieldCreatedAt)).
+		Limit(perPage).
+		Offset(PaginationOffset(page, perPage)).
+		All(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list assigned jobs: %w", err)
 	}
 
 	return jobs, total, nil
@@ -172,15 +230,25 @@ func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.J
 		b.SetArrivalWindowEnd(params.ArrivalEnd)
 	}
 
+	assignments, err := s.hydrateAssignments(ctx, params.Assignments)
+	if err != nil {
+		return nil, err
+	}
+	b.SetAssignments(SerializeAssignments(s.assignmentsForStorage(params.Assignments, assignments)))
+
 	j, err := b.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create job: %w", err)
+	}
+	if err := s.replaceAssignments(ctx, j.ID, assignments); err != nil {
+		return nil, err
 	}
 	return j, nil
 }
 
 func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParams) (*ent.Job, error) {
 	u := s.client.Job.UpdateOneID(id)
+	var assignments []JobAssignment
 
 	if params.CustomerID != nil {
 		u.SetCustomerID(*params.CustomerID)
@@ -241,7 +309,12 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 		u.SetVisits(SerializeVisits(*params.Visits))
 	}
 	if params.Assignments != nil {
-		u.SetAssignments(SerializeAssignments(*params.Assignments))
+		var err error
+		assignments, err = s.hydrateAssignments(ctx, *params.Assignments)
+		if err != nil {
+			return nil, err
+		}
+		u.SetAssignments(SerializeAssignments(s.assignmentsForStorage(*params.Assignments, assignments)))
 	}
 	if params.Subtasks != nil {
 		u.SetSubtasks(SerializeSubtasks(*params.Subtasks))
@@ -251,7 +324,111 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 	if err != nil {
 		return nil, fmt.Errorf("update job %d: %w", id, err)
 	}
+	if params.Assignments != nil {
+		if err := s.replaceAssignments(ctx, id, assignments); err != nil {
+			return nil, err
+		}
+	}
 	return j, nil
+}
+
+func (s *JobService) Assignments(ctx context.Context, jobID int64) ([]JobAssignment, error) {
+	rows, err := s.client.JobAssignment.Query().Where(jobassignment.JobIDEQ(jobID)).Order(ent.Asc(jobassignment.FieldCreatedAt)).All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list job assignments: %w", err)
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	userIDs := make([]int64, 0, len(rows))
+	for _, row := range rows {
+		userIDs = append(userIDs, row.UserID)
+	}
+	users, err := s.client.User.Query().Where(user.IDIn(userIDs...)).All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list assigned users: %w", err)
+	}
+	names := make(map[int64]string, len(users))
+	for _, u := range users {
+		names[u.ID] = u.Name
+	}
+	assignments := make([]JobAssignment, 0, len(rows))
+	for _, row := range rows {
+		assignments = append(assignments, JobAssignment{UserID: row.UserID, Name: names[row.UserID], Role: row.Role})
+	}
+	return assignments, nil
+}
+
+func (s *JobService) replaceAssignments(ctx context.Context, jobID int64, assignments []JobAssignment) error {
+	if _, err := s.client.JobAssignment.Delete().Where(jobassignment.JobIDEQ(jobID)).Exec(ctx); err != nil {
+		return fmt.Errorf("delete job assignments: %w", err)
+	}
+	for _, assignment := range assignments {
+		if assignment.UserID <= 0 {
+			continue
+		}
+		if _, err := s.client.JobAssignment.Create().SetJobID(jobID).SetUserID(assignment.UserID).SetRole(strings.TrimSpace(assignment.Role)).Save(ctx); err != nil {
+			return fmt.Errorf("create job assignment: %w", err)
+		}
+	}
+	return nil
+}
+
+func (s *JobService) hydrateAssignments(ctx context.Context, assignments []JobAssignment) ([]JobAssignment, error) {
+	seen := map[int64]bool{}
+	userIDs := make([]int64, 0, len(assignments))
+	for _, assignment := range assignments {
+		if assignment.UserID <= 0 || seen[assignment.UserID] {
+			continue
+		}
+		seen[assignment.UserID] = true
+		userIDs = append(userIDs, assignment.UserID)
+	}
+	if len(userIDs) == 0 {
+		return nil, nil
+	}
+	users, err := s.client.User.Query().Where(user.IDIn(userIDs...)).All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list assignment users: %w", err)
+	}
+	names := make(map[int64]string, len(users))
+	for _, u := range users {
+		names[u.ID] = u.Name
+	}
+	hydrated := make([]JobAssignment, 0, len(userIDs))
+	seen = map[int64]bool{}
+	for _, assignment := range assignments {
+		if assignment.UserID <= 0 || names[assignment.UserID] == "" || seen[assignment.UserID] {
+			continue
+		}
+		seen[assignment.UserID] = true
+		hydrated = append(hydrated, JobAssignment{UserID: assignment.UserID, Name: names[assignment.UserID], Role: strings.TrimSpace(assignment.Role)})
+	}
+	return hydrated, nil
+}
+
+func (s *JobService) assignmentsForStorage(submitted []JobAssignment, hydrated []JobAssignment) []JobAssignment {
+	stored := make([]JobAssignment, 0, len(submitted))
+	stored = append(stored, hydrated...)
+	for _, assignment := range submitted {
+		if assignment.UserID > 0 || strings.TrimSpace(assignment.Name) == "" {
+			continue
+		}
+		stored = append(stored, JobAssignment{Name: strings.TrimSpace(assignment.Name), Role: strings.TrimSpace(assignment.Role)})
+	}
+	return stored
+}
+
+func (s *JobService) assignedJobIDs(ctx context.Context, userID int64) ([]int64, error) {
+	assignments, err := s.client.JobAssignment.Query().Where(jobassignment.UserIDEQ(userID)).All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list assigned job IDs: %w", err)
+	}
+	ids := make([]int64, 0, len(assignments))
+	for _, assignment := range assignments {
+		ids = append(ids, assignment.JobID)
+	}
+	return ids, nil
 }
 
 func (s *JobService) Delete(ctx context.Context, id int64) error {

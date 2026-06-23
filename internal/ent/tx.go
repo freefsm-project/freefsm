@@ -40,6 +40,8 @@ type Tx struct {
 	Item *ItemClient
 	// Job is the client for interacting with the Job builders.
 	Job *JobClient
+	// JobAssignment is the client for interacting with the JobAssignment builders.
+	JobAssignment *JobAssignmentClient
 	// Location is the client for interacting with the Location builders.
 	Location *LocationClient
 	// PasswordResetToken is the client for interacting with the PasswordResetToken builders.
@@ -203,6 +205,7 @@ func (tx *Tx) init() {
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.Item = NewItemClient(tx.config)
 	tx.Job = NewJobClient(tx.config)
+	tx.JobAssignment = NewJobAssignmentClient(tx.config)
 	tx.Location = NewLocationClient(tx.config)
 	tx.PasswordResetToken = NewPasswordResetTokenClient(tx.config)
 	tx.Project = NewProjectClient(tx.config)

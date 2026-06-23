@@ -132,11 +132,19 @@ templ JobForm(p JobFormPageData) {
 			<fieldset x-data="assignmentsEditor()" data-existing={ p.ExistingAssignmentsJSON }>
 				<legend>Assignments</legend>
 				<table>
-					<thead><tr><th>Name</th><th>Role</th><th></th></tr></thead>
+					<thead><tr><th>User</th><th>Role</th><th></th></tr></thead>
 					<tbody>
 						<template x-for="(a, idx) in items" :key="idx">
 							<tr>
-								<td><input type="text" x-model="a.name"></td>
+								<td>
+									<select x-model.number="a.user_id">
+										<option value="0">Select user...</option>
+										for _, u := range p.Users {
+											<option value={ fmt.Sprintf("%d", u.Value) }>{ u.Label }</option>
+										}
+									</select>
+									<small x-show="!a.user_id && a.name" x-text="'Legacy assignment: ' + a.name"></small>
+								</td>
 								<td><input type="text" x-model="a.role"></td>
 								<td><button @click.prevent="remove(idx)" class="outline contrast small">X</button></td>
 							</tr>
@@ -205,7 +213,7 @@ templ JobForm(p JobFormPageData) {
 				Alpine.data('assignmentsEditor', () => ({
 					items: [],
 					init() { try { this.items = JSON.parse(this.$el.dataset.existing || '[]'); } catch(e) {} },
-					add() { this.items.push({name:'',role:''}); },
+					add() { this.items.push({user_id:0,name:'',role:''}); },
 					remove(idx) { this.items.splice(idx, 1); },
 					get json() { return JSON.stringify(this.items); },
 				}));

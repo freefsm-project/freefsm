@@ -29,6 +29,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
 	"github.com/MartialM1nd/freefsm/internal/ent/item"
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
+	"github.com/MartialM1nd/freefsm/internal/ent/jobassignment"
 	"github.com/MartialM1nd/freefsm/internal/ent/location"
 	"github.com/MartialM1nd/freefsm/internal/ent/passwordresettoken"
 	"github.com/MartialM1nd/freefsm/internal/ent/project"
@@ -73,6 +74,8 @@ type Client struct {
 	Item *ItemClient
 	// Job is the client for interacting with the Job builders.
 	Job *JobClient
+	// JobAssignment is the client for interacting with the JobAssignment builders.
+	JobAssignment *JobAssignmentClient
 	// Location is the client for interacting with the Location builders.
 	Location *LocationClient
 	// PasswordResetToken is the client for interacting with the PasswordResetToken builders.
@@ -116,6 +119,7 @@ func (c *Client) init() {
 	c.Invoice = NewInvoiceClient(c.config)
 	c.Item = NewItemClient(c.config)
 	c.Job = NewJobClient(c.config)
+	c.JobAssignment = NewJobAssignmentClient(c.config)
 	c.Location = NewLocationClient(c.config)
 	c.PasswordResetToken = NewPasswordResetTokenClient(c.config)
 	c.Project = NewProjectClient(c.config)
@@ -231,6 +235,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Invoice:               NewInvoiceClient(cfg),
 		Item:                  NewItemClient(cfg),
 		Job:                   NewJobClient(cfg),
+		JobAssignment:         NewJobAssignmentClient(cfg),
 		Location:              NewLocationClient(cfg),
 		PasswordResetToken:    NewPasswordResetTokenClient(cfg),
 		Project:               NewProjectClient(cfg),
@@ -273,6 +278,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Invoice:               NewInvoiceClient(cfg),
 		Item:                  NewItemClient(cfg),
 		Job:                   NewJobClient(cfg),
+		JobAssignment:         NewJobAssignmentClient(cfg),
 		Location:              NewLocationClient(cfg),
 		PasswordResetToken:    NewPasswordResetTokenClient(cfg),
 		Project:               NewProjectClient(cfg),
@@ -313,8 +319,9 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.ActivityLog, c.Asset, c.AssetStatus, c.AssetType, c.Comment,
 		c.CompanySettings, c.CustomFieldDefinition, c.Customer, c.CustomerContact,
-		c.Estimate, c.File, c.Invoice, c.Item, c.Job, c.Location, c.PasswordResetToken,
-		c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink, c.TimeEntry, c.User,
+		c.Estimate, c.File, c.Invoice, c.Item, c.Job, c.JobAssignment, c.Location,
+		c.PasswordResetToken, c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink,
+		c.TimeEntry, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -326,8 +333,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.ActivityLog, c.Asset, c.AssetStatus, c.AssetType, c.Comment,
 		c.CompanySettings, c.CustomFieldDefinition, c.Customer, c.CustomerContact,
-		c.Estimate, c.File, c.Invoice, c.Item, c.Job, c.Location, c.PasswordResetToken,
-		c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink, c.TimeEntry, c.User,
+		c.Estimate, c.File, c.Invoice, c.Item, c.Job, c.JobAssignment, c.Location,
+		c.PasswordResetToken, c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink,
+		c.TimeEntry, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -364,6 +372,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Item.mutate(ctx, m)
 	case *JobMutation:
 		return c.Job.mutate(ctx, m)
+	case *JobAssignmentMutation:
+		return c.JobAssignment.mutate(ctx, m)
 	case *LocationMutation:
 		return c.Location.mutate(ctx, m)
 	case *PasswordResetTokenMutation:
@@ -2249,6 +2259,139 @@ func (c *JobClient) mutate(ctx context.Context, m *JobMutation) (Value, error) {
 	}
 }
 
+// JobAssignmentClient is a client for the JobAssignment schema.
+type JobAssignmentClient struct {
+	config
+}
+
+// NewJobAssignmentClient returns a client for the JobAssignment from the given config.
+func NewJobAssignmentClient(c config) *JobAssignmentClient {
+	return &JobAssignmentClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `jobassignment.Hooks(f(g(h())))`.
+func (c *JobAssignmentClient) Use(hooks ...Hook) {
+	c.hooks.JobAssignment = append(c.hooks.JobAssignment, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `jobassignment.Intercept(f(g(h())))`.
+func (c *JobAssignmentClient) Intercept(interceptors ...Interceptor) {
+	c.inters.JobAssignment = append(c.inters.JobAssignment, interceptors...)
+}
+
+// Create returns a builder for creating a JobAssignment entity.
+func (c *JobAssignmentClient) Create() *JobAssignmentCreate {
+	mutation := newJobAssignmentMutation(c.config, OpCreate)
+	return &JobAssignmentCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of JobAssignment entities.
+func (c *JobAssignmentClient) CreateBulk(builders ...*JobAssignmentCreate) *JobAssignmentCreateBulk {
+	return &JobAssignmentCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *JobAssignmentClient) MapCreateBulk(slice any, setFunc func(*JobAssignmentCreate, int)) *JobAssignmentCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &JobAssignmentCreateBulk{err: fmt.Errorf("calling to JobAssignmentClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*JobAssignmentCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &JobAssignmentCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for JobAssignment.
+func (c *JobAssignmentClient) Update() *JobAssignmentUpdate {
+	mutation := newJobAssignmentMutation(c.config, OpUpdate)
+	return &JobAssignmentUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *JobAssignmentClient) UpdateOne(_m *JobAssignment) *JobAssignmentUpdateOne {
+	mutation := newJobAssignmentMutation(c.config, OpUpdateOne, withJobAssignment(_m))
+	return &JobAssignmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *JobAssignmentClient) UpdateOneID(id int64) *JobAssignmentUpdateOne {
+	mutation := newJobAssignmentMutation(c.config, OpUpdateOne, withJobAssignmentID(id))
+	return &JobAssignmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for JobAssignment.
+func (c *JobAssignmentClient) Delete() *JobAssignmentDelete {
+	mutation := newJobAssignmentMutation(c.config, OpDelete)
+	return &JobAssignmentDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *JobAssignmentClient) DeleteOne(_m *JobAssignment) *JobAssignmentDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *JobAssignmentClient) DeleteOneID(id int64) *JobAssignmentDeleteOne {
+	builder := c.Delete().Where(jobassignment.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &JobAssignmentDeleteOne{builder}
+}
+
+// Query returns a query builder for JobAssignment.
+func (c *JobAssignmentClient) Query() *JobAssignmentQuery {
+	return &JobAssignmentQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeJobAssignment},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a JobAssignment entity by its id.
+func (c *JobAssignmentClient) Get(ctx context.Context, id int64) (*JobAssignment, error) {
+	return c.Query().Where(jobassignment.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *JobAssignmentClient) GetX(ctx context.Context, id int64) *JobAssignment {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *JobAssignmentClient) Hooks() []Hook {
+	return c.hooks.JobAssignment
+}
+
+// Interceptors returns the client interceptors.
+func (c *JobAssignmentClient) Interceptors() []Interceptor {
+	return c.inters.JobAssignment
+}
+
+func (c *JobAssignmentClient) mutate(ctx context.Context, m *JobAssignmentMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&JobAssignmentCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&JobAssignmentUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&JobAssignmentUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&JobAssignmentDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown JobAssignment mutation op: %q", m.Op())
+	}
+}
+
 // LocationClient is a client for the Location schema.
 type LocationClient struct {
 	config
@@ -3483,13 +3626,13 @@ type (
 	hooks struct {
 		ActivityLog, Asset, AssetStatus, AssetType, Comment, CompanySettings,
 		CustomFieldDefinition, Customer, CustomerContact, Estimate, File, Invoice,
-		Item, Job, Location, PasswordResetToken, Project, Status, StatusWorkflow, Tag,
-		TagLink, TimeEntry, User []ent.Hook
+		Item, Job, JobAssignment, Location, PasswordResetToken, Project, Status,
+		StatusWorkflow, Tag, TagLink, TimeEntry, User []ent.Hook
 	}
 	inters struct {
 		ActivityLog, Asset, AssetStatus, AssetType, Comment, CompanySettings,
 		CustomFieldDefinition, Customer, CustomerContact, Estimate, File, Invoice,
-		Item, Job, Location, PasswordResetToken, Project, Status, StatusWorkflow, Tag,
-		TagLink, TimeEntry, User []ent.Interceptor
+		Item, Job, JobAssignment, Location, PasswordResetToken, Project, Status,
+		StatusWorkflow, Tag, TagLink, TimeEntry, User []ent.Interceptor
 	}
 )

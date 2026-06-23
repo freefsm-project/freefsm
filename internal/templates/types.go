@@ -30,6 +30,11 @@ func getFlash(ctx context.Context) string {
 	return f
 }
 
+func canManageOperational(ctx context.Context) bool {
+	u := getUser(ctx)
+	return u != nil && (u.Role == "admin" || u.Role == "dispatcher")
+}
+
 type User struct {
 	ID    int64
 	Name  string
@@ -317,6 +322,7 @@ type JobFormPageData struct {
 	Projects                []SelectOption
 	Locations               []SelectOption
 	Assets                  []SelectOption
+	Users                   []SelectOption
 	Statuses                []SelectOption
 	BillingTypes            []string
 	ExistingVisitsJSON      string

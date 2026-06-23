@@ -32,12 +32,13 @@ var activityTypeToPrefix = map[string]string{
 }
 
 type ActivityHandler struct {
-	svc     *services.ActivityService
-	userSvc *services.UserService
+	svc       *services.ActivityService
+	userSvc   *services.UserService
+	policySvc *services.PolicyService
 }
 
-func NewActivityHandler(svc *services.ActivityService, userSvc *services.UserService) *ActivityHandler {
-	return &ActivityHandler{svc: svc, userSvc: userSvc}
+func NewActivityHandler(svc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService) *ActivityHandler {
+	return &ActivityHandler{svc: svc, userSvc: userSvc, policySvc: policySvc}
 }
 
 func (h *ActivityHandler) ListForObject(objectType string) http.HandlerFunc {
@@ -52,7 +53,7 @@ func (h *ActivityHandler) ListForObject(objectType string) http.HandlerFunc {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if !canAccessObject(u, objectType, objectID, policyRead) {
+		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectType, objectID, policyRead) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

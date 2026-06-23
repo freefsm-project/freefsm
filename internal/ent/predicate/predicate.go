@@ -48,6 +48,9 @@ type Item func(*sql.Selector)
 // Job is the predicate function for job builders.
 type Job func(*sql.Selector)
 
+// JobAssignment is the predicate function for jobassignment builders.
+type JobAssignment func(*sql.Selector)
+
 // Location is the predicate function for location builders.
 type Location func(*sql.Selector)
 

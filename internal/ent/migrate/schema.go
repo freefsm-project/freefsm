@@ -513,6 +513,38 @@ var (
 			},
 		},
 	}
+	// JobAssignmentsColumns holds the columns for the "job_assignments" table.
+	JobAssignmentsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "job_id", Type: field.TypeInt64},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "role", Type: field.TypeString, Default: ""},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// JobAssignmentsTable holds the schema information for the "job_assignments" table.
+	JobAssignmentsTable = &schema.Table{
+		Name:       "job_assignments",
+		Columns:    JobAssignmentsColumns,
+		PrimaryKey: []*schema.Column{JobAssignmentsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "jobassignment_job_id",
+				Unique:  false,
+				Columns: []*schema.Column{JobAssignmentsColumns[1]},
+			},
+			{
+				Name:    "jobassignment_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{JobAssignmentsColumns[2]},
+			},
+			{
+				Name:    "jobassignment_job_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{JobAssignmentsColumns[1], JobAssignmentsColumns[2]},
+			},
+		},
+	}
 	// LocationsColumns holds the columns for the "locations" table.
 	LocationsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -755,6 +787,7 @@ var (
 		InvoicesTable,
 		ItemsTable,
 		JobsTable,
+		JobAssignmentsTable,
 		LocationsTable,
 		PasswordResetTokensTable,
 		ProjectsTable,
@@ -809,6 +842,9 @@ func init() {
 	}
 	JobsTable.Annotation = &entsql.Annotation{
 		Table: "jobs",
+	}
+	JobAssignmentsTable.Annotation = &entsql.Annotation{
+		Table: "job_assignments",
 	}
 	LocationsTable.Annotation = &entsql.Annotation{
 		Table: "locations",

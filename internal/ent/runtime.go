@@ -19,6 +19,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
 	"github.com/MartialM1nd/freefsm/internal/ent/item"
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
+	"github.com/MartialM1nd/freefsm/internal/ent/jobassignment"
 	"github.com/MartialM1nd/freefsm/internal/ent/location"
 	"github.com/MartialM1nd/freefsm/internal/ent/passwordresettoken"
 	"github.com/MartialM1nd/freefsm/internal/ent/project"
@@ -627,6 +628,22 @@ func init() {
 	job.DefaultUpdatedAt = jobDescUpdatedAt.Default.(func() time.Time)
 	// job.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	job.UpdateDefaultUpdatedAt = jobDescUpdatedAt.UpdateDefault.(func() time.Time)
+	jobassignmentFields := schema.JobAssignment{}.Fields()
+	_ = jobassignmentFields
+	// jobassignmentDescRole is the schema descriptor for role field.
+	jobassignmentDescRole := jobassignmentFields[3].Descriptor()
+	// jobassignment.DefaultRole holds the default value on creation for the role field.
+	jobassignment.DefaultRole = jobassignmentDescRole.Default.(string)
+	// jobassignmentDescCreatedAt is the schema descriptor for created_at field.
+	jobassignmentDescCreatedAt := jobassignmentFields[4].Descriptor()
+	// jobassignment.DefaultCreatedAt holds the default value on creation for the created_at field.
+	jobassignment.DefaultCreatedAt = jobassignmentDescCreatedAt.Default.(func() time.Time)
+	// jobassignmentDescUpdatedAt is the schema descriptor for updated_at field.
+	jobassignmentDescUpdatedAt := jobassignmentFields[5].Descriptor()
+	// jobassignment.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	jobassignment.DefaultUpdatedAt = jobassignmentDescUpdatedAt.Default.(func() time.Time)
+	// jobassignment.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	jobassignment.UpdateDefaultUpdatedAt = jobassignmentDescUpdatedAt.UpdateDefault.(func() time.Time)
 	locationFields := schema.Location{}.Fields()
 	_ = locationFields
 	// locationDescAddress1 is the schema descriptor for address_1 field.
