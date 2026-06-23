@@ -7,33 +7,44 @@ templ ContactsList(contacts []ContactRow, customerID int64) {
 		<h3>Contacts</h3>
 		if len(contacts) > 0 {
 			<table>
-				<thead><tr><th>Name</th><th>Email</th><th>Phone</th><th></th></tr></thead>
+				<thead>
+					<tr>
+						<th>Name</th><th>Email</th><th>Phone</th>
+						if canManageOperational(ctx) {
+							<th></th>
+						}
+					</tr>
+				</thead>
 				<tbody>
 					for _, c := range contacts {
 						<tr id={ templ.SafeURL(fmt.Sprintf("contact-%d", c.ID)) }>
 							<td>{ c.FirstName } { c.LastName }</td>
 							<td>{ c.Email }</td>
 							<td>{ c.Phone }</td>
-							<td style="text-align:right">
-								<button class="outline small"
-									hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/edit", customerID, c.ID)) }
-									hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", c.ID)) }
-									hx-swap="outerHTML">Edit</button>
-								<button class="outline contrast small"
-									hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/delete", customerID, c.ID)) }
-									hx-confirm="Delete this contact?"
-									hx-target="#contacts-section"
-									hx-swap="outerHTML">Del</button>
-							</td>
+							if canManageOperational(ctx) {
+								<td style="text-align:right">
+									<button class="outline small"
+										hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/edit", customerID, c.ID)) }
+										hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", c.ID)) }
+										hx-swap="outerHTML">Edit</button>
+									<button class="outline contrast small"
+										hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/delete", customerID, c.ID)) }
+										hx-confirm="Delete this contact?"
+										hx-target="#contacts-section"
+										hx-swap="outerHTML">Del</button>
+								</td>
+							}
 						</tr>
 					}
 				</tbody>
 			</table>
 		}
-		<button hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/new", customerID)) }
-			hx-target="#contact-form-wrap"
-			hx-swap="innerHTML" class="outline"
-			style="margin-top:0.5rem">+ Add Contact</button>
+		if canManageOperational(ctx) {
+			<button hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/new", customerID)) }
+				hx-target="#contact-form-wrap"
+				hx-swap="innerHTML" class="outline"
+				style="margin-top:0.5rem">+ Add Contact</button>
+		}
 		<div id="contact-form-wrap"></div>
 	</div>
 }

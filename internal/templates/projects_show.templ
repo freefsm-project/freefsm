@@ -4,22 +4,26 @@ import "fmt"
 
 templ ProjectShow(p ProjectShowPageData) {
 	@Layout("Project - "+p.Project.Name) {
-		<div style="display:flex;justify-content:space-between;align-items:center">
-			<div style="display:flex;gap:0.5rem">
-				<a href={ templ.URL(fmt.Sprintf("/projects/%d/edit", p.Project.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Project.Name) }>Edit</a>
-				<form action={ templ.URL(fmt.Sprintf("/projects/%d/delete", p.Project.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this project?')">
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Project.Name) }>Delete</button>
-				</form>
+		if canManageOperational(ctx) {
+			<div style="display:flex;justify-content:space-between;align-items:center">
+				<div style="display:flex;gap:0.5rem">
+					<a href={ templ.URL(fmt.Sprintf("/projects/%d/edit", p.Project.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Project.Name) }>Edit</a>
+					<form action={ templ.URL(fmt.Sprintf("/projects/%d/delete", p.Project.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this project?')">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Project.Name) }>Delete</button>
+					</form>
+				</div>
 			</div>
-		</div>
+		}
 		if p.Project.ArchivedAt != "" {
 			<div style="background:var(--pico-muted-background);border:1px solid var(--pico-muted-border-color);border-radius:0.25rem;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
 				<span style="color:var(--pico-muted-color)">Archived on { p.Project.ArchivedAt }</span>
-				<form action={ templ.URL(fmt.Sprintf("/projects/%d/restore", p.Project.ID)) } method="post" style="display:inline">
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
-				</form>
+				if canManageOperational(ctx) {
+					<form action={ templ.URL(fmt.Sprintf("/projects/%d/restore", p.Project.ID)) } method="post" style="display:inline">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
+					</form>
+				}
 			</div>
 		}
 		if len(p.Tags) > 0 || true {
@@ -80,6 +84,8 @@ templ ProjectShow(p ProjectShowPageData) {
 		<div hx-get={ templ.URL(fmt.Sprintf("/projects/%d/activity", p.Project.ID)) } hx-trigger="load" hx-swap="innerHTML">
 		<p>Loading activity...</p>
 	</div>
-	<p><a href="/projects">&larr; Back to Projects</a></p>
+	if canManageOperational(ctx) {
+		<p><a href="/projects">&larr; Back to Projects</a></p>
+	}
 	}
 }

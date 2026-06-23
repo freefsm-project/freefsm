@@ -428,7 +428,14 @@ func (s *JobService) assignedJobIDs(ctx context.Context, userID int64) ([]int64,
 	for _, assignment := range assignments {
 		ids = append(ids, assignment.JobID)
 	}
-	return ids, nil
+	if len(ids) == 0 {
+		return ids, nil
+	}
+	activeIDs, err := s.client.Job.Query().Where(job.IDIn(ids...), job.DeletedAtIsNil()).IDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list active assigned job IDs: %w", err)
+	}
+	return activeIDs, nil
 }
 
 func (s *JobService) Delete(ctx context.Context, id int64) error {

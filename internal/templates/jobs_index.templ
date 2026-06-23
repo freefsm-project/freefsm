@@ -18,13 +18,17 @@ templ JobsIndex(p JobListPageData) {
 				</select>
 				<span id="search-spinner" class="spinner htmx-indicator"></span>
 			</form>
-			<a href="/jobs/new" role="button">New Job</a>
+			if canManageOperational(ctx) {
+				<a href="/jobs/new" role="button">New Job</a>
+			}
 		</div>
 		@JobsTable(p)
 
-		<div hx-get="/jobs/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
-			<p>Loading recent activity...</p>
-		</div>
+		if canManageOperational(ctx) {
+			<div hx-get="/jobs/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+				<p>Loading recent activity...</p>
+			</div>
+		}
 	}
 }
 
@@ -37,16 +41,24 @@ templ JobsTable(p JobListPageData) {
 					<th>Customer</th>
 					<th>Status</th>
 					<th>Scheduled</th>
-					<th>Billing</th>
-					<th></th>
+					if canManageOperational(ctx) {
+						<th>Billing</th>
+						<th></th>
+					}
 				</tr>
 			</thead>
 			<tbody>
 				if len(p.Jobs) == 0 {
-					<tr><td colspan="6" style="text-align:center">
-						<p>No jobs found.</p>
-						<a href="/jobs/new" role="button" class="outline" style="font-size:0.85rem">Create your first job</a>
-					</td></tr>
+					if canManageOperational(ctx) {
+						<tr><td colspan="6" style="text-align:center">
+							<p>No jobs found.</p>
+							<a href="/jobs/new" role="button" class="outline" style="font-size:0.85rem">Create your first job</a>
+						</td></tr>
+					} else {
+						<tr><td colspan="4" style="text-align:center">
+							<p>No assigned jobs found.</p>
+						</td></tr>
+					}
 				}
 				for _, j := range p.Jobs {
 					<tr>
@@ -56,14 +68,16 @@ templ JobsTable(p JobListPageData) {
 						<td>{ j.Customer }</td>
 						<td><span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span></td>
 						<td>{ j.StartTime }</td>
-						<td>{ j.BillingType }</td>
-						<td style="text-align:right">
-							<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", j.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", j.DisplayName) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", j.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this job?')">
-								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", j.DisplayName) }>Del</button>
-							</form>
-						</td>
+						if canManageOperational(ctx) {
+							<td>{ j.BillingType }</td>
+							<td style="text-align:right">
+								<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", j.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", j.DisplayName) }>Edit</a>
+								<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", j.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this job?')">
+									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+									<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", j.DisplayName) }>Del</button>
+								</form>
+							</td>
+						}
 					</tr>
 				}
 			</tbody>

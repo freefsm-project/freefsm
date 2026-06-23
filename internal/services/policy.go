@@ -4,9 +4,11 @@ import (
 	"context"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/ent/asset"
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
 	"github.com/MartialM1nd/freefsm/internal/ent/jobassignment"
+	"github.com/MartialM1nd/freefsm/internal/ent/project"
 )
 
 type PolicyService struct {
@@ -32,6 +34,16 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role,
 			return false
 		}
 	}
+	if role != "tech" {
+		return false
+	}
+	switch action {
+	case "read", "create", "attach_file":
+	case "update", "delete":
+		return false
+	default:
+		return false
+	}
 	switch objectType {
 	case "job":
 		return s.IsUserAssignedToJob(ctx, objectID, userID)
@@ -52,13 +64,21 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role,
 
 func (s *PolicyService) IsUserAssignedToJob(ctx context.Context, jobID, userID int64) bool {
 	exists, err := s.client.JobAssignment.Query().Where(jobassignment.JobIDEQ(jobID), jobassignment.UserIDEQ(userID)).Exist(ctx)
-	return err == nil && exists
+	if err != nil || !exists {
+		return false
+	}
+	active, err := s.client.Job.Query().Where(job.IDEQ(jobID), job.DeletedAtIsNil()).Exist(ctx)
+	return err == nil && active
 }
 
 func (s *PolicyService) canAccessCustomer(ctx context.Context, customerID, userID int64) bool {
-	direct, err := s.client.Customer.Query().Where(customer.IDEQ(customerID), customer.AssignedToEQ(userID)).Exist(ctx)
+	direct, err := s.client.Customer.Query().Where(customer.IDEQ(customerID), customer.DeletedAtIsNil(), customer.AssignedToEQ(userID)).Exist(ctx)
 	if err == nil && direct {
 		return true
+	}
+	active, err := s.client.Customer.Query().Where(customer.IDEQ(customerID), customer.DeletedAtIsNil()).Exist(ctx)
+	if err != nil || !active {
+		return false
 	}
 	jobIDs, err := s.assignedJobIDs(ctx, userID)
 	if err != nil || len(jobIDs) == 0 {
@@ -69,9 +89,12 @@ func (s *PolicyService) canAccessCustomer(ctx context.Context, customerID, userI
 }
 
 func (s *PolicyService) canAccessProject(ctx context.Context, projectID, userID int64) bool {
-	p, err := s.client.Project.Get(ctx, projectID)
+	p, err := s.client.Project.Query().Where(project.IDEQ(projectID), project.DeletedAtIsNil()).Only(ctx)
 	if err == nil && s.isCustomerAssignedToUser(ctx, p.CustomerID, userID) {
 		return true
+	}
+	if err != nil {
+		return false
 	}
 	jobIDs, err := s.assignedJobIDs(ctx, userID)
 	if err != nil || len(jobIDs) == 0 {
@@ -82,9 +105,12 @@ func (s *PolicyService) canAccessProject(ctx context.Context, projectID, userID 
 }
 
 func (s *PolicyService) canAccessAsset(ctx context.Context, assetID, userID int64) bool {
-	a, err := s.client.Asset.Get(ctx, assetID)
+	a, err := s.client.Asset.Query().Where(asset.IDEQ(assetID), asset.DeletedAtIsNil()).Only(ctx)
 	if err == nil && s.isCustomerAssignedToUser(ctx, a.CustomerID, userID) {
 		return true
+	}
+	if err != nil {
+		return false
 	}
 	jobIDs, err := s.assignedJobIDs(ctx, userID)
 	if err != nil || len(jobIDs) == 0 {
@@ -95,7 +121,7 @@ func (s *PolicyService) canAccessAsset(ctx context.Context, assetID, userID int6
 }
 
 func (s *PolicyService) isCustomerAssignedToUser(ctx context.Context, customerID, userID int64) bool {
-	direct, err := s.client.Customer.Query().Where(customer.IDEQ(customerID), customer.AssignedToEQ(userID)).Exist(ctx)
+	direct, err := s.client.Customer.Query().Where(customer.IDEQ(customerID), customer.DeletedAtIsNil(), customer.AssignedToEQ(userID)).Exist(ctx)
 	return err == nil && direct
 }
 

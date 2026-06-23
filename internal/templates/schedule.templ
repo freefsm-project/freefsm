@@ -21,7 +21,9 @@ templ SchedulePage(p SchedulePageData) {
 				<a href="/schedule" role="button" class={ "outline", !p.IsMonth }>Month</a>
 				<a href={ templ.URL("/schedule?view=week&date="+p.Date) } role="button" class={ "outline", !p.IsWeek }>Week</a>
 				<a href={ templ.URL("/schedule?view=day&date="+p.Date) } role="button" class={ "outline", !p.IsDay }>Day</a>
-				<a href="/jobs/new" role="button">New Job</a>
+				if canManageOperational(ctx) {
+					<a href="/jobs/new" role="button">New Job</a>
+				}
 			</div>
 		</div>
 		if p.IsMonth {

@@ -27,10 +27,12 @@ templ JobShow(p JobDetail) {
 		if p.ArchivedAt != "" {
 			<div style="background:var(--pico-muted-background);border:1px solid var(--pico-muted-border-color);border-radius:0.25rem;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
 				<span style="color:var(--pico-muted-color)">Archived on { p.ArchivedAt }</span>
-				<form action={ templ.URL(fmt.Sprintf("/jobs/%d/restore", p.ID)) } method="post" style="display:inline">
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
-				</form>
+				if canManageOperational(ctx) {
+					<form action={ templ.URL(fmt.Sprintf("/jobs/%d/restore", p.ID)) } method="post" style="display:inline">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
+					</form>
+				}
 			</div>
 		}
 		if len(p.Tags) > 0 || true {
@@ -46,7 +48,9 @@ templ JobShow(p JobDetail) {
 			<tbody>
 				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
 				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(p.StatusColor) }>{ p.StatusName }</span></td></tr>
-				<tr><th>Billing Type</th><td>{ p.BillingType }</td></tr>
+				if canManageOperational(ctx) {
+					<tr><th>Billing Type</th><td>{ p.BillingType }</td></tr>
+				}
 				if p.ProjectName != "" {
 					<tr><th>Project</th><td>{ p.ProjectName }</td></tr>
 				}
@@ -108,7 +112,7 @@ templ JobShow(p JobDetail) {
 		if len(p.Subtasks) > 0 {
 			@JobSubtasks(p)
 		}
-		if len(p.LineItems) > 0 {
+		if canManageOperational(ctx) && len(p.LineItems) > 0 {
 			<h3>Line Items</h3>
 			<table>
 				<thead>

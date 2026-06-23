@@ -77,11 +77,13 @@ templ FileList(p FileListPageData) {
 							<td>{ f.FileSize }</td>
 							<td>{ f.CreatedAt }</td>
 							<td>
-								<form action={ templ.URL(fmt.Sprintf("/files/%d/delete", f.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this file?')">
-									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-									<input type="hidden" name="redirect" value={ fmt.Sprintf("%s/%d", redirectPrefix(p.ObjectType), p.ObjectID) }/>
-									<button type="submit" class="outline contrast small" style="padding:0 0.5rem;font-size:0.8rem">Delete</button>
-								</form>
+								if canManageOperational(ctx) {
+									<form action={ templ.URL(fmt.Sprintf("/files/%d/delete", f.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this file?')">
+										<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+										<input type="hidden" name="redirect" value={ fmt.Sprintf("%s/%d", redirectPrefix(p.ObjectType), p.ObjectID) }/>
+										<button type="submit" class="outline contrast small" style="padding:0 0.5rem;font-size:0.8rem">Delete</button>
+									</form>
+								}
 							</td>
 						</tr>
 					}

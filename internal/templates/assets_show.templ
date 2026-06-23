@@ -6,22 +6,26 @@ templ AssetShow(p AssetShowPageData) {
 	@Layout(p.Asset.Name) {
 		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
 			<h2 style="margin:0">{ p.Asset.Name }</h2>
-			<div>
-				<a href={ templ.URL(fmt.Sprintf("/assets/%d/edit", p.Asset.ID)) } role="button" class="outline">Edit</a>
-				<form action={ templ.URL(fmt.Sprintf("/assets/%d/delete", p.Asset.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this asset?')">
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button class="outline contrast">Delete</button>
-				</form>
-			</div>
+			if canManageOperational(ctx) {
+				<div>
+					<a href={ templ.URL(fmt.Sprintf("/assets/%d/edit", p.Asset.ID)) } role="button" class="outline">Edit</a>
+					<form action={ templ.URL(fmt.Sprintf("/assets/%d/delete", p.Asset.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this asset?')">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button class="outline contrast">Delete</button>
+					</form>
+				</div>
+			}
 		</div>
 
 		if p.Asset.ArchivedAt != "" {
 			<div style="background:var(--pico-muted-background);border:1px solid var(--pico-muted-border-color);border-radius:0.25rem;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
 				<span style="color:var(--pico-muted-color)">Archived on { p.Asset.ArchivedAt }</span>
-				<form action={ templ.URL(fmt.Sprintf("/assets/%d/restore", p.Asset.ID)) } method="post" style="display:inline">
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
-				</form>
+				if canManageOperational(ctx) {
+					<form action={ templ.URL(fmt.Sprintf("/assets/%d/restore", p.Asset.ID)) } method="post" style="display:inline">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
+					</form>
+				}
 			</div>
 		}
 

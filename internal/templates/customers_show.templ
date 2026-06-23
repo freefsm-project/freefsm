@@ -4,22 +4,26 @@ import "fmt"
 
 templ CustomerShow(p CustomerShowPageData) {
 	@Layout("Customer - "+p.Customer.DisplayName) {
-		<div style="display:flex;justify-content:space-between;align-items:center">
-			<div style="display:flex;gap:0.5rem">
-				<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Customer.DisplayName) }>Edit</a>
-				<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", p.Customer.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this customer?')">
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Customer.DisplayName) }>Delete</button>
-				</form>
+		if canManageOperational(ctx) {
+			<div style="display:flex;justify-content:space-between;align-items:center">
+				<div style="display:flex;gap:0.5rem">
+					<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Customer.DisplayName) }>Edit</a>
+					<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", p.Customer.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this customer?')">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Customer.DisplayName) }>Delete</button>
+					</form>
+				</div>
 			</div>
-		</div>
+		}
 		if p.Customer.ArchivedAt != "" {
 			<div style="background:var(--pico-muted-background);border:1px solid var(--pico-muted-border-color);border-radius:0.25rem;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
 				<span style="color:var(--pico-muted-color)">Archived on { p.Customer.ArchivedAt }</span>
-				<form action={ templ.URL(fmt.Sprintf("/customers/%d/restore", p.Customer.ID)) } method="post" style="display:inline">
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
-				</form>
+				if canManageOperational(ctx) {
+					<form action={ templ.URL(fmt.Sprintf("/customers/%d/restore", p.Customer.ID)) } method="post" style="display:inline">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
+					</form>
+				}
 			</div>
 		}
 		if len(p.Tags) > 0 || true {
@@ -37,22 +41,26 @@ templ CustomerShow(p CustomerShowPageData) {
 				<tr><th>Last Name</th><td>{ p.Customer.LastName }</td></tr>
 				<tr><th>Email</th><td>{ p.Customer.Email }</td></tr>
 				<tr><th>Phone</th><td>{ p.Customer.Phone }</td></tr>
-				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(customerStatusColor(p.Customer.Status)) }>{ p.Customer.Status }</span></td></tr>
-				<tr><th>Account Type</th><td>{ p.Customer.AccountType }</td></tr>
+				if canManageOperational(ctx) {
+					<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(customerStatusColor(p.Customer.Status)) }>{ p.Customer.Status }</span></td></tr>
+					<tr><th>Account Type</th><td>{ p.Customer.AccountType }</td></tr>
+				}
 			</tbody>
 		</table>
-		if p.Customer.Notes != "" {
+		if canManageOperational(ctx) && p.Customer.Notes != "" {
 			<h3>Notes</h3>
 			<p>{ p.Customer.Notes }</p>
 		}
-		<h3>Billing Address</h3>
-		<p>
-			{ p.Customer.BillingAddress1 }<br/>
-			if p.Customer.BillingAddress2 != "" {
-				{ p.Customer.BillingAddress2 }<br/>
+		if canManageOperational(ctx) {
+			<h3>Billing Address</h3>
+			<p>
+				{ p.Customer.BillingAddress1 }<br/>
+				if p.Customer.BillingAddress2 != "" {
+					{ p.Customer.BillingAddress2 }<br/>
+				}
+				{ p.Customer.BillingCity }, { p.Customer.BillingState } { p.Customer.BillingZipCode }
+			</p>
 			}
-			{ p.Customer.BillingCity }, { p.Customer.BillingState } { p.Customer.BillingZipCode }
-		</p>
 		<h3>Service Address</h3>
 		<p>
 			{ p.Customer.ServiceAddress1 }<br/>
@@ -73,6 +81,8 @@ templ CustomerShow(p CustomerShowPageData) {
 	<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/activity", p.Customer.ID)) } hx-trigger="load" hx-swap="innerHTML">
 		<p>Loading activity...</p>
 	</div>
-	<p><a href="/customers">&larr; Back to Customers</a></p>
+	if canManageOperational(ctx) {
+		<p><a href="/customers">&larr; Back to Customers</a></p>
+	}
 	}
 }

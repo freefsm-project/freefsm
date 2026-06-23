@@ -10,7 +10,13 @@ import (
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/ent/asset"
+	"github.com/MartialM1nd/freefsm/internal/ent/customer"
+	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/file"
+	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
+	"github.com/MartialM1nd/freefsm/internal/ent/job"
+	"github.com/MartialM1nd/freefsm/internal/ent/project"
 	"github.com/google/uuid"
 )
 
@@ -65,23 +71,23 @@ func (s *FileService) TargetExists(ctx context.Context, objectType string, objec
 	}
 	switch objectType {
 	case "customer":
-		_, err := s.client.Customer.Get(ctx, objectID)
-		return err == nil
+		exists, err := s.client.Customer.Query().Where(customer.IDEQ(objectID), customer.DeletedAtIsNil()).Exist(ctx)
+		return err == nil && exists
 	case "job":
-		_, err := s.client.Job.Get(ctx, objectID)
-		return err == nil
+		exists, err := s.client.Job.Query().Where(job.IDEQ(objectID), job.DeletedAtIsNil()).Exist(ctx)
+		return err == nil && exists
 	case "project":
-		_, err := s.client.Project.Get(ctx, objectID)
-		return err == nil
+		exists, err := s.client.Project.Query().Where(project.IDEQ(objectID), project.DeletedAtIsNil()).Exist(ctx)
+		return err == nil && exists
 	case "estimate":
-		_, err := s.client.Estimate.Get(ctx, objectID)
-		return err == nil
+		exists, err := s.client.Estimate.Query().Where(estimate.IDEQ(objectID), estimate.DeletedAtIsNil()).Exist(ctx)
+		return err == nil && exists
 	case "invoice":
-		_, err := s.client.Invoice.Get(ctx, objectID)
-		return err == nil
+		exists, err := s.client.Invoice.Query().Where(invoice.IDEQ(objectID), invoice.DeletedAtIsNil()).Exist(ctx)
+		return err == nil && exists
 	case "asset":
-		_, err := s.client.Asset.Get(ctx, objectID)
-		return err == nil
+		exists, err := s.client.Asset.Query().Where(asset.IDEQ(objectID), asset.DeletedAtIsNil()).Exist(ctx)
+		return err == nil && exists
 	default:
 		return false
 	}
