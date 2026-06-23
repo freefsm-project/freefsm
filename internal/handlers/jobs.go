@@ -132,24 +132,22 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Tags = tagsToRows(tags)
 	d.AllTags = tagsToRows(allTags)
-	projects, _ := h.projectSvc.ListAll(r.Context())
-	locations, _ := h.locSvc.ListAll(r.Context())
-	if j.CustomerID > 0 {
-		contacts, _ := h.contactSvc.ListByCustomer(r.Context(), j.CustomerID)
-		for _, p := range projects {
-			if j.ProjectID != nil && p.ID == *j.ProjectID {
-				d.ProjectName = p.Name
-			}
+	if j.ProjectID != nil && *j.ProjectID > 0 {
+		project, _ := h.projectSvc.GetByID(r.Context(), *j.ProjectID)
+		if project != nil && project.DeletedAt == nil {
+			d.ProjectName = project.Name
 		}
-		for _, l := range locations {
-			if j.LocationID != nil && l.ID == *j.LocationID {
-				d.LocationName = l.Title
-			}
+	}
+	if j.LocationID != nil && *j.LocationID > 0 {
+		location, _ := h.locSvc.GetByID(r.Context(), *j.LocationID)
+		if location != nil {
+			d.LocationName = location.Title
 		}
-		for _, c := range contacts {
-			if j.CustomerContactID != nil && c.ID == *j.CustomerContactID {
-				d.ContactName = c.FirstName + " " + c.LastName
-			}
+	}
+	if j.CustomerContactID != nil && *j.CustomerContactID > 0 {
+		contact, _ := h.contactSvc.GetByID(r.Context(), *j.CustomerContactID)
+		if contact != nil && contact.CustomerID == j.CustomerID {
+			d.ContactName = contact.FirstName + " " + contact.LastName
 		}
 	}
 	if j.AssetID != nil && *j.AssetID > 0 {
