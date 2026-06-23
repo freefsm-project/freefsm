@@ -16,26 +16,16 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, s
 	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
 
-	items, _ := ParseLineItems(e.LineItems)
+	items, err := ParseLineItems(e.LineItems)
+	if err != nil {
+		return fmt.Errorf("parse estimate line items: %w", err)
+	}
 	writeHeader(pdf, "ESTIMATE", fmt.Sprintf("%05d", e.ID), cs)
 	writeCustomer(pdf, customer)
 	writeLineItems(pdf, items, parseTaxRate(e.TaxRate), cs)
 	writeNotes(pdf, e.Notes)
 	writeStatus(pdf, statusNameForPDF(statuses, e.StatusID))
-
-	if cs != nil && cs.InvoiceFooter != "" {
-		pdf.SetAutoPageBreak(false, 0)
-		pdf.SetFont("Helvetica", "I", 8)
-		pdf.SetTextColor(128, 128, 128)
-		lines := strings.Split(cs.InvoiceFooter, "\n")
-		footerHeight := float64(len(lines)) * 5
-		pdf.SetY(-footerHeight - 10)
-		for _, line := range lines {
-			pdf.Cell(0, 5, line)
-			pdf.Ln(5)
-		}
-		pdf.SetAutoPageBreak(true, 15)
-	}
+	writeFooter(pdf, cs)
 
 	return pdf.Output(w)
 }
@@ -45,8 +35,14 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, sta
 	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
 
-	items, _ := ParseLineItems(i.LineItems)
-	payments, _ := ParsePayments(i.Payments)
+	items, err := ParseLineItems(i.LineItems)
+	if err != nil {
+		return fmt.Errorf("parse invoice line items: %w", err)
+	}
+	payments, err := ParsePayments(i.Payments)
+	if err != nil {
+		return fmt.Errorf("parse invoice payments: %w", err)
+	}
 	writeHeader(pdf, "INVOICE", fmt.Sprintf("%05d", i.ID), cs)
 	writeCustomer(pdf, customer)
 	writeInvoiceDates(pdf, i)
@@ -60,22 +56,26 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, sta
 	writePayments(pdf, payments, cs)
 	writeNotes(pdf, i.Notes)
 	writeStatus(pdf, statusNameForPDF(statuses, i.StatusID))
- 
-	if cs != nil && cs.InvoiceFooter != "" {
-		pdf.SetAutoPageBreak(false, 0)
-		pdf.SetFont("Helvetica", "I", 8)
-		pdf.SetTextColor(128, 128, 128)
-		lines := strings.Split(cs.InvoiceFooter, "\n")
-		footerHeight := float64(len(lines)) * 5
-		pdf.SetY(-footerHeight - 10)
-		for _, line := range lines {
-			pdf.Cell(0, 5, line)
-			pdf.Ln(5)
-		}
-		pdf.SetAutoPageBreak(true, 15)
-	}
+	writeFooter(pdf, cs)
 
 	return pdf.Output(w)
+}
+
+func writeFooter(pdf *gofpdf.Fpdf, cs *ent.CompanySettings) {
+	if cs == nil || cs.InvoiceFooter == "" {
+		return
+	}
+	pdf.SetAutoPageBreak(false, 0)
+	pdf.SetFont("Helvetica", "I", 8)
+	pdf.SetTextColor(128, 128, 128)
+	lines := strings.Split(cs.InvoiceFooter, "\n")
+	footerHeight := float64(len(lines)) * 5
+	pdf.SetY(-footerHeight - 10)
+	for _, line := range lines {
+		pdf.Cell(0, 5, line)
+		pdf.Ln(5)
+	}
+	pdf.SetAutoPageBreak(true, 15)
 }
 
 func writeHeader(pdf *gofpdf.Fpdf, docType, number string, cs *ent.CompanySettings) {

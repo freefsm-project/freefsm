@@ -1,10 +1,10 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -175,13 +175,13 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := services.EstimateCreateParams{
-		CustomerID: custID,
-		JobID:      jobID,
-		StatusID:   statusID,
-		Title:      r.FormValue("title"),
-		Notes:      r.FormValue("notes"),
-		TaxRate:    taxRate,
-		LineItems:   lineItems,
+		CustomerID:   custID,
+		JobID:        jobID,
+		StatusID:     statusID,
+		Title:        r.FormValue("title"),
+		Notes:        r.FormValue("notes"),
+		TaxRate:      taxRate,
+		LineItems:    lineItems,
 		CustomFields: parseCustomFieldValues(r),
 	}
 	if params.LineItems == nil {
@@ -235,11 +235,11 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := services.EstimateUpdateParams{
-		CustomerID: int64Ptr(custID),
-		JobID:      int64Ptr(jobID),
-		StatusID:   int64Ptr(statusID),
-		Title:      formPtr(r.FormValue("title")),
-		Notes:      formPtr(r.FormValue("notes")),
+		CustomerID:   int64Ptr(custID),
+		JobID:        int64Ptr(jobID),
+		StatusID:     int64Ptr(statusID),
+		Title:        formPtr(r.FormValue("title")),
+		Notes:        formPtr(r.FormValue("notes")),
 		TaxRate:      taxRatePtr,
 		CustomFields: strPtr(parseCustomFieldValues(r)),
 	}
@@ -275,8 +275,8 @@ func (h *EstimateHandler) ConvertToInvoice(w http.ResponseWriter, r *http.Reques
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.ID, "converted", "estimate", id, map[string]interface{}{
-			"entity_name":  inv.Title,
-			"actor_name":   u.Name,
+			"entity_name": inv.Title,
+			"actor_name":  u.Name,
 			"invoice_id":  inv.ID,
 		})
 	}
@@ -327,14 +327,9 @@ func (h *EstimateHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		c, _ := h.custSvc.GetByID(r.Context(), *e.CustomerID)
 		customer = c
 	}
-	var buf bytes.Buffer
-	if err := services.GenerateEstimatePDF(&buf, e, customer, statuses, middleware.CompanyFromContext(r.Context())); err != nil {
-		http.Error(w, "PDF generation failed: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="EST-%05d.pdf"`, id))
-	buf.WriteTo(w)
+	writePDFResponse(w, fmt.Sprintf("EST-%05d.pdf", id), func(w io.Writer) error {
+		return services.GenerateEstimatePDF(w, e, customer, statuses, middleware.CompanyFromContext(r.Context()))
+	})
 }
 
 func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -439,14 +434,14 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 
 func estimateToDetail(e *ent.Estimate, statuses []*ent.Status) templates.EstimateDetail {
 	d := templates.EstimateDetail{
-		ID:         e.ID,
-		CustomerID: estCustID(e),
-		StatusID:   estStatusID(e),
+		ID:          e.ID,
+		CustomerID:  estCustID(e),
+		StatusID:    estStatusID(e),
 		StatusName:  statusName(statuses, e.StatusID),
 		StatusColor: statusColor(statuses, e.StatusID),
-		Title:      e.Title,
-		Notes:      e.Notes,
-		TaxRate:    e.TaxRate,
+		Title:       e.Title,
+		Notes:       e.Notes,
+		TaxRate:     e.TaxRate,
 	}
 	if e.JobID != nil {
 		d.JobID = *e.JobID
@@ -459,11 +454,11 @@ func estimateToDetail(e *ent.Estimate, statuses []*ent.Status) templates.Estimat
 
 func estimateRow(e *ent.Estimate, statuses []*ent.Status, custMap map[int64]string) templates.EstimateRow {
 	r := templates.EstimateRow{
-		ID:         e.ID,
-		Title:      e.Title,
-		CustomerID: estCustID(e),
-		Customer:   custMap[estCustID(e)],
-		StatusID:   estStatusID(e),
+		ID:          e.ID,
+		Title:       e.Title,
+		CustomerID:  estCustID(e),
+		Customer:    custMap[estCustID(e)],
+		StatusID:    estStatusID(e),
 		StatusName:  statusName(statuses, e.StatusID),
 		StatusColor: statusColor(statuses, e.StatusID),
 	}

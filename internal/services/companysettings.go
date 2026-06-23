@@ -19,32 +19,32 @@ func (s *CompanySettingsService) Get(ctx context.Context) (*ent.CompanySettings,
 }
 
 type CompanySettingsParams struct {
-	BusinessName    string
-	Address         string
-	City            string
-	State           string
-	Zip             string
-	Phone           string
-	Email           string
-	TaxID           string
-	DefaultTaxRate  string
-	InvoicePrefix   string
-	EstimatePrefix  string
-	DefaultDueDays  int
-	SmtpHost        string
-	SmtpPort        int
-	SmtpUser        string
-	SmtpPassword    string
-	SmtpFrom        string
-	Timezone        string
-	PasswordMinLength         int
+	BusinessName             string
+	Address                  string
+	City                     string
+	State                    string
+	Zip                      string
+	Phone                    string
+	Email                    string
+	TaxID                    string
+	DefaultTaxRate           string
+	InvoicePrefix            string
+	EstimatePrefix           string
+	DefaultDueDays           int
+	SmtpHost                 string
+	SmtpPort                 int
+	SmtpUser                 string
+	SmtpPassword             string
+	SmtpFrom                 string
+	Timezone                 string
+	PasswordMinLength        int
 	PasswordRequireUppercase bool
 	PasswordRequireLowercase bool
 	PasswordRequireDigit     bool
 	PasswordRequireSpecial   bool
 	InvoiceColor             string
-	InvoiceFooter             string
-	InvoicePaymentTerms       string
+	InvoiceFooter            string
+	InvoicePaymentTerms      string
 }
 
 func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsParams) error {
@@ -81,4 +81,12 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetInvoicePaymentTerms(p.InvoicePaymentTerms).
 		Save(ctx)
 	return err
+}
+
+func (s *CompanySettingsService) UpdateInvoiceLogoPath(ctx context.Context, path string) (*ent.CompanySettings, error) {
+	cs, err := s.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.client.CompanySettings.UpdateOneID(cs.ID).SetInvoiceLogoPath(path).Save(ctx)
 }

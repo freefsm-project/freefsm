@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 	"os"
@@ -20,12 +20,11 @@ type SettingsHandler struct {
 	svc         *services.CompanySettingsService
 	emailSvc    *services.EmailService
 	activitySvc *services.ActivityService
-	entClient   *ent.Client
 	uploadDir   string
 }
 
-func NewSettingsHandler(svc *services.CompanySettingsService, emailSvc *services.EmailService, activitySvc *services.ActivityService, entClient *ent.Client, uploadDir string) *SettingsHandler {
-	return &SettingsHandler{svc: svc, emailSvc: emailSvc, activitySvc: activitySvc, entClient: entClient, uploadDir: uploadDir}
+func NewSettingsHandler(svc *services.CompanySettingsService, emailSvc *services.EmailService, activitySvc *services.ActivityService, uploadDir string) *SettingsHandler {
+	return &SettingsHandler{svc: svc, emailSvc: emailSvc, activitySvc: activitySvc, uploadDir: uploadDir}
 }
 
 func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
@@ -49,32 +48,32 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 	oldSettings, _ := h.svc.Get(r.Context())
 
 	err := h.svc.Save(r.Context(), services.CompanySettingsParams{
-		BusinessName:   r.FormValue("business_name"),
-		Address:        r.FormValue("address"),
-		City:           r.FormValue("city"),
-		State:          r.FormValue("state"),
-		Zip:            r.FormValue("zip"),
-		Phone:          r.FormValue("phone"),
-		Email:          r.FormValue("email"),
-		TaxID:          r.FormValue("tax_id"),
-		DefaultTaxRate: r.FormValue("default_tax_rate"),
-		InvoicePrefix:  r.FormValue("invoice_prefix"),
-		EstimatePrefix: r.FormValue("estimate_prefix"),
-		DefaultDueDays: dueDays,
-		SmtpHost:       r.FormValue("smtp_host"),
-		SmtpPort:       smtpPort,
-		SmtpUser:       r.FormValue("smtp_user"),
-		SmtpPassword:   r.FormValue("smtp_password"),
-		SmtpFrom:       r.FormValue("smtp_from"),
-		Timezone:       r.FormValue("timezone"),
-		PasswordMinLength:         pwMinLen,
-		PasswordRequireUppercase:  r.FormValue("password_require_uppercase") == "on",
-		PasswordRequireLowercase:  r.FormValue("password_require_lowercase") == "on",
-		PasswordRequireDigit:        r.FormValue("password_require_digit") == "on",
-		PasswordRequireSpecial:      r.FormValue("password_require_special") == "on",
-		InvoiceColor:                 r.FormValue("invoice_color"),
-		InvoiceFooter:                r.FormValue("invoice_footer"),
-		InvoicePaymentTerms:          r.FormValue("invoice_payment_terms"),
+		BusinessName:             r.FormValue("business_name"),
+		Address:                  r.FormValue("address"),
+		City:                     r.FormValue("city"),
+		State:                    r.FormValue("state"),
+		Zip:                      r.FormValue("zip"),
+		Phone:                    r.FormValue("phone"),
+		Email:                    r.FormValue("email"),
+		TaxID:                    r.FormValue("tax_id"),
+		DefaultTaxRate:           r.FormValue("default_tax_rate"),
+		InvoicePrefix:            r.FormValue("invoice_prefix"),
+		EstimatePrefix:           r.FormValue("estimate_prefix"),
+		DefaultDueDays:           dueDays,
+		SmtpHost:                 r.FormValue("smtp_host"),
+		SmtpPort:                 smtpPort,
+		SmtpUser:                 r.FormValue("smtp_user"),
+		SmtpPassword:             r.FormValue("smtp_password"),
+		SmtpFrom:                 r.FormValue("smtp_from"),
+		Timezone:                 r.FormValue("timezone"),
+		PasswordMinLength:        pwMinLen,
+		PasswordRequireUppercase: r.FormValue("password_require_uppercase") == "on",
+		PasswordRequireLowercase: r.FormValue("password_require_lowercase") == "on",
+		PasswordRequireDigit:     r.FormValue("password_require_digit") == "on",
+		PasswordRequireSpecial:   r.FormValue("password_require_special") == "on",
+		InvoiceColor:             r.FormValue("invoice_color"),
+		InvoiceFooter:            r.FormValue("invoice_footer"),
+		InvoicePaymentTerms:      r.FormValue("invoice_payment_terms"),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -211,23 +210,17 @@ func (h *SettingsHandler) UploadInvoiceLogo(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	fh := files[0]
-	mimeType := fh.Header.Get("Content-Type")
-	if !strings.HasPrefix(mimeType, "image/") {
-		http.Error(w, "Only image files allowed", 400)
-		return
-	}
-
-	f, err := fh.Open()
+	f, err := files[0].Open()
 	if err != nil {
 		http.Error(w, "Cannot open file", 500)
 		return
 	}
 	defer f.Close()
 
-	ext := strings.ToLower(filepath.Ext(fh.Filename))
-	if ext == "" {
-		ext = ".png"
+	ext, err := detectInvoiceLogoExt(f)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
 	}
 	logoPath := filepath.Join(h.uploadDir, "invoice-logo"+ext)
 
@@ -243,13 +236,8 @@ func (h *SettingsHandler) UploadInvoiceLogo(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	cs, err := h.svc.Get(r.Context())
+	cs, err := h.svc.UpdateInvoiceLogoPath(r.Context(), logoPath)
 	if err != nil {
-		http.Error(w, "Cannot load settings", 500)
-		return
-	}
-
-	if _, err := h.entClient.CompanySettings.UpdateOneID(cs.ID).SetInvoiceLogoPath(logoPath).Save(r.Context()); err != nil {
 		http.Error(w, "Cannot update settings: "+err.Error(), 500)
 		return
 	}
@@ -262,11 +250,25 @@ func (h *SettingsHandler) UploadInvoiceLogo(w http.ResponseWriter, r *http.Reque
 		})
 	}
 
-	logoURL := "/settings/invoice-logo?t=" + strconv.FormatInt(time.Now().UnixMilli(), 10)
-	if logoPath != "" {
-		fmt.Fprintf(w, `<input type="text" name="invoice_logo_path" value="%s" placeholder="File path" readonly style="font-family:monospace;font-size:0.85rem"/><div style="margin-top:0.5rem"><img src="%s" alt="Logo preview" style="max-height:64px;max-width:200px"/></div>`, logoPath, logoURL)
-	} else {
-		fmt.Fprintf(w, `<input type="text" name="invoice_logo_path" value="" placeholder="File path" readonly style="font-family:monospace;font-size:0.85rem"/>`)
+	templates.InvoiceLogoPreview(logoPath, strconv.FormatInt(time.Now().UnixMilli(), 10)).Render(r.Context(), w)
+}
+
+func detectInvoiceLogoExt(f io.ReadSeeker) (string, error) {
+	buf := make([]byte, 512)
+	n, err := f.Read(buf)
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		return "", err
+	}
+	switch http.DetectContentType(buf[:n]) {
+	case "image/png":
+		return ".png", nil
+	case "image/jpeg":
+		return ".jpg", nil
+	default:
+		return "", errors.New("Only PNG and JPEG images allowed")
 	}
 }
 

@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -175,14 +175,14 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	loc := middleware.CompanyLocation(r.Context())
 	params := services.InvoiceCreateParams{
-		CustomerID:  custID,
-		JobID:       jobID,
-		StatusID:    statusID,
-		Title:       r.FormValue("title"),
-		Notes:       r.FormValue("notes"),
-		InvoiceDate: parseDate(r.FormValue("invoice_date"), loc),
-		DueDate:     parseDate(r.FormValue("due_date"), loc),
-		TaxRate:     taxRate,
+		CustomerID:   custID,
+		JobID:        jobID,
+		StatusID:     statusID,
+		Title:        r.FormValue("title"),
+		Notes:        r.FormValue("notes"),
+		InvoiceDate:  parseDate(r.FormValue("invoice_date"), loc),
+		DueDate:      parseDate(r.FormValue("due_date"), loc),
+		TaxRate:      taxRate,
 		LineItems:    lineItems,
 		CustomFields: parseCustomFieldValues(r),
 	}
@@ -370,14 +370,14 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 
 func invoiceToDetail(i *ent.Invoice, statuses []*ent.Status) templates.InvoiceDetail {
 	d := templates.InvoiceDetail{
-		ID:         i.ID,
-		CustomerID: invCustID(i),
-		StatusID:   invStatusID(i),
+		ID:          i.ID,
+		CustomerID:  invCustID(i),
+		StatusID:    invStatusID(i),
 		StatusName:  statusName(statuses, i.StatusID),
 		StatusColor: statusColor(statuses, i.StatusID),
-		Title:      i.Title,
-		Notes:      i.Notes,
-		TaxRate:    i.TaxRate,
+		Title:       i.Title,
+		Notes:       i.Notes,
+		TaxRate:     i.TaxRate,
 	}
 	if i.JobID != nil {
 		d.JobID = *i.JobID
@@ -396,11 +396,11 @@ func invoiceToDetail(i *ent.Invoice, statuses []*ent.Status) templates.InvoiceDe
 
 func invoiceRow(i *ent.Invoice, statuses []*ent.Status, custMap map[int64]string) templates.InvoiceRow {
 	r := templates.InvoiceRow{
-		ID:         i.ID,
-		Title:      i.Title,
-		CustomerID: invCustID(i),
-		Customer:   custMap[invCustID(i)],
-		StatusID:   invStatusID(i),
+		ID:          i.ID,
+		Title:       i.Title,
+		CustomerID:  invCustID(i),
+		Customer:    custMap[invCustID(i)],
+		StatusID:    invStatusID(i),
 		StatusName:  statusName(statuses, i.StatusID),
 		StatusColor: statusColor(statuses, i.StatusID),
 	}
@@ -491,14 +491,9 @@ func (h *InvoiceHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		c, _ := h.custSvc.GetByID(r.Context(), *i.CustomerID)
 		customer = c
 	}
-	var buf bytes.Buffer
-	if err := services.GenerateInvoicePDF(&buf, i, customer, statuses, middleware.CompanyFromContext(r.Context())); err != nil {
-		http.Error(w, "PDF generation failed: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="INV-%05d.pdf"`, id))
-	buf.WriteTo(w)
+	writePDFResponse(w, fmt.Sprintf("INV-%05d.pdf", id), func(w io.Writer) error {
+		return services.GenerateInvoicePDF(w, i, customer, statuses, middleware.CompanyFromContext(r.Context()))
+	})
 }
 
 func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {

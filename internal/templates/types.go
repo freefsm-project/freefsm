@@ -46,7 +46,7 @@ type SetupPageData struct {
 }
 
 type DashboardData struct {
-	Stats      services.DashboardStats
+	Stats       services.DashboardStats
 	ClockWidget ClockWidgetData
 }
 
@@ -74,16 +74,14 @@ type RecentEstimate struct {
 	CreatedAt string
 }
 
-
-
 type CustomerListPageData struct {
-	Customers     []CustomerRow
-	Page          int
-	PerPage       int
-	Total         int
-	TotalPages    int
-	Search        string
-	StatusFilter  string
+	Customers    []CustomerRow
+	Page         int
+	PerPage      int
+	Total        int
+	TotalPages   int
+	Search       string
+	StatusFilter string
 }
 
 type CustomerRow struct {
@@ -103,7 +101,7 @@ type CustomerShowPageData struct {
 	Tags         []TagRow
 	AllTags      []TagRow
 	CustomFields []CustomFieldDisplay
-	FileList        FileListPageData
+	FileList     FileListPageData
 }
 
 type CustomerDetail struct {
@@ -131,12 +129,12 @@ type CustomerDetail struct {
 }
 
 type CustomerFormPageData struct {
-	Customer      *CustomerDetail
-	Errors        map[string]string
-	IsNew         bool
-	Statuses      []string
-	AccountTypes  []string
-	CustomFields  []CustomFieldDisplay
+	Customer     *CustomerDetail
+	Errors       map[string]string
+	IsNew        bool
+	Statuses     []string
+	AccountTypes []string
+	CustomFields []CustomFieldDisplay
 }
 
 type PaginationData struct {
@@ -192,30 +190,30 @@ type ProjectListPageData struct {
 type ProjectShowPageData struct {
 	Project      ProjectDetail
 	Jobs         []JobRow
-	Tags        []TagRow
-	AllTags     []TagRow
+	Tags         []TagRow
+	AllTags      []TagRow
 	CustomFields []CustomFieldDisplay
-	FileList    FileListPageData
+	FileList     FileListPageData
 }
 
 type ProjectFormPageData struct {
-	Project       *ProjectDetail
-	Errors        map[string]string
-	IsNew         bool
-	Customers     []SelectOption
-	Statuses      []SelectOption
-	Locations     []SelectOption
-	CustomFields  []CustomFieldDisplay
+	Project      *ProjectDetail
+	Errors       map[string]string
+	IsNew        bool
+	Customers    []SelectOption
+	Statuses     []SelectOption
+	Locations    []SelectOption
+	CustomFields []CustomFieldDisplay
 }
 
 type ItemRow struct {
-	ID          int64
-	Name        string
-	Type        string
-	Sku         string
-	UnitPrice   float64
-	UnitCost    float64
-	IsActive    bool
+	ID        int64
+	Name      string
+	Type      string
+	Sku       string
+	UnitPrice float64
+	UnitCost  float64
+	IsActive  bool
 }
 
 type ItemDetail struct {
@@ -243,10 +241,10 @@ type ItemListPageData struct {
 }
 
 type ItemFormPageData struct {
-	Item     *ItemDetail
-	Errors   map[string]string
-	IsNew    bool
-	Types    []string
+	Item   *ItemDetail
+	Errors map[string]string
+	IsNew  bool
+	Types  []string
 }
 
 type JobRow struct {
@@ -262,37 +260,37 @@ type JobRow struct {
 }
 
 type JobDetail struct {
-	ID              int64
-	CustomerID      int64
-	Customer        string
-	ProjectID       int64
-	ProjectName     string
-	LocationID      int64
-	LocationName    string
-	ContactID       int64
-	ContactName     string
-	AssetID         int64
-	AssetName       string
-	LineItems       []services.LineItem
-	Visits          []services.JobVisit
-	Assignments     []services.JobAssignment
-	Subtasks        []services.JobSubtask
-	Tags            []TagRow
-	AllTags         []TagRow
-	CustomFields    []CustomFieldDisplay
-	JobType         string
-	Subtitle        string
-	StatusID        int64
-	StatusName      string
-	StatusColor     string
-	BillingType     string
-	StartTime       string
-	EndTime         string
-	DueDate         string
-	Notes           string
-	TechNotes       string
-	FileList        FileListPageData
-	ArchivedAt      string
+	ID           int64
+	CustomerID   int64
+	Customer     string
+	ProjectID    int64
+	ProjectName  string
+	LocationID   int64
+	LocationName string
+	ContactID    int64
+	ContactName  string
+	AssetID      int64
+	AssetName    string
+	LineItems    []services.LineItem
+	Visits       []services.JobVisit
+	Assignments  []services.JobAssignment
+	Subtasks     []services.JobSubtask
+	Tags         []TagRow
+	AllTags      []TagRow
+	CustomFields []CustomFieldDisplay
+	JobType      string
+	Subtitle     string
+	StatusID     int64
+	StatusName   string
+	StatusColor  string
+	BillingType  string
+	StartTime    string
+	EndTime      string
+	DueDate      string
+	Notes        string
+	TechNotes    string
+	FileList     FileListPageData
+	ArchivedAt   string
 }
 
 type SelectOption struct {
@@ -312,19 +310,19 @@ type JobListPageData struct {
 }
 
 type JobFormPageData struct {
-	Job                   *JobDetail
-	Errors                map[string]string
-	IsNew                 bool
-	Customers             []SelectOption
-	Projects              []SelectOption
-	Locations             []SelectOption
-	Assets                []SelectOption
-	Statuses              []SelectOption
-	BillingTypes          []string
-	ExistingVisitsJSON     string
+	Job                     *JobDetail
+	Errors                  map[string]string
+	IsNew                   bool
+	Customers               []SelectOption
+	Projects                []SelectOption
+	Locations               []SelectOption
+	Assets                  []SelectOption
+	Statuses                []SelectOption
+	BillingTypes            []string
+	ExistingVisitsJSON      string
 	ExistingAssignmentsJSON string
-	ExistingSubtasksJSON   string
-	CustomFields           []CustomFieldDisplay
+	ExistingSubtasksJSON    string
+	CustomFields            []CustomFieldDisplay
 }
 
 func customerFormTitle(isNew bool) string {
@@ -353,22 +351,22 @@ type EstimateRow struct {
 }
 
 type EstimateDetail struct {
-	ID          int64
-	CustomerID  int64
-	Customer    string
-	JobID       int64
-	StatusID    int64
-	StatusName  string
-	StatusColor string
-	Title       string
-	Notes       string
-	TaxRate     string
-	LineItems   []services.LineItem
-	Tags        []TagRow
-	AllTags     []TagRow
+	ID           int64
+	CustomerID   int64
+	Customer     string
+	JobID        int64
+	StatusID     int64
+	StatusName   string
+	StatusColor  string
+	Title        string
+	Notes        string
+	TaxRate      string
+	LineItems    []services.LineItem
+	Tags         []TagRow
+	AllTags      []TagRow
 	CustomFields []CustomFieldDisplay
-	FileList    FileListPageData
-	ArchivedAt  string
+	FileList     FileListPageData
+	ArchivedAt   string
 }
 
 type EstimateListPageData struct {
@@ -407,25 +405,25 @@ type InvoiceRow struct {
 }
 
 type InvoiceDetail struct {
-	ID          int64
-	CustomerID  int64
-	Customer    string
-	JobID       int64
-	StatusID    int64
-	StatusName  string
-	StatusColor string
-	Title       string
-	Notes       string
-	InvoiceDate string
-	DueDate     string
-	TaxRate     string
-	LineItems   []services.LineItem
-	Payments    []services.Payment
-	Tags        []TagRow
-	AllTags     []TagRow
+	ID           int64
+	CustomerID   int64
+	Customer     string
+	JobID        int64
+	StatusID     int64
+	StatusName   string
+	StatusColor  string
+	Title        string
+	Notes        string
+	InvoiceDate  string
+	DueDate      string
+	TaxRate      string
+	LineItems    []services.LineItem
+	Payments     []services.Payment
+	Tags         []TagRow
+	AllTags      []TagRow
 	CustomFields []CustomFieldDisplay
-	FileList    FileListPageData
-	ArchivedAt  string
+	FileList     FileListPageData
+	ArchivedAt   string
 }
 
 type InvoiceListPageData struct {
@@ -493,15 +491,15 @@ type SettingsPageData struct {
 }
 
 type InvoiceFormPageData struct {
-	Invoice          *InvoiceDetail
-	Errors           map[string]string
-	IsNew            bool
-	Customers        []SelectOption
-	Jobs             []SelectOption
-	Statuses         []SelectOption
-	ItemsJSON        string
+	Invoice           *InvoiceDetail
+	Errors            map[string]string
+	IsNew             bool
+	Customers         []SelectOption
+	Jobs              []SelectOption
+	Statuses          []SelectOption
+	ItemsJSON         string
 	ExistingItemsJSON string
-	CustomFields     []CustomFieldDisplay
+	CustomFields      []CustomFieldDisplay
 }
 
 func jobFormTitle(isNew bool) string {
@@ -670,23 +668,33 @@ func estimatePrefix(ctx context.Context) string {
 }
 
 func userFormTitle(isNew bool) string {
-	if isNew { return "New User" }
+	if isNew {
+		return "New User"
+	}
 	return "Edit User"
 }
 
 func userFormAction(isNew bool, id int64) string {
-	if isNew { return "/users" }
+	if isNew {
+		return "/users"
+	}
 	return fmt.Sprintf("/users/%d", id)
 }
 
 func customerStatusColor(status string) string {
 	switch status {
-	case "lead": return "#3B82F6"
-	case "opportunity": return "#F59E0B"
-	case "customer": return "#10B981"
-	case "lost": return "#EF4444"
-	case "inactive": return "#6B7280"
-	default: return "#6B7280"
+	case "lead":
+		return "#3B82F6"
+	case "opportunity":
+		return "#F59E0B"
+	case "customer":
+		return "#10B981"
+	case "lost":
+		return "#EF4444"
+	case "inactive":
+		return "#6B7280"
+	default:
+		return "#6B7280"
 	}
 }
 
@@ -810,6 +818,13 @@ func settingsFormAction(isSetup bool) string {
 		return "/setup/company"
 	}
 	return "/settings"
+}
+
+func invoiceLogoURL(cacheBust string) string {
+	if cacheBust == "" {
+		return "/settings/invoice-logo"
+	}
+	return "/settings/invoice-logo?t=" + cacheBust
 }
 
 func hexToRGBA(hex string, alpha float64) string {
@@ -1108,12 +1123,12 @@ type AssetRow struct {
 }
 
 type AssetShowPageData struct {
-	Asset           AssetDetail
-	ServiceHistory  []JobRow
-	Tags            []TagRow
-	AllTags         []TagRow
-	CustomFields    []CustomFieldDisplay
-	FileList        FileListPageData
+	Asset          AssetDetail
+	ServiceHistory []JobRow
+	Tags           []TagRow
+	AllTags        []TagRow
+	CustomFields   []CustomFieldDisplay
+	FileList       FileListPageData
 }
 
 type AssetDetail struct {

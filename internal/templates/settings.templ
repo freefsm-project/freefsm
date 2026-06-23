@@ -127,12 +127,7 @@ templ SettingsPage(p SettingsPageData) {
 					<span id="logo-upload-status" style="font-size:0.85rem;color:var(--pico-muted-color)"></span>
 				</div>
 				<div id="logo-preview">
-					<input type="text" name="invoice_logo_path" value={ p.Settings.InvoiceLogoPath } placeholder="File path" readonly style="font-family:monospace;font-size:0.85rem"/>
-					if p.Settings.InvoiceLogoPath != "" {
-						<div style="margin-top:0.5rem">
-							<img src="/settings/invoice-logo" alt="Logo preview" style="max-height:64px;max-width:200px"/>
-						</div>
-					}
+					@InvoiceLogoPreview(p.Settings.InvoiceLogoPath, "")
 				</div>
 				<label>
 					Accent Color
@@ -213,5 +208,14 @@ templ TestEmailResult(success bool, message string) {
 		<p style="color:green;text-align:right">✓ Test email sent successfully</p>
 	} else {
 		<p style="color:var(--pico-del-color);text-align:right">✗ Test email failed: { message }</p>
+	}
+}
+
+templ InvoiceLogoPreview(path string, cacheBust string) {
+	<input type="text" name="invoice_logo_path" value={ path } placeholder="File path" readonly style="font-family:monospace;font-size:0.85rem"/>
+	if path != "" {
+		<div style="margin-top:0.5rem">
+			<img src={ templ.URL(invoiceLogoURL(cacheBust)) } alt="Logo preview" style="max-height:64px;max-width:200px"/>
+		</div>
 	}
 }
