@@ -41,8 +41,7 @@ func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
 	start, end := monthRange(year, month, loc)
 	jobs, _ := h.jobsByDateRange(r, start, end)
 
-	customers, _ := h.custSvc.ListAll(r.Context())
-	custMap := customerMap(customers)
+	custMap := h.customerMapForJobs(r, jobs)
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
 	calJobs := make([]templates.CalendarJob, len(jobs))
 	for i, j := range jobs {
@@ -68,8 +67,7 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 	start, end := weekRange(date, loc)
 
 	jobs, _ := h.jobsByDateRange(r, start, end)
-	customers, _ := h.custSvc.ListAll(r.Context())
-	custMap := customerMap(customers)
+	custMap := h.customerMapForJobs(r, jobs)
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
 	var days []templates.ScheduleDay
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
@@ -112,8 +110,7 @@ func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
 	end := start.AddDate(0, 0, 1).Add(-time.Second)
 
 	jobs, _ := h.jobsByDateRange(r, start, end)
-	customers, _ := h.custSvc.ListAll(r.Context())
-	custMap := customerMap(customers)
+	custMap := h.customerMapForJobs(r, jobs)
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
 	var calJobs []templates.CalendarJob
 	for _, j := range jobs {
@@ -144,6 +141,23 @@ func (h *ScheduleHandler) jobsByDateRange(r *http.Request, start, end time.Time)
 		return nil, nil
 	}
 	return h.jobSvc.ListAssignedByDateRange(r.Context(), u.ID, start, end)
+}
+
+func (h *ScheduleHandler) customerMapForJobs(r *http.Request, jobs []*ent.Job) map[int64]string {
+	ids := make([]int64, 0, len(jobs))
+	seen := make(map[int64]struct{}, len(jobs))
+	for _, j := range jobs {
+		if j.CustomerID <= 0 {
+			continue
+		}
+		if _, ok := seen[j.CustomerID]; ok {
+			continue
+		}
+		seen[j.CustomerID] = struct{}{}
+		ids = append(ids, j.CustomerID)
+	}
+	customers, _ := h.custSvc.ListByIDs(r.Context(), ids)
+	return customerMap(customers)
 }
 
 func calendarJob(j *ent.Job, custMap map[int64]string, statuses []*ent.Status) templates.CalendarJob {

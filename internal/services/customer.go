@@ -67,6 +67,13 @@ func (s *CustomerService) ListAll(ctx context.Context) ([]*ent.Customer, error) 
 	return s.client.Customer.Query().Where(customer.DeletedAtIsNil()).Order(ent.Asc(customer.FieldDisplayName)).All(ctx)
 }
 
+func (s *CustomerService) ListByIDs(ctx context.Context, ids []int64) ([]*ent.Customer, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return s.client.Customer.Query().Where(customer.DeletedAtIsNil(), customer.IDIn(ids...)).All(ctx)
+}
+
 func (s *CustomerService) List(ctx context.Context, search, status string, page, perPage int) ([]*ent.Customer, int, error) {
 	q := s.client.Customer.Query().Where(customer.DeletedAtIsNil())
 
