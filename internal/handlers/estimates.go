@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -326,9 +327,14 @@ func (h *EstimateHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		c, _ := h.custSvc.GetByID(r.Context(), *e.CustomerID)
 		customer = c
 	}
+	var buf bytes.Buffer
+	if err := services.GenerateEstimatePDF(&buf, e, customer, statuses, middleware.CompanyFromContext(r.Context())); err != nil {
+		http.Error(w, "PDF generation failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="EST-%05d.pdf"`, id))
-	services.GenerateEstimatePDF(w, e, customer, statuses, middleware.CompanyFromContext(r.Context()))
+	buf.WriteTo(w)
 }
 
 func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {

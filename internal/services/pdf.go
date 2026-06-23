@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/jung-kurt/gofpdf"
 )
 
-func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, statuses []*ent.Status, cs *ent.CompanySettings) {
+func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, statuses []*ent.Status, cs *ent.CompanySettings) error {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
@@ -22,18 +23,24 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, s
 	writeNotes(pdf, e.Notes)
 	writeStatus(pdf, statusNameForPDF(statuses, e.StatusID))
 
-	if cs.InvoiceFooter != "" {
-		pdf.SetY(-30)
+	if cs != nil && cs.InvoiceFooter != "" {
+		pdf.SetAutoPageBreak(false, 0)
 		pdf.SetFont("Helvetica", "I", 8)
 		pdf.SetTextColor(128, 128, 128)
-		pdf.Cell(0, 5, cs.InvoiceFooter)
-		pdf.Ln(5)
+		lines := strings.Split(cs.InvoiceFooter, "\n")
+		footerHeight := float64(len(lines)) * 5
+		pdf.SetY(-footerHeight - 10)
+		for _, line := range lines {
+			pdf.Cell(0, 5, line)
+			pdf.Ln(5)
+		}
+		pdf.SetAutoPageBreak(true, 15)
 	}
 
-	pdf.Output(w)
+	return pdf.Output(w)
 }
 
-func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, statuses []*ent.Status, cs *ent.CompanySettings) {
+func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, statuses []*ent.Status, cs *ent.CompanySettings) error {
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetAutoPageBreak(true, 15)
 	pdf.AddPage()
@@ -44,7 +51,7 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, sta
 	writeCustomer(pdf, customer)
 	writeInvoiceDates(pdf, i)
 	writeLineItems(pdf, items, parseTaxRate(i.TaxRate), cs)
-	if cs.InvoicePaymentTerms != "" {
+	if cs != nil && cs.InvoicePaymentTerms != "" {
 		pdf.SetFont("Helvetica", "", 9)
 		pdf.SetTextColor(0, 0, 0)
 		pdf.Cell(0, 6, "Payment Terms: "+cs.InvoicePaymentTerms)
@@ -53,16 +60,22 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, sta
 	writePayments(pdf, payments, cs)
 	writeNotes(pdf, i.Notes)
 	writeStatus(pdf, statusNameForPDF(statuses, i.StatusID))
-
-	if cs.InvoiceFooter != "" {
-		pdf.SetY(-30)
+ 
+	if cs != nil && cs.InvoiceFooter != "" {
+		pdf.SetAutoPageBreak(false, 0)
 		pdf.SetFont("Helvetica", "I", 8)
 		pdf.SetTextColor(128, 128, 128)
-		pdf.Cell(0, 5, cs.InvoiceFooter)
-		pdf.Ln(5)
+		lines := strings.Split(cs.InvoiceFooter, "\n")
+		footerHeight := float64(len(lines)) * 5
+		pdf.SetY(-footerHeight - 10)
+		for _, line := range lines {
+			pdf.Cell(0, 5, line)
+			pdf.Ln(5)
+		}
+		pdf.SetAutoPageBreak(true, 15)
 	}
 
-	pdf.Output(w)
+	return pdf.Output(w)
 }
 
 func writeHeader(pdf *gofpdf.Fpdf, docType, number string, cs *ent.CompanySettings) {
@@ -74,7 +87,9 @@ func writeHeader(pdf *gofpdf.Fpdf, docType, number string, cs *ent.CompanySettin
 		pdf.Cell(0, 10, "FreeFSM")
 	}
 	if cs != nil && cs.InvoiceLogoPath != "" {
-		pdf.ImageOptions(cs.InvoiceLogoPath, 160, 10, 30, 0, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
+		if _, err := os.Stat(cs.InvoiceLogoPath); err == nil {
+			pdf.ImageOptions(cs.InvoiceLogoPath, 160, 10, 30, 0, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
+		}
 	}
 	pdf.Ln(8)
 	pdf.SetFont("Helvetica", "", 9)

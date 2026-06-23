@@ -44,7 +44,6 @@ type CompanySettingsParams struct {
 	PasswordRequireSpecial   bool
 	InvoiceColor             string
 	InvoiceFooter             string
-	InvoiceLogoPath           string
 	InvoicePaymentTerms       string
 }
 
@@ -79,7 +78,6 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetPasswordRequireSpecial(p.PasswordRequireSpecial).
 		SetInvoiceColor(p.InvoiceColor).
 		SetInvoiceFooter(p.InvoiceFooter).
-		SetInvoiceLogoPath(p.InvoiceLogoPath).
 		SetInvoicePaymentTerms(p.InvoicePaymentTerms).
 		Save(ctx)
 	return err

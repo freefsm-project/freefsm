@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/http"
@@ -490,9 +491,14 @@ func (h *InvoiceHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		c, _ := h.custSvc.GetByID(r.Context(), *i.CustomerID)
 		customer = c
 	}
+	var buf bytes.Buffer
+	if err := services.GenerateInvoicePDF(&buf, i, customer, statuses, middleware.CompanyFromContext(r.Context())); err != nil {
+		http.Error(w, "PDF generation failed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/pdf")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="INV-%05d.pdf"`, id))
-	services.GenerateInvoicePDF(w, i, customer, statuses, middleware.CompanyFromContext(r.Context()))
+	buf.WriteTo(w)
 }
 
 func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {

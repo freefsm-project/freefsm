@@ -72,10 +72,9 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		PasswordRequireLowercase:  r.FormValue("password_require_lowercase") == "on",
 		PasswordRequireDigit:        r.FormValue("password_require_digit") == "on",
 		PasswordRequireSpecial:      r.FormValue("password_require_special") == "on",
-		InvoiceColor:                r.FormValue("invoice_color"),
-		InvoiceFooter:               r.FormValue("invoice_footer"),
-		InvoiceLogoPath:             r.FormValue("invoice_logo_path"),
-		InvoicePaymentTerms:         r.FormValue("invoice_payment_terms"),
+		InvoiceColor:                 r.FormValue("invoice_color"),
+		InvoiceFooter:                r.FormValue("invoice_footer"),
+		InvoicePaymentTerms:          r.FormValue("invoice_payment_terms"),
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
