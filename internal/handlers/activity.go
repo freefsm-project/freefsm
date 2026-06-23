@@ -47,6 +47,15 @@ func (h *ActivityHandler) ListForObject(objectType string) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
+		u, ok := middleware.UserFromContext(r.Context())
+		if !ok || u == nil {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if !canAccessObject(u, objectType, objectID, policyRead) {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 
 		entries, err := h.svc.ListForObject(r.Context(), objectType, objectID, 25)
 		if err != nil {
@@ -59,11 +68,11 @@ func (h *ActivityHandler) ListForObject(objectType string) http.HandlerFunc {
 			rows = []templates.ActivityEntry{}
 		}
 
-		templates.ActivityWidget(templates.ActivityWidgetData{
+		render(w, r, templates.ActivityWidget(templates.ActivityWidgetData{
 			ObjectType: objectType,
 			ObjectID:   objectID,
 			Entries:    rows,
-		}).Render(r.Context(), w)
+		}))
 	}
 }
 

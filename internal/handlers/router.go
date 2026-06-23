@@ -199,18 +199,21 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/invoices/{id}/pdf", invoiceHandler.PDF)
 
 		// Entity tagging
-		r.Post("/jobs/{id}/tags/{tag_id}/attach", jobHandler.AttachTag)
-		r.Post("/jobs/{id}/tags/{tag_id}/detach", jobHandler.DetachTag)
-		r.Post("/customers/{id}/tags/{tag_id}/attach", customerHandler.AttachTag)
-		r.Post("/customers/{id}/tags/{tag_id}/detach", customerHandler.DetachTag)
-		r.Post("/projects/{id}/tags/{tag_id}/attach", projectHandler.AttachTag)
-		r.Post("/projects/{id}/tags/{tag_id}/detach", projectHandler.DetachTag)
-		r.Post("/estimates/{id}/tags/{tag_id}/attach", estimateHandler.AttachTag)
-		r.Post("/estimates/{id}/tags/{tag_id}/detach", estimateHandler.DetachTag)
-		r.Post("/invoices/{id}/tags/{tag_id}/attach", invoiceHandler.AttachTag)
-		r.Post("/invoices/{id}/tags/{tag_id}/detach", invoiceHandler.DetachTag)
-		r.Post("/assets/{id}/tags/{tag_id}/attach", assetHandler.AttachTag)
-		r.Post("/assets/{id}/tags/{tag_id}/detach", assetHandler.DetachTag)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.DispatcherOrAdmin)
+			r.Post("/jobs/{id}/tags/{tag_id}/attach", jobHandler.AttachTag)
+			r.Post("/jobs/{id}/tags/{tag_id}/detach", jobHandler.DetachTag)
+			r.Post("/customers/{id}/tags/{tag_id}/attach", customerHandler.AttachTag)
+			r.Post("/customers/{id}/tags/{tag_id}/detach", customerHandler.DetachTag)
+			r.Post("/projects/{id}/tags/{tag_id}/attach", projectHandler.AttachTag)
+			r.Post("/projects/{id}/tags/{tag_id}/detach", projectHandler.DetachTag)
+			r.Post("/estimates/{id}/tags/{tag_id}/attach", estimateHandler.AttachTag)
+			r.Post("/estimates/{id}/tags/{tag_id}/detach", estimateHandler.DetachTag)
+			r.Post("/invoices/{id}/tags/{tag_id}/attach", invoiceHandler.AttachTag)
+			r.Post("/invoices/{id}/tags/{tag_id}/detach", invoiceHandler.DetachTag)
+			r.Post("/assets/{id}/tags/{tag_id}/attach", assetHandler.AttachTag)
+			r.Post("/assets/{id}/tags/{tag_id}/detach", assetHandler.DetachTag)
+		})
 
 		// Entity comments (list, create, delete)
 		for _, e := range []struct{ prefix, objType string }{

@@ -18,8 +18,16 @@ func canAccessObject(u *middleware.UserInfo, objectType string, objectID int64, 
 	if u == nil || objectID <= 0 {
 		return false
 	}
-	if isAdminOrDispatcher(u) {
+	if u.Role == "admin" {
 		return true
+	}
+	if u.Role == "dispatcher" {
+		switch objectType {
+		case "customer", "job", "project", "estimate", "invoice", "asset", "item", "time_entry":
+			return true
+		default:
+			return false
+		}
 	}
 
 	// Until job assignments store user IDs, tech object access cannot be proven safely.
