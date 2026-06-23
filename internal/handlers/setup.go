@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/MartialM1nd/freefsm/internal/config"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -88,7 +89,7 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "session", Value: token, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode,
-		Secure: r.TLS != nil,
+		Secure: middleware.IsHTTPS(r),
 		MaxAge: 604800,
 	})
 

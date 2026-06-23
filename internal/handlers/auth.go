@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -80,7 +81,7 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name: "session", Value: token, Path: "/",
 		HttpOnly: true, SameSite: http.SameSiteLaxMode,
-		Secure: r.TLS != nil,
+		Secure: middleware.IsHTTPS(r),
 		MaxAge: 604800,
 	})
 
@@ -115,7 +116,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scheme := "http"
-	if r.TLS != nil {
+	if middleware.IsHTTPS(r) {
 		scheme = "https"
 	}
 	link := fmt.Sprintf("%s://%s/reset-password?token=%s", scheme, r.Host, tok)

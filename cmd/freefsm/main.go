@@ -144,7 +144,7 @@ func main() {
 
 	csrfHandler := nosurf.New(r)
 	csrfHandler.SetIsTLSFunc(func(r *http.Request) bool {
-		return r.TLS != nil
+		return middleware.IsHTTPS(r)
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
