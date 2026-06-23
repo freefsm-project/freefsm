@@ -68,10 +68,14 @@ templ Layout(title string, children ...templ.Component) {
 				<nav>
 					<a href="/" class={ templ.KV("active", isActivePath(ctx, "/")) }>Dashboard</a>
 					<a href="/schedule" class={ templ.KV("active", isActivePath(ctx, "/schedule")) }>Schedule</a>
-				<a href="/customers" class={ templ.KV("active", isActivePath(ctx, "/customers")) }>Customers</a>
-				<a href="/assets" class={ templ.KV("active", isActivePath(ctx, "/assets")) }>Assets</a>
+				if canManageOperational(ctx) {
+					<a href="/customers" class={ templ.KV("active", isActivePath(ctx, "/customers")) }>Customers</a>
+					<a href="/assets" class={ templ.KV("active", isActivePath(ctx, "/assets")) }>Assets</a>
+				}
 				<a href="/jobs" class={ templ.KV("active", isActivePath(ctx, "/jobs")) }>Jobs</a>
+				if canManageOperational(ctx) {
 					<a href="/projects" class={ templ.KV("active", isActivePath(ctx, "/projects")) }>Projects</a>
+				}
 					if canManageOperational(ctx) {
 						<a href="/estimates" class={ templ.KV("active", isActivePath(ctx, "/estimates")) }>Estimates</a>
 						<a href="/invoices" class={ templ.KV("active", isActivePath(ctx, "/invoices")) }>Invoices</a>

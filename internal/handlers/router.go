@@ -53,7 +53,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	fileHandler := NewFileHandler(fileSvc, activitySvc, policySvc)
 	activityHandler := NewActivityHandler(activitySvc, userService, policySvc)
 
-	customerHandler := NewCustomerHandler(customerService, contactSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
+	customerHandler := NewCustomerHandler(customerService, contactSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc)
 	itemHandler := NewItemHandler(itemService, activitySvc)
 	// Asset services
 	assetTypeSvc := services.NewAssetTypeService(entClient)
@@ -61,7 +61,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	assetSvc := services.NewAssetService(entClient)
 
 	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, fileSvc, activitySvc, userService, policySvc)
-	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc)
+	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc, policySvc)
 	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService)
 	invoiceService := services.NewInvoiceService(entClient)
 	estimateHandler := NewEstimateHandler(services.NewEstimateService(entClient), customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
@@ -76,7 +76,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	passwordHandler := NewPasswordHandler(userService, companySettingsSvc, activitySvc)
 
 	// Asset handlers
-	assetHandler := NewAssetHandler(assetSvc, assetTypeSvc, assetStatusSvc, customerService, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc)
+	assetHandler := NewAssetHandler(assetSvc, assetTypeSvc, assetStatusSvc, customerService, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc)
 	assetTypeHandler := NewAssetTypeHandler(assetTypeSvc, assetStatusSvc, activitySvc, depSvc)
 	assetStatusHandler := NewAssetStatusHandler(assetStatusSvc, activitySvc, depSvc)
 
@@ -112,10 +112,10 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {
 			handleLogout(w, r, sessions, activitySvc)
 		})
-		r.Get("/projects", projectHandler.List)
+		r.With(middleware.DispatcherOrAdmin).Get("/projects", projectHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/projects/activity", activityHandler.ListByType("project"))
 		r.Get("/projects/{id}", projectHandler.Show)
-		r.Get("/customers", customerHandler.List)
+		r.With(middleware.DispatcherOrAdmin).Get("/customers", customerHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/activity", activityHandler.ListByType("customer"))
 		r.Get("/customers/{id}", customerHandler.Show)
 		r.Get("/customers/{id}/contacts", customerHandler.ListContacts)
@@ -146,7 +146,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/jobs", jobHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/jobs/activity", activityHandler.ListByType("job"))
 		r.Get("/jobs/{id}", jobHandler.Show)
-		r.Get("/assets", assetHandler.List)
+		r.With(middleware.DispatcherOrAdmin).Get("/assets", assetHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/assets/activity", activityHandler.ListByType("asset"))
 		r.Get("/assets/{id}", assetHandler.Show)
 		r.With(middleware.DispatcherOrAdmin).Get("/estimates", estimateHandler.List)

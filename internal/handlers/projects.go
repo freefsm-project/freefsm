@@ -25,10 +25,11 @@ type ProjectHandler struct {
 	tagLinkSvc  *services.TagLinkService
 	defSvc      *services.CustomFieldDefinitionService
 	activitySvc *services.ActivityService
+	policySvc   *services.PolicyService
 }
 
-func NewProjectHandler(svc *services.ProjectService, custSvc *services.CustomerService, statusSvc *services.StatusService, locSvc *services.LocationService, jobSvc *services.JobService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, activitySvc *services.ActivityService) *ProjectHandler {
-	return &ProjectHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, locSvc: locSvc, jobSvc: jobSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, activitySvc: activitySvc}
+func NewProjectHandler(svc *services.ProjectService, custSvc *services.CustomerService, statusSvc *services.StatusService, locSvc *services.LocationService, jobSvc *services.JobService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, activitySvc *services.ActivityService, policySvc *services.PolicyService) *ProjectHandler {
+	return &ProjectHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, locSvc: locSvc, jobSvc: jobSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, activitySvc: activitySvc, policySvc: policySvc}
 }
 
 func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -84,12 +85,20 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "project", id, policyRead) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 
 	statuses := h.statusesForSelect(r.Context())
 	customers, _ := h.custSvc.ListAll(r.Context())
 	custMap := customerMap(customers)
 	locations, _ := h.locSvc.ListAll(r.Context())
 	jobs, _ := h.jobSvc.ListByProject(r.Context(), id)
+	if !isAdminOrDispatcher(u) {
+		jobs = filterReadableJobs(r.Context(), h.policySvc, u, jobs)
+	}
 
 	jobRows := make([]templates.JobRow, len(jobs))
 	for i, j := range jobs {
@@ -139,6 +148,16 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 		AllTags:      tagsToRows(allTags),
 		CustomFields: buildCustomFieldDisplay(defs, p.CustomFields),
 	}).Render(ctx, w)
+}
+
+func filterReadableJobs(ctx context.Context, policySvc *services.PolicyService, u *middleware.UserInfo, jobs []*ent.Job) []*ent.Job {
+	filtered := make([]*ent.Job, 0, len(jobs))
+	for _, j := range jobs {
+		if policySvc.CanAccessObject(ctx, u.ID, u.Role, "job", j.ID, policyRead) {
+			filtered = append(filtered, j)
+		}
+	}
+	return filtered
 }
 
 func (h *ProjectHandler) AttachTag(w http.ResponseWriter, r *http.Request) {

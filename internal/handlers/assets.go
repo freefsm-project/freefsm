@@ -22,6 +22,7 @@ type AssetHandler struct {
 	cfSvc          *services.CustomFieldDefinitionService
 	fileSvc        *services.FileService
 	activitySvc    *services.ActivityService
+	policySvc      *services.PolicyService
 }
 
 func NewAssetHandler(
@@ -34,6 +35,7 @@ func NewAssetHandler(
 	cfSvc *services.CustomFieldDefinitionService,
 	fileSvc *services.FileService,
 	activitySvc *services.ActivityService,
+	policySvc *services.PolicyService,
 ) *AssetHandler {
 	return &AssetHandler{
 		svc:            svc,
@@ -45,6 +47,7 @@ func NewAssetHandler(
 		cfSvc:          cfSvc,
 		fileSvc:        fileSvc,
 		activitySvc:    activitySvc,
+		policySvc:      policySvc,
 	}
 }
 
@@ -105,12 +108,20 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "asset", id, policyRead) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 
 	assetTypes, _ := h.assetTypeSvc.List(r.Context())
 	assetStatuses, _ := h.assetStatusSvc.List(r.Context())
 
 	// Get service history
 	serviceHistory, _ := h.svc.GetServiceHistory(r.Context(), id)
+	if !isAdminOrDispatcher(u) {
+		serviceHistory = filterReadableJobs(r.Context(), h.policySvc, u, serviceHistory)
+	}
 	jobRows := make([]templates.JobRow, len(serviceHistory))
 	for i, j := range serviceHistory {
 		jobRows[i] = jobRowForAsset(j)

@@ -46,9 +46,9 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role,
 	case "asset":
 		return s.canAccessAsset(ctx, objectID, userID)
 	case "estimate":
-		return s.canAccessEstimate(ctx, objectID, userID)
+		return false
 	case "invoice":
-		return s.canAccessInvoice(ctx, objectID, userID)
+		return false
 	default:
 		return false
 	}
@@ -74,7 +74,7 @@ func (s *PolicyService) canAccessCustomer(ctx context.Context, customerID, userI
 
 func (s *PolicyService) canAccessProject(ctx context.Context, projectID, userID int64) bool {
 	p, err := s.client.Project.Get(ctx, projectID)
-	if err == nil && s.canAccessCustomer(ctx, p.CustomerID, userID) {
+	if err == nil && s.isCustomerAssignedToUser(ctx, p.CustomerID, userID) {
 		return true
 	}
 	jobIDs, err := s.assignedJobIDs(ctx, userID)
@@ -87,7 +87,7 @@ func (s *PolicyService) canAccessProject(ctx context.Context, projectID, userID 
 
 func (s *PolicyService) canAccessAsset(ctx context.Context, assetID, userID int64) bool {
 	a, err := s.client.Asset.Get(ctx, assetID)
-	if err == nil && s.canAccessCustomer(ctx, a.CustomerID, userID) {
+	if err == nil && s.isCustomerAssignedToUser(ctx, a.CustomerID, userID) {
 		return true
 	}
 	jobIDs, err := s.assignedJobIDs(ctx, userID)
@@ -98,29 +98,9 @@ func (s *PolicyService) canAccessAsset(ctx context.Context, assetID, userID int6
 	return err == nil && exists
 }
 
-func (s *PolicyService) canAccessEstimate(ctx context.Context, estimateID, userID int64) bool {
-	e, err := s.client.Estimate.Get(ctx, estimateID)
-	if err != nil {
-		return false
-	}
-	if e.JobID != nil && s.IsUserAssignedToJob(ctx, *e.JobID, userID) {
-		return true
-	}
-	return e.CustomerID != nil && s.canAccessCustomer(ctx, *e.CustomerID, userID)
-}
-
-func (s *PolicyService) canAccessInvoice(ctx context.Context, invoiceID, userID int64) bool {
-	i, err := s.client.Invoice.Get(ctx, invoiceID)
-	if err != nil {
-		return false
-	}
-	if i.JobID != nil && s.IsUserAssignedToJob(ctx, *i.JobID, userID) {
-		return true
-	}
-	if i.EstimateID != nil && s.canAccessEstimate(ctx, *i.EstimateID, userID) {
-		return true
-	}
-	return i.CustomerID != nil && s.canAccessCustomer(ctx, *i.CustomerID, userID)
+func (s *PolicyService) isCustomerAssignedToUser(ctx context.Context, customerID, userID int64) bool {
+	direct, err := s.client.Customer.Query().Where(customer.IDEQ(customerID), customer.AssignedToEQ(userID)).Exist(ctx)
+	return err == nil && direct
 }
 
 func (s *PolicyService) assignedJobIDs(ctx context.Context, userID int64) ([]int64, error) {

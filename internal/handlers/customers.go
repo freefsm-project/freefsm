@@ -20,10 +20,11 @@ type CustomerHandler struct {
 	defSvc      *services.CustomFieldDefinitionService
 	fileSvc     *services.FileService
 	activitySvc *services.ActivityService
+	policySvc   *services.PolicyService
 }
 
-func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, activitySvc *services.ActivityService) *CustomerHandler {
-	return &CustomerHandler{svc: svc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, activitySvc: activitySvc}
+func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, activitySvc *services.ActivityService, policySvc *services.PolicyService) *CustomerHandler {
+	return &CustomerHandler{svc: svc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, activitySvc: activitySvc, policySvc: policySvc}
 }
 
 func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -72,6 +73,10 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	c, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
+		return
+	}
+	if !h.canReadCustomer(r, id) {
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "customer", c.ID)
@@ -312,6 +317,10 @@ func (h *CustomerHandler) Contacts(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if !h.canReadCustomer(r, id) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	contacts, _ := h.contactSvc.ListByCustomer(r.Context(), id)
 	opts := make([]templates.SelectOption, len(contacts))
 	for i, c := range contacts {
@@ -324,6 +333,10 @@ func (h *CustomerHandler) Contacts(w http.ResponseWriter, r *http.Request) {
 
 func (h *CustomerHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.canReadCustomer(r, id) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	contacts, _ := h.contactSvc.ListByCustomer(r.Context(), id)
 	rows := make([]templates.ContactRow, len(contacts))
 	for i, c := range contacts {
@@ -333,6 +346,11 @@ func (h *CustomerHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	templates.ContactsList(rows, id).Render(r.Context(), w)
+}
+
+func (h *CustomerHandler) canReadCustomer(r *http.Request, customerID int64) bool {
+	u, ok := middleware.UserFromContext(r.Context())
+	return ok && u != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "customer", customerID, policyRead)
 }
 
 func (h *CustomerHandler) NewContactForm(w http.ResponseWriter, r *http.Request) {
