@@ -20,6 +20,7 @@ type documentPDF struct {
 	JobName       string
 	JobType       string
 	JobSubtitle   string
+	Date          string
 	Archived      bool
 }
 
@@ -52,6 +53,7 @@ func documentEmailDefaults(objectType string, doc documentPDF, cs *ent.CompanySe
 		"job_name":        doc.JobName,
 		"job_type":        doc.JobType,
 		"job_subtitle":    doc.JobSubtitle,
+		"date":            doc.Date,
 	}
 	return services.RenderEmailTemplate(subject, values), services.RenderEmailTemplate(body, values)
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
@@ -466,7 +467,8 @@ func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64) (do
 	}
 	jobName, jobType, jobSubtitle := documentJobFields(job)
 	number := fmt.Sprintf("EST-%05d", id)
-	return documentPDF{Filename: number + ".pdf", Data: data, Title: e.Title, Number: number, CustomerEmail: to, CustomerName: customerName, JobName: jobName, JobType: jobType, JobSubtitle: jobSubtitle, Archived: e.DeletedAt != nil}, nil
+	date := time.Now().In(middleware.CompanyLocation(ctx)).Format("Jan 2, 2006")
+	return documentPDF{Filename: number + ".pdf", Data: data, Title: e.Title, Number: number, CustomerEmail: to, CustomerName: customerName, JobName: jobName, JobType: jobType, JobSubtitle: jobSubtitle, Date: date, Archived: e.DeletedAt != nil}, nil
 }
 
 func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
@@ -630,7 +631,8 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (docu
 	}
 	jobName, jobType, jobSubtitle := documentJobFields(job)
 	number := fmt.Sprintf("INV-%05d", id)
-	return documentPDF{Filename: number + ".pdf", Data: data, Title: i.Title, Number: number, CustomerEmail: to, CustomerName: customerName, JobName: jobName, JobType: jobType, JobSubtitle: jobSubtitle, Archived: i.DeletedAt != nil}, nil
+	date := time.Now().In(middleware.CompanyLocation(ctx)).Format("Jan 2, 2006")
+	return documentPDF{Filename: number + ".pdf", Data: data, Title: i.Title, Number: number, CustomerEmail: to, CustomerName: customerName, JobName: jobName, JobType: jobType, JobSubtitle: jobSubtitle, Date: date, Archived: i.DeletedAt != nil}, nil
 }
 
 func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
