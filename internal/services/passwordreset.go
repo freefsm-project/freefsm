@@ -22,7 +22,9 @@ func NewPasswordResetService(client *ent.Client) *PasswordResetService {
 
 func (s *PasswordResetService) CreateToken(ctx context.Context, userID int64) (string, error) {
 	b := make([]byte, 32)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("generate reset token: %w", err)
+	}
 	token := hex.EncodeToString(b)
 	hash := sha256.Sum256([]byte(token))
 

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/config"
 	"github.com/MartialM1nd/freefsm/internal/ent"
@@ -70,9 +71,9 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc, cfg.UploadDir)
-	userHandler := NewUserHandler(userService, emailSvc, companySettingsSvc, activitySvc)
+	userHandler := NewUserHandler(userService, emailSvc, companySettingsSvc, activitySvc, cfg)
 	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, activitySvc)
-	authHandler := NewAuthHandler(db, sessions, userService, companySettingsSvc, emailSvc, services.NewPasswordResetService(entClient), activitySvc)
+	authHandler := NewAuthHandler(db, sessions, userService, companySettingsSvc, emailSvc, services.NewPasswordResetService(entClient), activitySvc, cfg)
 	passwordHandler := NewPasswordHandler(userService, companySettingsSvc, activitySvc)
 
 	// Asset handlers
@@ -81,16 +82,17 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	assetStatusHandler := NewAssetStatusHandler(assetStatusSvc, activitySvc, depSvc)
 
 	// Public routes
+	authPostLimiter := middleware.NewRateLimiter(5, time.Minute).Handler
 	r.Get("/login", authHandler.ServeHTTP)
-	r.Post("/login", authHandler.ServeHTTP)
+	r.With(authPostLimiter).Post("/login", authHandler.ServeHTTP)
 	r.Get("/forgot-password", authHandler.ForgotPassword)
-	r.Post("/forgot-password", authHandler.ForgotPassword)
+	r.With(authPostLimiter).Post("/forgot-password", authHandler.ForgotPassword)
 	r.Get("/reset-password", authHandler.ResetPassword)
-	r.Post("/reset-password", authHandler.ResetPassword)
+	r.With(authPostLimiter).Post("/reset-password", authHandler.ResetPassword)
 
 	setupHandler := NewSetupHandler(db, sessions, cfg)
 	r.Get("/setup", setupHandler.ServeHTTP)
-	r.Post("/setup", setupHandler.ServeHTTP)
+	r.With(authPostLimiter).Post("/setup", setupHandler.ServeHTTP)
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

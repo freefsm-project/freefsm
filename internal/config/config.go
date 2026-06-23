@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/joho/godotenv"
 )
@@ -21,14 +23,15 @@ type Config struct {
 	DBPassword string
 	DBSSLMode  string
 
-	Addr           string
-	LogLevel       string
-	LogFile        string
-	SessionSecret  string
-	SetupToken     string
+	Addr          string
+	LogLevel      string
+	LogFile       string
+	SessionSecret string
+	SetupToken    string
+	PublicURL     string
 
-	UploadDir      string
-	MaxUploadSize  int64
+	UploadDir     string
+	MaxUploadSize int64
 }
 
 func Load() (*Config, error) {
@@ -46,12 +49,22 @@ func Load() (*Config, error) {
 		LogFile:       getEnv("FREEFSM_LOG_FILE", ""),
 		SessionSecret: getEnv("FREEFSM_SESSION_SECRET", ""),
 		SetupToken:    getEnv("FREEFSM_SETUP_TOKEN", ""),
+		PublicURL:     strings.TrimRight(getEnv("FREEFSM_PUBLIC_URL", ""), "/"),
 		UploadDir:     getEnv("FREEFSM_UPLOAD_DIR", "/var/lib/freefsm/uploads"),
 		MaxUploadSize: getEnvInt64("FREEFSM_MAX_UPLOAD_SIZE", 26214400),
 	}
 
 	if cfg.SessionSecret == "" {
 		return nil, fmt.Errorf("FREEFSM_SESSION_SECRET is required")
+	}
+	if cfg.SetupToken == "" {
+		return nil, fmt.Errorf("FREEFSM_SETUP_TOKEN is required")
+	}
+	if cfg.PublicURL != "" {
+		parsed, err := url.Parse(cfg.PublicURL)
+		if err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			return nil, fmt.Errorf("FREEFSM_PUBLIC_URL must be a valid http(s) URL")
+		}
 	}
 
 	return cfg, nil

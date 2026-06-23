@@ -1,9 +1,10 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
+	"net/url"
 
+	"github.com/MartialM1nd/freefsm/internal/config"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
@@ -19,10 +20,11 @@ type AuthHandler struct {
 	emailSvc    *services.EmailService
 	resetSvc    *services.PasswordResetService
 	activitySvc *services.ActivityService
+	cfg         *config.Config
 }
 
-func NewAuthHandler(db *pgxpool.Pool, sessions *services.SessionService, userSvc *services.UserService, csSvc *services.CompanySettingsService, emailSvc *services.EmailService, resetSvc *services.PasswordResetService, activitySvc *services.ActivityService) *AuthHandler {
-	return &AuthHandler{db: db, sessions: sessions, userSvc: userSvc, csSvc: csSvc, emailSvc: emailSvc, resetSvc: resetSvc, activitySvc: activitySvc}
+func NewAuthHandler(db *pgxpool.Pool, sessions *services.SessionService, userSvc *services.UserService, csSvc *services.CompanySettingsService, emailSvc *services.EmailService, resetSvc *services.PasswordResetService, activitySvc *services.ActivityService, cfg *config.Config) *AuthHandler {
+	return &AuthHandler{db: db, sessions: sessions, userSvc: userSvc, csSvc: csSvc, emailSvc: emailSvc, resetSvc: resetSvc, activitySvc: activitySvc, cfg: cfg}
 }
 
 func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -115,11 +117,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	scheme := "http"
-	if middleware.IsHTTPS(r) {
-		scheme = "https"
-	}
-	link := fmt.Sprintf("%s://%s/reset-password?token=%s", scheme, r.Host, tok)
+	link := absoluteAppURL(h.cfg, r, "/reset-password?token="+url.QueryEscape(tok))
 	var emailErr string
 	if err := h.emailSvc.SendPasswordReset(r.Context(), email, u.Name, link); err != nil {
 		emailErr = "Failed to send email. Please try again."

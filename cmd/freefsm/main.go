@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"flag"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
@@ -150,14 +152,27 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	srv := newHTTPServer(cfg.Addr, csrfHandler)
+	serverErr := make(chan error, 1)
 	go func() {
 		slog.Info("listening", "addr", cfg.Addr)
-		if err := http.ListenAndServe(cfg.Addr, csrfHandler); err != nil {
-			slog.Error("server", "error", err)
-			os.Exit(1)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
 		}
 	}()
 
-	<-ctx.Done()
+	select {
+	case err := <-serverErr:
+		slog.Error("server", "error", err)
+		os.Exit(1)
+	case <-ctx.Done():
+	}
+
 	slog.Info("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("server shutdown", "error", err)
+		os.Exit(1)
+	}
 }

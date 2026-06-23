@@ -82,6 +82,8 @@ make run
 3. Create an admin account (name, email, password)
 4. You're logged in and on the Dashboard
 
+`FREEFSM_SETUP_TOKEN` is required at startup and is only accepted while no users exist.
+
 ### Demo Data
 
 Populate the database with sample HVAC-themed data (customers, jobs, assets, invoices, etc.) for testing:
@@ -106,6 +108,7 @@ This is idempotent — it skips if any customers already exist.
 | `FREEFSM_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
 | `FREEFSM_SESSION_SECRET` | *(required)* | Cookie encryption key |
 | `FREEFSM_SETUP_TOKEN` | *(required)* | Initial admin registration token |
+| `FREEFSM_PUBLIC_URL` | request host | Public base URL for emailed links |
 | `FREEFSM_UPLOAD_DIR` | `/var/lib/freefsm/uploads` (Linux) / `/var/db/freefsm/uploads` (FreeBSD) | File upload storage directory |
 | `FREEFSM_MAX_UPLOAD_SIZE` | `26214400` (25 MB) | Maximum upload file size in bytes |
 

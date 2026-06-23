@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"crypto/subtle"
 	"log/slog"
 	"net/http"
 
@@ -50,7 +51,7 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.FormValue("token") != h.cfg.SetupToken {
+	if subtle.ConstantTimeCompare([]byte(r.FormValue("token")), []byte(h.cfg.SetupToken)) != 1 {
 		http.Redirect(w, r, "/setup?error=invalid+setup+token", http.StatusSeeOther)
 		return
 	}

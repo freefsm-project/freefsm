@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/MartialM1nd/freefsm/internal/config"
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
@@ -19,10 +20,11 @@ type UserHandler struct {
 	emailSvc    *services.EmailService
 	csSvc       *services.CompanySettingsService
 	activitySvc *services.ActivityService
+	cfg         *config.Config
 }
 
-func NewUserHandler(svc *services.UserService, emailSvc *services.EmailService, csSvc *services.CompanySettingsService, activitySvc *services.ActivityService) *UserHandler {
-	return &UserHandler{svc: svc, emailSvc: emailSvc, csSvc: csSvc, activitySvc: activitySvc}
+func NewUserHandler(svc *services.UserService, emailSvc *services.EmailService, csSvc *services.CompanySettingsService, activitySvc *services.ActivityService, cfg *config.Config) *UserHandler {
+	return &UserHandler{svc: svc, emailSvc: emailSvc, csSvc: csSvc, activitySvc: activitySvc, cfg: cfg}
 }
 
 func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -68,11 +70,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.FormValue("send_welcome_email") == "on" {
-		scheme := "http"
-		if r.TLS != nil {
-			scheme = "https"
-		}
-		loginURL := fmt.Sprintf("%s://%s/login", scheme, r.Host)
+		loginURL := absoluteAppURL(h.cfg, r, "/login")
 		if err := h.emailSvc.SendWelcomeEmail(r.Context(), result.Email, result.Name, tempPass, loginURL); err != nil {
 			slog.Error("send welcome email", "error", err, "user", result.Email)
 		}
@@ -196,11 +194,7 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	loginURL := fmt.Sprintf("%s://%s/login", scheme, r.Host)
+	loginURL := absoluteAppURL(h.cfg, r, "/login")
 	if err := h.emailSvc.SendWelcomeEmail(r.Context(), user.Email, user.Name, tempPass, loginURL); err != nil {
 		slog.Error("resend welcome email", "error", err, "user", user.Email)
 		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+failed", id), http.StatusSeeOther)
