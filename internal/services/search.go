@@ -33,8 +33,9 @@ func NewSearchService(client *ent.Client) *SearchService {
 }
 
 func (s *SearchService) Search(ctx context.Context, q string, limit int, userID int64, role string) ([]SearchResult, []SearchResult, []SearchResult, []SearchResult, []SearchResult, error) {
+	canReadBilling := role == "admin" || role == "dispatcher"
 	queryLimit := limit
-	if role != "admin" && role != "dispatcher" {
+	if !canReadBilling {
 		queryLimit = limit * 5
 	}
 
@@ -85,32 +86,36 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 		return nil, nil, nil, nil, nil, fmt.Errorf("search projects: %w", err)
 	}
 
-	invoices, err := s.client.Invoice.Query().
-		Where(
-			invoice.DeletedAtIsNil(),
-			invoice.Or(
-				invoice.TitleContainsFold(q),
-				invoice.NotesContainsFold(q),
-			),
-		).
-		Limit(queryLimit).
-		All(ctx)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("search invoices: %w", err)
-	}
+	var invoices []*ent.Invoice
+	var estimates []*ent.Estimate
+	if canReadBilling {
+		invoices, err = s.client.Invoice.Query().
+			Where(
+				invoice.DeletedAtIsNil(),
+				invoice.Or(
+					invoice.TitleContainsFold(q),
+					invoice.NotesContainsFold(q),
+				),
+			).
+			Limit(queryLimit).
+			All(ctx)
+		if err != nil {
+			return nil, nil, nil, nil, nil, fmt.Errorf("search invoices: %w", err)
+		}
 
-	estimates, err := s.client.Estimate.Query().
-		Where(
-			estimate.DeletedAtIsNil(),
-			estimate.Or(
-				estimate.TitleContainsFold(q),
-				estimate.NotesContainsFold(q),
-			),
-		).
-		Limit(queryLimit).
-		All(ctx)
-	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("search estimates: %w", err)
+		estimates, err = s.client.Estimate.Query().
+			Where(
+				estimate.DeletedAtIsNil(),
+				estimate.Or(
+					estimate.TitleContainsFold(q),
+					estimate.NotesContainsFold(q),
+				),
+			).
+			Limit(queryLimit).
+			All(ctx)
+		if err != nil {
+			return nil, nil, nil, nil, nil, fmt.Errorf("search estimates: %w", err)
+		}
 	}
 
 	custMap := make(map[int64]*ent.Customer)
@@ -299,13 +304,11 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 		}
 	}
 
-	if role != "admin" && role != "dispatcher" {
+	if !canReadBilling {
 		policy := NewPolicyService(s.client)
 		custResults = filterSearchResults(ctx, policy, custResults, userID, role, limit)
 		jobResults = filterSearchResults(ctx, policy, jobResults, userID, role, limit)
 		projResults = filterSearchResults(ctx, policy, projResults, userID, role, limit)
-		invResults = filterSearchResults(ctx, policy, invResults, userID, role, limit)
-		estResults = filterSearchResults(ctx, policy, estResults, userID, role, limit)
 	}
 
 	return trimSearchResults(custResults, limit), trimSearchResults(jobResults, limit), trimSearchResults(projResults, limit), trimSearchResults(invResults, limit), trimSearchResults(estResults, limit), nil

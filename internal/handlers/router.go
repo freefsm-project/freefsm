@@ -149,12 +149,12 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/assets", assetHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/assets/activity", activityHandler.ListByType("asset"))
 		r.Get("/assets/{id}", assetHandler.Show)
-		r.Get("/estimates", estimateHandler.List)
+		r.With(middleware.DispatcherOrAdmin).Get("/estimates", estimateHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/estimates/activity", activityHandler.ListByType("estimate"))
-		r.Get("/estimates/{id}", estimateHandler.Show)
-		r.Get("/invoices", invoiceHandler.List)
+		r.With(middleware.DispatcherOrAdmin).Get("/estimates/{id}", estimateHandler.Show)
+		r.With(middleware.DispatcherOrAdmin).Get("/invoices", invoiceHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/invoices/activity", activityHandler.ListByType("invoice"))
-		r.Get("/invoices/{id}", invoiceHandler.Show)
+		r.With(middleware.DispatcherOrAdmin).Get("/invoices/{id}", invoiceHandler.Show)
 
 		// Core operational mutations
 		r.Group(func(r chi.Router) {
