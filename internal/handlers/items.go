@@ -71,6 +71,9 @@ func (h *ItemHandler) Show(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ItemHandler) Create(w http.ResponseWriter, r *http.Request) {
+	if !requireAdminOrDispatcher(w, r) {
+		return
+	}
 	if r.Method == http.MethodGet {
 		templates.ItemForm(newItemForm()).Render(r.Context(), w)
 		return
@@ -110,6 +113,9 @@ func (h *ItemHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ItemHandler) Update(w http.ResponseWriter, r *http.Request) {
+	if !requireAdminOrDispatcher(w, r) {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.NotFound(w, r)
@@ -156,6 +162,9 @@ func (h *ItemHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ItemHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if !requireAdminOrDispatcher(w, r) {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
@@ -217,6 +226,19 @@ func floatPtr(v float64) *float64 {
 
 func boolPtr(v bool) *bool {
 	return &v
+}
+
+func requireAdminOrDispatcher(w http.ResponseWriter, r *http.Request) bool {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "Unauthorized", 401)
+		return false
+	}
+	if !isAdminOrDispatcher(u) {
+		http.Error(w, "Forbidden", 403)
+		return false
+	}
+	return true
 }
 
 func itemToDetail(i *ent.Item) templates.ItemDetail {

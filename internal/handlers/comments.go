@@ -17,6 +17,7 @@ var typeToPrefix = map[string]string{
 	"project":  "/projects",
 	"estimate": "/estimates",
 	"invoice":  "/invoices",
+	"asset":    "/assets",
 }
 
 type CommentHandler struct {
@@ -36,6 +37,15 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
+		u, ok := middleware.UserFromContext(r.Context())
+		if !ok || u == nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if !canAccessObject(u, objectType, objectID, policyRead) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 
 		comments, err := h.svc.ListForObject(r.Context(), objectType, objectID)
 		if err != nil {
@@ -52,10 +62,7 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 				authorName = author.Name
 			}
 
-			canDelete := false
-			if u, ok := middleware.UserFromContext(r.Context()); ok && u != nil {
-				canDelete = u.ID == c.AuthorID || u.Role == "admin" || u.Role == "dispatcher"
-			}
+			canDelete := u.ID == c.AuthorID || isAdminOrDispatcher(u)
 
 			rows[i] = templates.CommentRow{
 				ID:        c.ID,
@@ -66,12 +73,12 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 			}
 		}
 
-		templates.CommentsWidget(templates.CommentsWidgetData{
+		render(w, r, templates.CommentsWidget(templates.CommentsWidgetData{
 			BaseURL:    baseURL,
 			ObjectType: objectType,
 			ObjectID:   objectID,
 			Comments:   rows,
-		}).Render(r.Context(), w)
+		}))
 	}
 }
 
@@ -86,6 +93,10 @@ func (h *CommentHandler) Create(objectType string) http.HandlerFunc {
 		u, ok := middleware.UserFromContext(r.Context())
 		if !ok || u == nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if !canAccessObject(u, objectType, objectID, policyCreate) {
+			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 
@@ -132,6 +143,19 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 			http.Error(w, err.Error(), 500)
 			return
 		}
+		if comment.ObjectType != objectType {
+			http.NotFound(w, r)
+			return
+		}
+		u, ok := middleware.UserFromContext(r.Context())
+		if !ok || u == nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if !canAccessObject(u, objectType, comment.ObjectID, policyDelete) && !(u.ID == comment.AuthorID && canAccessObject(u, objectType, comment.ObjectID, policyRead)) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 
 		entityName := h.activitySvc.LookupEntityName(r.Context(), objectType, comment.ObjectID)
 		preview := comment.Content
@@ -144,13 +168,10 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 			return
 		}
 
-		u, _ := middleware.UserFromContext(r.Context())
-		if u != nil {
-			_ = h.activitySvc.Record(r.Context(), u.ID, "comment_deleted", objectType, comment.ObjectID, map[string]interface{}{
-				"entity_name":     entityName,
-				"comment_preview": preview,
-			})
-		}
+		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_deleted", objectType, comment.ObjectID, map[string]interface{}{
+			"entity_name":     entityName,
+			"comment_preview": preview,
+		})
 
 		h.List(objectType).ServeHTTP(w, r)
 	}

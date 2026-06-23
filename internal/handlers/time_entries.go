@@ -111,7 +111,7 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", 401)
 		return
 	}
-	if currentUser.Role != "admin" && entry.UserID != currentUser.ID {
+	if !isAdminOrDispatcher(currentUser) && entry.UserID != currentUser.ID {
 		http.Error(w, "forbidden", 403)
 		return
 	}
@@ -252,8 +252,7 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isAdmin := user.Role == "admin"
-	canEdit := isAdmin || entry.UserID == user.ID
+	canEdit := isAdminOrDispatcher(user) || entry.UserID == user.ID
 	if !canEdit {
 		http.Error(w, "forbidden", 403)
 		return
@@ -337,8 +336,7 @@ func (h *TimeEntryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	isAdmin := user.Role == "admin"
-	canDelete := isAdmin || entry.UserID == user.ID
+	canDelete := isAdminOrDispatcher(user) || entry.UserID == user.ID
 	if !canDelete {
 		http.Error(w, "forbidden", 403)
 		return

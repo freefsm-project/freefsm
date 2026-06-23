@@ -57,6 +57,10 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid object ID", 400)
 		return
 	}
+	if !canAccessObject(u, objectType, objectID, policyAttachFile) {
+		http.Error(w, "Forbidden", 403)
+		return
+	}
 
 	f, err := fh.Open()
 	if err != nil {
@@ -114,9 +118,18 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "Unauthorized", 401)
+		return
+	}
 
 	if !h.svc.ValidObjectType(f.ObjectType) || !h.svc.TargetExists(r.Context(), f.ObjectType, f.ObjectID) {
 		http.NotFound(w, r)
+		return
+	}
+	if !canAccessObject(u, f.ObjectType, f.ObjectID, policyRead) {
+		http.Error(w, "Forbidden", 403)
 		return
 	}
 
@@ -153,7 +166,7 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if u.Role != "admin" && u.Role != "dispatcher" && f.UploadedBy != u.ID {
+	if !canAccessObject(u, f.ObjectType, f.ObjectID, policyDelete) && !(f.UploadedBy == u.ID && canAccessObject(u, f.ObjectType, f.ObjectID, policyRead)) {
 		http.Error(w, "Forbidden", 403)
 		return
 	}
