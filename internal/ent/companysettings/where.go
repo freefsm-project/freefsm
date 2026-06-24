@@ -214,6 +214,11 @@ func InvoicePaymentTerms(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldInvoicePaymentTerms, v))
 }
 
+// PdfShowLineItemDescriptions applies equality check predicate on the "pdf_show_line_item_descriptions" field. It's identical to PdfShowLineItemDescriptionsEQ.
+func PdfShowLineItemDescriptions(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPdfShowLineItemDescriptions, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldCreatedAt, v))
@@ -1992,6 +1997,16 @@ func InvoicePaymentTermsEqualFold(v string) predicate.CompanySettings {
 // InvoicePaymentTermsContainsFold applies the ContainsFold predicate on the "invoice_payment_terms" field.
 func InvoicePaymentTermsContainsFold(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldContainsFold(FieldInvoicePaymentTerms, v))
+}
+
+// PdfShowLineItemDescriptionsEQ applies the EQ predicate on the "pdf_show_line_item_descriptions" field.
+func PdfShowLineItemDescriptionsEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldPdfShowLineItemDescriptions, v))
+}
+
+// PdfShowLineItemDescriptionsNEQ applies the NEQ predicate on the "pdf_show_line_item_descriptions" field.
+func PdfShowLineItemDescriptionsNEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldPdfShowLineItemDescriptions, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

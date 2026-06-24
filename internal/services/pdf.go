@@ -11,30 +11,39 @@ import (
 	"github.com/jung-kurt/gofpdf"
 )
 
-func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, statuses []*ent.Status, cs *ent.CompanySettings) error {
-	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetAutoPageBreak(true, 15)
-	pdf.AddPage()
+const (
+	pdfMargin = 12.0
+	pdfBottom = 18.0
+)
 
+type pdfTotals struct {
+	Subtotal        float64
+	Tax             float64
+	Total           float64
+	Paid            float64
+	Due             float64
+	TaxableSubtotal float64
+}
+
+func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, job *ent.Job, statuses []*ent.Status, cs *ent.CompanySettings) error {
 	items, err := ParseLineItems(e.LineItems)
 	if err != nil {
 		return fmt.Errorf("parse estimate line items: %w", err)
 	}
-	writeHeader(pdf, "ESTIMATE", fmt.Sprintf("%05d", e.ID), cs)
-	writeCustomer(pdf, customer)
-	writeLineItems(pdf, items, parseTaxRate(e.TaxRate), cs)
-	writeNotes(pdf, e.Notes)
-	writeStatus(pdf, statusNameForPDF(statuses, e.StatusID))
-	writeFooter(pdf, cs)
+
+	pdf := newDocumentPDF()
+	status, statusColor := statusForPDF(statuses, e.StatusID)
+	number := documentNumber("estimate", e.ID, cs)
+	writeTopHeader(pdf, "ESTIMATE", number, status, statusColor, cs)
+	writeDetailRow(pdf, customer, job, estimateDetails(e, status))
+	writeDocumentNotes(pdf, e.Notes)
+	totals := writeLineItems(pdf, items, parseTaxRate(e.TaxRate), cs)
+	writeSummary(pdf, cs, totals, false)
 
 	return pdf.Output(w)
 }
 
-func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, statuses []*ent.Status, cs *ent.CompanySettings) error {
-	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetAutoPageBreak(true, 15)
-	pdf.AddPage()
-
+func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, statuses []*ent.Status, cs *ent.CompanySettings) error {
 	items, err := ParseLineItems(i.LineItems)
 	if err != nil {
 		return fmt.Errorf("parse invoice line items: %w", err)
@@ -43,236 +52,354 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, sta
 	if err != nil {
 		return fmt.Errorf("parse invoice payments: %w", err)
 	}
-	writeHeader(pdf, "INVOICE", fmt.Sprintf("%05d", i.ID), cs)
-	writeCustomer(pdf, customer)
-	writeInvoiceDates(pdf, i)
-	writeLineItems(pdf, items, parseTaxRate(i.TaxRate), cs)
-	if cs != nil && cs.InvoicePaymentTerms != "" {
-		pdf.SetFont("Helvetica", "", 9)
-		pdf.SetTextColor(0, 0, 0)
-		pdf.Cell(0, 6, "Payment Terms: "+cs.InvoicePaymentTerms)
-		pdf.Ln(8)
+
+	pdf := newDocumentPDF()
+	status, statusColor := statusForPDF(statuses, i.StatusID)
+	number := documentNumber("invoice", i.ID, cs)
+	writeTopHeader(pdf, "INVOICE", number, status, statusColor, cs)
+	writeDetailRow(pdf, customer, job, invoiceDetails(i, status))
+	writeDocumentNotes(pdf, i.Notes)
+	totals := writeLineItems(pdf, items, parseTaxRate(i.TaxRate), cs)
+	for _, p := range payments {
+		totals.Paid += p.Amount
 	}
-	writePayments(pdf, payments, cs)
-	writeNotes(pdf, i.Notes)
-	writeStatus(pdf, statusNameForPDF(statuses, i.StatusID))
-	writeFooter(pdf, cs)
+	totals.Due = totals.Total - totals.Paid
+	writeSummary(pdf, cs, totals, true)
 
 	return pdf.Output(w)
 }
 
-func writeFooter(pdf *gofpdf.Fpdf, cs *ent.CompanySettings) {
-	if cs == nil || cs.InvoiceFooter == "" {
-		return
-	}
+func newDocumentPDF() *gofpdf.Fpdf {
+	pdf := gofpdf.New("P", "mm", "Letter", "")
+	pdf.SetMargins(pdfMargin, pdfMargin, pdfMargin)
 	pdf.SetAutoPageBreak(false, 0)
-	pdf.SetFont("Helvetica", "I", 8)
-	pdf.SetTextColor(128, 128, 128)
-	lines := strings.Split(cs.InvoiceFooter, "\n")
-	footerHeight := float64(len(lines)) * 5
-	pdf.SetY(-footerHeight - 10)
-	for _, line := range lines {
-		pdf.Cell(0, 5, line)
-		pdf.Ln(5)
-	}
-	pdf.SetAutoPageBreak(true, 15)
+	pdf.AddPage()
+	return pdf
 }
 
-func writeHeader(pdf *gofpdf.Fpdf, docType, number string, cs *ent.CompanySettings) {
-	pdf.SetFont("Helvetica", "B", 20)
-	pdf.SetTextColor(0, 0, 0)
-	if cs != nil && cs.BusinessName != "" {
-		pdf.Cell(0, 10, cs.BusinessName)
-	} else {
-		pdf.Cell(0, 10, "FreeFSM")
-	}
+func writeTopHeader(pdf *gofpdf.Fpdf, docType, number, status, statusColor string, cs *ent.CompanySettings) {
+	pageWidth, _ := pdf.GetPageSize()
+	accentR, accentG, accentB := accentColor(cs)
+
 	if cs != nil && cs.InvoiceLogoPath != "" {
 		if _, err := os.Stat(cs.InvoiceLogoPath); err == nil {
-			pdf.ImageOptions(cs.InvoiceLogoPath, 160, 10, 30, 0, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
+			pdf.ImageOptions(cs.InvoiceLogoPath, pdfMargin, 11, 41.6, 0, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
 		}
 	}
-	pdf.Ln(8)
-	pdf.SetFont("Helvetica", "", 9)
-	if cs != nil {
-		addr := strings.TrimSpace(cs.Address)
-		if addr != "" {
-			loc := strings.TrimSpace(cs.City + " " + cs.State + " " + cs.Zip)
-			if loc != "" {
-				addr += ", " + loc
-			}
-			pdf.Cell(0, 5, addr)
-			pdf.Ln(5)
-		}
-		if phone := strings.TrimSpace(cs.Phone); phone != "" {
-			pdf.Cell(0, 5, phone)
-			pdf.Ln(5)
-		}
-		if email := strings.TrimSpace(cs.Email); email != "" {
-			pdf.Cell(0, 5, email)
-			pdf.Ln(5)
-		}
+
+	pdf.SetTextColor(0, 0, 0)
+	pdf.SetFont("Helvetica", "B", 13)
+	pdf.SetXY(55, 12)
+	pdf.CellFormat(pageWidth-110, 6, businessNameForPDF(cs), "", 1, "C", false, 0, "")
+	pdf.SetFont("Helvetica", "", 8)
+	for _, line := range companyDetailLines(cs) {
+		pdf.SetX(55)
+		pdf.CellFormat(pageWidth-110, 4.5, line, "", 1, "C", false, 0, "")
 	}
-	pdf.Ln(2)
-	if cs != nil {
-		r, g, b := hexToRGB(cs.InvoiceColor)
-		pdf.SetDrawColor(r, g, b)
-		pdf.CellFormat(190, 1, "", "B", 1, "L", false, 0, "")
-		pdf.Ln(4)
+
+	pdf.SetXY(pageWidth-62, 12)
+	pdf.SetFont("Helvetica", "B", 12)
+	pdf.CellFormat(50, 6, docType+" #"+number, "", 2, "R", false, 0, "")
+	statusR, statusG, statusB := accentR, accentG, accentB
+	if strings.TrimSpace(statusColor) != "" {
+		statusR, statusG, statusB = hexToRGB(statusColor)
 	}
-	pdf.SetFont("Helvetica", "B", 14)
-	pdf.Cell(0, 8, docType+" #"+number)
-	pdf.Ln(12)
+	writeStatusBadge(pdf, pageWidth-45, 22, status, statusR, statusG, statusB)
+
+	pdf.SetDrawColor(accentR, accentG, accentB)
+	pdf.SetLineWidth(0.4)
+	pdf.Line(pdfMargin, 42, pageWidth-pdfMargin, 42)
+	pdf.SetY(47)
 }
 
-func writeCustomer(pdf *gofpdf.Fpdf, c *ent.Customer) {
-	pdf.SetFont("Helvetica", "B", 11)
-	pdf.Cell(0, 6, "Bill To:")
-	pdf.Ln(6)
-	pdf.SetFont("Helvetica", "", 10)
-	if c != nil {
-		pdf.Cell(0, 5, c.DisplayName)
-		if c.CompanyName != "" {
-			pdf.Ln(5)
-			pdf.Cell(0, 5, c.CompanyName)
-		}
-		if c.Email != "" {
-			pdf.Ln(5)
-			pdf.Cell(0, 5, c.Email)
-		}
-		if c.Phone != "" {
-			pdf.Ln(5)
-			pdf.Cell(0, 5, c.Phone)
-		}
+func writeStatusBadge(pdf *gofpdf.Fpdf, x, y float64, status string, r, g, b int) {
+	if status == "" {
+		status = "Draft"
 	}
-	pdf.Ln(10)
+	pdf.SetFillColor(r, g, b)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFont("Helvetica", "B", 8)
+	pdf.SetXY(x, y)
+	pdf.CellFormat(33, 7, strings.ToUpper(status), "", 0, "C", true, 0, "")
+	pdf.SetTextColor(0, 0, 0)
 }
 
-func writeInvoiceDates(pdf *gofpdf.Fpdf, i *ent.Invoice) {
-	pdf.SetFont("Helvetica", "", 10)
-	if !i.InvoiceDate.IsZero() {
-		pdf.Cell(0, 5, "Invoice Date: "+i.InvoiceDate.Format("Jan 2, 2006"))
-		pdf.Ln(5)
-	}
-	if !i.DueDate.IsZero() {
-		pdf.Cell(0, 5, "Due Date: "+i.DueDate.Format("Jan 2, 2006"))
-		pdf.Ln(10)
-	}
+func writeDetailRow(pdf *gofpdf.Fpdf, customer *ent.Customer, job *ent.Job, details []string) {
+	pageWidth, _ := pdf.GetPageSize()
+	colGap := 6.0
+	colWidth := (pageWidth - pdfMargin*2 - colGap*2) / 3
+	y := pdf.GetY()
+
+	leftHeight := writeInfoBlock(pdf, pdfMargin, y, colWidth, "Customer", customerLines(customer))
+	midHeight := writeInfoBlock(pdf, pdfMargin+colWidth+colGap, y, colWidth, "Job", jobLines(job))
+	rightHeight := writeInfoBlock(pdf, pdfMargin+(colWidth+colGap)*2, y, colWidth, "Details", details)
+	pdf.SetY(y + maxFloat(leftHeight, midHeight, rightHeight) + 7)
 }
 
-func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate float64, cs *ent.CompanySettings) {
-	if len(items) == 0 {
+func writeInfoBlock(pdf *gofpdf.Fpdf, x, y, width float64, title string, lines []string) float64 {
+	pdf.SetXY(x, y)
+	pdf.SetFont("Helvetica", "B", 9)
+	pdf.CellFormat(width, 5, title, "", 2, "L", false, 0, "")
+	pdf.SetFont("Helvetica", "", 8.5)
+	startY := y
+	if len(lines) == 0 {
+		lines = []string{"-"}
+	}
+	for _, line := range lines {
+		pdf.SetX(x)
+		pdf.MultiCell(width, 4.3, line, "", "L", false)
+	}
+	return pdf.GetY() - startY
+}
+
+func writeDocumentNotes(pdf *gofpdf.Fpdf, notes string) {
+	notes = strings.TrimSpace(notes)
+	if notes == "" {
 		return
 	}
-
-	headers := []string{"Item", "Qty", "Price", "Total"}
-	widths := []float64{80, 20, 40, 40}
+	ensureSpace(pdf, 20, false, nil)
 	pdf.SetFont("Helvetica", "B", 9)
-	if cs != nil && cs.InvoiceColor != "" {
-		r, g, b := hexToRGB(cs.InvoiceColor)
-		pdf.SetFillColor(r, g, b)
-		pdf.SetTextColor(255, 255, 255)
-	} else {
-		pdf.SetFillColor(230, 230, 230)
-		pdf.SetTextColor(0, 0, 0)
+	pdf.CellFormat(0, 5, "Notes", "", 1, "L", false, 0, "")
+	pdf.SetFont("Helvetica", "", 8.5)
+	pdf.MultiCell(0, 4.5, notes, "", "L", false)
+	pdf.Ln(4)
+}
+
+func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate float64, cs *ent.CompanySettings) pdfTotals {
+	totals := pdfTotals{}
+	if len(items) == 0 {
+		return totals
 	}
+
+	showDescriptions := cs != nil && cs.PdfShowLineItemDescriptions
+	widths := itemColumnWidths(pdf)
+	writeItemTableHeader(pdf, cs)
+
+	for _, li := range items {
+		lineTotal := lineItemTotal(li)
+		totals.Subtotal += lineTotal
+		if li.Taxable {
+			totals.TaxableSubtotal += lineTotal
+		}
+
+		itemText := li.Title
+		if showDescriptions && strings.TrimSpace(li.Description) != "" {
+			itemText += "\n" + strings.TrimSpace(li.Description)
+		}
+		rowHeight := float64(maxLineCount(
+			pdf.SplitLines([]byte(itemText), widths[0]-2),
+			pdf.SplitLines([]byte(strconv.Itoa(li.Quantity)), widths[1]),
+			pdf.SplitLines([]byte(fmt.Sprintf("$%.2f", li.UnitPrice)), widths[2]),
+			pdf.SplitLines([]byte(fmt.Sprintf("$%.2f", lineTotal)), widths[3]),
+		)) * 4.3
+		rowHeight += 2
+		if rowHeight < 8 {
+			rowHeight = 8
+		}
+		ensureSpace(pdf, rowHeight, true, func() { writeItemTableHeader(pdf, cs) })
+
+		x, y := pdfMargin, pdf.GetY()
+		pdf.SetDrawColor(200, 200, 200)
+		for _, width := range widths {
+			pdf.Rect(x, y, width, rowHeight, "D")
+			x += width
+		}
+
+		x = pdfMargin
+		pdf.SetFont("Helvetica", "", 8.5)
+		pdf.SetXY(x+1, y+1)
+		pdf.MultiCell(widths[0]-2, 4.3, itemText, "", "L", false)
+		pdf.SetXY(x+widths[0], y)
+		writeCenteredRowCell(pdf, widths[1], rowHeight, strconv.Itoa(li.Quantity))
+		writeRightRowCell(pdf, widths[2], rowHeight, fmt.Sprintf("$%.2f", li.UnitPrice))
+		writeRightRowCell(pdf, widths[3], rowHeight, fmt.Sprintf("$%.2f", lineTotal))
+		pdf.SetXY(pdfMargin, y+rowHeight)
+	}
+
+	totals.Tax = totals.TaxableSubtotal * taxRate / 100
+	totals.Total = totals.Subtotal + totals.Tax
+	pdf.Ln(5)
+	return totals
+}
+
+func writeItemTableHeader(pdf *gofpdf.Fpdf, cs *ent.CompanySettings) {
+	ensureSpace(pdf, 9, false, nil)
+	widths := itemColumnWidths(pdf)
+	headers := []string{"Item", "Qty", "Price", "Total"}
+	r, g, b := accentColor(cs)
+	pdf.SetFillColor(r, g, b)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFont("Helvetica", "B", 8.5)
+	pdf.SetX(pdfMargin)
 	for i, h := range headers {
 		pdf.CellFormat(widths[i], 7, h, "1", 0, "C", true, 0, "")
 	}
 	pdf.SetTextColor(0, 0, 0)
 	pdf.Ln(7)
-
-	var subtotal float64
-	var taxableSubtotal float64
-	pdf.SetFont("Helvetica", "", 9)
-	for _, li := range items {
-		lineTotal := li.UnitPrice * float64(li.Quantity)
-		subtotal += lineTotal
-		if li.Taxable {
-			taxableSubtotal += lineTotal
-		}
-		pdf.CellFormat(widths[0], 6, li.Title, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(widths[1], 6, strconv.Itoa(li.Quantity), "1", 0, "C", false, 0, "")
-		pdf.CellFormat(widths[2], 6, fmt.Sprintf("$%.2f", li.UnitPrice), "1", 0, "R", false, 0, "")
-		pdf.CellFormat(widths[3], 6, fmt.Sprintf("$%.2f", lineTotal), "1", 0, "R", false, 0, "")
-		pdf.Ln(6)
-	}
-
-	pdf.Ln(4)
-	pdf.SetFont("Helvetica", "B", 10)
-	x := pdf.GetX() + 100
-	pdf.SetX(x)
-	pdf.CellFormat(40, 6, "Subtotal:", "", 0, "R", false, 0, "")
-	pdf.CellFormat(40, 6, fmt.Sprintf("$%.2f", subtotal), "", 1, "R", false, 0, "")
-
-	if taxRate > 0 {
-		tax := taxableSubtotal * taxRate / 100
-		pdf.SetX(x)
-		pdf.CellFormat(40, 6, fmt.Sprintf("Tax (%.2f%%):", taxRate), "", 0, "R", false, 0, "")
-		pdf.CellFormat(40, 6, fmt.Sprintf("$%.2f", tax), "", 1, "R", false, 0, "")
-		subtotal += tax
-	}
-
-	pdf.SetX(x)
-	pdf.CellFormat(40, 6, "Total:", "T", 0, "R", false, 0, "")
-	pdf.CellFormat(40, 6, fmt.Sprintf("$%.2f", subtotal), "T", 1, "R", false, 0, "")
-	pdf.Ln(6)
 }
 
-func writePayments(pdf *gofpdf.Fpdf, payments []Payment, cs *ent.CompanySettings) {
-	if len(payments) == 0 {
+func itemColumnWidths(pdf *gofpdf.Fpdf) []float64 {
+	pageWidth, _ := pdf.GetPageSize()
+	contentWidth := pageWidth - pdfMargin*2
+	qtyWidth := 20.0
+	priceWidth := 32.0
+	totalWidth := 34.0
+	return []float64{contentWidth - qtyWidth - priceWidth - totalWidth, qtyWidth, priceWidth, totalWidth}
+}
+
+func writeCenteredRowCell(pdf *gofpdf.Fpdf, width, rowHeight float64, text string) {
+	x, y := pdf.GetX(), pdf.GetY()
+	pdf.SetXY(x, y+(rowHeight-4.3)/2)
+	pdf.CellFormat(width, 4.3, text, "", 0, "C", false, 0, "")
+	pdf.SetXY(x+width, y)
+}
+
+func writeRightRowCell(pdf *gofpdf.Fpdf, width, rowHeight float64, text string) {
+	x, y := pdf.GetX(), pdf.GetY()
+	pdf.SetXY(x, y+(rowHeight-4.3)/2)
+	pdf.CellFormat(width-1, 4.3, text, "", 0, "R", false, 0, "")
+	pdf.SetXY(x+width, y)
+}
+
+func writeSummary(pdf *gofpdf.Fpdf, cs *ent.CompanySettings, totals pdfTotals, includePayments bool) {
+	ensureSpace(pdf, 40, false, nil)
+	pageWidth, _ := pdf.GetPageSize()
+	y := pdf.GetY()
+	footerWidth := 92.0
+	totalsX := pageWidth - pdfMargin - 70
+
+	if cs != nil && strings.TrimSpace(cs.InvoiceFooter) != "" {
+		pdf.SetXY(pdfMargin, y)
+		pdf.SetFont("Helvetica", "I", 8.5)
+		pdf.SetTextColor(90, 90, 90)
+		pdf.MultiCell(footerWidth, 4.5, strings.TrimSpace(cs.InvoiceFooter), "", "L", false)
+		pdf.SetTextColor(0, 0, 0)
+	}
+
+	pdf.SetXY(totalsX, y)
+	writeTotalLine(pdf, totalsX, "Subtotal", totals.Subtotal, false)
+	writeTotalLine(pdf, totalsX, "Tax", totals.Tax, false)
+	writeTotalLine(pdf, totalsX, "Total", totals.Total, true)
+	if includePayments {
+		writeTotalLine(pdf, totalsX, "Amount Paid", totals.Paid, false)
+		writeTotalLine(pdf, totalsX, "Amount Due", totals.Due, true)
+	}
+}
+
+func writeTotalLine(pdf *gofpdf.Fpdf, x float64, label string, amount float64, bold bool) {
+	style := ""
+	border := ""
+	if bold {
+		style = "B"
+		border = "T"
+	}
+	pdf.SetX(x)
+	pdf.SetFont("Helvetica", style, 9)
+	pdf.CellFormat(35, 6, label+":", border, 0, "R", false, 0, "")
+	pdf.CellFormat(35, 6, fmt.Sprintf("$%.2f", amount), border, 1, "R", false, 0, "")
+}
+
+func ensureSpace(pdf *gofpdf.Fpdf, needed float64, repeatHeader bool, afterPageBreak func()) {
+	_, pageHeight := pdf.GetPageSize()
+	if pdf.GetY()+needed <= pageHeight-pdfBottom {
 		return
 	}
-	pdf.SetFont("Helvetica", "B", 10)
-	pdf.Cell(0, 6, "Payments")
-	pdf.Ln(7)
-	pdf.SetFont("Helvetica", "", 9)
-	headers := []string{"Date", "Method", "Reference", "Amount"}
-	widths := []float64{35, 40, 60, 45}
+	pdf.AddPage()
+	pdf.SetY(pdfMargin)
+	if repeatHeader && afterPageBreak != nil {
+		afterPageBreak()
+	}
+}
+
+func documentNumber(docType string, id int64, cs *ent.CompanySettings) string {
+	prefix := ""
 	if cs != nil {
-		r, g, b := hexToRGB(cs.InvoiceColor)
-		pdf.SetFillColor(r, g, b)
-		pdf.SetTextColor(255, 255, 255)
-	} else {
-		pdf.SetFillColor(230, 230, 230)
+		if docType == "invoice" {
+			prefix = strings.TrimSpace(cs.InvoicePrefix)
+		} else {
+			prefix = strings.TrimSpace(cs.EstimatePrefix)
+		}
 	}
-	for i, h := range headers {
-		pdf.CellFormat(widths[i], 6, h, "1", 0, "C", true, 0, "")
+	if prefix == "" {
+		return fmt.Sprintf("%05d", id)
 	}
-	pdf.SetTextColor(0, 0, 0)
-	pdf.Ln(6)
-	var total float64
-	for _, p := range payments {
-		total += p.Amount
-		pdf.CellFormat(widths[0], 6, p.Date, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(widths[1], 6, p.Method, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(widths[2], 6, p.Reference, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(widths[3], 6, fmt.Sprintf("$%.2f", p.Amount), "1", 0, "R", false, 0, "")
-		pdf.Ln(6)
-	}
-	pdf.SetFont("Helvetica", "B", 9)
-	pdf.CellFormat(widths[0]+widths[1]+widths[2], 6, "Total Paid:", "1", 0, "R", false, 0, "")
-	pdf.CellFormat(widths[3], 6, fmt.Sprintf("$%.2f", total), "1", 0, "R", false, 0, "")
-	pdf.Ln(10)
+	return fmt.Sprintf("%s%05d", prefix, id)
 }
 
-func writeNotes(pdf *gofpdf.Fpdf, notes string) {
-	if notes == "" {
-		return
+func businessNameForPDF(cs *ent.CompanySettings) string {
+	if cs != nil && strings.TrimSpace(cs.BusinessName) != "" {
+		return strings.TrimSpace(cs.BusinessName)
 	}
-	pdf.SetFont("Helvetica", "B", 10)
-	pdf.Cell(0, 6, "Notes")
-	pdf.Ln(6)
-	pdf.SetFont("Helvetica", "", 9)
-	pdf.MultiCell(0, 5, notes, "", "L", false)
-	pdf.Ln(4)
+	return "FreeFSM"
 }
 
-func writeStatus(pdf *gofpdf.Fpdf, status string) {
-	if status == "" {
-		return
+func companyDetailLines(cs *ent.CompanySettings) []string {
+	if cs == nil {
+		return nil
 	}
-	pdf.SetFont("Helvetica", "I", 9)
-	pdf.Cell(0, 6, "Status: "+status)
+	var lines []string
+	addr := strings.TrimSpace(cs.Address)
+	loc := strings.TrimSpace(strings.Join(nonEmpty(cs.City, cs.State, cs.Zip), " "))
+	if addr != "" && loc != "" {
+		lines = append(lines, addr+", "+loc)
+	} else if addr != "" || loc != "" {
+		lines = append(lines, strings.TrimSpace(addr+" "+loc))
+	}
+	lines = append(lines, nonEmpty(cs.Phone, cs.Email)...)
+	return lines
+}
+
+func customerLines(c *ent.Customer) []string {
+	if c == nil {
+		return nil
+	}
+	return nonEmpty(c.DisplayName, c.CompanyName, c.Email, c.Phone)
+}
+
+func jobLines(j *ent.Job) []string {
+	if j == nil {
+		return nil
+	}
+	lines := nonEmpty(j.JobType, j.Subtitle)
+	if j.StartTime != nil {
+		lines = append(lines, "Start: "+j.StartTime.Format("Jan 2, 2006"))
+	}
+	if j.DueDate != nil {
+		lines = append(lines, "Due: "+j.DueDate.Format("Jan 2, 2006"))
+	}
+	return lines
+}
+
+func invoiceDetails(i *ent.Invoice, status string) []string {
+	var lines []string
+	if !i.InvoiceDate.IsZero() {
+		lines = append(lines, "Invoice Date: "+i.InvoiceDate.Format("Jan 2, 2006"))
+	}
+	if !i.DueDate.IsZero() {
+		lines = append(lines, "Due Date: "+i.DueDate.Format("Jan 2, 2006"))
+	}
+	lines = append(lines, "Status: "+statusText(status))
+	return lines
+}
+
+func estimateDetails(e *ent.Estimate, status string) []string {
+	var lines []string
+	if !e.CreatedAt.IsZero() {
+		lines = append(lines, "Created Date: "+e.CreatedAt.Format("Jan 2, 2006"))
+	}
+	lines = append(lines, "Status: "+statusText(status))
+	return lines
+}
+
+func statusText(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return "Draft"
+	}
+	return strings.TrimSpace(status)
+}
+
+func lineItemTotal(li LineItem) float64 {
+	return li.UnitPrice*float64(li.Quantity) - li.Discount + li.Surcharge
 }
 
 func parseTaxRate(s string) float64 {
@@ -281,16 +408,23 @@ func parseTaxRate(s string) float64 {
 	return f
 }
 
-func statusNameForPDF(statuses []*ent.Status, id *int64) string {
+func statusForPDF(statuses []*ent.Status, id *int64) (string, string) {
 	if id == nil {
-		return ""
+		return "", ""
 	}
 	for _, s := range statuses {
 		if s.ID == *id {
-			return s.Name
+			return s.Name, s.Color
 		}
 	}
-	return ""
+	return "", ""
+}
+
+func accentColor(cs *ent.CompanySettings) (int, int, int) {
+	if cs == nil || strings.TrimSpace(cs.InvoiceColor) == "" {
+		return 40, 83, 140
+	}
+	return hexToRGB(cs.InvoiceColor)
 }
 
 func hexToRGB(hex string) (int, int, int) {
@@ -302,4 +436,34 @@ func hexToRGB(hex string) (int, int, int) {
 	g, _ := strconv.ParseInt(hex[2:4], 16, 64)
 	b, _ := strconv.ParseInt(hex[4:6], 16, 64)
 	return int(r), int(g), int(b)
+}
+
+func nonEmpty(values ...string) []string {
+	var lines []string
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			lines = append(lines, strings.TrimSpace(value))
+		}
+	}
+	return lines
+}
+
+func maxFloat(values ...float64) float64 {
+	max := 0.0
+	for _, value := range values {
+		if value > max {
+			max = value
+		}
+	}
+	return max
+}
+
+func maxLineCount(lines ...[][]byte) int {
+	max := 0
+	for _, line := range lines {
+		if len(line) > max {
+			max = len(line)
+		}
+	}
+	return max
 }

@@ -613,8 +613,12 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (docu
 		c, _ := h.custSvc.GetByID(ctx, *i.CustomerID)
 		customer = c
 	}
+	var job *ent.Job
+	if i.JobID != nil && *i.JobID > 0 {
+		job, _ = h.jobSvc.GetByID(ctx, *i.JobID)
+	}
 	data, err := generatePDFBytes(func(w io.Writer) error {
-		return services.GenerateInvoicePDF(w, i, customer, statuses, middleware.CompanyFromContext(ctx))
+		return services.GenerateInvoicePDF(w, i, customer, job, statuses, middleware.CompanyFromContext(ctx))
 	})
 	if err != nil {
 		return documentPDF{}, err
@@ -624,10 +628,6 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (docu
 	if customer != nil {
 		to = customer.Email
 		customerName = customer.DisplayName
-	}
-	var job *ent.Job
-	if i.JobID != nil && *i.JobID > 0 {
-		job, _ = h.jobSvc.GetByID(ctx, *i.JobID)
 	}
 	jobName, jobType, jobSubtitle := documentJobFields(job)
 	number := fmt.Sprintf("INV-%05d", id)

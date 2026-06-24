@@ -166,6 +166,10 @@ templ SettingsPage(p SettingsPageData) {
 					<input type="text" name="invoice_payment_terms" value={ p.Settings.InvoicePaymentTerms } placeholder="Net 30"/>
 				</label>
 				<label>
+					<input type="checkbox" name="pdf_show_line_item_descriptions" checked?={ p.Settings.PdfShowLineItemDescriptions }/>
+					Show line item descriptions on invoice/estimate PDFs
+				</label>
+				<label>
 					Footer Text
 					<textarea name="invoice_footer" rows="5" placeholder="Thank you for your business!">{ p.Settings.InvoiceFooter }</textarea>
 				</label>

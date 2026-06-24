@@ -468,6 +468,20 @@ func (_c *CompanySettingsCreate) SetNillableInvoicePaymentTerms(v *string) *Comp
 	return _c
 }
 
+// SetPdfShowLineItemDescriptions sets the "pdf_show_line_item_descriptions" field.
+func (_c *CompanySettingsCreate) SetPdfShowLineItemDescriptions(v bool) *CompanySettingsCreate {
+	_c.mutation.SetPdfShowLineItemDescriptions(v)
+	return _c
+}
+
+// SetNillablePdfShowLineItemDescriptions sets the "pdf_show_line_item_descriptions" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillablePdfShowLineItemDescriptions(v *bool) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetPdfShowLineItemDescriptions(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *CompanySettingsCreate) SetCreatedAt(v time.Time) *CompanySettingsCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -661,6 +675,10 @@ func (_c *CompanySettingsCreate) defaults() {
 		v := companysettings.DefaultInvoicePaymentTerms
 		_c.mutation.SetInvoicePaymentTerms(v)
 	}
+	if _, ok := _c.mutation.PdfShowLineItemDescriptions(); !ok {
+		v := companysettings.DefaultPdfShowLineItemDescriptions
+		_c.mutation.SetPdfShowLineItemDescriptions(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := companysettings.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -765,6 +783,9 @@ func (_c *CompanySettingsCreate) check() error {
 	}
 	if _, ok := _c.mutation.InvoicePaymentTerms(); !ok {
 		return &ValidationError{Name: "invoice_payment_terms", err: errors.New(`ent: missing required field "CompanySettings.invoice_payment_terms"`)}
+	}
+	if _, ok := _c.mutation.PdfShowLineItemDescriptions(); !ok {
+		return &ValidationError{Name: "pdf_show_line_item_descriptions", err: errors.New(`ent: missing required field "CompanySettings.pdf_show_line_item_descriptions"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "CompanySettings.created_at"`)}
@@ -931,6 +952,10 @@ func (_c *CompanySettingsCreate) createSpec() (*CompanySettings, *sqlgraph.Creat
 	if value, ok := _c.mutation.InvoicePaymentTerms(); ok {
 		_spec.SetField(companysettings.FieldInvoicePaymentTerms, field.TypeString, value)
 		_node.InvoicePaymentTerms = value
+	}
+	if value, ok := _c.mutation.PdfShowLineItemDescriptions(); ok {
+		_spec.SetField(companysettings.FieldPdfShowLineItemDescriptions, field.TypeBool, value)
+		_node.PdfShowLineItemDescriptions = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(companysettings.FieldCreatedAt, field.TypeTime, value)

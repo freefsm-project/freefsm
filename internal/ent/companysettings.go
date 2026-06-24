@@ -81,6 +81,8 @@ type CompanySettings struct {
 	InvoiceLogoPath string `json:"invoice_logo_path,omitempty"`
 	// InvoicePaymentTerms holds the value of the "invoice_payment_terms" field.
 	InvoicePaymentTerms string `json:"invoice_payment_terms,omitempty"`
+	// PdfShowLineItemDescriptions holds the value of the "pdf_show_line_item_descriptions" field.
+	PdfShowLineItemDescriptions bool `json:"pdf_show_line_item_descriptions,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -93,7 +95,7 @@ func (*CompanySettings) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case companysettings.FieldPasswordRequireUppercase, companysettings.FieldPasswordRequireLowercase, companysettings.FieldPasswordRequireDigit, companysettings.FieldPasswordRequireSpecial:
+		case companysettings.FieldPasswordRequireUppercase, companysettings.FieldPasswordRequireLowercase, companysettings.FieldPasswordRequireDigit, companysettings.FieldPasswordRequireSpecial, companysettings.FieldPdfShowLineItemDescriptions:
 			values[i] = new(sql.NullBool)
 		case companysettings.FieldID, companysettings.FieldCompanyID, companysettings.FieldDefaultDueDays, companysettings.FieldSMTPPort, companysettings.FieldPasswordMinLength:
 			values[i] = new(sql.NullInt64)
@@ -315,6 +317,12 @@ func (_m *CompanySettings) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.InvoicePaymentTerms = value.String
 			}
+		case companysettings.FieldPdfShowLineItemDescriptions:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field pdf_show_line_item_descriptions", values[i])
+			} else if value.Valid {
+				_m.PdfShowLineItemDescriptions = value.Bool
+			}
 		case companysettings.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -460,6 +468,9 @@ func (_m *CompanySettings) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("invoice_payment_terms=")
 	builder.WriteString(_m.InvoicePaymentTerms)
+	builder.WriteString(", ")
+	builder.WriteString("pdf_show_line_item_descriptions=")
+	builder.WriteString(fmt.Sprintf("%v", _m.PdfShowLineItemDescriptions))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

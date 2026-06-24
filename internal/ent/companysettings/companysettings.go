@@ -77,6 +77,8 @@ const (
 	FieldInvoiceLogoPath = "invoice_logo_path"
 	// FieldInvoicePaymentTerms holds the string denoting the invoice_payment_terms field in the database.
 	FieldInvoicePaymentTerms = "invoice_payment_terms"
+	// FieldPdfShowLineItemDescriptions holds the string denoting the pdf_show_line_item_descriptions field in the database.
+	FieldPdfShowLineItemDescriptions = "pdf_show_line_item_descriptions"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -120,6 +122,7 @@ var Columns = []string{
 	FieldInvoiceFooter,
 	FieldInvoiceLogoPath,
 	FieldInvoicePaymentTerms,
+	FieldPdfShowLineItemDescriptions,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -197,6 +200,8 @@ var (
 	DefaultInvoiceLogoPath string
 	// DefaultInvoicePaymentTerms holds the default value on creation for the "invoice_payment_terms" field.
 	DefaultInvoicePaymentTerms string
+	// DefaultPdfShowLineItemDescriptions holds the default value on creation for the "pdf_show_line_item_descriptions" field.
+	DefaultPdfShowLineItemDescriptions bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -371,6 +376,11 @@ func ByInvoiceLogoPath(opts ...sql.OrderTermOption) OrderOption {
 // ByInvoicePaymentTerms orders the results by the invoice_payment_terms field.
 func ByInvoicePaymentTerms(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInvoicePaymentTerms, opts...).ToFunc()
+}
+
+// ByPdfShowLineItemDescriptions orders the results by the pdf_show_line_item_descriptions field.
+func ByPdfShowLineItemDescriptions(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPdfShowLineItemDescriptions, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

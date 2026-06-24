@@ -4294,51 +4294,52 @@ func (m *CommentMutation) ResetEdge(name string) error {
 // CompanySettingsMutation represents an operation that mutates the CompanySettings nodes in the graph.
 type CompanySettingsMutation struct {
 	config
-	op                         Op
-	typ                        string
-	id                         *int64
-	company_id                 *int64
-	addcompany_id              *int64
-	business_name              *string
-	address                    *string
-	city                       *string
-	state                      *string
-	zip                        *string
-	phone                      *string
-	email                      *string
-	tax_id                     *string
-	default_tax_rate           *string
-	invoice_prefix             *string
-	estimate_prefix            *string
-	default_due_days           *int
-	adddefault_due_days        *int
-	smtp_host                  *string
-	smtp_port                  *int
-	addsmtp_port               *int
-	smtp_user                  *string
-	smtp_password              *string
-	smtp_from                  *string
-	invoice_email_subject      *string
-	invoice_email_body         *string
-	estimate_email_subject     *string
-	estimate_email_body        *string
-	timezone                   *string
-	password_min_length        *int
-	addpassword_min_length     *int
-	password_require_uppercase *bool
-	password_require_lowercase *bool
-	password_require_digit     *bool
-	password_require_special   *bool
-	invoice_color              *string
-	invoice_footer             *string
-	invoice_logo_path          *string
-	invoice_payment_terms      *string
-	created_at                 *time.Time
-	updated_at                 *time.Time
-	clearedFields              map[string]struct{}
-	done                       bool
-	oldValue                   func(context.Context) (*CompanySettings, error)
-	predicates                 []predicate.CompanySettings
+	op                              Op
+	typ                             string
+	id                              *int64
+	company_id                      *int64
+	addcompany_id                   *int64
+	business_name                   *string
+	address                         *string
+	city                            *string
+	state                           *string
+	zip                             *string
+	phone                           *string
+	email                           *string
+	tax_id                          *string
+	default_tax_rate                *string
+	invoice_prefix                  *string
+	estimate_prefix                 *string
+	default_due_days                *int
+	adddefault_due_days             *int
+	smtp_host                       *string
+	smtp_port                       *int
+	addsmtp_port                    *int
+	smtp_user                       *string
+	smtp_password                   *string
+	smtp_from                       *string
+	invoice_email_subject           *string
+	invoice_email_body              *string
+	estimate_email_subject          *string
+	estimate_email_body             *string
+	timezone                        *string
+	password_min_length             *int
+	addpassword_min_length          *int
+	password_require_uppercase      *bool
+	password_require_lowercase      *bool
+	password_require_digit          *bool
+	password_require_special        *bool
+	invoice_color                   *string
+	invoice_footer                  *string
+	invoice_logo_path               *string
+	invoice_payment_terms           *string
+	pdf_show_line_item_descriptions *bool
+	created_at                      *time.Time
+	updated_at                      *time.Time
+	clearedFields                   map[string]struct{}
+	done                            bool
+	oldValue                        func(context.Context) (*CompanySettings, error)
+	predicates                      []predicate.CompanySettings
 }
 
 var _ ent.Mutation = (*CompanySettingsMutation)(nil)
@@ -5691,6 +5692,42 @@ func (m *CompanySettingsMutation) ResetInvoicePaymentTerms() {
 	m.invoice_payment_terms = nil
 }
 
+// SetPdfShowLineItemDescriptions sets the "pdf_show_line_item_descriptions" field.
+func (m *CompanySettingsMutation) SetPdfShowLineItemDescriptions(b bool) {
+	m.pdf_show_line_item_descriptions = &b
+}
+
+// PdfShowLineItemDescriptions returns the value of the "pdf_show_line_item_descriptions" field in the mutation.
+func (m *CompanySettingsMutation) PdfShowLineItemDescriptions() (r bool, exists bool) {
+	v := m.pdf_show_line_item_descriptions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPdfShowLineItemDescriptions returns the old "pdf_show_line_item_descriptions" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldPdfShowLineItemDescriptions(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPdfShowLineItemDescriptions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPdfShowLineItemDescriptions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPdfShowLineItemDescriptions: %w", err)
+	}
+	return oldValue.PdfShowLineItemDescriptions, nil
+}
+
+// ResetPdfShowLineItemDescriptions resets all changes to the "pdf_show_line_item_descriptions" field.
+func (m *CompanySettingsMutation) ResetPdfShowLineItemDescriptions() {
+	m.pdf_show_line_item_descriptions = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *CompanySettingsMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -5797,7 +5834,7 @@ func (m *CompanySettingsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompanySettingsMutation) Fields() []string {
-	fields := make([]string, 0, 34)
+	fields := make([]string, 0, 35)
 	if m.company_id != nil {
 		fields = append(fields, companysettings.FieldCompanyID)
 	}
@@ -5894,6 +5931,9 @@ func (m *CompanySettingsMutation) Fields() []string {
 	if m.invoice_payment_terms != nil {
 		fields = append(fields, companysettings.FieldInvoicePaymentTerms)
 	}
+	if m.pdf_show_line_item_descriptions != nil {
+		fields = append(fields, companysettings.FieldPdfShowLineItemDescriptions)
+	}
 	if m.created_at != nil {
 		fields = append(fields, companysettings.FieldCreatedAt)
 	}
@@ -5972,6 +6012,8 @@ func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 		return m.InvoiceLogoPath()
 	case companysettings.FieldInvoicePaymentTerms:
 		return m.InvoicePaymentTerms()
+	case companysettings.FieldPdfShowLineItemDescriptions:
+		return m.PdfShowLineItemDescriptions()
 	case companysettings.FieldCreatedAt:
 		return m.CreatedAt()
 	case companysettings.FieldUpdatedAt:
@@ -6049,6 +6091,8 @@ func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (en
 		return m.OldInvoiceLogoPath(ctx)
 	case companysettings.FieldInvoicePaymentTerms:
 		return m.OldInvoicePaymentTerms(ctx)
+	case companysettings.FieldPdfShowLineItemDescriptions:
+		return m.OldPdfShowLineItemDescriptions(ctx)
 	case companysettings.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case companysettings.FieldUpdatedAt:
@@ -6286,6 +6330,13 @@ func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetInvoicePaymentTerms(v)
 		return nil
+	case companysettings.FieldPdfShowLineItemDescriptions:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPdfShowLineItemDescriptions(v)
+		return nil
 	case companysettings.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -6504,6 +6555,9 @@ func (m *CompanySettingsMutation) ResetField(name string) error {
 		return nil
 	case companysettings.FieldInvoicePaymentTerms:
 		m.ResetInvoicePaymentTerms()
+		return nil
+	case companysettings.FieldPdfShowLineItemDescriptions:
+		m.ResetPdfShowLineItemDescriptions()
 		return nil
 	case companysettings.FieldCreatedAt:
 		m.ResetCreatedAt()

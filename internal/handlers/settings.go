@@ -48,36 +48,37 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 	oldSettings, _ := h.svc.Get(r.Context())
 
 	err := h.svc.Save(r.Context(), services.CompanySettingsParams{
-		BusinessName:             r.FormValue("business_name"),
-		Address:                  r.FormValue("address"),
-		City:                     r.FormValue("city"),
-		State:                    r.FormValue("state"),
-		Zip:                      r.FormValue("zip"),
-		Phone:                    r.FormValue("phone"),
-		Email:                    r.FormValue("email"),
-		TaxID:                    r.FormValue("tax_id"),
-		DefaultTaxRate:           r.FormValue("default_tax_rate"),
-		InvoicePrefix:            r.FormValue("invoice_prefix"),
-		EstimatePrefix:           r.FormValue("estimate_prefix"),
-		DefaultDueDays:           dueDays,
-		SmtpHost:                 r.FormValue("smtp_host"),
-		SmtpPort:                 smtpPort,
-		SmtpUser:                 r.FormValue("smtp_user"),
-		SmtpPassword:             r.FormValue("smtp_password"),
-		SmtpFrom:                 r.FormValue("smtp_from"),
-		InvoiceEmailSubject:      r.FormValue("invoice_email_subject"),
-		InvoiceEmailBody:         r.FormValue("invoice_email_body"),
-		EstimateEmailSubject:     r.FormValue("estimate_email_subject"),
-		EstimateEmailBody:        r.FormValue("estimate_email_body"),
-		Timezone:                 r.FormValue("timezone"),
-		PasswordMinLength:        pwMinLen,
-		PasswordRequireUppercase: r.FormValue("password_require_uppercase") == "on",
-		PasswordRequireLowercase: r.FormValue("password_require_lowercase") == "on",
-		PasswordRequireDigit:     r.FormValue("password_require_digit") == "on",
-		PasswordRequireSpecial:   r.FormValue("password_require_special") == "on",
-		InvoiceColor:             r.FormValue("invoice_color"),
-		InvoiceFooter:            r.FormValue("invoice_footer"),
-		InvoicePaymentTerms:      r.FormValue("invoice_payment_terms"),
+		BusinessName:                r.FormValue("business_name"),
+		Address:                     r.FormValue("address"),
+		City:                        r.FormValue("city"),
+		State:                       r.FormValue("state"),
+		Zip:                         r.FormValue("zip"),
+		Phone:                       r.FormValue("phone"),
+		Email:                       r.FormValue("email"),
+		TaxID:                       r.FormValue("tax_id"),
+		DefaultTaxRate:              r.FormValue("default_tax_rate"),
+		InvoicePrefix:               r.FormValue("invoice_prefix"),
+		EstimatePrefix:              r.FormValue("estimate_prefix"),
+		DefaultDueDays:              dueDays,
+		SmtpHost:                    r.FormValue("smtp_host"),
+		SmtpPort:                    smtpPort,
+		SmtpUser:                    r.FormValue("smtp_user"),
+		SmtpPassword:                r.FormValue("smtp_password"),
+		SmtpFrom:                    r.FormValue("smtp_from"),
+		InvoiceEmailSubject:         r.FormValue("invoice_email_subject"),
+		InvoiceEmailBody:            r.FormValue("invoice_email_body"),
+		EstimateEmailSubject:        r.FormValue("estimate_email_subject"),
+		EstimateEmailBody:           r.FormValue("estimate_email_body"),
+		Timezone:                    r.FormValue("timezone"),
+		PasswordMinLength:           pwMinLen,
+		PasswordRequireUppercase:    r.FormValue("password_require_uppercase") == "on",
+		PasswordRequireLowercase:    r.FormValue("password_require_lowercase") == "on",
+		PasswordRequireDigit:        r.FormValue("password_require_digit") == "on",
+		PasswordRequireSpecial:      r.FormValue("password_require_special") == "on",
+		InvoiceColor:                r.FormValue("invoice_color"),
+		InvoiceFooter:               r.FormValue("invoice_footer"),
+		InvoicePaymentTerms:         r.FormValue("invoice_payment_terms"),
+		PDFShowLineItemDescriptions: r.FormValue("pdf_show_line_item_descriptions") == "on",
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -181,6 +182,9 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 			}
 			if oldSettings.InvoicePaymentTerms != newSettings.InvoicePaymentTerms {
 				changed = append(changed, "invoice_payment_terms")
+			}
+			if oldSettings.PdfShowLineItemDescriptions != newSettings.PdfShowLineItemDescriptions {
+				changed = append(changed, "pdf_show_line_item_descriptions")
 			}
 			if len(changed) > 0 {
 				h.activitySvc.Record(r.Context(), u.ID, "settings_updated", "company_settings", newSettings.ID, map[string]interface{}{

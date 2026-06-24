@@ -510,6 +510,20 @@ func (_u *CompanySettingsUpdate) SetNillableInvoicePaymentTerms(v *string) *Comp
 	return _u
 }
 
+// SetPdfShowLineItemDescriptions sets the "pdf_show_line_item_descriptions" field.
+func (_u *CompanySettingsUpdate) SetPdfShowLineItemDescriptions(v bool) *CompanySettingsUpdate {
+	_u.mutation.SetPdfShowLineItemDescriptions(v)
+	return _u
+}
+
+// SetNillablePdfShowLineItemDescriptions sets the "pdf_show_line_item_descriptions" field if the given value is not nil.
+func (_u *CompanySettingsUpdate) SetNillablePdfShowLineItemDescriptions(v *bool) *CompanySettingsUpdate {
+	if v != nil {
+		_u.SetPdfShowLineItemDescriptions(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CompanySettingsUpdate) SetUpdatedAt(v time.Time) *CompanySettingsUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -676,6 +690,9 @@ func (_u *CompanySettingsUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.InvoicePaymentTerms(); ok {
 		_spec.SetField(companysettings.FieldInvoicePaymentTerms, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PdfShowLineItemDescriptions(); ok {
+		_spec.SetField(companysettings.FieldPdfShowLineItemDescriptions, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(companysettings.FieldUpdatedAt, field.TypeTime, value)
@@ -1182,6 +1199,20 @@ func (_u *CompanySettingsUpdateOne) SetNillableInvoicePaymentTerms(v *string) *C
 	return _u
 }
 
+// SetPdfShowLineItemDescriptions sets the "pdf_show_line_item_descriptions" field.
+func (_u *CompanySettingsUpdateOne) SetPdfShowLineItemDescriptions(v bool) *CompanySettingsUpdateOne {
+	_u.mutation.SetPdfShowLineItemDescriptions(v)
+	return _u
+}
+
+// SetNillablePdfShowLineItemDescriptions sets the "pdf_show_line_item_descriptions" field if the given value is not nil.
+func (_u *CompanySettingsUpdateOne) SetNillablePdfShowLineItemDescriptions(v *bool) *CompanySettingsUpdateOne {
+	if v != nil {
+		_u.SetPdfShowLineItemDescriptions(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CompanySettingsUpdateOne) SetUpdatedAt(v time.Time) *CompanySettingsUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -1378,6 +1409,9 @@ func (_u *CompanySettingsUpdateOne) sqlSave(ctx context.Context) (_node *Company
 	}
 	if value, ok := _u.mutation.InvoicePaymentTerms(); ok {
 		_spec.SetField(companysettings.FieldInvoicePaymentTerms, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PdfShowLineItemDescriptions(); ok {
+		_spec.SetField(companysettings.FieldPdfShowLineItemDescriptions, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(companysettings.FieldUpdatedAt, field.TypeTime, value)

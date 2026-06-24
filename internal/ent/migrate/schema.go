@@ -193,6 +193,7 @@ var (
 		{Name: "invoice_footer", Type: field.TypeString, Default: ""},
 		{Name: "invoice_logo_path", Type: field.TypeString, Default: ""},
 		{Name: "invoice_payment_terms", Type: field.TypeString, Default: "Net 30"},
+		{Name: "pdf_show_line_item_descriptions", Type: field.TypeBool, Default: false},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}

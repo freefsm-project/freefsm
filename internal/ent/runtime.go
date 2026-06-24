@@ -268,12 +268,16 @@ func init() {
 	companysettingsDescInvoicePaymentTerms := companysettingsFields[32].Descriptor()
 	// companysettings.DefaultInvoicePaymentTerms holds the default value on creation for the invoice_payment_terms field.
 	companysettings.DefaultInvoicePaymentTerms = companysettingsDescInvoicePaymentTerms.Default.(string)
+	// companysettingsDescPdfShowLineItemDescriptions is the schema descriptor for pdf_show_line_item_descriptions field.
+	companysettingsDescPdfShowLineItemDescriptions := companysettingsFields[33].Descriptor()
+	// companysettings.DefaultPdfShowLineItemDescriptions holds the default value on creation for the pdf_show_line_item_descriptions field.
+	companysettings.DefaultPdfShowLineItemDescriptions = companysettingsDescPdfShowLineItemDescriptions.Default.(bool)
 	// companysettingsDescCreatedAt is the schema descriptor for created_at field.
-	companysettingsDescCreatedAt := companysettingsFields[33].Descriptor()
+	companysettingsDescCreatedAt := companysettingsFields[34].Descriptor()
 	// companysettings.DefaultCreatedAt holds the default value on creation for the created_at field.
 	companysettings.DefaultCreatedAt = companysettingsDescCreatedAt.Default.(func() time.Time)
 	// companysettingsDescUpdatedAt is the schema descriptor for updated_at field.
-	companysettingsDescUpdatedAt := companysettingsFields[34].Descriptor()
+	companysettingsDescUpdatedAt := companysettingsFields[35].Descriptor()
 	// companysettings.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	companysettings.DefaultUpdatedAt = companysettingsDescUpdatedAt.Default.(func() time.Time)
 	// companysettings.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

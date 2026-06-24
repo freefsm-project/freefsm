@@ -449,8 +449,12 @@ func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64) (do
 		c, _ := h.custSvc.GetByID(ctx, *e.CustomerID)
 		customer = c
 	}
+	var job *ent.Job
+	if e.JobID != nil && *e.JobID > 0 {
+		job, _ = h.jobSvc.GetByID(ctx, *e.JobID)
+	}
 	data, err := generatePDFBytes(func(w io.Writer) error {
-		return services.GenerateEstimatePDF(w, e, customer, statuses, middleware.CompanyFromContext(ctx))
+		return services.GenerateEstimatePDF(w, e, customer, job, statuses, middleware.CompanyFromContext(ctx))
 	})
 	if err != nil {
 		return documentPDF{}, err
@@ -460,10 +464,6 @@ func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64) (do
 	if customer != nil {
 		to = customer.Email
 		customerName = customer.DisplayName
-	}
-	var job *ent.Job
-	if e.JobID != nil && *e.JobID > 0 {
-		job, _ = h.jobSvc.GetByID(ctx, *e.JobID)
 	}
 	jobName, jobType, jobSubtitle := documentJobFields(job)
 	number := fmt.Sprintf("EST-%05d", id)
