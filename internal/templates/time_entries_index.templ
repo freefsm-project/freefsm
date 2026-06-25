@@ -5,8 +5,8 @@ import "fmt"
 templ TimeEntriesIndex(p TimeEntryListPageData) {
 	@Layout("Timesheets") {
 
-		<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-			<form hx-get="/time-entries" hx-target="#time-entry-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner" style="display:flex;gap:0.5rem;align-items:center;flex:1;flex-wrap:wrap">
+		<div class="list-toolbar work-queue-toolbar">
+			<form class="work-queue-filters" hx-get="/time-entries" hx-target="#time-entry-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
 				if p.ShowUserFilter {
 					<select name="user_id" hx-trigger="change">
 						<option value="">All Users</option>
@@ -15,10 +15,10 @@ templ TimeEntriesIndex(p TimeEntryListPageData) {
 						}
 					</select>
 				}
-				<input type="date" name="date_from" value={ p.DateFrom } style="max-width:160px"/>
-				<input type="date" name="date_to" value={ p.DateTo } style="max-width:160px"/>
+				<input type="date" name="date_from" value={ p.DateFrom }/>
+				<input type="date" name="date_to" value={ p.DateTo }/>
 				<input type="search" name="search" placeholder="Search notes..."
-					value={ p.Search } style="max-width:200px"
+					value={ p.Search }
 					hx-trigger="input changed delay:300ms"/>
 				<span id="search-spinner" class="spinner htmx-indicator"></span>
 			</form>
@@ -33,7 +33,8 @@ templ TimeEntriesIndex(p TimeEntryListPageData) {
 
 templ TimeEntriesTable(p TimeEntryListPageData) {
 	<div id="time-entry-table-wrap">
-		<table>
+		<div class="work-queue-wrap">
+			<table class="work-queue-table">
 			<thead>
 				<tr>
 					<th>User</th>
@@ -46,18 +47,18 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 			</thead>
 			<tbody>
 				if len(p.Entries) == 0 {
-					<tr><td colspan="6" style="text-align:center">
+					<tr><td colspan="6" class="work-queue-empty">
 						<p>No time entries found.</p>
-						<a href="/" role="button" class="outline" style="font-size:0.85rem">Go to Dashboard to clock in</a>
+						<a href="/" role="button" class="outline">Go to Dashboard to clock in</a>
 					</td></tr>
 				}
 				for _, e := range p.Entries {
 					<tr>
 						<td>{ e.UserName }</td>
-						<td><small>{ e.ClockIn }</small></td>
+						<td><small class="work-queue-muted">{ e.ClockIn }</small></td>
 						<td>
 							if e.ClockOut != "" {
-								<small>{ e.ClockOut }</small>
+								<small class="work-queue-muted">{ e.ClockOut }</small>
 							} else {
 								<mark>Active</mark>
 							}
@@ -67,12 +68,12 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 							if e.IsManual {
 								<small><mark class="manual-badge">Manual</mark></small>
 							}
-							<small>{ e.Notes }</small>
+							<small class="work-queue-muted">{ e.Notes }</small>
 						</td>
-						<td style="text-align:right">
+						<td class="work-queue-actions">
 							if e.CanEdit {
 								<a href={ templ.URL(fmt.Sprintf("/time-entries/%d/edit", e.ID)) } role="button" class="outline small" aria-label="Edit time entry">Edit</a>
-								<form action={ templ.URL(fmt.Sprintf("/time-entries/%d/delete", e.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this time entry?')">
+								<form action={ templ.URL(fmt.Sprintf("/time-entries/%d/delete", e.ID)) } method="post" onsubmit="return confirm('Delete this time entry?')">
 									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 									<button class="outline contrast small" aria-label="Delete time entry">Del</button>
 								</form>
@@ -81,7 +82,8 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 					</tr>
 				}
 			</tbody>
-		</table>
+			</table>
+		</div>
 		@Pagination(PaginationData{
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,

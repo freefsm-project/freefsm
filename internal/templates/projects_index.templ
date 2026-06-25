@@ -5,10 +5,10 @@ import "fmt"
 templ ProjectIndex(p ProjectListPageData) {
 	@Layout("Projects") {
 
-		<div class="list-toolbar">
-			<form hx-get="/projects" hx-target="#project-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner" style="display:flex;gap:0.5rem;align-items:center;flex:1">
+		<div class="list-toolbar work-queue-toolbar">
+			<form class="work-queue-filters" hx-get="/projects" hx-target="#project-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
 				<input type="search" name="search" placeholder="Search projects..."
-					value={ p.Search } style="max-width:300px"
+					value={ p.Search }
 					hx-trigger="input changed delay:300ms"/>
 				<select name="status_id" hx-trigger="change">
 					<option value="0">All Statuses</option>
@@ -30,7 +30,8 @@ templ ProjectIndex(p ProjectListPageData) {
 
 templ ProjectTable(p ProjectListPageData) {
 	<div id="project-table-wrap">
-		<table>
+		<div class="work-queue-wrap">
+			<table class="work-queue-table">
 			<thead>
 				<tr>
 					<th>Project</th>
@@ -42,30 +43,30 @@ templ ProjectTable(p ProjectListPageData) {
 			</thead>
 			<tbody>
 				if len(p.Projects) == 0 {
-					<tr><td colspan="5" style="text-align:center">
+					<tr><td colspan="5" class="work-queue-empty">
 						<p>No projects found.</p>
-						<a href="/projects/new" role="button" class="outline" style="font-size:0.85rem">Create your first project</a>
+						<a href="/projects/new" role="button" class="outline">Create your first project</a>
 					</td></tr>
 				}
 				for _, pr := range p.Projects {
 					<tr>
 						<td>
-							<a href={ templ.URL(fmt.Sprintf("/projects/%d", pr.ID)) }>
+							<a href={ templ.URL(fmt.Sprintf("/projects/%d", pr.ID)) } class="work-queue-title">
 								{ pr.Name }
 							</a>
 							if pr.Description != "" {
-								<br/><small>{ pr.Description }</small>
+								<br/><small class="work-queue-muted">{ pr.Description }</small>
 							}
 						</td>
 						<td>{ pr.CustomerName }</td>
-						<td><span class="status-badge" style={ badgeStyle(pr.StatusColor) }>{ pr.StatusName }</span></td>
+						<td class="work-queue-status"><span class="status-badge" style={ badgeStyle(pr.StatusColor) }>{ pr.StatusName }</span></td>
 						<td>
 							<progress value={ fmt.Sprintf("%.0f", pr.CompletionPercentage) } max="100"></progress>
 							<small>{ fmt.Sprintf("%.0f%%", pr.CompletionPercentage) }</small>
 						</td>
-						<td style="text-align:right">
+						<td class="work-queue-actions">
 							<a href={ templ.URL(fmt.Sprintf("/projects/%d/edit", pr.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", pr.Name) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/projects/%d/delete", pr.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this project?')">
+							<form action={ templ.URL(fmt.Sprintf("/projects/%d/delete", pr.ID)) } method="post" onsubmit="return confirm('Delete this project?')">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", pr.Name) }>Del</button>
 							</form>
@@ -73,7 +74,8 @@ templ ProjectTable(p ProjectListPageData) {
 					</tr>
 				}
 			</tbody>
-		</table>
+			</table>
+		</div>
 		@Pagination(PaginationData{
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,

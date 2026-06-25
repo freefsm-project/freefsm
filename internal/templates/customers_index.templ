@@ -5,10 +5,10 @@ import "fmt"
 templ CustomerIndex(p CustomerListPageData) {
 	@Layout("Customers") {
 
-		<div class="list-toolbar">
-			<form hx-get="/customers" hx-target="#customer-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner" style="display:flex;gap:0.5rem;align-items:center;flex:1">
+		<div class="list-toolbar work-queue-toolbar">
+			<form class="work-queue-filters" hx-get="/customers" hx-target="#customer-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
 			<input type="search" name="search" placeholder="Search customers..."
-				value={ p.Search } style="max-width:300px"
+				value={ p.Search }
 				hx-trigger="input changed delay:300ms"/>
 			<select name="status"
 				hx-trigger="change">
@@ -31,7 +31,8 @@ templ CustomerIndex(p CustomerListPageData) {
 
 templ CustomerTable(p CustomerListPageData) {
 	<div id="customer-table-wrap">
-		<table>
+		<div class="work-queue-wrap">
+			<table class="work-queue-table">
 			<thead>
 				<tr>
 					<th>Name</th>
@@ -43,27 +44,27 @@ templ CustomerTable(p CustomerListPageData) {
 			</thead>
 			<tbody>
 				if len(p.Customers) == 0 {
-					<tr><td colspan="5" style="text-align:center">
+					<tr><td colspan="5" class="work-queue-empty">
 						<p>No customers found.</p>
-						<a href="/customers/new" role="button" class="outline" style="font-size:0.85rem">Create your first customer</a>
+						<a href="/customers/new" role="button" class="outline">Create your first customer</a>
 					</td></tr>
 				}
 				for _, c := range p.Customers {
 					<tr>
 						<td>
-							<a href={ templ.URL(fmt.Sprintf("/customers/%d", c.ID)) }>
+							<a href={ templ.URL(fmt.Sprintf("/customers/%d", c.ID)) } class="work-queue-title">
 								{ c.DisplayName }
 							</a>
 							if c.CompanyName != "" {
-								<br/><small>{ c.CompanyName }</small>
+								<br/><small class="work-queue-muted">{ c.CompanyName }</small>
 							}
 						</td>
 						<td>{ c.Email }</td>
 						<td>{ c.Phone }</td>
-						<td><span class="status-badge" style={ badgeStyle(customerStatusColor(c.Status)) }>{ c.Status }</span></td>
-						<td style="text-align:right">
+						<td class="work-queue-status"><span class="status-badge" style={ badgeStyle(customerStatusColor(c.Status)) }>{ c.Status }</span></td>
+						<td class="work-queue-actions">
 							<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", c.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", c.DisplayName) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", c.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this customer?')">
+							<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", c.ID)) } method="post" onsubmit="return confirm('Delete this customer?')">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", c.DisplayName) }>Del</button>
 							</form>
@@ -71,7 +72,8 @@ templ CustomerTable(p CustomerListPageData) {
 					</tr>
 				}
 			</tbody>
-		</table>
+			</table>
+		</div>
 		@Pagination(PaginationData{
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,

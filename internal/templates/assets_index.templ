@@ -4,10 +4,10 @@ import "fmt"
 
 templ AssetIndex(p AssetListPageData) {
 	@Layout("Assets") {
-		<div class="list-toolbar">
-			<form hx-get="/assets" hx-target="#asset-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner" style="display:flex;gap:0.5rem;align-items:center;flex:1">
+		<div class="list-toolbar work-queue-toolbar">
+			<form class="work-queue-filters" hx-get="/assets" hx-target="#asset-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
 				<input type="search" name="search" placeholder="Search assets..."
-					value={ p.Search } style="max-width:300px"
+					value={ p.Search }
 					hx-trigger="input changed delay:300ms"/>
 				<select name="asset_type_id" hx-trigger="change">
 					<option value="0">All Types</option>
@@ -35,7 +35,8 @@ templ AssetIndex(p AssetListPageData) {
 
 templ AssetTable(p AssetListPageData) {
 	<div id="asset-table-wrap">
-		<table>
+		<div class="work-queue-wrap">
+			<table class="work-queue-table">
 			<thead>
 				<tr>
 					<th>Name</th>
@@ -48,15 +49,15 @@ templ AssetTable(p AssetListPageData) {
 			</thead>
 			<tbody>
 				if len(p.Assets) == 0 {
-					<tr><td colspan="6" style="text-align:center">
+					<tr><td colspan="6" class="work-queue-empty">
 						<p>No assets found.</p>
-						<a href="/assets/new" role="button" class="outline" style="font-size:0.85rem">Create your first asset</a>
+						<a href="/assets/new" role="button" class="outline">Create your first asset</a>
 					</td></tr>
 				}
 				for _, a := range p.Assets {
 					<tr>
 						<td>
-							<a href={ templ.URL(fmt.Sprintf("/assets/%d", a.ID)) }>
+							<a href={ templ.URL(fmt.Sprintf("/assets/%d", a.ID)) } class="work-queue-title">
 								{ a.Name }
 							</a>
 						</td>
@@ -69,16 +70,16 @@ templ AssetTable(p AssetListPageData) {
 								}
 							}
 						</td>
-						<td>
+						<td class="work-queue-status">
 							for _, s := range p.AssetStatuses {
 								if a.AssetStatusID != nil && s.Value == *a.AssetStatusID {
 									<span class="status-badge" style={ badgeStyle(s.Label) }>{ s.Label }</span>
 								}
 							}
 						</td>
-						<td style="text-align:right">
+						<td class="work-queue-actions">
 							<a href={ templ.URL(fmt.Sprintf("/assets/%d/edit", a.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", a.Name) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/assets/%d/delete", a.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this asset?')">
+							<form action={ templ.URL(fmt.Sprintf("/assets/%d/delete", a.ID)) } method="post" onsubmit="return confirm('Delete this asset?')">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", a.Name) }>Del</button>
 							</form>
@@ -86,7 +87,8 @@ templ AssetTable(p AssetListPageData) {
 					</tr>
 				}
 			</tbody>
-		</table>
+			</table>
+		</div>
 		@Pagination(PaginationData{
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
