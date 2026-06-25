@@ -965,6 +965,15 @@ html[data-theme="dark"] .theme-icon-moon {
   display: none;
 }
 
+.search-empty {
+  margin-top: 2rem;
+  text-align: center;
+}
+
+.contact-add-button {
+  margin-top: 0.5rem;
+}
+
 .required-marker {
   color: var(--pico-primary);
 }

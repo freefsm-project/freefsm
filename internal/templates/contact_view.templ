@@ -7,7 +7,7 @@ templ ContactViewRow(customerID int64, c ContactRow) {
 		<td>{ c.FirstName } { c.LastName }</td>
 		<td>{ c.Email }</td>
 		<td>{ c.Phone }</td>
-		<td style="text-align:right">
+		<td class="text-right">
 			<button class="outline small"
 				hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/edit", customerID, c.ID)) }
 				hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", c.ID)) }

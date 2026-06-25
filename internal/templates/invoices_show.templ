@@ -108,7 +108,7 @@ templ InvoiceShow(p InvoiceDetail) {
 		if p.ArchivedAt == "" {
 		<details open>
 			<summary>Record Payment</summary>
-			<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments", p.ID)) } method="post" style="margin-top:0.5rem">
+			<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments", p.ID)) } method="post" class="inline-add-form">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<div class="grid">
 					<label>

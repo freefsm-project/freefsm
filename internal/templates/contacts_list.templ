@@ -22,7 +22,7 @@ templ ContactsList(contacts []ContactRow, customerID int64, readOnly bool) {
 							<td>{ c.Email }</td>
 							<td>{ c.Phone }</td>
 							if canManageOperational(ctx) && !readOnly {
-								<td style="text-align:right">
+								<td class="text-right">
 									<button class="outline small"
 										hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/edit", customerID, c.ID)) }
 										hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", c.ID)) }
@@ -42,8 +42,7 @@ templ ContactsList(contacts []ContactRow, customerID int64, readOnly bool) {
 		if canManageOperational(ctx) && !readOnly {
 			<button hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/new", customerID)) }
 				hx-target="#contact-form-wrap"
-				hx-swap="innerHTML" class="outline"
-				style="margin-top:0.5rem">+ Add Contact</button>
+				hx-swap="innerHTML" class="outline contact-add-button">+ Add Contact</button>
 		}
 		<div id="contact-form-wrap"></div>
 	</div>

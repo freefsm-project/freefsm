@@ -121,7 +121,7 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 					return templ_7745c5c3_Err
 				}
 				if canManageOperational(ctx) && !readOnly {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<td style=\"text-align:right\"><button class=\"outline small\" hx-get=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<td class=\"text-right\"><button class=\"outline small\" hx-get=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -189,7 +189,7 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" hx-target=\"#contact-form-wrap\" hx-swap=\"innerHTML\" class=\"outline\" style=\"margin-top:0.5rem\">+ Add Contact</button>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" hx-target=\"#contact-form-wrap\" hx-swap=\"innerHTML\" class=\"outline contact-add-button\">+ Add Contact</button>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

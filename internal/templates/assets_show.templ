@@ -56,14 +56,14 @@ templ AssetShow(p AssetShowPageData) {
 				if p.Asset.Notes != "" {
 					<p>{ p.Asset.Notes }</p>
 				} else {
-					<p style="color:var(--pico-muted-color)">No notes.</p>
+					<p class="shared-widget-muted">No notes.</p>
 				}
 			</article>
 		</div>
 
 		<h3>Service History</h3>
 		if len(p.ServiceHistory) == 0 {
-			<p style="color:var(--pico-muted-color)">No service history yet.</p>
+			<p class="shared-widget-muted">No service history yet.</p>
 		} else {
 			<table>
 				<thead>
@@ -87,7 +87,7 @@ templ AssetShow(p AssetShowPageData) {
 								if j.StartTime != "" {
 									{ j.StartTime }
 								} else {
-									<span style="color:var(--pico-muted-color)">Not scheduled</span>
+									<span class="shared-widget-muted">Not scheduled</span>
 								}
 							</td>
 							<td>

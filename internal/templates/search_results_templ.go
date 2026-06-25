@@ -71,7 +71,7 @@ func SearchResults(p SearchPageData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if len(p.Customers) == 0 && len(p.Jobs) == 0 && len(p.Projects) == 0 && len(p.Invoices) == 0 && len(p.Estimates) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div style=\"text-align:center;margin-top:2rem\"><p>No results found. Try broadening your search terms.</p></div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"search-empty\"><p>No results found. Try broadening your search terms.</p></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
