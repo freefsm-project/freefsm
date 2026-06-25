@@ -537,6 +537,211 @@ html[data-theme="dark"] .theme-icon-moon {
   margin-top: 1rem;
 }
 
+/* Scoped shared widgets */
+.shared-widget {
+  margin-top: 1.5rem;
+}
+
+.shared-widget-muted {
+  color: var(--pico-muted-color);
+}
+
+.shared-widget-required {
+  color: var(--pico-primary);
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.activity-list-compact {
+  gap: 0.3rem;
+}
+
+.activity-item {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.activity-item-compact {
+  padding: 0.3rem 0;
+}
+
+.activity-icon {
+  flex-shrink: 0;
+  width: 1.5rem;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
+.activity-item-compact .activity-icon {
+  width: 1.4rem;
+  font-size: 1rem;
+}
+
+.activity-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-text {
+  line-height: 1.5;
+}
+
+.activity-text-compact {
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.activity-preview {
+  margin: 0.15rem 0 0 0;
+  color: var(--pico-muted-color);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.activity-preview-compact {
+  margin-top: 0.1rem;
+  font-size: 0.8rem;
+}
+
+.activity-time {
+  flex-shrink: 0;
+  color: var(--pico-muted-color);
+  font-size: 0.8rem;
+}
+
+.activity-time-compact {
+  font-size: 0.75rem;
+}
+
+.comments-list-item {
+  margin-bottom: 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--pico-primary);
+}
+
+.comments-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.comments-item-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.comments-delete-button {
+  margin: 0;
+  padding: 0 0.35rem;
+  font-size: 0.7rem;
+}
+
+.comments-content {
+  margin: 0.25rem 0 0 0;
+  white-space: pre-wrap;
+}
+
+.comments-form {
+  margin-top: 1rem;
+}
+
+.comments-textarea {
+  margin-bottom: 0.25rem;
+}
+
+.comments-submit-button {
+  font-size: 0.85rem;
+}
+
+.custom-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.custom-field-checkbox {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.clock-widget {
+  text-align: center;
+}
+
+.clock-status {
+  margin-bottom: 0.25rem;
+  font-size: 1.25rem;
+}
+
+.clock-duration {
+  margin-bottom: 0.25rem;
+  font-size: 2rem;
+  font-weight: bold;
+}
+
+.clock-duration-empty {
+  margin-bottom: 0.5rem;
+}
+
+.clock-note {
+  margin-bottom: 1rem;
+  color: var(--pico-muted-color);
+  font-size: 0.85rem;
+}
+
+.clock-form {
+  display: inline;
+}
+
+.clock-button {
+  width: 100%;
+}
+
+.pagination-nav,
+.activity-pagination {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.pagination-status,
+.activity-pagination-status {
+  color: var(--pico-muted-color);
+  line-height: 1.8rem;
+}
+
+.activity-pagination-button {
+  font-size: 0.8rem;
+}
+
+.tag-widget {
+  margin-bottom: 1rem;
+}
+
+.tag-widget-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.tag-select {
+  width: auto;
+  padding: 0.25rem;
+  font-size: 0.8rem;
+}
+
 /* Scoped form primitives */
 .entity-form {
   max-width: 800px;

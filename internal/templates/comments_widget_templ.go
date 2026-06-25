@@ -44,7 +44,7 @@ func CommentsWidget(p CommentsWidgetData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" style=\"margin-top:1.5rem\"><h4>Comments</h4>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" class=\"shared-widget\"><h4>Comments</h4>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -55,7 +55,7 @@ func CommentsWidget(p CommentsWidgetData) templ.Component {
 			}
 		} else {
 			for _, c := range p.Comments {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div style=\"border-left:3px solid var(--pico-primary);padding-left:0.75rem;margin-bottom:0.75rem\"><div style=\"display:flex;justify-content:space-between;align-items:baseline\"><strong>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"comments-list-item\"><div class=\"comments-item-header\"><strong>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -68,14 +68,14 @@ func CommentsWidget(p CommentsWidgetData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</strong><div style=\"display:flex;gap:0.5rem;align-items:center\"><small style=\"color:var(--pico-muted-color)\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</strong><div class=\"comments-item-actions\"><small class=\"shared-widget-muted\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(c.CreatedAt)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 16, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 16, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -86,14 +86,14 @@ func CommentsWidget(p CommentsWidgetData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				if c.CanDelete && !p.ReadOnly {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<button class=\"outline contrast\" style=\"font-size:0.7rem;padding:0 0.35rem;margin:0\" hx-post=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<button class=\"outline contrast comments-delete-button\" hx-post=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%s/comments/%d/delete", p.BaseURL, c.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 21, Col: 72}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 20, Col: 72}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 					if templ_7745c5c3_Err != nil {
@@ -106,7 +106,7 @@ func CommentsWidget(p CommentsWidgetData) templ.Component {
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("closest #comments-%s-%d", p.ObjectType, p.ObjectID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 22, Col: 85}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 21, Col: 85}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 					if templ_7745c5c3_Err != nil {
@@ -117,14 +117,14 @@ func CommentsWidget(p CommentsWidgetData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div><p style=\"margin:0.25rem 0 0 0;white-space:pre-wrap\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</div></div><p class=\"comments-content\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(c.Content)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 29, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 28, Col: 44}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
@@ -144,7 +144,7 @@ func CommentsWidget(p CommentsWidgetData) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%s/comments", p.BaseURL))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 35, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 34, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 			if templ_7745c5c3_Err != nil {
@@ -157,26 +157,26 @@ func CommentsWidget(p CommentsWidgetData) templ.Component {
 			var templ_7745c5c3_Var9 string
 			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("#comments-%s-%d", p.ObjectType, p.ObjectID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 36, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 35, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" hx-swap=\"outerHTML\" style=\"margin-top:1rem\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" hx-swap=\"outerHTML\" class=\"comments-form\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 40, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/comments_widget.templ`, Line: 39, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\"> <label><textarea name=\"content\" rows=\"2\" placeholder=\"Add a comment...\" style=\"margin-bottom:0.25rem\"></textarea></label> <button type=\"submit\" class=\"outline\" style=\"font-size:0.85rem\">Add Comment</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\"> <label><textarea name=\"content\" rows=\"2\" placeholder=\"Add a comment...\" class=\"comments-textarea\"></textarea></label> <button type=\"submit\" class=\"outline comments-submit-button\">Add Comment</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

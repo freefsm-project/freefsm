@@ -32,7 +32,7 @@ func CustomFieldsWidget(p CustomFieldsWidgetData) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		if len(p.Fields) > 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"margin-top:1.5rem\"><h4>Custom Fields</h4><div style=\"display:grid;grid-template-columns:1fr 1fr;gap:0.75rem\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"shared-widget\"><h4>Custom Fields</h4><div class=\"custom-fields-grid\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -60,7 +60,7 @@ func CustomFieldsWidget(p CustomFieldsWidgetData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					if f.Required {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<small style=\"color:var(--pico-primary)\">*</small> ")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<small class=\"shared-widget-required\">*</small> ")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -254,7 +254,7 @@ func CustomFieldsWidget(p CustomFieldsWidgetData) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					} else if f.FieldType == "checkbox" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div style=\"display:flex;align-items:center;gap:0.5rem;margin-top:0.25rem\"><input type=\"hidden\" name=\"")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div class=\"custom-field-checkbox\"><input type=\"hidden\" name=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
@@ -369,7 +369,7 @@ func CustomFieldsWidget(p CustomFieldsWidgetData) templ.Component {
 							return templ_7745c5c3_Err
 						}
 					} else {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<p style=\"color:var(--pico-muted-color)\"><em>Not set</em></p>")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<p class=\"shared-widget-muted\"><em>Not set</em></p>")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}

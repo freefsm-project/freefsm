@@ -3,21 +3,20 @@ package templates
 import "fmt"
 
 templ CommentsWidget(p CommentsWidgetData) {
-	<div id={ fmt.Sprintf("comments-%s-%d", p.ObjectType, p.ObjectID) } style="margin-top:1.5rem">
+	<div id={ fmt.Sprintf("comments-%s-%d", p.ObjectType, p.ObjectID) } class="shared-widget">
 		<h4>Comments</h4>
 		if len(p.Comments) == 0 {
 			<p>No comments yet.</p>
 		} else {
 			for _, c := range p.Comments {
-				<div style="border-left:3px solid var(--pico-primary);padding-left:0.75rem;margin-bottom:0.75rem">
-					<div style="display:flex;justify-content:space-between;align-items:baseline">
+				<div class="comments-list-item">
+					<div class="comments-item-header">
 						<strong>{ c.Author }</strong>
-						<div style="display:flex;gap:0.5rem;align-items:center">
-							<small style="color:var(--pico-muted-color)">{ c.CreatedAt }</small>
+						<div class="comments-item-actions">
+							<small class="shared-widget-muted">{ c.CreatedAt }</small>
 							if c.CanDelete && !p.ReadOnly {
 								<button
-									class="outline contrast"
-									style="font-size:0.7rem;padding:0 0.35rem;margin:0"
+									class="outline contrast comments-delete-button"
 									hx-post={ fmt.Sprintf("%s/comments/%d/delete", p.BaseURL, c.ID) }
 									hx-target={ fmt.Sprintf("closest #comments-%s-%d", p.ObjectType, p.ObjectID) }
 									hx-swap="outerHTML"
@@ -26,7 +25,7 @@ templ CommentsWidget(p CommentsWidgetData) {
 							}
 						</div>
 					</div>
-					<p style="margin:0.25rem 0 0 0;white-space:pre-wrap">{ c.Content }</p>
+					<p class="comments-content">{ c.Content }</p>
 				</div>
 			}
 		}
@@ -35,13 +34,13 @@ templ CommentsWidget(p CommentsWidgetData) {
 				hx-post={ fmt.Sprintf("%s/comments", p.BaseURL) }
 				hx-target={ fmt.Sprintf("#comments-%s-%d", p.ObjectType, p.ObjectID) }
 				hx-swap="outerHTML"
-				style="margin-top:1rem"
+				class="comments-form"
 			>
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<label>
-					<textarea name="content" rows="2" placeholder="Add a comment..." style="margin-bottom:0.25rem"></textarea>
+					<textarea name="content" rows="2" placeholder="Add a comment..." class="comments-textarea"></textarea>
 				</label>
-				<button type="submit" class="outline" style="font-size:0.85rem">Add Comment</button>
+				<button type="submit" class="outline comments-submit-button">Add Comment</button>
 			</form>
 		}
 	</div>

@@ -3,8 +3,8 @@ package templates
 import "fmt"
 
 templ TagWidget(p TagWidgetData) {
-	<div id="tag-widget" data-base-url={ p.BaseURL } style="margin-bottom:1rem">
-		<div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center">
+	<div id="tag-widget" data-base-url={ p.BaseURL } class="tag-widget">
+		<div class="tag-widget-list">
 			for _, t := range p.Tags {
 				<span class="tag-badge" style={ badgeStyle(t.Color) }>
 					{ t.Name }
@@ -14,14 +14,13 @@ templ TagWidget(p TagWidgetData) {
 							hx-post={ fmt.Sprintf("%s/tags/%d/detach", p.BaseURL, t.ID) }
 							hx-target="#tag-widget"
 							hx-swap="outerHTML"
-							style="margin-left:0.25rem;background:none;border:none;color:inherit;cursor:pointer;font-size:0.7rem;padding:0"
 						>×</button>
 					}
 				</span>
 			}
 			if canManageOperational(ctx) && !p.ReadOnly && len(p.AllTags) > len(p.Tags) {
 				<select
-					style="width:auto;font-size:0.8rem;padding:0.25rem"
+					class="tag-select"
 					hx-on:change="htmx.trigger(this, 'addTag')"
 				>
 					<option value="">+ Add tag</option>

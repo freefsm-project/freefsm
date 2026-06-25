@@ -44,7 +44,7 @@ func TagWidget(p TagWidgetData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" style=\"margin-bottom:1rem\"><div style=\"display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" class=\"tag-widget\"><div class=\"tag-widget-list\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -93,7 +93,7 @@ func TagWidget(p TagWidgetData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" hx-target=\"#tag-widget\" hx-swap=\"outerHTML\" style=\"margin-left:0.25rem;background:none;border:none;color:inherit;cursor:pointer;font-size:0.7rem;padding:0\">×</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" hx-target=\"#tag-widget\" hx-swap=\"outerHTML\">×</button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -104,7 +104,7 @@ func TagWidget(p TagWidgetData) templ.Component {
 			}
 		}
 		if canManageOperational(ctx) && !p.ReadOnly && len(p.AllTags) > len(p.Tags) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<select style=\"width:auto;font-size:0.8rem;padding:0.25rem\" hx-on:change=\"htmx.trigger(this, 'addTag')\"><option value=\"\">+ Add tag</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<select class=\"tag-select\" hx-on:change=\"htmx.trigger(this, 'addTag')\"><option value=\"\">+ Add tag</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -117,7 +117,7 @@ func TagWidget(p TagWidgetData) templ.Component {
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", t.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 30, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 29, Col: 46}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 					if templ_7745c5c3_Err != nil {
@@ -130,7 +130,7 @@ func TagWidget(p TagWidgetData) templ.Component {
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(t.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 30, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 29, Col: 57}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {

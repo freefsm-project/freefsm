@@ -1,17 +1,17 @@
 package templates
 
 templ ActivityWidget(p ActivityWidgetData) {
-	<div id={ "activity-" + p.ObjectType + "-" + sprintHTML(p.ObjectID) } style="margin-top:1.5rem">
+	<div id={ "activity-" + p.ObjectType + "-" + sprintHTML(p.ObjectID) } class="shared-widget">
 		<h4>Activity</h4>
 		if len(p.Entries) == 0 {
 			<p>No activity yet.</p>
 		} else {
-			<div style="display:flex;flex-direction:column;gap:0.5rem">
+			<div class="activity-list">
 				for _, e := range p.Entries {
-					<div class="activity-item" style="display:flex;gap:0.6rem;align-items:flex-start;padding:0.4rem 0;border-bottom:1px solid var(--pico-muted-border-color)">
-						<span class="activity-icon" style={ "font-size:1.1rem;flex-shrink:0;width:1.5rem;text-align:center" }>{ e.Icon }</span>
-						<div style="flex:1;min-width:0">
-							<span style="line-height:1.5">
+					<div class="activity-item">
+						<span class="activity-icon">{ e.Icon }</span>
+						<div class="activity-body">
+							<span class="activity-text">
 								<strong>{ e.ActorName }</strong>
 								{" "}
 								<span class={ activityActionClass(e.Action) }>{ activityVerb(e.Action) }</span>
@@ -50,10 +50,10 @@ templ ActivityWidget(p ActivityWidgetData) {
 								}
 							</span>
 							if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
-								<p style="margin:0.15rem 0 0 0;font-size:0.85rem;color:var(--pico-muted-color);font-style:italic">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>
+								<p class="activity-preview">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>
 							}
 						</div>
-						<small style="flex-shrink:0;color:var(--pico-muted-color);font-size:0.8rem" title={ e.CreatedAt }>{ e.RelativeTime }</small>
+						<small class="activity-time" title={ e.CreatedAt }>{ e.RelativeTime }</small>
 					</div>
 				}
 			</div>
