@@ -4,60 +4,60 @@ import "fmt"
 
 templ DashboardPage(p DashboardData) {
 	@Layout("Dashboard") {
-		<div class="grid" style="margin-bottom:2rem">
+		<div class="dashboard-overview">
 			@ClockWidget(p.ClockWidget)
 			if canManageOperational(ctx) {
-				<article>
+				<article class="dashboard-stat">
 					<header>Customers</header>
-					<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalCustomers) }</p>
-					<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">{ fmt.Sprintf("%d new this month", p.Stats.NewCustomersThisMonth) }</p>
+					<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalCustomers) }</p>
+					<p class="dashboard-meta">{ fmt.Sprintf("%d new this month", p.Stats.NewCustomersThisMonth) }</p>
 					<footer><a href="/customers" role="button" class="outline">View Customers</a></footer>
 				</article>
-				<article>
+				<article class="dashboard-stat">
 					<header>Jobs</header>
-					<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalJobs) }</p>
-					<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">
+					<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalJobs) }</p>
+					<p class="dashboard-meta">
 						if p.Stats.JobsOverdue > 0 {
-							<span style="color:var(--pico-del-color)">{ fmt.Sprintf("%d overdue", p.Stats.JobsOverdue) }</span>
+							<span class="dashboard-danger">{ fmt.Sprintf("%d overdue", p.Stats.JobsOverdue) }</span>
 						} else {
 							<span>No overdue jobs</span>
 						}
 					</p>
 					<footer><a href="/jobs" role="button" class="outline">View Jobs</a></footer>
 				</article>
-				<article>
+				<article class="dashboard-stat">
 					<header>Invoices</header>
-					<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalInvoices) }</p>
-					<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">
+					<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalInvoices) }</p>
+					<p class="dashboard-meta">
 						{ fmt.Sprintf("%d paid, %d unpaid", p.Stats.InvoicesPaid, p.Stats.InvoicesUnpaid) }
 						if p.Stats.InvoicesOverdue > 0 {
-							<span>, <span style="color:var(--pico-del-color)">{ fmt.Sprintf("%d overdue", p.Stats.InvoicesOverdue) }</span></span>
+							<span>, <span class="dashboard-danger">{ fmt.Sprintf("%d overdue", p.Stats.InvoicesOverdue) }</span></span>
 						}
 					</p>
 					<footer><a href="/invoices" role="button" class="outline">View Invoices</a></footer>
 				</article>
-				<article>
+				<article class="dashboard-stat">
 					<header>Projects</header>
-					<p style="font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem">{ fmt.Sprintf("%d", p.Stats.TotalProjects) }</p>
-					<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">{ fmt.Sprintf("%d active, %d completed", p.Stats.ProjectsActive, p.Stats.ProjectsCompleted) }</p>
+					<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalProjects) }</p>
+					<p class="dashboard-meta">{ fmt.Sprintf("%d active, %d completed", p.Stats.ProjectsActive, p.Stats.ProjectsCompleted) }</p>
 					<footer><a href="/projects" role="button" class="outline">View Projects</a></footer>
 				</article>
 			}
 		</div>
 		if !canManageOperational(ctx) {
-			<article>
+			<article class="dashboard-panel">
 				<header>Assigned Work</header>
 				<p>Use Jobs or Schedule to view work assigned to you.</p>
-				<footer style="display:flex;gap:0.5rem;flex-wrap:wrap">
+				<footer class="dashboard-assigned-actions">
 					<a href="/jobs" role="button" class="outline">View Jobs</a>
 					<a href="/schedule" role="button" class="outline">View Schedule</a>
 				</footer>
 			</article>
 		}
 		if canManageOperational(ctx) {
-			<h3>Recent Activity</h3>
-			<div class="grid">
-				<article>
+			<h3 class="dashboard-section-title">Recent Activity</h3>
+			<div class="dashboard-work-queues">
+				<article class="dashboard-panel">
 					<header>Recent Jobs</header>
 					<table>
 						<thead>
@@ -65,7 +65,7 @@ templ DashboardPage(p DashboardData) {
 						</thead>
 						<tbody>
 							if len(p.Stats.RecentJobs) == 0 {
-								<tr><td colspan="3" style="text-align:center">No recent jobs</td></tr>
+								<tr><td colspan="3" class="dashboard-empty">No recent jobs</td></tr>
 							}
 							for _, j := range p.Stats.RecentJobs {
 								<tr>
@@ -77,7 +77,7 @@ templ DashboardPage(p DashboardData) {
 						</tbody>
 					</table>
 				</article>
-				<article>
+				<article class="dashboard-panel">
 					<header>Recent Invoices</header>
 					<table>
 						<thead>
@@ -85,19 +85,19 @@ templ DashboardPage(p DashboardData) {
 						</thead>
 						<tbody>
 							if len(p.Stats.RecentInvoices) == 0 {
-								<tr><td colspan="3" style="text-align:center">No recent invoices</td></tr>
+								<tr><td colspan="3" class="dashboard-empty">No recent invoices</td></tr>
 							}
 							for _, inv := range p.Stats.RecentInvoices {
 								<tr>
 									<td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", inv.ID)) }>{ inv.Title }</a></td>
 									<td>{ inv.Customer }</td>
-									<td style="text-align:right">{ fmt.Sprintf("$%.2f", inv.Total) }</td>
+									<td class="dashboard-amount">{ fmt.Sprintf("$%.2f", inv.Total) }</td>
 								</tr>
 							}
 						</tbody>
 					</table>
 				</article>
-				<article>
+				<article class="dashboard-panel">
 					<header>Recent Estimates</header>
 					<table>
 						<thead>
@@ -105,39 +105,39 @@ templ DashboardPage(p DashboardData) {
 						</thead>
 						<tbody>
 							if len(p.Stats.RecentEstimates) == 0 {
-								<tr><td colspan="3" style="text-align:center">No recent estimates</td></tr>
+								<tr><td colspan="3" class="dashboard-empty">No recent estimates</td></tr>
 							}
 							for _, e := range p.Stats.RecentEstimates {
 								<tr>
 									<td><a href={ templ.URL(fmt.Sprintf("/estimates/%d", e.ID)) }>{ e.Title }</a></td>
 									<td>{ e.Customer }</td>
-									<td style="text-align:right">{ fmt.Sprintf("$%.2f", e.Total) }</td>
+									<td class="dashboard-amount">{ fmt.Sprintf("$%.2f", e.Total) }</td>
 								</tr>
 							}
 						</tbody>
 					</table>
 				</article>
 			</div>
-			<h3>Financial Summary</h3>
-			<div class="grid" style="margin-bottom:2rem">
-				<article>
+			<h3 class="dashboard-section-title">Financial Summary</h3>
+			<div class="dashboard-financials">
+				<article class="dashboard-stat">
 					<header>Revenue This Month</header>
-					<p style="font-size:1.5rem;font-weight:bold;text-align:center">{ fmt.Sprintf("$%.2f", p.Stats.RevenueMonth) }</p>
+					<p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Stats.RevenueMonth) }</p>
 				</article>
-				<article>
+				<article class="dashboard-stat">
 					<header>Outstanding Receivables</header>
-					<p style="font-size:1.5rem;font-weight:bold;text-align:center">{ fmt.Sprintf("$%.2f", p.Stats.OutstandingReceivables) }</p>
+					<p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Stats.OutstandingReceivables) }</p>
 				</article>
-				<article>
+				<article class="dashboard-stat">
 					<header>Overdue</header>
-					<p style="font-size:1.5rem;font-weight:bold;text-align:center">
+					<p class="dashboard-metric dashboard-metric-sm">
 						if p.Stats.OverdueAmount > 0 {
-							<span style="color:var(--pico-del-color)">{ fmt.Sprintf("$%.2f", p.Stats.OverdueAmount) }</span>
+							<span class="dashboard-danger">{ fmt.Sprintf("$%.2f", p.Stats.OverdueAmount) }</span>
 						} else {
 							{ fmt.Sprintf("$%.2f", p.Stats.OverdueAmount) }
 						}
 					</p>
-					<p style="text-align:center;color:var(--pico-muted-color);font-size:0.85rem">{ fmt.Sprintf("%d invoices", p.Stats.InvoicesOverdue) }</p>
+					<p class="dashboard-meta">{ fmt.Sprintf("%d invoices", p.Stats.InvoicesOverdue) }</p>
 				</article>
 			</div>
 		}

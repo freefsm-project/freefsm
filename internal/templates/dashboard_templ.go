@@ -43,7 +43,7 @@ func DashboardPage(p DashboardData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"grid\" style=\"margin-bottom:2rem\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"dashboard-overview\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -52,58 +52,58 @@ func DashboardPage(p DashboardData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if canManageOperational(ctx) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<article><header>Customers</header><p style=\"font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<article class=\"dashboard-stat\"><header>Customers</header><p class=\"dashboard-metric\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var3 string
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", p.Stats.TotalCustomers))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 12, Col: 131}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 12, Col: 76}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</p><p style=\"text-align:center;color:var(--pico-muted-color);font-size:0.85rem\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</p><p class=\"dashboard-meta\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d new this month", p.Stats.NewCustomersThisMonth))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 13, Col: 147}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 13, Col: 96}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</p><footer><a href=\"/customers\" role=\"button\" class=\"outline\">View Customers</a></footer></article><article><header>Jobs</header><p style=\"font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</p><footer><a href=\"/customers\" role=\"button\" class=\"outline\">View Customers</a></footer></article><article class=\"dashboard-stat\"><header>Jobs</header><p class=\"dashboard-metric\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", p.Stats.TotalJobs))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 18, Col: 126}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 18, Col: 71}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</p><p style=\"text-align:center;color:var(--pico-muted-color);font-size:0.85rem\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</p><p class=\"dashboard-meta\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if p.Stats.JobsOverdue > 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<span style=\"color:var(--pico-del-color)\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<span class=\"dashboard-danger\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d overdue", p.Stats.JobsOverdue))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 21, Col: 97}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 21, Col: 86}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 					if templ_7745c5c3_Err != nil {
@@ -119,20 +119,20 @@ func DashboardPage(p DashboardData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</p><footer><a href=\"/jobs\" role=\"button\" class=\"outline\">View Jobs</a></footer></article><article><header>Invoices</header><p style=\"font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</p><footer><a href=\"/jobs\" role=\"button\" class=\"outline\">View Jobs</a></footer></article><article class=\"dashboard-stat\"><header>Invoices</header><p class=\"dashboard-metric\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", p.Stats.TotalInvoices))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 30, Col: 130}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 30, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</p><p style=\"text-align:center;color:var(--pico-muted-color);font-size:0.85rem\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</p><p class=\"dashboard-meta\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -150,14 +150,14 @@ func DashboardPage(p DashboardData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				if p.Stats.InvoicesOverdue > 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<span>, <span style=\"color:var(--pico-del-color)\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<span>, <span class=\"dashboard-danger\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var9 string
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d overdue", p.Stats.InvoicesOverdue))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 34, Col: 109}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 34, Col: 98}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 					if templ_7745c5c3_Err != nil {
@@ -168,27 +168,27 @@ func DashboardPage(p DashboardData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</p><footer><a href=\"/invoices\" role=\"button\" class=\"outline\">View Invoices</a></footer></article><article><header>Projects</header><p style=\"font-size:2rem;font-weight:bold;text-align:center;margin-bottom:0.25rem\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</p><footer><a href=\"/invoices\" role=\"button\" class=\"outline\">View Invoices</a></footer></article><article class=\"dashboard-stat\"><header>Projects</header><p class=\"dashboard-metric\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", p.Stats.TotalProjects))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 41, Col: 130}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 41, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</p><p style=\"text-align:center;color:var(--pico-muted-color);font-size:0.85rem\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</p><p class=\"dashboard-meta\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d active, %d completed", p.Stats.ProjectsActive, p.Stats.ProjectsCompleted))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 42, Col: 173}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 42, Col: 122}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 				if templ_7745c5c3_Err != nil {
@@ -204,7 +204,7 @@ func DashboardPage(p DashboardData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if !canManageOperational(ctx) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<article><header>Assigned Work</header><p>Use Jobs or Schedule to view work assigned to you.</p><footer style=\"display:flex;gap:0.5rem;flex-wrap:wrap\"><a href=\"/jobs\" role=\"button\" class=\"outline\">View Jobs</a> <a href=\"/schedule\" role=\"button\" class=\"outline\">View Schedule</a></footer></article>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<article class=\"dashboard-panel\"><header>Assigned Work</header><p>Use Jobs or Schedule to view work assigned to you.</p><footer class=\"dashboard-assigned-actions\"><a href=\"/jobs\" role=\"button\" class=\"outline\">View Jobs</a> <a href=\"/schedule\" role=\"button\" class=\"outline\">View Schedule</a></footer></article>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -214,12 +214,12 @@ func DashboardPage(p DashboardData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if canManageOperational(ctx) {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<h3>Recent Activity</h3><div class=\"grid\"><article><header>Recent Jobs</header><table><thead><tr><th>Job</th><th>Customer</th><th>Date</th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<h3 class=\"dashboard-section-title\">Recent Activity</h3><div class=\"dashboard-work-queues\"><article class=\"dashboard-panel\"><header>Recent Jobs</header><table><thead><tr><th>Job</th><th>Customer</th><th>Date</th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if len(p.Stats.RecentJobs) == 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<tr><td colspan=\"3\" style=\"text-align:center\">No recent jobs</td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<tr><td colspan=\"3\" class=\"dashboard-empty\">No recent jobs</td></tr>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -282,12 +282,12 @@ func DashboardPage(p DashboardData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</tbody></table></article><article><header>Recent Invoices</header><table><thead><tr><th>Invoice</th><th>Customer</th><th>Amount</th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "</tbody></table></article><article class=\"dashboard-panel\"><header>Recent Invoices</header><table><thead><tr><th>Invoice</th><th>Customer</th><th>Amount</th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if len(p.Stats.RecentInvoices) == 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<tr><td colspan=\"3\" style=\"text-align:center\">No recent invoices</td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<tr><td colspan=\"3\" class=\"dashboard-empty\">No recent invoices</td></tr>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -332,7 +332,7 @@ func DashboardPage(p DashboardData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</td><td style=\"text-align:right\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</td><td class=\"dashboard-amount\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -350,12 +350,12 @@ func DashboardPage(p DashboardData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</tbody></table></article><article><header>Recent Estimates</header><table><thead><tr><th>Estimate</th><th>Customer</th><th>Amount</th></tr></thead> <tbody>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</tbody></table></article><article class=\"dashboard-panel\"><header>Recent Estimates</header><table><thead><tr><th>Estimate</th><th>Customer</th><th>Amount</th></tr></thead> <tbody>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if len(p.Stats.RecentEstimates) == 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<tr><td colspan=\"3\" style=\"text-align:center\">No recent estimates</td></tr>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<tr><td colspan=\"3\" class=\"dashboard-empty\">No recent estimates</td></tr>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -400,7 +400,7 @@ func DashboardPage(p DashboardData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</td><td style=\"text-align:right\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</td><td class=\"dashboard-amount\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -418,45 +418,45 @@ func DashboardPage(p DashboardData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</tbody></table></article></div><h3>Financial Summary</h3><div class=\"grid\" style=\"margin-bottom:2rem\"><article><header>Revenue This Month</header><p style=\"font-size:1.5rem;font-weight:bold;text-align:center\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "</tbody></table></article></div><h3 class=\"dashboard-section-title\">Financial Summary</h3><div class=\"dashboard-financials\"><article class=\"dashboard-stat\"><header>Revenue This Month</header><p class=\"dashboard-metric dashboard-metric-sm\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var24 string
 				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("$%.2f", p.Stats.RevenueMonth))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 125, Col: 112}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 125, Col: 97}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</p></article><article><header>Outstanding Receivables</header><p style=\"font-size:1.5rem;font-weight:bold;text-align:center\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</p></article><article class=\"dashboard-stat\"><header>Outstanding Receivables</header><p class=\"dashboard-metric dashboard-metric-sm\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("$%.2f", p.Stats.OutstandingReceivables))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 129, Col: 122}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 129, Col: 107}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</p></article><article><header>Overdue</header><p style=\"font-size:1.5rem;font-weight:bold;text-align:center\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</p></article><article class=\"dashboard-stat\"><header>Overdue</header><p class=\"dashboard-metric dashboard-metric-sm\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if p.Stats.OverdueAmount > 0 {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<span style=\"color:var(--pico-del-color)\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<span class=\"dashboard-danger\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var26 string
 					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("$%.2f", p.Stats.OverdueAmount))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 135, Col: 94}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 135, Col: 83}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 					if templ_7745c5c3_Err != nil {
@@ -477,14 +477,14 @@ func DashboardPage(p DashboardData) templ.Component {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</p><p style=\"text-align:center;color:var(--pico-muted-color);font-size:0.85rem\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</p><p class=\"dashboard-meta\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var28 string
 				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d invoices", p.Stats.InvoicesOverdue))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 140, Col: 135}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/dashboard.templ`, Line: 140, Col: 84}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {

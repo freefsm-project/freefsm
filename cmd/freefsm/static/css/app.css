@@ -938,33 +938,127 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
   background: rgba(37, 99, 235, 0.08);
 }
 
-/* Dashboard Cards */
-.dash-grid {
+/* Dashboard */
+.dashboard-overview {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
 }
-.dash-card {
-  background: var(--pico-muted-color);
-  border: 1px solid var(--pico-muted-border-color);
-  border-radius: var(--pico-border-radius);
-  padding: 1.25rem;
-  text-align: center;
-  transition: box-shadow 0.2s, transform 0.1s;
+
+.dashboard-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.75rem;
 }
-.dash-card:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  transform: translateY(-1px);
-}
-.dash-card .dash-number {
-  font-size: 2rem;
-  font-weight: 700;
-  margin: 0.25rem 0;
-}
-.dash-card .dash-label {
+
+.dashboard-stat header,
+.dashboard-panel header {
+  padding-bottom: 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 600;
   color: var(--pico-muted-color);
-  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dashboard-metric {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.dashboard-metric-sm {
+  font-size: 1.35rem;
+}
+
+.dashboard-meta {
+  margin: 0;
+  color: var(--pico-muted-color);
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+
+.dashboard-danger {
+  color: var(--pico-del-color);
+  font-weight: 600;
+}
+
+.dashboard-stat footer {
+  padding-top: 0.45rem;
+  margin-top: auto;
+}
+
+.dashboard-stat a[role="button"],
+.dashboard-assigned-actions a[role="button"] {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+.dashboard-section-title {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1rem;
+}
+
+.dashboard-work-queues {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+}
+
+.dashboard-panel {
+  margin: 0;
+  padding: 0.75rem;
+}
+
+.dashboard-panel table {
+  margin: 0;
+  font-size: 0.86rem;
+}
+
+.dashboard-panel th,
+.dashboard-panel td {
+  padding: 0.4rem 0.5rem;
+  vertical-align: middle;
+}
+
+.dashboard-panel td:first-child {
+  font-weight: 600;
+}
+
+.dashboard-empty {
+  text-align: center;
+  color: var(--pico-muted-color);
+}
+
+.dashboard-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-financials {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.dashboard-assigned-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .dashboard-overview,
+  .dashboard-work-queues,
+  .dashboard-financials {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Status Badge */
