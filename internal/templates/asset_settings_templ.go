@@ -41,7 +41,7 @@ func AssetSettingsPage(types AssetTypeListPageData, statuses AssetStatusListPage
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem\"><h2 style=\"margin:0\">Asset Settings</h2><a href=\"/settings\" role=\"button\" class=\"outline\">Back to Settings</a></div><div class=\"grid\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"work-queue-toolbar list-toolbar\"><h2>Asset Settings</h2><a href=\"/settings\" role=\"button\" class=\"outline\">Back to Settings</a></div><div class=\"settings-grid\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -53,7 +53,7 @@ func AssetSettingsPage(types AssetTypeListPageData, statuses AssetStatusListPage
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div hx-get=\"/settings/assets/activity\" hx-trigger=\"load\" hx-swap=\"innerHTML\" style=\"margin-top:1.5rem\"><p>Loading recent activity...</p></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div><div hx-get=\"/settings/assets/activity\" hx-trigger=\"load\" hx-swap=\"innerHTML\" class=\"shared-widget\"><p>Loading recent activity...</p></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

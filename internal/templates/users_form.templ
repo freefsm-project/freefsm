@@ -3,7 +3,7 @@ package templates
 templ UserForm(p UserFormData) {
 	@Layout(userFormTitle(p.IsNew)) {
 
-		<form action={ templ.URL(userFormAction(p.IsNew, p.User.User.ID)) } method="post">
+		<form action={ templ.URL(userFormAction(p.IsNew, p.User.User.ID)) } method="post" class="entity-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
 				Name
@@ -14,7 +14,7 @@ templ UserForm(p UserFormData) {
 				<input type="email" name="email" value={ p.User.User.Email } required/>
 			</label>
 			if p.IsNew {
-				<label id="password_field" style="display:none">
+				<label id="password_field" class="is-hidden">
 					Password
 					<input type="password" name="password" minlength="8"/>
 				</label>
@@ -44,7 +44,7 @@ templ UserForm(p UserFormData) {
 				var input = pw.querySelector('input');
 				function sync() {
 					var show = !cb.checked;
-					pw.style.display = show ? '' : 'none';
+					pw.classList.toggle('is-hidden', !show);
 					if (show) input.setAttribute('required', '');
 					else input.removeAttribute('required');
 				}

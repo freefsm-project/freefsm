@@ -5,10 +5,11 @@ import "fmt"
 templ UsersIndex(p UserListData) {
 	@Layout("Users") {
 
-		<div style="display:flex;justify-content:flex-end;margin-bottom:1rem">
+		<div class="work-queue-toolbar list-toolbar entity-form-actions-end">
 			<a href="/users/new" role="button">New User</a>
 		</div>
-		<table>
+		<div class="work-queue-wrap">
+		<table class="work-queue-table">
 			<thead>
 				<tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th></th></tr>
 			</thead>
@@ -25,9 +26,9 @@ templ UsersIndex(p UserListData) {
 								No
 							}
 						</td>
-						<td style="text-align:right">
+						<td class="work-queue-actions">
 							<a href={ templ.URL(fmt.Sprintf("/users/%d/edit", u.ID)) } role="button" class="outline small">Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/users/%d/disable", u.ID)) } method="post" style="display:inline">
+							<form action={ templ.URL(fmt.Sprintf("/users/%d/disable", u.ID)) } method="post">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small">
 									if u.IsActive {
@@ -42,6 +43,7 @@ templ UsersIndex(p UserListData) {
 				}
 			</tbody>
 		</table>
+		</div>
 		<div hx-get="/users/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
 		</div>

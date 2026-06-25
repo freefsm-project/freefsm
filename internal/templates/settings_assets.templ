@@ -3,9 +3,9 @@ package templates
 import "fmt"
 
 templ AssetTypeList(p AssetTypeListPageData) {
-	<div class="asset-types-list">
+	<div class="asset-types-list settings-panel">
 		<h3>Asset Types</h3>
-		<table>
+		<table class="work-queue-table">
 			<thead>
 				<tr>
 					<th>Name</th>
@@ -18,8 +18,8 @@ templ AssetTypeList(p AssetTypeListPageData) {
 					<tr>
 						<td>{ t.Name }</td>
 						<td>{ fmt.Sprintf("%d", t.SortOrder) }</td>
-						<td style="text-align:right">
-							<form action={ templ.URL(fmt.Sprintf("/settings/asset-types/%d/delete", t.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this type?')">
+						<td class="work-queue-actions">
+							<form action={ templ.URL(fmt.Sprintf("/settings/asset-types/%d/delete", t.ID)) } method="post" onsubmit="return confirm('Delete this type?')">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small">Del</button>
 							</form>
@@ -28,9 +28,9 @@ templ AssetTypeList(p AssetTypeListPageData) {
 				}
 			</tbody>
 		</table>
-		<form action="/settings/asset-types" method="post" style="margin-top:1rem">
+		<form action="/settings/asset-types" method="post" class="inline-add-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-			<div class="grid" style="grid-template-columns: 2fr 1fr auto">
+			<div class="grid asset-type-add-grid">
 				<input type="text" name="name" placeholder="New type name" required/>
 				<input type="number" name="sort_order" placeholder="Order" value="0"/>
 				<button type="submit">Add</button>
@@ -40,9 +40,9 @@ templ AssetTypeList(p AssetTypeListPageData) {
 }
 
 templ AssetStatusList(p AssetStatusListPageData) {
-	<div class="asset-statuses-list">
+	<div class="asset-statuses-list settings-panel">
 		<h3>Asset Statuses</h3>
-		<table>
+		<table class="work-queue-table">
 			<thead>
 				<tr>
 					<th>Name</th>
@@ -56,12 +56,12 @@ templ AssetStatusList(p AssetStatusListPageData) {
 					<tr>
 						<td>{ s.Name }</td>
 						<td>
-							<span style="display:inline-block;width:16px;height:16px;border-radius:50%;background-color:{ s.Color }"></span>
+							<span class="color-dot" style={ fmt.Sprintf("background-color:%s", s.Color) }></span>
 							{ s.Color }
 						</td>
 						<td>{ fmt.Sprintf("%d", s.SortOrder) }</td>
-						<td style="text-align:right">
-							<form action={ templ.URL(fmt.Sprintf("/settings/asset-statuses/%d/delete", s.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this status?')">
+						<td class="work-queue-actions">
+							<form action={ templ.URL(fmt.Sprintf("/settings/asset-statuses/%d/delete", s.ID)) } method="post" onsubmit="return confirm('Delete this status?')">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small">Del</button>
 							</form>
@@ -70,9 +70,9 @@ templ AssetStatusList(p AssetStatusListPageData) {
 				}
 			</tbody>
 		</table>
-		<form action="/settings/asset-statuses" method="post" style="margin-top:1rem">
+		<form action="/settings/asset-statuses" method="post" class="inline-add-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-			<div class="grid" style="grid-template-columns: 2fr 1fr 1fr auto">
+			<div class="grid asset-status-add-grid">
 				<input type="text" name="name" placeholder="New status name" required/>
 				<input type="color" name="color" value="#6B7280"/>
 				<input type="number" name="sort_order" placeholder="Order" value="0"/>

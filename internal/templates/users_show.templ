@@ -4,14 +4,15 @@ import "fmt"
 
 templ UserShow(p UserDetailPage) {
 	@Layout("User - "+p.User.Name) {
-		<div style="display:flex;justify-content:space-between;align-items:center">
-			<div style="display:flex;gap:0.5rem">
+		<div class="work-item-detail">
+		<div class="work-item-detail-actions">
+			<div class="work-item-detail-action-group">
 				<a href={ templ.URL(fmt.Sprintf("/users/%d/edit", p.User.ID)) } role="button" class="outline">Edit</a>
-				<form action={ templ.URL(fmt.Sprintf("/users/%d/resend-welcome", p.User.ID)) } method="post" style="display:inline">
+				<form action={ templ.URL(fmt.Sprintf("/users/%d/resend-welcome", p.User.ID)) } method="post">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline">Resend Welcome</button>
 				</form>
-				<form action={ templ.URL(fmt.Sprintf("/users/%d/disable", p.User.ID)) } method="post" style="display:inline">
+				<form action={ templ.URL(fmt.Sprintf("/users/%d/disable", p.User.ID)) } method="post">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast">
 						if p.User.IsActive {
@@ -23,7 +24,7 @@ templ UserShow(p UserDetailPage) {
 				</form>
 			</div>
 		</div>
-		<table>
+		<table class="work-item-detail-meta">
 			<tbody>
 				<tr><th>Email</th><td>{ p.User.Email }</td></tr>
 				<tr><th>Role</th><td><mark>{ p.User.Role }</mark></td></tr>
@@ -40,15 +41,16 @@ templ UserShow(p UserDetailPage) {
 		</table>
 		<details>
 			<summary>Reset Password</summary>
-			<form action={ templ.URL(fmt.Sprintf("/users/%d/reset-password", p.User.ID)) } method="post" style="margin-top:0.5rem">
+			<form action={ templ.URL(fmt.Sprintf("/users/%d/reset-password", p.User.ID)) } method="post" class="inline-add-form">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<label>New Password <input type="password" name="password" required minlength="8"/></label>
 				<button type="submit">Reset Password</button>
 			</form>
 		</details>
-		<div hx-get={ templ.URL(fmt.Sprintf("/users/%d/activity", p.User.ID)) } hx-trigger="load" hx-swap="innerHTML">
+		<div hx-get={ templ.URL(fmt.Sprintf("/users/%d/activity", p.User.ID)) } hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 		<p>Loading activity...</p>
 	</div>
-	<p><a href="/users">&larr; Back to Users</a></p>
+	<p class="work-item-detail-back"><a href="/users">&larr; Back to Users</a></p>
+	</div>
 	}
 }

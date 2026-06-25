@@ -299,6 +299,10 @@ html[data-theme="dark"] .theme-icon-moon {
   margin-bottom: 0.75rem;
 }
 
+.work-queue-toolbar h2 {
+  margin: 0;
+}
+
 .work-queue-filters {
   display: flex;
   align-items: center;
@@ -882,6 +886,83 @@ html[data-theme="dark"] .theme-icon-moon {
 .entity-form-actions-end {
   justify-content: flex-end;
   margin-top: 0;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.settings-panel h3 {
+  margin-top: 0;
+}
+
+.settings-panel table {
+  margin-bottom: 0;
+}
+
+.inline-add-form {
+  margin-top: 1rem;
+}
+
+.inline-add-form .grid {
+  align-items: start;
+}
+
+.inline-add-form input,
+.inline-add-form button {
+  margin-bottom: 0;
+}
+
+.asset-type-add-grid {
+  grid-template-columns: 2fr 1fr auto;
+}
+
+.asset-status-add-grid {
+  grid-template-columns: 2fr 1fr 1fr auto;
+}
+
+.tag-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.tag-card {
+  padding: 1rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+}
+
+.tag-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.color-dot {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 0.35rem;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.compact-action-button {
+  padding: 0.2rem 0.5rem;
+  font-size: 0.8rem;
+  line-height: 1.2;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.is-hidden {
+  display: none;
 }
 
 .required-marker {
