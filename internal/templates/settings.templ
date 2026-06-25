@@ -74,7 +74,7 @@ templ SettingsPage(p SettingsPageData) {
 					<input type="text" name="estimate_prefix" value={ p.Settings.EstimatePrefix }/>
 				</label>
 			</div>
-			<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
+			<button type="submit" class="settings-submit">{ settingsButtonText(p.IsSetup) }</button>
 		</div>
 		
 		<!-- Email Tab -->
@@ -122,8 +122,8 @@ templ SettingsPage(p SettingsPageData) {
 					Body
 					<textarea name="estimate_email_body" rows="6" placeholder="Hello {customer_name},">{ p.Settings.EstimateEmailBody }</textarea>
 				</label>
-				<p style="font-size:0.85rem;color:var(--pico-muted-color)">Available placeholders: <code>{ "{customer_name}" }</code>, <code>{ "{business_name}" }</code>, <code>{ "{invoice_number}" }</code>, <code>{ "{estimate_number}" }</code>, <code>{ "{job_name}" }</code>, <code>{ "{job_type}" }</code>, <code>{ "{job_subtitle}" }</code>, and <code>{ "{date}" }</code>.</p>
-				<div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
+				<p class="settings-help">Available placeholders: <code>{ "{customer_name}" }</code>, <code>{ "{business_name}" }</code>, <code>{ "{invoice_number}" }</code>, <code>{ "{estimate_number}" }</code>, <code>{ "{job_name}" }</code>, <code>{ "{job_type}" }</code>, <code>{ "{job_subtitle}" }</code>, and <code>{ "{date}" }</code>.</p>
+				<div class="settings-test-actions">
 					<button type="button"
 						hx-post="/settings/test-email"
 						hx-target="#test-email-result"
@@ -134,20 +134,20 @@ templ SettingsPage(p SettingsPageData) {
 					</button>
 				</div>
 				<div id="test-email-result"></div>
-				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
+				<button type="submit" class="settings-submit">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
 			
 			<!-- PDF Tab -->
 			<div class="settings-tab-content" id="tab-pdf">
 				<label>Invoice Logo</label>
-				<div style="display:flex;gap:0.5rem;align-items:end;margin-bottom:1rem">
+				<div class="settings-upload-row">
 					<input type="file" name="file" id="logo-file-input" accept="image/png,image/jpeg"/>
-					<button type="button" class="outline" style="margin:0"
+					<button type="button" class="outline"
 						hx-encoding="multipart/form-data"
 						hx-post="/settings/invoice-logo"
 						hx-include="#logo-file-input, [name='csrf_token']"
 						hx-target="#logo-preview" hx-swap="innerHTML">Upload</button>
-					<span id="logo-upload-status" style="font-size:0.85rem;color:var(--pico-muted-color)"></span>
+					<span id="logo-upload-status" class="settings-help"></span>
 				</div>
 				<div id="logo-preview">
 					@InvoiceLogoPreview(p.Settings.InvoiceLogoPath, "")
@@ -176,7 +176,7 @@ templ SettingsPage(p SettingsPageData) {
 					Footer Text
 					<textarea name="invoice_footer" rows="5" placeholder="Thank you for your business!">{ p.Settings.InvoiceFooter }</textarea>
 				</label>
-				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
+				<button type="submit" class="settings-submit">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
 
 			if !p.IsSetup {
@@ -186,13 +186,13 @@ templ SettingsPage(p SettingsPageData) {
 						Map Tile URL
 						<input type="text" name="map_tile_url" value={ p.Settings.MapTileURL } placeholder="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
 					</label>
-					<p style="font-size:0.85rem;color:var(--pico-muted-color)">URL template used by the schedule map. Include <code>{ "{z}" }</code>, <code>{ "{x}" }</code>, and <code>{ "{y}" }</code> placeholders for zoom and tile coordinates.</p>
+					<p class="settings-help">URL template used by the schedule map. Include <code>{ "{z}" }</code>, <code>{ "{x}" }</code>, and <code>{ "{y}" }</code> placeholders for zoom and tile coordinates.</p>
 					<label>
 						Geocoder URL
 						<input type="url" name="geocoder_url" value={ p.Settings.GeocoderURL } placeholder="https://nominatim.openstreetmap.org"/>
 					</label>
-					<p style="font-size:0.85rem;color:var(--pico-muted-color)">Base URL for the geocoding service used to resolve job locations on the map. Leave blank to disable automatic geocoding.</p>
-					<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
+					<p class="settings-help">Base URL for the geocoding service used to resolve job locations on the map. Leave blank to disable automatic geocoding.</p>
+					<button type="submit" class="settings-submit">{ settingsButtonText(p.IsSetup) }</button>
 				</div>
 			}
 			
@@ -220,10 +220,10 @@ templ SettingsPage(p SettingsPageData) {
 					<input type="checkbox" name="password_require_special" checked?={ p.Settings.PasswordRequireSpecial }/>
 					Require special character (!@#$%^&* etc.)
 				</label>
-				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
+				<button type="submit" class="settings-submit">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
 		</form>
-		<div hx-get="/settings/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+		<div hx-get="/settings/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
 		</div>
 		<script>
@@ -249,17 +249,17 @@ templ SettingsPage(p SettingsPageData) {
 
 templ TestEmailResult(success bool, message string) {
 	if success {
-		<p style="color:green;text-align:right">✓ Test email sent successfully</p>
+		<p class="settings-result settings-result-success">✓ Test email sent successfully</p>
 	} else {
-		<p style="color:var(--pico-del-color);text-align:right">✗ Test email failed: { message }</p>
+		<p class="settings-result settings-result-error">✗ Test email failed: { message }</p>
 	}
 }
 
 templ InvoiceLogoPreview(path string, cacheBust string) {
-	<input type="text" name="invoice_logo_path" value={ path } placeholder="File path" readonly style="font-family:monospace;font-size:0.85rem"/>
+	<input type="text" name="invoice_logo_path" value={ path } placeholder="File path" readonly class="settings-logo-path"/>
 	if path != "" {
-		<div style="margin-top:0.5rem">
-			<img src={ templ.URL(invoiceLogoURL(cacheBust)) } alt="Logo preview" style="max-height:64px;max-width:200px"/>
+		<div class="settings-logo-preview">
+			<img src={ templ.URL(invoiceLogoURL(cacheBust)) } alt="Logo preview"/>
 		</div>
 	}
 }

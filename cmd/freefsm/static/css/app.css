@@ -915,6 +915,59 @@ html[data-theme="dark"] .theme-icon-moon {
   margin-bottom: 0;
 }
 
+.settings-submit {
+  margin-top: 1rem;
+}
+
+.settings-help {
+  color: var(--pico-muted-color);
+  font-size: 0.85rem;
+}
+
+.settings-test-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.settings-upload-row {
+  display: flex;
+  align-items: end;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.settings-upload-row button {
+  margin: 0;
+}
+
+.settings-result {
+  text-align: right;
+}
+
+.settings-result-success {
+  color: green;
+}
+
+.settings-result-error {
+  color: var(--pico-del-color);
+}
+
+.settings-logo-path {
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.settings-logo-preview {
+  margin-top: 0.5rem;
+}
+
+.settings-logo-preview img {
+  max-width: 200px;
+  max-height: 64px;
+}
+
 .asset-type-add-grid {
   grid-template-columns: 2fr 1fr auto;
 }
