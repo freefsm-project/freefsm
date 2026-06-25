@@ -5,7 +5,7 @@ import "fmt"
 templ ContactForm(customerID int64) {
 	<form hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts", customerID)) }
 		hx-target="#contacts-section" hx-swap="outerHTML"
-		style="padding:0.5rem;background:var(--pico-muted-color);border-radius:4px">
+		class="inline-form-card">
 		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 		<div class="grid">
 			<label>First <input type="text" name="first_name" required/></label>
@@ -19,4 +19,3 @@ templ ContactForm(customerID int64) {
 		<button type="submit">Save</button>
 	</form>
 }
-

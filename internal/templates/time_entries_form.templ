@@ -9,7 +9,7 @@ templ TimeEntryForm(p TimeEntryFormPageData) {
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<div class="grid">
 				<label>
-					Clock In <small style="color:var(--pico-primary)">*</small>
+					Clock In <small class="required-marker">*</small>
 					<input type="datetime-local" name="clock_in" value={ p.Entry.ClockIn } required/>
 				</label>
 				<label>
@@ -21,7 +21,7 @@ templ TimeEntryForm(p TimeEntryFormPageData) {
 				Notes
 				<textarea name="notes" rows="3">{ p.Entry.Notes }</textarea>
 			</label>
-			<div style="display:flex;gap:0.5rem;margin-top:1rem">
+			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href="/time-entries" role="button" class="outline">Cancel</a>
 			</div>

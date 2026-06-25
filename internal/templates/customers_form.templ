@@ -73,7 +73,7 @@ templ CustomerForm(p CustomerFormPageData) {
 					Address Line 2
 					<input type="text" name="billing_address_2" value={ p.Customer.BillingAddress2 }/>
 				</label>
-				<div class="grid" style="grid-template-columns:2fr 1fr 1fr">
+				<div class="grid form-grid-address">
 					<label>
 						City
 						<input type="text" name="billing_city" value={ p.Customer.BillingCity }/>
@@ -98,7 +98,7 @@ templ CustomerForm(p CustomerFormPageData) {
 					Address Line 2
 					<input type="text" name="service_address_2" value={ p.Customer.ServiceAddress2 }/>
 				</label>
-				<div class="grid" style="grid-template-columns:2fr 1fr 1fr">
+				<div class="grid form-grid-address">
 					<label>
 						City
 						<input type="text" name="service_city" value={ p.Customer.ServiceCity }/>
@@ -113,7 +113,7 @@ templ CustomerForm(p CustomerFormPageData) {
 					</label>
 				</div>
 			</fieldset>
-			<div style="display:flex;gap:0.5rem;margin-top:1rem">
+			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href="/customers" role="button" class="outline">Cancel</a>
 			</div>

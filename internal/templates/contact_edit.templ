@@ -7,7 +7,7 @@ templ ContactEditRow(customerID, contactID int64, firstName, lastName, email, ph
 		<td colspan="4">
 			<form hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d", customerID, contactID)) }
 				hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", contactID)) }
-				hx-swap="outerHTML" style="padding:0.25rem">
+				hx-swap="outerHTML" class="inline-form-card-compact">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<div class="grid">
 					<label>First <input type="text" name="first_name" value={ firstName } required/></label>

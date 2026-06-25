@@ -10,7 +10,7 @@ templ ProjectForm(p ProjectFormPageData) {
 			<fieldset>
 				<legend>Project Details</legend>
 				<label>
-					Customer <small style="color:var(--pico-primary)">*</small>
+					Customer <small class="required-marker">*</small>
 					<select name="customer_id" required>
 						<option value="">Select customer...</option>
 						for _, c := range p.Customers {
@@ -22,7 +22,7 @@ templ ProjectForm(p ProjectFormPageData) {
 					}
 				</label>
 				<label>
-					Project Name <small style="color:var(--pico-primary)">*</small>
+					Project Name <small class="required-marker">*</small>
 					<input type="text" name="name" value={ p.Project.Name } required/>
 					if p.Errors["name"] != "" {
 						<small class="error-msg">{ p.Errors["name"] }</small>
@@ -72,7 +72,7 @@ templ ProjectForm(p ProjectFormPageData) {
 			</label>
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
 		</fieldset>
-		<div style="display:flex;gap:0.5rem;justify-content:flex-end">
+		<div class="entity-form-actions entity-form-actions-end">
 				<a href="/projects" role="button" class="outline">Cancel</a>
 				<button type="submit">Save</button>
 			</div>

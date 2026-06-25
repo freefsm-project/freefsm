@@ -7,7 +7,7 @@ import (
 
 templ AssetForm(p AssetFormPageData) {
 	@Layout(assetFormTitle(p.IsNew)) {
-		<form action={ templ.URL(assetFormAction(p.IsNew, p.Asset)) } method="post" style="max-width:800px">
+		<form action={ templ.URL(assetFormAction(p.IsNew, p.Asset)) } method="post" class="entity-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<fieldset>
 				<legend>Asset Details</legend>

@@ -8,7 +8,7 @@ templ ItemForm(p ItemFormPageData) {
 		<form action={ templ.URL(itemFormAction(p.IsNew, p.Item.ID)) } method="post" autocomplete="off">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<label>
-					Name <small style="color:var(--pico-primary)">*</small>
+					Name <small class="required-marker">*</small>
 				<input type="text" name="name" value={ p.Item.Name } required autofocus/>
 				if p.Errors["name"] != "" {
 					<small class="error-msg">{ p.Errors["name"] }</small>
@@ -67,7 +67,7 @@ templ ItemForm(p ItemFormPageData) {
 				Description
 				<textarea name="description" rows="3">{ p.Item.Description }</textarea>
 			</label>
-			<div style="display:flex;gap:0.5rem;margin-top:1rem">
+			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href="/items" role="button" class="outline">Cancel</a>
 			</div>

@@ -44,7 +44,7 @@ func ContactForm(customerID int64) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" hx-target=\"#contacts-section\" hx-swap=\"outerHTML\" style=\"padding:0.5rem;background:var(--pico-muted-color);border-radius:4px\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" hx-target=\"#contacts-section\" hx-swap=\"outerHTML\" class=\"inline-form-card\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

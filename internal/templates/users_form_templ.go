@@ -149,7 +149,7 @@ func UserForm(p UserFormData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</select></label><div style=\"display:flex;gap:0.5rem;margin-top:1rem\"><button type=\"submit\">Save</button> <a href=\"/users\" role=\"button\" class=\"outline\">Cancel</a></div></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</select></label><div class=\"entity-form-actions\"><button type=\"submit\">Save</button> <a href=\"/users\" role=\"button\" class=\"outline\">Cancel</a></div></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

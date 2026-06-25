@@ -69,7 +69,7 @@ func ProjectForm(p ProjectFormPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><fieldset><legend>Project Details</legend> <label>Customer <small style=\"color:var(--pico-primary)\">*</small> <select name=\"customer_id\" required><option value=\"\">Select customer...</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><fieldset><legend>Project Details</legend> <label>Customer <small class=\"required-marker\">*</small> <select name=\"customer_id\" required><option value=\"\">Select customer...</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -138,7 +138,7 @@ func ProjectForm(p ProjectFormPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</label> <label>Project Name <small style=\"color:var(--pico-primary)\">*</small> <input type=\"text\" name=\"name\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</label> <label>Project Name <small class=\"required-marker\">*</small> <input type=\"text\" name=\"name\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -339,7 +339,7 @@ func ProjectForm(p ProjectFormPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</fieldset><div style=\"display:flex;gap:0.5rem;justify-content:flex-end\"><a href=\"/projects\" role=\"button\" class=\"outline\">Cancel</a> <button type=\"submit\">Save</button></div></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</fieldset><div class=\"entity-form-actions entity-form-actions-end\"><a href=\"/projects\" role=\"button\" class=\"outline\">Cancel</a> <button type=\"submit\">Save</button></div></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
