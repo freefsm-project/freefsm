@@ -6,21 +6,21 @@ templ SchedulePage(p SchedulePageData) {
 	@Layout("Schedule") {
 
 		<div class="schedule-toolbar">
-			<div style="display:flex;gap:0.5rem;align-items:center">
+			<div class="schedule-title-nav">
 				if p.IsMonth {
 					<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=month&year=%d&month=%d", p.PrevYear, p.PrevMonth)) } role="button" class="outline">&larr;</a>
-					<h3 style="margin:0">{ p.Title }</h3>
+					<h3>{ p.Title }</h3>
 					<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=month&year=%d&month=%d", p.NextYear, p.NextMonth)) } role="button" class="outline">&rarr;</a>
 				} else if p.IsWeek || p.IsDay {
 					<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=%s&date=%s", p.Period, p.PrevDate)) } role="button" class="outline">&larr;</a>
-					<h3 style="margin:0">{ p.Title }</h3>
+					<h3>{ p.Title }</h3>
 					<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=%s&date=%s", p.Period, p.NextDate)) } role="button" class="outline">&rarr;</a>
 				} else if p.IsDispatch {
 					<a href={ templ.URL("/schedule?tab=dispatch&period="+p.Period+"&date="+p.PrevDate) } role="button" class="outline">&larr;</a>
-					<h3 style="margin:0">{ p.Title }</h3>
+					<h3>{ p.Title }</h3>
 					<a href={ templ.URL("/schedule?tab=dispatch&period="+p.Period+"&date="+p.NextDate) } role="button" class="outline">&rarr;</a>
 				} else {
-					<h3 style="margin:0">{ p.Title }</h3>
+					<h3>{ p.Title }</h3>
 				}
 			</div>
 			<div class="schedule-primary-tabs">
@@ -126,7 +126,7 @@ templ SchedulePage(p SchedulePageData) {
 }
 
 templ listView(p SchedulePageData) {
-	<form action="/schedule" method="get" style="display:flex;gap:0.5rem;align-items:end;flex-wrap:wrap;margin-bottom:1rem">
+	<form action="/schedule" method="get" class="schedule-list-filter">
 		<input type="hidden" name="view" value="list"/>
 		<input type="hidden" name="period" value={ p.Period }/>
 		<label>Start
@@ -149,7 +149,7 @@ templ listView(p SchedulePageData) {
 		</thead>
 		<tbody>
 			if len(p.Jobs) == 0 {
-				<tr><td colspan="5" style="text-align:center">No scheduled jobs found.</td></tr>
+				<tr><td colspan="5" class="schedule-empty-cell">No scheduled jobs found.</td></tr>
 			}
 			for _, j := range p.Jobs {
 				<tr>
@@ -249,7 +249,7 @@ templ dayView(p SchedulePageData) {
 }
 
 templ dispatchView(p SchedulePageData) {
-	<p style="color:var(--pico-muted-color);margin-top:-0.5rem">Drag unscheduled jobs or scheduled cards into a technician slot. Dropping replaces the job assignment with that technician.</p>
+	<p class="schedule-help">Drag unscheduled jobs or scheduled cards into a technician slot. Dropping replaces the job assignment with that technician.</p>
 	<div class="dispatch-layout" id="dispatch-board" data-date={ p.Date }>
 		<aside class="dispatch-unscheduled">
 			<header><strong>Unscheduled</strong></header>
@@ -336,13 +336,13 @@ templ dispatchView(p SchedulePageData) {
 }
 
 templ mapView(p SchedulePageData) {
-	<div id="schedule-map" data-tile-url={ p.TileURL } style="height:520px;border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);overflow:hidden"></div>
+	<div id="schedule-map" data-tile-url={ p.TileURL } class="schedule-map"></div>
 	<div id="schedule-map-markers" hidden>
 		for _, j := range p.MapJobs {
 			<div data-lat={ fmt.Sprintf("%f", j.Lat) } data-lng={ fmt.Sprintf("%f", j.Lng) } data-title={ j.JobType } data-customer={ j.Customer } data-url={ fmt.Sprintf("/jobs/%d", j.ID) }></div>
 		}
 	</div>
 	if len(p.MapJobs) == 0 {
-		<p style="color:var(--pico-muted-color);margin-top:0.75rem">No geocoded scheduled jobs are available yet. The map is ready for job location coordinates when the service layer provides them.</p>
+		<p class="schedule-map-empty">No geocoded scheduled jobs are available yet. The map is ready for job location coordinates when the service layer provides them.</p>
 	}
 }

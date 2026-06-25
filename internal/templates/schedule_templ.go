@@ -43,7 +43,7 @@ func SchedulePage(p SchedulePageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"schedule-toolbar\"><div style=\"display:flex;gap:0.5rem;align-items:center\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"schedule-toolbar\"><div class=\"schedule-title-nav\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -61,14 +61,14 @@ func SchedulePage(p SchedulePageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" role=\"button\" class=\"outline\">&larr;</a><h3 style=\"margin:0\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\" role=\"button\" class=\"outline\">&larr;</a><h3>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(p.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/schedule.templ`, Line: 12, Col: 35}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/schedule.templ`, Line: 12, Col: 18}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -105,14 +105,14 @@ func SchedulePage(p SchedulePageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" role=\"button\" class=\"outline\">&larr;</a><h3 style=\"margin:0\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" role=\"button\" class=\"outline\">&larr;</a><h3>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var7 string
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(p.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/schedule.templ`, Line: 16, Col: 35}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/schedule.templ`, Line: 16, Col: 18}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
@@ -149,14 +149,14 @@ func SchedulePage(p SchedulePageData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" role=\"button\" class=\"outline\">&larr;</a><h3 style=\"margin:0\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\" role=\"button\" class=\"outline\">&larr;</a><h3>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var10 string
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(p.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/schedule.templ`, Line: 20, Col: 35}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/schedule.templ`, Line: 20, Col: 18}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
@@ -180,14 +180,14 @@ func SchedulePage(p SchedulePageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<h3 style=\"margin:0\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<h3>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var12 string
 				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(p.Title)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/schedule.templ`, Line: 23, Col: 35}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/schedule.templ`, Line: 23, Col: 18}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {
@@ -556,7 +556,7 @@ func listView(p SchedulePageData) templ.Component {
 			templ_7745c5c3_Var33 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<form action=\"/schedule\" method=\"get\" style=\"display:flex;gap:0.5rem;align-items:end;flex-wrap:wrap;margin-bottom:1rem\"><input type=\"hidden\" name=\"view\" value=\"list\"> <input type=\"hidden\" name=\"period\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<form action=\"/schedule\" method=\"get\" class=\"schedule-list-filter\"><input type=\"hidden\" name=\"view\" value=\"list\"> <input type=\"hidden\" name=\"period\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -600,7 +600,7 @@ func listView(p SchedulePageData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if len(p.Jobs) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<tr><td colspan=\"5\" style=\"text-align:center\">No scheduled jobs found.</td></tr>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<tr><td colspan=\"5\" class=\"schedule-empty-cell\">No scheduled jobs found.</td></tr>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -1579,7 +1579,7 @@ func dispatchView(p SchedulePageData) templ.Component {
 			templ_7745c5c3_Var101 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, "<p style=\"color:var(--pico-muted-color);margin-top:-0.5rem\">Drag unscheduled jobs or scheduled cards into a technician slot. Dropping replaces the job assignment with that technician.</p><div class=\"dispatch-layout\" id=\"dispatch-board\" data-date=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 128, "<p class=\"schedule-help\">Drag unscheduled jobs or scheduled cards into a technician slot. Dropping replaces the job assignment with that technician.</p><div class=\"dispatch-layout\" id=\"dispatch-board\" data-date=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -1974,7 +1974,7 @@ func mapView(p SchedulePageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 163, "\" style=\"height:520px;border:1px solid var(--pico-muted-border-color);border-radius:var(--pico-border-radius);overflow:hidden\"></div><div id=\"schedule-map-markers\" hidden>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 163, "\" class=\"schedule-map\"></div><div id=\"schedule-map-markers\" hidden>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -2054,7 +2054,7 @@ func mapView(p SchedulePageData) templ.Component {
 			return templ_7745c5c3_Err
 		}
 		if len(p.MapJobs) == 0 {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 171, "<p style=\"color:var(--pico-muted-color);margin-top:0.75rem\">No geocoded scheduled jobs are available yet. The map is ready for job location coordinates when the service layer provides them.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 171, "<p class=\"schedule-map-empty\">No geocoded scheduled jobs are available yet. The map is ready for job location coordinates when the service layer provides them.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

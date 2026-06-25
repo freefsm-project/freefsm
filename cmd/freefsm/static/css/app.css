@@ -1148,6 +1148,45 @@ html[data-theme="dark"] .theme-icon-moon {
   margin-bottom: 0.75rem;
 }
 
+.schedule-title-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.schedule-title-nav h3 {
+  margin: 0;
+}
+
+.schedule-list-filter {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.schedule-empty-cell {
+  text-align: center;
+}
+
+.schedule-help {
+  margin-top: -0.5rem;
+  color: var(--pico-muted-color);
+}
+
+.schedule-map {
+  height: 520px;
+  overflow: hidden;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+}
+
+.schedule-map-empty {
+  margin-top: 0.75rem;
+  color: var(--pico-muted-color);
+}
+
 .schedule-primary-tabs,
 .schedule-period-tabs {
   display: flex;
