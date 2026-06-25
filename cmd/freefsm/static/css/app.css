@@ -261,7 +261,10 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 .sidebar-footer {
-  display: none;
+  margin-top: auto;
+  padding: 1rem 0.5rem 0.25rem;
+  color: var(--pico-muted-color);
+  font-size: 0.8rem;
 }
 
 .main-content {

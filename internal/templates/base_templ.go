@@ -503,79 +503,92 @@ func Layout(title string, children ...templ.Component) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</aside><div class=\"sidebar-overlay\" id=\"sidebar-overlay\" onclick=\"document.getElementById('sidebar').classList.remove('open')\"></div><div class=\"main-content\"><header class=\"page-header\"><div class=\"header-left\"><button class=\"hamburger\" onclick=\"document.getElementById('sidebar').classList.toggle('open')\" aria-label=\"Toggle menu\">&#9776;</button> <span class=\"page-title\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<div class=\"sidebar-footer\">FreeFSM ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var40 string
-		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(pageTitleFromPath(ctx))
+		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(appVersion())
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 164, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 158, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</span></div><div class=\"header-right\"><button class=\"theme-toggle\" onclick=\"toggleTheme()\" aria-label=\"Toggle dark mode\"><svg class=\"theme-icon-sun\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M12 2.25C12.4142 2.25 12.75 2.58579 12.75 3V5.25C12.75 5.66421 12.4142 6 12 6C11.5858 6 11.25 5.66421 11.25 5.25V3C11.25 2.58579 11.5858 2.25 12 2.25Z\" fill=\"currentColor\"></path> <path d=\"M7.5 12C7.5 9.51472 9.51472 7.5 12 7.5C14.4853 7.5 16.5 9.51472 16.5 12C16.5 14.4853 14.4853 16.5 12 16.5C9.51472 16.5 7.5 14.4853 7.5 12Z\" fill=\"currentColor\"></path> <path d=\"M18.8943 6.16634C19.1872 5.87344 19.1872 5.39857 18.8943 5.10568C18.6014 4.81278 18.1266 4.81278 17.8337 5.10568L16.2427 6.69667C15.9498 6.98956 15.9498 7.46444 16.2427 7.75733C16.5356 8.05022 17.0105 8.05022 17.3034 7.75733L18.8943 6.16634Z\" fill=\"currentColor\"></path> <path d=\"M21.75 12C21.75 12.4142 21.4142 12.75 21 12.75H18.75C18.3358 12.75 18 12.4142 18 12C18 11.5858 18.3358 11.25 18.75 11.25H21C21.4142 11.25 21.75 11.5858 21.75 12Z\" fill=\"currentColor\"></path> <path d=\"M17.8336 18.8943C18.1265 19.1871 18.6013 19.1871 18.8942 18.8943C19.1871 18.6014 19.1871 18.1265 18.8942 17.8336L17.3032 16.2426C17.0103 15.9497 16.5355 15.9497 16.2426 16.2426C15.9497 16.5355 15.9497 17.0104 16.2426 17.3033L17.8336 18.8943Z\" fill=\"currentColor\"></path> <path d=\"M12 18C12.4142 18 12.75 18.3358 12.75 18.75V21C12.75 21.4142 12.4142 21.75 12 21.75C11.5858 21.75 11.25 21.4142 11.25 21V18.75C11.25 18.3358 11.5858 18 12 18Z\" fill=\"currentColor\"></path> <path d=\"M7.7575 17.3033C8.0504 17.0104 8.0504 16.5355 7.7575 16.2426C7.46461 15.9497 6.98974 15.9497 6.69684 16.2426L5.10585 17.8336C4.81296 18.1265 4.81296 18.6014 5.10585 18.8943C5.39875 19.1872 5.87362 19.1872 6.16651 18.8943L7.7575 17.3033Z\" fill=\"currentColor\"></path> <path d=\"M6 12C6 12.4142 5.66421 12.75 5.25 12.75H3C2.58579 12.75 2.25 12.4142 2.25 12C2.25 11.5858 2.58579 11.25 3 11.25H5.25C5.66421 11.25 6 11.5858 6 12Z\" fill=\"currentColor\"></path> <path d=\"M6.69673 7.75732C6.98962 8.05021 7.4645 8.05021 7.75739 7.75732C8.05028 7.46443 8.05028 6.98955 7.75739 6.69666L6.1664 5.10567C5.87351 4.81278 5.39863 4.81278 5.10574 5.10567C4.81285 5.39856 4.81285 5.87344 5.10574 6.16633L6.69673 7.75732Z\" fill=\"currentColor\"></path></svg> <svg class=\"theme-icon-moon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M9.52839 1.71786C9.74339 1.93286 9.80731 2.2564 9.69021 2.53701C9.2458 3.60204 9 4.77143 9 6.00013C9 10.9707 13.0294 15.0001 18 15.0001C19.2287 15.0001 20.3981 14.7543 21.4631 14.3099C21.7437 14.1928 22.0673 14.2567 22.2823 14.4717C22.4973 14.6867 22.5612 15.0103 22.4441 15.2909C20.8618 19.0828 17.1183 21.7501 12.75 21.7501C6.95101 21.7501 2.25 17.0491 2.25 11.2501C2.25 6.88184 4.91735 3.13829 8.70924 1.55603C8.98985 1.43894 9.31338 1.50286 9.52839 1.71786Z\" fill=\"currentColor\"></path></svg></button> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</div></aside><div class=\"sidebar-overlay\" id=\"sidebar-overlay\" onclick=\"document.getElementById('sidebar').classList.remove('open')\"></div><div class=\"main-content\"><header class=\"page-header\"><div class=\"header-left\"><button class=\"hamburger\" onclick=\"document.getElementById('sidebar').classList.toggle('open')\" aria-label=\"Toggle menu\">&#9776;</button> <span class=\"page-title\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var41 string
+		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(pageTitleFromPath(ctx))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 165, Col: 53}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</span></div><div class=\"header-right\"><button class=\"theme-toggle\" onclick=\"toggleTheme()\" aria-label=\"Toggle dark mode\"><svg class=\"theme-icon-sun\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path d=\"M12 2.25C12.4142 2.25 12.75 2.58579 12.75 3V5.25C12.75 5.66421 12.4142 6 12 6C11.5858 6 11.25 5.66421 11.25 5.25V3C11.25 2.58579 11.5858 2.25 12 2.25Z\" fill=\"currentColor\"></path> <path d=\"M7.5 12C7.5 9.51472 9.51472 7.5 12 7.5C14.4853 7.5 16.5 9.51472 16.5 12C16.5 14.4853 14.4853 16.5 12 16.5C9.51472 16.5 7.5 14.4853 7.5 12Z\" fill=\"currentColor\"></path> <path d=\"M18.8943 6.16634C19.1872 5.87344 19.1872 5.39857 18.8943 5.10568C18.6014 4.81278 18.1266 4.81278 17.8337 5.10568L16.2427 6.69667C15.9498 6.98956 15.9498 7.46444 16.2427 7.75733C16.5356 8.05022 17.0105 8.05022 17.3034 7.75733L18.8943 6.16634Z\" fill=\"currentColor\"></path> <path d=\"M21.75 12C21.75 12.4142 21.4142 12.75 21 12.75H18.75C18.3358 12.75 18 12.4142 18 12C18 11.5858 18.3358 11.25 18.75 11.25H21C21.4142 11.25 21.75 11.5858 21.75 12Z\" fill=\"currentColor\"></path> <path d=\"M17.8336 18.8943C18.1265 19.1871 18.6013 19.1871 18.8942 18.8943C19.1871 18.6014 19.1871 18.1265 18.8942 17.8336L17.3032 16.2426C17.0103 15.9497 16.5355 15.9497 16.2426 16.2426C15.9497 16.5355 15.9497 17.0104 16.2426 17.3033L17.8336 18.8943Z\" fill=\"currentColor\"></path> <path d=\"M12 18C12.4142 18 12.75 18.3358 12.75 18.75V21C12.75 21.4142 12.4142 21.75 12 21.75C11.5858 21.75 11.25 21.4142 11.25 21V18.75C11.25 18.3358 11.5858 18 12 18Z\" fill=\"currentColor\"></path> <path d=\"M7.7575 17.3033C8.0504 17.0104 8.0504 16.5355 7.7575 16.2426C7.46461 15.9497 6.98974 15.9497 6.69684 16.2426L5.10585 17.8336C4.81296 18.1265 4.81296 18.6014 5.10585 18.8943C5.39875 19.1872 5.87362 19.1872 6.16651 18.8943L7.7575 17.3033Z\" fill=\"currentColor\"></path> <path d=\"M6 12C6 12.4142 5.66421 12.75 5.25 12.75H3C2.58579 12.75 2.25 12.4142 2.25 12C2.25 11.5858 2.58579 11.25 3 11.25H5.25C5.66421 11.25 6 11.5858 6 12Z\" fill=\"currentColor\"></path> <path d=\"M6.69673 7.75732C6.98962 8.05021 7.4645 8.05021 7.75739 7.75732C8.05028 7.46443 8.05028 6.98955 7.75739 6.69666L6.1664 5.10567C5.87351 4.81278 5.39863 4.81278 5.10574 5.10567C4.81285 5.39856 4.81285 5.87344 5.10574 6.16633L6.69673 7.75732Z\" fill=\"currentColor\"></path></svg> <svg class=\"theme-icon-moon\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\"><path fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M9.52839 1.71786C9.74339 1.93286 9.80731 2.2564 9.69021 2.53701C9.2458 3.60204 9 4.77143 9 6.00013C9 10.9707 13.0294 15.0001 18 15.0001C19.2287 15.0001 20.3981 14.7543 21.4631 14.3099C21.7437 14.1928 22.0673 14.2567 22.2823 14.4717C22.4973 14.6867 22.5612 15.0103 22.4441 15.2909C20.8618 19.0828 17.1183 21.7501 12.75 21.7501C6.95101 21.7501 2.25 17.0491 2.25 11.2501C2.25 6.88184 4.91735 3.13829 8.70924 1.55603C8.98985 1.43894 9.31338 1.50286 9.52839 1.71786Z\" fill=\"currentColor\"></path></svg></button> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if getUser(ctx) != nil {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<details class=\"dropdown\"><summary>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var41 string
-			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(getUser(ctx).Name)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 185, Col: 36}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</summary><ul><li><a href=\"/change-password\">Change Password</a></li><li><form action=\"/logout\" method=\"post\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "<details class=\"dropdown\"><summary>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var42 string
-			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
+			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(getUser(ctx).Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 190, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 186, Col: 36}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\"> <button type=\"submit\">Logout</button></form></li></ul></details>")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "</div></header>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if getFlash(ctx) != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "<div class=\"flash-banner\" role=\"alert\" id=\"flash-banner\"><span>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</summary><ul><li><a href=\"/change-password\">Change Password</a></li><li><form action=\"/logout\" method=\"post\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var43 string
-			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(getFlash(ctx))
+			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 201, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 191, Col: 71}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</span> <button class=\"flash-close\" onclick=\"this.parentElement.remove()\" aria-label=\"Dismiss\">&times;</button></div><script>\n\t\t\t\t\t\tsetTimeout(function(){ var f=document.getElementById('flash-banner'); if(f){ f.style.opacity='0'; f.style.transition='opacity 0.5s'; setTimeout(function(){ if(f) f.remove(); },500); } }, 4000);\n\t\t\t\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\"> <button type=\"submit\">Logout</button></form></li></ul></details>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "<div class=\"page-body\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</div></header>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if getFlash(ctx) != "" {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<div class=\"flash-banner\" role=\"alert\" id=\"flash-banner\"><span>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var44 string
+			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(getFlash(ctx))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 202, Col: 27}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</span> <button class=\"flash-close\" onclick=\"this.parentElement.remove()\" aria-label=\"Dismiss\">&times;</button></div><script>\n\t\t\t\t\t\tsetTimeout(function(){ var f=document.getElementById('flash-banner'); if(f){ f.style.opacity='0'; f.style.transition='opacity 0.5s'; setTimeout(function(){ if(f) f.remove(); },500); } }, 4000);\n\t\t\t\t\t</script>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "<div class=\"page-body\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -583,7 +596,7 @@ func Layout(title string, children ...templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</div></div></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</div></div></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

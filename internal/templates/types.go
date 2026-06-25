@@ -29,6 +29,13 @@ func staticAssetVersion() string {
 	return version
 }
 
+func appVersion() string {
+	if config.Version == "" {
+		return "dev"
+	}
+	return config.Version
+}
+
 func getUser(ctx context.Context) *User {
 	u, ok := middleware.UserFromContext(ctx)
 	if !ok || u == nil {
