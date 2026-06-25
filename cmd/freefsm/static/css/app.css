@@ -423,7 +423,7 @@ html[data-theme="dark"] .theme-icon-moon {
 /* Dense work-item detail primitives */
 .work-item-detail {
   --work-item-detail-gap: 0.75rem;
-  max-width: 1120px;
+  width: 100%;
 }
 
 .work-item-detail-actions,
