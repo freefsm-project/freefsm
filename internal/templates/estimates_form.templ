@@ -8,7 +8,7 @@ templ EstimateForm(p EstimateFormPageData) {
 		<form action={ templ.URL(estimateFormAction(p.IsNew, p.Estimate.ID)) } method="post" autocomplete="off">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
-				Customer <small style="color:var(--pico-primary)">*</small>
+				Customer <small class="required-marker">*</small>
 				<select name="customer_id" required>
 					<option value="">Select a customer...</option>
 					for _, c := range p.Customers {
@@ -30,7 +30,7 @@ templ EstimateForm(p EstimateFormPageData) {
 			</label>
 			<div class="grid">
 				<label>
-					Title <small style="color:var(--pico-primary)">*</small>
+					Title <small class="required-marker">*</small>
 					<input type="text" name="title" value={ p.Estimate.Title } required autofocus/>
 					if p.Errors["title"] != "" {
 						<small class="error-msg">{ p.Errors["title"] }</small>
@@ -106,8 +106,8 @@ templ EstimateForm(p EstimateFormPageData) {
 										</template>
 									</select>
 								</td>
-								<td><input type="number" x-model="item.quantity" min="1" style="width:70px"></td>
-								<td><input type="number" x-model="item.unit_price" step="0.01" style="width:100px"></td>
+								<td><input type="number" x-model="item.quantity" min="1" class="input-width-70"></td>
+								<td><input type="number" x-model="item.unit_price" step="0.01" class="input-width-100"></td>
 								<td>
 									<template x-if="item.taxable && item.tax_rate">
 										<span x-text="'Yes'"></span>
@@ -123,14 +123,14 @@ templ EstimateForm(p EstimateFormPageData) {
 					</tbody>
 				</table>
 				<button @click.prevent="add()" class="outline">+ Add Item</button>
-				<div style="text-align:right;margin-top:1rem">
+				<div class="line-item-totals">
 					<p>Subtotal: $<span x-text="subtotal.toFixed(2)"></span></p>
 					<p>Tax: $<span x-text="tax.toFixed(2)"></span></p>
 					<p><strong>Total: $<span x-text="total.toFixed(2)"></span></strong></p>
 				</div>
 				<input type="hidden" name="line_items" :value="json">
 			</fieldset>
-			<div style="display:flex;gap:0.5rem;margin-top:1rem">
+			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href="/estimates" role="button" class="outline">Cancel</a>
 			</div>

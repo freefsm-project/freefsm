@@ -974,6 +974,19 @@ html[data-theme="dark"] .theme-icon-moon {
   margin-top: 0.5rem;
 }
 
+.input-width-70 {
+  width: 70px;
+}
+
+.input-width-100 {
+  width: 100px;
+}
+
+.line-item-totals {
+  margin-top: 1rem;
+  text-align: right;
+}
+
 .required-marker {
   color: var(--pico-primary);
 }

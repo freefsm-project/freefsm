@@ -8,7 +8,7 @@ templ JobForm(p JobFormPageData) {
 		<form action={ templ.URL(jobFormAction(p.IsNew, p.Job.ID)) } method="post" autocomplete="off">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
-				Customer <small style="color:var(--pico-primary)">*</small>
+				Customer <small class="required-marker">*</small>
 				<select name="customer_id" id="job-customer-select" required>
 					<option value="">Select a customer...</option>
 					for _, c := range p.Customers {
@@ -58,7 +58,7 @@ templ JobForm(p JobFormPageData) {
 	</div>
 	<div class="grid">
 		<label>
-			Job Type <small style="color:var(--pico-primary)">*</small>
+			Job Type <small class="required-marker">*</small>
 			<input type="text" name="job_type" value={ p.Job.JobType } placeholder="e.g. Installation, Repair" required/>
 			if p.Errors["job_type"] != "" {
 				<small class="error-msg">{ p.Errors["job_type"] }</small>
@@ -163,7 +163,7 @@ templ JobForm(p JobFormPageData) {
 							<tr>
 								<td><input type="text" x-model="st.title" placeholder="e.g. Pre-site survey"></td>
 								<td><input type="checkbox" x-model="st.completed"></td>
-								<td><input type="number" x-model="st.sort_order" min="0" style="width:70px"></td>
+								<td><input type="number" x-model="st.sort_order" min="0" class="input-width-70"></td>
 								<td><button @click.prevent="remove(idx)" class="outline contrast small">X</button></td>
 							</tr>
 						</template>
@@ -172,7 +172,7 @@ templ JobForm(p JobFormPageData) {
 				<button @click.prevent="add()" class="outline">+ Add Subtask</button>
 				<input type="hidden" name="subtasks" :value="json">
 			</fieldset>
-			<div style="display:flex;gap:0.5rem;margin-top:1rem">
+			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href="/jobs" role="button" class="outline">Cancel</a>
 			</div>
