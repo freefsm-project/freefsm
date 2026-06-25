@@ -4,11 +4,12 @@ import "fmt"
 
 templ CustomerShow(p CustomerShowPageData) {
 	@Layout("Customer - "+p.Customer.DisplayName) {
+		<div class="work-item-detail">
 		if canManageOperational(ctx) && p.Customer.ArchivedAt == "" {
-			<div style="display:flex;justify-content:space-between;align-items:center">
-				<div style="display:flex;gap:0.5rem">
+			<div class="work-item-detail-actions">
+				<div class="work-item-detail-action-group">
 					<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Customer.DisplayName) }>Edit</a>
-					<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", p.Customer.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this customer?')">
+					<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", p.Customer.ID)) } method="post" onsubmit="return confirm('Delete this customer?')">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 						<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Customer.DisplayName) }>Delete</button>
 					</form>
@@ -16,12 +17,12 @@ templ CustomerShow(p CustomerShowPageData) {
 			</div>
 		}
 		if p.Customer.ArchivedAt != "" {
-			<div style="background:var(--pico-muted-background);border:1px solid var(--pico-muted-border-color);border-radius:0.25rem;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
-				<span style="color:var(--pico-muted-color)">Archived on { p.Customer.ArchivedAt }</span>
+			<div class="work-item-detail-archive-banner">
+				<span>Archived on { p.Customer.ArchivedAt }</span>
 				if canAdmin(ctx) {
-					<form action={ templ.URL(fmt.Sprintf("/customers/%d/restore", p.Customer.ID)) } method="post" style="display:inline">
+					<form action={ templ.URL(fmt.Sprintf("/customers/%d/restore", p.Customer.ID)) } method="post">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-						<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
+						<button type="submit" class="outline">Restore</button>
 					</form>
 				}
 			</div>
@@ -32,7 +33,7 @@ templ CustomerShow(p CustomerShowPageData) {
 		if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
 		}
-		<table>
+		<table class="work-item-detail-meta">
 			<tbody>
 				if p.Customer.CompanyName != "" {
 					<tr><th>Company</th><td>{ p.Customer.CompanyName }</td></tr>
@@ -95,7 +96,8 @@ templ CustomerShow(p CustomerShowPageData) {
 		<p>Loading activity...</p>
 	</div>
 	if canManageOperational(ctx) {
-		<p><a href="/customers">&larr; Back to Customers</a></p>
+		<p class="work-item-detail-back"><a href="/customers">&larr; Back to Customers</a></p>
 	}
+		</div>
 	}
 }

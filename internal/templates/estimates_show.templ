@@ -4,16 +4,17 @@ import "fmt"
 
 templ EstimateShow(p EstimateDetail) {
 	@Layout(estimatePrefix(ctx)+fmt.Sprintf("%05d", p.ID)+": "+p.Title) {
+		<div class="work-item-detail">
 		if p.ArchivedAt == "" {
-			<div style="display:flex;justify-content:space-between;align-items:center">
-			<div style="display:flex;gap:0.5rem">
+			<div class="work-item-detail-actions">
+			<div class="work-item-detail-action-group">
 				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
 				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Title) }>Edit</a>
-				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/convert-to-invoice", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Convert this estimate to an invoice? The estimate will be removed.')">
+				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/convert-to-invoice", p.ID)) } method="post" onsubmit="return confirm('Convert this estimate to an invoice? The estimate will be removed.')">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button>Convert to Invoice</button>
 				</form>
-				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", p.ID)) } method="post" style="display:inline" onsubmit="return confirm('Delete this estimate?')">
+				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", p.ID)) } method="post" onsubmit="return confirm('Delete this estimate?')">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Title) }>Delete</button>
 				</form>
@@ -21,14 +22,14 @@ templ EstimateShow(p EstimateDetail) {
 			</div>
 		}
 		if p.ArchivedAt != "" {
-			<div style="background:var(--pico-muted-background);border:1px solid var(--pico-muted-border-color);border-radius:0.25rem;padding:0.75rem 1rem;margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center">
-				<span style="color:var(--pico-muted-color)">Archived on { p.ArchivedAt }</span>
-				<div style="display:flex;gap:0.5rem;align-items:center">
-				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/pdf/preview", p.ID)) } role="button" class="outline" style="font-size:0.85rem">PDF</a>
+			<div class="work-item-detail-archive-banner">
+				<span>Archived on { p.ArchivedAt }</span>
+				<div class="work-item-detail-action-group">
+				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
 				if canAdmin(ctx) {
-					<form action={ templ.URL(fmt.Sprintf("/estimates/%d/restore", p.ID)) } method="post" style="display:inline">
+					<form action={ templ.URL(fmt.Sprintf("/estimates/%d/restore", p.ID)) } method="post">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-						<button type="submit" class="outline" style="font-size:0.85rem">Restore</button>
+						<button type="submit" class="outline">Restore</button>
 					</form>
 				}
 				</div>
@@ -40,7 +41,7 @@ templ EstimateShow(p EstimateDetail) {
 		if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
 		}
-		<table>
+		<table class="work-item-detail-meta">
 			<tbody>
 				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
 				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(p.StatusColor) }>{ p.StatusName }</span></td></tr>
@@ -77,7 +78,7 @@ templ EstimateShow(p EstimateDetail) {
 					}
 				</tbody>
 			</table>
-			<div style="text-align:right;margin-top:0.5rem">
+			<div class="work-item-detail-totals">
 				<p><strong>Subtotal: { fmt.Sprintf("$%.2f", lineItemsTotal(p.LineItems)) }</strong></p>
 				if t := taxAmount(p.LineItems, p.TaxRate); t > 0 {
 					<p><strong>Tax: { fmt.Sprintf("$%.2f", t) }</strong></p>
@@ -103,6 +104,7 @@ templ EstimateShow(p EstimateDetail) {
 	<div hx-get={ templ.URL(fmt.Sprintf("/estimates/%d/activity", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
 		<p>Loading activity...</p>
 	</div>
-	<p><a href="/estimates">&larr; Back to Estimates</a></p>
+	<p class="work-item-detail-back"><a href="/estimates">&larr; Back to Estimates</a></p>
+		</div>
 	}
 }

@@ -428,6 +428,10 @@ html[data-theme="dark"] .theme-icon-moon {
   margin-bottom: var(--work-item-detail-gap);
 }
 
+.work-item-detail-actions h2 {
+  margin: 0;
+}
+
 .work-item-detail-action-group {
   display: flex;
   flex-wrap: wrap;
@@ -491,6 +495,15 @@ html[data-theme="dark"] .theme-icon-moon {
 
 .work-item-detail-meta th {
   width: 9rem;
+}
+
+.work-item-detail-row-actions {
+  text-align: right;
+}
+
+.work-item-detail-totals {
+  margin-top: 0.5rem;
+  text-align: right;
 }
 
 .work-item-detail p {
