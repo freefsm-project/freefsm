@@ -2,21 +2,21 @@ package templates
 
 templ Layout(title string, children ...templ.Component) {
 	<!DOCTYPE html>
-	<html lang="en" data-theme={ themeFromCtx(ctx) }>
+	<html lang="en" data-theme={ themeFromCtx(ctx) } data-static-version={ staticAssetVersion() }>
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<meta name="csrf-token" content={ csrfToken(ctx) }/>
 			<script>if (history.scrollRestoration) { history.scrollRestoration = 'manual'; }</script>
 			<title>{ title } - { companyBrandName(companyFromCtx(ctx)) }</title>
-			<link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png"/>
-			<link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png"/>
-			<link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png"/>
-			<link rel="manifest" href="/static/img/site.webmanifest"/>
-			<link rel="stylesheet" href="/static/css/pico.min.css"/>
-			<link rel="stylesheet" href="/static/third_party/leaflet/leaflet.css"/>
-			<link rel="stylesheet" href="/static/css/app.css"/>
-			<script src="/static/js/htmx.min.js"></script>
+			<link rel="icon" type="image/png" sizes="32x32" href={ templ.URL(staticAsset("/static/img/favicon-32x32.png")) }/>
+			<link rel="icon" type="image/png" sizes="16x16" href={ templ.URL(staticAsset("/static/img/favicon-16x16.png")) }/>
+			<link rel="apple-touch-icon" sizes="180x180" href={ templ.URL(staticAsset("/static/img/apple-touch-icon.png")) }/>
+			<link rel="manifest" href={ templ.URL(staticAsset("/static/img/site.webmanifest")) }/>
+			<link rel="stylesheet" href={ templ.URL(staticAsset("/static/css/pico.min.css")) }/>
+			<link rel="stylesheet" href={ templ.URL(staticAsset("/static/third_party/leaflet/leaflet.css")) }/>
+			<link rel="stylesheet" href={ templ.URL(staticAsset("/static/css/app.css")) }/>
+			<script src={ templ.URL(staticAsset("/static/js/htmx.min.js")) }></script>
 			<script>
 				document.addEventListener('htmx:configRequest', function(evt) {
 					var csrf = document.querySelector('meta[name="csrf-token"]');
@@ -25,7 +25,7 @@ templ Layout(title string, children ...templ.Component) {
 					}
 				});
 			</script>
-			<script src="/static/js/alpine.min.js" defer></script>
+			<script src={ templ.URL(staticAsset("/static/js/alpine.min.js")) } defer></script>
 			<script>
 				document.addEventListener('htmx:afterSettle', function(evt) {
 					if (window.Alpine && evt.detail && evt.detail.elt) {
@@ -48,7 +48,7 @@ templ Layout(title string, children ...templ.Component) {
 					window.__freefsmLeafletLoading = true;
 					window.__freefsmLeafletCallbacks = [callback];
 					var script = document.createElement('script');
-					script.src = '/static/third_party/leaflet/leaflet.js';
+					script.src = '/static/third_party/leaflet/leaflet.js?v=' + encodeURIComponent(document.documentElement.dataset.staticVersion || 'dev');
 					script.onload = function() {
 						window.__freefsmLeafletLoading = false;
 						(window.__freefsmLeafletCallbacks || []).splice(0).forEach(function(fn) { fn(); });
@@ -112,7 +112,7 @@ templ Layout(title string, children ...templ.Component) {
 		<body hx-boost="true">
 			<aside class="sidebar" id="sidebar">
 				<div class="sidebar-brand">
-					<img src="/static/img/gear.png" alt=""/>
+					<img src={ templ.URL(staticAsset("/static/img/gear.png")) } alt=""/>
 					<strong>{ companyBrandName(companyFromCtx(ctx)) }</strong>
 				</div>
 				<form class="sidebar-search" action="/search" method="get">

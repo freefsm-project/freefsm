@@ -3,14 +3,31 @@ package templates
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/MartialM1nd/freefsm/internal/config"
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 )
+
+func staticAsset(path string) string {
+	return path + "?v=" + url.QueryEscape(staticAssetVersion())
+}
+
+func staticAssetVersion() string {
+	version := config.Commit
+	if version == "" || version == "none" {
+		version = config.Version
+	}
+	if version == "" {
+		version = "dev"
+	}
+	return version
+}
 
 func getUser(ctx context.Context) *User {
 	u, ok := middleware.UserFromContext(ctx)
