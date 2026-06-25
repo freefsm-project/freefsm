@@ -23,7 +23,7 @@ templ CustomerIndex(p CustomerListPageData) {
 		</div>
 		@CustomerTable(p)
 
-		<div hx-get="/customers/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+		<div hx-get="/customers/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
 		</div>
 	}

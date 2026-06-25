@@ -22,7 +22,7 @@ templ InvoicesIndex(p InvoiceListPageData) {
 		</div>
 		@InvoicesTable(p)
 
-		<div hx-get="/invoices/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+		<div hx-get="/invoices/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
 		</div>
 	}

@@ -9,7 +9,7 @@ templ TagsIndex(p TagListPageData) {
 			<a href="/tags/new" role="button">New Tag</a>
 		</div>
 		@TagsTable(p)
-		<div hx-get="/tags/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+		<div hx-get="/tags/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
 		</div>
 	}

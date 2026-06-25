@@ -27,7 +27,7 @@ templ AssetIndex(p AssetListPageData) {
 		</div>
 		@AssetTable(p)
 
-		<div hx-get="/assets/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+		<div hx-get="/assets/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
 		</div>
 	}

@@ -22,7 +22,7 @@ templ ProjectIndex(p ProjectListPageData) {
 		</div>
 		@ProjectTable(p)
 
-		<div hx-get="/projects/activity" hx-trigger="load" hx-swap="innerHTML" style="margin-top:1.5rem">
+		<div hx-get="/projects/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
 		</div>
 	}
