@@ -136,6 +136,62 @@ func (_c *LocationCreate) SetNillableNotes(v *string) *LocationCreate {
 	return _c
 }
 
+// SetLatitude sets the "latitude" field.
+func (_c *LocationCreate) SetLatitude(v float64) *LocationCreate {
+	_c.mutation.SetLatitude(v)
+	return _c
+}
+
+// SetNillableLatitude sets the "latitude" field if the given value is not nil.
+func (_c *LocationCreate) SetNillableLatitude(v *float64) *LocationCreate {
+	if v != nil {
+		_c.SetLatitude(*v)
+	}
+	return _c
+}
+
+// SetLongitude sets the "longitude" field.
+func (_c *LocationCreate) SetLongitude(v float64) *LocationCreate {
+	_c.mutation.SetLongitude(v)
+	return _c
+}
+
+// SetNillableLongitude sets the "longitude" field if the given value is not nil.
+func (_c *LocationCreate) SetNillableLongitude(v *float64) *LocationCreate {
+	if v != nil {
+		_c.SetLongitude(*v)
+	}
+	return _c
+}
+
+// SetGeocodedAt sets the "geocoded_at" field.
+func (_c *LocationCreate) SetGeocodedAt(v time.Time) *LocationCreate {
+	_c.mutation.SetGeocodedAt(v)
+	return _c
+}
+
+// SetNillableGeocodedAt sets the "geocoded_at" field if the given value is not nil.
+func (_c *LocationCreate) SetNillableGeocodedAt(v *time.Time) *LocationCreate {
+	if v != nil {
+		_c.SetGeocodedAt(*v)
+	}
+	return _c
+}
+
+// SetGeocodeSource sets the "geocode_source" field.
+func (_c *LocationCreate) SetGeocodeSource(v string) *LocationCreate {
+	_c.mutation.SetGeocodeSource(v)
+	return _c
+}
+
+// SetNillableGeocodeSource sets the "geocode_source" field if the given value is not nil.
+func (_c *LocationCreate) SetNillableGeocodeSource(v *string) *LocationCreate {
+	if v != nil {
+		_c.SetGeocodeSource(*v)
+	}
+	return _c
+}
+
 // SetIsPrimary sets the "is_primary" field.
 func (_c *LocationCreate) SetIsPrimary(v bool) *LocationCreate {
 	_c.mutation.SetIsPrimary(v)
@@ -366,6 +422,22 @@ func (_c *LocationCreate) createSpec() (*Location, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Notes(); ok {
 		_spec.SetField(location.FieldNotes, field.TypeString, value)
 		_node.Notes = value
+	}
+	if value, ok := _c.mutation.Latitude(); ok {
+		_spec.SetField(location.FieldLatitude, field.TypeFloat64, value)
+		_node.Latitude = &value
+	}
+	if value, ok := _c.mutation.Longitude(); ok {
+		_spec.SetField(location.FieldLongitude, field.TypeFloat64, value)
+		_node.Longitude = &value
+	}
+	if value, ok := _c.mutation.GeocodedAt(); ok {
+		_spec.SetField(location.FieldGeocodedAt, field.TypeTime, value)
+		_node.GeocodedAt = &value
+	}
+	if value, ok := _c.mutation.GeocodeSource(); ok {
+		_spec.SetField(location.FieldGeocodeSource, field.TypeString, value)
+		_node.GeocodeSource = &value
 	}
 	if value, ok := _c.mutation.IsPrimary(); ok {
 		_spec.SetField(location.FieldIsPrimary, field.TypeBool, value)

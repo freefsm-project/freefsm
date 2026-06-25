@@ -104,6 +104,26 @@ func Notes(v string) predicate.Location {
 	return predicate.Location(sql.FieldEQ(FieldNotes, v))
 }
 
+// Latitude applies equality check predicate on the "latitude" field. It's identical to LatitudeEQ.
+func Latitude(v float64) predicate.Location {
+	return predicate.Location(sql.FieldEQ(FieldLatitude, v))
+}
+
+// Longitude applies equality check predicate on the "longitude" field. It's identical to LongitudeEQ.
+func Longitude(v float64) predicate.Location {
+	return predicate.Location(sql.FieldEQ(FieldLongitude, v))
+}
+
+// GeocodedAt applies equality check predicate on the "geocoded_at" field. It's identical to GeocodedAtEQ.
+func GeocodedAt(v time.Time) predicate.Location {
+	return predicate.Location(sql.FieldEQ(FieldGeocodedAt, v))
+}
+
+// GeocodeSource applies equality check predicate on the "geocode_source" field. It's identical to GeocodeSourceEQ.
+func GeocodeSource(v string) predicate.Location {
+	return predicate.Location(sql.FieldEQ(FieldGeocodeSource, v))
+}
+
 // IsPrimary applies equality check predicate on the "is_primary" field. It's identical to IsPrimaryEQ.
 func IsPrimary(v bool) predicate.Location {
 	return predicate.Location(sql.FieldEQ(FieldIsPrimary, v))
@@ -727,6 +747,231 @@ func NotesEqualFold(v string) predicate.Location {
 // NotesContainsFold applies the ContainsFold predicate on the "notes" field.
 func NotesContainsFold(v string) predicate.Location {
 	return predicate.Location(sql.FieldContainsFold(FieldNotes, v))
+}
+
+// LatitudeEQ applies the EQ predicate on the "latitude" field.
+func LatitudeEQ(v float64) predicate.Location {
+	return predicate.Location(sql.FieldEQ(FieldLatitude, v))
+}
+
+// LatitudeNEQ applies the NEQ predicate on the "latitude" field.
+func LatitudeNEQ(v float64) predicate.Location {
+	return predicate.Location(sql.FieldNEQ(FieldLatitude, v))
+}
+
+// LatitudeIn applies the In predicate on the "latitude" field.
+func LatitudeIn(vs ...float64) predicate.Location {
+	return predicate.Location(sql.FieldIn(FieldLatitude, vs...))
+}
+
+// LatitudeNotIn applies the NotIn predicate on the "latitude" field.
+func LatitudeNotIn(vs ...float64) predicate.Location {
+	return predicate.Location(sql.FieldNotIn(FieldLatitude, vs...))
+}
+
+// LatitudeGT applies the GT predicate on the "latitude" field.
+func LatitudeGT(v float64) predicate.Location {
+	return predicate.Location(sql.FieldGT(FieldLatitude, v))
+}
+
+// LatitudeGTE applies the GTE predicate on the "latitude" field.
+func LatitudeGTE(v float64) predicate.Location {
+	return predicate.Location(sql.FieldGTE(FieldLatitude, v))
+}
+
+// LatitudeLT applies the LT predicate on the "latitude" field.
+func LatitudeLT(v float64) predicate.Location {
+	return predicate.Location(sql.FieldLT(FieldLatitude, v))
+}
+
+// LatitudeLTE applies the LTE predicate on the "latitude" field.
+func LatitudeLTE(v float64) predicate.Location {
+	return predicate.Location(sql.FieldLTE(FieldLatitude, v))
+}
+
+// LatitudeIsNil applies the IsNil predicate on the "latitude" field.
+func LatitudeIsNil() predicate.Location {
+	return predicate.Location(sql.FieldIsNull(FieldLatitude))
+}
+
+// LatitudeNotNil applies the NotNil predicate on the "latitude" field.
+func LatitudeNotNil() predicate.Location {
+	return predicate.Location(sql.FieldNotNull(FieldLatitude))
+}
+
+// LongitudeEQ applies the EQ predicate on the "longitude" field.
+func LongitudeEQ(v float64) predicate.Location {
+	return predicate.Location(sql.FieldEQ(FieldLongitude, v))
+}
+
+// LongitudeNEQ applies the NEQ predicate on the "longitude" field.
+func LongitudeNEQ(v float64) predicate.Location {
+	return predicate.Location(sql.FieldNEQ(FieldLongitude, v))
+}
+
+// LongitudeIn applies the In predicate on the "longitude" field.
+func LongitudeIn(vs ...float64) predicate.Location {
+	return predicate.Location(sql.FieldIn(FieldLongitude, vs...))
+}
+
+// LongitudeNotIn applies the NotIn predicate on the "longitude" field.
+func LongitudeNotIn(vs ...float64) predicate.Location {
+	return predicate.Location(sql.FieldNotIn(FieldLongitude, vs...))
+}
+
+// LongitudeGT applies the GT predicate on the "longitude" field.
+func LongitudeGT(v float64) predicate.Location {
+	return predicate.Location(sql.FieldGT(FieldLongitude, v))
+}
+
+// LongitudeGTE applies the GTE predicate on the "longitude" field.
+func LongitudeGTE(v float64) predicate.Location {
+	return predicate.Location(sql.FieldGTE(FieldLongitude, v))
+}
+
+// LongitudeLT applies the LT predicate on the "longitude" field.
+func LongitudeLT(v float64) predicate.Location {
+	return predicate.Location(sql.FieldLT(FieldLongitude, v))
+}
+
+// LongitudeLTE applies the LTE predicate on the "longitude" field.
+func LongitudeLTE(v float64) predicate.Location {
+	return predicate.Location(sql.FieldLTE(FieldLongitude, v))
+}
+
+// LongitudeIsNil applies the IsNil predicate on the "longitude" field.
+func LongitudeIsNil() predicate.Location {
+	return predicate.Location(sql.FieldIsNull(FieldLongitude))
+}
+
+// LongitudeNotNil applies the NotNil predicate on the "longitude" field.
+func LongitudeNotNil() predicate.Location {
+	return predicate.Location(sql.FieldNotNull(FieldLongitude))
+}
+
+// GeocodedAtEQ applies the EQ predicate on the "geocoded_at" field.
+func GeocodedAtEQ(v time.Time) predicate.Location {
+	return predicate.Location(sql.FieldEQ(FieldGeocodedAt, v))
+}
+
+// GeocodedAtNEQ applies the NEQ predicate on the "geocoded_at" field.
+func GeocodedAtNEQ(v time.Time) predicate.Location {
+	return predicate.Location(sql.FieldNEQ(FieldGeocodedAt, v))
+}
+
+// GeocodedAtIn applies the In predicate on the "geocoded_at" field.
+func GeocodedAtIn(vs ...time.Time) predicate.Location {
+	return predicate.Location(sql.FieldIn(FieldGeocodedAt, vs...))
+}
+
+// GeocodedAtNotIn applies the NotIn predicate on the "geocoded_at" field.
+func GeocodedAtNotIn(vs ...time.Time) predicate.Location {
+	return predicate.Location(sql.FieldNotIn(FieldGeocodedAt, vs...))
+}
+
+// GeocodedAtGT applies the GT predicate on the "geocoded_at" field.
+func GeocodedAtGT(v time.Time) predicate.Location {
+	return predicate.Location(sql.FieldGT(FieldGeocodedAt, v))
+}
+
+// GeocodedAtGTE applies the GTE predicate on the "geocoded_at" field.
+func GeocodedAtGTE(v time.Time) predicate.Location {
+	return predicate.Location(sql.FieldGTE(FieldGeocodedAt, v))
+}
+
+// GeocodedAtLT applies the LT predicate on the "geocoded_at" field.
+func GeocodedAtLT(v time.Time) predicate.Location {
+	return predicate.Location(sql.FieldLT(FieldGeocodedAt, v))
+}
+
+// GeocodedAtLTE applies the LTE predicate on the "geocoded_at" field.
+func GeocodedAtLTE(v time.Time) predicate.Location {
+	return predicate.Location(sql.FieldLTE(FieldGeocodedAt, v))
+}
+
+// GeocodedAtIsNil applies the IsNil predicate on the "geocoded_at" field.
+func GeocodedAtIsNil() predicate.Location {
+	return predicate.Location(sql.FieldIsNull(FieldGeocodedAt))
+}
+
+// GeocodedAtNotNil applies the NotNil predicate on the "geocoded_at" field.
+func GeocodedAtNotNil() predicate.Location {
+	return predicate.Location(sql.FieldNotNull(FieldGeocodedAt))
+}
+
+// GeocodeSourceEQ applies the EQ predicate on the "geocode_source" field.
+func GeocodeSourceEQ(v string) predicate.Location {
+	return predicate.Location(sql.FieldEQ(FieldGeocodeSource, v))
+}
+
+// GeocodeSourceNEQ applies the NEQ predicate on the "geocode_source" field.
+func GeocodeSourceNEQ(v string) predicate.Location {
+	return predicate.Location(sql.FieldNEQ(FieldGeocodeSource, v))
+}
+
+// GeocodeSourceIn applies the In predicate on the "geocode_source" field.
+func GeocodeSourceIn(vs ...string) predicate.Location {
+	return predicate.Location(sql.FieldIn(FieldGeocodeSource, vs...))
+}
+
+// GeocodeSourceNotIn applies the NotIn predicate on the "geocode_source" field.
+func GeocodeSourceNotIn(vs ...string) predicate.Location {
+	return predicate.Location(sql.FieldNotIn(FieldGeocodeSource, vs...))
+}
+
+// GeocodeSourceGT applies the GT predicate on the "geocode_source" field.
+func GeocodeSourceGT(v string) predicate.Location {
+	return predicate.Location(sql.FieldGT(FieldGeocodeSource, v))
+}
+
+// GeocodeSourceGTE applies the GTE predicate on the "geocode_source" field.
+func GeocodeSourceGTE(v string) predicate.Location {
+	return predicate.Location(sql.FieldGTE(FieldGeocodeSource, v))
+}
+
+// GeocodeSourceLT applies the LT predicate on the "geocode_source" field.
+func GeocodeSourceLT(v string) predicate.Location {
+	return predicate.Location(sql.FieldLT(FieldGeocodeSource, v))
+}
+
+// GeocodeSourceLTE applies the LTE predicate on the "geocode_source" field.
+func GeocodeSourceLTE(v string) predicate.Location {
+	return predicate.Location(sql.FieldLTE(FieldGeocodeSource, v))
+}
+
+// GeocodeSourceContains applies the Contains predicate on the "geocode_source" field.
+func GeocodeSourceContains(v string) predicate.Location {
+	return predicate.Location(sql.FieldContains(FieldGeocodeSource, v))
+}
+
+// GeocodeSourceHasPrefix applies the HasPrefix predicate on the "geocode_source" field.
+func GeocodeSourceHasPrefix(v string) predicate.Location {
+	return predicate.Location(sql.FieldHasPrefix(FieldGeocodeSource, v))
+}
+
+// GeocodeSourceHasSuffix applies the HasSuffix predicate on the "geocode_source" field.
+func GeocodeSourceHasSuffix(v string) predicate.Location {
+	return predicate.Location(sql.FieldHasSuffix(FieldGeocodeSource, v))
+}
+
+// GeocodeSourceIsNil applies the IsNil predicate on the "geocode_source" field.
+func GeocodeSourceIsNil() predicate.Location {
+	return predicate.Location(sql.FieldIsNull(FieldGeocodeSource))
+}
+
+// GeocodeSourceNotNil applies the NotNil predicate on the "geocode_source" field.
+func GeocodeSourceNotNil() predicate.Location {
+	return predicate.Location(sql.FieldNotNull(FieldGeocodeSource))
+}
+
+// GeocodeSourceEqualFold applies the EqualFold predicate on the "geocode_source" field.
+func GeocodeSourceEqualFold(v string) predicate.Location {
+	return predicate.Location(sql.FieldEqualFold(FieldGeocodeSource, v))
+}
+
+// GeocodeSourceContainsFold applies the ContainsFold predicate on the "geocode_source" field.
+func GeocodeSourceContainsFold(v string) predicate.Location {
+	return predicate.Location(sql.FieldContainsFold(FieldGeocodeSource, v))
 }
 
 // IsPrimaryEQ applies the EQ predicate on the "is_primary" field.

@@ -272,12 +272,20 @@ func init() {
 	companysettingsDescPdfShowLineItemDescriptions := companysettingsFields[33].Descriptor()
 	// companysettings.DefaultPdfShowLineItemDescriptions holds the default value on creation for the pdf_show_line_item_descriptions field.
 	companysettings.DefaultPdfShowLineItemDescriptions = companysettingsDescPdfShowLineItemDescriptions.Default.(bool)
+	// companysettingsDescMapTileURL is the schema descriptor for map_tile_url field.
+	companysettingsDescMapTileURL := companysettingsFields[34].Descriptor()
+	// companysettings.DefaultMapTileURL holds the default value on creation for the map_tile_url field.
+	companysettings.DefaultMapTileURL = companysettingsDescMapTileURL.Default.(string)
+	// companysettingsDescGeocoderURL is the schema descriptor for geocoder_url field.
+	companysettingsDescGeocoderURL := companysettingsFields[35].Descriptor()
+	// companysettings.DefaultGeocoderURL holds the default value on creation for the geocoder_url field.
+	companysettings.DefaultGeocoderURL = companysettingsDescGeocoderURL.Default.(string)
 	// companysettingsDescCreatedAt is the schema descriptor for created_at field.
-	companysettingsDescCreatedAt := companysettingsFields[34].Descriptor()
+	companysettingsDescCreatedAt := companysettingsFields[36].Descriptor()
 	// companysettings.DefaultCreatedAt holds the default value on creation for the created_at field.
 	companysettings.DefaultCreatedAt = companysettingsDescCreatedAt.Default.(func() time.Time)
 	// companysettingsDescUpdatedAt is the schema descriptor for updated_at field.
-	companysettingsDescUpdatedAt := companysettingsFields[35].Descriptor()
+	companysettingsDescUpdatedAt := companysettingsFields[37].Descriptor()
 	// companysettings.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	companysettings.DefaultUpdatedAt = companysettingsDescUpdatedAt.Default.(func() time.Time)
 	// companysettings.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -691,15 +699,15 @@ func init() {
 	// location.DefaultNotes holds the default value on creation for the notes field.
 	location.DefaultNotes = locationDescNotes.Default.(string)
 	// locationDescIsPrimary is the schema descriptor for is_primary field.
-	locationDescIsPrimary := locationFields[11].Descriptor()
+	locationDescIsPrimary := locationFields[15].Descriptor()
 	// location.DefaultIsPrimary holds the default value on creation for the is_primary field.
 	location.DefaultIsPrimary = locationDescIsPrimary.Default.(bool)
 	// locationDescCreatedAt is the schema descriptor for created_at field.
-	locationDescCreatedAt := locationFields[12].Descriptor()
+	locationDescCreatedAt := locationFields[16].Descriptor()
 	// location.DefaultCreatedAt holds the default value on creation for the created_at field.
 	location.DefaultCreatedAt = locationDescCreatedAt.Default.(func() time.Time)
 	// locationDescUpdatedAt is the schema descriptor for updated_at field.
-	locationDescUpdatedAt := locationFields[13].Descriptor()
+	locationDescUpdatedAt := locationFields[17].Descriptor()
 	// location.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	location.DefaultUpdatedAt = locationDescUpdatedAt.Default.(func() time.Time)
 	// location.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

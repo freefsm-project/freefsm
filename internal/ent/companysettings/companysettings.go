@@ -79,6 +79,10 @@ const (
 	FieldInvoicePaymentTerms = "invoice_payment_terms"
 	// FieldPdfShowLineItemDescriptions holds the string denoting the pdf_show_line_item_descriptions field in the database.
 	FieldPdfShowLineItemDescriptions = "pdf_show_line_item_descriptions"
+	// FieldMapTileURL holds the string denoting the map_tile_url field in the database.
+	FieldMapTileURL = "map_tile_url"
+	// FieldGeocoderURL holds the string denoting the geocoder_url field in the database.
+	FieldGeocoderURL = "geocoder_url"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -123,6 +127,8 @@ var Columns = []string{
 	FieldInvoiceLogoPath,
 	FieldInvoicePaymentTerms,
 	FieldPdfShowLineItemDescriptions,
+	FieldMapTileURL,
+	FieldGeocoderURL,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -202,6 +208,10 @@ var (
 	DefaultInvoicePaymentTerms string
 	// DefaultPdfShowLineItemDescriptions holds the default value on creation for the "pdf_show_line_item_descriptions" field.
 	DefaultPdfShowLineItemDescriptions bool
+	// DefaultMapTileURL holds the default value on creation for the "map_tile_url" field.
+	DefaultMapTileURL string
+	// DefaultGeocoderURL holds the default value on creation for the "geocoder_url" field.
+	DefaultGeocoderURL string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 	// DefaultUpdatedAt holds the default value on creation for the "updated_at" field.
@@ -381,6 +391,16 @@ func ByInvoicePaymentTerms(opts ...sql.OrderTermOption) OrderOption {
 // ByPdfShowLineItemDescriptions orders the results by the pdf_show_line_item_descriptions field.
 func ByPdfShowLineItemDescriptions(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPdfShowLineItemDescriptions, opts...).ToFunc()
+}
+
+// ByMapTileURL orders the results by the map_tile_url field.
+func ByMapTileURL(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldMapTileURL, opts...).ToFunc()
+}
+
+// ByGeocoderURL orders the results by the geocoder_url field.
+func ByGeocoderURL(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGeocoderURL, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

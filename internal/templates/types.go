@@ -881,6 +881,20 @@ func today(ctx context.Context) string {
 	return time.Now().In(middleware.CompanyLocation(ctx)).Format("2006-01-02")
 }
 
+func scheduleTabClass(active bool) string {
+	if active {
+		return "schedule-tab active"
+	}
+	return "schedule-tab"
+}
+
+func schedulePeriodTabClass(active bool) string {
+	if active {
+		return "schedule-period-tab active"
+	}
+	return "schedule-period-tab"
+}
+
 type ContactRow struct {
 	ID        int64
 	FirstName string
@@ -891,14 +905,53 @@ type ContactRow struct {
 
 type CalendarJob struct {
 	ID          int64
+	TechID      int64
 	Day         int
 	Hour        int
 	Duration    int
 	JobType     string
 	Customer    string
 	Time        string
+	Date        string
+	DateISO     string
 	StatusName  string
 	StatusColor string
+	Lat         float64
+	Lng         float64
+}
+
+type ScheduleTech struct {
+	ID   int64
+	Name string
+}
+
+type DispatchColumn struct {
+	Tech ScheduleTech
+	Jobs []CalendarJob
+}
+
+type DispatchMatrix struct {
+	Period  string
+	Columns []DispatchMatrixColumn
+	Rows    []DispatchMatrixRow
+}
+
+type DispatchMatrixColumn struct {
+	Key     string
+	Label   string
+	Date    string
+	Hour    int
+	IsToday bool
+}
+
+type DispatchMatrixRow struct {
+	Tech  ScheduleTech
+	Cells []DispatchMatrixCell
+}
+
+type DispatchMatrixCell struct {
+	Column DispatchMatrixColumn
+	Jobs   []CalendarJob
 }
 
 type DayData struct {
@@ -921,20 +974,33 @@ type ScheduleDay struct {
 }
 
 type SchedulePageData struct {
-	Title     string
-	Weeks     []WeekData
-	Days      []ScheduleDay
-	Jobs      []CalendarJob
-	PrevYear  int
-	PrevMonth int
-	NextYear  int
-	NextMonth int
-	PrevDate  string
-	NextDate  string
-	Date      string
-	IsMonth   bool
-	IsWeek    bool
-	IsDay     bool
+	Title           string
+	Weeks           []WeekData
+	Days            []ScheduleDay
+	Jobs            []CalendarJob
+	MapJobs         []CalendarJob
+	UnscheduledJobs []CalendarJob
+	DispatchColumns []DispatchColumn
+	DispatchMatrix  DispatchMatrix
+	Techs           []ScheduleTech
+	Tab             string
+	Period          string
+	TileURL         string
+	PrevYear        int
+	PrevMonth       int
+	NextYear        int
+	NextMonth       int
+	PrevDate        string
+	NextDate        string
+	Date            string
+	StartDate       string
+	EndDate         string
+	IsMonth         bool
+	IsWeek          bool
+	IsDay           bool
+	IsList          bool
+	IsDispatch      bool
+	IsMap           bool
 }
 
 type TagRow struct {

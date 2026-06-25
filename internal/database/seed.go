@@ -169,7 +169,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 			SetDescription(d.Description).
 			SetCustomerID(customers[d.CustIdx].ID).
 			SetCompletionPercentage(float64(i+1) * 15).
-			SetStartTime(now.AddDate(1, -(i+1)*2,  0)).
+			SetStartTime(now.AddDate(1, -(i+1)*2, 0)).
 			SetEndTime(now.AddDate(1, i+1, 0)).
 			Save(ctx)
 		if err != nil {
@@ -181,16 +181,16 @@ func Seed(ctx context.Context, client *ent.Client) error {
 	// --- Jobs (5) ---
 	jobs := make([]*ent.Job, 5)
 	jobData := []struct {
-		JobType    string
-		Subtitle   string
-		CustIdx    int
-		ProjIdx    int
-		AssetIdx   int
-		StatusID   int64
-		StartOff   time.Duration
-		EndOff     time.Duration
-		Notes      string
-		TechNotes  string
+		JobType   string
+		Subtitle  string
+		CustIdx   int
+		ProjIdx   int
+		AssetIdx  int
+		StatusID  int64
+		StartOff  time.Duration
+		EndOff    time.Duration
+		Notes     string
+		TechNotes string
 	}{
 		{"AC Repair", "Building 2 Unit B3", 0, 0, 0, 1, -24 * time.Hour, -2 * time.Hour, "Unit not cooling, low refrigerant suspected", "Found leak at evaporator coil, recharged system"},
 		{"Chiller Maintenance", "Primary chiller Q2 service", 4, 4, 3, 4, -72 * time.Hour, -48 * time.Hour, "Scheduled quarterly maintenance", "Replaced worn bearings, checked compressor amp draw"},
@@ -301,7 +301,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 			SetStatusID(d.StatusID).
 			SetTaxRate(d.TaxRate).
 			SetLineItems(string(liJSON)).
-			SetInvoiceDate(now.AddDate(1, -(i+1), 0)).
+			SetInvoiceDate(now.AddDate(1, -(i + 1), 0)).
 			SetDueDate(now.AddDate(1, -(i+1)+1, 0))
 
 		if d.EstimateIdx >= 0 {
@@ -328,7 +328,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 
 	// --- Time Entries (5) for admin user (ID 1) ---
 	for i := 0; i < 5; i++ {
-		clockIn := now.AddDate(0, 0, -(i+1)).Add(-8 * time.Hour)
+		clockIn := now.AddDate(0, 0, -(i + 1)).Add(-8 * time.Hour)
 		clockOut := clockIn.Add(7*time.Hour + 30*time.Minute)
 		_, err := client.TimeEntry.Create().
 			SetUserID(1).

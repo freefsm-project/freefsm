@@ -12,6 +12,9 @@ templ SettingsPage(p SettingsPageData) {
 				<button type="button" class="active" data-tab="company" onclick="switchSettingsTab('company')">Company</button>
 				<button type="button" data-tab="email" onclick="switchSettingsTab('email')">Email</button>
 				<button type="button" data-tab="pdf" onclick="switchSettingsTab('pdf')">PDF</button>
+				if !p.IsSetup {
+					<button type="button" data-tab="map" onclick="switchSettingsTab('map')">Map</button>
+				}
 				<button type="button" data-tab="security" onclick="switchSettingsTab('security')">Security</button>
 			</div>
 			
@@ -175,6 +178,23 @@ templ SettingsPage(p SettingsPageData) {
 				</label>
 				<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
 			</div>
+
+			if !p.IsSetup {
+				<!-- Map Tab -->
+				<div class="settings-tab-content" id="tab-map">
+					<label>
+						Map Tile URL
+						<input type="text" name="map_tile_url" value={ p.Settings.MapTileURL } placeholder="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
+					</label>
+					<p style="font-size:0.85rem;color:var(--pico-muted-color)">URL template used by the schedule map. Include <code>{ "{z}" }</code>, <code>{ "{x}" }</code>, and <code>{ "{y}" }</code> placeholders for zoom and tile coordinates.</p>
+					<label>
+						Geocoder URL
+						<input type="url" name="geocoder_url" value={ p.Settings.GeocoderURL } placeholder="https://nominatim.openstreetmap.org"/>
+					</label>
+					<p style="font-size:0.85rem;color:var(--pico-muted-color)">Base URL for the geocoding service used to resolve job locations on the map. Leave blank to disable automatic geocoding.</p>
+					<button type="submit" style="margin-top:1rem">{ settingsButtonText(p.IsSetup) }</button>
+				</div>
+			}
 			
 			<!-- Security Tab -->
 			<div class="settings-tab-content" id="tab-security">

@@ -83,6 +83,10 @@ type CompanySettings struct {
 	InvoicePaymentTerms string `json:"invoice_payment_terms,omitempty"`
 	// PdfShowLineItemDescriptions holds the value of the "pdf_show_line_item_descriptions" field.
 	PdfShowLineItemDescriptions bool `json:"pdf_show_line_item_descriptions,omitempty"`
+	// MapTileURL holds the value of the "map_tile_url" field.
+	MapTileURL string `json:"map_tile_url,omitempty"`
+	// GeocoderURL holds the value of the "geocoder_url" field.
+	GeocoderURL string `json:"geocoder_url,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -99,7 +103,7 @@ func (*CompanySettings) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case companysettings.FieldID, companysettings.FieldCompanyID, companysettings.FieldDefaultDueDays, companysettings.FieldSMTPPort, companysettings.FieldPasswordMinLength:
 			values[i] = new(sql.NullInt64)
-		case companysettings.FieldBusinessName, companysettings.FieldAddress, companysettings.FieldCity, companysettings.FieldState, companysettings.FieldZip, companysettings.FieldPhone, companysettings.FieldEmail, companysettings.FieldTaxID, companysettings.FieldDefaultTaxRate, companysettings.FieldInvoicePrefix, companysettings.FieldEstimatePrefix, companysettings.FieldSMTPHost, companysettings.FieldSMTPUser, companysettings.FieldSMTPPassword, companysettings.FieldSMTPFrom, companysettings.FieldInvoiceEmailSubject, companysettings.FieldInvoiceEmailBody, companysettings.FieldEstimateEmailSubject, companysettings.FieldEstimateEmailBody, companysettings.FieldTimezone, companysettings.FieldInvoiceColor, companysettings.FieldInvoiceFooter, companysettings.FieldInvoiceLogoPath, companysettings.FieldInvoicePaymentTerms:
+		case companysettings.FieldBusinessName, companysettings.FieldAddress, companysettings.FieldCity, companysettings.FieldState, companysettings.FieldZip, companysettings.FieldPhone, companysettings.FieldEmail, companysettings.FieldTaxID, companysettings.FieldDefaultTaxRate, companysettings.FieldInvoicePrefix, companysettings.FieldEstimatePrefix, companysettings.FieldSMTPHost, companysettings.FieldSMTPUser, companysettings.FieldSMTPPassword, companysettings.FieldSMTPFrom, companysettings.FieldInvoiceEmailSubject, companysettings.FieldInvoiceEmailBody, companysettings.FieldEstimateEmailSubject, companysettings.FieldEstimateEmailBody, companysettings.FieldTimezone, companysettings.FieldInvoiceColor, companysettings.FieldInvoiceFooter, companysettings.FieldInvoiceLogoPath, companysettings.FieldInvoicePaymentTerms, companysettings.FieldMapTileURL, companysettings.FieldGeocoderURL:
 			values[i] = new(sql.NullString)
 		case companysettings.FieldCreatedAt, companysettings.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -323,6 +327,18 @@ func (_m *CompanySettings) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.PdfShowLineItemDescriptions = value.Bool
 			}
+		case companysettings.FieldMapTileURL:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field map_tile_url", values[i])
+			} else if value.Valid {
+				_m.MapTileURL = value.String
+			}
+		case companysettings.FieldGeocoderURL:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field geocoder_url", values[i])
+			} else if value.Valid {
+				_m.GeocoderURL = value.String
+			}
 		case companysettings.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -471,6 +487,12 @@ func (_m *CompanySettings) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("pdf_show_line_item_descriptions=")
 	builder.WriteString(fmt.Sprintf("%v", _m.PdfShowLineItemDescriptions))
+	builder.WriteString(", ")
+	builder.WriteString("map_tile_url=")
+	builder.WriteString(_m.MapTileURL)
+	builder.WriteString(", ")
+	builder.WriteString("geocoder_url=")
+	builder.WriteString(_m.GeocoderURL)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

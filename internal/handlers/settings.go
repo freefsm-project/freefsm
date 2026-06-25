@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -46,6 +47,24 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	oldSettings, _ := h.svc.Get(r.Context())
+	mapTileURL := strings.TrimSpace(r.FormValue("map_tile_url"))
+	geocoderURL := strings.TrimRight(strings.TrimSpace(r.FormValue("geocoder_url")), "/")
+	if r.URL.Path == "/setup/company" && oldSettings != nil {
+		mapTileURL = oldSettings.MapTileURL
+		geocoderURL = oldSettings.GeocoderURL
+	}
+	if mapTileURL != "" {
+		if parsed, err := url.Parse(mapTileURLSample(mapTileURL)); err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			http.Redirect(w, r, "/settings?flash=Map+tile+URL+must+be+a+valid+http(s)+URL", http.StatusSeeOther)
+			return
+		}
+	}
+	if geocoderURL != "" {
+		if parsed, err := url.Parse(geocoderURL); err != nil || parsed.Scheme == "" || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+			http.Redirect(w, r, "/settings?flash=Geocoder+URL+must+be+a+valid+http(s)+URL", http.StatusSeeOther)
+			return
+		}
+	}
 
 	err := h.svc.Save(r.Context(), services.CompanySettingsParams{
 		BusinessName:                r.FormValue("business_name"),
@@ -79,6 +98,8 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		InvoiceFooter:               r.FormValue("invoice_footer"),
 		InvoicePaymentTerms:         r.FormValue("invoice_payment_terms"),
 		PDFShowLineItemDescriptions: r.FormValue("pdf_show_line_item_descriptions") == "on",
+		MapTileURL:                  mapTileURL,
+		GeocoderURL:                 geocoderURL,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -186,6 +207,12 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 			if oldSettings.PdfShowLineItemDescriptions != newSettings.PdfShowLineItemDescriptions {
 				changed = append(changed, "pdf_show_line_item_descriptions")
 			}
+			if oldSettings.MapTileURL != newSettings.MapTileURL {
+				changed = append(changed, "map_tile_url")
+			}
+			if oldSettings.GeocoderURL != newSettings.GeocoderURL {
+				changed = append(changed, "geocoder_url")
+			}
 			if len(changed) > 0 {
 				h.activitySvc.Record(r.Context(), u.ID, "settings_updated", "company_settings", newSettings.ID, map[string]interface{}{
 					"entity_name": "Company Settings",
@@ -201,6 +228,10 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/settings?flash=Settings+saved", http.StatusSeeOther)
+}
+
+func mapTileURLSample(tileURL string) string {
+	return strings.NewReplacer("{s}", "a", "{z}", "0", "{x}", "0", "{y}", "0", "{r}", "").Replace(tileURL)
 }
 
 func (h *SettingsHandler) TestEmail(w http.ResponseWriter, r *http.Request) {

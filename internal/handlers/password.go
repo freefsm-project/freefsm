@@ -29,11 +29,11 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 	if r.Method == http.MethodGet {
 		cs, _ := h.csSvc.Get(r.Context())
 		templates.ChangePasswordPage(templates.ChangePasswordData{
-			MinLength:       cs.PasswordMinLength,
-			RequireUpper:    cs.PasswordRequireUppercase,
-			RequireLower:    cs.PasswordRequireLowercase,
-			RequireDigit:    cs.PasswordRequireDigit,
-			RequireSpecial:  cs.PasswordRequireSpecial,
+			MinLength:      cs.PasswordMinLength,
+			RequireUpper:   cs.PasswordRequireUppercase,
+			RequireLower:   cs.PasswordRequireLowercase,
+			RequireDigit:   cs.PasswordRequireDigit,
+			RequireSpecial: cs.PasswordRequireSpecial,
 		}).Render(r.Context(), w)
 		return
 	}

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/MartialM1nd/freefsm/internal/config"
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
@@ -16,22 +17,187 @@ type ScheduleHandler struct {
 	jobSvc    *services.JobService
 	custSvc   *services.CustomerService
 	statusSvc *services.StatusService
+	userSvc   *services.UserService
+	locSvc    *services.LocationService
+	cfg       *config.Config
 }
 
-func NewScheduleHandler(jobSvc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService) *ScheduleHandler {
-	return &ScheduleHandler{jobSvc: jobSvc, custSvc: custSvc, statusSvc: statusSvc}
+func NewScheduleHandler(jobSvc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, userSvc *services.UserService, locSvc *services.LocationService, cfg *config.Config) *ScheduleHandler {
+	return &ScheduleHandler{jobSvc: jobSvc, custSvc: custSvc, statusSvc: statusSvc, userSvc: userSvc, locSvc: locSvc, cfg: cfg}
 }
 
 func (h *ScheduleHandler) Index(w http.ResponseWriter, r *http.Request) {
-	view := r.URL.Query().Get("view")
-	switch view {
-	case "week":
-		h.Week(w, r)
-	case "day":
-		h.Day(w, r)
+	tab, period := scheduleTabPeriod(r)
+	switch tab {
+	case "calendar":
+		switch period {
+		case "week":
+			h.Week(w, r)
+		case "day":
+			h.Day(w, r)
+		default:
+			h.Month(w, r)
+		}
+	case "list":
+		h.List(w, r)
+	case "dispatch":
+		h.Dispatch(w, r)
+	case "map":
+		h.Map(w, r)
 	default:
 		h.Month(w, r)
 	}
+}
+
+func scheduleTabPeriod(r *http.Request) (string, string) {
+	tab := r.URL.Query().Get("tab")
+	period := r.URL.Query().Get("period")
+
+	if tab == "" {
+		switch r.URL.Query().Get("view") {
+		case "list":
+			tab = "list"
+		case "calendar":
+			tab = "calendar"
+			if period == "" {
+				period = "month"
+			}
+		case "week":
+			tab = "calendar"
+			period = "week"
+		case "day":
+			tab = "calendar"
+			period = "day"
+		case "dispatch":
+			tab = "dispatch"
+		case "map":
+			tab = "map"
+		}
+	}
+
+	switch tab {
+	case "list", "calendar", "dispatch", "map":
+	default:
+		tab = "calendar"
+	}
+	switch period {
+	case "month", "week", "day":
+	default:
+		period = "month"
+		if tab == "dispatch" {
+			period = "day"
+		}
+	}
+	return tab, period
+}
+
+func (h *ScheduleHandler) DispatchUpdate(w http.ResponseWriter, r *http.Request) {
+	loc := middleware.CompanyLocation(r.Context())
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
+	userID, _ := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
+	date, err := time.ParseInLocation("2006-01-02", r.FormValue("date"), loc)
+	if err != nil || jobID <= 0 || userID <= 0 {
+		http.Error(w, "invalid schedule move", http.StatusBadRequest)
+		return
+	}
+	j, err := h.jobSvc.GetByID(r.Context(), jobID)
+	if err != nil {
+		http.Error(w, "job not found", http.StatusNotFound)
+		return
+	}
+	hour := 8
+	minute := 0
+	duration := 1
+	if j.StartTime != nil && !j.StartTime.IsZero() {
+		localStart := j.StartTime.In(loc)
+		hour = localStart.Hour()
+		minute = localStart.Minute()
+	}
+	if j.StartTime != nil && j.EndTime != nil && !j.EndTime.IsZero() {
+		if d := int(j.EndTime.Sub(*j.StartTime).Hours()); d > 0 {
+			duration = d
+		}
+	}
+	if formHour := r.FormValue("hour"); formHour != "" {
+		parsedHour, _ := strconv.Atoi(formHour)
+		if parsedHour < 0 || parsedHour > 23 {
+			http.Error(w, "invalid schedule move", http.StatusBadRequest)
+			return
+		}
+		hour = parsedHour
+		minute = 0
+	}
+	if formDuration := r.FormValue("duration"); formDuration != "" {
+		parsedDuration, _ := strconv.Atoi(formDuration)
+		if parsedDuration > 0 {
+			duration = parsedDuration
+		}
+	}
+	start := time.Date(date.Year(), date.Month(), date.Day(), hour, minute, 0, 0, loc)
+	end := start.Add(time.Duration(duration) * time.Hour)
+	if _, err := h.jobSvc.Move(r.Context(), jobID, userID, start, end); err != nil {
+		http.Error(w, "move job", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ScheduleHandler) CalendarMove(w http.ResponseWriter, r *http.Request) {
+	loc := middleware.CompanyLocation(r.Context())
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
+	date, err := time.ParseInLocation("2006-01-02", r.FormValue("date"), loc)
+	if err != nil || jobID <= 0 {
+		http.Error(w, "invalid calendar move", http.StatusBadRequest)
+		return
+	}
+	j, err := h.jobSvc.GetByID(r.Context(), jobID)
+	if err != nil {
+		http.Error(w, "job not found", http.StatusNotFound)
+		return
+	}
+	hour := 8
+	minute := 0
+	duration := 1
+	if j.StartTime != nil && !j.StartTime.IsZero() {
+		hour = j.StartTime.In(loc).Hour()
+		minute = j.StartTime.In(loc).Minute()
+	}
+	if formHour := r.FormValue("hour"); formHour != "" {
+		parsedHour, _ := strconv.Atoi(formHour)
+		if parsedHour < 0 || parsedHour > 23 {
+			http.Error(w, "invalid calendar move", http.StatusBadRequest)
+			return
+		}
+		hour = parsedHour
+		minute = 0
+	}
+	if j.StartTime != nil && j.EndTime != nil && !j.EndTime.IsZero() {
+		d := int(j.EndTime.Sub(*j.StartTime).Hours())
+		if d > 0 {
+			duration = d
+		}
+	}
+	if formDuration := r.FormValue("duration"); formDuration != "" {
+		parsedDuration, _ := strconv.Atoi(formDuration)
+		if parsedDuration > 0 {
+			duration = parsedDuration
+		}
+	}
+	start := time.Date(date.Year(), date.Month(), date.Day(), hour, minute, 0, 0, loc)
+	end := start.Add(time.Duration(duration) * time.Hour)
+	if _, err := h.jobSvc.MoveTime(r.Context(), jobID, start, end); err != nil {
+		http.Error(w, "move job", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +217,10 @@ func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
 	weeks := buildMonthGrid(year, month, calJobs, loc)
 	data := templates.SchedulePageData{
 		Title:     time.Date(year, month, 1, 0, 0, 0, 0, loc).Format("January 2006"),
+		Tab:       "calendar",
+		Period:    "month",
 		Weeks:     weeks,
+		Date:      time.Date(year, month, 1, 0, 0, 0, 0, loc).Format("2006-01-02"),
 		PrevYear:  prevMonthYear(year, month),
 		PrevMonth: prevMonthMonth(year, month),
 		NextYear:  nextMonthYear(year, month),
@@ -78,11 +247,11 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 			IsToday: isToday(d, loc),
 		}
 		for _, j := range jobs {
-			cj := calendarJob(j, custMap, statuses)
-			cj.Hour = j.StartTime.Hour()
 			if j.StartTime == nil {
 				continue
 			}
+			cj := calendarJob(j, custMap, statuses)
+			cj.Hour = j.StartTime.Hour()
 			if j.StartTime.Year() == d.Year() && j.StartTime.YearDay() == d.YearDay() {
 				day.Jobs = append(day.Jobs, cj)
 			}
@@ -94,11 +263,107 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 	next := date.AddDate(0, 0, 7)
 	data := templates.SchedulePageData{
 		Title:    fmt.Sprintf("%s — %s, %d", start.Format("Jan 2"), end.Format("Jan 2"), end.Year()),
+		Tab:      "calendar",
+		Period:   "week",
 		Days:     days,
 		PrevDate: prev.Format("2006-01-02"),
 		NextDate: next.Format("2006-01-02"),
 		Date:     date.Format("2006-01-02"),
 		IsWeek:   true,
+	}
+	templates.SchedulePage(data).Render(r.Context(), w)
+}
+
+func (h *ScheduleHandler) List(w http.ResponseWriter, r *http.Request) {
+	loc := middleware.CompanyLocation(r.Context())
+	now := time.Now().In(loc)
+	period := parsePeriod(r, "month")
+	start := parseDateParam(r, "start", loc)
+	if r.URL.Query().Get("start") == "" {
+		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+		switch period {
+		case "day":
+		case "week":
+			start, _ = weekRange(start, loc)
+		default:
+			start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
+		}
+	}
+	end := parseDateParam(r, "end", loc)
+	if r.URL.Query().Get("end") == "" {
+		switch period {
+		case "day":
+			end = start.AddDate(0, 0, 1).Add(-time.Second)
+		case "week":
+			_, end = weekRange(start, loc)
+		default:
+			end = start.AddDate(0, 1, 0).Add(-time.Second)
+		}
+	}
+
+	jobs, _ := h.jobsByDateRange(r, start, end)
+	data := templates.SchedulePageData{
+		Title:     fmt.Sprintf("%s - %s", start.Format("Jan 2"), end.Format("Jan 2, 2006")),
+		Tab:       "list",
+		Jobs:      h.calendarJobs(r, jobs),
+		Date:      start.Format("2006-01-02"),
+		StartDate: start.Format("2006-01-02"),
+		EndDate:   end.Format("2006-01-02"),
+		Period:    period,
+		IsList:    true,
+	}
+	templates.SchedulePage(data).Render(r.Context(), w)
+}
+
+func (h *ScheduleHandler) Dispatch(w http.ResponseWriter, r *http.Request) {
+	u, _ := middleware.UserFromContext(r.Context())
+	if !isAdminOrDispatcher(u) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	loc := middleware.CompanyLocation(r.Context())
+	date := parseDateParam(r, "date", loc)
+	_, period := scheduleTabPeriod(r)
+	start, end := dispatchRange(period, date, loc)
+	jobs, _ := h.jobsByDateRange(r, start, end)
+	unscheduled, _ := h.unscheduledJobs(r)
+	techs := h.scheduleTechs(r)
+	columns := []templates.DispatchColumn{}
+	if period == "day" {
+		columns = h.dispatchColumns(r, techs, jobs)
+	}
+	matrix := h.dispatchMatrix(r, period, start, end, techs, jobs)
+	prev, next := dispatchPrevNext(period, date)
+	data := templates.SchedulePageData{
+		Title:           dispatchTitle(period, start, end),
+		PrevDate:        prev.Format("2006-01-02"),
+		NextDate:        next.Format("2006-01-02"),
+		Date:            date.Format("2006-01-02"),
+		UnscheduledJobs: h.calendarJobs(r, unscheduled),
+		DispatchColumns: columns,
+		DispatchMatrix:  matrix,
+		Techs:           techs,
+		Tab:             "dispatch",
+		Period:          period,
+		IsDispatch:      true,
+	}
+	templates.SchedulePage(data).Render(r.Context(), w)
+}
+
+func (h *ScheduleHandler) Map(w http.ResponseWriter, r *http.Request) {
+	loc := middleware.CompanyLocation(r.Context())
+	now := time.Now().In(loc)
+	start, end := monthRange(now.Year(), now.Month(), loc)
+	jobs, _ := h.jobsByDateRange(r, start, end)
+	data := templates.SchedulePageData{
+		Title:   "Schedule Map",
+		Tab:     "map",
+		Period:  "month",
+		Jobs:    h.calendarJobs(r, jobs),
+		MapJobs: h.mapJobs(r, jobs),
+		Date:    now.Format("2006-01-02"),
+		TileURL: h.mapTileURL(r),
+		IsMap:   true,
 	}
 	templates.SchedulePage(data).Render(r.Context(), w)
 }
@@ -123,6 +388,8 @@ func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
 	next := date.AddDate(0, 0, 1)
 	data := templates.SchedulePageData{
 		Title:    date.Format("Monday, January 2, 2006"),
+		Tab:      "calendar",
+		Period:   "day",
 		Jobs:     calJobs,
 		PrevDate: prev.Format("2006-01-02"),
 		NextDate: next.Format("2006-01-02"),
@@ -141,6 +408,120 @@ func (h *ScheduleHandler) jobsByDateRange(r *http.Request, start, end time.Time)
 		return nil, nil
 	}
 	return h.jobSvc.ListAssignedByDateRange(r.Context(), u.ID, start, end)
+}
+
+func (h *ScheduleHandler) unscheduledJobs(r *http.Request) ([]*ent.Job, error) {
+	u, _ := middleware.UserFromContext(r.Context())
+	if isAdminOrDispatcher(u) {
+		return h.jobSvc.ListUnscheduled(r.Context())
+	}
+	if u == nil {
+		return nil, nil
+	}
+	return h.jobSvc.ListAssignedUnscheduled(r.Context(), u.ID)
+}
+
+func (h *ScheduleHandler) scheduleTechs(r *http.Request) []templates.ScheduleTech {
+	users, _ := h.userSvc.ListAll(r.Context())
+	techs := make([]templates.ScheduleTech, 0, len(users))
+	for _, u := range users {
+		if !u.IsActive || u.Role != "tech" {
+			continue
+		}
+		techs = append(techs, templates.ScheduleTech{ID: u.ID, Name: u.Name})
+	}
+	return techs
+}
+
+func (h *ScheduleHandler) dispatchColumns(r *http.Request, techs []templates.ScheduleTech, jobs []*ent.Job) []templates.DispatchColumn {
+	calJobs := h.calendarJobs(r, jobs)
+	jobsByTech := make(map[int64][]templates.CalendarJob, len(techs))
+	for i, job := range jobs {
+		assignments, _ := h.jobSvc.Assignments(r.Context(), job.ID)
+		if len(assignments) == 0 {
+			continue
+		}
+		calJobs[i].TechID = assignments[0].UserID
+		jobsByTech[assignments[0].UserID] = append(jobsByTech[assignments[0].UserID], calJobs[i])
+	}
+	columns := make([]templates.DispatchColumn, 0, len(techs))
+	for _, tech := range techs {
+		columns = append(columns, templates.DispatchColumn{Tech: tech, Jobs: jobsByTech[tech.ID]})
+	}
+	return columns
+}
+
+func (h *ScheduleHandler) dispatchMatrix(r *http.Request, period string, start, end time.Time, techs []templates.ScheduleTech, jobs []*ent.Job) templates.DispatchMatrix {
+	columns := dispatchMatrixColumns(period, start, end, middleware.CompanyLocation(r.Context()))
+	jobsByTechColumn := make(map[int64]map[string][]templates.CalendarJob, len(techs))
+	calJobs := h.calendarJobs(r, jobs)
+
+	for i, job := range jobs {
+		if job.StartTime == nil {
+			continue
+		}
+		assignments, _ := h.jobSvc.Assignments(r.Context(), job.ID)
+		if len(assignments) == 0 {
+			continue
+		}
+		techID := assignments[0].UserID
+		columnKey := dispatchMatrixColumnKey(period, *job.StartTime)
+		if columnKey == "" {
+			continue
+		}
+		if jobsByTechColumn[techID] == nil {
+			jobsByTechColumn[techID] = make(map[string][]templates.CalendarJob, len(columns))
+		}
+		calJobs[i].TechID = techID
+		jobsByTechColumn[techID][columnKey] = append(jobsByTechColumn[techID][columnKey], calJobs[i])
+	}
+
+	rows := make([]templates.DispatchMatrixRow, 0, len(techs))
+	for _, tech := range techs {
+		cells := make([]templates.DispatchMatrixCell, 0, len(columns))
+		for _, column := range columns {
+			cells = append(cells, templates.DispatchMatrixCell{
+				Column: column,
+				Jobs:   jobsByTechColumn[tech.ID][column.Key],
+			})
+		}
+		rows = append(rows, templates.DispatchMatrixRow{Tech: tech, Cells: cells})
+	}
+
+	return templates.DispatchMatrix{Period: period, Columns: columns, Rows: rows}
+}
+
+func dispatchMatrixColumns(period string, start, end time.Time, loc *time.Location) []templates.DispatchMatrixColumn {
+	if period == "day" {
+		columns := make([]templates.DispatchMatrixColumn, 0, 24)
+		for hour := 0; hour <= 23; hour++ {
+			columns = append(columns, templates.DispatchMatrixColumn{
+				Key:   fmt.Sprintf("%02d", hour),
+				Label: fmt.Sprintf("%02d:00", hour),
+				Date:  start.Format("2006-01-02"),
+				Hour:  hour,
+			})
+		}
+		return columns
+	}
+
+	columns := []templates.DispatchMatrixColumn{}
+	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
+		columns = append(columns, templates.DispatchMatrixColumn{
+			Key:     d.Format("2006-01-02"),
+			Label:   d.Format("Mon Jan 2"),
+			Date:    d.Format("2006-01-02"),
+			IsToday: isToday(d, loc),
+		})
+	}
+	return columns
+}
+
+func dispatchMatrixColumnKey(period string, start time.Time) string {
+	if period == "day" {
+		return fmt.Sprintf("%02d", start.Hour())
+	}
+	return start.Format("2006-01-02")
 }
 
 func (h *ScheduleHandler) customerMapForJobs(r *http.Request, jobs []*ent.Job) map[int64]string {
@@ -172,6 +553,8 @@ func calendarJob(j *ent.Job, custMap map[int64]string, statuses []*ent.Status) t
 	cj.StatusColor = statusColor(statuses, j.StatusID)
 	if j.StartTime != nil && !j.StartTime.IsZero() {
 		cj.Time = j.StartTime.Format("3:04 PM")
+		cj.Date = j.StartTime.Format("Jan 2, 2006")
+		cj.DateISO = j.StartTime.Format("2006-01-02")
 		cj.Day = j.StartTime.Day()
 		cj.Hour = j.StartTime.Hour()
 
@@ -193,6 +576,82 @@ func calendarJob(j *ent.Job, custMap map[int64]string, statuses []*ent.Status) t
 	return cj
 }
 
+func parsePeriod(r *http.Request, fallback string) string {
+	switch r.URL.Query().Get("period") {
+	case "month", "week", "day":
+		return r.URL.Query().Get("period")
+	default:
+		return fallback
+	}
+}
+
+func (h *ScheduleHandler) calendarJobs(r *http.Request, jobs []*ent.Job) []templates.CalendarJob {
+	custMap := h.customerMapForJobs(r, jobs)
+	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
+	calJobs := make([]templates.CalendarJob, 0, len(jobs))
+	for _, j := range jobs {
+		calJobs = append(calJobs, calendarJob(j, custMap, statuses))
+	}
+	return calJobs
+}
+
+func (h *ScheduleHandler) mapJobs(r *http.Request, jobs []*ent.Job) []templates.CalendarJob {
+	locationIDs := make([]int64, 0, len(jobs))
+	seen := make(map[int64]struct{})
+	for _, j := range jobs {
+		if j.LocationID == nil || *j.LocationID <= 0 {
+			continue
+		}
+		if _, ok := seen[*j.LocationID]; ok {
+			continue
+		}
+		seen[*j.LocationID] = struct{}{}
+		locationIDs = append(locationIDs, *j.LocationID)
+	}
+	locations, _ := h.locSvc.ListByIDs(r.Context(), locationIDs)
+	locByID := make(map[int64]*ent.Location, len(locations))
+	geocodedThisRequest := false
+	geocoderURL := h.geocoderURL(r)
+	for _, l := range locations {
+		if geocoderURL != "" && !geocodedThisRequest && (l.Latitude == nil || l.Longitude == nil) {
+			if geocoded, err := h.locSvc.Geocode(r.Context(), l, geocoderURL); err == nil {
+				l = geocoded
+				geocodedThisRequest = true
+			}
+		}
+		locByID[l.ID] = l
+	}
+	calJobs := h.calendarJobs(r, jobs)
+	mapJobs := make([]templates.CalendarJob, 0, len(calJobs))
+	for i, j := range jobs {
+		if j.LocationID == nil {
+			continue
+		}
+		l := locByID[*j.LocationID]
+		if l == nil || l.Latitude == nil || l.Longitude == nil {
+			continue
+		}
+		calJobs[i].Lat = *l.Latitude
+		calJobs[i].Lng = *l.Longitude
+		mapJobs = append(mapJobs, calJobs[i])
+	}
+	return mapJobs
+}
+
+func (h *ScheduleHandler) mapTileURL(r *http.Request) string {
+	if cs := middleware.CompanyFromContext(r.Context()); cs != nil && cs.MapTileURL != "" {
+		return cs.MapTileURL
+	}
+	return h.cfg.TileURL
+}
+
+func (h *ScheduleHandler) geocoderURL(r *http.Request) string {
+	if cs := middleware.CompanyFromContext(r.Context()); cs != nil && cs.GeocoderURL != "" {
+		return cs.GeocoderURL
+	}
+	return h.cfg.GeocoderURL
+}
+
 func parseDateParam(r *http.Request, key string, loc *time.Location) time.Time {
 	ds := r.URL.Query().Get(key)
 	if ds == "" {
@@ -211,6 +670,40 @@ func weekRange(date time.Time, loc *time.Location) (time.Time, time.Time) {
 	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, loc)
 	end := start.AddDate(0, 0, 7).Add(-time.Second)
 	return start, end
+}
+
+func dispatchRange(period string, date time.Time, loc *time.Location) (time.Time, time.Time) {
+	switch period {
+	case "month":
+		return monthRange(date.Year(), date.Month(), loc)
+	case "week":
+		return weekRange(date, loc)
+	default:
+		start := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
+		return start, start.AddDate(0, 0, 1).Add(-time.Second)
+	}
+}
+
+func dispatchPrevNext(period string, date time.Time) (time.Time, time.Time) {
+	switch period {
+	case "month":
+		return date.AddDate(0, -1, 0), date.AddDate(0, 1, 0)
+	case "week":
+		return date.AddDate(0, 0, -7), date.AddDate(0, 0, 7)
+	default:
+		return date.AddDate(0, 0, -1), date.AddDate(0, 0, 1)
+	}
+}
+
+func dispatchTitle(period string, start, end time.Time) string {
+	switch period {
+	case "month":
+		return fmt.Sprintf("Dispatch: %s", start.Format("January 2006"))
+	case "week":
+		return fmt.Sprintf("Dispatch: %s - %s", start.Format("Jan 2"), end.Format("Jan 2, 2006"))
+	default:
+		return fmt.Sprintf("Dispatch: %s", start.Format("Monday, Jan 2, 2006"))
+	}
 }
 
 func parseYearMonth(r *http.Request, now time.Time) (int, time.Month) {

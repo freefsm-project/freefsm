@@ -55,6 +55,8 @@ func (CompanySettings) Fields() []ent.Field {
 		field.String("invoice_logo_path").Default(""),
 		field.String("invoice_payment_terms").Default("Net 30"),
 		field.Bool("pdf_show_line_item_descriptions").Default(false),
+		field.String("map_tile_url").Default("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"),
+		field.String("geocoder_url").Default(""),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
 	}

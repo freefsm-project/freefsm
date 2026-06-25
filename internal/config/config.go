@@ -32,6 +32,8 @@ type Config struct {
 
 	UploadDir     string
 	MaxUploadSize int64
+	TileURL       string
+	GeocoderURL   string
 }
 
 func Load() (*Config, error) {
@@ -52,6 +54,8 @@ func Load() (*Config, error) {
 		PublicURL:     strings.TrimRight(getEnv("FREEFSM_PUBLIC_URL", ""), "/"),
 		UploadDir:     getEnv("FREEFSM_UPLOAD_DIR", "/var/lib/freefsm/uploads"),
 		MaxUploadSize: getEnvInt64("FREEFSM_MAX_UPLOAD_SIZE", 26214400),
+		TileURL:       getEnv("FREEFSM_TILE_URL", "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"),
+		GeocoderURL:   strings.TrimRight(getEnv("FREEFSM_GEOCODER_URL", ""), "/"),
 	}
 
 	if cfg.SessionSecret == "" {

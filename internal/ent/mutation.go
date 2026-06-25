@@ -4334,6 +4334,8 @@ type CompanySettingsMutation struct {
 	invoice_logo_path               *string
 	invoice_payment_terms           *string
 	pdf_show_line_item_descriptions *bool
+	map_tile_url                    *string
+	geocoder_url                    *string
 	created_at                      *time.Time
 	updated_at                      *time.Time
 	clearedFields                   map[string]struct{}
@@ -5728,6 +5730,78 @@ func (m *CompanySettingsMutation) ResetPdfShowLineItemDescriptions() {
 	m.pdf_show_line_item_descriptions = nil
 }
 
+// SetMapTileURL sets the "map_tile_url" field.
+func (m *CompanySettingsMutation) SetMapTileURL(s string) {
+	m.map_tile_url = &s
+}
+
+// MapTileURL returns the value of the "map_tile_url" field in the mutation.
+func (m *CompanySettingsMutation) MapTileURL() (r string, exists bool) {
+	v := m.map_tile_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMapTileURL returns the old "map_tile_url" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldMapTileURL(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMapTileURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMapTileURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMapTileURL: %w", err)
+	}
+	return oldValue.MapTileURL, nil
+}
+
+// ResetMapTileURL resets all changes to the "map_tile_url" field.
+func (m *CompanySettingsMutation) ResetMapTileURL() {
+	m.map_tile_url = nil
+}
+
+// SetGeocoderURL sets the "geocoder_url" field.
+func (m *CompanySettingsMutation) SetGeocoderURL(s string) {
+	m.geocoder_url = &s
+}
+
+// GeocoderURL returns the value of the "geocoder_url" field in the mutation.
+func (m *CompanySettingsMutation) GeocoderURL() (r string, exists bool) {
+	v := m.geocoder_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGeocoderURL returns the old "geocoder_url" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldGeocoderURL(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGeocoderURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGeocoderURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGeocoderURL: %w", err)
+	}
+	return oldValue.GeocoderURL, nil
+}
+
+// ResetGeocoderURL resets all changes to the "geocoder_url" field.
+func (m *CompanySettingsMutation) ResetGeocoderURL() {
+	m.geocoder_url = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *CompanySettingsMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -5834,7 +5908,7 @@ func (m *CompanySettingsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompanySettingsMutation) Fields() []string {
-	fields := make([]string, 0, 35)
+	fields := make([]string, 0, 37)
 	if m.company_id != nil {
 		fields = append(fields, companysettings.FieldCompanyID)
 	}
@@ -5934,6 +6008,12 @@ func (m *CompanySettingsMutation) Fields() []string {
 	if m.pdf_show_line_item_descriptions != nil {
 		fields = append(fields, companysettings.FieldPdfShowLineItemDescriptions)
 	}
+	if m.map_tile_url != nil {
+		fields = append(fields, companysettings.FieldMapTileURL)
+	}
+	if m.geocoder_url != nil {
+		fields = append(fields, companysettings.FieldGeocoderURL)
+	}
 	if m.created_at != nil {
 		fields = append(fields, companysettings.FieldCreatedAt)
 	}
@@ -6014,6 +6094,10 @@ func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 		return m.InvoicePaymentTerms()
 	case companysettings.FieldPdfShowLineItemDescriptions:
 		return m.PdfShowLineItemDescriptions()
+	case companysettings.FieldMapTileURL:
+		return m.MapTileURL()
+	case companysettings.FieldGeocoderURL:
+		return m.GeocoderURL()
 	case companysettings.FieldCreatedAt:
 		return m.CreatedAt()
 	case companysettings.FieldUpdatedAt:
@@ -6093,6 +6177,10 @@ func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (en
 		return m.OldInvoicePaymentTerms(ctx)
 	case companysettings.FieldPdfShowLineItemDescriptions:
 		return m.OldPdfShowLineItemDescriptions(ctx)
+	case companysettings.FieldMapTileURL:
+		return m.OldMapTileURL(ctx)
+	case companysettings.FieldGeocoderURL:
+		return m.OldGeocoderURL(ctx)
 	case companysettings.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case companysettings.FieldUpdatedAt:
@@ -6337,6 +6425,20 @@ func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetPdfShowLineItemDescriptions(v)
 		return nil
+	case companysettings.FieldMapTileURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMapTileURL(v)
+		return nil
+	case companysettings.FieldGeocoderURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGeocoderURL(v)
+		return nil
 	case companysettings.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -6558,6 +6660,12 @@ func (m *CompanySettingsMutation) ResetField(name string) error {
 		return nil
 	case companysettings.FieldPdfShowLineItemDescriptions:
 		m.ResetPdfShowLineItemDescriptions()
+		return nil
+	case companysettings.FieldMapTileURL:
+		m.ResetMapTileURL()
+		return nil
+	case companysettings.FieldGeocoderURL:
+		m.ResetGeocoderURL()
 		return nil
 	case companysettings.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -17911,28 +18019,34 @@ func (m *JobAssignmentMutation) ResetEdge(name string) error {
 // LocationMutation represents an operation that mutates the Location nodes in the graph.
 type LocationMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *int64
-	company_id    *int64
-	addcompany_id *int64
-	object_type   *string
-	object_id     *int64
-	addobject_id  *int64
-	title         *string
-	address_1     *string
-	address_2     *string
-	city          *string
-	state         *string
-	zip_code      *string
-	notes         *string
-	is_primary    *bool
-	created_at    *time.Time
-	updated_at    *time.Time
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*Location, error)
-	predicates    []predicate.Location
+	op             Op
+	typ            string
+	id             *int64
+	company_id     *int64
+	addcompany_id  *int64
+	object_type    *string
+	object_id      *int64
+	addobject_id   *int64
+	title          *string
+	address_1      *string
+	address_2      *string
+	city           *string
+	state          *string
+	zip_code       *string
+	notes          *string
+	latitude       *float64
+	addlatitude    *float64
+	longitude      *float64
+	addlongitude   *float64
+	geocoded_at    *time.Time
+	geocode_source *string
+	is_primary     *bool
+	created_at     *time.Time
+	updated_at     *time.Time
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*Location, error)
+	predicates     []predicate.Location
 }
 
 var _ ent.Mutation = (*LocationMutation)(nil)
@@ -18453,6 +18567,244 @@ func (m *LocationMutation) ResetNotes() {
 	m.notes = nil
 }
 
+// SetLatitude sets the "latitude" field.
+func (m *LocationMutation) SetLatitude(f float64) {
+	m.latitude = &f
+	m.addlatitude = nil
+}
+
+// Latitude returns the value of the "latitude" field in the mutation.
+func (m *LocationMutation) Latitude() (r float64, exists bool) {
+	v := m.latitude
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLatitude returns the old "latitude" field's value of the Location entity.
+// If the Location object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LocationMutation) OldLatitude(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLatitude is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLatitude requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLatitude: %w", err)
+	}
+	return oldValue.Latitude, nil
+}
+
+// AddLatitude adds f to the "latitude" field.
+func (m *LocationMutation) AddLatitude(f float64) {
+	if m.addlatitude != nil {
+		*m.addlatitude += f
+	} else {
+		m.addlatitude = &f
+	}
+}
+
+// AddedLatitude returns the value that was added to the "latitude" field in this mutation.
+func (m *LocationMutation) AddedLatitude() (r float64, exists bool) {
+	v := m.addlatitude
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearLatitude clears the value of the "latitude" field.
+func (m *LocationMutation) ClearLatitude() {
+	m.latitude = nil
+	m.addlatitude = nil
+	m.clearedFields[location.FieldLatitude] = struct{}{}
+}
+
+// LatitudeCleared returns if the "latitude" field was cleared in this mutation.
+func (m *LocationMutation) LatitudeCleared() bool {
+	_, ok := m.clearedFields[location.FieldLatitude]
+	return ok
+}
+
+// ResetLatitude resets all changes to the "latitude" field.
+func (m *LocationMutation) ResetLatitude() {
+	m.latitude = nil
+	m.addlatitude = nil
+	delete(m.clearedFields, location.FieldLatitude)
+}
+
+// SetLongitude sets the "longitude" field.
+func (m *LocationMutation) SetLongitude(f float64) {
+	m.longitude = &f
+	m.addlongitude = nil
+}
+
+// Longitude returns the value of the "longitude" field in the mutation.
+func (m *LocationMutation) Longitude() (r float64, exists bool) {
+	v := m.longitude
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLongitude returns the old "longitude" field's value of the Location entity.
+// If the Location object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LocationMutation) OldLongitude(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLongitude is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLongitude requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLongitude: %w", err)
+	}
+	return oldValue.Longitude, nil
+}
+
+// AddLongitude adds f to the "longitude" field.
+func (m *LocationMutation) AddLongitude(f float64) {
+	if m.addlongitude != nil {
+		*m.addlongitude += f
+	} else {
+		m.addlongitude = &f
+	}
+}
+
+// AddedLongitude returns the value that was added to the "longitude" field in this mutation.
+func (m *LocationMutation) AddedLongitude() (r float64, exists bool) {
+	v := m.addlongitude
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearLongitude clears the value of the "longitude" field.
+func (m *LocationMutation) ClearLongitude() {
+	m.longitude = nil
+	m.addlongitude = nil
+	m.clearedFields[location.FieldLongitude] = struct{}{}
+}
+
+// LongitudeCleared returns if the "longitude" field was cleared in this mutation.
+func (m *LocationMutation) LongitudeCleared() bool {
+	_, ok := m.clearedFields[location.FieldLongitude]
+	return ok
+}
+
+// ResetLongitude resets all changes to the "longitude" field.
+func (m *LocationMutation) ResetLongitude() {
+	m.longitude = nil
+	m.addlongitude = nil
+	delete(m.clearedFields, location.FieldLongitude)
+}
+
+// SetGeocodedAt sets the "geocoded_at" field.
+func (m *LocationMutation) SetGeocodedAt(t time.Time) {
+	m.geocoded_at = &t
+}
+
+// GeocodedAt returns the value of the "geocoded_at" field in the mutation.
+func (m *LocationMutation) GeocodedAt() (r time.Time, exists bool) {
+	v := m.geocoded_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGeocodedAt returns the old "geocoded_at" field's value of the Location entity.
+// If the Location object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LocationMutation) OldGeocodedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGeocodedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGeocodedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGeocodedAt: %w", err)
+	}
+	return oldValue.GeocodedAt, nil
+}
+
+// ClearGeocodedAt clears the value of the "geocoded_at" field.
+func (m *LocationMutation) ClearGeocodedAt() {
+	m.geocoded_at = nil
+	m.clearedFields[location.FieldGeocodedAt] = struct{}{}
+}
+
+// GeocodedAtCleared returns if the "geocoded_at" field was cleared in this mutation.
+func (m *LocationMutation) GeocodedAtCleared() bool {
+	_, ok := m.clearedFields[location.FieldGeocodedAt]
+	return ok
+}
+
+// ResetGeocodedAt resets all changes to the "geocoded_at" field.
+func (m *LocationMutation) ResetGeocodedAt() {
+	m.geocoded_at = nil
+	delete(m.clearedFields, location.FieldGeocodedAt)
+}
+
+// SetGeocodeSource sets the "geocode_source" field.
+func (m *LocationMutation) SetGeocodeSource(s string) {
+	m.geocode_source = &s
+}
+
+// GeocodeSource returns the value of the "geocode_source" field in the mutation.
+func (m *LocationMutation) GeocodeSource() (r string, exists bool) {
+	v := m.geocode_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGeocodeSource returns the old "geocode_source" field's value of the Location entity.
+// If the Location object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LocationMutation) OldGeocodeSource(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGeocodeSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGeocodeSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGeocodeSource: %w", err)
+	}
+	return oldValue.GeocodeSource, nil
+}
+
+// ClearGeocodeSource clears the value of the "geocode_source" field.
+func (m *LocationMutation) ClearGeocodeSource() {
+	m.geocode_source = nil
+	m.clearedFields[location.FieldGeocodeSource] = struct{}{}
+}
+
+// GeocodeSourceCleared returns if the "geocode_source" field was cleared in this mutation.
+func (m *LocationMutation) GeocodeSourceCleared() bool {
+	_, ok := m.clearedFields[location.FieldGeocodeSource]
+	return ok
+}
+
+// ResetGeocodeSource resets all changes to the "geocode_source" field.
+func (m *LocationMutation) ResetGeocodeSource() {
+	m.geocode_source = nil
+	delete(m.clearedFields, location.FieldGeocodeSource)
+}
+
 // SetIsPrimary sets the "is_primary" field.
 func (m *LocationMutation) SetIsPrimary(b bool) {
 	m.is_primary = &b
@@ -18595,7 +18947,7 @@ func (m *LocationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *LocationMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 17)
 	if m.company_id != nil {
 		fields = append(fields, location.FieldCompanyID)
 	}
@@ -18625,6 +18977,18 @@ func (m *LocationMutation) Fields() []string {
 	}
 	if m.notes != nil {
 		fields = append(fields, location.FieldNotes)
+	}
+	if m.latitude != nil {
+		fields = append(fields, location.FieldLatitude)
+	}
+	if m.longitude != nil {
+		fields = append(fields, location.FieldLongitude)
+	}
+	if m.geocoded_at != nil {
+		fields = append(fields, location.FieldGeocodedAt)
+	}
+	if m.geocode_source != nil {
+		fields = append(fields, location.FieldGeocodeSource)
 	}
 	if m.is_primary != nil {
 		fields = append(fields, location.FieldIsPrimary)
@@ -18663,6 +19027,14 @@ func (m *LocationMutation) Field(name string) (ent.Value, bool) {
 		return m.ZipCode()
 	case location.FieldNotes:
 		return m.Notes()
+	case location.FieldLatitude:
+		return m.Latitude()
+	case location.FieldLongitude:
+		return m.Longitude()
+	case location.FieldGeocodedAt:
+		return m.GeocodedAt()
+	case location.FieldGeocodeSource:
+		return m.GeocodeSource()
 	case location.FieldIsPrimary:
 		return m.IsPrimary()
 	case location.FieldCreatedAt:
@@ -18698,6 +19070,14 @@ func (m *LocationMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldZipCode(ctx)
 	case location.FieldNotes:
 		return m.OldNotes(ctx)
+	case location.FieldLatitude:
+		return m.OldLatitude(ctx)
+	case location.FieldLongitude:
+		return m.OldLongitude(ctx)
+	case location.FieldGeocodedAt:
+		return m.OldGeocodedAt(ctx)
+	case location.FieldGeocodeSource:
+		return m.OldGeocodeSource(ctx)
 	case location.FieldIsPrimary:
 		return m.OldIsPrimary(ctx)
 	case location.FieldCreatedAt:
@@ -18783,6 +19163,34 @@ func (m *LocationMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetNotes(v)
 		return nil
+	case location.FieldLatitude:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLatitude(v)
+		return nil
+	case location.FieldLongitude:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLongitude(v)
+		return nil
+	case location.FieldGeocodedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGeocodedAt(v)
+		return nil
+	case location.FieldGeocodeSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGeocodeSource(v)
+		return nil
 	case location.FieldIsPrimary:
 		v, ok := value.(bool)
 		if !ok {
@@ -18818,6 +19226,12 @@ func (m *LocationMutation) AddedFields() []string {
 	if m.addobject_id != nil {
 		fields = append(fields, location.FieldObjectID)
 	}
+	if m.addlatitude != nil {
+		fields = append(fields, location.FieldLatitude)
+	}
+	if m.addlongitude != nil {
+		fields = append(fields, location.FieldLongitude)
+	}
 	return fields
 }
 
@@ -18830,6 +19244,10 @@ func (m *LocationMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedCompanyID()
 	case location.FieldObjectID:
 		return m.AddedObjectID()
+	case location.FieldLatitude:
+		return m.AddedLatitude()
+	case location.FieldLongitude:
+		return m.AddedLongitude()
 	}
 	return nil, false
 }
@@ -18853,6 +19271,20 @@ func (m *LocationMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddObjectID(v)
 		return nil
+	case location.FieldLatitude:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLatitude(v)
+		return nil
+	case location.FieldLongitude:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLongitude(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Location numeric field %s", name)
 }
@@ -18863,6 +19295,18 @@ func (m *LocationMutation) ClearedFields() []string {
 	var fields []string
 	if m.FieldCleared(location.FieldCompanyID) {
 		fields = append(fields, location.FieldCompanyID)
+	}
+	if m.FieldCleared(location.FieldLatitude) {
+		fields = append(fields, location.FieldLatitude)
+	}
+	if m.FieldCleared(location.FieldLongitude) {
+		fields = append(fields, location.FieldLongitude)
+	}
+	if m.FieldCleared(location.FieldGeocodedAt) {
+		fields = append(fields, location.FieldGeocodedAt)
+	}
+	if m.FieldCleared(location.FieldGeocodeSource) {
+		fields = append(fields, location.FieldGeocodeSource)
 	}
 	return fields
 }
@@ -18880,6 +19324,18 @@ func (m *LocationMutation) ClearField(name string) error {
 	switch name {
 	case location.FieldCompanyID:
 		m.ClearCompanyID()
+		return nil
+	case location.FieldLatitude:
+		m.ClearLatitude()
+		return nil
+	case location.FieldLongitude:
+		m.ClearLongitude()
+		return nil
+	case location.FieldGeocodedAt:
+		m.ClearGeocodedAt()
+		return nil
+	case location.FieldGeocodeSource:
+		m.ClearGeocodeSource()
 		return nil
 	}
 	return fmt.Errorf("unknown Location nullable field %s", name)
@@ -18918,6 +19374,18 @@ func (m *LocationMutation) ResetField(name string) error {
 		return nil
 	case location.FieldNotes:
 		m.ResetNotes()
+		return nil
+	case location.FieldLatitude:
+		m.ResetLatitude()
+		return nil
+	case location.FieldLongitude:
+		m.ResetLongitude()
+		return nil
+	case location.FieldGeocodedAt:
+		m.ResetGeocodedAt()
+		return nil
+	case location.FieldGeocodeSource:
+		m.ResetGeocodeSource()
 		return nil
 	case location.FieldIsPrimary:
 		m.ResetIsPrimary()

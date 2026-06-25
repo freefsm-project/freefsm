@@ -188,6 +188,100 @@ func (_u *LocationUpdate) SetNillableNotes(v *string) *LocationUpdate {
 	return _u
 }
 
+// SetLatitude sets the "latitude" field.
+func (_u *LocationUpdate) SetLatitude(v float64) *LocationUpdate {
+	_u.mutation.ResetLatitude()
+	_u.mutation.SetLatitude(v)
+	return _u
+}
+
+// SetNillableLatitude sets the "latitude" field if the given value is not nil.
+func (_u *LocationUpdate) SetNillableLatitude(v *float64) *LocationUpdate {
+	if v != nil {
+		_u.SetLatitude(*v)
+	}
+	return _u
+}
+
+// AddLatitude adds value to the "latitude" field.
+func (_u *LocationUpdate) AddLatitude(v float64) *LocationUpdate {
+	_u.mutation.AddLatitude(v)
+	return _u
+}
+
+// ClearLatitude clears the value of the "latitude" field.
+func (_u *LocationUpdate) ClearLatitude() *LocationUpdate {
+	_u.mutation.ClearLatitude()
+	return _u
+}
+
+// SetLongitude sets the "longitude" field.
+func (_u *LocationUpdate) SetLongitude(v float64) *LocationUpdate {
+	_u.mutation.ResetLongitude()
+	_u.mutation.SetLongitude(v)
+	return _u
+}
+
+// SetNillableLongitude sets the "longitude" field if the given value is not nil.
+func (_u *LocationUpdate) SetNillableLongitude(v *float64) *LocationUpdate {
+	if v != nil {
+		_u.SetLongitude(*v)
+	}
+	return _u
+}
+
+// AddLongitude adds value to the "longitude" field.
+func (_u *LocationUpdate) AddLongitude(v float64) *LocationUpdate {
+	_u.mutation.AddLongitude(v)
+	return _u
+}
+
+// ClearLongitude clears the value of the "longitude" field.
+func (_u *LocationUpdate) ClearLongitude() *LocationUpdate {
+	_u.mutation.ClearLongitude()
+	return _u
+}
+
+// SetGeocodedAt sets the "geocoded_at" field.
+func (_u *LocationUpdate) SetGeocodedAt(v time.Time) *LocationUpdate {
+	_u.mutation.SetGeocodedAt(v)
+	return _u
+}
+
+// SetNillableGeocodedAt sets the "geocoded_at" field if the given value is not nil.
+func (_u *LocationUpdate) SetNillableGeocodedAt(v *time.Time) *LocationUpdate {
+	if v != nil {
+		_u.SetGeocodedAt(*v)
+	}
+	return _u
+}
+
+// ClearGeocodedAt clears the value of the "geocoded_at" field.
+func (_u *LocationUpdate) ClearGeocodedAt() *LocationUpdate {
+	_u.mutation.ClearGeocodedAt()
+	return _u
+}
+
+// SetGeocodeSource sets the "geocode_source" field.
+func (_u *LocationUpdate) SetGeocodeSource(v string) *LocationUpdate {
+	_u.mutation.SetGeocodeSource(v)
+	return _u
+}
+
+// SetNillableGeocodeSource sets the "geocode_source" field if the given value is not nil.
+func (_u *LocationUpdate) SetNillableGeocodeSource(v *string) *LocationUpdate {
+	if v != nil {
+		_u.SetGeocodeSource(*v)
+	}
+	return _u
+}
+
+// ClearGeocodeSource clears the value of the "geocode_source" field.
+func (_u *LocationUpdate) ClearGeocodeSource() *LocationUpdate {
+	_u.mutation.ClearGeocodeSource()
+	return _u
+}
+
 // SetIsPrimary sets the "is_primary" field.
 func (_u *LocationUpdate) SetIsPrimary(v bool) *LocationUpdate {
 	_u.mutation.SetIsPrimary(v)
@@ -296,6 +390,36 @@ func (_u *LocationUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(location.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Latitude(); ok {
+		_spec.SetField(location.FieldLatitude, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedLatitude(); ok {
+		_spec.AddField(location.FieldLatitude, field.TypeFloat64, value)
+	}
+	if _u.mutation.LatitudeCleared() {
+		_spec.ClearField(location.FieldLatitude, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.Longitude(); ok {
+		_spec.SetField(location.FieldLongitude, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedLongitude(); ok {
+		_spec.AddField(location.FieldLongitude, field.TypeFloat64, value)
+	}
+	if _u.mutation.LongitudeCleared() {
+		_spec.ClearField(location.FieldLongitude, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.GeocodedAt(); ok {
+		_spec.SetField(location.FieldGeocodedAt, field.TypeTime, value)
+	}
+	if _u.mutation.GeocodedAtCleared() {
+		_spec.ClearField(location.FieldGeocodedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.GeocodeSource(); ok {
+		_spec.SetField(location.FieldGeocodeSource, field.TypeString, value)
+	}
+	if _u.mutation.GeocodeSourceCleared() {
+		_spec.ClearField(location.FieldGeocodeSource, field.TypeString)
 	}
 	if value, ok := _u.mutation.IsPrimary(); ok {
 		_spec.SetField(location.FieldIsPrimary, field.TypeBool, value)
@@ -483,6 +607,100 @@ func (_u *LocationUpdateOne) SetNillableNotes(v *string) *LocationUpdateOne {
 	return _u
 }
 
+// SetLatitude sets the "latitude" field.
+func (_u *LocationUpdateOne) SetLatitude(v float64) *LocationUpdateOne {
+	_u.mutation.ResetLatitude()
+	_u.mutation.SetLatitude(v)
+	return _u
+}
+
+// SetNillableLatitude sets the "latitude" field if the given value is not nil.
+func (_u *LocationUpdateOne) SetNillableLatitude(v *float64) *LocationUpdateOne {
+	if v != nil {
+		_u.SetLatitude(*v)
+	}
+	return _u
+}
+
+// AddLatitude adds value to the "latitude" field.
+func (_u *LocationUpdateOne) AddLatitude(v float64) *LocationUpdateOne {
+	_u.mutation.AddLatitude(v)
+	return _u
+}
+
+// ClearLatitude clears the value of the "latitude" field.
+func (_u *LocationUpdateOne) ClearLatitude() *LocationUpdateOne {
+	_u.mutation.ClearLatitude()
+	return _u
+}
+
+// SetLongitude sets the "longitude" field.
+func (_u *LocationUpdateOne) SetLongitude(v float64) *LocationUpdateOne {
+	_u.mutation.ResetLongitude()
+	_u.mutation.SetLongitude(v)
+	return _u
+}
+
+// SetNillableLongitude sets the "longitude" field if the given value is not nil.
+func (_u *LocationUpdateOne) SetNillableLongitude(v *float64) *LocationUpdateOne {
+	if v != nil {
+		_u.SetLongitude(*v)
+	}
+	return _u
+}
+
+// AddLongitude adds value to the "longitude" field.
+func (_u *LocationUpdateOne) AddLongitude(v float64) *LocationUpdateOne {
+	_u.mutation.AddLongitude(v)
+	return _u
+}
+
+// ClearLongitude clears the value of the "longitude" field.
+func (_u *LocationUpdateOne) ClearLongitude() *LocationUpdateOne {
+	_u.mutation.ClearLongitude()
+	return _u
+}
+
+// SetGeocodedAt sets the "geocoded_at" field.
+func (_u *LocationUpdateOne) SetGeocodedAt(v time.Time) *LocationUpdateOne {
+	_u.mutation.SetGeocodedAt(v)
+	return _u
+}
+
+// SetNillableGeocodedAt sets the "geocoded_at" field if the given value is not nil.
+func (_u *LocationUpdateOne) SetNillableGeocodedAt(v *time.Time) *LocationUpdateOne {
+	if v != nil {
+		_u.SetGeocodedAt(*v)
+	}
+	return _u
+}
+
+// ClearGeocodedAt clears the value of the "geocoded_at" field.
+func (_u *LocationUpdateOne) ClearGeocodedAt() *LocationUpdateOne {
+	_u.mutation.ClearGeocodedAt()
+	return _u
+}
+
+// SetGeocodeSource sets the "geocode_source" field.
+func (_u *LocationUpdateOne) SetGeocodeSource(v string) *LocationUpdateOne {
+	_u.mutation.SetGeocodeSource(v)
+	return _u
+}
+
+// SetNillableGeocodeSource sets the "geocode_source" field if the given value is not nil.
+func (_u *LocationUpdateOne) SetNillableGeocodeSource(v *string) *LocationUpdateOne {
+	if v != nil {
+		_u.SetGeocodeSource(*v)
+	}
+	return _u
+}
+
+// ClearGeocodeSource clears the value of the "geocode_source" field.
+func (_u *LocationUpdateOne) ClearGeocodeSource() *LocationUpdateOne {
+	_u.mutation.ClearGeocodeSource()
+	return _u
+}
+
 // SetIsPrimary sets the "is_primary" field.
 func (_u *LocationUpdateOne) SetIsPrimary(v bool) *LocationUpdateOne {
 	_u.mutation.SetIsPrimary(v)
@@ -621,6 +839,36 @@ func (_u *LocationUpdateOne) sqlSave(ctx context.Context) (_node *Location, err 
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(location.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Latitude(); ok {
+		_spec.SetField(location.FieldLatitude, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedLatitude(); ok {
+		_spec.AddField(location.FieldLatitude, field.TypeFloat64, value)
+	}
+	if _u.mutation.LatitudeCleared() {
+		_spec.ClearField(location.FieldLatitude, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.Longitude(); ok {
+		_spec.SetField(location.FieldLongitude, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedLongitude(); ok {
+		_spec.AddField(location.FieldLongitude, field.TypeFloat64, value)
+	}
+	if _u.mutation.LongitudeCleared() {
+		_spec.ClearField(location.FieldLongitude, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.GeocodedAt(); ok {
+		_spec.SetField(location.FieldGeocodedAt, field.TypeTime, value)
+	}
+	if _u.mutation.GeocodedAtCleared() {
+		_spec.ClearField(location.FieldGeocodedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.GeocodeSource(); ok {
+		_spec.SetField(location.FieldGeocodeSource, field.TypeString, value)
+	}
+	if _u.mutation.GeocodeSourceCleared() {
+		_spec.ClearField(location.FieldGeocodeSource, field.TypeString)
 	}
 	if value, ok := _u.mutation.IsPrimary(); ok {
 		_spec.SetField(location.FieldIsPrimary, field.TypeBool, value)

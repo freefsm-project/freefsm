@@ -524,6 +524,34 @@ func (_u *CompanySettingsUpdate) SetNillablePdfShowLineItemDescriptions(v *bool)
 	return _u
 }
 
+// SetMapTileURL sets the "map_tile_url" field.
+func (_u *CompanySettingsUpdate) SetMapTileURL(v string) *CompanySettingsUpdate {
+	_u.mutation.SetMapTileURL(v)
+	return _u
+}
+
+// SetNillableMapTileURL sets the "map_tile_url" field if the given value is not nil.
+func (_u *CompanySettingsUpdate) SetNillableMapTileURL(v *string) *CompanySettingsUpdate {
+	if v != nil {
+		_u.SetMapTileURL(*v)
+	}
+	return _u
+}
+
+// SetGeocoderURL sets the "geocoder_url" field.
+func (_u *CompanySettingsUpdate) SetGeocoderURL(v string) *CompanySettingsUpdate {
+	_u.mutation.SetGeocoderURL(v)
+	return _u
+}
+
+// SetNillableGeocoderURL sets the "geocoder_url" field if the given value is not nil.
+func (_u *CompanySettingsUpdate) SetNillableGeocoderURL(v *string) *CompanySettingsUpdate {
+	if v != nil {
+		_u.SetGeocoderURL(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CompanySettingsUpdate) SetUpdatedAt(v time.Time) *CompanySettingsUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -693,6 +721,12 @@ func (_u *CompanySettingsUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.PdfShowLineItemDescriptions(); ok {
 		_spec.SetField(companysettings.FieldPdfShowLineItemDescriptions, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.MapTileURL(); ok {
+		_spec.SetField(companysettings.FieldMapTileURL, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GeocoderURL(); ok {
+		_spec.SetField(companysettings.FieldGeocoderURL, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(companysettings.FieldUpdatedAt, field.TypeTime, value)
@@ -1213,6 +1247,34 @@ func (_u *CompanySettingsUpdateOne) SetNillablePdfShowLineItemDescriptions(v *bo
 	return _u
 }
 
+// SetMapTileURL sets the "map_tile_url" field.
+func (_u *CompanySettingsUpdateOne) SetMapTileURL(v string) *CompanySettingsUpdateOne {
+	_u.mutation.SetMapTileURL(v)
+	return _u
+}
+
+// SetNillableMapTileURL sets the "map_tile_url" field if the given value is not nil.
+func (_u *CompanySettingsUpdateOne) SetNillableMapTileURL(v *string) *CompanySettingsUpdateOne {
+	if v != nil {
+		_u.SetMapTileURL(*v)
+	}
+	return _u
+}
+
+// SetGeocoderURL sets the "geocoder_url" field.
+func (_u *CompanySettingsUpdateOne) SetGeocoderURL(v string) *CompanySettingsUpdateOne {
+	_u.mutation.SetGeocoderURL(v)
+	return _u
+}
+
+// SetNillableGeocoderURL sets the "geocoder_url" field if the given value is not nil.
+func (_u *CompanySettingsUpdateOne) SetNillableGeocoderURL(v *string) *CompanySettingsUpdateOne {
+	if v != nil {
+		_u.SetGeocoderURL(*v)
+	}
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *CompanySettingsUpdateOne) SetUpdatedAt(v time.Time) *CompanySettingsUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -1412,6 +1474,12 @@ func (_u *CompanySettingsUpdateOne) sqlSave(ctx context.Context) (_node *Company
 	}
 	if value, ok := _u.mutation.PdfShowLineItemDescriptions(); ok {
 		_spec.SetField(companysettings.FieldPdfShowLineItemDescriptions, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.MapTileURL(); ok {
+		_spec.SetField(companysettings.FieldMapTileURL, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GeocoderURL(); ok {
+		_spec.SetField(companysettings.FieldGeocoderURL, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(companysettings.FieldUpdatedAt, field.TypeTime, value)

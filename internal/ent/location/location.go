@@ -33,6 +33,14 @@ const (
 	FieldZipCode = "zip_code"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// FieldLatitude holds the string denoting the latitude field in the database.
+	FieldLatitude = "latitude"
+	// FieldLongitude holds the string denoting the longitude field in the database.
+	FieldLongitude = "longitude"
+	// FieldGeocodedAt holds the string denoting the geocoded_at field in the database.
+	FieldGeocodedAt = "geocoded_at"
+	// FieldGeocodeSource holds the string denoting the geocode_source field in the database.
+	FieldGeocodeSource = "geocode_source"
 	// FieldIsPrimary holds the string denoting the is_primary field in the database.
 	FieldIsPrimary = "is_primary"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -56,6 +64,10 @@ var Columns = []string{
 	FieldState,
 	FieldZipCode,
 	FieldNotes,
+	FieldLatitude,
+	FieldLongitude,
+	FieldGeocodedAt,
+	FieldGeocodeSource,
 	FieldIsPrimary,
 	FieldCreatedAt,
 	FieldUpdatedAt,
@@ -150,6 +162,26 @@ func ByZipCode(opts ...sql.OrderTermOption) OrderOption {
 // ByNotes orders the results by the notes field.
 func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNotes, opts...).ToFunc()
+}
+
+// ByLatitude orders the results by the latitude field.
+func ByLatitude(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLatitude, opts...).ToFunc()
+}
+
+// ByLongitude orders the results by the longitude field.
+func ByLongitude(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLongitude, opts...).ToFunc()
+}
+
+// ByGeocodedAt orders the results by the geocoded_at field.
+func ByGeocodedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGeocodedAt, opts...).ToFunc()
+}
+
+// ByGeocodeSource orders the results by the geocode_source field.
+func ByGeocodeSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGeocodeSource, opts...).ToFunc()
 }
 
 // ByIsPrimary orders the results by the is_primary field.

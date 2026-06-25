@@ -97,16 +97,26 @@ type UserUpdateParams struct {
 
 func (s *UserService) Update(ctx context.Context, id int64, p UserUpdateParams) (*ent.User, error) {
 	u := s.client.User.UpdateOneID(id)
-	if p.Name != nil { u.SetName(*p.Name) }
-	if p.Email != nil { u.SetEmail(*p.Email) }
-	if p.Role != nil { u.SetRole(*p.Role) }
+	if p.Name != nil {
+		u.SetName(*p.Name)
+	}
+	if p.Email != nil {
+		u.SetEmail(*p.Email)
+	}
+	if p.Role != nil {
+		u.SetRole(*p.Role)
+	}
 	if p.Password != nil {
 		hash, err := bcrypt.GenerateFromPassword([]byte(*p.Password), bcrypt.DefaultCost)
-		if err != nil { return nil, fmt.Errorf("hash password: %w", err) }
+		if err != nil {
+			return nil, fmt.Errorf("hash password: %w", err)
+		}
 		u.SetPasswordHash(string(hash))
 	}
 	ret, err := u.Save(ctx)
-	if err != nil { return nil, fmt.Errorf("update user: %w", err) }
+	if err != nil {
+		return nil, fmt.Errorf("update user: %w", err)
+	}
 	return ret, nil
 }
 
@@ -116,7 +126,9 @@ func (s *UserService) SetActive(ctx context.Context, id int64, active bool) erro
 
 func (s *UserService) SetPassword(ctx context.Context, id int64, password string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil { return fmt.Errorf("hash password: %w", err) }
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
 	return s.client.User.UpdateOneID(id).SetPasswordHash(string(hash)).Exec(ctx)
 }
 
@@ -155,15 +167,31 @@ func (s *UserService) ValidatePassword(password string, cs *ent.CompanySettings)
 	hasDigit := false
 	hasSpecial := false
 	for _, r := range password {
-		if unicode.IsUpper(r) { hasUpper = true }
-		if unicode.IsLower(r) { hasLower = true }
-		if unicode.IsDigit(r) { hasDigit = true }
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) { hasSpecial = true }
+		if unicode.IsUpper(r) {
+			hasUpper = true
+		}
+		if unicode.IsLower(r) {
+			hasLower = true
+		}
+		if unicode.IsDigit(r) {
+			hasDigit = true
+		}
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
+			hasSpecial = true
+		}
 	}
-	if cs.PasswordRequireUppercase && !hasUpper { return fmt.Errorf("password must contain an uppercase letter") }
-	if cs.PasswordRequireLowercase && !hasLower { return fmt.Errorf("password must contain a lowercase letter") }
-	if cs.PasswordRequireDigit && !hasDigit { return fmt.Errorf("password must contain a digit") }
-	if cs.PasswordRequireSpecial && !hasSpecial { return fmt.Errorf("password must contain a special character") }
+	if cs.PasswordRequireUppercase && !hasUpper {
+		return fmt.Errorf("password must contain an uppercase letter")
+	}
+	if cs.PasswordRequireLowercase && !hasLower {
+		return fmt.Errorf("password must contain a lowercase letter")
+	}
+	if cs.PasswordRequireDigit && !hasDigit {
+		return fmt.Errorf("password must contain a digit")
+	}
+	if cs.PasswordRequireSpecial && !hasSpecial {
+		return fmt.Errorf("password must contain a special character")
+	}
 	return nil
 }
 

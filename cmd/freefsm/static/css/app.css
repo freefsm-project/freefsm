@@ -602,6 +602,58 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 /* Calendar */
+.schedule-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.schedule-primary-tabs,
+.schedule-period-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.schedule-primary-tabs a[role="button"],
+.schedule-period-tabs a {
+  margin: 0;
+}
+
+.schedule-tab:not(.active) {
+  background: transparent;
+  border-color: var(--pico-primary);
+  color: var(--pico-primary);
+}
+
+.schedule-tab.active,
+.schedule-period-tab.active {
+  background: var(--pico-primary);
+  border-color: var(--pico-primary);
+  color: var(--pico-primary-inverse);
+}
+
+.schedule-period-tabs {
+  margin-bottom: 0.75rem;
+}
+
+.schedule-period-tab {
+  padding: 0.25rem 0.6rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.calendar-drop-slot.drag-over,
+.dispatch-slot.drag-over {
+  outline: 2px solid var(--pico-primary);
+  outline-offset: -2px;
+  background: rgba(37, 99, 235, 0.1);
+}
+
 table.calendar {
   table-layout: fixed;
   width: 100%;
@@ -786,6 +838,96 @@ table.week-view td.hour, table.day-view td.hour {
   font-size: 0.75rem;
   color: var(--pico-muted-color);
   padding-right: 0.5rem;
+}
+
+.dispatch-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.dispatch-unscheduled {
+  padding: 0.5rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+}
+
+.dispatch-unscheduled header {
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.dispatch-matrix-wrapper {
+  overflow: auto;
+  max-height: calc(100vh - 230px);
+}
+
+.dispatch-matrix {
+  min-width: 760px;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.dispatch-matrix th,
+.dispatch-matrix td {
+  padding: 0.35rem;
+  vertical-align: top;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+  border-right: 1px solid var(--pico-muted-border-color);
+}
+
+.dispatch-matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--pico-muted-color);
+  text-align: center;
+  font-size: 0.78rem;
+}
+
+.dispatch-tech-heading,
+.dispatch-tech-name {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  width: 140px;
+  background: var(--pico-card-background-color);
+}
+
+.dispatch-slot {
+  min-width: 120px;
+  min-height: 72px;
+  background: var(--pico-background-color);
+}
+
+.dispatch-card {
+  display: block;
+  padding: 0.45rem;
+  margin-bottom: 0.45rem;
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-primary);
+  color: var(--pico-primary-inverse);
+  text-decoration: none;
+  cursor: grab;
+  font-size: 0.78rem;
+}
+
+.dispatch-card:active {
+  cursor: grabbing;
+}
+
+.dispatch-card strong,
+.dispatch-card small {
+  display: block;
+}
+
+.dispatch-empty {
+  color: var(--pico-muted-color);
+  font-size: 0.85rem;
 }
 
 /* Table Polish */

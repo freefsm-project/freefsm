@@ -37,6 +37,14 @@ type Location struct {
 	ZipCode string `json:"zip_code,omitempty"`
 	// Notes holds the value of the "notes" field.
 	Notes string `json:"notes,omitempty"`
+	// Latitude holds the value of the "latitude" field.
+	Latitude *float64 `json:"latitude,omitempty"`
+	// Longitude holds the value of the "longitude" field.
+	Longitude *float64 `json:"longitude,omitempty"`
+	// GeocodedAt holds the value of the "geocoded_at" field.
+	GeocodedAt *time.Time `json:"geocoded_at,omitempty"`
+	// GeocodeSource holds the value of the "geocode_source" field.
+	GeocodeSource *string `json:"geocode_source,omitempty"`
 	// IsPrimary holds the value of the "is_primary" field.
 	IsPrimary bool `json:"is_primary,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -53,11 +61,13 @@ func (*Location) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case location.FieldIsPrimary:
 			values[i] = new(sql.NullBool)
+		case location.FieldLatitude, location.FieldLongitude:
+			values[i] = new(sql.NullFloat64)
 		case location.FieldID, location.FieldCompanyID, location.FieldObjectID:
 			values[i] = new(sql.NullInt64)
-		case location.FieldObjectType, location.FieldTitle, location.FieldAddress1, location.FieldAddress2, location.FieldCity, location.FieldState, location.FieldZipCode, location.FieldNotes:
+		case location.FieldObjectType, location.FieldTitle, location.FieldAddress1, location.FieldAddress2, location.FieldCity, location.FieldState, location.FieldZipCode, location.FieldNotes, location.FieldGeocodeSource:
 			values[i] = new(sql.NullString)
-		case location.FieldCreatedAt, location.FieldUpdatedAt:
+		case location.FieldGeocodedAt, location.FieldCreatedAt, location.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -140,6 +150,34 @@ func (_m *Location) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field notes", values[i])
 			} else if value.Valid {
 				_m.Notes = value.String
+			}
+		case location.FieldLatitude:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field latitude", values[i])
+			} else if value.Valid {
+				_m.Latitude = new(float64)
+				*_m.Latitude = value.Float64
+			}
+		case location.FieldLongitude:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field longitude", values[i])
+			} else if value.Valid {
+				_m.Longitude = new(float64)
+				*_m.Longitude = value.Float64
+			}
+		case location.FieldGeocodedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field geocoded_at", values[i])
+			} else if value.Valid {
+				_m.GeocodedAt = new(time.Time)
+				*_m.GeocodedAt = value.Time
+			}
+		case location.FieldGeocodeSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field geocode_source", values[i])
+			} else if value.Valid {
+				_m.GeocodeSource = new(string)
+				*_m.GeocodeSource = value.String
 			}
 		case location.FieldIsPrimary:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -226,6 +264,26 @@ func (_m *Location) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("notes=")
 	builder.WriteString(_m.Notes)
+	builder.WriteString(", ")
+	if v := _m.Latitude; v != nil {
+		builder.WriteString("latitude=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.Longitude; v != nil {
+		builder.WriteString("longitude=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.GeocodedAt; v != nil {
+		builder.WriteString("geocoded_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.GeocodeSource; v != nil {
+		builder.WriteString("geocode_source=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("is_primary=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsPrimary))

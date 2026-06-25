@@ -50,6 +50,8 @@ type CompanySettingsParams struct {
 	InvoiceFooter               string
 	InvoicePaymentTerms         string
 	PDFShowLineItemDescriptions bool
+	MapTileURL                  string
+	GeocoderURL                 string
 }
 
 func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsParams) error {
@@ -89,6 +91,8 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetInvoiceFooter(p.InvoiceFooter).
 		SetInvoicePaymentTerms(p.InvoicePaymentTerms).
 		SetPdfShowLineItemDescriptions(p.PDFShowLineItemDescriptions).
+		SetMapTileURL(p.MapTileURL).
+		SetGeocoderURL(p.GeocoderURL).
 		Save(ctx)
 	return err
 }

@@ -219,6 +219,16 @@ func PdfShowLineItemDescriptions(v bool) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldPdfShowLineItemDescriptions, v))
 }
 
+// MapTileURL applies equality check predicate on the "map_tile_url" field. It's identical to MapTileURLEQ.
+func MapTileURL(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldMapTileURL, v))
+}
+
+// GeocoderURL applies equality check predicate on the "geocoder_url" field. It's identical to GeocoderURLEQ.
+func GeocoderURL(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldGeocoderURL, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldCreatedAt, v))
@@ -2007,6 +2017,136 @@ func PdfShowLineItemDescriptionsEQ(v bool) predicate.CompanySettings {
 // PdfShowLineItemDescriptionsNEQ applies the NEQ predicate on the "pdf_show_line_item_descriptions" field.
 func PdfShowLineItemDescriptionsNEQ(v bool) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldNEQ(FieldPdfShowLineItemDescriptions, v))
+}
+
+// MapTileURLEQ applies the EQ predicate on the "map_tile_url" field.
+func MapTileURLEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldMapTileURL, v))
+}
+
+// MapTileURLNEQ applies the NEQ predicate on the "map_tile_url" field.
+func MapTileURLNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldMapTileURL, v))
+}
+
+// MapTileURLIn applies the In predicate on the "map_tile_url" field.
+func MapTileURLIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldMapTileURL, vs...))
+}
+
+// MapTileURLNotIn applies the NotIn predicate on the "map_tile_url" field.
+func MapTileURLNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldMapTileURL, vs...))
+}
+
+// MapTileURLGT applies the GT predicate on the "map_tile_url" field.
+func MapTileURLGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldMapTileURL, v))
+}
+
+// MapTileURLGTE applies the GTE predicate on the "map_tile_url" field.
+func MapTileURLGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldMapTileURL, v))
+}
+
+// MapTileURLLT applies the LT predicate on the "map_tile_url" field.
+func MapTileURLLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldMapTileURL, v))
+}
+
+// MapTileURLLTE applies the LTE predicate on the "map_tile_url" field.
+func MapTileURLLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldMapTileURL, v))
+}
+
+// MapTileURLContains applies the Contains predicate on the "map_tile_url" field.
+func MapTileURLContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldMapTileURL, v))
+}
+
+// MapTileURLHasPrefix applies the HasPrefix predicate on the "map_tile_url" field.
+func MapTileURLHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldMapTileURL, v))
+}
+
+// MapTileURLHasSuffix applies the HasSuffix predicate on the "map_tile_url" field.
+func MapTileURLHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldMapTileURL, v))
+}
+
+// MapTileURLEqualFold applies the EqualFold predicate on the "map_tile_url" field.
+func MapTileURLEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldMapTileURL, v))
+}
+
+// MapTileURLContainsFold applies the ContainsFold predicate on the "map_tile_url" field.
+func MapTileURLContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldMapTileURL, v))
+}
+
+// GeocoderURLEQ applies the EQ predicate on the "geocoder_url" field.
+func GeocoderURLEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldGeocoderURL, v))
+}
+
+// GeocoderURLNEQ applies the NEQ predicate on the "geocoder_url" field.
+func GeocoderURLNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldGeocoderURL, v))
+}
+
+// GeocoderURLIn applies the In predicate on the "geocoder_url" field.
+func GeocoderURLIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldGeocoderURL, vs...))
+}
+
+// GeocoderURLNotIn applies the NotIn predicate on the "geocoder_url" field.
+func GeocoderURLNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldGeocoderURL, vs...))
+}
+
+// GeocoderURLGT applies the GT predicate on the "geocoder_url" field.
+func GeocoderURLGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldGeocoderURL, v))
+}
+
+// GeocoderURLGTE applies the GTE predicate on the "geocoder_url" field.
+func GeocoderURLGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldGeocoderURL, v))
+}
+
+// GeocoderURLLT applies the LT predicate on the "geocoder_url" field.
+func GeocoderURLLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldGeocoderURL, v))
+}
+
+// GeocoderURLLTE applies the LTE predicate on the "geocoder_url" field.
+func GeocoderURLLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldGeocoderURL, v))
+}
+
+// GeocoderURLContains applies the Contains predicate on the "geocoder_url" field.
+func GeocoderURLContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldGeocoderURL, v))
+}
+
+// GeocoderURLHasPrefix applies the HasPrefix predicate on the "geocoder_url" field.
+func GeocoderURLHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldGeocoderURL, v))
+}
+
+// GeocoderURLHasSuffix applies the HasSuffix predicate on the "geocoder_url" field.
+func GeocoderURLHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldGeocoderURL, v))
+}
+
+// GeocoderURLEqualFold applies the EqualFold predicate on the "geocoder_url" field.
+func GeocoderURLEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldGeocoderURL, v))
+}
+
+// GeocoderURLContainsFold applies the ContainsFold predicate on the "geocoder_url" field.
+func GeocoderURLContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldGeocoderURL, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

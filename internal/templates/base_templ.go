@@ -81,14 +81,14 @@ func Layout(title string, children ...templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</title><link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/static/img/favicon-32x32.png\"><link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"/static/img/favicon-16x16.png\"><link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/static/img/apple-touch-icon.png\"><link rel=\"manifest\" href=\"/static/img/site.webmanifest\"><link rel=\"stylesheet\" href=\"/static/css/pico.min.css\"><link rel=\"stylesheet\" href=\"/static/css/app.css\"><script src=\"/static/js/htmx.min.js\"></script><script>\n\t\t\t\tdocument.addEventListener('htmx:configRequest', function(evt) {\n\t\t\t\t\tvar csrf = document.querySelector('meta[name=\"csrf-token\"]');\n\t\t\t\t\tif (csrf) {\n\t\t\t\t\t\tevt.detail.headers['X-CSRF-Token'] = csrf.getAttribute('content');\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t</script><script src=\"/static/js/alpine.min.js\" defer></script><script>\n\t\t\t\tdocument.addEventListener('htmx:afterSettle', function(evt) {\n\t\t\t\t\tif (window.Alpine && evt.detail && evt.detail.elt) {\n\t\t\t\t\t\tAlpine.initTree(evt.detail.elt);\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t</script><script>\n\t\t\t\tfunction toggleTheme() {\n\t\t\t\t\tvar html = document.documentElement;\n\t\t\t\t\tvar current = html.getAttribute('data-theme');\n\t\t\t\t\tvar next = current === 'dark' ? 'light' : 'dark';\n\t\t\t\t\thtml.setAttribute('data-theme', next);\n\t\t\t\t\tdocument.cookie = 'theme=' + next + ';path=/;max-age=31536000';\n\t\t\t\t}\n\t\t\t\tfunction closeSidebar() {\n\t\t\t\t\tdocument.getElementById('sidebar').classList.remove('open');\n\t\t\t\t}\n\t\t\t\t// Close sidebar when clicking a link inside it (mobile)\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar sidebar = document.getElementById('sidebar');\n\t\t\t\t\tif (sidebar && sidebar.classList.contains('open')) {\n\t\t\t\t\t\tvar link = e.target.closest('nav a, .dropdown a');\n\t\t\t\t\t\tif (link) {\n\t\t\t\t\t\t\tcloseSidebar();\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t</script></head><body hx-boost=\"true\"><aside class=\"sidebar\" id=\"sidebar\"><div class=\"sidebar-brand\"><img src=\"/static/img/gear.png\" alt=\"\"> <strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</title><link rel=\"icon\" type=\"image/png\" sizes=\"32x32\" href=\"/static/img/favicon-32x32.png\"><link rel=\"icon\" type=\"image/png\" sizes=\"16x16\" href=\"/static/img/favicon-16x16.png\"><link rel=\"apple-touch-icon\" sizes=\"180x180\" href=\"/static/img/apple-touch-icon.png\"><link rel=\"manifest\" href=\"/static/img/site.webmanifest\"><link rel=\"stylesheet\" href=\"/static/css/pico.min.css\"><link rel=\"stylesheet\" href=\"/static/third_party/leaflet/leaflet.css\"><link rel=\"stylesheet\" href=\"/static/css/app.css\"><script src=\"/static/js/htmx.min.js\"></script><script>\n\t\t\t\tdocument.addEventListener('htmx:configRequest', function(evt) {\n\t\t\t\t\tvar csrf = document.querySelector('meta[name=\"csrf-token\"]');\n\t\t\t\t\tif (csrf) {\n\t\t\t\t\t\tevt.detail.headers['X-CSRF-Token'] = csrf.getAttribute('content');\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t</script><script src=\"/static/js/alpine.min.js\" defer></script><script>\n\t\t\t\tdocument.addEventListener('htmx:afterSettle', function(evt) {\n\t\t\t\t\tif (window.Alpine && evt.detail && evt.detail.elt) {\n\t\t\t\t\t\tAlpine.initTree(evt.detail.elt);\n\t\t\t\t\t}\n\t\t\t\t\tinitScheduleMap();\n\t\t\t\t});\n\t\t\t</script><script>\n\t\t\t\tfunction loadLeaflet(callback) {\n\t\t\t\t\tif (window.L) {\n\t\t\t\t\t\tcallback();\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tif (window.__freefsmLeafletLoading) {\n\t\t\t\t\t\twindow.__freefsmLeafletCallbacks = window.__freefsmLeafletCallbacks || [];\n\t\t\t\t\t\twindow.__freefsmLeafletCallbacks.push(callback);\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\twindow.__freefsmLeafletLoading = true;\n\t\t\t\t\twindow.__freefsmLeafletCallbacks = [callback];\n\t\t\t\t\tvar script = document.createElement('script');\n\t\t\t\t\tscript.src = '/static/third_party/leaflet/leaflet.js';\n\t\t\t\t\tscript.onload = function() {\n\t\t\t\t\t\twindow.__freefsmLeafletLoading = false;\n\t\t\t\t\t\t(window.__freefsmLeafletCallbacks || []).splice(0).forEach(function(fn) { fn(); });\n\t\t\t\t\t};\n\t\t\t\t\tdocument.head.appendChild(script);\n\t\t\t\t}\n\t\t\t\tfunction initScheduleMap() {\n\t\t\t\t\tvar mapEl = document.getElementById('schedule-map');\n\t\t\t\t\tif (!mapEl || mapEl.dataset.initialized === 'true') return;\n\t\t\t\t\tloadLeaflet(function() {\n\t\t\t\t\t\tif (!window.L || !document.body.contains(mapEl) || mapEl.dataset.initialized === 'true') return;\n\t\t\t\t\t\tmapEl.dataset.initialized = 'true';\n\t\t\t\t\t\tvar map = L.map(mapEl).setView([39.8283, -98.5795], 4);\n\t\t\t\t\t\tL.tileLayer(mapEl.dataset.tileUrl, {\n\t\t\t\t\t\t\tmaxZoom: 19,\n\t\t\t\t\t\t\tattribution: '&copy; OpenStreetMap contributors'\n\t\t\t\t\t\t}).addTo(map);\n\t\t\t\t\t\tvar bounds = [];\n\t\t\t\t\t\tdocument.querySelectorAll('#schedule-map-markers [data-lat]').forEach(function(el) {\n\t\t\t\t\t\t\tvar lat = parseFloat(el.dataset.lat);\n\t\t\t\t\t\t\tvar lng = parseFloat(el.dataset.lng);\n\t\t\t\t\t\t\tif (!isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) return;\n\t\t\t\t\t\t\tbounds.push([lat, lng]);\n\t\t\t\t\t\t\tvar popup = document.createElement('div');\n\t\t\t\t\t\t\tvar link = document.createElement('a');\n\t\t\t\t\t\t\tlink.href = el.dataset.url;\n\t\t\t\t\t\t\tvar strong = document.createElement('strong');\n\t\t\t\t\t\t\tstrong.textContent = el.dataset.title || 'Job';\n\t\t\t\t\t\t\tlink.appendChild(strong);\n\t\t\t\t\t\t\tpopup.appendChild(link);\n\t\t\t\t\t\t\tpopup.appendChild(document.createElement('br'));\n\t\t\t\t\t\t\tpopup.appendChild(document.createTextNode(el.dataset.customer || ''));\n\t\t\t\t\t\t\tL.marker([lat, lng]).addTo(map).bindPopup(popup);\n\t\t\t\t\t\t});\n\t\t\t\t\t\tif (bounds.length) map.fitBounds(bounds, { padding: [24, 24] });\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tfunction toggleTheme() {\n\t\t\t\t\tvar html = document.documentElement;\n\t\t\t\t\tvar current = html.getAttribute('data-theme');\n\t\t\t\t\tvar next = current === 'dark' ? 'light' : 'dark';\n\t\t\t\t\thtml.setAttribute('data-theme', next);\n\t\t\t\t\tdocument.cookie = 'theme=' + next + ';path=/;max-age=31536000';\n\t\t\t\t}\n\t\t\t\tfunction closeSidebar() {\n\t\t\t\t\tdocument.getElementById('sidebar').classList.remove('open');\n\t\t\t\t}\n\t\t\t\t// Close sidebar when clicking a link inside it (mobile)\n\t\t\t\tdocument.addEventListener('click', function(e) {\n\t\t\t\t\tvar sidebar = document.getElementById('sidebar');\n\t\t\t\t\tif (sidebar && sidebar.classList.contains('open')) {\n\t\t\t\t\t\tvar link = e.target.closest('nav a, .dropdown a');\n\t\t\t\t\t\tif (link) {\n\t\t\t\t\t\t\tcloseSidebar();\n\t\t\t\t\t\t}\n\t\t\t\t\t}\n\t\t\t\t});\n\t\t\t\tdocument.addEventListener('DOMContentLoaded', initScheduleMap);\n\t\t\t</script></head><body hx-boost=\"true\"><aside class=\"sidebar\" id=\"sidebar\"><div class=\"sidebar-brand\"><img src=\"/static/img/gear.png\" alt=\"\"> <strong>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var6 string
 		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(companyBrandName(companyFromCtx(ctx)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 62, Col: 52}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 116, Col: 52}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 		if templ_7745c5c3_Err != nil {
@@ -367,7 +367,7 @@ func Layout(title string, children ...templ.Component) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(pageTitleFromPath(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 110, Col: 53}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 164, Col: 53}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 		if templ_7745c5c3_Err != nil {
@@ -385,7 +385,7 @@ func Layout(title string, children ...templ.Component) templ.Component {
 			var templ_7745c5c3_Var30 string
 			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(getUser(ctx).Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 131, Col: 36}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 185, Col: 36}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 			if templ_7745c5c3_Err != nil {
@@ -398,7 +398,7 @@ func Layout(title string, children ...templ.Component) templ.Component {
 			var templ_7745c5c3_Var31 string
 			templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 136, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 190, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 			if templ_7745c5c3_Err != nil {
@@ -421,7 +421,7 @@ func Layout(title string, children ...templ.Component) templ.Component {
 			var templ_7745c5c3_Var32 string
 			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(getFlash(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 147, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/base.templ`, Line: 201, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 			if templ_7745c5c3_Err != nil {

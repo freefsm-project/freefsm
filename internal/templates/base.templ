@@ -14,6 +14,7 @@ templ Layout(title string, children ...templ.Component) {
 			<link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png"/>
 			<link rel="manifest" href="/static/img/site.webmanifest"/>
 			<link rel="stylesheet" href="/static/css/pico.min.css"/>
+			<link rel="stylesheet" href="/static/third_party/leaflet/leaflet.css"/>
 			<link rel="stylesheet" href="/static/css/app.css"/>
 			<script src="/static/js/htmx.min.js"></script>
 			<script>
@@ -30,9 +31,61 @@ templ Layout(title string, children ...templ.Component) {
 					if (window.Alpine && evt.detail && evt.detail.elt) {
 						Alpine.initTree(evt.detail.elt);
 					}
+					initScheduleMap();
 				});
 			</script>
 			<script>
+				function loadLeaflet(callback) {
+					if (window.L) {
+						callback();
+						return;
+					}
+					if (window.__freefsmLeafletLoading) {
+						window.__freefsmLeafletCallbacks = window.__freefsmLeafletCallbacks || [];
+						window.__freefsmLeafletCallbacks.push(callback);
+						return;
+					}
+					window.__freefsmLeafletLoading = true;
+					window.__freefsmLeafletCallbacks = [callback];
+					var script = document.createElement('script');
+					script.src = '/static/third_party/leaflet/leaflet.js';
+					script.onload = function() {
+						window.__freefsmLeafletLoading = false;
+						(window.__freefsmLeafletCallbacks || []).splice(0).forEach(function(fn) { fn(); });
+					};
+					document.head.appendChild(script);
+				}
+				function initScheduleMap() {
+					var mapEl = document.getElementById('schedule-map');
+					if (!mapEl || mapEl.dataset.initialized === 'true') return;
+					loadLeaflet(function() {
+						if (!window.L || !document.body.contains(mapEl) || mapEl.dataset.initialized === 'true') return;
+						mapEl.dataset.initialized = 'true';
+						var map = L.map(mapEl).setView([39.8283, -98.5795], 4);
+						L.tileLayer(mapEl.dataset.tileUrl, {
+							maxZoom: 19,
+							attribution: '&copy; OpenStreetMap contributors'
+						}).addTo(map);
+						var bounds = [];
+						document.querySelectorAll('#schedule-map-markers [data-lat]').forEach(function(el) {
+							var lat = parseFloat(el.dataset.lat);
+							var lng = parseFloat(el.dataset.lng);
+							if (!isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) return;
+							bounds.push([lat, lng]);
+							var popup = document.createElement('div');
+							var link = document.createElement('a');
+							link.href = el.dataset.url;
+							var strong = document.createElement('strong');
+							strong.textContent = el.dataset.title || 'Job';
+							link.appendChild(strong);
+							popup.appendChild(link);
+							popup.appendChild(document.createElement('br'));
+							popup.appendChild(document.createTextNode(el.dataset.customer || ''));
+							L.marker([lat, lng]).addTo(map).bindPopup(popup);
+						});
+						if (bounds.length) map.fitBounds(bounds, { padding: [24, 24] });
+					});
+				}
 				function toggleTheme() {
 					var html = document.documentElement;
 					var current = html.getAttribute('data-theme');
@@ -53,6 +106,7 @@ templ Layout(title string, children ...templ.Component) {
 						}
 					}
 				});
+				document.addEventListener('DOMContentLoaded', initScheduleMap);
 			</script>
 		</head>
 		<body hx-boost="true">

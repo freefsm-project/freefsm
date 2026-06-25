@@ -6,6 +6,7 @@ require (
 	entgo.io/ent v0.14.6
 	github.com/a-h/templ v0.3.1020
 	github.com/go-chi/chi/v5 v5.3.0
+	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/joho/godotenv v1.5.1
 	github.com/jung-kurt/gofpdf v1.16.2
@@ -20,7 +21,6 @@ require (
 	github.com/bmatcuk/doublestar v1.3.4 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.18.1 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect

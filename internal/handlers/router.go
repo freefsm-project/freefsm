@@ -63,7 +63,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 
 	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, fileSvc, activitySvc, userService, policySvc)
 	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc, policySvc)
-	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService)
+	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService, userService, locationSvc, cfg)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
 	invoiceService := services.NewInvoiceService(entClient)
@@ -182,6 +182,9 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(requireActiveObject(entClient, "job")).Post("/jobs/{id}", jobHandler.Update)
 			r.With(requireActiveObject(entClient, "job")).Post("/jobs/{id}/delete", jobHandler.Delete)
 			r.With(requireActiveObject(entClient, "job")).Post("/jobs/{id}/subtasks/{idx}/toggle", jobHandler.ToggleSubtask)
+			r.Post("/schedule/dispatch", scheduleHandler.DispatchUpdate)
+			r.Post("/schedule/move", scheduleHandler.CalendarMove)
+			r.Post("/schedule/calendar/move", scheduleHandler.CalendarMove)
 			r.Get("/assets/new", assetHandler.Create)
 			r.Post("/assets", assetHandler.Create)
 			r.With(requireActiveObject(entClient, "asset")).Get("/assets/{id}/edit", assetHandler.Update)

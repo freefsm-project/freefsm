@@ -482,6 +482,34 @@ func (_c *CompanySettingsCreate) SetNillablePdfShowLineItemDescriptions(v *bool)
 	return _c
 }
 
+// SetMapTileURL sets the "map_tile_url" field.
+func (_c *CompanySettingsCreate) SetMapTileURL(v string) *CompanySettingsCreate {
+	_c.mutation.SetMapTileURL(v)
+	return _c
+}
+
+// SetNillableMapTileURL sets the "map_tile_url" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableMapTileURL(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetMapTileURL(*v)
+	}
+	return _c
+}
+
+// SetGeocoderURL sets the "geocoder_url" field.
+func (_c *CompanySettingsCreate) SetGeocoderURL(v string) *CompanySettingsCreate {
+	_c.mutation.SetGeocoderURL(v)
+	return _c
+}
+
+// SetNillableGeocoderURL sets the "geocoder_url" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableGeocoderURL(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetGeocoderURL(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *CompanySettingsCreate) SetCreatedAt(v time.Time) *CompanySettingsCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -679,6 +707,14 @@ func (_c *CompanySettingsCreate) defaults() {
 		v := companysettings.DefaultPdfShowLineItemDescriptions
 		_c.mutation.SetPdfShowLineItemDescriptions(v)
 	}
+	if _, ok := _c.mutation.MapTileURL(); !ok {
+		v := companysettings.DefaultMapTileURL
+		_c.mutation.SetMapTileURL(v)
+	}
+	if _, ok := _c.mutation.GeocoderURL(); !ok {
+		v := companysettings.DefaultGeocoderURL
+		_c.mutation.SetGeocoderURL(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := companysettings.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -786,6 +822,12 @@ func (_c *CompanySettingsCreate) check() error {
 	}
 	if _, ok := _c.mutation.PdfShowLineItemDescriptions(); !ok {
 		return &ValidationError{Name: "pdf_show_line_item_descriptions", err: errors.New(`ent: missing required field "CompanySettings.pdf_show_line_item_descriptions"`)}
+	}
+	if _, ok := _c.mutation.MapTileURL(); !ok {
+		return &ValidationError{Name: "map_tile_url", err: errors.New(`ent: missing required field "CompanySettings.map_tile_url"`)}
+	}
+	if _, ok := _c.mutation.GeocoderURL(); !ok {
+		return &ValidationError{Name: "geocoder_url", err: errors.New(`ent: missing required field "CompanySettings.geocoder_url"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "CompanySettings.created_at"`)}
@@ -956,6 +998,14 @@ func (_c *CompanySettingsCreate) createSpec() (*CompanySettings, *sqlgraph.Creat
 	if value, ok := _c.mutation.PdfShowLineItemDescriptions(); ok {
 		_spec.SetField(companysettings.FieldPdfShowLineItemDescriptions, field.TypeBool, value)
 		_node.PdfShowLineItemDescriptions = value
+	}
+	if value, ok := _c.mutation.MapTileURL(); ok {
+		_spec.SetField(companysettings.FieldMapTileURL, field.TypeString, value)
+		_node.MapTileURL = value
+	}
+	if value, ok := _c.mutation.GeocoderURL(); ok {
+		_spec.SetField(companysettings.FieldGeocoderURL, field.TypeString, value)
+		_node.GeocoderURL = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(companysettings.FieldCreatedAt, field.TypeTime, value)

@@ -79,6 +79,13 @@ func (s *JobService) ListByDateRange(ctx context.Context, start, end time.Time) 
 		All(ctx)
 }
 
+func (s *JobService) ListUnscheduled(ctx context.Context) ([]*ent.Job, error) {
+	return s.client.Job.Query().
+		Where(job.DeletedAtIsNil(), job.StartTimeIsNil()).
+		Order(ent.Desc(job.FieldCreatedAt)).
+		All(ctx)
+}
+
 func (s *JobService) ListAssignedByDateRange(ctx context.Context, userID int64, start, end time.Time) ([]*ent.Job, error) {
 	jobIDs, err := s.assignedJobIDs(ctx, userID)
 	if err != nil {
@@ -90,6 +97,20 @@ func (s *JobService) ListAssignedByDateRange(ctx context.Context, userID int64, 
 	return s.client.Job.Query().
 		Where(job.DeletedAtIsNil(), job.IDIn(jobIDs...), job.StartTimeNotNil(), job.StartTimeGTE(start), job.StartTimeLTE(end)).
 		Order(ent.Asc(job.FieldStartTime)).
+		All(ctx)
+}
+
+func (s *JobService) ListAssignedUnscheduled(ctx context.Context, userID int64) ([]*ent.Job, error) {
+	jobIDs, err := s.assignedJobIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(jobIDs) == 0 {
+		return nil, nil
+	}
+	return s.client.Job.Query().
+		Where(job.DeletedAtIsNil(), job.IDIn(jobIDs...), job.StartTimeIsNil()).
+		Order(ent.Desc(job.FieldCreatedAt)).
 		All(ctx)
 }
 
@@ -385,6 +406,43 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 		if err := s.replaceAssignments(ctx, id, assignments); err != nil {
 			return nil, err
 		}
+	}
+	return j, nil
+}
+
+func (s *JobService) Move(ctx context.Context, id, userID int64, startTime, endTime time.Time) (*ent.Job, error) {
+	assignments, err := s.hydrateAssignments(ctx, []JobAssignment{{UserID: userID}})
+	if err != nil {
+		return nil, err
+	}
+
+	u := s.client.Job.UpdateOneID(id).SetStartTime(startTime).SetAssignments(SerializeAssignments(assignments))
+	if endTime.IsZero() {
+		u.ClearEndTime()
+	} else {
+		u.SetEndTime(endTime)
+	}
+
+	j, err := u.Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("move job %d: %w", id, err)
+	}
+	if err := s.replaceAssignments(ctx, id, assignments); err != nil {
+		return nil, err
+	}
+	return j, nil
+}
+
+func (s *JobService) MoveTime(ctx context.Context, id int64, startTime, endTime time.Time) (*ent.Job, error) {
+	u := s.client.Job.UpdateOneID(id).SetStartTime(startTime)
+	if endTime.IsZero() {
+		u.ClearEndTime()
+	} else {
+		u.SetEndTime(endTime)
+	}
+	j, err := u.Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("move job time %d: %w", id, err)
 	}
 	return j, nil
 }
