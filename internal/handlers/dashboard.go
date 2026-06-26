@@ -2,11 +2,14 @@ package handlers
 
 import (
 	"net/http"
+	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/middleware"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
+	"github.com/go-chi/chi/v5"
 )
 
 type DashboardHandler struct {
@@ -27,6 +30,13 @@ func (h *DashboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 		stats, _ = h.dashboardSvc.Stats(r.Context(), loc)
 	}
 	if user != nil {
+		editDashboard := r.URL.Query().Get("edit_dashboard") == "1"
+		var widgets []services.DashboardWidgetView
+		if editDashboard {
+			widgets, _ = h.dashboardSvc.EditableWidgets(r.Context(), dashboardUser(user))
+		} else {
+			widgets, _ = h.dashboardSvc.Widgets(r.Context(), dashboardUser(user))
+		}
 		activeEntry, err := h.timeEntrySvc.GetActiveByUser(r.Context(), user.ID)
 		if err == nil && activeEntry != nil {
 			duration := services.TimeEntryDuration(activeEntry.ClockIn, time.Time{})
@@ -36,12 +46,124 @@ func (h *DashboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 				ClockInTime: activeEntry.ClockIn.In(loc).Format("Jan 2, 2006 3:04 PM"),
 			}
 		}
+		templates.DashboardPage(templates.DashboardData{
+			Stats:       stats,
+			ClockWidget: clockWidget,
+			Widgets:     widgets,
+			EditMode:    editDashboard,
+		}).Render(r.Context(), w)
+		return
 	}
 
 	templates.DashboardPage(templates.DashboardData{
 		Stats:       stats,
 		ClockWidget: clockWidget,
 	}).Render(r.Context(), w)
+}
+
+func (h *DashboardHandler) NewWidget(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	widgets, err := h.dashboardSvc.AvailableWidgets(r.Context(), dashboardUser(user))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	templates.DashboardAddWidgetPage(templates.DashboardAddWidgetData{Widgets: widgets}).Render(r.Context(), w)
+}
+
+func (h *DashboardHandler) AddWidget(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := h.dashboardSvc.AddWidget(r.Context(), dashboardUser(user), r.FormValue("widget_type")); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/?edit_dashboard=1", http.StatusSeeOther)
+}
+
+func (h *DashboardHandler) RemoveWidget(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid widget", http.StatusBadRequest)
+		return
+	}
+	if err := h.dashboardSvc.RemoveWidget(r.Context(), dashboardUser(user), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/?edit_dashboard=1", http.StatusSeeOther)
+}
+
+func (h *DashboardHandler) ReorderWidget(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	id, err := strconv.ParseInt(r.FormValue("widget_id"), 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid widget", http.StatusBadRequest)
+		return
+	}
+	if err := h.dashboardSvc.ReorderWidget(r.Context(), dashboardUser(user), id, r.FormValue("direction")); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/?edit_dashboard=1", http.StatusSeeOther)
+}
+
+func (h *DashboardHandler) ResetWidgets(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if err := h.dashboardSvc.ResetWidgets(r.Context(), dashboardUser(user)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/?flash="+url.QueryEscape("Dashboard reset"), http.StatusSeeOther)
+}
+
+func (h *DashboardHandler) SaveCompanyDefaultWidgets(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.UserFromContext(r.Context())
+	if !ok || user == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if user.Role != "admin" {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	if err := h.dashboardSvc.SaveCompanyDefaultWidgets(r.Context(), dashboardUser(user)); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/?edit_dashboard=1&flash="+url.QueryEscape("Company dashboard default saved"), http.StatusSeeOther)
+}
+
+func dashboardUser(user *middleware.UserInfo) services.DashboardUser {
+	return services.DashboardUser{ID: user.ID, Role: user.Role, CompanyID: user.CompanyID}
 }
 
 func handleLogout(w http.ResponseWriter, r *http.Request, sessions *services.SessionService, activitySvc *services.ActivityService) {

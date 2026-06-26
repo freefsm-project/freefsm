@@ -312,6 +312,65 @@ var (
 			},
 		},
 	}
+	// DashboardLayoutsColumns holds the columns for the "dashboard_layouts" table.
+	DashboardLayoutsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "user_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "scope", Type: field.TypeString, Default: "user"},
+		{Name: "name", Type: field.TypeString, Default: ""},
+		{Name: "is_default", Type: field.TypeBool, Default: false},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// DashboardLayoutsTable holds the schema information for the "dashboard_layouts" table.
+	DashboardLayoutsTable = &schema.Table{
+		Name:       "dashboard_layouts",
+		Columns:    DashboardLayoutsColumns,
+		PrimaryKey: []*schema.Column{DashboardLayoutsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "dashboardlayout_user_id_scope",
+				Unique:  true,
+				Columns: []*schema.Column{DashboardLayoutsColumns[2], DashboardLayoutsColumns[3]},
+			},
+			{
+				Name:    "dashboardlayout_company_id_scope_is_default",
+				Unique:  false,
+				Columns: []*schema.Column{DashboardLayoutsColumns[1], DashboardLayoutsColumns[3], DashboardLayoutsColumns[5]},
+			},
+		},
+	}
+	// DashboardWidgetsColumns holds the columns for the "dashboard_widgets" table.
+	DashboardWidgetsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "layout_id", Type: field.TypeInt64},
+		{Name: "widget_type", Type: field.TypeString},
+		{Name: "title", Type: field.TypeString, Default: ""},
+		{Name: "position", Type: field.TypeInt, Default: 0},
+		{Name: "hidden", Type: field.TypeBool, Default: false},
+		{Name: "config", Type: field.TypeString, Default: "{}"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// DashboardWidgetsTable holds the schema information for the "dashboard_widgets" table.
+	DashboardWidgetsTable = &schema.Table{
+		Name:       "dashboard_widgets",
+		Columns:    DashboardWidgetsColumns,
+		PrimaryKey: []*schema.Column{DashboardWidgetsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "dashboardwidget_layout_id_position",
+				Unique:  false,
+				Columns: []*schema.Column{DashboardWidgetsColumns[1], DashboardWidgetsColumns[4]},
+			},
+			{
+				Name:    "dashboardwidget_layout_id_widget_type",
+				Unique:  true,
+				Columns: []*schema.Column{DashboardWidgetsColumns[1], DashboardWidgetsColumns[2]},
+			},
+		},
+	}
 	// EstimatesColumns holds the columns for the "estimates" table.
 	EstimatesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -788,6 +847,8 @@ var (
 		CustomFieldDefinitionsTable,
 		CustomersTable,
 		CustomerContactsTable,
+		DashboardLayoutsTable,
+		DashboardWidgetsTable,
 		EstimatesTable,
 		FilesTable,
 		InvoicesTable,
@@ -833,6 +894,12 @@ func init() {
 	}
 	CustomerContactsTable.Annotation = &entsql.Annotation{
 		Table: "customer_contacts",
+	}
+	DashboardLayoutsTable.Annotation = &entsql.Annotation{
+		Table: "dashboard_layouts",
+	}
+	DashboardWidgetsTable.Annotation = &entsql.Annotation{
+		Table: "dashboard_widgets",
 	}
 	EstimatesTable.Annotation = &entsql.Annotation{
 		Table: "estimates",

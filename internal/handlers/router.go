@@ -22,12 +22,16 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		if err != nil {
 			return nil, err
 		}
-		return &middleware.UserInfo{
+		info := &middleware.UserInfo{
 			ID:    u.ID,
 			Name:  u.Name,
 			Email: u.Email,
 			Role:  u.Role,
-		}, nil
+		}
+		if u.CompanyID != nil {
+			info.CompanyID = *u.CompanyID
+		}
+		return info, nil
 	}
 	authMW := middleware.Auth(sessions, userFn)
 
@@ -109,6 +113,12 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/change-password", passwordHandler.ChangePassword)
 		r.Get("/settings/invoice-logo", settingsHandler.InvoiceLogo)
 		r.Get("/", dashboardHandler.Index)
+		r.Get("/dashboard/widgets/new", dashboardHandler.NewWidget)
+		r.Post("/dashboard/widgets/add", dashboardHandler.AddWidget)
+		r.Post("/dashboard/widgets/{id}/remove", dashboardHandler.RemoveWidget)
+		r.Post("/dashboard/widgets/reorder", dashboardHandler.ReorderWidget)
+		r.Post("/dashboard/widgets/reset", dashboardHandler.ResetWidgets)
+		r.Post("/dashboard/widgets/company-default", dashboardHandler.SaveCompanyDefaultWidgets)
 		r.Get("/search", searchHandler.Search)
 		r.Get("/schedule", scheduleHandler.Index)
 		r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {

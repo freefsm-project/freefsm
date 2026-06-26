@@ -14,6 +14,8 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
 	"github.com/MartialM1nd/freefsm/internal/ent/customfielddefinition"
+	"github.com/MartialM1nd/freefsm/internal/ent/dashboardlayout"
+	"github.com/MartialM1nd/freefsm/internal/ent/dashboardwidget"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/file"
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
@@ -434,6 +436,58 @@ func init() {
 	customercontact.DefaultUpdatedAt = customercontactDescUpdatedAt.Default.(func() time.Time)
 	// customercontact.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	customercontact.UpdateDefaultUpdatedAt = customercontactDescUpdatedAt.UpdateDefault.(func() time.Time)
+	dashboardlayoutFields := schema.DashboardLayout{}.Fields()
+	_ = dashboardlayoutFields
+	// dashboardlayoutDescScope is the schema descriptor for scope field.
+	dashboardlayoutDescScope := dashboardlayoutFields[3].Descriptor()
+	// dashboardlayout.DefaultScope holds the default value on creation for the scope field.
+	dashboardlayout.DefaultScope = dashboardlayoutDescScope.Default.(string)
+	// dashboardlayoutDescName is the schema descriptor for name field.
+	dashboardlayoutDescName := dashboardlayoutFields[4].Descriptor()
+	// dashboardlayout.DefaultName holds the default value on creation for the name field.
+	dashboardlayout.DefaultName = dashboardlayoutDescName.Default.(string)
+	// dashboardlayoutDescIsDefault is the schema descriptor for is_default field.
+	dashboardlayoutDescIsDefault := dashboardlayoutFields[5].Descriptor()
+	// dashboardlayout.DefaultIsDefault holds the default value on creation for the is_default field.
+	dashboardlayout.DefaultIsDefault = dashboardlayoutDescIsDefault.Default.(bool)
+	// dashboardlayoutDescCreatedAt is the schema descriptor for created_at field.
+	dashboardlayoutDescCreatedAt := dashboardlayoutFields[6].Descriptor()
+	// dashboardlayout.DefaultCreatedAt holds the default value on creation for the created_at field.
+	dashboardlayout.DefaultCreatedAt = dashboardlayoutDescCreatedAt.Default.(func() time.Time)
+	// dashboardlayoutDescUpdatedAt is the schema descriptor for updated_at field.
+	dashboardlayoutDescUpdatedAt := dashboardlayoutFields[7].Descriptor()
+	// dashboardlayout.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	dashboardlayout.DefaultUpdatedAt = dashboardlayoutDescUpdatedAt.Default.(func() time.Time)
+	// dashboardlayout.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	dashboardlayout.UpdateDefaultUpdatedAt = dashboardlayoutDescUpdatedAt.UpdateDefault.(func() time.Time)
+	dashboardwidgetFields := schema.DashboardWidget{}.Fields()
+	_ = dashboardwidgetFields
+	// dashboardwidgetDescTitle is the schema descriptor for title field.
+	dashboardwidgetDescTitle := dashboardwidgetFields[3].Descriptor()
+	// dashboardwidget.DefaultTitle holds the default value on creation for the title field.
+	dashboardwidget.DefaultTitle = dashboardwidgetDescTitle.Default.(string)
+	// dashboardwidgetDescPosition is the schema descriptor for position field.
+	dashboardwidgetDescPosition := dashboardwidgetFields[4].Descriptor()
+	// dashboardwidget.DefaultPosition holds the default value on creation for the position field.
+	dashboardwidget.DefaultPosition = dashboardwidgetDescPosition.Default.(int)
+	// dashboardwidgetDescHidden is the schema descriptor for hidden field.
+	dashboardwidgetDescHidden := dashboardwidgetFields[5].Descriptor()
+	// dashboardwidget.DefaultHidden holds the default value on creation for the hidden field.
+	dashboardwidget.DefaultHidden = dashboardwidgetDescHidden.Default.(bool)
+	// dashboardwidgetDescConfig is the schema descriptor for config field.
+	dashboardwidgetDescConfig := dashboardwidgetFields[6].Descriptor()
+	// dashboardwidget.DefaultConfig holds the default value on creation for the config field.
+	dashboardwidget.DefaultConfig = dashboardwidgetDescConfig.Default.(string)
+	// dashboardwidgetDescCreatedAt is the schema descriptor for created_at field.
+	dashboardwidgetDescCreatedAt := dashboardwidgetFields[7].Descriptor()
+	// dashboardwidget.DefaultCreatedAt holds the default value on creation for the created_at field.
+	dashboardwidget.DefaultCreatedAt = dashboardwidgetDescCreatedAt.Default.(func() time.Time)
+	// dashboardwidgetDescUpdatedAt is the schema descriptor for updated_at field.
+	dashboardwidgetDescUpdatedAt := dashboardwidgetFields[8].Descriptor()
+	// dashboardwidget.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	dashboardwidget.DefaultUpdatedAt = dashboardwidgetDescUpdatedAt.Default.(func() time.Time)
+	// dashboardwidget.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	dashboardwidget.UpdateDefaultUpdatedAt = dashboardwidgetDescUpdatedAt.UpdateDefault.(func() time.Time)
 	estimateFields := schema.Estimate{}.Fields()
 	_ = estimateFields
 	// estimateDescTitle is the schema descriptor for title field.

@@ -20,6 +20,8 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
 	"github.com/MartialM1nd/freefsm/internal/ent/customfielddefinition"
+	"github.com/MartialM1nd/freefsm/internal/ent/dashboardlayout"
+	"github.com/MartialM1nd/freefsm/internal/ent/dashboardwidget"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/file"
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
@@ -56,6 +58,8 @@ const (
 	TypeCustomFieldDefinition = "CustomFieldDefinition"
 	TypeCustomer              = "Customer"
 	TypeCustomerContact       = "CustomerContact"
+	TypeDashboardLayout       = "DashboardLayout"
+	TypeDashboardWidget       = "DashboardWidget"
 	TypeEstimate              = "Estimate"
 	TypeFile                  = "File"
 	TypeInvoice               = "Invoice"
@@ -10225,6 +10229,1553 @@ func (m *CustomerContactMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *CustomerContactMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown CustomerContact edge %s", name)
+}
+
+// DashboardLayoutMutation represents an operation that mutates the DashboardLayout nodes in the graph.
+type DashboardLayoutMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	company_id    *int64
+	addcompany_id *int64
+	user_id       *int64
+	adduser_id    *int64
+	scope         *string
+	name          *string
+	is_default    *bool
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*DashboardLayout, error)
+	predicates    []predicate.DashboardLayout
+}
+
+var _ ent.Mutation = (*DashboardLayoutMutation)(nil)
+
+// dashboardlayoutOption allows management of the mutation configuration using functional options.
+type dashboardlayoutOption func(*DashboardLayoutMutation)
+
+// newDashboardLayoutMutation creates new mutation for the DashboardLayout entity.
+func newDashboardLayoutMutation(c config, op Op, opts ...dashboardlayoutOption) *DashboardLayoutMutation {
+	m := &DashboardLayoutMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeDashboardLayout,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withDashboardLayoutID sets the ID field of the mutation.
+func withDashboardLayoutID(id int64) dashboardlayoutOption {
+	return func(m *DashboardLayoutMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *DashboardLayout
+		)
+		m.oldValue = func(ctx context.Context) (*DashboardLayout, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().DashboardLayout.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withDashboardLayout sets the old DashboardLayout of the mutation.
+func withDashboardLayout(node *DashboardLayout) dashboardlayoutOption {
+	return func(m *DashboardLayoutMutation) {
+		m.oldValue = func(context.Context) (*DashboardLayout, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m DashboardLayoutMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m DashboardLayoutMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of DashboardLayout entities.
+func (m *DashboardLayoutMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *DashboardLayoutMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *DashboardLayoutMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().DashboardLayout.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCompanyID sets the "company_id" field.
+func (m *DashboardLayoutMutation) SetCompanyID(i int64) {
+	m.company_id = &i
+	m.addcompany_id = nil
+}
+
+// CompanyID returns the value of the "company_id" field in the mutation.
+func (m *DashboardLayoutMutation) CompanyID() (r int64, exists bool) {
+	v := m.company_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompanyID returns the old "company_id" field's value of the DashboardLayout entity.
+// If the DashboardLayout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardLayoutMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompanyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompanyID: %w", err)
+	}
+	return oldValue.CompanyID, nil
+}
+
+// AddCompanyID adds i to the "company_id" field.
+func (m *DashboardLayoutMutation) AddCompanyID(i int64) {
+	if m.addcompany_id != nil {
+		*m.addcompany_id += i
+	} else {
+		m.addcompany_id = &i
+	}
+}
+
+// AddedCompanyID returns the value that was added to the "company_id" field in this mutation.
+func (m *DashboardLayoutMutation) AddedCompanyID() (r int64, exists bool) {
+	v := m.addcompany_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearCompanyID clears the value of the "company_id" field.
+func (m *DashboardLayoutMutation) ClearCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	m.clearedFields[dashboardlayout.FieldCompanyID] = struct{}{}
+}
+
+// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
+func (m *DashboardLayoutMutation) CompanyIDCleared() bool {
+	_, ok := m.clearedFields[dashboardlayout.FieldCompanyID]
+	return ok
+}
+
+// ResetCompanyID resets all changes to the "company_id" field.
+func (m *DashboardLayoutMutation) ResetCompanyID() {
+	m.company_id = nil
+	m.addcompany_id = nil
+	delete(m.clearedFields, dashboardlayout.FieldCompanyID)
+}
+
+// SetUserID sets the "user_id" field.
+func (m *DashboardLayoutMutation) SetUserID(i int64) {
+	m.user_id = &i
+	m.adduser_id = nil
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *DashboardLayoutMutation) UserID() (r int64, exists bool) {
+	v := m.user_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the DashboardLayout entity.
+// If the DashboardLayout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardLayoutMutation) OldUserID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// AddUserID adds i to the "user_id" field.
+func (m *DashboardLayoutMutation) AddUserID(i int64) {
+	if m.adduser_id != nil {
+		*m.adduser_id += i
+	} else {
+		m.adduser_id = &i
+	}
+}
+
+// AddedUserID returns the value that was added to the "user_id" field in this mutation.
+func (m *DashboardLayoutMutation) AddedUserID() (r int64, exists bool) {
+	v := m.adduser_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (m *DashboardLayoutMutation) ClearUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+	m.clearedFields[dashboardlayout.FieldUserID] = struct{}{}
+}
+
+// UserIDCleared returns if the "user_id" field was cleared in this mutation.
+func (m *DashboardLayoutMutation) UserIDCleared() bool {
+	_, ok := m.clearedFields[dashboardlayout.FieldUserID]
+	return ok
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *DashboardLayoutMutation) ResetUserID() {
+	m.user_id = nil
+	m.adduser_id = nil
+	delete(m.clearedFields, dashboardlayout.FieldUserID)
+}
+
+// SetScope sets the "scope" field.
+func (m *DashboardLayoutMutation) SetScope(s string) {
+	m.scope = &s
+}
+
+// Scope returns the value of the "scope" field in the mutation.
+func (m *DashboardLayoutMutation) Scope() (r string, exists bool) {
+	v := m.scope
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldScope returns the old "scope" field's value of the DashboardLayout entity.
+// If the DashboardLayout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardLayoutMutation) OldScope(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldScope is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldScope requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldScope: %w", err)
+	}
+	return oldValue.Scope, nil
+}
+
+// ResetScope resets all changes to the "scope" field.
+func (m *DashboardLayoutMutation) ResetScope() {
+	m.scope = nil
+}
+
+// SetName sets the "name" field.
+func (m *DashboardLayoutMutation) SetName(s string) {
+	m.name = &s
+}
+
+// Name returns the value of the "name" field in the mutation.
+func (m *DashboardLayoutMutation) Name() (r string, exists bool) {
+	v := m.name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldName returns the old "name" field's value of the DashboardLayout entity.
+// If the DashboardLayout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardLayoutMutation) OldName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldName: %w", err)
+	}
+	return oldValue.Name, nil
+}
+
+// ResetName resets all changes to the "name" field.
+func (m *DashboardLayoutMutation) ResetName() {
+	m.name = nil
+}
+
+// SetIsDefault sets the "is_default" field.
+func (m *DashboardLayoutMutation) SetIsDefault(b bool) {
+	m.is_default = &b
+}
+
+// IsDefault returns the value of the "is_default" field in the mutation.
+func (m *DashboardLayoutMutation) IsDefault() (r bool, exists bool) {
+	v := m.is_default
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsDefault returns the old "is_default" field's value of the DashboardLayout entity.
+// If the DashboardLayout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardLayoutMutation) OldIsDefault(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsDefault is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsDefault requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsDefault: %w", err)
+	}
+	return oldValue.IsDefault, nil
+}
+
+// ResetIsDefault resets all changes to the "is_default" field.
+func (m *DashboardLayoutMutation) ResetIsDefault() {
+	m.is_default = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *DashboardLayoutMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *DashboardLayoutMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the DashboardLayout entity.
+// If the DashboardLayout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardLayoutMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *DashboardLayoutMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *DashboardLayoutMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *DashboardLayoutMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the DashboardLayout entity.
+// If the DashboardLayout object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardLayoutMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *DashboardLayoutMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the DashboardLayoutMutation builder.
+func (m *DashboardLayoutMutation) Where(ps ...predicate.DashboardLayout) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the DashboardLayoutMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *DashboardLayoutMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.DashboardLayout, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *DashboardLayoutMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *DashboardLayoutMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (DashboardLayout).
+func (m *DashboardLayoutMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *DashboardLayoutMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.company_id != nil {
+		fields = append(fields, dashboardlayout.FieldCompanyID)
+	}
+	if m.user_id != nil {
+		fields = append(fields, dashboardlayout.FieldUserID)
+	}
+	if m.scope != nil {
+		fields = append(fields, dashboardlayout.FieldScope)
+	}
+	if m.name != nil {
+		fields = append(fields, dashboardlayout.FieldName)
+	}
+	if m.is_default != nil {
+		fields = append(fields, dashboardlayout.FieldIsDefault)
+	}
+	if m.created_at != nil {
+		fields = append(fields, dashboardlayout.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, dashboardlayout.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *DashboardLayoutMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case dashboardlayout.FieldCompanyID:
+		return m.CompanyID()
+	case dashboardlayout.FieldUserID:
+		return m.UserID()
+	case dashboardlayout.FieldScope:
+		return m.Scope()
+	case dashboardlayout.FieldName:
+		return m.Name()
+	case dashboardlayout.FieldIsDefault:
+		return m.IsDefault()
+	case dashboardlayout.FieldCreatedAt:
+		return m.CreatedAt()
+	case dashboardlayout.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *DashboardLayoutMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case dashboardlayout.FieldCompanyID:
+		return m.OldCompanyID(ctx)
+	case dashboardlayout.FieldUserID:
+		return m.OldUserID(ctx)
+	case dashboardlayout.FieldScope:
+		return m.OldScope(ctx)
+	case dashboardlayout.FieldName:
+		return m.OldName(ctx)
+	case dashboardlayout.FieldIsDefault:
+		return m.OldIsDefault(ctx)
+	case dashboardlayout.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case dashboardlayout.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown DashboardLayout field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DashboardLayoutMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case dashboardlayout.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompanyID(v)
+		return nil
+	case dashboardlayout.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case dashboardlayout.FieldScope:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetScope(v)
+		return nil
+	case dashboardlayout.FieldName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetName(v)
+		return nil
+	case dashboardlayout.FieldIsDefault:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsDefault(v)
+		return nil
+	case dashboardlayout.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case dashboardlayout.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DashboardLayout field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *DashboardLayoutMutation) AddedFields() []string {
+	var fields []string
+	if m.addcompany_id != nil {
+		fields = append(fields, dashboardlayout.FieldCompanyID)
+	}
+	if m.adduser_id != nil {
+		fields = append(fields, dashboardlayout.FieldUserID)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *DashboardLayoutMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case dashboardlayout.FieldCompanyID:
+		return m.AddedCompanyID()
+	case dashboardlayout.FieldUserID:
+		return m.AddedUserID()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DashboardLayoutMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case dashboardlayout.FieldCompanyID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCompanyID(v)
+		return nil
+	case dashboardlayout.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddUserID(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DashboardLayout numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *DashboardLayoutMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(dashboardlayout.FieldCompanyID) {
+		fields = append(fields, dashboardlayout.FieldCompanyID)
+	}
+	if m.FieldCleared(dashboardlayout.FieldUserID) {
+		fields = append(fields, dashboardlayout.FieldUserID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *DashboardLayoutMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *DashboardLayoutMutation) ClearField(name string) error {
+	switch name {
+	case dashboardlayout.FieldCompanyID:
+		m.ClearCompanyID()
+		return nil
+	case dashboardlayout.FieldUserID:
+		m.ClearUserID()
+		return nil
+	}
+	return fmt.Errorf("unknown DashboardLayout nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *DashboardLayoutMutation) ResetField(name string) error {
+	switch name {
+	case dashboardlayout.FieldCompanyID:
+		m.ResetCompanyID()
+		return nil
+	case dashboardlayout.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case dashboardlayout.FieldScope:
+		m.ResetScope()
+		return nil
+	case dashboardlayout.FieldName:
+		m.ResetName()
+		return nil
+	case dashboardlayout.FieldIsDefault:
+		m.ResetIsDefault()
+		return nil
+	case dashboardlayout.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case dashboardlayout.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown DashboardLayout field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *DashboardLayoutMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *DashboardLayoutMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *DashboardLayoutMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *DashboardLayoutMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *DashboardLayoutMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *DashboardLayoutMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *DashboardLayoutMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown DashboardLayout unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *DashboardLayoutMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown DashboardLayout edge %s", name)
+}
+
+// DashboardWidgetMutation represents an operation that mutates the DashboardWidget nodes in the graph.
+type DashboardWidgetMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	layout_id     *int64
+	addlayout_id  *int64
+	widget_type   *string
+	title         *string
+	position      *int
+	addposition   *int
+	hidden        *bool
+	_config       *string
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*DashboardWidget, error)
+	predicates    []predicate.DashboardWidget
+}
+
+var _ ent.Mutation = (*DashboardWidgetMutation)(nil)
+
+// dashboardwidgetOption allows management of the mutation configuration using functional options.
+type dashboardwidgetOption func(*DashboardWidgetMutation)
+
+// newDashboardWidgetMutation creates new mutation for the DashboardWidget entity.
+func newDashboardWidgetMutation(c config, op Op, opts ...dashboardwidgetOption) *DashboardWidgetMutation {
+	m := &DashboardWidgetMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeDashboardWidget,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withDashboardWidgetID sets the ID field of the mutation.
+func withDashboardWidgetID(id int64) dashboardwidgetOption {
+	return func(m *DashboardWidgetMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *DashboardWidget
+		)
+		m.oldValue = func(ctx context.Context) (*DashboardWidget, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().DashboardWidget.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withDashboardWidget sets the old DashboardWidget of the mutation.
+func withDashboardWidget(node *DashboardWidget) dashboardwidgetOption {
+	return func(m *DashboardWidgetMutation) {
+		m.oldValue = func(context.Context) (*DashboardWidget, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m DashboardWidgetMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m DashboardWidgetMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// SetID sets the value of the id field. Note that this
+// operation is only accepted on creation of DashboardWidget entities.
+func (m *DashboardWidgetMutation) SetID(id int64) {
+	m.id = &id
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *DashboardWidgetMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *DashboardWidgetMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().DashboardWidget.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetLayoutID sets the "layout_id" field.
+func (m *DashboardWidgetMutation) SetLayoutID(i int64) {
+	m.layout_id = &i
+	m.addlayout_id = nil
+}
+
+// LayoutID returns the value of the "layout_id" field in the mutation.
+func (m *DashboardWidgetMutation) LayoutID() (r int64, exists bool) {
+	v := m.layout_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLayoutID returns the old "layout_id" field's value of the DashboardWidget entity.
+// If the DashboardWidget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardWidgetMutation) OldLayoutID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLayoutID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLayoutID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLayoutID: %w", err)
+	}
+	return oldValue.LayoutID, nil
+}
+
+// AddLayoutID adds i to the "layout_id" field.
+func (m *DashboardWidgetMutation) AddLayoutID(i int64) {
+	if m.addlayout_id != nil {
+		*m.addlayout_id += i
+	} else {
+		m.addlayout_id = &i
+	}
+}
+
+// AddedLayoutID returns the value that was added to the "layout_id" field in this mutation.
+func (m *DashboardWidgetMutation) AddedLayoutID() (r int64, exists bool) {
+	v := m.addlayout_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLayoutID resets all changes to the "layout_id" field.
+func (m *DashboardWidgetMutation) ResetLayoutID() {
+	m.layout_id = nil
+	m.addlayout_id = nil
+}
+
+// SetWidgetType sets the "widget_type" field.
+func (m *DashboardWidgetMutation) SetWidgetType(s string) {
+	m.widget_type = &s
+}
+
+// WidgetType returns the value of the "widget_type" field in the mutation.
+func (m *DashboardWidgetMutation) WidgetType() (r string, exists bool) {
+	v := m.widget_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWidgetType returns the old "widget_type" field's value of the DashboardWidget entity.
+// If the DashboardWidget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardWidgetMutation) OldWidgetType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWidgetType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWidgetType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWidgetType: %w", err)
+	}
+	return oldValue.WidgetType, nil
+}
+
+// ResetWidgetType resets all changes to the "widget_type" field.
+func (m *DashboardWidgetMutation) ResetWidgetType() {
+	m.widget_type = nil
+}
+
+// SetTitle sets the "title" field.
+func (m *DashboardWidgetMutation) SetTitle(s string) {
+	m.title = &s
+}
+
+// Title returns the value of the "title" field in the mutation.
+func (m *DashboardWidgetMutation) Title() (r string, exists bool) {
+	v := m.title
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTitle returns the old "title" field's value of the DashboardWidget entity.
+// If the DashboardWidget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardWidgetMutation) OldTitle(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTitle is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTitle requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTitle: %w", err)
+	}
+	return oldValue.Title, nil
+}
+
+// ResetTitle resets all changes to the "title" field.
+func (m *DashboardWidgetMutation) ResetTitle() {
+	m.title = nil
+}
+
+// SetPosition sets the "position" field.
+func (m *DashboardWidgetMutation) SetPosition(i int) {
+	m.position = &i
+	m.addposition = nil
+}
+
+// Position returns the value of the "position" field in the mutation.
+func (m *DashboardWidgetMutation) Position() (r int, exists bool) {
+	v := m.position
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPosition returns the old "position" field's value of the DashboardWidget entity.
+// If the DashboardWidget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardWidgetMutation) OldPosition(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPosition is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPosition requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPosition: %w", err)
+	}
+	return oldValue.Position, nil
+}
+
+// AddPosition adds i to the "position" field.
+func (m *DashboardWidgetMutation) AddPosition(i int) {
+	if m.addposition != nil {
+		*m.addposition += i
+	} else {
+		m.addposition = &i
+	}
+}
+
+// AddedPosition returns the value that was added to the "position" field in this mutation.
+func (m *DashboardWidgetMutation) AddedPosition() (r int, exists bool) {
+	v := m.addposition
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPosition resets all changes to the "position" field.
+func (m *DashboardWidgetMutation) ResetPosition() {
+	m.position = nil
+	m.addposition = nil
+}
+
+// SetHidden sets the "hidden" field.
+func (m *DashboardWidgetMutation) SetHidden(b bool) {
+	m.hidden = &b
+}
+
+// Hidden returns the value of the "hidden" field in the mutation.
+func (m *DashboardWidgetMutation) Hidden() (r bool, exists bool) {
+	v := m.hidden
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHidden returns the old "hidden" field's value of the DashboardWidget entity.
+// If the DashboardWidget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardWidgetMutation) OldHidden(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHidden is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHidden requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHidden: %w", err)
+	}
+	return oldValue.Hidden, nil
+}
+
+// ResetHidden resets all changes to the "hidden" field.
+func (m *DashboardWidgetMutation) ResetHidden() {
+	m.hidden = nil
+}
+
+// SetConfig sets the "config" field.
+func (m *DashboardWidgetMutation) SetConfig(s string) {
+	m._config = &s
+}
+
+// Config returns the value of the "config" field in the mutation.
+func (m *DashboardWidgetMutation) Config() (r string, exists bool) {
+	v := m._config
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConfig returns the old "config" field's value of the DashboardWidget entity.
+// If the DashboardWidget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardWidgetMutation) OldConfig(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConfig is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConfig requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConfig: %w", err)
+	}
+	return oldValue.Config, nil
+}
+
+// ResetConfig resets all changes to the "config" field.
+func (m *DashboardWidgetMutation) ResetConfig() {
+	m._config = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *DashboardWidgetMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *DashboardWidgetMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the DashboardWidget entity.
+// If the DashboardWidget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardWidgetMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *DashboardWidgetMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *DashboardWidgetMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *DashboardWidgetMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the DashboardWidget entity.
+// If the DashboardWidget object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *DashboardWidgetMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *DashboardWidgetMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the DashboardWidgetMutation builder.
+func (m *DashboardWidgetMutation) Where(ps ...predicate.DashboardWidget) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the DashboardWidgetMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *DashboardWidgetMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.DashboardWidget, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *DashboardWidgetMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *DashboardWidgetMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (DashboardWidget).
+func (m *DashboardWidgetMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *DashboardWidgetMutation) Fields() []string {
+	fields := make([]string, 0, 8)
+	if m.layout_id != nil {
+		fields = append(fields, dashboardwidget.FieldLayoutID)
+	}
+	if m.widget_type != nil {
+		fields = append(fields, dashboardwidget.FieldWidgetType)
+	}
+	if m.title != nil {
+		fields = append(fields, dashboardwidget.FieldTitle)
+	}
+	if m.position != nil {
+		fields = append(fields, dashboardwidget.FieldPosition)
+	}
+	if m.hidden != nil {
+		fields = append(fields, dashboardwidget.FieldHidden)
+	}
+	if m._config != nil {
+		fields = append(fields, dashboardwidget.FieldConfig)
+	}
+	if m.created_at != nil {
+		fields = append(fields, dashboardwidget.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, dashboardwidget.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *DashboardWidgetMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case dashboardwidget.FieldLayoutID:
+		return m.LayoutID()
+	case dashboardwidget.FieldWidgetType:
+		return m.WidgetType()
+	case dashboardwidget.FieldTitle:
+		return m.Title()
+	case dashboardwidget.FieldPosition:
+		return m.Position()
+	case dashboardwidget.FieldHidden:
+		return m.Hidden()
+	case dashboardwidget.FieldConfig:
+		return m.Config()
+	case dashboardwidget.FieldCreatedAt:
+		return m.CreatedAt()
+	case dashboardwidget.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *DashboardWidgetMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case dashboardwidget.FieldLayoutID:
+		return m.OldLayoutID(ctx)
+	case dashboardwidget.FieldWidgetType:
+		return m.OldWidgetType(ctx)
+	case dashboardwidget.FieldTitle:
+		return m.OldTitle(ctx)
+	case dashboardwidget.FieldPosition:
+		return m.OldPosition(ctx)
+	case dashboardwidget.FieldHidden:
+		return m.OldHidden(ctx)
+	case dashboardwidget.FieldConfig:
+		return m.OldConfig(ctx)
+	case dashboardwidget.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case dashboardwidget.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown DashboardWidget field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DashboardWidgetMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case dashboardwidget.FieldLayoutID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLayoutID(v)
+		return nil
+	case dashboardwidget.FieldWidgetType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWidgetType(v)
+		return nil
+	case dashboardwidget.FieldTitle:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTitle(v)
+		return nil
+	case dashboardwidget.FieldPosition:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPosition(v)
+		return nil
+	case dashboardwidget.FieldHidden:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHidden(v)
+		return nil
+	case dashboardwidget.FieldConfig:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConfig(v)
+		return nil
+	case dashboardwidget.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case dashboardwidget.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DashboardWidget field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *DashboardWidgetMutation) AddedFields() []string {
+	var fields []string
+	if m.addlayout_id != nil {
+		fields = append(fields, dashboardwidget.FieldLayoutID)
+	}
+	if m.addposition != nil {
+		fields = append(fields, dashboardwidget.FieldPosition)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *DashboardWidgetMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case dashboardwidget.FieldLayoutID:
+		return m.AddedLayoutID()
+	case dashboardwidget.FieldPosition:
+		return m.AddedPosition()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *DashboardWidgetMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case dashboardwidget.FieldLayoutID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLayoutID(v)
+		return nil
+	case dashboardwidget.FieldPosition:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPosition(v)
+		return nil
+	}
+	return fmt.Errorf("unknown DashboardWidget numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *DashboardWidgetMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *DashboardWidgetMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *DashboardWidgetMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown DashboardWidget nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *DashboardWidgetMutation) ResetField(name string) error {
+	switch name {
+	case dashboardwidget.FieldLayoutID:
+		m.ResetLayoutID()
+		return nil
+	case dashboardwidget.FieldWidgetType:
+		m.ResetWidgetType()
+		return nil
+	case dashboardwidget.FieldTitle:
+		m.ResetTitle()
+		return nil
+	case dashboardwidget.FieldPosition:
+		m.ResetPosition()
+		return nil
+	case dashboardwidget.FieldHidden:
+		m.ResetHidden()
+		return nil
+	case dashboardwidget.FieldConfig:
+		m.ResetConfig()
+		return nil
+	case dashboardwidget.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case dashboardwidget.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown DashboardWidget field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *DashboardWidgetMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *DashboardWidgetMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *DashboardWidgetMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *DashboardWidgetMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *DashboardWidgetMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *DashboardWidgetMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *DashboardWidgetMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown DashboardWidget unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *DashboardWidgetMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown DashboardWidget edge %s", name)
 }
 
 // EstimateMutation represents an operation that mutates the Estimate nodes in the graph.

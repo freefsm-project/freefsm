@@ -808,36 +808,47 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 .clock-widget {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.35rem;
   text-align: center;
 }
 
 .clock-status {
-  margin-bottom: 0.25rem;
-  font-size: 1.25rem;
+  margin: 0;
+  color: var(--pico-muted-color);
+  font-size: 0.82rem;
 }
 
 .clock-duration {
-  margin-bottom: 0.25rem;
-  font-size: 2rem;
+  margin: 0;
+  font-size: 1.65rem;
   font-weight: bold;
+  line-height: 1.1;
 }
 
 .clock-duration-empty {
-  margin-bottom: 0.5rem;
+  margin-top: 0.25rem;
 }
 
 .clock-note {
-  margin-bottom: 1rem;
+  margin: 0;
   color: var(--pico-muted-color);
-  font-size: 0.85rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
 }
 
 .clock-form {
-  display: inline;
+  margin: auto 0 0;
 }
 
 .clock-button {
   width: 100%;
+}
+
+.clock-widget footer {
+  margin-top: 0.25rem;
 }
 
 .pagination-nav,
@@ -1519,6 +1530,58 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
 }
 
 /* Dashboard */
+.dashboard-toolbar,
+.dashboard-add-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-toolbar form,
+.dashboard-widget-controls form {
+  margin: 0;
+}
+
+.dashboard-toolbar a[role="button"],
+.dashboard-toolbar button,
+.dashboard-add-header a[role="button"] {
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+}
+
+.dashboard-widget-shell {
+  min-width: 0;
+}
+
+.dashboard-widget-controls {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.18rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-widget-controls .dashboard-control-button {
+  width: 1.45rem;
+  height: 1.45rem;
+  padding: 0;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.dashboard-add-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.dashboard-add-card {
+  margin: 0;
+}
+
 .dashboard-overview {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1534,14 +1597,37 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
   padding: 0.75rem;
 }
 
+.dashboard-overview > .dashboard-stat {
+  min-height: 180px;
+}
+
 .dashboard-stat header,
 .dashboard-panel header {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
   padding-bottom: 0.45rem;
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   font-weight: 600;
+  line-height: 1.15;
   color: var(--pico-muted-color);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding-bottom: 0.45rem;
+}
+
+.dashboard-card-top header {
+  min-width: 0;
+  flex: 1;
+  padding-bottom: 0;
 }
 
 .dashboard-metric {
@@ -1582,6 +1668,84 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
 .dashboard-section-title {
   margin: 1.25rem 0 0.5rem;
   font-size: 1rem;
+}
+
+.dashboard-today {
+  gap: 0.35rem;
+}
+
+.dashboard-today-body {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.dashboard-today-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.22rem 0.45rem;
+}
+
+.dashboard-today-grid div {
+  min-width: 0;
+}
+
+.dashboard-today-grid span {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-today-grid small,
+.dashboard-gauge-center small {
+  color: var(--pico-muted-color);
+  font-size: 0.65rem;
+  line-height: 1.1;
+}
+
+.dashboard-gauge-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-gauge {
+  --gauge-value: 0%;
+  width: 123px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: conic-gradient(var(--pico-primary) var(--gauge-value), var(--pico-muted-border-color) 0);
+  display: grid;
+  place-items: center;
+}
+
+.dashboard-gauge::before {
+  content: "";
+  width: 82%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--pico-card-background-color, var(--pico-background-color));
+  grid-area: 1 / 1;
+}
+
+.dashboard-gauge-center {
+  grid-area: 1 / 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  position: relative;
+}
+
+.dashboard-gauge-center strong {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.dashboard-gauge-center small {
+  max-width: 93px;
 }
 
 .dashboard-work-queues {

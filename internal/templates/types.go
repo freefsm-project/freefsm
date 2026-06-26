@@ -82,6 +82,12 @@ type SetupPageData struct {
 type DashboardData struct {
 	Stats       services.DashboardStats
 	ClockWidget ClockWidgetData
+	Widgets     []services.DashboardWidgetView
+	EditMode    bool
+}
+
+type DashboardAddWidgetData struct {
+	Widgets []services.DashboardWidgetDefinition
 }
 
 type RecentJob struct {

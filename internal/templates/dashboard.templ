@@ -1,145 +1,232 @@
 package templates
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/MartialM1nd/freefsm/internal/services"
+)
 
 templ DashboardPage(p DashboardData) {
 	@Layout("Dashboard") {
+		<div class="dashboard-toolbar">
+			if p.EditMode {
+				<a href="/" role="button" class="outline">Done</a>
+				<a href="/dashboard/widgets/new" role="button" class="outline">Add Widget</a>
+				if canAdmin(ctx) {
+					<form action="/dashboard/widgets/company-default" method="post">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button type="submit" class="outline secondary">Save Company Default</button>
+					</form>
+				}
+				<form action="/dashboard/widgets/reset" method="post">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<button type="submit" class="outline secondary">Reset</button>
+				</form>
+			} else {
+				<a href="/?edit_dashboard=1" role="button" class="outline">Customize Dashboard</a>
+			}
+		</div>
 		<div class="dashboard-overview">
-			@ClockWidget(p.ClockWidget)
-			if canManageOperational(ctx) {
-				<article class="dashboard-stat">
-					<header>Customers</header>
-					<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalCustomers) }</p>
-					<p class="dashboard-meta">{ fmt.Sprintf("%d new this month", p.Stats.NewCustomersThisMonth) }</p>
-					<footer><a href="/customers" role="button" class="outline">View Customers</a></footer>
-				</article>
-				<article class="dashboard-stat">
-					<header>Jobs</header>
-					<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalJobs) }</p>
-					<p class="dashboard-meta">
-						if p.Stats.JobsOverdue > 0 {
-							<span class="dashboard-danger">{ fmt.Sprintf("%d overdue", p.Stats.JobsOverdue) }</span>
-						} else {
-							<span>No overdue jobs</span>
-						}
-					</p>
-					<footer><a href="/jobs" role="button" class="outline">View Jobs</a></footer>
-				</article>
-				<article class="dashboard-stat">
-					<header>Invoices</header>
-					<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalInvoices) }</p>
-					<p class="dashboard-meta">
-						{ fmt.Sprintf("%d paid, %d unpaid", p.Stats.InvoicesPaid, p.Stats.InvoicesUnpaid) }
-						if p.Stats.InvoicesOverdue > 0 {
-							<span>, <span class="dashboard-danger">{ fmt.Sprintf("%d overdue", p.Stats.InvoicesOverdue) }</span></span>
-						}
-					</p>
-					<footer><a href="/invoices" role="button" class="outline">View Invoices</a></footer>
-				</article>
-				<article class="dashboard-stat">
-					<header>Projects</header>
-					<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalProjects) }</p>
-					<p class="dashboard-meta">{ fmt.Sprintf("%d active, %d completed", p.Stats.ProjectsActive, p.Stats.ProjectsCompleted) }</p>
-					<footer><a href="/projects" role="button" class="outline">View Projects</a></footer>
+			for _, w := range p.Widgets {
+				if w.Type == "clock" {
+					<article class="dashboard-stat dashboard-widget-shell">
+						@DashboardCardTop("Time Clock", w, p.EditMode)
+						@ClockWidget(p.ClockWidget)
+					</article>
+				} else if w.Type == "customers" && canManageOperational(ctx) {
+					<article class="dashboard-stat">
+						@DashboardCardTop("Customers", w, p.EditMode)
+						<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalCustomers) }</p>
+						<p class="dashboard-meta">{ fmt.Sprintf("%d new this month", p.Stats.NewCustomersThisMonth) }</p>
+						<footer><a href="/customers" role="button" class="outline">View Customers</a></footer>
+					</article>
+				} else if w.Type == "jobs" && canManageOperational(ctx) {
+					<article class="dashboard-stat">
+						@DashboardCardTop("Jobs", w, p.EditMode)
+						<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalJobs) }</p>
+						<p class="dashboard-meta">
+							if p.Stats.JobsOverdue > 0 {
+								<span class="dashboard-danger">{ fmt.Sprintf("%d overdue", p.Stats.JobsOverdue) }</span>
+							} else {
+								<span>No overdue jobs</span>
+							}
+						</p>
+						<footer><a href="/jobs" role="button" class="outline">View Jobs</a></footer>
+					</article>
+				} else if w.Type == "invoices" && canManageOperational(ctx) {
+					<article class="dashboard-stat">
+						@DashboardCardTop("Invoices", w, p.EditMode)
+						<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalInvoices) }</p>
+						<p class="dashboard-meta">
+							{ fmt.Sprintf("%d paid, %d unpaid", p.Stats.InvoicesPaid, p.Stats.InvoicesUnpaid) }
+							if p.Stats.InvoicesOverdue > 0 {
+								<span>, <span class="dashboard-danger">{ fmt.Sprintf("%d overdue", p.Stats.InvoicesOverdue) }</span></span>
+							}
+						</p>
+						<footer><a href="/invoices" role="button" class="outline">View Invoices</a></footer>
+					</article>
+				} else if w.Type == "projects" && canManageOperational(ctx) {
+					<article class="dashboard-stat">
+						@DashboardCardTop("Projects", w, p.EditMode)
+						<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalProjects) }</p>
+						<p class="dashboard-meta">{ fmt.Sprintf("%d active, %d completed", p.Stats.ProjectsActive, p.Stats.ProjectsCompleted) }</p>
+						<footer><a href="/projects" role="button" class="outline">View Projects</a></footer>
+					</article>
+				} else if w.Type == "today_overview" && canManageOperational(ctx) {
+					<article class="dashboard-stat dashboard-today">
+						@DashboardCardTop("Overview - Today", w, p.EditMode)
+						<div class="dashboard-today-body">
+							<div class="dashboard-today-grid">
+								<div><span>{ fmt.Sprintf("%d", p.Stats.NewJobsToday) }</span><small>Jobs</small></div>
+								<div><span>{ fmt.Sprintf("%d", p.Stats.NewQuotesToday) }</span><small>Quotes</small></div>
+								<div><span>{ fmt.Sprintf("%d", p.Stats.NewInvoicesToday) }</span><small>Invoices</small></div>
+								<div><span>{ fmt.Sprintf("$%.2f", p.Stats.PaymentsCollectedToday) }</span><small>Payments</small></div>
+								<div><span>{ fmt.Sprintf("%d", p.Stats.CustomersCreatedToday) }</span><small>Customers</small></div>
+							</div>
+							<div class="dashboard-gauge-wrap">
+								<div class="dashboard-gauge" style={ fmt.Sprintf("--gauge-value:%d%%", p.Stats.JobsCompletedPercent) }>
+									<div class="dashboard-gauge-center">
+										<strong>{ fmt.Sprintf("%d/%d", p.Stats.JobsCompletedToday, p.Stats.JobsScheduledToday) }</strong>
+										<small>Done</small>
+									</div>
+								</div>
+							</div>
+						</div>
+					</article>
+				} else if w.Type == "assigned_work" && !canManageOperational(ctx) {
+					<article class="dashboard-panel">
+						@DashboardCardTop("Assigned Work", w, p.EditMode)
+						<p>Use Jobs or Schedule to view work assigned to you.</p>
+						<footer class="dashboard-assigned-actions">
+							<a href="/jobs" role="button" class="outline">View Jobs</a>
+							<a href="/schedule" role="button" class="outline">View Schedule</a>
+						</footer>
+					</article>
+				}
+			}
+		</div>
+		for _, w := range p.Widgets {
+			if w.Type == "recent_activity" && canManageOperational(ctx) {
+				<h3 class="dashboard-section-title">Recent Activity</h3>
+				@DashboardWidgetControls(w, p.EditMode)
+				<div class="dashboard-work-queues">
+					<article class="dashboard-panel">
+						<header>Recent Jobs</header>
+						<table>
+							<thead><tr><th>Job</th><th>Customer</th><th>Date</th></tr></thead>
+							<tbody>
+								if len(p.Stats.RecentJobs) == 0 {
+									<tr><td colspan="3" class="dashboard-empty">No recent jobs</td></tr>
+								}
+								for _, j := range p.Stats.RecentJobs {
+									<tr><td><a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) }>{ j.DisplayName }</a></td><td>{ j.Customer }</td><td><small>{ j.CreatedAt }</small></td></tr>
+								}
+							</tbody>
+						</table>
+					</article>
+					<article class="dashboard-panel">
+						<header>Recent Invoices</header>
+						<table>
+							<thead><tr><th>Invoice</th><th>Customer</th><th>Amount</th></tr></thead>
+							<tbody>
+								if len(p.Stats.RecentInvoices) == 0 {
+									<tr><td colspan="3" class="dashboard-empty">No recent invoices</td></tr>
+								}
+								for _, inv := range p.Stats.RecentInvoices {
+									<tr><td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", inv.ID)) }>{ inv.Title }</a></td><td>{ inv.Customer }</td><td class="dashboard-amount">{ fmt.Sprintf("$%.2f", inv.Total) }</td></tr>
+								}
+							</tbody>
+						</table>
+					</article>
+					<article class="dashboard-panel">
+						<header>Recent Estimates</header>
+						<table>
+							<thead><tr><th>Estimate</th><th>Customer</th><th>Amount</th></tr></thead>
+							<tbody>
+								if len(p.Stats.RecentEstimates) == 0 {
+									<tr><td colspan="3" class="dashboard-empty">No recent estimates</td></tr>
+								}
+								for _, e := range p.Stats.RecentEstimates {
+									<tr><td><a href={ templ.URL(fmt.Sprintf("/estimates/%d", e.ID)) }>{ e.Title }</a></td><td>{ e.Customer }</td><td class="dashboard-amount">{ fmt.Sprintf("$%.2f", e.Total) }</td></tr>
+								}
+							</tbody>
+						</table>
+					</article>
+				</div>
+			} else if w.Type == "financial_summary" && canManageOperational(ctx) {
+				<h3 class="dashboard-section-title">Financial Summary</h3>
+				@DashboardWidgetControls(w, p.EditMode)
+				<div class="dashboard-financials">
+					<article class="dashboard-stat"><header>Revenue This Month</header><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Stats.RevenueMonth) }</p></article>
+					<article class="dashboard-stat"><header>Outstanding Receivables</header><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Stats.OutstandingReceivables) }</p></article>
+					<article class="dashboard-stat">
+						<header>Overdue</header>
+						<p class="dashboard-metric dashboard-metric-sm">
+							if p.Stats.OverdueAmount > 0 {
+								<span class="dashboard-danger">{ fmt.Sprintf("$%.2f", p.Stats.OverdueAmount) }</span>
+							} else {
+								{ fmt.Sprintf("$%.2f", p.Stats.OverdueAmount) }
+							}
+						</p>
+						<p class="dashboard-meta">{ fmt.Sprintf("%d invoices", p.Stats.InvoicesOverdue) }</p>
+					</article>
+				</div>
+			}
+		}
+	}
+}
+
+templ DashboardCardTop(title string, w services.DashboardWidgetView, editMode bool) {
+	<div class="dashboard-card-top">
+		<header>{ title }</header>
+		@DashboardWidgetControls(w, editMode)
+	</div>
+}
+
+templ DashboardWidgetControls(w services.DashboardWidgetView, editMode bool) {
+	if editMode && w.Persisted {
+		<div class="dashboard-widget-controls">
+			<form action="/dashboard/widgets/reorder" method="post">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<input type="hidden" name="widget_id" value={ fmt.Sprintf("%d", w.ID) }/>
+				<input type="hidden" name="direction" value="up"/>
+				<button type="submit" class="outline secondary dashboard-control-button" aria-label="Move widget up" title="Move up">↑</button>
+			</form>
+			<form action="/dashboard/widgets/reorder" method="post">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<input type="hidden" name="widget_id" value={ fmt.Sprintf("%d", w.ID) }/>
+				<input type="hidden" name="direction" value="down"/>
+				<button type="submit" class="outline secondary dashboard-control-button" aria-label="Move widget down" title="Move down">↓</button>
+			</form>
+			<form action={ templ.URL(fmt.Sprintf("/dashboard/widgets/%d/remove", w.ID)) } method="post">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<button type="submit" class="outline secondary dashboard-control-button" aria-label="Remove widget" title="Remove">×</button>
+			</form>
+		</div>
+	}
+}
+
+templ DashboardAddWidgetPage(p DashboardAddWidgetData) {
+	@Layout("Add Dashboard Widget") {
+		<header class="dashboard-add-header">
+			<h2>Add Widget</h2>
+			<a href="/" role="button" class="outline">Back to Dashboard</a>
+		</header>
+		<div class="dashboard-add-grid">
+			if len(p.Widgets) == 0 {
+				<article><p>All available widgets are already on your dashboard.</p></article>
+			}
+			for _, w := range p.Widgets {
+				<article class="dashboard-add-card">
+					<header>{ w.Title }</header>
+					<p>{ w.Description }</p>
+					<form action="/dashboard/widgets/add" method="post">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<input type="hidden" name="widget_type" value={ w.Type }/>
+						<button type="submit">Add Widget</button>
+					</form>
 				</article>
 			}
 		</div>
-		if !canManageOperational(ctx) {
-			<article class="dashboard-panel">
-				<header>Assigned Work</header>
-				<p>Use Jobs or Schedule to view work assigned to you.</p>
-				<footer class="dashboard-assigned-actions">
-					<a href="/jobs" role="button" class="outline">View Jobs</a>
-					<a href="/schedule" role="button" class="outline">View Schedule</a>
-				</footer>
-			</article>
-		}
-		if canManageOperational(ctx) {
-			<h3 class="dashboard-section-title">Recent Activity</h3>
-			<div class="dashboard-work-queues">
-				<article class="dashboard-panel">
-					<header>Recent Jobs</header>
-					<table>
-						<thead>
-							<tr><th>Job</th><th>Customer</th><th>Date</th></tr>
-						</thead>
-						<tbody>
-							if len(p.Stats.RecentJobs) == 0 {
-								<tr><td colspan="3" class="dashboard-empty">No recent jobs</td></tr>
-							}
-							for _, j := range p.Stats.RecentJobs {
-								<tr>
-									<td><a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) }>{ j.DisplayName }</a></td>
-									<td>{ j.Customer }</td>
-									<td><small>{ j.CreatedAt }</small></td>
-								</tr>
-							}
-						</tbody>
-					</table>
-				</article>
-				<article class="dashboard-panel">
-					<header>Recent Invoices</header>
-					<table>
-						<thead>
-							<tr><th>Invoice</th><th>Customer</th><th>Amount</th></tr>
-						</thead>
-						<tbody>
-							if len(p.Stats.RecentInvoices) == 0 {
-								<tr><td colspan="3" class="dashboard-empty">No recent invoices</td></tr>
-							}
-							for _, inv := range p.Stats.RecentInvoices {
-								<tr>
-									<td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", inv.ID)) }>{ inv.Title }</a></td>
-									<td>{ inv.Customer }</td>
-									<td class="dashboard-amount">{ fmt.Sprintf("$%.2f", inv.Total) }</td>
-								</tr>
-							}
-						</tbody>
-					</table>
-				</article>
-				<article class="dashboard-panel">
-					<header>Recent Estimates</header>
-					<table>
-						<thead>
-							<tr><th>Estimate</th><th>Customer</th><th>Amount</th></tr>
-						</thead>
-						<tbody>
-							if len(p.Stats.RecentEstimates) == 0 {
-								<tr><td colspan="3" class="dashboard-empty">No recent estimates</td></tr>
-							}
-							for _, e := range p.Stats.RecentEstimates {
-								<tr>
-									<td><a href={ templ.URL(fmt.Sprintf("/estimates/%d", e.ID)) }>{ e.Title }</a></td>
-									<td>{ e.Customer }</td>
-									<td class="dashboard-amount">{ fmt.Sprintf("$%.2f", e.Total) }</td>
-								</tr>
-							}
-						</tbody>
-					</table>
-				</article>
-			</div>
-			<h3 class="dashboard-section-title">Financial Summary</h3>
-			<div class="dashboard-financials">
-				<article class="dashboard-stat">
-					<header>Revenue This Month</header>
-					<p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Stats.RevenueMonth) }</p>
-				</article>
-				<article class="dashboard-stat">
-					<header>Outstanding Receivables</header>
-					<p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Stats.OutstandingReceivables) }</p>
-				</article>
-				<article class="dashboard-stat">
-					<header>Overdue</header>
-					<p class="dashboard-metric dashboard-metric-sm">
-						if p.Stats.OverdueAmount > 0 {
-							<span class="dashboard-danger">{ fmt.Sprintf("$%.2f", p.Stats.OverdueAmount) }</span>
-						} else {
-							{ fmt.Sprintf("$%.2f", p.Stats.OverdueAmount) }
-						}
-					</p>
-					<p class="dashboard-meta">{ fmt.Sprintf("%d invoices", p.Stats.InvoicesOverdue) }</p>
-				</article>
-			</div>
-		}
 	}
 }

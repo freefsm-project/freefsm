@@ -30,14 +30,14 @@ func ClockWidget(p ClockWidgetData) templ.Component {
 		}
 		ctx = templ.ClearChildren(ctx)
 		if p.IsClockedIn {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<article class=\"clock-widget\" id=\"clock-widget\"><header>Time Clock</header><p class=\"clock-status\">Clocked in</p><p class=\"clock-duration\" id=\"clock-duration\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"clock-widget\" id=\"clock-widget\"><p class=\"clock-status\">Clocked in</p><p class=\"clock-duration\" id=\"clock-duration\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(p.Duration)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/clock_widget.templ`, Line: 8, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/clock_widget.templ`, Line: 7, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -50,7 +50,7 @@ func ClockWidget(p ClockWidgetData) templ.Component {
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(p.ClockInTime)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/clock_widget.templ`, Line: 10, Col: 25}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/clock_widget.templ`, Line: 9, Col: 25}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -63,31 +63,31 @@ func ClockWidget(p ClockWidgetData) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/clock_widget.templ`, Line: 13, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/clock_widget.templ`, Line: 12, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\"> <button type=\"submit\" class=\"contrast clock-button\">Clock Out</button></form><footer><a href=\"/time-entries\" role=\"button\" class=\"outline small\">View Timesheets</a></footer></article>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\"> <button type=\"submit\" class=\"contrast clock-button\">Clock Out</button></form><footer><a href=\"/time-entries\" role=\"button\" class=\"outline small\">View Timesheets</a></footer></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<article class=\"clock-widget\" id=\"clock-widget\"><header>Time Clock</header><p class=\"clock-duration clock-duration-empty\">&ndash;:&ndash;&ndash;</p><p class=\"clock-note\">Not clocked in</p><form action=\"/time-entries/clock-in\" method=\"post\" class=\"clock-form\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<div class=\"clock-widget\" id=\"clock-widget\"><p class=\"clock-duration clock-duration-empty\">&ndash;:&ndash;&ndash;</p><p class=\"clock-note\">Not clocked in</p><form action=\"/time-entries/clock-in\" method=\"post\" class=\"clock-form\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/clock_widget.templ`, Line: 24, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/clock_widget.templ`, Line: 22, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\"> <button type=\"submit\" class=\"clock-button\">Clock In</button></form><footer><a href=\"/time-entries\" role=\"button\" class=\"outline small\">View Timesheets</a></footer></article>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\"> <button type=\"submit\" class=\"clock-button\">Clock In</button></form><footer><a href=\"/time-entries\" role=\"button\" class=\"outline small\">View Timesheets</a></footer></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

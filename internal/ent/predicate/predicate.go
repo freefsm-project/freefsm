@@ -33,6 +33,12 @@ type Customer func(*sql.Selector)
 // CustomerContact is the predicate function for customercontact builders.
 type CustomerContact func(*sql.Selector)
 
+// DashboardLayout is the predicate function for dashboardlayout builders.
+type DashboardLayout func(*sql.Selector)
+
+// DashboardWidget is the predicate function for dashboardwidget builders.
+type DashboardWidget func(*sql.Selector)
+
 // Estimate is the predicate function for estimate builders.
 type Estimate func(*sql.Selector)
 

@@ -30,6 +30,10 @@ type Tx struct {
 	Customer *CustomerClient
 	// CustomerContact is the client for interacting with the CustomerContact builders.
 	CustomerContact *CustomerContactClient
+	// DashboardLayout is the client for interacting with the DashboardLayout builders.
+	DashboardLayout *DashboardLayoutClient
+	// DashboardWidget is the client for interacting with the DashboardWidget builders.
+	DashboardWidget *DashboardWidgetClient
 	// Estimate is the client for interacting with the Estimate builders.
 	Estimate *EstimateClient
 	// File is the client for interacting with the File builders.
@@ -200,6 +204,8 @@ func (tx *Tx) init() {
 	tx.CustomFieldDefinition = NewCustomFieldDefinitionClient(tx.config)
 	tx.Customer = NewCustomerClient(tx.config)
 	tx.CustomerContact = NewCustomerContactClient(tx.config)
+	tx.DashboardLayout = NewDashboardLayoutClient(tx.config)
+	tx.DashboardWidget = NewDashboardWidgetClient(tx.config)
 	tx.Estimate = NewEstimateClient(tx.config)
 	tx.File = NewFileClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)

@@ -24,6 +24,8 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/customer"
 	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
 	"github.com/MartialM1nd/freefsm/internal/ent/customfielddefinition"
+	"github.com/MartialM1nd/freefsm/internal/ent/dashboardlayout"
+	"github.com/MartialM1nd/freefsm/internal/ent/dashboardwidget"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/file"
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
@@ -64,6 +66,10 @@ type Client struct {
 	Customer *CustomerClient
 	// CustomerContact is the client for interacting with the CustomerContact builders.
 	CustomerContact *CustomerContactClient
+	// DashboardLayout is the client for interacting with the DashboardLayout builders.
+	DashboardLayout *DashboardLayoutClient
+	// DashboardWidget is the client for interacting with the DashboardWidget builders.
+	DashboardWidget *DashboardWidgetClient
 	// Estimate is the client for interacting with the Estimate builders.
 	Estimate *EstimateClient
 	// File is the client for interacting with the File builders.
@@ -114,6 +120,8 @@ func (c *Client) init() {
 	c.CustomFieldDefinition = NewCustomFieldDefinitionClient(c.config)
 	c.Customer = NewCustomerClient(c.config)
 	c.CustomerContact = NewCustomerContactClient(c.config)
+	c.DashboardLayout = NewDashboardLayoutClient(c.config)
+	c.DashboardWidget = NewDashboardWidgetClient(c.config)
 	c.Estimate = NewEstimateClient(c.config)
 	c.File = NewFileClient(c.config)
 	c.Invoice = NewInvoiceClient(c.config)
@@ -230,6 +238,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		CustomFieldDefinition: NewCustomFieldDefinitionClient(cfg),
 		Customer:              NewCustomerClient(cfg),
 		CustomerContact:       NewCustomerContactClient(cfg),
+		DashboardLayout:       NewDashboardLayoutClient(cfg),
+		DashboardWidget:       NewDashboardWidgetClient(cfg),
 		Estimate:              NewEstimateClient(cfg),
 		File:                  NewFileClient(cfg),
 		Invoice:               NewInvoiceClient(cfg),
@@ -273,6 +283,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		CustomFieldDefinition: NewCustomFieldDefinitionClient(cfg),
 		Customer:              NewCustomerClient(cfg),
 		CustomerContact:       NewCustomerContactClient(cfg),
+		DashboardLayout:       NewDashboardLayoutClient(cfg),
+		DashboardWidget:       NewDashboardWidgetClient(cfg),
 		Estimate:              NewEstimateClient(cfg),
 		File:                  NewFileClient(cfg),
 		Invoice:               NewInvoiceClient(cfg),
@@ -319,9 +331,9 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.ActivityLog, c.Asset, c.AssetStatus, c.AssetType, c.Comment,
 		c.CompanySettings, c.CustomFieldDefinition, c.Customer, c.CustomerContact,
-		c.Estimate, c.File, c.Invoice, c.Item, c.Job, c.JobAssignment, c.Location,
-		c.PasswordResetToken, c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink,
-		c.TimeEntry, c.User,
+		c.DashboardLayout, c.DashboardWidget, c.Estimate, c.File, c.Invoice, c.Item,
+		c.Job, c.JobAssignment, c.Location, c.PasswordResetToken, c.Project, c.Status,
+		c.StatusWorkflow, c.Tag, c.TagLink, c.TimeEntry, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -333,9 +345,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.ActivityLog, c.Asset, c.AssetStatus, c.AssetType, c.Comment,
 		c.CompanySettings, c.CustomFieldDefinition, c.Customer, c.CustomerContact,
-		c.Estimate, c.File, c.Invoice, c.Item, c.Job, c.JobAssignment, c.Location,
-		c.PasswordResetToken, c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink,
-		c.TimeEntry, c.User,
+		c.DashboardLayout, c.DashboardWidget, c.Estimate, c.File, c.Invoice, c.Item,
+		c.Job, c.JobAssignment, c.Location, c.PasswordResetToken, c.Project, c.Status,
+		c.StatusWorkflow, c.Tag, c.TagLink, c.TimeEntry, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -362,6 +374,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Customer.mutate(ctx, m)
 	case *CustomerContactMutation:
 		return c.CustomerContact.mutate(ctx, m)
+	case *DashboardLayoutMutation:
+		return c.DashboardLayout.mutate(ctx, m)
+	case *DashboardWidgetMutation:
+		return c.DashboardWidget.mutate(ctx, m)
 	case *EstimateMutation:
 		return c.Estimate.mutate(ctx, m)
 	case *FileMutation:
@@ -1591,6 +1607,272 @@ func (c *CustomerContactClient) mutate(ctx context.Context, m *CustomerContactMu
 		return (&CustomerContactDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CustomerContact mutation op: %q", m.Op())
+	}
+}
+
+// DashboardLayoutClient is a client for the DashboardLayout schema.
+type DashboardLayoutClient struct {
+	config
+}
+
+// NewDashboardLayoutClient returns a client for the DashboardLayout from the given config.
+func NewDashboardLayoutClient(c config) *DashboardLayoutClient {
+	return &DashboardLayoutClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `dashboardlayout.Hooks(f(g(h())))`.
+func (c *DashboardLayoutClient) Use(hooks ...Hook) {
+	c.hooks.DashboardLayout = append(c.hooks.DashboardLayout, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `dashboardlayout.Intercept(f(g(h())))`.
+func (c *DashboardLayoutClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DashboardLayout = append(c.inters.DashboardLayout, interceptors...)
+}
+
+// Create returns a builder for creating a DashboardLayout entity.
+func (c *DashboardLayoutClient) Create() *DashboardLayoutCreate {
+	mutation := newDashboardLayoutMutation(c.config, OpCreate)
+	return &DashboardLayoutCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DashboardLayout entities.
+func (c *DashboardLayoutClient) CreateBulk(builders ...*DashboardLayoutCreate) *DashboardLayoutCreateBulk {
+	return &DashboardLayoutCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DashboardLayoutClient) MapCreateBulk(slice any, setFunc func(*DashboardLayoutCreate, int)) *DashboardLayoutCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DashboardLayoutCreateBulk{err: fmt.Errorf("calling to DashboardLayoutClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DashboardLayoutCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DashboardLayoutCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DashboardLayout.
+func (c *DashboardLayoutClient) Update() *DashboardLayoutUpdate {
+	mutation := newDashboardLayoutMutation(c.config, OpUpdate)
+	return &DashboardLayoutUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DashboardLayoutClient) UpdateOne(_m *DashboardLayout) *DashboardLayoutUpdateOne {
+	mutation := newDashboardLayoutMutation(c.config, OpUpdateOne, withDashboardLayout(_m))
+	return &DashboardLayoutUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DashboardLayoutClient) UpdateOneID(id int64) *DashboardLayoutUpdateOne {
+	mutation := newDashboardLayoutMutation(c.config, OpUpdateOne, withDashboardLayoutID(id))
+	return &DashboardLayoutUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DashboardLayout.
+func (c *DashboardLayoutClient) Delete() *DashboardLayoutDelete {
+	mutation := newDashboardLayoutMutation(c.config, OpDelete)
+	return &DashboardLayoutDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DashboardLayoutClient) DeleteOne(_m *DashboardLayout) *DashboardLayoutDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DashboardLayoutClient) DeleteOneID(id int64) *DashboardLayoutDeleteOne {
+	builder := c.Delete().Where(dashboardlayout.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DashboardLayoutDeleteOne{builder}
+}
+
+// Query returns a query builder for DashboardLayout.
+func (c *DashboardLayoutClient) Query() *DashboardLayoutQuery {
+	return &DashboardLayoutQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDashboardLayout},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DashboardLayout entity by its id.
+func (c *DashboardLayoutClient) Get(ctx context.Context, id int64) (*DashboardLayout, error) {
+	return c.Query().Where(dashboardlayout.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DashboardLayoutClient) GetX(ctx context.Context, id int64) *DashboardLayout {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DashboardLayoutClient) Hooks() []Hook {
+	return c.hooks.DashboardLayout
+}
+
+// Interceptors returns the client interceptors.
+func (c *DashboardLayoutClient) Interceptors() []Interceptor {
+	return c.inters.DashboardLayout
+}
+
+func (c *DashboardLayoutClient) mutate(ctx context.Context, m *DashboardLayoutMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DashboardLayoutCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DashboardLayoutUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DashboardLayoutUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DashboardLayoutDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DashboardLayout mutation op: %q", m.Op())
+	}
+}
+
+// DashboardWidgetClient is a client for the DashboardWidget schema.
+type DashboardWidgetClient struct {
+	config
+}
+
+// NewDashboardWidgetClient returns a client for the DashboardWidget from the given config.
+func NewDashboardWidgetClient(c config) *DashboardWidgetClient {
+	return &DashboardWidgetClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `dashboardwidget.Hooks(f(g(h())))`.
+func (c *DashboardWidgetClient) Use(hooks ...Hook) {
+	c.hooks.DashboardWidget = append(c.hooks.DashboardWidget, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `dashboardwidget.Intercept(f(g(h())))`.
+func (c *DashboardWidgetClient) Intercept(interceptors ...Interceptor) {
+	c.inters.DashboardWidget = append(c.inters.DashboardWidget, interceptors...)
+}
+
+// Create returns a builder for creating a DashboardWidget entity.
+func (c *DashboardWidgetClient) Create() *DashboardWidgetCreate {
+	mutation := newDashboardWidgetMutation(c.config, OpCreate)
+	return &DashboardWidgetCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of DashboardWidget entities.
+func (c *DashboardWidgetClient) CreateBulk(builders ...*DashboardWidgetCreate) *DashboardWidgetCreateBulk {
+	return &DashboardWidgetCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *DashboardWidgetClient) MapCreateBulk(slice any, setFunc func(*DashboardWidgetCreate, int)) *DashboardWidgetCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &DashboardWidgetCreateBulk{err: fmt.Errorf("calling to DashboardWidgetClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*DashboardWidgetCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &DashboardWidgetCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for DashboardWidget.
+func (c *DashboardWidgetClient) Update() *DashboardWidgetUpdate {
+	mutation := newDashboardWidgetMutation(c.config, OpUpdate)
+	return &DashboardWidgetUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *DashboardWidgetClient) UpdateOne(_m *DashboardWidget) *DashboardWidgetUpdateOne {
+	mutation := newDashboardWidgetMutation(c.config, OpUpdateOne, withDashboardWidget(_m))
+	return &DashboardWidgetUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *DashboardWidgetClient) UpdateOneID(id int64) *DashboardWidgetUpdateOne {
+	mutation := newDashboardWidgetMutation(c.config, OpUpdateOne, withDashboardWidgetID(id))
+	return &DashboardWidgetUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for DashboardWidget.
+func (c *DashboardWidgetClient) Delete() *DashboardWidgetDelete {
+	mutation := newDashboardWidgetMutation(c.config, OpDelete)
+	return &DashboardWidgetDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *DashboardWidgetClient) DeleteOne(_m *DashboardWidget) *DashboardWidgetDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *DashboardWidgetClient) DeleteOneID(id int64) *DashboardWidgetDeleteOne {
+	builder := c.Delete().Where(dashboardwidget.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &DashboardWidgetDeleteOne{builder}
+}
+
+// Query returns a query builder for DashboardWidget.
+func (c *DashboardWidgetClient) Query() *DashboardWidgetQuery {
+	return &DashboardWidgetQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeDashboardWidget},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a DashboardWidget entity by its id.
+func (c *DashboardWidgetClient) Get(ctx context.Context, id int64) (*DashboardWidget, error) {
+	return c.Query().Where(dashboardwidget.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *DashboardWidgetClient) GetX(ctx context.Context, id int64) *DashboardWidget {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *DashboardWidgetClient) Hooks() []Hook {
+	return c.hooks.DashboardWidget
+}
+
+// Interceptors returns the client interceptors.
+func (c *DashboardWidgetClient) Interceptors() []Interceptor {
+	return c.inters.DashboardWidget
+}
+
+func (c *DashboardWidgetClient) mutate(ctx context.Context, m *DashboardWidgetMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&DashboardWidgetCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&DashboardWidgetUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&DashboardWidgetUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&DashboardWidgetDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown DashboardWidget mutation op: %q", m.Op())
 	}
 }
 
@@ -3625,14 +3907,16 @@ func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error)
 type (
 	hooks struct {
 		ActivityLog, Asset, AssetStatus, AssetType, Comment, CompanySettings,
-		CustomFieldDefinition, Customer, CustomerContact, Estimate, File, Invoice,
-		Item, Job, JobAssignment, Location, PasswordResetToken, Project, Status,
-		StatusWorkflow, Tag, TagLink, TimeEntry, User []ent.Hook
+		CustomFieldDefinition, Customer, CustomerContact, DashboardLayout,
+		DashboardWidget, Estimate, File, Invoice, Item, Job, JobAssignment, Location,
+		PasswordResetToken, Project, Status, StatusWorkflow, Tag, TagLink, TimeEntry,
+		User []ent.Hook
 	}
 	inters struct {
 		ActivityLog, Asset, AssetStatus, AssetType, Comment, CompanySettings,
-		CustomFieldDefinition, Customer, CustomerContact, Estimate, File, Invoice,
-		Item, Job, JobAssignment, Location, PasswordResetToken, Project, Status,
-		StatusWorkflow, Tag, TagLink, TimeEntry, User []ent.Interceptor
+		CustomFieldDefinition, Customer, CustomerContact, DashboardLayout,
+		DashboardWidget, Estimate, File, Invoice, Item, Job, JobAssignment, Location,
+		PasswordResetToken, Project, Status, StatusWorkflow, Tag, TagLink, TimeEntry,
+		User []ent.Interceptor
 	}
 )

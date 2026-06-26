@@ -117,6 +117,30 @@ func (f CustomerContactFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Va
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CustomerContactMutation", m)
 }
 
+// The DashboardLayoutFunc type is an adapter to allow the use of ordinary
+// function as DashboardLayout mutator.
+type DashboardLayoutFunc func(context.Context, *ent.DashboardLayoutMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DashboardLayoutFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DashboardLayoutMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DashboardLayoutMutation", m)
+}
+
+// The DashboardWidgetFunc type is an adapter to allow the use of ordinary
+// function as DashboardWidget mutator.
+type DashboardWidgetFunc func(context.Context, *ent.DashboardWidgetMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f DashboardWidgetFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.DashboardWidgetMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.DashboardWidgetMutation", m)
+}
+
 // The EstimateFunc type is an adapter to allow the use of ordinary
 // function as Estimate mutator.
 type EstimateFunc func(context.Context, *ent.EstimateMutation) (ent.Value, error)

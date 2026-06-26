@@ -2,8 +2,7 @@ package templates
 
 templ ClockWidget(p ClockWidgetData) {
 	if p.IsClockedIn {
-		<article class="clock-widget" id="clock-widget">
-			<header>Time Clock</header>
+		<div class="clock-widget" id="clock-widget">
 			<p class="clock-status">Clocked in</p>
 			<p class="clock-duration" id="clock-duration">{ p.Duration }</p>
 			<p class="clock-note">
@@ -14,10 +13,9 @@ templ ClockWidget(p ClockWidgetData) {
 				<button type="submit" class="contrast clock-button">Clock Out</button>
 			</form>
 			<footer><a href="/time-entries" role="button" class="outline small">View Timesheets</a></footer>
-		</article>
+		</div>
 	} else {
-		<article class="clock-widget" id="clock-widget">
-			<header>Time Clock</header>
+		<div class="clock-widget" id="clock-widget">
 			<p class="clock-duration clock-duration-empty">&ndash;:&ndash;&ndash;</p>
 			<p class="clock-note">Not clocked in</p>
 			<form action="/time-entries/clock-in" method="post" class="clock-form">
@@ -25,6 +23,6 @@ templ ClockWidget(p ClockWidgetData) {
 				<button type="submit" class="clock-button">Clock In</button>
 			</form>
 			<footer><a href="/time-entries" role="button" class="outline small">View Timesheets</a></footer>
-		</article>
+		</div>
 	}
 }
