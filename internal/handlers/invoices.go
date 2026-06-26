@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
@@ -19,6 +20,7 @@ type InvoiceHandler struct {
 	svc         *services.InvoiceService
 	custSvc     *services.CustomerService
 	jobSvc      *services.JobService
+	assetSvc    *services.AssetService
 	statusSvc   *services.StatusService
 	itemSvc     *services.ItemService
 	tagSvc      *services.TagService
@@ -29,8 +31,8 @@ type InvoiceHandler struct {
 	activitySvc *services.ActivityService
 }
 
-func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService) *InvoiceHandler {
-	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc}
+func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, assetSvc *services.AssetService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService) *InvoiceHandler {
+	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, assetSvc: assetSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc}
 }
 
 func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +94,16 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 		customer, _ := h.custSvc.GetByID(r.Context(), *i.CustomerID)
 		if customer != nil {
 			d.Customer = customer.DisplayName
+		}
+	}
+	if i.JobID != nil && *i.JobID > 0 {
+		job, _ := h.jobSvc.GetByID(r.Context(), *i.JobID)
+		if job != nil && job.AssetID != nil && *job.AssetID > 0 {
+			asset, _ := h.assetSvc.GetByID(r.Context(), *job.AssetID)
+			if asset != nil {
+				d.AssetID = asset.ID
+				d.AssetName = asset.Name
+			}
 		}
 	}
 	d.LineItems = h.svc.LineItems(i)
@@ -325,6 +337,45 @@ func (h *InvoiceHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/invoices/"+strconv.FormatInt(id, 10)+"?flash=Invoice+restored", http.StatusSeeOther)
 }
 
+func (h *InvoiceHandler) Finalize(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	i, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	status, err := h.statusSvc.FindByName(r.Context(), "invoice", "Invoiced")
+	if err != nil || status == nil {
+		http.Error(w, "invoice status 'Invoiced' not found", 500)
+		return
+	}
+	defaultDueDays := 30
+	if cs := middleware.CompanyFromContext(r.Context()); cs != nil {
+		defaultDueDays = cs.DefaultDueDays
+	}
+	now := time.Now().In(middleware.CompanyLocation(r.Context()))
+	invoiceDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	result, err := h.svc.Finalize(r.Context(), id, status.ID, invoiceDate, defaultDueDays)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "finalized", "invoice", id, map[string]interface{}{
+			"entity_name": result.Title,
+			"actor_name":  u.Name,
+			"old_status":  statusName(h.statusesForSelect(r.Context()), i.StatusID),
+			"new_status":  status.Name,
+		})
+	}
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+finalized", id), http.StatusSeeOther)
+}
+
 func (h *InvoiceHandler) statusesForSelect(ctx context.Context) []*ent.Status {
 	statuses, _ := h.statusSvc.ByObjectType(ctx, "invoice")
 	return statuses
@@ -429,10 +480,74 @@ func invStatusID(i *ent.Invoice) int64 {
 	return *i.StatusID
 }
 
+func (h *InvoiceHandler) invoiceStatusByName(ctx context.Context, name string) (*ent.Status, error) {
+	status, err := h.statusSvc.FindByName(ctx, "invoice", name)
+	if err != nil {
+		return nil, fmt.Errorf("invoice status %q not found", name)
+	}
+	return status, nil
+}
+
+func (h *InvoiceHandler) invoiceHasStatus(ctx context.Context, i *ent.Invoice, names ...string) bool {
+	current := statusName(h.statusesForSelect(ctx), i.StatusID)
+	for _, name := range names {
+		if strings.EqualFold(current, name) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *InvoiceHandler) updateInvoiceStatusAfterEmail(ctx context.Context, id int64) error {
+	i, err := h.svc.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if h.invoiceHasStatus(ctx, i, "Paid", "Partially Paid", "Void") {
+		return nil
+	}
+	sentStatus, err := h.invoiceStatusByName(ctx, "Sent")
+	if err != nil {
+		return err
+	}
+	return h.svc.SetStatus(ctx, id, sentStatus.ID)
+}
+
+func (h *InvoiceHandler) updateInvoiceStatusAfterPayment(ctx context.Context, id int64) error {
+	i, err := h.svc.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if h.invoiceHasStatus(ctx, i, "Void") {
+		return nil
+	}
+	total, paid, err := services.InvoiceAmountDue(i)
+	if err != nil {
+		return err
+	}
+	statusName := "Partially Paid"
+	if paid+0.005 >= total {
+		statusName = "Paid"
+	}
+	if paid <= 0 {
+		return nil
+	}
+	newStatus, err := h.invoiceStatusByName(ctx, statusName)
+	if err != nil {
+		return err
+	}
+	return h.svc.SetStatus(ctx, id, newStatus.ID)
+}
+
 func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
+		return
+	}
+	j, err := h.jobSvc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
 		return
 	}
 	cs := middleware.CompanyFromContext(r.Context())
@@ -440,19 +555,34 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 	if cs != nil {
 		defaultTaxRate = cs.DefaultTaxRate
 	}
-	inv, err := h.svc.CreateFromJob(r.Context(), id, h.statusSvc, defaultTaxRate)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
+	statuses := h.statusesForSelect(r.Context())
+	var statusID int64
+	if draft, _ := h.statusSvc.FindByName(r.Context(), "invoice", "Draft"); draft != nil {
+		statusID = draft.ID
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "invoice", inv.ID, map[string]interface{}{
-			"entity_name": inv.Title,
-			"actor_name":  u.Name,
-		})
+	customers, _ := h.custSvc.ListAll(r.Context())
+	jobs, _ := h.jobSvc.ListAll(r.Context())
+	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
+	items, _ := services.ParseLineItems(j.LineItems)
+	data := templates.InvoiceFormPageData{
+		Invoice: &templates.InvoiceDetail{
+			CustomerID: j.CustomerID,
+			JobID:      j.ID,
+			StatusID:   statusID,
+			Title:      j.JobType,
+			Notes:      j.Notes,
+			TaxRate:    defaultTaxRate,
+		},
+		IsNew:             true,
+		Customers:         customerOptions(customers),
+		Jobs:              jobOptions(jobs),
+		Statuses:          statusOptions(statuses),
+		ItemsJSON:         h.itemsCatalog(r.Context()),
+		ExistingItemsJSON: services.SerializeLineItems(items),
+		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
+		CancelURL:         fmt.Sprintf("/jobs/%d", id),
 	}
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+created+from+job", inv.ID), http.StatusSeeOther)
+	templates.InvoiceForm(data).Render(r.Context(), w)
 }
 
 func (h *InvoiceHandler) CreateFromEstimate(w http.ResponseWriter, r *http.Request) {
@@ -598,6 +728,11 @@ func (h *InvoiceHandler) Email(w http.ResponseWriter, r *http.Request) {
 		templates.DocumentEmailCompose(data).Render(r.Context(), w)
 		return
 	}
+	if err := h.updateInvoiceStatusAfterEmail(r.Context(), id); err != nil {
+		data.Error = err.Error()
+		templates.DocumentEmailCompose(data).Render(r.Context(), w)
+		return
+	}
 	h.activitySvc.Record(r.Context(), u.ID, "email_sent", "invoice", id, map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "to": data.To, "file_name": filename})
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+emailed", id), http.StatusSeeOther)
 }
@@ -614,11 +749,15 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (docu
 		customer = c
 	}
 	var job *ent.Job
+	var asset *ent.Asset
 	if i.JobID != nil && *i.JobID > 0 {
 		job, _ = h.jobSvc.GetByID(ctx, *i.JobID)
+		if job != nil && job.AssetID != nil && *job.AssetID > 0 {
+			asset, _ = h.assetSvc.GetByID(ctx, *job.AssetID)
+		}
 	}
 	data, err := generatePDFBytes(func(w io.Writer) error {
-		return services.GenerateInvoicePDF(w, i, customer, job, statuses, middleware.CompanyFromContext(ctx))
+		return services.GenerateInvoicePDF(w, i, customer, job, asset, statuses, middleware.CompanyFromContext(ctx))
 	})
 	if err != nil {
 		return documentPDF{}, err
@@ -654,6 +793,10 @@ func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		Notes:     r.FormValue("notes"),
 	}
 	if err := h.svc.RecordPayment(r.Context(), id, payment); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	if err := h.updateInvoiceStatusAfterPayment(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}

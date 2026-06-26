@@ -9,7 +9,7 @@ templ JobShow(p JobDetail) {
 			<div class="work-item-detail-actions">
 				<div class="work-item-detail-action-group">
 					<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.JobType) }>Edit</a>
-					<form action={ templ.URL(fmt.Sprintf("/jobs/%d/create-invoice", p.ID)) } method="post" onsubmit="return confirm('Create an invoice from this job?')">
+					<form action={ templ.URL(fmt.Sprintf("/jobs/%d/create-invoice", p.ID)) } method="post">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 						<button>Create Invoice</button>
 					</form>

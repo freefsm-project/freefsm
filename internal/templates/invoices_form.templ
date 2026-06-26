@@ -142,7 +142,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 			</fieldset>
 			<div class="entity-form-actions">
 				<button type="submit">Save</button>
-				<a href="/invoices" role="button" class="outline">Cancel</a>
+				<a href={ templ.URL(invoiceFormCancelURL(p)) } role="button" class="outline">Cancel</a>
 			</div>
 		</form>
 	}

@@ -224,6 +224,26 @@ func (s *InvoiceService) Restore(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (s *InvoiceService) Finalize(ctx context.Context, id int64, statusID int64, invoiceDate time.Time, defaultDueDays int) (*ent.Invoice, error) {
+	dueDate := invoiceDate.AddDate(0, 0, defaultDueDays)
+	i, err := s.client.Invoice.UpdateOneID(id).
+		SetStatusID(statusID).
+		SetInvoiceDate(invoiceDate).
+		SetDueDate(dueDate).
+		Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("finalize invoice %d: %w", id, err)
+	}
+	return i, nil
+}
+
+func (s *InvoiceService) SetStatus(ctx context.Context, id int64, statusID int64) error {
+	if _, err := s.client.Invoice.UpdateOneID(id).SetStatusID(statusID).Save(ctx); err != nil {
+		return fmt.Errorf("set invoice status %d: %w", id, err)
+	}
+	return nil
+}
+
 func InvoicePaginationTotalPages(total, perPage int) int {
 	return TotalPages(total, perPage)
 }
@@ -339,4 +359,35 @@ func (s *InvoiceService) RecordPayment(ctx context.Context, invoiceID int64, pay
 		return fmt.Errorf("record payment: %w", err)
 	}
 	return nil
+}
+
+func InvoiceAmountDue(i *ent.Invoice) (float64, float64, error) {
+	items, err := ParseLineItems(i.LineItems)
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse invoice line items: %w", err)
+	}
+	payments, err := ParsePayments(i.Payments)
+	if err != nil {
+		return 0, 0, fmt.Errorf("parse invoice payments: %w", err)
+	}
+	total := InvoiceTotal(items, i.TaxRate)
+	paid := 0.0
+	for _, payment := range payments {
+		paid += payment.Amount
+	}
+	return total, paid, nil
+}
+
+func InvoiceTotal(items []LineItem, taxRate string) float64 {
+	subtotal := 0.0
+	taxableSubtotal := 0.0
+	for _, item := range items {
+		lineTotal := item.UnitPrice*float64(item.Quantity) - item.Discount + item.Surcharge
+		subtotal += lineTotal
+		if item.Taxable {
+			taxableSubtotal += lineTotal
+		}
+	}
+	tax := taxableSubtotal * parseTaxRate(taxRate) / 100
+	return subtotal + tax
 }

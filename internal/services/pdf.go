@@ -35,7 +35,7 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 	status, statusColor := statusForPDF(statuses, e.StatusID)
 	number := documentNumber("estimate", e.ID, cs)
 	writeTopHeader(pdf, "ESTIMATE", number, status, statusColor, cs)
-	writeDetailRow(pdf, customer, job, estimateDetails(e, status))
+	writeDetailRow(pdf, customer, job, nil, estimateDetails(e, status))
 	writeDocumentNotes(pdf, e.Notes)
 	totals := writeLineItems(pdf, items, parseTaxRate(e.TaxRate), cs)
 	writeSummary(pdf, cs, totals, false)
@@ -43,7 +43,7 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 	return pdf.Output(w)
 }
 
-func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, statuses []*ent.Status, cs *ent.CompanySettings) error {
+func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, asset *ent.Asset, statuses []*ent.Status, cs *ent.CompanySettings) error {
 	items, err := ParseLineItems(i.LineItems)
 	if err != nil {
 		return fmt.Errorf("parse invoice line items: %w", err)
@@ -57,7 +57,7 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job
 	status, statusColor := statusForPDF(statuses, i.StatusID)
 	number := documentNumber("invoice", i.ID, cs)
 	writeTopHeader(pdf, "INVOICE", number, status, statusColor, cs)
-	writeDetailRow(pdf, customer, job, invoiceDetails(i, status))
+	writeDetailRow(pdf, customer, job, asset, invoiceDetails(i, status))
 	writeDocumentNotes(pdf, i.Notes)
 	totals := writeLineItems(pdf, items, parseTaxRate(i.TaxRate), cs)
 	for _, p := range payments {
@@ -124,14 +124,14 @@ func writeStatusBadge(pdf *gofpdf.Fpdf, x, y float64, status string, r, g, b int
 	pdf.SetTextColor(0, 0, 0)
 }
 
-func writeDetailRow(pdf *gofpdf.Fpdf, customer *ent.Customer, job *ent.Job, details []string) {
+func writeDetailRow(pdf *gofpdf.Fpdf, customer *ent.Customer, job *ent.Job, asset *ent.Asset, details []string) {
 	pageWidth, _ := pdf.GetPageSize()
 	colGap := 6.0
 	colWidth := (pageWidth - pdfMargin*2 - colGap*2) / 3
 	y := pdf.GetY()
 
 	leftHeight := writeInfoBlock(pdf, pdfMargin, y, colWidth, "Customer", customerLines(customer))
-	midHeight := writeInfoBlock(pdf, pdfMargin+colWidth+colGap, y, colWidth, "Job", jobLines(job))
+	midHeight := writeInfoBlock(pdf, pdfMargin+colWidth+colGap, y, colWidth, "Job", jobLines(job, asset))
 	rightHeight := writeInfoBlock(pdf, pdfMargin+(colWidth+colGap)*2, y, colWidth, "Details", details)
 	pdf.SetY(y + maxFloat(leftHeight, midHeight, rightHeight) + 7)
 }
@@ -356,11 +356,14 @@ func customerLines(c *ent.Customer) []string {
 	return nonEmpty(c.DisplayName, c.CompanyName, c.Email, c.Phone)
 }
 
-func jobLines(j *ent.Job) []string {
+func jobLines(j *ent.Job, asset *ent.Asset) []string {
 	if j == nil {
 		return nil
 	}
 	lines := nonEmpty(j.JobType, j.Subtitle)
+	if asset != nil {
+		lines = append(lines, "Asset: "+asset.Name)
+	}
 	if j.StartTime != nil {
 		lines = append(lines, "Start: "+j.StartTime.Format("Jan 2, 2006"))
 	}

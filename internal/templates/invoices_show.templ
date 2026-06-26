@@ -8,6 +8,10 @@ templ InvoiceShow(p InvoiceDetail) {
 		if p.ArchivedAt == "" {
 			<div class="work-item-detail-actions">
 			<div class="work-item-detail-action-group">
+				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/finalize", p.ID)) } method="post" onsubmit="return confirm('Finalize this invoice? This will set the invoice and due dates from current settings.')">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<button type="submit" class="outline">Finalize Invoice</button>
+				</form>
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Title) }>Edit</a>
 				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", p.ID)) } method="post" onsubmit="return confirm('Delete this invoice?')">
@@ -40,6 +44,9 @@ templ InvoiceShow(p InvoiceDetail) {
 		<table class="work-item-detail-meta">
 			<tbody>
 				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
+				if p.AssetID > 0 {
+					<tr><th>Asset</th><td><a href={ templ.URL(fmt.Sprintf("/assets/%d", p.AssetID)) }>{ p.AssetName }</a></td></tr>
+				}
 				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(p.StatusColor) }>{ p.StatusName }</span></td></tr>
 				<tr><th>Invoice Date</th><td>{ p.InvoiceDate }</td></tr>
 				<tr><th>Due Date</th><td>{ p.DueDate }</td></tr>

@@ -457,6 +457,8 @@ type InvoiceDetail struct {
 	CustomerID   int64
 	Customer     string
 	JobID        int64
+	AssetID      int64
+	AssetName    string
 	StatusID     int64
 	StatusName   string
 	StatusColor  string
@@ -548,6 +550,7 @@ type InvoiceFormPageData struct {
 	ItemsJSON         string
 	ExistingItemsJSON string
 	CustomFields      []CustomFieldDisplay
+	CancelURL         string
 }
 
 type DocumentPreviewData struct {
@@ -697,6 +700,13 @@ func invoiceFormAction(isNew bool, id int64) string {
 		return "/invoices"
 	}
 	return fmt.Sprintf("/invoices/%d", id)
+}
+
+func invoiceFormCancelURL(p InvoiceFormPageData) string {
+	if p.CancelURL != "" {
+		return p.CancelURL
+	}
+	return "/invoices"
 }
 
 func paymentsTotal(payments []services.Payment) float64 {
