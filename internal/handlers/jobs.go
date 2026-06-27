@@ -298,6 +298,9 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
+	if !h.validJobStatus(w, r, statusID, h.jobFormFromRequest(r, 0)) {
+		return
+	}
 	projectID, _ := strconv.ParseInt(r.FormValue("project_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	contactID, _ := strconv.ParseInt(r.FormValue("customer_contact_id"), 10, 64)
@@ -364,6 +367,9 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
+	if !h.validJobStatus(w, r, statusID, h.jobFormFromRequest(r, id)) {
+		return
+	}
 	projectID, _ := strconv.ParseInt(r.FormValue("project_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	contactID, _ := strconv.ParseInt(r.FormValue("customer_contact_id"), 10, 64)
@@ -524,6 +530,57 @@ func (h *JobHandler) statusesForSelect(ctx context.Context) []*ent.Status {
 	return statuses
 }
 
+func (h *JobHandler) validJobStatus(w http.ResponseWriter, r *http.Request, statusID int64, fd templates.JobFormPageData) bool {
+	ok, err := h.statusSvc.BelongsToObjectType(r.Context(), statusID, "job")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return false
+	}
+	if ok {
+		return true
+	}
+	if fd.Job == nil {
+		http.Error(w, "invalid status", http.StatusBadRequest)
+		return false
+	}
+	if fd.Errors == nil {
+		fd.Errors = map[string]string{}
+	}
+	fd.Errors["status_id"] = "Select a valid job status"
+	templates.JobForm(fd).Render(r.Context(), w)
+	return false
+}
+
+func (h *JobHandler) jobFormFromRequest(r *http.Request, id int64) templates.JobFormPageData {
+	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
+	projectID, _ := strconv.ParseInt(r.FormValue("project_id"), 10, 64)
+	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
+	contactID, _ := strconv.ParseInt(r.FormValue("customer_contact_id"), 10, 64)
+	assetID, _ := strconv.ParseInt(r.FormValue("asset_id"), 10, 64)
+	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
+	fd := h.newJobForm(r.Context(), customerID)
+	fd.IsNew = id == 0
+	fd.Job.ID = id
+	fd.Job.CustomerID = customerID
+	fd.Job.ProjectID = projectID
+	fd.Job.LocationID = locationID
+	fd.Job.ContactID = contactID
+	fd.Job.AssetID = assetID
+	fd.Job.JobType = r.FormValue("job_type")
+	fd.Job.Subtitle = r.FormValue("subtitle")
+	fd.Job.StatusID = statusID
+	fd.Job.BillingType = r.FormValue("billing_type")
+	fd.Job.StartTime = r.FormValue("start_time")
+	fd.Job.EndTime = r.FormValue("end_time")
+	fd.Job.DueDate = r.FormValue("due_date")
+	fd.Job.Notes = r.FormValue("notes")
+	fd.Job.TechNotes = r.FormValue("tech_notes")
+	fd.ExistingVisitsJSON = r.FormValue("visits")
+	fd.ExistingAssignmentsJSON = r.FormValue("assignments")
+	fd.ExistingSubtasksJSON = r.FormValue("subtasks")
+	return fd
+}
+
 func (h *JobHandler) newJobForm(ctx context.Context, customerID int64) templates.JobFormPageData {
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
@@ -550,6 +607,7 @@ func (h *JobHandler) newJobForm(ctx context.Context, customerID int64) templates
 		ExistingAssignmentsJSON: "[]",
 		ExistingSubtasksJSON:    "[]",
 		CustomFields:            buildCustomFieldDisplay(defs, "[]"),
+		Errors:                  map[string]string{},
 	}
 }
 
@@ -579,6 +637,7 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses [
 		ExistingAssignmentsJSON: services.SerializeAssignments(assignments),
 		ExistingSubtasksJSON:    services.SerializeSubtasks(services.ParseSubtasks(j.Subtasks)),
 		CustomFields:            buildCustomFieldDisplay(defs, j.CustomFields),
+		Errors:                  map[string]string{},
 	}
 }
 

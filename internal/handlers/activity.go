@@ -29,6 +29,7 @@ var activityTypeToPrefix = map[string]string{
 	"asset_status":     "/settings/assets",
 	"company_settings": "/settings",
 	"custom_field":     "/settings/custom-fields",
+	"job_status":       "/settings/job-statuses",
 }
 
 type ActivityHandler struct {

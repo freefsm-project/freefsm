@@ -80,6 +80,9 @@ templ SettingsPage(p SettingsPageData) {
 					<input type="text" name="estimate_prefix" value={ p.Settings.EstimatePrefix }/>
 				</label>
 			</div>
+			if !p.IsSetup {
+				<p><a href="/settings/job-statuses">Manage job statuses</a></p>
+			}
 			<button type="submit" class="settings-submit">{ settingsButtonText(p.IsSetup) }</button>
 		</div>
 		

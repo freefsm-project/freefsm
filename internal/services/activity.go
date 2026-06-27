@@ -15,6 +15,7 @@ var adminObjectTypes = map[string]bool{
 	"asset_status":     true,
 	"company_settings": true,
 	"custom_field":     true,
+	"job_status":       true,
 	"tag":              true,
 	"user":             true,
 }
@@ -111,6 +112,12 @@ func (s *ActivityService) LookupEntityName(ctx context.Context, objectType strin
 			return fmt.Sprintf("asset status #%d", objectID)
 		}
 		return as.Name
+	case "job_status":
+		st, err := s.client.Status.Get(ctx, objectID)
+		if err != nil {
+			return fmt.Sprintf("job status #%d", objectID)
+		}
+		return st.Name
 	case "company_settings":
 		cs, err := s.client.CompanySettings.Get(ctx, objectID)
 		if err != nil {

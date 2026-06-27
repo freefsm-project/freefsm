@@ -397,118 +397,141 @@ func JobForm(p JobFormPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</select></label> <label>Billing Type <select name=\"billing_type\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "</select> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			for _, b := range p.BillingTypes {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<option value=\"")
+			if p.Errors["status_id"] != "" {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "<small class=\"error-msg\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var21 string
-				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(b)
+				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(p.Errors["status_id"])
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 85, Col: 24}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 81, Col: 54}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\"")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				if p.Job.BillingType == b {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, " selected")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "</small>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, ">")
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</label> <label>Billing Type <select name=\"billing_type\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			for _, b := range p.BillingTypes {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "<option value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var22 string
-				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(b)
+				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(b)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 85, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 88, Col: 24}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "</option>")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if p.Job.BillingType == b {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, " selected")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, ">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var23 string
+				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(b)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 88, Col: 67}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</option>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "</select></label></div><div class=\"grid\"><label>Start Time <input type=\"datetime-local\" name=\"start_time\" step=\"900\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var23 string
-			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Job.StartTime)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 93, Col: 86}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\"></label> <label>End Time <input type=\"datetime-local\" name=\"end_time\" step=\"900\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</select></label></div><div class=\"grid\"><label>Start Time <input type=\"datetime-local\" name=\"start_time\" step=\"900\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var24 string
-			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Job.EndTime)
+			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Job.StartTime)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 97, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 96, Col: 86}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "\"></label></div><label>Due Date <input type=\"date\" name=\"due_date\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "\"></label> <label>End Time <input type=\"datetime-local\" name=\"end_time\" step=\"900\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var25 string
-			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Job.DueDate)
+			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Job.EndTime)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 102, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 100, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var25)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "\"></label> <label>Notes <textarea name=\"notes\" rows=\"3\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\"></label></div><label>Due Date <input type=\"date\" name=\"due_date\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var26 string
-			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(p.Job.Notes)
+			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.Job.DueDate)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 106, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 105, Col: 60}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</textarea></label> <label>Tech Notes <textarea name=\"tech_notes\" rows=\"3\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "\"></label> <label>Notes <textarea name=\"notes\" rows=\"3\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var27 string
-			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(p.Job.TechNotes)
+			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(p.Job.Notes)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 110, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 109, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</textarea></label>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</textarea></label> <label>Tech Notes <textarea name=\"tech_notes\" rows=\"3\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var28 string
+			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(p.Job.TechNotes)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 113, Col: 58}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "</textarea></label>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -516,82 +539,82 @@ func JobForm(p JobFormPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<fieldset x-data=\"visitsEditor()\" data-existing=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var28 string
-			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ExistingVisitsJSON)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 113, Col: 73}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\"><legend>Visits</legend><table><thead><tr><th>Date</th><th>Start</th><th>End</th><th>Notes</th><th></th></tr></thead> <tbody><template x-for=\"(v, idx) in items\" :key=\"idx\"><tr><td><input type=\"date\" x-model=\"v.date\"></td><td><input type=\"time\" x-model=\"v.start_time\"></td><td><input type=\"time\" x-model=\"v.end_time\"></td><td><input type=\"text\" x-model=\"v.notes\"></td><td><button @click.prevent=\"remove(idx)\" class=\"outline contrast small\">X</button></td></tr></template></tbody></table><button @click.prevent=\"add()\" class=\"outline\">+ Add Visit</button> <input type=\"hidden\" name=\"visits\" :value=\"json\"></fieldset><fieldset x-data=\"assignmentsEditor()\" data-existing=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<fieldset x-data=\"visitsEditor()\" data-existing=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var29 string
-			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ExistingAssignmentsJSON)
+			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ExistingVisitsJSON)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 132, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 116, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "\"><legend>Assignments</legend><table><thead><tr><th>User</th><th>Role</th><th></th></tr></thead> <tbody><template x-for=\"(a, idx) in items\" :key=\"idx\"><tr><td><select x-model.number=\"a.user_id\"><option value=\"0\">Select user...</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\"><legend>Visits</legend><table><thead><tr><th>Date</th><th>Start</th><th>End</th><th>Notes</th><th></th></tr></thead> <tbody><template x-for=\"(v, idx) in items\" :key=\"idx\"><tr><td><input type=\"date\" x-model=\"v.date\"></td><td><input type=\"time\" x-model=\"v.start_time\"></td><td><input type=\"time\" x-model=\"v.end_time\"></td><td><input type=\"text\" x-model=\"v.notes\"></td><td><button @click.prevent=\"remove(idx)\" class=\"outline contrast small\">X</button></td></tr></template></tbody></table><button @click.prevent=\"add()\" class=\"outline\">+ Add Visit</button> <input type=\"hidden\" name=\"visits\" :value=\"json\"></fieldset><fieldset x-data=\"assignmentsEditor()\" data-existing=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var30 string
+			templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ExistingAssignmentsJSON)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 135, Col: 83}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "\"><legend>Assignments</legend><table><thead><tr><th>User</th><th>Role</th><th></th></tr></thead> <tbody><template x-for=\"(a, idx) in items\" :key=\"idx\"><tr><td><select x-model.number=\"a.user_id\"><option value=\"0\">Select user...</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, u := range p.Users {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<option value=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var30 string
-				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", u.Value))
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 143, Col: 53}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "<option value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var31 string
-				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(u.Label)
+				templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", u.Value))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 143, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 146, Col: 53}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "</option>")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var32 string
+				templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(u.Label)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 146, Col: 65}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "</option>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "</select> <small x-show=\"!a.user_id && a.name\" x-text=\"'Legacy assignment: ' + a.name\"></small></td><td><input type=\"text\" x-model=\"a.role\"></td><td><button @click.prevent=\"remove(idx)\" class=\"outline contrast small\">X</button></td></tr></template></tbody></table><button @click.prevent=\"add()\" class=\"outline\">+ Add Assignment</button> <input type=\"hidden\" name=\"assignments\" :value=\"json\"></fieldset><fieldset x-data=\"subtasksEditor()\" data-existing=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "</select> <small x-show=\"!a.user_id && a.name\" x-text=\"'Legacy assignment: ' + a.name\"></small></td><td><input type=\"text\" x-model=\"a.role\"></td><td><button @click.prevent=\"remove(idx)\" class=\"outline contrast small\">X</button></td></tr></template></tbody></table><button @click.prevent=\"add()\" class=\"outline\">+ Add Assignment</button> <input type=\"hidden\" name=\"assignments\" :value=\"json\"></fieldset><fieldset x-data=\"subtasksEditor()\" data-existing=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var32 string
-			templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ExistingSubtasksJSON)
+			var templ_7745c5c3_Var33 string
+			templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ExistingSubtasksJSON)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 157, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 160, Col: 77}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "\"><legend>Subtasks</legend><table><thead><tr><th>Title</th><th>Completed</th><th>Order</th><th></th></tr></thead> <tbody><template x-for=\"(st, idx) in items\" :key=\"idx\"><tr><td><input type=\"text\" x-model=\"st.title\" placeholder=\"e.g. Pre-site survey\"></td><td><input type=\"checkbox\" x-model=\"st.completed\"></td><td><input type=\"number\" x-model=\"st.sort_order\" min=\"0\" class=\"input-width-70\"></td><td><button @click.prevent=\"remove(idx)\" class=\"outline contrast small\">X</button></td></tr></template></tbody></table><button @click.prevent=\"add()\" class=\"outline\">+ Add Subtask</button> <input type=\"hidden\" name=\"subtasks\" :value=\"json\"></fieldset><div class=\"entity-form-actions\"><button type=\"submit\">Save</button> <a href=\"/jobs\" role=\"button\" class=\"outline\">Cancel</a></div></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "\"><legend>Subtasks</legend><table><thead><tr><th>Title</th><th>Completed</th><th>Order</th><th></th></tr></thead> <tbody><template x-for=\"(st, idx) in items\" :key=\"idx\"><tr><td><input type=\"text\" x-model=\"st.title\" placeholder=\"e.g. Pre-site survey\"></td><td><input type=\"checkbox\" x-model=\"st.completed\"></td><td><input type=\"number\" x-model=\"st.sort_order\" min=\"0\" class=\"input-width-70\"></td><td><button @click.prevent=\"remove(idx)\" class=\"outline contrast small\">X</button></td></tr></template></tbody></table><button @click.prevent=\"add()\" class=\"outline\">+ Add Subtask</button> <input type=\"hidden\" name=\"subtasks\" :value=\"json\"></fieldset><div class=\"entity-form-actions\"><button type=\"submit\">Save</button> <a href=\"/jobs\" role=\"button\" class=\"outline\">Cancel</a></div></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

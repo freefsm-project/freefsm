@@ -77,6 +77,9 @@ templ JobForm(p JobFormPageData) {
 							<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.Job.StatusID == s.Value }>{ s.Label }</option>
 						}
 					</select>
+					if p.Errors["status_id"] != "" {
+						<small class="error-msg">{ p.Errors["status_id"] }</small>
+					}
 				</label>
 				<label>
 					Billing Type

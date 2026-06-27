@@ -1385,3 +1385,15 @@ type AssetStatusRow struct {
 	Color     string
 	SortOrder int
 }
+
+type JobStatusListPageData struct {
+	Statuses []JobStatusRow
+}
+
+type JobStatusRow struct {
+	ID         int64
+	Name       string
+	Color      string
+	SortOrder  int
+	UsageCount int
+}

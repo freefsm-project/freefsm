@@ -389,6 +389,12 @@ html[data-theme="dark"] .theme-icon-moon {
   padding: 0.2rem 0.45rem;
   font-size: 0.75rem;
   line-height: 1.2;
+  width: auto;
+}
+
+.work-queue-actions select {
+  width: auto;
+  margin: 0;
 }
 
 .work-queue-actions > * + * {
@@ -1044,6 +1050,11 @@ html[data-theme="dark"] .theme-icon-moon {
 
 .input-width-100 {
   width: 100px;
+}
+
+.job-status-name-input {
+  width: 14rem;
+  max-width: 100%;
 }
 
 .line-item-totals {
