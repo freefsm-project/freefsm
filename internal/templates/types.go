@@ -776,7 +776,7 @@ func companyFromCtx(ctx context.Context) *ent.CompanySettings {
 
 func invoicePrefix(ctx context.Context) string {
 	cs := middleware.CompanyFromContext(ctx)
-	if cs == nil || cs.InvoicePrefix == "" {
+	if cs == nil {
 		return "INV-"
 	}
 	return cs.InvoicePrefix
@@ -788,10 +788,14 @@ func invoiceNumber(ctx context.Context, number int64) string {
 
 func estimatePrefix(ctx context.Context) string {
 	cs := middleware.CompanyFromContext(ctx)
-	if cs == nil || cs.EstimatePrefix == "" {
+	if cs == nil {
 		return "EST-"
 	}
 	return cs.EstimatePrefix
+}
+
+func estimateNumber(ctx context.Context, id int64) string {
+	return services.FormatEstimateNumber(id, middleware.CompanyFromContext(ctx))
 }
 
 func userFormTitle(isNew bool) string {

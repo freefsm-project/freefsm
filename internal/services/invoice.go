@@ -312,11 +312,19 @@ func (s *InvoiceService) bumpNextInvoiceNumber(ctx context.Context, companyID *i
 }
 
 func FormatInvoiceNumber(invoiceNumber int64, cs *ent.CompanySettings) string {
-	prefix := "INV-"
-	if cs != nil && strings.TrimSpace(cs.InvoicePrefix) != "" {
-		prefix = strings.TrimSpace(cs.InvoicePrefix)
+	if cs == nil {
+		return fmt.Sprintf("INV-%05d", invoiceNumber)
 	}
+	prefix := strings.TrimSpace(cs.InvoicePrefix)
 	return fmt.Sprintf("%s%05d", prefix, invoiceNumber)
+}
+
+func FormatEstimateNumber(estimateID int64, cs *ent.CompanySettings) string {
+	if cs == nil {
+		return fmt.Sprintf("EST-%05d", estimateID)
+	}
+	prefix := strings.TrimSpace(cs.EstimatePrefix)
+	return fmt.Sprintf("%s%05d", prefix, estimateID)
 }
 
 func (s *InvoiceService) Delete(ctx context.Context, id int64) error {

@@ -3,7 +3,7 @@ package templates
 import "fmt"
 
 templ EstimateShow(p EstimateDetail) {
-	@Layout(estimatePrefix(ctx)+fmt.Sprintf("%05d", p.ID)+": "+p.Title) {
+	@Layout(estimateNumber(ctx, p.ID)+": "+p.Title) {
 		<div class="work-item-detail">
 		if p.ArchivedAt == "" {
 			<div class="work-item-detail-actions">

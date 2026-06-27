@@ -354,14 +354,14 @@ func companyName(cs *ent.CompanySettings) string {
 }
 
 func invoicePrefix(cs *ent.CompanySettings) string {
-	if cs == nil || cs.InvoicePrefix == "" {
+	if cs == nil {
 		return "INV-"
 	}
 	return cs.InvoicePrefix
 }
 
 func estimatePrefix(cs *ent.CompanySettings) string {
-	if cs == nil || cs.EstimatePrefix == "" {
+	if cs == nil {
 		return "EST-"
 	}
 	return cs.EstimatePrefix
