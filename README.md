@@ -5,21 +5,21 @@ Single static Go binary, PostgreSQL backend, zero npm/NPM dependencies.
 
 ## Features
 
-- **Dashboard** — KPI cards, calendar, quick actions, global search
-- **Customers** — full CRUD with locations, contacts, search, HTMX pagination
+- **Dashboard** — customizable widgets, KPI cards, work queues, time clock, quick actions, global search
+- **Customers** — full CRUD with reusable locations, contacts, financial summary, receivables graph, related work, search, HTMX pagination
 - **Assets** — equipment tracking with types, statuses, service history
-- **Jobs** — work orders with status workflow, scheduling, arrival windows, subtasks
-- **Schedule** — calendar and list views with clickable job cards
-- **Projects** — nested jobs, progress tracking, customer linkage
-- **Estimates** — line items editor, tax calculation, PDF generation, convert to invoice
-- **Invoices** — line items, payment recording, PDF generation, status workflow
+- **Jobs** — work orders with configurable status workflow, inline status updates, scheduling, arrival windows, subtasks, job-linked clock in/out
+- **Schedule** — list, calendar, dispatch, and map views with clickable job cards and drag/drop scheduling
+- **Projects** — nested jobs, progress tracking, customer and location linkage
+- **Estimates** — line items editor, tax calculation, PDF generation, email with CC/BCC, convert to invoice
+- **Invoices** — configurable numbering, line items, payment recording, PDF generation, email with CC/BCC, finalization workflow, status workflow
 - **Items / Pricebook** — service and product catalog with SKU and pricing
-- **Timesheets** — clock in/out, GPS coordinates, manual entry flag
+- **Timesheets** — standalone or job-linked clock in/out, GPS coordinates, manual entry flag
 - **Tags** — color-coded labels on any object (customers, jobs, assets, etc.)
 - **Custom Fields** — user-defined fields per object type
 - **Comments** — threaded notes on any object
 - **User Management** — roles, welcome emails, password policies, force password change
-- **Company Settings** — branding, email config, timezone, document numbering, security policies
+- **Company Settings** — branding, email config, timezone, invoice numbering, job statuses, map settings, document defaults, security policies
 - **Dark Mode** — persistent theme toggle
 - **Activity / Audit Log** — every mutation tracked across all entities; per-entity widgets on show pages, admin-only admin activity, recent activity panels on every list page
 - **File Attachments** — polymorphic uploads on customers, jobs, estimates, invoices, and assets; MIME whitelist, inline preview for images/PDFs, disk storage
@@ -46,7 +46,7 @@ Single static Go binary, PostgreSQL backend, zero npm/NPM dependencies.
 ### Prerequisites
 
 - Go 1.25+
-- PostgreSQL 15+
+- PostgreSQL 16+
 - `ent` CLI: `go install entgo.io/ent/cmd/ent@latest`
 - `templ` CLI: `go install github.com/a-h/templ/cmd/templ@latest`
 - Ensure `$HOME/go/bin` is in `$PATH`
@@ -106,11 +106,25 @@ This is idempotent — it skips if any customers already exist.
 | `FREEFSM_DB_SSLMODE` | `disable` | PostgreSQL SSL mode |
 | `FREEFSM_ADDR` | `:3000` | HTTP listen address |
 | `FREEFSM_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `FREEFSM_LOG_FILE` | *(empty)* | Optional file path for application logs |
 | `FREEFSM_SESSION_SECRET` | *(required)* | Cookie encryption key |
 | `FREEFSM_SETUP_TOKEN` | *(required)* | Initial admin registration token |
 | `FREEFSM_PUBLIC_URL` | request host | Public base URL for emailed links |
 | `FREEFSM_UPLOAD_DIR` | `/var/lib/freefsm/uploads` (Linux) / `/var/db/freefsm/uploads` (FreeBSD) | File upload storage directory |
 | `FREEFSM_MAX_UPLOAD_SIZE` | `26214400` (25 MB) | Maximum upload file size in bytes |
+| `FREEFSM_TILE_URL` | `https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png` | Default map tile URL template |
+| `FREEFSM_GEOCODER_URL` | *(empty)* | Optional geocoder base URL for map location lookup |
+
+### In-App Settings
+
+Administrators can manage runtime company settings from the Settings screens:
+
+- Company profile, timezone, invoice prefix, next invoice number, and estimate prefix
+- Job statuses with custom names, colors, ordering, usage counts, and replacement on delete
+- SMTP settings, invoice/estimate email defaults, and automatic CC recipients
+- PDF branding, logo, colors, footer text, payment terms, and line item description visibility
+- Map tile and geocoder URLs for schedule map features
+- Password and session security policies
 
 ## Project Structure
 
@@ -142,9 +156,14 @@ freefsm/
 
 ```bash
 make build            # ent generate → templ generate → go build → dist/freefsm
+make compile          # go build only → dist/freefsm
 make run              # build + run
+make generate         # ent generate + templ generate
+make ent              # regenerate ent code
+make templ            # regenerate templ code
 make fmt              # go fmt ./...
 make lint             # go vet ./...
+make test             # go test -v -race ./...
 make clean            # remove dist/
 make checksum         # SHA256 of the binary
 make install-linux    # install binary + systemd unit
