@@ -64,6 +64,11 @@ func UserID(v int64) predicate.TimeEntry {
 	return predicate.TimeEntry(sql.FieldEQ(FieldUserID, v))
 }
 
+// JobID applies equality check predicate on the "job_id" field. It's identical to JobIDEQ.
+func JobID(v int64) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldEQ(FieldJobID, v))
+}
+
 // IsManual applies equality check predicate on the "is_manual" field. It's identical to IsManualEQ.
 func IsManual(v bool) predicate.TimeEntry {
 	return predicate.TimeEntry(sql.FieldEQ(FieldIsManual, v))
@@ -192,6 +197,56 @@ func UserIDLT(v int64) predicate.TimeEntry {
 // UserIDLTE applies the LTE predicate on the "user_id" field.
 func UserIDLTE(v int64) predicate.TimeEntry {
 	return predicate.TimeEntry(sql.FieldLTE(FieldUserID, v))
+}
+
+// JobIDEQ applies the EQ predicate on the "job_id" field.
+func JobIDEQ(v int64) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldEQ(FieldJobID, v))
+}
+
+// JobIDNEQ applies the NEQ predicate on the "job_id" field.
+func JobIDNEQ(v int64) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldNEQ(FieldJobID, v))
+}
+
+// JobIDIn applies the In predicate on the "job_id" field.
+func JobIDIn(vs ...int64) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldIn(FieldJobID, vs...))
+}
+
+// JobIDNotIn applies the NotIn predicate on the "job_id" field.
+func JobIDNotIn(vs ...int64) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldNotIn(FieldJobID, vs...))
+}
+
+// JobIDGT applies the GT predicate on the "job_id" field.
+func JobIDGT(v int64) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldGT(FieldJobID, v))
+}
+
+// JobIDGTE applies the GTE predicate on the "job_id" field.
+func JobIDGTE(v int64) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldGTE(FieldJobID, v))
+}
+
+// JobIDLT applies the LT predicate on the "job_id" field.
+func JobIDLT(v int64) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldLT(FieldJobID, v))
+}
+
+// JobIDLTE applies the LTE predicate on the "job_id" field.
+func JobIDLTE(v int64) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldLTE(FieldJobID, v))
+}
+
+// JobIDIsNil applies the IsNil predicate on the "job_id" field.
+func JobIDIsNil() predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldIsNull(FieldJobID))
+}
+
+// JobIDNotNil applies the NotNil predicate on the "job_id" field.
+func JobIDNotNil() predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldNotNull(FieldJobID))
 }
 
 // IsManualEQ applies the EQ predicate on the "is_manual" field.

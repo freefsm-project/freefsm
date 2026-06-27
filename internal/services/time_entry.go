@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -14,12 +15,15 @@ type TimeEntryService struct {
 	client *ent.Client
 }
 
+var ErrActiveTimeEntry = errors.New("user already has an active time entry")
+
 func NewTimeEntryService(client *ent.Client) *TimeEntryService {
 	return &TimeEntryService{client: client}
 }
 
 type TimeEntryCreateParams struct {
 	UserID    int64
+	JobID     int64
 	IsManual  bool
 	Notes     string
 	Latitude  *float64
@@ -98,16 +102,33 @@ func (s *TimeEntryService) HasActiveEntry(ctx context.Context, userID int64) (bo
 	return count > 0, nil
 }
 
+func (s *TimeEntryService) ensureNoActiveEntry(ctx context.Context, userID int64) error {
+	hasActive, err := s.HasActiveEntry(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if hasActive {
+		return ErrActiveTimeEntry
+	}
+	return nil
+}
+
 func (s *TimeEntryService) ClockIn(ctx context.Context, params TimeEntryCreateParams) (*ent.TimeEntry, error) {
-	te, err := s.client.TimeEntry.
+	if err := s.ensureNoActiveEntry(ctx, params.UserID); err != nil {
+		return nil, err
+	}
+	c := s.client.TimeEntry.
 		Create().
 		SetUserID(params.UserID).
 		SetIsManual(false).
 		SetClockIn(time.Now()).
 		SetNotes(params.Notes).
 		SetNillableLatitude(params.Latitude).
-		SetNillableLongitude(params.Longitude).
-		Save(ctx)
+		SetNillableLongitude(params.Longitude)
+	if params.JobID > 0 {
+		c.SetJobID(params.JobID)
+	}
+	te, err := c.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("clock in: %w", err)
 	}

@@ -67,7 +67,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	assetStatusSvc := services.NewAssetStatusService(entClient)
 	assetSvc := services.NewAssetService(entClient)
 
-	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, fileSvc, activitySvc, userService, policySvc)
+	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, fileSvc, activitySvc, userService, policySvc, timeEntrySvc)
 	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc, policySvc)
 	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService, userService, locationSvc, cfg)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
@@ -160,6 +160,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/time-entries/{id}/delete", timeEntryHandler.Delete)
 		r.Get("/jobs", jobHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/jobs/activity", activityHandler.ListByType("job"))
+		r.Post("/jobs/{id}/clock-in", jobHandler.ClockIn)
+		r.Post("/jobs/{id}/clock-out", jobHandler.ClockOut)
 		r.Get("/jobs/{id}", jobHandler.Show)
 		r.With(middleware.DispatcherOrAdmin).Get("/assets", assetHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/assets/activity", activityHandler.ListByType("asset"))

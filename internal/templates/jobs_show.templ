@@ -36,6 +36,25 @@ templ JobShow(p JobDetail) {
 				}
 			</div>
 		}
+		if p.ArchivedAt == "" {
+			<div class="work-item-detail-actions">
+				<div class="work-item-detail-action-group">
+					if p.ActiveTimeEntryOnJob {
+						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/clock-out", p.ID)) } method="post">
+							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+							<button type="submit" class="contrast">Clock Out</button>
+						</form>
+					} else if p.ActiveTimeEntryElsewhere {
+						<p>{ p.ActiveTimeEntryMessage }</p>
+					} else {
+						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/clock-in", p.ID)) } method="post">
+							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+							<button type="submit">Clock In to Job</button>
+						</form>
+					}
+				</div>
+			</div>
+		}
 		if len(p.Tags) > 0 || true {
 			@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/jobs/%d", p.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: p.ArchivedAt != ""})
 		}

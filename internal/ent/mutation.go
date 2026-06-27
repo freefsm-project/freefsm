@@ -25569,6 +25569,8 @@ type TimeEntryMutation struct {
 	addcompany_id *int64
 	user_id       *int64
 	adduser_id    *int64
+	job_id        *int64
+	addjob_id     *int64
 	is_manual     *bool
 	clock_in      *time.Time
 	clock_out     *time.Time
@@ -25813,6 +25815,76 @@ func (m *TimeEntryMutation) AddedUserID() (r int64, exists bool) {
 func (m *TimeEntryMutation) ResetUserID() {
 	m.user_id = nil
 	m.adduser_id = nil
+}
+
+// SetJobID sets the "job_id" field.
+func (m *TimeEntryMutation) SetJobID(i int64) {
+	m.job_id = &i
+	m.addjob_id = nil
+}
+
+// JobID returns the value of the "job_id" field in the mutation.
+func (m *TimeEntryMutation) JobID() (r int64, exists bool) {
+	v := m.job_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldJobID returns the old "job_id" field's value of the TimeEntry entity.
+// If the TimeEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TimeEntryMutation) OldJobID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldJobID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldJobID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldJobID: %w", err)
+	}
+	return oldValue.JobID, nil
+}
+
+// AddJobID adds i to the "job_id" field.
+func (m *TimeEntryMutation) AddJobID(i int64) {
+	if m.addjob_id != nil {
+		*m.addjob_id += i
+	} else {
+		m.addjob_id = &i
+	}
+}
+
+// AddedJobID returns the value that was added to the "job_id" field in this mutation.
+func (m *TimeEntryMutation) AddedJobID() (r int64, exists bool) {
+	v := m.addjob_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearJobID clears the value of the "job_id" field.
+func (m *TimeEntryMutation) ClearJobID() {
+	m.job_id = nil
+	m.addjob_id = nil
+	m.clearedFields[timeentry.FieldJobID] = struct{}{}
+}
+
+// JobIDCleared returns if the "job_id" field was cleared in this mutation.
+func (m *TimeEntryMutation) JobIDCleared() bool {
+	_, ok := m.clearedFields[timeentry.FieldJobID]
+	return ok
+}
+
+// ResetJobID resets all changes to the "job_id" field.
+func (m *TimeEntryMutation) ResetJobID() {
+	m.job_id = nil
+	m.addjob_id = nil
+	delete(m.clearedFields, timeentry.FieldJobID)
 }
 
 // SetIsManual sets the "is_manual" field.
@@ -26218,12 +26290,15 @@ func (m *TimeEntryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TimeEntryMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.company_id != nil {
 		fields = append(fields, timeentry.FieldCompanyID)
 	}
 	if m.user_id != nil {
 		fields = append(fields, timeentry.FieldUserID)
+	}
+	if m.job_id != nil {
+		fields = append(fields, timeentry.FieldJobID)
 	}
 	if m.is_manual != nil {
 		fields = append(fields, timeentry.FieldIsManual)
@@ -26261,6 +26336,8 @@ func (m *TimeEntryMutation) Field(name string) (ent.Value, bool) {
 		return m.CompanyID()
 	case timeentry.FieldUserID:
 		return m.UserID()
+	case timeentry.FieldJobID:
+		return m.JobID()
 	case timeentry.FieldIsManual:
 		return m.IsManual()
 	case timeentry.FieldClockIn:
@@ -26290,6 +26367,8 @@ func (m *TimeEntryMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldCompanyID(ctx)
 	case timeentry.FieldUserID:
 		return m.OldUserID(ctx)
+	case timeentry.FieldJobID:
+		return m.OldJobID(ctx)
 	case timeentry.FieldIsManual:
 		return m.OldIsManual(ctx)
 	case timeentry.FieldClockIn:
@@ -26328,6 +26407,13 @@ func (m *TimeEntryMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUserID(v)
+		return nil
+	case timeentry.FieldJobID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetJobID(v)
 		return nil
 	case timeentry.FieldIsManual:
 		v, ok := value.(bool)
@@ -26399,6 +26485,9 @@ func (m *TimeEntryMutation) AddedFields() []string {
 	if m.adduser_id != nil {
 		fields = append(fields, timeentry.FieldUserID)
 	}
+	if m.addjob_id != nil {
+		fields = append(fields, timeentry.FieldJobID)
+	}
 	if m.addlatitude != nil {
 		fields = append(fields, timeentry.FieldLatitude)
 	}
@@ -26417,6 +26506,8 @@ func (m *TimeEntryMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedCompanyID()
 	case timeentry.FieldUserID:
 		return m.AddedUserID()
+	case timeentry.FieldJobID:
+		return m.AddedJobID()
 	case timeentry.FieldLatitude:
 		return m.AddedLatitude()
 	case timeentry.FieldLongitude:
@@ -26444,6 +26535,13 @@ func (m *TimeEntryMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddUserID(v)
 		return nil
+	case timeentry.FieldJobID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddJobID(v)
+		return nil
 	case timeentry.FieldLatitude:
 		v, ok := value.(float64)
 		if !ok {
@@ -26468,6 +26566,9 @@ func (m *TimeEntryMutation) ClearedFields() []string {
 	var fields []string
 	if m.FieldCleared(timeentry.FieldCompanyID) {
 		fields = append(fields, timeentry.FieldCompanyID)
+	}
+	if m.FieldCleared(timeentry.FieldJobID) {
+		fields = append(fields, timeentry.FieldJobID)
 	}
 	if m.FieldCleared(timeentry.FieldClockOut) {
 		fields = append(fields, timeentry.FieldClockOut)
@@ -26495,6 +26596,9 @@ func (m *TimeEntryMutation) ClearField(name string) error {
 	case timeentry.FieldCompanyID:
 		m.ClearCompanyID()
 		return nil
+	case timeentry.FieldJobID:
+		m.ClearJobID()
+		return nil
 	case timeentry.FieldClockOut:
 		m.ClearClockOut()
 		return nil
@@ -26517,6 +26621,9 @@ func (m *TimeEntryMutation) ResetField(name string) error {
 		return nil
 	case timeentry.FieldUserID:
 		m.ResetUserID()
+		return nil
+	case timeentry.FieldJobID:
+		m.ResetJobID()
 		return nil
 	case timeentry.FieldIsManual:
 		m.ResetIsManual()

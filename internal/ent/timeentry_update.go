@@ -76,6 +76,33 @@ func (_u *TimeEntryUpdate) AddUserID(v int64) *TimeEntryUpdate {
 	return _u
 }
 
+// SetJobID sets the "job_id" field.
+func (_u *TimeEntryUpdate) SetJobID(v int64) *TimeEntryUpdate {
+	_u.mutation.ResetJobID()
+	_u.mutation.SetJobID(v)
+	return _u
+}
+
+// SetNillableJobID sets the "job_id" field if the given value is not nil.
+func (_u *TimeEntryUpdate) SetNillableJobID(v *int64) *TimeEntryUpdate {
+	if v != nil {
+		_u.SetJobID(*v)
+	}
+	return _u
+}
+
+// AddJobID adds value to the "job_id" field.
+func (_u *TimeEntryUpdate) AddJobID(v int64) *TimeEntryUpdate {
+	_u.mutation.AddJobID(v)
+	return _u
+}
+
+// ClearJobID clears the value of the "job_id" field.
+func (_u *TimeEntryUpdate) ClearJobID() *TimeEntryUpdate {
+	_u.mutation.ClearJobID()
+	return _u
+}
+
 // SetIsManual sets the "is_manual" field.
 func (_u *TimeEntryUpdate) SetIsManual(v bool) *TimeEntryUpdate {
 	_u.mutation.SetIsManual(v)
@@ -263,6 +290,15 @@ func (_u *TimeEntryUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedUserID(); ok {
 		_spec.AddField(timeentry.FieldUserID, field.TypeInt64, value)
 	}
+	if value, ok := _u.mutation.JobID(); ok {
+		_spec.SetField(timeentry.FieldJobID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedJobID(); ok {
+		_spec.AddField(timeentry.FieldJobID, field.TypeInt64, value)
+	}
+	if _u.mutation.JobIDCleared() {
+		_spec.ClearField(timeentry.FieldJobID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.IsManual(); ok {
 		_spec.SetField(timeentry.FieldIsManual, field.TypeBool, value)
 	}
@@ -364,6 +400,33 @@ func (_u *TimeEntryUpdateOne) SetNillableUserID(v *int64) *TimeEntryUpdateOne {
 // AddUserID adds value to the "user_id" field.
 func (_u *TimeEntryUpdateOne) AddUserID(v int64) *TimeEntryUpdateOne {
 	_u.mutation.AddUserID(v)
+	return _u
+}
+
+// SetJobID sets the "job_id" field.
+func (_u *TimeEntryUpdateOne) SetJobID(v int64) *TimeEntryUpdateOne {
+	_u.mutation.ResetJobID()
+	_u.mutation.SetJobID(v)
+	return _u
+}
+
+// SetNillableJobID sets the "job_id" field if the given value is not nil.
+func (_u *TimeEntryUpdateOne) SetNillableJobID(v *int64) *TimeEntryUpdateOne {
+	if v != nil {
+		_u.SetJobID(*v)
+	}
+	return _u
+}
+
+// AddJobID adds value to the "job_id" field.
+func (_u *TimeEntryUpdateOne) AddJobID(v int64) *TimeEntryUpdateOne {
+	_u.mutation.AddJobID(v)
+	return _u
+}
+
+// ClearJobID clears the value of the "job_id" field.
+func (_u *TimeEntryUpdateOne) ClearJobID() *TimeEntryUpdateOne {
+	_u.mutation.ClearJobID()
 	return _u
 }
 
@@ -583,6 +646,15 @@ func (_u *TimeEntryUpdateOne) sqlSave(ctx context.Context) (_node *TimeEntry, er
 	}
 	if value, ok := _u.mutation.AddedUserID(); ok {
 		_spec.AddField(timeentry.FieldUserID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.JobID(); ok {
+		_spec.SetField(timeentry.FieldJobID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedJobID(); ok {
+		_spec.AddField(timeentry.FieldJobID, field.TypeInt64, value)
+	}
+	if _u.mutation.JobIDCleared() {
+		_spec.ClearField(timeentry.FieldJobID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.IsManual(); ok {
 		_spec.SetField(timeentry.FieldIsManual, field.TypeBool, value)

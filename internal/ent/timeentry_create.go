@@ -40,6 +40,20 @@ func (_c *TimeEntryCreate) SetUserID(v int64) *TimeEntryCreate {
 	return _c
 }
 
+// SetJobID sets the "job_id" field.
+func (_c *TimeEntryCreate) SetJobID(v int64) *TimeEntryCreate {
+	_c.mutation.SetJobID(v)
+	return _c
+}
+
+// SetNillableJobID sets the "job_id" field if the given value is not nil.
+func (_c *TimeEntryCreate) SetNillableJobID(v *int64) *TimeEntryCreate {
+	if v != nil {
+		_c.SetJobID(*v)
+	}
+	return _c
+}
+
 // SetIsManual sets the "is_manual" field.
 func (_c *TimeEntryCreate) SetIsManual(v bool) *TimeEntryCreate {
 	_c.mutation.SetIsManual(v)
@@ -262,6 +276,10 @@ func (_c *TimeEntryCreate) createSpec() (*TimeEntry, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UserID(); ok {
 		_spec.SetField(timeentry.FieldUserID, field.TypeInt64, value)
 		_node.UserID = value
+	}
+	if value, ok := _c.mutation.JobID(); ok {
+		_spec.SetField(timeentry.FieldJobID, field.TypeInt64, value)
+		_node.JobID = &value
 	}
 	if value, ok := _c.mutation.IsManual(); ok {
 		_spec.SetField(timeentry.FieldIsManual, field.TypeBool, value)

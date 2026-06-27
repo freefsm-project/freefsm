@@ -330,37 +330,40 @@ type JobRow struct {
 }
 
 type JobDetail struct {
-	ID           int64
-	CustomerID   int64
-	Customer     string
-	ProjectID    int64
-	ProjectName  string
-	LocationID   int64
-	LocationName string
-	ContactID    int64
-	ContactName  string
-	AssetID      int64
-	AssetName    string
-	LineItems    []services.LineItem
-	Visits       []services.JobVisit
-	Assignments  []services.JobAssignment
-	Subtasks     []services.JobSubtask
-	Tags         []TagRow
-	AllTags      []TagRow
-	CustomFields []CustomFieldDisplay
-	JobType      string
-	Subtitle     string
-	StatusID     int64
-	StatusName   string
-	StatusColor  string
-	BillingType  string
-	StartTime    string
-	EndTime      string
-	DueDate      string
-	Notes        string
-	TechNotes    string
-	FileList     FileListPageData
-	ArchivedAt   string
+	ID                       int64
+	CustomerID               int64
+	Customer                 string
+	ProjectID                int64
+	ProjectName              string
+	LocationID               int64
+	LocationName             string
+	ContactID                int64
+	ContactName              string
+	AssetID                  int64
+	AssetName                string
+	LineItems                []services.LineItem
+	Visits                   []services.JobVisit
+	Assignments              []services.JobAssignment
+	Subtasks                 []services.JobSubtask
+	Tags                     []TagRow
+	AllTags                  []TagRow
+	CustomFields             []CustomFieldDisplay
+	JobType                  string
+	Subtitle                 string
+	StatusID                 int64
+	StatusName               string
+	StatusColor              string
+	BillingType              string
+	StartTime                string
+	EndTime                  string
+	DueDate                  string
+	Notes                    string
+	TechNotes                string
+	FileList                 FileListPageData
+	ArchivedAt               string
+	ActiveTimeEntryOnJob     bool
+	ActiveTimeEntryElsewhere bool
+	ActiveTimeEntryMessage   string
 }
 
 type SelectOption struct {

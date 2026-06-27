@@ -21,6 +21,8 @@ type TimeEntry struct {
 	CompanyID *int64 `json:"company_id,omitempty"`
 	// UserID holds the value of the "user_id" field.
 	UserID int64 `json:"user_id,omitempty"`
+	// JobID holds the value of the "job_id" field.
+	JobID *int64 `json:"job_id,omitempty"`
 	// IsManual holds the value of the "is_manual" field.
 	IsManual bool `json:"is_manual,omitempty"`
 	// ClockIn holds the value of the "clock_in" field.
@@ -49,7 +51,7 @@ func (*TimeEntry) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case timeentry.FieldLatitude, timeentry.FieldLongitude:
 			values[i] = new(sql.NullFloat64)
-		case timeentry.FieldID, timeentry.FieldCompanyID, timeentry.FieldUserID:
+		case timeentry.FieldID, timeentry.FieldCompanyID, timeentry.FieldUserID, timeentry.FieldJobID:
 			values[i] = new(sql.NullInt64)
 		case timeentry.FieldNotes:
 			values[i] = new(sql.NullString)
@@ -88,6 +90,13 @@ func (_m *TimeEntry) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field user_id", values[i])
 			} else if value.Valid {
 				_m.UserID = value.Int64
+			}
+		case timeentry.FieldJobID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field job_id", values[i])
+			} else if value.Valid {
+				_m.JobID = new(int64)
+				*_m.JobID = value.Int64
 			}
 		case timeentry.FieldIsManual:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -183,6 +192,11 @@ func (_m *TimeEntry) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("user_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UserID))
+	builder.WriteString(", ")
+	if v := _m.JobID; v != nil {
+		builder.WriteString("job_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("is_manual=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsManual))

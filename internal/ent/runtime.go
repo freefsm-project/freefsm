@@ -855,19 +855,19 @@ func init() {
 	timeentryFields := schema.TimeEntry{}.Fields()
 	_ = timeentryFields
 	// timeentryDescIsManual is the schema descriptor for is_manual field.
-	timeentryDescIsManual := timeentryFields[3].Descriptor()
+	timeentryDescIsManual := timeentryFields[4].Descriptor()
 	// timeentry.DefaultIsManual holds the default value on creation for the is_manual field.
 	timeentry.DefaultIsManual = timeentryDescIsManual.Default.(bool)
 	// timeentryDescNotes is the schema descriptor for notes field.
-	timeentryDescNotes := timeentryFields[8].Descriptor()
+	timeentryDescNotes := timeentryFields[9].Descriptor()
 	// timeentry.DefaultNotes holds the default value on creation for the notes field.
 	timeentry.DefaultNotes = timeentryDescNotes.Default.(string)
 	// timeentryDescCreatedAt is the schema descriptor for created_at field.
-	timeentryDescCreatedAt := timeentryFields[9].Descriptor()
+	timeentryDescCreatedAt := timeentryFields[10].Descriptor()
 	// timeentry.DefaultCreatedAt holds the default value on creation for the created_at field.
 	timeentry.DefaultCreatedAt = timeentryDescCreatedAt.Default.(func() time.Time)
 	// timeentryDescUpdatedAt is the schema descriptor for updated_at field.
-	timeentryDescUpdatedAt := timeentryFields[10].Descriptor()
+	timeentryDescUpdatedAt := timeentryFields[11].Descriptor()
 	// timeentry.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	timeentry.DefaultUpdatedAt = timeentryDescUpdatedAt.Default.(func() time.Time)
 	// timeentry.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

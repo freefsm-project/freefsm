@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -16,24 +18,25 @@ import (
 )
 
 type JobHandler struct {
-	svc         *services.JobService
-	custSvc     *services.CustomerService
-	statusSvc   *services.StatusService
-	projectSvc  *services.ProjectService
-	locSvc      *services.LocationService
-	contactSvc  *services.CustomerContactService
-	tagSvc      *services.TagService
-	tagLinkSvc  *services.TagLinkService
-	defSvc      *services.CustomFieldDefinitionService
-	assetSvc    *services.AssetService
-	fileSvc     *services.FileService
-	activitySvc *services.ActivityService
-	userSvc     *services.UserService
-	policySvc   *services.PolicyService
+	svc          *services.JobService
+	custSvc      *services.CustomerService
+	statusSvc    *services.StatusService
+	projectSvc   *services.ProjectService
+	locSvc       *services.LocationService
+	contactSvc   *services.CustomerContactService
+	tagSvc       *services.TagService
+	tagLinkSvc   *services.TagLinkService
+	defSvc       *services.CustomFieldDefinitionService
+	assetSvc     *services.AssetService
+	fileSvc      *services.FileService
+	activitySvc  *services.ActivityService
+	userSvc      *services.UserService
+	policySvc    *services.PolicyService
+	timeEntrySvc *services.TimeEntryService
 }
 
-func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, fileSvc *services.FileService, activitySvc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService) *JobHandler {
-	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, assetSvc: assetSvc, fileSvc: fileSvc, activitySvc: activitySvc, userSvc: userSvc, policySvc: policySvc}
+func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, fileSvc *services.FileService, activitySvc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService, timeEntrySvc *services.TimeEntryService) *JobHandler {
+	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, assetSvc: assetSvc, fileSvc: fileSvc, activitySvc: activitySvc, userSvc: userSvc, policySvc: policySvc, timeEntrySvc: timeEntrySvc}
 }
 
 func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -160,12 +163,127 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 			d.AssetName = asset.Name
 		}
 	}
+	activeEntry, err := h.timeEntrySvc.GetActiveByUser(r.Context(), u.ID)
+	if err == nil && activeEntry != nil {
+		if activeEntry.JobID != nil && *activeEntry.JobID == j.ID {
+			d.ActiveTimeEntryOnJob = true
+		} else {
+			d.ActiveTimeEntryElsewhere = true
+			if activeEntry.JobID != nil {
+				activeJob, _ := h.svc.GetByID(r.Context(), *activeEntry.JobID)
+				if activeJob != nil {
+					d.ActiveTimeEntryMessage = "You are already clocked in to " + jobDisplayName(activeJob) + ". Clock out before clocking in to this job."
+				}
+			}
+			if d.ActiveTimeEntryMessage == "" {
+				d.ActiveTimeEntryMessage = "You are already clocked in. Clock out before clocking in to this job."
+			}
+		}
+	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "job")
 	d.CustomFields = buildCustomFieldDisplay(defs, j.CustomFields)
 	files, _ := h.fileSvc.List(r.Context(), "job", j.ID)
 	d.FileList = templates.FileListPageData{Files: filesToRows(files), ObjectID: j.ID, ObjectType: "job"}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), j.JobType)
 	templates.JobShow(d).Render(ctx, w)
+}
+
+func (h *JobHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "job", id, policyRead) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	j, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	result, err := h.timeEntrySvc.ClockIn(r.Context(), services.TimeEntryCreateParams{UserID: u.ID, JobID: id})
+	if err != nil {
+		if errors.Is(err, services.ErrActiveTimeEntry) {
+			redirectToJob(w, r, id, "You are already clocked in. Clock out before clocking in to this job.")
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	loc := middleware.CompanyLocation(r.Context())
+	clockInStr := result.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	h.activitySvc.Record(r.Context(), u.ID, "clocked_in", "time_entry", result.ID, map[string]interface{}{
+		"entity_name": fmt.Sprintf("%s — %s — %s", u.Name, jobDisplayName(j), clockInStr),
+		"actor_name":  u.Name,
+	})
+	redirectToJob(w, r, id, "Clocked in to job")
+}
+
+func (h *JobHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "job", id, policyRead) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	j, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	activeEntry, err := h.timeEntrySvc.GetActiveByUser(r.Context(), u.ID)
+	if err != nil {
+		redirectToJob(w, r, id, "No active clock-in found for this job")
+		return
+	}
+	if activeEntry.JobID == nil {
+		redirectToJob(w, r, id, "Your active clock-in is not linked to this job")
+		return
+	}
+	if *activeEntry.JobID != id {
+		redirectToJob(w, r, id, "You are clocked in to another job")
+		return
+	}
+	result, err := h.timeEntrySvc.ClockOut(r.Context(), activeEntry.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	loc := middleware.CompanyLocation(r.Context())
+	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
+	clockInStr := result.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	h.activitySvc.Record(r.Context(), u.ID, "clocked_out", "time_entry", result.ID, map[string]interface{}{
+		"entity_name": fmt.Sprintf("%s — %s — %s (%s)", u.Name, jobDisplayName(j), clockInStr, duration),
+		"actor_name":  u.Name,
+	})
+	redirectToJob(w, r, id, "Clocked out of job")
+}
+
+func redirectToJob(w http.ResponseWriter, r *http.Request, id int64, flash string) {
+	http.Redirect(w, r, fmt.Sprintf("/jobs/%d?flash=%s", id, url.QueryEscape(flash)), http.StatusSeeOther)
 }
 
 func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -561,6 +679,13 @@ func jobRow(j *ent.Job, statuses []*ent.Status, custMap map[int64]string) templa
 		r.StartTime = j.StartTime.Format("Jan 2, 2006 3:04 PM")
 	}
 	return r
+}
+
+func jobDisplayName(j *ent.Job) string {
+	if j.Subtitle != "" {
+		return j.JobType + " — " + j.Subtitle
+	}
+	return j.JobType
 }
 
 func parseTime(v string, loc *time.Location) time.Time {

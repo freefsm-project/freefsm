@@ -17,6 +17,8 @@ const (
 	FieldCompanyID = "company_id"
 	// FieldUserID holds the string denoting the user_id field in the database.
 	FieldUserID = "user_id"
+	// FieldJobID holds the string denoting the job_id field in the database.
+	FieldJobID = "job_id"
 	// FieldIsManual holds the string denoting the is_manual field in the database.
 	FieldIsManual = "is_manual"
 	// FieldClockIn holds the string denoting the clock_in field in the database.
@@ -42,6 +44,7 @@ var Columns = []string{
 	FieldID,
 	FieldCompanyID,
 	FieldUserID,
+	FieldJobID,
 	FieldIsManual,
 	FieldClockIn,
 	FieldClockOut,
@@ -91,6 +94,11 @@ func ByCompanyID(opts ...sql.OrderTermOption) OrderOption {
 // ByUserID orders the results by the user_id field.
 func ByUserID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUserID, opts...).ToFunc()
+}
+
+// ByJobID orders the results by the job_id field.
+func ByJobID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldJobID, opts...).ToFunc()
 }
 
 // ByIsManual orders the results by the is_manual field.

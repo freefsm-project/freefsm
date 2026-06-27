@@ -797,6 +797,7 @@ var (
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "job_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "is_manual", Type: field.TypeBool, Default: false},
 		{Name: "clock_in", Type: field.TypeTime},
 		{Name: "clock_out", Type: field.TypeTime, Nullable: true},
@@ -815,12 +816,17 @@ var (
 			{
 				Name:    "timeentry_user_id_clock_out",
 				Unique:  false,
-				Columns: []*schema.Column{TimeEntriesColumns[2], TimeEntriesColumns[5]},
+				Columns: []*schema.Column{TimeEntriesColumns[2], TimeEntriesColumns[6]},
+			},
+			{
+				Name:    "timeentry_job_id",
+				Unique:  false,
+				Columns: []*schema.Column{TimeEntriesColumns[3]},
 			},
 			{
 				Name:    "timeentry_clock_in",
 				Unique:  false,
-				Columns: []*schema.Column{TimeEntriesColumns[4]},
+				Columns: []*schema.Column{TimeEntriesColumns[5]},
 			},
 		},
 	}

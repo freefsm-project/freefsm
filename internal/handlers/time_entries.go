@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -168,25 +169,14 @@ func (h *TimeEntryHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hasActive, err := h.svc.HasActiveEntry(r.Context(), user.ID)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	if hasActive {
-		activeEntry, err := h.svc.GetActiveByUser(r.Context(), user.ID)
-		if err != nil {
-			http.Error(w, err.Error(), 500)
-			return
-		}
-		_, _ = h.svc.ClockOut(r.Context(), activeEntry.ID)
-	}
-
 	result, err := h.svc.ClockIn(r.Context(), services.TimeEntryCreateParams{
 		UserID: user.ID,
 	})
 	if err != nil {
+		if errors.Is(err, services.ErrActiveTimeEntry) {
+			http.Redirect(w, r, "/?flash=You+are+already+clocked+in", http.StatusSeeOther)
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
