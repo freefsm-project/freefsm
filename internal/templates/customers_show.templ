@@ -81,6 +81,7 @@ templ CustomerShow(p CustomerShowPageData) {
 						<div><small>Open Invoices</small><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("%d", p.Financial.OpenInvoiceCount) }</p></div>
 						<div><small>Overdue Invoices</small><p class="dashboard-metric dashboard-metric-sm dashboard-danger">{ fmt.Sprintf("%d", p.Financial.OverdueInvoiceCount) }</p></div>
 					</div>
+					@customerFinancialGraph(p.Financial)
 				</article>
 			}
 		</div>
@@ -124,6 +125,28 @@ templ customerFilesCard(p CustomerShowPageData) {
 		}
 		@FileList(p.FileList)
 	</article>
+}
+
+templ customerFinancialGraph(f CustomerFinancialSummary) {
+	<div class="customer-financial-graph" aria-label={ fmt.Sprintf("Receivables: paid %.2f, current %.2f, overdue %.2f", f.TotalPaid, f.CurrentBalance, f.OverdueBalance) }>
+		<div class="customer-financial-graph-title">Receivables</div>
+		<div class="customer-financial-bar">
+			if f.PaidPercent > 0 {
+				<span class="customer-financial-paid" style={ fmt.Sprintf("width:%d%%", f.PaidPercent) }></span>
+			}
+			if f.OpenPercent > 0 {
+				<span class="customer-financial-open" style={ fmt.Sprintf("width:%d%%", f.OpenPercent) }></span>
+			}
+			if f.OverduePercent > 0 {
+				<span class="customer-financial-overdue" style={ fmt.Sprintf("width:%d%%", f.OverduePercent) }></span>
+			}
+		</div>
+		<div class="customer-financial-legend">
+			<span><i class="customer-financial-paid-dot"></i>Paid { fmt.Sprintf("$%.2f", f.TotalPaid) }</span>
+			<span><i class="customer-financial-open-dot"></i>Current { fmt.Sprintf("$%.2f", f.CurrentBalance) }</span>
+			<span><i class="customer-financial-overdue-dot"></i>Overdue { fmt.Sprintf("$%.2f", f.OverdueBalance) }</span>
+		</div>
+	</div>
 }
 
 templ customerLocationsTable(locations []LocationRow) {

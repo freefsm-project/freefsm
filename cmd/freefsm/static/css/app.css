@@ -1846,6 +1846,71 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
   margin-bottom: 0;
 }
 
+.customer-financial-graph {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+}
+
+.customer-financial-graph-title {
+  color: var(--pico-muted-color);
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.customer-financial-bar {
+  display: flex;
+  width: 100%;
+  min-height: 0.85rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--pico-muted-border-color);
+}
+
+.customer-financial-bar span {
+  display: block;
+  min-width: 0;
+}
+
+.customer-financial-paid,
+.customer-financial-paid-dot {
+  background: #10b981;
+}
+
+.customer-financial-open,
+.customer-financial-open-dot {
+  background: var(--pico-primary);
+}
+
+.customer-financial-overdue,
+.customer-financial-overdue-dot {
+  background: var(--pico-del-color);
+}
+
+.customer-financial-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 0.65rem;
+  color: var(--pico-muted-color);
+  font-size: 0.75rem;
+  line-height: 1.25;
+}
+
+.customer-financial-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.customer-financial-legend i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  display: inline-block;
+}
+
 .dashboard-assigned-actions {
   display: flex;
   gap: 0.5rem;
