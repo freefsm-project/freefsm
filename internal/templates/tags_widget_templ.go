@@ -104,7 +104,7 @@ func TagWidget(p TagWidgetData) templ.Component {
 			}
 		}
 		if canManageOperational(ctx) && !p.ReadOnly && len(p.AllTags) > len(p.Tags) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<select class=\"tag-select\" hx-on:change=\"htmx.trigger(this, 'addTag')\"><option value=\"\">+ Add tag</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<select class=\"tag-select\" hx-on:change=\"htmx.trigger(this, 'addTag')\"><option value=\"\">Add Tag</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

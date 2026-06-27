@@ -4,7 +4,6 @@ import "fmt"
 
 templ ContactsList(contacts []ContactRow, customerID int64, readOnly bool) {
 	<div id="contacts-section">
-		<h3>Contacts</h3>
 		if len(contacts) > 0 {
 			<table>
 				<thead>
@@ -23,11 +22,11 @@ templ ContactsList(contacts []ContactRow, customerID int64, readOnly bool) {
 							<td>{ c.Phone }</td>
 							if canManageOperational(ctx) && !readOnly {
 								<td class="text-right">
-									<button class="outline small"
+									<button class="outline small customer-add-button"
 										hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/edit", customerID, c.ID)) }
 										hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", c.ID)) }
 										hx-swap="outerHTML">Edit</button>
-									<button class="outline contrast small"
+									<button class="outline contrast small customer-add-button"
 										hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/delete", customerID, c.ID)) }
 										hx-confirm="Delete this contact?"
 										hx-target="#contacts-section"
@@ -42,7 +41,7 @@ templ ContactsList(contacts []ContactRow, customerID int64, readOnly bool) {
 		if canManageOperational(ctx) && !readOnly {
 			<button hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/new", customerID)) }
 				hx-target="#contact-form-wrap"
-				hx-swap="innerHTML" class="outline contact-add-button">+ Add Contact</button>
+				hx-swap="innerHTML" class="outline small customer-add-button">+ Add Contact</button>
 		}
 		<div id="contact-form-wrap"></div>
 	</div>

@@ -152,7 +152,7 @@ func LocationViewRow(customerID int64, l LocationRow, readOnly bool) templ.Compo
 			return templ_7745c5c3_Err
 		}
 		if canManageOperational(ctx) && !readOnly {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<td class=\"text-right\"><button class=\"outline small\" hx-get=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<td class=\"text-right\"><button class=\"outline small customer-add-button\" hx-get=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -178,7 +178,7 @@ func LocationViewRow(customerID int64, l LocationRow, readOnly bool) templ.Compo
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" hx-swap=\"outerHTML\">Edit</button> <button class=\"outline contrast small\" hx-post=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" hx-swap=\"outerHTML\">Edit</button> <button class=\"outline contrast small customer-add-button\" hx-post=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

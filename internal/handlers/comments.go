@@ -56,6 +56,7 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 
 		baseURL := fmt.Sprintf("%s/%d", typeToPrefix[objectType], objectID)
 		readOnly := r.URL.Query().Get("read_only") == "1"
+		hideTitle := r.URL.Query().Get("hide_title") == "1"
 		rows := make([]templates.CommentRow, len(comments))
 		for i, c := range comments {
 			author, _ := h.userSvc.GetByID(r.Context(), c.AuthorID)
@@ -81,6 +82,7 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 			ObjectID:   objectID,
 			Comments:   rows,
 			ReadOnly:   readOnly,
+			HideTitle:  hideTitle,
 		}))
 	}
 }

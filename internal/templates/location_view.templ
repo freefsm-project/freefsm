@@ -20,11 +20,11 @@ templ LocationViewRow(customerID int64, l LocationRow, readOnly bool) {
 		<td>{ l.Notes }</td>
 		if canManageOperational(ctx) && !readOnly {
 			<td class="text-right">
-				<button class="outline small"
+				<button class="outline small customer-add-button"
 					hx-get={ templ.URL(fmt.Sprintf("/customers/%d/locations/%d/edit", customerID, l.ID)) }
 					hx-target={ templ.SafeURL(fmt.Sprintf("#location-%d", l.ID)) }
 					hx-swap="outerHTML">Edit</button>
-				<button class="outline contrast small"
+				<button class="outline contrast small customer-add-button"
 					hx-post={ templ.URL(fmt.Sprintf("/customers/%d/locations/%d/delete", customerID, l.ID)) }
 					hx-confirm="Delete this location?"
 					hx-target="#locations-section"

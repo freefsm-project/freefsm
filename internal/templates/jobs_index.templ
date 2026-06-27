@@ -16,6 +16,9 @@ templ JobsIndex(p JobListPageData) {
 						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
 					}
 				</select>
+				if p.CustomerID > 0 {
+					<input type="hidden" name="customer_id" value={ fmt.Sprintf("%d", p.CustomerID) }/>
+				}
 				<span id="search-spinner" class="spinner htmx-indicator"></span>
 			</form>
 			if canManageOperational(ctx) {
@@ -87,7 +90,7 @@ templ JobsTable(p JobListPageData) {
 		@Pagination(PaginationData{
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
-			BaseURL:     "/jobs",
+			BaseURL:     customerScopedListURL("/jobs", p.CustomerID),
 			Target:      "#job-table-wrap",
 		})
 	</div>

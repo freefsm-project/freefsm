@@ -3,8 +3,14 @@ package templates
 import "fmt"
 
 templ FileUploadWidget(objectType string, objectID int64, redirect string) {
+	@FileUploadWidgetWithTitle(objectType, objectID, redirect, true)
+}
+
+templ FileUploadWidgetWithTitle(objectType string, objectID int64, redirect string, showTitle bool) {
 	<div class="files-widget">
-		<h3>Files</h3>
+		if showTitle {
+			<h3>Files</h3>
+		}
 		<form action="/files" method="post" enctype="multipart/form-data" hx-post="/files" hx-swap="none">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<input type="hidden" name="object_type" value={ objectType }/>
@@ -12,7 +18,7 @@ templ FileUploadWidget(objectType string, objectID int64, redirect string) {
 			<input type="hidden" name="redirect" value={ redirect }/>
 			<div class="files-upload-row">
 				<input type="file" name="file" required/>
-				<button type="submit">Upload</button>
+				<button type="submit" class="small customer-add-button">Upload</button>
 			</div>
 		</form>
 	</div>
@@ -81,7 +87,7 @@ templ FileList(p FileListPageData) {
 									<form action={ templ.URL(fmt.Sprintf("/files/%d/delete", f.ID)) } method="post" onsubmit="return confirm('Delete this file?')">
 										<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 										<input type="hidden" name="redirect" value={ fmt.Sprintf("%s/%d", redirectPrefix(p.ObjectType), p.ObjectID) }/>
-										<button type="submit" class="outline contrast small files-delete-button">Delete</button>
+										<button type="submit" class="outline contrast small customer-add-button files-delete-button">Delete</button>
 									</form>
 								}
 							</td>

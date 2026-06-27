@@ -4,7 +4,6 @@ import "fmt"
 
 templ LocationsList(locations []LocationRow, customerID int64, readOnly bool) {
 	<div id="locations-section">
-		<h3>Locations</h3>
 		if len(locations) > 0 {
 			<table>
 				<thead>
@@ -25,7 +24,7 @@ templ LocationsList(locations []LocationRow, customerID int64, readOnly bool) {
 		if canManageOperational(ctx) && !readOnly {
 			<button hx-get={ templ.URL(fmt.Sprintf("/customers/%d/locations/new", customerID)) }
 				hx-target="#location-form-wrap"
-				hx-swap="innerHTML" class="outline contact-add-button">+ Add Location</button>
+				hx-swap="innerHTML" class="outline small customer-add-button">+ Add Location</button>
 		}
 		<div id="location-form-wrap"></div>
 	</div>

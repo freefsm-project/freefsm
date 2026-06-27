@@ -443,6 +443,7 @@ html[data-theme="dark"] .theme-icon-moon {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
+  align-items: center;
 }
 
 .work-item-detail-action-group form,
@@ -453,6 +454,7 @@ html[data-theme="dark"] .theme-icon-moon {
 .work-item-detail-action-group a[role="button"],
 .work-item-detail-action-group button,
 .work-item-detail-archive-banner button {
+  box-sizing: border-box;
   margin: 0;
   padding: 0.25rem 0.55rem;
   font-size: 0.8rem;
@@ -641,8 +643,7 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 .files-delete-button {
-  padding: 0 0.5rem;
-  font-size: 0.8rem;
+  margin-bottom: 0;
 }
 
 /* Subtasks */
@@ -773,8 +774,6 @@ html[data-theme="dark"] .theme-icon-moon {
 
 .comments-delete-button {
   margin: 0;
-  padding: 0 0.35rem;
-  font-size: 0.7rem;
 }
 
 .comments-content {
@@ -788,10 +787,6 @@ html[data-theme="dark"] .theme-icon-moon {
 
 .comments-textarea {
   margin-bottom: 0.25rem;
-}
-
-.comments-submit-button {
-  font-size: 0.85rem;
 }
 
 .custom-fields-grid {
@@ -882,8 +877,10 @@ html[data-theme="dark"] .theme-icon-moon {
 
 .tag-select {
   width: auto;
-  padding: 0.25rem;
+  margin: 0;
+  padding: 0.25rem 0.55rem;
   font-size: 0.8rem;
+  line-height: 1.25;
 }
 
 /* Scoped form primitives */
@@ -1761,6 +1758,47 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
   gap: 0.75rem;
 }
 
+.customer-dashboard-top {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.4fr) minmax(260px, 0.8fr);
+  gap: 0.75rem;
+  align-items: start;
+  margin-bottom: 1.25rem;
+}
+
+.customer-dashboard-supporting {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.customer-details-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 0.75fr) minmax(360px, 1.25fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.customer-details-main,
+.customer-details-related {
+  min-width: 0;
+}
+
+.customer-add-button {
+  width: auto;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.82rem;
+}
+
+.customer-detail-subsection {
+  margin-top: 1rem;
+}
+
+.customer-details-related .customer-detail-subsection:first-child {
+  margin-top: 0;
+}
+
 .dashboard-panel {
   margin: 0;
   padding: 0.75rem;
@@ -1798,6 +1836,16 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
   margin-bottom: 1.25rem;
 }
 
+.customer-financials {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0;
+}
+
+.customer-financials .dashboard-metric {
+  margin-bottom: 0;
+}
+
 .dashboard-assigned-actions {
   display: flex;
   gap: 0.5rem;
@@ -1807,6 +1855,9 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
 @media (max-width: 768px) {
   .dashboard-overview,
   .dashboard-work-queues,
+  .customer-dashboard-top,
+  .customer-details-grid,
+  .customer-dashboard-supporting,
   .dashboard-financials {
     grid-template-columns: 1fr;
   }

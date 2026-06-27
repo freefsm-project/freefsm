@@ -138,10 +138,29 @@ type CustomerRow struct {
 
 type CustomerShowPageData struct {
 	Customer     CustomerDetail
+	Locations    []LocationRow
+	Contacts     []ContactRow
+	Jobs         []JobRow
+	Estimates    []EstimateRow
+	Invoices     []InvoiceRow
+	Financial    CustomerFinancialSummary
 	Tags         []TagRow
 	AllTags      []TagRow
 	CustomFields []CustomFieldDisplay
 	FileList     FileListPageData
+}
+
+type CustomerFinancialSummary struct {
+	TotalInvoiced       float64
+	TotalPaid           float64
+	TotalBalance        float64
+	CurrentBalance      float64
+	OverdueBalance      float64
+	OpenInvoiceCount    int
+	OverdueInvoiceCount int
+	PaidPercent         int
+	OpenPercent         int
+	OverduePercent      int
 }
 
 type CustomerDetail struct {
@@ -182,6 +201,10 @@ type CustomerFormPageData struct {
 	Statuses     []string
 	AccountTypes []string
 	CustomFields []CustomFieldDisplay
+	Locations    []LocationRow
+	Contacts     []ContactRow
+	Tags         []TagRow
+	AllTags      []TagRow
 }
 
 type PaginationData struct {
@@ -353,6 +376,7 @@ type JobListPageData struct {
 	TotalPages int
 	Search     string
 	StatusID   int64
+	CustomerID int64
 	Statuses   []SelectOption
 }
 
@@ -425,6 +449,7 @@ type EstimateListPageData struct {
 	TotalPages int
 	Search     string
 	StatusID   int64
+	CustomerID int64
 	Statuses   []SelectOption
 }
 
@@ -484,6 +509,7 @@ type InvoiceListPageData struct {
 	TotalPages int
 	Search     string
 	StatusID   int64
+	CustomerID int64
 	Statuses   []SelectOption
 }
 
@@ -942,6 +968,13 @@ func schedulePeriodTabClass(active bool) string {
 	return "schedule-period-tab"
 }
 
+func customerScopedListURL(base string, customerID int64) string {
+	if customerID <= 0 {
+		return base
+	}
+	return fmt.Sprintf("%s?customer_id=%d", base, customerID)
+}
+
 type ContactRow struct {
 	ID        int64
 	FirstName string
@@ -1087,6 +1120,7 @@ type CommentsWidgetData struct {
 	ObjectID   int64
 	Comments   []CommentRow
 	ReadOnly   bool
+	HideTitle  bool
 }
 
 type CustomFieldDefRow struct {

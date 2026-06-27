@@ -44,12 +44,15 @@ func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
 	perPage := 25
 	search := r.URL.Query().Get("search")
 	statusID, _ := strconv.ParseInt(r.URL.Query().Get("status_id"), 10, 64)
+	customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
 
 	u, _ := middleware.UserFromContext(r.Context())
 	var jobs []*ent.Job
 	var total int
 	var err error
-	if isAdminOrDispatcher(u) {
+	if isAdminOrDispatcher(u) && customerID > 0 {
+		jobs, total, err = h.svc.ListForCustomer(r.Context(), customerID, search, statusID, page, perPage)
+	} else if isAdminOrDispatcher(u) {
 		jobs, total, err = h.svc.List(r.Context(), search, statusID, page, perPage)
 	} else if u != nil {
 		jobs, total, err = h.svc.ListAssigned(r.Context(), u.ID, search, statusID, page, perPage)
@@ -79,6 +82,7 @@ func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
 		TotalPages: services.JobPaginationTotalPages(total, perPage),
 		Search:     search,
 		StatusID:   statusID,
+		CustomerID: customerID,
 		Statuses:   statusOptions(statuses),
 	}
 
@@ -166,7 +170,8 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		templates.JobForm(h.newJobForm(r.Context())).Render(r.Context(), w)
+		customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
+		templates.JobForm(h.newJobForm(r.Context(), customerID)).Render(r.Context(), w)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -401,22 +406,24 @@ func (h *JobHandler) statusesForSelect(ctx context.Context) []*ent.Status {
 	return statuses
 }
 
-func (h *JobHandler) newJobForm(ctx context.Context) templates.JobFormPageData {
+func (h *JobHandler) newJobForm(ctx context.Context, customerID int64) templates.JobFormPageData {
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
 	projects, _ := h.projectSvc.ListAll(ctx)
+	locations, _ := h.locSvc.ListByCustomer(ctx, customerID)
 	assets, _ := h.assetSvc.ListAll(ctx)
 	users, _ := h.userSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	return templates.JobFormPageData{
 		Job: &templates.JobDetail{
+			CustomerID:  customerID,
 			BillingType: "flat_rate",
 			StartTime:   time.Now().Format("2006-01-02") + "T08:00",
 		},
 		IsNew:                   true,
 		Customers:               customerOptions(customers),
 		Projects:                projectOptions(projects),
-		Locations:               nil,
+		Locations:               locationOptions(locations),
 		Assets:                  assetOptions(assets),
 		Users:                   userOptions(users),
 		Statuses:                statusOptions(statuses),

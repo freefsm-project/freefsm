@@ -23,7 +23,7 @@ templ TagWidget(p TagWidgetData) {
 					class="tag-select"
 					hx-on:change="htmx.trigger(this, 'addTag')"
 				>
-					<option value="">+ Add tag</option>
+					<option value="">Add Tag</option>
 					for _, t := range p.AllTags {
 						if !tagInList(t.ID, p.Tags) {
 							<option value={ fmt.Sprintf("%d", t.ID) }>{ t.Name }</option>

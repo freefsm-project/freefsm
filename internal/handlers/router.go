@@ -48,6 +48,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	activitySvc := services.NewActivityService(entClient)
 	depSvc := services.NewDependencyService(entClient)
 	policySvc := services.NewPolicyService(entClient)
+	estimateService := services.NewEstimateService(entClient)
+	invoiceService := services.NewInvoiceService(entClient)
 	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc, policySvc)
 	defSvc := services.NewCustomFieldDefinitionService(entClient)
 	cfHandler := NewCustomFieldHandler(defSvc, activitySvc, depSvc)
@@ -58,7 +60,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	fileHandler := NewFileHandler(fileSvc, activitySvc, policySvc)
 	activityHandler := NewActivityHandler(activitySvc, userService, policySvc)
 
-	customerHandler := NewCustomerHandler(customerService, contactSvc, locationSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc)
+	customerHandler := NewCustomerHandler(customerService, contactSvc, locationSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc, jobService, estimateService, invoiceService, statusService)
 	itemHandler := NewItemHandler(itemService, activitySvc)
 	// Asset services
 	assetTypeSvc := services.NewAssetTypeService(entClient)
@@ -70,8 +72,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService, userService, locationSvc, cfg)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
-	invoiceService := services.NewInvoiceService(entClient)
-	estimateHandler := NewEstimateHandler(services.NewEstimateService(entClient), customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc)
+	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc)
 	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc)
 	tagHandler := NewTagHandler(tagSvc, tagLinkSvc, activitySvc, depSvc)
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc, cfg.UploadDir)

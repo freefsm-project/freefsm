@@ -43,8 +43,16 @@ func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
 	perPage := 25
 	search := r.URL.Query().Get("search")
 	statusID, _ := strconv.ParseInt(r.URL.Query().Get("status_id"), 10, 64)
+	customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
 
-	invoices, total, err := h.svc.List(r.Context(), search, statusID, page, perPage)
+	var invoices []*ent.Invoice
+	var total int
+	var err error
+	if customerID > 0 {
+		invoices, total, err = h.svc.ListForCustomer(r.Context(), customerID, search, statusID, page, perPage)
+	} else {
+		invoices, total, err = h.svc.List(r.Context(), search, statusID, page, perPage)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -67,6 +75,7 @@ func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
 		TotalPages: services.InvoicePaginationTotalPages(total, perPage),
 		Search:     search,
 		StatusID:   statusID,
+		CustomerID: customerID,
 		Statuses:   statusOptions(statuses),
 	}
 

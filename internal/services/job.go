@@ -121,6 +121,16 @@ func (s *JobService) ListByProject(ctx context.Context, projectID int64) ([]*ent
 		All(ctx)
 }
 
+func (s *JobService) ListByCustomer(ctx context.Context, customerID int64, limit int) ([]*ent.Job, error) {
+	q := s.client.Job.Query().
+		Where(job.DeletedAtIsNil(), job.CustomerIDEQ(customerID)).
+		Order(ent.Desc(job.FieldCreatedAt))
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	return q.All(ctx)
+}
+
 func (s *JobService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Job, int, error) {
 	q := s.client.Job.Query().Where(job.DeletedAtIsNil())
 
@@ -153,6 +163,27 @@ func (s *JobService) List(ctx context.Context, search string, statusID int64, pa
 		return nil, 0, fmt.Errorf("list jobs: %w", err)
 	}
 
+	return jobs, total, nil
+}
+
+func (s *JobService) ListForCustomer(ctx context.Context, customerID int64, search string, statusID int64, page, perPage int) ([]*ent.Job, int, error) {
+	q := s.client.Job.Query().Where(job.DeletedAtIsNil(), job.CustomerIDEQ(customerID))
+
+	if search != "" {
+		q = q.Where(job.Or(job.JobTypeContainsFold(search), job.SubtitleContainsFold(search)))
+	}
+	if statusID > 0 {
+		q = q.Where(job.StatusIDEQ(statusID))
+	}
+
+	total, err := q.Count(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count customer jobs: %w", err)
+	}
+	jobs, err := q.Order(ent.Desc(job.FieldStartTime)).Order(ent.Desc(job.FieldCreatedAt)).Limit(perPage).Offset(PaginationOffset(page, perPage)).All(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list customer jobs: %w", err)
+	}
 	return jobs, total, nil
 }
 

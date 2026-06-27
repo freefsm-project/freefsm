@@ -16,6 +16,9 @@ templ InvoicesIndex(p InvoiceListPageData) {
 						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
 					}
 				</select>
+				if p.CustomerID > 0 {
+					<input type="hidden" name="customer_id" value={ fmt.Sprintf("%d", p.CustomerID) }/>
+				}
 				<span id="search-spinner" class="spinner htmx-indicator"></span>
 			</form>
 			<a href="/invoices/new" role="button">New Invoice</a>
@@ -71,7 +74,7 @@ templ InvoicesTable(p InvoiceListPageData) {
 		@Pagination(PaginationData{
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
-			BaseURL:     "/invoices",
+			BaseURL:     customerScopedListURL("/invoices", p.CustomerID),
 			Target:      "#invoice-table-wrap",
 		})
 	</div>

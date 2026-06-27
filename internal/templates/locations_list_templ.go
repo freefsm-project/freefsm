@@ -31,7 +31,7 @@ func LocationsList(locations []LocationRow, customerID int64, readOnly bool) tem
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"locations-section\"><h3>Locations</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"locations-section\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -69,13 +69,13 @@ func LocationsList(locations []LocationRow, customerID int64, readOnly bool) tem
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fmt.Sprintf("/customers/%d/locations/new", customerID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/locations_list.templ`, Line: 26, Col: 85}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/locations_list.templ`, Line: 25, Col: 85}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" hx-target=\"#location-form-wrap\" hx-swap=\"innerHTML\" class=\"outline contact-add-button\">+ Add Location</button>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" hx-target=\"#location-form-wrap\" hx-swap=\"innerHTML\" class=\"outline small customer-add-button\">+ Add Location</button>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

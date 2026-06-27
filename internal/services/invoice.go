@@ -74,6 +74,37 @@ func (s *InvoiceService) List(ctx context.Context, search string, statusID int64
 	return invoices, total, nil
 }
 
+func (s *InvoiceService) ListByCustomer(ctx context.Context, customerID int64, limit int) ([]*ent.Invoice, error) {
+	q := s.client.Invoice.Query().
+		Where(invoice.DeletedAtIsNil(), invoice.CustomerIDEQ(customerID)).
+		Order(ent.Desc(invoice.FieldCreatedAt))
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	return q.All(ctx)
+}
+
+func (s *InvoiceService) ListForCustomer(ctx context.Context, customerID int64, search string, statusID int64, page, perPage int) ([]*ent.Invoice, int, error) {
+	q := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil(), invoice.CustomerIDEQ(customerID))
+
+	if search != "" {
+		q = q.Where(invoice.TitleContainsFold(search))
+	}
+	if statusID > 0 {
+		q = q.Where(invoice.StatusIDEQ(statusID))
+	}
+
+	total, err := q.Count(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count customer invoices: %w", err)
+	}
+	invoices, err := q.Order(ent.Desc(invoice.FieldCreatedAt)).Limit(perPage).Offset(PaginationOffset(page, perPage)).All(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list customer invoices: %w", err)
+	}
+	return invoices, total, nil
+}
+
 func (s *InvoiceService) GetByID(ctx context.Context, id int64) (*ent.Invoice, error) {
 	i, err := s.client.Invoice.Get(ctx, id)
 	if err != nil {

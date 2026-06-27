@@ -68,6 +68,37 @@ func (s *EstimateService) List(ctx context.Context, search string, statusID int6
 	return estimates, total, nil
 }
 
+func (s *EstimateService) ListByCustomer(ctx context.Context, customerID int64, limit int) ([]*ent.Estimate, error) {
+	q := s.client.Estimate.Query().
+		Where(estimate.DeletedAtIsNil(), estimate.CustomerIDEQ(customerID)).
+		Order(ent.Desc(estimate.FieldCreatedAt))
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	return q.All(ctx)
+}
+
+func (s *EstimateService) ListForCustomer(ctx context.Context, customerID int64, search string, statusID int64, page, perPage int) ([]*ent.Estimate, int, error) {
+	q := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil(), estimate.CustomerIDEQ(customerID))
+
+	if search != "" {
+		q = q.Where(estimate.TitleContainsFold(search))
+	}
+	if statusID > 0 {
+		q = q.Where(estimate.StatusIDEQ(statusID))
+	}
+
+	total, err := q.Count(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count customer estimates: %w", err)
+	}
+	estimates, err := q.Order(ent.Desc(estimate.FieldCreatedAt)).Limit(perPage).Offset(PaginationOffset(page, perPage)).All(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list customer estimates: %w", err)
+	}
+	return estimates, total, nil
+}
+
 func (s *EstimateService) GetByID(ctx context.Context, id int64) (*ent.Estimate, error) {
 	e, err := s.client.Estimate.Get(ctx, id)
 	if err != nil {
@@ -226,4 +257,18 @@ func (s *EstimateService) LineItems(e *ent.Estimate) []LineItem {
 		return []LineItem{}
 	}
 	return items
+}
+
+func EstimateTotal(items []LineItem, taxRate string) float64 {
+	subtotal := 0.0
+	taxableSubtotal := 0.0
+	for _, item := range items {
+		lineTotal := item.UnitPrice*float64(item.Quantity) - item.Discount + item.Surcharge
+		subtotal += lineTotal
+		if item.Taxable {
+			taxableSubtotal += lineTotal
+		}
+	}
+	tax := taxableSubtotal * parseTaxRate(taxRate) / 100
+	return subtotal + tax
 }

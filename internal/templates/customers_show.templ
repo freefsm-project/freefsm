@@ -4,10 +4,12 @@ import "fmt"
 
 templ CustomerShow(p CustomerShowPageData) {
 	@Layout("Customer - "+p.Customer.DisplayName) {
-		<div class="work-item-detail">
+		<div class="work-item-detail customer-dashboard">
 		if canManageOperational(ctx) && p.Customer.ArchivedAt == "" {
 			<div class="work-item-detail-actions">
 				<div class="work-item-detail-action-group">
+					<a href={ templ.URL(fmt.Sprintf("/jobs/new?customer_id=%d", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Create job for %s", p.Customer.DisplayName) }>Create Job</a>
+					<a href={ templ.URL(fmt.Sprintf("/estimates/new?customer_id=%d", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Create estimate for %s", p.Customer.DisplayName) }>Create Estimate</a>
 					<a href={ templ.URL(fmt.Sprintf("/customers/%d/create-invoice", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Create invoice for %s", p.Customer.DisplayName) }>Create Invoice</a>
 					<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Customer.DisplayName) }>Edit</a>
 					<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", p.Customer.ID)) } method="post" onsubmit="return confirm('Delete this customer?')">
@@ -28,80 +30,202 @@ templ CustomerShow(p CustomerShowPageData) {
 				}
 			</div>
 		}
-		if len(p.Tags) > 0 || true {
-			@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: p.Customer.ArchivedAt != ""})
+		if len(p.Tags) > 0 {
+			@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: true})
 		}
 		if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
 		}
-		<table class="work-item-detail-meta">
-			<tbody>
-				if p.Customer.CompanyName != "" {
-					<tr><th>Company</th><td>{ p.Customer.CompanyName }</td></tr>
-				}
-				<tr><th>First Name</th><td>{ p.Customer.FirstName }</td></tr>
-				<tr><th>Last Name</th><td>{ p.Customer.LastName }</td></tr>
-				<tr><th>Email</th><td>{ p.Customer.Email }</td></tr>
-				<tr><th>Phone</th><td>{ p.Customer.Phone }</td></tr>
-				if canManageOperational(ctx) {
-					<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(customerStatusColor(p.Customer.Status)) }>{ p.Customer.Status }</span></td></tr>
-					<tr><th>Account Type</th><td>{ p.Customer.AccountType }</td></tr>
-				}
-			</tbody>
-		</table>
-		if canManageOperational(ctx) && p.Customer.Notes != "" {
-			<h3>Notes</h3>
-			<p>{ p.Customer.Notes }</p>
-		}
-		if canManageOperational(ctx) {
-			<h3>Billing Address</h3>
-			<p>
-				{ p.Customer.BillingAddress1 }<br/>
-				if p.Customer.BillingAddress2 != "" {
-					{ p.Customer.BillingAddress2 }<br/>
-				}
-				{ p.Customer.BillingCity }, { p.Customer.BillingState } { p.Customer.BillingZipCode }
-			</p>
+		<div class="customer-dashboard-top">
+			<article class="dashboard-panel customer-dashboard-details">
+				@DashboardSubcardTop("Customer Details")
+				<div class="customer-details-grid">
+					<div class="customer-details-main">
+						<table class="work-item-detail-meta">
+							<tbody>
+								if p.Customer.CompanyName != "" {
+									<tr><th>Company</th><td>{ p.Customer.CompanyName }</td></tr>
+								}
+								<tr><th>First Name</th><td>{ p.Customer.FirstName }</td></tr>
+								<tr><th>Last Name</th><td>{ p.Customer.LastName }</td></tr>
+								<tr><th>Email</th><td>{ p.Customer.Email }</td></tr>
+								<tr><th>Phone</th><td>{ p.Customer.Phone }</td></tr>
+								if canManageOperational(ctx) {
+									<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(customerStatusColor(p.Customer.Status)) }>{ p.Customer.Status }</span></td></tr>
+									<tr><th>Account Type</th><td>{ p.Customer.AccountType }</td></tr>
+									<tr><th>Billing Address</th><td>
+										{ p.Customer.BillingAddress1 }<br/>
+										if p.Customer.BillingAddress2 != "" {
+											{ p.Customer.BillingAddress2 }<br/>
+										}
+										{ p.Customer.BillingCity }, { p.Customer.BillingState } { p.Customer.BillingZipCode }
+									</td></tr>
+								}
+							</tbody>
+						</table>
+					</div>
+					<div class="customer-details-related">
+						@customerLocationsTable(p.Locations)
+						@customerContactsTable(p.Contacts)
+					</div>
+				</div>
+			</article>
+			if canManageOperational(ctx) {
+				<article class="dashboard-panel customer-dashboard-financial">
+					@DashboardSubcardTop("Financial Summary")
+					<div class="dashboard-financials customer-financials">
+						<div><small>Total Invoiced</small><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Financial.TotalInvoiced) }</p></div>
+						<div><small>Total Paid</small><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Financial.TotalPaid) }</p></div>
+						<div><small>Total Balance</small><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Financial.TotalBalance) }</p></div>
+						<div><small>Overdue Balance</small><p class="dashboard-metric dashboard-metric-sm dashboard-danger">{ fmt.Sprintf("$%.2f", p.Financial.OverdueBalance) }</p></div>
+						<div><small>Open Invoices</small><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("%d", p.Financial.OpenInvoiceCount) }</p></div>
+						<div><small>Overdue Invoices</small><p class="dashboard-metric dashboard-metric-sm dashboard-danger">{ fmt.Sprintf("%d", p.Financial.OverdueInvoiceCount) }</p></div>
+					</div>
+				</article>
 			}
-		if p.Customer.ArchivedAt != "" {
-			<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/locations?read_only=1", p.Customer.ID)) }
-		hx-trigger="load" hx-swap="innerHTML">
-		<p>Loading locations...</p>
-	</div>
-		} else {
-			<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/locations", p.Customer.ID)) }
-		hx-trigger="load" hx-swap="innerHTML">
-		<p>Loading locations...</p>
-	</div>
+		</div>
+		<div class="customer-dashboard-supporting">
+			@customerCommentsCard(p)
+			@customerFilesCard(p)
+		</div>
+		if canManageOperational(ctx) {
+			<div class="dashboard-work-queues">
+				@customerJobsCard(p)
+				@customerEstimatesCard(p)
+				@customerInvoicesCard(p)
+			</div>
 		}
-		if p.Customer.ArchivedAt != "" {
-			<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts?read_only=1", p.Customer.ID)) }
-		hx-trigger="load" hx-swap="innerHTML">
-		<p>Loading contacts...</p>
-	</div>
-		} else {
-			<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts", p.Customer.ID)) }
-		hx-trigger="load" hx-swap="innerHTML">
-		<p>Loading contacts...</p>
-	</div>
+		<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/activity", p.Customer.ID)) } hx-trigger="load" hx-swap="innerHTML">
+			<p>Loading activity...</p>
+		</div>
+		if canManageOperational(ctx) {
+			<p class="work-item-detail-back"><a href="/customers">&larr; Back to Customers</a></p>
 		}
-	if p.Customer.ArchivedAt != "" {
-		<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/comments?read_only=1", p.Customer.ID)) } hx-trigger="load" hx-swap="innerHTML">
-			<p>Loading comments...</p>
 		</div>
-	} else {
-		<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/comments", p.Customer.ID)) } hx-trigger="load" hx-swap="innerHTML">
-			<p>Loading comments...</p>
-		</div>
-		@FileUploadWidget("customer", p.Customer.ID, fmt.Sprintf("/customers/%d", p.Customer.ID))
 	}
-	@FileList(p.FileList)
-	<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/activity", p.Customer.ID)) } hx-trigger="load" hx-swap="innerHTML">
-		<p>Loading activity...</p>
+}
+
+templ customerCommentsCard(p CustomerShowPageData) {
+	<article class="dashboard-panel">
+			@DashboardSubcardTop("Comments")
+		if p.Customer.ArchivedAt != "" {
+			<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/comments?read_only=1&hide_title=1", p.Customer.ID)) } hx-trigger="load" hx-swap="innerHTML"><p>Loading comments...</p></div>
+		} else {
+			<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/comments?hide_title=1", p.Customer.ID)) } hx-trigger="load" hx-swap="innerHTML"><p>Loading comments...</p></div>
+		}
+	</article>
+}
+
+templ customerFilesCard(p CustomerShowPageData) {
+	<article class="dashboard-panel">
+		@DashboardSubcardTop("Files")
+		if p.Customer.ArchivedAt == "" {
+			@FileUploadWidgetWithTitle("customer", p.Customer.ID, fmt.Sprintf("/customers/%d", p.Customer.ID), false)
+		}
+		@FileList(p.FileList)
+	</article>
+}
+
+templ customerLocationsTable(locations []LocationRow) {
+	<section class="customer-detail-subsection">
+		@DashboardSubcardTop("Locations")
+		if len(locations) == 0 {
+			<p class="dashboard-empty">No locations</p>
+		} else {
+			<table>
+				<thead>
+					<tr><th>Title</th><th>Address</th><th>Notes</th></tr>
+				</thead>
+				<tbody>
+					for _, l := range locations {
+						<tr>
+							<td>
+								{ l.Title }
+								if l.IsPrimary {
+									<small>Primary</small>
+								}
+							</td>
+							<td>
+								{ l.Address1 }<br/>
+								if l.Address2 != "" {
+									{ l.Address2 }<br/>
+								}
+								{ l.City }, { l.State } { l.ZipCode }
+							</td>
+							<td>{ l.Notes }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+	</section>
+}
+
+templ customerContactsTable(contacts []ContactRow) {
+	<section class="customer-detail-subsection">
+		@DashboardSubcardTop("Contacts")
+		if len(contacts) == 0 {
+			<p class="dashboard-empty">No contacts</p>
+		} else {
+			<table>
+				<thead>
+					<tr><th>Name</th><th>Email</th><th>Phone</th></tr>
+				</thead>
+				<tbody>
+					for _, c := range contacts {
+						<tr><td>{ c.FirstName } { c.LastName }</td><td>{ c.Email }</td><td>{ c.Phone }</td></tr>
+					}
+				</tbody>
+			</table>
+		}
+	</section>
+}
+
+templ customerJobsCard(p CustomerShowPageData) {
+	<article class="dashboard-panel">
+		@customerDashboardCardTop("Jobs", fmt.Sprintf("/jobs?customer_id=%d", p.Customer.ID))
+		<table><tbody>
+			if len(p.Jobs) == 0 {
+				<tr><td class="dashboard-empty">No jobs</td></tr>
+			}
+			for _, j := range p.Jobs {
+				<tr><td><a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) }>{ j.DisplayName }</a></td><td>{ j.StatusName }</td><td><small>{ j.StartTime }</small></td></tr>
+			}
+		</tbody></table>
+	</article>
+}
+
+templ customerEstimatesCard(p CustomerShowPageData) {
+	<article class="dashboard-panel">
+		@customerDashboardCardTop("Estimates", fmt.Sprintf("/estimates?customer_id=%d", p.Customer.ID))
+		<table><tbody>
+			if len(p.Estimates) == 0 {
+				<tr><td class="dashboard-empty">No estimates</td></tr>
+			}
+			for _, e := range p.Estimates {
+				<tr><td><a href={ templ.URL(fmt.Sprintf("/estimates/%d", e.ID)) }>{ e.Title }</a></td><td>{ e.StatusName }</td><td><small>{ e.CreatedAt }</small></td></tr>
+			}
+		</tbody></table>
+	</article>
+}
+
+templ customerInvoicesCard(p CustomerShowPageData) {
+	<article class="dashboard-panel">
+		@customerDashboardCardTop("Invoices", fmt.Sprintf("/invoices?customer_id=%d", p.Customer.ID))
+		<table><tbody>
+			if len(p.Invoices) == 0 {
+				<tr><td class="dashboard-empty">No invoices</td></tr>
+			}
+			for _, i := range p.Invoices {
+				<tr><td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) }>{ i.Title }</a></td><td>{ i.StatusName }</td><td><small>{ i.DueDate }</small></td></tr>
+			}
+		</tbody></table>
+	</article>
+}
+
+templ customerDashboardCardTop(title string, href string) {
+	<div class="dashboard-card-top dashboard-subcard-top">
+		<header>{ title }</header>
+		<a href={ templ.URL(href) }>View all</a>
 	</div>
-	if canManageOperational(ctx) {
-		<p class="work-item-detail-back"><a href="/customers">&larr; Back to Customers</a></p>
-	}
-		</div>
-	}
 }

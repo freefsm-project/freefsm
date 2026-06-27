@@ -31,7 +31,7 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"contacts-section\"><h3>Contacts</h3>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div id=\"contacts-section\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -58,7 +58,7 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 				var templ_7745c5c3_Var2 string
 				templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.SafeURL(fmt.Sprintf("contact-%d", c.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 20, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 19, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 				if templ_7745c5c3_Err != nil {
@@ -71,7 +71,7 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 				var templ_7745c5c3_Var3 string
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(c.FirstName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 21, Col: 24}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 20, Col: 24}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -84,7 +84,7 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 				var templ_7745c5c3_Var4 string
 				templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(c.LastName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 21, Col: 39}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 20, Col: 39}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 				if templ_7745c5c3_Err != nil {
@@ -97,7 +97,7 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(c.Email)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 22, Col: 20}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 21, Col: 20}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 				if templ_7745c5c3_Err != nil {
@@ -110,7 +110,7 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(c.Phone)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 23, Col: 20}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 22, Col: 20}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
@@ -121,14 +121,14 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 					return templ_7745c5c3_Err
 				}
 				if canManageOperational(ctx) && !readOnly {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<td class=\"text-right\"><button class=\"outline small\" hx-get=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<td class=\"text-right\"><button class=\"outline small customer-add-button\" hx-get=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/edit", customerID, c.ID)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 27, Col: 93}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 26, Col: 93}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 					if templ_7745c5c3_Err != nil {
@@ -141,20 +141,20 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 					var templ_7745c5c3_Var8 string
 					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.SafeURL(fmt.Sprintf("#contact-%d", c.ID)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 28, Col: 69}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 27, Col: 69}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" hx-swap=\"outerHTML\">Edit</button> <button class=\"outline contrast small\" hx-post=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" hx-swap=\"outerHTML\">Edit</button> <button class=\"outline contrast small customer-add-button\" hx-post=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var9 string
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/delete", customerID, c.ID)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 31, Col: 96}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 30, Col: 96}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 					if templ_7745c5c3_Err != nil {
@@ -183,13 +183,13 @@ func ContactsList(contacts []ContactRow, customerID int64, readOnly bool) templ.
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fmt.Sprintf("/customers/%d/contacts/new", customerID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 43, Col: 84}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/contacts_list.templ`, Line: 42, Col: 84}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" hx-target=\"#contact-form-wrap\" hx-swap=\"innerHTML\" class=\"outline contact-add-button\">+ Add Contact</button>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" hx-target=\"#contact-form-wrap\" hx-swap=\"innerHTML\" class=\"outline small customer-add-button\">+ Add Contact</button>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -1,5 +1,7 @@
 package templates
 
+import "fmt"
+
 templ CustomerForm(p CustomerFormPageData) {
 	@Layout(customerFormTitle(p.IsNew)) {
 
@@ -93,5 +95,21 @@ templ CustomerForm(p CustomerFormPageData) {
 				<a href="/customers" role="button" class="outline">Cancel</a>
 			</div>
 		</form>
+		if !p.IsNew {
+			<div class="customer-dashboard-supporting">
+				<article class="dashboard-panel">
+					@DashboardSubcardTop("Tags")
+					@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: false})
+				</article>
+				<article class="dashboard-panel">
+					@DashboardSubcardTop("Locations")
+					@LocationsList(p.Locations, p.Customer.ID, false)
+				</article>
+				<article class="dashboard-panel">
+					@DashboardSubcardTop("Contacts")
+					@ContactsList(p.Contacts, p.Customer.ID, false)
+				</article>
+			</div>
+		}
 	}
 }

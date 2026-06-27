@@ -2,10 +2,26 @@ package templates
 
 import "fmt"
 
+func commentsActionURL(baseURL string, hideTitle bool) string {
+	if hideTitle {
+		return fmt.Sprintf("%s/comments?hide_title=1", baseURL)
+	}
+	return fmt.Sprintf("%s/comments", baseURL)
+}
+
+func commentDeleteURL(baseURL string, commentID int64, hideTitle bool) string {
+	if hideTitle {
+		return fmt.Sprintf("%s/comments/%d/delete?hide_title=1", baseURL, commentID)
+	}
+	return fmt.Sprintf("%s/comments/%d/delete", baseURL, commentID)
+}
+
 templ CommentsWidget(p CommentsWidgetData) {
 	<div id={ fmt.Sprintf("comments-%s-%d", p.ObjectType, p.ObjectID) } class="shared-widget">
-		<h4>Comments</h4>
-		if len(p.Comments) == 0 {
+		if !p.HideTitle {
+			<h4>Comments</h4>
+		}
+		if len(p.Comments) == 0 && !p.HideTitle {
 			<p>No comments yet.</p>
 		} else {
 			for _, c := range p.Comments {
@@ -16,8 +32,8 @@ templ CommentsWidget(p CommentsWidgetData) {
 							<small class="shared-widget-muted">{ c.CreatedAt }</small>
 							if c.CanDelete && !p.ReadOnly {
 								<button
-									class="outline contrast comments-delete-button"
-									hx-post={ fmt.Sprintf("%s/comments/%d/delete", p.BaseURL, c.ID) }
+									class="outline contrast small customer-add-button comments-delete-button"
+									hx-post={ commentDeleteURL(p.BaseURL, c.ID, p.HideTitle) }
 									hx-target={ fmt.Sprintf("closest #comments-%s-%d", p.ObjectType, p.ObjectID) }
 									hx-swap="outerHTML"
 									onclick="return confirm('Delete this comment?')"
@@ -31,7 +47,7 @@ templ CommentsWidget(p CommentsWidgetData) {
 		}
 		if !p.ReadOnly {
 			<form
-				hx-post={ fmt.Sprintf("%s/comments", p.BaseURL) }
+				hx-post={ commentsActionURL(p.BaseURL, p.HideTitle) }
 				hx-target={ fmt.Sprintf("#comments-%s-%d", p.ObjectType, p.ObjectID) }
 				hx-swap="outerHTML"
 				class="comments-form"
@@ -40,7 +56,7 @@ templ CommentsWidget(p CommentsWidgetData) {
 				<label>
 					<textarea name="content" rows="2" placeholder="Add a comment..." class="comments-textarea"></textarea>
 				</label>
-				<button type="submit" class="outline comments-submit-button">Add Comment</button>
+				<button type="submit" class="outline small customer-add-button comments-submit-button">Add Comment</button>
 			</form>
 		}
 	</div>

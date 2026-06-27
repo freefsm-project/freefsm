@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
@@ -22,10 +25,14 @@ type CustomerHandler struct {
 	fileSvc     *services.FileService
 	activitySvc *services.ActivityService
 	policySvc   *services.PolicyService
+	jobSvc      *services.JobService
+	estimateSvc *services.EstimateService
+	invoiceSvc  *services.InvoiceService
+	statusSvc   *services.StatusService
 }
 
-func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.CustomerContactService, locationSvc *services.LocationService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, activitySvc *services.ActivityService, policySvc *services.PolicyService) *CustomerHandler {
-	return &CustomerHandler{svc: svc, contactSvc: contactSvc, locationSvc: locationSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, activitySvc: activitySvc, policySvc: policySvc}
+func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.CustomerContactService, locationSvc *services.LocationService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, activitySvc *services.ActivityService, policySvc *services.PolicyService, jobSvc *services.JobService, estimateSvc *services.EstimateService, invoiceSvc *services.InvoiceService, statusSvc *services.StatusService) *CustomerHandler {
+	return &CustomerHandler{svc: svc, contactSvc: contactSvc, locationSvc: locationSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, activitySvc: activitySvc, policySvc: policySvc, jobSvc: jobSvc, estimateSvc: estimateSvc, invoiceSvc: invoiceSvc, statusSvc: statusSvc}
 }
 
 func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -88,9 +95,26 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
 	files, _ := h.fileSvc.List(r.Context(), "customer", c.ID)
+	locations, _ := h.locationSvc.ListByCustomer(r.Context(), c.ID)
+	contacts, _ := h.contactSvc.ListByCustomer(r.Context(), c.ID)
+	jobs, estimates, invoices := []*ent.Job{}, []*ent.Estimate{}, []*ent.Invoice{}
+	var financial templates.CustomerFinancialSummary
+	if isAdminOrDispatcher(u) {
+		jobs, _ = h.jobSvc.ListByCustomer(r.Context(), c.ID, 10)
+		estimates, _ = h.estimateSvc.ListByCustomer(r.Context(), c.ID, 10)
+		invoices, _ = h.invoiceSvc.ListByCustomer(r.Context(), c.ID, 10)
+		allInvoices, _ := h.invoiceSvc.ListByCustomer(r.Context(), c.ID, 0)
+		financial = customerFinancialSummary(allInvoices, h.statusesByType(r.Context(), "invoice"), middleware.CompanyLocation(r.Context()))
+	}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), c.DisplayName)
 	templates.CustomerShow(templates.CustomerShowPageData{
 		Customer:     customerToDetail(c),
+		Locations:    locationRows(locations),
+		Contacts:     contactRows(contacts),
+		Jobs:         h.customerJobRows(r.Context(), jobs),
+		Estimates:    h.customerEstimateRows(r.Context(), estimates),
+		Invoices:     h.customerInvoiceRows(r.Context(), invoices),
+		Financial:    financial,
 		Tags:         tagsToRows(tags),
 		AllTags:      tagsToRows(allTags),
 		CustomFields: buildCustomFieldDisplay(defs, c.CustomFields),
@@ -163,6 +187,14 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		data := formDataFromCustomer(c)
 		defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
 		data.CustomFields = buildCustomFieldDisplay(defs, c.CustomFields)
+		locations, _ := h.locationSvc.ListByCustomer(r.Context(), c.ID)
+		contacts, _ := h.contactSvc.ListByCustomer(r.Context(), c.ID)
+		tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "customer", c.ID)
+		allTags, _ := h.tagSvc.ListAll(r.Context())
+		data.Locations = locationRows(locations)
+		data.Contacts = contactRows(contacts)
+		data.Tags = tagsToRows(tags)
+		data.AllTags = tagsToRows(allTags)
 		templates.CustomerForm(data).Render(r.Context(), w)
 		return
 	}
@@ -630,6 +662,97 @@ func filesToRows(files []*ent.File) []templates.FileRow {
 		}
 	}
 	return rows
+}
+
+func contactRows(contacts []*ent.CustomerContact) []templates.ContactRow {
+	rows := make([]templates.ContactRow, len(contacts))
+	for i, c := range contacts {
+		rows[i] = templates.ContactRow{ID: c.ID, FirstName: c.FirstName, LastName: c.LastName, Email: c.Email, Phone: c.Phone}
+	}
+	return rows
+}
+
+func (h *CustomerHandler) statusesByType(ctx context.Context, objectType string) []*ent.Status {
+	statuses, _ := h.statusSvc.ByObjectType(ctx, objectType)
+	return statuses
+}
+
+func (h *CustomerHandler) customerJobRows(ctx context.Context, jobs []*ent.Job) []templates.JobRow {
+	statuses := h.statusesByType(ctx, "job")
+	rows := make([]templates.JobRow, len(jobs))
+	for i, j := range jobs {
+		rows[i] = jobRow(j, statuses, map[int64]string{j.CustomerID: ""})
+	}
+	return rows
+}
+
+func (h *CustomerHandler) customerEstimateRows(ctx context.Context, estimates []*ent.Estimate) []templates.EstimateRow {
+	statuses := h.statusesByType(ctx, "estimate")
+	rows := make([]templates.EstimateRow, len(estimates))
+	for i, e := range estimates {
+		rows[i] = estimateRow(e, statuses, map[int64]string{estCustID(e): ""})
+	}
+	return rows
+}
+
+func (h *CustomerHandler) customerInvoiceRows(ctx context.Context, invoices []*ent.Invoice) []templates.InvoiceRow {
+	statuses := h.statusesByType(ctx, "invoice")
+	rows := make([]templates.InvoiceRow, len(invoices))
+	for i, inv := range invoices {
+		rows[i] = invoiceRow(inv, statuses, map[int64]string{invCustID(inv): ""})
+	}
+	return rows
+}
+
+func customerFinancialSummary(invoices []*ent.Invoice, invoiceStatuses []*ent.Status, loc *time.Location) templates.CustomerFinancialSummary {
+	today := time.Now().In(loc).Truncate(24 * time.Hour)
+	var summary templates.CustomerFinancialSummary
+	for _, inv := range invoices {
+		total, paid, err := services.InvoiceAmountDue(inv)
+		if err != nil {
+			continue
+		}
+		status := strings.ToLower(statusName(invoiceStatuses, inv.StatusID))
+		if status != "void" {
+			summary.TotalInvoiced += total
+			summary.TotalPaid += paid
+		}
+		if status == "draft" || status == "paid" || status == "void" {
+			continue
+		}
+		balance := total - paid
+		if balance < 0 {
+			balance = 0
+		}
+		if balance <= 0 {
+			continue
+		}
+		summary.TotalBalance += balance
+		summary.OpenInvoiceCount++
+		if !inv.DueDate.IsZero() && inv.DueDate.In(loc).Before(today) {
+			summary.OverdueBalance += balance
+			summary.OverdueInvoiceCount++
+		}
+	}
+	summary.CurrentBalance = summary.TotalBalance - summary.OverdueBalance
+	if summary.CurrentBalance < 0 {
+		summary.CurrentBalance = 0
+	}
+	if summary.TotalInvoiced > 0 {
+		summary.PaidPercent = int((summary.TotalPaid / summary.TotalInvoiced) * 100)
+		summary.OpenPercent = int((summary.CurrentBalance / summary.TotalInvoiced) * 100)
+		summary.OverduePercent = int((summary.OverdueBalance / summary.TotalInvoiced) * 100)
+		if summary.PaidPercent > 100 {
+			summary.PaidPercent = 100
+		}
+		if summary.OpenPercent > 100 {
+			summary.OpenPercent = 100
+		}
+		if summary.OverduePercent > 100 {
+			summary.OverduePercent = 100
+		}
+	}
+	return summary
 }
 
 func locationRows(locations []*ent.Location) []templates.LocationRow {

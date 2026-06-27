@@ -43,8 +43,16 @@ func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
 	perPage := 25
 	search := r.URL.Query().Get("search")
 	statusID, _ := strconv.ParseInt(r.URL.Query().Get("status_id"), 10, 64)
+	customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
 
-	estimates, total, err := h.svc.List(r.Context(), search, statusID, page, perPage)
+	var estimates []*ent.Estimate
+	var total int
+	var err error
+	if customerID > 0 {
+		estimates, total, err = h.svc.ListForCustomer(r.Context(), customerID, search, statusID, page, perPage)
+	} else {
+		estimates, total, err = h.svc.List(r.Context(), search, statusID, page, perPage)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -67,6 +75,7 @@ func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
 		TotalPages: services.EstimatePaginationTotalPages(total, perPage),
 		Search:     search,
 		StatusID:   statusID,
+		CustomerID: customerID,
 		Statuses:   statusOptions(statuses),
 	}
 
@@ -160,7 +169,8 @@ func (h *EstimateHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 
 func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		templates.EstimateForm(h.newEstimateForm(r.Context())).Render(r.Context(), w)
+		customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
+		templates.EstimateForm(h.newEstimateForm(r.Context(), customerID)).Render(r.Context(), w)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -536,13 +546,13 @@ func (h *EstimateHandler) existingItemsJSON(items []services.LineItem) string {
 	return services.SerializeLineItems(items)
 }
 
-func (h *EstimateHandler) newEstimateForm(ctx context.Context) templates.EstimateFormPageData {
+func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64) templates.EstimateFormPageData {
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
 	return templates.EstimateFormPageData{
-		Estimate:          &templates.EstimateDetail{},
+		Estimate:          &templates.EstimateDetail{CustomerID: customerID},
 		IsNew:             true,
 		Customers:         customerOptions(customers),
 		Jobs:              jobOptions(jobs),
