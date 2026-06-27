@@ -215,6 +215,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Use(middleware.DispatcherOrAdmin)
 			r.With(requireActiveObject(entClient, "job")).Post("/jobs/{id}/create-invoice", invoiceHandler.CreateFromJob)
 			r.With(requireActiveObject(entClient, "job")).Post("/jobs/{id}/create-estimate", estimateHandler.CreateFromJob)
+			r.With(requireActiveObject(entClient, "customer")).Get("/customers/{id}/create-invoice", invoiceHandler.CreateFromCustomer)
 			r.Get("/estimates/new", estimateHandler.Create)
 			r.Post("/estimates", estimateHandler.Create)
 			r.With(requireActiveObject(entClient, "estimate")).Get("/estimates/{id}/edit", estimateHandler.Update)

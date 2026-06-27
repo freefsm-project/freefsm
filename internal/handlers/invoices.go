@@ -215,7 +215,7 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 			"actor_name":  u.Name,
 		})
 	}
-	http.Redirect(w, r, "/invoices?flash=Invoice+created", http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+created", result.ID), http.StatusSeeOther)
 }
 
 func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -581,6 +581,46 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		ExistingItemsJSON: services.SerializeLineItems(items),
 		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
 		CancelURL:         fmt.Sprintf("/jobs/%d", id),
+	}
+	templates.InvoiceForm(data).Render(r.Context(), w)
+}
+
+func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	if _, err := h.custSvc.GetByID(r.Context(), id); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defaultTaxRate := "0"
+	if cs := middleware.CompanyFromContext(r.Context()); cs != nil {
+		defaultTaxRate = cs.DefaultTaxRate
+	}
+	statuses := h.statusesForSelect(r.Context())
+	var statusID int64
+	if draft, _ := h.statusSvc.FindByName(r.Context(), "invoice", "Draft"); draft != nil {
+		statusID = draft.ID
+	}
+	customers, _ := h.custSvc.ListAll(r.Context())
+	jobs, _ := h.jobSvc.ListAll(r.Context())
+	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
+	data := templates.InvoiceFormPageData{
+		Invoice: &templates.InvoiceDetail{
+			CustomerID: id,
+			StatusID:   statusID,
+			TaxRate:    defaultTaxRate,
+		},
+		IsNew:             true,
+		Customers:         customerOptions(customers),
+		Jobs:              jobOptions(jobs),
+		Statuses:          statusOptions(statuses),
+		ItemsJSON:         h.itemsCatalog(r.Context()),
+		ExistingItemsJSON: "[]",
+		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
+		CancelURL:         fmt.Sprintf("/customers/%d", id),
 	}
 	templates.InvoiceForm(data).Render(r.Context(), w)
 }

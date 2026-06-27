@@ -62,13 +62,21 @@ templ EstimateForm(p EstimateFormPageData) {
 						const catalog = JSON.parse(document.getElementById('items-catalog').textContent || '[]');
 						const existing = JSON.parse(document.getElementById('existing-items').textContent || '[]');
 						const makeItem = () => ({ item_id: 0, title: '', description: '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: 0, surcharge: 0 });
-						existing.forEach(i => { if (!i.quantity) i.quantity = 1; });
+						existing.forEach(i => {
+							if (!i.quantity) i.quantity = 1;
+							i.item_id = Number(i.item_id) || 0;
+							if (!i.item_id && i.title) {
+								const c = catalog.find(f => f.name === i.title);
+								if (c) i.item_id = Number(c.id) || 0;
+							}
+						});
 						return {
 							items: existing.length ? existing : [makeItem()],
 							catalog: catalog,
 							add() { this.items.push(makeItem()); },
 							remove(index) { this.items.splice(index, 1); },
 							selectItem(index, itemID) {
+								this.items[index].item_id = Number(itemID) || 0;
 								const c = catalog.find(f => f.id == itemID);
 								if (c) { this.items[index].title = c.name; this.items[index].description = c.description; this.items[index].unit_price = c.unit_price; this.items[index].taxable = c.taxable; this.items[index].tax_rate = c.tax_rate; }
 							},
@@ -99,10 +107,10 @@ templ EstimateForm(p EstimateFormPageData) {
 						<template x-for="(item, index) in items" :key="index">
 							<tr>
 								<td>
-									<select x-model="item.item_id" @change="selectItem(index, $el.value)">
+									<select x-model.number="item.item_id" x-init="$nextTick(() => { $el.value = String(item.item_id || 0) })" @change="selectItem(index, $el.value)">
 										<option value="0">Select item...</option>
 										<template x-for="c in catalog" :key="c.id">
-											<option :value="c.id" x-text="c.name"></option>
+											<option :value="c.id" :selected="Number(c.id) === Number(item.item_id)" x-text="c.name"></option>
 										</template>
 									</select>
 								</td>
