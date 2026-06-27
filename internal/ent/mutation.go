@@ -4324,6 +4324,7 @@ type CompanySettingsMutation struct {
 	smtp_user                       *string
 	smtp_password                   *string
 	smtp_from                       *string
+	email_auto_cc                   *string
 	invoice_email_subject           *string
 	invoice_email_body              *string
 	estimate_email_subject          *string
@@ -5232,6 +5233,42 @@ func (m *CompanySettingsMutation) ResetSMTPFrom() {
 	m.smtp_from = nil
 }
 
+// SetEmailAutoCc sets the "email_auto_cc" field.
+func (m *CompanySettingsMutation) SetEmailAutoCc(s string) {
+	m.email_auto_cc = &s
+}
+
+// EmailAutoCc returns the value of the "email_auto_cc" field in the mutation.
+func (m *CompanySettingsMutation) EmailAutoCc() (r string, exists bool) {
+	v := m.email_auto_cc
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEmailAutoCc returns the old "email_auto_cc" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldEmailAutoCc(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEmailAutoCc is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEmailAutoCc requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEmailAutoCc: %w", err)
+	}
+	return oldValue.EmailAutoCc, nil
+}
+
+// ResetEmailAutoCc resets all changes to the "email_auto_cc" field.
+func (m *CompanySettingsMutation) ResetEmailAutoCc() {
+	m.email_auto_cc = nil
+}
+
 // SetInvoiceEmailSubject sets the "invoice_email_subject" field.
 func (m *CompanySettingsMutation) SetInvoiceEmailSubject(s string) {
 	m.invoice_email_subject = &s
@@ -5970,7 +6007,7 @@ func (m *CompanySettingsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompanySettingsMutation) Fields() []string {
-	fields := make([]string, 0, 38)
+	fields := make([]string, 0, 39)
 	if m.company_id != nil {
 		fields = append(fields, companysettings.FieldCompanyID)
 	}
@@ -6027,6 +6064,9 @@ func (m *CompanySettingsMutation) Fields() []string {
 	}
 	if m.smtp_from != nil {
 		fields = append(fields, companysettings.FieldSMTPFrom)
+	}
+	if m.email_auto_cc != nil {
+		fields = append(fields, companysettings.FieldEmailAutoCc)
 	}
 	if m.invoice_email_subject != nil {
 		fields = append(fields, companysettings.FieldInvoiceEmailSubject)
@@ -6131,6 +6171,8 @@ func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 		return m.SMTPPassword()
 	case companysettings.FieldSMTPFrom:
 		return m.SMTPFrom()
+	case companysettings.FieldEmailAutoCc:
+		return m.EmailAutoCc()
 	case companysettings.FieldInvoiceEmailSubject:
 		return m.InvoiceEmailSubject()
 	case companysettings.FieldInvoiceEmailBody:
@@ -6216,6 +6258,8 @@ func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (en
 		return m.OldSMTPPassword(ctx)
 	case companysettings.FieldSMTPFrom:
 		return m.OldSMTPFrom(ctx)
+	case companysettings.FieldEmailAutoCc:
+		return m.OldEmailAutoCc(ctx)
 	case companysettings.FieldInvoiceEmailSubject:
 		return m.OldInvoiceEmailSubject(ctx)
 	case companysettings.FieldInvoiceEmailBody:
@@ -6395,6 +6439,13 @@ func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSMTPFrom(v)
+		return nil
+	case companysettings.FieldEmailAutoCc:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEmailAutoCc(v)
 		return nil
 	case companysettings.FieldInvoiceEmailSubject:
 		v, ok := value.(string)
@@ -6706,6 +6757,9 @@ func (m *CompanySettingsMutation) ResetField(name string) error {
 		return nil
 	case companysettings.FieldSMTPFrom:
 		m.ResetSMTPFrom()
+		return nil
+	case companysettings.FieldEmailAutoCc:
+		m.ResetEmailAutoCc()
 		return nil
 	case companysettings.FieldInvoiceEmailSubject:
 		m.ResetInvoiceEmailSubject()

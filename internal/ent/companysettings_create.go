@@ -286,6 +286,20 @@ func (_c *CompanySettingsCreate) SetNillableSMTPFrom(v *string) *CompanySettings
 	return _c
 }
 
+// SetEmailAutoCc sets the "email_auto_cc" field.
+func (_c *CompanySettingsCreate) SetEmailAutoCc(v string) *CompanySettingsCreate {
+	_c.mutation.SetEmailAutoCc(v)
+	return _c
+}
+
+// SetNillableEmailAutoCc sets the "email_auto_cc" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableEmailAutoCc(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetEmailAutoCc(*v)
+	}
+	return _c
+}
+
 // SetInvoiceEmailSubject sets the "invoice_email_subject" field.
 func (_c *CompanySettingsCreate) SetInvoiceEmailSubject(v string) *CompanySettingsCreate {
 	_c.mutation.SetInvoiceEmailSubject(v)
@@ -665,6 +679,10 @@ func (_c *CompanySettingsCreate) defaults() {
 		v := companysettings.DefaultSMTPFrom
 		_c.mutation.SetSMTPFrom(v)
 	}
+	if _, ok := _c.mutation.EmailAutoCc(); !ok {
+		v := companysettings.DefaultEmailAutoCc
+		_c.mutation.SetEmailAutoCc(v)
+	}
 	if _, ok := _c.mutation.InvoiceEmailSubject(); !ok {
 		v := companysettings.DefaultInvoiceEmailSubject
 		_c.mutation.SetInvoiceEmailSubject(v)
@@ -798,6 +816,9 @@ func (_c *CompanySettingsCreate) check() error {
 	}
 	if _, ok := _c.mutation.SMTPFrom(); !ok {
 		return &ValidationError{Name: "smtp_from", err: errors.New(`ent: missing required field "CompanySettings.smtp_from"`)}
+	}
+	if _, ok := _c.mutation.EmailAutoCc(); !ok {
+		return &ValidationError{Name: "email_auto_cc", err: errors.New(`ent: missing required field "CompanySettings.email_auto_cc"`)}
 	}
 	if _, ok := _c.mutation.InvoiceEmailSubject(); !ok {
 		return &ValidationError{Name: "invoice_email_subject", err: errors.New(`ent: missing required field "CompanySettings.invoice_email_subject"`)}
@@ -963,6 +984,10 @@ func (_c *CompanySettingsCreate) createSpec() (*CompanySettings, *sqlgraph.Creat
 	if value, ok := _c.mutation.SMTPFrom(); ok {
 		_spec.SetField(companysettings.FieldSMTPFrom, field.TypeString, value)
 		_node.SMTPFrom = value
+	}
+	if value, ok := _c.mutation.EmailAutoCc(); ok {
+		_spec.SetField(companysettings.FieldEmailAutoCc, field.TypeString, value)
+		_node.EmailAutoCc = value
 	}
 	if value, ok := _c.mutation.InvoiceEmailSubject(); ok {
 		_spec.SetField(companysettings.FieldInvoiceEmailSubject, field.TypeString, value)

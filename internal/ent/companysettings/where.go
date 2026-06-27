@@ -149,6 +149,11 @@ func SMTPFrom(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldSMTPFrom, v))
 }
 
+// EmailAutoCc applies equality check predicate on the "email_auto_cc" field. It's identical to EmailAutoCcEQ.
+func EmailAutoCc(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldEmailAutoCc, v))
+}
+
 // InvoiceEmailSubject applies equality check predicate on the "invoice_email_subject" field. It's identical to InvoiceEmailSubjectEQ.
 func InvoiceEmailSubject(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldInvoiceEmailSubject, v))
@@ -1387,6 +1392,71 @@ func SMTPFromEqualFold(v string) predicate.CompanySettings {
 // SMTPFromContainsFold applies the ContainsFold predicate on the "smtp_from" field.
 func SMTPFromContainsFold(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldContainsFold(FieldSMTPFrom, v))
+}
+
+// EmailAutoCcEQ applies the EQ predicate on the "email_auto_cc" field.
+func EmailAutoCcEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldEmailAutoCc, v))
+}
+
+// EmailAutoCcNEQ applies the NEQ predicate on the "email_auto_cc" field.
+func EmailAutoCcNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldEmailAutoCc, v))
+}
+
+// EmailAutoCcIn applies the In predicate on the "email_auto_cc" field.
+func EmailAutoCcIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldEmailAutoCc, vs...))
+}
+
+// EmailAutoCcNotIn applies the NotIn predicate on the "email_auto_cc" field.
+func EmailAutoCcNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldEmailAutoCc, vs...))
+}
+
+// EmailAutoCcGT applies the GT predicate on the "email_auto_cc" field.
+func EmailAutoCcGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldEmailAutoCc, v))
+}
+
+// EmailAutoCcGTE applies the GTE predicate on the "email_auto_cc" field.
+func EmailAutoCcGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldEmailAutoCc, v))
+}
+
+// EmailAutoCcLT applies the LT predicate on the "email_auto_cc" field.
+func EmailAutoCcLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldEmailAutoCc, v))
+}
+
+// EmailAutoCcLTE applies the LTE predicate on the "email_auto_cc" field.
+func EmailAutoCcLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldEmailAutoCc, v))
+}
+
+// EmailAutoCcContains applies the Contains predicate on the "email_auto_cc" field.
+func EmailAutoCcContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldEmailAutoCc, v))
+}
+
+// EmailAutoCcHasPrefix applies the HasPrefix predicate on the "email_auto_cc" field.
+func EmailAutoCcHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldEmailAutoCc, v))
+}
+
+// EmailAutoCcHasSuffix applies the HasSuffix predicate on the "email_auto_cc" field.
+func EmailAutoCcHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldEmailAutoCc, v))
+}
+
+// EmailAutoCcEqualFold applies the EqualFold predicate on the "email_auto_cc" field.
+func EmailAutoCcEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldEmailAutoCc, v))
+}
+
+// EmailAutoCcContainsFold applies the ContainsFold predicate on the "email_auto_cc" field.
+func EmailAutoCcContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldEmailAutoCc, v))
 }
 
 // InvoiceEmailSubjectEQ applies the EQ predicate on the "invoice_email_subject" field.

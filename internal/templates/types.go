@@ -600,6 +600,8 @@ type DocumentEmailData struct {
 	BackURL    string
 	ActionURL  string
 	To         string
+	CC         string
+	BCC        string
 	Subject    string
 	Body       string
 	Error      string

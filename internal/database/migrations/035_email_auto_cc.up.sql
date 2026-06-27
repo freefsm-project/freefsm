@@ -1,0 +1,1 @@
+ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS email_auto_cc TEXT NOT NULL DEFAULT '';

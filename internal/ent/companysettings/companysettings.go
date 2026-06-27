@@ -51,6 +51,8 @@ const (
 	FieldSMTPPassword = "smtp_password"
 	// FieldSMTPFrom holds the string denoting the smtp_from field in the database.
 	FieldSMTPFrom = "smtp_from"
+	// FieldEmailAutoCc holds the string denoting the email_auto_cc field in the database.
+	FieldEmailAutoCc = "email_auto_cc"
 	// FieldInvoiceEmailSubject holds the string denoting the invoice_email_subject field in the database.
 	FieldInvoiceEmailSubject = "invoice_email_subject"
 	// FieldInvoiceEmailBody holds the string denoting the invoice_email_body field in the database.
@@ -115,6 +117,7 @@ var Columns = []string{
 	FieldSMTPUser,
 	FieldSMTPPassword,
 	FieldSMTPFrom,
+	FieldEmailAutoCc,
 	FieldInvoiceEmailSubject,
 	FieldInvoiceEmailBody,
 	FieldEstimateEmailSubject,
@@ -183,6 +186,8 @@ var (
 	DefaultSMTPPassword string
 	// DefaultSMTPFrom holds the default value on creation for the "smtp_from" field.
 	DefaultSMTPFrom string
+	// DefaultEmailAutoCc holds the default value on creation for the "email_auto_cc" field.
+	DefaultEmailAutoCc string
 	// DefaultInvoiceEmailSubject holds the default value on creation for the "invoice_email_subject" field.
 	DefaultInvoiceEmailSubject string
 	// DefaultInvoiceEmailBody holds the default value on creation for the "invoice_email_body" field.
@@ -326,6 +331,11 @@ func BySMTPPassword(opts ...sql.OrderTermOption) OrderOption {
 // BySMTPFrom orders the results by the smtp_from field.
 func BySMTPFrom(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSMTPFrom, opts...).ToFunc()
+}
+
+// ByEmailAutoCc orders the results by the email_auto_cc field.
+func ByEmailAutoCc(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEmailAutoCc, opts...).ToFunc()
 }
 
 // ByInvoiceEmailSubject orders the results by the invoice_email_subject field.

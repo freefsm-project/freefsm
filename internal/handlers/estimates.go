@@ -407,6 +407,7 @@ func (h *EstimateHandler) Email(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "archived records are read-only", http.StatusForbidden)
 		return
 	}
+	cs := middleware.CompanyFromContext(r.Context())
 	data := templates.DocumentEmailData{
 		ObjectType: "estimate",
 		ObjectID:   id,
@@ -414,8 +415,9 @@ func (h *EstimateHandler) Email(w http.ResponseWriter, r *http.Request) {
 		BackURL:    fmt.Sprintf("/estimates/%d/pdf/preview", id),
 		ActionURL:  fmt.Sprintf("/estimates/%d/email", id),
 		To:         doc.CustomerEmail,
+		CC:         emailAutoCC(cs),
 	}
-	data.Subject, data.Body = documentEmailDefaults("estimate", doc, middleware.CompanyFromContext(r.Context()))
+	data.Subject, data.Body = documentEmailDefaults("estimate", doc, cs)
 	if r.Method == http.MethodGet {
 		templates.DocumentEmailCompose(data).Render(r.Context(), w)
 		return
@@ -425,8 +427,16 @@ func (h *EstimateHandler) Email(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data.To = r.FormValue("to")
+	data.CC = r.FormValue("cc")
+	data.BCC = r.FormValue("bcc")
 	data.Subject = r.FormValue("subject")
 	data.Body = r.FormValue("body")
+	recipients, err := services.ParseEmailRecipients(data.To, data.CC, data.BCC)
+	if err != nil {
+		data.Error = err.Error()
+		templates.DocumentEmailCompose(data).Render(r.Context(), w)
+		return
+	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
@@ -438,13 +448,13 @@ func (h *EstimateHandler) Email(w http.ResponseWriter, r *http.Request) {
 		templates.DocumentEmailCompose(data).Render(r.Context(), w)
 		return
 	}
-	if err := h.emailSvc.SendEmailWithAttachment(r.Context(), data.To, data.Subject, data.Body, filename, "application/pdf", doc.Data); err != nil {
+	if err := h.emailSvc.SendEmailWithAttachmentTo(r.Context(), recipients, data.Subject, data.Body, filename, "application/pdf", doc.Data); err != nil {
 		_ = h.fileSvc.Delete(r.Context(), savedFile.ID)
 		data.Error = err.Error()
 		templates.DocumentEmailCompose(data).Render(r.Context(), w)
 		return
 	}
-	h.activitySvc.Record(r.Context(), u.ID, "email_sent", "estimate", id, map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "to": data.To, "file_name": filename})
+	h.activitySvc.Record(r.Context(), u.ID, "email_sent", "estimate", id, map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "to": data.To, "cc": data.CC, "bcc_count": len(recipients.BCC), "file_name": filename})
 	http.Redirect(w, r, fmt.Sprintf("/estimates/%d?flash=Estimate+emailed", id), http.StatusSeeOther)
 }
 

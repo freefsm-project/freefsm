@@ -109,6 +109,11 @@ templ SettingsPage(p SettingsPageData) {
 					From Address
 					<input type="email" name="smtp_from" value={ p.Settings.SMTPFrom } placeholder="freefsm@example.com"/>
 				</label>
+				<label>
+					Auto CC
+					<input type="text" name="email_auto_cc" value={ p.Settings.EmailAutoCc } placeholder="owner@example.com"/>
+					<small>Inserted into invoice and estimate email CC fields. Separate multiple addresses with commas.</small>
+				</label>
 				<hr/>
 				<h3>Invoice Email Defaults</h3>
 				<label>

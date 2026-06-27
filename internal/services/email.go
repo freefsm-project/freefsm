@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"mime"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strings"
 	"time"
@@ -21,6 +22,12 @@ type EmailAttachment struct {
 	Filename    string
 	ContentType string
 	Data        []byte
+}
+
+type EmailRecipients struct {
+	To  []string
+	CC  []string
+	BCC []string
 }
 
 func NewEmailService(svc *CompanySettingsService) *EmailService {
@@ -84,30 +91,97 @@ func (s *EmailService) SendEmailWithAttachment(ctx context.Context, to, subject,
 }
 
 func (s *EmailService) SendEmail(ctx context.Context, to, subject, body string, attachments ...EmailAttachment) error {
+	recipients, err := ParseEmailRecipients(to, "", "")
+	if err != nil {
+		return err
+	}
+	return s.SendEmailTo(ctx, recipients, subject, body, attachments...)
+}
+
+func (s *EmailService) SendEmailWithAttachmentTo(ctx context.Context, recipients EmailRecipients, subject, body, filename, mimeType string, data []byte) error {
+	return s.SendEmailTo(ctx, recipients, subject, body, EmailAttachment{
+		Filename:    filename,
+		ContentType: mimeType,
+		Data:        data,
+	})
+}
+
+func (s *EmailService) SendEmailTo(ctx context.Context, recipients EmailRecipients, subject, body string, attachments ...EmailAttachment) error {
 	cs, err := s.svc.Get(ctx)
 	if err != nil || cs == nil || cs.SMTPHost == "" {
 		return fmt.Errorf("SMTP not configured")
 	}
 
 	from := sanitizeHeader(cs.SMTPFrom)
-	to = sanitizeHeader(to)
-	if strings.TrimSpace(to) == "" {
+	if len(recipients.To) == 0 {
 		return fmt.Errorf("recipient email is required")
 	}
 
-	msg, err := buildEmailMessage(from, to, subject, body, attachments)
+	msg, err := buildEmailMessage(from, recipients, subject, body, attachments)
 	if err != nil {
 		return err
 	}
+	envelopeRecipients := recipients.EnvelopeRecipients()
 
 	addr := fmt.Sprintf("%s:%d", cs.SMTPHost, cs.SMTPPort)
 	if cs.SMTPPort == 465 {
-		return s.sendTLS(addr, cs.SMTPUser, cs.SMTPPassword, from, to, msg)
+		return s.sendTLS(addr, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
 	}
 	if cs.SMTPPort == 587 {
-		return s.sendWithSTARTTLS(addr, cs.SMTPUser, cs.SMTPPassword, from, to, msg)
+		return s.sendWithSTARTTLS(addr, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
 	}
-	return s.sendPlain(addr, cs.SMTPHost, cs.SMTPUser, cs.SMTPPassword, from, to, msg)
+	return s.sendPlain(addr, cs.SMTPHost, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
+}
+
+func ParseEmailRecipients(to, cc, bcc string) (EmailRecipients, error) {
+	recipients := EmailRecipients{}
+	var err error
+	if recipients.To, err = ParseEmailList(to); err != nil {
+		return recipients, fmt.Errorf("to: %w", err)
+	}
+	if len(recipients.To) == 0 {
+		return recipients, fmt.Errorf("recipient email is required")
+	}
+	if recipients.CC, err = ParseEmailList(cc); err != nil {
+		return recipients, fmt.Errorf("cc: %w", err)
+	}
+	if recipients.BCC, err = ParseEmailList(bcc); err != nil {
+		return recipients, fmt.Errorf("bcc: %w", err)
+	}
+	return recipients, nil
+}
+
+func ParseEmailList(raw string) ([]string, error) {
+	parts := strings.Split(raw, ",")
+	addresses := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		addr, err := mail.ParseAddress(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid email address %q", part)
+		}
+		addresses = append(addresses, addr.Address)
+	}
+	return addresses, nil
+}
+
+func (r EmailRecipients) EnvelopeRecipients() []string {
+	seen := map[string]bool{}
+	all := make([]string, 0, len(r.To)+len(r.CC)+len(r.BCC))
+	for _, group := range [][]string{r.To, r.CC, r.BCC} {
+		for _, addr := range group {
+			key := strings.ToLower(addr)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			all = append(all, addr)
+		}
+	}
+	return all
 }
 
 func RenderEmailTemplate(template string, values map[string]string) string {
@@ -117,19 +191,24 @@ func RenderEmailTemplate(template string, values map[string]string) string {
 	return template
 }
 
-func buildEmailMessage(from, to, subject, body string, attachments []EmailAttachment) (string, error) {
+func buildEmailMessage(from string, recipients EmailRecipients, subject, body string, attachments []EmailAttachment) (string, error) {
 	from = sanitizeHeader(from)
-	to = sanitizeHeader(to)
 	subject = sanitizeHeader(subject)
+	toHeader := sanitizeHeader(strings.Join(recipients.To, ", "))
+	ccHeader := sanitizeHeader(strings.Join(recipients.CC, ", "))
+	headers := fmt.Sprintf("From: %s\r\nTo: %s\r\n", from, toHeader)
+	if ccHeader != "" {
+		headers += fmt.Sprintf("Cc: %s\r\n", ccHeader)
+	}
+	headers += fmt.Sprintf("Subject: %s\r\nMIME-Version: 1.0\r\n", mime.QEncoding.Encode("UTF-8", subject))
 
 	if len(attachments) == 0 {
-		return fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n%s",
-			from, to, mime.QEncoding.Encode("UTF-8", subject), body), nil
+		return fmt.Sprintf("%sContent-Type: text/plain; charset=UTF-8\r\n\r\n%s", headers, body), nil
 	}
 
 	boundary := fmt.Sprintf("freefsm-%d", time.Now().UnixNano())
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%q\r\n\r\n", from, to, mime.QEncoding.Encode("UTF-8", subject), boundary)
+	fmt.Fprintf(&buf, "%sContent-Type: multipart/mixed; boundary=%q\r\n\r\n", headers, boundary)
 	fmt.Fprintf(&buf, "--%s\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n", boundary, body)
 
 	for _, attachment := range attachments {
@@ -166,7 +245,7 @@ func writeBase64Lines(buf *bytes.Buffer, data []byte) {
 	buf.WriteString(encoded)
 }
 
-func (s *EmailService) sendWithSTARTTLS(addr, user, password, from, to, msg string) error {
+func (s *EmailService) sendWithSTARTTLS(addr, user, password, from string, recipients []string, msg string) error {
 	host := strings.Split(addr, ":")[0]
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	conn, err := dialer.Dial("tcp", addr)
@@ -189,10 +268,10 @@ func (s *EmailService) sendWithSTARTTLS(addr, user, password, from, to, msg stri
 		}
 	}
 
-	return sendSMTPMessage(client, host, user, password, from, to, msg)
+	return sendSMTPMessage(client, host, user, password, from, recipients, msg)
 }
 
-func (s *EmailService) sendTLS(addr, user, password, from, to, msg string) error {
+func (s *EmailService) sendTLS(addr, user, password, from string, recipients []string, msg string) error {
 	host := strings.Split(addr, ":")[0]
 
 	tlsConfig := &tls.Config{ServerName: host}
@@ -211,10 +290,10 @@ func (s *EmailService) sendTLS(addr, user, password, from, to, msg string) error
 	}
 	defer client.Quit()
 
-	return sendSMTPMessage(client, host, user, password, from, to, msg)
+	return sendSMTPMessage(client, host, user, password, from, recipients, msg)
 }
 
-func (s *EmailService) sendPlain(addr, host, user, password, from, to, msg string) error {
+func (s *EmailService) sendPlain(addr, host, user, password, from string, recipients []string, msg string) error {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
@@ -229,10 +308,10 @@ func (s *EmailService) sendPlain(addr, host, user, password, from, to, msg strin
 	}
 	defer client.Quit()
 
-	return sendSMTPMessage(client, host, user, password, from, to, msg)
+	return sendSMTPMessage(client, host, user, password, from, recipients, msg)
 }
 
-func sendSMTPMessage(client *smtp.Client, host, user, password, from, to, msg string) error {
+func sendSMTPMessage(client *smtp.Client, host, user, password, from string, recipients []string, msg string) error {
 	if user != "" {
 		auth := smtp.PlainAuth("", user, password, host)
 		if err := client.Auth(auth); err != nil {
@@ -242,8 +321,10 @@ func sendSMTPMessage(client *smtp.Client, host, user, password, from, to, msg st
 	if err := client.Mail(from); err != nil {
 		return fmt.Errorf("MAIL FROM: %w", err)
 	}
-	if err := client.Rcpt(to); err != nil {
-		return fmt.Errorf("RCPT TO: %w", err)
+	for _, recipient := range recipients {
+		if err := client.Rcpt(recipient); err != nil {
+			return fmt.Errorf("RCPT TO %s: %w", recipient, err)
+		}
 	}
 	w, err := client.Data()
 	if err != nil {

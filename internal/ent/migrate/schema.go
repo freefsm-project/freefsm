@@ -180,6 +180,7 @@ var (
 		{Name: "smtp_user", Type: field.TypeString, Default: ""},
 		{Name: "smtp_password", Type: field.TypeString, Default: ""},
 		{Name: "smtp_from", Type: field.TypeString, Default: ""},
+		{Name: "email_auto_cc", Type: field.TypeString, Default: ""},
 		{Name: "invoice_email_subject", Type: field.TypeString, Default: "Invoice {invoice_number} from {business_name}"},
 		{Name: "invoice_email_body", Type: field.TypeString, Default: "Hello {customer_name},\n\nPlease find invoice {invoice_number} attached.\n\nThank you,\n{business_name}"},
 		{Name: "estimate_email_subject", Type: field.TypeString, Default: "Estimate {estimate_number} from {business_name}"},

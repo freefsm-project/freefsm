@@ -37,6 +37,7 @@ type CompanySettingsParams struct {
 	SmtpUser                    string
 	SmtpPassword                string
 	SmtpFrom                    string
+	EmailAutoCC                 string
 	InvoiceEmailSubject         string
 	InvoiceEmailBody            string
 	EstimateEmailSubject        string
@@ -79,6 +80,7 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetSMTPUser(p.SmtpUser).
 		SetSMTPPassword(p.SmtpPassword).
 		SetSMTPFrom(p.SmtpFrom).
+		SetEmailAutoCc(p.EmailAutoCC).
 		SetInvoiceEmailSubject(p.InvoiceEmailSubject).
 		SetInvoiceEmailBody(p.InvoiceEmailBody).
 		SetEstimateEmailSubject(p.EstimateEmailSubject).

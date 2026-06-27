@@ -10,8 +10,17 @@ templ DocumentEmailCompose(p DocumentEmailData) {
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
 				To
-				<input type="email" name="to" value={ p.To } required/>
+				<input type="text" name="to" value={ p.To } required/>
 			</label>
+			<label>
+				CC
+				<input type="text" name="cc" value={ p.CC }/>
+			</label>
+			<label>
+				BCC
+				<input type="text" name="bcc" value={ p.BCC }/>
+			</label>
+			<p class="settings-help">Separate multiple email addresses with commas.</p>
 			<label>
 				Subject
 				<input type="text" name="subject" value={ p.Subject } required/>

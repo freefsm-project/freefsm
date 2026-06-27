@@ -95,6 +95,13 @@ func businessName(cs *ent.CompanySettings) string {
 	return cs.BusinessName
 }
 
+func emailAutoCC(cs *ent.CompanySettings) string {
+	if cs == nil {
+		return ""
+	}
+	return cs.EmailAutoCc
+}
+
 func saveVersionedDocumentPDF(ctx context.Context, fileSvc *services.FileService, objectType string, objectID int64, doc documentPDF, uploadedBy int64) (*ent.File, string, error) {
 	filename := nextVersionedDocumentPDFName(ctx, fileSvc, objectType, objectID, doc.Number)
 	f, err := fileSvc.CreateBytes(ctx, objectType, objectID, filename, "application/pdf", doc.Data, uploadedBy)

@@ -90,6 +90,7 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		SmtpUser:                    r.FormValue("smtp_user"),
 		SmtpPassword:                r.FormValue("smtp_password"),
 		SmtpFrom:                    r.FormValue("smtp_from"),
+		EmailAutoCC:                 r.FormValue("email_auto_cc"),
 		InvoiceEmailSubject:         r.FormValue("invoice_email_subject"),
 		InvoiceEmailBody:            r.FormValue("invoice_email_body"),
 		EstimateEmailSubject:        r.FormValue("estimate_email_subject"),
@@ -170,6 +171,9 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 			}
 			if oldSettings.SMTPFrom != newSettings.SMTPFrom {
 				changed = append(changed, "smtp_from")
+			}
+			if oldSettings.EmailAutoCc != newSettings.EmailAutoCc {
+				changed = append(changed, "email_auto_cc")
 			}
 			if oldSettings.InvoiceEmailSubject != newSettings.InvoiceEmailSubject {
 				changed = append(changed, "invoice_email_subject")
