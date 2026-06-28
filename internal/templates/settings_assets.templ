@@ -16,9 +16,17 @@ templ AssetTypeList(p AssetTypeListPageData) {
 			<tbody>
 				for _, t := range p.Types {
 					<tr>
-						<td>{ t.Name }</td>
-						<td>{ fmt.Sprintf("%d", t.SortOrder) }</td>
+						<td>
+							<form id={ fmt.Sprintf("asset-type-update-%d", t.ID) } action={ templ.URL(fmt.Sprintf("/settings/asset-types/%d", t.ID)) } method="post">
+								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+								<input type="text" name="name" value={ t.Name } required/>
+							</form>
+						</td>
+						<td>
+							<input form={ fmt.Sprintf("asset-type-update-%d", t.ID) } type="number" name="sort_order" value={ fmt.Sprintf("%d", t.SortOrder) } class="input-width-70"/>
+						</td>
 						<td class="work-queue-actions">
+							<button form={ fmt.Sprintf("asset-type-update-%d", t.ID) } type="submit" class="outline small">Save</button>
 							<form action={ templ.URL(fmt.Sprintf("/settings/asset-types/%d/delete", t.ID)) } method="post" onsubmit="return confirm('Delete this type?')">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small">Del</button>
@@ -54,13 +62,20 @@ templ AssetStatusList(p AssetStatusListPageData) {
 			<tbody>
 				for _, s := range p.Statuses {
 					<tr>
-						<td>{ s.Name }</td>
 						<td>
-							<span class="color-dot" style={ fmt.Sprintf("background-color:%s", s.Color) }></span>
-							{ s.Color }
+							<form id={ fmt.Sprintf("asset-status-update-%d", s.ID) } action={ templ.URL(fmt.Sprintf("/settings/asset-statuses/%d", s.ID)) } method="post">
+								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+								<input type="text" name="name" value={ s.Name } required/>
+							</form>
 						</td>
-						<td>{ fmt.Sprintf("%d", s.SortOrder) }</td>
+						<td>
+							<input form={ fmt.Sprintf("asset-status-update-%d", s.ID) } type="color" name="color" value={ s.Color }/>
+						</td>
+						<td>
+							<input form={ fmt.Sprintf("asset-status-update-%d", s.ID) } type="number" name="sort_order" value={ fmt.Sprintf("%d", s.SortOrder) } class="input-width-70"/>
+						</td>
 						<td class="work-queue-actions">
+							<button form={ fmt.Sprintf("asset-status-update-%d", s.ID) } type="submit" class="outline small">Save</button>
 							<form action={ templ.URL(fmt.Sprintf("/settings/asset-statuses/%d/delete", s.ID)) } method="post" onsubmit="return confirm('Delete this status?')">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small">Del</button>
