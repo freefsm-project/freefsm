@@ -555,6 +555,10 @@ type ChangePasswordData struct {
 	RequireSpecial bool
 }
 
+type PreferencesData struct {
+	FontSize string
+}
+
 type ForgotPasswordData struct {
 	Error    string
 	Success  bool
@@ -836,6 +840,19 @@ func isActivePath(ctx context.Context, prefix string) bool {
 
 func themeFromCtx(ctx context.Context) string {
 	return middleware.ThemeFromContext(ctx)
+}
+
+func fontSizeFromCtx(ctx context.Context) string {
+	u, ok := middleware.UserFromContext(ctx)
+	if !ok || u == nil {
+		return "medium"
+	}
+	switch u.FontSize {
+	case "small", "medium", "large":
+		return u.FontSize
+	default:
+		return "medium"
+	}
 }
 
 func pageTitleFromPath(ctx context.Context) string {

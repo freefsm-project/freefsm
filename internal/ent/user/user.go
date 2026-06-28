@@ -23,6 +23,8 @@ const (
 	FieldName = "name"
 	// FieldRole holds the string denoting the role field in the database.
 	FieldRole = "role"
+	// FieldFontSize holds the string denoting the font_size field in the database.
+	FieldFontSize = "font_size"
 	// FieldIsActive holds the string denoting the is_active field in the database.
 	FieldIsActive = "is_active"
 	// FieldForcePasswordChange holds the string denoting the force_password_change field in the database.
@@ -45,6 +47,7 @@ var Columns = []string{
 	FieldPasswordHash,
 	FieldName,
 	FieldRole,
+	FieldFontSize,
 	FieldIsActive,
 	FieldForcePasswordChange,
 	FieldWelcomeEmailSentAt,
@@ -71,6 +74,8 @@ var (
 	NameValidator func(string) error
 	// DefaultRole holds the default value on creation for the "role" field.
 	DefaultRole string
+	// DefaultFontSize holds the default value on creation for the "font_size" field.
+	DefaultFontSize string
 	// DefaultIsActive holds the default value on creation for the "is_active" field.
 	DefaultIsActive bool
 	// DefaultForcePasswordChange holds the default value on creation for the "force_password_change" field.
@@ -114,6 +119,11 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByRole orders the results by the role field.
 func ByRole(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRole, opts...).ToFunc()
+}
+
+// ByFontSize orders the results by the font_size field.
+func ByFontSize(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFontSize, opts...).ToFunc()
 }
 
 // ByIsActive orders the results by the is_active field.

@@ -23,10 +23,11 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			return nil, err
 		}
 		info := &middleware.UserInfo{
-			ID:    u.ID,
-			Name:  u.Name,
-			Email: u.Email,
-			Role:  u.Role,
+			ID:       u.ID,
+			Name:     u.Name,
+			Email:    u.Email,
+			Role:     u.Role,
+			FontSize: u.FontSize,
 		}
 		if u.CompanyID != nil {
 			info.CompanyID = *u.CompanyID
@@ -113,6 +114,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Use(middleware.ForcePasswordChange(userService))
 		r.Get("/change-password", passwordHandler.ChangePassword)
 		r.Post("/change-password", passwordHandler.ChangePassword)
+		r.Get("/preferences", userHandler.Preferences)
+		r.Post("/preferences", userHandler.Preferences)
 		r.Get("/settings/invoice-logo", settingsHandler.InvoiceLogo)
 		r.Get("/", dashboardHandler.Index)
 		r.Get("/dashboard/widgets/new", dashboardHandler.NewWidget)

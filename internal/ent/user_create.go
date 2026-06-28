@@ -66,6 +66,20 @@ func (_c *UserCreate) SetNillableRole(v *string) *UserCreate {
 	return _c
 }
 
+// SetFontSize sets the "font_size" field.
+func (_c *UserCreate) SetFontSize(v string) *UserCreate {
+	_c.mutation.SetFontSize(v)
+	return _c
+}
+
+// SetNillableFontSize sets the "font_size" field if the given value is not nil.
+func (_c *UserCreate) SetNillableFontSize(v *string) *UserCreate {
+	if v != nil {
+		_c.SetFontSize(*v)
+	}
+	return _c
+}
+
 // SetIsActive sets the "is_active" field.
 func (_c *UserCreate) SetIsActive(v bool) *UserCreate {
 	_c.mutation.SetIsActive(v)
@@ -181,6 +195,10 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultRole
 		_c.mutation.SetRole(v)
 	}
+	if _, ok := _c.mutation.FontSize(); !ok {
+		v := user.DefaultFontSize
+		_c.mutation.SetFontSize(v)
+	}
 	if _, ok := _c.mutation.IsActive(); !ok {
 		v := user.DefaultIsActive
 		_c.mutation.SetIsActive(v)
@@ -227,6 +245,9 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.Role(); !ok {
 		return &ValidationError{Name: "role", err: errors.New(`ent: missing required field "User.role"`)}
+	}
+	if _, ok := _c.mutation.FontSize(); !ok {
+		return &ValidationError{Name: "font_size", err: errors.New(`ent: missing required field "User.font_size"`)}
 	}
 	if _, ok := _c.mutation.IsActive(); !ok {
 		return &ValidationError{Name: "is_active", err: errors.New(`ent: missing required field "User.is_active"`)}
@@ -291,6 +312,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Role(); ok {
 		_spec.SetField(user.FieldRole, field.TypeString, value)
 		_node.Role = value
+	}
+	if value, ok := _c.mutation.FontSize(); ok {
+		_spec.SetField(user.FieldFontSize, field.TypeString, value)
+		_node.FontSize = value
 	}
 	if value, ok := _c.mutation.IsActive(); ok {
 		_spec.SetField(user.FieldIsActive, field.TypeBool, value)

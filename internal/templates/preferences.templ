@@ -1,0 +1,26 @@
+package templates
+
+templ PreferencesPage(p PreferencesData) {
+	@Layout("Preferences") {
+		<article class="auth-card-padded">
+			<header><h2>Preferences</h2></header>
+			<form action="/preferences" method="post">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<label>
+					Font Size
+					<select name="font_size"
+						hx-post="/preferences"
+						hx-trigger="change"
+						hx-include="[name='csrf_token'], this"
+						hx-swap="none"
+						onchange="document.documentElement.dataset.fontSize = this.value">
+						<option value="small" selected?={ p.FontSize == "small" }>Small</option>
+						<option value="medium" selected?={ p.FontSize == "medium" }>Medium</option>
+						<option value="large" selected?={ p.FontSize == "large" }>Large</option>
+					</select>
+				</label>
+				<noscript><button type="submit">Save Preferences</button></noscript>
+			</form>
+		</article>
+	}
+}

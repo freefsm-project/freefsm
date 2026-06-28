@@ -79,6 +79,11 @@ func Role(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldRole, v))
 }
 
+// FontSize applies equality check predicate on the "font_size" field. It's identical to FontSizeEQ.
+func FontSize(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldFontSize, v))
+}
+
 // IsActive applies equality check predicate on the "is_active" field. It's identical to IsActiveEQ.
 func IsActive(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldIsActive, v))
@@ -412,6 +417,71 @@ func RoleEqualFold(v string) predicate.User {
 // RoleContainsFold applies the ContainsFold predicate on the "role" field.
 func RoleContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldRole, v))
+}
+
+// FontSizeEQ applies the EQ predicate on the "font_size" field.
+func FontSizeEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldFontSize, v))
+}
+
+// FontSizeNEQ applies the NEQ predicate on the "font_size" field.
+func FontSizeNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldFontSize, v))
+}
+
+// FontSizeIn applies the In predicate on the "font_size" field.
+func FontSizeIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldFontSize, vs...))
+}
+
+// FontSizeNotIn applies the NotIn predicate on the "font_size" field.
+func FontSizeNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldFontSize, vs...))
+}
+
+// FontSizeGT applies the GT predicate on the "font_size" field.
+func FontSizeGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldFontSize, v))
+}
+
+// FontSizeGTE applies the GTE predicate on the "font_size" field.
+func FontSizeGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldFontSize, v))
+}
+
+// FontSizeLT applies the LT predicate on the "font_size" field.
+func FontSizeLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldFontSize, v))
+}
+
+// FontSizeLTE applies the LTE predicate on the "font_size" field.
+func FontSizeLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldFontSize, v))
+}
+
+// FontSizeContains applies the Contains predicate on the "font_size" field.
+func FontSizeContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldFontSize, v))
+}
+
+// FontSizeHasPrefix applies the HasPrefix predicate on the "font_size" field.
+func FontSizeHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldFontSize, v))
+}
+
+// FontSizeHasSuffix applies the HasSuffix predicate on the "font_size" field.
+func FontSizeHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldFontSize, v))
+}
+
+// FontSizeEqualFold applies the EqualFold predicate on the "font_size" field.
+func FontSizeEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldFontSize, v))
+}
+
+// FontSizeContainsFold applies the ContainsFold predicate on the "font_size" field.
+func FontSizeContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldFontSize, v))
 }
 
 // IsActiveEQ applies the EQ predicate on the "is_active" field.

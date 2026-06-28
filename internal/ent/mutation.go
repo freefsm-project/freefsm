@@ -26713,6 +26713,7 @@ type UserMutation struct {
 	password_hash         *string
 	name                  *string
 	role                  *string
+	font_size             *string
 	is_active             *bool
 	force_password_change *bool
 	welcome_email_sent_at *time.Time
@@ -27042,6 +27043,42 @@ func (m *UserMutation) ResetRole() {
 	m.role = nil
 }
 
+// SetFontSize sets the "font_size" field.
+func (m *UserMutation) SetFontSize(s string) {
+	m.font_size = &s
+}
+
+// FontSize returns the value of the "font_size" field in the mutation.
+func (m *UserMutation) FontSize() (r string, exists bool) {
+	v := m.font_size
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFontSize returns the old "font_size" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldFontSize(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFontSize is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFontSize requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFontSize: %w", err)
+	}
+	return oldValue.FontSize, nil
+}
+
+// ResetFontSize resets all changes to the "font_size" field.
+func (m *UserMutation) ResetFontSize() {
+	m.font_size = nil
+}
+
 // SetIsActive sets the "is_active" field.
 func (m *UserMutation) SetIsActive(b bool) {
 	m.is_active = &b
@@ -27269,7 +27306,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
 	if m.company_id != nil {
 		fields = append(fields, user.FieldCompanyID)
 	}
@@ -27284,6 +27321,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.role != nil {
 		fields = append(fields, user.FieldRole)
+	}
+	if m.font_size != nil {
+		fields = append(fields, user.FieldFontSize)
 	}
 	if m.is_active != nil {
 		fields = append(fields, user.FieldIsActive)
@@ -27318,6 +27358,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case user.FieldRole:
 		return m.Role()
+	case user.FieldFontSize:
+		return m.FontSize()
 	case user.FieldIsActive:
 		return m.IsActive()
 	case user.FieldForcePasswordChange:
@@ -27347,6 +27389,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldName(ctx)
 	case user.FieldRole:
 		return m.OldRole(ctx)
+	case user.FieldFontSize:
+		return m.OldFontSize(ctx)
 	case user.FieldIsActive:
 		return m.OldIsActive(ctx)
 	case user.FieldForcePasswordChange:
@@ -27400,6 +27444,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRole(v)
+		return nil
+	case user.FieldFontSize:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFontSize(v)
 		return nil
 	case user.FieldIsActive:
 		v, ok := value.(bool)
@@ -27529,6 +27580,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldRole:
 		m.ResetRole()
+		return nil
+	case user.FieldFontSize:
+		m.ResetFontSize()
 		return nil
 	case user.FieldIsActive:
 		m.ResetIsActive()

@@ -132,6 +132,22 @@ func (s *UserService) SetPassword(ctx context.Context, id int64, password string
 	return s.client.User.UpdateOneID(id).SetPasswordHash(string(hash)).Exec(ctx)
 }
 
+func (s *UserService) UpdateFontSize(ctx context.Context, id int64, fontSize string) error {
+	if !ValidFontSize(fontSize) {
+		return fmt.Errorf("invalid font size")
+	}
+	return s.client.User.UpdateOneID(id).SetFontSize(fontSize).Exec(ctx)
+}
+
+func ValidFontSize(fontSize string) bool {
+	switch fontSize {
+	case "small", "medium", "large":
+		return true
+	default:
+		return false
+	}
+}
+
 func (s *UserService) Authenticate(ctx context.Context, email, password string) error {
 	u, err := s.client.User.Query().Where(user.EmailEQ(email)).Only(ctx)
 	if err != nil {

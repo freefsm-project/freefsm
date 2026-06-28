@@ -838,6 +838,7 @@ var (
 		{Name: "password_hash", Type: field.TypeString},
 		{Name: "name", Type: field.TypeString},
 		{Name: "role", Type: field.TypeString, Default: "tech"},
+		{Name: "font_size", Type: field.TypeString, Default: "medium"},
 		{Name: "is_active", Type: field.TypeBool, Default: true},
 		{Name: "force_password_change", Type: field.TypeBool, Default: false},
 		{Name: "welcome_email_sent_at", Type: field.TypeTime, Nullable: true},

@@ -890,20 +890,24 @@ func init() {
 	userDescRole := userFields[5].Descriptor()
 	// user.DefaultRole holds the default value on creation for the role field.
 	user.DefaultRole = userDescRole.Default.(string)
+	// userDescFontSize is the schema descriptor for font_size field.
+	userDescFontSize := userFields[6].Descriptor()
+	// user.DefaultFontSize holds the default value on creation for the font_size field.
+	user.DefaultFontSize = userDescFontSize.Default.(string)
 	// userDescIsActive is the schema descriptor for is_active field.
-	userDescIsActive := userFields[6].Descriptor()
+	userDescIsActive := userFields[7].Descriptor()
 	// user.DefaultIsActive holds the default value on creation for the is_active field.
 	user.DefaultIsActive = userDescIsActive.Default.(bool)
 	// userDescForcePasswordChange is the schema descriptor for force_password_change field.
-	userDescForcePasswordChange := userFields[7].Descriptor()
+	userDescForcePasswordChange := userFields[8].Descriptor()
 	// user.DefaultForcePasswordChange holds the default value on creation for the force_password_change field.
 	user.DefaultForcePasswordChange = userDescForcePasswordChange.Default.(bool)
 	// userDescCreatedAt is the schema descriptor for created_at field.
-	userDescCreatedAt := userFields[9].Descriptor()
+	userDescCreatedAt := userFields[10].Descriptor()
 	// user.DefaultCreatedAt holds the default value on creation for the created_at field.
 	user.DefaultCreatedAt = userDescCreatedAt.Default.(func() time.Time)
 	// userDescUpdatedAt is the schema descriptor for updated_at field.
-	userDescUpdatedAt := userFields[10].Descriptor()
+	userDescUpdatedAt := userFields[11].Descriptor()
 	// user.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	user.DefaultUpdatedAt = userDescUpdatedAt.Default.(func() time.Time)
 	// user.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

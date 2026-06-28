@@ -2,7 +2,7 @@ package templates
 
 templ Layout(title string, children ...templ.Component) {
 	<!DOCTYPE html>
-	<html lang="en" data-theme={ themeFromCtx(ctx) } data-static-version={ staticAssetVersion() }>
+		<html lang="en" data-theme={ themeFromCtx(ctx) } data-font-size={ fontSizeFromCtx(ctx) } data-static-version={ staticAssetVersion() }>
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -185,8 +185,9 @@ templ Layout(title string, children ...templ.Component) {
 						if getUser(ctx) != nil {
 							<details class="dropdown">
 								<summary>{ getUser(ctx).Name }</summary>
-								<ul>
-									<li><a href="/change-password">Change Password</a></li>
+							<ul>
+								<li><a href="/preferences">Preferences</a></li>
+								<li><a href="/change-password">Change Password</a></li>
 									<li>
 									<form action="/logout" method="post" hx-boost="false">
 										<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>

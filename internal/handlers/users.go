@@ -178,6 +178,31 @@ func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Password+reset", id), http.StatusSeeOther)
 }
 
+func (h *UserHandler) Preferences(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if r.Method == http.MethodGet {
+		templates.PreferencesPage(templates.PreferencesData{FontSize: normalizedFontSize(u.FontSize)}).Render(r.Context(), w)
+		return
+	}
+
+	r.ParseForm()
+	fontSize := normalizedFontSize(r.FormValue("font_size"))
+	if err := h.svc.UpdateFontSize(r.Context(), u.ID, fontSize); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, "/preferences?flash=Preferences+saved", http.StatusSeeOther)
+}
+
 func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	user, tempPass, err := h.svc.ResendWelcomeEmail(r.Context(), id)
@@ -202,6 +227,13 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+resent", id), http.StatusSeeOther)
+}
+
+func normalizedFontSize(fontSize string) string {
+	if services.ValidFontSize(fontSize) {
+		return fontSize
+	}
+	return "medium"
 }
 
 func userToRow(u *ent.User) templates.UserRow {

@@ -21,6 +21,7 @@ type UserInfo struct {
 	Name      string
 	Email     string
 	Role      string
+	FontSize  string
 	CompanyID int64 // future multi-tenant: populated from user.company_id
 }
 
