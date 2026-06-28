@@ -57,7 +57,7 @@ func ContactForm(customerID int64) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><div class=\"grid\"><label>First <input type=\"text\" name=\"first_name\" required></label> <label>Last <input type=\"text\" name=\"last_name\" required></label></div><div class=\"grid\"><label>Email <input type=\"email\" name=\"email\"></label> <label>Phone <input type=\"tel\" name=\"phone\"></label></div><label>Notes <input type=\"text\" name=\"notes\"></label> <button type=\"submit\">Save</button></form>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\"><div class=\"grid\"><label>First <input type=\"text\" name=\"first_name\" required></label> <label>Last <input type=\"text\" name=\"last_name\"></label></div><div class=\"grid\"><label>Email <input type=\"email\" name=\"email\"></label> <label>Phone <input type=\"tel\" name=\"phone\"></label></div><label>Notes <input type=\"text\" name=\"notes\"></label> <button type=\"submit\">Save</button></form>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

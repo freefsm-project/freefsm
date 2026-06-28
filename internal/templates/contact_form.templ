@@ -9,7 +9,7 @@ templ ContactForm(customerID int64) {
 		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 		<div class="grid">
 			<label>First <input type="text" name="first_name" required/></label>
-			<label>Last <input type="text" name="last_name" required/></label>
+			<label>Last <input type="text" name="last_name"/></label>
 		</div>
 		<div class="grid">
 			<label>Email <input type="email" name="email"/></label>

@@ -11,7 +11,7 @@ templ ContactEditRow(customerID, contactID int64, firstName, lastName, email, ph
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<div class="grid">
 					<label>First <input type="text" name="first_name" value={ firstName } required/></label>
-					<label>Last <input type="text" name="last_name" value={ lastName } required/></label>
+					<label>Last <input type="text" name="last_name" value={ lastName }/></label>
 				</div>
 				<div class="grid">
 					<label>Email <input type="email" name="email" value={ email }/></label>

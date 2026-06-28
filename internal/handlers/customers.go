@@ -542,13 +542,7 @@ func (h *CustomerHandler) UpdateContact(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	r.ParseForm()
-	c, err := h.contactSvc.Update(r.Context(), cid, services.ContactUpdateParams{
-		FirstName: formPtr(r.FormValue("first_name")),
-		LastName:  formPtr(r.FormValue("last_name")),
-		Email:     formPtr(r.FormValue("email")),
-		Phone:     formPtr(r.FormValue("phone")),
-		Notes:     formPtr(r.FormValue("notes")),
-	})
+	c, err := h.contactSvc.Update(r.Context(), cid, contactUpdateParamsFromRequest(r))
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -565,6 +559,16 @@ func (h *CustomerHandler) UpdateContact(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 	templates.ContactViewRow(custID, row).Render(r.Context(), w)
+}
+
+func contactUpdateParamsFromRequest(r *http.Request) services.ContactUpdateParams {
+	return services.ContactUpdateParams{
+		FirstName: formPtr(r.FormValue("first_name")),
+		LastName:  strPtr(r.FormValue("last_name")),
+		Email:     strPtr(r.FormValue("email")),
+		Phone:     strPtr(r.FormValue("phone")),
+		Notes:     strPtr(r.FormValue("notes")),
+	}
 }
 
 func (h *CustomerHandler) DeleteContact(w http.ResponseWriter, r *http.Request) {
