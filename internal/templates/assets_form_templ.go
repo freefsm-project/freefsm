@@ -177,14 +177,14 @@ func AssetForm(p AssetFormPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</select></label> <label>Serial Number <input type=\"text\" name=\"serial_number\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</select></label> <label>Manufacturer <input type=\"text\" name=\"manufacturer\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var10 string
-			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(assetFormValue(p.Asset, "SerialNumber"))
+			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(assetFormValue(p.Asset, "Manufacturer"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_form.templ`, Line: 38, Col: 93}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_form.templ`, Line: 38, Col: 92}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 			if templ_7745c5c3_Err != nil {
@@ -203,14 +203,14 @@ func AssetForm(p AssetFormPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\"></label> <label>Manufacturer <input type=\"text\" name=\"manufacturer\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\"></label> <label>Serial Number <input type=\"text\" name=\"serial_number\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var12 string
-			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(assetFormValue(p.Asset, "Manufacturer"))
+			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(assetFormValue(p.Asset, "SerialNumber"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_form.templ`, Line: 46, Col: 92}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_form.templ`, Line: 46, Col: 93}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 			if templ_7745c5c3_Err != nil {

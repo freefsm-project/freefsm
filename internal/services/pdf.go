@@ -126,14 +126,26 @@ func writeStatusBadge(pdf *gofpdf.Fpdf, x, y float64, status string, r, g, b int
 
 func writeDetailRow(pdf *gofpdf.Fpdf, customer *ent.Customer, job *ent.Job, asset *ent.Asset, details []string) {
 	pageWidth, _ := pdf.GetPageSize()
-	colGap := 6.0
-	colWidth := (pageWidth - pdfMargin*2 - colGap*2) / 3
 	y := pdf.GetY()
+	if asset == nil {
+		colGap := 6.0
+		colWidth := (pageWidth - pdfMargin*2 - colGap*2) / 3
+		leftHeight := writeInfoBlock(pdf, pdfMargin, y, colWidth, "Customer", customerLines(customer))
+		midHeight := writeInfoBlock(pdf, pdfMargin+colWidth+colGap, y, colWidth, "Job", jobLines(job))
+		rightHeight := writeInfoBlock(pdf, pdfMargin+(colWidth+colGap)*2, y, colWidth, "Details", details)
+		pdf.SetY(y + maxFloat(leftHeight, midHeight, rightHeight) + 7)
+		return
+	}
 
-	leftHeight := writeInfoBlock(pdf, pdfMargin, y, colWidth, "Customer", customerLines(customer))
-	midHeight := writeInfoBlock(pdf, pdfMargin+colWidth+colGap, y, colWidth, "Job", jobLines(job, asset))
-	rightHeight := writeInfoBlock(pdf, pdfMargin+(colWidth+colGap)*2, y, colWidth, "Details", details)
-	pdf.SetY(y + maxFloat(leftHeight, midHeight, rightHeight) + 7)
+	colGap := 4.0
+	colWidth := (pageWidth - pdfMargin*2 - colGap*3) / 4
+	heights := []float64{
+		writeInfoBlock(pdf, pdfMargin, y, colWidth, "Customer", customerLines(customer)),
+		writeInfoBlock(pdf, pdfMargin+colWidth+colGap, y, colWidth, "Job", jobLines(job)),
+		writeInfoBlock(pdf, pdfMargin+(colWidth+colGap)*2, y, colWidth, "Assets", assetLines(asset)),
+		writeInfoBlock(pdf, pdfMargin+(colWidth+colGap)*3, y, colWidth, "Details", details),
+	}
+	pdf.SetY(y + maxFloat(heights...) + 7)
 }
 
 func writeInfoBlock(pdf *gofpdf.Fpdf, x, y, width float64, title string, lines []string) float64 {
@@ -356,19 +368,33 @@ func customerLines(c *ent.Customer) []string {
 	return nonEmpty(c.DisplayName, c.CompanyName, c.Email, c.Phone)
 }
 
-func jobLines(j *ent.Job, asset *ent.Asset) []string {
+func jobLines(j *ent.Job) []string {
 	if j == nil {
 		return nil
 	}
 	lines := nonEmpty(j.JobType, j.Subtitle)
-	if asset != nil {
-		lines = append(lines, "Asset: "+asset.Name)
-	}
 	if j.StartTime != nil {
 		lines = append(lines, "Start: "+j.StartTime.Format("Jan 2, 2006"))
 	}
 	if j.DueDate != nil {
 		lines = append(lines, "Due: "+j.DueDate.Format("Jan 2, 2006"))
+	}
+	return lines
+}
+
+func assetLines(asset *ent.Asset) []string {
+	if asset == nil {
+		return nil
+	}
+	var lines []string
+	if strings.TrimSpace(asset.Manufacturer) != "" {
+		lines = append(lines, "Manufacturer: "+asset.Manufacturer)
+	}
+	if strings.TrimSpace(asset.Model) != "" {
+		lines = append(lines, "Model: "+asset.Model)
+	}
+	if strings.TrimSpace(asset.SerialNumber) != "" {
+		lines = append(lines, "Serial: "+asset.SerialNumber)
 	}
 	return lines
 }

@@ -92,7 +92,7 @@ func (s *AssetService) List(ctx context.Context, search string, customerID, asse
 
 func (s *AssetService) ListForCustomer(ctx context.Context, customerID int64) ([]*ent.Asset, error) {
 	return s.client.Asset.Query().
-		Where(asset.CustomerID(customerID)).
+		Where(asset.CustomerID(customerID), asset.DeletedAtIsNil()).
 		Order(ent.Asc(asset.FieldName)).
 		All(ctx)
 }

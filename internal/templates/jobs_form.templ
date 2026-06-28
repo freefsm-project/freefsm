@@ -42,7 +42,7 @@ templ JobForm(p JobFormPageData) {
 	<div class="grid">
 		<label>
 			Asset (optional)
-			<select name="asset_id">
+			<select name="asset_id" id="job-asset-select" data-selected={ fmt.Sprintf("%d", p.Job.AssetID) }>
 				<option value="0">No asset</option>
 				for _, a := range p.Assets {
 					<option value={ fmt.Sprintf("%d", a.Value) } selected?={ p.Job.AssetID == a.Value }>{ a.Label }</option>
@@ -184,6 +184,7 @@ templ JobForm(p JobFormPageData) {
 			const jobCustomer = document.getElementById('job-customer-select');
 			const contactSelect = document.getElementById('contact-select');
 			const jobLocationSelect = document.getElementById('job-location-select');
+			const jobAssetSelect = document.getElementById('job-asset-select');
 			function loadContacts(customerID) {
 				if (!customerID) { contactSelect.innerHTML = '<option value="0">No contact</option>'; return; }
 				const sel = contactSelect.dataset.selected || 0;
@@ -199,6 +200,14 @@ templ JobForm(p JobFormPageData) {
 					.then(r => r.text())
 					.then(html => jobLocationSelect.innerHTML = html);
 			}
+			function loadJobAssets(customerID) {
+				if (!jobAssetSelect) return;
+				if (!customerID) { jobAssetSelect.innerHTML = '<option value="0">No asset</option>'; return; }
+				const sel = jobAssetSelect.dataset.selected || 0;
+				fetch('/customers/' + customerID + '/assets/options?selected=' + sel)
+					.then(r => r.text())
+					.then(html => jobAssetSelect.innerHTML = html);
+			}
 			if (jobCustomer && contactSelect) {
 				jobCustomer.addEventListener('change', function() { contactSelect.dataset.selected = 0; loadContacts(this.value); });
 				if (jobCustomer.value) loadContacts(jobCustomer.value);
@@ -206,6 +215,10 @@ templ JobForm(p JobFormPageData) {
 			if (jobCustomer && jobLocationSelect) {
 				jobCustomer.addEventListener('change', function() { jobLocationSelect.dataset.selected = 0; loadJobLocations(this.value); });
 				if (jobCustomer.value && jobLocationSelect.options.length <= 1) loadJobLocations(jobCustomer.value);
+			}
+			if (jobCustomer && jobAssetSelect) {
+				jobCustomer.addEventListener('change', function() { jobAssetSelect.dataset.selected = 0; loadJobAssets(this.value); });
+				if (jobCustomer.value && jobAssetSelect.options.length <= 1) loadJobAssets(jobCustomer.value);
 			}
 			const startEl = document.querySelector('[name=start_time]');
 			const endEl = document.querySelector('[name=end_time]');
@@ -243,5 +256,12 @@ templ JobForm(p JobFormPageData) {
 			}
 			if (window.Alpine) { registerJobEditors(); } else { document.addEventListener('alpine:init', registerJobEditors); }
 		</script>`)
+	}
+}
+
+templ AssetOptions(options []SelectOption, selectedID int64) {
+	<option value="0">No asset</option>
+	for _, o := range options {
+		<option value={ fmt.Sprintf("%d", o.Value) } selected?={ selectedID == o.Value }>{ o.Label }</option>
 	}
 }

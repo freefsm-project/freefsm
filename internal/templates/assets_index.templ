@@ -40,8 +40,9 @@ templ AssetTable(p AssetListPageData) {
 			<thead>
 				<tr>
 					<th>Name</th>
-					<th>Serial</th>
+					<th>Manufacturer</th>
 					<th>Model</th>
+					<th>Serial</th>
 					<th>Type</th>
 					<th>Status</th>
 					<th></th>
@@ -49,7 +50,7 @@ templ AssetTable(p AssetListPageData) {
 			</thead>
 			<tbody>
 				if len(p.Assets) == 0 {
-					<tr><td colspan="6" class="work-queue-empty">
+					<tr><td colspan="7" class="work-queue-empty">
 						<p>No assets found.</p>
 						<a href="/assets/new" role="button" class="outline">Create your first asset</a>
 					</td></tr>
@@ -61,8 +62,9 @@ templ AssetTable(p AssetListPageData) {
 								{ a.Name }
 							</a>
 						</td>
-						<td>{ a.SerialNumber }</td>
+						<td>{ a.Manufacturer }</td>
 						<td>{ a.Model }</td>
+						<td>{ a.SerialNumber }</td>
 						<td>
 							for _, t := range p.AssetTypes {
 								if t.Value == a.AssetTypeID {

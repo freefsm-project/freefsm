@@ -41,9 +41,9 @@ templ AssetShow(p AssetShowPageData) {
 						<span class="status-badge">No Status</span>
 					}
 				</p>
-				<p><strong>Serial:</strong> { p.Asset.SerialNumber }</p>
-				<p><strong>Model:</strong> { p.Asset.Model }</p>
 				<p><strong>Manufacturer:</strong> { p.Asset.Manufacturer }</p>
+				<p><strong>Model:</strong> { p.Asset.Model }</p>
+				<p><strong>Serial:</strong> { p.Asset.SerialNumber }</p>
 				if p.Asset.InstalledAt != nil {
 					<p><strong>Installed:</strong> { p.Asset.InstalledAt.Format("2006-01-02") }</p>
 				}

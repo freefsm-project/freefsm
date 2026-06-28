@@ -160,7 +160,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	if j.AssetID != nil && *j.AssetID > 0 {
 		asset, _ := h.assetSvc.GetByID(r.Context(), *j.AssetID)
 		if asset != nil {
-			d.AssetName = asset.Name
+			d.AssetName = assetLabel(asset)
 		}
 	}
 	activeEntry, err := h.timeEntrySvc.GetActiveByUser(r.Context(), u.ID)
@@ -582,6 +582,17 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 	templates.JobSubtasks(d).Render(r.Context(), w)
 }
 
+func (h *JobHandler) AssetOptions(w http.ResponseWriter, r *http.Request) {
+	customerID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	selected, _ := strconv.ParseInt(r.URL.Query().Get("selected"), 10, 64)
+	assets, _ := h.assetSvc.ListForCustomer(r.Context(), customerID)
+	templates.AssetOptions(assetOptions(assets), selected).Render(r.Context(), w)
+}
+
 func (h *JobHandler) statusesForSelect(ctx context.Context) []*ent.Status {
 	statuses, _ := h.statusSvc.ByObjectType(ctx, "job")
 	return statuses
@@ -643,7 +654,10 @@ func (h *JobHandler) newJobForm(ctx context.Context, customerID int64) templates
 	customers, _ := h.custSvc.ListAll(ctx)
 	projects, _ := h.projectSvc.ListAll(ctx)
 	locations, _ := h.locSvc.ListByCustomer(ctx, customerID)
-	assets, _ := h.assetSvc.ListAll(ctx)
+	var assets []*ent.Asset
+	if customerID > 0 {
+		assets, _ = h.assetSvc.ListForCustomer(ctx, customerID)
+	}
 	users, _ := h.userSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	return templates.JobFormPageData{
@@ -672,7 +686,7 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses [
 	customers, _ := h.custSvc.ListAll(ctx)
 	projects, _ := h.projectSvc.ListAll(ctx)
 	locations, _ := h.locSvc.ListByCustomer(ctx, j.CustomerID)
-	assets, _ := h.assetSvc.ListAll(ctx)
+	assets, _ := h.assetSvc.ListForCustomer(ctx, j.CustomerID)
 	users, _ := h.userSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	d := jobToDetail(j, statuses)
@@ -732,9 +746,26 @@ func locationOptions(locations []*ent.Location) []templates.SelectOption {
 func assetOptions(assets []*ent.Asset) []templates.SelectOption {
 	opts := make([]templates.SelectOption, len(assets))
 	for i, a := range assets {
-		opts[i] = templates.SelectOption{Value: a.ID, Label: a.Name}
+		opts[i] = templates.SelectOption{Value: a.ID, Label: assetLabel(a)}
 	}
 	return opts
+}
+
+func assetLabel(a *ent.Asset) string {
+	if a == nil {
+		return ""
+	}
+	parts := make([]string, 0, 3)
+	for _, part := range []string{a.Manufacturer, a.Model, a.SerialNumber} {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) == 0 {
+		return a.Name
+	}
+	return strings.Join(parts, ", ")
 }
 
 func jobToDetail(j *ent.Job, statuses []*ent.Status) templates.JobDetail {

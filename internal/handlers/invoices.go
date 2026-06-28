@@ -111,7 +111,7 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 			asset, _ := h.assetSvc.GetByID(r.Context(), *job.AssetID)
 			if asset != nil {
 				d.AssetID = asset.ID
-				d.AssetName = asset.Name
+				d.AssetName = assetLabel(asset)
 			}
 		}
 	}

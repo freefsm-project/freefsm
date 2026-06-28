@@ -139,6 +139,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/customers/{id}/contacts/options", customerHandler.Contacts)
 		r.Get("/customers/{id}/locations", customerHandler.ListLocations)
 		r.Get("/customers/{id}/locations/options", customerHandler.LocationOptions)
+		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/assets/options", jobHandler.AssetOptions)
 		r.Route("/items", func(r chi.Router) {
 			r.With(middleware.DispatcherOrAdmin).Get("/", itemHandler.List)
 			r.With(middleware.DispatcherOrAdmin).Get("/activity", activityHandler.ListByType("item"))
