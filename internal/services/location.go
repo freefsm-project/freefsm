@@ -156,15 +156,10 @@ func (s *LocationService) Geocode(ctx context.Context, l *ent.Location, geocoder
 		return l, nil
 	}
 
-	reqURL, err := url.Parse(geocoderURL + "/search")
+	reqURL, err := geocodeSearchURL(geocoderURL, locationAddress(l))
 	if err != nil {
 		return l, fmt.Errorf("parse geocoder URL: %w", err)
 	}
-	q := reqURL.Query()
-	q.Set("q", locationAddress(l))
-	q.Set("format", "jsonv2")
-	q.Set("limit", "1")
-	reqURL.RawQuery = q.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL.String(), nil)
 	if err != nil {
@@ -211,6 +206,23 @@ func (s *LocationService) Geocode(ctx context.Context, l *ent.Location, geocoder
 		return l, fmt.Errorf("save geocode result: %w", err)
 	}
 	return updated, nil
+}
+
+func geocodeSearchURL(geocoderURL, address string) (*url.URL, error) {
+	base := strings.TrimRight(strings.TrimSpace(geocoderURL), "/")
+	if !strings.HasSuffix(base, "/search") {
+		base += "/search"
+	}
+	reqURL, err := url.Parse(base)
+	if err != nil {
+		return nil, err
+	}
+	q := reqURL.Query()
+	q.Set("q", address)
+	q.Set("format", "jsonv2")
+	q.Set("limit", "1")
+	reqURL.RawQuery = q.Encode()
+	return reqURL, nil
 }
 
 func locationAddress(l *ent.Location) string {

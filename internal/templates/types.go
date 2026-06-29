@@ -1107,6 +1107,7 @@ type SchedulePageData struct {
 	Tab             string
 	Period          string
 	TileURL         string
+	MapEmptyMessage string
 	PrevYear        int
 	PrevMonth       int
 	NextYear        int

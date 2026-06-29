@@ -343,6 +343,6 @@ templ mapView(p SchedulePageData) {
 		}
 	</div>
 	if len(p.MapJobs) == 0 {
-		<p class="schedule-map-empty">No geocoded scheduled jobs are available yet. The map is ready for job location coordinates when the service layer provides them.</p>
+		<p class="schedule-map-empty">{ p.MapEmptyMessage }</p>
 	}
 }

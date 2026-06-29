@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -355,15 +356,17 @@ func (h *ScheduleHandler) Map(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().In(loc)
 	start, end := monthRange(now.Year(), now.Month(), loc)
 	jobs, _ := h.jobsByDateRange(r, start, end)
+	mapJobs, emptyMessage := h.mapJobs(r, jobs)
 	data := templates.SchedulePageData{
-		Title:   "Schedule Map",
-		Tab:     "map",
-		Period:  "month",
-		Jobs:    h.calendarJobs(r, jobs),
-		MapJobs: h.mapJobs(r, jobs),
-		Date:    now.Format("2006-01-02"),
-		TileURL: h.mapTileURL(r),
-		IsMap:   true,
+		Title:           "Schedule Map",
+		Tab:             "map",
+		Period:          "month",
+		Jobs:            h.calendarJobs(r, jobs),
+		MapJobs:         mapJobs,
+		MapEmptyMessage: emptyMessage,
+		Date:            now.Format("2006-01-02"),
+		TileURL:         h.mapTileURL(r),
+		IsMap:           true,
 	}
 	templates.SchedulePage(data).Render(r.Context(), w)
 }
@@ -595,29 +598,48 @@ func (h *ScheduleHandler) calendarJobs(r *http.Request, jobs []*ent.Job) []templ
 	return calJobs
 }
 
-func (h *ScheduleHandler) mapJobs(r *http.Request, jobs []*ent.Job) []templates.CalendarJob {
+func (h *ScheduleHandler) mapJobs(r *http.Request, jobs []*ent.Job) ([]templates.CalendarJob, string) {
+	if len(jobs) == 0 {
+		return nil, "No scheduled jobs are in the current month."
+	}
 	locationIDs := make([]int64, 0, len(jobs))
 	seen := make(map[int64]struct{})
+	jobsWithLocation := 0
 	for _, j := range jobs {
 		if j.LocationID == nil || *j.LocationID <= 0 {
 			continue
 		}
+		jobsWithLocation++
 		if _, ok := seen[*j.LocationID]; ok {
 			continue
 		}
 		seen[*j.LocationID] = struct{}{}
 		locationIDs = append(locationIDs, *j.LocationID)
 	}
+	if jobsWithLocation == 0 {
+		return nil, "Scheduled jobs in this month do not have linked locations yet. Add a job location to show them on the map."
+	}
 	locations, _ := h.locSvc.ListByIDs(r.Context(), locationIDs)
 	locByID := make(map[int64]*ent.Location, len(locations))
-	geocodedThisRequest := false
+	geocodeAttempted := false
 	geocoderURL := h.geocoderURL(r)
+	geocodeFailed := false
+	needsGeocoding := false
 	for _, l := range locations {
-		if geocoderURL != "" && !geocodedThisRequest && (l.Latitude == nil || l.Longitude == nil) {
+		if geocoderURL != "" && !geocodeAttempted && (l.Latitude == nil || l.Longitude == nil) {
+			geocodeAttempted = true
 			if geocoded, err := h.locSvc.Geocode(r.Context(), l, geocoderURL); err == nil {
 				l = geocoded
-				geocodedThisRequest = true
+				if l.Latitude == nil || l.Longitude == nil {
+					slog.Info("schedule map geocode returned no result", "location_id", l.ID, "geocoder_url", geocoderURL)
+				}
+			} else {
+				geocodeFailed = true
+				slog.Warn("schedule map geocode failed", "location_id", l.ID, "geocoder_url", geocoderURL, "error", err)
 			}
+		}
+		if l.Latitude == nil || l.Longitude == nil {
+			needsGeocoding = true
 		}
 		locByID[l.ID] = l
 	}
@@ -635,7 +657,19 @@ func (h *ScheduleHandler) mapJobs(r *http.Request, jobs []*ent.Job) []templates.
 		calJobs[i].Lng = *l.Longitude
 		mapJobs = append(mapJobs, calJobs[i])
 	}
-	return mapJobs
+	if len(mapJobs) > 0 {
+		return mapJobs, ""
+	}
+	if geocodeFailed {
+		return nil, "Scheduled job locations could not be geocoded. Check the configured geocoder URL and server logs."
+	}
+	if geocoderURL == "" && needsGeocoding {
+		return nil, "Scheduled job locations need coordinates. Configure a geocoder URL in Settings > Map, or enter coordinates manually."
+	}
+	if geocoderURL != "" && needsGeocoding {
+		return nil, "Scheduled job locations are waiting for geocoding. Refresh the map to geocode the next location."
+	}
+	return nil, "No geocoded scheduled jobs are available yet."
 }
 
 func (h *ScheduleHandler) mapTileURL(r *http.Request) string {
