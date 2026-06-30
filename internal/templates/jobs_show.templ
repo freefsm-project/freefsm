@@ -83,7 +83,12 @@ templ JobShow(p JobDetail) {
 					<tr><th>Project</th><td>{ p.ProjectName }</td></tr>
 				}
 				if p.LocationName != "" {
-					<tr><th>Location</th><td>{ p.LocationName }</td></tr>
+					<tr><th>Location</th><td>
+						{ p.LocationName }
+						if p.LocationAddress != "" {
+							<br/>{ p.LocationAddress }
+						}
+					</td></tr>
 				}
 				if p.ContactName != "" {
 					<tr><th>Contact</th><td>{ p.ContactName }</td></tr>

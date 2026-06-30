@@ -150,6 +150,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 		location, _ := h.locSvc.GetByID(r.Context(), *j.LocationID)
 		if location != nil {
 			d.LocationName = location.Title
+			d.LocationAddress = services.LocationAddress(location)
 		}
 	}
 	if j.CustomerContactID != nil && *j.CustomerContactID > 0 {

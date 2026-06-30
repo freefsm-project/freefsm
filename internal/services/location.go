@@ -149,14 +149,14 @@ func (s *LocationService) DeleteCustomerLocation(ctx context.Context, customerID
 }
 
 func (s *LocationService) Geocode(ctx context.Context, l *ent.Location, geocoderURL string) (*ent.Location, error) {
-	if l == nil || geocoderURL == "" || strings.TrimSpace(locationAddress(l)) == "" {
+	if l == nil || geocoderURL == "" || strings.TrimSpace(LocationAddress(l)) == "" {
 		return l, nil
 	}
 	if l.Latitude != nil && l.Longitude != nil {
 		return l, nil
 	}
 
-	reqURL, err := geocodeSearchURL(geocoderURL, locationAddress(l))
+	reqURL, err := geocodeSearchURL(geocoderURL, LocationAddress(l))
 	if err != nil {
 		return l, fmt.Errorf("parse geocoder URL: %w", err)
 	}
@@ -225,7 +225,7 @@ func geocodeSearchURL(geocoderURL, address string) (*url.URL, error) {
 	return reqURL, nil
 }
 
-func locationAddress(l *ent.Location) string {
+func LocationAddress(l *ent.Location) string {
 	parts := []string{l.Address1, l.Address2, l.City, l.State, l.ZipCode}
 	clean := make([]string, 0, len(parts))
 	for _, part := range parts {

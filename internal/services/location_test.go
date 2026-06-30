@@ -1,6 +1,25 @@
 package services
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/MartialM1nd/freefsm/internal/ent"
+)
+
+func TestLocationAddressFormatsNonEmptyParts(t *testing.T) {
+	t.Parallel()
+
+	got := LocationAddress(&ent.Location{
+		Address1: "123 Main St",
+		Address2: "Suite 4",
+		City:     "Denver",
+		State:    "CO",
+		ZipCode:  "80202",
+	})
+	if want := "123 Main St, Suite 4, Denver, CO, 80202"; got != want {
+		t.Fatalf("LocationAddress() = %q, want %q", got, want)
+	}
+}
 
 func TestGeocodeSearchURLBuildsNominatimRequest(t *testing.T) {
 	t.Parallel()

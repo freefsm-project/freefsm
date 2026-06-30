@@ -337,6 +337,7 @@ type JobDetail struct {
 	ProjectName              string
 	LocationID               int64
 	LocationName             string
+	LocationAddress          string
 	ContactID                int64
 	ContactName              string
 	AssetID                  int64
