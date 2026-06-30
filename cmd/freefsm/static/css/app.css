@@ -1328,15 +1328,21 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 .schedule-toolbar-main {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.schedule-toolbar-secondary {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 28rem minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 14rem minmax(0, 1fr);
   align-items: center;
   gap: 1rem;
 }
 
 .schedule-title-nav {
   display: grid;
-  grid-template-columns: 4.5rem minmax(0, 1fr) 4.5rem;
+  grid-template-columns: 3.75rem minmax(0, 1fr) 3.75rem;
   align-items: center;
   justify-self: stretch;
   gap: 0.5rem;
@@ -1353,6 +1359,8 @@ html[data-theme="dark"] .theme-icon-moon {
 
 .schedule-date-arrows a[role="button"] {
   margin: 0;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
 }
 
 .schedule-title-nav h3 {
@@ -1360,6 +1368,8 @@ html[data-theme="dark"] .theme-icon-moon {
   justify-self: center;
   margin: 0;
   overflow: hidden;
+  font-size: 0.85rem;
+  line-height: var(--pico-line-height);
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1415,6 +1425,12 @@ html[data-theme="dark"] .theme-icon-moon {
   margin: 0;
 }
 
+.schedule-primary-tabs a[role="button"],
+.schedule-tab {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.85rem;
+}
+
 .schedule-tab:not(.active) {
   background: transparent;
   border-color: var(--pico-primary);
@@ -1441,7 +1457,8 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 @media (max-width: 768px) {
-  .schedule-toolbar-main {
+  .schedule-toolbar-main,
+  .schedule-toolbar-secondary {
     display: flex;
     flex-direction: column;
     align-items: flex-start;

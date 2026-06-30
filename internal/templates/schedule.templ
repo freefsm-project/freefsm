@@ -18,6 +18,19 @@ templ SchedulePage(p SchedulePageData) {
 						<a href="/jobs/new" role="button">New Job</a>
 					}
 				</div>
+			</div>
+			<div class="schedule-toolbar-secondary">
+				if p.IsList || p.IsMonth || p.IsWeek || p.IsDay || p.IsDispatch {
+					<div class="schedule-toolbar-periods">
+						<nav class="schedule-period-tabs" aria-label="Schedule period">
+							<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=month&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "month") }>Month</a>
+							<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=week&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "week") }>Week</a>
+							<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=day&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "day") }>Day</a>
+						</nav>
+					</div>
+				} else {
+					<div class="schedule-toolbar-periods" aria-hidden="true"></div>
+				}
 				<div class="schedule-title-nav">
 					if p.IsMonth {
 						<div class="schedule-date-arrows">
@@ -43,15 +56,6 @@ templ SchedulePage(p SchedulePageData) {
 				</div>
 				<div class="schedule-toolbar-spacer" aria-hidden="true"></div>
 			</div>
-			if p.IsList || p.IsMonth || p.IsWeek || p.IsDay || p.IsDispatch {
-				<div class="schedule-toolbar-periods">
-					<nav class="schedule-period-tabs" aria-label="Schedule period">
-						<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=month&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "month") }>Month</a>
-						<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=week&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "week") }>Week</a>
-						<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=day&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "day") }>Day</a>
-					</nav>
-				</div>
-				}
 		</div>
 		if p.IsMonth {
 			@monthView(p)
