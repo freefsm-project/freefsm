@@ -217,12 +217,13 @@ func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
 	}
 
 	weeks := buildMonthGrid(year, month, calJobs, loc)
+	monthStart := time.Date(year, month, 1, 0, 0, 0, 0, loc)
 	data := templates.SchedulePageData{
-		Title:     displayDate(r.Context(), time.Date(year, month, 1, 0, 0, 0, 0, loc)),
+		Title:     scheduleMonthYearTitle(monthStart),
 		Tab:       "calendar",
 		Period:    "month",
 		Weeks:     weeks,
-		Date:      time.Date(year, month, 1, 0, 0, 0, 0, loc).Format("2006-01-02"),
+		Date:      monthStart.Format("2006-01-02"),
 		PrevYear:  prevMonthYear(year, month),
 		PrevMonth: prevMonthMonth(year, month),
 		NextYear:  nextMonthYear(year, month),
@@ -264,7 +265,7 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 	prev := date.AddDate(0, 0, -7)
 	next := date.AddDate(0, 0, 7)
 	data := templates.SchedulePageData{
-		Title:    fmt.Sprintf("%s — %s", displayDate(r.Context(), start), displayDate(r.Context(), end)),
+		Title:    scheduleMonthYearTitle(start),
 		Tab:      "calendar",
 		Period:   "week",
 		Days:     days,
@@ -733,12 +734,16 @@ func dispatchPrevNext(period string, date time.Time) (time.Time, time.Time) {
 func dispatchTitle(ctx context.Context, period string, start, end time.Time) string {
 	switch period {
 	case "month":
-		return fmt.Sprintf("Dispatch: %s", displayDate(ctx, start))
+		return fmt.Sprintf("Dispatch: %s", scheduleMonthYearTitle(start))
 	case "week":
-		return fmt.Sprintf("Dispatch: %s - %s", displayDate(ctx, start), displayDate(ctx, end))
+		return fmt.Sprintf("Dispatch: %s", scheduleMonthYearTitle(start))
 	default:
 		return fmt.Sprintf("Dispatch: %s", displayDate(ctx, start))
 	}
+}
+
+func scheduleMonthYearTitle(t time.Time) string {
+	return t.Format("Jan, 2006")
 }
 
 func parseYearMonth(r *http.Request, now time.Time) (int, time.Month) {

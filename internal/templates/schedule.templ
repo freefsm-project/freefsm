@@ -6,42 +6,53 @@ templ SchedulePage(p SchedulePageData) {
 	@Layout("Schedule") {
 
 		<div class="schedule-toolbar">
-			<div class="schedule-title-nav">
-				if p.IsMonth {
-					<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=month&year=%d&month=%d", p.PrevYear, p.PrevMonth)) } role="button" class="outline">&larr;</a>
-					<h3>{ p.Title }</h3>
-					<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=month&year=%d&month=%d", p.NextYear, p.NextMonth)) } role="button" class="outline">&rarr;</a>
-				} else if p.IsWeek || p.IsDay {
-					<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=%s&date=%s", p.Period, p.PrevDate)) } role="button" class="outline">&larr;</a>
-					<h3>{ p.Title }</h3>
-					<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=%s&date=%s", p.Period, p.NextDate)) } role="button" class="outline">&rarr;</a>
-				} else if p.IsDispatch {
-					<a href={ templ.URL("/schedule?tab=dispatch&period="+p.Period+"&date="+p.PrevDate) } role="button" class="outline">&larr;</a>
-					<h3>{ p.Title }</h3>
-					<a href={ templ.URL("/schedule?tab=dispatch&period="+p.Period+"&date="+p.NextDate) } role="button" class="outline">&rarr;</a>
-				} else {
-					<h3>{ p.Title }</h3>
-				}
+			<div class="schedule-toolbar-main">
+				<div class="schedule-primary-tabs">
+					<a href={ templ.URL("/schedule?tab=list&period="+func() string { if p.Period != "" { return p.Period } else { return "month" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "list") }>List</a>
+					<a href={ templ.URL("/schedule?tab=calendar&period="+func() string { if p.Period != "" && p.Period != "month" { return p.Period } else { return "month" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "calendar") }>Calendar</a>
+					if canManageOperational(ctx) {
+						<a href={ templ.URL("/schedule?tab=dispatch&period="+func() string { if p.Period != "" { return p.Period } else { return "day" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "dispatch") }>Dispatch</a>
+					}
+					<a href="/schedule?tab=map" role="button" class={ scheduleTabClass(p.Tab == "map") }>Map</a>
+					if canManageOperational(ctx) {
+						<a href="/jobs/new" role="button">New Job</a>
+					}
+				</div>
+				<div class="schedule-title-nav">
+					if p.IsMonth {
+						<div class="schedule-date-arrows">
+							<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=month&year=%d&month=%d", p.PrevYear, p.PrevMonth)) } role="button" class="outline">&larr;</a>
+							<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=month&year=%d&month=%d", p.NextYear, p.NextMonth)) } role="button" class="outline">&rarr;</a>
+						</div>
+						<h3>{ p.Title }</h3>
+					} else if p.IsWeek || p.IsDay {
+						<div class="schedule-date-arrows">
+							<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=%s&date=%s", p.Period, p.PrevDate)) } role="button" class="outline">&larr;</a>
+							<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=%s&date=%s", p.Period, p.NextDate)) } role="button" class="outline">&rarr;</a>
+						</div>
+						<h3>{ p.Title }</h3>
+					} else if p.IsDispatch {
+						<div class="schedule-date-arrows">
+							<a href={ templ.URL("/schedule?tab=dispatch&period="+p.Period+"&date="+p.PrevDate) } role="button" class="outline">&larr;</a>
+							<a href={ templ.URL("/schedule?tab=dispatch&period="+p.Period+"&date="+p.NextDate) } role="button" class="outline">&rarr;</a>
+						</div>
+						<h3>{ p.Title }</h3>
+					} else {
+						<h3>{ p.Title }</h3>
+					}
+				</div>
+				<div class="schedule-toolbar-spacer" aria-hidden="true"></div>
 			</div>
-			<div class="schedule-primary-tabs">
-				<a href={ templ.URL("/schedule?tab=list&period="+func() string { if p.Period != "" { return p.Period } else { return "month" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "list") }>List</a>
-				<a href={ templ.URL("/schedule?tab=calendar&period="+func() string { if p.Period != "" && p.Period != "month" { return p.Period } else { return "month" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "calendar") }>Calendar</a>
-				if canManageOperational(ctx) {
-					<a href={ templ.URL("/schedule?tab=dispatch&period="+func() string { if p.Period != "" { return p.Period } else { return "day" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "dispatch") }>Dispatch</a>
+			if p.IsList || p.IsMonth || p.IsWeek || p.IsDay || p.IsDispatch {
+				<div class="schedule-toolbar-periods">
+					<nav class="schedule-period-tabs" aria-label="Schedule period">
+						<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=month&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "month") }>Month</a>
+						<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=week&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "week") }>Week</a>
+						<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=day&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "day") }>Day</a>
+					</nav>
+				</div>
 				}
-				<a href="/schedule?tab=map" role="button" class={ scheduleTabClass(p.Tab == "map") }>Map</a>
-				if canManageOperational(ctx) {
-					<a href="/jobs/new" role="button">New Job</a>
-				}
-			</div>
 		</div>
-		if p.IsList || p.IsMonth || p.IsWeek || p.IsDay || p.IsDispatch {
-			<nav class="schedule-period-tabs" aria-label="Schedule period">
-				<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=month&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "month") }>Month</a>
-				<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=week&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "week") }>Week</a>
-				<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=day&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "day") }>Day</a>
-			</nav>
-		}
 		if p.IsMonth {
 			@monthView(p)
 		} else if p.IsWeek {

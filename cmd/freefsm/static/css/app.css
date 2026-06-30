@@ -1322,20 +1322,56 @@ html[data-theme="dark"] .theme-icon-moon {
 /* Calendar */
 .schedule-toolbar {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
 
-.schedule-title-nav {
-  display: flex;
+.schedule-toolbar-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28rem minmax(0, 1fr);
   align-items: center;
+  gap: 1rem;
+}
+
+.schedule-title-nav {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) 4.5rem;
+  align-items: center;
+  justify-self: stretch;
   gap: 0.5rem;
+  width: 100%;
+}
+
+.schedule-date-arrows {
+  display: flex;
+  grid-column: 1;
+  align-items: center;
+  gap: 0.25rem;
+  justify-self: start;
+}
+
+.schedule-date-arrows a[role="button"] {
+  margin: 0;
 }
 
 .schedule-title-nav h3 {
+  grid-column: 2;
+  justify-self: center;
   margin: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-toolbar-spacer {
+  min-width: 0;
+}
+
+.schedule-toolbar-periods {
+  display: flex;
+  justify-content: flex-start;
 }
 
 .schedule-list-filter {
@@ -1393,7 +1429,7 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 .schedule-period-tabs {
-  margin-bottom: 0.75rem;
+  margin: 0;
 }
 
 .schedule-period-tab {
@@ -1402,6 +1438,23 @@ html[data-theme="dark"] .theme-icon-moon {
   border-radius: var(--pico-border-radius);
   text-decoration: none;
   font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+  .schedule-toolbar-main {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .schedule-title-nav {
+    justify-self: auto;
+    width: 100%;
+  }
+
+  .schedule-toolbar-spacer {
+    display: none;
+  }
 }
 
 .calendar-drop-slot.drag-over,
