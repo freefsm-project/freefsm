@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -212,12 +213,12 @@ func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
 	calJobs := make([]templates.CalendarJob, len(jobs))
 	for i, j := range jobs {
-		calJobs[i] = calendarJob(j, custMap, statuses)
+		calJobs[i] = calendarJob(r.Context(), j, custMap, statuses)
 	}
 
 	weeks := buildMonthGrid(year, month, calJobs, loc)
 	data := templates.SchedulePageData{
-		Title:     time.Date(year, month, 1, 0, 0, 0, 0, loc).Format("January 2006"),
+		Title:     displayDate(r.Context(), time.Date(year, month, 1, 0, 0, 0, 0, loc)),
 		Tab:       "calendar",
 		Period:    "month",
 		Weeks:     weeks,
@@ -251,7 +252,7 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 			if j.StartTime == nil {
 				continue
 			}
-			cj := calendarJob(j, custMap, statuses)
+			cj := calendarJob(r.Context(), j, custMap, statuses)
 			cj.Hour = j.StartTime.Hour()
 			if j.StartTime.Year() == d.Year() && j.StartTime.YearDay() == d.YearDay() {
 				day.Jobs = append(day.Jobs, cj)
@@ -263,7 +264,7 @@ func (h *ScheduleHandler) Week(w http.ResponseWriter, r *http.Request) {
 	prev := date.AddDate(0, 0, -7)
 	next := date.AddDate(0, 0, 7)
 	data := templates.SchedulePageData{
-		Title:    fmt.Sprintf("%s — %s, %d", start.Format("Jan 2"), end.Format("Jan 2"), end.Year()),
+		Title:    fmt.Sprintf("%s — %s", displayDate(r.Context(), start), displayDate(r.Context(), end)),
 		Tab:      "calendar",
 		Period:   "week",
 		Days:     days,
@@ -304,7 +305,7 @@ func (h *ScheduleHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	jobs, _ := h.jobsByDateRange(r, start, end)
 	data := templates.SchedulePageData{
-		Title:     fmt.Sprintf("%s - %s", start.Format("Jan 2"), end.Format("Jan 2, 2006")),
+		Title:     fmt.Sprintf("%s - %s", displayDate(r.Context(), start), displayDate(r.Context(), end)),
 		Tab:       "list",
 		Jobs:      h.calendarJobs(r, jobs),
 		Date:      start.Format("2006-01-02"),
@@ -336,7 +337,7 @@ func (h *ScheduleHandler) Dispatch(w http.ResponseWriter, r *http.Request) {
 	matrix := h.dispatchMatrix(r, period, start, end, techs, jobs)
 	prev, next := dispatchPrevNext(period, date)
 	data := templates.SchedulePageData{
-		Title:           dispatchTitle(period, start, end),
+		Title:           dispatchTitle(r.Context(), period, start, end),
 		PrevDate:        prev.Format("2006-01-02"),
 		NextDate:        next.Format("2006-01-02"),
 		Date:            date.Format("2006-01-02"),
@@ -382,7 +383,7 @@ func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
 	var calJobs []templates.CalendarJob
 	for _, j := range jobs {
-		cj := calendarJob(j, custMap, statuses)
+		cj := calendarJob(r.Context(), j, custMap, statuses)
 		cj.Hour = j.StartTime.Hour()
 		calJobs = append(calJobs, cj)
 	}
@@ -390,7 +391,7 @@ func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
 	prev := date.AddDate(0, 0, -1)
 	next := date.AddDate(0, 0, 1)
 	data := templates.SchedulePageData{
-		Title:    date.Format("Monday, January 2, 2006"),
+		Title:    displayDate(r.Context(), date),
 		Tab:      "calendar",
 		Period:   "day",
 		Jobs:     calJobs,
@@ -455,7 +456,7 @@ func (h *ScheduleHandler) dispatchColumns(r *http.Request, techs []templates.Sch
 }
 
 func (h *ScheduleHandler) dispatchMatrix(r *http.Request, period string, start, end time.Time, techs []templates.ScheduleTech, jobs []*ent.Job) templates.DispatchMatrix {
-	columns := dispatchMatrixColumns(period, start, end, middleware.CompanyLocation(r.Context()))
+	columns := dispatchMatrixColumns(r.Context(), period, start, end, middleware.CompanyLocation(r.Context()))
 	jobsByTechColumn := make(map[int64]map[string][]templates.CalendarJob, len(techs))
 	calJobs := h.calendarJobs(r, jobs)
 
@@ -494,7 +495,7 @@ func (h *ScheduleHandler) dispatchMatrix(r *http.Request, period string, start, 
 	return templates.DispatchMatrix{Period: period, Columns: columns, Rows: rows}
 }
 
-func dispatchMatrixColumns(period string, start, end time.Time, loc *time.Location) []templates.DispatchMatrixColumn {
+func dispatchMatrixColumns(ctx context.Context, period string, start, end time.Time, loc *time.Location) []templates.DispatchMatrixColumn {
 	if period == "day" {
 		columns := make([]templates.DispatchMatrixColumn, 0, 24)
 		for hour := 0; hour <= 23; hour++ {
@@ -512,7 +513,7 @@ func dispatchMatrixColumns(period string, start, end time.Time, loc *time.Locati
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		columns = append(columns, templates.DispatchMatrixColumn{
 			Key:     d.Format("2006-01-02"),
-			Label:   d.Format("Mon Jan 2"),
+			Label:   displayDate(ctx, d),
 			Date:    d.Format("2006-01-02"),
 			IsToday: isToday(d, loc),
 		})
@@ -544,7 +545,7 @@ func (h *ScheduleHandler) customerMapForJobs(r *http.Request, jobs []*ent.Job) m
 	return customerMap(customers)
 }
 
-func calendarJob(j *ent.Job, custMap map[int64]string, statuses []*ent.Status) templates.CalendarJob {
+func calendarJob(ctx context.Context, j *ent.Job, custMap map[int64]string, statuses []*ent.Status) templates.CalendarJob {
 	cj := templates.CalendarJob{
 		ID:      j.ID,
 		JobType: j.JobType,
@@ -555,8 +556,8 @@ func calendarJob(j *ent.Job, custMap map[int64]string, statuses []*ent.Status) t
 	cj.StatusName = statusName(statuses, j.StatusID)
 	cj.StatusColor = statusColor(statuses, j.StatusID)
 	if j.StartTime != nil && !j.StartTime.IsZero() {
-		cj.Time = j.StartTime.Format("3:04 PM")
-		cj.Date = j.StartTime.Format("Jan 2, 2006")
+		cj.Time = displayTime(ctx, *j.StartTime)
+		cj.Date = displayDate(ctx, *j.StartTime)
 		cj.DateISO = j.StartTime.Format("2006-01-02")
 		cj.Day = j.StartTime.Day()
 		cj.Hour = j.StartTime.Hour()
@@ -593,7 +594,7 @@ func (h *ScheduleHandler) calendarJobs(r *http.Request, jobs []*ent.Job) []templ
 	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
 	calJobs := make([]templates.CalendarJob, 0, len(jobs))
 	for _, j := range jobs {
-		calJobs = append(calJobs, calendarJob(j, custMap, statuses))
+		calJobs = append(calJobs, calendarJob(r.Context(), j, custMap, statuses))
 	}
 	return calJobs
 }
@@ -729,14 +730,14 @@ func dispatchPrevNext(period string, date time.Time) (time.Time, time.Time) {
 	}
 }
 
-func dispatchTitle(period string, start, end time.Time) string {
+func dispatchTitle(ctx context.Context, period string, start, end time.Time) string {
 	switch period {
 	case "month":
-		return fmt.Sprintf("Dispatch: %s", start.Format("January 2006"))
+		return fmt.Sprintf("Dispatch: %s", displayDate(ctx, start))
 	case "week":
-		return fmt.Sprintf("Dispatch: %s - %s", start.Format("Jan 2"), end.Format("Jan 2, 2006"))
+		return fmt.Sprintf("Dispatch: %s - %s", displayDate(ctx, start), displayDate(ctx, end))
 	default:
-		return fmt.Sprintf("Dispatch: %s", start.Format("Monday, Jan 2, 2006"))
+		return fmt.Sprintf("Dispatch: %s", displayDate(ctx, start))
 	}
 }
 

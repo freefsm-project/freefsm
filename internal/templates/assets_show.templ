@@ -45,10 +45,10 @@ templ AssetShow(p AssetShowPageData) {
 				<p><strong>Model:</strong> { p.Asset.Model }</p>
 				<p><strong>Serial:</strong> { p.Asset.SerialNumber }</p>
 				if p.Asset.InstalledAt != nil {
-					<p><strong>Installed:</strong> { p.Asset.InstalledAt.Format("2006-01-02") }</p>
+					<p><strong>Installed:</strong> { displayDatePtr(ctx, p.Asset.InstalledAt) }</p>
 				}
 				if p.Asset.WarrantyExpires != nil {
-					<p><strong>Warranty:</strong> { p.Asset.WarrantyExpires.Format("2006-01-02") }</p>
+					<p><strong>Warranty:</strong> { displayDatePtr(ctx, p.Asset.WarrantyExpires) }</p>
 				}
 			</article>
 			<article>

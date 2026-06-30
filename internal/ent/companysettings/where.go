@@ -179,6 +179,11 @@ func Timezone(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldTimezone, v))
 }
 
+// DateFormat applies equality check predicate on the "date_format" field. It's identical to DateFormatEQ.
+func DateFormat(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldDateFormat, v))
+}
+
 // PasswordMinLength applies equality check predicate on the "password_min_length" field. It's identical to PasswordMinLengthEQ.
 func PasswordMinLength(v int) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldPasswordMinLength, v))
@@ -1782,6 +1787,71 @@ func TimezoneEqualFold(v string) predicate.CompanySettings {
 // TimezoneContainsFold applies the ContainsFold predicate on the "timezone" field.
 func TimezoneContainsFold(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldContainsFold(FieldTimezone, v))
+}
+
+// DateFormatEQ applies the EQ predicate on the "date_format" field.
+func DateFormatEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldDateFormat, v))
+}
+
+// DateFormatNEQ applies the NEQ predicate on the "date_format" field.
+func DateFormatNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldDateFormat, v))
+}
+
+// DateFormatIn applies the In predicate on the "date_format" field.
+func DateFormatIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldDateFormat, vs...))
+}
+
+// DateFormatNotIn applies the NotIn predicate on the "date_format" field.
+func DateFormatNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldDateFormat, vs...))
+}
+
+// DateFormatGT applies the GT predicate on the "date_format" field.
+func DateFormatGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldDateFormat, v))
+}
+
+// DateFormatGTE applies the GTE predicate on the "date_format" field.
+func DateFormatGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldDateFormat, v))
+}
+
+// DateFormatLT applies the LT predicate on the "date_format" field.
+func DateFormatLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldDateFormat, v))
+}
+
+// DateFormatLTE applies the LTE predicate on the "date_format" field.
+func DateFormatLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldDateFormat, v))
+}
+
+// DateFormatContains applies the Contains predicate on the "date_format" field.
+func DateFormatContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldDateFormat, v))
+}
+
+// DateFormatHasPrefix applies the HasPrefix predicate on the "date_format" field.
+func DateFormatHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldDateFormat, v))
+}
+
+// DateFormatHasSuffix applies the HasSuffix predicate on the "date_format" field.
+func DateFormatHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldDateFormat, v))
+}
+
+// DateFormatEqualFold applies the EqualFold predicate on the "date_format" field.
+func DateFormatEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldDateFormat, v))
+}
+
+// DateFormatContainsFold applies the ContainsFold predicate on the "date_format" field.
+func DateFormatContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldDateFormat, v))
 }
 
 // PasswordMinLengthEQ applies the EQ predicate on the "password_min_length" field.

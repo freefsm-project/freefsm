@@ -64,6 +64,15 @@ templ SettingsPage(p SettingsPageData) {
 						}
 					</select>
 				</label>
+				<label>
+					Date Format
+					<select name="date_format">
+						for _, format := range dateFormatOptions() {
+							<option value={ format.Value } selected?={ selectedDateFormat(p.Settings.DateFormat) == format.Value }>{ format.TimePreview }</option>
+						}
+					</select>
+					<small>Used for displayed dates and times. Form fields keep browser-compatible values.</small>
+				</label>
 			<div class="grid">
 				<label>
 					Invoice Prefix

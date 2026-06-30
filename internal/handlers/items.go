@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -68,7 +69,7 @@ func (h *ItemHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	templates.ItemShow(itemToDetail(i)).Render(r.Context(), w)
+	templates.ItemShow(itemToDetail(r.Context(), i)).Render(r.Context(), w)
 }
 
 func (h *ItemHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -176,7 +177,7 @@ func (h *ItemHandler) Update(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		templates.ItemForm(formDataFromItem(i)).Render(r.Context(), w)
+		templates.ItemForm(formDataFromItem(r.Context(), i)).Render(r.Context(), w)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -290,7 +291,7 @@ func requireAdminOrDispatcher(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 
-func itemToDetail(i *ent.Item) templates.ItemDetail {
+func itemToDetail(ctx context.Context, i *ent.Item) templates.ItemDetail {
 	d := templates.ItemDetail{
 		ID:             i.ID,
 		Name:           i.Name,
@@ -305,7 +306,7 @@ func itemToDetail(i *ent.Item) templates.ItemDetail {
 		IsActive:       i.IsActive,
 	}
 	if i.DeletedAt != nil && !i.DeletedAt.IsZero() {
-		d.ArchivedAt = i.DeletedAt.Format("Jan 2, 2006")
+		d.ArchivedAt = displayDate(ctx, *i.DeletedAt)
 	}
 	return d
 }
@@ -334,8 +335,8 @@ func newItemForm() templates.ItemFormPageData {
 	}
 }
 
-func formDataFromItem(i *ent.Item) templates.ItemFormPageData {
-	d := itemToDetail(i)
+func formDataFromItem(ctx context.Context, i *ent.Item) templates.ItemFormPageData {
+	d := itemToDetail(ctx, i)
 	return templates.ItemFormPageData{
 		Item:  &d,
 		IsNew: false,

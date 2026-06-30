@@ -71,7 +71,7 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 				ID:        c.ID,
 				Author:    authorName,
 				Content:   c.Content,
-				CreatedAt: c.CreatedAt.Format("Jan 2, 2006 3:04 PM"),
+				CreatedAt: displayDateTime(r.Context(), c.CreatedAt),
 				CanDelete: canDelete,
 			}
 		}

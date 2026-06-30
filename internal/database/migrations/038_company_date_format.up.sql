@@ -1,0 +1,1 @@
+ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS date_format TEXT NOT NULL DEFAULT 'Jan 2, 2006';

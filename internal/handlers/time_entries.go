@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -62,10 +63,9 @@ func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	loc := middleware.CompanyLocation(r.Context())
 	rows := make([]templates.TimeEntryRow, len(entries))
 	for i, e := range entries {
-		rows[i] = timeEntryToRow(e, userNames, user, loc)
+		rows[i] = timeEntryToRow(r.Context(), e, userNames, user)
 	}
 
 	var users []templates.UserRow
@@ -122,11 +122,10 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 		userName = u.Name
 	}
 
-	loc := middleware.CompanyLocation(r.Context())
-	clockInStr := entry.ClockIn.In(loc).Format("Jan 2, 2006 3:04 PM")
+	clockInStr := displayDateTime(r.Context(), entry.ClockIn)
 	clockOutStr := ""
 	if entry.ClockOut != nil {
-		clockOutStr = entry.ClockOut.In(loc).Format("Jan 2, 2006 3:04 PM")
+		clockOutStr = displayDateTime(r.Context(), *entry.ClockOut)
 	}
 	duration := services.TimeEntryDuration(entry.ClockIn, safeTime(entry.ClockOut))
 
@@ -180,8 +179,7 @@ func (h *TimeEntryHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	loc := middleware.CompanyLocation(r.Context())
-	clockInStr := result.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	clockInStr := displayDateTime(r.Context(), result.ClockIn)
 	h.activitySvc.Record(r.Context(), user.ID, "clocked_in", "time_entry", result.ID, map[string]interface{}{
 		"entity_name": fmt.Sprintf("%s — %s", user.Name, clockInStr),
 		"actor_name":  user.Name,
@@ -212,9 +210,8 @@ func (h *TimeEntryHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	loc := middleware.CompanyLocation(r.Context())
 	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
-	clockInStr := result.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	clockInStr := displayDateTime(r.Context(), result.ClockIn)
 	h.activitySvc.Record(r.Context(), user.ID, "clocked_out", "time_entry", result.ID, map[string]interface{}{
 		"entity_name": fmt.Sprintf("%s — %s (%s)", user.Name, clockInStr, duration),
 		"actor_name":  user.Name,
@@ -293,11 +290,10 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	loc = middleware.CompanyLocation(r.Context())
-	clockInStr := result.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	clockInStr := displayDateTime(r.Context(), result.ClockIn)
 	entityName := fmt.Sprintf("%s — %s", user.Name, clockInStr)
 	if result.ClockOut != nil {
-		entityName += fmt.Sprintf(" — %s", result.ClockOut.In(loc).Format("3:04 PM"))
+		entityName += fmt.Sprintf(" — %s", displayTime(r.Context(), *result.ClockOut))
 	}
 	h.activitySvc.Record(r.Context(), user.ID, "updated", "time_entry", id, map[string]interface{}{
 		"entity_name": entityName,
@@ -332,11 +328,10 @@ func (h *TimeEntryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loc := middleware.CompanyLocation(r.Context())
-	clockInStr := entry.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	clockInStr := displayDateTime(r.Context(), entry.ClockIn)
 	entityName := clockInStr
 	if entry.ClockOut != nil {
-		entityName += " — " + entry.ClockOut.In(loc).Format("3:04 PM")
+		entityName += " — " + displayTime(r.Context(), *entry.ClockOut)
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
@@ -350,11 +345,11 @@ func (h *TimeEntryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/time-entries?flash=Time+entry+deleted", http.StatusSeeOther)
 }
 
-func timeEntryToRow(e *ent.TimeEntry, userNames map[int64]string, currentUser *middleware.UserInfo, loc *time.Location) templates.TimeEntryRow {
-	clockIn := e.ClockIn.In(loc).Format("Jan 2, 2006 3:04 PM")
+func timeEntryToRow(ctx context.Context, e *ent.TimeEntry, userNames map[int64]string, currentUser *middleware.UserInfo) templates.TimeEntryRow {
+	clockIn := displayDateTime(ctx, e.ClockIn)
 	clockOut := ""
 	if e.ClockOut != nil {
-		clockOut = e.ClockOut.In(loc).Format("Jan 2, 2006 3:04 PM")
+		clockOut = displayDateTime(ctx, *e.ClockOut)
 	}
 
 	duration := services.TimeEntryDuration(e.ClockIn, safeTime(e.ClockOut))

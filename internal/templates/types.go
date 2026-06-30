@@ -242,6 +242,8 @@ type ProjectDetail struct {
 	CompletionPercentage float64
 	StartTime            string
 	EndTime              string
+	StartTimeDisplay     string
+	EndTimeDisplay       string
 	Notes                string
 	ArchivedAt           string
 }
@@ -359,6 +361,9 @@ type JobDetail struct {
 	StartTime                string
 	EndTime                  string
 	DueDate                  string
+	StartTimeDisplay         string
+	EndTimeDisplay           string
+	DueDateDisplay           string
 	NextOccurrenceStart      string
 	Notes                    string
 	TechNotes                string
@@ -486,29 +491,31 @@ type InvoiceRow struct {
 }
 
 type InvoiceDetail struct {
-	ID           int64
-	Number       int64
-	CustomerID   int64
-	Customer     string
-	JobID        int64
-	AssetID      int64
-	AssetName    string
-	StatusID     int64
-	StatusName   string
-	StatusColor  string
-	CanFinalize  bool
-	Title        string
-	Notes        string
-	InvoiceDate  string
-	DueDate      string
-	TaxRate      string
-	LineItems    []services.LineItem
-	Payments     []services.Payment
-	Tags         []TagRow
-	AllTags      []TagRow
-	CustomFields []CustomFieldDisplay
-	FileList     FileListPageData
-	ArchivedAt   string
+	ID                 int64
+	Number             int64
+	CustomerID         int64
+	Customer           string
+	JobID              int64
+	AssetID            int64
+	AssetName          string
+	StatusID           int64
+	StatusName         string
+	StatusColor        string
+	CanFinalize        bool
+	Title              string
+	Notes              string
+	InvoiceDate        string
+	DueDate            string
+	InvoiceDateDisplay string
+	DueDateDisplay     string
+	TaxRate            string
+	LineItems          []services.LineItem
+	Payments           []services.Payment
+	Tags               []TagRow
+	AllTags            []TagRow
+	CustomFields       []CustomFieldDisplay
+	FileList           FileListPageData
+	ArchivedAt         string
 }
 
 type InvoiceListPageData struct {
@@ -1322,6 +1329,40 @@ func commonTimezones() []string {
 		"Pacific/Auckland",
 		"Pacific/Fiji",
 	}
+}
+
+func dateFormatOptions() []services.DateFormatOption {
+	return services.DateFormatOptions()
+}
+
+func selectedDateFormat(format string) string {
+	return services.NormalizeDateFormat(format)
+}
+
+func displayDate(ctx context.Context, t time.Time) string {
+	return services.FormatCompanyDate(t, middleware.CompanyLocation(ctx), middleware.CompanyFromContext(ctx))
+}
+
+func displayDatePtr(ctx context.Context, t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return displayDate(ctx, *t)
+}
+
+func displayDateTime(ctx context.Context, t time.Time) string {
+	return services.FormatCompanyDateTime(t, middleware.CompanyLocation(ctx), middleware.CompanyFromContext(ctx))
+}
+
+func displayDateValue(ctx context.Context, value string) string {
+	if value == "" {
+		return ""
+	}
+	loc := middleware.CompanyLocation(ctx)
+	if t, err := time.ParseInLocation("2006-01-02", value, loc); err == nil {
+		return services.FormatCompanyDate(t, loc, middleware.CompanyFromContext(ctx))
+	}
+	return value
 }
 
 // Asset types

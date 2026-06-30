@@ -95,9 +95,11 @@ func (s *ActivityService) LookupEntityName(ctx context.Context, objectType strin
 		if err != nil {
 			return fmt.Sprintf("time entry #%d", objectID)
 		}
-		clockIn := te.ClockIn.Format("Jan 2 3:04 PM")
+		cs, _ := s.client.CompanySettings.Query().First(ctx)
+		loc := companySettingsLocation(cs)
+		clockIn := FormatCompanyDateTime(te.ClockIn, loc, cs)
 		if te.ClockOut != nil {
-			return fmt.Sprintf("%s — %s", clockIn, te.ClockOut.Format("3:04 PM"))
+			return fmt.Sprintf("%s — %s", clockIn, FormatCompanyTime(*te.ClockOut, loc, cs))
 		}
 		return clockIn
 	case "asset_type":

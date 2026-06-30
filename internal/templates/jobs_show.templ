@@ -93,14 +93,14 @@ templ JobShow(p JobDetail) {
 				if p.ContactName != "" {
 					<tr><th>Contact</th><td>{ p.ContactName }</td></tr>
 				}
-				if p.StartTime != "" {
-					<tr><th>Start Time</th><td>{ p.StartTime }</td></tr>
+				if p.StartTimeDisplay != "" {
+					<tr><th>Start Time</th><td>{ p.StartTimeDisplay }</td></tr>
 				}
-				if p.EndTime != "" {
-					<tr><th>End Time</th><td>{ p.EndTime }</td></tr>
+				if p.EndTimeDisplay != "" {
+					<tr><th>End Time</th><td>{ p.EndTimeDisplay }</td></tr>
 				}
-				if p.DueDate != "" {
-					<tr><th>Due Date</th><td>{ p.DueDate }</td></tr>
+				if p.DueDateDisplay != "" {
+					<tr><th>Due Date</th><td>{ p.DueDateDisplay }</td></tr>
 				}
 			</tbody>
 		</table>

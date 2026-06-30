@@ -267,7 +267,7 @@ func AssetShow(p AssetShowPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var16 string
-				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(p.Asset.InstalledAt.Format("2006-01-02"))
+				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(displayDatePtr(ctx, p.Asset.InstalledAt))
 				if templ_7745c5c3_Err != nil {
 					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_show.templ`, Line: 48, Col: 78}
 				}
@@ -286,7 +286,7 @@ func AssetShow(p AssetShowPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var17 string
-				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(p.Asset.WarrantyExpires.Format("2006-01-02"))
+				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(displayDatePtr(ctx, p.Asset.WarrantyExpires))
 				if templ_7745c5c3_Err != nil {
 					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_show.templ`, Line: 51, Col: 81}
 				}

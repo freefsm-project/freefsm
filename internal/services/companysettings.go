@@ -43,6 +43,7 @@ type CompanySettingsParams struct {
 	EstimateEmailSubject        string
 	EstimateEmailBody           string
 	Timezone                    string
+	DateFormat                  string
 	PasswordMinLength           int
 	PasswordRequireUppercase    bool
 	PasswordRequireLowercase    bool
@@ -86,6 +87,7 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetEstimateEmailSubject(p.EstimateEmailSubject).
 		SetEstimateEmailBody(p.EstimateEmailBody).
 		SetTimezone(p.Timezone).
+		SetDateFormat(NormalizeDateFormat(p.DateFormat)).
 		SetPasswordMinLength(p.PasswordMinLength).
 		SetPasswordRequireUppercase(p.PasswordRequireUppercase).
 		SetPasswordRequireLowercase(p.PasswordRequireLowercase).

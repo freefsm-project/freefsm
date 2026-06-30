@@ -213,7 +213,7 @@ func (h *ActivityHandler) entriesToRows(ctx context.Context, entries []*ent.Acti
 			Icon:         activityIcon(e.Action),
 			Metadata:     meta,
 			RelativeTime: services.ActivityRelativeTime(e.CreatedAt),
-			CreatedAt:    e.CreatedAt.Format("Jan 2, 2006 3:04 PM"),
+			CreatedAt:    displayDateTime(ctx, e.CreatedAt),
 		})
 	}
 	return rows

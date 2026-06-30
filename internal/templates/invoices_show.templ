@@ -51,8 +51,8 @@ templ InvoiceShow(p InvoiceDetail) {
 					<tr><th>Asset</th><td><a href={ templ.URL(fmt.Sprintf("/assets/%d", p.AssetID)) }>{ p.AssetName }</a></td></tr>
 				}
 				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(p.StatusColor) }>{ p.StatusName }</span></td></tr>
-				<tr><th>Invoice Date</th><td>{ p.InvoiceDate }</td></tr>
-				<tr><th>Due Date</th><td>{ p.DueDate }</td></tr>
+				<tr><th>Invoice Date</th><td>{ p.InvoiceDateDisplay }</td></tr>
+				<tr><th>Due Date</th><td>{ p.DueDateDisplay }</td></tr>
 				<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
 			</tbody>
 		</table>

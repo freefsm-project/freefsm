@@ -74,7 +74,7 @@ func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	rows := make([]templates.JobRow, len(jobs))
 	for i, j := range jobs {
-		rows[i] = jobRow(j, statuses, custMap)
+		rows[i] = jobRow(r.Context(), j, statuses, custMap)
 	}
 
 	data := templates.JobListPageData{
@@ -117,7 +117,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	statuses := h.statusesForSelect(r.Context())
-	d := jobToDetail(j, statuses)
+	d := jobToDetail(r.Context(), j, statuses)
 	d.NextOccurrenceStart = time.Now().In(middleware.CompanyLocation(r.Context())).Format("2006-01-02T15:04")
 	if j.CustomerID > 0 {
 		customer, _ := h.custSvc.GetByID(r.Context(), j.CustomerID)
@@ -185,7 +185,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "job")
 	d.CustomFields = buildCustomFieldDisplay(defs, j.CustomFields)
 	files, _ := h.fileSvc.List(r.Context(), "job", j.ID)
-	d.FileList = templates.FileListPageData{Files: filesToRows(files), ObjectID: j.ID, ObjectType: "job"}
+	d.FileList = templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: j.ID, ObjectType: "job"}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), j.JobType)
 	templates.JobShow(d).Render(ctx, w)
 }
@@ -240,7 +240,7 @@ func (h *JobHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	})
 
 	if r.Header.Get("HX-Request") == "true" {
-		d := jobToDetail(result, statuses)
+		d := jobToDetail(r.Context(), result, statuses)
 		render(w, r, templates.JobStatusControl(d))
 		return
 	}
@@ -280,8 +280,7 @@ func (h *JobHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	loc := middleware.CompanyLocation(r.Context())
-	clockInStr := result.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	clockInStr := displayDateTime(r.Context(), result.ClockIn)
 	h.activitySvc.Record(r.Context(), u.ID, "clocked_in", "time_entry", result.ID, map[string]interface{}{
 		"entity_name": fmt.Sprintf("%s — %s — %s", u.Name, jobDisplayName(j), clockInStr),
 		"actor_name":  u.Name,
@@ -331,9 +330,8 @@ func (h *JobHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	loc := middleware.CompanyLocation(r.Context())
 	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
-	clockInStr := result.ClockIn.In(loc).Format("Jan 2 3:04 PM")
+	clockInStr := displayDateTime(r.Context(), result.ClockIn)
 	h.activitySvc.Record(r.Context(), u.ID, "clocked_out", "time_entry", result.ID, map[string]interface{}{
 		"entity_name": fmt.Sprintf("%s — %s — %s (%s)", u.Name, jobDisplayName(j), clockInStr, duration),
 		"actor_name":  u.Name,
@@ -617,7 +615,7 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	statuses := h.statusesForSelect(r.Context())
-	d := jobToDetail(j, statuses)
+	d := jobToDetail(r.Context(), j, statuses)
 	d.Subtasks = subtasks
 	templates.JobSubtasks(d).Render(r.Context(), w)
 }
@@ -729,7 +727,7 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses [
 	assets, _ := h.assetSvc.ListForCustomer(ctx, j.CustomerID)
 	users, _ := h.userSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
-	d := jobToDetail(j, statuses)
+	d := jobToDetail(ctx, j, statuses)
 	assignments, _ := h.svc.Assignments(ctx, j.ID)
 	if len(assignments) == 0 {
 		assignments = services.ParseAssignments(j.Assignments)
@@ -808,7 +806,7 @@ func assetLabel(a *ent.Asset) string {
 	return strings.Join(parts, ", ")
 }
 
-func jobToDetail(j *ent.Job, statuses []*ent.Status) templates.JobDetail {
+func jobToDetail(ctx context.Context, j *ent.Job, statuses []*ent.Status) templates.JobDetail {
 	d := templates.JobDetail{
 		ID:          j.ID,
 		CustomerID:  j.CustomerID,
@@ -836,20 +834,23 @@ func jobToDetail(j *ent.Job, statuses []*ent.Status) templates.JobDetail {
 	}
 	if j.StartTime != nil && !j.StartTime.IsZero() {
 		d.StartTime = j.StartTime.Format("2006-01-02T15:04")
+		d.StartTimeDisplay = displayDateTime(ctx, *j.StartTime)
 	}
 	if j.EndTime != nil && !j.EndTime.IsZero() {
 		d.EndTime = j.EndTime.Format("2006-01-02T15:04")
+		d.EndTimeDisplay = displayDateTime(ctx, *j.EndTime)
 	}
 	if j.DueDate != nil && !j.DueDate.IsZero() {
 		d.DueDate = j.DueDate.Format("2006-01-02")
+		d.DueDateDisplay = displayDate(ctx, *j.DueDate)
 	}
 	if j.DeletedAt != nil && !j.DeletedAt.IsZero() {
-		d.ArchivedAt = j.DeletedAt.Format("Jan 2, 2006")
+		d.ArchivedAt = displayDate(ctx, *j.DeletedAt)
 	}
 	return d
 }
 
-func jobRow(j *ent.Job, statuses []*ent.Status, custMap map[int64]string) templates.JobRow {
+func jobRow(ctx context.Context, j *ent.Job, statuses []*ent.Status, custMap map[int64]string) templates.JobRow {
 	r := templates.JobRow{
 		ID:          j.ID,
 		DisplayName: j.JobType,
@@ -864,7 +865,7 @@ func jobRow(j *ent.Job, statuses []*ent.Status, custMap map[int64]string) templa
 		r.DisplayName = j.JobType + " — " + j.Subtitle
 	}
 	if j.StartTime != nil && !j.StartTime.IsZero() {
-		r.StartTime = j.StartTime.Format("Jan 2, 2006 3:04 PM")
+		r.StartTime = displayDateTime(ctx, *j.StartTime)
 	}
 	return r
 }

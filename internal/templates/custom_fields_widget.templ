@@ -50,6 +50,8 @@ templ CustomFieldsWidget(p CustomFieldsWidgetData) {
 										No
 									}
 								</p>
+							} else if f.FieldType == "date" && f.Value != "" {
+								<p>{ displayDateValue(ctx, f.Value) }</p>
 							} else if f.Value != "" {
 								<p>{ f.Value }</p>
 							} else {

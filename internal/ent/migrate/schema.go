@@ -186,6 +186,7 @@ var (
 		{Name: "estimate_email_subject", Type: field.TypeString, Default: "Estimate {estimate_number} from {business_name}"},
 		{Name: "estimate_email_body", Type: field.TypeString, Default: "Hello {customer_name},\n\nPlease find estimate {estimate_number} attached.\n\nThank you,\n{business_name}"},
 		{Name: "timezone", Type: field.TypeString, Default: "UTC"},
+		{Name: "date_format", Type: field.TypeString, Default: "Jan 2, 2006"},
 		{Name: "password_min_length", Type: field.TypeInt, Default: 8},
 		{Name: "password_require_uppercase", Type: field.TypeBool, Default: true},
 		{Name: "password_require_lowercase", Type: field.TypeBool, Default: true},

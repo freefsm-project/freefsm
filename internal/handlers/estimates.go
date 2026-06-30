@@ -64,7 +64,7 @@ func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	rows := make([]templates.EstimateRow, len(estimates))
 	for i, e := range estimates {
-		rows[i] = estimateRow(e, statuses, custMap)
+		rows[i] = estimateRow(r.Context(), e, statuses, custMap)
 	}
 
 	data := templates.EstimateListPageData{
@@ -98,7 +98,7 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	statuses := h.statusesForSelect(r.Context())
-	d := estimateToDetail(e, statuses)
+	d := estimateToDetail(r.Context(), e, statuses)
 	if e.CustomerID != nil && *e.CustomerID > 0 {
 		customer, _ := h.custSvc.GetByID(r.Context(), *e.CustomerID)
 		if customer != nil {
@@ -113,7 +113,7 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "estimate")
 	d.CustomFields = buildCustomFieldDisplay(defs, e.CustomFields)
 	files, _ := h.fileSvc.List(r.Context(), "estimate", id)
-	d.FileList = templates.FileListPageData{Files: filesToRows(files), ObjectID: id, ObjectType: "estimate"}
+	d.FileList = templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "estimate"}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), e.Title)
 	templates.EstimateShow(d).Render(ctx, w)
 }
@@ -487,7 +487,7 @@ func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64) (do
 	}
 	jobName, jobType, jobSubtitle := documentJobFields(job)
 	number := services.FormatEstimateNumber(id, middleware.CompanyFromContext(ctx))
-	date := time.Now().In(middleware.CompanyLocation(ctx)).Format("Jan 2, 2006")
+	date := displayDate(ctx, time.Now())
 	return documentPDF{Filename: number + ".pdf", Data: data, Title: e.Title, Number: number, CustomerEmail: to, CustomerName: customerName, JobName: jobName, JobType: jobType, JobSubtitle: jobSubtitle, Date: date, Archived: e.DeletedAt != nil}, nil
 }
 
@@ -577,7 +577,7 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
-	d := estimateToDetail(e, statuses)
+	d := estimateToDetail(ctx, e, statuses)
 	items := h.svc.LineItems(e)
 	return templates.EstimateFormPageData{
 		Estimate:          &d,
@@ -591,7 +591,7 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 	}
 }
 
-func estimateToDetail(e *ent.Estimate, statuses []*ent.Status) templates.EstimateDetail {
+func estimateToDetail(ctx context.Context, e *ent.Estimate, statuses []*ent.Status) templates.EstimateDetail {
 	d := templates.EstimateDetail{
 		ID:          e.ID,
 		CustomerID:  estCustID(e),
@@ -606,12 +606,12 @@ func estimateToDetail(e *ent.Estimate, statuses []*ent.Status) templates.Estimat
 		d.JobID = *e.JobID
 	}
 	if e.DeletedAt != nil && !e.DeletedAt.IsZero() {
-		d.ArchivedAt = e.DeletedAt.Format("Jan 2, 2006")
+		d.ArchivedAt = displayDate(ctx, *e.DeletedAt)
 	}
 	return d
 }
 
-func estimateRow(e *ent.Estimate, statuses []*ent.Status, custMap map[int64]string) templates.EstimateRow {
+func estimateRow(ctx context.Context, e *ent.Estimate, statuses []*ent.Status, custMap map[int64]string) templates.EstimateRow {
 	r := templates.EstimateRow{
 		ID:          e.ID,
 		Title:       e.Title,
@@ -622,7 +622,7 @@ func estimateRow(e *ent.Estimate, statuses []*ent.Status, custMap map[int64]stri
 		StatusColor: statusColor(statuses, e.StatusID),
 	}
 	if !e.CreatedAt.IsZero() {
-		r.CreatedAt = e.CreatedAt.Format("Jan 2, 2006")
+		r.CreatedAt = displayDate(ctx, e.CreatedAt)
 	}
 	return r
 }

@@ -27,7 +27,7 @@ func (h *DashboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 	user, _ := middleware.UserFromContext(r.Context())
 	stats := services.DashboardStats{}
 	if isAdminOrDispatcher(user) {
-		stats, _ = h.dashboardSvc.Stats(r.Context(), loc)
+		stats, _ = h.dashboardSvc.Stats(r.Context(), loc, middleware.CompanyFromContext(r.Context()))
 	}
 	if user != nil {
 		editDashboard := r.URL.Query().Get("edit_dashboard") == "1"
@@ -43,7 +43,7 @@ func (h *DashboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 			clockWidget = templates.ClockWidgetData{
 				IsClockedIn: true,
 				Duration:    duration,
-				ClockInTime: activeEntry.ClockIn.In(loc).Format("Jan 2, 2006 3:04 PM"),
+				ClockInTime: displayDateTime(r.Context(), activeEntry.ClockIn),
 			}
 		}
 		templates.DashboardPage(templates.DashboardData{

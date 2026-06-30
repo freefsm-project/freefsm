@@ -4330,6 +4330,7 @@ type CompanySettingsMutation struct {
 	estimate_email_subject          *string
 	estimate_email_body             *string
 	timezone                        *string
+	date_format                     *string
 	password_min_length             *int
 	addpassword_min_length          *int
 	password_require_uppercase      *bool
@@ -5449,6 +5450,42 @@ func (m *CompanySettingsMutation) ResetTimezone() {
 	m.timezone = nil
 }
 
+// SetDateFormat sets the "date_format" field.
+func (m *CompanySettingsMutation) SetDateFormat(s string) {
+	m.date_format = &s
+}
+
+// DateFormat returns the value of the "date_format" field in the mutation.
+func (m *CompanySettingsMutation) DateFormat() (r string, exists bool) {
+	v := m.date_format
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDateFormat returns the old "date_format" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldDateFormat(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDateFormat is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDateFormat requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDateFormat: %w", err)
+	}
+	return oldValue.DateFormat, nil
+}
+
+// ResetDateFormat resets all changes to the "date_format" field.
+func (m *CompanySettingsMutation) ResetDateFormat() {
+	m.date_format = nil
+}
+
 // SetPasswordMinLength sets the "password_min_length" field.
 func (m *CompanySettingsMutation) SetPasswordMinLength(i int) {
 	m.password_min_length = &i
@@ -6007,7 +6044,7 @@ func (m *CompanySettingsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompanySettingsMutation) Fields() []string {
-	fields := make([]string, 0, 39)
+	fields := make([]string, 0, 40)
 	if m.company_id != nil {
 		fields = append(fields, companysettings.FieldCompanyID)
 	}
@@ -6082,6 +6119,9 @@ func (m *CompanySettingsMutation) Fields() []string {
 	}
 	if m.timezone != nil {
 		fields = append(fields, companysettings.FieldTimezone)
+	}
+	if m.date_format != nil {
+		fields = append(fields, companysettings.FieldDateFormat)
 	}
 	if m.password_min_length != nil {
 		fields = append(fields, companysettings.FieldPasswordMinLength)
@@ -6183,6 +6223,8 @@ func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 		return m.EstimateEmailBody()
 	case companysettings.FieldTimezone:
 		return m.Timezone()
+	case companysettings.FieldDateFormat:
+		return m.DateFormat()
 	case companysettings.FieldPasswordMinLength:
 		return m.PasswordMinLength()
 	case companysettings.FieldPasswordRequireUppercase:
@@ -6270,6 +6312,8 @@ func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (en
 		return m.OldEstimateEmailBody(ctx)
 	case companysettings.FieldTimezone:
 		return m.OldTimezone(ctx)
+	case companysettings.FieldDateFormat:
+		return m.OldDateFormat(ctx)
 	case companysettings.FieldPasswordMinLength:
 		return m.OldPasswordMinLength(ctx)
 	case companysettings.FieldPasswordRequireUppercase:
@@ -6481,6 +6525,13 @@ func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTimezone(v)
+		return nil
+	case companysettings.FieldDateFormat:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDateFormat(v)
 		return nil
 	case companysettings.FieldPasswordMinLength:
 		v, ok := value.(int)
@@ -6775,6 +6826,9 @@ func (m *CompanySettingsMutation) ResetField(name string) error {
 		return nil
 	case companysettings.FieldTimezone:
 		m.ResetTimezone()
+		return nil
+	case companysettings.FieldDateFormat:
+		m.ResetDateFormat()
 		return nil
 	case companysettings.FieldPasswordMinLength:
 		m.ResetPasswordMinLength()

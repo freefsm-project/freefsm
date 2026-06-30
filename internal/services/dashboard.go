@@ -472,7 +472,7 @@ func (s *DashboardService) allWidgetDefinitions() []DashboardWidgetDefinition {
 	}
 }
 
-func (s *DashboardService) Stats(ctx context.Context, loc *time.Location) (DashboardStats, error) {
+func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *ent.CompanySettings) (DashboardStats, error) {
 	now := time.Now().In(loc)
 	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	startOfTomorrow := startOfToday.AddDate(0, 0, 1)
@@ -646,9 +646,9 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location) (Dashb
 		RevenueMonth:           revenue,
 		OutstandingReceivables: outstanding,
 		OverdueAmount:          overdue,
-		RecentJobs:             s.toRecentJobs(recentJobs, custMap),
-		RecentInvoices:         s.toRecentInvoices(recentInvoices, custMap, statusMap),
-		RecentEstimates:        s.toRecentEstimates(recentEstimates, custMap),
+		RecentJobs:             s.toRecentJobs(recentJobs, custMap, loc, cs),
+		RecentInvoices:         s.toRecentInvoices(recentInvoices, custMap, statusMap, loc, cs),
+		RecentEstimates:        s.toRecentEstimates(recentEstimates, custMap, loc, cs),
 	}, nil
 }
 
@@ -707,7 +707,7 @@ func (s *DashboardService) invoiceBalance(i *ent.Invoice) float64 {
 	return balance
 }
 
-func (s *DashboardService) toRecentJobs(jobs []*ent.Job, custMap map[int64]string) []RecentJob {
+func (s *DashboardService) toRecentJobs(jobs []*ent.Job, custMap map[int64]string, loc *time.Location, cs *ent.CompanySettings) []RecentJob {
 	result := make([]RecentJob, len(jobs))
 	for i, j := range jobs {
 		dn := j.JobType
@@ -718,13 +718,13 @@ func (s *DashboardService) toRecentJobs(jobs []*ent.Job, custMap map[int64]strin
 			ID:          j.ID,
 			DisplayName: dn,
 			Customer:    custMap[j.CustomerID],
-			CreatedAt:   j.CreatedAt.Format("Jan 2, 2006"),
+			CreatedAt:   FormatCompanyDate(j.CreatedAt, loc, cs),
 		}
 	}
 	return result
 }
 
-func (s *DashboardService) toRecentInvoices(invoices []*ent.Invoice, custMap, statusMap map[int64]string) []RecentInvoice {
+func (s *DashboardService) toRecentInvoices(invoices []*ent.Invoice, custMap, statusMap map[int64]string, loc *time.Location, cs *ent.CompanySettings) []RecentInvoice {
 	result := make([]RecentInvoice, len(invoices))
 	for i, inv := range invoices {
 		statusName := ""
@@ -741,13 +741,13 @@ func (s *DashboardService) toRecentInvoices(invoices []*ent.Invoice, custMap, st
 			Customer:  customerName,
 			Total:     s.invoiceTotal(inv),
 			Status:    statusName,
-			CreatedAt: inv.CreatedAt.Format("Jan 2, 2006"),
+			CreatedAt: FormatCompanyDate(inv.CreatedAt, loc, cs),
 		}
 	}
 	return result
 }
 
-func (s *DashboardService) toRecentEstimates(estimates []*ent.Estimate, custMap map[int64]string) []RecentEstimate {
+func (s *DashboardService) toRecentEstimates(estimates []*ent.Estimate, custMap map[int64]string, loc *time.Location, cs *ent.CompanySettings) []RecentEstimate {
 	result := make([]RecentEstimate, len(estimates))
 	for i, e := range estimates {
 		customerName := ""
@@ -759,7 +759,7 @@ func (s *DashboardService) toRecentEstimates(estimates []*ent.Estimate, custMap 
 			Title:     e.Title,
 			Customer:  customerName,
 			Total:     s.estimateTotal(e),
-			CreatedAt: e.CreatedAt.Format("Jan 2, 2006"),
+			CreatedAt: FormatCompanyDate(e.CreatedAt, loc, cs),
 		}
 	}
 	return result

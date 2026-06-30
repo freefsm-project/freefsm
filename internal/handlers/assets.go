@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -166,7 +167,7 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 	defs, _ := h.cfSvc.ListForObjectType(r.Context(), "asset")
 	cfDisplay := buildCustomFieldDisplay(defs, asset.CustomFields)
 
-	assetDetail := assetToDetail(asset, assetTypes, assetStatuses)
+	assetDetail := assetToDetail(r.Context(), asset, assetTypes, assetStatuses)
 	files, _ := h.fileSvc.List(r.Context(), "asset", id)
 	data := templates.AssetShowPageData{
 		Asset:          *assetDetail,
@@ -174,7 +175,7 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 		Tags:           assignedTags,
 		AllTags:        availableTags,
 		CustomFields:   cfDisplay,
-		FileList:       templates.FileListPageData{Files: filesToRows(files), ObjectID: id, ObjectType: "asset"},
+		FileList:       templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "asset"},
 	}
 
 	templates.AssetShow(data).Render(r.Context(), w)
@@ -259,7 +260,7 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		locations, _ := h.locationSvc.ListByCustomer(r.Context(), asset.CustomerID)
 		templates.AssetForm(templates.AssetFormPageData{
 			IsNew:         false,
-			Asset:         assetToDetail(asset, assetTypes, assetStatuses),
+			Asset:         assetToDetail(r.Context(), asset, assetTypes, assetStatuses),
 			Customers:     customersToOptions(customers),
 			Locations:     locationsToOptions(locations),
 			AssetTypes:    assetTypesToOptions(assetTypes),
@@ -422,7 +423,7 @@ func assetRow(a *ent.Asset) templates.AssetRow {
 	}
 }
 
-func assetToDetail(a *ent.Asset, assetTypes []*ent.AssetType, assetStatuses []*ent.AssetStatus) *templates.AssetDetail {
+func assetToDetail(ctx context.Context, a *ent.Asset, assetTypes []*ent.AssetType, assetStatuses []*ent.AssetStatus) *templates.AssetDetail {
 	var assetTypeName, assetStatusName, assetStatusColor string
 	for _, t := range assetTypes {
 		if t.ID == a.AssetTypeID {
@@ -459,7 +460,7 @@ func assetToDetail(a *ent.Asset, assetTypes []*ent.AssetType, assetStatuses []*e
 		UpdatedAt:        a.UpdatedAt,
 	}
 	if a.DeletedAt != nil && !a.DeletedAt.IsZero() {
-		d.ArchivedAt = a.DeletedAt.Format("Jan 2, 2006")
+		d.ArchivedAt = displayDate(ctx, *a.DeletedAt)
 	}
 	return d
 }

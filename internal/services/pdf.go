@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/jung-kurt/gofpdf"
@@ -35,7 +36,7 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 	status, statusColor := statusForPDF(statuses, e.StatusID)
 	number := documentNumber("estimate", e.ID, cs)
 	writeTopHeader(pdf, "ESTIMATE", number, status, statusColor, cs)
-	writeDetailRow(pdf, customer, job, nil, estimateDetails(e, status))
+	writeDetailRow(pdf, customer, job, nil, estimateDetails(e, status, cs), cs)
 	writeDocumentNotes(pdf, e.Notes)
 	totals := writeLineItems(pdf, items, parseTaxRate(e.TaxRate), cs)
 	writeSummary(pdf, cs, totals, false)
@@ -57,7 +58,7 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job
 	status, statusColor := statusForPDF(statuses, i.StatusID)
 	number := FormatInvoiceNumber(i.InvoiceNumber, cs)
 	writeTopHeader(pdf, "INVOICE", number, status, statusColor, cs)
-	writeDetailRow(pdf, customer, job, asset, invoiceDetails(i, status))
+	writeDetailRow(pdf, customer, job, asset, invoiceDetails(i, status, cs), cs)
 	writeDocumentNotes(pdf, i.Notes)
 	totals := writeLineItems(pdf, items, parseTaxRate(i.TaxRate), cs)
 	for _, p := range payments {
@@ -124,14 +125,14 @@ func writeStatusBadge(pdf *gofpdf.Fpdf, x, y float64, status string, r, g, b int
 	pdf.SetTextColor(0, 0, 0)
 }
 
-func writeDetailRow(pdf *gofpdf.Fpdf, customer *ent.Customer, job *ent.Job, asset *ent.Asset, details []string) {
+func writeDetailRow(pdf *gofpdf.Fpdf, customer *ent.Customer, job *ent.Job, asset *ent.Asset, details []string, cs *ent.CompanySettings) {
 	pageWidth, _ := pdf.GetPageSize()
 	y := pdf.GetY()
 	if asset == nil {
 		colGap := 6.0
 		colWidth := (pageWidth - pdfMargin*2 - colGap*2) / 3
 		leftHeight := writeInfoBlock(pdf, pdfMargin, y, colWidth, "Customer", customerLines(customer))
-		midHeight := writeInfoBlock(pdf, pdfMargin+colWidth+colGap, y, colWidth, "Job", jobLines(job))
+		midHeight := writeInfoBlock(pdf, pdfMargin+colWidth+colGap, y, colWidth, "Job", jobLines(job, cs))
 		rightHeight := writeInfoBlock(pdf, pdfMargin+(colWidth+colGap)*2, y, colWidth, "Details", details)
 		pdf.SetY(y + maxFloat(leftHeight, midHeight, rightHeight) + 7)
 		return
@@ -141,7 +142,7 @@ func writeDetailRow(pdf *gofpdf.Fpdf, customer *ent.Customer, job *ent.Job, asse
 	colWidth := (pageWidth - pdfMargin*2 - colGap*3) / 4
 	heights := []float64{
 		writeInfoBlock(pdf, pdfMargin, y, colWidth, "Customer", customerLines(customer)),
-		writeInfoBlock(pdf, pdfMargin+colWidth+colGap, y, colWidth, "Job", jobLines(job)),
+		writeInfoBlock(pdf, pdfMargin+colWidth+colGap, y, colWidth, "Job", jobLines(job, cs)),
 		writeInfoBlock(pdf, pdfMargin+(colWidth+colGap)*2, y, colWidth, "Assets", assetLines(asset)),
 		writeInfoBlock(pdf, pdfMargin+(colWidth+colGap)*3, y, colWidth, "Details", details),
 	}
@@ -368,16 +369,17 @@ func customerLines(c *ent.Customer) []string {
 	return nonEmpty(c.DisplayName, c.CompanyName, c.Email, c.Phone)
 }
 
-func jobLines(j *ent.Job) []string {
+func jobLines(j *ent.Job, cs *ent.CompanySettings) []string {
 	if j == nil {
 		return nil
 	}
 	lines := nonEmpty(j.JobType, j.Subtitle)
+	loc := companySettingsLocation(cs)
 	if j.StartTime != nil {
-		lines = append(lines, "Start: "+j.StartTime.Format("Jan 2, 2006"))
+		lines = append(lines, "Start: "+FormatCompanyDate(*j.StartTime, loc, cs))
 	}
 	if j.DueDate != nil {
-		lines = append(lines, "Due: "+j.DueDate.Format("Jan 2, 2006"))
+		lines = append(lines, "Due: "+FormatCompanyDate(*j.DueDate, loc, cs))
 	}
 	return lines
 }
@@ -399,25 +401,35 @@ func assetLines(asset *ent.Asset) []string {
 	return lines
 }
 
-func invoiceDetails(i *ent.Invoice, status string) []string {
+func invoiceDetails(i *ent.Invoice, status string, cs *ent.CompanySettings) []string {
 	var lines []string
+	loc := companySettingsLocation(cs)
 	if !i.InvoiceDate.IsZero() {
-		lines = append(lines, "Invoice Date: "+i.InvoiceDate.Format("Jan 2, 2006"))
+		lines = append(lines, "Invoice Date: "+FormatCompanyDate(i.InvoiceDate, loc, cs))
 	}
 	if !i.DueDate.IsZero() {
-		lines = append(lines, "Due Date: "+i.DueDate.Format("Jan 2, 2006"))
+		lines = append(lines, "Due Date: "+FormatCompanyDate(i.DueDate, loc, cs))
 	}
 	lines = append(lines, "Status: "+statusText(status))
 	return lines
 }
 
-func estimateDetails(e *ent.Estimate, status string) []string {
+func estimateDetails(e *ent.Estimate, status string, cs *ent.CompanySettings) []string {
 	var lines []string
 	if !e.CreatedAt.IsZero() {
-		lines = append(lines, "Created Date: "+e.CreatedAt.Format("Jan 2, 2006"))
+		lines = append(lines, "Created Date: "+FormatCompanyDate(e.CreatedAt, companySettingsLocation(cs), cs))
 	}
 	lines = append(lines, "Status: "+statusText(status))
 	return lines
+}
+
+func companySettingsLocation(cs *ent.CompanySettings) *time.Location {
+	if cs != nil && cs.Timezone != "" {
+		if loc, err := time.LoadLocation(cs.Timezone); err == nil {
+			return loc
+		}
+	}
+	return time.UTC
 }
 
 func statusText(status string) string {

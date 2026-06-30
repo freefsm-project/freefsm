@@ -47,11 +47,11 @@ templ ProjectShow(p ProjectShowPageData) {
 				if p.Project.LocationName != "" {
 					<tr><th>Location</th><td>{ p.Project.LocationName }</td></tr>
 				}
-				if p.Project.StartTime != "" {
-					<tr><th>Start</th><td>{ p.Project.StartTime }</td></tr>
+				if p.Project.StartTimeDisplay != "" {
+					<tr><th>Start</th><td>{ p.Project.StartTimeDisplay }</td></tr>
 				}
-				if p.Project.EndTime != "" {
-					<tr><th>End</th><td>{ p.Project.EndTime }</td></tr>
+				if p.Project.EndTimeDisplay != "" {
+					<tr><th>End</th><td>{ p.Project.EndTimeDisplay }</td></tr>
 				}
 			</tbody>
 		</table>

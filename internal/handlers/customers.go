@@ -108,7 +108,7 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), c.DisplayName)
 	templates.CustomerShow(templates.CustomerShowPageData{
-		Customer:     customerToDetail(c),
+		Customer:     customerToDetail(r.Context(), c),
 		Locations:    locationRows(locations),
 		Contacts:     contactRows(contacts),
 		Jobs:         h.customerJobRows(r.Context(), jobs),
@@ -118,7 +118,7 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 		Tags:         tagsToRows(tags),
 		AllTags:      tagsToRows(allTags),
 		CustomFields: buildCustomFieldDisplay(defs, c.CustomFields),
-		FileList:     templates.FileListPageData{Files: filesToRows(files), ObjectID: c.ID, ObjectType: "customer"},
+		FileList:     templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: c.ID, ObjectType: "customer"},
 	}).Render(ctx, w)
 }
 
@@ -184,7 +184,7 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		data := formDataFromCustomer(c)
+		data := formDataFromCustomer(r.Context(), c)
 		defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
 		data.CustomFields = buildCustomFieldDisplay(defs, c.CustomFields)
 		locations, _ := h.locationSvc.ListByCustomer(r.Context(), c.ID)
@@ -285,7 +285,7 @@ func (h *CustomerHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/customers/"+strconv.FormatInt(id, 10)+"?flash=Customer+restored", http.StatusSeeOther)
 }
 
-func customerToDetail(c *ent.Customer) templates.CustomerDetail {
+func customerToDetail(ctx context.Context, c *ent.Customer) templates.CustomerDetail {
 	d := templates.CustomerDetail{
 		ID:              c.ID,
 		FirstName:       c.FirstName,
@@ -304,7 +304,7 @@ func customerToDetail(c *ent.Customer) templates.CustomerDetail {
 		BillingZipCode:  c.BillingZipCode,
 	}
 	if c.DeletedAt != nil && !c.DeletedAt.IsZero() {
-		d.ArchivedAt = c.DeletedAt.Format("Jan 2, 2006")
+		d.ArchivedAt = displayDate(ctx, *c.DeletedAt)
 	}
 	return d
 }
@@ -323,8 +323,8 @@ func customerRow(c *ent.Customer) templates.CustomerRow {
 	}
 }
 
-func formDataFromCustomer(c *ent.Customer) templates.CustomerFormPageData {
-	d := customerToDetail(c)
+func formDataFromCustomer(ctx context.Context, c *ent.Customer) templates.CustomerFormPageData {
+	d := customerToDetail(ctx, c)
 	return templates.CustomerFormPageData{
 		Customer:     &d,
 		IsNew:        false,
@@ -654,7 +654,7 @@ func newFormData() templates.CustomerFormPageData {
 	}
 }
 
-func filesToRows(files []*ent.File) []templates.FileRow {
+func filesToRows(ctx context.Context, files []*ent.File) []templates.FileRow {
 	rows := make([]templates.FileRow, len(files))
 	for i, f := range files {
 		rows[i] = templates.FileRow{
@@ -662,7 +662,7 @@ func filesToRows(files []*ent.File) []templates.FileRow {
 			OriginalName: f.OriginalName,
 			MimeType:     f.MimeType,
 			FileSize:     services.FormatFileSize(f.FileSize),
-			CreatedAt:    f.CreatedAt.Format("2006-01-02 15:04"),
+			CreatedAt:    displayDateTime(ctx, f.CreatedAt),
 		}
 	}
 	return rows
@@ -685,7 +685,7 @@ func (h *CustomerHandler) customerJobRows(ctx context.Context, jobs []*ent.Job) 
 	statuses := h.statusesByType(ctx, "job")
 	rows := make([]templates.JobRow, len(jobs))
 	for i, j := range jobs {
-		rows[i] = jobRow(j, statuses, map[int64]string{j.CustomerID: ""})
+		rows[i] = jobRow(ctx, j, statuses, map[int64]string{j.CustomerID: ""})
 	}
 	return rows
 }
@@ -694,7 +694,7 @@ func (h *CustomerHandler) customerEstimateRows(ctx context.Context, estimates []
 	statuses := h.statusesByType(ctx, "estimate")
 	rows := make([]templates.EstimateRow, len(estimates))
 	for i, e := range estimates {
-		rows[i] = estimateRow(e, statuses, map[int64]string{estCustID(e): ""})
+		rows[i] = estimateRow(ctx, e, statuses, map[int64]string{estCustID(e): ""})
 	}
 	return rows
 }
@@ -703,7 +703,7 @@ func (h *CustomerHandler) customerInvoiceRows(ctx context.Context, invoices []*e
 	statuses := h.statusesByType(ctx, "invoice")
 	rows := make([]templates.InvoiceRow, len(invoices))
 	for i, inv := range invoices {
-		rows[i] = invoiceRow(inv, statuses, map[int64]string{invCustID(inv): ""})
+		rows[i] = invoiceRow(ctx, inv, statuses, map[int64]string{invCustID(inv): ""})
 	}
 	return rows
 }

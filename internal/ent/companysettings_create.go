@@ -370,6 +370,20 @@ func (_c *CompanySettingsCreate) SetNillableTimezone(v *string) *CompanySettings
 	return _c
 }
 
+// SetDateFormat sets the "date_format" field.
+func (_c *CompanySettingsCreate) SetDateFormat(v string) *CompanySettingsCreate {
+	_c.mutation.SetDateFormat(v)
+	return _c
+}
+
+// SetNillableDateFormat sets the "date_format" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableDateFormat(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetDateFormat(*v)
+	}
+	return _c
+}
+
 // SetPasswordMinLength sets the "password_min_length" field.
 func (_c *CompanySettingsCreate) SetPasswordMinLength(v int) *CompanySettingsCreate {
 	_c.mutation.SetPasswordMinLength(v)
@@ -703,6 +717,10 @@ func (_c *CompanySettingsCreate) defaults() {
 		v := companysettings.DefaultTimezone
 		_c.mutation.SetTimezone(v)
 	}
+	if _, ok := _c.mutation.DateFormat(); !ok {
+		v := companysettings.DefaultDateFormat
+		_c.mutation.SetDateFormat(v)
+	}
 	if _, ok := _c.mutation.PasswordMinLength(); !ok {
 		v := companysettings.DefaultPasswordMinLength
 		_c.mutation.SetPasswordMinLength(v)
@@ -834,6 +852,9 @@ func (_c *CompanySettingsCreate) check() error {
 	}
 	if _, ok := _c.mutation.Timezone(); !ok {
 		return &ValidationError{Name: "timezone", err: errors.New(`ent: missing required field "CompanySettings.timezone"`)}
+	}
+	if _, ok := _c.mutation.DateFormat(); !ok {
+		return &ValidationError{Name: "date_format", err: errors.New(`ent: missing required field "CompanySettings.date_format"`)}
 	}
 	if _, ok := _c.mutation.PasswordMinLength(); !ok {
 		return &ValidationError{Name: "password_min_length", err: errors.New(`ent: missing required field "CompanySettings.password_min_length"`)}
@@ -1008,6 +1029,10 @@ func (_c *CompanySettingsCreate) createSpec() (*CompanySettings, *sqlgraph.Creat
 	if value, ok := _c.mutation.Timezone(); ok {
 		_spec.SetField(companysettings.FieldTimezone, field.TypeString, value)
 		_node.Timezone = value
+	}
+	if value, ok := _c.mutation.DateFormat(); ok {
+		_spec.SetField(companysettings.FieldDateFormat, field.TypeString, value)
+		_node.DateFormat = value
 	}
 	if value, ok := _c.mutation.PasswordMinLength(); ok {
 		_spec.SetField(companysettings.FieldPasswordMinLength, field.TypeInt, value)

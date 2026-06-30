@@ -63,6 +63,8 @@ const (
 	FieldEstimateEmailBody = "estimate_email_body"
 	// FieldTimezone holds the string denoting the timezone field in the database.
 	FieldTimezone = "timezone"
+	// FieldDateFormat holds the string denoting the date_format field in the database.
+	FieldDateFormat = "date_format"
 	// FieldPasswordMinLength holds the string denoting the password_min_length field in the database.
 	FieldPasswordMinLength = "password_min_length"
 	// FieldPasswordRequireUppercase holds the string denoting the password_require_uppercase field in the database.
@@ -123,6 +125,7 @@ var Columns = []string{
 	FieldEstimateEmailSubject,
 	FieldEstimateEmailBody,
 	FieldTimezone,
+	FieldDateFormat,
 	FieldPasswordMinLength,
 	FieldPasswordRequireUppercase,
 	FieldPasswordRequireLowercase,
@@ -198,6 +201,8 @@ var (
 	DefaultEstimateEmailBody string
 	// DefaultTimezone holds the default value on creation for the "timezone" field.
 	DefaultTimezone string
+	// DefaultDateFormat holds the default value on creation for the "date_format" field.
+	DefaultDateFormat string
 	// DefaultPasswordMinLength holds the default value on creation for the "password_min_length" field.
 	DefaultPasswordMinLength int
 	// DefaultPasswordRequireUppercase holds the default value on creation for the "password_require_uppercase" field.
@@ -361,6 +366,11 @@ func ByEstimateEmailBody(opts ...sql.OrderTermOption) OrderOption {
 // ByTimezone orders the results by the timezone field.
 func ByTimezone(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTimezone, opts...).ToFunc()
+}
+
+// ByDateFormat orders the results by the date_format field.
+func ByDateFormat(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDateFormat, opts...).ToFunc()
 }
 
 // ByPasswordMinLength orders the results by the password_min_length field.

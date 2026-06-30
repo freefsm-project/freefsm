@@ -64,7 +64,7 @@ func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	rows := make([]templates.InvoiceRow, len(invoices))
 	for i, inv := range invoices {
-		rows[i] = invoiceRow(inv, statuses, custMap)
+		rows[i] = invoiceRow(r.Context(), inv, statuses, custMap)
 	}
 
 	data := templates.InvoiceListPageData{
@@ -98,7 +98,7 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	statuses := h.statusesForSelect(r.Context())
-	d := invoiceToDetail(i, statuses)
+	d := invoiceToDetail(r.Context(), i, statuses)
 	if i.CustomerID != nil && *i.CustomerID > 0 {
 		customer, _ := h.custSvc.GetByID(r.Context(), *i.CustomerID)
 		if customer != nil {
@@ -116,7 +116,7 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.LineItems = h.svc.LineItems(i)
-	d.Payments = h.svc.Payments(i)
+	d.Payments = displayPayments(r.Context(), h.svc.Payments(i))
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "invoice", id)
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	d.Tags = tagsToRows(tags)
@@ -124,7 +124,7 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
 	d.CustomFields = buildCustomFieldDisplay(defs, i.CustomFields)
 	files, _ := h.fileSvc.List(r.Context(), "invoice", id)
-	d.FileList = templates.FileListPageData{Files: filesToRows(files), ObjectID: id, ObjectType: "invoice"}
+	d.FileList = templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "invoice"}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), i.Title)
 	templates.InvoiceShow(d).Render(ctx, w)
 }
@@ -432,7 +432,7 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
-	d := invoiceToDetail(i, statuses)
+	d := invoiceToDetail(ctx, i, statuses)
 	items := h.svc.LineItems(i)
 	return templates.InvoiceFormPageData{
 		Invoice:           &d,
@@ -446,7 +446,7 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 	}
 }
 
-func invoiceToDetail(i *ent.Invoice, statuses []*ent.Status) templates.InvoiceDetail {
+func invoiceToDetail(ctx context.Context, i *ent.Invoice, statuses []*ent.Status) templates.InvoiceDetail {
 	statusName := statusName(statuses, i.StatusID)
 	d := templates.InvoiceDetail{
 		ID:          i.ID,
@@ -465,17 +465,19 @@ func invoiceToDetail(i *ent.Invoice, statuses []*ent.Status) templates.InvoiceDe
 	}
 	if !i.InvoiceDate.IsZero() {
 		d.InvoiceDate = i.InvoiceDate.Format("2006-01-02")
+		d.InvoiceDateDisplay = displayDate(ctx, i.InvoiceDate)
 	}
 	if !i.DueDate.IsZero() {
 		d.DueDate = i.DueDate.Format("2006-01-02")
+		d.DueDateDisplay = displayDate(ctx, i.DueDate)
 	}
 	if i.DeletedAt != nil && !i.DeletedAt.IsZero() {
-		d.ArchivedAt = i.DeletedAt.Format("Jan 2, 2006")
+		d.ArchivedAt = displayDate(ctx, *i.DeletedAt)
 	}
 	return d
 }
 
-func invoiceRow(i *ent.Invoice, statuses []*ent.Status, custMap map[int64]string) templates.InvoiceRow {
+func invoiceRow(ctx context.Context, i *ent.Invoice, statuses []*ent.Status, custMap map[int64]string) templates.InvoiceRow {
 	r := templates.InvoiceRow{
 		ID:          i.ID,
 		Number:      i.InvoiceNumber,
@@ -487,10 +489,10 @@ func invoiceRow(i *ent.Invoice, statuses []*ent.Status, custMap map[int64]string
 		StatusColor: statusColor(statuses, i.StatusID),
 	}
 	if !i.InvoiceDate.IsZero() {
-		r.InvoiceDate = i.InvoiceDate.Format("Jan 2, 2006")
+		r.InvoiceDate = displayDate(ctx, i.InvoiceDate)
 	}
 	if !i.DueDate.IsZero() {
-		r.DueDate = i.DueDate.Format("Jan 2, 2006")
+		r.DueDate = displayDate(ctx, i.DueDate)
 	}
 	return r
 }
@@ -500,6 +502,13 @@ func invCustID(i *ent.Invoice) int64 {
 		return 0
 	}
 	return *i.CustomerID
+}
+
+func displayPayments(ctx context.Context, payments []services.Payment) []services.Payment {
+	for i := range payments {
+		payments[i].Date = displayStoredDate(ctx, payments[i].Date)
+	}
+	return payments
 }
 
 func invStatusID(i *ent.Invoice) int64 {
@@ -849,7 +858,7 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (docu
 	}
 	jobName, jobType, jobSubtitle := documentJobFields(job)
 	number := services.FormatInvoiceNumber(i.InvoiceNumber, middleware.CompanyFromContext(ctx))
-	date := time.Now().In(middleware.CompanyLocation(ctx)).Format("Jan 2, 2006")
+	date := displayDate(ctx, time.Now())
 	return documentPDF{Filename: number + ".pdf", Data: data, Title: i.Title, Number: number, CustomerEmail: to, CustomerName: customerName, JobName: jobName, JobType: jobType, JobSubtitle: jobSubtitle, Date: date, Archived: i.DeletedAt != nil}, nil
 }
 

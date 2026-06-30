@@ -47,6 +47,7 @@ func (CompanySettings) Fields() []ent.Field {
 		field.String("estimate_email_subject").Default("Estimate {estimate_number} from {business_name}"),
 		field.String("estimate_email_body").Default("Hello {customer_name},\n\nPlease find estimate {estimate_number} attached.\n\nThank you,\n{business_name}"),
 		field.String("timezone").Default("UTC"),
+		field.String("date_format").Default("Jan 2, 2006"),
 		field.Int("password_min_length").Default(8),
 		field.Bool("password_require_uppercase").Default(true),
 		field.Bool("password_require_lowercase").Default(true),

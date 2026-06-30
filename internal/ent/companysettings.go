@@ -67,6 +67,8 @@ type CompanySettings struct {
 	EstimateEmailBody string `json:"estimate_email_body,omitempty"`
 	// Timezone holds the value of the "timezone" field.
 	Timezone string `json:"timezone,omitempty"`
+	// DateFormat holds the value of the "date_format" field.
+	DateFormat string `json:"date_format,omitempty"`
 	// PasswordMinLength holds the value of the "password_min_length" field.
 	PasswordMinLength int `json:"password_min_length,omitempty"`
 	// PasswordRequireUppercase holds the value of the "password_require_uppercase" field.
@@ -107,7 +109,7 @@ func (*CompanySettings) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case companysettings.FieldID, companysettings.FieldCompanyID, companysettings.FieldNextInvoiceNumber, companysettings.FieldDefaultDueDays, companysettings.FieldSMTPPort, companysettings.FieldPasswordMinLength:
 			values[i] = new(sql.NullInt64)
-		case companysettings.FieldBusinessName, companysettings.FieldAddress, companysettings.FieldCity, companysettings.FieldState, companysettings.FieldZip, companysettings.FieldPhone, companysettings.FieldEmail, companysettings.FieldTaxID, companysettings.FieldDefaultTaxRate, companysettings.FieldInvoicePrefix, companysettings.FieldEstimatePrefix, companysettings.FieldSMTPHost, companysettings.FieldSMTPUser, companysettings.FieldSMTPPassword, companysettings.FieldSMTPFrom, companysettings.FieldEmailAutoCc, companysettings.FieldInvoiceEmailSubject, companysettings.FieldInvoiceEmailBody, companysettings.FieldEstimateEmailSubject, companysettings.FieldEstimateEmailBody, companysettings.FieldTimezone, companysettings.FieldInvoiceColor, companysettings.FieldInvoiceFooter, companysettings.FieldInvoiceLogoPath, companysettings.FieldInvoicePaymentTerms, companysettings.FieldMapTileURL, companysettings.FieldGeocoderURL:
+		case companysettings.FieldBusinessName, companysettings.FieldAddress, companysettings.FieldCity, companysettings.FieldState, companysettings.FieldZip, companysettings.FieldPhone, companysettings.FieldEmail, companysettings.FieldTaxID, companysettings.FieldDefaultTaxRate, companysettings.FieldInvoicePrefix, companysettings.FieldEstimatePrefix, companysettings.FieldSMTPHost, companysettings.FieldSMTPUser, companysettings.FieldSMTPPassword, companysettings.FieldSMTPFrom, companysettings.FieldEmailAutoCc, companysettings.FieldInvoiceEmailSubject, companysettings.FieldInvoiceEmailBody, companysettings.FieldEstimateEmailSubject, companysettings.FieldEstimateEmailBody, companysettings.FieldTimezone, companysettings.FieldDateFormat, companysettings.FieldInvoiceColor, companysettings.FieldInvoiceFooter, companysettings.FieldInvoiceLogoPath, companysettings.FieldInvoicePaymentTerms, companysettings.FieldMapTileURL, companysettings.FieldGeocoderURL:
 			values[i] = new(sql.NullString)
 		case companysettings.FieldCreatedAt, companysettings.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -282,6 +284,12 @@ func (_m *CompanySettings) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field timezone", values[i])
 			} else if value.Valid {
 				_m.Timezone = value.String
+			}
+		case companysettings.FieldDateFormat:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field date_format", values[i])
+			} else if value.Valid {
+				_m.DateFormat = value.String
 			}
 		case companysettings.FieldPasswordMinLength:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -479,6 +487,9 @@ func (_m *CompanySettings) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("timezone=")
 	builder.WriteString(_m.Timezone)
+	builder.WriteString(", ")
+	builder.WriteString("date_format=")
+	builder.WriteString(_m.DateFormat)
 	builder.WriteString(", ")
 	builder.WriteString("password_min_length=")
 	builder.WriteString(fmt.Sprintf("%v", _m.PasswordMinLength))

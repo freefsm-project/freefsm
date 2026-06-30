@@ -53,7 +53,7 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	rows := make([]templates.ProjectRow, len(projects))
 	for i, p := range projects {
-		rows[i] = projectRow(p, statuses, custMap)
+		rows[i] = projectRow(r.Context(), p, statuses, custMap)
 	}
 
 	data := templates.ProjectListPageData{
@@ -101,7 +101,7 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 	jobRows := make([]templates.JobRow, len(jobs))
 	for i, j := range jobs {
-		jobRows[i] = jobRow(j, statuses, custMap)
+		jobRows[i] = jobRow(r.Context(), j, statuses, custMap)
 	}
 
 	statusesMap := statusMap(statuses)
@@ -125,12 +125,14 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	if p.StartTime != nil && !p.StartTime.IsZero() {
 		d.StartTime = p.StartTime.Format("2006-01-02")
+		d.StartTimeDisplay = displayDate(r.Context(), *p.StartTime)
 	}
 	if p.EndTime != nil && !p.EndTime.IsZero() {
 		d.EndTime = p.EndTime.Format("2006-01-02")
+		d.EndTimeDisplay = displayDate(r.Context(), *p.EndTime)
 	}
 	if p.DeletedAt != nil && !p.DeletedAt.IsZero() {
-		d.ArchivedAt = p.DeletedAt.Format("Jan 2, 2006")
+		d.ArchivedAt = displayDate(r.Context(), *p.DeletedAt)
 	}
 
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "project", id)
@@ -499,7 +501,7 @@ func (h *ProjectHandler) formDataFromProject(ctx context.Context, p *ent.Project
 	}
 }
 
-func projectRow(p *ent.Project, statuses []*ent.Status, custMap map[int64]string) templates.ProjectRow {
+func projectRow(ctx context.Context, p *ent.Project, statuses []*ent.Status, custMap map[int64]string) templates.ProjectRow {
 	return templates.ProjectRow{
 		ID:                   p.ID,
 		Name:                 p.Name,
@@ -510,8 +512,8 @@ func projectRow(p *ent.Project, statuses []*ent.Status, custMap map[int64]string
 		StatusName:           statusName(statuses, p.StatusID),
 		StatusColor:          statusColor(statuses, p.StatusID),
 		CompletionPercentage: p.CompletionPercentage,
-		StartTime:            formatDate(p.StartTime),
-		EndTime:              formatDate(p.EndTime),
+		StartTime:            formatProjectDisplayDate(ctx, p.StartTime),
+		EndTime:              formatProjectDisplayDate(ctx, p.EndTime),
 	}
 }
 
@@ -531,9 +533,9 @@ func parseDatePtr(v string, loc *time.Location) *time.Time {
 	return &t
 }
 
-func formatDate(t *time.Time) string {
+func formatProjectDisplayDate(ctx context.Context, t *time.Time) string {
 	if t == nil || t.IsZero() {
 		return ""
 	}
-	return t.Format("2006-01-02")
+	return displayDate(ctx, *t)
 }

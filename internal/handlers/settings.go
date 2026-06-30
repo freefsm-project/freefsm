@@ -52,6 +52,7 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	oldSettings, _ := h.svc.Get(r.Context())
+	dateFormat := services.NormalizeDateFormat(r.FormValue("date_format"))
 	mapTileURL := strings.TrimSpace(r.FormValue("map_tile_url"))
 	geocoderURL := strings.TrimRight(strings.TrimSpace(r.FormValue("geocoder_url")), "/")
 	if r.URL.Path == "/setup/company" && oldSettings != nil {
@@ -96,6 +97,7 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		EstimateEmailSubject:        r.FormValue("estimate_email_subject"),
 		EstimateEmailBody:           r.FormValue("estimate_email_body"),
 		Timezone:                    r.FormValue("timezone"),
+		DateFormat:                  dateFormat,
 		PasswordMinLength:           pwMinLen,
 		PasswordRequireUppercase:    r.FormValue("password_require_uppercase") == "on",
 		PasswordRequireLowercase:    r.FormValue("password_require_lowercase") == "on",
@@ -189,6 +191,9 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 			}
 			if oldSettings.Timezone != newSettings.Timezone {
 				changed = append(changed, "timezone")
+			}
+			if oldSettings.DateFormat != newSettings.DateFormat {
+				changed = append(changed, "date_format")
 			}
 			if oldSettings.PasswordMinLength != newSettings.PasswordMinLength {
 				changed = append(changed, "password_min_length")
