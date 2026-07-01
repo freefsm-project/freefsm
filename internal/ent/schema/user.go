@@ -28,6 +28,8 @@ func (User) Fields() []ent.Field {
 		field.String("name").NotEmpty(),
 		field.String("role").Default("tech"),
 		field.String("font_size").Default("medium"),
+		field.String("last_schedule_tab").Default("calendar"),
+		field.String("last_schedule_period").Default("month"),
 		field.Bool("is_active").Default(true),
 		field.Bool("force_password_change").Default(false),
 		field.Time("welcome_email_sent_at").Optional().Nillable(),

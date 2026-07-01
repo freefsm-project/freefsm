@@ -139,9 +139,40 @@ func (s *UserService) UpdateFontSize(ctx context.Context, id int64, fontSize str
 	return s.client.User.UpdateOneID(id).SetFontSize(fontSize).Exec(ctx)
 }
 
+func (s *UserService) UpdateSchedulePreferences(ctx context.Context, id int64, tab, period string) error {
+	if !ValidScheduleTab(tab) {
+		return fmt.Errorf("invalid schedule tab")
+	}
+	if !ValidSchedulePeriod(period) {
+		return fmt.Errorf("invalid schedule period")
+	}
+	return s.client.User.UpdateOneID(id).
+		SetLastScheduleTab(tab).
+		SetLastSchedulePeriod(period).
+		Exec(ctx)
+}
+
 func ValidFontSize(fontSize string) bool {
 	switch fontSize {
 	case "small", "medium", "large":
+		return true
+	default:
+		return false
+	}
+}
+
+func ValidScheduleTab(tab string) bool {
+	switch tab {
+	case "list", "calendar", "dispatch", "map":
+		return true
+	default:
+		return false
+	}
+}
+
+func ValidSchedulePeriod(period string) bool {
+	switch period {
+	case "month", "week", "day":
 		return true
 	default:
 		return false

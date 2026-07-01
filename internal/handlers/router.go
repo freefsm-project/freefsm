@@ -23,11 +23,13 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			return nil, err
 		}
 		info := &middleware.UserInfo{
-			ID:       u.ID,
-			Name:     u.Name,
-			Email:    u.Email,
-			Role:     u.Role,
-			FontSize: u.FontSize,
+			ID:                 u.ID,
+			Name:               u.Name,
+			Email:              u.Email,
+			Role:               u.Role,
+			FontSize:           u.FontSize,
+			LastScheduleTab:    u.LastScheduleTab,
+			LastSchedulePeriod: u.LastSchedulePeriod,
 		}
 		if u.CompanyID != nil {
 			info.CompanyID = *u.CompanyID

@@ -84,6 +84,16 @@ func FontSize(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldFontSize, v))
 }
 
+// LastScheduleTab applies equality check predicate on the "last_schedule_tab" field. It's identical to LastScheduleTabEQ.
+func LastScheduleTab(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLastScheduleTab, v))
+}
+
+// LastSchedulePeriod applies equality check predicate on the "last_schedule_period" field. It's identical to LastSchedulePeriodEQ.
+func LastSchedulePeriod(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLastSchedulePeriod, v))
+}
+
 // IsActive applies equality check predicate on the "is_active" field. It's identical to IsActiveEQ.
 func IsActive(v bool) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldIsActive, v))
@@ -482,6 +492,136 @@ func FontSizeEqualFold(v string) predicate.User {
 // FontSizeContainsFold applies the ContainsFold predicate on the "font_size" field.
 func FontSizeContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldFontSize, v))
+}
+
+// LastScheduleTabEQ applies the EQ predicate on the "last_schedule_tab" field.
+func LastScheduleTabEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLastScheduleTab, v))
+}
+
+// LastScheduleTabNEQ applies the NEQ predicate on the "last_schedule_tab" field.
+func LastScheduleTabNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldLastScheduleTab, v))
+}
+
+// LastScheduleTabIn applies the In predicate on the "last_schedule_tab" field.
+func LastScheduleTabIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldLastScheduleTab, vs...))
+}
+
+// LastScheduleTabNotIn applies the NotIn predicate on the "last_schedule_tab" field.
+func LastScheduleTabNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldLastScheduleTab, vs...))
+}
+
+// LastScheduleTabGT applies the GT predicate on the "last_schedule_tab" field.
+func LastScheduleTabGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldLastScheduleTab, v))
+}
+
+// LastScheduleTabGTE applies the GTE predicate on the "last_schedule_tab" field.
+func LastScheduleTabGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldLastScheduleTab, v))
+}
+
+// LastScheduleTabLT applies the LT predicate on the "last_schedule_tab" field.
+func LastScheduleTabLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldLastScheduleTab, v))
+}
+
+// LastScheduleTabLTE applies the LTE predicate on the "last_schedule_tab" field.
+func LastScheduleTabLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldLastScheduleTab, v))
+}
+
+// LastScheduleTabContains applies the Contains predicate on the "last_schedule_tab" field.
+func LastScheduleTabContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldLastScheduleTab, v))
+}
+
+// LastScheduleTabHasPrefix applies the HasPrefix predicate on the "last_schedule_tab" field.
+func LastScheduleTabHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldLastScheduleTab, v))
+}
+
+// LastScheduleTabHasSuffix applies the HasSuffix predicate on the "last_schedule_tab" field.
+func LastScheduleTabHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldLastScheduleTab, v))
+}
+
+// LastScheduleTabEqualFold applies the EqualFold predicate on the "last_schedule_tab" field.
+func LastScheduleTabEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldLastScheduleTab, v))
+}
+
+// LastScheduleTabContainsFold applies the ContainsFold predicate on the "last_schedule_tab" field.
+func LastScheduleTabContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldLastScheduleTab, v))
+}
+
+// LastSchedulePeriodEQ applies the EQ predicate on the "last_schedule_period" field.
+func LastSchedulePeriodEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldLastSchedulePeriod, v))
+}
+
+// LastSchedulePeriodNEQ applies the NEQ predicate on the "last_schedule_period" field.
+func LastSchedulePeriodNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldLastSchedulePeriod, v))
+}
+
+// LastSchedulePeriodIn applies the In predicate on the "last_schedule_period" field.
+func LastSchedulePeriodIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldLastSchedulePeriod, vs...))
+}
+
+// LastSchedulePeriodNotIn applies the NotIn predicate on the "last_schedule_period" field.
+func LastSchedulePeriodNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldLastSchedulePeriod, vs...))
+}
+
+// LastSchedulePeriodGT applies the GT predicate on the "last_schedule_period" field.
+func LastSchedulePeriodGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldLastSchedulePeriod, v))
+}
+
+// LastSchedulePeriodGTE applies the GTE predicate on the "last_schedule_period" field.
+func LastSchedulePeriodGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldLastSchedulePeriod, v))
+}
+
+// LastSchedulePeriodLT applies the LT predicate on the "last_schedule_period" field.
+func LastSchedulePeriodLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldLastSchedulePeriod, v))
+}
+
+// LastSchedulePeriodLTE applies the LTE predicate on the "last_schedule_period" field.
+func LastSchedulePeriodLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldLastSchedulePeriod, v))
+}
+
+// LastSchedulePeriodContains applies the Contains predicate on the "last_schedule_period" field.
+func LastSchedulePeriodContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldLastSchedulePeriod, v))
+}
+
+// LastSchedulePeriodHasPrefix applies the HasPrefix predicate on the "last_schedule_period" field.
+func LastSchedulePeriodHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldLastSchedulePeriod, v))
+}
+
+// LastSchedulePeriodHasSuffix applies the HasSuffix predicate on the "last_schedule_period" field.
+func LastSchedulePeriodHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldLastSchedulePeriod, v))
+}
+
+// LastSchedulePeriodEqualFold applies the EqualFold predicate on the "last_schedule_period" field.
+func LastSchedulePeriodEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldLastSchedulePeriod, v))
+}
+
+// LastSchedulePeriodContainsFold applies the ContainsFold predicate on the "last_schedule_period" field.
+func LastSchedulePeriodContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldLastSchedulePeriod, v))
 }
 
 // IsActiveEQ applies the EQ predicate on the "is_active" field.

@@ -26768,6 +26768,8 @@ type UserMutation struct {
 	name                  *string
 	role                  *string
 	font_size             *string
+	last_schedule_tab     *string
+	last_schedule_period  *string
 	is_active             *bool
 	force_password_change *bool
 	welcome_email_sent_at *time.Time
@@ -27133,6 +27135,78 @@ func (m *UserMutation) ResetFontSize() {
 	m.font_size = nil
 }
 
+// SetLastScheduleTab sets the "last_schedule_tab" field.
+func (m *UserMutation) SetLastScheduleTab(s string) {
+	m.last_schedule_tab = &s
+}
+
+// LastScheduleTab returns the value of the "last_schedule_tab" field in the mutation.
+func (m *UserMutation) LastScheduleTab() (r string, exists bool) {
+	v := m.last_schedule_tab
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastScheduleTab returns the old "last_schedule_tab" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldLastScheduleTab(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastScheduleTab is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastScheduleTab requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastScheduleTab: %w", err)
+	}
+	return oldValue.LastScheduleTab, nil
+}
+
+// ResetLastScheduleTab resets all changes to the "last_schedule_tab" field.
+func (m *UserMutation) ResetLastScheduleTab() {
+	m.last_schedule_tab = nil
+}
+
+// SetLastSchedulePeriod sets the "last_schedule_period" field.
+func (m *UserMutation) SetLastSchedulePeriod(s string) {
+	m.last_schedule_period = &s
+}
+
+// LastSchedulePeriod returns the value of the "last_schedule_period" field in the mutation.
+func (m *UserMutation) LastSchedulePeriod() (r string, exists bool) {
+	v := m.last_schedule_period
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastSchedulePeriod returns the old "last_schedule_period" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldLastSchedulePeriod(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastSchedulePeriod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastSchedulePeriod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastSchedulePeriod: %w", err)
+	}
+	return oldValue.LastSchedulePeriod, nil
+}
+
+// ResetLastSchedulePeriod resets all changes to the "last_schedule_period" field.
+func (m *UserMutation) ResetLastSchedulePeriod() {
+	m.last_schedule_period = nil
+}
+
 // SetIsActive sets the "is_active" field.
 func (m *UserMutation) SetIsActive(b bool) {
 	m.is_active = &b
@@ -27360,7 +27434,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 13)
 	if m.company_id != nil {
 		fields = append(fields, user.FieldCompanyID)
 	}
@@ -27378,6 +27452,12 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.font_size != nil {
 		fields = append(fields, user.FieldFontSize)
+	}
+	if m.last_schedule_tab != nil {
+		fields = append(fields, user.FieldLastScheduleTab)
+	}
+	if m.last_schedule_period != nil {
+		fields = append(fields, user.FieldLastSchedulePeriod)
 	}
 	if m.is_active != nil {
 		fields = append(fields, user.FieldIsActive)
@@ -27414,6 +27494,10 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Role()
 	case user.FieldFontSize:
 		return m.FontSize()
+	case user.FieldLastScheduleTab:
+		return m.LastScheduleTab()
+	case user.FieldLastSchedulePeriod:
+		return m.LastSchedulePeriod()
 	case user.FieldIsActive:
 		return m.IsActive()
 	case user.FieldForcePasswordChange:
@@ -27445,6 +27529,10 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldRole(ctx)
 	case user.FieldFontSize:
 		return m.OldFontSize(ctx)
+	case user.FieldLastScheduleTab:
+		return m.OldLastScheduleTab(ctx)
+	case user.FieldLastSchedulePeriod:
+		return m.OldLastSchedulePeriod(ctx)
 	case user.FieldIsActive:
 		return m.OldIsActive(ctx)
 	case user.FieldForcePasswordChange:
@@ -27505,6 +27593,20 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetFontSize(v)
+		return nil
+	case user.FieldLastScheduleTab:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastScheduleTab(v)
+		return nil
+	case user.FieldLastSchedulePeriod:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastSchedulePeriod(v)
 		return nil
 	case user.FieldIsActive:
 		v, ok := value.(bool)
@@ -27637,6 +27739,12 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldFontSize:
 		m.ResetFontSize()
+		return nil
+	case user.FieldLastScheduleTab:
+		m.ResetLastScheduleTab()
+		return nil
+	case user.FieldLastSchedulePeriod:
+		m.ResetLastSchedulePeriod()
 		return nil
 	case user.FieldIsActive:
 		m.ResetIsActive()

@@ -29,6 +29,10 @@ type User struct {
 	Role string `json:"role,omitempty"`
 	// FontSize holds the value of the "font_size" field.
 	FontSize string `json:"font_size,omitempty"`
+	// LastScheduleTab holds the value of the "last_schedule_tab" field.
+	LastScheduleTab string `json:"last_schedule_tab,omitempty"`
+	// LastSchedulePeriod holds the value of the "last_schedule_period" field.
+	LastSchedulePeriod string `json:"last_schedule_period,omitempty"`
 	// IsActive holds the value of the "is_active" field.
 	IsActive bool `json:"is_active,omitempty"`
 	// ForcePasswordChange holds the value of the "force_password_change" field.
@@ -51,7 +55,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case user.FieldID, user.FieldCompanyID:
 			values[i] = new(sql.NullInt64)
-		case user.FieldEmail, user.FieldPasswordHash, user.FieldName, user.FieldRole, user.FieldFontSize:
+		case user.FieldEmail, user.FieldPasswordHash, user.FieldName, user.FieldRole, user.FieldFontSize, user.FieldLastScheduleTab, user.FieldLastSchedulePeriod:
 			values[i] = new(sql.NullString)
 		case user.FieldWelcomeEmailSentAt, user.FieldCreatedAt, user.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -112,6 +116,18 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field font_size", values[i])
 			} else if value.Valid {
 				_m.FontSize = value.String
+			}
+		case user.FieldLastScheduleTab:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field last_schedule_tab", values[i])
+			} else if value.Valid {
+				_m.LastScheduleTab = value.String
+			}
+		case user.FieldLastSchedulePeriod:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field last_schedule_period", values[i])
+			} else if value.Valid {
+				_m.LastSchedulePeriod = value.String
 			}
 		case user.FieldIsActive:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -199,6 +215,12 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("font_size=")
 	builder.WriteString(_m.FontSize)
+	builder.WriteString(", ")
+	builder.WriteString("last_schedule_tab=")
+	builder.WriteString(_m.LastScheduleTab)
+	builder.WriteString(", ")
+	builder.WriteString("last_schedule_period=")
+	builder.WriteString(_m.LastSchedulePeriod)
 	builder.WriteString(", ")
 	builder.WriteString("is_active=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsActive))

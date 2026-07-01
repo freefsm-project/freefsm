@@ -32,7 +32,15 @@ func NewScheduleHandler(jobSvc *services.JobService, custSvc *services.CustomerS
 }
 
 func (h *ScheduleHandler) Index(w http.ResponseWriter, r *http.Request) {
-	tab, period := scheduleTabPeriod(r)
+	tab, period, explicit := h.resolveScheduleTabPeriod(r)
+	if explicit {
+		if u, _ := middleware.UserFromContext(r.Context()); u != nil && (tab != "dispatch" || isAdminOrDispatcher(u)) {
+			if err := h.userSvc.UpdateSchedulePreferences(r.Context(), u.ID, tab, period); err != nil {
+				slog.Error("update schedule preferences", "error", err, "user_id", u.ID)
+			}
+		}
+	}
+	r = requestWithScheduleTabPeriod(r, tab, period)
 	switch tab {
 	case "calendar":
 		switch period {
@@ -52,6 +60,37 @@ func (h *ScheduleHandler) Index(w http.ResponseWriter, r *http.Request) {
 	default:
 		h.Month(w, r)
 	}
+}
+
+func (h *ScheduleHandler) resolveScheduleTabPeriod(r *http.Request) (string, string, bool) {
+	q := r.URL.Query()
+	explicit := q.Has("tab") || q.Has("period")
+	if explicit {
+		tab, period := scheduleTabPeriod(r)
+		return tab, period, true
+	}
+
+	if u, _ := middleware.UserFromContext(r.Context()); u != nil {
+		tab, period := normalizeScheduleTabPeriod(u.LastScheduleTab, u.LastSchedulePeriod)
+		if tab == "dispatch" && !isAdminOrDispatcher(u) {
+			tab = "calendar"
+			period = normalizeSchedulePeriod(period, tab)
+		}
+		return tab, period, false
+	}
+
+	return "calendar", "month", false
+}
+
+func requestWithScheduleTabPeriod(r *http.Request, tab, period string) *http.Request {
+	clone := r.Clone(r.Context())
+	u := *r.URL
+	q := u.Query()
+	q.Set("tab", tab)
+	q.Set("period", period)
+	u.RawQuery = q.Encode()
+	clone.URL = &u
+	return clone
 }
 
 func scheduleTabPeriod(r *http.Request) (string, string) {
@@ -80,20 +119,24 @@ func scheduleTabPeriod(r *http.Request) (string, string) {
 		}
 	}
 
-	switch tab {
-	case "list", "calendar", "dispatch", "map":
-	default:
+	return normalizeScheduleTabPeriod(tab, period)
+}
+
+func normalizeScheduleTabPeriod(tab, period string) (string, string) {
+	if !services.ValidScheduleTab(tab) {
 		tab = "calendar"
 	}
-	switch period {
-	case "month", "week", "day":
-	default:
-		period = "month"
-		if tab == "dispatch" {
-			period = "day"
-		}
+	return tab, normalizeSchedulePeriod(period, tab)
+}
+
+func normalizeSchedulePeriod(period, tab string) string {
+	if services.ValidSchedulePeriod(period) {
+		return period
 	}
-	return tab, period
+	if tab == "dispatch" {
+		return "day"
+	}
+	return "month"
 }
 
 func (h *ScheduleHandler) DispatchUpdate(w http.ResponseWriter, r *http.Request) {

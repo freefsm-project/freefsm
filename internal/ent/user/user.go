@@ -25,6 +25,10 @@ const (
 	FieldRole = "role"
 	// FieldFontSize holds the string denoting the font_size field in the database.
 	FieldFontSize = "font_size"
+	// FieldLastScheduleTab holds the string denoting the last_schedule_tab field in the database.
+	FieldLastScheduleTab = "last_schedule_tab"
+	// FieldLastSchedulePeriod holds the string denoting the last_schedule_period field in the database.
+	FieldLastSchedulePeriod = "last_schedule_period"
 	// FieldIsActive holds the string denoting the is_active field in the database.
 	FieldIsActive = "is_active"
 	// FieldForcePasswordChange holds the string denoting the force_password_change field in the database.
@@ -48,6 +52,8 @@ var Columns = []string{
 	FieldName,
 	FieldRole,
 	FieldFontSize,
+	FieldLastScheduleTab,
+	FieldLastSchedulePeriod,
 	FieldIsActive,
 	FieldForcePasswordChange,
 	FieldWelcomeEmailSentAt,
@@ -76,6 +82,10 @@ var (
 	DefaultRole string
 	// DefaultFontSize holds the default value on creation for the "font_size" field.
 	DefaultFontSize string
+	// DefaultLastScheduleTab holds the default value on creation for the "last_schedule_tab" field.
+	DefaultLastScheduleTab string
+	// DefaultLastSchedulePeriod holds the default value on creation for the "last_schedule_period" field.
+	DefaultLastSchedulePeriod string
 	// DefaultIsActive holds the default value on creation for the "is_active" field.
 	DefaultIsActive bool
 	// DefaultForcePasswordChange holds the default value on creation for the "force_password_change" field.
@@ -124,6 +134,16 @@ func ByRole(opts ...sql.OrderTermOption) OrderOption {
 // ByFontSize orders the results by the font_size field.
 func ByFontSize(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFontSize, opts...).ToFunc()
+}
+
+// ByLastScheduleTab orders the results by the last_schedule_tab field.
+func ByLastScheduleTab(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastScheduleTab, opts...).ToFunc()
+}
+
+// ByLastSchedulePeriod orders the results by the last_schedule_period field.
+func ByLastSchedulePeriod(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldLastSchedulePeriod, opts...).ToFunc()
 }
 
 // ByIsActive orders the results by the is_active field.

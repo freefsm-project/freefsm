@@ -898,20 +898,28 @@ func init() {
 	userDescFontSize := userFields[6].Descriptor()
 	// user.DefaultFontSize holds the default value on creation for the font_size field.
 	user.DefaultFontSize = userDescFontSize.Default.(string)
+	// userDescLastScheduleTab is the schema descriptor for last_schedule_tab field.
+	userDescLastScheduleTab := userFields[7].Descriptor()
+	// user.DefaultLastScheduleTab holds the default value on creation for the last_schedule_tab field.
+	user.DefaultLastScheduleTab = userDescLastScheduleTab.Default.(string)
+	// userDescLastSchedulePeriod is the schema descriptor for last_schedule_period field.
+	userDescLastSchedulePeriod := userFields[8].Descriptor()
+	// user.DefaultLastSchedulePeriod holds the default value on creation for the last_schedule_period field.
+	user.DefaultLastSchedulePeriod = userDescLastSchedulePeriod.Default.(string)
 	// userDescIsActive is the schema descriptor for is_active field.
-	userDescIsActive := userFields[7].Descriptor()
+	userDescIsActive := userFields[9].Descriptor()
 	// user.DefaultIsActive holds the default value on creation for the is_active field.
 	user.DefaultIsActive = userDescIsActive.Default.(bool)
 	// userDescForcePasswordChange is the schema descriptor for force_password_change field.
-	userDescForcePasswordChange := userFields[8].Descriptor()
+	userDescForcePasswordChange := userFields[10].Descriptor()
 	// user.DefaultForcePasswordChange holds the default value on creation for the force_password_change field.
 	user.DefaultForcePasswordChange = userDescForcePasswordChange.Default.(bool)
 	// userDescCreatedAt is the schema descriptor for created_at field.
-	userDescCreatedAt := userFields[10].Descriptor()
+	userDescCreatedAt := userFields[12].Descriptor()
 	// user.DefaultCreatedAt holds the default value on creation for the created_at field.
 	user.DefaultCreatedAt = userDescCreatedAt.Default.(func() time.Time)
 	// userDescUpdatedAt is the schema descriptor for updated_at field.
-	userDescUpdatedAt := userFields[11].Descriptor()
+	userDescUpdatedAt := userFields[13].Descriptor()
 	// user.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	user.DefaultUpdatedAt = userDescUpdatedAt.Default.(func() time.Time)
 	// user.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

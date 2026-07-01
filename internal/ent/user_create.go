@@ -80,6 +80,34 @@ func (_c *UserCreate) SetNillableFontSize(v *string) *UserCreate {
 	return _c
 }
 
+// SetLastScheduleTab sets the "last_schedule_tab" field.
+func (_c *UserCreate) SetLastScheduleTab(v string) *UserCreate {
+	_c.mutation.SetLastScheduleTab(v)
+	return _c
+}
+
+// SetNillableLastScheduleTab sets the "last_schedule_tab" field if the given value is not nil.
+func (_c *UserCreate) SetNillableLastScheduleTab(v *string) *UserCreate {
+	if v != nil {
+		_c.SetLastScheduleTab(*v)
+	}
+	return _c
+}
+
+// SetLastSchedulePeriod sets the "last_schedule_period" field.
+func (_c *UserCreate) SetLastSchedulePeriod(v string) *UserCreate {
+	_c.mutation.SetLastSchedulePeriod(v)
+	return _c
+}
+
+// SetNillableLastSchedulePeriod sets the "last_schedule_period" field if the given value is not nil.
+func (_c *UserCreate) SetNillableLastSchedulePeriod(v *string) *UserCreate {
+	if v != nil {
+		_c.SetLastSchedulePeriod(*v)
+	}
+	return _c
+}
+
 // SetIsActive sets the "is_active" field.
 func (_c *UserCreate) SetIsActive(v bool) *UserCreate {
 	_c.mutation.SetIsActive(v)
@@ -199,6 +227,14 @@ func (_c *UserCreate) defaults() {
 		v := user.DefaultFontSize
 		_c.mutation.SetFontSize(v)
 	}
+	if _, ok := _c.mutation.LastScheduleTab(); !ok {
+		v := user.DefaultLastScheduleTab
+		_c.mutation.SetLastScheduleTab(v)
+	}
+	if _, ok := _c.mutation.LastSchedulePeriod(); !ok {
+		v := user.DefaultLastSchedulePeriod
+		_c.mutation.SetLastSchedulePeriod(v)
+	}
 	if _, ok := _c.mutation.IsActive(); !ok {
 		v := user.DefaultIsActive
 		_c.mutation.SetIsActive(v)
@@ -248,6 +284,12 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.FontSize(); !ok {
 		return &ValidationError{Name: "font_size", err: errors.New(`ent: missing required field "User.font_size"`)}
+	}
+	if _, ok := _c.mutation.LastScheduleTab(); !ok {
+		return &ValidationError{Name: "last_schedule_tab", err: errors.New(`ent: missing required field "User.last_schedule_tab"`)}
+	}
+	if _, ok := _c.mutation.LastSchedulePeriod(); !ok {
+		return &ValidationError{Name: "last_schedule_period", err: errors.New(`ent: missing required field "User.last_schedule_period"`)}
 	}
 	if _, ok := _c.mutation.IsActive(); !ok {
 		return &ValidationError{Name: "is_active", err: errors.New(`ent: missing required field "User.is_active"`)}
@@ -316,6 +358,14 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.FontSize(); ok {
 		_spec.SetField(user.FieldFontSize, field.TypeString, value)
 		_node.FontSize = value
+	}
+	if value, ok := _c.mutation.LastScheduleTab(); ok {
+		_spec.SetField(user.FieldLastScheduleTab, field.TypeString, value)
+		_node.LastScheduleTab = value
+	}
+	if value, ok := _c.mutation.LastSchedulePeriod(); ok {
+		_spec.SetField(user.FieldLastSchedulePeriod, field.TypeString, value)
+		_node.LastSchedulePeriod = value
 	}
 	if value, ok := _c.mutation.IsActive(); ok {
 		_spec.SetField(user.FieldIsActive, field.TypeBool, value)

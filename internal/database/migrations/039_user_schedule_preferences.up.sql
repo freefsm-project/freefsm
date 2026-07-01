@@ -1,0 +1,2 @@
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_schedule_tab TEXT NOT NULL DEFAULT 'calendar';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_schedule_period TEXT NOT NULL DEFAULT 'month';

@@ -840,6 +840,8 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "role", Type: field.TypeString, Default: "tech"},
 		{Name: "font_size", Type: field.TypeString, Default: "medium"},
+		{Name: "last_schedule_tab", Type: field.TypeString, Default: "calendar"},
+		{Name: "last_schedule_period", Type: field.TypeString, Default: "month"},
 		{Name: "is_active", Type: field.TypeBool, Default: true},
 		{Name: "force_password_change", Type: field.TypeBool, Default: false},
 		{Name: "welcome_email_sent_at", Type: field.TypeTime, Nullable: true},

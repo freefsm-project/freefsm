@@ -125,6 +125,34 @@ func (_u *UserUpdate) SetNillableFontSize(v *string) *UserUpdate {
 	return _u
 }
 
+// SetLastScheduleTab sets the "last_schedule_tab" field.
+func (_u *UserUpdate) SetLastScheduleTab(v string) *UserUpdate {
+	_u.mutation.SetLastScheduleTab(v)
+	return _u
+}
+
+// SetNillableLastScheduleTab sets the "last_schedule_tab" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableLastScheduleTab(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetLastScheduleTab(*v)
+	}
+	return _u
+}
+
+// SetLastSchedulePeriod sets the "last_schedule_period" field.
+func (_u *UserUpdate) SetLastSchedulePeriod(v string) *UserUpdate {
+	_u.mutation.SetLastSchedulePeriod(v)
+	return _u
+}
+
+// SetNillableLastSchedulePeriod sets the "last_schedule_period" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableLastSchedulePeriod(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetLastSchedulePeriod(*v)
+	}
+	return _u
+}
+
 // SetIsActive sets the "is_active" field.
 func (_u *UserUpdate) SetIsActive(v bool) *UserUpdate {
 	_u.mutation.SetIsActive(v)
@@ -276,6 +304,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.FontSize(); ok {
 		_spec.SetField(user.FieldFontSize, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.LastScheduleTab(); ok {
+		_spec.SetField(user.FieldLastScheduleTab, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LastSchedulePeriod(); ok {
+		_spec.SetField(user.FieldLastSchedulePeriod, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(user.FieldIsActive, field.TypeBool, value)
 	}
@@ -404,6 +438,34 @@ func (_u *UserUpdateOne) SetFontSize(v string) *UserUpdateOne {
 func (_u *UserUpdateOne) SetNillableFontSize(v *string) *UserUpdateOne {
 	if v != nil {
 		_u.SetFontSize(*v)
+	}
+	return _u
+}
+
+// SetLastScheduleTab sets the "last_schedule_tab" field.
+func (_u *UserUpdateOne) SetLastScheduleTab(v string) *UserUpdateOne {
+	_u.mutation.SetLastScheduleTab(v)
+	return _u
+}
+
+// SetNillableLastScheduleTab sets the "last_schedule_tab" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableLastScheduleTab(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetLastScheduleTab(*v)
+	}
+	return _u
+}
+
+// SetLastSchedulePeriod sets the "last_schedule_period" field.
+func (_u *UserUpdateOne) SetLastSchedulePeriod(v string) *UserUpdateOne {
+	_u.mutation.SetLastSchedulePeriod(v)
+	return _u
+}
+
+// SetNillableLastSchedulePeriod sets the "last_schedule_period" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableLastSchedulePeriod(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetLastSchedulePeriod(*v)
 	}
 	return _u
 }
@@ -588,6 +650,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.FontSize(); ok {
 		_spec.SetField(user.FieldFontSize, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LastScheduleTab(); ok {
+		_spec.SetField(user.FieldLastScheduleTab, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.LastSchedulePeriod(); ok {
+		_spec.SetField(user.FieldLastSchedulePeriod, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.IsActive(); ok {
 		_spec.SetField(user.FieldIsActive, field.TypeBool, value)
