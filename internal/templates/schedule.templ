@@ -149,6 +149,8 @@ templ SchedulePage(p SchedulePageData) {
 templ listView(p SchedulePageData) {
 	if p.Period == "week" {
 		@scheduleListWeekView(p)
+	} else if p.Period == "day" {
+		@scheduleListDayView(p)
 	} else {
 	<table>
 		<thead>
@@ -176,6 +178,34 @@ templ listView(p SchedulePageData) {
 		</tbody>
 	</table>
 	}
+}
+
+templ scheduleListDayView(p SchedulePageData) {
+	<div class="schedule-list-day">
+		if len(p.Jobs) == 0 {
+			<p class="schedule-empty-cell">No scheduled jobs found.</p>
+		}
+		for _, j := range p.Jobs {
+			<div class="schedule-list-day-card" style={ scheduleJobAccentStyle(j.StatusColor) }>
+				<div class="schedule-list-day-time">
+					<span>{ j.StartTime }</span>
+					<span>{ j.EndTime }</span>
+				</div>
+				<span class="status-badge schedule-list-day-status" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span>
+				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="schedule-list-day-title">{ j.JobType }</a>
+				<span class="schedule-list-day-customer">
+					<strong>{ j.Customer }</strong>
+					<span>{ j.Address }</span>
+				</span>
+				if j.AssigneeInitials != "" {
+					<span class="schedule-list-day-assignee" title={ j.Assignee } style={ assigneeBadgeStyle(j.AssigneeColor) }>{ j.AssigneeInitials }</span>
+				}
+				if j.InvoiceID > 0 {
+					<a href={ templ.URL(fmt.Sprintf("/invoices/%d", j.InvoiceID)) } class="schedule-list-day-invoice" style={ badgeStyle(j.InvoiceStatusColor) }>{ j.InvoiceStatusName }</a>
+				}
+			</div>
+		}
+	</div>
 }
 
 templ scheduleListWeekView(p SchedulePageData) {

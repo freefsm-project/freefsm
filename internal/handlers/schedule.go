@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MartialM1nd/freefsm/internal/config"
@@ -17,16 +18,17 @@ import (
 )
 
 type ScheduleHandler struct {
-	jobSvc    *services.JobService
-	custSvc   *services.CustomerService
-	statusSvc *services.StatusService
-	userSvc   *services.UserService
-	locSvc    *services.LocationService
-	cfg       *config.Config
+	jobSvc     *services.JobService
+	custSvc    *services.CustomerService
+	statusSvc  *services.StatusService
+	userSvc    *services.UserService
+	locSvc     *services.LocationService
+	invoiceSvc *services.InvoiceService
+	cfg        *config.Config
 }
 
-func NewScheduleHandler(jobSvc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, userSvc *services.UserService, locSvc *services.LocationService, cfg *config.Config) *ScheduleHandler {
-	return &ScheduleHandler{jobSvc: jobSvc, custSvc: custSvc, statusSvc: statusSvc, userSvc: userSvc, locSvc: locSvc, cfg: cfg}
+func NewScheduleHandler(jobSvc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, userSvc *services.UserService, locSvc *services.LocationService, invoiceSvc *services.InvoiceService, cfg *config.Config) *ScheduleHandler {
+	return &ScheduleHandler{jobSvc: jobSvc, custSvc: custSvc, statusSvc: statusSvc, userSvc: userSvc, locSvc: locSvc, invoiceSvc: invoiceSvc, cfg: cfg}
 }
 
 func (h *ScheduleHandler) Index(w http.ResponseWriter, r *http.Request) {
@@ -290,6 +292,8 @@ func (h *ScheduleHandler) List(w http.ResponseWriter, r *http.Request) {
 	var days []templates.ScheduleDay
 	if period == "week" {
 		days = h.listWeekDays(r, jobs, start, end, loc)
+	} else if period == "day" {
+		jobsData = h.listDayJobs(r, jobs, loc)
 	}
 	data := templates.SchedulePageData{
 		Title:    scheduleTitle(r.Context(), period, date, start),
@@ -646,6 +650,8 @@ func (h *ScheduleHandler) locationMapForJobs(r *http.Request, jobs []*ent.Job) m
 func listWeekCalendarJob(ctx context.Context, j *ent.Job, custMap map[int64]string, statuses []*ent.Status, locations map[int64]*ent.Location, loc *time.Location) templates.CalendarJob {
 	cj := calendarJob(ctx, j, custMap, statuses)
 	cj.TimeRange = scheduleJobTimeRange(ctx, j)
+	cj.StartTime = scheduleJobStartTime(ctx, j)
+	cj.EndTime = scheduleJobEndTime(ctx, j)
 	if j.LocationID != nil {
 		if l := locations[*j.LocationID]; l != nil {
 			cj.Address = services.LocationAddress(l)
@@ -657,6 +663,81 @@ func listWeekCalendarJob(ctx context.Context, j *ent.Job, custMap map[int64]stri
 	return cj
 }
 
+func (h *ScheduleHandler) listDayJobs(r *http.Request, jobs []*ent.Job, loc *time.Location) []templates.CalendarJob {
+	custMap := h.customerMapForJobs(r, jobs)
+	statuses, _ := h.statusSvc.ByObjectType(r.Context(), "job")
+	invoiceStatuses, _ := h.statusSvc.ByObjectType(r.Context(), "invoice")
+	locations := h.locationMapForJobs(r, jobs)
+	invoices := h.latestInvoiceMapForJobs(r, jobs)
+
+	dayJobs := make([]*ent.Job, 0, len(jobs))
+	for _, j := range jobs {
+		if j.StartTime == nil || j.StartTime.IsZero() {
+			continue
+		}
+		dayJobs = append(dayJobs, j)
+	}
+	sort.SliceStable(dayJobs, func(i, j int) bool {
+		return dayJobs[i].StartTime.In(loc).Before(dayJobs[j].StartTime.In(loc))
+	})
+
+	calJobs := make([]templates.CalendarJob, 0, len(dayJobs))
+	for _, j := range dayJobs {
+		cj := listWeekCalendarJob(r.Context(), j, custMap, statuses, locations, loc)
+		if assignments, _ := h.jobSvc.Assignments(r.Context(), j.ID); len(assignments) > 0 {
+			cj.Assignee = assignments[0].Name
+			cj.AssigneeInitials = initials(assignments[0].Name)
+			cj.AssigneeColor = assigneeColor(assignments[0].Name)
+		}
+		if inv := invoices[j.ID]; inv != nil {
+			cj.InvoiceID = inv.ID
+			cj.InvoiceStatusName = statusName(invoiceStatuses, inv.StatusID)
+			cj.InvoiceStatusColor = statusColor(invoiceStatuses, inv.StatusID)
+		}
+		calJobs = append(calJobs, cj)
+	}
+	return calJobs
+}
+
+func (h *ScheduleHandler) latestInvoiceMapForJobs(r *http.Request, jobs []*ent.Job) map[int64]*ent.Invoice {
+	jobIDs := make([]int64, 0, len(jobs))
+	for _, j := range jobs {
+		jobIDs = append(jobIDs, j.ID)
+	}
+	invoices, _ := h.invoiceSvc.LatestByJobIDs(r.Context(), jobIDs)
+	return invoices
+}
+
+func initials(name string) string {
+	parts := strings.Fields(name)
+	if len(parts) == 0 {
+		return ""
+	}
+	if len(parts) == 1 {
+		return strings.ToUpper(firstRune(parts[0]))
+	}
+	return strings.ToUpper(firstRune(parts[0]) + firstRune(parts[len(parts)-1]))
+}
+
+func firstRune(s string) string {
+	for _, r := range s {
+		return string(r)
+	}
+	return ""
+}
+
+func assigneeColor(name string) string {
+	palette := []string{"#2563EB", "#7C3AED", "#0F766E", "#B45309", "#BE123C", "#4338CA", "#047857"}
+	if name == "" {
+		return palette[0]
+	}
+	hash := 0
+	for _, r := range name {
+		hash += int(r)
+	}
+	return palette[hash%len(palette)]
+}
+
 func scheduleJobTimeRange(ctx context.Context, j *ent.Job) string {
 	if j.StartTime == nil || j.StartTime.IsZero() {
 		return ""
@@ -666,6 +747,20 @@ func scheduleJobTimeRange(ctx context.Context, j *ent.Job) string {
 		return start
 	}
 	return fmt.Sprintf("%s-%s", start, displayTime(ctx, *j.EndTime))
+}
+
+func scheduleJobStartTime(ctx context.Context, j *ent.Job) string {
+	if j.StartTime == nil || j.StartTime.IsZero() {
+		return ""
+	}
+	return displayTime(ctx, *j.StartTime)
+}
+
+func scheduleJobEndTime(ctx context.Context, j *ent.Job) string {
+	if j.EndTime == nil || j.EndTime.IsZero() {
+		return ""
+	}
+	return displayTime(ctx, *j.EndTime)
 }
 
 func (h *ScheduleHandler) mapJobs(r *http.Request, jobs []*ent.Job) ([]templates.CalendarJob, string) {

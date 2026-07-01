@@ -1388,6 +1388,93 @@ html[data-theme="dark"] .theme-icon-moon {
   text-align: center;
 }
 
+.schedule-list-day {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.schedule-list-day-card {
+  display: grid;
+  grid-template-columns: 4.25rem minmax(5.5rem, 0.8fr) minmax(10rem, 1.4fr) minmax(10rem, 1.4fr) minmax(2.5rem, 0.35fr) minmax(5.5rem, 0.7fr);
+  column-gap: 1rem;
+  align-items: center;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-left: 0.35rem solid var(--pico-primary);
+  border-radius: var(--pico-border-radius);
+  color: var(--pico-color);
+}
+
+.schedule-list-day-time {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: var(--pico-muted-color);
+  font-size: 0.78rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.schedule-list-day-status {
+  justify-self: start;
+}
+
+.schedule-list-day-title {
+  overflow: hidden;
+  color: var(--pico-color);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-list-day-assignee {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 999px;
+  background: var(--pico-card-background-color);
+  color: var(--pico-color);
+  font-weight: 700;
+  font-size: 0.82rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.schedule-list-day-customer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.schedule-list-day-customer strong,
+.schedule-list-day-customer span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schedule-list-day-customer span {
+  color: var(--pico-muted-color);
+}
+
+.schedule-list-day-invoice {
+  display: inline-block;
+  justify-self: center;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 999px;
+  text-decoration: none;
+  white-space: nowrap;
+  font-size: 0.82rem;
+}
+
 .schedule-list-week-wrapper {
   overflow-x: auto;
 }
@@ -1545,6 +1632,54 @@ html[data-theme="dark"] .theme-icon-moon {
 
   .schedule-toolbar-spacer {
     display: none;
+  }
+
+  .schedule-list-day-card {
+    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    grid-template-areas:
+      "time spacer status assignee invoice"
+      "title title title title title"
+      "customer customer customer customer customer";
+    column-gap: 0.4rem;
+    row-gap: 0.35rem;
+    padding: 0.55rem;
+  }
+
+  .schedule-list-day-time {
+    grid-area: time;
+    flex-direction: row;
+    gap: 0.25rem;
+    justify-content: flex-start;
+  }
+
+  .schedule-list-day-time span + span::before {
+    content: "- ";
+  }
+
+  .schedule-list-day-status {
+    grid-area: status;
+    justify-self: end;
+  }
+
+  .schedule-list-day-title {
+    grid-area: title;
+    justify-self: stretch;
+    white-space: normal;
+  }
+
+  .schedule-list-day-customer {
+    grid-area: customer;
+    justify-self: stretch;
+  }
+
+  .schedule-list-day-assignee {
+    grid-area: assignee;
+    justify-self: center;
+  }
+
+  .schedule-list-day-invoice {
+    grid-area: invoice;
+    justify-self: end;
   }
 }
 

@@ -88,6 +88,29 @@ func (s *InvoiceService) ListByCustomer(ctx context.Context, customerID int64, l
 	return q.All(ctx)
 }
 
+func (s *InvoiceService) LatestByJobIDs(ctx context.Context, jobIDs []int64) (map[int64]*ent.Invoice, error) {
+	if len(jobIDs) == 0 {
+		return nil, nil
+	}
+	invoices, err := s.client.Invoice.Query().
+		Where(invoice.DeletedAtIsNil(), invoice.JobIDIn(jobIDs...)).
+		Order(ent.Desc(invoice.FieldCreatedAt)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list invoices by jobs: %w", err)
+	}
+	latest := make(map[int64]*ent.Invoice, len(jobIDs))
+	for _, inv := range invoices {
+		if inv.JobID == nil {
+			continue
+		}
+		if _, ok := latest[*inv.JobID]; !ok {
+			latest[*inv.JobID] = inv
+		}
+	}
+	return latest, nil
+}
+
 func (s *InvoiceService) ListForCustomer(ctx context.Context, customerID int64, search string, statusID int64, page, perPage int) ([]*ent.Invoice, int, error) {
 	q := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil(), invoice.CustomerIDEQ(customerID))
 

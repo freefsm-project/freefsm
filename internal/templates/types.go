@@ -1008,6 +1008,13 @@ func scheduleJobAccentStyle(color string) string {
 	return "border-left-color:" + color + ";background:" + hexToRGBA(color, 0.08)
 }
 
+func assigneeBadgeStyle(color string) string {
+	if color == "" {
+		return ""
+	}
+	return "background:" + hexToRGBA(color, 0.16) + ";border-color:" + color + ";color:" + color
+}
+
 func today(ctx context.Context) string {
 	return time.Now().In(middleware.CompanyLocation(ctx)).Format("2006-01-02")
 }
@@ -1042,22 +1049,30 @@ type ContactRow struct {
 }
 
 type CalendarJob struct {
-	ID          int64
-	TechID      int64
-	Day         int
-	Hour        int
-	Duration    int
-	JobType     string
-	Customer    string
-	Address     string
-	Time        string
-	TimeRange   string
-	Date        string
-	DateISO     string
-	StatusName  string
-	StatusColor string
-	Lat         float64
-	Lng         float64
+	ID                 int64
+	TechID             int64
+	Day                int
+	Hour               int
+	Duration           int
+	JobType            string
+	Customer           string
+	Assignee           string
+	AssigneeInitials   string
+	AssigneeColor      string
+	Address            string
+	Time               string
+	TimeRange          string
+	StartTime          string
+	EndTime            string
+	Date               string
+	DateISO            string
+	InvoiceID          int64
+	InvoiceStatusName  string
+	InvoiceStatusColor string
+	StatusName         string
+	StatusColor        string
+	Lat                float64
+	Lng                float64
 }
 
 type ScheduleTech struct {
