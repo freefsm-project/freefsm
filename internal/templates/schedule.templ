@@ -257,8 +257,7 @@ templ weekView(p SchedulePageData) {
 			for dayIndex, day := range p.Days {
 				for _, j := range day.Jobs {
 					<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="grid-job cal-job" draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)"
-						style={ fmt.Sprintf("grid-row: %d / span %d; grid-column: %d;", j.Hour + 2, j.Duration, dayIndex + 2) }>
-						<span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span>
+						style={ fmt.Sprintf("grid-row: %d / span %d; grid-column: %d;%s", j.Hour + 2, j.Duration, dayIndex + 2, scheduleJobAccentStyle(j.StatusColor)) }>
 						<strong>{ j.JobType }</strong>
 						<small>{ j.Customer }</small>
 						<small>{ j.Time }</small>
@@ -280,8 +279,7 @@ templ dayView(p SchedulePageData) {
 			}
 			for _, j := range p.Jobs {
 				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="grid-job cal-job" draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)"
-					style={ fmt.Sprintf("grid-row: %d / span %d; grid-column: 2;", j.Hour + 2, j.Duration) }>
-					<span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span>
+					style={ fmt.Sprintf("grid-row: %d / span %d; grid-column: 2;%s", j.Hour + 2, j.Duration, scheduleJobAccentStyle(j.StatusColor)) }>
 					<strong>{ j.JobType }</strong> &mdash; { j.Customer }
 					<small>{ j.Time }</small>
 				</a>

@@ -1872,13 +1872,11 @@ a.cal-job.schedule-month-job small::before {
   flex-direction: column;
   justify-content: flex-start;
   min-height: 0;
+  border-left: 0.25rem solid var(--pico-primary);
 }
 
-.grid-job .status-badge {
-  font-size: 0.65rem;
-  padding: 0.05rem 0.15rem;
-  align-self: flex-start;
-  margin-bottom: 2px;
+a.grid-job.cal-job {
+  color: var(--pico-color);
 }
 
 .grid-job strong {
