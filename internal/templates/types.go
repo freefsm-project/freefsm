@@ -1008,6 +1008,48 @@ func scheduleJobAccentStyle(color string) string {
 	return "border-left-color:" + color + ";background:" + hexToRGBA(color, 0.08)
 }
 
+func dispatchScheduledJobClass(period string) string {
+	if period == "month" {
+		return "dispatch-card dispatch-scheduled dispatch-scheduled-dot"
+	}
+	return "dispatch-card dispatch-scheduled dispatch-scheduled-card"
+}
+
+func dispatchScheduledJobStyle(color string) string {
+	if color == "" {
+		return ""
+	}
+	return "background:" + color + ";border-color:" + color + ";color:" + readableTextColor(color)
+}
+
+func dispatchScheduledJobLabel(j CalendarJob) string {
+	parts := []string{j.JobType, j.Customer, j.Time, j.StatusName}
+	label := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if strings.TrimSpace(part) != "" {
+			label = append(label, part)
+		}
+	}
+	return strings.Join(label, " - ")
+}
+
+func readableTextColor(color string) string {
+	hex := strings.TrimPrefix(color, "#")
+	if len(hex) != 6 {
+		return "#ffffff"
+	}
+	r, errR := strconv.ParseInt(hex[0:2], 16, 64)
+	g, errG := strconv.ParseInt(hex[2:4], 16, 64)
+	b, errB := strconv.ParseInt(hex[4:6], 16, 64)
+	if errR != nil || errG != nil || errB != nil {
+		return "#ffffff"
+	}
+	if (r*299+g*587+b*114)/1000 > 145 {
+		return "#111827"
+	}
+	return "#ffffff"
+}
+
 func assigneeBadgeStyle(color string) string {
 	if color == "" {
 		return ""

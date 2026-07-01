@@ -468,7 +468,7 @@ func (h *ScheduleHandler) scheduleTechs(r *http.Request) []templates.ScheduleTec
 	users, _ := h.userSvc.ListAll(r.Context())
 	techs := make([]templates.ScheduleTech, 0, len(users))
 	for _, u := range users {
-		if !u.IsActive || u.Role != "tech" {
+		if !u.IsActive {
 			continue
 		}
 		techs = append(techs, templates.ScheduleTech{ID: u.ID, Name: u.Name})
@@ -944,11 +944,11 @@ func dispatchPrevNext(period string, date time.Time) (time.Time, time.Time) {
 func dispatchTitle(ctx context.Context, period string, start, end time.Time) string {
 	switch period {
 	case "month":
-		return fmt.Sprintf("Dispatch: %s", scheduleMonthYearTitle(start))
+		return scheduleMonthYearTitle(start)
 	case "week":
-		return fmt.Sprintf("Dispatch: %s", scheduleMonthYearTitle(start))
+		return scheduleMonthYearTitle(start)
 	default:
-		return fmt.Sprintf("Dispatch: %s", displayDate(ctx, start))
+		return displayDate(ctx, start)
 	}
 }
 

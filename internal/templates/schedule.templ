@@ -289,7 +289,7 @@ templ dayView(p SchedulePageData) {
 }
 
 templ dispatchView(p SchedulePageData) {
-	<p class="schedule-help">Drag unscheduled jobs or scheduled cards into a technician slot. Dropping replaces the job assignment with that technician.</p>
+	<p class="schedule-help">Drag unscheduled jobs or scheduled cards into a user slot. Dropping replaces the job assignment with that user.</p>
 	<div class="dispatch-layout" id="dispatch-board" data-date={ p.Date }>
 		<aside class="dispatch-unscheduled">
 			<header><strong>Unscheduled</strong></header>
@@ -308,7 +308,7 @@ templ dispatchView(p SchedulePageData) {
 			<table class="dispatch-matrix">
 				<thead>
 					<tr>
-						<th class="dispatch-tech-heading">Tech</th>
+						<th class="dispatch-tech-heading">User</th>
 						for _, col := range p.DispatchMatrix.Columns {
 							<th class={ "today", col.IsToday }>{ col.Label }</th>
 						}
@@ -321,11 +321,12 @@ templ dispatchView(p SchedulePageData) {
 							for _, cell := range row.Cells {
 			<td class="dispatch-slot" data-user-id={ fmt.Sprintf("%d", row.Tech.ID) } data-date={ cell.Column.Date } data-hour={ func() string { if p.Period == "day" { return fmt.Sprintf("%d", cell.Column.Hour) } else { return "" } }() } ondragover="scheduleDispatchDragOver(event)" ondragleave="scheduleDispatchDragLeave(event)" ondrop="scheduleDispatchDrop(event, this)">
 									for _, j := range cell.Jobs {
-										<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="dispatch-card dispatch-scheduled" draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-duration={ fmt.Sprintf("%d", j.Duration) } data-hour={ fmt.Sprintf("%d", j.Hour) } ondragstart="scheduleDispatchDrag(event)">
-											<span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span>
-											<strong>{ j.JobType }</strong>
-											<small>{ j.Customer }</small>
-											<small>{ j.Time }</small>
+										<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class={ dispatchScheduledJobClass(p.Period) } draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-duration={ fmt.Sprintf("%d", j.Duration) } data-hour={ fmt.Sprintf("%d", j.Hour) } ondragstart="scheduleDispatchDrag(event)" style={ dispatchScheduledJobStyle(j.StatusColor) } title={ dispatchScheduledJobLabel(j) } aria-label={ dispatchScheduledJobLabel(j) }>
+											if p.Period != "month" {
+												<strong>{ j.JobType }</strong>
+												<small>{ j.Customer }</small>
+												<small>{ j.Time }</small>
+											}
 										</a>
 									}
 								</td>
