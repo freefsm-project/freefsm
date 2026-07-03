@@ -111,6 +111,16 @@ templ SchedulePage(p SchedulePageData) {
 		}
 		if p.IsMonth || p.IsWeek || p.IsDay || (p.IsList && (p.Period == "month" || p.Period == "week")) {
 			<script>
+				function scheduleOpenMonthDay(event, target) {
+					if (event.defaultPrevented || event.target.closest('a')) return;
+					if (target.dataset.dayHref) window.location.href = target.dataset.dayHref;
+				}
+				function scheduleOpenMonthDayKey(event, target) {
+					if (event.defaultPrevented || event.target.closest('a')) return;
+					if (event.key !== 'Enter' && event.key !== ' ') return;
+					event.preventDefault();
+					if (target.dataset.dayHref) window.location.href = target.dataset.dayHref;
+				}
 				function scheduleCalendarDrag(event) {
 					event.dataTransfer.setData('text/plain', event.currentTarget.dataset.jobId);
 					event.dataTransfer.setData('duration', event.currentTarget.dataset.duration || '1');
@@ -228,8 +238,8 @@ templ monthView(p SchedulePageData) {
 						if day.DayNum == 0 {
 							<td class="empty"></td>
 						} else {
-							<td class={ "calendar-drop-slot", "today", day.IsToday } data-date={ day.Date } ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)">
-								<div class="day-num">{ fmt.Sprintf("%d", day.DayNum) }</div>
+							<td class={ "calendar-drop-slot", "schedule-month-day", "today", day.IsToday } data-date={ day.Date } data-day-href={ fmt.Sprintf("/schedule?tab=%s&period=day&date=%s", p.Tab, day.Date) } tabindex="0" ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)" onclick="scheduleOpenMonthDay(event, this)" onkeydown="scheduleOpenMonthDayKey(event, this)">
+								<div class="day-num"><a href={ templ.URL(fmt.Sprintf("/schedule?tab=%s&period=day&date=%s", p.Tab, day.Date)) } class="schedule-month-day-link" aria-label={ fmt.Sprintf("Open %s day view", day.Date) }>{ fmt.Sprintf("%d", day.DayNum) }</a></div>
 								for _, j := range day.Jobs {
 									<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job schedule-month-job" draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)" style={ scheduleJobAccentStyle(j.StatusColor) }>
 										<strong>{ j.JobType }</strong>

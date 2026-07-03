@@ -1777,10 +1777,30 @@ table.calendar td.empty {
 table.calendar td.today {
   background: rgba(37, 99, 235, 0.06);
 }
+table.calendar td.schedule-month-day {
+  cursor: pointer;
+}
+table.calendar td.schedule-month-day:focus-visible {
+  outline: 2px solid var(--pico-primary);
+  outline-offset: -2px;
+}
+table.calendar td.schedule-month-day:hover {
+  background: rgba(37, 99, 235, 0.04);
+}
+table.calendar td.schedule-month-day.today:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
 table.calendar .day-num {
   font-weight: bold;
   font-size: 0.8rem;
   margin-bottom: 0.25rem;
+}
+table.calendar .schedule-month-day-link {
+  color: inherit;
+  text-decoration: none;
+}
+table.calendar .schedule-month-day-link:hover {
+  text-decoration: underline;
 }
 a.cal-job {
   display: block;
