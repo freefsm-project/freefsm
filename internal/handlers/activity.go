@@ -241,7 +241,7 @@ func activityIcon(action string) string {
 		return "▶"
 	case "clocked_out":
 		return "■"
-	case "payment_recorded":
+	case "payment_recorded", "payment_deleted":
 		return "$"
 	case "user_disabled":
 		return "🚫"

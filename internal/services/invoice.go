@@ -408,6 +408,7 @@ func (s *InvoiceService) LineItems(i *ent.Invoice) []LineItem {
 
 func (s *InvoiceService) Payments(i *ent.Invoice) []Payment {
 	p, _ := ParsePayments(i.Payments)
+	backfillPaymentIDs(p)
 	if p == nil {
 		return []Payment{}
 	}
@@ -514,6 +515,7 @@ func (s *InvoiceService) RecordPayment(ctx context.Context, invoiceID int64, pay
 	if err != nil {
 		return fmt.Errorf("get invoice %d: %w", invoiceID, err)
 	}
+	ensurePaymentID(&payment)
 	existing := s.Payments(i)
 	existing = append(existing, payment)
 	_, err = s.client.Invoice.UpdateOneID(invoiceID).SetPayments(SerializePayments(existing)).Save(ctx)
@@ -521,6 +523,33 @@ func (s *InvoiceService) RecordPayment(ctx context.Context, invoiceID int64, pay
 		return fmt.Errorf("record payment: %w", err)
 	}
 	return nil
+}
+
+func (s *InvoiceService) DeletePayment(ctx context.Context, invoiceID int64, paymentID string) (Payment, error) {
+	paymentID = strings.TrimSpace(paymentID)
+	if paymentID == "" {
+		return Payment{}, fmt.Errorf("payment id is required")
+	}
+
+	i, err := s.client.Invoice.Get(ctx, invoiceID)
+	if err != nil {
+		return Payment{}, fmt.Errorf("get invoice %d: %w", invoiceID, err)
+	}
+
+	payments := s.Payments(i)
+	for index, payment := range payments {
+		if payment.ID != paymentID {
+			continue
+		}
+
+		payments = append(payments[:index], payments[index+1:]...)
+		if _, err := s.client.Invoice.UpdateOneID(invoiceID).SetPayments(SerializePayments(payments)).Save(ctx); err != nil {
+			return Payment{}, fmt.Errorf("delete payment: %w", err)
+		}
+		return payment, nil
+	}
+
+	return Payment{}, fmt.Errorf("payment %s not found", paymentID)
 }
 
 func InvoiceAmountDue(i *ent.Invoice) (float64, float64, error) {

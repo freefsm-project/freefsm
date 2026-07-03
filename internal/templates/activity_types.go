@@ -77,6 +77,8 @@ func activityVerb(action string) string {
 		return "clocked out"
 	case "payment_recorded":
 		return "recorded"
+	case "payment_deleted":
+		return "deleted"
 	case "converted":
 		return "converted"
 	case "user_disabled":
@@ -126,7 +128,7 @@ func activityActionClass(action string) string {
 		return "activity-comment"
 	case "clocked_in", "clocked_out":
 		return "activity-timesheet"
-	case "payment_recorded":
+	case "payment_recorded", "payment_deleted":
 		return "activity-payment"
 	case "user_disabled":
 		return "activity-user"

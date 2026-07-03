@@ -564,11 +564,10 @@ func (h *InvoiceHandler) updateInvoiceStatusAfterPayment(ctx context.Context, id
 		return err
 	}
 	statusName := "Partially Paid"
-	if paid+0.005 >= total {
-		statusName = "Paid"
-	}
 	if paid <= 0 {
-		return nil
+		statusName = "Sent"
+	} else if paid+0.005 >= total {
+		statusName = "Paid"
 	}
 	newStatus, err := h.invoiceStatusByName(ctx, statusName)
 	if err != nil {
@@ -896,4 +895,32 @@ func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+recorded", id), http.StatusSeeOther)
+}
+
+func (h *InvoiceHandler) DeletePayment(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	paymentID := chi.URLParam(r, "payment_id")
+	payment, err := h.svc.DeletePayment(r.Context(), id, paymentID)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	if err := h.updateInvoiceStatusAfterPayment(r.Context(), id); err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "payment_deleted", "invoice", id, map[string]interface{}{
+			"actor_name": u.Name,
+			"amount":     fmt.Sprintf("%.2f", payment.Amount),
+			"method":     payment.Method,
+			"reference":  payment.Reference,
+		})
+	}
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+deleted", id), http.StatusSeeOther)
 }

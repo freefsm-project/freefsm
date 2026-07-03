@@ -248,6 +248,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(requireActiveObject(entClient, "invoice")).Post("/invoices/{id}/delete", invoiceHandler.Delete)
 			r.With(requireActiveObject(entClient, "invoice")).Post("/invoices/{id}/finalize", invoiceHandler.Finalize)
 			r.With(requireActiveObject(entClient, "invoice")).Post("/invoices/{id}/payments", invoiceHandler.RecordPayment)
+			r.With(requireActiveObject(entClient, "invoice")).Post("/invoices/{id}/payments/{payment_id}/delete", invoiceHandler.DeletePayment)
 			r.Get("/invoices/{id}/pdf", invoiceHandler.PDF)
 			r.Get("/invoices/{id}/pdf/preview", invoiceHandler.PreviewPDF)
 			r.With(requireActiveObject(entClient, "invoice")).Post("/invoices/{id}/pdf/save", invoiceHandler.SavePDF)

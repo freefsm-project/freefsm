@@ -39,6 +39,8 @@ templ ActivityIndex(p ActivityPageData) {
 									{ " on " }
 								} else if e.Action == "payment_recorded" {
 									{ "payment of $" + e.Metadata.Amount + " to " }
+								} else if e.Action == "payment_deleted" {
+									{ "payment of $" + e.Metadata.Amount + " from " }
 								} else if e.Action == "comment_added" || e.Action == "comment_deleted" {
 									{ "a comment on " }
 								} else if e.Action == "settings_updated" && e.Metadata.Changed != "" {
