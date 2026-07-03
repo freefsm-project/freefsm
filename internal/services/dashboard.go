@@ -11,6 +11,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
+	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
 	"github.com/MartialM1nd/freefsm/internal/ent/project"
 	"github.com/MartialM1nd/freefsm/internal/ent/status"
 	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
@@ -57,6 +58,7 @@ type DashboardWidgetView struct {
 type DashboardStats struct {
 	TotalCustomers         int
 	NewCustomersThisMonth  int
+	CustomerMonths         []DashboardMonthlyBar
 	NewJobsToday           int
 	NewQuotesToday         int
 	NewInvoicesToday       int
@@ -67,20 +69,37 @@ type DashboardStats struct {
 	JobsCompletedPercent   int
 	TotalJobs              int
 	JobsOverdue            int
+	JobMonths              []DashboardMonthlyBar
 	TotalEstimates         int
 	TotalInvoices          int
 	InvoicesPaid           int
 	InvoicesUnpaid         int
 	InvoicesOverdue        int
+	InvoiceMonths          []DashboardMonthlyBar
 	TotalProjects          int
 	ProjectsActive         int
 	ProjectsCompleted      int
+	ProjectMonths          []DashboardMonthlyBar
 	RevenueMonth           float64
 	OutstandingReceivables float64
 	OverdueAmount          float64
 	RecentJobs             []RecentJob
 	RecentInvoices         []RecentInvoice
 	RecentEstimates        []RecentEstimate
+}
+
+type DashboardMonthlyBar struct {
+	Label    string
+	Title    string
+	Total    int
+	Segments []DashboardMonthlySegment
+}
+
+type DashboardMonthlySegment struct {
+	Label        string
+	Count        int
+	PercentOfMax int
+	CSSClass     string
 }
 
 type RecentJob struct {
@@ -501,11 +520,6 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *en
 		Where(customer.DeletedAtIsNil(), customer.CreatedAtGTE(startOfToday), customer.CreatedAtLT(startOfTomorrow)).
 		Count(ctx)
 
-	// Jobs overdue
-	jobsOverdue, _ := s.client.Job.Query().
-		Where(job.DeletedAtIsNil(), job.DueDateNotNil(), job.DueDateLT(now)).
-		Count(ctx)
-
 	// Find status IDs
 	paidStatusID := s.statusIDByName(ctx, "invoice", "Paid")
 	voidStatusID := s.statusIDByName(ctx, "invoice", "Void")
@@ -513,6 +527,16 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *en
 	jobCompletedStatusID := s.statusIDByName(ctx, "job", "Completed")
 	inProgressStatusID := s.statusIDByName(ctx, "project", "In Progress")
 	completedStatusID := s.statusIDByName(ctx, "project", "Completed")
+	overdueJobPredicates := []predicate.Job{job.DeletedAtIsNil(), job.DueDateNotNil(), job.DueDateLT(now)}
+	if jobCompletedStatusID != 0 {
+		overdueJobPredicates = append(overdueJobPredicates, job.StatusIDNEQ(jobCompletedStatusID))
+	}
+	jobsOverdue, _ := s.client.Job.Query().Where(overdueJobPredicates...).Count(ctx)
+	monthStarts := dashboardMonthStarts(now)
+	customerMonths := s.customerMonthlyBars(ctx, loc, monthStarts)
+	jobMonths := s.jobMonthlyBars(ctx, loc, monthStarts, now, jobCompletedStatusID)
+	invoiceMonths := s.invoiceMonthlyBars(ctx, loc, monthStarts, now, paidStatusID, draftStatusID, voidStatusID)
+	projectMonths := s.projectMonthlyBars(ctx, loc, monthStarts, inProgressStatusID, completedStatusID)
 
 	jobsScheduledToday, _ := s.client.Job.Query().
 		Where(job.DeletedAtIsNil(), job.StartTimeGTE(startOfToday), job.StartTimeLT(startOfTomorrow)).
@@ -530,12 +554,23 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *en
 		Where(invoice.DeletedAtIsNil(), invoice.StatusIDEQ(paidStatusID)).
 		Count(ctx)
 
+	unpaidInvoicePredicates := []predicate.Invoice{invoice.DeletedAtIsNil()}
+	if paidStatusID != 0 {
+		unpaidInvoicePredicates = append(unpaidInvoicePredicates, invoice.StatusIDNEQ(paidStatusID))
+	}
+	if draftStatusID != 0 {
+		unpaidInvoicePredicates = append(unpaidInvoicePredicates, invoice.StatusIDNEQ(draftStatusID))
+	}
+	if voidStatusID != 0 {
+		unpaidInvoicePredicates = append(unpaidInvoicePredicates, invoice.StatusIDNEQ(voidStatusID))
+	}
 	invoicesUnpaid, _ := s.client.Invoice.Query().
-		Where(invoice.DeletedAtIsNil(), invoice.StatusIDNEQ(paidStatusID)).
+		Where(unpaidInvoicePredicates...).
 		Count(ctx)
 
+	overdueInvoicePredicates := append(unpaidInvoicePredicates, invoice.DueDateLT(now))
 	invoicesOverdue, _ := s.client.Invoice.Query().
-		Where(invoice.DeletedAtIsNil(), invoice.DueDateLT(now), invoice.StatusIDNEQ(paidStatusID)).
+		Where(overdueInvoicePredicates...).
 		Count(ctx)
 
 	// Projects
@@ -625,6 +660,7 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *en
 	return DashboardStats{
 		TotalCustomers:         totalCustomers,
 		NewCustomersThisMonth:  newCustomers,
+		CustomerMonths:         customerMonths,
 		NewJobsToday:           newJobsToday,
 		NewQuotesToday:         newQuotesToday,
 		NewInvoicesToday:       newInvoicesToday,
@@ -635,14 +671,17 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *en
 		JobsCompletedPercent:   jobsCompletedPercent,
 		TotalJobs:              totalJobs,
 		JobsOverdue:            jobsOverdue,
+		JobMonths:              jobMonths,
 		TotalEstimates:         totalEstimates,
 		TotalInvoices:          totalInvoices,
 		InvoicesPaid:           invoicesPaid,
 		InvoicesUnpaid:         invoicesUnpaid,
 		InvoicesOverdue:        invoicesOverdue,
+		InvoiceMonths:          invoiceMonths,
 		TotalProjects:          totalProjects,
 		ProjectsActive:         projectsActive,
 		ProjectsCompleted:      projectsCompleted,
+		ProjectMonths:          projectMonths,
 		RevenueMonth:           revenue,
 		OutstandingReceivables: outstanding,
 		OverdueAmount:          overdue,
@@ -650,6 +689,170 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *en
 		RecentInvoices:         s.toRecentInvoices(recentInvoices, custMap, statusMap, loc, cs),
 		RecentEstimates:        s.toRecentEstimates(recentEstimates, custMap, loc, cs),
 	}, nil
+}
+
+type dashboardMonthlyCounts struct {
+	Neutral int
+	Red     int
+	Yellow  int
+	Green   int
+}
+
+func dashboardMonthStarts(now time.Time) []time.Time {
+	starts := make([]time.Time, 12)
+	thisMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	for i := range starts {
+		starts[i] = thisMonth.AddDate(0, i-11, 0)
+	}
+	return starts
+}
+
+func dashboardMonthIndex(t time.Time, loc *time.Location, starts []time.Time) int {
+	month := time.Date(t.In(loc).Year(), t.In(loc).Month(), 1, 0, 0, 0, 0, loc)
+	for i, start := range starts {
+		if month.Equal(start) {
+			return i
+		}
+	}
+	return -1
+}
+
+func dashboardStatusIDEquals(id *int64, want int64) bool {
+	return id != nil && want != 0 && *id == want
+}
+
+func dashboardMonthlyBars(starts []time.Time, counts []dashboardMonthlyCounts, title string, segmentOrder []string) []DashboardMonthlyBar {
+	maxTotal := 0
+	for _, c := range counts {
+		total := c.Neutral + c.Red + c.Yellow + c.Green
+		if total > maxTotal {
+			maxTotal = total
+		}
+	}
+
+	bars := make([]DashboardMonthlyBar, len(starts))
+	for i, start := range starts {
+		c := counts[i]
+		bar := DashboardMonthlyBar{
+			Label: start.Format("Jan"),
+			Title: title + " in " + start.Format("Jan 2006"),
+			Total: c.Neutral + c.Red + c.Yellow + c.Green,
+		}
+		for _, name := range segmentOrder {
+			segment := dashboardMonthlySegment(name, c, maxTotal)
+			if segment.Count > 0 {
+				bar.Segments = append(bar.Segments, segment)
+			}
+		}
+		bars[i] = bar
+	}
+	return bars
+}
+
+func dashboardMonthlySegment(name string, counts dashboardMonthlyCounts, maxTotal int) DashboardMonthlySegment {
+	segment := DashboardMonthlySegment{Label: name}
+	switch name {
+	case "created":
+		segment.Count = counts.Neutral
+		segment.CSSClass = "dashboard-monthly-segment-neutral"
+	case "overdue":
+		segment.Count = counts.Red
+		segment.CSSClass = "dashboard-monthly-segment-red"
+	case "unpaid", "active":
+		segment.Count = counts.Yellow
+		segment.CSSClass = "dashboard-monthly-segment-yellow"
+	case "paid", "completed":
+		segment.Count = counts.Green
+		segment.CSSClass = "dashboard-monthly-segment-green"
+	case "other":
+		segment.Count = counts.Neutral
+		segment.CSSClass = "dashboard-monthly-segment-neutral"
+	}
+	if segment.Count > 0 && maxTotal > 0 {
+		segment.PercentOfMax = segment.Count * 100 / maxTotal
+		if segment.PercentOfMax == 0 {
+			segment.PercentOfMax = 1
+		}
+	}
+	return segment
+}
+
+func (s *DashboardService) customerMonthlyBars(ctx context.Context, loc *time.Location, starts []time.Time) []DashboardMonthlyBar {
+	counts := make([]dashboardMonthlyCounts, len(starts))
+	customers, _ := s.client.Customer.Query().
+		Where(customer.DeletedAtIsNil(), customer.CreatedAtGTE(starts[0]), customer.CreatedAtLT(starts[len(starts)-1].AddDate(0, 1, 0))).
+		All(ctx)
+	for _, c := range customers {
+		if idx := dashboardMonthIndex(c.CreatedAt, loc, starts); idx >= 0 {
+			counts[idx].Neutral++
+		}
+	}
+	return dashboardMonthlyBars(starts, counts, "Customers created", []string{"created"})
+}
+
+func (s *DashboardService) jobMonthlyBars(ctx context.Context, loc *time.Location, starts []time.Time, now time.Time, completedStatusID int64) []DashboardMonthlyBar {
+	counts := make([]dashboardMonthlyCounts, len(starts))
+	jobs, _ := s.client.Job.Query().
+		Where(job.DeletedAtIsNil(), job.CreatedAtGTE(starts[0]), job.CreatedAtLT(starts[len(starts)-1].AddDate(0, 1, 0))).
+		All(ctx)
+	for _, j := range jobs {
+		idx := dashboardMonthIndex(j.CreatedAt, loc, starts)
+		if idx < 0 {
+			continue
+		}
+		if j.DueDate != nil && j.DueDate.Before(now) && !dashboardStatusIDEquals(j.StatusID, completedStatusID) {
+			counts[idx].Red++
+		} else {
+			counts[idx].Neutral++
+		}
+	}
+	return dashboardMonthlyBars(starts, counts, "Jobs created", []string{"created", "overdue"})
+}
+
+func (s *DashboardService) invoiceMonthlyBars(ctx context.Context, loc *time.Location, starts []time.Time, now time.Time, paidStatusID, draftStatusID, voidStatusID int64) []DashboardMonthlyBar {
+	counts := make([]dashboardMonthlyCounts, len(starts))
+	invoices, _ := s.client.Invoice.Query().
+		Where(invoice.DeletedAtIsNil(), invoice.InvoiceDateGTE(starts[0]), invoice.InvoiceDateLT(starts[len(starts)-1].AddDate(0, 1, 0))).
+		All(ctx)
+	for _, inv := range invoices {
+		if dashboardStatusIDEquals(inv.StatusID, draftStatusID) || dashboardStatusIDEquals(inv.StatusID, voidStatusID) {
+			continue
+		}
+		idx := dashboardMonthIndex(inv.InvoiceDate, loc, starts)
+		if idx < 0 {
+			continue
+		}
+		if dashboardStatusIDEquals(inv.StatusID, paidStatusID) {
+			counts[idx].Green++
+		} else if inv.DueDate.Before(now) {
+			counts[idx].Red++
+		} else {
+			counts[idx].Yellow++
+		}
+	}
+	return dashboardMonthlyBars(starts, counts, "Invoices", []string{"paid", "unpaid", "overdue"})
+}
+
+func (s *DashboardService) projectMonthlyBars(ctx context.Context, loc *time.Location, starts []time.Time, inProgressStatusID, completedStatusID int64) []DashboardMonthlyBar {
+	counts := make([]dashboardMonthlyCounts, len(starts))
+	projects, _ := s.client.Project.Query().
+		Where(project.DeletedAtIsNil(), project.CreatedAtGTE(starts[0]), project.CreatedAtLT(starts[len(starts)-1].AddDate(0, 1, 0))).
+		All(ctx)
+	for _, p := range projects {
+		idx := dashboardMonthIndex(p.CreatedAt, loc, starts)
+		if idx < 0 {
+			continue
+		}
+		switch {
+		case dashboardStatusIDEquals(p.StatusID, inProgressStatusID):
+			counts[idx].Yellow++
+		case dashboardStatusIDEquals(p.StatusID, completedStatusID):
+			counts[idx].Green++
+		default:
+			counts[idx].Neutral++
+		}
+	}
+	return dashboardMonthlyBars(starts, counts, "Projects created", []string{"other", "active", "completed"})
 }
 
 func (s *DashboardService) statusIDByName(ctx context.Context, objectType, name string) int64 {

@@ -38,6 +38,7 @@ templ DashboardPage(p DashboardData) {
 						@DashboardCardTop("Customers", w, p.EditMode)
 						<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalCustomers) }</p>
 						<p class="dashboard-meta">{ fmt.Sprintf("%d new this month", p.Stats.NewCustomersThisMonth) }</p>
+						@DashboardMonthlyBars(p.Stats.CustomerMonths)
 						<footer><a href="/customers" role="button" class="outline">View Customers</a></footer>
 					</article>
 				} else if w.Type == "jobs" && canManageOperational(ctx) {
@@ -51,6 +52,7 @@ templ DashboardPage(p DashboardData) {
 								<span>No overdue jobs</span>
 							}
 						</p>
+						@DashboardMonthlyBars(p.Stats.JobMonths)
 						<footer><a href="/jobs" role="button" class="outline">View Jobs</a></footer>
 					</article>
 				} else if w.Type == "invoices" && canManageOperational(ctx) {
@@ -63,6 +65,7 @@ templ DashboardPage(p DashboardData) {
 								<span>, <span class="dashboard-danger">{ fmt.Sprintf("%d overdue", p.Stats.InvoicesOverdue) }</span></span>
 							}
 						</p>
+						@DashboardMonthlyBars(p.Stats.InvoiceMonths)
 						<footer><a href="/invoices" role="button" class="outline">View Invoices</a></footer>
 					</article>
 				} else if w.Type == "projects" && canManageOperational(ctx) {
@@ -70,6 +73,7 @@ templ DashboardPage(p DashboardData) {
 						@DashboardCardTop("Projects", w, p.EditMode)
 						<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalProjects) }</p>
 						<p class="dashboard-meta">{ fmt.Sprintf("%d active, %d completed", p.Stats.ProjectsActive, p.Stats.ProjectsCompleted) }</p>
+						@DashboardMonthlyBars(p.Stats.ProjectMonths)
 						<footer><a href="/projects" role="button" class="outline">View Projects</a></footer>
 					</article>
 				} else if w.Type == "today_overview" && canManageOperational(ctx) {
@@ -194,6 +198,21 @@ templ DashboardCardTop(title string, w services.DashboardWidgetView, editMode bo
 templ DashboardSubcardTop(title string) {
 	<div class="dashboard-card-top dashboard-subcard-top">
 		<header>{ title }</header>
+	</div>
+}
+
+templ DashboardMonthlyBars(bars []services.DashboardMonthlyBar) {
+	<div class="dashboard-monthly-bars" aria-label="12 month trend">
+		for _, bar := range bars {
+			<div class="dashboard-monthly-bar-wrap" title={ fmt.Sprintf("%s: %d", bar.Title, bar.Total) }>
+				<div class="dashboard-monthly-bar" aria-hidden="true">
+					for _, segment := range bar.Segments {
+						<span class={ "dashboard-monthly-segment", segment.CSSClass } style={ fmt.Sprintf("height:%d%%", segment.PercentOfMax) }></span>
+					}
+				</div>
+				<small>{ bar.Label }</small>
+			</div>
+		}
 	</div>
 }
 
