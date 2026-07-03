@@ -734,22 +734,315 @@ html[data-theme="dark"] .theme-icon-moon {
   margin-top: 1rem;
 }
 
+.files-card {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+}
+
+.files-drop-form {
+  margin-bottom: 0;
+}
+
+.files-drop-zone {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border: 1px dashed var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: color-mix(in srgb, var(--pico-primary) 5%, transparent);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.files-drop-zone small {
+  display: block;
+  color: var(--pico-muted-color);
+}
+
+.files-drop-active .files-drop-zone {
+  border-color: var(--pico-primary);
+  background: color-mix(in srgb, var(--pico-primary) 12%, transparent);
+}
+
 .files-upload-row {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  margin-bottom: 0;
 }
 
 .files-upload-row button {
   margin-bottom: 0;
 }
 
-.files-actions form {
-  display: inline;
+.files-gallery-card {
+  margin-top: 0.75rem;
 }
 
-.files-delete-button {
+.files-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.75rem;
+}
+
+.files-tile {
+  margin: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-background-color);
+}
+
+.files-thumb {
+  display: flex;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: calc(var(--pico-border-radius) * 0.85);
+  background: color-mix(in srgb, var(--pico-muted-border-color) 24%, transparent);
+  cursor: pointer;
+}
+
+.files-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.files-thumb-icon {
+  display: inline-flex;
+  min-width: 3.5rem;
+  min-height: 3.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.65rem;
+  background: var(--pico-primary);
+  color: var(--pico-primary-inverse);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.files-tile-pdf .files-thumb-icon {
+  background: var(--pico-del-color);
+}
+
+.files-tile-body {
+  min-width: 0;
+  margin-top: 0.55rem;
+}
+
+.files-tile-body strong,
+.files-tile-body small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-tile-body small {
+  color: var(--pico-muted-color);
+}
+
+.files-empty {
   margin-bottom: 0;
+}
+
+.files-preview-dialog {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: 0;
+  background: var(--pico-card-background-color);
+  box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.35);
+}
+
+.files-preview-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.files-preview-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.files-preview-header strong {
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.files-preview-actions {
+  grid-column: 2;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-self: center;
+}
+
+.files-preview-actions form {
+  margin: 0;
+}
+
+.files-preview-action {
+  display: inline-flex;
+  min-height: 2.15rem;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--pico-primary) 55%, var(--pico-muted-border-color));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--pico-primary) 10%, transparent);
+  color: var(--pico-primary);
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1;
+  text-decoration: none;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.files-preview-action:hover,
+.files-preview-action:focus {
+  border-color: var(--pico-primary);
+  background: var(--pico-primary);
+  color: var(--pico-primary-inverse);
+  text-decoration: none;
+}
+
+.files-preview-action-danger {
+  border-color: color-mix(in srgb, var(--pico-del-color) 55%, var(--pico-muted-border-color));
+  background: color-mix(in srgb, var(--pico-del-color) 10%, transparent);
+  color: var(--pico-del-color);
+}
+
+.files-preview-action-danger:hover,
+.files-preview-action-danger:focus {
+  border-color: var(--pico-del-color);
+  background: var(--pico-del-color);
+  color: var(--pico-primary-inverse);
+}
+
+.files-modal-rename-form {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(12rem, 24rem) auto auto;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.files-modal-rename-form[hidden] {
+  display: none;
+}
+
+.files-modal-rename-form input,
+.files-modal-rename-form button {
+  margin-bottom: 0;
+}
+
+.files-preview-dialog button,
+.files-preview-dialog a {
+  margin-bottom: 0;
+}
+
+.files-preview-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  background: color-mix(in srgb, var(--pico-muted-border-color) 18%, transparent);
+}
+
+.files-preview-body-pdf {
+  padding: 0;
+}
+
+.files-preview-body img {
+  max-width: 100%;
+  max-height: 100%;
+  border: 0;
+  border-radius: var(--pico-border-radius);
+  background: white;
+  object-fit: contain;
+}
+
+.files-preview-body iframe {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border: 0;
+  border-radius: var(--pico-border-radius);
+  background: white;
+}
+
+.files-preview-body-pdf iframe {
+  border-radius: 0;
+}
+
+.files-preview-fallback {
+  max-width: 28rem;
+  text-align: center;
+  color: var(--pico-muted-color);
+}
+
+@media (max-width: 640px) {
+  .files-drop-zone {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .files-upload-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .files-preview-header {
+    align-items: flex-start;
+    grid-template-columns: 1fr;
+  }
+
+  .files-preview-header strong {
+    grid-column: 1;
+    max-width: 100%;
+  }
+
+  .files-preview-actions {
+    grid-column: 1;
+    align-self: center;
+  }
+
+  .files-modal-rename-form {
+    grid-column: 1;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
 }
 
 /* Subtasks */

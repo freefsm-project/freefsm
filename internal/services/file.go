@@ -217,6 +217,24 @@ func (s *FileService) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+func (s *FileService) Rename(ctx context.Context, id int64, originalName string) error {
+	originalName = strings.TrimSpace(originalName)
+	if originalName == "" {
+		return fmt.Errorf("file name is required")
+	}
+	if len(originalName) > 255 {
+		return fmt.Errorf("file name is too long")
+	}
+	if strings.ContainsAny(originalName, "/\\") {
+		return fmt.Errorf("file name cannot contain path separators")
+	}
+
+	if err := s.client.File.UpdateOneID(id).SetOriginalName(originalName).Exec(ctx); err != nil {
+		return fmt.Errorf("rename file %d: %w", id, err)
+	}
+	return nil
+}
+
 func (s *FileService) GetDiskPath(storedName string) string {
 	return filepath.Join(s.uploadDir, storedName)
 }

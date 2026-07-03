@@ -120,10 +120,12 @@ templ customerCommentsCard(p CustomerShowPageData) {
 templ customerFilesCard(p CustomerShowPageData) {
 	<article class="dashboard-panel">
 		@DashboardSubcardTop("Files")
-		if p.Customer.ArchivedAt == "" {
-			@FileUploadWidgetWithTitle("customer", p.Customer.ID, fmt.Sprintf("/customers/%d", p.Customer.ID), false)
-		}
-		@FileList(p.FileList)
+		<div class="files-card">
+			if p.Customer.ArchivedAt == "" {
+				@FileUploadWidgetWithTitle("customer", p.Customer.ID, fmt.Sprintf("/customers/%d", p.Customer.ID), false)
+			}
+			@FileList(p.FileList)
+		</div>
 	</article>
 }
 

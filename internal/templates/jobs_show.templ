@@ -171,9 +171,13 @@ templ JobShow(p JobDetail) {
 			<div hx-get={ templ.URL(fmt.Sprintf("/jobs/%d/comments", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
 				<p>Loading comments...</p>
 			</div>
-			@FileUploadWidget("job", p.ID, fmt.Sprintf("/jobs/%d", p.ID))
 		}
-		@FileList(p.FileList)
+		<div class="files-card">
+			if p.ArchivedAt == "" {
+				@FileUploadWidget("job", p.ID, fmt.Sprintf("/jobs/%d", p.ID))
+			}
+			@FileList(p.FileList)
+		</div>
 		<div hx-get={ templ.URL(fmt.Sprintf("/jobs/%d/activity", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
 			<p>Loading activity...</p>
 		</div>

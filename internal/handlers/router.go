@@ -306,6 +306,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		// File uploads
 		r.Post("/files", fileHandler.Upload)
 		r.Get("/files/{id}", fileHandler.Download)
+		r.Post("/files/{id}/rename", fileHandler.Rename)
 		r.Post("/files/{id}/delete", fileHandler.Delete)
 
 		// Admin-only routes

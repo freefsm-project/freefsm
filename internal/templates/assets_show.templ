@@ -126,10 +126,12 @@ templ AssetShow(p AssetShowPageData) {
 			<div hx-get={ fmt.Sprintf("/assets/%d/comments", p.Asset.ID) } hx-trigger="load"></div>
 		}
 
+	<div class="files-card">
 		if p.Asset.ArchivedAt == "" {
 			@FileUploadWidget("asset", p.Asset.ID, fmt.Sprintf("/assets/%d", p.Asset.ID))
 		}
-	@FileList(p.FileList)
+		@FileList(p.FileList)
+	</div>
 	<div hx-get={ templ.URL(fmt.Sprintf("/assets/%d/activity", p.Asset.ID)) } hx-trigger="load" hx-swap="innerHTML">
 		<p>Loading activity...</p>
 	</div>

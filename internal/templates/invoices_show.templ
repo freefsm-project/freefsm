@@ -184,9 +184,13 @@ templ InvoiceShow(p InvoiceDetail) {
 			<div hx-get={ templ.URL(fmt.Sprintf("/invoices/%d/comments", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
 				<p>Loading comments...</p>
 			</div>
+		}
+	<div class="files-card">
+		if p.ArchivedAt == "" {
 			@FileUploadWidget("invoice", p.ID, fmt.Sprintf("/invoices/%d", p.ID))
 		}
-	@FileList(p.FileList)
+		@FileList(p.FileList)
+	</div>
 	<div hx-get={ templ.URL(fmt.Sprintf("/invoices/%d/activity", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
 		<p>Loading activity...</p>
 	</div>

@@ -1,6 +1,9 @@
 package templates
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 templ FileUploadWidget(objectType string, objectID int64, redirect string) {
 	@FileUploadWidgetWithTitle(objectType, objectID, redirect, true)
@@ -11,14 +14,20 @@ templ FileUploadWidgetWithTitle(objectType string, objectID int64, redirect stri
 		if showTitle {
 			<h3>Files</h3>
 		}
-		<form action="/files" method="post" enctype="multipart/form-data" hx-post="/files" hx-swap="none">
+		<form action="/files" method="post" enctype="multipart/form-data" hx-post="/files" hx-swap="none" class="files-drop-form" ondragover="filesDragOver(event, this)" ondragleave="filesDragLeave(event, this)" ondrop="filesHandleDrop(event, this)">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<input type="hidden" name="object_type" value={ objectType }/>
 			<input type="hidden" name="object_id" value={ fmt.Sprintf("%d", objectID) }/>
 			<input type="hidden" name="redirect" value={ redirect }/>
-			<div class="files-upload-row">
-				<input type="file" name="file" required/>
-				<button type="submit" class="small customer-add-button">Upload</button>
+			<div class="files-drop-zone">
+				<div>
+					<strong>Drop files here</strong>
+					<small>or choose a file to attach</small>
+				</div>
+				<div class="files-upload-row">
+					<input type="file" name="file" required/>
+					<button type="submit" class="small customer-add-button">Upload</button>
+				</div>
 			</div>
 		</form>
 	</div>
@@ -60,43 +69,245 @@ func redirectPrefix(objectType string) string {
 	}
 }
 
+func filePreviewKind(mimeType string) string {
+	if strings.HasPrefix(mimeType, "image/") {
+		return "image"
+	}
+	if mimeType == "application/pdf" {
+		return "pdf"
+	}
+	return "file"
+}
+
+func fileTileClass(mimeType string) string {
+	return "files-tile files-tile-" + filePreviewKind(mimeType)
+}
+
+func fileIconLabel(mimeType string) string {
+	switch {
+	case strings.HasPrefix(mimeType, "image/"):
+		return "IMG"
+	case mimeType == "application/pdf":
+		return "PDF"
+	case strings.Contains(mimeType, "word"):
+		return "DOC"
+	case strings.Contains(mimeType, "excel") || strings.Contains(mimeType, "spreadsheet"):
+		return "XLS"
+	case strings.Contains(mimeType, "powerpoint") || strings.Contains(mimeType, "presentation"):
+		return "PPT"
+	case strings.Contains(mimeType, "zip"):
+		return "ZIP"
+	case strings.Contains(mimeType, "json"):
+		return "JSON"
+	case strings.HasPrefix(mimeType, "text/"):
+		return "TXT"
+	default:
+		return "FILE"
+	}
+}
+
 templ FileList(p FileListPageData) {
-	<div class="files-widget">
+	<div class="files-widget files-gallery-card">
 		if len(p.Files) > 0 {
-			<table>
-				<thead>
-					<tr>
-						<th>File</th>
-						<th>Size</th>
-						<th>Uploaded</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					for _, f := range p.Files {
-						<tr>
-							<td>
-								<a href={ templ.URL(fmt.Sprintf("/files/%d", f.ID)) } target="_blank">
-									{ f.OriginalName }
-								</a>
-							</td>
-							<td>{ f.FileSize }</td>
-							<td>{ f.CreatedAt }</td>
-							<td class="files-actions">
-								if canManageOperational(ctx) {
-									<form action={ templ.URL(fmt.Sprintf("/files/%d/delete", f.ID)) } method="post" onsubmit="return confirm('Delete this file?')">
-										<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-										<input type="hidden" name="redirect" value={ fmt.Sprintf("%s/%d", redirectPrefix(p.ObjectType), p.ObjectID) }/>
-										<button type="submit" class="outline contrast small customer-add-button files-delete-button">Delete</button>
-									</form>
-								}
-							</td>
-						</tr>
-					}
-				</tbody>
-			</table>
+			<div class="files-gallery" aria-label="Attached files">
+				for _, f := range p.Files {
+					<article class={ fileTileClass(f.MimeType) }>
+						<button
+							type="button"
+							class="files-thumb"
+							data-file-name={ f.OriginalName }
+							data-file-url={ fmt.Sprintf("/files/%d", f.ID) }
+							data-file-download-url={ fmt.Sprintf("/files/%d?download=1", f.ID) }
+							data-file-rename-url={ fmt.Sprintf("/files/%d/rename", f.ID) }
+							data-file-delete-url={ fmt.Sprintf("/files/%d/delete", f.ID) }
+							data-file-kind={ filePreviewKind(f.MimeType) }
+							onclick="filesOpenModal(this)"
+							aria-label={ fmt.Sprintf("Open %s", f.OriginalName) }
+						>
+							if strings.HasPrefix(f.MimeType, "image/") {
+								<img src={ templ.URL(fmt.Sprintf("/files/%d", f.ID)) } alt="" loading="lazy"/>
+							} else {
+								<span class="files-thumb-icon">{ fileIconLabel(f.MimeType) }</span>
+							}
+						</button>
+						<div class="files-tile-body">
+							<strong title={ f.OriginalName }>{ f.OriginalName }</strong>
+							<small>{ f.FileSize } · { f.CreatedAt }</small>
+						</div>
+					</article>
+				}
+			</div>
 		} else {
-			<p><small>No files attached.</small></p>
+			<p class="files-empty"><small>No files attached. Drop a file into the card above to attach one.</small></p>
 		}
+		@FilePreviewDialog()
+		@FileWidgetScript()
 	</div>
+}
+
+templ FilePreviewDialog() {
+	<dialog class="files-preview-dialog" id="files-preview-dialog" onclick="filesDialogBackdropClose(event, this)">
+		<header class="files-preview-header">
+			<strong id="files-preview-title">File preview</strong>
+			<div class="files-preview-actions">
+				<a id="files-preview-download" href="#" class="files-preview-action" download>Download</a>
+				if canManageOperational(ctx) {
+					<button type="button" class="files-preview-action" onclick="filesToggleModalRename()">Rename</button>
+					<input type="hidden" id="files-preview-csrf" value={ csrfToken(ctx) }/>
+					<button type="button" class="files-preview-action files-preview-action-danger" onclick="filesDeleteCurrentFile()">Delete</button>
+				}
+				<button type="button" class="files-preview-action" onclick="filesCloseModal()" aria-label="Close file preview">Close</button>
+			</div>
+			if canManageOperational(ctx) {
+				<form id="files-preview-rename-form" class="files-modal-rename-form" onsubmit="return filesRenameCurrentFile(this)" hidden>
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<input type="text" name="original_name" required maxlength="255"/>
+					<button type="submit" class="small customer-add-button">Save</button>
+					<button type="button" class="outline small customer-add-button" onclick="filesCancelModalRename()">Cancel</button>
+				</form>
+			}
+		</header>
+		<div class="files-preview-body" id="files-preview-body"></div>
+	</dialog>
+}
+
+templ FileWidgetScript() {
+	<script>
+		function filesDragOver(event, form) {
+			event.preventDefault();
+			form.classList.add('files-drop-active');
+		}
+
+		function filesDragLeave(event, form) {
+			if (!form.contains(event.relatedTarget)) form.classList.remove('files-drop-active');
+		}
+
+		async function filesHandleDrop(event, form) {
+			event.preventDefault();
+			form.classList.remove('files-drop-active');
+			const files = Array.from(event.dataTransfer.files || []);
+			if (!files.length) return;
+			const redirect = form.querySelector('[name="redirect"]')?.value || window.location.pathname;
+			for (const file of files) {
+				const body = new FormData(form);
+				body.set('file', file);
+				const response = await fetch(form.action, {
+					method: 'POST',
+					body,
+					headers: { 'HX-Request': 'true' }
+				});
+				if (!response.ok) {
+					alert(await response.text() || 'Upload failed');
+					return;
+				}
+			}
+			window.location.href = redirect;
+		}
+
+		function filesOpenModal(button) {
+			const dialog = document.getElementById('files-preview-dialog');
+			const title = document.getElementById('files-preview-title');
+			const body = document.getElementById('files-preview-body');
+			const download = document.getElementById('files-preview-download');
+			if (!dialog || !title || !body || !download) return;
+			const name = button.dataset.fileName || 'File preview';
+			const url = button.dataset.fileUrl;
+			const kind = button.dataset.fileKind;
+			title.textContent = name;
+			download.href = button.dataset.fileDownloadUrl || url;
+			const redirect = window.location.pathname + window.location.search;
+			dialog.dataset.fileRenameUrl = button.dataset.fileRenameUrl || '';
+			dialog.dataset.fileDeleteUrl = button.dataset.fileDeleteUrl || '';
+			dialog.dataset.redirect = redirect;
+			const renameForm = document.getElementById('files-preview-rename-form');
+			if (renameForm) {
+				renameForm.hidden = true;
+				renameForm.querySelector('[name="original_name"]').value = name;
+			}
+			body.replaceChildren();
+			body.classList.toggle('files-preview-body-pdf', kind === 'pdf');
+			if (kind === 'image') {
+				const img = document.createElement('img');
+				img.src = url;
+				img.alt = name;
+				body.appendChild(img);
+			} else if (kind === 'pdf') {
+				const frame = document.createElement('iframe');
+				frame.src = url + '#zoom=100&navpanes=0';
+				frame.title = name;
+				body.appendChild(frame);
+			} else {
+				const fallback = document.createElement('div');
+				fallback.className = 'files-preview-fallback';
+				fallback.textContent = 'Preview is not available for this file type. Use Download to open it.';
+				body.appendChild(fallback);
+			}
+			if (typeof dialog.showModal === 'function') dialog.showModal();
+		}
+
+		function filesCloseModal() {
+			const dialog = document.getElementById('files-preview-dialog');
+			if (dialog) dialog.close();
+		}
+
+		function filesDialogBackdropClose(event, dialog) {
+			if (event.target === dialog) dialog.close();
+		}
+
+		function filesToggleModalRename() {
+			const form = document.getElementById('files-preview-rename-form');
+			if (!form) return;
+			form.hidden = !form.hidden;
+			if (!form.hidden) form.querySelector('input[name="original_name"]')?.focus();
+		}
+
+		function filesCancelModalRename() {
+			const form = document.getElementById('files-preview-rename-form');
+			if (form) form.hidden = true;
+		}
+
+		function filesSelectedAction(action, pattern) {
+			if (!pattern.test(action || '')) {
+				alert('File action was not ready. Please close and reopen this file.');
+				return '';
+			}
+			return action;
+		}
+
+		async function filesPostModalAction(action, values) {
+			const csrf = document.getElementById('files-preview-csrf')?.value || document.querySelector('#files-preview-rename-form [name="csrf_token"]')?.value || '';
+			const dialog = document.getElementById('files-preview-dialog');
+			const redirect = dialog?.dataset.redirect || window.location.pathname;
+			const body = new URLSearchParams({ csrf_token: csrf, redirect });
+			Object.entries(values || {}).forEach(([key, value]) => body.set(key, value));
+			const response = await fetch(action, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+					'HX-Request': 'true'
+				},
+				body
+			});
+			if (!response.ok) {
+				alert(await response.text() || 'File action failed');
+				return;
+			}
+			window.location.href = response.headers.get('HX-Redirect') || redirect;
+		}
+
+		function filesRenameCurrentFile(form) {
+			const dialog = document.getElementById('files-preview-dialog');
+			const action = filesSelectedAction(dialog?.dataset.fileRenameUrl, /^\/files\/\d+\/rename$/);
+			if (!action) return false;
+			filesPostModalAction(action, { original_name: form.querySelector('[name="original_name"]').value });
+			return false;
+		}
+
+		function filesDeleteCurrentFile() {
+			const dialog = document.getElementById('files-preview-dialog');
+			const action = filesSelectedAction(dialog?.dataset.fileDeleteUrl, /^\/files\/\d+\/delete$/);
+			if (!action || !confirm('Delete this file?')) return;
+			filesPostModalAction(action);
+		}
+	</script>
 }
