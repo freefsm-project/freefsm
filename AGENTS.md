@@ -10,6 +10,14 @@ If the user says "commit and push", they are requesting it. Otherwise, stage cha
 
 - Keep responses concise and to the point - unless the user asks otherwise. 
 
+## ENGINEERING PREFERENCE
+
+- Prefer best-practice, well-designed solutions over short-term shortcuts, even when implementation is slower, as long as the added complexity is justified by the domain.
+- Do not choose the smallest patch if it creates misleading semantics, future coupling, or a brittle design.
+- Keep complexity down by designing the right abstraction, not by reusing the wrong one.
+- Prefer domain-accurate concepts over overloaded ones. For example, use invitation tokens for account onboarding rather than reusing password-reset tokens.
+- If best practice and minimal complexity appear to conflict, pause and explain the tradeoff before implementing.
+
 ## PLANING MODE
 
 - Always ask clarifying questions

@@ -18,13 +18,14 @@ import (
 type UserHandler struct {
 	svc         *services.UserService
 	emailSvc    *services.EmailService
+	inviteSvc   *services.InvitationService
 	csSvc       *services.CompanySettingsService
 	activitySvc *services.ActivityService
 	cfg         *config.Config
 }
 
-func NewUserHandler(svc *services.UserService, emailSvc *services.EmailService, csSvc *services.CompanySettingsService, activitySvc *services.ActivityService, cfg *config.Config) *UserHandler {
-	return &UserHandler{svc: svc, emailSvc: emailSvc, csSvc: csSvc, activitySvc: activitySvc, cfg: cfg}
+func NewUserHandler(svc *services.UserService, emailSvc *services.EmailService, inviteSvc *services.InvitationService, csSvc *services.CompanySettingsService, activitySvc *services.ActivityService, cfg *config.Config) *UserHandler {
+	return &UserHandler{svc: svc, emailSvc: emailSvc, inviteSvc: inviteSvc, csSvc: csSvc, activitySvc: activitySvc, cfg: cfg}
 }
 
 func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -49,7 +50,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.ParseForm()
-	result, tempPass, err := h.svc.Create(r.Context(), services.UserCreateParams{
+	result, err := h.svc.Create(r.Context(), services.UserCreateParams{
 		Name:             r.FormValue("name"),
 		Email:            r.FormValue("email"),
 		Password:         r.FormValue("password"),
@@ -57,7 +58,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		SendWelcomeEmail: r.FormValue("send_welcome_email") == "on",
 	})
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "create user", err)
 		return
 	}
 
@@ -70,9 +71,20 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.FormValue("send_welcome_email") == "on" {
-		loginURL := absoluteAppURL(h.cfg, r, "/login")
-		if err := h.emailSvc.SendWelcomeEmail(r.Context(), result.Email, result.Name, tempPass, loginURL); err != nil {
+		token, err := h.inviteSvc.CreateInvite(r.Context(), result.ID)
+		if err != nil {
+			internalServerError(w, r, "create invitation", err)
+			return
+		}
+		inviteURL := absoluteAppURL(h.cfg, r, "/accept-invite?token="+url.QueryEscape(token))
+		if err := h.emailSvc.SendWelcomeEmail(r.Context(), result.Email, result.Name, inviteURL); err != nil {
 			slog.Error("send welcome email", "error", err, "user", result.Email)
+		}
+		if a != nil && h.activitySvc != nil {
+			h.activitySvc.Record(r.Context(), a.ID, "welcome_invite_sent", "user", result.ID, map[string]interface{}{
+				"entity_name": result.Name,
+				"actor_name":  a.Name,
+			})
 		}
 	}
 
@@ -110,7 +122,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Role:  formPtr(r.FormValue("role")),
 	})
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "update user", err)
 		return
 	}
 
@@ -160,7 +172,7 @@ func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.SetPassword(r.Context(), id, password); err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "admin reset password", err)
 		return
 	}
 
@@ -205,9 +217,14 @@ func (h *UserHandler) Preferences(w http.ResponseWriter, r *http.Request) {
 
 func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	user, tempPass, err := h.svc.ResendWelcomeEmail(r.Context(), id)
+	user, err := h.svc.ResendWelcomeEmail(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "prepare welcome resend", err)
+		return
+	}
+	token, err := h.inviteSvc.CreateInvite(r.Context(), user.ID)
+	if err != nil {
+		internalServerError(w, r, "create invitation", err)
 		return
 	}
 
@@ -219,8 +236,8 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	loginURL := absoluteAppURL(h.cfg, r, "/login")
-	if err := h.emailSvc.SendWelcomeEmail(r.Context(), user.Email, user.Name, tempPass, loginURL); err != nil {
+	inviteURL := absoluteAppURL(h.cfg, r, "/accept-invite?token="+url.QueryEscape(token))
+	if err := h.emailSvc.SendWelcomeEmail(r.Context(), user.Email, user.Name, inviteURL); err != nil {
 		slog.Error("resend welcome email", "error", err, "user", user.Email)
 		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+failed", id), http.StatusSeeOther)
 		return

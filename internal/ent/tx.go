@@ -38,6 +38,8 @@ type Tx struct {
 	Estimate *EstimateClient
 	// File is the client for interacting with the File builders.
 	File *FileClient
+	// InvitationToken is the client for interacting with the InvitationToken builders.
+	InvitationToken *InvitationTokenClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// Item is the client for interacting with the Item builders.
@@ -208,6 +210,7 @@ func (tx *Tx) init() {
 	tx.DashboardWidget = NewDashboardWidgetClient(tx.config)
 	tx.Estimate = NewEstimateClient(tx.config)
 	tx.File = NewFileClient(tx.config)
+	tx.InvitationToken = NewInvitationTokenClient(tx.config)
 	tx.Invoice = NewInvoiceClient(tx.config)
 	tx.Item = NewItemClient(tx.config)
 	tx.Job = NewJobClient(tx.config)

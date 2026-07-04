@@ -75,14 +75,15 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService, userService, locationSvc, invoiceService, activitySvc, cfg)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
-	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc)
-	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc)
+	inviteSvc := services.NewInvitationService(entClient)
+	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc, policySvc)
+	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc, policySvc)
 	tagHandler := NewTagHandler(tagSvc, tagLinkSvc, activitySvc, depSvc)
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc, cfg.UploadDir)
 	jobStatusHandler := NewJobStatusHandler(statusService, activitySvc)
-	userHandler := NewUserHandler(userService, emailSvc, companySettingsSvc, activitySvc, cfg)
+	userHandler := NewUserHandler(userService, emailSvc, inviteSvc, companySettingsSvc, activitySvc, cfg)
 	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, activitySvc)
-	authHandler := NewAuthHandler(db, sessions, userService, companySettingsSvc, emailSvc, services.NewPasswordResetService(entClient), activitySvc, cfg)
+	authHandler := NewAuthHandler(db, sessions, userService, companySettingsSvc, emailSvc, services.NewPasswordResetService(entClient), inviteSvc, activitySvc, cfg)
 	passwordHandler := NewPasswordHandler(userService, companySettingsSvc, activitySvc)
 
 	// Asset handlers
@@ -98,6 +99,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	r.With(authPostLimiter).Post("/forgot-password", authHandler.ForgotPassword)
 	r.Get("/reset-password", authHandler.ResetPassword)
 	r.With(authPostLimiter).Post("/reset-password", authHandler.ResetPassword)
+	r.Get("/accept-invite", authHandler.AcceptInvite)
+	r.With(authPostLimiter).Post("/accept-invite", authHandler.AcceptInvite)
 
 	setupHandler := NewSetupHandler(db, sessions, cfg)
 	r.Get("/setup", setupHandler.ServeHTTP)

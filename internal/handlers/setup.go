@@ -67,7 +67,7 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "hash setup password", err)
 		return
 	}
 
@@ -83,7 +83,7 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 
 	token, err := h.sessions.Create(r.Context(), userID)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "create setup session", err)
 		return
 	}
 

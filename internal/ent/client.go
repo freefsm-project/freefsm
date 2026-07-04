@@ -28,6 +28,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/dashboardwidget"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/file"
+	"github.com/MartialM1nd/freefsm/internal/ent/invitationtoken"
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
 	"github.com/MartialM1nd/freefsm/internal/ent/item"
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
@@ -74,6 +75,8 @@ type Client struct {
 	Estimate *EstimateClient
 	// File is the client for interacting with the File builders.
 	File *FileClient
+	// InvitationToken is the client for interacting with the InvitationToken builders.
+	InvitationToken *InvitationTokenClient
 	// Invoice is the client for interacting with the Invoice builders.
 	Invoice *InvoiceClient
 	// Item is the client for interacting with the Item builders.
@@ -124,6 +127,7 @@ func (c *Client) init() {
 	c.DashboardWidget = NewDashboardWidgetClient(c.config)
 	c.Estimate = NewEstimateClient(c.config)
 	c.File = NewFileClient(c.config)
+	c.InvitationToken = NewInvitationTokenClient(c.config)
 	c.Invoice = NewInvoiceClient(c.config)
 	c.Item = NewItemClient(c.config)
 	c.Job = NewJobClient(c.config)
@@ -242,6 +246,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		DashboardWidget:       NewDashboardWidgetClient(cfg),
 		Estimate:              NewEstimateClient(cfg),
 		File:                  NewFileClient(cfg),
+		InvitationToken:       NewInvitationTokenClient(cfg),
 		Invoice:               NewInvoiceClient(cfg),
 		Item:                  NewItemClient(cfg),
 		Job:                   NewJobClient(cfg),
@@ -287,6 +292,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		DashboardWidget:       NewDashboardWidgetClient(cfg),
 		Estimate:              NewEstimateClient(cfg),
 		File:                  NewFileClient(cfg),
+		InvitationToken:       NewInvitationTokenClient(cfg),
 		Invoice:               NewInvoiceClient(cfg),
 		Item:                  NewItemClient(cfg),
 		Job:                   NewJobClient(cfg),
@@ -331,9 +337,9 @@ func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.ActivityLog, c.Asset, c.AssetStatus, c.AssetType, c.Comment,
 		c.CompanySettings, c.CustomFieldDefinition, c.Customer, c.CustomerContact,
-		c.DashboardLayout, c.DashboardWidget, c.Estimate, c.File, c.Invoice, c.Item,
-		c.Job, c.JobAssignment, c.Location, c.PasswordResetToken, c.Project, c.Status,
-		c.StatusWorkflow, c.Tag, c.TagLink, c.TimeEntry, c.User,
+		c.DashboardLayout, c.DashboardWidget, c.Estimate, c.File, c.InvitationToken,
+		c.Invoice, c.Item, c.Job, c.JobAssignment, c.Location, c.PasswordResetToken,
+		c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink, c.TimeEntry, c.User,
 	} {
 		n.Use(hooks...)
 	}
@@ -345,9 +351,9 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.ActivityLog, c.Asset, c.AssetStatus, c.AssetType, c.Comment,
 		c.CompanySettings, c.CustomFieldDefinition, c.Customer, c.CustomerContact,
-		c.DashboardLayout, c.DashboardWidget, c.Estimate, c.File, c.Invoice, c.Item,
-		c.Job, c.JobAssignment, c.Location, c.PasswordResetToken, c.Project, c.Status,
-		c.StatusWorkflow, c.Tag, c.TagLink, c.TimeEntry, c.User,
+		c.DashboardLayout, c.DashboardWidget, c.Estimate, c.File, c.InvitationToken,
+		c.Invoice, c.Item, c.Job, c.JobAssignment, c.Location, c.PasswordResetToken,
+		c.Project, c.Status, c.StatusWorkflow, c.Tag, c.TagLink, c.TimeEntry, c.User,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -382,6 +388,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Estimate.mutate(ctx, m)
 	case *FileMutation:
 		return c.File.mutate(ctx, m)
+	case *InvitationTokenMutation:
+		return c.InvitationToken.mutate(ctx, m)
 	case *InvoiceMutation:
 		return c.Invoice.mutate(ctx, m)
 	case *ItemMutation:
@@ -2139,6 +2147,139 @@ func (c *FileClient) mutate(ctx context.Context, m *FileMutation) (Value, error)
 		return (&FileDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown File mutation op: %q", m.Op())
+	}
+}
+
+// InvitationTokenClient is a client for the InvitationToken schema.
+type InvitationTokenClient struct {
+	config
+}
+
+// NewInvitationTokenClient returns a client for the InvitationToken from the given config.
+func NewInvitationTokenClient(c config) *InvitationTokenClient {
+	return &InvitationTokenClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `invitationtoken.Hooks(f(g(h())))`.
+func (c *InvitationTokenClient) Use(hooks ...Hook) {
+	c.hooks.InvitationToken = append(c.hooks.InvitationToken, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `invitationtoken.Intercept(f(g(h())))`.
+func (c *InvitationTokenClient) Intercept(interceptors ...Interceptor) {
+	c.inters.InvitationToken = append(c.inters.InvitationToken, interceptors...)
+}
+
+// Create returns a builder for creating a InvitationToken entity.
+func (c *InvitationTokenClient) Create() *InvitationTokenCreate {
+	mutation := newInvitationTokenMutation(c.config, OpCreate)
+	return &InvitationTokenCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of InvitationToken entities.
+func (c *InvitationTokenClient) CreateBulk(builders ...*InvitationTokenCreate) *InvitationTokenCreateBulk {
+	return &InvitationTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *InvitationTokenClient) MapCreateBulk(slice any, setFunc func(*InvitationTokenCreate, int)) *InvitationTokenCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &InvitationTokenCreateBulk{err: fmt.Errorf("calling to InvitationTokenClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*InvitationTokenCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &InvitationTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for InvitationToken.
+func (c *InvitationTokenClient) Update() *InvitationTokenUpdate {
+	mutation := newInvitationTokenMutation(c.config, OpUpdate)
+	return &InvitationTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *InvitationTokenClient) UpdateOne(_m *InvitationToken) *InvitationTokenUpdateOne {
+	mutation := newInvitationTokenMutation(c.config, OpUpdateOne, withInvitationToken(_m))
+	return &InvitationTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *InvitationTokenClient) UpdateOneID(id int64) *InvitationTokenUpdateOne {
+	mutation := newInvitationTokenMutation(c.config, OpUpdateOne, withInvitationTokenID(id))
+	return &InvitationTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for InvitationToken.
+func (c *InvitationTokenClient) Delete() *InvitationTokenDelete {
+	mutation := newInvitationTokenMutation(c.config, OpDelete)
+	return &InvitationTokenDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *InvitationTokenClient) DeleteOne(_m *InvitationToken) *InvitationTokenDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *InvitationTokenClient) DeleteOneID(id int64) *InvitationTokenDeleteOne {
+	builder := c.Delete().Where(invitationtoken.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &InvitationTokenDeleteOne{builder}
+}
+
+// Query returns a query builder for InvitationToken.
+func (c *InvitationTokenClient) Query() *InvitationTokenQuery {
+	return &InvitationTokenQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeInvitationToken},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a InvitationToken entity by its id.
+func (c *InvitationTokenClient) Get(ctx context.Context, id int64) (*InvitationToken, error) {
+	return c.Query().Where(invitationtoken.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *InvitationTokenClient) GetX(ctx context.Context, id int64) *InvitationToken {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *InvitationTokenClient) Hooks() []Hook {
+	return c.hooks.InvitationToken
+}
+
+// Interceptors returns the client interceptors.
+func (c *InvitationTokenClient) Interceptors() []Interceptor {
+	return c.inters.InvitationToken
+}
+
+func (c *InvitationTokenClient) mutate(ctx context.Context, m *InvitationTokenMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&InvitationTokenCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&InvitationTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&InvitationTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&InvitationTokenDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown InvitationToken mutation op: %q", m.Op())
 	}
 }
 
@@ -3908,15 +4049,15 @@ type (
 	hooks struct {
 		ActivityLog, Asset, AssetStatus, AssetType, Comment, CompanySettings,
 		CustomFieldDefinition, Customer, CustomerContact, DashboardLayout,
-		DashboardWidget, Estimate, File, Invoice, Item, Job, JobAssignment, Location,
-		PasswordResetToken, Project, Status, StatusWorkflow, Tag, TagLink, TimeEntry,
-		User []ent.Hook
+		DashboardWidget, Estimate, File, InvitationToken, Invoice, Item, Job,
+		JobAssignment, Location, PasswordResetToken, Project, Status, StatusWorkflow,
+		Tag, TagLink, TimeEntry, User []ent.Hook
 	}
 	inters struct {
 		ActivityLog, Asset, AssetStatus, AssetType, Comment, CompanySettings,
 		CustomFieldDefinition, Customer, CustomerContact, DashboardLayout,
-		DashboardWidget, Estimate, File, Invoice, Item, Job, JobAssignment, Location,
-		PasswordResetToken, Project, Status, StatusWorkflow, Tag, TagLink, TimeEntry,
-		User []ent.Interceptor
+		DashboardWidget, Estimate, File, InvitationToken, Invoice, Item, Job,
+		JobAssignment, Location, PasswordResetToken, Project, Status, StatusWorkflow,
+		Tag, TagLink, TimeEntry, User []ent.Interceptor
 	}
 )

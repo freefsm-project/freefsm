@@ -50,7 +50,7 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 
 	u, err := h.userSvc.GetByID(r.Context(), user.ID)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "load current user", err)
 		return
 	}
 
@@ -69,7 +69,7 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 
 	// Update password and clear flag
 	if err := h.userSvc.SetPassword(r.Context(), user.ID, newPass); err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "change password", err)
 		return
 	}
 	if err := h.userSvc.ClearForcePasswordChange(r.Context(), user.ID); err != nil {

@@ -38,6 +38,12 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 	assignedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Assigned Route Job").SetBillingType("hourly").SetLineItems(`[{"title":"Billable","quantity":1,"unit_price":100}]`).SaveX(ctx)
 	archivedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Archived Route Job").SetDeletedAt(time.Now()).SaveX(ctx)
 	unassignedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Unassigned Route Job").SaveX(ctx)
+	workflow := client.StatusWorkflow.Create().SetObjectType("job").SetName("Job Workflow").SaveX(ctx)
+	status := client.Status.Create().SetWorkflowID(workflow.ID).SetName("Scheduled").SetColor("#336699").SetSortOrder(1).SaveX(ctx)
+	estimate := client.Estimate.Create().SetCustomerID(customer.ID).SetTitle("Protected Estimate").SaveX(ctx)
+	invoice := client.Invoice.Create().SetCustomerID(customer.ID).SetTitle("Protected Invoice").SaveX(ctx)
+	contact := client.CustomerContact.Create().SetCustomerID(customer.ID).SetFirstName("Protected").SetLastName("Contact").SaveX(ctx)
+	location := client.Location.Create().SetObjectType("customer").SetObjectID(customer.ID).SetTitle("Protected Location").SaveX(ctx)
 	client.JobAssignment.Create().SetJobID(assignedJob.ID).SetUserID(tech.ID).SaveX(ctx)
 	client.JobAssignment.Create().SetJobID(archivedJob.ID).SetUserID(tech.ID).SaveX(ctx)
 
@@ -59,13 +65,36 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/comments", archivedJob.ID), http.StatusForbidden)
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/activity", assignedJob.ID), http.StatusOK)
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/activity", archivedJob.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/invoices/%d", invoice.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/invoices/%d/pdf", invoice.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/invoices/%d/pdf/preview", invoice.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/estimates/%d", estimate.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/estimates/%d/pdf", estimate.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/estimates/%d/pdf/preview", estimate.ID), http.StatusForbidden)
 	})
 
 	t.Run("dispatcher route boundaries", func(t *testing.T) {
 		expectStatus(t, router, dispatcherCookie, http.MethodGet, "/customers", http.StatusOK)
 		expectStatus(t, router, dispatcherCookie, http.MethodGet, "/invoices", http.StatusOK)
+		expectStatus(t, router, dispatcherCookie, http.MethodGet, fmt.Sprintf("/invoices/%d", invoice.ID), http.StatusOK)
+		expectStatus(t, router, dispatcherCookie, http.MethodGet, fmt.Sprintf("/estimates/%d", estimate.ID), http.StatusOK)
 		expectStatus(t, router, dispatcherCookie, http.MethodGet, fmt.Sprintf("/jobs/%d", assignedJob.ID), http.StatusOK)
 		expectStatus(t, router, dispatcherCookie, http.MethodGet, fmt.Sprintf("/jobs/%d", archivedJob.ID), http.StatusOK)
+	})
+
+	t.Run("tech cannot mutate assigned jobs", func(t *testing.T) {
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/status?status_id=%d", assignedJob.ID, status.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/create-next-occurrence", assignedJob.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/cancel-next-occurrence", assignedJob.ID), http.StatusForbidden)
+	})
+
+	t.Run("tech cannot mutate customer subresources", func(t *testing.T) {
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/customers/%d/contacts/%d/edit", customer.ID, contact.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/contacts/%d", customer.ID, contact.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/contacts/%d/delete", customer.ID, contact.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/customers/%d/locations/%d/edit", customer.ID, location.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/locations/%d", customer.ID, location.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/locations/%d/delete", customer.ID, location.ID), http.StatusForbidden)
 	})
 
 	t.Run("archived job pages are read-only", func(t *testing.T) {

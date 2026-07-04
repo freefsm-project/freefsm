@@ -47,19 +47,20 @@ If you received this email, your email configuration is ready to use.
 	return s.SendEmail(ctx, to, subject, body)
 }
 
-func (s *EmailService) SendWelcomeEmail(ctx context.Context, to, name, tempPassword, loginURL string) error {
+func (s *EmailService) SendWelcomeEmail(ctx context.Context, to, name, inviteURL string) error {
 	subject := "Welcome to FreeFSM"
 	body := fmt.Sprintf(`Hi %s,
 
 Your FreeFSM account has been created.
 
-Login: %s
 Email: %s
-Temporary Password: %s
 
-You'll be required to change this on first login.
+Click the link below to set your password and activate your account:
+%s
 
-- FreeFSM`, name, loginURL, to, tempPassword)
+This invitation expires in 72 hours.
+
+- FreeFSM`, name, to, inviteURL)
 
 	return s.SendEmail(ctx, to, subject, body)
 }

@@ -50,18 +50,18 @@ type UserCreateParams struct {
 	SendWelcomeEmail bool
 }
 
-func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User, string, error) {
+func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User, error) {
 	password := p.Password
-	forceChange := false
+	active := true
 
 	if p.SendWelcomeEmail {
-		password = generateTempPassword()
-		forceChange = true
+		password = generateUnusablePassword()
+		active = false
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, "", fmt.Errorf("hash password: %w", err)
+		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
 	u, err := s.client.User.Create().
@@ -69,11 +69,11 @@ func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User
 		SetEmail(p.Email).
 		SetPasswordHash(string(hash)).
 		SetRole(p.Role).
-		SetIsActive(true).
-		SetForcePasswordChange(forceChange).
+		SetIsActive(active).
+		SetForcePasswordChange(false).
 		Save(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("create user: %w", err)
+		return nil, fmt.Errorf("create user: %w", err)
 	}
 
 	if p.SendWelcomeEmail {
@@ -81,11 +81,11 @@ func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User
 			SetWelcomeEmailSentAt(time.Now()).
 			Save(ctx)
 		if err != nil {
-			return nil, "", fmt.Errorf("update welcome sent at: %w", err)
+			return nil, fmt.Errorf("update welcome sent at: %w", err)
 		}
 	}
 
-	return u, password, nil
+	return u, nil
 }
 
 type UserUpdateParams struct {
@@ -122,6 +122,18 @@ func (s *UserService) Update(ctx context.Context, id int64, p UserUpdateParams) 
 
 func (s *UserService) SetActive(ctx context.Context, id int64, active bool) error {
 	return s.client.User.UpdateOneID(id).SetIsActive(active).Exec(ctx)
+}
+
+func (s *UserService) ActivateWithPassword(ctx context.Context, id int64, password string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	return s.client.User.UpdateOneID(id).
+		SetPasswordHash(string(hash)).
+		SetIsActive(true).
+		SetForcePasswordChange(false).
+		Exec(ctx)
 }
 
 func (s *UserService) SetPassword(ctx context.Context, id int64, password string) error {
@@ -242,31 +254,26 @@ func (s *UserService) ValidatePassword(password string, cs *ent.CompanySettings)
 	return nil
 }
 
-func (s *UserService) ResendWelcomeEmail(ctx context.Context, id int64) (*ent.User, string, error) {
+func (s *UserService) ResendWelcomeEmail(ctx context.Context, id int64) (*ent.User, error) {
 	u, err := s.GetByID(ctx, id)
 	if err != nil {
-		return nil, "", err
-	}
-	tempPass := generateTempPassword()
-	hash, err := bcrypt.GenerateFromPassword([]byte(tempPass), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, "", fmt.Errorf("hash password: %w", err)
+		return nil, err
 	}
 	_, err = s.client.User.UpdateOne(u).
-		SetPasswordHash(string(hash)).
-		SetForcePasswordChange(true).
+		SetIsActive(false).
+		SetForcePasswordChange(false).
 		SetWelcomeEmailSentAt(time.Now()).
 		Save(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("update user: %w", err)
+		return nil, fmt.Errorf("update user: %w", err)
 	}
-	return u, tempPass, nil
+	return u, nil
 }
 
-func generateTempPassword() string {
+func generateUnusablePassword() string {
 	const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	var sb strings.Builder
-	for i := 1; i <= 12; i++ {
+	for i := 1; i <= 64; i++ {
 		n, _ := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
 		sb.WriteByte(chars[n.Int64()])
 	}

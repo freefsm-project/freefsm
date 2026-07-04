@@ -1,0 +1,27 @@
+package templates
+
+templ AcceptInvitePage(p ResetPasswordData) {
+	@Layout("Accept Invitation") {
+		<article class="auth-card">
+			<hgroup>
+				<h2>Accept Invitation</h2>
+				<p>Set your password to activate your account</p>
+			</hgroup>
+			if p.Error != "" {
+				<div class="error-msg">{ p.Error }</div>
+			}
+			if p.Valid {
+				<form action="/accept-invite" method="post">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<input type="hidden" name="token" value={ p.Token }/>
+					<label>
+						Password
+						<input type="password" name="password" placeholder="Password" required minlength="8" autofocus/>
+					</label>
+					<button type="submit">Activate Account</button>
+				</form>
+			}
+			<p class="auth-link"><a href="/login">&larr; Back to Login</a></p>
+		</article>
+	}
+}

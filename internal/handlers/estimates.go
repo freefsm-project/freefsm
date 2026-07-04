@@ -29,10 +29,24 @@ type EstimateHandler struct {
 	fileSvc     *services.FileService
 	emailSvc    *services.EmailService
 	activitySvc *services.ActivityService
+	policySvc   *services.PolicyService
 }
 
-func NewEstimateHandler(svc *services.EstimateService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, invoiceSvc *services.InvoiceService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService) *EstimateHandler {
-	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc}
+func NewEstimateHandler(svc *services.EstimateService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, invoiceSvc *services.InvoiceService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService, policySvc *services.PolicyService) *EstimateHandler {
+	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc}
+}
+
+func (h *EstimateHandler) authorizeEstimate(w http.ResponseWriter, r *http.Request, id int64, action string) bool {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "estimate", id, action) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
 }
 
 func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +106,9 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if !h.authorizeEstimate(w, r, id, policyRead) {
+		return
+	}
 	e, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
@@ -120,11 +137,14 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 func (h *EstimateHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeEstimate(w, r, id, policyUpdate) {
+		return
+	}
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, "estimate", id)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "attach estimate tag", err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -145,10 +165,13 @@ func (h *EstimateHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 
 func (h *EstimateHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeEstimate(w, r, id, policyUpdate) {
+		return
+	}
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "estimate", id); err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "detach estimate tag", err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -328,6 +351,9 @@ func (h *EstimateHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if !h.authorizeEstimate(w, r, id, policyRead) {
+		return
+	}
 	doc, err := h.estimatePDFDocument(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
@@ -343,6 +369,9 @@ func (h *EstimateHandler) PreviewPDF(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
+		return
+	}
+	if !h.authorizeEstimate(w, r, id, policyRead) {
 		return
 	}
 	e, err := h.svc.GetByID(r.Context(), id)
@@ -369,6 +398,9 @@ func (h *EstimateHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if !h.authorizeEstimate(w, r, id, policyUpdate) {
+		return
+	}
 	doc, err := h.estimatePDFDocument(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
@@ -385,7 +417,7 @@ func (h *EstimateHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 	}
 	_, filename, err := saveVersionedDocumentPDF(r.Context(), h.fileSvc, "estimate", id, doc, u.ID)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "save estimate pdf", err)
 		return
 	}
 	h.activitySvc.Record(r.Context(), u.ID, "pdf_saved", "estimate", id, map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "file_name": filename})
@@ -396,6 +428,9 @@ func (h *EstimateHandler) Email(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
+		return
+	}
+	if !h.authorizeEstimate(w, r, id, policyUpdate) {
 		return
 	}
 	doc, err := h.estimatePDFDocument(r.Context(), id)

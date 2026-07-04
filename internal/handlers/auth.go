@@ -19,12 +19,13 @@ type AuthHandler struct {
 	csSvc       *services.CompanySettingsService
 	emailSvc    *services.EmailService
 	resetSvc    *services.PasswordResetService
+	inviteSvc   *services.InvitationService
 	activitySvc *services.ActivityService
 	cfg         *config.Config
 }
 
-func NewAuthHandler(db *pgxpool.Pool, sessions *services.SessionService, userSvc *services.UserService, csSvc *services.CompanySettingsService, emailSvc *services.EmailService, resetSvc *services.PasswordResetService, activitySvc *services.ActivityService, cfg *config.Config) *AuthHandler {
-	return &AuthHandler{db: db, sessions: sessions, userSvc: userSvc, csSvc: csSvc, emailSvc: emailSvc, resetSvc: resetSvc, activitySvc: activitySvc, cfg: cfg}
+func NewAuthHandler(db *pgxpool.Pool, sessions *services.SessionService, userSvc *services.UserService, csSvc *services.CompanySettingsService, emailSvc *services.EmailService, resetSvc *services.PasswordResetService, inviteSvc *services.InvitationService, activitySvc *services.ActivityService, cfg *config.Config) *AuthHandler {
+	return &AuthHandler{db: db, sessions: sessions, userSvc: userSvc, csSvc: csSvc, emailSvc: emailSvc, resetSvc: resetSvc, inviteSvc: inviteSvc, activitySvc: activitySvc, cfg: cfg}
 }
 
 func (h *AuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -76,7 +77,7 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 
 	token, err := h.sessions.Create(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "create session", err)
 		return
 	}
 
@@ -114,7 +115,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	tok, err := h.resetSvc.CreateToken(r.Context(), u.ID)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "create password reset token", err)
 		return
 	}
 	link := absoluteAppURL(h.cfg, r, "/reset-password?token="+url.QueryEscape(tok))
@@ -162,4 +163,46 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	h.resetSvc.Consume(r.Context(), token)
 	http.Redirect(w, r, "/login?flash=Password+reset+successfully", http.StatusSeeOther)
+}
+
+func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		token := r.URL.Query().Get("token")
+		_, err := h.inviteSvc.ValidateInvite(r.Context(), token)
+		if err != nil {
+			render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Error: "Invalid or expired invitation"}))
+			return
+		}
+		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true}))
+		return
+	}
+
+	r.ParseForm()
+	token := r.FormValue("token")
+	password := r.FormValue("password")
+	uid, err := h.inviteSvc.ValidateInvite(r.Context(), token)
+	if err != nil {
+		http.Error(w, "invalid invitation", http.StatusBadRequest)
+		return
+	}
+	cs, _ := h.csSvc.Get(r.Context())
+	if err := h.userSvc.ValidatePassword(password, cs); err != nil {
+		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Error: err.Error()}))
+		return
+	}
+	if err := h.userSvc.ActivateWithPassword(r.Context(), uid, password); err != nil {
+		internalServerError(w, r, "activate invited user", err)
+		return
+	}
+	if err := h.inviteSvc.ConsumeInvite(r.Context(), token); err != nil {
+		internalServerError(w, r, "consume invitation", err)
+		return
+	}
+	if u, err := h.userSvc.GetByID(r.Context(), uid); err == nil {
+		h.activitySvc.Record(r.Context(), uid, "invite_accepted", "user", uid, map[string]interface{}{
+			"entity_name": u.Name,
+			"actor_name":  u.Name,
+		})
+	}
+	http.Redirect(w, r, "/login?flash=Account+activated", http.StatusSeeOther)
 }

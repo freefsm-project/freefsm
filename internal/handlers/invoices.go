@@ -29,10 +29,24 @@ type InvoiceHandler struct {
 	fileSvc     *services.FileService
 	emailSvc    *services.EmailService
 	activitySvc *services.ActivityService
+	policySvc   *services.PolicyService
 }
 
-func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, assetSvc *services.AssetService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService) *InvoiceHandler {
-	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, assetSvc: assetSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc}
+func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, assetSvc *services.AssetService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService, policySvc *services.PolicyService) *InvoiceHandler {
+	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, assetSvc: assetSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc}
+}
+
+func (h *InvoiceHandler) authorizeInvoice(w http.ResponseWriter, r *http.Request, id int64, action string) bool {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "invoice", id, action) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
 }
 
 func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -92,6 +106,9 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if !h.authorizeInvoice(w, r, id, policyRead) {
+		return
+	}
 	i, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
@@ -131,11 +148,14 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 func (h *InvoiceHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeInvoice(w, r, id, policyUpdate) {
+		return
+	}
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, "invoice", id)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "attach invoice tag", err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -156,10 +176,13 @@ func (h *InvoiceHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 
 func (h *InvoiceHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeInvoice(w, r, id, policyUpdate) {
+		return
+	}
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
 	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "invoice", id); err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "detach invoice tag", err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -689,6 +712,9 @@ func (h *InvoiceHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if !h.authorizeInvoice(w, r, id, policyRead) {
+		return
+	}
 	doc, err := h.invoicePDFDocument(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
@@ -704,6 +730,9 @@ func (h *InvoiceHandler) PreviewPDF(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
+		return
+	}
+	if !h.authorizeInvoice(w, r, id, policyRead) {
 		return
 	}
 	i, err := h.svc.GetByID(r.Context(), id)
@@ -730,6 +759,9 @@ func (h *InvoiceHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if !h.authorizeInvoice(w, r, id, policyUpdate) {
+		return
+	}
 	doc, err := h.invoicePDFDocument(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
@@ -746,7 +778,7 @@ func (h *InvoiceHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 	}
 	_, filename, err := saveVersionedDocumentPDF(r.Context(), h.fileSvc, "invoice", id, doc, u.ID)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "save invoice pdf", err)
 		return
 	}
 	h.activitySvc.Record(r.Context(), u.ID, "pdf_saved", "invoice", id, map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "file_name": filename})
@@ -757,6 +789,9 @@ func (h *InvoiceHandler) Email(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
+		return
+	}
+	if !h.authorizeInvoice(w, r, id, policyUpdate) {
 		return
 	}
 	doc, err := h.invoicePDFDocument(r.Context(), id)

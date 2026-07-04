@@ -107,7 +107,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "job", id, policyRead) {
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "job", id, policyUpdate) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -217,7 +217,7 @@ func (h *JobHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	ok, err = h.statusSvc.BelongsToObjectType(r.Context(), statusID, "job")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalServerError(w, r, "check job status", err)
 		return
 	}
 	if !ok {
@@ -228,7 +228,7 @@ func (h *JobHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	oldStatus := statusName(statuses, j.StatusID)
 	result, err := h.svc.Update(r.Context(), id, services.JobUpdateParams{StatusID: int64Ptr(statusID)})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalServerError(w, r, "update job status", err)
 		return
 	}
 	newStatus := statusName(statuses, result.StatusID)
@@ -407,15 +407,23 @@ func (h *JobHandler) CreateNextOccurrence(w http.ResponseWriter, r *http.Request
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "job", id, policyUpdate) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	loc := middleware.CompanyLocation(r.Context())
 	now := time.Now().In(loc)
 	nextStart := time.Date(now.Year(), now.Month(), now.Day(), 8, 0, 0, 0, loc)
 	result, err := h.svc.CreateNextOccurrence(r.Context(), id, nextStart)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalServerError(w, r, "create next occurrence", err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.ID, "created_next_occurrence", "job", result.ID, map[string]interface{}{
 			"entity_name":   result.JobType,
@@ -432,8 +440,17 @@ func (h *JobHandler) CancelNextOccurrence(w http.ResponseWriter, r *http.Request
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "job", id, policyUpdate) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalServerError(w, r, "cancel next occurrence", err)
 		return
 	}
 	http.Redirect(w, r, "/jobs?flash=Next+occurrence+cancelled", http.StatusSeeOther)
@@ -581,6 +598,15 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "job", id, policyUpdate) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	idx, err := strconv.Atoi(chi.URLParam(r, "idx"))
 	if err != nil {
 		http.NotFound(w, r)
@@ -601,10 +627,9 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 		Subtasks: &subtasks,
 	}
 	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "toggle job subtask", err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		action := "subtask_completed"
 		if !subtasks[idx].Completed {

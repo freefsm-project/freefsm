@@ -23,6 +23,11 @@ func render(w http.ResponseWriter, r *http.Request, component templ.Component) {
 	_, _ = buf.WriteTo(w)
 }
 
+func internalServerError(w http.ResponseWriter, r *http.Request, msg string, err error) {
+	slog.Error(msg, "path", r.URL.Path, "error", err)
+	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+}
+
 func customerMap(customers []*ent.Customer) map[int64]string {
 	m := make(map[int64]string, len(customers))
 	for _, c := range customers {

@@ -25,6 +25,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/dashboardwidget"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/file"
+	"github.com/MartialM1nd/freefsm/internal/ent/invitationtoken"
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
 	"github.com/MartialM1nd/freefsm/internal/ent/item"
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
@@ -111,6 +112,7 @@ func checkColumn(t, c string) error {
 			dashboardwidget.Table:       dashboardwidget.ValidColumn,
 			estimate.Table:              estimate.ValidColumn,
 			file.Table:                  file.ValidColumn,
+			invitationtoken.Table:       invitationtoken.ValidColumn,
 			invoice.Table:               invoice.ValidColumn,
 			item.Table:                  item.ValidColumn,
 			job.Table:                   job.ValidColumn,

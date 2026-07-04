@@ -440,6 +440,34 @@ var (
 			},
 		},
 	}
+	// InvitationTokensColumns holds the columns for the "invitation_tokens" table.
+	InvitationTokensColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "token_hash", Type: field.TypeString, Unique: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "consumed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "created_at", Type: field.TypeTime},
+	}
+	// InvitationTokensTable holds the schema information for the "invitation_tokens" table.
+	InvitationTokensTable = &schema.Table{
+		Name:       "invitation_tokens",
+		Columns:    InvitationTokensColumns,
+		PrimaryKey: []*schema.Column{InvitationTokensColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "invitationtoken_token_hash",
+				Unique:  false,
+				Columns: []*schema.Column{InvitationTokensColumns[2]},
+			},
+			{
+				Name:    "invitationtoken_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{InvitationTokensColumns[3]},
+			},
+		},
+	}
 	// InvoicesColumns holds the columns for the "invoices" table.
 	InvoicesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -869,6 +897,7 @@ var (
 		DashboardWidgetsTable,
 		EstimatesTable,
 		FilesTable,
+		InvitationTokensTable,
 		InvoicesTable,
 		ItemsTable,
 		JobsTable,
@@ -924,6 +953,9 @@ func init() {
 	}
 	FilesTable.Annotation = &entsql.Annotation{
 		Table: "files",
+	}
+	InvitationTokensTable.Annotation = &entsql.Annotation{
+		Table: "invitation_tokens",
 	}
 	InvoicesTable.Annotation = &entsql.Annotation{
 		Table: "invoices",

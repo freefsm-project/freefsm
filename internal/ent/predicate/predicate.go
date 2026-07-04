@@ -45,6 +45,9 @@ type Estimate func(*sql.Selector)
 // File is the predicate function for file builders.
 type File func(*sql.Selector)
 
+// InvitationToken is the predicate function for invitationtoken builders.
+type InvitationToken func(*sql.Selector)
+
 // Invoice is the predicate function for invoice builders.
 type Invoice func(*sql.Selector)
 

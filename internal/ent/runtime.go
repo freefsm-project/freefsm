@@ -18,6 +18,7 @@ import (
 	"github.com/MartialM1nd/freefsm/internal/ent/dashboardwidget"
 	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
 	"github.com/MartialM1nd/freefsm/internal/ent/file"
+	"github.com/MartialM1nd/freefsm/internal/ent/invitationtoken"
 	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
 	"github.com/MartialM1nd/freefsm/internal/ent/item"
 	"github.com/MartialM1nd/freefsm/internal/ent/job"
@@ -558,6 +559,16 @@ func init() {
 	fileDescCreatedAt := fileFields[10].Descriptor()
 	// file.DefaultCreatedAt holds the default value on creation for the created_at field.
 	file.DefaultCreatedAt = fileDescCreatedAt.Default.(func() time.Time)
+	invitationtokenFields := schema.InvitationToken{}.Fields()
+	_ = invitationtokenFields
+	// invitationtokenDescTokenHash is the schema descriptor for token_hash field.
+	invitationtokenDescTokenHash := invitationtokenFields[2].Descriptor()
+	// invitationtoken.TokenHashValidator is a validator for the "token_hash" field. It is called by the builders before save.
+	invitationtoken.TokenHashValidator = invitationtokenDescTokenHash.Validators[0].(func(string) error)
+	// invitationtokenDescCreatedAt is the schema descriptor for created_at field.
+	invitationtokenDescCreatedAt := invitationtokenFields[6].Descriptor()
+	// invitationtoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	invitationtoken.DefaultCreatedAt = invitationtokenDescCreatedAt.Default.(func() time.Time)
 	invoiceFields := schema.Invoice{}.Fields()
 	_ = invoiceFields
 	// invoiceDescTitle is the schema descriptor for title field.

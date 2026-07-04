@@ -400,18 +400,40 @@ func (h *CustomerHandler) canReadCustomer(r *http.Request, customerID int64) boo
 	return ok && u != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "customer", customerID, policyRead)
 }
 
+func (h *CustomerHandler) authorizeCustomerUpdate(w http.ResponseWriter, r *http.Request, customerID int64) bool {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "customer", customerID, policyUpdate) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
 func (h *CustomerHandler) NewContactForm(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, id) {
+		return
+	}
 	templates.ContactForm(id).Render(r.Context(), w)
 }
 
 func (h *CustomerHandler) NewLocationForm(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, id) {
+		return
+	}
 	templates.LocationForm(id).Render(r.Context(), w)
 }
 
 func (h *CustomerHandler) CreateLocation(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, id) {
+		return
+	}
 	r.ParseForm()
 	l, err := h.locationSvc.CreateForCustomer(r.Context(), id, services.CustomerLocationCreateParams{
 		Title:     r.FormValue("title"),
@@ -424,7 +446,7 @@ func (h *CustomerHandler) CreateLocation(w http.ResponseWriter, r *http.Request)
 		IsPrimary: r.FormValue("is_primary") == "on",
 	})
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "create customer location", err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -439,6 +461,9 @@ func (h *CustomerHandler) CreateLocation(w http.ResponseWriter, r *http.Request)
 
 func (h *CustomerHandler) EditLocationForm(w http.ResponseWriter, r *http.Request) {
 	custID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, custID) {
+		return
+	}
 	lid, _ := strconv.ParseInt(chi.URLParam(r, "lid"), 10, 64)
 	l, err := h.locationSvc.GetByCustomer(r.Context(), custID, lid)
 	if err != nil {
@@ -450,6 +475,9 @@ func (h *CustomerHandler) EditLocationForm(w http.ResponseWriter, r *http.Reques
 
 func (h *CustomerHandler) UpdateLocation(w http.ResponseWriter, r *http.Request) {
 	custID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, custID) {
+		return
+	}
 	lid, _ := strconv.ParseInt(chi.URLParam(r, "lid"), 10, 64)
 	r.ParseForm()
 	isPrimary := r.FormValue("is_primary") == "on"
@@ -464,7 +492,7 @@ func (h *CustomerHandler) UpdateLocation(w http.ResponseWriter, r *http.Request)
 		IsPrimary: &isPrimary,
 	})
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "update customer location", err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -479,6 +507,9 @@ func (h *CustomerHandler) UpdateLocation(w http.ResponseWriter, r *http.Request)
 
 func (h *CustomerHandler) DeleteLocation(w http.ResponseWriter, r *http.Request) {
 	custID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, custID) {
+		return
+	}
 	lid, _ := strconv.ParseInt(chi.URLParam(r, "lid"), 10, 64)
 	l, err := h.locationSvc.GetByCustomer(r.Context(), custID, lid)
 	if err != nil {
@@ -493,7 +524,7 @@ func (h *CustomerHandler) DeleteLocation(w http.ResponseWriter, r *http.Request)
 		})
 	}
 	if err := h.locationSvc.DeleteCustomerLocation(r.Context(), custID, lid); err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "delete customer location", err)
 		return
 	}
 	h.ListLocations(w, r)
@@ -501,6 +532,9 @@ func (h *CustomerHandler) DeleteLocation(w http.ResponseWriter, r *http.Request)
 
 func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, id) {
+		return
+	}
 	r.ParseForm()
 	_, err := h.contactSvc.Create(r.Context(), id, services.ContactCreateParams{
 		FirstName: r.FormValue("first_name"),
@@ -510,7 +544,7 @@ func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) 
 		Notes:     r.FormValue("notes"),
 	})
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "create customer contact", err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -525,6 +559,9 @@ func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) 
 
 func (h *CustomerHandler) EditContactForm(w http.ResponseWriter, r *http.Request) {
 	custID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, custID) {
+		return
+	}
 	cid, _ := strconv.ParseInt(chi.URLParam(r, "cid"), 10, 64)
 	c, err := h.contactSvc.GetByCustomer(r.Context(), custID, cid)
 	if err != nil {
@@ -536,6 +573,9 @@ func (h *CustomerHandler) EditContactForm(w http.ResponseWriter, r *http.Request
 
 func (h *CustomerHandler) UpdateContact(w http.ResponseWriter, r *http.Request) {
 	custID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, custID) {
+		return
+	}
 	cid, _ := strconv.ParseInt(chi.URLParam(r, "cid"), 10, 64)
 	if _, err := h.contactSvc.GetByCustomer(r.Context(), custID, cid); err != nil {
 		http.NotFound(w, r)
@@ -544,7 +584,7 @@ func (h *CustomerHandler) UpdateContact(w http.ResponseWriter, r *http.Request) 
 	r.ParseForm()
 	c, err := h.contactSvc.Update(r.Context(), cid, contactUpdateParamsFromRequest(r))
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "update customer contact", err)
 		return
 	}
 	row := templates.ContactRow{
@@ -574,6 +614,9 @@ func contactUpdateParamsFromRequest(r *http.Request) services.ContactUpdateParam
 func (h *CustomerHandler) DeleteContact(w http.ResponseWriter, r *http.Request) {
 	cid, _ := strconv.ParseInt(chi.URLParam(r, "cid"), 10, 64)
 	custID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, custID) {
+		return
+	}
 	contact, err := h.contactSvc.GetByCustomer(r.Context(), custID, cid)
 	if err != nil {
 		http.NotFound(w, r)
@@ -587,7 +630,7 @@ func (h *CustomerHandler) DeleteContact(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 	if err := h.contactSvc.Delete(r.Context(), cid); err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "delete customer contact", err)
 		return
 	}
 	h.ListContacts(w, r)
