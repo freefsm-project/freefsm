@@ -20,15 +20,26 @@ type ActivityEntry struct {
 }
 
 type ActivityMetadata struct {
-	EntityName     string `json:"entity_name,omitempty"`
-	ActorName      string `json:"actor_name,omitempty"`
-	TagName        string `json:"tag_name,omitempty"`
-	FileName       string `json:"file_name,omitempty"`
-	CommentPreview string `json:"comment_preview,omitempty"`
-	OldStatus      string `json:"old_status,omitempty"`
-	NewStatus      string `json:"new_status,omitempty"`
-	Amount         string `json:"amount,omitempty"`
-	Changed        string `json:"changed,omitempty"`
+	EntityName      string `json:"entity_name,omitempty"`
+	ActorName       string `json:"actor_name,omitempty"`
+	TagName         string `json:"tag_name,omitempty"`
+	FileName        string `json:"file_name,omitempty"`
+	CommentPreview  string `json:"comment_preview,omitempty"`
+	OldStatus       string `json:"old_status,omitempty"`
+	NewStatus       string `json:"new_status,omitempty"`
+	Amount          string `json:"amount,omitempty"`
+	Changed         string `json:"changed,omitempty"`
+	OldStart        string `json:"old_start,omitempty"`
+	NewStart        string `json:"new_start,omitempty"`
+	OldEnd          string `json:"old_end,omitempty"`
+	NewEnd          string `json:"new_end,omitempty"`
+	OldStartDisplay string `json:"old_start_display,omitempty"`
+	NewStartDisplay string `json:"new_start_display,omitempty"`
+	OldEndDisplay   string `json:"old_end_display,omitempty"`
+	NewEndDisplay   string `json:"new_end_display,omitempty"`
+	OldAssignee     string `json:"old_assignee,omitempty"`
+	NewAssignee     string `json:"new_assignee,omitempty"`
+	Source          string `json:"source,omitempty"`
 }
 
 type ActivityWidgetData struct {
@@ -59,6 +70,12 @@ func activityVerb(action string) string {
 		return "updated"
 	case "status_changed":
 		return "changed"
+	case "scheduled":
+		return "scheduled"
+	case "rescheduled":
+		return "rescheduled"
+	case "dispatched":
+		return "dispatched"
 	case "tag_attached":
 		return "attached"
 	case "tag_detached":
@@ -120,6 +137,8 @@ func activityActionClass(action string) string {
 		return "activity-deleted"
 	case "status_changed":
 		return "activity-status"
+	case "scheduled", "rescheduled", "dispatched":
+		return "activity-schedule"
 	case "tag_attached", "tag_detached":
 		return "activity-tag"
 	case "file_uploaded", "file_deleted":
@@ -160,6 +179,43 @@ func TruncateText(s string, maxRunes int) string {
 		return s
 	}
 	return string(runes[:maxRunes]) + "..."
+}
+
+func ScheduleActivityDetail(meta ActivityMetadata) string {
+	parts := []string{}
+	oldWindow := scheduleWindow(meta.OldStartDisplay, meta.OldEndDisplay)
+	newWindow := scheduleWindow(meta.NewStartDisplay, meta.NewEndDisplay)
+	if oldWindow != "" && newWindow != "" && oldWindow != newWindow {
+		parts = append(parts, oldWindow+" -> "+newWindow)
+	} else if newWindow != "" {
+		parts = append(parts, newWindow)
+	} else if oldWindow != "" {
+		parts = append(parts, oldWindow)
+	}
+
+	if meta.OldAssignee != "" && meta.NewAssignee != "" && meta.OldAssignee != meta.NewAssignee {
+		parts = append(parts, meta.OldAssignee+" -> "+meta.NewAssignee)
+	} else if meta.NewAssignee != "" {
+		parts = append(parts, "assigned to "+meta.NewAssignee)
+	} else if meta.OldAssignee != "" {
+		parts = append(parts, "assigned to "+meta.OldAssignee)
+	}
+
+	if meta.Source != "" {
+		parts = append(parts, "source: "+meta.Source)
+	}
+
+	return strings.Join(parts, "; ")
+}
+
+func scheduleWindow(start, end string) string {
+	if start == "" {
+		return ""
+	}
+	if end == "" {
+		return start
+	}
+	return start + "-" + end
 }
 
 func sprintHTML(vals ...interface{}) string {

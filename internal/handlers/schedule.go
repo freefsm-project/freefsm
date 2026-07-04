@@ -18,17 +18,18 @@ import (
 )
 
 type ScheduleHandler struct {
-	jobSvc     *services.JobService
-	custSvc    *services.CustomerService
-	statusSvc  *services.StatusService
-	userSvc    *services.UserService
-	locSvc     *services.LocationService
-	invoiceSvc *services.InvoiceService
-	cfg        *config.Config
+	jobSvc      *services.JobService
+	custSvc     *services.CustomerService
+	statusSvc   *services.StatusService
+	userSvc     *services.UserService
+	locSvc      *services.LocationService
+	invoiceSvc  *services.InvoiceService
+	activitySvc *services.ActivityService
+	cfg         *config.Config
 }
 
-func NewScheduleHandler(jobSvc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, userSvc *services.UserService, locSvc *services.LocationService, invoiceSvc *services.InvoiceService, cfg *config.Config) *ScheduleHandler {
-	return &ScheduleHandler{jobSvc: jobSvc, custSvc: custSvc, statusSvc: statusSvc, userSvc: userSvc, locSvc: locSvc, invoiceSvc: invoiceSvc, cfg: cfg}
+func NewScheduleHandler(jobSvc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, userSvc *services.UserService, locSvc *services.LocationService, invoiceSvc *services.InvoiceService, activitySvc *services.ActivityService, cfg *config.Config) *ScheduleHandler {
+	return &ScheduleHandler{jobSvc: jobSvc, custSvc: custSvc, statusSvc: statusSvc, userSvc: userSvc, locSvc: locSvc, invoiceSvc: invoiceSvc, activitySvc: activitySvc, cfg: cfg}
 }
 
 func (h *ScheduleHandler) Index(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +158,12 @@ func (h *ScheduleHandler) DispatchUpdate(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "job not found", http.StatusNotFound)
 		return
 	}
+	oldStart := j.StartTime
+	oldEnd := j.EndTime
+	oldAssignments, _ := h.jobSvc.Assignments(r.Context(), jobID)
+	if len(oldAssignments) == 0 {
+		oldAssignments = services.ParseAssignments(j.Assignments)
+	}
 	hour := 8
 	minute := 0
 	duration := 1
@@ -187,10 +194,12 @@ func (h *ScheduleHandler) DispatchUpdate(w http.ResponseWriter, r *http.Request)
 	}
 	start := time.Date(date.Year(), date.Month(), date.Day(), hour, minute, 0, 0, loc)
 	end := start.Add(time.Duration(duration) * time.Hour)
-	if _, err := h.jobSvc.Move(r.Context(), jobID, userID, start, end); err != nil {
+	result, err := h.jobSvc.Move(r.Context(), jobID, userID, start, end)
+	if err != nil {
 		http.Error(w, "move job", http.StatusInternalServerError)
 		return
 	}
+	h.recordScheduleActivity(r, result, oldStart, oldEnd, &start, &end, firstAssignmentName(oldAssignments), h.userName(r.Context(), userID), "dispatch")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -211,6 +220,8 @@ func (h *ScheduleHandler) CalendarMove(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "job not found", http.StatusNotFound)
 		return
 	}
+	oldStart := j.StartTime
+	oldEnd := j.EndTime
 	hour := 8
 	minute := 0
 	duration := 1
@@ -241,11 +252,96 @@ func (h *ScheduleHandler) CalendarMove(w http.ResponseWriter, r *http.Request) {
 	}
 	start := time.Date(date.Year(), date.Month(), date.Day(), hour, minute, 0, 0, loc)
 	end := start.Add(time.Duration(duration) * time.Hour)
-	if _, err := h.jobSvc.MoveTime(r.Context(), jobID, start, end); err != nil {
+	result, err := h.jobSvc.MoveTime(r.Context(), jobID, start, end)
+	if err != nil {
 		http.Error(w, "move job", http.StatusInternalServerError)
 		return
 	}
+	h.recordScheduleActivity(r, result, oldStart, oldEnd, &start, &end, "", "", "calendar")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *ScheduleHandler) recordScheduleActivity(r *http.Request, j *ent.Job, oldStart, oldEnd, newStart, newEnd *time.Time, oldAssignee, newAssignee, source string) {
+	if h.activitySvc == nil || j == nil || !scheduleChanged(oldStart, oldEnd, newStart, newEnd, oldAssignee, newAssignee) {
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u == nil {
+		return
+	}
+	action := scheduleActivityAction(oldStart, oldAssignee, newAssignee)
+	metadata := map[string]interface{}{
+		"entity_name": j.JobType,
+		"actor_name":  u.Name,
+		"source":      source,
+	}
+	if oldStart != nil && !oldStart.IsZero() {
+		metadata["old_start"] = oldStart.Format(time.RFC3339)
+		metadata["old_start_display"] = displayDateTime(r.Context(), *oldStart)
+	}
+	if oldEnd != nil && !oldEnd.IsZero() {
+		metadata["old_end"] = oldEnd.Format(time.RFC3339)
+		metadata["old_end_display"] = displayDateTime(r.Context(), *oldEnd)
+	}
+	if newStart != nil && !newStart.IsZero() {
+		metadata["new_start"] = newStart.Format(time.RFC3339)
+		metadata["new_start_display"] = displayDateTime(r.Context(), *newStart)
+	}
+	if newEnd != nil && !newEnd.IsZero() {
+		metadata["new_end"] = newEnd.Format(time.RFC3339)
+		metadata["new_end_display"] = displayDateTime(r.Context(), *newEnd)
+	}
+	if oldAssignee != "" {
+		metadata["old_assignee"] = oldAssignee
+	}
+	if newAssignee != "" {
+		metadata["new_assignee"] = newAssignee
+	}
+	if err := h.activitySvc.Record(r.Context(), u.ID, action, "job", j.ID, metadata); err != nil {
+		slog.Error("record schedule activity", "error", err, "job_id", j.ID, "action", action)
+	}
+}
+
+func (h *ScheduleHandler) userName(ctx context.Context, userID int64) string {
+	if userID <= 0 || h.userSvc == nil {
+		return ""
+	}
+	u, err := h.userSvc.GetByID(ctx, userID)
+	if err != nil || u == nil {
+		return ""
+	}
+	return u.Name
+}
+
+func firstAssignmentName(assignments []services.JobAssignment) string {
+	if len(assignments) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(assignments[0].Name)
+}
+
+func scheduleChanged(oldStart, oldEnd, newStart, newEnd *time.Time, oldAssignee, newAssignee string) bool {
+	return !sameOptionalTime(oldStart, newStart) || !sameOptionalTime(oldEnd, newEnd) || strings.TrimSpace(oldAssignee) != strings.TrimSpace(newAssignee)
+}
+
+func scheduleActivityAction(oldStart *time.Time, oldAssignee, newAssignee string) string {
+	if strings.TrimSpace(oldAssignee) != strings.TrimSpace(newAssignee) && (oldAssignee != "" || newAssignee != "") {
+		return "dispatched"
+	}
+	if oldStart == nil || oldStart.IsZero() {
+		return "scheduled"
+	}
+	return "rescheduled"
+}
+
+func sameOptionalTime(a, b *time.Time) bool {
+	if a == nil || a.IsZero() {
+		return b == nil || b.IsZero()
+	}
+	if b == nil || b.IsZero() {
+		return false
+	}
+	return a.Equal(*b)
 }
 
 func (h *ScheduleHandler) Month(w http.ResponseWriter, r *http.Request) {

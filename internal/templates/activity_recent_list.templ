@@ -53,6 +53,9 @@ templ ActivityRecentList(p ActivityPageData) {
 						if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
 							<p class="activity-preview activity-preview-compact">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>
 						}
+						if ScheduleActivityDetail(e.Metadata) != "" && (e.Action == "scheduled" || e.Action == "rescheduled" || e.Action == "dispatched") {
+							<p class="activity-preview activity-preview-compact">{ ScheduleActivityDetail(e.Metadata) }</p>
+						}
 					</div>
 					<small class="activity-time activity-time-compact" title={ e.CreatedAt }>{ e.RelativeTime }</small>
 				</div>

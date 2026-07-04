@@ -82,6 +82,9 @@ templ SchedulePage(p SchedulePageData) {
 		} else if p.IsMap {
 			@mapView(p)
 		}
+		<div hx-get="/schedule/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
+			<p>Loading recent schedule activity...</p>
+		</div>
 		if p.IsWeek || p.IsDay {
 			<script>
 				function scrollTo8AM() {

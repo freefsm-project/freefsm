@@ -150,6 +150,35 @@ func (h *ActivityHandler) ListForAssetSettings(w http.ResponseWriter, r *http.Re
 	templates.ActivityIndex(data).Render(r.Context(), w)
 }
 
+func (h *ActivityHandler) ListSchedule(w http.ResponseWriter, r *http.Request) {
+	page := 1
+	if p := r.URL.Query().Get("page"); p != "" {
+		page, _ = strconv.Atoi(p)
+	}
+	perPage := 10
+	offset := (page - 1) * perPage
+
+	entries, total, err := h.svc.ListByTypeAndActions(r.Context(), "job", []string{"scheduled", "rescheduled", "dispatched"}, offset, perPage)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+
+	totalPages := (total + perPage - 1) / perPage
+	rows := h.entriesToRows(r.Context(), entries)
+	if rows == nil {
+		rows = []templates.ActivityEntry{}
+	}
+
+	templates.ActivityRecentList(templates.ActivityPageData{
+		Entries:    rows,
+		Page:       page,
+		PerPage:    perPage,
+		Total:      total,
+		TotalPages: totalPages,
+	}).Render(r.Context(), w)
+}
+
 func (h *ActivityHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	page := 1
 	if p := r.URL.Query().Get("page"); p != "" {
@@ -231,6 +260,8 @@ func activityIcon(action string) string {
 		return "📦"
 	case "status_changed":
 		return "↻"
+	case "scheduled", "rescheduled", "dispatched":
+		return "📅"
 	case "tag_attached", "tag_detached":
 		return "#"
 	case "file_uploaded", "file_deleted":

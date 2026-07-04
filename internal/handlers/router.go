@@ -72,7 +72,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 
 	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, fileSvc, activitySvc, userService, policySvc, timeEntrySvc)
 	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc, policySvc)
-	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService, userService, locationSvc, invoiceService, cfg)
+	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService, userService, locationSvc, invoiceService, activitySvc, cfg)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
 	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc)
@@ -128,6 +128,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/dashboard/widgets/company-default", dashboardHandler.SaveCompanyDefaultWidgets)
 		r.Get("/search", searchHandler.Search)
 		r.Get("/schedule", scheduleHandler.Index)
+		r.Get("/schedule/activity", activityHandler.ListSchedule)
 		r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {
 			handleLogout(w, r, sessions, activitySvc)
 		})
