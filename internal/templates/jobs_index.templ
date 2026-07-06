@@ -76,7 +76,7 @@ templ JobsTable(p JobListPageData) {
 							<td>{ j.BillingType }</td>
 							<td class="work-queue-actions">
 								<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", j.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", j.DisplayName) }>Edit</a>
-								<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", j.ID)) } method="post" onsubmit="return confirm('Delete this job?')">
+								<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", j.ID)) } method="post" hx-confirm="Delete this job?">
 									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 									<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", j.DisplayName) }>Del</button>
 								</form>

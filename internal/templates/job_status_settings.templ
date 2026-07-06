@@ -37,7 +37,7 @@ templ JobStatusSettingsPage(p JobStatusListPageData) {
 							<td>{ fmt.Sprintf("%d", s.UsageCount) }</td>
 							<td class="work-queue-actions">
 								<button form={ fmt.Sprintf("status-update-%d", s.ID) } type="submit" class="outline small">Save</button>
-								<form action={ templ.URL(fmt.Sprintf("/settings/job-statuses/%d/delete", s.ID)) } method="post" class="job-status-delete-form" onsubmit="return confirm('Delete this status?')">
+								<form action={ templ.URL(fmt.Sprintf("/settings/job-statuses/%d/delete", s.ID)) } method="post" class="job-status-delete-form" hx-confirm="Delete this status?">
 									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 									<select name="replacement_status_id" class="job-status-replacement-select" aria-label="Replacement status">
 										<option value="">No replacement</option>

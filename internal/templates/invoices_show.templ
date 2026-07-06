@@ -9,14 +9,14 @@ templ InvoiceShow(p InvoiceDetail) {
 			<div class="work-item-detail-actions">
 			<div class="work-item-detail-action-group">
 			if p.CanFinalize {
-				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/finalize", p.ID)) } method="post" onsubmit="return confirm('Finalize this invoice? This will set the invoice and due dates from current settings.')">
+				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/finalize", p.ID)) } method="post" hx-confirm="Finalize this invoice? This will set the invoice and due dates from current settings.">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button type="submit">Finalize Invoice</button>
 				</form>
 			}
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Title) }>Edit</a>
-				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", p.ID)) } method="post" onsubmit="return confirm('Delete this invoice?')">
+				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", p.ID)) } method="post" hx-confirm="Delete this invoice?">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Title) }>Delete</button>
 				</form>
@@ -119,7 +119,7 @@ templ InvoiceShow(p InvoiceDetail) {
 							<td>{ fmt.Sprintf("$%.2f", pmt.Amount) }</td>
 							if p.ArchivedAt == "" {
 								<td>
-									<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments/%s/delete", p.ID, pmt.ID)) } method="post" onsubmit="return confirm('Delete this payment?')">
+									<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments/%s/delete", p.ID, pmt.ID)) } method="post" hx-confirm="Delete this payment?">
 										<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 										<button type="submit" class="outline contrast">Delete</button>
 									</form>

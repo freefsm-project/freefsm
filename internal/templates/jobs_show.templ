@@ -14,7 +14,7 @@ templ JobShow(p JobDetail) {
 							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 							<button>Create Invoice</button>
 						</form>
-						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/create-estimate", p.ID)) } method="post" onsubmit="return confirm('Create an estimate from this job?')">
+						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/create-estimate", p.ID)) } method="post" hx-confirm="Create an estimate from this job?">
 							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 							<button>Create Estimate</button>
 						</form>
@@ -22,7 +22,7 @@ templ JobShow(p JobDetail) {
 							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 							<button type="submit">Create Next Occurrence</button>
 						</form>
-						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", p.ID)) } method="post" onsubmit="return confirm('Delete this job?')">
+						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", p.ID)) } method="post" hx-confirm="Delete this job?">
 							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 							<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.JobType) }>Delete</button>
 						</form>

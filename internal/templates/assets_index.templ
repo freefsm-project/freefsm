@@ -81,7 +81,7 @@ templ AssetTable(p AssetListPageData) {
 						</td>
 						<td class="work-queue-actions">
 							<a href={ templ.URL(fmt.Sprintf("/assets/%d/edit", a.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", a.Name) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/assets/%d/delete", a.ID)) } method="post" onsubmit="return confirm('Delete this asset?')">
+							<form action={ templ.URL(fmt.Sprintf("/assets/%d/delete", a.ID)) } method="post" hx-confirm="Delete this asset?">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", a.Name) }>Del</button>
 							</form>

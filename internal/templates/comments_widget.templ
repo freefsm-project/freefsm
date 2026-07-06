@@ -34,9 +34,9 @@ templ CommentsWidget(p CommentsWidgetData) {
 								<button
 									class="outline contrast small customer-add-button comments-delete-button"
 									hx-post={ commentDeleteURL(p.BaseURL, c.ID, p.HideTitle) }
+									hx-confirm="Delete this comment?"
 									hx-target={ fmt.Sprintf("closest #comments-%s-%d", p.ObjectType, p.ObjectID) }
 									hx-swap="outerHTML"
-									onclick="return confirm('Delete this comment?')"
 								>×</button>
 							}
 						</div>

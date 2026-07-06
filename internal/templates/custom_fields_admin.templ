@@ -32,7 +32,7 @@ templ CustomFieldDefIndex(p CustomFieldDefListPageData) {
 							<td>{ fmt.Sprintf("%d", d.SortOrder) }</td>
 							<td class="work-queue-actions">
 								<a href={ templ.URL(fmt.Sprintf("/settings/custom-fields/%d/edit", d.ID)) } role="button" class="outline compact-action-button">Edit</a>
-								<form action={ templ.URL(fmt.Sprintf("/settings/custom-fields/%d/delete", d.ID)) } method="post" onsubmit="return confirm('Delete this custom field? This cannot be undone.')">
+								<form action={ templ.URL(fmt.Sprintf("/settings/custom-fields/%d/delete", d.ID)) } method="post" hx-confirm="Delete this custom field? This cannot be undone.">
 									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 									<button class="outline contrast compact-action-button">Delete</button>
 								</form>

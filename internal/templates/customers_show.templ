@@ -12,7 +12,7 @@ templ CustomerShow(p CustomerShowPageData) {
 					<a href={ templ.URL(fmt.Sprintf("/estimates/new?customer_id=%d", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create estimate for %s", p.Customer.DisplayName) }>Create Estimate</a>
 					<a href={ templ.URL(fmt.Sprintf("/customers/%d/create-invoice", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create invoice for %s", p.Customer.DisplayName) }>Create Invoice</a>
 					<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Customer.DisplayName) }>Edit</a>
-					<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", p.Customer.ID)) } method="post" onsubmit="return confirm('Delete this customer?')">
+					<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", p.Customer.ID)) } method="post" hx-confirm="Delete this customer?">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 						<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Customer.DisplayName) }>Delete</button>
 					</form>

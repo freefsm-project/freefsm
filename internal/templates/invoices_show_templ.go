@@ -66,7 +66,7 @@ func InvoiceShow(p InvoiceDetail) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" method=\"post\" onsubmit=\"return confirm('Finalize this invoice? This will set the invoice and due dates from current settings.')\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" method=\"post\" hx-confirm=\"Finalize this invoice? This will set the invoice and due dates from current settings.\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -136,7 +136,7 @@ func InvoiceShow(p InvoiceDetail) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" method=\"post\" onsubmit=\"return confirm('Delete this invoice?')\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" method=\"post\" hx-confirm=\"Delete this invoice?\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -627,7 +627,7 @@ func InvoiceShow(p InvoiceDetail) templ.Component {
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "\" method=\"post\" onsubmit=\"return confirm('Delete this payment?')\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "\" method=\"post\" hx-confirm=\"Delete this payment?\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}

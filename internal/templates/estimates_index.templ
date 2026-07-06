@@ -59,7 +59,7 @@ templ EstimatesTable(p EstimateListPageData) {
 						<td>{ e.CreatedAt }</td>
 						<td class="work-queue-actions">
 							<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", e.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", e.Title) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", e.ID)) } method="post" onsubmit="return confirm('Delete this estimate?')">
+							<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", e.ID)) } method="post" hx-confirm="Delete this estimate?">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", e.Title) }>Del</button>
 							</form>

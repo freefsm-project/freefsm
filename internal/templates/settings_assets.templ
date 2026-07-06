@@ -27,7 +27,7 @@ templ AssetTypeList(p AssetTypeListPageData) {
 						</td>
 						<td class="work-queue-actions">
 							<button form={ fmt.Sprintf("asset-type-update-%d", t.ID) } type="submit" class="outline small">Save</button>
-							<form action={ templ.URL(fmt.Sprintf("/settings/asset-types/%d/delete", t.ID)) } method="post" onsubmit="return confirm('Delete this type?')">
+							<form action={ templ.URL(fmt.Sprintf("/settings/asset-types/%d/delete", t.ID)) } method="post" hx-confirm="Delete this type?">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small">Del</button>
 							</form>
@@ -76,7 +76,7 @@ templ AssetStatusList(p AssetStatusListPageData) {
 						</td>
 						<td class="work-queue-actions">
 							<button form={ fmt.Sprintf("asset-status-update-%d", s.ID) } type="submit" class="outline small">Save</button>
-							<form action={ templ.URL(fmt.Sprintf("/settings/asset-statuses/%d/delete", s.ID)) } method="post" onsubmit="return confirm('Delete this status?')">
+							<form action={ templ.URL(fmt.Sprintf("/settings/asset-statuses/%d/delete", s.ID)) } method="post" hx-confirm="Delete this status?">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small">Del</button>
 							</form>

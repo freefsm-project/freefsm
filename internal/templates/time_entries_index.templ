@@ -73,7 +73,7 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 						<td class="work-queue-actions">
 							if e.CanEdit {
 								<a href={ templ.URL(fmt.Sprintf("/time-entries/%d/edit", e.ID)) } role="button" class="outline small" aria-label="Edit time entry">Edit</a>
-								<form action={ templ.URL(fmt.Sprintf("/time-entries/%d/delete", e.ID)) } method="post" onsubmit="return confirm('Delete this time entry?')">
+								<form action={ templ.URL(fmt.Sprintf("/time-entries/%d/delete", e.ID)) } method="post" hx-confirm="Delete this time entry?">
 									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 									<button class="outline contrast small" aria-label="Delete time entry">Del</button>
 								</form>

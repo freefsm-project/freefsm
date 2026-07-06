@@ -66,7 +66,7 @@ templ ProjectTable(p ProjectListPageData) {
 						</td>
 						<td class="work-queue-actions">
 							<a href={ templ.URL(fmt.Sprintf("/projects/%d/edit", pr.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", pr.Name) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/projects/%d/delete", pr.ID)) } method="post" onsubmit="return confirm('Delete this project?')">
+							<form action={ templ.URL(fmt.Sprintf("/projects/%d/delete", pr.ID)) } method="post" hx-confirm="Delete this project?">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", pr.Name) }>Del</button>
 							</form>

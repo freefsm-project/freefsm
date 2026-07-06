@@ -63,7 +63,7 @@ templ InvoicesTable(p InvoiceListPageData) {
 						<td>{ i.DueDate }</td>
 						<td class="work-queue-actions">
 							<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", i.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", i.Title) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", i.ID)) } method="post" onsubmit="return confirm('Delete this invoice?')">
+							<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", i.ID)) } method="post" hx-confirm="Delete this invoice?">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", i.Title) }>Del</button>
 							</form>
