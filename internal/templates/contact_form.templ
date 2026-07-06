@@ -5,7 +5,7 @@ import "fmt"
 templ ContactForm(customerID int64) {
 	<form hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts", customerID)) }
 		hx-target="#contacts-section" hx-swap="outerHTML"
-		class="inline-form-card">
+		class="inline-form-card compact-form">
 		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 		<div class="grid">
 			<label>First <input type="text" name="first_name" required/></label>
@@ -17,5 +17,20 @@ templ ContactForm(customerID int64) {
 		</div>
 		<label>Notes <input type="text" name="notes"/></label>
 		<button type="submit">Save</button>
+	</form>
+}
+
+templ ContactFormCompact(customerID int64) {
+	<form hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts?compact=1", customerID)) }
+		hx-target="#contacts-section" hx-swap="outerHTML"
+		class="customer-rail-card inline-form-card compact-form">
+		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+		<input type="hidden" name="compact" value="1"/>
+		<label>First <input type="text" name="first_name" required/></label>
+		<label>Last <input type="text" name="last_name"/></label>
+		<label>Email <input type="email" name="email"/></label>
+		<label>Phone <input type="tel" name="phone"/></label>
+		<label>Notes <input type="text" name="notes"/></label>
+		<button type="submit" class="small">Save</button>
 	</form>
 }

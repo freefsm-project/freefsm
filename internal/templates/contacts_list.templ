@@ -46,3 +46,21 @@ templ ContactsList(contacts []ContactRow, customerID int64, readOnly bool) {
 		<div id="contact-form-wrap"></div>
 	</div>
 }
+
+templ ContactsListCompact(contacts []ContactRow, customerID int64, readOnly bool) {
+	<div id="contacts-section" class="customer-rail-list customer-rail-contacts">
+		if len(contacts) > 0 {
+			<div class="customer-rail-cards">
+				for _, c := range contacts {
+					@ContactViewCard(customerID, c, readOnly)
+				}
+			</div>
+		}
+		if canManageOperational(ctx) && !readOnly {
+			<button hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/new?compact=1", customerID)) }
+				hx-target="#contact-form-wrap"
+				hx-swap="innerHTML" class="outline small customer-add-button">+ Add Contact</button>
+		}
+		<div id="contact-form-wrap"></div>
+	</div>
+}

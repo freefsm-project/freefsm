@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -169,7 +170,7 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 			"actor_name":  u.Name,
 		})
 	}
-	http.Redirect(w, r, "/customers?flash=Customer+created", http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/customers/%d/edit?flash=%s", result.ID, url.QueryEscape("Customer created. Locations and contacts can now be added.")), http.StatusSeeOther)
 }
 
 func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -367,6 +368,10 @@ func (h *CustomerHandler) ListContacts(w http.ResponseWriter, r *http.Request) {
 			Email: c.Email, Phone: c.Phone,
 		}
 	}
+	if customerEditRailCompact(r) {
+		templates.ContactsListCompact(rows, id, r.URL.Query().Get("read_only") == "1").Render(r.Context(), w)
+		return
+	}
 	templates.ContactsList(rows, id, r.URL.Query().Get("read_only") == "1").Render(r.Context(), w)
 }
 
@@ -392,7 +397,15 @@ func (h *CustomerHandler) ListLocations(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	locations, _ := h.locationSvc.ListByCustomer(r.Context(), id)
+	if customerEditRailCompact(r) {
+		templates.LocationsListCompact(locationRows(locations), id, r.URL.Query().Get("read_only") == "1").Render(r.Context(), w)
+		return
+	}
 	templates.LocationsList(locationRows(locations), id, r.URL.Query().Get("read_only") == "1").Render(r.Context(), w)
+}
+
+func customerEditRailCompact(r *http.Request) bool {
+	return r.URL.Query().Get("compact") == "1" || r.FormValue("compact") == "1"
 }
 
 func (h *CustomerHandler) canReadCustomer(r *http.Request, customerID int64) bool {
@@ -418,12 +431,20 @@ func (h *CustomerHandler) NewContactForm(w http.ResponseWriter, r *http.Request)
 	if !h.authorizeCustomerUpdate(w, r, id) {
 		return
 	}
+	if customerEditRailCompact(r) {
+		templates.ContactFormCompact(id).Render(r.Context(), w)
+		return
+	}
 	templates.ContactForm(id).Render(r.Context(), w)
 }
 
 func (h *CustomerHandler) NewLocationForm(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if !h.authorizeCustomerUpdate(w, r, id) {
+		return
+	}
+	if customerEditRailCompact(r) {
+		templates.LocationFormCompact(id).Render(r.Context(), w)
 		return
 	}
 	templates.LocationForm(id).Render(r.Context(), w)
@@ -470,6 +491,10 @@ func (h *CustomerHandler) EditLocationForm(w http.ResponseWriter, r *http.Reques
 		http.NotFound(w, r)
 		return
 	}
+	if customerEditRailCompact(r) {
+		templates.LocationEditCard(custID, locationRow(l)).Render(r.Context(), w)
+		return
+	}
 	templates.LocationEditRow(custID, locationRow(l)).Render(r.Context(), w)
 }
 
@@ -501,6 +526,10 @@ func (h *CustomerHandler) UpdateLocation(w http.ResponseWriter, r *http.Request)
 			"actor_name":  u.Name,
 			"entity_name": l.Title,
 		})
+	}
+	if customerEditRailCompact(r) {
+		templates.LocationViewCard(custID, locationRow(l), false).Render(r.Context(), w)
+		return
 	}
 	templates.LocationViewRow(custID, locationRow(l), false).Render(r.Context(), w)
 }
@@ -568,6 +597,10 @@ func (h *CustomerHandler) EditContactForm(w http.ResponseWriter, r *http.Request
 		http.NotFound(w, r)
 		return
 	}
+	if customerEditRailCompact(r) {
+		templates.ContactEditCard(custID, cid, c.FirstName, c.LastName, c.Email, c.Phone, c.Notes).Render(r.Context(), w)
+		return
+	}
 	templates.ContactEditRow(custID, cid, c.FirstName, c.LastName, c.Email, c.Phone, c.Notes).Render(r.Context(), w)
 }
 
@@ -597,6 +630,10 @@ func (h *CustomerHandler) UpdateContact(w http.ResponseWriter, r *http.Request) 
 			"actor_name":  u.Name,
 			"entity_name": c.FirstName + " " + c.LastName,
 		})
+	}
+	if customerEditRailCompact(r) {
+		templates.ContactViewCard(custID, row, false).Render(r.Context(), w)
+		return
 	}
 	templates.ContactViewRow(custID, row).Render(r.Context(), w)
 }

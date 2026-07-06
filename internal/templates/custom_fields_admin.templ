@@ -52,7 +52,7 @@ templ CustomFieldDefIndex(p CustomFieldDefListPageData) {
 
 templ CustomFieldDefForm(p CustomFieldDefFormData) {
 	@Layout("Custom Field - " + formTitle(p)) {
-		<form action="/settings/custom-fields" method="post" autocomplete="off" class="entity-form">
+		<form action="/settings/custom-fields" method="post" autocomplete="off" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			if !p.IsNew {
 				<input type="hidden" name="id" value={ fmt.Sprintf("%d", p.Def.ID) }/>

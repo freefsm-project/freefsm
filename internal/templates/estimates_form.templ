@@ -5,7 +5,7 @@ import "fmt"
 templ EstimateForm(p EstimateFormPageData) {
 	@Layout(estimateFormTitle(p.IsNew)) {
 
-		<form action={ templ.URL(estimateFormAction(p.IsNew, p.Estimate.ID)) } method="post" autocomplete="off">
+		<form action={ templ.URL(estimateFormAction(p.IsNew, p.Estimate.ID)) } method="post" autocomplete="off" class="compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
 				Customer <small class="required-marker">*</small>

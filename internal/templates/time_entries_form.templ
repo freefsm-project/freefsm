@@ -5,7 +5,7 @@ import "fmt"
 templ TimeEntryForm(p TimeEntryFormPageData) {
 	@Layout("Edit Time Entry") {
 
-		<form action={ templ.URL(fmt.Sprintf("/time-entries/%d", p.Entry.ID)) } method="post" autocomplete="off">
+		<form action={ templ.URL(fmt.Sprintf("/time-entries/%d", p.Entry.ID)) } method="post" autocomplete="off" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<div class="grid">
 				<label>

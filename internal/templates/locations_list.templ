@@ -29,3 +29,21 @@ templ LocationsList(locations []LocationRow, customerID int64, readOnly bool) {
 		<div id="location-form-wrap"></div>
 	</div>
 }
+
+templ LocationsListCompact(locations []LocationRow, customerID int64, readOnly bool) {
+	<div id="locations-section" class="customer-rail-list customer-rail-locations">
+		if len(locations) > 0 {
+			<div class="customer-rail-cards">
+				for _, l := range locations {
+					@LocationViewCard(customerID, l, readOnly)
+				}
+			</div>
+		}
+		if canManageOperational(ctx) && !readOnly {
+			<button hx-get={ templ.URL(fmt.Sprintf("/customers/%d/locations/new?compact=1", customerID)) }
+				hx-target="#location-form-wrap"
+				hx-swap="innerHTML" class="outline small customer-add-button">+ Add Location</button>
+		}
+		<div id="location-form-wrap"></div>
+	</div>
+}

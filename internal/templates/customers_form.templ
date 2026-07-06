@@ -5,111 +5,131 @@ import "fmt"
 templ CustomerForm(p CustomerFormPageData) {
 	@Layout(customerFormTitle(p.IsNew)) {
 
-		<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off">
-			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-			<fieldset>
-				<legend>Customer Info</legend>
+		if !p.IsNew {
+			<div class="customer-edit-layout">
+				<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form customer-edit-form">
+					@CustomerFormFields(p)
+				</form>
+				<aside class="customer-edit-side-rail">
+					<article class="dashboard-panel">
+						@DashboardSubcardTop("Locations")
+						@LocationsListCompact(p.Locations, p.Customer.ID, false)
+					</article>
+					<article class="dashboard-panel">
+						@DashboardSubcardTop("Contacts")
+						@ContactsListCompact(p.Contacts, p.Customer.ID, false)
+					</article>
+					<article class="dashboard-panel">
+						@DashboardSubcardTop("Tags")
+						@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: false})
+					</article>
+				</aside>
+			</div>
+		} else {
+			<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form">
+				@CustomerFormFields(p)
+			</form>
+		}
+	}
+}
+
+templ CustomerFormFields(p CustomerFormPageData) {
+	<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+	if p.IsNew {
+		<p><small>Locations and contacts can be added after saving.</small></p>
+	}
+	<fieldset>
+		<legend>Customer Info</legend>
+		<label>
+			First Name
+			<input type="text" name="first_name" value={ p.Customer.FirstName }/>
+			if p.Errors["first_name"] != "" {
+				<small class="error-msg">{ p.Errors["first_name"] }</small>
+			}
+		</label>
+		<label>
+			Last Name
+			<input type="text" name="last_name" value={ p.Customer.LastName }/>
+		</label>
+		<label>
+			Display Name
+			<input type="text" name="display_name" value={ p.Customer.DisplayName }/>
+			if p.Errors["display_name"] != "" {
+				<small class="error-msg">{ p.Errors["display_name"] }</small>
+			}
+		</label>
+		<div class="grid">
 			<label>
-				First Name
-				<input type="text" name="first_name" value={ p.Customer.FirstName }/>
-				if p.Errors["first_name"] != "" {
-					<small class="error-msg">{ p.Errors["first_name"] }</small>
-				}
-			</label>
-				<label>
-					Last Name
-					<input type="text" name="last_name" value={ p.Customer.LastName }/>
-				</label>
-				<label>
-					Display Name
-					<input type="text" name="display_name" value={ p.Customer.DisplayName }/>
-					if p.Errors["display_name"] != "" {
-						<small class="error-msg">{ p.Errors["display_name"] }</small>
-					}
-				</label>
-				<div class="grid">
-				<label>
 					Email
 					<input type="email" name="email" value={ p.Customer.Email }/>
 				</label>
-					<label>
-						Phone
-						<input type="tel" name="phone" value={ p.Customer.Phone }/>
-					</label>
-				</div>
-				<label>
-					Company
-					<input type="text" name="company_name" value={ p.Customer.CompanyName }/>
-				</label>
-				<div class="grid">
-					<label>
-						Status
-						<select name="status">
-							for _, s := range p.Statuses {
-								<option value={ s } selected?={ p.Customer.Status == s }>{ s }</option>
-							}
-						</select>
-					</label>
-					<label>
-						Account Type
-						<select name="account_type">
-							for _, a := range p.AccountTypes {
-								<option value={ a } selected?={ p.Customer.AccountType == a }>{ a }</option>
-							}
-						</select>
-					</label>
-				</div>
 			<label>
+				Phone
+				<input type="tel" name="phone" value={ p.Customer.Phone }/>
+			</label>
+		</div>
+		<label>
+			Company
+			<input type="text" name="company_name" value={ p.Customer.CompanyName }/>
+		</label>
+		<div class="grid">
+			<label>
+				Status
+				<select name="status">
+					for _, s := range p.Statuses {
+						<option value={ s } selected?={ p.Customer.Status == s }>{ s }</option>
+					}
+				</select>
+			</label>
+			<label>
+				Account Type
+				<select name="account_type">
+					for _, a := range p.AccountTypes {
+						<option value={ a } selected?={ p.Customer.AccountType == a }>{ a }</option>
+					}
+				</select>
+			</label>
+		</div>
+		<label>
 				Notes
 				<textarea name="notes" rows="3">{ p.Customer.Notes }</textarea>
 			</label>
-			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
-		</fieldset>
-		<fieldset>
-				<legend>Billing Address</legend>
-				<label>
-					Address Line 1
-					<input type="text" name="billing_address_1" value={ p.Customer.BillingAddress1 }/>
-				</label>
-				<label>
-					Address Line 2
-					<input type="text" name="billing_address_2" value={ p.Customer.BillingAddress2 }/>
-				</label>
-				<div class="grid form-grid-address">
-					<label>
-						City
-						<input type="text" name="billing_city" value={ p.Customer.BillingCity }/>
-					</label>
-					<label>
-						State
-						<input type="text" name="billing_state" value={ p.Customer.BillingState }/>
-					</label>
-					<label>
-						ZIP
-						<input type="text" name="billing_zip_code" value={ p.Customer.BillingZipCode }/>
-					</label>
-				</div>
-			</fieldset>
-			<div class="entity-form-actions">
-				<button type="submit">Save</button>
-				<a href="/customers" role="button" class="outline">Cancel</a>
-			</div>
-		</form>
-		if !p.IsNew {
-			<div class="customer-dashboard-supporting">
-				<article class="dashboard-panel">
-					@DashboardSubcardTop("Tags")
-					@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: false})
-				</article>
-				<article class="dashboard-panel">
-					@DashboardSubcardTop("Locations")
-					@LocationsList(p.Locations, p.Customer.ID, false)
-				</article>
-				<article class="dashboard-panel">
-					@DashboardSubcardTop("Contacts")
-					@ContactsList(p.Contacts, p.Customer.ID, false)
-				</article>
-			</div>
-		}
+		@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
+	</fieldset>
+	<fieldset>
+		<legend>Billing Address</legend>
+		<label>
+			Address Line 1
+			<input type="text" name="billing_address_1" value={ p.Customer.BillingAddress1 }/>
+		</label>
+		<label>
+			Address Line 2
+			<input type="text" name="billing_address_2" value={ p.Customer.BillingAddress2 }/>
+		</label>
+		<div class="grid form-grid-address">
+			<label>
+				City
+				<input type="text" name="billing_city" value={ p.Customer.BillingCity }/>
+			</label>
+			<label>
+				State
+				<input type="text" name="billing_state" value={ p.Customer.BillingState }/>
+			</label>
+			<label>
+				ZIP
+				<input type="text" name="billing_zip_code" value={ p.Customer.BillingZipCode }/>
+			</label>
+		</div>
+	</fieldset>
+	<div class="entity-form-actions">
+		<button type="submit">{ customerFormSubmitLabel(p.IsNew) }</button>
+		<a href="/customers" role="button" class="outline">Cancel</a>
+	</div>
+}
+
+func customerFormSubmitLabel(isNew bool) string {
+	if isNew {
+		return "Save and continue"
 	}
+	return "Save"
 }

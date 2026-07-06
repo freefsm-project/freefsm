@@ -5,7 +5,7 @@ import "fmt"
 templ ProjectForm(p ProjectFormPageData) {
 	@Layout(projectFormTitle(p.IsNew)) {
 
-		<form action={ templ.URL(projectFormAction(p.IsNew, p.Project.ID)) } method="post" autocomplete="off">
+		<form action={ templ.URL(projectFormAction(p.IsNew, p.Project.ID)) } method="post" autocomplete="off" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<fieldset>
 				<legend>Project Details</legend>

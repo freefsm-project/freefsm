@@ -33,3 +33,37 @@ templ LocationViewRow(customerID int64, l LocationRow, readOnly bool) {
 		}
 	</tr>
 }
+
+templ LocationViewCard(customerID int64, l LocationRow, readOnly bool) {
+	<div id={ templ.SafeURL(fmt.Sprintf("location-%d", l.ID)) } class="customer-rail-card">
+		<div class="customer-rail-card-header">
+			<strong>{ l.Title }</strong>
+			if l.IsPrimary {
+				<small>Primary</small>
+			}
+		</div>
+		<div class="customer-rail-card-body">
+			<div>{ l.Address1 }</div>
+			if l.Address2 != "" {
+				<div>{ l.Address2 }</div>
+			}
+			<div>{ l.City }, { l.State } { l.ZipCode }</div>
+			if l.Notes != "" {
+				<div class="customer-rail-muted">{ l.Notes }</div>
+			}
+		</div>
+		if canManageOperational(ctx) && !readOnly {
+			<div class="customer-rail-actions">
+				<button class="outline small customer-add-button"
+					hx-get={ templ.URL(fmt.Sprintf("/customers/%d/locations/%d/edit?compact=1", customerID, l.ID)) }
+					hx-target={ templ.SafeURL(fmt.Sprintf("#location-%d", l.ID)) }
+					hx-swap="outerHTML">Edit</button>
+				<button class="outline contrast small customer-add-button"
+					hx-post={ templ.URL(fmt.Sprintf("/customers/%d/locations/%d/delete?compact=1", customerID, l.ID)) }
+					hx-confirm="Delete this location?"
+					hx-target="#locations-section"
+					hx-swap="outerHTML">Del</button>
+			</div>
+		}
+	</div>
+}

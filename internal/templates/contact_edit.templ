@@ -7,7 +7,7 @@ templ ContactEditRow(customerID, contactID int64, firstName, lastName, email, ph
 		<td colspan="4">
 			<form hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d", customerID, contactID)) }
 				hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", contactID)) }
-				hx-swap="outerHTML" class="inline-form-card-compact">
+				hx-swap="outerHTML" class="inline-form-card inline-form-card-compact compact-form">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<div class="grid">
 					<label>First <input type="text" name="first_name" value={ firstName } required/></label>
@@ -26,4 +26,26 @@ templ ContactEditRow(customerID, contactID int64, firstName, lastName, email, ph
 			</form>
 		</td>
 	</tr>
+}
+
+templ ContactEditCard(customerID, contactID int64, firstName, lastName, email, phone, notes string) {
+	<form id={ templ.SafeURL(fmt.Sprintf("contact-%d", contactID)) }
+		hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d?compact=1", customerID, contactID)) }
+		hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", contactID)) }
+		hx-swap="outerHTML" class="customer-rail-card inline-form-card inline-form-card-compact compact-form">
+		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+		<input type="hidden" name="compact" value="1"/>
+		<label>First <input type="text" name="first_name" value={ firstName } required/></label>
+		<label>Last <input type="text" name="last_name" value={ lastName }/></label>
+		<label>Email <input type="email" name="email" value={ email }/></label>
+		<label>Phone <input type="tel" name="phone" value={ phone }/></label>
+		<label>Notes <input type="text" name="notes" value={ notes }/></label>
+		<div class="customer-rail-actions">
+			<button type="submit" class="small">Save</button>
+			<button type="button" class="outline small"
+				hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts?compact=1", customerID)) }
+				hx-target="#contacts-section"
+				hx-swap="outerHTML">Cancel</button>
+		</div>
+	</form>
 }

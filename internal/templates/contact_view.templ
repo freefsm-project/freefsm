@@ -20,3 +20,32 @@ templ ContactViewRow(customerID int64, c ContactRow) {
 		</td>
 	</tr>
 }
+
+templ ContactViewCard(customerID int64, c ContactRow, readOnly bool) {
+	<div id={ templ.SafeURL(fmt.Sprintf("contact-%d", c.ID)) } class="customer-rail-card">
+		<div class="customer-rail-card-header">
+			<strong>{ c.FirstName } { c.LastName }</strong>
+		</div>
+		<div class="customer-rail-card-body">
+			if c.Email != "" {
+				<div>{ c.Email }</div>
+			}
+			if c.Phone != "" {
+				<div>{ c.Phone }</div>
+			}
+		</div>
+		if canManageOperational(ctx) && !readOnly {
+			<div class="customer-rail-actions">
+				<button class="outline small customer-add-button"
+					hx-get={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/edit?compact=1", customerID, c.ID)) }
+					hx-target={ templ.SafeURL(fmt.Sprintf("#contact-%d", c.ID)) }
+					hx-swap="outerHTML">Edit</button>
+				<button class="outline contrast small customer-add-button"
+					hx-post={ templ.URL(fmt.Sprintf("/customers/%d/contacts/%d/delete?compact=1", customerID, c.ID)) }
+					hx-confirm="Delete this contact?"
+					hx-target="#contacts-section"
+					hx-swap="outerHTML">Del</button>
+			</div>
+		}
+	</div>
+}

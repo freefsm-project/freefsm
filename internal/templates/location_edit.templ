@@ -7,7 +7,7 @@ templ LocationEditRow(customerID int64, l LocationRow) {
 		<td colspan="4">
 			<form hx-post={ templ.URL(fmt.Sprintf("/customers/%d/locations/%d", customerID, l.ID)) }
 				hx-target={ templ.SafeURL(fmt.Sprintf("#location-%d", l.ID)) }
-				hx-swap="outerHTML" class="inline-form-card-compact">
+				hx-swap="outerHTML" class="inline-form-card inline-form-card-compact compact-form">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<label>Title <input type="text" name="title" value={ l.Title } required/></label>
 				<div class="grid">
@@ -29,4 +29,31 @@ templ LocationEditRow(customerID int64, l LocationRow) {
 			</form>
 		</td>
 	</tr>
+}
+
+templ LocationEditCard(customerID int64, l LocationRow) {
+	<form id={ templ.SafeURL(fmt.Sprintf("location-%d", l.ID)) }
+		hx-post={ templ.URL(fmt.Sprintf("/customers/%d/locations/%d?compact=1", customerID, l.ID)) }
+		hx-target={ templ.SafeURL(fmt.Sprintf("#location-%d", l.ID)) }
+		hx-swap="outerHTML" class="customer-rail-card inline-form-card inline-form-card-compact compact-form">
+		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+		<input type="hidden" name="compact" value="1"/>
+		<label>Title <input type="text" name="title" value={ l.Title } required/></label>
+		<label>Address 1 <input type="text" name="address_1" value={ l.Address1 }/></label>
+		<label>Address 2 <input type="text" name="address_2" value={ l.Address2 }/></label>
+		<div class="grid form-grid-address">
+			<label>City <input type="text" name="city" value={ l.City }/></label>
+			<label>State <input type="text" name="state" value={ l.State }/></label>
+			<label>ZIP <input type="text" name="zip_code" value={ l.ZipCode }/></label>
+		</div>
+		<label>Notes <input type="text" name="notes" value={ l.Notes }/></label>
+		<label><input type="checkbox" name="is_primary" checked?={ l.IsPrimary }/> Primary</label>
+		<div class="customer-rail-actions">
+			<button type="submit" class="small">Save</button>
+			<button type="button" class="outline small"
+				hx-get={ templ.URL(fmt.Sprintf("/customers/%d/locations?compact=1", customerID)) }
+				hx-target="#locations-section"
+				hx-swap="outerHTML">Cancel</button>
+		</div>
+	</form>
 }

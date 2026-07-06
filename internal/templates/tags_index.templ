@@ -42,7 +42,7 @@ templ TagsTable(p TagListPageData) {
 
 templ TagForm(p TagFormData) {
 	@Layout(func() string { if p.IsNew { return "New Tag" } else { return "Edit Tag" } }()) {
-		<form action={ templ.URL(func() string { if p.IsNew { return "/tags" } else { return fmt.Sprintf("/tags/%d", p.Tag.ID) } }()) } method="post" autocomplete="off" class="entity-form">
+		<form action={ templ.URL(func() string { if p.IsNew { return "/tags" } else { return fmt.Sprintf("/tags/%d", p.Tag.ID) } }()) } method="post" autocomplete="off" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
 				Name

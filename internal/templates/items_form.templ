@@ -5,7 +5,7 @@ import "fmt"
 templ ItemForm(p ItemFormPageData) {
 	@Layout(itemFormTitle(p.IsNew)) {
 
-		<form action={ templ.URL(itemFormAction(p.IsNew, p.Item.ID)) } method="post" autocomplete="off">
+		<form action={ templ.URL(itemFormAction(p.IsNew, p.Item.ID)) } method="post" autocomplete="off" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<label>
 					Name <small class="required-marker">*</small>

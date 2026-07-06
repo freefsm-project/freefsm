@@ -5,7 +5,7 @@ import "fmt"
 templ JobForm(p JobFormPageData) {
 	@Layout(jobFormTitle(p.IsNew)) {
 
-		<form action={ templ.URL(jobFormAction(p.IsNew, p.Job.ID)) } method="post" autocomplete="off">
+		<form action={ templ.URL(jobFormAction(p.IsNew, p.Job.ID)) } method="post" autocomplete="off" class="compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<label>
 				Customer <small class="required-marker">*</small>

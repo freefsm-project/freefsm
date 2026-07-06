@@ -5,7 +5,7 @@ import "fmt"
 templ LocationForm(customerID int64) {
 	<form hx-post={ templ.URL(fmt.Sprintf("/customers/%d/locations", customerID)) }
 		hx-target="#locations-section" hx-swap="outerHTML"
-		class="inline-form-card">
+		class="inline-form-card compact-form">
 		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 		<label>Title <input type="text" name="title" required/></label>
 		<div class="grid">
@@ -20,5 +20,25 @@ templ LocationForm(customerID int64) {
 		<label>Notes <input type="text" name="notes"/></label>
 		<label><input type="checkbox" name="is_primary"/> Primary</label>
 		<button type="submit">Save</button>
+	</form>
+}
+
+templ LocationFormCompact(customerID int64) {
+	<form hx-post={ templ.URL(fmt.Sprintf("/customers/%d/locations?compact=1", customerID)) }
+		hx-target="#locations-section" hx-swap="outerHTML"
+		class="customer-rail-card inline-form-card compact-form">
+		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+		<input type="hidden" name="compact" value="1"/>
+		<label>Title <input type="text" name="title" required/></label>
+		<label>Address 1 <input type="text" name="address_1"/></label>
+		<label>Address 2 <input type="text" name="address_2"/></label>
+		<div class="grid form-grid-address">
+			<label>City <input type="text" name="city"/></label>
+			<label>State <input type="text" name="state"/></label>
+			<label>ZIP <input type="text" name="zip_code"/></label>
+		</div>
+		<label>Notes <input type="text" name="notes"/></label>
+		<label><input type="checkbox" name="is_primary"/> Primary</label>
+		<button type="submit" class="small">Save</button>
 	</form>
 }
