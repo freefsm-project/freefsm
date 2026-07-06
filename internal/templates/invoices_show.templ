@@ -11,7 +11,7 @@ templ InvoiceShow(p InvoiceDetail) {
 			if p.CanFinalize {
 				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/finalize", p.ID)) } method="post" onsubmit="return confirm('Finalize this invoice? This will set the invoice and due dates from current settings.')">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button type="submit" class="outline">Finalize Invoice</button>
+					<button type="submit">Finalize Invoice</button>
 				</form>
 			}
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>

@@ -484,80 +484,7 @@ html[data-theme="dark"] .theme-icon-moon {
   font-size: 0.8rem;
 }
 
-.actions-dropdown {
-  position: relative;
-  margin: 0;
-}
-
-.actions-dropdown[open] {
-  z-index: 1000;
-}
-
-.actions-dropdown summary {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  list-style: none;
-  cursor: pointer;
-}
-
-.actions-dropdown-menu {
-  position: absolute;
-  left: 0;
-  right: auto;
-  z-index: 1000;
-  min-width: 16rem;
-  max-width: min(22rem, calc(100vw - 2rem));
-  margin-top: 0.35rem;
-  padding: 0.45rem;
-  border: 1px solid var(--pico-muted-border-color);
-  border-radius: var(--pico-border-radius);
-  background: var(--pico-card-background-color);
-  box-shadow: 0 0.75rem 2rem rgba(15, 23, 42, 0.18);
-}
-
-.actions-dropdown-menu a[role="button"],
-.actions-dropdown-menu button {
-  display: block;
-  width: 100%;
-  margin: 0 0 0.35rem;
-  text-align: left;
-}
-
-.actions-dropdown-menu form:last-child button,
-.actions-dropdown-menu a[role="button"]:last-child {
-  margin-bottom: 0;
-}
-
-.actions-dropdown-menu form,
-.actions-dropdown-menu label,
-.actions-dropdown-menu input {
-  margin: 0;
-}
-
-.actions-dropdown-menu label {
-  display: block;
-  margin-bottom: 0.35rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-}
-
-.actions-dropdown-menu input {
-  width: 100%;
-  margin-top: 0.2rem;
-  padding: 0.25rem 0.45rem;
-  font-size: 0.85rem;
-}
-
-.actions-dropdown-menu .dropdown-action-form {
-  padding: 0.4rem 0;
-  margin: 0.4rem 0;
-  border-top: 1px solid var(--pico-muted-border-color);
-  border-bottom: 1px solid var(--pico-muted-border-color);
-}
-
 .work-item-detail-action-group a[role="button"],
-.work-item-detail-action-group .actions-dropdown summary,
 .work-item-detail-action-group button,
 .work-item-detail-archive-banner button {
   box-sizing: border-box;
@@ -1680,19 +1607,7 @@ html[data-theme="dark"] .theme-icon-moon {
     flex-direction: column;
   }
 
-  .actions-dropdown,
-  .actions-dropdown summary {
-    width: 100%;
-  }
-
-  .actions-dropdown-menu {
-    position: static;
-    width: 100%;
-    min-width: 0;
-  }
-
   .work-item-detail-action-group a[role="button"],
-  .work-item-detail-action-group .actions-dropdown summary,
   .work-item-detail-action-group button,
   .work-item-detail-archive-banner button {
     width: 100%;

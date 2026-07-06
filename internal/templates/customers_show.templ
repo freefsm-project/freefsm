@@ -8,9 +8,9 @@ templ CustomerShow(p CustomerShowPageData) {
 		if canManageOperational(ctx) && p.Customer.ArchivedAt == "" {
 			<div class="work-item-detail-actions">
 				<div class="work-item-detail-action-group">
-					<a href={ templ.URL(fmt.Sprintf("/jobs/new?customer_id=%d", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Create job for %s", p.Customer.DisplayName) }>Create Job</a>
-					<a href={ templ.URL(fmt.Sprintf("/estimates/new?customer_id=%d", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Create estimate for %s", p.Customer.DisplayName) }>Create Estimate</a>
-					<a href={ templ.URL(fmt.Sprintf("/customers/%d/create-invoice", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Create invoice for %s", p.Customer.DisplayName) }>Create Invoice</a>
+					<a href={ templ.URL(fmt.Sprintf("/jobs/new?customer_id=%d", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create job for %s", p.Customer.DisplayName) }>Create Job</a>
+					<a href={ templ.URL(fmt.Sprintf("/estimates/new?customer_id=%d", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create estimate for %s", p.Customer.DisplayName) }>Create Estimate</a>
+					<a href={ templ.URL(fmt.Sprintf("/customers/%d/create-invoice", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create invoice for %s", p.Customer.DisplayName) }>Create Invoice</a>
 					<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", p.Customer.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Customer.DisplayName) }>Edit</a>
 					<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", p.Customer.ID)) } method="post" onsubmit="return confirm('Delete this customer?')">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
