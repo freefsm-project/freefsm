@@ -223,6 +223,7 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if taxRate == "" {
 		taxRate = "0"
 	}
+	taxRate = taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate)
 
 	loc := middleware.CompanyLocation(r.Context())
 	params := services.InvoiceCreateParams{
@@ -290,6 +291,10 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	taxRatePtr := formPtr(taxRate)
 	if taxRate == "" {
 		t := "0"
+		taxRatePtr = &t
+	}
+	if taxRatePtr != nil {
+		t := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr)
 		taxRatePtr = &t
 	}
 
@@ -439,14 +444,16 @@ func (h *InvoiceHandler) newInvoiceForm(ctx context.Context) templates.InvoiceFo
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
+	defaultTaxRate := companyDefaultTaxRate(ctx)
 	return templates.InvoiceFormPageData{
-		Invoice:           &templates.InvoiceDetail{},
+		Invoice:           &templates.InvoiceDetail{TaxRate: defaultTaxRate},
 		IsNew:             true,
 		Customers:         customerOptions(customers),
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         h.itemsCatalog(ctx),
 		ExistingItemsJSON: "[]",
+		CustomersJSON:     customerTaxContextJSON(customers, defaultTaxRate),
 		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
 	}
 }
@@ -455,6 +462,7 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
+	defaultTaxRate := companyDefaultTaxRate(ctx)
 	d := invoiceToDetail(ctx, i, statuses)
 	items := h.svc.LineItems(i)
 	return templates.InvoiceFormPageData{
@@ -465,6 +473,7 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         h.itemsCatalog(ctx),
 		ExistingItemsJSON: services.SerializeLineItems(items),
+		CustomersJSON:     customerTaxContextJSON(customers, defaultTaxRate),
 		CustomFields:      buildCustomFieldDisplay(defs, i.CustomFields),
 	}
 }
@@ -610,11 +619,7 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	cs := middleware.CompanyFromContext(r.Context())
-	defaultTaxRate := "0"
-	if cs != nil {
-		defaultTaxRate = cs.DefaultTaxRate
-	}
+	defaultTaxRate := taxRateForCustomer(r.Context(), h.custSvc, j.CustomerID, companyDefaultTaxRate(r.Context()))
 	statuses := h.statusesForSelect(r.Context())
 	var statusID int64
 	if draft, _ := h.statusSvc.FindByName(r.Context(), "invoice", "Draft"); draft != nil {
@@ -639,6 +644,7 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         h.itemsCatalog(r.Context()),
 		ExistingItemsJSON: services.SerializeLineItems(items),
+		CustomersJSON:     customerTaxContextJSON(customers, companyDefaultTaxRate(r.Context())),
 		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
 		CancelURL:         fmt.Sprintf("/jobs/%d", id),
 	}
@@ -655,10 +661,7 @@ func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Reque
 		http.NotFound(w, r)
 		return
 	}
-	defaultTaxRate := "0"
-	if cs := middleware.CompanyFromContext(r.Context()); cs != nil {
-		defaultTaxRate = cs.DefaultTaxRate
-	}
+	defaultTaxRate := taxRateForCustomer(r.Context(), h.custSvc, id, companyDefaultTaxRate(r.Context()))
 	statuses := h.statusesForSelect(r.Context())
 	var statusID int64
 	if draft, _ := h.statusSvc.FindByName(r.Context(), "invoice", "Draft"); draft != nil {
@@ -679,6 +682,7 @@ func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Reque
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         h.itemsCatalog(r.Context()),
 		ExistingItemsJSON: "[]",
+		CustomersJSON:     customerTaxContextJSON(customers, companyDefaultTaxRate(r.Context())),
 		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
 		CancelURL:         fmt.Sprintf("/customers/%d", id),
 	}

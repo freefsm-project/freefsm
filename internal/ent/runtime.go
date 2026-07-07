@@ -399,16 +399,20 @@ func init() {
 	customerDescBillingZipCode := customerFields[18].Descriptor()
 	// customer.DefaultBillingZipCode holds the default value on creation for the billing_zip_code field.
 	customer.DefaultBillingZipCode = customerDescBillingZipCode.Default.(string)
+	// customerDescTaxExempt is the schema descriptor for tax_exempt field.
+	customerDescTaxExempt := customerFields[19].Descriptor()
+	// customer.DefaultTaxExempt holds the default value on creation for the tax_exempt field.
+	customer.DefaultTaxExempt = customerDescTaxExempt.Default.(bool)
 	// customerDescCustomFields is the schema descriptor for custom_fields field.
-	customerDescCustomFields := customerFields[19].Descriptor()
+	customerDescCustomFields := customerFields[20].Descriptor()
 	// customer.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	customer.DefaultCustomFields = customerDescCustomFields.Default.(string)
 	// customerDescCreatedAt is the schema descriptor for created_at field.
-	customerDescCreatedAt := customerFields[21].Descriptor()
+	customerDescCreatedAt := customerFields[22].Descriptor()
 	// customer.DefaultCreatedAt holds the default value on creation for the created_at field.
 	customer.DefaultCreatedAt = customerDescCreatedAt.Default.(func() time.Time)
 	// customerDescUpdatedAt is the schema descriptor for updated_at field.
-	customerDescUpdatedAt := customerFields[22].Descriptor()
+	customerDescUpdatedAt := customerFields[23].Descriptor()
 	// customer.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	customer.DefaultUpdatedAt = customerDescUpdatedAt.Default.(func() time.Time)
 	// customer.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

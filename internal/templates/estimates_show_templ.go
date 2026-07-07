@@ -368,11 +368,11 @@ func EstimateShow(p EstimateDetail) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if li.Taxable && li.TaxRate != "" {
+					if li.Taxable && parseTaxRate(p.TaxRate) > 0 {
 						var templ_7745c5c3_Var24 string
-						templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(li.TaxRate)
+						templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(p.TaxRate)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 73, Col: 21}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 73, Col: 20}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 						if templ_7745c5c3_Err != nil {

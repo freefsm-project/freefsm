@@ -144,6 +144,11 @@ func BillingZipCode(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldBillingZipCode, v))
 }
 
+// TaxExempt applies equality check predicate on the "tax_exempt" field. It's identical to TaxExemptEQ.
+func TaxExempt(v bool) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldTaxExempt, v))
+}
+
 // CustomFields applies equality check predicate on the "custom_fields" field. It's identical to CustomFieldsEQ.
 func CustomFields(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldCustomFields, v))
@@ -1272,6 +1277,16 @@ func BillingZipCodeEqualFold(v string) predicate.Customer {
 // BillingZipCodeContainsFold applies the ContainsFold predicate on the "billing_zip_code" field.
 func BillingZipCodeContainsFold(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldContainsFold(FieldBillingZipCode, v))
+}
+
+// TaxExemptEQ applies the EQ predicate on the "tax_exempt" field.
+func TaxExemptEQ(v bool) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldTaxExempt, v))
+}
+
+// TaxExemptNEQ applies the NEQ predicate on the "tax_exempt" field.
+func TaxExemptNEQ(v bool) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldTaxExempt, v))
 }
 
 // CustomFieldsEQ applies the EQ predicate on the "custom_fields" field.

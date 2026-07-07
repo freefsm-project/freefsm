@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -9,6 +11,8 @@ import (
 	"strings"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/a-h/templ"
 )
@@ -50,6 +54,45 @@ func customerOptions(customers []*ent.Customer) []templates.SelectOption {
 		opts[i] = templates.SelectOption{Value: c.ID, Label: c.DisplayName}
 	}
 	return opts
+}
+
+func companyDefaultTaxRate(ctx context.Context) string {
+	if cs := middleware.CompanyFromContext(ctx); cs != nil && cs.DefaultTaxRate != "" {
+		return cs.DefaultTaxRate
+	}
+	return "0"
+}
+
+func taxRateForCustomer(ctx context.Context, custSvc *services.CustomerService, customerID int64, defaultTaxRate string) string {
+	if customerID <= 0 {
+		return defaultTaxRate
+	}
+	c, err := custSvc.GetByID(ctx, customerID)
+	if err == nil && c != nil && c.TaxExempt {
+		return "0"
+	}
+	return defaultTaxRate
+}
+
+func customerTaxContextJSON(customers []*ent.Customer, defaultTaxRate string) string {
+	type customerTaxInfo struct {
+		TaxExempt bool `json:"tax_exempt"`
+	}
+	payload := struct {
+		DefaultTaxRate string                    `json:"default_tax_rate"`
+		Customers      map[int64]customerTaxInfo `json:"customers"`
+	}{
+		DefaultTaxRate: defaultTaxRate,
+		Customers:      make(map[int64]customerTaxInfo, len(customers)),
+	}
+	for _, c := range customers {
+		payload.Customers[c.ID] = customerTaxInfo{TaxExempt: c.TaxExempt}
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return `{"default_tax_rate":"0","customers":{}}`
+	}
+	return string(b)
 }
 
 func statusName(statuses []*ent.Status, id *int64) string {

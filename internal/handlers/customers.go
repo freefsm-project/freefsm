@@ -150,6 +150,7 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		BillingCity:     r.FormValue("billing_city"),
 		BillingState:    r.FormValue("billing_state"),
 		BillingZipCode:  r.FormValue("billing_zip_code"),
+		TaxExempt:       r.FormValue("tax_exempt") == "true",
 		CustomFields:    parseCustomFieldValues(r),
 	}
 	if params.Status == "" {
@@ -218,6 +219,7 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		BillingCity:     formPtr(r.FormValue("billing_city")),
 		BillingState:    formPtr(r.FormValue("billing_state")),
 		BillingZipCode:  formPtr(r.FormValue("billing_zip_code")),
+		TaxExempt:       boolPtr(r.FormValue("tax_exempt") == "true"),
 		CustomFields:    strPtr(parseCustomFieldValues(r)),
 	}
 	result, err := h.svc.Update(r.Context(), id, params)
@@ -303,6 +305,7 @@ func customerToDetail(ctx context.Context, c *ent.Customer) templates.CustomerDe
 		BillingCity:     c.BillingCity,
 		BillingState:    c.BillingState,
 		BillingZipCode:  c.BillingZipCode,
+		TaxExempt:       c.TaxExempt,
 	}
 	if c.DeletedAt != nil && !c.DeletedAt.IsZero() {
 		d.ArchivedAt = displayDate(ctx, *c.DeletedAt)

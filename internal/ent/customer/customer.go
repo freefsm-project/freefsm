@@ -49,6 +49,8 @@ const (
 	FieldBillingState = "billing_state"
 	// FieldBillingZipCode holds the string denoting the billing_zip_code field in the database.
 	FieldBillingZipCode = "billing_zip_code"
+	// FieldTaxExempt holds the string denoting the tax_exempt field in the database.
+	FieldTaxExempt = "tax_exempt"
 	// FieldCustomFields holds the string denoting the custom_fields field in the database.
 	FieldCustomFields = "custom_fields"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
@@ -82,6 +84,7 @@ var Columns = []string{
 	FieldBillingCity,
 	FieldBillingState,
 	FieldBillingZipCode,
+	FieldTaxExempt,
 	FieldCustomFields,
 	FieldDeletedAt,
 	FieldCreatedAt,
@@ -127,6 +130,8 @@ var (
 	DefaultBillingState string
 	// DefaultBillingZipCode holds the default value on creation for the "billing_zip_code" field.
 	DefaultBillingZipCode string
+	// DefaultTaxExempt holds the default value on creation for the "tax_exempt" field.
+	DefaultTaxExempt bool
 	// DefaultCustomFields holds the default value on creation for the "custom_fields" field.
 	DefaultCustomFields string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -233,6 +238,11 @@ func ByBillingState(opts ...sql.OrderTermOption) OrderOption {
 // ByBillingZipCode orders the results by the billing_zip_code field.
 func ByBillingZipCode(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBillingZipCode, opts...).ToFunc()
+}
+
+// ByTaxExempt orders the results by the tax_exempt field.
+func ByTaxExempt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTaxExempt, opts...).ToFunc()
 }
 
 // ByCustomFields orders the results by the custom_fields field.

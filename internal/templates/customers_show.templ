@@ -60,6 +60,13 @@ templ CustomerShow(p CustomerShowPageData) {
 										}
 										{ p.Customer.BillingCity }, { p.Customer.BillingState } { p.Customer.BillingZipCode }
 									</td></tr>
+									<tr><th>Tax Exempt</th><td>
+										if p.Customer.TaxExempt {
+											Yes
+										} else {
+											No
+										}
+									</td></tr>
 								}
 							</tbody>
 						</table>

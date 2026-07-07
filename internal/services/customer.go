@@ -32,6 +32,7 @@ type CustomerCreateParams struct {
 	BillingCity     string
 	BillingState    string
 	BillingZipCode  string
+	TaxExempt       bool
 	CustomFields    string
 }
 
@@ -50,6 +51,7 @@ type CustomerUpdateParams struct {
 	BillingCity     *string
 	BillingState    *string
 	BillingZipCode  *string
+	TaxExempt       *bool
 	CustomFields    *string
 }
 
@@ -139,6 +141,7 @@ func (s *CustomerService) Create(ctx context.Context, params CustomerCreateParam
 		SetBillingCity(params.BillingCity).
 		SetBillingState(params.BillingState).
 		SetBillingZipCode(params.BillingZipCode).
+		SetTaxExempt(params.TaxExempt).
 		SetCustomFields(params.CustomFields).
 		Save(ctx)
 	if err != nil {
@@ -191,6 +194,9 @@ func (s *CustomerService) Update(ctx context.Context, id int64, params CustomerU
 	}
 	if params.BillingZipCode != nil {
 		u.SetBillingZipCode(*params.BillingZipCode)
+	}
+	if params.TaxExempt != nil {
+		u.SetTaxExempt(*params.TaxExempt)
 	}
 	if params.CustomFields != nil {
 		u.SetCustomFields(*params.CustomFields)

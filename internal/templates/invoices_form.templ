@@ -70,13 +70,19 @@ templ InvoiceForm(p InvoiceFormPageData) {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
 			@templ.Raw(`<script type="application/json" id="items-catalog">` + p.ItemsJSON + `</script>`)
 			@templ.Raw(`<script type="application/json" id="existing-items">` + p.ExistingItemsJSON + `</script>`)
+			@templ.Raw(`<script type="application/json" id="customer-tax-context">` + p.CustomersJSON + `</script>`)
 			<script>
 				function registerLineItemEditor() {
 					Alpine.data('lineItemEditor', () => {
 						const catalog = JSON.parse(document.getElementById('items-catalog').textContent || '[]');
 						const existing = JSON.parse(document.getElementById('existing-items').textContent || '[]');
+						const taxContext = JSON.parse(document.getElementById('customer-tax-context').textContent || '{"default_tax_rate":"0","customers":{}}');
 						const makeItem = () => ({ item_id: 0, title: '', description: '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: 0, surcharge: 0 });
 						const makeNewItem = () => ({ name: '', description: '', unit_price: 0, taxable: false, tax_rate: '' });
+						const parseRate = (value) => {
+							const parsed = parseFloat(String(value || '').replace('%', '').trim()) || 0;
+							return parsed / 100;
+						};
 						existing.forEach(i => {
 							if (!i.quantity) i.quantity = 1;
 							i.item_id = Number(i.item_id) || 0;
@@ -92,6 +98,16 @@ templ InvoiceForm(p InvoiceFormPageData) {
 							showCreateItem: false,
 							creatingItem: false,
 							createItemError: '',
+							wasTaxExempt: false,
+							lastNonExemptTaxRate: taxContext.default_tax_rate || '0',
+							taxVersion: 0,
+							init() {
+								const customerSelect = document.querySelector('select[name="customer_id"]');
+								const taxInput = document.querySelector('input[name="tax_rate"]');
+								if (customerSelect) customerSelect.addEventListener('change', () => this.syncCustomerTax());
+								if (taxInput) taxInput.addEventListener('input', () => { this.taxVersion++; });
+								this.syncCustomerTax();
+							},
 							add() { this.items.push(makeItem()); },
 							remove(index) { this.items.splice(index, 1); },
 							applyCatalogItem(item, c) {
@@ -106,6 +122,28 @@ templ InvoiceForm(p InvoiceFormPageData) {
 								this.items[index].item_id = Number(itemID) || 0;
 								const c = catalog.find(f => f.id == itemID);
 								if (c) this.applyCatalogItem(this.items[index], c);
+							},
+							documentTaxRate() {
+								this.taxVersion;
+								const taxInput = document.querySelector('input[name="tax_rate"]');
+								return parseRate(taxInput ? taxInput.value : taxContext.default_tax_rate);
+							},
+							syncCustomerTax() {
+								const customerSelect = document.querySelector('select[name="customer_id"]');
+								const taxInput = document.querySelector('input[name="tax_rate"]');
+								if (!customerSelect || !taxInput) return;
+								const info = taxContext.customers[String(customerSelect.value)] || {};
+								if (info.tax_exempt) {
+									if (!this.wasTaxExempt && parseRate(taxInput.value) > 0) this.lastNonExemptTaxRate = taxInput.value;
+									taxInput.value = '0';
+									this.wasTaxExempt = true;
+									this.taxVersion++;
+									return;
+								}
+								if (this.wasTaxExempt && parseRate(taxInput.value) <= 0) taxInput.value = this.lastNonExemptTaxRate || taxContext.default_tax_rate || '0';
+								if (!this.wasTaxExempt && !taxInput.value) taxInput.value = taxContext.default_tax_rate || '0';
+								this.wasTaxExempt = false;
+								this.taxVersion++;
 							},
 							async createItem() {
 								this.createItemError = '';
@@ -138,7 +176,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 							},
 							lineTotal(item) { return (item.unit_price * item.quantity) - (item.discount || 0) + (item.surcharge || 0); },
 							get subtotal() { return this.items.reduce((s, i) => s + (i.unit_price * i.quantity), 0); },
-							get tax() { return this.items.reduce((s, i) => { if (i.taxable && i.tax_rate) { const r = parseFloat(i.tax_rate) || 0; return s + (i.unit_price * i.quantity * r / 100); } return s; }, 0); },
+							get tax() { const r = this.documentTaxRate(); return this.items.reduce((s, i) => i.taxable ? s + (this.lineTotal(i) * r) : s, 0); },
 							get total() { return this.subtotal + this.tax - this.items.reduce((s, i) => s + (i.discount || 0), 0) + this.items.reduce((s, i) => s + (i.surcharge || 0), 0); },
 							get json() { return JSON.stringify(this.items.filter(i => i.item_id > 0 || i.title).map(i => ({ item_id: Number(i.item_id) || 0, title: i.title, description: i.description, unit_price: Number(i.unit_price) || 0, quantity: Number(i.quantity) || 1, taxable: Boolean(i.taxable), tax_rate: i.tax_rate, discount: Number(i.discount) || 0, surcharge: Number(i.surcharge) || 0 }))); },
 						};
@@ -174,14 +212,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 								<td><textarea x-model="item.description" rows="2" placeholder="Line item description"></textarea></td>
 								<td><input type="number" x-model="item.quantity" min="1" class="input-width-70"></td>
 								<td><input type="number" x-model="item.unit_price" step="0.01" class="input-width-100"></td>
-								<td>
-									<template x-if="item.taxable && item.tax_rate">
-										<span x-text="'Yes'"></span>
-									</template>
-									<template x-if="!item.taxable || !item.tax_rate">
-										<span x-text="'No'"></span>
-									</template>
-								</td>
+								<td><input type="checkbox" x-model="item.taxable" aria-label="Taxable line item"/></td>
 								<td><span x-text="lineTotal(item).toFixed(2)"></span></td>
 								<td><button @click.prevent="remove(index)" class="outline contrast small">X</button></td>
 							</tr>

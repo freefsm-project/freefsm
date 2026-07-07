@@ -255,6 +255,7 @@ var (
 		{Name: "billing_city", Type: field.TypeString, Default: ""},
 		{Name: "billing_state", Type: field.TypeString, Default: ""},
 		{Name: "billing_zip_code", Type: field.TypeString, Default: ""},
+		{Name: "tax_exempt", Type: field.TypeBool, Default: false},
 		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},

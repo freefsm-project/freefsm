@@ -77,8 +77,8 @@ templ InvoiceShow(p InvoiceDetail) {
 							<td>{ fmt.Sprintf("%d", li.Quantity) }</td>
 							<td>{ fmt.Sprintf("$%.2f", li.UnitPrice) }</td>
 							<td>
-								if li.Taxable && li.TaxRate != "" {
-									{ li.TaxRate }
+								if li.Taxable && parseTaxRate(p.TaxRate) > 0 {
+									{ p.TaxRate }
 								} else {
 									No
 								}

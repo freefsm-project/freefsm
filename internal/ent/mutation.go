@@ -7810,6 +7810,7 @@ type CustomerMutation struct {
 	billing_city          *string
 	billing_state         *string
 	billing_zip_code      *string
+	tax_exempt            *bool
 	custom_fields         *string
 	deleted_at            *time.Time
 	created_at            *time.Time
@@ -8708,6 +8709,42 @@ func (m *CustomerMutation) ResetBillingZipCode() {
 	m.billing_zip_code = nil
 }
 
+// SetTaxExempt sets the "tax_exempt" field.
+func (m *CustomerMutation) SetTaxExempt(b bool) {
+	m.tax_exempt = &b
+}
+
+// TaxExempt returns the value of the "tax_exempt" field in the mutation.
+func (m *CustomerMutation) TaxExempt() (r bool, exists bool) {
+	v := m.tax_exempt
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTaxExempt returns the old "tax_exempt" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldTaxExempt(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTaxExempt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTaxExempt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTaxExempt: %w", err)
+	}
+	return oldValue.TaxExempt, nil
+}
+
+// ResetTaxExempt resets all changes to the "tax_exempt" field.
+func (m *CustomerMutation) ResetTaxExempt() {
+	m.tax_exempt = nil
+}
+
 // SetCustomFields sets the "custom_fields" field.
 func (m *CustomerMutation) SetCustomFields(s string) {
 	m.custom_fields = &s
@@ -8899,7 +8936,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
 	if m.company_id != nil {
 		fields = append(fields, customer.FieldCompanyID)
 	}
@@ -8953,6 +8990,9 @@ func (m *CustomerMutation) Fields() []string {
 	}
 	if m.billing_zip_code != nil {
 		fields = append(fields, customer.FieldBillingZipCode)
+	}
+	if m.tax_exempt != nil {
+		fields = append(fields, customer.FieldTaxExempt)
 	}
 	if m.custom_fields != nil {
 		fields = append(fields, customer.FieldCustomFields)
@@ -9010,6 +9050,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.BillingState()
 	case customer.FieldBillingZipCode:
 		return m.BillingZipCode()
+	case customer.FieldTaxExempt:
+		return m.TaxExempt()
 	case customer.FieldCustomFields:
 		return m.CustomFields()
 	case customer.FieldDeletedAt:
@@ -9063,6 +9105,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldBillingState(ctx)
 	case customer.FieldBillingZipCode:
 		return m.OldBillingZipCode(ctx)
+	case customer.FieldTaxExempt:
+		return m.OldTaxExempt(ctx)
 	case customer.FieldCustomFields:
 		return m.OldCustomFields(ctx)
 	case customer.FieldDeletedAt:
@@ -9205,6 +9249,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBillingZipCode(v)
+		return nil
+	case customer.FieldTaxExempt:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTaxExempt(v)
 		return nil
 	case customer.FieldCustomFields:
 		v, ok := value.(string)
@@ -9420,6 +9471,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldBillingZipCode:
 		m.ResetBillingZipCode()
+		return nil
+	case customer.FieldTaxExempt:
+		m.ResetTaxExempt()
 		return nil
 	case customer.FieldCustomFields:
 		m.ResetCustomFields()

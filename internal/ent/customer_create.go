@@ -264,6 +264,20 @@ func (_c *CustomerCreate) SetNillableBillingZipCode(v *string) *CustomerCreate {
 	return _c
 }
 
+// SetTaxExempt sets the "tax_exempt" field.
+func (_c *CustomerCreate) SetTaxExempt(v bool) *CustomerCreate {
+	_c.mutation.SetTaxExempt(v)
+	return _c
+}
+
+// SetNillableTaxExempt sets the "tax_exempt" field if the given value is not nil.
+func (_c *CustomerCreate) SetNillableTaxExempt(v *bool) *CustomerCreate {
+	if v != nil {
+		_c.SetTaxExempt(*v)
+	}
+	return _c
+}
+
 // SetCustomFields sets the "custom_fields" field.
 func (_c *CustomerCreate) SetCustomFields(v string) *CustomerCreate {
 	_c.mutation.SetCustomFields(v)
@@ -413,6 +427,10 @@ func (_c *CustomerCreate) defaults() {
 		v := customer.DefaultBillingZipCode
 		_c.mutation.SetBillingZipCode(v)
 	}
+	if _, ok := _c.mutation.TaxExempt(); !ok {
+		v := customer.DefaultTaxExempt
+		_c.mutation.SetTaxExempt(v)
+	}
 	if _, ok := _c.mutation.CustomFields(); !ok {
 		v := customer.DefaultCustomFields
 		_c.mutation.SetCustomFields(v)
@@ -475,6 +493,9 @@ func (_c *CustomerCreate) check() error {
 	}
 	if _, ok := _c.mutation.BillingZipCode(); !ok {
 		return &ValidationError{Name: "billing_zip_code", err: errors.New(`ent: missing required field "Customer.billing_zip_code"`)}
+	}
+	if _, ok := _c.mutation.TaxExempt(); !ok {
+		return &ValidationError{Name: "tax_exempt", err: errors.New(`ent: missing required field "Customer.tax_exempt"`)}
 	}
 	if _, ok := _c.mutation.CustomFields(); !ok {
 		return &ValidationError{Name: "custom_fields", err: errors.New(`ent: missing required field "Customer.custom_fields"`)}
@@ -588,6 +609,10 @@ func (_c *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.BillingZipCode(); ok {
 		_spec.SetField(customer.FieldBillingZipCode, field.TypeString, value)
 		_node.BillingZipCode = value
+	}
+	if value, ok := _c.mutation.TaxExempt(); ok {
+		_spec.SetField(customer.FieldTaxExempt, field.TypeBool, value)
+		_node.TaxExempt = value
 	}
 	if value, ok := _c.mutation.CustomFields(); ok {
 		_spec.SetField(customer.FieldCustomFields, field.TypeString, value)

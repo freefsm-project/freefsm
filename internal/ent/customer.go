@@ -53,6 +53,8 @@ type Customer struct {
 	BillingState string `json:"billing_state,omitempty"`
 	// BillingZipCode holds the value of the "billing_zip_code" field.
 	BillingZipCode string `json:"billing_zip_code,omitempty"`
+	// TaxExempt holds the value of the "tax_exempt" field.
+	TaxExempt bool `json:"tax_exempt,omitempty"`
 	// CustomFields holds the value of the "custom_fields" field.
 	CustomFields string `json:"custom_fields,omitempty"`
 	// DeletedAt holds the value of the "deleted_at" field.
@@ -69,6 +71,8 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case customer.FieldTaxExempt:
+			values[i] = new(sql.NullBool)
 		case customer.FieldID, customer.FieldCompanyID, customer.FieldAssignedTo, customer.FieldPipelineStatusID, customer.FieldLeadSourceID:
 			values[i] = new(sql.NullInt64)
 		case customer.FieldFirstName, customer.FieldLastName, customer.FieldDisplayName, customer.FieldEmail, customer.FieldPhone, customer.FieldCompanyName, customer.FieldNotes, customer.FieldStatus, customer.FieldAccountType, customer.FieldBillingAddress1, customer.FieldBillingAddress2, customer.FieldBillingCity, customer.FieldBillingState, customer.FieldBillingZipCode, customer.FieldCustomFields:
@@ -208,6 +212,12 @@ func (_m *Customer) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.BillingZipCode = value.String
 			}
+		case customer.FieldTaxExempt:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field tax_exempt", values[i])
+			} else if value.Valid {
+				_m.TaxExempt = value.Bool
+			}
 		case customer.FieldCustomFields:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field custom_fields", values[i])
@@ -330,6 +340,9 @@ func (_m *Customer) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("billing_zip_code=")
 	builder.WriteString(_m.BillingZipCode)
+	builder.WriteString(", ")
+	builder.WriteString("tax_exempt=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TaxExempt))
 	builder.WriteString(", ")
 	builder.WriteString("custom_fields=")
 	builder.WriteString(_m.CustomFields)

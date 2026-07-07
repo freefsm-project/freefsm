@@ -332,6 +332,20 @@ func (_u *CustomerUpdate) SetNillableBillingZipCode(v *string) *CustomerUpdate {
 	return _u
 }
 
+// SetTaxExempt sets the "tax_exempt" field.
+func (_u *CustomerUpdate) SetTaxExempt(v bool) *CustomerUpdate {
+	_u.mutation.SetTaxExempt(v)
+	return _u
+}
+
+// SetNillableTaxExempt sets the "tax_exempt" field if the given value is not nil.
+func (_u *CustomerUpdate) SetNillableTaxExempt(v *bool) *CustomerUpdate {
+	if v != nil {
+		_u.SetTaxExempt(*v)
+	}
+	return _u
+}
+
 // SetCustomFields sets the "custom_fields" field.
 func (_u *CustomerUpdate) SetCustomFields(v string) *CustomerUpdate {
 	_u.mutation.SetCustomFields(v)
@@ -512,6 +526,9 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.BillingZipCode(); ok {
 		_spec.SetField(customer.FieldBillingZipCode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TaxExempt(); ok {
+		_spec.SetField(customer.FieldTaxExempt, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(customer.FieldCustomFields, field.TypeString, value)
@@ -849,6 +866,20 @@ func (_u *CustomerUpdateOne) SetNillableBillingZipCode(v *string) *CustomerUpdat
 	return _u
 }
 
+// SetTaxExempt sets the "tax_exempt" field.
+func (_u *CustomerUpdateOne) SetTaxExempt(v bool) *CustomerUpdateOne {
+	_u.mutation.SetTaxExempt(v)
+	return _u
+}
+
+// SetNillableTaxExempt sets the "tax_exempt" field if the given value is not nil.
+func (_u *CustomerUpdateOne) SetNillableTaxExempt(v *bool) *CustomerUpdateOne {
+	if v != nil {
+		_u.SetTaxExempt(*v)
+	}
+	return _u
+}
+
 // SetCustomFields sets the "custom_fields" field.
 func (_u *CustomerUpdateOne) SetCustomFields(v string) *CustomerUpdateOne {
 	_u.mutation.SetCustomFields(v)
@@ -1059,6 +1090,9 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	}
 	if value, ok := _u.mutation.BillingZipCode(); ok {
 		_spec.SetField(customer.FieldBillingZipCode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TaxExempt(); ok {
+		_spec.SetField(customer.FieldTaxExempt, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(customer.FieldCustomFields, field.TypeString, value)

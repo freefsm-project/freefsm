@@ -41,6 +41,7 @@ func (Customer) Fields() []ent.Field {
 		field.String("billing_city").Default(""),
 		field.String("billing_state").Default(""),
 		field.String("billing_zip_code").Default(""),
+		field.Bool("tax_exempt").Default(false),
 		field.String("custom_fields").Default("[]"),
 		field.Time("deleted_at").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),

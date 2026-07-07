@@ -179,6 +179,7 @@ type CustomerDetail struct {
 	BillingCity     string
 	BillingState    string
 	BillingZipCode  string
+	TaxExempt       bool
 	ArchivedAt      string
 }
 
@@ -474,6 +475,7 @@ type EstimateFormPageData struct {
 	Statuses          []SelectOption
 	ItemsJSON         string
 	ExistingItemsJSON string
+	CustomersJSON     string
 	CustomFields      []CustomFieldDisplay
 }
 
@@ -596,6 +598,7 @@ type InvoiceFormPageData struct {
 	Statuses          []SelectOption
 	ItemsJSON         string
 	ExistingItemsJSON string
+	CustomersJSON     string
 	CustomFields      []CustomFieldDisplay
 	CancelURL         string
 }

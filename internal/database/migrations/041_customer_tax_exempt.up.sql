@@ -1,0 +1,1 @@
+ALTER TABLE customers ADD COLUMN tax_exempt BOOLEAN NOT NULL DEFAULT false;

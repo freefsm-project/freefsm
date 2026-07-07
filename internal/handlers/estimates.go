@@ -208,6 +208,7 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if taxRate == "" {
 		taxRate = "0"
 	}
+	taxRate = taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate)
 
 	params := services.EstimateCreateParams{
 		CustomerID:   custID,
@@ -268,6 +269,10 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		t := "0"
 		taxRatePtr = &t
 	}
+	if taxRatePtr != nil {
+		t := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr)
+		taxRatePtr = &t
+	}
 
 	params := services.EstimateUpdateParams{
 		CustomerID:   int64Ptr(custID),
@@ -324,11 +329,12 @@ func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	cs := middleware.CompanyFromContext(r.Context())
-	defaultTaxRate := "0"
-	if cs != nil {
-		defaultTaxRate = cs.DefaultTaxRate
+	j, err := h.jobSvc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
 	}
+	defaultTaxRate := taxRateForCustomer(r.Context(), h.custSvc, j.CustomerID, companyDefaultTaxRate(r.Context()))
 	est, err := h.svc.CreateFromJob(r.Context(), id, h.statusSvc, defaultTaxRate)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -596,14 +602,16 @@ func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64)
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
+	defaultTaxRate := companyDefaultTaxRate(ctx)
 	return templates.EstimateFormPageData{
-		Estimate:          &templates.EstimateDetail{CustomerID: customerID},
+		Estimate:          &templates.EstimateDetail{CustomerID: customerID, TaxRate: taxRateForCustomer(ctx, h.custSvc, customerID, defaultTaxRate)},
 		IsNew:             true,
 		Customers:         customerOptions(customers),
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         h.itemsCatalog(ctx),
 		ExistingItemsJSON: "[]",
+		CustomersJSON:     customerTaxContextJSON(customers, defaultTaxRate),
 		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
 	}
 }
@@ -612,6 +620,7 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
+	defaultTaxRate := companyDefaultTaxRate(ctx)
 	d := estimateToDetail(ctx, e, statuses)
 	items := h.svc.LineItems(e)
 	return templates.EstimateFormPageData{
@@ -622,6 +631,7 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         h.itemsCatalog(ctx),
 		ExistingItemsJSON: h.existingItemsJSON(items),
+		CustomersJSON:     customerTaxContextJSON(customers, defaultTaxRate),
 		CustomFields:      buildCustomFieldDisplay(defs, e.CustomFields),
 	}
 }

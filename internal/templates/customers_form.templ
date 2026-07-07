@@ -120,6 +120,10 @@ templ CustomerFormFields(p CustomerFormPageData) {
 				<input type="text" name="billing_zip_code" value={ p.Customer.BillingZipCode }/>
 			</label>
 		</div>
+		<label>
+			<input type="checkbox" name="tax_exempt" value="true" checked?={ p.Customer.TaxExempt }/>
+			Tax exempt
+		</label>
 	</fieldset>
 	<div class="entity-form-actions">
 		<button type="submit">{ customerFormSubmitLabel(p.IsNew) }</button>
