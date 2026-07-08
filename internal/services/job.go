@@ -230,6 +230,21 @@ func (s *JobService) ListAssigned(ctx context.Context, userID int64, search stri
 	return jobs, total, nil
 }
 
+func (s *JobService) ListAssignedAll(ctx context.Context, userID int64) ([]*ent.Job, error) {
+	jobIDs, err := s.assignedJobIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(jobIDs) == 0 {
+		return nil, nil
+	}
+	return s.client.Job.Query().
+		Where(job.DeletedAtIsNil(), job.IDIn(jobIDs...)).
+		Order(ent.Desc(job.FieldStartTime)).
+		Order(ent.Desc(job.FieldCreatedAt)).
+		All(ctx)
+}
+
 func (s *JobService) GetByID(ctx context.Context, id int64) (*ent.Job, error) {
 	j, err := s.client.Job.Get(ctx, id)
 	if err != nil {

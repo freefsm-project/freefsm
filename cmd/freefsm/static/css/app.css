@@ -502,6 +502,29 @@ html[data-theme="dark"] .theme-icon-moon {
   color: var(--pico-muted-color);
 }
 
+.work-item-detail-clock-card {
+  margin: 0 0 var(--work-item-detail-gap);
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-left: 0.35rem solid var(--pico-primary);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+}
+
+.work-item-detail-clock-card header,
+.work-item-detail-clock-card p,
+.work-item-detail-clock-card form {
+  margin: 0;
+}
+
+.work-item-detail-clock-card p {
+  margin-top: 0.35rem;
+}
+
+.work-item-detail-clock-card form {
+  margin-top: 0.65rem;
+}
+
 .work-item-detail-subtitle {
   margin: 0 0 var(--work-item-detail-gap);
   color: var(--pico-muted-color);

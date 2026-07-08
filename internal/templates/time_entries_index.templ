@@ -38,6 +38,7 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 			<thead>
 				<tr>
 					<th>User</th>
+					<th>Job</th>
 					<th>Clock In</th>
 					<th>Clock Out</th>
 					<th>Duration</th>
@@ -47,7 +48,7 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 			</thead>
 			<tbody>
 				if len(p.Entries) == 0 {
-					<tr><td colspan="6" class="work-queue-empty">
+					<tr><td colspan="7" class="work-queue-empty">
 						<p>No time entries found.</p>
 						<a href="/" role="button" class="outline">Go to Dashboard to clock in</a>
 					</td></tr>
@@ -55,6 +56,13 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 				for _, e := range p.Entries {
 					<tr>
 						<td>{ e.UserName }</td>
+						<td>
+							if e.JobID > 0 {
+								<a href={ templ.URL(fmt.Sprintf("/jobs/%d", e.JobID)) }>{ e.JobName }</a>
+							} else {
+								<span class="work-queue-muted">-</span>
+							}
+						</td>
 						<td><small class="work-queue-muted">{ e.ClockIn }</small></td>
 						<td>
 							if e.ClockOut != "" {

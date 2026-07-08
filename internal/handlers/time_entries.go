@@ -18,11 +18,12 @@ import (
 type TimeEntryHandler struct {
 	svc         *services.TimeEntryService
 	userSvc     *services.UserService
+	jobSvc      *services.JobService
 	activitySvc *services.ActivityService
 }
 
-func NewTimeEntryHandler(svc *services.TimeEntryService, userSvc *services.UserService, activitySvc *services.ActivityService) *TimeEntryHandler {
-	return &TimeEntryHandler{svc: svc, userSvc: userSvc, activitySvc: activitySvc}
+func NewTimeEntryHandler(svc *services.TimeEntryService, userSvc *services.UserService, jobSvc *services.JobService, activitySvc *services.ActivityService) *TimeEntryHandler {
+	return &TimeEntryHandler{svc: svc, userSvc: userSvc, jobSvc: jobSvc, activitySvc: activitySvc}
 }
 
 func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -62,10 +63,11 @@ func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
 			userNames[uid] = u.Name
 		}
 	}
+	jobNames := h.jobNames(r.Context(), entries)
 
 	rows := make([]templates.TimeEntryRow, len(entries))
 	for i, e := range entries {
-		rows[i] = timeEntryToRow(r.Context(), e, userNames, user)
+		rows[i] = timeEntryToRow(r.Context(), e, userNames, jobNames, user)
 	}
 
 	var users []templates.UserRow
@@ -121,6 +123,7 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 	if u, err := h.userSvc.GetByID(r.Context(), entry.UserID); err == nil {
 		userName = u.Name
 	}
+	jobID, jobName := h.timeEntryJob(r.Context(), entry)
 
 	clockInStr := displayDateTime(r.Context(), entry.ClockIn)
 	clockOutStr := ""
@@ -141,6 +144,8 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 	data := templates.TimeEntryShowPageData{
 		ID:       entry.ID,
 		UserName: userName,
+		JobID:    jobID,
+		JobName:  jobName,
 		ClockIn:  clockInStr,
 		ClockOut: clockOutStr,
 		Duration: duration,
@@ -212,9 +217,25 @@ func (h *TimeEntryHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 	}
 	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
 	clockInStr := displayDateTime(r.Context(), result.ClockIn)
+	entityName := fmt.Sprintf("%s — %s (%s)", user.Name, clockInStr, duration)
+	if result.JobID != nil && *result.JobID > 0 {
+		if jobID, jobName := h.timeEntryJob(r.Context(), result); jobID > 0 && jobName != "" {
+			entityName = fmt.Sprintf("%s — %s — %s (%s)", user.Name, jobName, clockInStr, duration)
+			h.activitySvc.Record(r.Context(), user.ID, "clocked_out", "job", jobID, map[string]interface{}{
+				"entity_name":   fmt.Sprintf("%s — %s (%s)", jobName, clockInStr, duration),
+				"actor_name":    user.Name,
+				"time_entry_id": result.ID,
+				"clock_in":      clockInStr,
+				"duration":      duration,
+			})
+		}
+	}
 	h.activitySvc.Record(r.Context(), user.ID, "clocked_out", "time_entry", result.ID, map[string]interface{}{
-		"entity_name": fmt.Sprintf("%s — %s (%s)", user.Name, clockInStr, duration),
-		"actor_name":  user.Name,
+		"entity_name":   entityName,
+		"actor_name":    user.Name,
+		"time_entry_id": result.ID,
+		"clock_in":      clockInStr,
+		"duration":      duration,
 	})
 
 	http.Redirect(w, r, "/?flash=Clocked+out", http.StatusSeeOther)
@@ -246,6 +267,11 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == http.MethodGet {
+		jobs, err := h.allowedJobsForUser(r.Context(), user)
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
 		loc := middleware.CompanyLocation(r.Context())
 		clockOutStr := ""
 		if entry.ClockOut != nil {
@@ -255,10 +281,12 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		data := templates.TimeEntryFormPageData{
 			Entry: &templates.TimeEntryFormEntry{
 				ID:       entry.ID,
+				JobID:    valueInt64(entry.JobID),
 				ClockIn:  entry.ClockIn.In(loc).Format("2006-01-02T15:04:05"),
 				ClockOut: clockOutStr,
 				Notes:    entry.Notes,
 			},
+			Jobs: jobOptions(jobs),
 		}
 		render(w, r, templates.TimeEntryForm(data))
 		return
@@ -284,6 +312,25 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	params.Notes = formPtr(r.FormValue("notes"))
+	jobs, err := h.allowedJobsForUser(r.Context(), user)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	jobID, err := parseOptionalID(r.FormValue("job_id"))
+	if err != nil {
+		http.Error(w, "invalid job", 400)
+		return
+	}
+	if jobID > 0 {
+		if !jobAllowed(jobs, jobID) {
+			http.Error(w, "job not allowed", 400)
+			return
+		}
+		params.JobID = &jobID
+	} else {
+		params.ClearJob = true
+	}
 
 	result, err := h.svc.Update(r.Context(), id, params)
 	if err != nil {
@@ -345,7 +392,40 @@ func (h *TimeEntryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/time-entries?flash=Time+entry+deleted", http.StatusSeeOther)
 }
 
-func timeEntryToRow(ctx context.Context, e *ent.TimeEntry, userNames map[int64]string, currentUser *middleware.UserInfo) templates.TimeEntryRow {
+func (h *TimeEntryHandler) jobNames(ctx context.Context, entries []*ent.TimeEntry) map[int64]string {
+	names := make(map[int64]string)
+	for _, e := range entries {
+		if e.JobID == nil || *e.JobID == 0 {
+			continue
+		}
+		if _, ok := names[*e.JobID]; ok {
+			continue
+		}
+		if j, err := h.jobSvc.GetByID(ctx, *e.JobID); err == nil && j != nil {
+			names[*e.JobID] = jobDisplayName(j)
+		}
+	}
+	return names
+}
+
+func (h *TimeEntryHandler) timeEntryJob(ctx context.Context, e *ent.TimeEntry) (int64, string) {
+	if e.JobID == nil || *e.JobID == 0 {
+		return 0, ""
+	}
+	if j, err := h.jobSvc.GetByID(ctx, *e.JobID); err == nil && j != nil {
+		return *e.JobID, jobDisplayName(j)
+	}
+	return *e.JobID, fmt.Sprintf("Job #%d", *e.JobID)
+}
+
+func (h *TimeEntryHandler) allowedJobsForUser(ctx context.Context, user *middleware.UserInfo) ([]*ent.Job, error) {
+	if isAdminOrDispatcher(user) {
+		return h.jobSvc.ListAll(ctx)
+	}
+	return h.jobSvc.ListAssignedAll(ctx, user.ID)
+}
+
+func timeEntryToRow(ctx context.Context, e *ent.TimeEntry, userNames map[int64]string, jobNames map[int64]string, currentUser *middleware.UserInfo) templates.TimeEntryRow {
 	clockIn := displayDateTime(ctx, e.ClockIn)
 	clockOut := ""
 	if e.ClockOut != nil {
@@ -356,8 +436,12 @@ func timeEntryToRow(ctx context.Context, e *ent.TimeEntry, userNames map[int64]s
 
 	userName := userNames[e.UserID]
 
-	isAdmin := currentUser != nil && currentUser.Role == "admin"
-	canEdit := isAdmin || (currentUser != nil && currentUser.ID == e.UserID)
+	canEdit := isAdminOrDispatcher(currentUser) || (currentUser != nil && currentUser.ID == e.UserID)
+	jobID := valueInt64(e.JobID)
+	jobName := jobNames[jobID]
+	if jobID > 0 && jobName == "" {
+		jobName = fmt.Sprintf("Job #%d", jobID)
+	}
 
 	return templates.TimeEntryRow{
 		ID:       e.ID,
@@ -365,10 +449,35 @@ func timeEntryToRow(ctx context.Context, e *ent.TimeEntry, userNames map[int64]s
 		IsManual: e.IsManual,
 		ClockIn:  clockIn,
 		ClockOut: clockOut,
+		JobID:    jobID,
+		JobName:  jobName,
 		Duration: duration,
 		Notes:    e.Notes,
 		CanEdit:  canEdit,
 	}
+}
+
+func jobAllowed(jobs []*ent.Job, jobID int64) bool {
+	for _, j := range jobs {
+		if j.ID == jobID {
+			return true
+		}
+	}
+	return false
+}
+
+func parseOptionalID(value string) (int64, error) {
+	if value == "" {
+		return 0, nil
+	}
+	return strconv.ParseInt(value, 10, 64)
+}
+
+func valueInt64(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 func safeTime(t *time.Time) time.Time {

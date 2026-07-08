@@ -82,7 +82,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc, cfg.UploadDir)
 	jobStatusHandler := NewJobStatusHandler(statusService, activitySvc)
 	userHandler := NewUserHandler(userService, emailSvc, inviteSvc, companySettingsSvc, activitySvc, cfg)
-	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, activitySvc)
+	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, jobService, activitySvc)
 	authHandler := NewAuthHandler(db, sessions, userService, companySettingsSvc, emailSvc, services.NewPasswordResetService(entClient), inviteSvc, activitySvc, cfg)
 	passwordHandler := NewPasswordHandler(userService, companySettingsSvc, activitySvc)
 

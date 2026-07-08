@@ -169,6 +169,8 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	if err == nil && activeEntry != nil {
 		if activeEntry.JobID != nil && *activeEntry.JobID == j.ID {
 			d.ActiveTimeEntryOnJob = true
+			d.ActiveTimeEntryClockIn = displayDateTime(r.Context(), activeEntry.ClockIn)
+			d.ActiveTimeEntryDuration = services.TimeEntryDuration(activeEntry.ClockIn, safeTime(activeEntry.ClockOut))
 		} else {
 			d.ActiveTimeEntryElsewhere = true
 			if activeEntry.JobID != nil {
@@ -281,9 +283,18 @@ func (h *JobHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clockInStr := displayDateTime(r.Context(), result.ClockIn)
+	jobName := jobDisplayName(j)
 	h.activitySvc.Record(r.Context(), u.ID, "clocked_in", "time_entry", result.ID, map[string]interface{}{
-		"entity_name": fmt.Sprintf("%s — %s — %s", u.Name, jobDisplayName(j), clockInStr),
-		"actor_name":  u.Name,
+		"entity_name":   fmt.Sprintf("%s — %s — %s", u.Name, jobName, clockInStr),
+		"actor_name":    u.Name,
+		"time_entry_id": result.ID,
+		"clock_in":      clockInStr,
+	})
+	h.activitySvc.Record(r.Context(), u.ID, "clocked_in", "job", id, map[string]interface{}{
+		"entity_name":   fmt.Sprintf("%s — %s", jobName, clockInStr),
+		"actor_name":    u.Name,
+		"time_entry_id": result.ID,
+		"clock_in":      clockInStr,
 	})
 	redirectToJob(w, r, id, "Clocked in to job")
 }
@@ -332,9 +343,20 @@ func (h *JobHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 	}
 	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
 	clockInStr := displayDateTime(r.Context(), result.ClockIn)
+	jobName := jobDisplayName(j)
 	h.activitySvc.Record(r.Context(), u.ID, "clocked_out", "time_entry", result.ID, map[string]interface{}{
-		"entity_name": fmt.Sprintf("%s — %s — %s (%s)", u.Name, jobDisplayName(j), clockInStr, duration),
-		"actor_name":  u.Name,
+		"entity_name":   fmt.Sprintf("%s — %s — %s (%s)", u.Name, jobName, clockInStr, duration),
+		"actor_name":    u.Name,
+		"time_entry_id": result.ID,
+		"clock_in":      clockInStr,
+		"duration":      duration,
+	})
+	h.activitySvc.Record(r.Context(), u.ID, "clocked_out", "job", id, map[string]interface{}{
+		"entity_name":   fmt.Sprintf("%s — %s (%s)", jobName, clockInStr, duration),
+		"actor_name":    u.Name,
+		"time_entry_id": result.ID,
+		"clock_in":      clockInStr,
+		"duration":      duration,
 	})
 	redirectToJob(w, r, id, "Clocked out of job")
 }

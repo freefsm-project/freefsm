@@ -34,6 +34,8 @@ type TimeEntryUpdateParams struct {
 	IsManual *bool
 	ClockIn  *time.Time
 	ClockOut *time.Time
+	JobID    *int64
+	ClearJob bool
 	Notes    *string
 }
 
@@ -172,6 +174,11 @@ func (s *TimeEntryService) Update(ctx context.Context, id int64, params TimeEntr
 	}
 	if params.ClockOut != nil {
 		u.SetClockOut(*params.ClockOut)
+	}
+	if params.ClearJob {
+		u.ClearJobID()
+	} else if params.JobID != nil {
+		u.SetJobID(*params.JobID)
 	}
 	if params.Notes != nil {
 		u.SetNotes(*params.Notes)

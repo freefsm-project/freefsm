@@ -17,6 +17,13 @@ templ TimeEntryShow(p TimeEntryShowPageData) {
 		<table class="work-item-detail-meta">
 			<tbody>
 				<tr><th>User</th><td>{ p.UserName }</td></tr>
+				<tr><th>Job</th><td>
+					if p.JobID > 0 {
+						<a href={ templ.URL(fmt.Sprintf("/jobs/%d", p.JobID)) }>{ p.JobName }</a>
+					} else {
+						-
+					}
+				</td></tr>
 				<tr><th>Clock In</th><td>{ p.ClockIn }</td></tr>
 				<tr><th>Clock Out</th><td>{ p.ClockOut }</td></tr>
 				<tr><th>Duration</th><td>{ p.Duration }</td></tr>

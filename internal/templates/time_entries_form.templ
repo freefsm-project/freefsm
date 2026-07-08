@@ -18,6 +18,15 @@ templ TimeEntryForm(p TimeEntryFormPageData) {
 				</label>
 			</div>
 			<label>
+				Job
+				<select name="job_id">
+					<option value="" selected?={ p.Entry.JobID == 0 }>No Job</option>
+					for _, j := range p.Jobs {
+						<option value={ fmt.Sprintf("%d", j.Value) } selected?={ p.Entry.JobID == j.Value }>{ j.Label }</option>
+					}
+				</select>
+			</label>
+			<label>
 				Notes
 				<textarea name="notes" rows="3">{ p.Entry.Notes }</textarea>
 			</label>

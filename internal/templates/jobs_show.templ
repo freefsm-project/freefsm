@@ -27,14 +27,7 @@ templ JobShow(p JobDetail) {
 							<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.JobType) }>Delete</button>
 						</form>
 					}
-					if p.ActiveTimeEntryOnJob {
-						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/clock-out", p.ID)) } method="post">
-							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-							<button type="submit">Clock Out</button>
-						</form>
-					} else if p.ActiveTimeEntryElsewhere {
-						<p>{ p.ActiveTimeEntryMessage }</p>
-					} else {
+					if !p.ActiveTimeEntryOnJob && !p.ActiveTimeEntryElsewhere {
 						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/clock-in", p.ID)) } method="post">
 							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 							<button type="submit">Clock In to Job</button>
@@ -53,6 +46,21 @@ templ JobShow(p JobDetail) {
 					</form>
 				}
 			</div>
+		}
+		if p.ArchivedAt == "" && p.ActiveTimeEntryOnJob {
+			<article class="work-item-detail-clock-card">
+				<header><strong>You are clocked in to this job</strong></header>
+				<p>Clocked in at <strong>{ p.ActiveTimeEntryClockIn }</strong>. Current duration: <strong>{ p.ActiveTimeEntryDuration }</strong>.</p>
+				<form action={ templ.URL(fmt.Sprintf("/jobs/%d/clock-out", p.ID)) } method="post">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<button type="submit">Clock Out</button>
+				</form>
+			</article>
+		} else if p.ArchivedAt == "" && p.ActiveTimeEntryElsewhere {
+			<article class="work-item-detail-clock-card">
+				<header><strong>Active clock-in on another job</strong></header>
+				<p>{ p.ActiveTimeEntryMessage }</p>
+			</article>
 		}
 		if len(p.Tags) > 0 || true {
 			@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/jobs/%d", p.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: p.ArchivedAt != ""})

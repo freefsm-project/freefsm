@@ -373,6 +373,8 @@ type JobDetail struct {
 	ActiveTimeEntryOnJob     bool
 	ActiveTimeEntryElsewhere bool
 	ActiveTimeEntryMessage   string
+	ActiveTimeEntryClockIn   string
+	ActiveTimeEntryDuration  string
 }
 
 type SelectOption struct {
@@ -1302,6 +1304,8 @@ type TimeEntryRow struct {
 	IsManual bool
 	ClockIn  string
 	ClockOut string
+	JobID    int64
+	JobName  string
 	Duration string
 	Notes    string
 	CanEdit  bool
@@ -1325,11 +1329,13 @@ type TimeEntryFormEntry struct {
 	ID       int64
 	ClockIn  string
 	ClockOut string
+	JobID    int64
 	Notes    string
 }
 
 type TimeEntryFormPageData struct {
 	Entry  *TimeEntryFormEntry
+	Jobs   []SelectOption
 	Errors map[string]string
 }
 
@@ -1338,6 +1344,8 @@ type TimeEntryShowPageData struct {
 	UserName string
 	ClockIn  string
 	ClockOut string
+	JobID    int64
+	JobName  string
 	Duration string
 	IsManual bool
 	Notes    string
