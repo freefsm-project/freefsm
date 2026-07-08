@@ -119,14 +119,20 @@ func (h *ItemHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid form", 400)
 		return
 	}
+	itemType := r.FormValue("type")
+	if itemType == "" {
+		itemType = "product"
+	}
 
 	result, err := h.svc.Create(r.Context(), services.ItemCreateParams{
 		Name:           r.FormValue("name"),
-		Type:           "product",
+		Type:           itemType,
+		Sku:            r.FormValue("sku"),
 		UnitPrice:      parseFloat(r.FormValue("unit_price")),
+		UnitCost:       parseFloat(r.FormValue("unit_cost")),
 		Taxable:        r.FormValue("taxable") == "true",
 		TaxRate:        r.FormValue("tax_rate"),
-		TrackInventory: false,
+		TrackInventory: r.FormValue("track_inventory") == "true",
 		Description:    r.FormValue("description"),
 		IsActive:       true,
 	})

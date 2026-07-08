@@ -78,7 +78,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 						const existing = JSON.parse(document.getElementById('existing-items').textContent || '[]');
 						const taxContext = JSON.parse(document.getElementById('customer-tax-context').textContent || '{"default_tax_rate":"0","customers":{}}');
 						const makeItem = () => ({ item_id: 0, title: '', description: '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: 0, surcharge: 0 });
-						const makeNewItem = () => ({ name: '', description: '', unit_price: 0, taxable: false, tax_rate: '' });
+						const makeNewItem = () => ({ name: '', type: 'product', sku: '', description: '', unit_price: 0, unit_cost: 0, taxable: true, tax_rate: '', track_inventory: false });
 						const parseRate = (value) => {
 							const parsed = parseFloat(String(value || '').replace('%', '').trim()) || 0;
 							return parsed / 100;
@@ -123,6 +123,15 @@ templ InvoiceForm(p InvoiceFormPageData) {
 								const c = catalog.find(f => f.id == itemID);
 								if (c) this.applyCatalogItem(this.items[index], c);
 							},
+							openCreateItemModal() {
+								this.createItemError = '';
+								const dialog = this.$refs.createItemDialog;
+								if (dialog && !dialog.open) dialog.showModal();
+							},
+							closeCreateItemModal() {
+								const dialog = this.$refs.createItemDialog;
+								if (dialog && dialog.open) dialog.close();
+							},
 							documentTaxRate() {
 								this.taxVersion;
 								const taxInput = document.querySelector('input[name="tax_rate"]');
@@ -155,10 +164,14 @@ templ InvoiceForm(p InvoiceFormPageData) {
 								try {
 									const body = new URLSearchParams();
 									body.set('name', this.newItem.name);
+									body.set('type', this.newItem.type || 'product');
+									body.set('sku', this.newItem.sku || '');
 									body.set('description', this.newItem.description || '');
 									body.set('unit_price', this.newItem.unit_price || 0);
+									body.set('unit_cost', this.newItem.unit_cost || 0);
 									body.set('taxable', this.newItem.taxable ? 'true' : 'false');
 									body.set('tax_rate', this.newItem.tax_rate || '');
+									body.set('track_inventory', this.newItem.track_inventory ? 'true' : 'false');
 									const csrf = document.querySelector('meta[name="csrf-token"]');
 									const res = await fetch('/items/inline', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrf ? csrf.content : '' }, body });
 									if (!res.ok) throw new Error((await res.text()) || 'Unable to create item.');
@@ -168,6 +181,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 									this.applyCatalogItem(item, created);
 									this.items.push(item);
 									this.newItem = makeNewItem();
+									this.closeCreateItemModal();
 								} catch (err) {
 									this.createItemError = err.message || 'Unable to create item.';
 								} finally {
@@ -221,35 +235,66 @@ templ InvoiceForm(p InvoiceFormPageData) {
 				</table>
 				<div class="line-item-actions">
 					<button @click.prevent="add()" class="outline">Add Item</button>
-					<button @click.prevent="showCreateItem = !showCreateItem" class="outline" x-text="showCreateItem ? 'Cancel' : 'Create Item'"></button>
+					<button @click.prevent="openCreateItemModal()" class="outline">Create Item</button>
 				</div>
-				<div x-show="showCreateItem">
-					<div class="grid">
-						<label>
-							Name
-							<input type="text" x-model="newItem.name" placeholder="Item name"/>
-						</label>
-						<label>
-							Unit Price
-							<input type="number" x-model="newItem.unit_price" step="0.01" min="0"/>
-						</label>
-					</div>
-					<label>
-						Description
-						<textarea x-model="newItem.description" rows="2"></textarea>
-					</label>
-					<div class="grid">
-						<label>
-							<input type="checkbox" x-model="newItem.taxable"/> Taxable
-						</label>
-						<label>
-							Tax Rate
-							<input type="text" x-model="newItem.tax_rate" placeholder="e.g. 8.25"/>
-						</label>
-					</div>
-					<small class="error-msg" x-text="createItemError" x-show="createItemError"></small>
-					<button @click.prevent="createItem()" class="outline" :aria-busy="creatingItem" x-text="creatingItem ? 'Creating...' : 'Create Item'"></button>
-				</div>
+				<dialog class="item-create-dialog" x-ref="createItemDialog" @click.self="closeCreateItemModal()">
+					<article class="item-create-dialog-card">
+						<header class="item-create-dialog-header">
+							<strong>Create Item</strong>
+							<button type="button" class="outline small" @click="closeCreateItemModal()">Close</button>
+						</header>
+						<div class="item-create-dialog-body">
+							<label>
+								Name <small class="required-marker">*</small>
+								<input type="text" x-model="newItem.name" placeholder="Item name" required/>
+							</label>
+							<div class="grid">
+								<label>
+									Type
+									<select x-model="newItem.type">
+										<option value="product">product</option>
+										<option value="service">service</option>
+									</select>
+								</label>
+								<label>
+									SKU
+									<input type="text" x-model="newItem.sku" placeholder="Optional"/>
+								</label>
+							</div>
+							<div class="grid">
+								<label>
+									Unit Price
+									<input type="number" x-model="newItem.unit_price" step="0.01" min="0"/>
+								</label>
+								<label>
+									Unit Cost
+									<input type="number" x-model="newItem.unit_cost" step="0.01" min="0"/>
+								</label>
+							</div>
+							<div class="grid">
+								<label>
+									<input type="checkbox" x-model="newItem.taxable"/> Taxable
+								</label>
+								<label>
+									Tax Rate
+									<input type="text" x-model="newItem.tax_rate" placeholder="e.g. 8.25%"/>
+								</label>
+							</div>
+							<label>
+								<input type="checkbox" x-model="newItem.track_inventory"/> Track Inventory
+							</label>
+							<label>
+								Description
+								<textarea x-model="newItem.description" rows="3"></textarea>
+							</label>
+							<small class="error-msg" x-text="createItemError" x-show="createItemError"></small>
+						</div>
+						<footer class="item-create-dialog-actions">
+							<button type="button" @click="createItem()" :aria-busy="creatingItem" x-text="creatingItem ? 'Creating...' : 'Create Item'"></button>
+							<button type="button" class="outline" @click="closeCreateItemModal()">Cancel</button>
+						</footer>
+					</article>
+				</dialog>
 				<div class="line-item-totals">
 					<p>Subtotal: $<span x-text="subtotal.toFixed(2)"></span></p>
 					<p>Tax: $<span x-text="tax.toFixed(2)"></span></p>
