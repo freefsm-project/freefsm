@@ -402,6 +402,9 @@ type JobFormPageData struct {
 	Projects                []SelectOption
 	Locations               []SelectOption
 	Assets                  []SelectOption
+	AssetTypes              []SelectOption
+	AssetStatuses           []SelectOption
+	ProjectStatuses         []SelectOption
 	Users                   []SelectOption
 	Statuses                []SelectOption
 	BillingTypes            []string

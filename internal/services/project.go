@@ -21,6 +21,13 @@ func (s *ProjectService) ListAll(ctx context.Context) ([]*ent.Project, error) {
 	return s.client.Project.Query().Where(project.DeletedAtIsNil()).Order(ent.Asc(project.FieldName)).All(ctx)
 }
 
+func (s *ProjectService) ListByCustomer(ctx context.Context, customerID int64) ([]*ent.Project, error) {
+	return s.client.Project.Query().
+		Where(project.DeletedAtIsNil(), project.CustomerIDEQ(customerID)).
+		Order(ent.Asc(project.FieldName)).
+		All(ctx)
+}
+
 func (s *ProjectService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Project, int, error) {
 	q := s.client.Project.Query().Where(project.DeletedAtIsNil())
 

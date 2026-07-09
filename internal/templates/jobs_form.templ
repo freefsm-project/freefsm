@@ -22,40 +22,190 @@ templ JobForm(p JobFormPageData) {
 			<div class="grid">
 				<label>
 					Project (optional)
-					<select name="project_id">
-						<option value="0">No project</option>
-						for _, pr := range p.Projects {
-							<option value={ fmt.Sprintf("%d", pr.Value) } selected?={ p.Job.ProjectID == pr.Value }>{ pr.Label }</option>
-						}
-					</select>
+					<span class="select-with-action">
+						<select name="project_id" id="job-project-select" data-selected={ fmt.Sprintf("%d", p.Job.ProjectID) }>
+							<option value="0">No project</option>
+							for _, pr := range p.Projects {
+								<option value={ fmt.Sprintf("%d", pr.Value) } selected?={ p.Job.ProjectID == pr.Value }>{ pr.Label }</option>
+							}
+						</select>
+						<button type="button" class="outline select-action-button" onclick="openJobCreateModal('project')">Create</button>
+					</span>
 				</label>
 				<label>
 					Location (optional)
-					<select name="location_id" id="job-location-select" data-selected={ fmt.Sprintf("%d", p.Job.LocationID) }>
-						<option value="0">No location</option>
-						for _, l := range p.Locations {
-							<option value={ fmt.Sprintf("%d", l.Value) } selected?={ p.Job.LocationID == l.Value }>{ l.Label }</option>
-						}
-					</select>
-		</label>
-	</div>
+					<span class="select-with-action">
+						<select name="location_id" id="job-location-select" data-selected={ fmt.Sprintf("%d", p.Job.LocationID) }>
+							<option value="0">No location</option>
+							for _, l := range p.Locations {
+								<option value={ fmt.Sprintf("%d", l.Value) } selected?={ p.Job.LocationID == l.Value }>{ l.Label }</option>
+							}
+						</select>
+						<button type="button" class="outline select-action-button" onclick="openJobCreateModal('location')">Create</button>
+					</span>
+				</label>
+			</div>
 	<div class="grid">
 		<label>
 			Asset (optional)
-			<select name="asset_id" id="job-asset-select" data-selected={ fmt.Sprintf("%d", p.Job.AssetID) }>
-				<option value="0">No asset</option>
-				for _, a := range p.Assets {
-					<option value={ fmt.Sprintf("%d", a.Value) } selected?={ p.Job.AssetID == a.Value }>{ a.Label }</option>
-				}
-			</select>
-		</label>
+			<span class="select-with-action">
+				<select name="asset_id" id="job-asset-select" data-selected={ fmt.Sprintf("%d", p.Job.AssetID) }>
+					<option value="0">No asset</option>
+					for _, a := range p.Assets {
+						<option value={ fmt.Sprintf("%d", a.Value) } selected?={ p.Job.AssetID == a.Value }>{ a.Label }</option>
+					}
+				</select>
+				<button type="button" class="outline select-action-button" onclick="openJobCreateModal('asset')">Create</button>
+			</span>
+			</label>
 		<label>
 			Contact (optional)
-			<select name="customer_contact_id" id="contact-select" data-selected={ fmt.Sprintf("%d", p.Job.ContactID) }>
-				<option value="0">No contact</option>
-			</select>
+			<span class="select-with-action">
+				<select name="customer_contact_id" id="contact-select" data-selected={ fmt.Sprintf("%d", p.Job.ContactID) }>
+					<option value="0">No contact</option>
+				</select>
+				<button type="button" class="outline select-action-button" onclick="openJobCreateModal('contact')">Create</button>
+			</span>
 		</label>
 	</div>
+	<dialog class="item-create-dialog" id="job-project-dialog" onclick="if (event.target === this) closeJobCreateModal('project')">
+		<article class="item-create-dialog-card">
+			<header class="item-create-dialog-header">
+				<strong>Create Project</strong>
+				<button type="button" class="outline small" onclick="closeJobCreateModal('project')">Close</button>
+			</header>
+			<div class="item-create-dialog-body">
+				<small class="error-msg" id="job-project-error" hidden></small>
+				<label>Name <small class="required-marker">*</small><input type="text" id="job-project-name" required/></label>
+				<label>Description <input type="text" id="job-project-description"/></label>
+				<div class="grid">
+					<label>Status
+						<select id="job-project-status-id">
+							<option value="0">No Status</option>
+							for _, s := range p.ProjectStatuses {
+								<option value={ fmt.Sprintf("%d", s.Value) }>{ s.Label }</option>
+							}
+						</select>
+					</label>
+					<label>Location
+						<select id="job-project-location-id">
+							<option value="0">No location</option>
+						</select>
+					</label>
+				</div>
+				<label>Completion (%) <input type="number" id="job-project-completion-percentage" value="0" min="0" max="100" step="1"/></label>
+				<div class="grid">
+					<label>Start Date <input type="date" id="job-project-start-time"/></label>
+					<label>End Date <input type="date" id="job-project-end-time"/></label>
+				</div>
+				<label>Notes <textarea id="job-project-notes" rows="3"></textarea></label>
+			</div>
+			<footer class="item-create-dialog-actions">
+				<button type="button" id="job-project-create-button" onclick="createJobProject()">Create Project</button>
+				<button type="button" class="outline" onclick="closeJobCreateModal('project')">Cancel</button>
+			</footer>
+		</article>
+	</dialog>
+	<dialog class="item-create-dialog" id="job-location-dialog" onclick="if (event.target === this) closeJobCreateModal('location')">
+		<article class="item-create-dialog-card">
+			<header class="item-create-dialog-header">
+				<strong>Create Location</strong>
+				<button type="button" class="outline small" onclick="closeJobCreateModal('location')">Close</button>
+			</header>
+			<div class="item-create-dialog-body">
+				<small class="error-msg" id="job-location-error" hidden></small>
+				<label>Title <small class="required-marker">*</small><input type="text" id="job-location-title" required/></label>
+				<div class="grid">
+					<label>Address 1 <input type="text" id="job-location-address-1"/></label>
+					<label>Address 2 <input type="text" id="job-location-address-2"/></label>
+				</div>
+				<div class="grid form-grid-address">
+					<label>City <input type="text" id="job-location-city"/></label>
+					<label>State <input type="text" id="job-location-state"/></label>
+					<label>ZIP <input type="text" id="job-location-zip-code"/></label>
+				</div>
+				<label>Notes <input type="text" id="job-location-notes"/></label>
+				<label><input type="checkbox" id="job-location-is-primary"/> Primary</label>
+			</div>
+			<footer class="item-create-dialog-actions">
+				<button type="button" id="job-location-create-button" onclick="createJobLocation()">Create Location</button>
+				<button type="button" class="outline" onclick="closeJobCreateModal('location')">Cancel</button>
+			</footer>
+		</article>
+	</dialog>
+	<dialog class="item-create-dialog" id="job-asset-dialog" onclick="if (event.target === this) closeJobCreateModal('asset')">
+		<article class="item-create-dialog-card">
+			<header class="item-create-dialog-header">
+				<strong>Create Asset</strong>
+				<button type="button" class="outline small" onclick="closeJobCreateModal('asset')">Close</button>
+			</header>
+			<div class="item-create-dialog-body">
+				<small class="error-msg" id="job-asset-error" hidden></small>
+				<label>Name <small class="required-marker">*</small><input type="text" id="job-asset-name" required/></label>
+				<div class="grid">
+					<label>Asset Type <small class="required-marker">*</small>
+						<select id="job-asset-type-id" required>
+							<option value="0">Select asset type...</option>
+							for _, t := range p.AssetTypes {
+								<option value={ fmt.Sprintf("%d", t.Value) }>{ t.Label }</option>
+							}
+						</select>
+					</label>
+					<label>Status
+						<select id="job-asset-status-id">
+							<option value="0">No Status</option>
+							for _, s := range p.AssetStatuses {
+								<option value={ fmt.Sprintf("%d", s.Value) }>{ s.Label }</option>
+							}
+						</select>
+					</label>
+				</div>
+				<label>Location
+					<select id="job-asset-location-id">
+						<option value="0">No location</option>
+					</select>
+				</label>
+				<div class="grid">
+					<label>Manufacturer <input type="text" id="job-asset-manufacturer"/></label>
+					<label>Model <input type="text" id="job-asset-model"/></label>
+				</div>
+				<label>Serial Number <input type="text" id="job-asset-serial-number"/></label>
+				<div class="grid">
+					<label>Installed At <input type="date" id="job-asset-installed-at"/></label>
+					<label>Warranty Expires <input type="date" id="job-asset-warranty-expires"/></label>
+				</div>
+				<label>Notes <textarea id="job-asset-notes" rows="3"></textarea></label>
+			</div>
+			<footer class="item-create-dialog-actions">
+				<button type="button" id="job-asset-create-button" onclick="createJobAsset()">Create Asset</button>
+				<button type="button" class="outline" onclick="closeJobCreateModal('asset')">Cancel</button>
+			</footer>
+		</article>
+	</dialog>
+	<dialog class="item-create-dialog" id="job-contact-dialog" onclick="if (event.target === this) closeJobCreateModal('contact')">
+		<article class="item-create-dialog-card">
+			<header class="item-create-dialog-header">
+				<strong>Create Contact</strong>
+				<button type="button" class="outline small" onclick="closeJobCreateModal('contact')">Close</button>
+			</header>
+			<div class="item-create-dialog-body">
+				<small class="error-msg" id="job-contact-error" hidden></small>
+				<div class="grid">
+					<label>First <small class="required-marker">*</small><input type="text" id="job-contact-first-name" required/></label>
+					<label>Last <input type="text" id="job-contact-last-name"/></label>
+				</div>
+				<div class="grid">
+					<label>Email <input type="email" id="job-contact-email"/></label>
+					<label>Phone <input type="tel" id="job-contact-phone"/></label>
+				</div>
+				<label>Notes <input type="text" id="job-contact-notes"/></label>
+			</div>
+			<footer class="item-create-dialog-actions">
+				<button type="button" id="job-contact-create-button" onclick="createJobContact()">Create Contact</button>
+				<button type="button" class="outline" onclick="closeJobCreateModal('contact')">Cancel</button>
+			</footer>
+		</article>
+	</dialog>
 	<div class="grid">
 		<label>
 			Job Type <small class="required-marker">*</small>
@@ -186,43 +336,174 @@ templ JobForm(p JobFormPageData) {
 		</form>
 		@templ.Raw(`<script>
 			const jobCustomer = document.getElementById('job-customer-select');
+			const jobProjectSelect = document.getElementById('job-project-select');
 			const contactSelect = document.getElementById('contact-select');
 			const jobLocationSelect = document.getElementById('job-location-select');
 			const jobAssetSelect = document.getElementById('job-asset-select');
+			function selectedJobCustomerID() { return jobCustomer ? jobCustomer.value : ''; }
+			function csrfToken() {
+				const token = document.querySelector('input[name="csrf_token"]');
+				return token ? token.value : '';
+			}
+			function refreshOptions(select, emptyHTML, url, selectedID) {
+				if (!select) return Promise.resolve();
+				if (!url) { select.innerHTML = emptyHTML; return Promise.resolve(); }
+				select.dataset.selected = selectedID || 0;
+				return fetch(url + '?selected=' + (selectedID || 0))
+					.then(r => r.text())
+					.then(html => { select.innerHTML = html; select.value = String(selectedID || 0); });
+			}
+			function loadJobProjects(customerID, selectedID) {
+				return refreshOptions(jobProjectSelect, '<option value="0">No project</option>', customerID ? '/customers/' + customerID + '/projects/options' : '', selectedID ?? (jobProjectSelect ? jobProjectSelect.dataset.selected : 0));
+			}
 			function loadContacts(customerID) {
-				if (!customerID) { contactSelect.innerHTML = '<option value="0">No contact</option>'; return; }
-				const sel = contactSelect.dataset.selected || 0;
-				fetch('/customers/' + customerID + '/contacts/options?selected=' + sel)
-					.then(r => r.text())
-					.then(html => contactSelect.innerHTML = html);
+				return refreshOptions(contactSelect, '<option value="0">No contact</option>', customerID ? '/customers/' + customerID + '/contacts/options' : '', contactSelect ? contactSelect.dataset.selected : 0);
 			}
-			function loadJobLocations(customerID) {
-				if (!jobLocationSelect) return;
-				if (!customerID) { jobLocationSelect.innerHTML = '<option value="0">No location</option>'; return; }
-				const sel = jobLocationSelect.dataset.selected || 0;
-				fetch('/customers/' + customerID + '/locations/options?selected=' + sel)
-					.then(r => r.text())
-					.then(html => jobLocationSelect.innerHTML = html);
+			function loadJobLocations(customerID, selectedID) {
+				return refreshOptions(jobLocationSelect, '<option value="0">No location</option>', customerID ? '/customers/' + customerID + '/locations/options' : '', selectedID ?? (jobLocationSelect ? jobLocationSelect.dataset.selected : 0));
 			}
-			function loadJobAssets(customerID) {
-				if (!jobAssetSelect) return;
-				if (!customerID) { jobAssetSelect.innerHTML = '<option value="0">No asset</option>'; return; }
-				const sel = jobAssetSelect.dataset.selected || 0;
-				fetch('/customers/' + customerID + '/assets/options?selected=' + sel)
-					.then(r => r.text())
-					.then(html => jobAssetSelect.innerHTML = html);
+			function loadJobAssets(customerID, selectedID) {
+				return refreshOptions(jobAssetSelect, '<option value="0">No asset</option>', customerID ? '/customers/' + customerID + '/assets/options' : '', selectedID ?? (jobAssetSelect ? jobAssetSelect.dataset.selected : 0));
 			}
-			if (jobCustomer && contactSelect) {
-				jobCustomer.addEventListener('change', function() { contactSelect.dataset.selected = 0; loadContacts(this.value); });
-				if (jobCustomer.value) loadContacts(jobCustomer.value);
+			function loadModalLocations(selectID, selectedID) {
+				const select = document.getElementById(selectID);
+				const customerID = selectedJobCustomerID();
+				return refreshOptions(select, '<option value="0">No location</option>', customerID ? '/customers/' + customerID + '/locations/options' : '', selectedID || 0);
 			}
-			if (jobCustomer && jobLocationSelect) {
-				jobCustomer.addEventListener('change', function() { jobLocationSelect.dataset.selected = 0; loadJobLocations(this.value); });
-				if (jobCustomer.value && jobLocationSelect.options.length <= 1) loadJobLocations(jobCustomer.value);
+			function setJobModalError(type, message) {
+				const el = document.getElementById('job-' + type + '-error');
+				if (!el) return;
+				el.textContent = message || '';
+				el.hidden = !message;
 			}
-			if (jobCustomer && jobAssetSelect) {
-				jobCustomer.addEventListener('change', function() { jobAssetSelect.dataset.selected = 0; loadJobAssets(this.value); });
-				if (jobCustomer.value && jobAssetSelect.options.length <= 1) loadJobAssets(jobCustomer.value);
+			function openJobCreateModal(type) {
+				const dialog = document.getElementById('job-' + type + '-dialog');
+				if (!dialog) return;
+				setJobModalError(type, '');
+				if (!selectedJobCustomerID()) setJobModalError(type, 'Select a customer before creating a ' + type + '.');
+				if (type === 'asset') loadModalLocations('job-asset-location-id', jobLocationSelect ? jobLocationSelect.value : 0);
+				if (type === 'project') loadModalLocations('job-project-location-id', jobLocationSelect ? jobLocationSelect.value : 0);
+				if (!dialog.open) dialog.showModal();
+			}
+			function closeJobCreateModal(type) {
+				const dialog = document.getElementById('job-' + type + '-dialog');
+				if (dialog && dialog.open) dialog.close();
+			}
+			function resetJobModalFields(prefix) {
+				document.querySelectorAll('[id^="job-' + prefix + '-"]').forEach(el => {
+					if (el.id.endsWith('-error') || el.id.endsWith('-button') || el.tagName === 'DIALOG') return;
+					if (el.type === 'checkbox') el.checked = false;
+					else if (el.tagName === 'SELECT') el.value = '0';
+					else if (el.id === 'job-project-completion-percentage') el.value = '0';
+					else el.value = '';
+				});
+			}
+			function postInline(url, fields) {
+				const body = new URLSearchParams();
+				fields.forEach(([name, value]) => body.set(name, value || ''));
+				return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrfToken() }, body })
+					.then(async r => {
+						if (!r.ok) throw new Error((await r.text()) || 'Unable to create record.');
+						return r.json();
+					});
+			}
+			async function createJobLocation() {
+				const customerID = selectedJobCustomerID();
+				if (!customerID) { setJobModalError('location', 'Select a customer before creating a location.'); return; }
+				try {
+					const created = await postInline('/customers/' + customerID + '/locations/inline', [
+						['title', document.getElementById('job-location-title').value],
+						['address_1', document.getElementById('job-location-address-1').value],
+						['address_2', document.getElementById('job-location-address-2').value],
+						['city', document.getElementById('job-location-city').value],
+						['state', document.getElementById('job-location-state').value],
+						['zip_code', document.getElementById('job-location-zip-code').value],
+						['notes', document.getElementById('job-location-notes').value],
+						['is_primary', document.getElementById('job-location-is-primary').checked ? 'true' : 'false'],
+					]);
+					await loadJobLocations(customerID, created.id);
+					await loadModalLocations('job-project-location-id', created.id);
+					await loadModalLocations('job-asset-location-id', created.id);
+					resetJobModalFields('location');
+					closeJobCreateModal('location');
+				} catch (err) { setJobModalError('location', err.message); }
+			}
+			async function createJobContact() {
+				const customerID = selectedJobCustomerID();
+				if (!customerID) { setJobModalError('contact', 'Select a customer before creating a contact.'); return; }
+				try {
+					const created = await postInline('/customers/' + customerID + '/contacts/inline', [
+						['first_name', document.getElementById('job-contact-first-name').value],
+						['last_name', document.getElementById('job-contact-last-name').value],
+						['email', document.getElementById('job-contact-email').value],
+						['phone', document.getElementById('job-contact-phone').value],
+						['notes', document.getElementById('job-contact-notes').value],
+					]);
+					if (contactSelect) contactSelect.dataset.selected = created.id;
+					await loadContacts(customerID);
+					resetJobModalFields('contact');
+					closeJobCreateModal('contact');
+				} catch (err) { setJobModalError('contact', err.message); }
+			}
+			async function createJobAsset() {
+				const customerID = selectedJobCustomerID();
+				if (!customerID) { setJobModalError('asset', 'Select a customer before creating an asset.'); return; }
+				try {
+					const created = await postInline('/assets/inline', [
+						['customer_id', customerID],
+						['name', document.getElementById('job-asset-name').value],
+						['asset_type_id', document.getElementById('job-asset-type-id').value],
+						['asset_status_id', document.getElementById('job-asset-status-id').value],
+						['location_id', document.getElementById('job-asset-location-id').value],
+						['manufacturer', document.getElementById('job-asset-manufacturer').value],
+						['model', document.getElementById('job-asset-model').value],
+						['serial_number', document.getElementById('job-asset-serial-number').value],
+						['installed_at', document.getElementById('job-asset-installed-at').value],
+						['warranty_expires', document.getElementById('job-asset-warranty-expires').value],
+						['notes', document.getElementById('job-asset-notes').value],
+					]);
+					await loadJobAssets(customerID, created.id);
+					resetJobModalFields('asset');
+					closeJobCreateModal('asset');
+				} catch (err) { setJobModalError('asset', err.message); }
+			}
+			async function createJobProject() {
+				const customerID = selectedJobCustomerID();
+				if (!customerID) { setJobModalError('project', 'Select a customer before creating a project.'); return; }
+				try {
+					const created = await postInline('/projects/inline', [
+						['customer_id', customerID],
+						['name', document.getElementById('job-project-name').value],
+						['description', document.getElementById('job-project-description').value],
+						['status_id', document.getElementById('job-project-status-id').value],
+						['location_id', document.getElementById('job-project-location-id').value],
+						['completion_percentage', document.getElementById('job-project-completion-percentage').value],
+						['start_time', document.getElementById('job-project-start-time').value],
+						['end_time', document.getElementById('job-project-end-time').value],
+						['notes', document.getElementById('job-project-notes').value],
+					]);
+					await loadJobProjects(customerID, created.id);
+					resetJobModalFields('project');
+					closeJobCreateModal('project');
+				} catch (err) { setJobModalError('project', err.message); }
+			}
+			if (jobCustomer) {
+				jobCustomer.addEventListener('change', function() {
+					if (jobProjectSelect) jobProjectSelect.dataset.selected = 0;
+					if (contactSelect) contactSelect.dataset.selected = 0;
+					if (jobLocationSelect) jobLocationSelect.dataset.selected = 0;
+					if (jobAssetSelect) jobAssetSelect.dataset.selected = 0;
+					loadJobProjects(this.value, 0);
+					loadContacts(this.value);
+					loadJobLocations(this.value, 0);
+					loadJobAssets(this.value, 0);
+				});
+				if (jobCustomer.value) {
+					if (jobProjectSelect && jobProjectSelect.options.length <= 1) loadJobProjects(jobCustomer.value);
+					if (contactSelect) loadContacts(jobCustomer.value);
+					if (jobLocationSelect && jobLocationSelect.options.length <= 1) loadJobLocations(jobCustomer.value);
+					if (jobAssetSelect && jobAssetSelect.options.length <= 1) loadJobAssets(jobCustomer.value);
+				}
 			}
 			const startEl = document.querySelector('[name=start_time]');
 			const endEl = document.querySelector('[name=end_time]');

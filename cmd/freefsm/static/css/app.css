@@ -1264,6 +1264,7 @@ html[data-theme="dark"] .theme-icon-moon {
 
 .compact-form label > input:not([type="checkbox"]):not([type="radio"]),
 .compact-form label > select,
+.compact-form .select-with-action select,
 .compact-form label > textarea {
   margin-bottom: 0;
   padding: 0.35rem 0.55rem;
@@ -1498,6 +1499,28 @@ html[data-theme="dark"] .theme-icon-moon {
   margin: 0.5rem 0 1rem;
 }
 
+.select-with-action {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.select-with-action select {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.select-action-button {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .item-create-dialog {
   background-color: var(--pico-modal-overlay-background-color);
 }
@@ -1558,6 +1581,14 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 @media (max-width: 600px) {
+  .select-with-action {
+    align-items: stretch;
+  }
+
+  .select-action-button {
+    padding-inline: 0.5rem;
+  }
+
   .item-create-dialog-card {
     width: calc(100vw - 1rem);
     max-height: calc(100dvh - 1rem);

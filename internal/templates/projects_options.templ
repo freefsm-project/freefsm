@@ -1,0 +1,10 @@
+package templates
+
+import "fmt"
+
+templ ProjectOptions(projects []SelectOption, selectedID int64) {
+	<option value="0">No project</option>
+	for _, p := range projects {
+		<option value={ fmt.Sprintf("%d", p.Value) } selected?={ selectedID == p.Value }>{ p.Label }</option>
+	}
+}

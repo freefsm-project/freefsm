@@ -483,6 +483,44 @@ func (h *CustomerHandler) CreateLocation(w http.ResponseWriter, r *http.Request)
 	h.ListLocations(w, r)
 }
 
+func (h *CustomerHandler) CreateLocationInline(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, id) {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	title := strings.TrimSpace(r.FormValue("title"))
+	if title == "" {
+		http.Error(w, "title is required", http.StatusBadRequest)
+		return
+	}
+	l, err := h.locationSvc.CreateForCustomer(r.Context(), id, services.CustomerLocationCreateParams{
+		Title:     title,
+		Address1:  r.FormValue("address_1"),
+		Address2:  r.FormValue("address_2"),
+		City:      r.FormValue("city"),
+		State:     r.FormValue("state"),
+		ZipCode:   r.FormValue("zip_code"),
+		Notes:     r.FormValue("notes"),
+		IsPrimary: r.FormValue("is_primary") == "true",
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "location_created", "customer", id, map[string]interface{}{
+			"actor_name":  u.Name,
+			"entity_name": l.Title,
+		})
+	}
+	writeInlineOptionJSON(w, l.ID, l.Title)
+}
+
 func (h *CustomerHandler) EditLocationForm(w http.ResponseWriter, r *http.Request) {
 	custID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if !h.authorizeCustomerUpdate(w, r, custID) {
@@ -587,6 +625,42 @@ func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) 
 		})
 	}
 	h.ListContacts(w, r)
+}
+
+func (h *CustomerHandler) CreateContactInline(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if !h.authorizeCustomerUpdate(w, r, id) {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	firstName := strings.TrimSpace(r.FormValue("first_name"))
+	if firstName == "" {
+		http.Error(w, "first name is required", http.StatusBadRequest)
+		return
+	}
+	c, err := h.contactSvc.Create(r.Context(), id, services.ContactCreateParams{
+		FirstName: firstName,
+		LastName:  r.FormValue("last_name"),
+		Email:     r.FormValue("email"),
+		Phone:     r.FormValue("phone"),
+		Notes:     r.FormValue("notes"),
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	label := strings.TrimSpace(c.FirstName + " " + c.LastName)
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "contact_created", "customer", id, map[string]interface{}{
+			"actor_name":  u.Name,
+			"entity_name": label,
+		})
+	}
+	writeInlineOptionJSON(w, c.ID, label)
 }
 
 func (h *CustomerHandler) EditContactForm(w http.ResponseWriter, r *http.Request) {

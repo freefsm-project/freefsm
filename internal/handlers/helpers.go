@@ -27,6 +27,16 @@ func render(w http.ResponseWriter, r *http.Request, component templ.Component) {
 	_, _ = buf.WriteTo(w)
 }
 
+type inlineOptionResponse struct {
+	ID    int64  `json:"id"`
+	Label string `json:"label"`
+}
+
+func writeInlineOptionJSON(w http.ResponseWriter, id int64, label string) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(inlineOptionResponse{ID: id, Label: label})
+}
+
 func internalServerError(w http.ResponseWriter, r *http.Request, msg string, err error) {
 	slog.Error(msg, "path", r.URL.Path, "error", err)
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)

@@ -28,6 +28,8 @@ type JobHandler struct {
 	tagLinkSvc   *services.TagLinkService
 	defSvc       *services.CustomFieldDefinitionService
 	assetSvc     *services.AssetService
+	assetTypeSvc *services.AssetTypeService
+	assetStatSvc *services.AssetStatusService
 	fileSvc      *services.FileService
 	activitySvc  *services.ActivityService
 	userSvc      *services.UserService
@@ -35,8 +37,8 @@ type JobHandler struct {
 	timeEntrySvc *services.TimeEntryService
 }
 
-func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, fileSvc *services.FileService, activitySvc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService, timeEntrySvc *services.TimeEntryService) *JobHandler {
-	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, assetSvc: assetSvc, fileSvc: fileSvc, activitySvc: activitySvc, userSvc: userSvc, policySvc: policySvc, timeEntrySvc: timeEntrySvc}
+func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, assetTypeSvc *services.AssetTypeService, assetStatSvc *services.AssetStatusService, fileSvc *services.FileService, activitySvc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService, timeEntrySvc *services.TimeEntryService) *JobHandler {
+	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, assetSvc: assetSvc, assetTypeSvc: assetTypeSvc, assetStatSvc: assetStatSvc, fileSvc: fileSvc, activitySvc: activitySvc, userSvc: userSvc, policySvc: policySvc, timeEntrySvc: timeEntrySvc}
 }
 
 func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -737,13 +739,19 @@ func (h *JobHandler) jobFormFromRequest(r *http.Request, id int64) templates.Job
 
 func (h *JobHandler) newJobForm(ctx context.Context, customerID int64) templates.JobFormPageData {
 	statuses := h.statusesForSelect(ctx)
+	projectStatuses, _ := h.statusSvc.ByObjectType(ctx, "project")
 	customers, _ := h.custSvc.ListAll(ctx)
-	projects, _ := h.projectSvc.ListAll(ctx)
+	var projects []*ent.Project
+	if customerID > 0 {
+		projects, _ = h.projectSvc.ListByCustomer(ctx, customerID)
+	}
 	locations, _ := h.locSvc.ListByCustomer(ctx, customerID)
 	var assets []*ent.Asset
 	if customerID > 0 {
 		assets, _ = h.assetSvc.ListForCustomer(ctx, customerID)
 	}
+	assetTypes, _ := h.assetTypeSvc.List(ctx)
+	assetStatuses, _ := h.assetStatSvc.List(ctx)
 	users, _ := h.userSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	return templates.JobFormPageData{
@@ -757,6 +765,9 @@ func (h *JobHandler) newJobForm(ctx context.Context, customerID int64) templates
 		Projects:                projectOptions(projects),
 		Locations:               locationOptions(locations),
 		Assets:                  assetOptions(assets),
+		AssetTypes:              assetTypesToOptions(assetTypes),
+		AssetStatuses:           assetStatusesToOptions(assetStatuses),
+		ProjectStatuses:         statusOptions(projectStatuses),
 		Users:                   userOptions(users),
 		Statuses:                statusOptions(statuses),
 		BillingTypes:            services.JobBillingTypes,
@@ -769,10 +780,13 @@ func (h *JobHandler) newJobForm(ctx context.Context, customerID int64) templates
 }
 
 func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses []*ent.Status) templates.JobFormPageData {
+	projectStatuses, _ := h.statusSvc.ByObjectType(ctx, "project")
 	customers, _ := h.custSvc.ListAll(ctx)
-	projects, _ := h.projectSvc.ListAll(ctx)
+	projects, _ := h.projectSvc.ListByCustomer(ctx, j.CustomerID)
 	locations, _ := h.locSvc.ListByCustomer(ctx, j.CustomerID)
 	assets, _ := h.assetSvc.ListForCustomer(ctx, j.CustomerID)
+	assetTypes, _ := h.assetTypeSvc.List(ctx)
+	assetStatuses, _ := h.assetStatSvc.List(ctx)
 	users, _ := h.userSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	d := jobToDetail(ctx, j, statuses)
@@ -787,6 +801,9 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses [
 		Projects:                projectOptions(projects),
 		Locations:               locationOptions(locations),
 		Assets:                  assetOptions(assets),
+		AssetTypes:              assetTypesToOptions(assetTypes),
+		AssetStatuses:           assetStatusesToOptions(assetStatuses),
+		ProjectStatuses:         statusOptions(projectStatuses),
 		Users:                   userOptions(users),
 		Statuses:                statusOptions(statuses),
 		BillingTypes:            services.JobBillingTypes,

@@ -394,6 +394,63 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, fmt.Sprintf("/projects/%d?flash=Project+updated", id), http.StatusSeeOther)
 }
 
+func (h *ProjectHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
+	if custID <= 0 {
+		http.Error(w, "customer is required", http.StatusBadRequest)
+		return
+	}
+	customer, err := h.custSvc.GetByID(r.Context(), custID)
+	if err != nil || customer.DeletedAt != nil {
+		http.Error(w, "invalid customer", http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		http.Error(w, "project name is required", http.StatusBadRequest)
+		return
+	}
+	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
+	if ok, err := h.statusSvc.BelongsToObjectType(r.Context(), statusID, "project"); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else if !ok {
+		http.Error(w, "invalid project status", http.StatusBadRequest)
+		return
+	}
+	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
+	completion, _ := strconv.ParseFloat(r.FormValue("completion_percentage"), 64)
+	loc := middleware.CompanyLocation(r.Context())
+	result, err := h.svc.Create(r.Context(), services.ProjectCreateParams{
+		CustomerID:           custID,
+		Name:                 name,
+		Description:          r.FormValue("description"),
+		StatusID:             statusID,
+		LocationID:           locationID,
+		CompletionPercentage: completion,
+		StartTime:            parseDatePtr(r.FormValue("start_time"), loc),
+		EndTime:              parseDatePtr(r.FormValue("end_time"), loc),
+		Notes:                r.FormValue("notes"),
+		CustomFields:         "[]",
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "project", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
+	}
+	writeInlineOptionJSON(w, result.ID, result.Name)
+}
+
 func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -448,6 +505,17 @@ func (h *ProjectHandler) Restore(w http.ResponseWriter, r *http.Request) {
 func (h *ProjectHandler) statusesForSelect(ctx context.Context) []*ent.Status {
 	statuses, _ := h.statusSvc.ByObjectType(ctx, "project")
 	return statuses
+}
+
+func (h *ProjectHandler) ProjectOptions(w http.ResponseWriter, r *http.Request) {
+	customerID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	projects, _ := h.svc.ListByCustomer(r.Context(), customerID)
+	selected, _ := strconv.ParseInt(r.URL.Query().Get("selected"), 10, 64)
+	templates.ProjectOptions(projectOptions(projects), selected).Render(r.Context(), w)
 }
 
 func (h *ProjectHandler) newProjectForm(ctx context.Context) templates.ProjectFormPageData {

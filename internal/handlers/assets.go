@@ -241,6 +241,72 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/assets?flash=Asset+created", http.StatusSeeOther)
 }
 
+func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
+	if customerID <= 0 {
+		http.Error(w, "customer is required", http.StatusBadRequest)
+		return
+	}
+	name := r.FormValue("name")
+	if name == "" {
+		http.Error(w, "asset name is required", http.StatusBadRequest)
+		return
+	}
+	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
+	assetTypeID, _ := strconv.ParseInt(r.FormValue("asset_type_id"), 10, 64)
+	if assetTypeID <= 0 {
+		http.Error(w, "asset type is required", http.StatusBadRequest)
+		return
+	}
+	if _, err := h.assetTypeSvc.GetByID(r.Context(), assetTypeID); err != nil {
+		http.Error(w, "invalid asset type", http.StatusBadRequest)
+		return
+	}
+	assetStatusID, _ := strconv.ParseInt(r.FormValue("asset_status_id"), 10, 64)
+	var locID, statusID *int64
+	if locationID > 0 {
+		locID = &locationID
+	}
+	if assetStatusID > 0 {
+		if _, err := h.assetStatusSvc.GetByID(r.Context(), assetStatusID); err != nil {
+			http.Error(w, "invalid asset status", http.StatusBadRequest)
+			return
+		}
+		statusID = &assetStatusID
+	}
+	loc := middleware.CompanyLocation(r.Context())
+	result, err := h.svc.Create(r.Context(), services.AssetCreateParams{
+		CustomerID:      customerID,
+		LocationID:      locID,
+		AssetTypeID:     assetTypeID,
+		AssetStatusID:   statusID,
+		Name:            name,
+		SerialNumber:    r.FormValue("serial_number"),
+		Model:           r.FormValue("model"),
+		Manufacturer:    r.FormValue("manufacturer"),
+		Notes:           r.FormValue("notes"),
+		InstalledAt:     parseDatePtr(r.FormValue("installed_at"), loc),
+		WarrantyExpires: parseDatePtr(r.FormValue("warranty_expires"), loc),
+		CustomFields:    "[]",
+	})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "created", "asset", result.ID, map[string]interface{}{
+			"entity_name": result.Name,
+			"actor_name":  u.Name,
+		})
+	}
+	writeInlineOptionJSON(w, result.ID, assetLabel(result))
+}
+
 func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
