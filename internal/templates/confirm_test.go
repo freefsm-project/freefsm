@@ -65,3 +65,63 @@ func TestJobQuickCreateDialogsAreOutsideJobForm(t *testing.T) {
 		}
 	}
 }
+
+func TestJobModalResetIsScopedToDialog(t *testing.T) {
+	content, err := os.ReadFile("jobs_form.templ")
+	if err != nil {
+		t.Fatalf("read jobs_form.templ: %v", err)
+	}
+	text := string(content)
+
+	if !strings.Contains(text, `const dialog = document.getElementById('job-' + prefix + '-dialog');`) {
+		t.Fatal("resetJobModalFields should find the modal dialog before clearing fields")
+	}
+	if !strings.Contains(text, `dialog.querySelectorAll('[id^="job-' + prefix + '-"]')`) {
+		t.Fatal("resetJobModalFields should clear only fields inside the modal dialog")
+	}
+	if strings.Contains(text, `document.querySelectorAll('[id^="job-' + prefix + '-"]')`) {
+		t.Fatal("resetJobModalFields must not query the whole document; it resets main job selects")
+	}
+}
+
+func TestJobOptionRefreshIgnoresStaleResponses(t *testing.T) {
+	content, err := os.ReadFile("jobs_form.templ")
+	if err != nil {
+		t.Fatalf("read jobs_form.templ: %v", err)
+	}
+	text := string(content)
+
+	for _, snippet := range []string{
+		`const requestID = String((Number(select.dataset.refreshRequest || '0') || 0) + 1);`,
+		`select.dataset.refreshRequest = requestID;`,
+		`if (select.dataset.refreshRequest !== requestID) return;`,
+	} {
+		if !strings.Contains(text, snippet) {
+			t.Fatalf("refreshOptions missing stale-response guard %q", snippet)
+		}
+	}
+}
+
+func TestJobInlineCreateSelectsCreatedOptionDirectly(t *testing.T) {
+	content, err := os.ReadFile("jobs_form.templ")
+	if err != nil {
+		t.Fatalf("read jobs_form.templ: %v", err)
+	}
+	text := string(content)
+
+	for _, snippet := range []string{
+		`function selectInlineOption(select, created)`,
+		`if (![...select.options].some(option => option.value === value))`,
+		`select.appendChild(option);`,
+		`select.dataset.selected = value;`,
+		`select.value = value;`,
+		`selectInlineOption(jobLocationSelect, created);`,
+		`selectInlineOption(contactSelect, created);`,
+		`selectInlineOption(jobAssetSelect, created);`,
+		`selectInlineOption(jobProjectSelect, created);`,
+	} {
+		if !strings.Contains(text, snippet) {
+			t.Fatalf("job inline create flow missing direct created-option selection %q", snippet)
+		}
+	}
+}

@@ -209,11 +209,29 @@ templ JobForm(p JobFormPageData) {
 			}
 			function refreshOptions(select, emptyHTML, url, selectedID) {
 				if (!select) return Promise.resolve();
+				const requestID = String((Number(select.dataset.refreshRequest || '0') || 0) + 1);
+				select.dataset.refreshRequest = requestID;
 				if (!url) { select.innerHTML = emptyHTML; return Promise.resolve(); }
 				select.dataset.selected = selectedID || 0;
 				return fetch(url + '?selected=' + (selectedID || 0))
 					.then(r => r.text())
-					.then(html => { select.innerHTML = html; select.value = String(selectedID || 0); });
+					.then(html => {
+						if (select.dataset.refreshRequest !== requestID) return;
+						select.innerHTML = html;
+						select.value = String(selectedID || 0);
+					});
+			}
+			function selectInlineOption(select, created) {
+				if (!select || !created || !created.id) return;
+				const value = String(created.id);
+				if (![...select.options].some(option => option.value === value)) {
+					const option = document.createElement('option');
+					option.value = value;
+					option.textContent = created.label || value;
+					select.appendChild(option);
+				}
+				select.dataset.selected = value;
+				select.value = value;
 			}
 			function loadJobProjects(customerID, selectedID) {
 				return refreshOptions(jobProjectSelect, '<option value="0">No project</option>', customerID ? '/customers/' + customerID + '/projects/options' : '', selectedID ?? (jobProjectSelect ? jobProjectSelect.dataset.selected : 0));
@@ -252,7 +270,9 @@ templ JobForm(p JobFormPageData) {
 				if (dialog && dialog.open) dialog.close();
 			}
 			function resetJobModalFields(prefix) {
-				document.querySelectorAll('[id^="job-' + prefix + '-"]').forEach(el => {
+				const dialog = document.getElementById('job-' + prefix + '-dialog');
+				if (!dialog) return;
+				dialog.querySelectorAll('[id^="job-' + prefix + '-"]').forEach(el => {
 					if (el.id.endsWith('-error') || el.id.endsWith('-button') || el.tagName === 'DIALOG') return;
 					if (el.type === 'checkbox') el.checked = false;
 					else if (el.tagName === 'SELECT') el.value = '0';
@@ -284,6 +304,7 @@ templ JobForm(p JobFormPageData) {
 						['is_primary', document.getElementById('job-location-is-primary').checked ? 'true' : 'false'],
 					]);
 					await loadJobLocations(customerID, created.id);
+					selectInlineOption(jobLocationSelect, created);
 					await loadModalLocations('job-project-location-id', created.id);
 					await loadModalLocations('job-asset-location-id', created.id);
 					resetJobModalFields('location');
@@ -301,8 +322,8 @@ templ JobForm(p JobFormPageData) {
 						['phone', document.getElementById('job-contact-phone').value],
 						['notes', document.getElementById('job-contact-notes').value],
 					]);
-					if (contactSelect) contactSelect.dataset.selected = created.id;
 					await loadContacts(customerID);
+					selectInlineOption(contactSelect, created);
 					resetJobModalFields('contact');
 					closeJobCreateModal('contact');
 				} catch (err) { setJobModalError('contact', err.message); }
@@ -325,6 +346,7 @@ templ JobForm(p JobFormPageData) {
 						['notes', document.getElementById('job-asset-notes').value],
 					]);
 					await loadJobAssets(customerID, created.id);
+					selectInlineOption(jobAssetSelect, created);
 					resetJobModalFields('asset');
 					closeJobCreateModal('asset');
 				} catch (err) { setJobModalError('asset', err.message); }
@@ -345,6 +367,7 @@ templ JobForm(p JobFormPageData) {
 						['notes', document.getElementById('job-project-notes').value],
 					]);
 					await loadJobProjects(customerID, created.id);
+					selectInlineOption(jobProjectSelect, created);
 					resetJobModalFields('project');
 					closeJobCreateModal('project');
 				} catch (err) { setJobModalError('project', err.message); }

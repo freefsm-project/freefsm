@@ -685,11 +685,29 @@ func JobForm(p JobFormPageData) templ.Component {
 			}
 			function refreshOptions(select, emptyHTML, url, selectedID) {
 				if (!select) return Promise.resolve();
+				const requestID = String((Number(select.dataset.refreshRequest || '0') || 0) + 1);
+				select.dataset.refreshRequest = requestID;
 				if (!url) { select.innerHTML = emptyHTML; return Promise.resolve(); }
 				select.dataset.selected = selectedID || 0;
 				return fetch(url + '?selected=' + (selectedID || 0))
 					.then(r => r.text())
-					.then(html => { select.innerHTML = html; select.value = String(selectedID || 0); });
+					.then(html => {
+						if (select.dataset.refreshRequest !== requestID) return;
+						select.innerHTML = html;
+						select.value = String(selectedID || 0);
+					});
+			}
+			function selectInlineOption(select, created) {
+				if (!select || !created || !created.id) return;
+				const value = String(created.id);
+				if (![...select.options].some(option => option.value === value)) {
+					const option = document.createElement('option');
+					option.value = value;
+					option.textContent = created.label || value;
+					select.appendChild(option);
+				}
+				select.dataset.selected = value;
+				select.value = value;
 			}
 			function loadJobProjects(customerID, selectedID) {
 				return refreshOptions(jobProjectSelect, '<option value="0">No project</option>', customerID ? '/customers/' + customerID + '/projects/options' : '', selectedID ?? (jobProjectSelect ? jobProjectSelect.dataset.selected : 0));
@@ -728,7 +746,9 @@ func JobForm(p JobFormPageData) templ.Component {
 				if (dialog && dialog.open) dialog.close();
 			}
 			function resetJobModalFields(prefix) {
-				document.querySelectorAll('[id^="job-' + prefix + '-"]').forEach(el => {
+				const dialog = document.getElementById('job-' + prefix + '-dialog');
+				if (!dialog) return;
+				dialog.querySelectorAll('[id^="job-' + prefix + '-"]').forEach(el => {
 					if (el.id.endsWith('-error') || el.id.endsWith('-button') || el.tagName === 'DIALOG') return;
 					if (el.type === 'checkbox') el.checked = false;
 					else if (el.tagName === 'SELECT') el.value = '0';
@@ -760,6 +780,7 @@ func JobForm(p JobFormPageData) templ.Component {
 						['is_primary', document.getElementById('job-location-is-primary').checked ? 'true' : 'false'],
 					]);
 					await loadJobLocations(customerID, created.id);
+					selectInlineOption(jobLocationSelect, created);
 					await loadModalLocations('job-project-location-id', created.id);
 					await loadModalLocations('job-asset-location-id', created.id);
 					resetJobModalFields('location');
@@ -777,8 +798,8 @@ func JobForm(p JobFormPageData) templ.Component {
 						['phone', document.getElementById('job-contact-phone').value],
 						['notes', document.getElementById('job-contact-notes').value],
 					]);
-					if (contactSelect) contactSelect.dataset.selected = created.id;
 					await loadContacts(customerID);
+					selectInlineOption(contactSelect, created);
 					resetJobModalFields('contact');
 					closeJobCreateModal('contact');
 				} catch (err) { setJobModalError('contact', err.message); }
@@ -801,6 +822,7 @@ func JobForm(p JobFormPageData) templ.Component {
 						['notes', document.getElementById('job-asset-notes').value],
 					]);
 					await loadJobAssets(customerID, created.id);
+					selectInlineOption(jobAssetSelect, created);
 					resetJobModalFields('asset');
 					closeJobCreateModal('asset');
 				} catch (err) { setJobModalError('asset', err.message); }
@@ -821,6 +843,7 @@ func JobForm(p JobFormPageData) templ.Component {
 						['notes', document.getElementById('job-project-notes').value],
 					]);
 					await loadJobProjects(customerID, created.id);
+					selectInlineOption(jobProjectSelect, created);
 					resetJobModalFields('project');
 					closeJobCreateModal('project');
 				} catch (err) { setJobModalError('project', err.message); }
@@ -933,7 +956,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", s.Value))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 426, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 449, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 			if templ_7745c5c3_Err != nil {
@@ -946,7 +969,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 			var templ_7745c5c3_Var39 string
 			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(s.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 426, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 449, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
 			if templ_7745c5c3_Err != nil {
@@ -969,7 +992,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 			var templ_7745c5c3_Var40 string
 			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", t.Value))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 490, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 513, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 			if templ_7745c5c3_Err != nil {
@@ -982,7 +1005,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 			var templ_7745c5c3_Var41 string
 			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(t.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 490, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 513, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 			if templ_7745c5c3_Err != nil {
@@ -1005,7 +1028,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 			var templ_7745c5c3_Var42 string
 			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", s.Value))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 498, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 521, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 			if templ_7745c5c3_Err != nil {
@@ -1018,7 +1041,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 			var templ_7745c5c3_Var43 string
 			templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(s.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 498, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 521, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 			if templ_7745c5c3_Err != nil {
@@ -1070,7 +1093,7 @@ func AssetOptions(options []SelectOption, selectedID int64) templ.Component {
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", o.Value))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 554, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 577, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 			if templ_7745c5c3_Err != nil {
@@ -1093,7 +1116,7 @@ func AssetOptions(options []SelectOption, selectedID int64) templ.Component {
 			var templ_7745c5c3_Var46 string
 			templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 554, Col: 92}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 577, Col: 92}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 			if templ_7745c5c3_Err != nil {
