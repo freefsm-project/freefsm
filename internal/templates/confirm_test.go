@@ -31,3 +31,37 @@ func TestTemplatesUseHTMXConfirmForInteractiveConfirmations(t *testing.T) {
 		}
 	}
 }
+
+func TestJobQuickCreateDialogsAreOutsideJobForm(t *testing.T) {
+	content, err := os.ReadFile("jobs_form.templ")
+	if err != nil {
+		t.Fatalf("read jobs_form.templ: %v", err)
+	}
+	text := string(content)
+
+	formStart := strings.Index(text, `<form action={ templ.URL(jobFormAction(p.IsNew, p.Job.ID)) }`)
+	if formStart == -1 {
+		t.Fatal("job form start not found")
+	}
+	formEnd := strings.Index(text[formStart:], `</form>`)
+	if formEnd == -1 {
+		t.Fatal("job form end not found")
+	}
+	formBody := text[formStart : formStart+formEnd]
+
+	for _, id := range []string{
+		`id="job-project-dialog"`,
+		`id="job-location-dialog"`,
+		`id="job-asset-dialog"`,
+		`id="job-contact-dialog"`,
+		`id="job-project-name" required`,
+		`id="job-location-title" required`,
+		`id="job-asset-name" required`,
+		`id="job-asset-type-id" required`,
+		`id="job-contact-first-name" required`,
+	} {
+		if strings.Contains(formBody, id) {
+			t.Fatalf("job form contains modal-only field %s; this can block Save via browser validation", id)
+		}
+	}
+}

@@ -68,144 +68,6 @@ templ JobForm(p JobFormPageData) {
 			</span>
 		</label>
 	</div>
-	<dialog class="item-create-dialog" id="job-project-dialog" onclick="if (event.target === this) closeJobCreateModal('project')">
-		<article class="item-create-dialog-card">
-			<header class="item-create-dialog-header">
-				<strong>Create Project</strong>
-				<button type="button" class="outline small" onclick="closeJobCreateModal('project')">Close</button>
-			</header>
-			<div class="item-create-dialog-body">
-				<small class="error-msg" id="job-project-error" hidden></small>
-				<label>Name <small class="required-marker">*</small><input type="text" id="job-project-name" required/></label>
-				<label>Description <input type="text" id="job-project-description"/></label>
-				<div class="grid">
-					<label>Status
-						<select id="job-project-status-id">
-							<option value="0">No Status</option>
-							for _, s := range p.ProjectStatuses {
-								<option value={ fmt.Sprintf("%d", s.Value) }>{ s.Label }</option>
-							}
-						</select>
-					</label>
-					<label>Location
-						<select id="job-project-location-id">
-							<option value="0">No location</option>
-						</select>
-					</label>
-				</div>
-				<label>Completion (%) <input type="number" id="job-project-completion-percentage" value="0" min="0" max="100" step="1"/></label>
-				<div class="grid">
-					<label>Start Date <input type="date" id="job-project-start-time"/></label>
-					<label>End Date <input type="date" id="job-project-end-time"/></label>
-				</div>
-				<label>Notes <textarea id="job-project-notes" rows="3"></textarea></label>
-			</div>
-			<footer class="item-create-dialog-actions">
-				<button type="button" id="job-project-create-button" onclick="createJobProject()">Create Project</button>
-				<button type="button" class="outline" onclick="closeJobCreateModal('project')">Cancel</button>
-			</footer>
-		</article>
-	</dialog>
-	<dialog class="item-create-dialog" id="job-location-dialog" onclick="if (event.target === this) closeJobCreateModal('location')">
-		<article class="item-create-dialog-card">
-			<header class="item-create-dialog-header">
-				<strong>Create Location</strong>
-				<button type="button" class="outline small" onclick="closeJobCreateModal('location')">Close</button>
-			</header>
-			<div class="item-create-dialog-body">
-				<small class="error-msg" id="job-location-error" hidden></small>
-				<label>Title <small class="required-marker">*</small><input type="text" id="job-location-title" required/></label>
-				<div class="grid">
-					<label>Address 1 <input type="text" id="job-location-address-1"/></label>
-					<label>Address 2 <input type="text" id="job-location-address-2"/></label>
-				</div>
-				<div class="grid form-grid-address">
-					<label>City <input type="text" id="job-location-city"/></label>
-					<label>State <input type="text" id="job-location-state"/></label>
-					<label>ZIP <input type="text" id="job-location-zip-code"/></label>
-				</div>
-				<label>Notes <input type="text" id="job-location-notes"/></label>
-				<label><input type="checkbox" id="job-location-is-primary"/> Primary</label>
-			</div>
-			<footer class="item-create-dialog-actions">
-				<button type="button" id="job-location-create-button" onclick="createJobLocation()">Create Location</button>
-				<button type="button" class="outline" onclick="closeJobCreateModal('location')">Cancel</button>
-			</footer>
-		</article>
-	</dialog>
-	<dialog class="item-create-dialog" id="job-asset-dialog" onclick="if (event.target === this) closeJobCreateModal('asset')">
-		<article class="item-create-dialog-card">
-			<header class="item-create-dialog-header">
-				<strong>Create Asset</strong>
-				<button type="button" class="outline small" onclick="closeJobCreateModal('asset')">Close</button>
-			</header>
-			<div class="item-create-dialog-body">
-				<small class="error-msg" id="job-asset-error" hidden></small>
-				<label>Name <small class="required-marker">*</small><input type="text" id="job-asset-name" required/></label>
-				<div class="grid">
-					<label>Asset Type <small class="required-marker">*</small>
-						<select id="job-asset-type-id" required>
-							<option value="0">Select asset type...</option>
-							for _, t := range p.AssetTypes {
-								<option value={ fmt.Sprintf("%d", t.Value) }>{ t.Label }</option>
-							}
-						</select>
-					</label>
-					<label>Status
-						<select id="job-asset-status-id">
-							<option value="0">No Status</option>
-							for _, s := range p.AssetStatuses {
-								<option value={ fmt.Sprintf("%d", s.Value) }>{ s.Label }</option>
-							}
-						</select>
-					</label>
-				</div>
-				<label>Location
-					<select id="job-asset-location-id">
-						<option value="0">No location</option>
-					</select>
-				</label>
-				<div class="grid">
-					<label>Manufacturer <input type="text" id="job-asset-manufacturer"/></label>
-					<label>Model <input type="text" id="job-asset-model"/></label>
-				</div>
-				<label>Serial Number <input type="text" id="job-asset-serial-number"/></label>
-				<div class="grid">
-					<label>Installed At <input type="date" id="job-asset-installed-at"/></label>
-					<label>Warranty Expires <input type="date" id="job-asset-warranty-expires"/></label>
-				</div>
-				<label>Notes <textarea id="job-asset-notes" rows="3"></textarea></label>
-			</div>
-			<footer class="item-create-dialog-actions">
-				<button type="button" id="job-asset-create-button" onclick="createJobAsset()">Create Asset</button>
-				<button type="button" class="outline" onclick="closeJobCreateModal('asset')">Cancel</button>
-			</footer>
-		</article>
-	</dialog>
-	<dialog class="item-create-dialog" id="job-contact-dialog" onclick="if (event.target === this) closeJobCreateModal('contact')">
-		<article class="item-create-dialog-card">
-			<header class="item-create-dialog-header">
-				<strong>Create Contact</strong>
-				<button type="button" class="outline small" onclick="closeJobCreateModal('contact')">Close</button>
-			</header>
-			<div class="item-create-dialog-body">
-				<small class="error-msg" id="job-contact-error" hidden></small>
-				<div class="grid">
-					<label>First <small class="required-marker">*</small><input type="text" id="job-contact-first-name" required/></label>
-					<label>Last <input type="text" id="job-contact-last-name"/></label>
-				</div>
-				<div class="grid">
-					<label>Email <input type="email" id="job-contact-email"/></label>
-					<label>Phone <input type="tel" id="job-contact-phone"/></label>
-				</div>
-				<label>Notes <input type="text" id="job-contact-notes"/></label>
-			</div>
-			<footer class="item-create-dialog-actions">
-				<button type="button" id="job-contact-create-button" onclick="createJobContact()">Create Contact</button>
-				<button type="button" class="outline" onclick="closeJobCreateModal('contact')">Cancel</button>
-			</footer>
-		</article>
-	</dialog>
 	<div class="grid">
 		<label>
 			Job Type <small class="required-marker">*</small>
@@ -541,7 +403,149 @@ templ JobForm(p JobFormPageData) {
 			}
 			if (window.Alpine) { registerJobEditors(); } else { document.addEventListener('alpine:init', registerJobEditors); }
 		</script>`)
+		@JobQuickCreateDialogs(p)
 	}
+}
+
+templ JobQuickCreateDialogs(p JobFormPageData) {
+	<dialog class="item-create-dialog" id="job-project-dialog" onclick="if (event.target === this) closeJobCreateModal('project')">
+		<article class="item-create-dialog-card">
+			<header class="item-create-dialog-header">
+				<strong>Create Project</strong>
+				<button type="button" class="outline small" onclick="closeJobCreateModal('project')">Close</button>
+			</header>
+			<div class="item-create-dialog-body">
+				<small class="error-msg" id="job-project-error" hidden></small>
+				<label>Name <small class="required-marker">*</small><input type="text" id="job-project-name" required/></label>
+				<label>Description <input type="text" id="job-project-description"/></label>
+				<div class="grid">
+					<label>Status
+						<select id="job-project-status-id">
+							<option value="0">No Status</option>
+							for _, s := range p.ProjectStatuses {
+								<option value={ fmt.Sprintf("%d", s.Value) }>{ s.Label }</option>
+							}
+						</select>
+					</label>
+					<label>Location
+						<select id="job-project-location-id">
+							<option value="0">No location</option>
+						</select>
+					</label>
+				</div>
+				<label>Completion (%) <input type="number" id="job-project-completion-percentage" value="0" min="0" max="100" step="1"/></label>
+				<div class="grid">
+					<label>Start Date <input type="date" id="job-project-start-time"/></label>
+					<label>End Date <input type="date" id="job-project-end-time"/></label>
+				</div>
+				<label>Notes <textarea id="job-project-notes" rows="3"></textarea></label>
+			</div>
+			<footer class="item-create-dialog-actions">
+				<button type="button" id="job-project-create-button" onclick="createJobProject()">Create Project</button>
+				<button type="button" class="outline" onclick="closeJobCreateModal('project')">Cancel</button>
+			</footer>
+		</article>
+	</dialog>
+	<dialog class="item-create-dialog" id="job-location-dialog" onclick="if (event.target === this) closeJobCreateModal('location')">
+		<article class="item-create-dialog-card">
+			<header class="item-create-dialog-header">
+				<strong>Create Location</strong>
+				<button type="button" class="outline small" onclick="closeJobCreateModal('location')">Close</button>
+			</header>
+			<div class="item-create-dialog-body">
+				<small class="error-msg" id="job-location-error" hidden></small>
+				<label>Title <small class="required-marker">*</small><input type="text" id="job-location-title" required/></label>
+				<div class="grid">
+					<label>Address 1 <input type="text" id="job-location-address-1"/></label>
+					<label>Address 2 <input type="text" id="job-location-address-2"/></label>
+				</div>
+				<div class="grid form-grid-address">
+					<label>City <input type="text" id="job-location-city"/></label>
+					<label>State <input type="text" id="job-location-state"/></label>
+					<label>ZIP <input type="text" id="job-location-zip-code"/></label>
+				</div>
+				<label>Notes <input type="text" id="job-location-notes"/></label>
+				<label><input type="checkbox" id="job-location-is-primary"/> Primary</label>
+			</div>
+			<footer class="item-create-dialog-actions">
+				<button type="button" id="job-location-create-button" onclick="createJobLocation()">Create Location</button>
+				<button type="button" class="outline" onclick="closeJobCreateModal('location')">Cancel</button>
+			</footer>
+		</article>
+	</dialog>
+	<dialog class="item-create-dialog" id="job-asset-dialog" onclick="if (event.target === this) closeJobCreateModal('asset')">
+		<article class="item-create-dialog-card">
+			<header class="item-create-dialog-header">
+				<strong>Create Asset</strong>
+				<button type="button" class="outline small" onclick="closeJobCreateModal('asset')">Close</button>
+			</header>
+			<div class="item-create-dialog-body">
+				<small class="error-msg" id="job-asset-error" hidden></small>
+				<label>Name <small class="required-marker">*</small><input type="text" id="job-asset-name" required/></label>
+				<div class="grid">
+					<label>Asset Type <small class="required-marker">*</small>
+						<select id="job-asset-type-id" required>
+							<option value="0">Select asset type...</option>
+							for _, t := range p.AssetTypes {
+								<option value={ fmt.Sprintf("%d", t.Value) }>{ t.Label }</option>
+							}
+						</select>
+					</label>
+					<label>Status
+						<select id="job-asset-status-id">
+							<option value="0">No Status</option>
+							for _, s := range p.AssetStatuses {
+								<option value={ fmt.Sprintf("%d", s.Value) }>{ s.Label }</option>
+							}
+						</select>
+					</label>
+				</div>
+				<label>Location
+					<select id="job-asset-location-id">
+						<option value="0">No location</option>
+					</select>
+				</label>
+				<div class="grid">
+					<label>Manufacturer <input type="text" id="job-asset-manufacturer"/></label>
+					<label>Model <input type="text" id="job-asset-model"/></label>
+				</div>
+				<label>Serial Number <input type="text" id="job-asset-serial-number"/></label>
+				<div class="grid">
+					<label>Installed At <input type="date" id="job-asset-installed-at"/></label>
+					<label>Warranty Expires <input type="date" id="job-asset-warranty-expires"/></label>
+				</div>
+				<label>Notes <textarea id="job-asset-notes" rows="3"></textarea></label>
+			</div>
+			<footer class="item-create-dialog-actions">
+				<button type="button" id="job-asset-create-button" onclick="createJobAsset()">Create Asset</button>
+				<button type="button" class="outline" onclick="closeJobCreateModal('asset')">Cancel</button>
+			</footer>
+		</article>
+	</dialog>
+	<dialog class="item-create-dialog" id="job-contact-dialog" onclick="if (event.target === this) closeJobCreateModal('contact')">
+		<article class="item-create-dialog-card">
+			<header class="item-create-dialog-header">
+				<strong>Create Contact</strong>
+				<button type="button" class="outline small" onclick="closeJobCreateModal('contact')">Close</button>
+			</header>
+			<div class="item-create-dialog-body">
+				<small class="error-msg" id="job-contact-error" hidden></small>
+				<div class="grid">
+					<label>First <small class="required-marker">*</small><input type="text" id="job-contact-first-name" required/></label>
+					<label>Last <input type="text" id="job-contact-last-name"/></label>
+				</div>
+				<div class="grid">
+					<label>Email <input type="email" id="job-contact-email"/></label>
+					<label>Phone <input type="tel" id="job-contact-phone"/></label>
+				</div>
+				<label>Notes <input type="text" id="job-contact-notes"/></label>
+			</div>
+			<footer class="item-create-dialog-actions">
+				<button type="button" id="job-contact-create-button" onclick="createJobContact()">Create Contact</button>
+				<button type="button" class="outline" onclick="closeJobCreateModal('contact')">Cancel</button>
+			</footer>
+		</article>
+	</dialog>
 }
 
 templ AssetOptions(options []SelectOption, selectedID int64) {
