@@ -10,6 +10,7 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -135,7 +136,7 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 		d.ArchivedAt = displayDate(r.Context(), *p.DeletedAt)
 	}
 
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "project", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeProject, id))
 	var allTags []*ent.Tag
 	if isAdminOrDispatcher(u) {
 		allTags, _ = h.tagSvc.ListAll(r.Context())
@@ -164,7 +165,7 @@ func filterReadableJobs(ctx context.Context, policySvc *services.PolicyService, 
 func (h *ProjectHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, "project", id)
+	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeProject, id))
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -181,7 +182,7 @@ func (h *ProjectHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 			"actor_name": u.Name,
 		})
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "project", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeProject, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/projects/%d", id),
@@ -198,7 +199,7 @@ func (h *ProjectHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	if tag != nil {
 		tagName = tag.Name
 	}
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "project", id); err != nil {
+	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeProject, id)); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -209,7 +210,7 @@ func (h *ProjectHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 			"actor_name": u.Name,
 		})
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "project", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeProject, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/projects/%d", id),

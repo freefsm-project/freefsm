@@ -11,6 +11,7 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -88,7 +89,7 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "customer", c.ID)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeCustomer, c.ID))
 	var allTags []*ent.Tag
 	u, _ := middleware.UserFromContext(r.Context())
 	if isAdminOrDispatcher(u) {
@@ -191,7 +192,7 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		data.CustomFields = buildCustomFieldDisplay(defs, c.CustomFields)
 		locations, _ := h.locationSvc.ListByCustomer(r.Context(), c.ID)
 		contacts, _ := h.contactSvc.ListByCustomer(r.Context(), c.ID)
-		tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "customer", c.ID)
+		tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeCustomer, c.ID))
 		allTags, _ := h.tagSvc.ListAll(r.Context())
 		data.Locations = locationRows(locations)
 		data.Contacts = contactRows(contacts)
@@ -754,7 +755,7 @@ func (h *CustomerHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, "customer", id)
+	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeCustomer, id))
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -766,7 +767,7 @@ func (h *CustomerHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 			"tag_name":   tag.Name,
 		})
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "customer", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeCustomer, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/customers/%d", id),
@@ -779,7 +780,7 @@ func (h *CustomerHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "customer", id); err != nil {
+	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeCustomer, id)); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -790,7 +791,7 @@ func (h *CustomerHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 			"tag_name":   tag.Name,
 		})
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "customer", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeCustomer, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/customers/%d", id),

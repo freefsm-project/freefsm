@@ -43,6 +43,16 @@ func TestCapabilitiesAndAdminOnly(t *testing.T) {
 			t.Fatalf("%s should support archive", typ)
 		}
 	}
+
+	tags := []Type{TypeCustomer, TypeJob, TypeProject, TypeEstimate, TypeInvoice, TypeAsset}
+	for _, typ := range tags {
+		if !typ.Has(CapTags) {
+			t.Fatalf("%s should support tags", typ)
+		}
+	}
+	if TypeItem.Has(CapTags) {
+		t.Fatal("item should not support tags")
+	}
 	if TypeItem.Has(CapFiles) {
 		t.Fatal("item should not support files")
 	}

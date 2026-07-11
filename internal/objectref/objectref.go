@@ -33,6 +33,7 @@ const (
 	CapActivity Capability = 1 << iota
 	CapFiles
 	CapArchive
+	CapTags
 )
 
 type ExistenceMode uint8
@@ -105,12 +106,12 @@ var knownTypes = map[Type]struct{}{
 }
 
 var descriptors = map[Type]Descriptor{
-	TypeCustomer:        {Type: TypeCustomer, SingularName: "customer", Capabilities: CapActivity | CapFiles | CapArchive},
-	TypeJob:             {Type: TypeJob, SingularName: "job", Capabilities: CapActivity | CapFiles | CapArchive},
-	TypeProject:         {Type: TypeProject, SingularName: "project", Capabilities: CapActivity | CapFiles | CapArchive},
-	TypeEstimate:        {Type: TypeEstimate, SingularName: "estimate", Capabilities: CapActivity | CapFiles | CapArchive},
-	TypeInvoice:         {Type: TypeInvoice, SingularName: "invoice", Capabilities: CapActivity | CapFiles | CapArchive},
-	TypeAsset:           {Type: TypeAsset, SingularName: "asset", Capabilities: CapActivity | CapFiles | CapArchive},
+	TypeCustomer:        {Type: TypeCustomer, SingularName: "customer", Capabilities: CapActivity | CapFiles | CapArchive | CapTags},
+	TypeJob:             {Type: TypeJob, SingularName: "job", Capabilities: CapActivity | CapFiles | CapArchive | CapTags},
+	TypeProject:         {Type: TypeProject, SingularName: "project", Capabilities: CapActivity | CapFiles | CapArchive | CapTags},
+	TypeEstimate:        {Type: TypeEstimate, SingularName: "estimate", Capabilities: CapActivity | CapFiles | CapArchive | CapTags},
+	TypeInvoice:         {Type: TypeInvoice, SingularName: "invoice", Capabilities: CapActivity | CapFiles | CapArchive | CapTags},
+	TypeAsset:           {Type: TypeAsset, SingularName: "asset", Capabilities: CapActivity | CapFiles | CapArchive | CapTags},
 	TypeItem:            {Type: TypeItem, SingularName: "item", Capabilities: CapActivity | CapArchive},
 	TypeTimeEntry:       {Type: TypeTimeEntry, SingularName: "time entry", Capabilities: CapActivity},
 	TypeAssetType:       {Type: TypeAssetType, SingularName: "asset type", AdminOnly: true, Capabilities: CapActivity},

@@ -8,6 +8,7 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -132,7 +133,7 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get tags
-	tagLinks, _ := h.tagLinkSvc.ListForObject(r.Context(), "asset", id)
+	tagLinks, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeAsset, id))
 	var allTags []*ent.Tag
 	if isAdminOrDispatcher(u) {
 		allTags, _ = h.tagSvc.ListAll(r.Context())
@@ -433,7 +434,7 @@ func (h *AssetHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	if _, err := h.tagLinkSvc.Attach(r.Context(), tagID, "asset", id); err != nil {
+	if _, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeAsset, id)); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -451,7 +452,7 @@ func (h *AssetHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "asset", id); err != nil {
+	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeAsset, id)); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}

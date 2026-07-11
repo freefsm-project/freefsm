@@ -11,6 +11,7 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -134,7 +135,7 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	d.LineItems = h.svc.LineItems(i)
 	d.Payments = displayPayments(r.Context(), h.svc.Payments(i))
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "invoice", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeInvoice, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	d.Tags = tagsToRows(tags)
 	d.AllTags = tagsToRows(allTags)
@@ -153,7 +154,7 @@ func (h *InvoiceHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, "invoice", id)
+	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeInvoice, id))
 	if err != nil {
 		internalServerError(w, r, "attach invoice tag", err)
 		return
@@ -165,7 +166,7 @@ func (h *InvoiceHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 			"tag_name":   tag.Name,
 		})
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "invoice", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeInvoice, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/invoices/%d", id),
@@ -181,7 +182,7 @@ func (h *InvoiceHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "invoice", id); err != nil {
+	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeInvoice, id)); err != nil {
 		internalServerError(w, r, "detach invoice tag", err)
 		return
 	}
@@ -192,7 +193,7 @@ func (h *InvoiceHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 			"tag_name":   tag.Name,
 		})
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "invoice", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeInvoice, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/invoices/%d", id),

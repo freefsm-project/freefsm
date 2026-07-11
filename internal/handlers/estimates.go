@@ -11,6 +11,7 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -123,7 +124,7 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.LineItems = h.svc.LineItems(e)
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "estimate", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeEstimate, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	d.Tags = tagsToRows(tags)
 	d.AllTags = tagsToRows(allTags)
@@ -142,7 +143,7 @@ func (h *EstimateHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, "estimate", id)
+	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeEstimate, id))
 	if err != nil {
 		internalServerError(w, r, "attach estimate tag", err)
 		return
@@ -154,7 +155,7 @@ func (h *EstimateHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 			"tag_name":   tag.Name,
 		})
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "estimate", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeEstimate, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/estimates/%d", id),
@@ -170,7 +171,7 @@ func (h *EstimateHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "estimate", id); err != nil {
+	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeEstimate, id)); err != nil {
 		internalServerError(w, r, "detach estimate tag", err)
 		return
 	}
@@ -181,7 +182,7 @@ func (h *EstimateHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 			"tag_name":   tag.Name,
 		})
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "estimate", id)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeEstimate, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/estimates/%d", id),

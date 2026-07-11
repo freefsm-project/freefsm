@@ -12,6 +12,7 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -135,7 +136,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Assignments = assignments
 	d.Subtasks = services.ParseSubtasks(j.Subtasks)
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "job", j.ID)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeJob, j.ID))
 	var allTags []*ent.Tag
 	if isAdminOrDispatcher(u) {
 		allTags, _ = h.tagSvc.ListAll(r.Context())
@@ -963,7 +964,7 @@ func (h *JobHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, "job", id)
+	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeJob, id))
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -982,7 +983,7 @@ func (h *JobHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
 	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, "job", id); err != nil {
+	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeJob, id)); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -997,7 +998,7 @@ func (h *JobHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *JobHandler) loadTagWidget(w http.ResponseWriter, r *http.Request, jobID int64) {
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), "job", jobID)
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeJob, jobID))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	d := templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/jobs/%d", jobID),
