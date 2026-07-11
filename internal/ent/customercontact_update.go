@@ -11,8 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
-	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
+	"github.com/freefsm-project/freefsm/internal/ent/customercontact"
+	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 )
 
 // CustomerContactUpdate is the builder for updating CustomerContact entities.

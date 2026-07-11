@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/middleware"
-	"github.com/MartialM1nd/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/services"
 )
 
 func displayDate(ctx context.Context, t time.Time) string {

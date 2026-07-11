@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/comment"
-	"github.com/MartialM1nd/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/comment"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 )
 
 type CommentService struct {

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/MartialM1nd/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/go-chi/chi/v5"
 )
 

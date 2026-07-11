@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/companysettings"
-	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/companysettings"
+	"github.com/freefsm-project/freefsm/internal/ent/invoice"
 )
 
 type InvoiceService struct {

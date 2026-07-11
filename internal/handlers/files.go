@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/MartialM1nd/freefsm/internal/middleware"
-	"github.com/MartialM1nd/freefsm/internal/objectref"
-	"github.com/MartialM1nd/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/go-chi/chi/v5"
 )
 

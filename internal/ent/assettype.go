@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/assettype"
+	"github.com/freefsm-project/freefsm/internal/ent/assettype"
 )
 
 // AssetType is the model entity for the AssetType schema.

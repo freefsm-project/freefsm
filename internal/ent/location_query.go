@@ -11,8 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/location"
-	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
+	"github.com/freefsm-project/freefsm/internal/ent/location"
+	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 )
 
 // LocationQuery is the builder for querying Location entities.

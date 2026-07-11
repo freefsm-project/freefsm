@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/jobassignment"
+	"github.com/freefsm-project/freefsm/internal/ent/jobassignment"
 )
 
 // JobAssignment is the model entity for the JobAssignment schema.

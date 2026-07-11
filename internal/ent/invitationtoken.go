@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/invitationtoken"
+	"github.com/freefsm-project/freefsm/internal/ent/invitationtoken"
 )
 
 // InvitationToken is the model entity for the InvitationToken schema.

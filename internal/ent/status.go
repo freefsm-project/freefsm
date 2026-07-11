@@ -9,8 +9,8 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/status"
-	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
+	"github.com/freefsm-project/freefsm/internal/ent/status"
+	"github.com/freefsm-project/freefsm/internal/ent/statusworkflow"
 )
 
 // Status is the model entity for the Status schema.

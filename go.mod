@@ -1,4 +1,4 @@
-module github.com/MartialM1nd/freefsm
+module github.com/freefsm-project/freefsm
 
 go 1.25.10
 

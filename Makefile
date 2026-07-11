@@ -1,5 +1,5 @@
 BINARY   := freefsm
-MODULE   := github.com/MartialM1nd/freefsm
+MODULE   := github.com/freefsm-project/freefsm
 GO       := go
 
 BUILD_DIR := dist

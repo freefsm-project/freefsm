@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent"
 )
 
 func TestNormalizeDateFormatFallsBackToDefault(t *testing.T) {

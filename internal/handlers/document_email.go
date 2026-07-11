@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/objectref"
-	"github.com/MartialM1nd/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/services"
 )
 
 type documentPDF struct {

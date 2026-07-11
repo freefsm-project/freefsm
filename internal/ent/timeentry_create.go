@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/timeentry"
+	"github.com/freefsm-project/freefsm/internal/ent/timeentry"
 )
 
 // TimeEntryCreate is the builder for creating a TimeEntry entity.

@@ -11,8 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
-	"github.com/MartialM1nd/freefsm/internal/ent/user"
+	"github.com/freefsm-project/freefsm/internal/ent/predicate"
+	"github.com/freefsm-project/freefsm/internal/ent/user"
 )
 
 // UserUpdate is the builder for updating User entities.

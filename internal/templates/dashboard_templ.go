@@ -11,7 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	"fmt"
 
-	"github.com/MartialM1nd/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/services"
 )
 
 func DashboardPage(p DashboardData) templ.Component {

@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/file"
+	"github.com/freefsm-project/freefsm/internal/ent/file"
 )
 
 // File is the model entity for the File schema.

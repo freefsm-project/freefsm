@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/job"
+	"github.com/freefsm-project/freefsm/internal/ent/job"
 )
 
 // JobCreate is the builder for creating a Job entity.

@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/dashboardlayout"
+	"github.com/freefsm-project/freefsm/internal/ent/dashboardlayout"
 )
 
 // DashboardLayout is the model entity for the DashboardLayout schema.

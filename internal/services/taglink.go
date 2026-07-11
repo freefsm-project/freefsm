@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/tag"
-	"github.com/MartialM1nd/freefsm/internal/ent/taglink"
-	"github.com/MartialM1nd/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/tag"
+	"github.com/freefsm-project/freefsm/internal/ent/taglink"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 )
 
 type TagLinkService struct {

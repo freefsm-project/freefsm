@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/MartialM1nd/freefsm/internal/ent/job"
+	"github.com/freefsm-project/freefsm/internal/ent/job"
 )
 
 func TestStatusServiceJobDeleteRequiresReplacementAndReassigns(t *testing.T) {

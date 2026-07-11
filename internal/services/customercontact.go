@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/customercontact"
 )
 
 type CustomerContactService struct {

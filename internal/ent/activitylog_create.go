@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/activitylog"
+	"github.com/freefsm-project/freefsm/internal/ent/activitylog"
 )
 
 // ActivityLogCreate is the builder for creating a ActivityLog entity.

@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/MartialM1nd/freefsm/internal/config"
-	"github.com/MartialM1nd/freefsm/internal/middleware"
-	"github.com/MartialM1nd/freefsm/internal/services"
-	"github.com/MartialM1nd/freefsm/internal/templates"
+	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )

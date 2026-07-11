@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/estimate"
 )
 
 type EstimateService struct {

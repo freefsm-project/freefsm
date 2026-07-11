@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/job"
-	"github.com/MartialM1nd/freefsm/internal/ent/status"
-	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/job"
+	"github.com/freefsm-project/freefsm/internal/ent/status"
+	"github.com/freefsm-project/freefsm/internal/ent/statusworkflow"
 )
 
 var (

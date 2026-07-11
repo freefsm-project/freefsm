@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/job"
-	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
+	"github.com/freefsm-project/freefsm/internal/ent/job"
+	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 )
 
 // JobDelete is the builder for deleting a Job entity.

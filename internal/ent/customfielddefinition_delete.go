@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/customfielddefinition"
-	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
+	"github.com/freefsm-project/freefsm/internal/ent/customfielddefinition"
+	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 )
 
 // CustomFieldDefinitionDelete is the builder for deleting a CustomFieldDefinition entity.

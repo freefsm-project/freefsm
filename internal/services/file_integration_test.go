@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 )
 
 func TestFileServiceTargetExistsRejectsArchivedTargets(t *testing.T) {

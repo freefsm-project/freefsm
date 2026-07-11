@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/asset"
-	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
-	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
-	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
-	"github.com/MartialM1nd/freefsm/internal/ent/job"
-	"github.com/MartialM1nd/freefsm/internal/ent/project"
-	"github.com/MartialM1nd/freefsm/internal/ent/taglink"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/asset"
+	"github.com/freefsm-project/freefsm/internal/ent/customercontact"
+	"github.com/freefsm-project/freefsm/internal/ent/estimate"
+	"github.com/freefsm-project/freefsm/internal/ent/invoice"
+	"github.com/freefsm-project/freefsm/internal/ent/job"
+	"github.com/freefsm-project/freefsm/internal/ent/project"
+	"github.com/freefsm-project/freefsm/internal/ent/taglink"
 )
 
 type DependencyService struct {

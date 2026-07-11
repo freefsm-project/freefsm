@@ -7,8 +7,8 @@ import (
 	"math"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/timeentry"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/timeentry"
 )
 
 type TimeEntryService struct {

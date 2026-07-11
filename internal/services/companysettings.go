@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent"
 )
 
 type CompanySettingsService struct {

@@ -9,8 +9,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/user"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/user"
 	"golang.org/x/crypto/bcrypt"
 )
 

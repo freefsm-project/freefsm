@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/MartialM1nd/freefsm/internal/middleware"
-	"github.com/MartialM1nd/freefsm/internal/services"
-	"github.com/MartialM1nd/freefsm/internal/templates"
+	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/templates"
 )
 
 type SearchHandler struct {

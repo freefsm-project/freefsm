@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/file"
+	"github.com/freefsm-project/freefsm/internal/ent/file"
 )
 
 // FileCreate is the builder for creating a File entity.

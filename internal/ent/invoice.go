@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
+	"github.com/freefsm-project/freefsm/internal/ent/invoice"
 )
 
 // Invoice is the model entity for the Invoice schema.

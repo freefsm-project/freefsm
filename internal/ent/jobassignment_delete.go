@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/jobassignment"
-	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
+	"github.com/freefsm-project/freefsm/internal/ent/jobassignment"
+	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 )
 
 // JobAssignmentDelete is the builder for deleting a JobAssignment entity.

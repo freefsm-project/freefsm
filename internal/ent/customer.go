@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/customer"
+	"github.com/freefsm-project/freefsm/internal/ent/customer"
 )
 
 // Customer is the model entity for the Customer schema.

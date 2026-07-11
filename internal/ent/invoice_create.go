@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
+	"github.com/freefsm-project/freefsm/internal/ent/invoice"
 )
 
 // InvoiceCreate is the builder for creating a Invoice entity.

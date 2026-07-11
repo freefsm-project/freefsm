@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/assetstatus"
+	"github.com/freefsm-project/freefsm/internal/ent/assetstatus"
 )
 
 // AssetStatus is the model entity for the AssetStatus schema.

@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/timeentry"
+	"github.com/freefsm-project/freefsm/internal/ent/timeentry"
 )
 
 // TimeEntry is the model entity for the TimeEntry schema.

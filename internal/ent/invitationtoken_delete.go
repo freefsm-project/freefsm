@@ -8,8 +8,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/invitationtoken"
-	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
+	"github.com/freefsm-project/freefsm/internal/ent/invitationtoken"
+	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 )
 
 // InvitationTokenDelete is the builder for deleting a InvitationToken entity.

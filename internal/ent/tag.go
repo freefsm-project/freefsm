@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/tag"
+	"github.com/freefsm-project/freefsm/internal/ent/tag"
 )
 
 // Tag is the model entity for the Tag schema.

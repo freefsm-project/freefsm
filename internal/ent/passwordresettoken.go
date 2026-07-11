@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/passwordresettoken"
+	"github.com/freefsm-project/freefsm/internal/ent/passwordresettoken"
 )
 
 // PasswordResetToken is the model entity for the PasswordResetToken schema.

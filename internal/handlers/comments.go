@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/MartialM1nd/freefsm/internal/middleware"
-	"github.com/MartialM1nd/freefsm/internal/objectref"
-	"github.com/MartialM1nd/freefsm/internal/services"
-	"github.com/MartialM1nd/freefsm/internal/templates"
+	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
 

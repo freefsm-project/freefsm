@@ -4,7 +4,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/MartialM1nd/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/config"
 )
 
 func TestAbsoluteAppURLUsesConfiguredPublicURL(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/companysettings"
+	"github.com/freefsm-project/freefsm/internal/ent/companysettings"
 )
 
 // CompanySettings is the model entity for the CompanySettings schema.

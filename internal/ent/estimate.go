@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
+	"github.com/freefsm-project/freefsm/internal/ent/estimate"
 )
 
 // Estimate is the model entity for the Estimate schema.

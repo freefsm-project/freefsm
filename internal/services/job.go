@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/job"
-	"github.com/MartialM1nd/freefsm/internal/ent/jobassignment"
-	"github.com/MartialM1nd/freefsm/internal/ent/status"
-	"github.com/MartialM1nd/freefsm/internal/ent/statusworkflow"
-	"github.com/MartialM1nd/freefsm/internal/ent/user"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/job"
+	"github.com/freefsm-project/freefsm/internal/ent/jobassignment"
+	"github.com/freefsm-project/freefsm/internal/ent/status"
+	"github.com/freefsm-project/freefsm/internal/ent/statusworkflow"
+	"github.com/freefsm-project/freefsm/internal/ent/user"
 )
 
 type JobService struct {

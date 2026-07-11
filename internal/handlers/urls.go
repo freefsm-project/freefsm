@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/MartialM1nd/freefsm/internal/config"
-	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/middleware"
 )
 
 func absoluteAppURL(cfg *config.Config, r *http.Request, path string) string {

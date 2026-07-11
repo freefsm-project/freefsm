@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/item"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/item"
 )
 
 type ItemService struct {

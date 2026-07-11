@@ -1,6 +1,6 @@
 package handlers
 
-import "github.com/MartialM1nd/freefsm/internal/middleware"
+import "github.com/freefsm-project/freefsm/internal/middleware"
 
 const (
 	policyRead       = "read"

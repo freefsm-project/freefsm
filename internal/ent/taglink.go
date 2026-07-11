@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/taglink"
+	"github.com/freefsm-project/freefsm/internal/ent/taglink"
 )
 
 // TagLink is the model entity for the TagLink schema.

@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/project"
+	"github.com/freefsm-project/freefsm/internal/ent/project"
 )
 
 // Project is the model entity for the Project schema.

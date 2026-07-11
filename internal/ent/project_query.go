@@ -11,8 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
-	"github.com/MartialM1nd/freefsm/internal/ent/project"
+	"github.com/freefsm-project/freefsm/internal/ent/predicate"
+	"github.com/freefsm-project/freefsm/internal/ent/project"
 )
 
 // ProjectQuery is the builder for querying Project entities.

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/config"
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/middleware"
-	"github.com/MartialM1nd/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/services"
 )
 
 func staticAsset(path string) string {

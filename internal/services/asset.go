@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/asset"
-	"github.com/MartialM1nd/freefsm/internal/ent/job"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/asset"
+	"github.com/freefsm-project/freefsm/internal/ent/job"
 )
 
 type AssetService struct {

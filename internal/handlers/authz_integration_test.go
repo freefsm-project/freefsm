@@ -14,10 +14,10 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/config"
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/enttest"
-	"github.com/MartialM1nd/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/enttest"
+	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )

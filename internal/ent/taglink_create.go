@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/taglink"
+	"github.com/freefsm-project/freefsm/internal/ent/taglink"
 )
 
 // TagLinkCreate is the builder for creating a TagLink entity.

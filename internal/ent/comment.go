@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/comment"
+	"github.com/freefsm-project/freefsm/internal/ent/comment"
 )
 
 // Comment is the model entity for the Comment schema.

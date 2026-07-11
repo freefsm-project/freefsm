@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/MartialM1nd/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 )
 
 func TestCommentServiceUsesObjectRefsIntegration(t *testing.T) {

@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/asset"
-	"github.com/MartialM1nd/freefsm/internal/ent/customer"
-	"github.com/MartialM1nd/freefsm/internal/ent/customercontact"
-	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
-	"github.com/MartialM1nd/freefsm/internal/ent/job"
-	"github.com/MartialM1nd/freefsm/internal/ent/location"
-	"github.com/MartialM1nd/freefsm/internal/ent/project"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/asset"
+	"github.com/freefsm-project/freefsm/internal/ent/customer"
+	"github.com/freefsm-project/freefsm/internal/ent/customercontact"
+	"github.com/freefsm-project/freefsm/internal/ent/estimate"
+	"github.com/freefsm-project/freefsm/internal/ent/job"
+	"github.com/freefsm-project/freefsm/internal/ent/location"
+	"github.com/freefsm-project/freefsm/internal/ent/project"
 )
 
 func validateCustomerLocation(ctx context.Context, client *ent.Client, customerID, locationID int64) error {

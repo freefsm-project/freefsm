@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/activitylog"
-	"github.com/MartialM1nd/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/activitylog"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 )
 
 type ActivityService struct {

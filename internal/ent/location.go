@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/location"
+	"github.com/freefsm-project/freefsm/internal/ent/location"
 )
 
 // Location is the model entity for the Location schema.

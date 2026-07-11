@@ -5,12 +5,12 @@ package enttest
 import (
 	"context"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent"
 	// required by schema hooks.
-	_ "github.com/MartialM1nd/freefsm/internal/ent/runtime"
+	_ "github.com/freefsm-project/freefsm/internal/ent/runtime"
 
 	"entgo.io/ent/dialect/sql/schema"
-	"github.com/MartialM1nd/freefsm/internal/ent/migrate"
+	"github.com/freefsm-project/freefsm/internal/ent/migrate"
 )
 
 type (

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/file"
-	"github.com/MartialM1nd/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/file"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/google/uuid"
 )
 

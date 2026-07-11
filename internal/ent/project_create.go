@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/project"
+	"github.com/freefsm-project/freefsm/internal/ent/project"
 )
 
 // ProjectCreate is the builder for creating a Project entity.

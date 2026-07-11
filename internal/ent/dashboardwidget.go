@@ -9,7 +9,7 @@ import (
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
-	"github.com/MartialM1nd/freefsm/internal/ent/dashboardwidget"
+	"github.com/freefsm-project/freefsm/internal/ent/dashboardwidget"
 )
 
 // DashboardWidget is the model entity for the DashboardWidget schema.

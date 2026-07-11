@@ -6,14 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/asset"
-	"github.com/MartialM1nd/freefsm/internal/ent/customer"
-	"github.com/MartialM1nd/freefsm/internal/ent/estimate"
-	"github.com/MartialM1nd/freefsm/internal/ent/invoice"
-	"github.com/MartialM1nd/freefsm/internal/ent/item"
-	"github.com/MartialM1nd/freefsm/internal/ent/job"
-	"github.com/MartialM1nd/freefsm/internal/ent/project"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/asset"
+	"github.com/freefsm-project/freefsm/internal/ent/customer"
+	"github.com/freefsm-project/freefsm/internal/ent/estimate"
+	"github.com/freefsm-project/freefsm/internal/ent/invoice"
+	"github.com/freefsm-project/freefsm/internal/ent/item"
+	"github.com/freefsm-project/freefsm/internal/ent/job"
+	"github.com/freefsm-project/freefsm/internal/ent/project"
 )
 
 type EntDirectory struct {

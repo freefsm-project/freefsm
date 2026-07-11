@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
-	"github.com/MartialM1nd/freefsm/internal/ent/invitationtoken"
+	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/invitationtoken"
 )
 
 type InvitationService struct {

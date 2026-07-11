@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/MartialM1nd/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/justinas/nosurf"
 )
 

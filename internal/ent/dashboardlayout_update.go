@@ -11,8 +11,8 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/dashboardlayout"
-	"github.com/MartialM1nd/freefsm/internal/ent/predicate"
+	"github.com/freefsm-project/freefsm/internal/ent/dashboardlayout"
+	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 )
 
 // DashboardLayoutUpdate is the builder for updating DashboardLayout entities.

@@ -66,7 +66,7 @@ PostgreSQL.
 ### Build & Run
 
 ```bash
-git clone https://github.com/MartialM1nd/freefsm.git
+git clone https://github.com/freefsm-project/freefsm.git
 cd freefsm
 cp .env.example .env
 # Edit .env: set DB_PASSWORD, SESSION_SECRET, SETUP_TOKEN

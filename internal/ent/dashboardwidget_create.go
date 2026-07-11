@@ -10,7 +10,7 @@ import (
 
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
-	"github.com/MartialM1nd/freefsm/internal/ent/dashboardwidget"
+	"github.com/freefsm-project/freefsm/internal/ent/dashboardwidget"
 )
 
 // DashboardWidgetCreate is the builder for creating a DashboardWidget entity.

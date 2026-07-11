@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent"
 )
 
 const DefaultDateFormat = "Jan 2, 2006"
