@@ -1,39 +1,31 @@
 package handlers
 
 import (
-	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
-
-var typeToPrefix = map[string]string{
-	"customer": "/customers",
-	"job":      "/jobs",
-	"project":  "/projects",
-	"estimate": "/estimates",
-	"invoice":  "/invoices",
-	"asset":    "/assets",
-}
 
 type CommentHandler struct {
 	svc         *services.CommentService
 	userSvc     *services.UserService
 	activitySvc *services.ActivityService
 	policySvc   *services.PolicyService
+	objects     objectref.Directory
 }
 
-func NewCommentHandler(svc *services.CommentService, userSvc *services.UserService, activitySvc *services.ActivityService, policySvc *services.PolicyService) *CommentHandler {
-	return &CommentHandler{svc: svc, userSvc: userSvc, activitySvc: activitySvc, policySvc: policySvc}
+func NewCommentHandler(svc *services.CommentService, userSvc *services.UserService, activitySvc *services.ActivityService, policySvc *services.PolicyService, objects objectref.Directory) *CommentHandler {
+	return &CommentHandler{svc: svc, userSvc: userSvc, activitySvc: activitySvc, policySvc: policySvc, objects: objects}
 }
 
 func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		objectID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		ref, err := h.refFromRequest(objectType, r)
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -43,18 +35,22 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectType, objectID, policyRead) {
+		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref.ObjectType(), ref.ObjectID(), policyRead) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 
-		comments, err := h.svc.ListForObject(r.Context(), objectType, objectID)
+		comments, err := h.svc.ListForObject(r.Context(), ref)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 
-		baseURL := fmt.Sprintf("%s/%d", typeToPrefix[objectType], objectID)
+		baseURL, ok := h.objects.URL(ref)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
 		readOnly := r.URL.Query().Get("read_only") == "1"
 		hideTitle := r.URL.Query().Get("hide_title") == "1"
 		rows := make([]templates.CommentRow, len(comments))
@@ -78,8 +74,8 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 
 		render(w, r, templates.CommentsWidget(templates.CommentsWidgetData{
 			BaseURL:    baseURL,
-			ObjectType: objectType,
-			ObjectID:   objectID,
+			ObjectType: ref.ObjectType(),
+			ObjectID:   ref.ObjectID(),
 			Comments:   rows,
 			ReadOnly:   readOnly,
 			HideTitle:  hideTitle,
@@ -89,7 +85,7 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 
 func (h *CommentHandler) Create(objectType string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		objectID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		ref, err := h.refFromRequest(objectType, r)
 		if err != nil {
 			http.NotFound(w, r)
 			return
@@ -100,7 +96,7 @@ func (h *CommentHandler) Create(objectType string) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectType, objectID, policyCreate) {
+		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref.ObjectType(), ref.ObjectID(), policyCreate) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -115,18 +111,18 @@ func (h *CommentHandler) Create(objectType string) http.HandlerFunc {
 			return
 		}
 
-		_, err = h.svc.Create(r.Context(), objectType, objectID, u.ID, content)
+		_, err = h.svc.Create(r.Context(), ref, u.ID, content)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
 		}
 
-		entityName := h.activitySvc.LookupEntityName(r.Context(), objectType, objectID)
+		entityName := h.activitySvc.LookupEntityName(r.Context(), ref.ObjectType(), ref.ObjectID())
 		preview := content
 		if len(preview) > 100 {
 			preview = preview[:100]
 		}
-		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_added", objectType, objectID, map[string]interface{}{
+		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_added", ref.ObjectType(), ref.ObjectID(), map[string]interface{}{
 			"entity_name":     entityName,
 			"comment_preview": preview,
 		})
@@ -148,7 +144,8 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		if comment.ObjectType != objectType {
+		ref, err := h.objects.Parse(objectType, comment.ObjectID)
+		if err != nil || comment.ObjectType != ref.ObjectType() {
 			http.NotFound(w, r)
 			return
 		}
@@ -157,12 +154,12 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectType, comment.ObjectID, policyDelete) && !(u.ID == comment.AuthorID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectType, comment.ObjectID, policyCreate)) {
+		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref.ObjectType(), ref.ObjectID(), policyDelete) && !(u.ID == comment.AuthorID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref.ObjectType(), ref.ObjectID(), policyCreate)) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
 
-		entityName := h.activitySvc.LookupEntityName(r.Context(), objectType, comment.ObjectID)
+		entityName := h.activitySvc.LookupEntityName(r.Context(), ref.ObjectType(), ref.ObjectID())
 		preview := comment.Content
 		if len(preview) > 100 {
 			preview = preview[:100]
@@ -173,11 +170,19 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 			return
 		}
 
-		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_deleted", objectType, comment.ObjectID, map[string]interface{}{
+		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_deleted", ref.ObjectType(), ref.ObjectID(), map[string]interface{}{
 			"entity_name":     entityName,
 			"comment_preview": preview,
 		})
 
 		h.List(objectType).ServeHTTP(w, r)
 	}
+}
+
+func (h *CommentHandler) refFromRequest(objectType string, r *http.Request) (objectref.Ref, error) {
+	objectID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		return objectref.Ref{}, err
+	}
+	return h.objects.Parse(objectType, objectID)
 }

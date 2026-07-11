@@ -6,6 +6,7 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/ent/comment"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 )
 
 type CommentService struct {
@@ -16,9 +17,12 @@ func NewCommentService(client *ent.Client) *CommentService {
 	return &CommentService{client: client}
 }
 
-func (s *CommentService) ListForObject(ctx context.Context, objectType string, objectID int64) ([]*ent.Comment, error) {
+func (s *CommentService) ListForObject(ctx context.Context, ref objectref.Ref) ([]*ent.Comment, error) {
+	if !ref.Valid() {
+		return nil, fmt.Errorf("invalid comment target: %s %d", ref.Type, ref.ID)
+	}
 	comments, err := s.client.Comment.Query().
-		Where(comment.ObjectTypeEQ(objectType), comment.ObjectIDEQ(objectID)).
+		Where(comment.ObjectTypeEQ(ref.ObjectType()), comment.ObjectIDEQ(ref.ObjectID())).
 		Order(ent.Desc(comment.FieldCreatedAt)).
 		All(ctx)
 	if err != nil {
@@ -27,10 +31,13 @@ func (s *CommentService) ListForObject(ctx context.Context, objectType string, o
 	return comments, nil
 }
 
-func (s *CommentService) Create(ctx context.Context, objectType string, objectID int64, authorID int64, content string) (*ent.Comment, error) {
+func (s *CommentService) Create(ctx context.Context, ref objectref.Ref, authorID int64, content string) (*ent.Comment, error) {
+	if !ref.Valid() {
+		return nil, fmt.Errorf("invalid comment target: %s %d", ref.Type, ref.ID)
+	}
 	c, err := s.client.Comment.Create().
-		SetObjectType(objectType).
-		SetObjectID(objectID).
+		SetObjectType(ref.ObjectType()).
+		SetObjectID(ref.ObjectID()).
 		SetAuthorID(authorID).
 		SetContent(content).
 		Save(ctx)
