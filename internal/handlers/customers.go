@@ -414,7 +414,7 @@ func customerEditRailCompact(r *http.Request) bool {
 
 func (h *CustomerHandler) canReadCustomer(r *http.Request, customerID int64) bool {
 	u, ok := middleware.UserFromContext(r.Context())
-	return ok && u != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "customer", customerID, policyRead)
+	return ok && u != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeCustomer, customerID), policyRead)
 }
 
 func (h *CustomerHandler) authorizeCustomerUpdate(w http.ResponseWriter, r *http.Request, customerID int64) bool {
@@ -423,7 +423,7 @@ func (h *CustomerHandler) authorizeCustomerUpdate(w http.ResponseWriter, r *http
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return false
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "customer", customerID, policyUpdate) {
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeCustomer, customerID), policyUpdate) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return false
 	}

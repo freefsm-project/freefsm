@@ -37,13 +37,13 @@ func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerS
 	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, assetSvc: assetSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc}
 }
 
-func (h *InvoiceHandler) authorizeInvoice(w http.ResponseWriter, r *http.Request, id int64, action string) bool {
+func (h *InvoiceHandler) authorizeInvoice(w http.ResponseWriter, r *http.Request, id int64, action services.PolicyAction) bool {
 	u, ok := middleware.UserFromContext(r.Context())
 	if !ok || u == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return false
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "invoice", id, action) {
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeInvoice, id), action) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return false
 	}

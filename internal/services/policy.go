@@ -6,33 +6,46 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/asset"
 	"github.com/freefsm-project/freefsm/internal/ent/customer"
-	"github.com/freefsm-project/freefsm/internal/ent/estimate"
-	"github.com/freefsm-project/freefsm/internal/ent/invoice"
-	"github.com/freefsm-project/freefsm/internal/ent/item"
 	"github.com/freefsm-project/freefsm/internal/ent/job"
 	"github.com/freefsm-project/freefsm/internal/ent/jobassignment"
 	"github.com/freefsm-project/freefsm/internal/ent/project"
+	"github.com/freefsm-project/freefsm/internal/objectref"
+)
+
+type PolicyAction string
+
+const (
+	PolicyRead       PolicyAction = "read"
+	PolicyCreate     PolicyAction = "create"
+	PolicyUpdate     PolicyAction = "update"
+	PolicyDelete     PolicyAction = "delete"
+	PolicyAttachFile PolicyAction = "attach_file"
 )
 
 type PolicyService struct {
-	client *ent.Client
+	client  *ent.Client
+	objects objectref.Directory
 }
 
-func NewPolicyService(client *ent.Client) *PolicyService {
-	return &PolicyService{client: client}
+func NewPolicyService(client *ent.Client, objects objectref.Directory) *PolicyService {
+	return &PolicyService{client: client, objects: objects}
 }
 
-func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role, objectType string, objectID int64, action string) bool {
-	if userID <= 0 || objectID <= 0 {
+func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role string, ref objectref.Ref, action PolicyAction) bool {
+	if userID <= 0 || !ref.Valid() || s.objects == nil || !validPolicyAction(action) {
+		return false
+	}
+	if action == PolicyAttachFile && !s.objects.Supports(ref.Type, objectref.CapFiles) {
 		return false
 	}
 	if role == "admin" {
-		return action == "read" || s.canMutateObject(ctx, objectType, objectID)
+		return s.targetExists(ctx, ref, action)
 	}
 	if role == "dispatcher" {
-		switch objectType {
-		case "customer", "job", "project", "estimate", "invoice", "asset", "item", "time_entry":
-			return action == "read" || s.canMutateObject(ctx, objectType, objectID)
+		switch ref.Type {
+		case objectref.TypeCustomer, objectref.TypeJob, objectref.TypeProject, objectref.TypeEstimate,
+			objectref.TypeInvoice, objectref.TypeAsset, objectref.TypeItem, objectref.TypeTimeEntry:
+			return s.targetExists(ctx, ref, action)
 		default:
 			return false
 		}
@@ -41,28 +54,49 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role,
 		return false
 	}
 	switch action {
-	case "read", "create", "attach_file":
-	case "update", "delete":
+	case PolicyRead, PolicyCreate, PolicyAttachFile:
+	case PolicyUpdate, PolicyDelete:
 		return false
 	default:
 		return false
 	}
-	switch objectType {
-	case "job":
-		return s.IsUserAssignedToJob(ctx, objectID, userID)
-	case "customer":
-		return s.canAccessCustomer(ctx, objectID, userID)
-	case "project":
-		return s.canAccessProject(ctx, objectID, userID)
-	case "asset":
-		return s.canAccessAsset(ctx, objectID, userID)
-	case "estimate":
+	if !s.targetExists(ctx, ref, action) || s.client == nil {
 		return false
-	case "invoice":
+	}
+	switch ref.Type {
+	case objectref.TypeJob:
+		return s.IsUserAssignedToJob(ctx, ref.ID, userID)
+	case objectref.TypeCustomer:
+		return s.canAccessCustomer(ctx, ref.ID, userID)
+	case objectref.TypeProject:
+		return s.canAccessProject(ctx, ref.ID, userID)
+	case objectref.TypeAsset:
+		return s.canAccessAsset(ctx, ref.ID, userID)
+	case objectref.TypeEstimate:
+		return false
+	case objectref.TypeInvoice:
 		return false
 	default:
 		return false
 	}
+}
+
+func validPolicyAction(action PolicyAction) bool {
+	switch action {
+	case PolicyRead, PolicyCreate, PolicyUpdate, PolicyDelete, PolicyAttachFile:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *PolicyService) targetExists(ctx context.Context, ref objectref.Ref, action PolicyAction) bool {
+	mode := objectref.ExistsAny
+	if action != PolicyRead && s.objects.Supports(ref.Type, objectref.CapArchive) {
+		mode = objectref.ExistsActive
+	}
+	exists, err := s.objects.Exists(ctx, ref, mode)
+	return err == nil && exists
 }
 
 func (s *PolicyService) IsUserAssignedToJob(ctx context.Context, jobID, userID int64) bool {
@@ -130,37 +164,4 @@ func (s *PolicyService) isCustomerAssignedToUser(ctx context.Context, customerID
 
 func (s *PolicyService) assignedJobIDs(ctx context.Context, userID int64) ([]int64, error) {
 	return NewJobService(s.client).assignedJobIDs(ctx, userID)
-}
-
-func (s *PolicyService) canMutateObject(ctx context.Context, objectType string, objectID int64) bool {
-	if s.client == nil {
-		return true
-	}
-	switch objectType {
-	case "customer":
-		exists, err := s.client.Customer.Query().Where(customer.IDEQ(objectID), customer.DeletedAtIsNil()).Exist(ctx)
-		return err == nil && exists
-	case "job":
-		exists, err := s.client.Job.Query().Where(job.IDEQ(objectID), job.DeletedAtIsNil()).Exist(ctx)
-		return err == nil && exists
-	case "project":
-		exists, err := s.client.Project.Query().Where(project.IDEQ(objectID), project.DeletedAtIsNil()).Exist(ctx)
-		return err == nil && exists
-	case "estimate":
-		exists, err := s.client.Estimate.Query().Where(estimate.IDEQ(objectID), estimate.DeletedAtIsNil()).Exist(ctx)
-		return err == nil && exists
-	case "invoice":
-		exists, err := s.client.Invoice.Query().Where(invoice.IDEQ(objectID), invoice.DeletedAtIsNil()).Exist(ctx)
-		return err == nil && exists
-	case "asset":
-		exists, err := s.client.Asset.Query().Where(asset.IDEQ(objectID), asset.DeletedAtIsNil()).Exist(ctx)
-		return err == nil && exists
-	case "item":
-		exists, err := s.client.Item.Query().Where(item.IDEQ(objectID), item.DeletedAtIsNil()).Exist(ctx)
-		return err == nil && exists
-	case "time_entry":
-		return true
-	default:
-		return false
-	}
 }

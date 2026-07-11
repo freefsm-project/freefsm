@@ -37,13 +37,13 @@ func NewEstimateHandler(svc *services.EstimateService, custSvc *services.Custome
 	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc}
 }
 
-func (h *EstimateHandler) authorizeEstimate(w http.ResponseWriter, r *http.Request, id int64, action string) bool {
+func (h *EstimateHandler) authorizeEstimate(w http.ResponseWriter, r *http.Request, id int64, action services.PolicyAction) bool {
 	u, ok := middleware.UserFromContext(r.Context())
 	if !ok || u == nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return false
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "estimate", id, action) {
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeEstimate, id), action) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return false
 	}

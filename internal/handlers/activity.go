@@ -38,7 +38,12 @@ func (h *ActivityHandler) ListForObject(objectType string) http.HandlerFunc {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectType, objectID, policyRead) {
+		ref, err := h.objects.Parse(objectType, objectID)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyRead) {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

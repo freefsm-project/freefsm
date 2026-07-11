@@ -82,7 +82,7 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil || !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "project", id, policyRead) {
+	if !ok || u == nil || !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeProject, id), policyRead) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -155,7 +155,7 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 func filterReadableJobs(ctx context.Context, policySvc *services.PolicyService, u *middleware.UserInfo, jobs []*ent.Job) []*ent.Job {
 	filtered := make([]*ent.Job, 0, len(jobs))
 	for _, j := range jobs {
-		if policySvc.CanAccessObject(ctx, u.ID, u.Role, "job", j.ID, policyRead) {
+		if policySvc.CanAccessObject(ctx, u.ID, u.Role, objectref.New(objectref.TypeJob, j.ID), policyRead) {
 			filtered = append(filtered, j)
 		}
 	}

@@ -14,6 +14,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/enttest"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -22,7 +23,7 @@ func TestPolicyServiceAssignmentAccessIntegration(t *testing.T) {
 	defer client.Close()
 
 	ctx := context.Background()
-	policy := NewPolicyService(client)
+	policy := NewPolicyService(client, objectref.NewEntDirectory(client))
 	now := time.Now()
 
 	tech := client.User.Create().
@@ -82,41 +83,41 @@ func TestPolicyServiceAssignmentAccessIntegration(t *testing.T) {
 	}
 
 	tests := []struct {
-		name       string
-		objectType string
-		objectID   int64
-		want       bool
+		name string
+		ref  objectref.Ref
+		want bool
 	}{
-		{name: "tech can read active assigned job", objectType: "job", objectID: activeJob.ID, want: true},
-		{name: "tech cannot read archived assigned job", objectType: "job", objectID: archivedJob.ID, want: false},
-		{name: "tech can read active linked customer", objectType: "customer", objectID: activeCustomer.ID, want: true},
-		{name: "tech can read directly assigned active customer", objectType: "customer", objectID: directCustomer.ID, want: true},
-		{name: "tech cannot read archived linked customer", objectType: "customer", objectID: archivedCustomer.ID, want: false},
-		{name: "tech cannot read archived directly assigned customer", objectType: "customer", objectID: archivedDirectCustomer.ID, want: false},
-		{name: "tech can read active linked project", objectType: "project", objectID: activeProject.ID, want: true},
-		{name: "tech cannot read archived linked project", objectType: "project", objectID: archivedProject.ID, want: false},
-		{name: "tech can read active linked asset", objectType: "asset", objectID: activeAsset.ID, want: true},
-		{name: "tech cannot read archived linked asset", objectType: "asset", objectID: archivedAsset.ID, want: false},
-		{name: "tech cannot read estimates", objectType: "estimate", objectID: 1, want: false},
-		{name: "tech cannot read invoices", objectType: "invoice", objectID: 1, want: false},
+		{name: "tech can read active assigned job", ref: objectref.New(objectref.TypeJob, activeJob.ID), want: true},
+		{name: "tech cannot read archived assigned job", ref: objectref.New(objectref.TypeJob, archivedJob.ID), want: false},
+		{name: "tech can read active linked customer", ref: objectref.New(objectref.TypeCustomer, activeCustomer.ID), want: true},
+		{name: "tech can read directly assigned active customer", ref: objectref.New(objectref.TypeCustomer, directCustomer.ID), want: true},
+		{name: "tech cannot read archived linked customer", ref: objectref.New(objectref.TypeCustomer, archivedCustomer.ID), want: false},
+		{name: "tech cannot read archived directly assigned customer", ref: objectref.New(objectref.TypeCustomer, archivedDirectCustomer.ID), want: false},
+		{name: "tech can read active linked project", ref: objectref.New(objectref.TypeProject, activeProject.ID), want: true},
+		{name: "tech cannot read archived linked project", ref: objectref.New(objectref.TypeProject, archivedProject.ID), want: false},
+		{name: "tech can read active linked asset", ref: objectref.New(objectref.TypeAsset, activeAsset.ID), want: true},
+		{name: "tech cannot read archived linked asset", ref: objectref.New(objectref.TypeAsset, archivedAsset.ID), want: false},
+		{name: "tech cannot read estimates", ref: objectref.New(objectref.TypeEstimate, 1), want: false},
+		{name: "tech cannot read invoices", ref: objectref.New(objectref.TypeInvoice, 1), want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := policy.CanAccessObject(ctx, tech.ID, tech.Role, tt.objectType, tt.objectID, "read")
+			got := policy.CanAccessObject(ctx, tech.ID, tech.Role, tt.ref, PolicyRead)
 			if got != tt.want {
-				t.Fatalf("CanAccessObject(%q, %d) = %v, want %v", tt.objectType, tt.objectID, got, tt.want)
+				t.Fatalf("CanAccessObject(%v) = %v, want %v", tt.ref, got, tt.want)
 			}
 		})
 	}
 
-	if !policy.CanAccessObject(ctx, dispatcher.ID, dispatcher.Role, "job", archivedJob.ID, "read") {
+	archivedJobRef := objectref.New(objectref.TypeJob, archivedJob.ID)
+	if !policy.CanAccessObject(ctx, dispatcher.ID, dispatcher.Role, archivedJobRef, PolicyRead) {
 		t.Fatal("dispatcher read archived job = false, want true")
 	}
-	if policy.CanAccessObject(ctx, dispatcher.ID, dispatcher.Role, "job", archivedJob.ID, "create") {
+	if policy.CanAccessObject(ctx, dispatcher.ID, dispatcher.Role, archivedJobRef, PolicyCreate) {
 		t.Fatal("dispatcher create on archived job = true, want false")
 	}
-	if policy.CanAccessObject(ctx, dispatcher.ID, dispatcher.Role, "job", archivedJob.ID, "delete") {
+	if policy.CanAccessObject(ctx, dispatcher.ID, dispatcher.Role, archivedJobRef, PolicyDelete) {
 		t.Fatal("dispatcher delete on archived job = true, want false")
 	}
 }

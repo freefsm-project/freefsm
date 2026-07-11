@@ -55,7 +55,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	commentSvc := services.NewCommentService(entClient, objects)
 	activitySvc := services.NewActivityService(entClient, objects)
 	depSvc := services.NewDependencyService(entClient)
-	policySvc := services.NewPolicyService(entClient)
+	policySvc := services.NewPolicyService(entClient, objects)
 	estimateService := services.NewEstimateService(entClient)
 	invoiceService := services.NewInvoiceService(entClient)
 	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc, policySvc, objects)

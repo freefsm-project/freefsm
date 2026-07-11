@@ -64,7 +64,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid object type", 400)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectType, objectID, policyAttachFile) {
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyAttachFile) {
 		http.Error(w, "Forbidden", 403)
 		return
 	}
@@ -136,7 +136,7 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, f.ObjectType, f.ObjectID, policyRead) {
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyRead) {
 		http.Error(w, "Forbidden", 403)
 		return
 	}
@@ -177,7 +177,7 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, f.ObjectType, f.ObjectID, policyDelete) && !(f.UploadedBy == u.ID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, f.ObjectType, f.ObjectID, policyAttachFile)) {
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyDelete) && !(f.UploadedBy == u.ID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyAttachFile)) {
 		http.Error(w, "Forbidden", 403)
 		return
 	}
@@ -223,7 +223,7 @@ func (h *FileHandler) Rename(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, f.ObjectType, f.ObjectID, policyDelete) && !(f.UploadedBy == u.ID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, f.ObjectType, f.ObjectID, policyAttachFile)) {
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyDelete) && !(f.UploadedBy == u.ID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyAttachFile)) {
 		http.Error(w, "Forbidden", 403)
 		return
 	}

@@ -109,7 +109,7 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil || !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "asset", id, policyRead) {
+	if !ok || u == nil || !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeAsset, id), policyRead) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}

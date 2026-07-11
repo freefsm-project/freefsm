@@ -35,7 +35,7 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref.ObjectType(), ref.ObjectID(), policyRead) {
+		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyRead) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -96,7 +96,7 @@ func (h *CommentHandler) Create(objectType string) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref.ObjectType(), ref.ObjectID(), policyCreate) {
+		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyCreate) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
@@ -154,7 +154,7 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
-		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref.ObjectType(), ref.ObjectID(), policyDelete) && !(u.ID == comment.AuthorID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref.ObjectType(), ref.ObjectID(), policyCreate)) {
+		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyDelete) && !(u.ID == comment.AuthorID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyCreate)) {
 			http.Error(w, "forbidden", http.StatusForbidden)
 			return
 		}
