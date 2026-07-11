@@ -8,6 +8,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -146,7 +147,7 @@ func (h *JobStatusHandler) recordActivity(r *http.Request, action string, s *ent
 	if u == nil {
 		return
 	}
-	h.activitySvc.Record(r.Context(), u.ID, action, "job_status", s.ID, map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.ID, action, objectref.New(objectref.TypeJobStatus, s.ID), map[string]interface{}{
 		"entity_name": s.Name,
 		"actor_name":  u.Name,
 	})

@@ -10,11 +10,12 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/a-h/templ"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
-	"github.com/a-h/templ"
 )
 
 func render(w http.ResponseWriter, r *http.Request, component templ.Component) {
@@ -40,6 +41,14 @@ func writeInlineOptionJSON(w http.ResponseWriter, id int64, label string) {
 func internalServerError(w http.ResponseWriter, r *http.Request, msg string, err error) {
 	slog.Error(msg, "path", r.URL.Path, "error", err)
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+}
+
+func objectDisplayName(ctx context.Context, objects objectref.Directory, ref objectref.Ref) string {
+	name, err := objects.DisplayName(ctx, ref)
+	if err == nil && name != "" {
+		return name
+	}
+	return fmt.Sprintf("%s #%d", ref.Type, ref.ID)
 }
 
 func customerMap(customers []*ent.Customer) map[int64]string {

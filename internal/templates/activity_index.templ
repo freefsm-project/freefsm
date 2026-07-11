@@ -47,10 +47,16 @@ templ ActivityIndex(p ActivityPageData) {
 									{ "(" + e.Metadata.Changed + ") of " }
 								}
 								if e.Action != "password_changed" {
-									<a href={ e.EntityURL }>{ e.EntityName }</a>
+									if e.EntityURL != "" {
+										<a href={ e.EntityURL }>{ e.EntityName }</a>
+									} else {
+										{ e.EntityName }
+									}
 								}
 								{" "}
-								<span class="shared-widget-muted">({ e.ObjectType })</span>
+								if e.TargetType != "" {
+									<span class="shared-widget-muted">({ e.TargetType })</span>
+								}
 							</span>
 							if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
 								<p class="activity-preview activity-preview-compact">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>

@@ -177,7 +177,7 @@ func (h *ProjectHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "project", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeProject, id), map[string]interface{}{
 			"tag_name":   tagName,
 			"actor_name": u.Name,
 		})
@@ -205,7 +205,7 @@ func (h *ProjectHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "project", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeProject, id), map[string]interface{}{
 			"tag_name":   tagName,
 			"actor_name": u.Name,
 		})
@@ -293,7 +293,7 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "project", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeProject, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -387,7 +387,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", "project", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeProject, id), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -444,7 +444,7 @@ func (h *ProjectHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "project", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeProject, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -470,7 +470,7 @@ func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", "project", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeProject, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
@@ -495,7 +495,7 @@ func (h *ProjectHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", "project", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeProject, id), map[string]interface{}{
 			"entity_name": p.Name,
 			"actor_name":  u.Name,
 		})

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
@@ -26,7 +25,7 @@ func NewActivityHandler(svc *services.ActivityService, userSvc *services.UserSer
 	return &ActivityHandler{svc: svc, userSvc: userSvc, policySvc: policySvc, objects: objects}
 }
 
-func (h *ActivityHandler) ListForObject(objectType string) http.HandlerFunc {
+func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		objectID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
@@ -38,8 +37,8 @@ func (h *ActivityHandler) ListForObject(objectType string) http.HandlerFunc {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		ref, err := h.objects.Parse(objectType, objectID)
-		if err != nil {
+		ref := objectref.New(objectType, objectID)
+		if !ref.Valid() {
 			http.NotFound(w, r)
 			return
 		}
@@ -48,7 +47,7 @@ func (h *ActivityHandler) ListForObject(objectType string) http.HandlerFunc {
 			return
 		}
 
-		entries, err := h.svc.ListForObject(r.Context(), objectType, objectID, 25)
+		entries, err := h.svc.ListForObject(r.Context(), ref, 25)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -60,19 +59,15 @@ func (h *ActivityHandler) ListForObject(objectType string) http.HandlerFunc {
 		}
 
 		render(w, r, templates.ActivityWidget(templates.ActivityWidgetData{
-			ObjectType: objectType,
-			ObjectID:   objectID,
-			Entries:    rows,
+			DOMID:   fmt.Sprintf("activity-%s-%d", ref.Type, ref.ID),
+			Entries: rows,
 		}))
 	}
 }
 
-func (h *ActivityHandler) ListByType(objectType string) http.HandlerFunc {
+func (h *ActivityHandler) ListByType(objectType objectref.Type) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		page := 1
-		if p := r.URL.Query().Get("page"); p != "" {
-			page, _ = strconv.Atoi(p)
-		}
+		page := activityPage(r)
 		perPage := 10
 		offset := (page - 1) * perPage
 
@@ -105,14 +100,11 @@ func (h *ActivityHandler) ListByType(objectType string) http.HandlerFunc {
 }
 
 func (h *ActivityHandler) ListForAssetSettings(w http.ResponseWriter, r *http.Request) {
-	page := 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		page, _ = strconv.Atoi(p)
-	}
+	page := activityPage(r)
 	perPage := 10
 	offset := (page - 1) * perPage
 
-	entries, total, err := h.svc.ListByTypes(r.Context(), []string{"asset_type", "asset_status"}, offset, perPage)
+	entries, total, err := h.svc.ListByTypes(r.Context(), []objectref.Type{objectref.TypeAssetType, objectref.TypeAssetStatus}, offset, perPage)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -140,14 +132,11 @@ func (h *ActivityHandler) ListForAssetSettings(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ActivityHandler) ListSchedule(w http.ResponseWriter, r *http.Request) {
-	page := 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		page, _ = strconv.Atoi(p)
-	}
+	page := activityPage(r)
 	perPage := 10
 	offset := (page - 1) * perPage
 
-	entries, total, err := h.svc.ListByTypeAndActions(r.Context(), "job", []string{"scheduled", "rescheduled", "dispatched"}, offset, perPage)
+	entries, total, err := h.svc.ListByTypeAndActions(r.Context(), objectref.TypeJob, []string{"scheduled", "rescheduled", "dispatched"}, offset, perPage)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -169,10 +158,7 @@ func (h *ActivityHandler) ListSchedule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ActivityHandler) ListAll(w http.ResponseWriter, r *http.Request) {
-	page := 1
-	if p := r.URL.Query().Get("page"); p != "" {
-		page, _ = strconv.Atoi(p)
-	}
+	page := activityPage(r)
 	perPage := 25
 	offset := (page - 1) * perPage
 
@@ -200,7 +186,7 @@ func (h *ActivityHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	}).Render(r.Context(), w)
 }
 
-func (h *ActivityHandler) entriesToRows(ctx context.Context, entries []*ent.ActivityLog) []templates.ActivityEntry {
+func (h *ActivityHandler) entriesToRows(ctx context.Context, entries []services.ActivityEntry) []templates.ActivityEntry {
 	rows := make([]templates.ActivityEntry, 0, len(entries))
 	for _, e := range entries {
 		var meta templates.ActivityMetadata
@@ -214,24 +200,31 @@ func (h *ActivityHandler) entriesToRows(ctx context.Context, entries []*ent.Acti
 		}
 
 		entityURL := ""
-		ref, err := h.objects.Parse(e.ObjectType, e.ObjectID)
-		if err == nil {
-			if url, ok := h.objects.URL(ref); ok {
+		if e.Target.Valid() {
+			if url, ok := h.objects.URL(e.Target); ok {
 				entityURL = url
 			}
 		}
 
 		entityName := meta.EntityName
+		if entityName == "" && e.Target.Valid() {
+			name, err := h.objects.DisplayName(ctx, e.Target)
+			if err == nil {
+				entityName = name
+			}
+		}
 		if entityName == "" {
-			entityName = h.svc.LookupEntityName(ctx, e.ObjectType, e.ObjectID)
+			entityName = e.HistoricalTarget
+		}
+		if entityName == "" && e.Target.Valid() {
+			entityName = fmt.Sprintf("%s #%d", e.Target.Type, e.Target.ID)
 		}
 
 		rows = append(rows, templates.ActivityEntry{
 			ID:           e.ID,
 			ActorName:    actorName,
 			Action:       e.Action,
-			ObjectType:   e.ObjectType,
-			ObjectID:     e.ObjectID,
+			TargetType:   string(e.Target.Type),
 			EntityName:   entityName,
 			EntityURL:    entityURL,
 			Icon:         activityIcon(e.Action),
@@ -241,6 +234,14 @@ func (h *ActivityHandler) entriesToRows(ctx context.Context, entries []*ent.Acti
 		})
 	}
 	return rows
+}
+
+func activityPage(r *http.Request) int {
+	page, err := strconv.Atoi(r.URL.Query().Get("page"))
+	if err != nil || page < 1 {
+		return 1
+	}
+	return page
 }
 
 func activityIcon(action string) string {
@@ -299,6 +300,9 @@ func activityIcon(action string) string {
 }
 
 func (h *ActivityHandler) lookupActorName(ctx context.Context, actorID int64) string {
+	if h.userSvc == nil {
+		return fmt.Sprintf("User #%d", actorID)
+	}
 	u, err := h.userSvc.GetByID(ctx, actorID)
 	if err != nil || u == nil {
 		return fmt.Sprintf("User #%d", actorID)

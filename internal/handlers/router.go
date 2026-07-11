@@ -65,7 +65,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	dashboardHandler := NewDashboardHandler(services.NewDashboardService(entClient), timeEntrySvc)
 	// File service
 	fileSvc := services.NewFileService(entClient, objects, cfg.UploadDir, cfg.MaxUploadSize)
-	fileHandler := NewFileHandler(fileSvc, activitySvc, policySvc)
+	fileHandler := NewFileHandler(fileSvc, activitySvc, policySvc, objects)
 	activityHandler := NewActivityHandler(activitySvc, userService, policySvc, objects)
 
 	customerHandler := NewCustomerHandler(customerService, contactSvc, locationSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc, jobService, estimateService, invoiceService, statusService)
@@ -141,10 +141,10 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			handleLogout(w, r, sessions, activitySvc)
 		})
 		r.With(middleware.DispatcherOrAdmin).Get("/projects", projectHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/projects/activity", activityHandler.ListByType("project"))
+		r.With(middleware.DispatcherOrAdmin).Get("/projects/activity", activityHandler.ListByType(objectref.TypeProject))
 		r.Get("/projects/{id}", projectHandler.Show)
 		r.With(middleware.DispatcherOrAdmin).Get("/customers", customerHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/customers/activity", activityHandler.ListByType("customer"))
+		r.With(middleware.DispatcherOrAdmin).Get("/customers/activity", activityHandler.ListByType(objectref.TypeCustomer))
 		r.Get("/customers/{id}", customerHandler.Show)
 		r.Get("/customers/{id}/contacts", customerHandler.ListContacts)
 		r.Get("/customers/{id}/contacts/options", customerHandler.Contacts)
@@ -154,7 +154,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/assets/options", jobHandler.AssetOptions)
 		r.Route("/items", func(r chi.Router) {
 			r.With(middleware.DispatcherOrAdmin).Get("/", itemHandler.List)
-			r.With(middleware.DispatcherOrAdmin).Get("/activity", activityHandler.ListByType("item"))
+			r.With(middleware.DispatcherOrAdmin).Get("/activity", activityHandler.ListByType(objectref.TypeItem))
 			r.With(middleware.DispatcherOrAdmin).Post("/inline", itemHandler.CreateInline)
 			r.Post("/", itemHandler.Create)
 			r.With(middleware.DispatcherOrAdmin).Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
@@ -171,25 +171,25 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/time-entries", timeEntryHandler.List)
 		r.Post("/time-entries/clock-in", timeEntryHandler.ClockIn)
 		r.Post("/time-entries/clock-out", timeEntryHandler.ClockOut)
-		r.With(middleware.DispatcherOrAdmin).Get("/time-entries/activity", activityHandler.ListByType("time_entry"))
+		r.With(middleware.DispatcherOrAdmin).Get("/time-entries/activity", activityHandler.ListByType(objectref.TypeTimeEntry))
 		r.Get("/time-entries/{id}/edit", timeEntryHandler.Update)
 		r.Post("/time-entries/{id}", timeEntryHandler.Update)
 		r.Get("/time-entries/{id}", timeEntryHandler.Show)
 		r.Post("/time-entries/{id}/delete", timeEntryHandler.Delete)
 		r.Get("/jobs", jobHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/jobs/activity", activityHandler.ListByType("job"))
+		r.With(middleware.DispatcherOrAdmin).Get("/jobs/activity", activityHandler.ListByType(objectref.TypeJob))
 		r.Post("/jobs/{id}/status", jobHandler.UpdateStatus)
 		r.Post("/jobs/{id}/clock-in", jobHandler.ClockIn)
 		r.Post("/jobs/{id}/clock-out", jobHandler.ClockOut)
 		r.Get("/jobs/{id}", jobHandler.Show)
 		r.With(middleware.DispatcherOrAdmin).Get("/assets", assetHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/assets/activity", activityHandler.ListByType("asset"))
+		r.With(middleware.DispatcherOrAdmin).Get("/assets/activity", activityHandler.ListByType(objectref.TypeAsset))
 		r.Get("/assets/{id}", assetHandler.Show)
 		r.With(middleware.DispatcherOrAdmin).Get("/estimates", estimateHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/estimates/activity", activityHandler.ListByType("estimate"))
+		r.With(middleware.DispatcherOrAdmin).Get("/estimates/activity", activityHandler.ListByType(objectref.TypeEstimate))
 		r.With(middleware.DispatcherOrAdmin).Get("/estimates/{id}", estimateHandler.Show)
 		r.With(middleware.DispatcherOrAdmin).Get("/invoices", invoiceHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/invoices/activity", activityHandler.ListByType("invoice"))
+		r.With(middleware.DispatcherOrAdmin).Get("/invoices/activity", activityHandler.ListByType(objectref.TypeInvoice))
 		r.With(middleware.DispatcherOrAdmin).Get("/invoices/{id}", invoiceHandler.Show)
 
 		// Core operational mutations
@@ -288,31 +288,37 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		})
 
 		// Entity comments (list, create, delete)
-		for _, e := range []struct{ prefix, objType string }{
-			{"/customers", "customer"},
-			{"/jobs", "job"},
-			{"/projects", "project"},
-			{"/estimates", "estimate"},
-			{"/invoices", "invoice"},
-			{"/assets", "asset"},
+		for _, e := range []struct {
+			prefix  string
+			objType objectref.Type
+		}{
+			{"/customers", objectref.TypeCustomer},
+			{"/jobs", objectref.TypeJob},
+			{"/projects", objectref.TypeProject},
+			{"/estimates", objectref.TypeEstimate},
+			{"/invoices", objectref.TypeInvoice},
+			{"/assets", objectref.TypeAsset},
 		} {
 			r.Get(e.prefix+"/{id}/comments", commentHandler.List(e.objType))
-			r.With(activeObjectGuard(objectref.Type(e.objType))).Post(e.prefix+"/{id}/comments", commentHandler.Create(e.objType))
-			r.With(activeObjectGuard(objectref.Type(e.objType))).Post(e.prefix+"/{id}/comments/{cid}/delete", commentHandler.Delete(e.objType))
+			r.With(activeObjectGuard(e.objType)).Post(e.prefix+"/{id}/comments", commentHandler.Create(e.objType))
+			r.With(activeObjectGuard(e.objType)).Post(e.prefix+"/{id}/comments/{cid}/delete", commentHandler.Delete(e.objType))
 		}
 
 		// Activity
 		r.With(middleware.DispatcherOrAdmin).Get("/activity", activityHandler.ListAll)
-		for _, e := range []struct{ prefix, objType string }{
-			{"/customers", "customer"},
-			{"/jobs", "job"},
-			{"/projects", "project"},
-			{"/estimates", "estimate"},
-			{"/invoices", "invoice"},
-			{"/assets", "asset"},
-			{"/items", "item"},
-			{"/time-entries", "time_entry"},
-			{"/users", "user"},
+		for _, e := range []struct {
+			prefix  string
+			objType objectref.Type
+		}{
+			{"/customers", objectref.TypeCustomer},
+			{"/jobs", objectref.TypeJob},
+			{"/projects", objectref.TypeProject},
+			{"/estimates", objectref.TypeEstimate},
+			{"/invoices", objectref.TypeInvoice},
+			{"/assets", objectref.TypeAsset},
+			{"/items", objectref.TypeItem},
+			{"/time-entries", objectref.TypeTimeEntry},
+			{"/users", objectref.TypeUser},
 		} {
 			r.Get(e.prefix+"/{id}/activity", activityHandler.ListForObject(e.objType))
 		}
@@ -335,12 +341,12 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/assets/{id}/restore", assetHandler.Restore)
 			r.Post("/items/{id}/restore", itemHandler.Restore)
 			// Admin activity feeds
-			r.Get("/settings/activity", activityHandler.ListByType("company_settings"))
-			r.Get("/settings/custom-fields/activity", activityHandler.ListByType("custom_field"))
+			r.Get("/settings/activity", activityHandler.ListByType(objectref.TypeCompanySettings))
+			r.Get("/settings/custom-fields/activity", activityHandler.ListByType(objectref.TypeCustomField))
 			r.Get("/settings/assets/activity", activityHandler.ListForAssetSettings)
-			r.Get("/settings/job-statuses/activity", activityHandler.ListByType("job_status"))
-			r.Get("/tags/activity", activityHandler.ListByType("tag"))
-			r.Get("/users/activity", activityHandler.ListByType("user"))
+			r.Get("/settings/job-statuses/activity", activityHandler.ListByType(objectref.TypeJobStatus))
+			r.Get("/tags/activity", activityHandler.ListByType(objectref.TypeTag))
+			r.Get("/users/activity", activityHandler.ListByType(objectref.TypeUser))
 			r.Get("/tags", tagHandler.List)
 			r.Get("/tags/new", tagHandler.Create)
 			r.Post("/tags", tagHandler.Create)

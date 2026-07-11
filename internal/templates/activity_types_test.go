@@ -1,6 +1,11 @@
 package templates
 
-import "testing"
+import (
+	"bytes"
+	"context"
+	"strings"
+	"testing"
+)
 
 func TestScheduleActivityVerbAndClass(t *testing.T) {
 	tests := []struct {
@@ -38,5 +43,28 @@ func TestScheduleActivityDetail(t *testing.T) {
 	want := "Jul 4, 2026 9:00 AM-Jul 4, 2026 10:00 AM -> Jul 5, 2026 11:00 AM-Jul 5, 2026 12:00 PM; Chris -> Morgan; source: dispatch"
 	if got := ScheduleActivityDetail(meta); got != want {
 		t.Fatalf("ScheduleActivityDetail() = %q, want %q", got, want)
+	}
+}
+
+func TestActivityWidgetUsesPreparedIdentityAndPlainTargetName(t *testing.T) {
+	var output bytes.Buffer
+	component := ActivityWidget(ActivityWidgetData{
+		DOMID: "activity-customer-42",
+		Entries: []ActivityEntry{{
+			ActorName:  "Alex",
+			Action:     "updated",
+			EntityName: "Historical Customer",
+		}},
+	})
+	if err := component.Render(context.Background(), &output); err != nil {
+		t.Fatal(err)
+	}
+
+	html := output.String()
+	if !strings.Contains(html, `id="activity-customer-42"`) {
+		t.Fatalf("widget did not render prepared DOM ID: %s", html)
+	}
+	if !strings.Contains(html, "Historical Customer") || strings.Contains(html, `href=""`) {
+		t.Fatalf("widget did not render an unlinked target name: %s", html)
 	}
 }

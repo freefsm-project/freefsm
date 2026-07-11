@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -75,7 +76,7 @@ func (h *TagHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_created", "tag", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_created", objectref.New(objectref.TypeTag, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -133,7 +134,7 @@ func (h *TagHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_updated", "tag", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_updated", objectref.New(objectref.TypeTag, id), map[string]interface{}{
 			"entity_name": name,
 			"actor_name":  u.Name,
 		})
@@ -157,16 +158,17 @@ func (h *TagHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "tag not found", 404)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_deleted", "tag", id, map[string]interface{}{
-			"entity_name": tag.Name,
-			"actor_name":  u.Name,
-		})
-	}
+	entityName := tag.Name
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "tag_deleted", objectref.New(objectref.TypeTag, id), map[string]interface{}{
+			"entity_name": entityName,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/tags?flash=Tag+deleted", http.StatusSeeOther)
 }

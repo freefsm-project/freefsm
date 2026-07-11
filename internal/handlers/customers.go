@@ -167,7 +167,7 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "customer", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeCustomer, result.ID), map[string]interface{}{
 			"entity_name": result.DisplayName,
 			"actor_name":  u.Name,
 		})
@@ -230,7 +230,7 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", "customer", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"entity_name": result.DisplayName,
 			"actor_name":  u.Name,
 		})
@@ -256,7 +256,7 @@ func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", "customer", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
@@ -281,7 +281,7 @@ func (h *CustomerHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", "customer", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"entity_name": c.DisplayName,
 			"actor_name":  u.Name,
 		})
@@ -476,7 +476,7 @@ func (h *CustomerHandler) CreateLocation(w http.ResponseWriter, r *http.Request)
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "location_created", "customer", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "location_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": l.Title,
 		})
@@ -514,7 +514,7 @@ func (h *CustomerHandler) CreateLocationInline(w http.ResponseWriter, r *http.Re
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "location_created", "customer", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "location_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": l.Title,
 		})
@@ -564,7 +564,7 @@ func (h *CustomerHandler) UpdateLocation(w http.ResponseWriter, r *http.Request)
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "location_updated", "customer", custID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "location_updated", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": l.Title,
 		})
@@ -589,7 +589,7 @@ func (h *CustomerHandler) DeleteLocation(w http.ResponseWriter, r *http.Request)
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "location_deleted", "customer", custID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "location_deleted", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": l.Title,
 		})
@@ -620,7 +620,7 @@ func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) 
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "contact_created", "customer", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "contact_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": r.FormValue("first_name") + " " + r.FormValue("last_name"),
 		})
@@ -656,7 +656,7 @@ func (h *CustomerHandler) CreateContactInline(w http.ResponseWriter, r *http.Req
 	label := strings.TrimSpace(c.FirstName + " " + c.LastName)
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "contact_created", "customer", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "contact_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": label,
 		})
@@ -704,7 +704,7 @@ func (h *CustomerHandler) UpdateContact(w http.ResponseWriter, r *http.Request) 
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "contact_updated", "customer", custID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "contact_updated", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": c.FirstName + " " + c.LastName,
 		})
@@ -739,7 +739,7 @@ func (h *CustomerHandler) DeleteContact(w http.ResponseWriter, r *http.Request) 
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "contact_deleted", "customer", custID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "contact_deleted", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": contact.FirstName + " " + contact.LastName,
 		})
@@ -762,7 +762,7 @@ func (h *CustomerHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "customer", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})
@@ -786,7 +786,7 @@ func (h *CustomerHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "customer", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})

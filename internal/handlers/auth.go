@@ -6,6 +6,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -88,7 +89,7 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 		MaxAge: 604800,
 	})
 
-	h.activitySvc.Record(r.Context(), id, "logged_in", "user", id, map[string]interface{}{
+	h.activitySvc.Record(r.Context(), id, "logged_in", objectref.New(objectref.TypeUser, id), map[string]interface{}{
 		"entity_name": name,
 		"actor_name":  name,
 	})
@@ -199,7 +200,7 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u, err := h.userSvc.GetByID(r.Context(), uid); err == nil {
-		h.activitySvc.Record(r.Context(), uid, "invite_accepted", "user", uid, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), uid, "invite_accepted", objectref.New(objectref.TypeUser, uid), map[string]interface{}{
 			"entity_name": u.Name,
 			"actor_name":  u.Name,
 		})

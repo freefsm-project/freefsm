@@ -10,6 +10,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -64,7 +65,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	a, _ := middleware.UserFromContext(r.Context())
 	if a != nil && h.activitySvc != nil {
-		h.activitySvc.Record(r.Context(), a.ID, "user_created", "user", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), a.ID, "user_created", objectref.New(objectref.TypeUser, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  a.Name,
 		})
@@ -81,7 +82,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 			slog.Error("send welcome email", "error", err, "user", result.Email)
 		}
 		if a != nil && h.activitySvc != nil {
-			h.activitySvc.Record(r.Context(), a.ID, "welcome_invite_sent", "user", result.ID, map[string]interface{}{
+			h.activitySvc.Record(r.Context(), a.ID, "welcome_invite_sent", objectref.New(objectref.TypeUser, result.ID), map[string]interface{}{
 				"entity_name": result.Name,
 				"actor_name":  a.Name,
 			})
@@ -128,7 +129,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	a, _ := middleware.UserFromContext(r.Context())
 	if a != nil && h.activitySvc != nil {
-		h.activitySvc.Record(r.Context(), a.ID, "user_updated", "user", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), a.ID, "user_updated", objectref.New(objectref.TypeUser, id), map[string]interface{}{
 			"entity_name": r.FormValue("name"),
 			"actor_name":  a.Name,
 		})
@@ -153,7 +154,7 @@ func (h *UserHandler) Disable(w http.ResponseWriter, r *http.Request) {
 		if newState {
 			action = "user_enabled"
 		}
-		h.activitySvc.Record(r.Context(), a.ID, action, "user", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), a.ID, action, objectref.New(objectref.TypeUser, id), map[string]interface{}{
 			"entity_name": user.Name,
 			"actor_name":  a.Name,
 		})
@@ -180,7 +181,7 @@ func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		a, _ := middleware.UserFromContext(r.Context())
 		if a != nil && h.activitySvc != nil {
-			h.activitySvc.Record(r.Context(), a.ID, "password_reset", "user", id, map[string]interface{}{
+			h.activitySvc.Record(r.Context(), a.ID, "password_reset", objectref.New(objectref.TypeUser, id), map[string]interface{}{
 				"entity_name": user.Name,
 				"actor_name":  a.Name,
 			})
@@ -230,7 +231,7 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 
 	a, _ := middleware.UserFromContext(r.Context())
 	if a != nil && h.activitySvc != nil {
-		h.activitySvc.Record(r.Context(), a.ID, "welcome_resent", "user", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), a.ID, "welcome_resent", objectref.New(objectref.TypeUser, id), map[string]interface{}{
 			"entity_name": user.Name,
 			"actor_name":  a.Name,
 		})

@@ -150,7 +150,7 @@ func (h *EstimateHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "estimate", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})
@@ -177,7 +177,7 @@ func (h *EstimateHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "estimate", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})
@@ -231,7 +231,7 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "estimate", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeEstimate, result.ID), map[string]interface{}{
 			"entity_name": result.Title,
 			"actor_name":  u.Name,
 		})
@@ -294,7 +294,7 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", "estimate", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
 			"entity_name": result.Title,
 			"actor_name":  u.Name,
 		})
@@ -315,7 +315,7 @@ func (h *EstimateHandler) ConvertToInvoice(w http.ResponseWriter, r *http.Reques
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "converted", "estimate", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "converted", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
 			"entity_name": inv.Title,
 			"actor_name":  u.Name,
 			"invoice_id":  inv.ID,
@@ -343,7 +343,7 @@ func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) 
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "estimate", est.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeEstimate, est.ID), map[string]interface{}{
 			"entity_name": est.Title,
 			"actor_name":  u.Name,
 			"job_id":      id,
@@ -427,7 +427,7 @@ func (h *EstimateHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		internalServerError(w, r, "save estimate pdf", err)
 		return
 	}
-	h.activitySvc.Record(r.Context(), u.ID, "pdf_saved", "estimate", id, map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "file_name": filename})
+	h.activitySvc.Record(r.Context(), u.ID, "pdf_saved", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "file_name": filename})
 	http.Redirect(w, r, fmt.Sprintf("/estimates/%d/pdf/preview?flash=PDF+saved", id), http.StatusSeeOther)
 }
 
@@ -496,7 +496,7 @@ func (h *EstimateHandler) Email(w http.ResponseWriter, r *http.Request) {
 		templates.DocumentEmailCompose(data).Render(r.Context(), w)
 		return
 	}
-	h.activitySvc.Record(r.Context(), u.ID, "email_sent", "estimate", id, map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "to": data.To, "cc": data.CC, "bcc_count": len(recipients.BCC), "file_name": filename})
+	h.activitySvc.Record(r.Context(), u.ID, "email_sent", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "to": data.To, "cc": data.CC, "bcc_count": len(recipients.BCC), "file_name": filename})
 	http.Redirect(w, r, fmt.Sprintf("/estimates/%d?flash=Estimate+emailed", id), http.StatusSeeOther)
 }
 
@@ -551,7 +551,7 @@ func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", "estimate", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
@@ -576,7 +576,7 @@ func (h *EstimateHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", "estimate", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
 			"entity_name": e.Title,
 			"actor_name":  u.Name,
 		})

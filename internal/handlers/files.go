@@ -17,10 +17,11 @@ type FileHandler struct {
 	svc         *services.FileService
 	activitySvc *services.ActivityService
 	policySvc   *services.PolicyService
+	objects     objectref.Directory
 }
 
-func NewFileHandler(svc *services.FileService, activitySvc *services.ActivityService, policySvc *services.PolicyService) *FileHandler {
-	return &FileHandler{svc: svc, activitySvc: activitySvc, policySvc: policySvc}
+func NewFileHandler(svc *services.FileService, activitySvc *services.ActivityService, policySvc *services.PolicyService, objects objectref.Directory) *FileHandler {
+	return &FileHandler{svc: svc, activitySvc: activitySvc, policySvc: policySvc, objects: objects}
 }
 
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
@@ -100,8 +101,8 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entityName := h.activitySvc.LookupEntityName(r.Context(), objectType, objectID)
-	h.activitySvc.Record(r.Context(), u.ID, "file_uploaded", objectType, objectID, map[string]interface{}{
+	entityName := objectDisplayName(r.Context(), h.objects, ref)
+	h.activitySvc.Record(r.Context(), u.ID, "file_uploaded", ref, map[string]interface{}{
 		"entity_name": entityName,
 		"actor_name":  u.Name,
 		"file_name":   fh.Filename,
@@ -189,8 +190,8 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entityName := h.activitySvc.LookupEntityName(r.Context(), f.ObjectType, f.ObjectID)
-	h.activitySvc.Record(r.Context(), u.ID, "file_deleted", f.ObjectType, f.ObjectID, map[string]interface{}{
+	entityName := objectDisplayName(r.Context(), h.objects, ref)
+	h.activitySvc.Record(r.Context(), u.ID, "file_deleted", ref, map[string]interface{}{
 		"entity_name": entityName,
 		"actor_name":  u.Name,
 		"file_name":   f.OriginalName,
@@ -235,8 +236,8 @@ func (h *FileHandler) Rename(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	entityName := h.activitySvc.LookupEntityName(r.Context(), f.ObjectType, f.ObjectID)
-	h.activitySvc.Record(r.Context(), u.ID, "file_renamed", f.ObjectType, f.ObjectID, map[string]interface{}{
+	entityName := objectDisplayName(r.Context(), h.objects, ref)
+	h.activitySvc.Record(r.Context(), u.ID, "file_renamed", ref, map[string]interface{}{
 		"entity_name": entityName,
 		"actor_name":  u.Name,
 		"file_name":   name,

@@ -237,7 +237,7 @@ func (h *JobHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newStatus := statusName(statuses, result.StatusID)
-	h.activitySvc.Record(r.Context(), u.ID, "status_changed", "job", id, map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.ID, "status_changed", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 		"entity_name": result.JobType,
 		"actor_name":  u.Name,
 		"old_status":  oldStatus,
@@ -287,13 +287,13 @@ func (h *JobHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 	}
 	clockInStr := displayDateTime(r.Context(), result.ClockIn)
 	jobName := jobDisplayName(j)
-	h.activitySvc.Record(r.Context(), u.ID, "clocked_in", "time_entry", result.ID, map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.ID, "clocked_in", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
 		"entity_name":   fmt.Sprintf("%s — %s — %s", u.Name, jobName, clockInStr),
 		"actor_name":    u.Name,
 		"time_entry_id": result.ID,
 		"clock_in":      clockInStr,
 	})
-	h.activitySvc.Record(r.Context(), u.ID, "clocked_in", "job", id, map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.ID, "clocked_in", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 		"entity_name":   fmt.Sprintf("%s — %s", jobName, clockInStr),
 		"actor_name":    u.Name,
 		"time_entry_id": result.ID,
@@ -347,14 +347,14 @@ func (h *JobHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
 	clockInStr := displayDateTime(r.Context(), result.ClockIn)
 	jobName := jobDisplayName(j)
-	h.activitySvc.Record(r.Context(), u.ID, "clocked_out", "time_entry", result.ID, map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.ID, "clocked_out", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
 		"entity_name":   fmt.Sprintf("%s — %s — %s (%s)", u.Name, jobName, clockInStr, duration),
 		"actor_name":    u.Name,
 		"time_entry_id": result.ID,
 		"clock_in":      clockInStr,
 		"duration":      duration,
 	})
-	h.activitySvc.Record(r.Context(), u.ID, "clocked_out", "job", id, map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.ID, "clocked_out", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 		"entity_name":   fmt.Sprintf("%s — %s (%s)", jobName, clockInStr, duration),
 		"actor_name":    u.Name,
 		"time_entry_id": result.ID,
@@ -418,7 +418,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "job", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeJob, result.ID), map[string]interface{}{
 			"entity_name": result.JobType,
 			"actor_name":  u.Name,
 		})
@@ -450,7 +450,7 @@ func (h *JobHandler) CreateNextOccurrence(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created_next_occurrence", "job", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created_next_occurrence", objectref.New(objectref.TypeJob, result.ID), map[string]interface{}{
 			"entity_name":   result.JobType,
 			"actor_name":    u.Name,
 			"source_job_id": id,
@@ -558,7 +558,7 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", "job", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"entity_name": result.JobType,
 			"actor_name":  u.Name,
 		})
@@ -584,7 +584,7 @@ func (h *JobHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", "job", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
@@ -609,7 +609,7 @@ func (h *JobHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", "job", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"entity_name": j.JobType,
 			"actor_name":  u.Name,
 		})
@@ -660,7 +660,7 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 		if !subtasks[idx].Completed {
 			action = "subtask_uncompleted"
 		}
-		h.activitySvc.Record(r.Context(), u.ID, action, "job", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, action, objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": subtasks[idx].Title,
 		})
@@ -971,7 +971,7 @@ func (h *JobHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil && tag != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "job", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})
@@ -989,7 +989,7 @@ func (h *JobHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil && tag != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "job", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})

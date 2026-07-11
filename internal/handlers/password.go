@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 )
@@ -77,7 +78,7 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 	}
 
 	if user != nil {
-		h.activitySvc.Record(r.Context(), user.ID, "password_changed", "user", user.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), user.ID, "password_changed", objectref.New(objectref.TypeUser, user.ID), map[string]interface{}{
 			"entity_name": user.Name,
 			"actor_name":  user.Name,
 		})

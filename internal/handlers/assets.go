@@ -234,7 +234,7 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "asset", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeAsset, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -300,7 +300,7 @@ func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "asset", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeAsset, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -371,7 +371,7 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", "asset", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeAsset, id), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -397,7 +397,7 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", "asset", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeAsset, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
@@ -422,7 +422,7 @@ func (h *AssetHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", "asset", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeAsset, id), map[string]interface{}{
 			"entity_name": a.Name,
 			"actor_name":  u.Name,
 		})
@@ -440,7 +440,7 @@ func (h *AssetHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil && tag != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "asset", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeAsset, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})
@@ -458,7 +458,7 @@ func (h *AssetHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil && tag != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "asset", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeAsset, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})

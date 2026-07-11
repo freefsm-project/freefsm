@@ -23,7 +23,7 @@ func NewCommentHandler(svc *services.CommentService, userSvc *services.UserServi
 	return &CommentHandler{svc: svc, userSvc: userSvc, activitySvc: activitySvc, policySvc: policySvc, objects: objects}
 }
 
-func (h *CommentHandler) List(objectType string) http.HandlerFunc {
+func (h *CommentHandler) List(objectType objectref.Type) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ref, err := h.refFromRequest(objectType, r)
 		if err != nil {
@@ -83,7 +83,7 @@ func (h *CommentHandler) List(objectType string) http.HandlerFunc {
 	}
 }
 
-func (h *CommentHandler) Create(objectType string) http.HandlerFunc {
+func (h *CommentHandler) Create(objectType objectref.Type) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ref, err := h.refFromRequest(objectType, r)
 		if err != nil {
@@ -117,12 +117,12 @@ func (h *CommentHandler) Create(objectType string) http.HandlerFunc {
 			return
 		}
 
-		entityName := h.activitySvc.LookupEntityName(r.Context(), ref.ObjectType(), ref.ObjectID())
+		entityName := objectDisplayName(r.Context(), h.objects, ref)
 		preview := content
 		if len(preview) > 100 {
 			preview = preview[:100]
 		}
-		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_added", ref.ObjectType(), ref.ObjectID(), map[string]interface{}{
+		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_added", ref, map[string]interface{}{
 			"entity_name":     entityName,
 			"comment_preview": preview,
 		})
@@ -131,7 +131,7 @@ func (h *CommentHandler) Create(objectType string) http.HandlerFunc {
 	}
 }
 
-func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
+func (h *CommentHandler) Delete(objectType objectref.Type) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		commentID, err := strconv.ParseInt(chi.URLParam(r, "cid"), 10, 64)
 		if err != nil {
@@ -144,7 +144,7 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 			http.Error(w, err.Error(), 500)
 			return
 		}
-		ref, err := h.objects.Parse(objectType, comment.ObjectID)
+		ref, err := h.objects.Parse(string(objectType), comment.ObjectID)
 		if err != nil || comment.ObjectType != ref.ObjectType() {
 			http.NotFound(w, r)
 			return
@@ -159,7 +159,7 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 			return
 		}
 
-		entityName := h.activitySvc.LookupEntityName(r.Context(), ref.ObjectType(), ref.ObjectID())
+		entityName := objectDisplayName(r.Context(), h.objects, ref)
 		preview := comment.Content
 		if len(preview) > 100 {
 			preview = preview[:100]
@@ -170,7 +170,7 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 			return
 		}
 
-		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_deleted", ref.ObjectType(), ref.ObjectID(), map[string]interface{}{
+		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_deleted", ref, map[string]interface{}{
 			"entity_name":     entityName,
 			"comment_preview": preview,
 		})
@@ -179,10 +179,10 @@ func (h *CommentHandler) Delete(objectType string) http.HandlerFunc {
 	}
 }
 
-func (h *CommentHandler) refFromRequest(objectType string, r *http.Request) (objectref.Ref, error) {
+func (h *CommentHandler) refFromRequest(objectType objectref.Type, r *http.Request) (objectref.Ref, error) {
 	objectID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		return objectref.Ref{}, err
 	}
-	return h.objects.Parse(objectType, objectID)
+	return h.objects.Parse(string(objectType), objectID)
 }

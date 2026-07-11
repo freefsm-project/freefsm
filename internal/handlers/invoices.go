@@ -161,7 +161,7 @@ func (h *InvoiceHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", "invoice", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})
@@ -188,7 +188,7 @@ func (h *InvoiceHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", "invoice", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})
@@ -250,7 +250,7 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "invoice", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeInvoice, result.ID), map[string]interface{}{
 			"entity_name": result.Title,
 			"actor_name":  u.Name,
 		})
@@ -328,7 +328,7 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", "invoice", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"entity_name": result.Title,
 			"actor_name":  u.Name,
 		})
@@ -354,7 +354,7 @@ func (h *InvoiceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", "invoice", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"entity_name": title,
 			"actor_name":  u.Name,
 		})
@@ -379,7 +379,7 @@ func (h *InvoiceHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", "invoice", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"entity_name": i.Title,
 			"actor_name":  u.Name,
 		})
@@ -420,7 +420,7 @@ func (h *InvoiceHandler) Finalize(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "finalized", "invoice", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "finalized", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"entity_name": result.Title,
 			"actor_name":  u.Name,
 			"old_status":  statusName(h.statusesForSelect(r.Context()), i.StatusID),
@@ -703,7 +703,7 @@ func (h *InvoiceHandler) CreateFromEstimate(w http.ResponseWriter, r *http.Reque
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", "invoice", inv.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeInvoice, inv.ID), map[string]interface{}{
 			"entity_name": inv.Title,
 			"actor_name":  u.Name,
 		})
@@ -786,7 +786,7 @@ func (h *InvoiceHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		internalServerError(w, r, "save invoice pdf", err)
 		return
 	}
-	h.activitySvc.Record(r.Context(), u.ID, "pdf_saved", "invoice", id, map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "file_name": filename})
+	h.activitySvc.Record(r.Context(), u.ID, "pdf_saved", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "file_name": filename})
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d/pdf/preview?flash=PDF+saved", id), http.StatusSeeOther)
 }
 
@@ -860,7 +860,7 @@ func (h *InvoiceHandler) Email(w http.ResponseWriter, r *http.Request) {
 		templates.DocumentEmailCompose(data).Render(r.Context(), w)
 		return
 	}
-	h.activitySvc.Record(r.Context(), u.ID, "email_sent", "invoice", id, map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "to": data.To, "cc": data.CC, "bcc_count": len(recipients.BCC), "file_name": filename})
+	h.activitySvc.Record(r.Context(), u.ID, "email_sent", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "to": data.To, "cc": data.CC, "bcc_count": len(recipients.BCC), "file_name": filename})
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+emailed", id), http.StatusSeeOther)
 }
 
@@ -929,7 +929,7 @@ func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "payment_recorded", "invoice", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "payment_recorded", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"amount":     fmt.Sprintf("%.2f", amount),
 		})
@@ -955,7 +955,7 @@ func (h *InvoiceHandler) DeletePayment(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "payment_deleted", "invoice", id, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "payment_deleted", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"amount":     fmt.Sprintf("%.2f", payment.Amount),
 			"method":     payment.Method,

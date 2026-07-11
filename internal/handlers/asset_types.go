@@ -7,6 +7,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -78,7 +79,7 @@ func (h *AssetTypeHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "type_created", "asset_type", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "type_created", objectref.New(objectref.TypeAssetType, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -109,7 +110,7 @@ func (h *AssetTypeHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "type_updated", "asset_type", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "type_updated", objectref.New(objectref.TypeAssetType, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -133,16 +134,17 @@ func (h *AssetTypeHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "type_deleted", "asset_type", existing.ID, map[string]interface{}{
-			"entity_name": existing.Name,
-			"actor_name":  u.Name,
-		})
-	}
+	entityName := existing.Name
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "type_deleted", objectref.New(objectref.TypeAssetType, id), map[string]interface{}{
+			"entity_name": entityName,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/settings/assets?flash=Type+deleted", http.StatusSeeOther)
 }
@@ -197,7 +199,7 @@ func (h *AssetStatusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "status_created", "asset_status", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "status_created", objectref.New(objectref.TypeAssetStatus, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -232,7 +234,7 @@ func (h *AssetStatusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "status_updated", "asset_status", result.ID, map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.ID, "status_updated", objectref.New(objectref.TypeAssetStatus, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -256,16 +258,17 @@ func (h *AssetStatusHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "status_deleted", "asset_status", existing.ID, map[string]interface{}{
-			"entity_name": existing.Name,
-			"actor_name":  u.Name,
-		})
-	}
+	entityName := existing.Name
 	if err := h.svc.Delete(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
+	}
+	u, _ := middleware.UserFromContext(r.Context())
+	if u != nil {
+		h.activitySvc.Record(r.Context(), u.ID, "status_deleted", objectref.New(objectref.TypeAssetStatus, id), map[string]interface{}{
+			"entity_name": entityName,
+			"actor_name":  u.Name,
+		})
 	}
 	http.Redirect(w, r, "/settings/assets?flash=Status+deleted", http.StatusSeeOther)
 }

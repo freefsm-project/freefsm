@@ -9,8 +9,7 @@ type ActivityEntry struct {
 	ID           int64
 	ActorName    string
 	Action       string
-	ObjectType   string
-	ObjectID     int64
+	TargetType   string
 	EntityName   string
 	EntityURL    string
 	Icon         string
@@ -43,9 +42,8 @@ type ActivityMetadata struct {
 }
 
 type ActivityWidgetData struct {
-	ObjectType string
-	ObjectID   int64
-	Entries    []ActivityEntry
+	DOMID   string
+	Entries []ActivityEntry
 }
 
 type ActivityPageData struct {

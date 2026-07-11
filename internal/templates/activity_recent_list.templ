@@ -47,7 +47,11 @@ templ ActivityRecentList(p ActivityPageData) {
 								{ "(" + e.Metadata.Changed + ") of " }
 							}
 							if e.Action != "password_changed" {
-								<a href={ e.EntityURL }>{ e.EntityName }</a>
+								if e.EntityURL != "" {
+									<a href={ e.EntityURL }>{ e.EntityName }</a>
+								} else {
+									{ e.EntityName }
+								}
 							}
 						</span>
 						if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
