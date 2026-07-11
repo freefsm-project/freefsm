@@ -130,7 +130,7 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.AllTags = tagsToRows(allTags)
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "estimate")
 	d.CustomFields = buildCustomFieldDisplay(defs, e.CustomFields)
-	files, _ := h.fileSvc.List(r.Context(), "estimate", id)
+	files, _ := h.fileSvc.List(r.Context(), objectref.New(objectref.TypeEstimate, id))
 	d.FileList = templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "estimate"}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), e.Title)
 	templates.EstimateShow(d).Render(ctx, w)

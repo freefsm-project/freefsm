@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 	"github.com/MartialM1nd/freefsm/internal/services"
 )
 
@@ -103,16 +104,20 @@ func emailAutoCC(cs *ent.CompanySettings) string {
 }
 
 func saveVersionedDocumentPDF(ctx context.Context, fileSvc *services.FileService, objectType string, objectID int64, doc documentPDF, uploadedBy int64) (*ent.File, string, error) {
-	filename := nextVersionedDocumentPDFName(ctx, fileSvc, objectType, objectID, doc.Number)
-	f, err := fileSvc.CreateBytes(ctx, objectType, objectID, filename, "application/pdf", doc.Data, uploadedBy)
+	ref, err := objectref.Parse(objectType, objectID)
+	if err != nil {
+		return nil, "", err
+	}
+	filename := nextVersionedDocumentPDFName(ctx, fileSvc, ref, doc.Number)
+	f, err := fileSvc.CreateBytes(ctx, ref, filename, "application/pdf", doc.Data, uploadedBy)
 	if err != nil {
 		return nil, "", err
 	}
 	return f, filename, nil
 }
 
-func nextVersionedDocumentPDFName(ctx context.Context, fileSvc *services.FileService, objectType string, objectID int64, base string) string {
-	files, err := fileSvc.List(ctx, objectType, objectID)
+func nextVersionedDocumentPDFName(ctx context.Context, fileSvc *services.FileService, ref objectref.Ref, base string) string {
+	files, err := fileSvc.List(ctx, ref)
 	if err != nil {
 		return fmt.Sprintf("%s-v001.pdf", base)
 	}

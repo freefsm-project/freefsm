@@ -110,7 +110,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "job", id, policyUpdate) {
+	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, "job", id, policyRead) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -189,7 +189,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "job")
 	d.CustomFields = buildCustomFieldDisplay(defs, j.CustomFields)
-	files, _ := h.fileSvc.List(r.Context(), "job", j.ID)
+	files, _ := h.fileSvc.List(r.Context(), objectref.New(objectref.TypeJob, j.ID))
 	d.FileList = templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: j.ID, ObjectType: "job"}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), j.JobType)
 	templates.JobShow(d).Render(ctx, w)

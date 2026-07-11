@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/go-chi/chi/v5"
 )
@@ -44,7 +45,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	fh := fileHeader[0]
 	objectType, ok := multipartValue(r, "object_type")
-	if !ok || !h.svc.ValidObjectType(objectType) {
+	if !ok {
 		http.Error(w, "Invalid object type", 400)
 		return
 	}
@@ -56,6 +57,11 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	objectID, err := strconv.ParseInt(objectIDStr, 10, 64)
 	if err != nil || objectID <= 0 {
 		http.Error(w, "Invalid object ID", 400)
+		return
+	}
+	ref, err := objectref.Parse(objectType, objectID)
+	if err != nil || !h.svc.SupportsFiles(ref) {
+		http.Error(w, "Invalid object type", 400)
 		return
 	}
 	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectType, objectID, policyAttachFile) {
@@ -76,7 +82,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.svc.Create(r.Context(), objectType, objectID, fh.Filename, mimeType, fh.Size, f, u.ID)
+	_, err = h.svc.Create(r.Context(), ref, fh.Filename, mimeType, fh.Size, f, u.ID)
 	if err != nil {
 		if strings.HasPrefix(err.Error(), "invalid MIME type:") {
 			http.Error(w, "Invalid file type", 400)
@@ -125,7 +131,8 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.svc.ValidObjectType(f.ObjectType) || !h.svc.TargetExistsAny(r.Context(), f.ObjectType, f.ObjectID) {
+	ref, err := objectref.Parse(f.ObjectType, f.ObjectID)
+	if err != nil || !h.svc.TargetExistsAny(r.Context(), ref) {
 		http.NotFound(w, r)
 		return
 	}
@@ -165,7 +172,8 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", 401)
 		return
 	}
-	if !h.svc.ValidObjectType(f.ObjectType) || !h.svc.TargetExists(r.Context(), f.ObjectType, f.ObjectID) {
+	ref, err := objectref.Parse(f.ObjectType, f.ObjectID)
+	if err != nil || !h.svc.TargetExists(r.Context(), ref) {
 		http.NotFound(w, r)
 		return
 	}
@@ -210,7 +218,8 @@ func (h *FileHandler) Rename(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", 401)
 		return
 	}
-	if !h.svc.ValidObjectType(f.ObjectType) || !h.svc.TargetExists(r.Context(), f.ObjectType, f.ObjectID) {
+	ref, err := objectref.Parse(f.ObjectType, f.ObjectID)
+	if err != nil || !h.svc.TargetExists(r.Context(), ref) {
 		http.NotFound(w, r)
 		return
 	}

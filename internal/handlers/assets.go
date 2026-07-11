@@ -169,7 +169,7 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 	cfDisplay := buildCustomFieldDisplay(defs, asset.CustomFields)
 
 	assetDetail := assetToDetail(r.Context(), asset, assetTypes, assetStatuses)
-	files, _ := h.fileSvc.List(r.Context(), "asset", id)
+	files, _ := h.fileSvc.List(r.Context(), objectref.New(objectref.TypeAsset, id))
 	data := templates.AssetShowPageData{
 		Asset:          *assetDetail,
 		ServiceHistory: jobRows,

@@ -96,7 +96,7 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 		allTags, _ = h.tagSvc.ListAll(r.Context())
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
-	files, _ := h.fileSvc.List(r.Context(), "customer", c.ID)
+	files, _ := h.fileSvc.List(r.Context(), objectref.New(objectref.TypeCustomer, c.ID))
 	locations, _ := h.locationSvc.ListByCustomer(r.Context(), c.ID)
 	contacts, _ := h.contactSvc.ListByCustomer(r.Context(), c.ID)
 	jobs, estimates, invoices := []*ent.Job{}, []*ent.Estimate{}, []*ent.Invoice{}

@@ -53,22 +53,20 @@ func (s *FileService) ValidateMIMEType(mimeType string) bool {
 	return false
 }
 
-func (s *FileService) ValidObjectType(objectType string) bool {
-	return s.objects.Supports(objectref.Type(objectType), objectref.CapFiles)
+func (s *FileService) SupportsFiles(ref objectref.Ref) bool {
+	return ref.Valid() && s.objects.Supports(ref.Type, objectref.CapFiles)
 }
 
-func (s *FileService) TargetExists(ctx context.Context, objectType string, objectID int64) bool {
-	ref, err := s.objects.Parse(objectType, objectID)
-	if err != nil || !s.objects.Supports(ref.Type, objectref.CapFiles) {
+func (s *FileService) TargetExists(ctx context.Context, ref objectref.Ref) bool {
+	if !s.SupportsFiles(ref) {
 		return false
 	}
 	exists, err := s.objects.Exists(ctx, ref, objectref.ExistsActive)
 	return err == nil && exists
 }
 
-func (s *FileService) TargetExistsAny(ctx context.Context, objectType string, objectID int64) bool {
-	ref, err := s.objects.Parse(objectType, objectID)
-	if err != nil || !s.objects.Supports(ref.Type, objectref.CapFiles) {
+func (s *FileService) TargetExistsAny(ctx context.Context, ref objectref.Ref) bool {
+	if !s.SupportsFiles(ref) {
 		return false
 	}
 	exists, err := s.objects.Exists(ctx, ref, objectref.ExistsAny)
@@ -83,9 +81,13 @@ func (s *FileService) UploadDir() string {
 	return s.uploadDir
 }
 
-func (s *FileService) List(ctx context.Context, objectType string, objectID int64) ([]*ent.File, error) {
+func (s *FileService) List(ctx context.Context, ref objectref.Ref) ([]*ent.File, error) {
+	if err := s.validateTarget(ctx, ref, objectref.ExistsAny); err != nil {
+		return nil, err
+	}
+
 	return s.client.File.Query().
-		Where(file.ObjectType(objectType), file.ObjectID(objectID)).
+		Where(file.ObjectType(ref.ObjectType()), file.ObjectID(ref.ObjectID())).
 		Order(ent.Desc(file.FieldCreatedAt)).
 		All(ctx)
 }
@@ -98,17 +100,9 @@ func (s *FileService) GetByID(ctx context.Context, id int64) (*ent.File, error) 
 	return f, nil
 }
 
-func (s *FileService) Create(ctx context.Context, objectType string, objectID int64, originalName string, mimeType string, fileSize int64, reader io.Reader, uploadedBy int64) (*ent.File, error) {
-	ref, err := s.objects.Parse(objectType, objectID)
-	if err != nil || !s.objects.Supports(ref.Type, objectref.CapFiles) {
-		return nil, fmt.Errorf("invalid object type: %s", objectType)
-	}
-	exists, err := s.objects.Exists(ctx, ref, objectref.ExistsActive)
-	if err != nil {
-		return nil, fmt.Errorf("validate attachment target: %w", err)
-	}
-	if !exists {
-		return nil, fmt.Errorf("target %s %d not found", objectType, objectID)
+func (s *FileService) Create(ctx context.Context, ref objectref.Ref, originalName string, mimeType string, fileSize int64, reader io.Reader, uploadedBy int64) (*ent.File, error) {
+	if err := s.validateTarget(ctx, ref, objectref.ExistsActive); err != nil {
+		return nil, err
 	}
 	if !s.ValidateMIMEType(mimeType) {
 		return nil, fmt.Errorf("invalid MIME type: %s", mimeType)
@@ -138,8 +132,8 @@ func (s *FileService) Create(ctx context.Context, objectType string, objectID in
 	}
 
 	entFile, err := s.client.File.Create().
-		SetObjectType(objectType).
-		SetObjectID(objectID).
+		SetObjectType(ref.ObjectType()).
+		SetObjectID(ref.ObjectID()).
 		SetOriginalName(originalName).
 		SetStoredName(storedName).
 		SetMimeType(mimeType).
@@ -155,8 +149,22 @@ func (s *FileService) Create(ctx context.Context, objectType string, objectID in
 	return entFile, nil
 }
 
-func (s *FileService) CreateBytes(ctx context.Context, objectType string, objectID int64, originalName string, mimeType string, data []byte, uploadedBy int64) (*ent.File, error) {
-	return s.Create(ctx, objectType, objectID, originalName, mimeType, int64(len(data)), bytes.NewReader(data), uploadedBy)
+func (s *FileService) CreateBytes(ctx context.Context, ref objectref.Ref, originalName string, mimeType string, data []byte, uploadedBy int64) (*ent.File, error) {
+	return s.Create(ctx, ref, originalName, mimeType, int64(len(data)), bytes.NewReader(data), uploadedBy)
+}
+
+func (s *FileService) validateTarget(ctx context.Context, ref objectref.Ref, mode objectref.ExistenceMode) error {
+	if !s.SupportsFiles(ref) {
+		return fmt.Errorf("invalid object type: %s", ref.ObjectType())
+	}
+	exists, err := s.objects.Exists(ctx, ref, mode)
+	if err != nil {
+		return fmt.Errorf("validate attachment target: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("target %s %d not found", ref.ObjectType(), ref.ObjectID())
+	}
+	return nil
 }
 
 func (s *FileService) Delete(ctx context.Context, id int64) error {

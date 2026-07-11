@@ -141,7 +141,7 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.AllTags = tagsToRows(allTags)
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
 	d.CustomFields = buildCustomFieldDisplay(defs, i.CustomFields)
-	files, _ := h.fileSvc.List(r.Context(), "invoice", id)
+	files, _ := h.fileSvc.List(r.Context(), objectref.New(objectref.TypeInvoice, id))
 	d.FileList = templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "invoice"}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), i.Title)
 	templates.InvoiceShow(d).Render(ctx, w)
