@@ -670,10 +670,11 @@ func invoiceFormTitle(isNew bool) string {
 }
 
 func lineItemTotal(li services.LineItem) float64 {
-	total := li.UnitPrice * float64(li.Quantity)
-	total -= li.Discount
-	total += li.Surcharge
-	return total
+	amount, err := services.LineAmount(li)
+	if err != nil {
+		return 0
+	}
+	return moneyAmount(amount)
 }
 
 func subtaskCompletedCount(subtasks []services.JobSubtask) int {
@@ -696,32 +697,31 @@ func tagInList(tagID int64, tags []TagRow) bool {
 }
 
 func lineItemsTotal(items []services.LineItem) float64 {
-	var total float64
-	for _, li := range items {
-		total += lineItemTotal(li)
+	totals, err := services.CalculateTotals(items, "0")
+	if err != nil {
+		return 0
 	}
-	return total
+	return moneyAmount(totals.Subtotal)
 }
 
 func taxAmount(items []services.LineItem, taxRate string) float64 {
-	tr := parseTaxRate(taxRate)
-	if tr <= 0 {
+	totals, err := services.CalculateTotals(items, taxRate)
+	if err != nil {
 		return 0
 	}
-	var taxableTotal float64
-	for _, li := range items {
-		if li.Taxable {
-			taxableTotal += lineItemTotal(li)
-		}
-	}
-	return taxableTotal * tr
+	return moneyAmount(totals.Tax)
 }
 
-func parseTaxRate(s string) float64 {
-	s = strings.TrimSuffix(s, "%")
-	s = strings.TrimSpace(s)
-	f, _ := strconv.ParseFloat(s, 64)
-	return f / 100
+func grandTotal(items []services.LineItem, taxRate string) float64 {
+	totals, err := services.CalculateTotals(items, taxRate)
+	if err != nil {
+		return 0
+	}
+	return moneyAmount(totals.Total)
+}
+
+func moneyAmount(amount services.Money) float64 {
+	return float64(amount.MinorUnits()) / 100
 }
 
 func customerFormAction(isNew bool, id int64) string {

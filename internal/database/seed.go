@@ -242,17 +242,17 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		TaxRate  string
 		Items    []map[string]interface{}
 	}{
-		{"HVAC Repair Estimate - Acme", 0, 0, 2, "0.0825", nil},
-		{"Chiller Service Quote - Regional", 3, 1, 2, " 0.0825", nil},
-		{"Smart Thermostat Proposal - Metro", 1, 2, 3, " 0.0825", nil},
-		{"Duct Cleaning Estimate - Mall", 2, 3, 2, "0.0825", nil},
-		{"Compressor Replacement Quote - Tower", 3, 4, 1, "0.0825", nil},
+		{"HVAC Repair Estimate - Acme", 0, 0, 2, "8.25", nil},
+		{"Chiller Service Quote - Regional", 3, 1, 2, "8.25", nil},
+		{"Smart Thermostat Proposal - Metro", 1, 2, 3, "8.25", nil},
+		{"Duct Cleaning Estimate - Mall", 2, 3, 2, "8.25", nil},
+		{"Compressor Replacement Quote - Tower", 3, 4, 1, "8.25", nil},
 	}
 
 	for i, d := range estData {
 		lineItems := []map[string]interface{}{
-			{"item_id": items[0].ID, "title": items[1].Name, "description": items[1].Description, "unit_price": items[1].UnitPrice, "quantity": 1, "taxable": true, "tax_rate": "0.0825", "discount": 0, "surcharge": 0},
-			{"item_id": items[0].ID, "title": items[0].Name, "description": items[0].Description, "unit_price": items[0].UnitPrice, "quantity": 4, "taxable": true, "tax_rate": "0.0825", "discount": 0, "surcharge": 150},
+			{"item_id": items[0].ID, "title": items[1].Name, "description": items[1].Description, "unit_price": items[1].UnitPrice, "quantity": 1.5, "taxable": true, "tax_rate": "8.25", "discount": 0, "surcharge": 0},
+			{"item_id": items[0].ID, "title": items[0].Name, "description": items[0].Description, "unit_price": items[0].UnitPrice, "quantity": 4, "taxable": true, "tax_rate": "8.25", "discount": 0, "surcharge": 150},
 		}
 		liJSON, _ := json.Marshal(lineItems)
 
@@ -280,17 +280,17 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		TaxRate     string
 		Paid        bool
 	}{
-		{"Invoice - Acme Office Repair", 0, 1, -1, 3, "0.0825", true},
-		{"Invoice - Regional Hospital Maint", 3, 1, 1, 2, "0.0825", false},
-		{"Invoice - Metro Mall Thermostats", 1, 2, 2, 2, "0.0825", false},
-		{"Invoice - Downtown Tower Compressor", 3, 4, 4, 2, "0.0825", false},
-		{"Invoice - Warehouse Duct Cleaning", 2, 3, 3, 3, "0.0825", true},
+		{"Invoice - Acme Office Repair", 0, 1, -1, 3, "8.25", true},
+		{"Invoice - Regional Hospital Maint", 3, 1, 1, 2, "8.25", false},
+		{"Invoice - Metro Mall Thermostats", 1, 2, 2, 2, "8.25", false},
+		{"Invoice - Downtown Tower Compressor", 3, 4, 4, 2, "8.25", false},
+		{"Invoice - Warehouse Duct Cleaning", 2, 3, 3, 3, "8.25", true},
 	}
 
 	for i, d := range invoiceData {
 		lineItems := []map[string]interface{}{
-			{"item_id": items[0].ID, "title": items[1].Name, "description": items[1].Description, "unit_price": items[1].UnitPrice, "quantity": 1, "taxable": true, "tax_rate": "0.0825", "discount": 0, "surcharge": 0},
-			{"item_id": items[0].ID, "title": items[0].Name, "description": items[0].Description, "unit_price": items[0].UnitPrice, "quantity": 3, "taxable": true, "tax_rate": "0.0825", "discount": 0, "surcharge": 0},
+			{"item_id": items[0].ID, "title": items[1].Name, "description": items[1].Description, "unit_price": items[1].UnitPrice, "quantity": 1, "taxable": true, "tax_rate": "8.25", "discount": 0, "surcharge": 0},
+			{"item_id": items[0].ID, "title": items[0].Name, "description": items[0].Description, "unit_price": items[0].UnitPrice, "quantity": 3, "taxable": true, "tax_rate": "8.25", "discount": 0, "surcharge": 0},
 		}
 		liJSON, _ := json.Marshal(lineItems)
 

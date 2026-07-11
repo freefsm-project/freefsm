@@ -83,8 +83,9 @@ templ InvoiceForm(p InvoiceFormPageData) {
 							const parsed = parseFloat(String(value || '').replace('%', '').trim()) || 0;
 							return parsed / 100;
 						};
+						const roundMoney = (value) => Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * 100) / 100;
 						existing.forEach(i => {
-							if (!i.quantity) i.quantity = 1;
+							if (i.quantity === null || i.quantity === undefined || i.quantity === '') i.quantity = 1;
 							i.item_id = Number(i.item_id) || 0;
 							if (!i.item_id && i.title) {
 								const c = catalog.find(f => f.name === i.title);
@@ -188,11 +189,11 @@ templ InvoiceForm(p InvoiceFormPageData) {
 									this.creatingItem = false;
 								}
 							},
-							lineTotal(item) { return (item.unit_price * item.quantity) - (item.discount || 0) + (item.surcharge || 0); },
-							get subtotal() { return this.items.reduce((s, i) => s + (i.unit_price * i.quantity), 0); },
-							get tax() { const r = this.documentTaxRate(); return this.items.reduce((s, i) => i.taxable ? s + (this.lineTotal(i) * r) : s, 0); },
-							get total() { return this.subtotal + this.tax - this.items.reduce((s, i) => s + (i.discount || 0), 0) + this.items.reduce((s, i) => s + (i.surcharge || 0), 0); },
-							get json() { return JSON.stringify(this.items.filter(i => i.item_id > 0 || i.title).map(i => ({ item_id: Number(i.item_id) || 0, title: i.title, description: i.description, unit_price: Number(i.unit_price) || 0, quantity: Number(i.quantity) || 1, taxable: Boolean(i.taxable), tax_rate: i.tax_rate, discount: Number(i.discount) || 0, surcharge: Number(i.surcharge) || 0 }))); },
+							lineTotal(item) { return roundMoney((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount || 0) + Number(item.surcharge || 0)); },
+							get subtotal() { return roundMoney(this.items.reduce((s, i) => s + this.lineTotal(i), 0)); },
+							get tax() { const r = this.documentTaxRate(); return roundMoney(this.items.reduce((s, i) => i.taxable ? s + this.lineTotal(i) : s, 0) * r); },
+							get total() { return roundMoney(this.subtotal + this.tax); },
+							get json() { return JSON.stringify(this.items.filter(i => i.item_id > 0 || i.title).map(i => ({ item_id: Number(i.item_id) || 0, title: i.title, description: i.description, unit_price: Number(i.unit_price) || 0, quantity: Number(i.quantity), taxable: Boolean(i.taxable), tax_rate: i.tax_rate, discount: Number(i.discount) || 0, surcharge: Number(i.surcharge) || 0 }))); },
 						};
 					});
 				}
@@ -224,7 +225,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 									</select>
 								</td>
 								<td><textarea x-model="item.description" rows="2" placeholder="Line item description"></textarea></td>
-								<td><input type="number" x-model="item.quantity" min="1" class="input-width-70"></td>
+								<td><input type="number" x-model="item.quantity" step="any" min="0.000001" class="input-width-70"></td>
 								<td><input type="number" x-model="item.unit_price" step="0.01" class="input-width-100"></td>
 								<td><input type="checkbox" x-model="item.taxable" aria-label="Taxable line item"/></td>
 								<td><span x-text="lineTotal(item).toFixed(2)"></span></td>

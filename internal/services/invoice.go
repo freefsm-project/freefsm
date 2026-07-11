@@ -141,6 +141,17 @@ func (s *InvoiceService) GetByID(ctx context.Context, id int64) (*ent.Invoice, e
 }
 
 func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams) (*ent.Invoice, error) {
+	taxRate := params.TaxRate
+	if taxRate == "" {
+		taxRate = "0"
+	}
+	if _, err := CalculateTotals(params.LineItems, taxRate); err != nil {
+		return nil, fmt.Errorf("calculate invoice totals: %w", err)
+	}
+	lineItems, err := EncodeLineItems(params.LineItems)
+	if err != nil {
+		return nil, fmt.Errorf("encode invoice line items: %w", err)
+	}
 	if err := validateJobCustomer(ctx, s.client, params.CustomerID, params.JobID, true); err != nil {
 		return nil, err
 	}
@@ -148,10 +159,6 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		return nil, err
 	}
 
-	taxRate := params.TaxRate
-	if taxRate == "" {
-		taxRate = "0"
-	}
 	customFields := params.CustomFields
 	if customFields == "" {
 		customFields = "[]"
@@ -163,7 +170,7 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		SetInvoiceDate(params.InvoiceDate).
 		SetDueDate(params.DueDate).
 		SetTaxRate(taxRate).
-		SetLineItems(SerializeLineItems(params.LineItems)).
+		SetLineItems(lineItems).
 		SetCustomFields(customFields)
 
 	if params.JobID > 0 {
@@ -187,9 +194,35 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 }
 
 func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpdateParams) (*ent.Invoice, error) {
+	var encodedLineItems string
+	if params.LineItems != nil {
+		var err error
+		encodedLineItems, err = EncodeLineItems(*params.LineItems)
+		if err != nil {
+			return nil, fmt.Errorf("encode invoice line items: %w", err)
+		}
+	}
 	current, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if params.LineItems != nil || params.TaxRate != nil {
+		items := []LineItem(nil)
+		if params.LineItems != nil {
+			items = *params.LineItems
+		} else {
+			items, err = DecodeLineItems(current.LineItems)
+			if err != nil {
+				return nil, fmt.Errorf("decode invoice line items: %w", err)
+			}
+		}
+		taxRate := current.TaxRate
+		if params.TaxRate != nil {
+			taxRate = *params.TaxRate
+		}
+		if _, err := CalculateTotals(items, taxRate); err != nil {
+			return nil, fmt.Errorf("calculate invoice totals: %w", err)
+		}
 	}
 	customerID := int64Value(current.CustomerID)
 	jobID := int64Value(current.JobID)
@@ -257,7 +290,7 @@ func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpd
 		u.SetTaxRate(*params.TaxRate)
 	}
 	if params.LineItems != nil {
-		u.SetLineItems(SerializeLineItems(*params.LineItems))
+		u.SetLineItems(encodedLineItems)
 	}
 	if params.CustomFields != nil {
 		u.SetCustomFields(*params.CustomFields)
@@ -427,7 +460,17 @@ func (s *InvoiceService) CreateFromEstimate(ctx context.Context, estimateID int6
 		statusID = draftStatus.ID
 	}
 
-	items, _ := ParseLineItems(e.LineItems)
+	items, err := ParseLineItems(e.LineItems)
+	if err != nil {
+		return nil, fmt.Errorf("parse estimate %d line items: %w", estimateID, err)
+	}
+	encodedLineItems, err := EncodeLineItems(items)
+	if err != nil {
+		return nil, fmt.Errorf("encode estimate %d line items: %w", estimateID, err)
+	}
+	if _, err := CalculateTotals(items, e.TaxRate); err != nil {
+		return nil, fmt.Errorf("calculate estimate %d totals: %w", estimateID, err)
+	}
 	now := time.Now()
 
 	custID := e.CustomerID
@@ -457,7 +500,7 @@ func (s *InvoiceService) CreateFromEstimate(ctx context.Context, estimateID int6
 		SetTitle(e.Title).
 		SetNotes(e.Notes).
 		SetTaxRate(e.TaxRate).
-		SetLineItems(SerializeLineItems(items)).
+		SetLineItems(encodedLineItems).
 		SetStatusID(statusID).
 		SetInvoiceDate(now).
 		SetDueDate(now.AddDate(0, 0, 30)).
@@ -493,7 +536,10 @@ func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusS
 		statusID = newStatus.ID
 	}
 
-	items, _ := ParseLineItems(j.LineItems)
+	items, err := ParseLineItems(j.LineItems)
+	if err != nil {
+		return nil, fmt.Errorf("parse job %d line items: %w", jobID, err)
+	}
 	now := time.Now()
 
 	return s.Create(ctx, InvoiceCreateParams{
@@ -561,24 +607,28 @@ func InvoiceAmountDue(i *ent.Invoice) (float64, float64, error) {
 	if err != nil {
 		return 0, 0, fmt.Errorf("parse invoice payments: %w", err)
 	}
-	total := InvoiceTotal(items, i.TaxRate)
-	paid := 0.0
-	for _, payment := range payments {
-		paid += payment.Amount
+	totals, err := CalculateTotals(items, i.TaxRate)
+	if err != nil {
+		return 0, 0, fmt.Errorf("calculate invoice total: %w", err)
 	}
-	return total, paid, nil
-}
-
-func InvoiceTotal(items []LineItem, taxRate string) float64 {
-	subtotal := 0.0
-	taxableSubtotal := 0.0
-	for _, item := range items {
-		lineTotal := item.UnitPrice*float64(item.Quantity) - item.Discount + item.Surcharge
-		subtotal += lineTotal
-		if item.Taxable {
-			taxableSubtotal += lineTotal
+	paid := Money{}
+	for _, payment := range payments {
+		amount, err := MoneyFromMajorUnits(payment.Amount)
+		if err != nil {
+			return 0, 0, fmt.Errorf("calculate invoice payments: %w", err)
+		}
+		paid, err = paid.Add(amount)
+		if err != nil {
+			return 0, 0, fmt.Errorf("calculate invoice payments: %w", err)
 		}
 	}
-	tax := taxableSubtotal * parseTaxRate(taxRate) / 100
-	return subtotal + tax
+	return totals.Total.MajorUnits(), paid.MajorUnits(), nil
+}
+
+func InvoiceTotal(items []LineItem, taxRate string) (float64, error) {
+	totals, err := CalculateTotals(items, taxRate)
+	if err != nil {
+		return 0, err
+	}
+	return totals.Total.MajorUnits(), nil
 }

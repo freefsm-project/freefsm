@@ -154,7 +154,7 @@ templ JobShow(p JobDetail) {
 					for _, li := range p.LineItems {
 						<tr>
 							<td>{ li.Title }</td>
-							<td>{ fmt.Sprintf("%d", li.Quantity) }</td>
+							<td>{ fmt.Sprintf("%g", li.Quantity) }</td>
 							<td>{ fmt.Sprintf("$%.2f", li.UnitPrice) }</td>
 							<td>{ fmt.Sprintf("$%.2f", lineItemTotal(li)) }</td>
 						</tr>

@@ -108,14 +108,21 @@ func (s *EstimateService) GetByID(ctx context.Context, id int64) (*ent.Estimate,
 }
 
 func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParams) (*ent.Estimate, error) {
-	if err := validateJobCustomer(ctx, s.client, params.CustomerID, params.JobID, true); err != nil {
-		return nil, err
-	}
-
 	taxRate := params.TaxRate
 	if taxRate == "" {
 		taxRate = "0"
 	}
+	if _, err := CalculateTotals(params.LineItems, taxRate); err != nil {
+		return nil, fmt.Errorf("calculate estimate totals: %w", err)
+	}
+	lineItems, err := EncodeLineItems(params.LineItems)
+	if err != nil {
+		return nil, fmt.Errorf("encode estimate line items: %w", err)
+	}
+	if err := validateJobCustomer(ctx, s.client, params.CustomerID, params.JobID, true); err != nil {
+		return nil, err
+	}
+
 	customFields := params.CustomFields
 	if customFields == "" {
 		customFields = "[]"
@@ -125,7 +132,7 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 		SetTitle(params.Title).
 		SetNotes(params.Notes).
 		SetTaxRate(taxRate).
-		SetLineItems(SerializeLineItems(params.LineItems)).
+		SetLineItems(lineItems).
 		SetCustomFields(customFields)
 
 	if params.JobID > 0 {
@@ -143,9 +150,35 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 }
 
 func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateUpdateParams) (*ent.Estimate, error) {
+	var encodedLineItems string
+	if params.LineItems != nil {
+		var err error
+		encodedLineItems, err = EncodeLineItems(*params.LineItems)
+		if err != nil {
+			return nil, fmt.Errorf("encode estimate line items: %w", err)
+		}
+	}
 	current, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if params.LineItems != nil || params.TaxRate != nil {
+		items := []LineItem(nil)
+		if params.LineItems != nil {
+			items = *params.LineItems
+		} else {
+			items, err = DecodeLineItems(current.LineItems)
+			if err != nil {
+				return nil, fmt.Errorf("decode estimate line items: %w", err)
+			}
+		}
+		taxRate := current.TaxRate
+		if params.TaxRate != nil {
+			taxRate = *params.TaxRate
+		}
+		if _, err := CalculateTotals(items, taxRate); err != nil {
+			return nil, fmt.Errorf("calculate estimate totals: %w", err)
+		}
 	}
 	customerID := int64Value(current.CustomerID)
 	jobID := int64Value(current.JobID)
@@ -184,7 +217,7 @@ func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateU
 		u.SetTaxRate(*params.TaxRate)
 	}
 	if params.LineItems != nil {
-		u.SetLineItems(SerializeLineItems(*params.LineItems))
+		u.SetLineItems(encodedLineItems)
 	}
 	if params.CustomFields != nil {
 		u.SetCustomFields(*params.CustomFields)
@@ -237,7 +270,10 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 		statusID = draftStatus.ID
 	}
 
-	items, _ := ParseLineItems(j.LineItems)
+	items, err := ParseLineItems(j.LineItems)
+	if err != nil {
+		return nil, fmt.Errorf("parse job %d line items: %w", jobID, err)
+	}
 
 	return s.Create(ctx, EstimateCreateParams{
 		CustomerID:   j.CustomerID,
@@ -259,16 +295,10 @@ func (s *EstimateService) LineItems(e *ent.Estimate) []LineItem {
 	return items
 }
 
-func EstimateTotal(items []LineItem, taxRate string) float64 {
-	subtotal := 0.0
-	taxableSubtotal := 0.0
-	for _, item := range items {
-		lineTotal := item.UnitPrice*float64(item.Quantity) - item.Discount + item.Surcharge
-		subtotal += lineTotal
-		if item.Taxable {
-			taxableSubtotal += lineTotal
-		}
+func EstimateTotal(items []LineItem, taxRate string) (float64, error) {
+	totals, err := CalculateTotals(items, taxRate)
+	if err != nil {
+		return 0, err
 	}
-	tax := taxableSubtotal * parseTaxRate(taxRate) / 100
-	return subtotal + tax
+	return totals.Total.MajorUnits(), nil
 }

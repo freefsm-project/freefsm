@@ -204,12 +204,16 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
-	lineItems, _ := services.ParseLineItems(r.FormValue("line_items"))
 	taxRate := r.FormValue("tax_rate")
 	if taxRate == "" {
 		taxRate = "0"
 	}
 	taxRate = taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate)
+	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), taxRate)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	params := services.EstimateCreateParams{
 		CustomerID:   custID,
@@ -220,9 +224,6 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TaxRate:      taxRate,
 		LineItems:    lineItems,
 		CustomFields: parseCustomFieldValues(r),
-	}
-	if params.LineItems == nil {
-		params.LineItems = []services.LineItem{}
 	}
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
@@ -263,7 +264,6 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
-	lineItems, _ := services.ParseLineItems(r.FormValue("line_items"))
 	taxRate := r.FormValue("tax_rate")
 	taxRatePtr := formPtr(taxRate)
 	if taxRate == "" {
@@ -273,6 +273,11 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if taxRatePtr != nil {
 		t := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr)
 		taxRatePtr = &t
+	}
+	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), *taxRatePtr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	params := services.EstimateUpdateParams{
@@ -284,9 +289,7 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		TaxRate:      taxRatePtr,
 		CustomFields: strPtr(parseCustomFieldValues(r)),
 	}
-	if lineItems != nil {
-		params.LineItems = &lineItems
-	}
+	params.LineItems = &lineItems
 	result, err := h.svc.Update(r.Context(), id, params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)

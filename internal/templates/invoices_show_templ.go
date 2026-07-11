@@ -428,7 +428,7 @@ func InvoiceShow(p InvoiceDetail) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var27 string
-					templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", li.Quantity))
+					templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%g", li.Quantity))
 					if templ_7745c5c3_Err != nil {
 						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/invoices_show.templ`, Line: 77, Col: 43}
 					}
@@ -453,7 +453,7 @@ func InvoiceShow(p InvoiceDetail) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					if li.Taxable && parseTaxRate(p.TaxRate) > 0 {
+					if li.Taxable {
 						var templ_7745c5c3_Var29 string
 						templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(p.TaxRate)
 						if templ_7745c5c3_Err != nil {
@@ -528,9 +528,9 @@ func InvoiceShow(p InvoiceDetail) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var33 string
-				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("$%.2f", lineItemsTotal(p.LineItems)+taxAmount(p.LineItems, p.TaxRate)))
+				templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("$%.2f", grandTotal(p.LineItems, p.TaxRate)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/invoices_show.templ`, Line: 96, Col: 113}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/invoices_show.templ`, Line: 96, Col: 86}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 				if templ_7745c5c3_Err != nil {

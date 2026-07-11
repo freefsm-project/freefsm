@@ -74,10 +74,10 @@ templ InvoiceShow(p InvoiceDetail) {
 						<tr>
 							<td>{ li.Title }</td>
 							<td>{ li.Description }</td>
-							<td>{ fmt.Sprintf("%d", li.Quantity) }</td>
+							<td>{ fmt.Sprintf("%g", li.Quantity) }</td>
 							<td>{ fmt.Sprintf("$%.2f", li.UnitPrice) }</td>
 							<td>
-								if li.Taxable && parseTaxRate(p.TaxRate) > 0 {
+								if li.Taxable {
 									{ p.TaxRate }
 								} else {
 									No
@@ -93,7 +93,7 @@ templ InvoiceShow(p InvoiceDetail) {
 				if t := taxAmount(p.LineItems, p.TaxRate); t > 0 {
 					<p><strong>Tax: { fmt.Sprintf("$%.2f", t) }</strong></p>
 				}
-				<p><strong>Grand Total: { fmt.Sprintf("$%.2f", lineItemsTotal(p.LineItems)+taxAmount(p.LineItems, p.TaxRate)) }</strong></p>
+				<p><strong>Grand Total: { fmt.Sprintf("$%.2f", grandTotal(p.LineItems, p.TaxRate)) }</strong></p>
 			</div>
 		}
 		if len(p.Payments) > 0 {

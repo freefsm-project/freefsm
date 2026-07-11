@@ -1,0 +1,219 @@
+package services
+
+import (
+	"errors"
+	"math"
+	"testing"
+
+	"github.com/freefsm-project/freefsm/internal/ent"
+)
+
+func TestDecodeLineItemsAcceptsIntegerAndFractionalQuantities(t *testing.T) {
+	items, err := DecodeLineItems(`[
+		{"title":"Whole","unit_price":10,"quantity":2},
+		{"title":"Fractional","unit_price":10.25,"quantity":1.5}
+	]`)
+	if err != nil {
+		t.Fatalf("DecodeLineItems() error = %v", err)
+	}
+	if got := items[0].Quantity; got != 2 {
+		t.Errorf("integer quantity = %v, want 2", got)
+	}
+	if got := items[1].Quantity; got != 1.5 {
+		t.Errorf("fractional quantity = %v, want 1.5", got)
+	}
+}
+
+func TestServiceConsumersAgreeWithCanonicalTotals(t *testing.T) {
+	items := []LineItem{
+		{Title: "Taxable", UnitPrice: 10.25, Quantity: 1.5, Discount: 0.40, Surcharge: 0.15, Taxable: true},
+		{Title: "Exempt", UnitPrice: 3, Quantity: 2.25, Discount: 0.10, Surcharge: 0.20},
+	}
+	encoded, err := EncodeLineItems(items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical, err := CalculateTotals(items, "8.25")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := canonical.Total.MajorUnits()
+	if want != 23.23 {
+		t.Fatalf("canonical total = %.2f, want 23.23", want)
+	}
+
+	estimateTotal, err := EstimateTotal(items, "8.25")
+	if err != nil || estimateTotal != want {
+		t.Errorf("EstimateTotal() = (%.2f, %v), want (%.2f, nil)", estimateTotal, err, want)
+	}
+	invoiceTotal, err := InvoiceTotal(items, "8.25")
+	if err != nil || invoiceTotal != want {
+		t.Errorf("InvoiceTotal() = (%.2f, %v), want (%.2f, nil)", invoiceTotal, err, want)
+	}
+
+	dashboard := &DashboardService{}
+	invoice := &ent.Invoice{LineItems: encoded, TaxRate: "8.25", Payments: `[{"amount":10.111},{"amount":0.004}]`}
+	if got := dashboard.invoiceSubtotal(invoice); got != canonical.Subtotal.MajorUnits() {
+		t.Errorf("dashboard invoice subtotal = %.2f, want %.2f", got, canonical.Subtotal.MajorUnits())
+	}
+	if got := dashboard.invoiceTotal(invoice); got != want {
+		t.Errorf("dashboard invoice total = %.2f, want %.2f", got, want)
+	}
+	if got := dashboard.invoiceBalance(invoice); got != 13.12 {
+		t.Errorf("dashboard invoice balance = %.2f, want 13.12", got)
+	}
+	if got := dashboard.estimateTotal(&ent.Estimate{LineItems: encoded, TaxRate: "8.25"}); got != want {
+		t.Errorf("dashboard estimate total = %.2f, want %.2f", got, want)
+	}
+
+	total, paid, err := InvoiceAmountDue(invoice)
+	if err != nil || total != want || paid != 10.11 {
+		t.Errorf("InvoiceAmountDue() = (%.2f, %.2f, %v), want (%.2f, 10.11, nil)", total, paid, err, want)
+	}
+}
+
+func TestDashboardInvoiceBalanceClampsOverpayment(t *testing.T) {
+	invoice := &ent.Invoice{
+		LineItems: `[{"title":"Labor","unit_price":10,"quantity":1}]`,
+		TaxRate:   "0",
+		Payments:  `[{"amount":10.01}]`,
+	}
+	if got := (&DashboardService{}).invoiceBalance(invoice); got != 0 {
+		t.Errorf("invoiceBalance() = %.2f, want 0", got)
+	}
+}
+
+func TestValidateLineItemsRejectsInvalidDomainValues(t *testing.T) {
+	tests := []struct {
+		name string
+		item LineItem
+	}{
+		{"blank title", LineItem{Title: "  ", Quantity: 1}},
+		{"zero quantity", LineItem{Title: "x", Quantity: 0}},
+		{"negative quantity", LineItem{Title: "x", Quantity: -1}},
+		{"non-finite quantity", LineItem{Title: "x", Quantity: math.Inf(1)}},
+		{"negative unit price", LineItem{Title: "x", Quantity: 1, UnitPrice: -1}},
+		{"non-finite unit price", LineItem{Title: "x", Quantity: 1, UnitPrice: math.NaN()}},
+		{"negative discount", LineItem{Title: "x", Quantity: 1, Discount: -1}},
+		{"negative surcharge", LineItem{Title: "x", Quantity: 1, Surcharge: -1}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := ValidateLineItems([]LineItem{tt.item}); !errors.Is(err, ErrInvalidLineItem) {
+				t.Fatalf("ValidateLineItems() error = %v, want ErrInvalidLineItem", err)
+			}
+		})
+	}
+
+	valid := LineItem{Title: "Labor", Quantity: 0.25, UnitPrice: 10, Discount: 1, Surcharge: 2}
+	if err := ValidateLineItems([]LineItem{valid}); err != nil {
+		t.Fatalf("valid fractional item rejected: %v", err)
+	}
+}
+
+func TestDecodeLineItemsDistinguishesMalformedFromEmpty(t *testing.T) {
+	for _, input := range []string{"", "[]"} {
+		items, err := DecodeLineItems(input)
+		if err != nil || len(items) != 0 {
+			t.Errorf("DecodeLineItems(%q) = (%v, %v), want empty, nil", input, items, err)
+		}
+	}
+
+	_, err := DecodeLineItems(`[`)
+	if !errors.Is(err, ErrMalformedLineItems) {
+		t.Fatalf("malformed error = %v, want ErrMalformedLineItems", err)
+	}
+}
+
+func TestLineAmountUsesDecimalSafeFractionalArithmetic(t *testing.T) {
+	amount, err := LineAmount(LineItem{
+		Title: "Materials", UnitPrice: 10.25, Quantity: 1.5, Discount: 0.40, Surcharge: 0.15,
+	})
+	if err != nil {
+		t.Fatalf("LineAmount() error = %v", err)
+	}
+	if got := amount.MinorUnits(); got != 1513 {
+		t.Errorf("LineAmount() = %d minor units, want 1513", got)
+	}
+}
+
+func TestCalculateTotalsRoundsTaxOnceOnAggregateTaxableSubtotal(t *testing.T) {
+	items := []LineItem{
+		{Title: "Taxable A", UnitPrice: 0.05, Quantity: 1, Taxable: true, TaxRate: "99"},
+		{Title: "Taxable B", UnitPrice: 0.05, Quantity: 1, Taxable: true, TaxRate: "0"},
+		{Title: "Exempt", UnitPrice: 1, Quantity: 1, Taxable: false, TaxRate: "100"},
+	}
+	totals, err := CalculateTotals(items, "5")
+	if err != nil {
+		t.Fatalf("CalculateTotals() error = %v", err)
+	}
+	if got := totals.Subtotal.MinorUnits(); got != 110 {
+		t.Errorf("subtotal = %d, want 110", got)
+	}
+	if got := totals.TaxableSubtotal.MinorUnits(); got != 10 {
+		t.Errorf("taxable subtotal = %d, want 10", got)
+	}
+	if got := totals.Tax.MinorUnits(); got != 1 {
+		t.Errorf("aggregate tax = %d, want 1 (half away from zero)", got)
+	}
+	if got := totals.Total.MinorUnits(); got != 111 {
+		t.Errorf("total = %d, want 111", got)
+	}
+}
+
+func TestCalculateTotalsValidatesPercentageRate(t *testing.T) {
+	item := []LineItem{{Title: "x", Quantity: 1}}
+	for _, rate := range []string{"", "nope", "-1", "100.01"} {
+		if _, err := CalculateTotals(item, rate); !errors.Is(err, ErrInvalidTaxRate) {
+			t.Errorf("rate %q error = %v, want ErrInvalidTaxRate", rate, err)
+		}
+	}
+	for _, rate := range []string{"0", "8.25", "100", "8.25%"} {
+		if _, err := CalculateTotals(item, rate); err != nil {
+			t.Errorf("rate %q rejected: %v", rate, err)
+		}
+	}
+}
+
+func TestEncodeLineItemsValidatesDomainData(t *testing.T) {
+	if _, err := EncodeLineItems([]LineItem{{Title: "x", Quantity: math.NaN()}}); !errors.Is(err, ErrInvalidLineItem) {
+		t.Fatalf("EncodeLineItems() error = %v, want ErrInvalidLineItem", err)
+	}
+	encoded, err := EncodeLineItems(nil)
+	if err != nil || encoded != "[]" {
+		t.Fatalf("EncodeLineItems(nil) = (%q, %v), want ([], nil)", encoded, err)
+	}
+}
+
+func TestEncodeLineItemsFractionalQuantityRoundTrip(t *testing.T) {
+	want := []LineItem{{Title: "Labor", UnitPrice: 12.5, Quantity: 1.25}}
+	encoded, err := EncodeLineItems(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := DecodeLineItems(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Quantity != want[0].Quantity {
+		t.Fatalf("round trip = %#v, want quantity %v", got, want[0].Quantity)
+	}
+}
+
+func TestLineAndTaxRoundingHalfAwayFromZero(t *testing.T) {
+	positive, err := LineAmount(LineItem{Title: "x", UnitPrice: 0.005, Quantity: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if positive.MinorUnits() != 1 {
+		t.Errorf("positive half-cent = %d, want 1", positive.MinorUnits())
+	}
+
+	negative, err := LineAmount(LineItem{Title: "x", UnitPrice: 0, Quantity: 1, Discount: 0.005})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if negative.MinorUnits() != -1 {
+		t.Errorf("negative half-cent = %d, want -1", negative.MinorUnits())
+	}
+}

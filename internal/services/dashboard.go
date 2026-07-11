@@ -869,45 +869,55 @@ func (s *DashboardService) statusIDByName(ctx context.Context, objectType, name 
 }
 
 func (s *DashboardService) invoiceSubtotal(i *ent.Invoice) float64 {
-	items, _ := ParseLineItems(i.LineItems)
-	var total float64
-	for _, li := range items {
-		total += li.UnitPrice * float64(li.Quantity)
-		total -= li.Discount
-		total += li.Surcharge
+	items, err := DecodeLineItems(i.LineItems)
+	if err != nil {
+		return 0
 	}
-	return total
+	totals, err := CalculateTotals(items, i.TaxRate)
+	if err != nil {
+		return 0
+	}
+	return totals.Subtotal.MajorUnits()
 }
 
 func (s *DashboardService) invoiceTotal(i *ent.Invoice) float64 {
-	total := s.invoiceSubtotal(i)
-	if taxRate := parseTaxRate(i.TaxRate); taxRate > 0 {
-		items, _ := ParseLineItems(i.LineItems)
-		var taxableTotal float64
-		for _, li := range items {
-			if li.Taxable {
-				taxableTotal += li.UnitPrice * float64(li.Quantity)
-				taxableTotal -= li.Discount
-				taxableTotal += li.Surcharge
-			}
-		}
-		total += taxableTotal * taxRate / 100
+	items, err := DecodeLineItems(i.LineItems)
+	if err != nil {
+		return 0
 	}
-	return total
+	totals, err := CalculateTotals(items, i.TaxRate)
+	if err != nil {
+		return 0
+	}
+	return totals.Total.MajorUnits()
 }
 
 func (s *DashboardService) invoiceBalance(i *ent.Invoice) float64 {
-	total := s.invoiceTotal(i)
-	payments, _ := ParsePayments(i.Payments)
-	var paid float64
-	for _, p := range payments {
-		paid += p.Amount
-	}
-	balance := total - paid
-	if balance < 0 {
+	items, err := DecodeLineItems(i.LineItems)
+	if err != nil {
 		return 0
 	}
-	return balance
+	totals, err := CalculateTotals(items, i.TaxRate)
+	if err != nil {
+		return 0
+	}
+	payments, _ := ParsePayments(i.Payments)
+	paid := Money{}
+	for _, p := range payments {
+		amount, err := MoneyFromMajorUnits(p.Amount)
+		if err != nil {
+			return 0
+		}
+		paid, err = paid.Add(amount)
+		if err != nil {
+			return 0
+		}
+	}
+	balance, err := totals.Total.Sub(paid)
+	if err != nil || balance.Compare(Money{}) < 0 {
+		return 0
+	}
+	return balance.MajorUnits()
 }
 
 func (s *DashboardService) toRecentJobs(jobs []*ent.Job, custMap map[int64]string, loc *time.Location, cs *ent.CompanySettings) []RecentJob {
@@ -969,23 +979,13 @@ func (s *DashboardService) toRecentEstimates(estimates []*ent.Estimate, custMap 
 }
 
 func (s *DashboardService) estimateTotal(e *ent.Estimate) float64 {
-	items, _ := ParseLineItems(e.LineItems)
-	var total float64
-	for _, li := range items {
-		total += li.UnitPrice * float64(li.Quantity)
-		total -= li.Discount
-		total += li.Surcharge
+	items, err := DecodeLineItems(e.LineItems)
+	if err != nil {
+		return 0
 	}
-	if taxRate := parseTaxRate(e.TaxRate); taxRate > 0 {
-		var taxableTotal float64
-		for _, li := range items {
-			if li.Taxable {
-				taxableTotal += li.UnitPrice * float64(li.Quantity)
-				taxableTotal -= li.Discount
-				taxableTotal += li.Surcharge
-			}
-		}
-		total += taxableTotal * taxRate / 100
+	totals, err := CalculateTotals(items, e.TaxRate)
+	if err != nil {
+		return 0
 	}
-	return total
+	return totals.Total.MajorUnits()
 }

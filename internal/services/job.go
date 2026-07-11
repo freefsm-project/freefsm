@@ -254,6 +254,10 @@ func (s *JobService) GetByID(ctx context.Context, id int64) (*ent.Job, error) {
 }
 
 func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.Job, error) {
+	lineItems, err := EncodeLineItems(params.LineItems)
+	if err != nil {
+		return nil, fmt.Errorf("encode job line items: %w", err)
+	}
 	if err := validateJobCustomerLinks(ctx, s.client, params.CustomerID, params.ProjectID, params.LocationID, params.CustomerContactID, params.AssetID); err != nil {
 		return nil, err
 	}
@@ -265,7 +269,7 @@ func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.J
 		SetBillingType(params.BillingType).
 		SetNotes(params.Notes).
 		SetTechNotes(params.TechNotes).
-		SetLineItems(SerializeLineItems(params.LineItems)).
+		SetLineItems(lineItems).
 		SetVisits(SerializeVisits(params.Visits)).
 		SetAssignments(SerializeAssignments(params.Assignments)).
 		SetSubtasks(SerializeSubtasks(params.Subtasks)).
@@ -435,6 +439,14 @@ func daysBetween(from, to time.Time) int {
 }
 
 func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParams) (*ent.Job, error) {
+	var encodedLineItems string
+	if params.LineItems != nil {
+		var err error
+		encodedLineItems, err = EncodeLineItems(*params.LineItems)
+		if err != nil {
+			return nil, fmt.Errorf("encode job line items: %w", err)
+		}
+	}
 	current, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -540,7 +552,7 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 		u.SetTechNotes(*params.TechNotes)
 	}
 	if params.LineItems != nil {
-		u.SetLineItems(SerializeLineItems(*params.LineItems))
+		u.SetLineItems(encodedLineItems)
 	}
 	if params.CustomFields != nil {
 		u.SetCustomFields(*params.CustomFields)

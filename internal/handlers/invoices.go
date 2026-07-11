@@ -214,7 +214,6 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
-	lineItems, _ := services.ParseLineItems(r.FormValue("line_items"))
 	invoiceNumber, err := parseOptionalPositiveInt64(r.FormValue("invoice_number"), "invoice number")
 	if err != nil {
 		http.Error(w, err.Error(), 400)
@@ -225,6 +224,11 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		taxRate = "0"
 	}
 	taxRate = taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate)
+	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), taxRate)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	loc := middleware.CompanyLocation(r.Context())
 	params := services.InvoiceCreateParams{
@@ -239,9 +243,6 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TaxRate:       taxRate,
 		LineItems:     lineItems,
 		CustomFields:  parseCustomFieldValues(r),
-	}
-	if params.LineItems == nil {
-		params.LineItems = []services.LineItem{}
 	}
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
@@ -282,7 +283,6 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
-	lineItems, _ := services.ParseLineItems(r.FormValue("line_items"))
 	invoiceNumber, err := parseRequiredPositiveInt64(r.FormValue("invoice_number"), "invoice number")
 	if err != nil {
 		http.Error(w, err.Error(), 400)
@@ -297,6 +297,11 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if taxRatePtr != nil {
 		t := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr)
 		taxRatePtr = &t
+	}
+	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), *taxRatePtr)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	params := services.InvoiceUpdateParams{
@@ -317,9 +322,7 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		t := parseDate(d, loc)
 		params.DueDate = &t
 	}
-	if lineItems != nil {
-		params.LineItems = &lineItems
-	}
+	params.LineItems = &lineItems
 	params.CustomFields = strPtr(parseCustomFieldValues(r))
 	result, err := h.svc.Update(r.Context(), id, params)
 	if err != nil {
