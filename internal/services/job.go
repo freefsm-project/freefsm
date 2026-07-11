@@ -348,7 +348,7 @@ func (s *JobService) CreateNextOccurrence(ctx context.Context, sourceID int64, n
 	if len(assignments) == 0 {
 		assignments = ParseAssignments(source.Assignments)
 	}
-	lineItems, err := ParseLineItems(source.LineItems)
+	lineItems, err := DecodeLineItems(source.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("parse source job line items: %w", err)
 	}
@@ -757,7 +757,7 @@ func JobPaginationTotalPages(total, perPage int) int {
 }
 
 func (s *JobService) LineItems(j *ent.Job) []LineItem {
-	items, _ := ParseLineItems(j.LineItems)
+	items, _ := DecodeLineItems(j.LineItems)
 	if items == nil {
 		return []LineItem{}
 	}

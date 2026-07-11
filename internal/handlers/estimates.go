@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -194,7 +193,12 @@ func (h *EstimateHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
-		templates.EstimateForm(h.newEstimateForm(r.Context(), customerID)).Render(r.Context(), w)
+		data, err := h.newEstimateForm(r.Context(), customerID)
+		if err != nil {
+			internalServerError(w, r, "build estimate editor", err)
+			return
+		}
+		templates.EstimateForm(data).Render(r.Context(), w)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -253,7 +257,11 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		statuses := h.statusesForSelect(r.Context())
-		fd := h.formDataFromEstimate(r.Context(), e, statuses)
+		fd, err := h.formDataFromEstimate(r.Context(), e, statuses)
+		if err != nil {
+			internalServerError(w, r, "build estimate editor", err)
+			return
+		}
 		templates.EstimateForm(fd).Render(r.Context(), w)
 		return
 	}
@@ -592,52 +600,50 @@ func (h *EstimateHandler) statusesForSelect(ctx context.Context) []*ent.Status {
 	return statuses
 }
 
-func (h *EstimateHandler) itemsCatalog(ctx context.Context) string {
-	items, _ := h.itemSvc.ListActive(ctx)
-	return itemsToJSON(items)
-}
-
-func (h *EstimateHandler) existingItemsJSON(items []services.LineItem) string {
-	return services.SerializeLineItems(items)
-}
-
-func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64) templates.EstimateFormPageData {
+func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64) (templates.EstimateFormPageData, error) {
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
+	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, "[]", defaultTaxRate)
+	if err != nil {
+		return templates.EstimateFormPageData{}, err
+	}
 	return templates.EstimateFormPageData{
 		Estimate:          &templates.EstimateDetail{CustomerID: customerID, TaxRate: taxRateForCustomer(ctx, h.custSvc, customerID, defaultTaxRate)},
 		IsNew:             true,
 		Customers:         customerOptions(customers),
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
-		ItemsJSON:         h.itemsCatalog(ctx),
-		ExistingItemsJSON: "[]",
-		CustomersJSON:     customerTaxContextJSON(customers, defaultTaxRate),
+		ItemsJSON:         bootstrap.ItemsJSON,
+		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
+		CustomersJSON:     bootstrap.CustomersJSON,
 		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
-	}
+	}, nil
 }
 
-func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estimate, statuses []*ent.Status) templates.EstimateFormPageData {
+func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estimate, statuses []*ent.Status) (templates.EstimateFormPageData, error) {
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
 	d := estimateToDetail(ctx, e, statuses)
-	items := h.svc.LineItems(e)
+	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, e.LineItems, defaultTaxRate)
+	if err != nil {
+		return templates.EstimateFormPageData{}, err
+	}
 	return templates.EstimateFormPageData{
 		Estimate:          &d,
 		IsNew:             false,
 		Customers:         customerOptions(customers),
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
-		ItemsJSON:         h.itemsCatalog(ctx),
-		ExistingItemsJSON: h.existingItemsJSON(items),
-		CustomersJSON:     customerTaxContextJSON(customers, defaultTaxRate),
+		ItemsJSON:         bootstrap.ItemsJSON,
+		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
+		CustomersJSON:     bootstrap.CustomersJSON,
 		CustomFields:      buildCustomFieldDisplay(defs, e.CustomFields),
-	}
+	}, nil
 }
 
 func estimateToDetail(ctx context.Context, e *ent.Estimate, statuses []*ent.Status) templates.EstimateDetail {
@@ -700,35 +706,4 @@ func jobOptions(jobs []*ent.Job) []templates.SelectOption {
 		opts[i] = templates.SelectOption{Value: j.ID, Label: label}
 	}
 	return opts
-}
-
-type catalogItem struct {
-	ID          int64   `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	UnitPrice   float64 `json:"unit_price"`
-	Taxable     bool    `json:"taxable"`
-	TaxRate     string  `json:"tax_rate"`
-}
-
-func itemsToJSON(items []*ent.Item) string {
-	if len(items) == 0 {
-		return "[]"
-	}
-	c := make([]catalogItem, len(items))
-	for i, item := range items {
-		c[i] = catalogItem{
-			ID:          item.ID,
-			Name:        item.Name,
-			Description: item.Description,
-			UnitPrice:   item.UnitPrice,
-			Taxable:     item.Taxable,
-			TaxRate:     item.TaxRate,
-		}
-	}
-	b, err := json.Marshal(c)
-	if err != nil {
-		return "[]"
-	}
-	return string(b)
 }

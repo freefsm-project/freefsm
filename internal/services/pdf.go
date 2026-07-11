@@ -28,7 +28,7 @@ type pdfTotals struct {
 }
 
 func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, job *ent.Job, statuses []*ent.Status, cs *ent.CompanySettings) error {
-	items, err := ParseLineItems(e.LineItems)
+	items, err := DecodeLineItems(e.LineItems)
 	if err != nil {
 		return fmt.Errorf("parse estimate line items: %w", err)
 	}
@@ -49,7 +49,7 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 }
 
 func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, asset *ent.Asset, statuses []*ent.Status, cs *ent.CompanySettings) error {
-	items, err := ParseLineItems(i.LineItems)
+	items, err := DecodeLineItems(i.LineItems)
 	if err != nil {
 		return fmt.Errorf("parse invoice line items: %w", err)
 	}

@@ -93,25 +93,31 @@ func taxRateForCustomer(ctx context.Context, custSvc *services.CustomerService, 
 	return defaultTaxRate
 }
 
-func customerTaxContextJSON(customers []*ent.Customer, defaultTaxRate string) string {
-	type customerTaxInfo struct {
-		TaxExempt bool `json:"tax_exempt"`
-	}
-	payload := struct {
-		DefaultTaxRate string                    `json:"default_tax_rate"`
-		Customers      map[int64]customerTaxInfo `json:"customers"`
-	}{
-		DefaultTaxRate: defaultTaxRate,
-		Customers:      make(map[int64]customerTaxInfo, len(customers)),
-	}
-	for _, c := range customers {
-		payload.Customers[c.ID] = customerTaxInfo{TaxExempt: c.TaxExempt}
-	}
-	b, err := json.Marshal(payload)
+type handlerCustomerTaxContext struct {
+	defaultTaxRate string
+	exemptions     map[int64]bool
+}
+
+func (c handlerCustomerTaxContext) DefaultTaxRate() string                { return c.defaultTaxRate }
+func (c handlerCustomerTaxContext) CustomerTaxExemptions() map[int64]bool { return c.exemptions }
+
+func lineItemEditorBootstrap(ctx context.Context, itemSvc *services.ItemService, customers []*ent.Customer, existingLineItems, defaultTaxRate string) (services.EditorBootstrap, error) {
+	items, err := itemSvc.ListActive(ctx)
 	if err != nil {
-		return `{"default_tax_rate":"0","customers":{}}`
+		return services.EditorBootstrap{}, fmt.Errorf("list line item catalog: %w", err)
 	}
-	return string(b)
+	catalog := make([]services.CatalogSnapshot, len(items))
+	for i, item := range items {
+		catalog[i] = services.CatalogSnapshotFromItem(item)
+	}
+	exemptions := make(map[int64]bool, len(customers))
+	for _, customer := range customers {
+		exemptions[customer.ID] = customer.TaxExempt
+	}
+	return services.EncodeEditorBootstrap(catalog, existingLineItems, handlerCustomerTaxContext{
+		defaultTaxRate: defaultTaxRate,
+		exemptions:     exemptions,
+	})
 }
 
 func statusName(statuses []*ent.Status, id *int64) string {

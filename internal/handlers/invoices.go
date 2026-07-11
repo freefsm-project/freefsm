@@ -204,7 +204,12 @@ func (h *InvoiceHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 
 func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		templates.InvoiceForm(h.newInvoiceForm(r.Context())).Render(r.Context(), w)
+		data, err := h.newInvoiceForm(r.Context())
+		if err != nil {
+			internalServerError(w, r, "build invoice editor", err)
+			return
+		}
+		templates.InvoiceForm(data).Render(r.Context(), w)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -272,7 +277,11 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		statuses := h.statusesForSelect(r.Context())
-		fd := h.formDataFromInvoice(r.Context(), i, statuses)
+		fd, err := h.formDataFromInvoice(r.Context(), i, statuses)
+		if err != nil {
+			internalServerError(w, r, "build invoice editor", err)
+			return
+		}
 		templates.InvoiceForm(fd).Render(r.Context(), w)
 		return
 	}
@@ -438,48 +447,50 @@ func (h *InvoiceHandler) statusesForSelect(ctx context.Context) []*ent.Status {
 	return statuses
 }
 
-func (h *InvoiceHandler) itemsCatalog(ctx context.Context) string {
-	items, _ := h.itemSvc.ListActive(ctx)
-	return itemsToJSON(items)
-}
-
-func (h *InvoiceHandler) newInvoiceForm(ctx context.Context) templates.InvoiceFormPageData {
+func (h *InvoiceHandler) newInvoiceForm(ctx context.Context) (templates.InvoiceFormPageData, error) {
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
+	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, "[]", defaultTaxRate)
+	if err != nil {
+		return templates.InvoiceFormPageData{}, err
+	}
 	return templates.InvoiceFormPageData{
 		Invoice:           &templates.InvoiceDetail{TaxRate: defaultTaxRate},
 		IsNew:             true,
 		Customers:         customerOptions(customers),
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
-		ItemsJSON:         h.itemsCatalog(ctx),
-		ExistingItemsJSON: "[]",
-		CustomersJSON:     customerTaxContextJSON(customers, defaultTaxRate),
+		ItemsJSON:         bootstrap.ItemsJSON,
+		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
+		CustomersJSON:     bootstrap.CustomersJSON,
 		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
-	}
+	}, nil
 }
 
-func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice, statuses []*ent.Status) templates.InvoiceFormPageData {
+func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice, statuses []*ent.Status) (templates.InvoiceFormPageData, error) {
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
 	d := invoiceToDetail(ctx, i, statuses)
-	items := h.svc.LineItems(i)
+	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, i.LineItems, defaultTaxRate)
+	if err != nil {
+		return templates.InvoiceFormPageData{}, err
+	}
 	return templates.InvoiceFormPageData{
 		Invoice:           &d,
 		IsNew:             false,
 		Customers:         customerOptions(customers),
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
-		ItemsJSON:         h.itemsCatalog(ctx),
-		ExistingItemsJSON: services.SerializeLineItems(items),
-		CustomersJSON:     customerTaxContextJSON(customers, defaultTaxRate),
+		ItemsJSON:         bootstrap.ItemsJSON,
+		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
+		CustomersJSON:     bootstrap.CustomersJSON,
 		CustomFields:      buildCustomFieldDisplay(defs, i.CustomFields),
-	}
+	}, nil
 }
 
 func invoiceToDetail(ctx context.Context, i *ent.Invoice, statuses []*ent.Status) templates.InvoiceDetail {
@@ -632,7 +643,11 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 	customers, _ := h.custSvc.ListAll(r.Context())
 	jobs, _ := h.jobSvc.ListAll(r.Context())
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
-	items, _ := services.ParseLineItems(j.LineItems)
+	bootstrap, err := lineItemEditorBootstrap(r.Context(), h.itemSvc, customers, j.LineItems, companyDefaultTaxRate(r.Context()))
+	if err != nil {
+		internalServerError(w, r, "build invoice editor", err)
+		return
+	}
 	data := templates.InvoiceFormPageData{
 		Invoice: &templates.InvoiceDetail{
 			CustomerID: j.CustomerID,
@@ -646,9 +661,9 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		Customers:         customerOptions(customers),
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
-		ItemsJSON:         h.itemsCatalog(r.Context()),
-		ExistingItemsJSON: services.SerializeLineItems(items),
-		CustomersJSON:     customerTaxContextJSON(customers, companyDefaultTaxRate(r.Context())),
+		ItemsJSON:         bootstrap.ItemsJSON,
+		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
+		CustomersJSON:     bootstrap.CustomersJSON,
 		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
 		CancelURL:         fmt.Sprintf("/jobs/%d", id),
 	}
@@ -674,6 +689,11 @@ func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Reque
 	customers, _ := h.custSvc.ListAll(r.Context())
 	jobs, _ := h.jobSvc.ListAll(r.Context())
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
+	bootstrap, err := lineItemEditorBootstrap(r.Context(), h.itemSvc, customers, "[]", companyDefaultTaxRate(r.Context()))
+	if err != nil {
+		internalServerError(w, r, "build invoice editor", err)
+		return
+	}
 	data := templates.InvoiceFormPageData{
 		Invoice: &templates.InvoiceDetail{
 			CustomerID: id,
@@ -684,9 +704,9 @@ func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Reque
 		Customers:         customerOptions(customers),
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
-		ItemsJSON:         h.itemsCatalog(r.Context()),
-		ExistingItemsJSON: "[]",
-		CustomersJSON:     customerTaxContextJSON(customers, companyDefaultTaxRate(r.Context())),
+		ItemsJSON:         bootstrap.ItemsJSON,
+		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
+		CustomersJSON:     bootstrap.CustomersJSON,
 		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
 		CancelURL:         fmt.Sprintf("/customers/%d", id),
 	}

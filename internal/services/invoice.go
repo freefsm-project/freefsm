@@ -432,7 +432,7 @@ func InvoicePaginationTotalPages(total, perPage int) int {
 }
 
 func (s *InvoiceService) LineItems(i *ent.Invoice) []LineItem {
-	items, _ := ParseLineItems(i.LineItems)
+	items, _ := DecodeLineItems(i.LineItems)
 	if items == nil {
 		return []LineItem{}
 	}
@@ -460,7 +460,7 @@ func (s *InvoiceService) CreateFromEstimate(ctx context.Context, estimateID int6
 		statusID = draftStatus.ID
 	}
 
-	items, err := ParseLineItems(e.LineItems)
+	items, err := DecodeLineItems(e.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("parse estimate %d line items: %w", estimateID, err)
 	}
@@ -536,7 +536,7 @@ func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusS
 		statusID = newStatus.ID
 	}
 
-	items, err := ParseLineItems(j.LineItems)
+	items, err := DecodeLineItems(j.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("parse job %d line items: %w", jobID, err)
 	}
@@ -599,7 +599,7 @@ func (s *InvoiceService) DeletePayment(ctx context.Context, invoiceID int64, pay
 }
 
 func InvoiceAmountDue(i *ent.Invoice) (float64, float64, error) {
-	items, err := ParseLineItems(i.LineItems)
+	items, err := DecodeLineItems(i.LineItems)
 	if err != nil {
 		return 0, 0, fmt.Errorf("parse invoice line items: %w", err)
 	}

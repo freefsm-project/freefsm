@@ -270,7 +270,7 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 		statusID = draftStatus.ID
 	}
 
-	items, err := ParseLineItems(j.LineItems)
+	items, err := DecodeLineItems(j.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("parse job %d line items: %w", jobID, err)
 	}
@@ -288,7 +288,7 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 }
 
 func (s *EstimateService) LineItems(e *ent.Estimate) []LineItem {
-	items, _ := ParseLineItems(e.LineItems)
+	items, _ := DecodeLineItems(e.LineItems)
 	if items == nil {
 		return []LineItem{}
 	}

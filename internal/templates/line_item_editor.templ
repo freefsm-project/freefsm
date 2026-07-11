@@ -1,0 +1,166 @@
+package templates
+
+type LineItemEditorData struct {
+	ItemsJSON         string
+	ExistingItemsJSON string
+	CustomersJSON     string
+}
+
+templ LineItemEditor(p LineItemEditorData) {
+	<script>
+		function lineItemEditor(root) {
+			const readJSON = (name, fallback) => JSON.parse(root.querySelector(`[data-line-item-json="${name}"]`).textContent || fallback);
+			const catalog = readJSON('catalog', '[]');
+			const existing = readJSON('existing', '[]');
+			const taxContext = readJSON('customers', '{"default_tax_rate":"0","customers":{}}');
+			const form = root.closest('form');
+			const makeItem = () => ({ item_id: 0, title: '', description: '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: 0, surcharge: 0 });
+			const makeNewItem = () => ({ name: '', type: 'product', sku: '', description: '', unit_price: 0, unit_cost: 0, taxable: true, tax_rate: '', track_inventory: false });
+			const parseRate = (value) => (parseFloat(String(value || '').replace('%', '').trim()) || 0) / 100;
+			const roundMoney = (value) => Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * 100) / 100;
+			existing.forEach((item) => {
+				if (item.quantity === null || item.quantity === undefined || item.quantity === '') item.quantity = 1;
+				item.item_id = Number(item.item_id) || 0;
+			});
+			return {
+				items: existing.length ? existing : [makeItem()],
+				catalog,
+				newItem: makeNewItem(),
+				creatingItem: false,
+				createItemError: '',
+				wasTaxExempt: false,
+				lastNonExemptTaxRate: taxContext.default_tax_rate || '0',
+				taxVersion: 0,
+				init() {
+					const customerSelect = form.querySelector('select[name="customer_id"]');
+					const taxInput = form.querySelector('input[name="tax_rate"]');
+					if (customerSelect) customerSelect.addEventListener('change', () => this.syncCustomerTax());
+					if (taxInput) taxInput.addEventListener('input', () => { this.taxVersion++; });
+					this.syncCustomerTax();
+				},
+				add() { this.items.push(makeItem()); },
+				remove(index) { this.items.splice(index, 1); },
+				applyCatalogItem(item, catalogItem) {
+					item.item_id = Number(catalogItem.id) || 0;
+					item.title = catalogItem.name;
+					item.description = catalogItem.description || '';
+					item.unit_price = Number(catalogItem.unit_price) || 0;
+					item.taxable = Boolean(catalogItem.taxable);
+					item.tax_rate = catalogItem.tax_rate || '';
+				},
+				selectItem(index, itemID) {
+					this.items[index].item_id = Number(itemID) || 0;
+					const catalogItem = this.catalog.find((candidate) => candidate.id == itemID);
+					if (catalogItem) this.applyCatalogItem(this.items[index], catalogItem);
+				},
+				openCreateItemModal() {
+					this.createItemError = '';
+					if (this.$refs.createItemDialog && !this.$refs.createItemDialog.open) this.$refs.createItemDialog.showModal();
+				},
+				closeCreateItemModal() {
+					if (this.$refs.createItemDialog && this.$refs.createItemDialog.open) this.$refs.createItemDialog.close();
+				},
+				documentTaxRate() {
+					this.taxVersion;
+					const taxInput = form.querySelector('input[name="tax_rate"]');
+					return parseRate(taxInput ? taxInput.value : taxContext.default_tax_rate);
+				},
+				syncCustomerTax() {
+					const customerSelect = form.querySelector('select[name="customer_id"]');
+					const taxInput = form.querySelector('input[name="tax_rate"]');
+					if (!customerSelect || !taxInput) return;
+					const info = taxContext.customers[String(customerSelect.value)] || {};
+					if (info.tax_exempt) {
+						if (!this.wasTaxExempt && parseRate(taxInput.value) > 0) this.lastNonExemptTaxRate = taxInput.value;
+						taxInput.value = '0';
+						this.wasTaxExempt = true;
+						this.taxVersion++;
+						return;
+					}
+					if (this.wasTaxExempt && parseRate(taxInput.value) <= 0) taxInput.value = this.lastNonExemptTaxRate || taxContext.default_tax_rate || '0';
+					if (!this.wasTaxExempt && !taxInput.value) taxInput.value = taxContext.default_tax_rate || '0';
+					this.wasTaxExempt = false;
+					this.taxVersion++;
+				},
+				async createItem() {
+					this.createItemError = '';
+					if (!this.newItem.name.trim()) { this.createItemError = 'Item name is required.'; return; }
+					this.creatingItem = true;
+					try {
+						const body = new URLSearchParams();
+						['name', 'type', 'sku', 'description', 'unit_price', 'unit_cost', 'tax_rate'].forEach((name) => body.set(name, this.newItem[name] || ''));
+						body.set('taxable', this.newItem.taxable ? 'true' : 'false');
+						body.set('track_inventory', this.newItem.track_inventory ? 'true' : 'false');
+						const csrf = document.querySelector('meta[name="csrf-token"]');
+						const response = await fetch('/items/inline', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrf ? csrf.content : '' }, body });
+						if (!response.ok) throw new Error((await response.text()) || 'Unable to create item.');
+						const created = await response.json();
+						this.catalog.push(created);
+						const item = makeItem();
+						this.applyCatalogItem(item, created);
+						this.items.push(item);
+						this.newItem = makeNewItem();
+						this.closeCreateItemModal();
+					} catch (error) {
+						this.createItemError = error.message || 'Unable to create item.';
+					} finally { this.creatingItem = false; }
+				},
+				lineTotal(item) { return roundMoney((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount || 0) + Number(item.surcharge || 0)); },
+				get subtotal() { return roundMoney(this.items.reduce((sum, item) => sum + this.lineTotal(item), 0)); },
+				get tax() { return roundMoney(this.items.reduce((sum, item) => item.taxable ? sum + this.lineTotal(item) : sum, 0) * this.documentTaxRate()); },
+				get total() { return roundMoney(this.subtotal + this.tax); },
+				get json() { return JSON.stringify(this.items.filter((item) => item.item_id > 0 || item.title).map((item) => ({ item_id: Number(item.item_id) || 0, title: item.title, description: item.description, unit_price: Number(item.unit_price) || 0, quantity: Number(item.quantity), taxable: Boolean(item.taxable), tax_rate: item.tax_rate || '', discount: Number(item.discount) || 0, surcharge: Number(item.surcharge) || 0 }))); },
+			};
+		}
+	</script>
+	<fieldset x-data="lineItemEditor($el)" data-line-item-editor>
+		@templ.Raw(`<script type="application/json" data-line-item-json="catalog">` + p.ItemsJSON + `</script>`)
+		@templ.Raw(`<script type="application/json" data-line-item-json="existing">` + p.ExistingItemsJSON + `</script>`)
+		@templ.Raw(`<script type="application/json" data-line-item-json="customers">` + p.CustomersJSON + `</script>`)
+		<legend>Line Items</legend>
+		<table>
+			<thead><tr><th>Catalog</th><th>Title</th><th>Description</th><th>Qty</th><th>Price</th><th>Discount</th><th>Surcharge</th><th>Taxable</th><th>Total</th><th></th></tr></thead>
+			<tbody>
+				<template x-for="(item, index) in items" :key="index">
+					<tr>
+						<td><select x-model.number="item.item_id" x-init="$nextTick(() => { $el.value = String(item.item_id || 0) })" @change="selectItem(index, $el.value)"><option value="0">Free-text line</option><template x-for="catalogItem in catalog" :key="catalogItem.id"><option :value="catalogItem.id" :selected="Number(catalogItem.id) === Number(item.item_id)" x-text="catalogItem.name"></option></template></select></td>
+						<td><input type="text" x-model="item.title" placeholder="Line title" aria-label="Line item title"/></td>
+						<td><textarea x-model="item.description" rows="2" placeholder="Line item description"></textarea></td>
+						<td><input type="number" x-model="item.quantity" step="any" min="0.000001" class="input-width-70" aria-label="Quantity"/></td>
+						<td><input type="number" x-model="item.unit_price" step="0.01" class="input-width-100" aria-label="Unit price"/></td>
+						<td><input type="number" x-model="item.discount" step="0.01" min="0" class="input-width-100" aria-label="Discount"/></td>
+						<td><input type="number" x-model="item.surcharge" step="0.01" min="0" class="input-width-100" aria-label="Surcharge"/></td>
+						<td><input type="checkbox" x-model="item.taxable" aria-label="Taxable line item"/></td>
+						<td><span x-text="lineTotal(item).toFixed(2)"></span></td>
+						<td><button @click.prevent="remove(index)" class="outline contrast small" aria-label="Remove line item">X</button></td>
+					</tr>
+				</template>
+			</tbody>
+		</table>
+		<div class="line-item-actions">
+			<button @click.prevent="add()" class="outline">Add Line</button>
+			if canManageOperational(ctx) {
+				<button @click.prevent="openCreateItemModal()" class="outline">Create Item</button>
+			}
+		</div>
+		if canManageOperational(ctx) {
+			<dialog class="item-create-dialog" x-ref="createItemDialog" @click.self="closeCreateItemModal()">
+				<article class="item-create-dialog-card">
+					<header class="item-create-dialog-header"><strong>Create Item</strong><button type="button" class="outline small" @click="closeCreateItemModal()">Close</button></header>
+					<div class="item-create-dialog-body">
+						<label>Name <small class="required-marker">*</small><input type="text" x-model="newItem.name" placeholder="Item name"/></label>
+						<div class="grid"><label>Type<select x-model="newItem.type"><option value="product">product</option><option value="service">service</option></select></label><label>SKU<input type="text" x-model="newItem.sku" placeholder="Optional"/></label></div>
+						<div class="grid"><label>Unit Price<input type="number" x-model="newItem.unit_price" step="0.01" min="0"/></label><label>Unit Cost<input type="number" x-model="newItem.unit_cost" step="0.01" min="0"/></label></div>
+						<div class="grid"><label><input type="checkbox" x-model="newItem.taxable"/> Taxable</label><label>Tax Rate<input type="text" x-model="newItem.tax_rate" placeholder="e.g. 8.25%"/></label></div>
+						<label><input type="checkbox" x-model="newItem.track_inventory"/> Track Inventory</label>
+						<label>Description<textarea x-model="newItem.description" rows="3"></textarea></label>
+						<small class="error-msg" x-text="createItemError" x-show="createItemError"></small>
+					</div>
+					<footer class="item-create-dialog-actions"><button type="button" @click="createItem()" :aria-busy="creatingItem" x-text="creatingItem ? 'Creating...' : 'Create Item'"></button><button type="button" class="outline" @click="closeCreateItemModal()">Cancel</button></footer>
+				</article>
+			</dialog>
+		}
+		<div class="line-item-totals"><p>Subtotal: $<span x-text="subtotal.toFixed(2)"></span></p><p>Tax: $<span x-text="tax.toFixed(2)"></span></p><p><strong>Total: $<span x-text="total.toFixed(2)"></span></strong></p></div>
+		<input type="hidden" name="line_items" :value="json"/>
+	</fieldset>
+}

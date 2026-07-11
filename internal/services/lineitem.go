@@ -8,6 +8,8 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+
+	"github.com/freefsm-project/freefsm/internal/ent"
 )
 
 var (
@@ -81,8 +83,116 @@ type LineItem struct {
 	Surcharge   float64 `json:"surcharge"`
 }
 
-func ParseLineItems(s string) ([]LineItem, error) {
-	return DecodeLineItems(s)
+// CatalogSnapshot contains only the catalog values copied into a document line.
+// Once created, a LineItem is independent of later catalog changes.
+type CatalogSnapshot struct {
+	ID          int64   `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	UnitPrice   float64 `json:"unit_price"`
+	Taxable     bool    `json:"taxable"`
+	TaxRate     string  `json:"tax_rate"`
+}
+
+// CustomerTaxContext supplies already-decided tax context for editor bootstrap.
+// The line-item module serializes it but does not decide customer tax policy.
+type CustomerTaxContext interface {
+	DefaultTaxRate() string
+	CustomerTaxExemptions() map[int64]bool
+}
+
+type EditorBootstrap struct {
+	ItemsJSON         string
+	ExistingItemsJSON string
+	CustomersJSON     string
+}
+
+func CatalogSnapshotFromItem(item *ent.Item) CatalogSnapshot {
+	if item == nil {
+		return CatalogSnapshot{}
+	}
+	return CatalogSnapshot{
+		ID:          item.ID,
+		Name:        item.Name,
+		Description: item.Description,
+		UnitPrice:   item.UnitPrice,
+		Taxable:     item.Taxable,
+		TaxRate:     item.TaxRate,
+	}
+}
+
+func (snapshot CatalogSnapshot) NewLineItem(quantity float64) (LineItem, error) {
+	line := LineItem{
+		ItemID:      snapshot.ID,
+		Title:       snapshot.Name,
+		Description: snapshot.Description,
+		UnitPrice:   snapshot.UnitPrice,
+		Quantity:    quantity,
+		Taxable:     snapshot.Taxable,
+		TaxRate:     snapshot.TaxRate,
+	}
+	if err := ValidateLineItems([]LineItem{line}); err != nil {
+		return LineItem{}, fmt.Errorf("create line item from catalog snapshot: %w", err)
+	}
+	return line, nil
+}
+
+func ReferencesItem(items []LineItem, itemID int64) bool {
+	if itemID <= 0 {
+		return false
+	}
+	for _, item := range items {
+		if item.ItemID == itemID {
+			return true
+		}
+	}
+	return false
+}
+
+func EncodeEditorBootstrap(catalog []CatalogSnapshot, existingLineItems string, taxContext CustomerTaxContext) (EditorBootstrap, error) {
+	if catalog == nil {
+		catalog = []CatalogSnapshot{}
+	}
+	itemsJSON, err := json.Marshal(catalog)
+	if err != nil {
+		return EditorBootstrap{}, fmt.Errorf("encode catalog snapshots: %w", err)
+	}
+
+	existing, err := DecodeLineItems(existingLineItems)
+	if err != nil {
+		return EditorBootstrap{}, fmt.Errorf("decode existing line items: %w", err)
+	}
+	existingJSON, err := EncodeLineItems(existing)
+	if err != nil {
+		return EditorBootstrap{}, fmt.Errorf("encode existing line items: %w", err)
+	}
+
+	if taxContext == nil {
+		return EditorBootstrap{}, errors.New("customer tax context is required")
+	}
+	type customerTaxInfo struct {
+		TaxExempt bool `json:"tax_exempt"`
+	}
+	customers := make(map[int64]customerTaxInfo, len(taxContext.CustomerTaxExemptions()))
+	for id, exempt := range taxContext.CustomerTaxExemptions() {
+		customers[id] = customerTaxInfo{TaxExempt: exempt}
+	}
+	customersJSON, err := json.Marshal(struct {
+		DefaultTaxRate string                    `json:"default_tax_rate"`
+		Customers      map[int64]customerTaxInfo `json:"customers"`
+	}{
+		DefaultTaxRate: taxContext.DefaultTaxRate(),
+		Customers:      customers,
+	})
+	if err != nil {
+		return EditorBootstrap{}, fmt.Errorf("encode customer tax context: %w", err)
+	}
+
+	return EditorBootstrap{
+		ItemsJSON:         string(itemsJSON),
+		ExistingItemsJSON: existingJSON,
+		CustomersJSON:     string(customersJSON),
+	}, nil
 }
 
 func DecodeLineItems(s string) ([]LineItem, error) {
@@ -230,14 +340,4 @@ func addMoney(total *Money, amount Money) error {
 	}
 	total.minorUnits = result.Int64()
 	return nil
-}
-
-// SerializeLineItems is a legacy display compatibility helper that falls back
-// to an empty list when the supplied line items cannot be encoded.
-func SerializeLineItems(items []LineItem) string {
-	s, err := EncodeLineItems(items)
-	if err != nil {
-		return "[]"
-	}
-	return s
 }

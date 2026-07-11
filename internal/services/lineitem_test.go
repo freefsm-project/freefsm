@@ -217,3 +217,109 @@ func TestLineAndTaxRoundingHalfAwayFromZero(t *testing.T) {
 		t.Errorf("negative half-cent = %d, want -1", negative.MinorUnits())
 	}
 }
+
+func TestCatalogSnapshotCreatesFrozenLineItem(t *testing.T) {
+	item := &ent.Item{
+		ID:          42,
+		Name:        "Service call",
+		Description: "Original description",
+		UnitPrice:   125.50,
+		Taxable:     true,
+		TaxRate:     "8.25",
+	}
+
+	snapshot := CatalogSnapshotFromItem(item)
+	line, err := snapshot.NewLineItem(2.5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item.Name = "Changed catalog name"
+	item.Description = "Changed catalog description"
+	item.UnitPrice = 1
+	item.Taxable = false
+
+	want := LineItem{
+		ItemID:      42,
+		Title:       "Service call",
+		Description: "Original description",
+		UnitPrice:   125.50,
+		Quantity:    2.5,
+		Taxable:     true,
+		TaxRate:     "8.25",
+	}
+	if line != want {
+		t.Fatalf("NewLineItem() = %#v, want frozen snapshot %#v", line, want)
+	}
+}
+
+func TestCatalogSnapshotQuantityValidation(t *testing.T) {
+	snapshot := CatalogSnapshot{ID: 1, Name: "Labor", UnitPrice: 10}
+	for _, quantity := range []float64{0, -1, math.NaN(), math.Inf(1)} {
+		if _, err := snapshot.NewLineItem(quantity); !errors.Is(err, ErrInvalidLineItem) {
+			t.Errorf("NewLineItem(%v) error = %v, want ErrInvalidLineItem", quantity, err)
+		}
+	}
+}
+
+func TestReferencesItemUsesProvenanceIDOnly(t *testing.T) {
+	items := []LineItem{
+		{ItemID: 0, Title: "Duplicate", Quantity: 1},
+		{ItemID: 7, Title: "Duplicate", Quantity: 1},
+	}
+	if !ReferencesItem(items, 7) {
+		t.Error("ReferencesItem(items, 7) = false, want true")
+	}
+	for _, itemID := range []int64{0, -1, 8} {
+		if ReferencesItem(items, itemID) {
+			t.Errorf("ReferencesItem(items, %d) = true, want false", itemID)
+		}
+	}
+}
+
+type testCustomerTaxContext struct {
+	defaultRate string
+	exemptions  map[int64]bool
+}
+
+func (c testCustomerTaxContext) DefaultTaxRate() string                { return c.defaultRate }
+func (c testCustomerTaxContext) CustomerTaxExemptions() map[int64]bool { return c.exemptions }
+
+func TestEncodeEditorBootstrapIsDeterministicAndPreservesSnapshots(t *testing.T) {
+	catalog := []CatalogSnapshot{
+		{ID: 2, Name: "Duplicate", Description: "new", UnitPrice: 99, Taxable: true, TaxRate: "9"},
+		{ID: 1, Name: "Duplicate", UnitPrice: 10},
+	}
+	existing := `[{"item_id":2,"title":"Edited title","description":"frozen","unit_price":12.5,"quantity":2,"taxable":false,"tax_rate":"5","discount":1,"surcharge":3},{"item_id":0,"title":"Free text","description":"manual","unit_price":4,"quantity":1,"taxable":false,"tax_rate":"","discount":0,"surcharge":0}]`
+	taxContext := testCustomerTaxContext{defaultRate: "8.25", exemptions: map[int64]bool{9: true, 3: false}}
+
+	first, err := EncodeEditorBootstrap(catalog, existing, taxContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := EncodeEditorBootstrap(catalog, existing, taxContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second {
+		t.Fatalf("bootstrap output is not deterministic:\nfirst:  %#v\nsecond: %#v", first, second)
+	}
+	if first.ItemsJSON != `[{"id":2,"name":"Duplicate","description":"new","unit_price":99,"taxable":true,"tax_rate":"9"},{"id":1,"name":"Duplicate","description":"","unit_price":10,"taxable":false,"tax_rate":""}]` {
+		t.Errorf("ItemsJSON = %s", first.ItemsJSON)
+	}
+	if first.ExistingItemsJSON != existing {
+		t.Errorf("ExistingItemsJSON = %s, want frozen lines %s", first.ExistingItemsJSON, existing)
+	}
+	if first.CustomersJSON != `{"default_tax_rate":"8.25","customers":{"3":{"tax_exempt":false},"9":{"tax_exempt":true}}}` {
+		t.Errorf("CustomersJSON = %s", first.CustomersJSON)
+	}
+}
+
+func TestEncodeEditorBootstrapRejectsMalformedOrInvalidExistingLines(t *testing.T) {
+	context := testCustomerTaxContext{defaultRate: "0"}
+	if _, err := EncodeEditorBootstrap(nil, `[`, context); !errors.Is(err, ErrMalformedLineItems) {
+		t.Fatalf("malformed existing lines error = %v, want ErrMalformedLineItems", err)
+	}
+	if _, err := EncodeEditorBootstrap(nil, `[{"title":"","quantity":0}]`, context); !errors.Is(err, ErrInvalidLineItem) {
+		t.Fatalf("invalid existing line error = %v, want ErrInvalidLineItem", err)
+	}
+}

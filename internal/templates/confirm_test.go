@@ -127,33 +127,27 @@ func TestJobInlineCreateSelectsCreatedOptionDirectly(t *testing.T) {
 }
 
 func TestDocumentCreateItemModalsDoNotBlockFormSubmit(t *testing.T) {
-	forms := map[string]string{
-		"invoices_form.templ":  `<form action={ templ.URL(invoiceFormAction(p.IsNew, p.Invoice.ID)) }`,
-		"estimates_form.templ": `<form action={ templ.URL(estimateFormAction(p.IsNew, p.Estimate.ID)) }`,
-	}
-
-	for path, formStartPattern := range forms {
+	for _, path := range []string{"invoices_form.templ", "estimates_form.templ"} {
 		content, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("read %s: %v", path, err)
 		}
 		text := string(content)
 
-		formStart := strings.Index(text, formStartPattern)
-		if formStart == -1 {
-			t.Fatalf("%s form start not found", path)
+		if !strings.Contains(text, `@LineItemEditor(LineItemEditorData{`) {
+			t.Fatalf("%s should invoke the shared line-item editor", path)
 		}
-		formEnd := strings.Index(text[formStart:], `</form>`)
-		if formEnd == -1 {
-			t.Fatalf("%s form end not found", path)
-		}
-		formBody := text[formStart : formStart+formEnd]
+	}
 
-		if strings.Contains(formBody, `x-model="newItem.name" placeholder="Item name" required`) {
-			t.Fatalf("%s create item modal name field is required inside the main form; this can block Save", path)
-		}
-		if !strings.Contains(formBody, `this.createItemError = 'Item name is required.'`) {
-			t.Fatalf("%s should keep JS validation for create item modal name", path)
-		}
+	content, err := os.ReadFile("line_item_editor.templ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	if strings.Contains(text, `x-model="newItem.name" placeholder="Item name" required`) {
+		t.Fatal("create item modal name field is required inside the main form; this can block Save")
+	}
+	if !strings.Contains(text, `this.createItemError = 'Item name is required.'`) {
+		t.Fatal("shared editor should keep JS validation for create item modal name")
 	}
 }
