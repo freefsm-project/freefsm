@@ -54,6 +54,30 @@ func TestTagLinkServiceAttachListDetachIntegration(t *testing.T) {
 	}
 }
 
+func TestTagLinkServiceListsTagsAfterTargetArchivedIntegration(t *testing.T) {
+	client := openPolicyTestClient(t)
+	defer client.Close()
+
+	ctx := context.Background()
+	svc := NewTagLinkService(client, objectref.NewEntDirectory(client))
+	tag := client.Tag.Create().SetName("Archived Listable").SaveX(ctx)
+	customer := client.Customer.Create().SetDisplayName("Archived Listable Target").SaveX(ctx)
+	ref := objectref.New(objectref.TypeCustomer, customer.ID)
+
+	if _, err := svc.Attach(ctx, tag.ID, ref); err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+	client.Customer.UpdateOneID(customer.ID).SetDeletedAt(time.Now()).SaveX(ctx)
+
+	tags, err := svc.ListForObject(ctx, ref)
+	if err != nil {
+		t.Fatalf("ListForObject archived target: %v", err)
+	}
+	if len(tags) != 1 || tags[0].ID != tag.ID {
+		t.Fatalf("tags = %#v", tags)
+	}
+}
+
 func TestTagLinkServiceDuplicateAttachIntegration(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
@@ -107,6 +131,26 @@ func TestTagLinkServiceRejectsMissingAndArchivedTargetsIntegration(t *testing.T)
 	}
 	if _, err := svc.Attach(ctx, tag.ID, objectref.New(objectref.TypeCustomer, archivedCustomer.ID)); err == nil {
 		t.Fatal("Attach archived target error = nil")
+	}
+}
+
+func TestTagLinkServiceRejectsDetachFromArchivedTargetIntegration(t *testing.T) {
+	client := openPolicyTestClient(t)
+	defer client.Close()
+
+	ctx := context.Background()
+	svc := NewTagLinkService(client, objectref.NewEntDirectory(client))
+	tag := client.Tag.Create().SetName("Archived Detach").SaveX(ctx)
+	customer := client.Customer.Create().SetDisplayName("Archived Detach Target").SaveX(ctx)
+	ref := objectref.New(objectref.TypeCustomer, customer.ID)
+
+	if _, err := svc.Attach(ctx, tag.ID, ref); err != nil {
+		t.Fatalf("Attach: %v", err)
+	}
+	client.Customer.UpdateOneID(customer.ID).SetDeletedAt(time.Now()).SaveX(ctx)
+
+	if err := svc.Detach(ctx, tag.ID, ref); err == nil {
+		t.Fatal("Detach archived target error = nil")
 	}
 }
 

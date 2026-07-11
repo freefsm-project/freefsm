@@ -20,7 +20,7 @@ func NewTagLinkService(client *ent.Client, objects objectref.Directory) *TagLink
 }
 
 func (s *TagLinkService) Attach(ctx context.Context, tagID int64, ref objectref.Ref) (*ent.TagLink, error) {
-	if err := s.validateRef(ctx, ref); err != nil {
+	if err := s.validateRef(ctx, ref, objectref.ExistsActive); err != nil {
 		return nil, err
 	}
 	if err := s.validateTag(ctx, tagID); err != nil {
@@ -50,7 +50,7 @@ func (s *TagLinkService) Attach(ctx context.Context, tagID int64, ref objectref.
 }
 
 func (s *TagLinkService) Detach(ctx context.Context, tagID int64, ref objectref.Ref) error {
-	if err := s.validateRef(ctx, ref); err != nil {
+	if err := s.validateRef(ctx, ref, objectref.ExistsActive); err != nil {
 		return err
 	}
 	if err := s.validateTag(ctx, tagID); err != nil {
@@ -67,7 +67,7 @@ func (s *TagLinkService) Detach(ctx context.Context, tagID int64, ref objectref.
 }
 
 func (s *TagLinkService) ListForObject(ctx context.Context, ref objectref.Ref) ([]*ent.Tag, error) {
-	if err := s.validateRef(ctx, ref); err != nil {
+	if err := s.validateRef(ctx, ref, objectref.ExistsAny); err != nil {
 		return nil, err
 	}
 
@@ -110,7 +110,7 @@ func (s *TagLinkService) ListObjectsWithTag(ctx context.Context, tagID int64, ty
 		All(ctx)
 }
 
-func (s *TagLinkService) validateRef(ctx context.Context, ref objectref.Ref) error {
+func (s *TagLinkService) validateRef(ctx context.Context, ref objectref.Ref, mode objectref.ExistenceMode) error {
 	if !ref.Valid() {
 		if _, err := objectref.Parse(ref.ObjectType(), ref.ObjectID()); err != nil {
 			return err
@@ -119,12 +119,15 @@ func (s *TagLinkService) validateRef(ctx context.Context, ref objectref.Ref) err
 	if err := s.validateType(ref.Type); err != nil {
 		return err
 	}
-	exists, err := s.objects.Exists(ctx, ref, objectref.ExistsActive)
+	exists, err := s.objects.Exists(ctx, ref, mode)
 	if err != nil {
 		return fmt.Errorf("validate tag target: %w", err)
 	}
 	if !exists {
-		return fmt.Errorf("tag target not found or archived: %s %d", ref.Type, ref.ID)
+		if mode == objectref.ExistsActive {
+			return fmt.Errorf("tag target not found or archived: %s %d", ref.Type, ref.ID)
+		}
+		return fmt.Errorf("tag target not found: %s %d", ref.Type, ref.ID)
 	}
 	return nil
 }
