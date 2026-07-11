@@ -52,7 +52,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	locationSvc := services.NewLocationService(entClient)
 	tagSvc := services.NewTagService(entClient)
 	tagLinkSvc := services.NewTagLinkService(entClient, objects)
-	commentSvc := services.NewCommentService(entClient)
+	commentSvc := services.NewCommentService(entClient, objects)
 	activitySvc := services.NewActivityService(entClient, objects)
 	depSvc := services.NewDependencyService(entClient)
 	policySvc := services.NewPolicyService(entClient)
