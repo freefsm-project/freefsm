@@ -15,6 +15,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/project"
 	"github.com/freefsm-project/freefsm/internal/ent/status"
 	"github.com/freefsm-project/freefsm/internal/ent/statusworkflow"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
@@ -128,10 +129,15 @@ type RecentEstimate struct {
 
 type DashboardService struct {
 	client *ent.Client
+	db     *pgxpool.Pool
 }
 
-func NewDashboardService(client *ent.Client) *DashboardService {
-	return &DashboardService{client: client}
+func NewDashboardService(client *ent.Client, pools ...*pgxpool.Pool) *DashboardService {
+	s := &DashboardService{client: client}
+	if len(pools) > 0 {
+		s.db = pools[0]
+	}
+	return s
 }
 
 func (s *DashboardService) Widgets(ctx context.Context, u DashboardUser) ([]DashboardWidgetView, error) {
@@ -491,11 +497,10 @@ func (s *DashboardService) allWidgetDefinitions() []DashboardWidgetDefinition {
 	}
 }
 
-func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *ent.CompanySettings) (DashboardStats, error) {
+func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time.Location, cs *ent.CompanySettings) (DashboardStats, error) {
 	now := time.Now().In(loc)
 	startOfToday := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	startOfTomorrow := startOfToday.AddDate(0, 0, 1)
-	todayDate := now.Format("2006-01-02")
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
 
 	// Basic counts
@@ -521,7 +526,6 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *en
 		Count(ctx)
 
 	// Find status IDs
-	paidStatusID := s.statusIDByName(ctx, "invoice", "Paid")
 	voidStatusID := s.statusIDByName(ctx, "invoice", "Void")
 	draftStatusID := s.statusIDByName(ctx, "invoice", "Draft")
 	jobCompletedStatusID := s.statusIDByName(ctx, "job", "Completed")
@@ -535,7 +539,7 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *en
 	monthStarts := dashboardMonthStarts(now)
 	customerMonths := s.customerMonthlyBars(ctx, loc, monthStarts)
 	jobMonths := s.jobMonthlyBars(ctx, loc, monthStarts, now, jobCompletedStatusID)
-	invoiceMonths := s.invoiceMonthlyBars(ctx, loc, monthStarts, now, paidStatusID, draftStatusID, voidStatusID)
+	invoiceMonths := s.invoiceMonthlyBars(ctx, loc, monthStarts, now, draftStatusID, voidStatusID)
 	projectMonths := s.projectMonthlyBars(ctx, loc, monthStarts, inProgressStatusID, completedStatusID)
 
 	jobsScheduledToday, _ := s.client.Job.Query().
@@ -551,13 +555,11 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *en
 
 	// Invoices
 	invoicesPaid, _ := s.client.Invoice.Query().
-		Where(invoice.DeletedAtIsNil(), invoice.StatusIDEQ(paidStatusID)).
+		Where(invoice.DeletedAtIsNil(), invoice.SettlementStateEQ("paid")).
 		Count(ctx)
 
 	unpaidInvoicePredicates := []predicate.Invoice{invoice.DeletedAtIsNil()}
-	if paidStatusID != 0 {
-		unpaidInvoicePredicates = append(unpaidInvoicePredicates, invoice.StatusIDNEQ(paidStatusID))
-	}
+	unpaidInvoicePredicates = append(unpaidInvoicePredicates, invoice.SettlementStateNEQ("paid"))
 	if draftStatusID != 0 {
 		unpaidInvoicePredicates = append(unpaidInvoicePredicates, invoice.StatusIDNEQ(draftStatusID))
 	}
@@ -583,41 +585,36 @@ func (s *DashboardService) Stats(ctx context.Context, loc *time.Location, cs *en
 		Count(ctx)
 
 	// Revenue this month (payments received)
-	monthInvoices, _ := s.client.Invoice.Query().
-		Where(invoice.DeletedAtIsNil(), invoice.InvoiceDateGTE(startOfMonth)).
-		All(ctx)
-
-	var revenue float64
-	for _, i := range monthInvoices {
-		payments, _ := ParsePayments(i.Payments)
-		for _, p := range payments {
-			revenue += p.Amount
+	var revenue, paymentsCollectedToday float64
+	if s.db != nil {
+		monthCents, todayCents, err := s.paymentTotals(ctx, companyID, dashboardPeriod{monthStart: startOfMonth, todayStart: startOfToday, tomorrowStart: startOfTomorrow})
+		if err != nil {
+			return DashboardStats{}, err
 		}
-	}
-
-	paymentInvoices, _ := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil()).All(ctx)
-	var paymentsCollectedToday float64
-	for _, i := range paymentInvoices {
-		payments, _ := ParsePayments(i.Payments)
-		for _, p := range payments {
-			if p.Date == todayDate {
-				paymentsCollectedToday += p.Amount
-			}
-		}
+		revenue, paymentsCollectedToday = float64(monthCents)/100, float64(todayCents)/100
 	}
 
 	// Financial totals (exclude draft, paid, and void invoices)
-	allInvoices, _ := s.client.Invoice.Query().
+	allInvoices, err := s.client.Invoice.Query().
 		Where(
 			invoice.DeletedAtIsNil(),
 			invoice.StatusIDNEQ(draftStatusID),
-			invoice.StatusIDNEQ(paidStatusID),
 			invoice.StatusIDNEQ(voidStatusID),
 		).
 		All(ctx)
+	if err != nil {
+		return DashboardStats{}, err
+	}
+	settledByInvoice := map[int64]int64{}
+	if s.db != nil {
+		settledByInvoice, err = s.invoiceSettledTotals(ctx, companyID)
+		if err != nil {
+			return DashboardStats{}, err
+		}
+	}
 	var outstanding, overdue float64
 	for _, i := range allInvoices {
-		balance := s.invoiceBalance(i)
+		balance := s.invoiceBalance(i, settledByInvoice[i.ID])
 		if balance > 0 {
 			outstanding += balance
 			if !i.DueDate.IsZero() && i.DueDate.Before(now) {
@@ -809,7 +806,7 @@ func (s *DashboardService) jobMonthlyBars(ctx context.Context, loc *time.Locatio
 	return dashboardMonthlyBars(starts, counts, "Jobs created", []string{"created", "overdue"})
 }
 
-func (s *DashboardService) invoiceMonthlyBars(ctx context.Context, loc *time.Location, starts []time.Time, now time.Time, paidStatusID, draftStatusID, voidStatusID int64) []DashboardMonthlyBar {
+func (s *DashboardService) invoiceMonthlyBars(ctx context.Context, loc *time.Location, starts []time.Time, now time.Time, draftStatusID, voidStatusID int64) []DashboardMonthlyBar {
 	counts := make([]dashboardMonthlyCounts, len(starts))
 	invoices, _ := s.client.Invoice.Query().
 		Where(invoice.DeletedAtIsNil(), invoice.InvoiceDateGTE(starts[0]), invoice.InvoiceDateLT(starts[len(starts)-1].AddDate(0, 1, 0))).
@@ -822,7 +819,7 @@ func (s *DashboardService) invoiceMonthlyBars(ctx context.Context, loc *time.Loc
 		if idx < 0 {
 			continue
 		}
-		if dashboardStatusIDEquals(inv.StatusID, paidStatusID) {
+		if inv.SettlementState == "paid" {
 			counts[idx].Green++
 		} else if inv.DueDate.Before(now) {
 			counts[idx].Red++
@@ -892,32 +889,40 @@ func (s *DashboardService) invoiceTotal(i *ent.Invoice) float64 {
 	return totals.Total.MajorUnits()
 }
 
-func (s *DashboardService) invoiceBalance(i *ent.Invoice) float64 {
-	items, err := DecodeLineItems(i.LineItems)
+type dashboardPeriod struct {
+	monthStart, todayStart, tomorrowStart time.Time
+}
+
+func (s *DashboardService) paymentTotals(ctx context.Context, companyID int64, period dashboardPeriod) (int64, int64, error) {
+	var monthCents, todayCents int64
+	err := s.db.QueryRow(ctx, `SELECT coalesce(sum(amount_cents) FILTER (WHERE received_date >= $2),0),coalesce(sum(amount_cents) FILTER (WHERE received_date >= $3 AND received_date < $4),0) FROM invoice_payments p WHERE p.company_id=$1 AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.company_id=$1 AND r.operation_type='payment' AND r.operation_id=p.id)`, companyID, period.monthStart, period.todayStart, period.tomorrowStart).Scan(&monthCents, &todayCents)
+	return monthCents, todayCents, err
+}
+
+func (s *DashboardService) invoiceSettledTotals(ctx context.Context, companyID int64) (map[int64]int64, error) {
+	rows, err := s.db.Query(ctx, `SELECT i.id,coalesce(paid.amount_cents,0)+coalesce(credited.amount_cents,0) FROM invoices i LEFT JOIN (SELECT a.invoice_id,sum(a.amount_cents) amount_cents FROM payment_invoice_allocations a JOIN invoice_payments p ON p.id=a.payment_id WHERE p.company_id=$1 AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.company_id=$1 AND r.operation_type='payment' AND r.operation_id=p.id) GROUP BY a.invoice_id) paid ON paid.invoice_id=i.id LEFT JOIN (SELECT a.invoice_id,sum(a.amount_cents) amount_cents FROM credit_applications a WHERE a.company_id=$1 AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.company_id=$1 AND r.operation_type='credit_application' AND r.operation_id=a.id) GROUP BY a.invoice_id) credited ON credited.invoice_id=i.id WHERE i.company_id=$1`, companyID)
 	if err != nil {
-		return 0
+		return nil, err
 	}
-	totals, err := CalculateTotals(items, i.TaxRate)
-	if err != nil {
-		return 0
-	}
-	payments, _ := ParsePayments(i.Payments)
-	paid := Money{}
-	for _, p := range payments {
-		amount, err := MoneyFromMajorUnits(p.Amount)
-		if err != nil {
-			return 0
+	defer rows.Close()
+	totals := make(map[int64]int64)
+	for rows.Next() {
+		var invoiceID, cents int64
+		if err := rows.Scan(&invoiceID, &cents); err != nil {
+			return nil, err
 		}
-		paid, err = paid.Add(amount)
-		if err != nil {
-			return 0
-		}
+		totals[invoiceID] = cents
 	}
-	balance, err := totals.Total.Sub(paid)
-	if err != nil || balance.Compare(Money{}) < 0 {
+	return totals, rows.Err()
+}
+
+func (s *DashboardService) invoiceBalance(i *ent.Invoice, settled int64) float64 {
+	total := s.invoiceTotal(i)
+	balance := total - float64(settled)/100
+	if balance < 0 {
 		return 0
 	}
-	return balance.MajorUnits()
+	return balance
 }
 
 func (s *DashboardService) toRecentJobs(jobs []*ent.Job, custMap map[int64]string, loc *time.Location, cs *ent.CompanySettings) []RecentJob {
@@ -945,9 +950,7 @@ func (s *DashboardService) toRecentInvoices(invoices []*ent.Invoice, custMap, st
 			statusName = statusMap[*inv.StatusID]
 		}
 		customerName := ""
-		if inv.CustomerID != nil {
-			customerName = custMap[*inv.CustomerID]
-		}
+		customerName = custMap[inv.CustomerID]
 		result[i] = RecentInvoice{
 			ID:        inv.ID,
 			Title:     inv.Title,

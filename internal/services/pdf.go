@@ -27,6 +27,11 @@ type pdfTotals struct {
 	totalMoney      Money
 }
 
+type InvoicePDFSettlement struct {
+	AmountPaidCents int64
+	AmountDueCents  int64
+}
+
 func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, job *ent.Job, statuses []*ent.Status, cs *ent.CompanySettings) error {
 	items, err := DecodeLineItems(e.LineItems)
 	if err != nil {
@@ -48,45 +53,23 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 	return pdf.Output(w)
 }
 
-func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, asset *ent.Asset, statuses []*ent.Status, cs *ent.CompanySettings) error {
+func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, asset *ent.Asset, statuses []*ent.Status, cs *ent.CompanySettings, settlement InvoicePDFSettlement) error {
 	items, err := DecodeLineItems(i.LineItems)
 	if err != nil {
 		return fmt.Errorf("parse invoice line items: %w", err)
 	}
-	payments, err := ParsePayments(i.Payments)
-	if err != nil {
-		return fmt.Errorf("parse invoice payments: %w", err)
-	}
-
 	pdf := newDocumentPDF()
-	status, statusColor := statusForPDF(statuses, i.StatusID)
-	number := FormatInvoiceNumber(i.InvoiceNumber, cs)
-	writeTopHeader(pdf, "INVOICE", number, status, statusColor, cs)
+	status, color := statusForPDF(statuses, i.StatusID)
+	writeTopHeader(pdf, "INVOICE", documentNumber("invoice", i.InvoiceNumber, cs), status, color, cs)
 	writeDetailRow(pdf, customer, job, asset, invoiceDetails(i, status, cs), cs)
 	writeDocumentNotes(pdf, i.Notes)
 	totals, err := writeLineItems(pdf, items, i.TaxRate, cs)
 	if err != nil {
 		return fmt.Errorf("calculate invoice totals: %w", err)
 	}
-	paid := Money{}
-	for _, p := range payments {
-		amount, err := MoneyFromMajorUnits(p.Amount)
-		if err != nil {
-			return fmt.Errorf("calculate invoice payments: %w", err)
-		}
-		paid, err = paid.Add(amount)
-		if err != nil {
-			return fmt.Errorf("calculate invoice payments: %w", err)
-		}
-	}
-	totals.Paid = paid.MajorUnits()
-	due, err := totals.totalMoney.Sub(paid)
-	if err != nil {
-		return fmt.Errorf("calculate invoice amount due: %w", err)
-	}
-	totals.Due = due.MajorUnits()
+	totals.Paid = float64(settlement.AmountPaidCents) / 100
+	totals.Due = float64(settlement.AmountDueCents) / 100
 	writeSummary(pdf, cs, totals, true)
-
 	return pdf.Output(w)
 }
 

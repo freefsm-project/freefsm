@@ -103,12 +103,6 @@ func (_u *InvoiceUpdate) AddCustomerID(v int64) *InvoiceUpdate {
 	return _u
 }
 
-// ClearCustomerID clears the value of the "customer_id" field.
-func (_u *InvoiceUpdate) ClearCustomerID() *InvoiceUpdate {
-	_u.mutation.ClearCustomerID()
-	return _u
-}
-
 // SetJobID sets the "job_id" field.
 func (_u *InvoiceUpdate) SetJobID(v int64) *InvoiceUpdate {
 	_u.mutation.ResetJobID()
@@ -274,16 +268,16 @@ func (_u *InvoiceUpdate) SetNillableLineItems(v *string) *InvoiceUpdate {
 	return _u
 }
 
-// SetPayments sets the "payments" field.
-func (_u *InvoiceUpdate) SetPayments(v string) *InvoiceUpdate {
-	_u.mutation.SetPayments(v)
+// SetSettlementState sets the "settlement_state" field.
+func (_u *InvoiceUpdate) SetSettlementState(v string) *InvoiceUpdate {
+	_u.mutation.SetSettlementState(v)
 	return _u
 }
 
-// SetNillablePayments sets the "payments" field if the given value is not nil.
-func (_u *InvoiceUpdate) SetNillablePayments(v *string) *InvoiceUpdate {
+// SetNillableSettlementState sets the "settlement_state" field if the given value is not nil.
+func (_u *InvoiceUpdate) SetNillableSettlementState(v *string) *InvoiceUpdate {
 	if v != nil {
-		_u.SetPayments(*v)
+		_u.SetSettlementState(*v)
 	}
 	return _u
 }
@@ -416,9 +410,6 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedCustomerID(); ok {
 		_spec.AddField(invoice.FieldCustomerID, field.TypeInt64, value)
 	}
-	if _u.mutation.CustomerIDCleared() {
-		_spec.ClearField(invoice.FieldCustomerID, field.TypeInt64)
-	}
 	if value, ok := _u.mutation.JobID(); ok {
 		_spec.SetField(invoice.FieldJobID, field.TypeInt64, value)
 	}
@@ -464,8 +455,8 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.LineItems(); ok {
 		_spec.SetField(invoice.FieldLineItems, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Payments(); ok {
-		_spec.SetField(invoice.FieldPayments, field.TypeString, value)
+	if value, ok := _u.mutation.SettlementState(); ok {
+		_spec.SetField(invoice.FieldSettlementState, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.DisplaySettings(); ok {
 		_spec.SetField(invoice.FieldDisplaySettings, field.TypeString, value)
@@ -574,12 +565,6 @@ func (_u *InvoiceUpdateOne) SetNillableCustomerID(v *int64) *InvoiceUpdateOne {
 // AddCustomerID adds value to the "customer_id" field.
 func (_u *InvoiceUpdateOne) AddCustomerID(v int64) *InvoiceUpdateOne {
 	_u.mutation.AddCustomerID(v)
-	return _u
-}
-
-// ClearCustomerID clears the value of the "customer_id" field.
-func (_u *InvoiceUpdateOne) ClearCustomerID() *InvoiceUpdateOne {
-	_u.mutation.ClearCustomerID()
 	return _u
 }
 
@@ -748,16 +733,16 @@ func (_u *InvoiceUpdateOne) SetNillableLineItems(v *string) *InvoiceUpdateOne {
 	return _u
 }
 
-// SetPayments sets the "payments" field.
-func (_u *InvoiceUpdateOne) SetPayments(v string) *InvoiceUpdateOne {
-	_u.mutation.SetPayments(v)
+// SetSettlementState sets the "settlement_state" field.
+func (_u *InvoiceUpdateOne) SetSettlementState(v string) *InvoiceUpdateOne {
+	_u.mutation.SetSettlementState(v)
 	return _u
 }
 
-// SetNillablePayments sets the "payments" field if the given value is not nil.
-func (_u *InvoiceUpdateOne) SetNillablePayments(v *string) *InvoiceUpdateOne {
+// SetNillableSettlementState sets the "settlement_state" field if the given value is not nil.
+func (_u *InvoiceUpdateOne) SetNillableSettlementState(v *string) *InvoiceUpdateOne {
 	if v != nil {
-		_u.SetPayments(*v)
+		_u.SetSettlementState(*v)
 	}
 	return _u
 }
@@ -920,9 +905,6 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	if value, ok := _u.mutation.AddedCustomerID(); ok {
 		_spec.AddField(invoice.FieldCustomerID, field.TypeInt64, value)
 	}
-	if _u.mutation.CustomerIDCleared() {
-		_spec.ClearField(invoice.FieldCustomerID, field.TypeInt64)
-	}
 	if value, ok := _u.mutation.JobID(); ok {
 		_spec.SetField(invoice.FieldJobID, field.TypeInt64, value)
 	}
@@ -968,8 +950,8 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	if value, ok := _u.mutation.LineItems(); ok {
 		_spec.SetField(invoice.FieldLineItems, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.Payments(); ok {
-		_spec.SetField(invoice.FieldPayments, field.TypeString, value)
+	if value, ok := _u.mutation.SettlementState(); ok {
+		_spec.SetField(invoice.FieldSettlementState, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.DisplaySettings(); ok {
 		_spec.SetField(invoice.FieldDisplaySettings, field.TypeString, value)

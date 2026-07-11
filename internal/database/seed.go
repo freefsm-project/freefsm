@@ -278,13 +278,12 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		EstimateIdx int
 		StatusID    int64
 		TaxRate     string
-		Paid        bool
 	}{
-		{"Invoice - Acme Office Repair", 0, 1, -1, 3, "8.25", true},
-		{"Invoice - Regional Hospital Maint", 3, 1, 1, 2, "8.25", false},
-		{"Invoice - Metro Mall Thermostats", 1, 2, 2, 2, "8.25", false},
-		{"Invoice - Downtown Tower Compressor", 3, 4, 4, 2, "8.25", false},
-		{"Invoice - Warehouse Duct Cleaning", 2, 3, 3, 3, "8.25", true},
+		{"Invoice - Acme Office Repair", 0, 1, -1, 3, "8.25"},
+		{"Invoice - Regional Hospital Maint", 3, 1, 1, 2, "8.25"},
+		{"Invoice - Metro Mall Thermostats", 1, 2, 2, 2, "8.25"},
+		{"Invoice - Downtown Tower Compressor", 3, 4, 4, 2, "8.25"},
+		{"Invoice - Warehouse Duct Cleaning", 2, 3, 3, 3, "8.25"},
 	}
 
 	for i, d := range invoiceData {
@@ -314,17 +313,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 			return fmt.Errorf("create invoice %d: %w", i, err)
 		}
 
-		// Add payment for paid invoices
-		if d.Paid {
-			payments := []map[string]interface{}{
-				{"amount": 2850.00 + float64(i)*150, "method": "check", "date": now.Format("2006-01-02"), "reference": fmt.Sprintf("CHK-%04d", 1000+i)},
-			}
-			payJSON, _ := json.Marshal(payments)
-			_, err = inv.Update().SetPayments(string(payJSON)).Save(ctx)
-			if err != nil {
-				return fmt.Errorf("add payment to invoice %d: %w", i, err)
-			}
-		}
+		_ = inv
 	}
 
 	// --- Time Entries (5) for admin user (ID 1) ---

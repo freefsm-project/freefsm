@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,18 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/companysettings"
 	"github.com/freefsm-project/freefsm/internal/ent/invoice"
 )
+
+var ErrNegativeInvoiceTotal = errors.New("invoice total must not be negative")
+
+func invoiceSettlementState(totalCents, settledCents int64) string {
+	if totalCents == 0 || settledCents >= totalCents {
+		return "paid"
+	}
+	if settledCents > 0 {
+		return "partially_paid"
+	}
+	return "unpaid"
+}
 
 type InvoiceService struct {
 	client *ent.Client
@@ -145,8 +158,12 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 	if taxRate == "" {
 		taxRate = "0"
 	}
-	if _, err := CalculateTotals(params.LineItems, taxRate); err != nil {
+	totals, err := CalculateTotals(params.LineItems, taxRate)
+	if err != nil {
 		return nil, fmt.Errorf("calculate invoice totals: %w", err)
+	}
+	if totals.Total.MinorUnits() < 0 {
+		return nil, ErrNegativeInvoiceTotal
 	}
 	lineItems, err := EncodeLineItems(params.LineItems)
 	if err != nil {
@@ -165,6 +182,7 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 	}
 	b := s.client.Invoice.Create().
 		SetCustomerID(params.CustomerID).
+		SetSettlementState(invoiceSettlementState(totals.Total.MinorUnits(), 0)).
 		SetTitle(params.Title).
 		SetNotes(params.Notes).
 		SetInvoiceDate(params.InvoiceDate).
@@ -206,7 +224,10 @@ func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpd
 	if err != nil {
 		return nil, err
 	}
-	if params.LineItems != nil || params.TaxRate != nil {
+	var updatedTotalCents int64
+	var currentTotalCents int64
+	monetaryUpdate := params.LineItems != nil || params.TaxRate != nil
+	if monetaryUpdate {
 		items := []LineItem(nil)
 		if params.LineItems != nil {
 			items = *params.LineItems
@@ -220,11 +241,25 @@ func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpd
 		if params.TaxRate != nil {
 			taxRate = *params.TaxRate
 		}
-		if _, err := CalculateTotals(items, taxRate); err != nil {
+		totals, err := CalculateTotals(items, taxRate)
+		if err != nil {
 			return nil, fmt.Errorf("calculate invoice totals: %w", err)
 		}
+		if totals.Total.MinorUnits() < 0 {
+			return nil, ErrNegativeInvoiceTotal
+		}
+		updatedTotalCents = totals.Total.MinorUnits()
+		currentItems, decodeErr := DecodeLineItems(current.LineItems)
+		if decodeErr != nil {
+			return nil, fmt.Errorf("decode current invoice line items: %w", decodeErr)
+		}
+		currentTotals, totalErr := CalculateTotals(currentItems, current.TaxRate)
+		if totalErr != nil {
+			return nil, fmt.Errorf("calculate current invoice totals: %w", totalErr)
+		}
+		currentTotalCents = currentTotals.Total.MinorUnits()
 	}
-	customerID := int64Value(current.CustomerID)
+	customerID := current.CustomerID
 	jobID := int64Value(current.JobID)
 	estimateID := int64Value(current.EstimateID)
 	if params.CustomerID != nil {
@@ -291,6 +326,9 @@ func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpd
 	}
 	if params.LineItems != nil {
 		u.SetLineItems(encodedLineItems)
+	}
+	if monetaryUpdate && current.SettlementState != "partially_paid" && (current.SettlementState != "paid" || currentTotalCents == 0) {
+		u.SetSettlementState(invoiceSettlementState(updatedTotalCents, 0))
 	}
 	if params.CustomFields != nil {
 		u.SetCustomFields(*params.CustomFields)
@@ -439,15 +477,6 @@ func (s *InvoiceService) LineItems(i *ent.Invoice) []LineItem {
 	return items
 }
 
-func (s *InvoiceService) Payments(i *ent.Invoice) []Payment {
-	p, _ := ParsePayments(i.Payments)
-	backfillPaymentIDs(p)
-	if p == nil {
-		return []Payment{}
-	}
-	return p
-}
-
 func (s *InvoiceService) CreateFromEstimate(ctx context.Context, estimateID int64, statusSvc *StatusService) (*ent.Invoice, error) {
 	e, err := s.client.Estimate.Get(ctx, estimateID)
 	if err != nil {
@@ -468,12 +497,16 @@ func (s *InvoiceService) CreateFromEstimate(ctx context.Context, estimateID int6
 	if err != nil {
 		return nil, fmt.Errorf("encode estimate %d line items: %w", estimateID, err)
 	}
-	if _, err := CalculateTotals(items, e.TaxRate); err != nil {
+	totals, err := CalculateTotals(items, e.TaxRate)
+	if err != nil {
 		return nil, fmt.Errorf("calculate estimate %d totals: %w", estimateID, err)
 	}
 	now := time.Now()
 
 	custID := e.CustomerID
+	if custID == nil || *custID <= 0 {
+		return nil, errors.New("estimate customer is required to create an invoice")
+	}
 	jobID := e.JobID
 	if err := validateJobCustomer(ctx, s.client, int64Value(custID), int64Value(jobID), false); err != nil {
 		return nil, err
@@ -501,10 +534,11 @@ func (s *InvoiceService) CreateFromEstimate(ctx context.Context, estimateID int6
 		SetNotes(e.Notes).
 		SetTaxRate(e.TaxRate).
 		SetLineItems(encodedLineItems).
+		SetSettlementState(invoiceSettlementState(totals.Total.MinorUnits(), 0)).
 		SetStatusID(statusID).
 		SetInvoiceDate(now).
 		SetDueDate(now.AddDate(0, 0, 30)).
-		SetNillableCustomerID(custID).
+		SetCustomerID(*custID).
 		SetNillableJobID(jobID)
 	if cs.CompanyID != nil {
 		b.SetCompanyID(*cs.CompanyID)
@@ -554,75 +588,6 @@ func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusS
 		CustomFields: "[]",
 		LineItems:    items,
 	})
-}
-
-func (s *InvoiceService) RecordPayment(ctx context.Context, invoiceID int64, payment Payment) error {
-	i, err := s.client.Invoice.Get(ctx, invoiceID)
-	if err != nil {
-		return fmt.Errorf("get invoice %d: %w", invoiceID, err)
-	}
-	ensurePaymentID(&payment)
-	existing := s.Payments(i)
-	existing = append(existing, payment)
-	_, err = s.client.Invoice.UpdateOneID(invoiceID).SetPayments(SerializePayments(existing)).Save(ctx)
-	if err != nil {
-		return fmt.Errorf("record payment: %w", err)
-	}
-	return nil
-}
-
-func (s *InvoiceService) DeletePayment(ctx context.Context, invoiceID int64, paymentID string) (Payment, error) {
-	paymentID = strings.TrimSpace(paymentID)
-	if paymentID == "" {
-		return Payment{}, fmt.Errorf("payment id is required")
-	}
-
-	i, err := s.client.Invoice.Get(ctx, invoiceID)
-	if err != nil {
-		return Payment{}, fmt.Errorf("get invoice %d: %w", invoiceID, err)
-	}
-
-	payments := s.Payments(i)
-	for index, payment := range payments {
-		if payment.ID != paymentID {
-			continue
-		}
-
-		payments = append(payments[:index], payments[index+1:]...)
-		if _, err := s.client.Invoice.UpdateOneID(invoiceID).SetPayments(SerializePayments(payments)).Save(ctx); err != nil {
-			return Payment{}, fmt.Errorf("delete payment: %w", err)
-		}
-		return payment, nil
-	}
-
-	return Payment{}, fmt.Errorf("payment %s not found", paymentID)
-}
-
-func InvoiceAmountDue(i *ent.Invoice) (float64, float64, error) {
-	items, err := DecodeLineItems(i.LineItems)
-	if err != nil {
-		return 0, 0, fmt.Errorf("parse invoice line items: %w", err)
-	}
-	payments, err := ParsePayments(i.Payments)
-	if err != nil {
-		return 0, 0, fmt.Errorf("parse invoice payments: %w", err)
-	}
-	totals, err := CalculateTotals(items, i.TaxRate)
-	if err != nil {
-		return 0, 0, fmt.Errorf("calculate invoice total: %w", err)
-	}
-	paid := Money{}
-	for _, payment := range payments {
-		amount, err := MoneyFromMajorUnits(payment.Amount)
-		if err != nil {
-			return 0, 0, fmt.Errorf("calculate invoice payments: %w", err)
-		}
-		paid, err = paid.Add(amount)
-		if err != nil {
-			return 0, 0, fmt.Errorf("calculate invoice payments: %w", err)
-		}
-	}
-	return totals.Total.MajorUnits(), paid.MajorUnits(), nil
 }
 
 func InvoiceTotal(items []LineItem, taxRate string) (float64, error) {

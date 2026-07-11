@@ -13,6 +13,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/job"
 	"github.com/freefsm-project/freefsm/internal/ent/project"
 	"github.com/freefsm-project/freefsm/internal/ent/taglink"
+	"entgo.io/ent/dialect/sql"
 )
 
 type DependencyService struct {
@@ -85,13 +86,15 @@ func (s *DependencyService) CanDeleteEstimate(ctx context.Context, id int64) (bo
 }
 
 func (s *DependencyService) CanDeleteInvoice(ctx context.Context, id int64) (bool, string) {
-	inv, err := s.client.Invoice.Get(ctx, id)
+	n, err := s.client.Invoice.Query().Where(invoice.IDEQ(id), func(sel *sql.Selector) {
+		invoiceID := sel.C(invoice.FieldID)
+		sel.Where(sql.ExprP(`EXISTS(SELECT 1 FROM invoice_payments p WHERE p.invoice_id=` + invoiceID + `) OR EXISTS(SELECT 1 FROM credit_applications a WHERE a.invoice_id=` + invoiceID + `)`))
+	}).Count(ctx)
 	if err != nil {
 		return false, "Cannot verify invoice dependencies"
 	}
-	var payments []Payment
-	if err := json.Unmarshal([]byte(inv.Payments), &payments); err == nil && len(payments) > 0 {
-		return false, fmt.Sprintf("Cannot delete invoice — it has %d recorded payment(s)", len(payments))
+	if n > 0 {
+		return false, "Cannot delete invoice — it has settlement history"
 	}
 	return true, ""
 }

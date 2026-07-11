@@ -37,8 +37,8 @@ const (
 	FieldTaxRate = "tax_rate"
 	// FieldLineItems holds the string denoting the line_items field in the database.
 	FieldLineItems = "line_items"
-	// FieldPayments holds the string denoting the payments field in the database.
-	FieldPayments = "payments"
+	// FieldSettlementState holds the string denoting the settlement_state field in the database.
+	FieldSettlementState = "settlement_state"
 	// FieldDisplaySettings holds the string denoting the display_settings field in the database.
 	FieldDisplaySettings = "display_settings"
 	// FieldCustomFields holds the string denoting the custom_fields field in the database.
@@ -68,7 +68,7 @@ var Columns = []string{
 	FieldDueDate,
 	FieldTaxRate,
 	FieldLineItems,
-	FieldPayments,
+	FieldSettlementState,
 	FieldDisplaySettings,
 	FieldCustomFields,
 	FieldDeletedAt,
@@ -95,8 +95,8 @@ var (
 	DefaultTaxRate string
 	// DefaultLineItems holds the default value on creation for the "line_items" field.
 	DefaultLineItems string
-	// DefaultPayments holds the default value on creation for the "payments" field.
-	DefaultPayments string
+	// DefaultSettlementState holds the default value on creation for the "settlement_state" field.
+	DefaultSettlementState string
 	// DefaultDisplaySettings holds the default value on creation for the "display_settings" field.
 	DefaultDisplaySettings string
 	// DefaultCustomFields holds the default value on creation for the "custom_fields" field.
@@ -177,9 +177,9 @@ func ByLineItems(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLineItems, opts...).ToFunc()
 }
 
-// ByPayments orders the results by the payments field.
-func ByPayments(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPayments, opts...).ToFunc()
+// BySettlementState orders the results by the settlement_state field.
+func BySettlementState(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSettlementState, opts...).ToFunc()
 }
 
 // ByDisplaySettings orders the results by the display_settings field.

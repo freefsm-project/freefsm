@@ -51,6 +51,7 @@ templ InvoiceShow(p InvoiceDetail) {
 					<tr><th>Asset</th><td><a href={ templ.URL(fmt.Sprintf("/assets/%d", p.AssetID)) }>{ p.AssetName }</a></td></tr>
 				}
 				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(p.StatusColor) }>{ p.StatusName }</span></td></tr>
+				<tr><th>Settlement State</th><td><span class="status-badge">{ string(p.Settlement.State) }</span></td></tr>
 				<tr><th>Invoice Date</th><td>{ p.InvoiceDateDisplay }</td></tr>
 				<tr><th>Due Date</th><td>{ p.DueDateDisplay }</td></tr>
 				<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
@@ -96,8 +97,14 @@ templ InvoiceShow(p InvoiceDetail) {
 				<p><strong>Grand Total: { fmt.Sprintf("$%.2f", grandTotal(p.LineItems, p.TaxRate)) }</strong></p>
 			</div>
 		}
-		if len(p.Payments) > 0 {
+		<div class="work-item-detail-totals">
+			<p><strong>Total: { cents(p.Settlement.TotalCents) }</strong></p>
+			<p><strong>Settled: { cents(p.Settlement.SettledCents) }</strong></p>
+			<p><strong>Amount Due: { cents(p.Settlement.AmountDueCents) }</strong></p>
+		</div>
+		if len(p.Settlement.Payments) > 0 {
 			<h3>Payments</h3>
+			<div style="overflow-x: auto;">
 			<table>
 				<thead>
 					<tr>
@@ -105,32 +112,49 @@ templ InvoiceShow(p InvoiceDetail) {
 						<th>Method</th>
 						<th>Reference</th>
 						<th>Amount</th>
-						if p.ArchivedAt == "" {
-							<th>Actions</th>
-						}
+						<th>State / Action</th>
 					</tr>
 				</thead>
 				<tbody>
-					for _, pmt := range p.Payments {
+					for _, pmt := range p.Settlement.Payments {
 						<tr>
-							<td>{ pmt.Date }</td>
-							<td>{ pmt.Method }</td>
+							<td>{ pmt.ReceivedDate.Format("2006-01-02") }</td>
+							<td>{ string(pmt.Method) }</td>
 							<td>{ pmt.Reference }</td>
-							<td>{ fmt.Sprintf("$%.2f", pmt.Amount) }</td>
-							if p.ArchivedAt == "" {
-								<td>
-									<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments/%s/delete", p.ID, pmt.ID)) } method="post" hx-confirm="Delete this payment?">
+							<td>{ cents(pmt.AmountCents) } ({ cents(pmt.AppliedCents) } applied)</td>
+							<td>
+							if pmt.Reversal != nil {
+								Reversed { pmt.Reversal.EffectiveDate.Format("2006-01-02") }: { pmt.Reversal.Reason }
+							} else if p.ArchivedAt == "" {
+									<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments/%s/reverse", p.ID, pmt.ID)) } method="post">
 										<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-										<button type="submit" class="outline contrast">Delete</button>
+										<input type="hidden" name="idempotency_key" value={ pmt.ReversalKey }/>
+										<input type="date" name="effective_date" value={ today(ctx) } required/>
+										<input type="text" name="reason" placeholder="Reason" required/>
+										<button type="submit" class="outline contrast">Reverse</button>
 									</form>
-								</td>
 							}
+							</td>
 						</tr>
 					}
 				</tbody>
 			</table>
-			<div class="work-item-detail-totals">
-				<p><strong>Total Paid: { fmt.Sprintf("$%.2f", paymentsTotal(p.Payments)) }</strong></p>
+			</div>
+		}
+		if len(p.Settlement.Applications) > 0 {
+			<h3>Credit Applications</h3>
+			<div style="overflow-x: auto;">
+			<table><tbody>
+			for _, a := range p.Settlement.Applications {
+				<tr><td>{ a.EffectiveDate.Format("2006-01-02") }</td><td>{ cents(a.AmountCents) }</td><td>
+				if a.Reversal != nil {
+					Reversed: { a.Reversal.Reason }
+				} else if p.ArchivedAt == "" {
+					<form action={ templ.URL(fmt.Sprintf("/invoices/%d/credit-applications/%s/reverse",p.ID,a.ID)) } method="post"><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ a.ReversalKey }/><input type="date" name="effective_date" value={ today(ctx) } required/><input name="reason" placeholder="Reason" required/><button class="outline contrast">Reverse</button></form>
+				}
+				</td></tr>
+			}
+			</tbody></table>
 			</div>
 		}
 		if p.ArchivedAt == "" {
@@ -138,6 +162,7 @@ templ InvoiceShow(p InvoiceDetail) {
 			<summary>Record Payment</summary>
 			<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments", p.ID)) } method="post" class="inline-add-form">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<input type="hidden" name="idempotency_key" value={ p.PaymentKey }/>
 				<div class="grid">
 					<label>
 						Amount
@@ -171,6 +196,17 @@ templ InvoiceShow(p InvoiceDetail) {
 				<button type="submit">Record Payment</button>
 			</form>
 		</details>
+		if len(p.CreditSources) > 0 && p.Settlement.AmountDueCents > 0 {
+		<details><summary>Apply Customer Credit</summary><form action={ templ.URL(fmt.Sprintf("/invoices/%d/credit-applications",p.ID)) } method="post">
+		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ p.ApplyCreditKey }/>
+		<label>Source<select name="credit_id" required>
+		for _, s := range p.CreditSources {
+			<option value={ s.ID.String() }>{ s.SourceDate.Format("2006-01-02") } { string(s.PaymentMethod) } { s.PaymentReference } ({ cents(s.AvailableCents) } available)</option>
+		}
+		</select></label>
+		<label>Amount<input name="amount" inputmode="decimal" required/></label><label>Effective Date<input type="date" name="effective_date" value={ today(ctx) } required/></label><button>Apply Credit</button>
+		</form></details>
+		}
 		}
 		if p.Notes != "" {
 			<h3>Notes</h3>

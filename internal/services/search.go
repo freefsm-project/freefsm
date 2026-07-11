@@ -128,8 +128,8 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 		}
 	}
 	for _, i := range invoices {
-		if i.CustomerID != nil && *i.CustomerID > 0 {
-			allCustIDs[*i.CustomerID] = struct{}{}
+		if i.CustomerID > 0 {
+			allCustIDs[i.CustomerID] = struct{}{}
 		}
 	}
 	for _, e := range estimates {
@@ -164,8 +164,8 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 	invResults := make([]SearchResult, len(invoices))
 	for i, inv := range invoices {
 		var custName string
-		if inv.CustomerID != nil {
-			if c, ok := custMap[*inv.CustomerID]; ok {
+		if inv.CustomerID > 0 {
+			if c, ok := custMap[inv.CustomerID]; ok {
 				custName = c.DisplayName
 			}
 		}
@@ -180,12 +180,7 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 			ID:   inv.ID,
 			Type: "invoice",
 			Name: inv.Title,
-			CustomerID: func() int64 {
-				if inv.CustomerID != nil {
-					return *inv.CustomerID
-				}
-				return 0
-			}(),
+			CustomerID: inv.CustomerID,
 			Customer: custName,
 			StatusID: func() int64 {
 				if inv.StatusID != nil {

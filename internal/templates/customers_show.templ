@@ -97,6 +97,7 @@ templ CustomerShow(p CustomerShowPageData) {
 			@customerFilesCard(p)
 		</div>
 		if canManageOperational(ctx) {
+			@customerCredit(p)
 			<div class="dashboard-work-queues">
 				@customerJobsCard(p)
 				@customerEstimatesCard(p)
@@ -111,6 +112,45 @@ templ CustomerShow(p CustomerShowPageData) {
 		}
 		</div>
 	}
+}
+
+templ customerCredit(p CustomerShowPageData) {
+	<article class="dashboard-panel"><h3>Customer Credit</h3><p><strong>Available: { cents(p.Settlement.AvailableCreditCents) }</strong></p>
+	if len(p.Settlement.Sources) > 0 {
+		<h4>Sources</h4><div style="overflow-x: auto;"><table><thead><tr><th>Date</th><th>Origin</th><th>Original</th><th>Remaining</th></tr></thead><tbody>
+		for _, s := range p.Settlement.Sources {
+			<tr><td>{ s.SourceDate.Format("2006-01-02") }</td><td><a href={ templ.URL(fmt.Sprintf("/invoices/%d",s.InvoiceID)) }>Payment { s.SourcePaymentID.String() }</a> { string(s.PaymentMethod) } { s.PaymentReference }</td><td>{ cents(s.OriginalCents) }</td><td>{ cents(s.AvailableCents) }</td></tr>
+		}
+		</tbody></table></div>
+	}
+	if len(p.Settlement.Applications) > 0 {
+		<h4>Applications</h4><div style="overflow-x: auto;"><table><tbody>
+		for _, a := range p.Settlement.Applications {
+			<tr><td>{ a.EffectiveDate.Format("2006-01-02") }</td><td><a href={ templ.URL(fmt.Sprintf("/invoices/%d",a.InvoiceID)) }>Invoice</a></td><td>{ cents(a.AmountCents) }</td><td>
+			if a.Reversal != nil {
+				<span>Reversed: { a.Reversal.Reason }</span>
+			}
+			</td></tr>
+		}
+		</tbody></table></div>
+	}
+	if p.Customer.ArchivedAt == "" && p.Settlement.AvailableCreditCents > 0 {
+		<details><summary>Refund Available Credit</summary><form action={ templ.URL(fmt.Sprintf("/customers/%d/credit/refunds",p.Customer.ID)) } method="post"><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ p.RefundKey }/><label>Amount<input name="amount" inputmode="decimal" required/></label><label>Method<select name="method"><option value="cash">Cash</option><option value="check">Check</option><option value="credit_card">Credit Card</option><option value="transfer">Transfer</option><option value="other">Other</option></select></label><label>Date<input type="date" name="effective_date" value={ today(ctx) } required/></label><label>Reason<input name="reason" required/></label><label>Reference<input name="reference"/></label><label>Notes<input name="notes"/></label><button>Refund Credit</button></form></details>
+	}
+	if len(p.Settlement.Refunds) > 0 {
+		<h4>Refunds</h4><div style="overflow-x: auto;"><table><tbody>
+		for _, f := range p.Settlement.Refunds {
+			<tr><td>{ f.EffectiveDate.Format("2006-01-02") }</td><td>{ string(f.Method) }</td><td>{ cents(f.AmountCents) }</td><td>{ f.Reason }</td><td>
+			if f.Reversal != nil {
+				<span>Reversed: { f.Reversal.Reason }</span>
+			} else if p.Customer.ArchivedAt == "" {
+				<form action={ templ.URL(fmt.Sprintf("/customers/%d/credit/refunds/%s/reverse",p.Customer.ID,f.ID)) } method="post"><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ f.ReversalKey }/><input type="date" name="effective_date" value={ today(ctx) } required/><input name="reason" placeholder="Reason" required/><button class="outline contrast">Reverse</button></form>
+			}
+			</td></tr>
+		}
+		</tbody></table></div>
+	}
+	</article>
 }
 
 templ customerCommentsCard(p CustomerShowPageData) {
@@ -249,7 +289,7 @@ templ customerInvoicesCard(p CustomerShowPageData) {
 				<tr><td class="dashboard-empty">No invoices</td></tr>
 			}
 			for _, i := range p.Invoices {
-				<tr><td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) }>{ i.Title }</a></td><td>{ i.StatusName }</td><td><small>{ i.DueDate }</small></td></tr>
+				<tr><td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) }>{ i.Title }</a></td><td>{ i.StatusName } / { i.SettlementState }</td><td><small>{ i.DueDate }</small></td></tr>
 			}
 		</tbody></table>
 	</article>

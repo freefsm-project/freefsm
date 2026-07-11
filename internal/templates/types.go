@@ -12,6 +12,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/settlement"
 )
 
 func staticAsset(path string) string {
@@ -148,6 +149,8 @@ type CustomerShowPageData struct {
 	AllTags      []TagRow
 	CustomFields []CustomFieldDisplay
 	FileList     FileListPageData
+	Settlement   settlement.CustomerSettlement
+	RefundKey    string
 }
 
 type CustomerFinancialSummary struct {
@@ -485,16 +488,17 @@ type EstimateFormPageData struct {
 }
 
 type InvoiceRow struct {
-	ID          int64
-	Number      int64
-	Title       string
-	Customer    string
-	CustomerID  int64
-	StatusID    int64
-	StatusName  string
-	StatusColor string
-	InvoiceDate string
-	DueDate     string
+	ID              int64
+	Number          int64
+	Title           string
+	Customer        string
+	CustomerID      int64
+	StatusID        int64
+	StatusName      string
+	StatusColor     string
+	InvoiceDate     string
+	DueDate         string
+	SettlementState string
 }
 
 type InvoiceDetail struct {
@@ -517,7 +521,10 @@ type InvoiceDetail struct {
 	DueDateDisplay     string
 	TaxRate            string
 	LineItems          []services.LineItem
-	Payments           []services.Payment
+	Settlement         settlement.InvoiceSettlement
+	CreditSources      []settlement.CreditSource
+	PaymentKey         string
+	ApplyCreditKey     string
 	Tags               []TagRow
 	AllTags            []TagRow
 	CustomFields       []CustomFieldDisplay
@@ -773,13 +780,7 @@ func invoiceFormNumberValue(p InvoiceFormPageData) string {
 	return fmt.Sprintf("%d", p.Invoice.Number)
 }
 
-func paymentsTotal(payments []services.Payment) float64 {
-	var total float64
-	for _, p := range payments {
-		total += p.Amount
-	}
-	return total
-}
+func cents(c int64) string { return fmt.Sprintf("$%.2f", float64(c)/100) }
 
 func csrfToken(ctx context.Context) string {
 	return middleware.CSRFFromContext(ctx)

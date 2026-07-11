@@ -54,14 +54,6 @@ func (_c *InvoiceCreate) SetCustomerID(v int64) *InvoiceCreate {
 	return _c
 }
 
-// SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
-func (_c *InvoiceCreate) SetNillableCustomerID(v *int64) *InvoiceCreate {
-	if v != nil {
-		_c.SetCustomerID(*v)
-	}
-	return _c
-}
-
 // SetJobID sets the "job_id" field.
 func (_c *InvoiceCreate) SetJobID(v int64) *InvoiceCreate {
 	_c.mutation.SetJobID(v)
@@ -172,16 +164,16 @@ func (_c *InvoiceCreate) SetNillableLineItems(v *string) *InvoiceCreate {
 	return _c
 }
 
-// SetPayments sets the "payments" field.
-func (_c *InvoiceCreate) SetPayments(v string) *InvoiceCreate {
-	_c.mutation.SetPayments(v)
+// SetSettlementState sets the "settlement_state" field.
+func (_c *InvoiceCreate) SetSettlementState(v string) *InvoiceCreate {
+	_c.mutation.SetSettlementState(v)
 	return _c
 }
 
-// SetNillablePayments sets the "payments" field if the given value is not nil.
-func (_c *InvoiceCreate) SetNillablePayments(v *string) *InvoiceCreate {
+// SetNillableSettlementState sets the "settlement_state" field if the given value is not nil.
+func (_c *InvoiceCreate) SetNillableSettlementState(v *string) *InvoiceCreate {
 	if v != nil {
-		_c.SetPayments(*v)
+		_c.SetSettlementState(*v)
 	}
 	return _c
 }
@@ -313,9 +305,9 @@ func (_c *InvoiceCreate) defaults() {
 		v := invoice.DefaultLineItems
 		_c.mutation.SetLineItems(v)
 	}
-	if _, ok := _c.mutation.Payments(); !ok {
-		v := invoice.DefaultPayments
-		_c.mutation.SetPayments(v)
+	if _, ok := _c.mutation.SettlementState(); !ok {
+		v := invoice.DefaultSettlementState
+		_c.mutation.SetSettlementState(v)
 	}
 	if _, ok := _c.mutation.DisplaySettings(); !ok {
 		v := invoice.DefaultDisplaySettings
@@ -337,6 +329,9 @@ func (_c *InvoiceCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *InvoiceCreate) check() error {
+	if _, ok := _c.mutation.CustomerID(); !ok {
+		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "Invoice.customer_id"`)}
+	}
 	if _, ok := _c.mutation.Title(); !ok {
 		return &ValidationError{Name: "title", err: errors.New(`ent: missing required field "Invoice.title"`)}
 	}
@@ -355,8 +350,8 @@ func (_c *InvoiceCreate) check() error {
 	if _, ok := _c.mutation.LineItems(); !ok {
 		return &ValidationError{Name: "line_items", err: errors.New(`ent: missing required field "Invoice.line_items"`)}
 	}
-	if _, ok := _c.mutation.Payments(); !ok {
-		return &ValidationError{Name: "payments", err: errors.New(`ent: missing required field "Invoice.payments"`)}
+	if _, ok := _c.mutation.SettlementState(); !ok {
+		return &ValidationError{Name: "settlement_state", err: errors.New(`ent: missing required field "Invoice.settlement_state"`)}
 	}
 	if _, ok := _c.mutation.DisplaySettings(); !ok {
 		return &ValidationError{Name: "display_settings", err: errors.New(`ent: missing required field "Invoice.display_settings"`)}
@@ -412,7 +407,7 @@ func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(invoice.FieldCustomerID, field.TypeInt64, value)
-		_node.CustomerID = &value
+		_node.CustomerID = value
 	}
 	if value, ok := _c.mutation.JobID(); ok {
 		_spec.SetField(invoice.FieldJobID, field.TypeInt64, value)
@@ -450,9 +445,9 @@ func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 		_spec.SetField(invoice.FieldLineItems, field.TypeString, value)
 		_node.LineItems = value
 	}
-	if value, ok := _c.mutation.Payments(); ok {
-		_spec.SetField(invoice.FieldPayments, field.TypeString, value)
-		_node.Payments = value
+	if value, ok := _c.mutation.SettlementState(); ok {
+		_spec.SetField(invoice.FieldSettlementState, field.TypeString, value)
+		_node.SettlementState = value
 	}
 	if value, ok := _c.mutation.DisplaySettings(); ok {
 		_spec.SetField(invoice.FieldDisplaySettings, field.TypeString, value)

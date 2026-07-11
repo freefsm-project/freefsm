@@ -28,7 +28,12 @@ func (h *DashboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 	user, _ := middleware.UserFromContext(r.Context())
 	stats := services.DashboardStats{}
 	if isAdminOrDispatcher(user) {
-		stats, _ = h.dashboardSvc.Stats(r.Context(), loc, middleware.CompanyFromContext(r.Context()))
+		var err error
+		stats, err = h.dashboardSvc.Stats(r.Context(), user.CompanyID, loc, middleware.CompanyFromContext(r.Context()))
+		if err != nil {
+			internalServerError(w, r, "load dashboard statistics", err)
+			return
+		}
 	}
 	if user != nil {
 		editDashboard := r.URL.Query().Get("edit_dashboard") == "1"

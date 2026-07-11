@@ -25,23 +25,31 @@ import (
 func TestHTTPAuthorizationBoundaries(t *testing.T) {
 	client, pool := openHandlerTestDB(t)
 	defer client.Close()
-	pool.Close()
+	defer pool.Close()
 
 	ctx := context.Background()
 	sessions := services.NewSessionService(pool)
 	router := New(pool, client, sessions, &config.Config{UploadDir: t.TempDir(), MaxUploadSize: 1024 * 1024})
 
-	tech := client.User.Create().SetEmail("tech@example.test").SetPasswordHash("hash").SetName("Tech").SetRole("tech").SaveX(ctx)
-	admin := client.User.Create().SetEmail("admin@example.test").SetPasswordHash("hash").SetName("Admin").SetRole("admin").SaveX(ctx)
-	dispatcher := client.User.Create().SetEmail("dispatcher@example.test").SetPasswordHash("hash").SetName("Dispatcher").SetRole("dispatcher").SaveX(ctx)
-	customer := client.Customer.Create().SetDisplayName("Route Customer").SaveX(ctx)
+	const companyID int64 = 1
+	client.CompanySettings.Create().SetCompanyID(companyID).SetBusinessName("Route Company").SaveX(ctx)
+	tech := client.User.Create().SetCompanyID(companyID).SetEmail("tech@example.test").SetPasswordHash("hash").SetName("Tech").SetRole("tech").SaveX(ctx)
+	admin := client.User.Create().SetCompanyID(companyID).SetEmail("admin@example.test").SetPasswordHash("hash").SetName("Admin").SetRole("admin").SaveX(ctx)
+	dispatcher := client.User.Create().SetCompanyID(companyID).SetEmail("dispatcher@example.test").SetPasswordHash("hash").SetName("Dispatcher").SetRole("dispatcher").SaveX(ctx)
+	customer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Route Customer").SaveX(ctx)
 	assignedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Assigned Route Job").SetBillingType("hourly").SetLineItems(`[{"title":"Billable","quantity":1,"unit_price":100}]`).SaveX(ctx)
 	archivedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Archived Route Job").SetDeletedAt(time.Now()).SaveX(ctx)
 	unassignedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Unassigned Route Job").SaveX(ctx)
 	workflow := client.StatusWorkflow.Create().SetObjectType("job").SetName("Job Workflow").SaveX(ctx)
 	status := client.Status.Create().SetWorkflowID(workflow.ID).SetName("Scheduled").SetColor("#336699").SetSortOrder(1).SaveX(ctx)
 	estimate := client.Estimate.Create().SetCustomerID(customer.ID).SetTitle("Protected Estimate").SaveX(ctx)
-	invoice := client.Invoice.Create().SetCustomerID(customer.ID).SetTitle("Protected Invoice").SaveX(ctx)
+	invoice := client.Invoice.Create().
+		SetCompanyID(companyID).
+		SetCustomerID(customer.ID).
+		SetTitle("Protected Invoice").
+		SetInvoiceDate(time.Now()).
+		SetDueDate(time.Now()).
+		SaveX(ctx)
 	contact := client.CustomerContact.Create().SetCustomerID(customer.ID).SetFirstName("Protected").SetLastName("Contact").SaveX(ctx)
 	location := client.Location.Create().SetObjectType("customer").SetObjectID(customer.ID).SetTitle("Protected Location").SaveX(ctx)
 	client.JobAssignment.Create().SetJobID(assignedJob.ID).SetUserID(tech.ID).SaveX(ctx)
@@ -102,7 +110,7 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 		assertContains(t, dispatcherBody, "Archived Route Job")
 		assertContains(t, dispatcherBody, "Archived on")
 		assertNotContains(t, dispatcherBody, "Edit")
-		assertNotContains(t, dispatcherBody, "Delete")
+		assertNotContains(t, dispatcherBody, fmt.Sprintf("/jobs/%d/delete", archivedJob.ID))
 		assertNotContains(t, dispatcherBody, "Create Invoice")
 		assertNotContains(t, dispatcherBody, "Restore")
 
@@ -121,7 +129,7 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 		assertNotContains(t, body, "Billing Type")
 		assertNotContains(t, body, "Line Items")
 		assertNotContains(t, body, "Create Invoice")
-		assertNotContains(t, body, "Delete")
+		assertNotContains(t, body, fmt.Sprintf("/jobs/%d/delete", assignedJob.ID))
 	})
 
 	t.Run("tech dashboard hides global widgets", func(t *testing.T) {
@@ -181,6 +189,17 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	)`); err != nil {
 		t.Fatalf("create sessions table: %v", err)
+	}
+	if _, err := schemaDB.Exec(`
+		CREATE TABLE invoice_payments (id UUID PRIMARY KEY, company_id BIGINT NOT NULL, invoice_id BIGINT NOT NULL, amount_cents BIGINT NOT NULL, method TEXT NOT NULL, received_date DATE NOT NULL, reference TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '');
+		CREATE TABLE payment_invoice_allocations (payment_id UUID PRIMARY KEY, invoice_id BIGINT NOT NULL, amount_cents BIGINT NOT NULL);
+		CREATE TABLE customer_credits (id UUID PRIMARY KEY, company_id BIGINT NOT NULL, customer_id BIGINT NOT NULL, source_payment_id UUID NOT NULL, source_date DATE NOT NULL, original_amount_cents BIGINT NOT NULL);
+		CREATE TABLE credit_applications (id UUID PRIMARY KEY, company_id BIGINT NOT NULL, customer_id BIGINT NOT NULL, invoice_id BIGINT NOT NULL, credit_id UUID NOT NULL, amount_cents BIGINT NOT NULL, effective_date DATE NOT NULL);
+		CREATE TABLE credit_refunds (id UUID PRIMARY KEY, company_id BIGINT NOT NULL, customer_id BIGINT NOT NULL, amount_cents BIGINT NOT NULL, method TEXT NOT NULL, effective_date DATE NOT NULL, reference TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', reason TEXT NOT NULL);
+		CREATE TABLE credit_refund_allocations (refund_id UUID NOT NULL, credit_id UUID NOT NULL, amount_cents BIGINT NOT NULL, PRIMARY KEY(refund_id, credit_id));
+		CREATE TABLE settlement_reversals (id UUID PRIMARY KEY, operation_type TEXT NOT NULL, operation_id UUID NOT NULL, effective_date DATE NOT NULL, reason TEXT NOT NULL);
+	`); err != nil {
+		t.Fatalf("create settlement query tables: %v", err)
 	}
 
 	pool, err := pgxpool.New(context.Background(), schemaDSN)

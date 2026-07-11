@@ -52,35 +52,17 @@ func TestServiceConsumersAgreeWithCanonicalTotals(t *testing.T) {
 	}
 
 	dashboard := &DashboardService{}
-	invoice := &ent.Invoice{LineItems: encoded, TaxRate: "8.25", Payments: `[{"amount":10.111},{"amount":0.004}]`}
+	invoice := &ent.Invoice{LineItems: encoded, TaxRate: "8.25"}
 	if got := dashboard.invoiceSubtotal(invoice); got != canonical.Subtotal.MajorUnits() {
 		t.Errorf("dashboard invoice subtotal = %.2f, want %.2f", got, canonical.Subtotal.MajorUnits())
 	}
 	if got := dashboard.invoiceTotal(invoice); got != want {
 		t.Errorf("dashboard invoice total = %.2f, want %.2f", got, want)
 	}
-	if got := dashboard.invoiceBalance(invoice); got != 13.12 {
-		t.Errorf("dashboard invoice balance = %.2f, want 13.12", got)
-	}
 	if got := dashboard.estimateTotal(&ent.Estimate{LineItems: encoded, TaxRate: "8.25"}); got != want {
 		t.Errorf("dashboard estimate total = %.2f, want %.2f", got, want)
 	}
 
-	total, paid, err := InvoiceAmountDue(invoice)
-	if err != nil || total != want || paid != 10.11 {
-		t.Errorf("InvoiceAmountDue() = (%.2f, %.2f, %v), want (%.2f, 10.11, nil)", total, paid, err, want)
-	}
-}
-
-func TestDashboardInvoiceBalanceClampsOverpayment(t *testing.T) {
-	invoice := &ent.Invoice{
-		LineItems: `[{"title":"Labor","unit_price":10,"quantity":1}]`,
-		TaxRate:   "0",
-		Payments:  `[{"amount":10.01}]`,
-	}
-	if got := (&DashboardService{}).invoiceBalance(invoice); got != 0 {
-		t.Errorf("invoiceBalance() = %.2f, want 0", got)
-	}
 }
 
 func TestValidateLineItemsRejectsInvalidDomainValues(t *testing.T) {

@@ -114,9 +114,9 @@ func LineItems(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldLineItems, v))
 }
 
-// Payments applies equality check predicate on the "payments" field. It's identical to PaymentsEQ.
-func Payments(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldEQ(FieldPayments, v))
+// SettlementState applies equality check predicate on the "settlement_state" field. It's identical to SettlementStateEQ.
+func SettlementState(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldSettlementState, v))
 }
 
 // DisplaySettings applies equality check predicate on the "display_settings" field. It's identical to DisplaySettingsEQ.
@@ -282,16 +282,6 @@ func CustomerIDLT(v int64) predicate.Invoice {
 // CustomerIDLTE applies the LTE predicate on the "customer_id" field.
 func CustomerIDLTE(v int64) predicate.Invoice {
 	return predicate.Invoice(sql.FieldLTE(FieldCustomerID, v))
-}
-
-// CustomerIDIsNil applies the IsNil predicate on the "customer_id" field.
-func CustomerIDIsNil() predicate.Invoice {
-	return predicate.Invoice(sql.FieldIsNull(FieldCustomerID))
-}
-
-// CustomerIDNotNil applies the NotNil predicate on the "customer_id" field.
-func CustomerIDNotNil() predicate.Invoice {
-	return predicate.Invoice(sql.FieldNotNull(FieldCustomerID))
 }
 
 // JobIDEQ applies the EQ predicate on the "job_id" field.
@@ -784,69 +774,69 @@ func LineItemsContainsFold(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldContainsFold(FieldLineItems, v))
 }
 
-// PaymentsEQ applies the EQ predicate on the "payments" field.
-func PaymentsEQ(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldEQ(FieldPayments, v))
+// SettlementStateEQ applies the EQ predicate on the "settlement_state" field.
+func SettlementStateEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldSettlementState, v))
 }
 
-// PaymentsNEQ applies the NEQ predicate on the "payments" field.
-func PaymentsNEQ(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldNEQ(FieldPayments, v))
+// SettlementStateNEQ applies the NEQ predicate on the "settlement_state" field.
+func SettlementStateNEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldSettlementState, v))
 }
 
-// PaymentsIn applies the In predicate on the "payments" field.
-func PaymentsIn(vs ...string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldIn(FieldPayments, vs...))
+// SettlementStateIn applies the In predicate on the "settlement_state" field.
+func SettlementStateIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldSettlementState, vs...))
 }
 
-// PaymentsNotIn applies the NotIn predicate on the "payments" field.
-func PaymentsNotIn(vs ...string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldNotIn(FieldPayments, vs...))
+// SettlementStateNotIn applies the NotIn predicate on the "settlement_state" field.
+func SettlementStateNotIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldSettlementState, vs...))
 }
 
-// PaymentsGT applies the GT predicate on the "payments" field.
-func PaymentsGT(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldGT(FieldPayments, v))
+// SettlementStateGT applies the GT predicate on the "settlement_state" field.
+func SettlementStateGT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldSettlementState, v))
 }
 
-// PaymentsGTE applies the GTE predicate on the "payments" field.
-func PaymentsGTE(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldGTE(FieldPayments, v))
+// SettlementStateGTE applies the GTE predicate on the "settlement_state" field.
+func SettlementStateGTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldSettlementState, v))
 }
 
-// PaymentsLT applies the LT predicate on the "payments" field.
-func PaymentsLT(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldLT(FieldPayments, v))
+// SettlementStateLT applies the LT predicate on the "settlement_state" field.
+func SettlementStateLT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldSettlementState, v))
 }
 
-// PaymentsLTE applies the LTE predicate on the "payments" field.
-func PaymentsLTE(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldLTE(FieldPayments, v))
+// SettlementStateLTE applies the LTE predicate on the "settlement_state" field.
+func SettlementStateLTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldSettlementState, v))
 }
 
-// PaymentsContains applies the Contains predicate on the "payments" field.
-func PaymentsContains(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldContains(FieldPayments, v))
+// SettlementStateContains applies the Contains predicate on the "settlement_state" field.
+func SettlementStateContains(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContains(FieldSettlementState, v))
 }
 
-// PaymentsHasPrefix applies the HasPrefix predicate on the "payments" field.
-func PaymentsHasPrefix(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldHasPrefix(FieldPayments, v))
+// SettlementStateHasPrefix applies the HasPrefix predicate on the "settlement_state" field.
+func SettlementStateHasPrefix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasPrefix(FieldSettlementState, v))
 }
 
-// PaymentsHasSuffix applies the HasSuffix predicate on the "payments" field.
-func PaymentsHasSuffix(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldHasSuffix(FieldPayments, v))
+// SettlementStateHasSuffix applies the HasSuffix predicate on the "settlement_state" field.
+func SettlementStateHasSuffix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasSuffix(FieldSettlementState, v))
 }
 
-// PaymentsEqualFold applies the EqualFold predicate on the "payments" field.
-func PaymentsEqualFold(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldEqualFold(FieldPayments, v))
+// SettlementStateEqualFold applies the EqualFold predicate on the "settlement_state" field.
+func SettlementStateEqualFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEqualFold(FieldSettlementState, v))
 }
 
-// PaymentsContainsFold applies the ContainsFold predicate on the "payments" field.
-func PaymentsContainsFold(v string) predicate.Invoice {
-	return predicate.Invoice(sql.FieldContainsFold(FieldPayments, v))
+// SettlementStateContainsFold applies the ContainsFold predicate on the "settlement_state" field.
+func SettlementStateContainsFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContainsFold(FieldSettlementState, v))
 }
 
 // DisplaySettingsEQ applies the EQ predicate on the "display_settings" field.

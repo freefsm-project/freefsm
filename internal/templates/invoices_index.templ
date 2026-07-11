@@ -58,7 +58,7 @@ templ InvoicesTable(p InvoiceListPageData) {
 						<td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) }>{ invoiceNumber(ctx, i.Number) }</a></td>
 						<td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) } class="work-queue-title">{ i.Title }</a></td>
 						<td>{ i.Customer }</td>
-						<td class="work-queue-status"><span class="status-badge" style={ badgeStyle(i.StatusColor) }>{ i.StatusName }</span></td>
+						<td class="work-queue-status"><span class="status-badge" style={ badgeStyle(i.StatusColor) }>{ i.StatusName }</span> <span class="status-badge">{ i.SettlementState }</span></td>
 						<td>{ i.InvoiceDate }</td>
 						<td>{ i.DueDate }</td>
 						<td class="work-queue-actions">

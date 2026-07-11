@@ -14905,7 +14905,7 @@ type InvoiceMutation struct {
 	due_date          *time.Time
 	tax_rate          *string
 	line_items        *string
-	payments          *string
+	settlement_state  *string
 	display_settings  *string
 	custom_fields     *string
 	deleted_at        *time.Time
@@ -15179,7 +15179,7 @@ func (m *InvoiceMutation) CustomerID() (r int64, exists bool) {
 // OldCustomerID returns the old "customer_id" field's value of the Invoice entity.
 // If the Invoice object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceMutation) OldCustomerID(ctx context.Context) (v *int64, err error) {
+func (m *InvoiceMutation) OldCustomerID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldCustomerID is only allowed on UpdateOne operations")
 	}
@@ -15211,24 +15211,10 @@ func (m *InvoiceMutation) AddedCustomerID() (r int64, exists bool) {
 	return *v, true
 }
 
-// ClearCustomerID clears the value of the "customer_id" field.
-func (m *InvoiceMutation) ClearCustomerID() {
-	m.customer_id = nil
-	m.addcustomer_id = nil
-	m.clearedFields[invoice.FieldCustomerID] = struct{}{}
-}
-
-// CustomerIDCleared returns if the "customer_id" field was cleared in this mutation.
-func (m *InvoiceMutation) CustomerIDCleared() bool {
-	_, ok := m.clearedFields[invoice.FieldCustomerID]
-	return ok
-}
-
 // ResetCustomerID resets all changes to the "customer_id" field.
 func (m *InvoiceMutation) ResetCustomerID() {
 	m.customer_id = nil
 	m.addcustomer_id = nil
-	delete(m.clearedFields, invoice.FieldCustomerID)
 }
 
 // SetJobID sets the "job_id" field.
@@ -15657,40 +15643,40 @@ func (m *InvoiceMutation) ResetLineItems() {
 	m.line_items = nil
 }
 
-// SetPayments sets the "payments" field.
-func (m *InvoiceMutation) SetPayments(s string) {
-	m.payments = &s
+// SetSettlementState sets the "settlement_state" field.
+func (m *InvoiceMutation) SetSettlementState(s string) {
+	m.settlement_state = &s
 }
 
-// Payments returns the value of the "payments" field in the mutation.
-func (m *InvoiceMutation) Payments() (r string, exists bool) {
-	v := m.payments
+// SettlementState returns the value of the "settlement_state" field in the mutation.
+func (m *InvoiceMutation) SettlementState() (r string, exists bool) {
+	v := m.settlement_state
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldPayments returns the old "payments" field's value of the Invoice entity.
+// OldSettlementState returns the old "settlement_state" field's value of the Invoice entity.
 // If the Invoice object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *InvoiceMutation) OldPayments(ctx context.Context) (v string, err error) {
+func (m *InvoiceMutation) OldSettlementState(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPayments is only allowed on UpdateOne operations")
+		return v, errors.New("OldSettlementState is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPayments requires an ID field in the mutation")
+		return v, errors.New("OldSettlementState requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPayments: %w", err)
+		return v, fmt.Errorf("querying old value for OldSettlementState: %w", err)
 	}
-	return oldValue.Payments, nil
+	return oldValue.SettlementState, nil
 }
 
-// ResetPayments resets all changes to the "payments" field.
-func (m *InvoiceMutation) ResetPayments() {
-	m.payments = nil
+// ResetSettlementState resets all changes to the "settlement_state" field.
+func (m *InvoiceMutation) ResetSettlementState() {
+	m.settlement_state = nil
 }
 
 // SetDisplaySettings sets the "display_settings" field.
@@ -15957,8 +15943,8 @@ func (m *InvoiceMutation) Fields() []string {
 	if m.line_items != nil {
 		fields = append(fields, invoice.FieldLineItems)
 	}
-	if m.payments != nil {
-		fields = append(fields, invoice.FieldPayments)
+	if m.settlement_state != nil {
+		fields = append(fields, invoice.FieldSettlementState)
 	}
 	if m.display_settings != nil {
 		fields = append(fields, invoice.FieldDisplaySettings)
@@ -16007,8 +15993,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.TaxRate()
 	case invoice.FieldLineItems:
 		return m.LineItems()
-	case invoice.FieldPayments:
-		return m.Payments()
+	case invoice.FieldSettlementState:
+		return m.SettlementState()
 	case invoice.FieldDisplaySettings:
 		return m.DisplaySettings()
 	case invoice.FieldCustomFields:
@@ -16052,8 +16038,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldTaxRate(ctx)
 	case invoice.FieldLineItems:
 		return m.OldLineItems(ctx)
-	case invoice.FieldPayments:
-		return m.OldPayments(ctx)
+	case invoice.FieldSettlementState:
+		return m.OldSettlementState(ctx)
 	case invoice.FieldDisplaySettings:
 		return m.OldDisplaySettings(ctx)
 	case invoice.FieldCustomFields:
@@ -16157,12 +16143,12 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetLineItems(v)
 		return nil
-	case invoice.FieldPayments:
+	case invoice.FieldSettlementState:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetPayments(v)
+		m.SetSettlementState(v)
 		return nil
 	case invoice.FieldDisplaySettings:
 		v, ok := value.(string)
@@ -16310,9 +16296,6 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldCompanyID) {
 		fields = append(fields, invoice.FieldCompanyID)
 	}
-	if m.FieldCleared(invoice.FieldCustomerID) {
-		fields = append(fields, invoice.FieldCustomerID)
-	}
 	if m.FieldCleared(invoice.FieldJobID) {
 		fields = append(fields, invoice.FieldJobID)
 	}
@@ -16344,9 +16327,6 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldCompanyID:
 		m.ClearCompanyID()
-		return nil
-	case invoice.FieldCustomerID:
-		m.ClearCustomerID()
 		return nil
 	case invoice.FieldJobID:
 		m.ClearJobID()
@@ -16404,8 +16384,8 @@ func (m *InvoiceMutation) ResetField(name string) error {
 	case invoice.FieldLineItems:
 		m.ResetLineItems()
 		return nil
-	case invoice.FieldPayments:
-		m.ResetPayments()
+	case invoice.FieldSettlementState:
+		m.ResetSettlementState()
 		return nil
 	case invoice.FieldDisplaySettings:
 		m.ResetDisplaySettings()

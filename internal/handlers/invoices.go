@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
@@ -31,10 +33,11 @@ type InvoiceHandler struct {
 	emailSvc    *services.EmailService
 	activitySvc *services.ActivityService
 	policySvc   *services.PolicyService
+	settlement  settlementService
 }
 
-func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, assetSvc *services.AssetService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService, policySvc *services.PolicyService) *InvoiceHandler {
-	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, assetSvc: assetSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc}
+func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, assetSvc *services.AssetService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService, policySvc *services.PolicyService, settlement settlementService) *InvoiceHandler {
+	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, assetSvc: assetSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc, settlement: settlement}
 }
 
 func (h *InvoiceHandler) authorizeInvoice(w http.ResponseWriter, r *http.Request, id int64, action services.PolicyAction) bool {
@@ -117,8 +120,8 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := invoiceToDetail(r.Context(), i, statuses)
-	if i.CustomerID != nil && *i.CustomerID > 0 {
-		customer, _ := h.custSvc.GetByID(r.Context(), *i.CustomerID)
+	if i.CustomerID > 0 {
+		customer, _ := h.custSvc.GetByID(r.Context(), i.CustomerID)
 		if customer != nil {
 			d.Customer = customer.DisplayName
 		}
@@ -134,7 +137,27 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.LineItems = h.svc.LineItems(i)
-	d.Payments = displayPayments(r.Context(), h.svc.Payments(i))
+	actor, ok := settlementActor(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	d.Settlement, err = h.settlement.InvoiceSettlement(r.Context(), actor, id)
+	if err != nil {
+		writeSettlementError(w, r, err)
+		return
+	}
+	credit, err := h.settlement.CustomerSettlement(r.Context(), actor, d.Settlement.CustomerID)
+	if err != nil {
+		writeSettlementError(w, r, err)
+		return
+	}
+	for _, source := range credit.Sources {
+		if source.AvailableCents > 0 {
+			d.CreditSources = append(d.CreditSources, source)
+		}
+	}
+	d.PaymentKey, d.ApplyCreditKey = newOperationKey(), newOperationKey()
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeInvoice, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context())
 	d.Tags = tagsToRows(tags)
@@ -217,6 +240,10 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
+	if custID <= 0 {
+		http.Error(w, "customer is required", http.StatusBadRequest)
+		return
+	}
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	invoiceNumber, err := parseOptionalPositiveInt64(r.FormValue("invoice_number"), "invoice number")
@@ -251,6 +278,10 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, services.ErrNegativeInvoiceTotal) {
+			http.Error(w, "invoice total must not be negative", http.StatusBadRequest)
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -290,8 +321,28 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
+	if custID <= 0 {
+		http.Error(w, "customer is required", http.StatusBadRequest)
+		return
+	}
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
+	if selected := statusName(h.statusesForSelect(r.Context()), &statusID); strings.EqualFold(selected, "Void") {
+		actor, ok := settlementActor(r.Context())
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		view, queryErr := h.settlement.InvoiceSettlement(r.Context(), actor, id)
+		if queryErr != nil {
+			writeSettlementError(w, r, queryErr)
+			return
+		}
+		if view.SettledCents > 0 {
+			http.Error(w, "cannot void an invoice with active settlement", http.StatusConflict)
+			return
+		}
+	}
 	invoiceNumber, err := parseRequiredPositiveInt64(r.FormValue("invoice_number"), "invoice number")
 	if err != nil {
 		http.Error(w, err.Error(), 400)
@@ -335,6 +386,10 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	params.CustomFields = strPtr(parseCustomFieldValues(r))
 	result, err := h.svc.Update(r.Context(), id, params)
 	if err != nil {
+		if errors.Is(err, services.ErrNegativeInvoiceTotal) {
+			http.Error(w, "invoice total must not be negative", http.StatusBadRequest)
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -360,6 +415,10 @@ func (h *InvoiceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	title := inv.Title
+	if inv.SettlementState != "paid" && !h.invoiceHasStatus(r.Context(), inv, "Void") {
+		http.Error(w, "invoice can only be archived when paid or void", http.StatusConflict)
+		return
+	}
 	if err := h.svc.Archive(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -526,14 +585,15 @@ func invoiceToDetail(ctx context.Context, i *ent.Invoice, statuses []*ent.Status
 
 func invoiceRow(ctx context.Context, i *ent.Invoice, statuses []*ent.Status, custMap map[int64]string) templates.InvoiceRow {
 	r := templates.InvoiceRow{
-		ID:          i.ID,
-		Number:      i.InvoiceNumber,
-		Title:       i.Title,
-		CustomerID:  invCustID(i),
-		Customer:    custMap[invCustID(i)],
-		StatusID:    invStatusID(i),
-		StatusName:  statusName(statuses, i.StatusID),
-		StatusColor: statusColor(statuses, i.StatusID),
+		ID:              i.ID,
+		Number:          i.InvoiceNumber,
+		Title:           i.Title,
+		CustomerID:      invCustID(i),
+		Customer:        custMap[invCustID(i)],
+		StatusID:        invStatusID(i),
+		StatusName:      statusName(statuses, i.StatusID),
+		StatusColor:     statusColor(statuses, i.StatusID),
+		SettlementState: i.SettlementState,
 	}
 	if !i.InvoiceDate.IsZero() {
 		r.InvoiceDate = displayDate(ctx, i.InvoiceDate)
@@ -545,17 +605,7 @@ func invoiceRow(ctx context.Context, i *ent.Invoice, statuses []*ent.Status, cus
 }
 
 func invCustID(i *ent.Invoice) int64 {
-	if i.CustomerID == nil {
-		return 0
-	}
-	return *i.CustomerID
-}
-
-func displayPayments(ctx context.Context, payments []services.Payment) []services.Payment {
-	for i := range payments {
-		payments[i].Date = displayStoredDate(ctx, payments[i].Date)
-	}
-	return payments
+	return i.CustomerID
 }
 
 func invStatusID(i *ent.Invoice) int64 {
@@ -588,7 +638,7 @@ func (h *InvoiceHandler) updateInvoiceStatusAfterEmail(ctx context.Context, id i
 	if err != nil {
 		return err
 	}
-	if h.invoiceHasStatus(ctx, i, "Paid", "Partially Paid", "Void") {
+	if h.invoiceHasStatus(ctx, i, "Void") {
 		return nil
 	}
 	sentStatus, err := h.invoiceStatusByName(ctx, "Sent")
@@ -596,31 +646,6 @@ func (h *InvoiceHandler) updateInvoiceStatusAfterEmail(ctx context.Context, id i
 		return err
 	}
 	return h.svc.SetStatus(ctx, id, sentStatus.ID)
-}
-
-func (h *InvoiceHandler) updateInvoiceStatusAfterPayment(ctx context.Context, id int64) error {
-	i, err := h.svc.GetByID(ctx, id)
-	if err != nil {
-		return err
-	}
-	if h.invoiceHasStatus(ctx, i, "Void") {
-		return nil
-	}
-	total, paid, err := services.InvoiceAmountDue(i)
-	if err != nil {
-		return err
-	}
-	statusName := "Partially Paid"
-	if paid <= 0 {
-		statusName = "Sent"
-	} else if paid+0.005 >= total {
-		statusName = "Paid"
-	}
-	newStatus, err := h.invoiceStatusByName(ctx, statusName)
-	if err != nil {
-		return err
-	}
-	return h.svc.SetStatus(ctx, id, newStatus.ID)
 }
 
 func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
@@ -893,9 +918,17 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (docu
 		return documentPDF{}, err
 	}
 	statuses, _ := h.statusSvc.ByObjectType(ctx, "invoice")
+	actor, ok := settlementActor(ctx)
+	if !ok {
+		return documentPDF{}, errors.New("settlement actor is required")
+	}
+	settlementView, err := h.settlement.InvoiceSettlement(ctx, actor, id)
+	if err != nil {
+		return documentPDF{}, fmt.Errorf("load invoice settlement: %w", err)
+	}
 	var customer *ent.Customer
-	if i.CustomerID != nil && *i.CustomerID > 0 {
-		c, _ := h.custSvc.GetByID(ctx, *i.CustomerID)
+	if i.CustomerID > 0 {
+		c, _ := h.custSvc.GetByID(ctx, i.CustomerID)
 		customer = c
 	}
 	var job *ent.Job
@@ -907,7 +940,10 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (docu
 		}
 	}
 	data, err := generatePDFBytes(func(w io.Writer) error {
-		return services.GenerateInvoicePDF(w, i, customer, job, asset, statuses, middleware.CompanyFromContext(ctx))
+		return services.GenerateInvoicePDF(w, i, customer, job, asset, statuses, middleware.CompanyFromContext(ctx), services.InvoicePDFSettlement{
+			AmountPaidCents: settlementView.SettledCents,
+			AmountDueCents:  settlementView.AmountDueCents,
+		})
 	})
 	if err != nil {
 		return documentPDF{}, err
@@ -934,56 +970,94 @@ func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid form", 400)
 		return
 	}
-	amount, _ := strconv.ParseFloat(r.FormValue("amount"), 64)
-	payment := services.Payment{
-		Amount:    amount,
-		Method:    r.FormValue("method"),
-		Reference: r.FormValue("reference"),
-		Date:      r.FormValue("date"),
-		Notes:     r.FormValue("notes"),
-	}
-	if err := h.svc.RecordPayment(r.Context(), id, payment); err != nil {
-		http.Error(w, err.Error(), 500)
+	amount, err := parseCents(r.FormValue("amount"))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := h.updateInvoiceStatusAfterPayment(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+	actor, ok := settlementActor(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "payment_recorded", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
-			"actor_name": u.Name,
-			"amount":     fmt.Sprintf("%.2f", amount),
-		})
+	result, err := h.settlement.RecordPayment(r.Context(), actor, settlement.RecordPaymentRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, InvoiceID: id, AmountCents: amount, Method: settlement.PaymentMethod(r.FormValue("method")), ReceivedDate: settlement.Date(r.FormValue("date")), Reference: r.FormValue("reference"), Notes: r.FormValue("notes")})
+	if err != nil {
+		writeSettlementError(w, r, err)
+		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+recorded", id), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+recorded%%3A+%%24%.2f+applied", id, float64(result.AppliedCents)/100), http.StatusSeeOther)
 }
 
-func (h *InvoiceHandler) DeletePayment(w http.ResponseWriter, r *http.Request) {
+func (h *InvoiceHandler) ReversePayment(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	paymentID := chi.URLParam(r, "payment_id")
-	payment, err := h.svc.DeletePayment(r.Context(), id, paymentID)
+	h.reverseSettlement(w, r, id, "payment_id", h.settlement.ReversePayment, "Payment+reversed")
+}
+
+func (h *InvoiceHandler) ApplyCredit(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		http.Error(w, "invalid id", 400)
 		return
 	}
-	if err := h.updateInvoiceStatusAfterPayment(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+	if err = r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", 400)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "payment_deleted", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
-			"actor_name": u.Name,
-			"amount":     fmt.Sprintf("%.2f", payment.Amount),
-			"method":     payment.Method,
-			"reference":  payment.Reference,
-		})
+	amount, err := parseCents(r.FormValue("amount"))
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+deleted", id), http.StatusSeeOther)
+	creditID, err := parseUUID(r.FormValue("credit_id"), "credit source")
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	actor, ok := settlementActor(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", 401)
+		return
+	}
+	result, err := h.settlement.ApplyCredit(r.Context(), actor, settlement.ApplyCreditRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, InvoiceID: id, CreditID: creditID, RequestedCents: amount, EffectiveDate: settlement.Date(r.FormValue("effective_date"))})
+	if err != nil {
+		writeSettlementError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Customer+credit+applied%%3A+%%24%.2f", id, float64(result.AppliedCents)/100), 303)
+}
+
+func (h *InvoiceHandler) ReverseCreditApplication(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	h.reverseSettlement(w, r, id, "application_id", h.settlement.ReverseCreditApplication, "Credit+application+reversed")
+}
+
+func (h *InvoiceHandler) reverseSettlement(w http.ResponseWriter, r *http.Request, invoiceID int64, param string, fn func(context.Context, settlement.Actor, settlement.ReverseRequest) (settlement.Result, error), flash string) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", 400)
+		return
+	}
+	opID, err := parseUUID(chi.URLParam(r, param), "settlement operation")
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	actor, ok := settlementActor(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", 401)
+		return
+	}
+	_, err = fn(r.Context(), actor, settlement.ReverseRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, ID: opID, InvoiceID: invoiceID, EffectiveDate: settlement.Date(r.FormValue("effective_date")), Reason: r.FormValue("reason")})
+	if err != nil {
+		writeSettlementError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=%s", invoiceID, flash), 303)
 }

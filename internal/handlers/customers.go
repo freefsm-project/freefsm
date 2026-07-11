@@ -13,6 +13,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
@@ -31,10 +32,11 @@ type CustomerHandler struct {
 	estimateSvc *services.EstimateService
 	invoiceSvc  *services.InvoiceService
 	statusSvc   *services.StatusService
+	settlement  settlementService
 }
 
-func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.CustomerContactService, locationSvc *services.LocationService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, activitySvc *services.ActivityService, policySvc *services.PolicyService, jobSvc *services.JobService, estimateSvc *services.EstimateService, invoiceSvc *services.InvoiceService, statusSvc *services.StatusService) *CustomerHandler {
-	return &CustomerHandler{svc: svc, contactSvc: contactSvc, locationSvc: locationSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, activitySvc: activitySvc, policySvc: policySvc, jobSvc: jobSvc, estimateSvc: estimateSvc, invoiceSvc: invoiceSvc, statusSvc: statusSvc}
+func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.CustomerContactService, locationSvc *services.LocationService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, activitySvc *services.ActivityService, policySvc *services.PolicyService, jobSvc *services.JobService, estimateSvc *services.EstimateService, invoiceSvc *services.InvoiceService, statusSvc *services.StatusService, settlement settlementService) *CustomerHandler {
+	return &CustomerHandler{svc: svc, contactSvc: contactSvc, locationSvc: locationSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, activitySvc: activitySvc, policySvc: policySvc, jobSvc: jobSvc, estimateSvc: estimateSvc, invoiceSvc: invoiceSvc, statusSvc: statusSvc, settlement: settlement}
 }
 
 func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -101,12 +103,27 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	contacts, _ := h.contactSvc.ListByCustomer(r.Context(), c.ID)
 	jobs, estimates, invoices := []*ent.Job{}, []*ent.Estimate{}, []*ent.Invoice{}
 	var financial templates.CustomerFinancialSummary
+	var customerSettlement settlement.CustomerSettlement
 	if isAdminOrDispatcher(u) {
 		jobs, _ = h.jobSvc.ListByCustomer(r.Context(), c.ID, 10)
 		estimates, _ = h.estimateSvc.ListByCustomer(r.Context(), c.ID, 10)
 		invoices, _ = h.invoiceSvc.ListByCustomer(r.Context(), c.ID, 10)
-		allInvoices, _ := h.invoiceSvc.ListByCustomer(r.Context(), c.ID, 0)
-		financial = customerFinancialSummary(allInvoices, h.statusesByType(r.Context(), "invoice"), middleware.CompanyLocation(r.Context()))
+		allInvoices, queryErr := h.invoiceSvc.ListByCustomer(r.Context(), c.ID, 0)
+		if queryErr != nil {
+			internalServerError(w, r, "load customer invoices", queryErr)
+			return
+		}
+		actor, _ := settlementActor(r.Context())
+		financial, queryErr = customerFinancialSummary(r.Context(), h.settlement, actor, allInvoices, h.statusesByType(r.Context(), "invoice"), middleware.CompanyLocation(r.Context()))
+		if queryErr != nil {
+			internalServerError(w, r, "load customer invoice settlements", queryErr)
+			return
+		}
+		customerSettlement, err = h.settlement.CustomerSettlement(r.Context(), actor, c.ID)
+		if err != nil {
+			writeSettlementError(w, r, err)
+			return
+		}
 	}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), c.DisplayName)
 	templates.CustomerShow(templates.CustomerShowPageData{
@@ -121,6 +138,8 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 		AllTags:      tagsToRows(allTags),
 		CustomFields: buildCustomFieldDisplay(defs, c.CustomFields),
 		FileList:     templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: c.ID, ObjectType: "customer"},
+		Settlement:   customerSettlement,
+		RefundKey:    newOperationKey(),
 	}).Render(ctx, w)
 }
 
@@ -250,6 +269,20 @@ func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	entityName := c.DisplayName
+	actor, ok := settlementActor(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	credit, queryErr := h.settlement.CustomerSettlement(r.Context(), actor, id)
+	if queryErr != nil {
+		writeSettlementError(w, r, queryErr)
+		return
+	}
+	if credit.AvailableCreditCents > 0 {
+		http.Error(w, "customer cannot be archived while credit remains unresolved", http.StatusConflict)
+		return
+	}
 	if err := h.svc.Archive(r.Context(), id); err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -866,36 +899,39 @@ func (h *CustomerHandler) customerInvoiceRows(ctx context.Context, invoices []*e
 	return rows
 }
 
-func customerFinancialSummary(invoices []*ent.Invoice, invoiceStatuses []*ent.Status, loc *time.Location) templates.CustomerFinancialSummary {
+func addInvoiceFinancial(summary *templates.CustomerFinancialSummary, inv *ent.Invoice, view settlement.InvoiceSettlement, invoiceStatuses []*ent.Status, loc *time.Location) {
 	today := time.Now().In(loc).Truncate(24 * time.Hour)
+	status := strings.ToLower(statusName(invoiceStatuses, inv.StatusID))
+	if status != "void" {
+		summary.TotalInvoiced += float64(view.TotalCents) / 100
+		summary.TotalPaid += float64(view.SettledCents) / 100
+	}
+	if status == "draft" || status == "void" || view.AmountDueCents <= 0 {
+		return
+	}
+	balance := float64(view.AmountDueCents) / 100
+	summary.TotalBalance += balance
+	summary.OpenInvoiceCount++
+	if !inv.DueDate.IsZero() && inv.DueDate.In(loc).Before(today) {
+		summary.OverdueBalance += balance
+		summary.OverdueInvoiceCount++
+	}
+}
+
+func customerFinancialSummary(ctx context.Context, svc settlementService, actor settlement.Actor, invoices []*ent.Invoice, statuses []*ent.Status, loc *time.Location) (templates.CustomerFinancialSummary, error) {
 	var summary templates.CustomerFinancialSummary
 	for _, inv := range invoices {
-		total, paid, err := services.InvoiceAmountDue(inv)
+		view, err := svc.InvoiceSettlement(ctx, actor, inv.ID)
 		if err != nil {
-			continue
+			return templates.CustomerFinancialSummary{}, err
 		}
-		status := strings.ToLower(statusName(invoiceStatuses, inv.StatusID))
-		if status != "void" {
-			summary.TotalInvoiced += total
-			summary.TotalPaid += paid
-		}
-		if status == "draft" || status == "paid" || status == "void" {
-			continue
-		}
-		balance := total - paid
-		if balance < 0 {
-			balance = 0
-		}
-		if balance <= 0 {
-			continue
-		}
-		summary.TotalBalance += balance
-		summary.OpenInvoiceCount++
-		if !inv.DueDate.IsZero() && inv.DueDate.In(loc).Before(today) {
-			summary.OverdueBalance += balance
-			summary.OverdueInvoiceCount++
-		}
+		addInvoiceFinancial(&summary, inv, view, statuses, loc)
 	}
+	finishCustomerFinancial(&summary)
+	return summary, nil
+}
+
+func finishCustomerFinancial(summary *templates.CustomerFinancialSummary) {
 	summary.CurrentBalance = summary.TotalBalance - summary.OverdueBalance
 	if summary.CurrentBalance < 0 {
 		summary.CurrentBalance = 0
@@ -914,7 +950,62 @@ func customerFinancialSummary(invoices []*ent.Invoice, invoiceStatuses []*ent.St
 			summary.OverduePercent = 100
 		}
 	}
-	return summary
+}
+
+func (h *CustomerHandler) RefundCredit(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	if err = r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", 400)
+		return
+	}
+	amount, err := parseCents(r.FormValue("amount"))
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	actor, ok := settlementActor(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", 401)
+		return
+	}
+	_, err = h.settlement.RefundCredit(r.Context(), actor, settlement.RefundCreditRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, CustomerID: id, AmountCents: amount, Method: settlement.PaymentMethod(r.FormValue("method")), EffectiveDate: settlement.Date(r.FormValue("effective_date")), Reference: r.FormValue("reference"), Notes: r.FormValue("notes"), Reason: r.FormValue("reason")})
+	if err != nil {
+		writeSettlementError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/customers/%d?flash=Customer+credit+refunded", id), 303)
+}
+
+func (h *CustomerHandler) ReverseRefund(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", 400)
+		return
+	}
+	if err = r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", 400)
+		return
+	}
+	refundID, err := parseUUID(chi.URLParam(r, "refund_id"), "refund")
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	actor, ok := settlementActor(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", 401)
+		return
+	}
+	_, err = h.settlement.ReverseRefund(r.Context(), actor, settlement.ReverseRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, ID: refundID, CustomerID: id, EffectiveDate: settlement.Date(r.FormValue("effective_date")), Reason: r.FormValue("reason")})
+	if err != nil {
+		writeSettlementError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/customers/%d?flash=Credit+refund+reversed", id), 303)
 }
 
 func locationRows(locations []*ent.Location) []templates.LocationRow {

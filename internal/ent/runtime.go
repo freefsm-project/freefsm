@@ -591,10 +591,10 @@ func init() {
 	invoiceDescLineItems := invoiceFields[12].Descriptor()
 	// invoice.DefaultLineItems holds the default value on creation for the line_items field.
 	invoice.DefaultLineItems = invoiceDescLineItems.Default.(string)
-	// invoiceDescPayments is the schema descriptor for payments field.
-	invoiceDescPayments := invoiceFields[13].Descriptor()
-	// invoice.DefaultPayments holds the default value on creation for the payments field.
-	invoice.DefaultPayments = invoiceDescPayments.Default.(string)
+	// invoiceDescSettlementState is the schema descriptor for settlement_state field.
+	invoiceDescSettlementState := invoiceFields[13].Descriptor()
+	// invoice.DefaultSettlementState holds the default value on creation for the settlement_state field.
+	invoice.DefaultSettlementState = invoiceDescSettlementState.Default.(string)
 	// invoiceDescDisplaySettings is the schema descriptor for display_settings field.
 	invoiceDescDisplaySettings := invoiceFields[14].Descriptor()
 	// invoice.DefaultDisplaySettings holds the default value on creation for the display_settings field.

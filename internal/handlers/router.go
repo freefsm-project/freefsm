@@ -10,6 +10,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -58,17 +59,18 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	policySvc := services.NewPolicyService(entClient, objects)
 	estimateService := services.NewEstimateService(entClient)
 	invoiceService := services.NewInvoiceService(entClient)
+	settlementService := settlement.New(db)
 	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc, policySvc, objects)
 	defSvc := services.NewCustomFieldDefinitionService(entClient)
 	cfHandler := NewCustomFieldHandler(defSvc, activitySvc, depSvc)
 	timeEntrySvc := services.NewTimeEntryService(entClient)
-	dashboardHandler := NewDashboardHandler(services.NewDashboardService(entClient), timeEntrySvc)
+	dashboardHandler := NewDashboardHandler(services.NewDashboardService(entClient, db), timeEntrySvc)
 	// File service
 	fileSvc := services.NewFileService(entClient, objects, cfg.UploadDir, cfg.MaxUploadSize)
 	fileHandler := NewFileHandler(fileSvc, activitySvc, policySvc, objects)
 	activityHandler := NewActivityHandler(activitySvc, userService, policySvc, objects)
 
-	customerHandler := NewCustomerHandler(customerService, contactSvc, locationSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc, jobService, estimateService, invoiceService, statusService)
+	customerHandler := NewCustomerHandler(customerService, contactSvc, locationSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc, jobService, estimateService, invoiceService, statusService, settlementService)
 	itemHandler := NewItemHandler(itemService, activitySvc)
 	// Asset services
 	assetTypeSvc := services.NewAssetTypeService(entClient)
@@ -82,7 +84,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	emailSvc := services.NewEmailService(companySettingsSvc)
 	inviteSvc := services.NewInvitationService(entClient)
 	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc, policySvc)
-	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc, policySvc)
+	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc, policySvc, settlementService)
 	tagHandler := NewTagHandler(tagSvc, tagLinkSvc, activitySvc, depSvc)
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc, cfg.UploadDir)
 	jobStatusHandler := NewJobStatusHandler(statusService, activitySvc)
@@ -206,6 +208,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Get("/customers/{id}/edit", customerHandler.Update)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}", customerHandler.Update)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/delete", customerHandler.Delete)
+			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/credit/refunds", customerHandler.RefundCredit)
+			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/credit/refunds/{refund_id}/reverse", customerHandler.ReverseRefund)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Get("/customers/{id}/contacts/new", customerHandler.NewContactForm)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/contacts", customerHandler.CreateContact)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/contacts/inline", customerHandler.CreateContactInline)
@@ -262,7 +266,9 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/delete", invoiceHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/finalize", invoiceHandler.Finalize)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/payments", invoiceHandler.RecordPayment)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/payments/{payment_id}/delete", invoiceHandler.DeletePayment)
+			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/payments/{payment_id}/reverse", invoiceHandler.ReversePayment)
+			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications", invoiceHandler.ApplyCredit)
+			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications/{application_id}/reverse", invoiceHandler.ReverseCreditApplication)
 			r.Get("/invoices/{id}/pdf", invoiceHandler.PDF)
 			r.Get("/invoices/{id}/pdf/preview", invoiceHandler.PreviewPDF)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/pdf/save", invoiceHandler.SavePDF)
