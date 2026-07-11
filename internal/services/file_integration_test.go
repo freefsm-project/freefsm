@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 )
 
 func TestFileServiceTargetExistsRejectsArchivedTargets(t *testing.T) {
@@ -11,7 +13,7 @@ func TestFileServiceTargetExistsRejectsArchivedTargets(t *testing.T) {
 	defer client.Close()
 
 	ctx := context.Background()
-	svc := NewFileService(client, t.TempDir(), 1024)
+	svc := NewFileService(client, objectref.NewEntDirectory(client), t.TempDir(), 1024)
 	now := time.Now()
 
 	activeCustomer := client.Customer.Create().SetDisplayName("Active Customer").SaveX(ctx)

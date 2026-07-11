@@ -9,37 +9,21 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/middleware"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 	"github.com/MartialM1nd/freefsm/internal/services"
 	"github.com/MartialM1nd/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
 
-var activityTypeToPrefix = map[string]string{
-	"customer":         "/customers",
-	"job":              "/jobs",
-	"project":          "/projects",
-	"estimate":         "/estimates",
-	"invoice":          "/invoices",
-	"asset":            "/assets",
-	"item":             "/items",
-	"time_entry":       "/time-entries",
-	"user":             "/users",
-	"tag":              "/tags",
-	"asset_type":       "/settings/assets",
-	"asset_status":     "/settings/assets",
-	"company_settings": "/settings",
-	"custom_field":     "/settings/custom-fields",
-	"job_status":       "/settings/job-statuses",
-}
-
 type ActivityHandler struct {
 	svc       *services.ActivityService
 	userSvc   *services.UserService
 	policySvc *services.PolicyService
+	objects   objectref.Directory
 }
 
-func NewActivityHandler(svc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService) *ActivityHandler {
-	return &ActivityHandler{svc: svc, userSvc: userSvc, policySvc: policySvc}
+func NewActivityHandler(svc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService, objects objectref.Directory) *ActivityHandler {
+	return &ActivityHandler{svc: svc, userSvc: userSvc, policySvc: policySvc, objects: objects}
 }
 
 func (h *ActivityHandler) ListForObject(objectType string) http.HandlerFunc {
@@ -224,7 +208,13 @@ func (h *ActivityHandler) entriesToRows(ctx context.Context, entries []*ent.Acti
 			actorName = h.lookupActorName(ctx, e.ActorID)
 		}
 
-		entityURL := buildEntityURL(e.ObjectType, e.ObjectID)
+		entityURL := ""
+		ref, err := h.objects.Parse(e.ObjectType, e.ObjectID)
+		if err == nil {
+			if url, ok := h.objects.URL(ref); ok {
+				entityURL = url
+			}
+		}
 
 		entityName := meta.EntityName
 		if entityName == "" {
@@ -300,27 +290,6 @@ func activityIcon(action string) string {
 		return "📍"
 	default:
 		return "●"
-	}
-}
-
-func buildEntityURL(objectType string, objectID int64) string {
-	switch objectType {
-	case "asset_type", "asset_status":
-		return "/settings/assets"
-	case "company_settings":
-		return "/settings"
-	case "custom_field":
-		return "/settings/custom-fields"
-	case "tag":
-		return fmt.Sprintf("/tags/%d", objectID)
-	case "user":
-		return fmt.Sprintf("/users/%d", objectID)
-	default:
-		prefix, ok := activityTypeToPrefix[objectType]
-		if !ok {
-			prefix = "/" + objectType + "s"
-		}
-		return fmt.Sprintf("%s/%d", prefix, objectID)
 	}
 }
 

@@ -8,24 +8,16 @@ import (
 
 	"github.com/MartialM1nd/freefsm/internal/ent"
 	"github.com/MartialM1nd/freefsm/internal/ent/activitylog"
+	"github.com/MartialM1nd/freefsm/internal/objectref"
 )
 
-var adminObjectTypes = map[string]bool{
-	"asset_type":       true,
-	"asset_status":     true,
-	"company_settings": true,
-	"custom_field":     true,
-	"job_status":       true,
-	"tag":              true,
-	"user":             true,
-}
-
 type ActivityService struct {
-	client *ent.Client
+	client  *ent.Client
+	objects objectref.Directory
 }
 
-func NewActivityService(client *ent.Client) *ActivityService {
-	return &ActivityService{client: client}
+func NewActivityService(client *ent.Client, objects objectref.Directory) *ActivityService {
+	return &ActivityService{client: client, objects: objects}
 }
 
 func (s *ActivityService) Record(ctx context.Context, actorID int64, action string, objectType string, objectID int64, metadata map[string]interface{}) error {
@@ -47,110 +39,15 @@ func (s *ActivityService) Record(ctx context.Context, actorID int64, action stri
 }
 
 func (s *ActivityService) LookupEntityName(ctx context.Context, objectType string, objectID int64) string {
-	switch objectType {
-	case "customer":
-		c, err := s.client.Customer.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("customer #%d", objectID)
-		}
-		return c.DisplayName
-	case "job":
-		j, err := s.client.Job.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("job #%d", objectID)
-		}
-		return j.JobType
-	case "project":
-		p, err := s.client.Project.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("project #%d", objectID)
-		}
-		return p.Name
-	case "estimate":
-		e, err := s.client.Estimate.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("estimate #%d", objectID)
-		}
-		return e.Title
-	case "invoice":
-		i, err := s.client.Invoice.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("invoice #%d", objectID)
-		}
-		return i.Title
-	case "asset":
-		a, err := s.client.Asset.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("asset #%d", objectID)
-		}
-		return a.Name
-	case "item":
-		i, err := s.client.Item.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("item #%d", objectID)
-		}
-		return i.Name
-	case "time_entry":
-		te, err := s.client.TimeEntry.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("time entry #%d", objectID)
-		}
-		cs, _ := s.client.CompanySettings.Query().First(ctx)
-		loc := companySettingsLocation(cs)
-		clockIn := FormatCompanyDateTime(te.ClockIn, loc, cs)
-		if te.ClockOut != nil {
-			return fmt.Sprintf("%s — %s", clockIn, FormatCompanyTime(*te.ClockOut, loc, cs))
-		}
-		return clockIn
-	case "asset_type":
-		at, err := s.client.AssetType.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("asset type #%d", objectID)
-		}
-		return at.Name
-	case "asset_status":
-		as, err := s.client.AssetStatus.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("asset status #%d", objectID)
-		}
-		return as.Name
-	case "job_status":
-		st, err := s.client.Status.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("job status #%d", objectID)
-		}
-		return st.Name
-	case "company_settings":
-		cs, err := s.client.CompanySettings.Get(ctx, objectID)
-		if err != nil {
-			return "Company Settings"
-		}
-		name := cs.BusinessName
-		if name == "" {
-			name = "Company Settings"
-		}
-		return name
-	case "custom_field":
-		cf, err := s.client.CustomFieldDefinition.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("custom field #%d", objectID)
-		}
-		return cf.Name
-	case "tag":
-		t, err := s.client.Tag.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("tag #%d", objectID)
-		}
-		return t.Name
-	case "user":
-		u, err := s.client.User.Get(ctx, objectID)
-		if err != nil {
-			return fmt.Sprintf("user #%d", objectID)
-		}
-		return u.Name
-	default:
+	ref, err := s.objects.Parse(objectType, objectID)
+	if err != nil {
 		return fmt.Sprintf("%s #%d", objectType, objectID)
 	}
+	name, err := s.objects.DisplayName(ctx, ref)
+	if err != nil {
+		return fmt.Sprintf("%s #%d", objectType, objectID)
+	}
+	return name
 }
 
 func (s *ActivityService) ListForObject(ctx context.Context, objectType string, objectID int64, limit int) ([]*ent.ActivityLog, error) {
@@ -173,8 +70,8 @@ func (s *ActivityService) ListForObject(ctx context.Context, objectType string, 
 func (s *ActivityService) ListAll(ctx context.Context, offset, limit int, isAdmin bool) ([]*ent.ActivityLog, int, error) {
 	q := s.client.ActivityLog.Query()
 	if !isAdmin {
-		for t := range adminObjectTypes {
-			q = q.Where(activitylog.ObjectTypeNEQ(t))
+		for _, t := range objectref.AdminOnlyTypes() {
+			q = q.Where(activitylog.ObjectTypeNEQ(string(t)))
 		}
 	}
 	total, err := q.Count(ctx)
