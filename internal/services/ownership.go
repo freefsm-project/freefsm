@@ -12,6 +12,8 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/job"
 	"github.com/freefsm-project/freefsm/internal/ent/location"
 	"github.com/freefsm-project/freefsm/internal/ent/project"
+	"github.com/freefsm-project/freefsm/internal/ent/status"
+	"github.com/freefsm-project/freefsm/internal/ent/statusworkflow"
 )
 
 func validateCustomerLocation(ctx context.Context, client *ent.Client, customerID, locationID int64) error {
@@ -26,6 +28,28 @@ func validateCustomerLocation(ctx context.Context, client *ent.Client, customerI
 	}
 	if !exists {
 		return fmt.Errorf("location does not belong to customer")
+	}
+	return nil
+}
+
+var ErrInvalidDocumentStatus = fmt.Errorf("status must belong to the same company and document workflow")
+
+func validateDocumentStatus(ctx context.Context, client *ent.Client, statusID int64, companyID *int64, objectType string) error {
+	if statusID <= 0 {
+		return nil
+	}
+	q := client.Status.Query().Where(status.IDEQ(statusID), status.HasWorkflowWith(statusworkflow.ObjectTypeEQ(objectType)))
+	if companyID != nil {
+		q = q.Where(status.CompanyIDEQ(*companyID), status.HasWorkflowWith(statusworkflow.CompanyIDEQ(*companyID)))
+	} else {
+		q = q.Where(status.CompanyIDIsNil(), status.HasWorkflowWith(statusworkflow.CompanyIDIsNil()))
+	}
+	ok, err := q.Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("validate %s status: %w", objectType, err)
+	}
+	if !ok {
+		return ErrInvalidDocumentStatus
 	}
 	return nil
 }
@@ -121,6 +145,7 @@ func validateEstimateCustomer(ctx context.Context, client *ent.Client, customerI
 	q := client.Estimate.Query().Where(estimate.IDEQ(estimateID), estimate.CustomerIDEQ(customerID))
 	if requireActive {
 		q = q.Where(estimate.DeletedAtIsNil())
+		q = q.Where(estimate.ConversionHiddenAtIsNil())
 	}
 	exists, err := q.Exist(ctx)
 	if err != nil {

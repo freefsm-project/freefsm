@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -17,6 +18,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type InvoiceHandler struct {
@@ -34,10 +36,11 @@ type InvoiceHandler struct {
 	activitySvc *services.ActivityService
 	policySvc   *services.PolicyService
 	settlement  settlementService
+	conversion  conversionService
 }
 
-func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, assetSvc *services.AssetService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService, policySvc *services.PolicyService, settlement settlementService) *InvoiceHandler {
-	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, assetSvc: assetSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc, settlement: settlement}
+func NewInvoiceHandler(svc *services.InvoiceService, custSvc *services.CustomerService, jobSvc *services.JobService, assetSvc *services.AssetService, statusSvc *services.StatusService, itemSvc *services.ItemService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService, policySvc *services.PolicyService, settlement settlementService, conversionSvc conversionService) *InvoiceHandler {
+	return &InvoiceHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, assetSvc: assetSvc, statusSvc: statusSvc, itemSvc: itemSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc, settlement: settlement, conversion: conversionSvc}
 }
 
 func (h *InvoiceHandler) authorizeInvoice(w http.ResponseWriter, r *http.Request, id int64, action services.PolicyAction) bool {
@@ -120,6 +123,21 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := invoiceToDetail(r.Context(), i, statuses)
+	u, _ := middleware.UserFromContext(r.Context())
+	d.CanManage = u != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeInvoice, id), policyUpdate)
+	d.CanSettle = u != nil && (u.Role == "admin" || u.Role == "dispatcher")
+	if actor, ok := conversionActor(r); ok && i.EstimateID != nil {
+		eligibility, eligibilityErr := h.conversion.RevertEligibility(r.Context(), actor, id)
+		if eligibilityErr == nil {
+			d.Converted, d.CanRevert, d.RevertKey = true, eligibility.Allowed, uuid.NewString()
+			for _, blocker := range eligibility.Blockers {
+				d.RevertBlockers = append(d.RevertBlockers, conversionBlockerText(blocker))
+			}
+		} else if !errors.Is(eligibilityErr, conversion.ErrNotFound) && !errors.Is(eligibilityErr, conversion.ErrForbidden) {
+			internalServerError(w, r, "check invoice revert eligibility", eligibilityErr)
+			return
+		}
+	}
 	if i.CustomerID > 0 {
 		customer, _ := h.custSvc.GetByID(r.Context(), i.CustomerID)
 		if customer != nil {
@@ -137,24 +155,26 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.LineItems = h.svc.LineItems(i)
-	actor, ok := settlementActor(r.Context())
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	d.Settlement, err = h.settlement.InvoiceSettlement(r.Context(), actor, id)
-	if err != nil {
-		writeSettlementError(w, r, err)
-		return
-	}
-	credit, err := h.settlement.CustomerSettlement(r.Context(), actor, d.Settlement.CustomerID)
-	if err != nil {
-		writeSettlementError(w, r, err)
-		return
-	}
-	for _, source := range credit.Sources {
-		if source.AvailableCents > 0 {
-			d.CreditSources = append(d.CreditSources, source)
+	if d.CanSettle {
+		actor, ok := settlementActor(r.Context())
+		if !ok {
+			http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		d.Settlement, err = h.settlement.InvoiceSettlement(r.Context(), actor, id)
+		if err != nil {
+			writeSettlementError(w, r, err)
+			return
+		}
+		credit, err := h.settlement.CustomerSettlement(r.Context(), actor, d.Settlement.CustomerID)
+		if err != nil {
+			writeSettlementError(w, r, err)
+			return
+		}
+		for _, source := range credit.Sources {
+			if source.AvailableCents > 0 {
+				d.CreditSources = append(d.CreditSources, source)
+			}
 		}
 	}
 	d.PaymentKey, d.ApplyCreditKey = newOperationKey(), newOperationKey()
@@ -301,6 +321,9 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if !h.authorizeInvoice(w, r, id, policyUpdate) {
+		return
+	}
 	if r.Method == http.MethodGet {
 		i, err := h.svc.GetByID(r.Context(), id)
 		if err != nil {
@@ -326,6 +349,9 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
+	if !h.authorizeDestinationJob(w, r, custID, jobID) {
+		return
+	}
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	if selected := statusName(h.statusesForSelect(r.Context()), &statusID); strings.EqualFold(selected, "Void") {
 		actor, ok := settlementActor(r.Context())
@@ -474,7 +500,7 @@ func (h *InvoiceHandler) Finalize(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invoice status 'Invoiced' not found", 500)
 		return
 	}
-	if !h.invoiceHasStatus(r.Context(), i, "Draft") {
+	if !h.invoiceHasDocumentRole(r.Context(), i, "draft") {
 		http.Error(w, "only draft invoices can be finalized", http.StatusConflict)
 		return
 	}
@@ -531,7 +557,7 @@ func (h *InvoiceHandler) newInvoiceForm(ctx context.Context) (templates.InvoiceF
 
 func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice, statuses []*ent.Status) (templates.InvoiceFormPageData, error) {
 	customers, _ := h.custSvc.ListAll(ctx)
-	jobs, _ := h.jobSvc.ListAll(ctx)
+	jobs, _ := h.jobsForEditor(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
 	d := invoiceToDetail(ctx, i, statuses)
@@ -561,7 +587,7 @@ func invoiceToDetail(ctx context.Context, i *ent.Invoice, statuses []*ent.Status
 		StatusID:    invStatusID(i),
 		StatusName:  statusName,
 		StatusColor: statusColor(statuses, i.StatusID),
-		CanFinalize: strings.EqualFold(statusName, "Draft"),
+		CanFinalize: statusDocumentRole(statuses, i.StatusID) == "draft",
 		Title:       i.Title,
 		Notes:       i.Notes,
 		TaxRate:     i.TaxRate,
@@ -633,6 +659,22 @@ func (h *InvoiceHandler) invoiceHasStatus(ctx context.Context, i *ent.Invoice, n
 	return false
 }
 
+func (h *InvoiceHandler) invoiceHasDocumentRole(ctx context.Context, i *ent.Invoice, role string) bool {
+	return statusDocumentRole(h.statusesForSelect(ctx), i.StatusID) == role
+}
+
+func statusDocumentRole(statuses []*ent.Status, id *int64) string {
+	if id == nil {
+		return ""
+	}
+	for _, s := range statuses {
+		if s.ID == *id {
+			return s.DocumentRole
+		}
+	}
+	return ""
+}
+
 func (h *InvoiceHandler) updateInvoiceStatusAfterEmail(ctx context.Context, id int64) error {
 	i, err := h.svc.GetByID(ctx, id)
 	if err != nil {
@@ -659,14 +701,19 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), u.ID, u.Role, id) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	defaultTaxRate := taxRateForCustomer(r.Context(), h.custSvc, j.CustomerID, companyDefaultTaxRate(r.Context()))
 	statuses := h.statusesForSelect(r.Context())
 	var statusID int64
-	if draft, _ := h.statusSvc.FindByName(r.Context(), "invoice", "Draft"); draft != nil {
+	if draft, _ := h.statusSvc.DraftForObjectType(r.Context(), "invoice"); draft != nil {
 		statusID = draft.ID
 	}
 	customers, _ := h.custSvc.ListAll(r.Context())
-	jobs, _ := h.jobSvc.ListAll(r.Context())
+	jobs, _ := h.jobsForEditor(r.Context())
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
 	bootstrap, err := lineItemEditorBootstrap(r.Context(), h.itemSvc, customers, j.LineItems, companyDefaultTaxRate(r.Context()))
 	if err != nil {
@@ -691,8 +738,60 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		CustomersJSON:     bootstrap.CustomersJSON,
 		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
 		CancelURL:         fmt.Sprintf("/jobs/%d", id),
+		FormAction:        fmt.Sprintf("/jobs/%d/invoices", id),
 	}
 	templates.InvoiceForm(data).Render(r.Context(), w)
+}
+
+func (h *InvoiceHandler) CreateForJob(w http.ResponseWriter, r *http.Request) {
+	jobID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err = r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
+		return
+	}
+	postedJobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
+	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
+	if postedJobID != jobID || !h.authorizeDestinationJob(w, r, customerID, jobID) {
+		if postedJobID != jobID {
+			http.Error(w, "job does not match creation route", http.StatusForbidden)
+		}
+		return
+	}
+	h.Create(w, r)
+}
+
+func (h *InvoiceHandler) jobsForEditor(ctx context.Context) ([]*ent.Job, error) {
+	u, _ := middleware.UserFromContext(ctx)
+	if u != nil && (u.Role == "tech" || u.Role == "technician") {
+		return h.jobSvc.ListAssignedAll(ctx, u.ID)
+	}
+	return h.jobSvc.ListAll(ctx)
+}
+
+func (h *InvoiceHandler) authorizeDestinationJob(w http.ResponseWriter, r *http.Request, customerID, jobID int64) bool {
+	if jobID <= 0 {
+		u, _ := middleware.UserFromContext(r.Context())
+		if u != nil && (u.Role == "tech" || u.Role == "technician") {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return false
+		}
+		return true
+	}
+	j, err := h.jobSvc.GetByID(r.Context(), jobID)
+	if err != nil || j.CustomerID != customerID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), u.ID, u.Role, jobID) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
 }
 
 func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Request) {
@@ -708,7 +807,7 @@ func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Reque
 	defaultTaxRate := taxRateForCustomer(r.Context(), h.custSvc, id, companyDefaultTaxRate(r.Context()))
 	statuses := h.statusesForSelect(r.Context())
 	var statusID int64
-	if draft, _ := h.statusSvc.FindByName(r.Context(), "invoice", "Draft"); draft != nil {
+	if draft, _ := h.statusSvc.DraftForObjectType(r.Context(), "invoice"); draft != nil {
 		statusID = draft.ID
 	}
 	customers, _ := h.custSvc.ListAll(r.Context())
@@ -738,25 +837,47 @@ func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Reque
 	templates.InvoiceForm(data).Render(r.Context(), w)
 }
 
-func (h *InvoiceHandler) CreateFromEstimate(w http.ResponseWriter, r *http.Request) {
+func (h *InvoiceHandler) RevertToEstimate(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	inv, err := h.svc.CreateFromEstimate(r.Context(), id, h.statusSvc)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
+	if err = r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeInvoice, inv.ID), map[string]interface{}{
-			"entity_name": inv.Title,
-			"actor_name":  u.Name,
-		})
+	key, err := uuid.Parse(r.FormValue("idempotency_key"))
+	if err != nil {
+		http.Error(w, "valid idempotency UUID is required", http.StatusUnprocessableEntity)
+		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+created+from+estimate", inv.ID), http.StatusSeeOther)
+	actor, ok := conversionActor(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	result, err := h.conversion.Revert(r.Context(), actor, conversion.RevertRequest{Operation: conversion.Operation{Key: key}, InvoiceID: id})
+	if err != nil {
+		writeConversionError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/estimates/%d?flash=Invoice+reverted+to+estimate", result.EstimateID), http.StatusSeeOther)
+}
+
+func conversionBlockerText(blocker conversion.Blocker) string {
+	switch blocker {
+	case conversion.BlockerArchived:
+		return "Restore this archived invoice before reverting."
+	case conversion.BlockerActivePayment:
+		return "Reverse all active payments before reverting."
+	case conversion.BlockerActiveCreditApplication:
+		return "Reverse all active credit applications before reverting."
+	case conversion.BlockerUnresolvedPaymentCredit:
+		return "Refund or apply all remaining overpayment credit before reverting."
+	default:
+		return "Financial settlement must be fully unwound before reverting."
+	}
 }
 
 func (h *InvoiceHandler) PDF(w http.ResponseWriter, r *http.Request) {

@@ -2,19 +2,30 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
+
+type conversionService interface {
+	Convert(context.Context, conversion.Actor, conversion.ConvertRequest) (conversion.Result, error)
+	Revert(context.Context, conversion.Actor, conversion.RevertRequest) (conversion.Result, error)
+	ConversionEligibility(context.Context, conversion.Actor, int64) (conversion.Eligibility, error)
+	RevertEligibility(context.Context, conversion.Actor, int64) (conversion.Eligibility, error)
+	Timeline(context.Context, conversion.Actor, int64) ([]conversion.TimelineEntry, error)
+}
 
 type EstimateHandler struct {
 	svc         *services.EstimateService
@@ -30,10 +41,19 @@ type EstimateHandler struct {
 	emailSvc    *services.EmailService
 	activitySvc *services.ActivityService
 	policySvc   *services.PolicyService
+	conversion  conversionService
 }
 
-func NewEstimateHandler(svc *services.EstimateService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, invoiceSvc *services.InvoiceService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService, policySvc *services.PolicyService) *EstimateHandler {
-	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc}
+func NewEstimateHandler(svc *services.EstimateService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, invoiceSvc *services.InvoiceService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService, policySvc *services.PolicyService, conversionSvc conversionService) *EstimateHandler {
+	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc, conversion: conversionSvc}
+}
+
+func conversionActor(r *http.Request) (conversion.Actor, bool) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		return conversion.Actor{}, false
+	}
+	return conversion.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, true
 }
 
 func (h *EstimateHandler) authorizeEstimate(w http.ResponseWriter, r *http.Request, id int64, action services.PolicyAction) bool {
@@ -116,6 +136,28 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := estimateToDetail(r.Context(), e, statuses)
+	u, _ := middleware.UserFromContext(r.Context())
+	d.CanManage = u != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeEstimate, id), policyUpdate)
+	convertibleStatus := false
+	for _, status := range statuses {
+		if e.StatusID != nil && status.ID == *e.StatusID {
+			convertibleStatus = status.EstimateConvertible
+			break
+		}
+	}
+	if actor, ok := conversionActor(r); ok && convertibleStatus {
+		eligibility, eligibilityErr := h.conversion.ConversionEligibility(r.Context(), actor, id)
+		if eligibilityErr == nil {
+			d.CanConvert = eligibility.Allowed
+			d.ConvertKey = uuid.NewString()
+			if !eligibility.Allowed && eligibility.Active == nil {
+				d.ConvertBlocker = "This estimate's current status does not allow conversion."
+			}
+		} else if !errors.Is(eligibilityErr, conversion.ErrForbidden) && !errors.Is(eligibilityErr, conversion.ErrNotFound) {
+			internalServerError(w, r, "check estimate conversion eligibility", eligibilityErr)
+			return
+		}
+	}
 	if e.CustomerID != nil && *e.CustomerID > 0 {
 		customer, _ := h.custSvc.GetByID(r.Context(), *e.CustomerID)
 		if customer != nil {
@@ -207,6 +249,9 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
+	if !h.authorizeDestinationJob(w, r, custID, jobID) {
+		return
+	}
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	taxRate := r.FormValue("tax_rate")
 	if taxRate == "" {
@@ -250,6 +295,9 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if !h.authorizeEstimate(w, r, id, policyUpdate) {
+		return
+	}
 	if r.Method == http.MethodGet {
 		e, err := h.svc.GetByID(r.Context(), id)
 		if err != nil {
@@ -271,6 +319,9 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
+	if !h.authorizeDestinationJob(w, r, custID, jobID) {
+		return
+	}
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	taxRate := r.FormValue("tax_rate")
 	taxRatePtr := formPtr(taxRate)
@@ -319,20 +370,41 @@ func (h *EstimateHandler) ConvertToInvoice(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	inv, err := h.invoiceSvc.CreateFromEstimate(r.Context(), id, h.statusSvc)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
+	if err = r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "converted", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
-			"entity_name": inv.Title,
-			"actor_name":  u.Name,
-			"invoice_id":  inv.ID,
-		})
+	key, err := uuid.Parse(r.FormValue("idempotency_key"))
+	if err != nil {
+		http.Error(w, "valid idempotency UUID is required", http.StatusUnprocessableEntity)
+		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Invoice+created+from+estimate", inv.ID), http.StatusSeeOther)
+	actor, ok := conversionActor(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	result, err := h.conversion.Convert(r.Context(), actor, conversion.ConvertRequest{Operation: conversion.Operation{Key: key}, EstimateID: id})
+	if err != nil {
+		writeConversionError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Estimate+converted+to+invoice", result.InvoiceID), http.StatusSeeOther)
+}
+
+func writeConversionError(w http.ResponseWriter, r *http.Request, err error) {
+	switch {
+	case errors.Is(err, conversion.ErrForbidden):
+		http.Error(w, "Forbidden", http.StatusForbidden)
+	case errors.Is(err, conversion.ErrNotFound):
+		http.NotFound(w, r)
+	case errors.Is(err, conversion.ErrArchived), errors.Is(err, conversion.ErrIdempotencyConflict), errors.Is(err, conversion.ErrTransactionConflict):
+		http.Error(w, err.Error(), http.StatusConflict)
+	case errors.Is(err, conversion.ErrNotConvertible), errors.Is(err, conversion.ErrSettlement):
+		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+	default:
+		internalServerError(w, r, "conversion operation", err)
+	}
 }
 
 func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
@@ -346,13 +418,17 @@ func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) 
 		http.NotFound(w, r)
 		return
 	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), u.ID, u.Role, id) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	defaultTaxRate := taxRateForCustomer(r.Context(), h.custSvc, j.CustomerID, companyDefaultTaxRate(r.Context()))
 	est, err := h.svc.CreateFromJob(r.Context(), id, h.statusSvc, defaultTaxRate)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeEstimate, est.ID), map[string]interface{}{
 			"entity_name": est.Title,
@@ -625,7 +701,7 @@ func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64)
 
 func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estimate, statuses []*ent.Status) (templates.EstimateFormPageData, error) {
 	customers, _ := h.custSvc.ListAll(ctx)
-	jobs, _ := h.jobSvc.ListAll(ctx)
+	jobs, _ := h.jobsForEditor(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
 	d := estimateToDetail(ctx, e, statuses)
@@ -644,6 +720,36 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 		CustomersJSON:     bootstrap.CustomersJSON,
 		CustomFields:      buildCustomFieldDisplay(defs, e.CustomFields),
 	}, nil
+}
+
+func (h *EstimateHandler) jobsForEditor(ctx context.Context) ([]*ent.Job, error) {
+	u, _ := middleware.UserFromContext(ctx)
+	if u != nil && (u.Role == "tech" || u.Role == "technician") {
+		return h.jobSvc.ListAssignedAll(ctx, u.ID)
+	}
+	return h.jobSvc.ListAll(ctx)
+}
+
+func (h *EstimateHandler) authorizeDestinationJob(w http.ResponseWriter, r *http.Request, customerID, jobID int64) bool {
+	if jobID <= 0 {
+		u, _ := middleware.UserFromContext(r.Context())
+		if u != nil && (u.Role == "tech" || u.Role == "technician") {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return false
+		}
+		return true
+	}
+	j, err := h.jobSvc.GetByID(r.Context(), jobID)
+	if err != nil || j.CustomerID != customerID {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), u.ID, u.Role, jobID) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return false
+	}
+	return true
 }
 
 func estimateToDetail(ctx context.Context, e *ent.Estimate, statuses []*ent.Status) templates.EstimateDetail {

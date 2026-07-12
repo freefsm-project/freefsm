@@ -119,6 +119,34 @@ func (_u *StatusUpdate) AddSortOrder(v int) *StatusUpdate {
 	return _u
 }
 
+// SetEstimateConvertible sets the "estimate_convertible" field.
+func (_u *StatusUpdate) SetEstimateConvertible(v bool) *StatusUpdate {
+	_u.mutation.SetEstimateConvertible(v)
+	return _u
+}
+
+// SetNillableEstimateConvertible sets the "estimate_convertible" field if the given value is not nil.
+func (_u *StatusUpdate) SetNillableEstimateConvertible(v *bool) *StatusUpdate {
+	if v != nil {
+		_u.SetEstimateConvertible(*v)
+	}
+	return _u
+}
+
+// SetDocumentRole sets the "document_role" field.
+func (_u *StatusUpdate) SetDocumentRole(v string) *StatusUpdate {
+	_u.mutation.SetDocumentRole(v)
+	return _u
+}
+
+// SetNillableDocumentRole sets the "document_role" field if the given value is not nil.
+func (_u *StatusUpdate) SetNillableDocumentRole(v *string) *StatusUpdate {
+	if v != nil {
+		_u.SetDocumentRole(*v)
+	}
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *StatusUpdate) SetCreatedAt(v time.Time) *StatusUpdate {
 	_u.mutation.SetCreatedAt(v)
@@ -183,6 +211,11 @@ func (_u *StatusUpdate) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Status.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.DocumentRole(); ok {
+		if err := status.DocumentRoleValidator(v); err != nil {
+			return &ValidationError{Name: "document_role", err: fmt.Errorf(`ent: validator failed for field "Status.document_role": %w`, err)}
+		}
+	}
 	if _u.mutation.WorkflowCleared() && len(_u.mutation.WorkflowIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Status.workflow"`)
 	}
@@ -221,6 +254,12 @@ func (_u *StatusUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedSortOrder(); ok {
 		_spec.AddField(status.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.EstimateConvertible(); ok {
+		_spec.SetField(status.FieldEstimateConvertible, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.DocumentRole(); ok {
+		_spec.SetField(status.FieldDocumentRole, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(status.FieldCreatedAt, field.TypeTime, value)
@@ -364,6 +403,34 @@ func (_u *StatusUpdateOne) AddSortOrder(v int) *StatusUpdateOne {
 	return _u
 }
 
+// SetEstimateConvertible sets the "estimate_convertible" field.
+func (_u *StatusUpdateOne) SetEstimateConvertible(v bool) *StatusUpdateOne {
+	_u.mutation.SetEstimateConvertible(v)
+	return _u
+}
+
+// SetNillableEstimateConvertible sets the "estimate_convertible" field if the given value is not nil.
+func (_u *StatusUpdateOne) SetNillableEstimateConvertible(v *bool) *StatusUpdateOne {
+	if v != nil {
+		_u.SetEstimateConvertible(*v)
+	}
+	return _u
+}
+
+// SetDocumentRole sets the "document_role" field.
+func (_u *StatusUpdateOne) SetDocumentRole(v string) *StatusUpdateOne {
+	_u.mutation.SetDocumentRole(v)
+	return _u
+}
+
+// SetNillableDocumentRole sets the "document_role" field if the given value is not nil.
+func (_u *StatusUpdateOne) SetNillableDocumentRole(v *string) *StatusUpdateOne {
+	if v != nil {
+		_u.SetDocumentRole(*v)
+	}
+	return _u
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_u *StatusUpdateOne) SetCreatedAt(v time.Time) *StatusUpdateOne {
 	_u.mutation.SetCreatedAt(v)
@@ -441,6 +508,11 @@ func (_u *StatusUpdateOne) check() error {
 			return &ValidationError{Name: "name", err: fmt.Errorf(`ent: validator failed for field "Status.name": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.DocumentRole(); ok {
+		if err := status.DocumentRoleValidator(v); err != nil {
+			return &ValidationError{Name: "document_role", err: fmt.Errorf(`ent: validator failed for field "Status.document_role": %w`, err)}
+		}
+	}
 	if _u.mutation.WorkflowCleared() && len(_u.mutation.WorkflowIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Status.workflow"`)
 	}
@@ -496,6 +568,12 @@ func (_u *StatusUpdateOne) sqlSave(ctx context.Context) (_node *Status, err erro
 	}
 	if value, ok := _u.mutation.AddedSortOrder(); ok {
 		_spec.AddField(status.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.EstimateConvertible(); ok {
+		_spec.SetField(status.FieldEstimateConvertible, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.DocumentRole(); ok {
+		_spec.SetField(status.FieldDocumentRole, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CreatedAt(); ok {
 		_spec.SetField(status.FieldCreatedAt, field.TypeTime, value)

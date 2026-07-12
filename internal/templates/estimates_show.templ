@@ -9,17 +9,27 @@ templ EstimateShow(p EstimateDetail) {
 			<div class="work-item-detail-actions">
 			<div class="work-item-detail-action-group">
 				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
+			if p.CanManage {
 				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Title) }>Edit</a>
-				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/convert-to-invoice", p.ID)) } method="post" hx-confirm="Convert this estimate to an invoice? The estimate will be removed.">
+			}
+			if p.CanConvert {
+				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/convert", p.ID)) } method="post" hx-confirm="Convert permanently to a new invoice? This estimate will disappear. Revert is available only after all financial activity is fully unwound.">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<input type="hidden" name="idempotency_key" value={ p.ConvertKey }/>
 					<button>Convert to Invoice</button>
 				</form>
+			}
+			if p.CanManage {
 				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", p.ID)) } method="post" hx-confirm="Delete this estimate?">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Title) }>Delete</button>
 				</form>
+			}
 			</div>
 			</div>
+		}
+		if p.ConvertBlocker != "" {
+			<p class="secondary">{ p.ConvertBlocker }</p>
 		}
 		if p.ArchivedAt != "" {
 			<div class="work-item-detail-archive-banner">

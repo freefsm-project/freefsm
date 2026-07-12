@@ -75,6 +75,34 @@ func (_c *StatusCreate) SetNillableSortOrder(v *int) *StatusCreate {
 	return _c
 }
 
+// SetEstimateConvertible sets the "estimate_convertible" field.
+func (_c *StatusCreate) SetEstimateConvertible(v bool) *StatusCreate {
+	_c.mutation.SetEstimateConvertible(v)
+	return _c
+}
+
+// SetNillableEstimateConvertible sets the "estimate_convertible" field if the given value is not nil.
+func (_c *StatusCreate) SetNillableEstimateConvertible(v *bool) *StatusCreate {
+	if v != nil {
+		_c.SetEstimateConvertible(*v)
+	}
+	return _c
+}
+
+// SetDocumentRole sets the "document_role" field.
+func (_c *StatusCreate) SetDocumentRole(v string) *StatusCreate {
+	_c.mutation.SetDocumentRole(v)
+	return _c
+}
+
+// SetNillableDocumentRole sets the "document_role" field if the given value is not nil.
+func (_c *StatusCreate) SetNillableDocumentRole(v *string) *StatusCreate {
+	if v != nil {
+		_c.SetDocumentRole(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *StatusCreate) SetCreatedAt(v time.Time) *StatusCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -143,6 +171,14 @@ func (_c *StatusCreate) defaults() {
 		v := status.DefaultSortOrder
 		_c.mutation.SetSortOrder(v)
 	}
+	if _, ok := _c.mutation.EstimateConvertible(); !ok {
+		v := status.DefaultEstimateConvertible
+		_c.mutation.SetEstimateConvertible(v)
+	}
+	if _, ok := _c.mutation.DocumentRole(); !ok {
+		v := status.DefaultDocumentRole
+		_c.mutation.SetDocumentRole(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := status.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -167,6 +203,17 @@ func (_c *StatusCreate) check() error {
 	}
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		return &ValidationError{Name: "sort_order", err: errors.New(`ent: missing required field "Status.sort_order"`)}
+	}
+	if _, ok := _c.mutation.EstimateConvertible(); !ok {
+		return &ValidationError{Name: "estimate_convertible", err: errors.New(`ent: missing required field "Status.estimate_convertible"`)}
+	}
+	if _, ok := _c.mutation.DocumentRole(); !ok {
+		return &ValidationError{Name: "document_role", err: errors.New(`ent: missing required field "Status.document_role"`)}
+	}
+	if v, ok := _c.mutation.DocumentRole(); ok {
+		if err := status.DocumentRoleValidator(v); err != nil {
+			return &ValidationError{Name: "document_role", err: fmt.Errorf(`ent: validator failed for field "Status.document_role": %w`, err)}
+		}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Status.created_at"`)}
@@ -221,6 +268,14 @@ func (_c *StatusCreate) createSpec() (*Status, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.SortOrder(); ok {
 		_spec.SetField(status.FieldSortOrder, field.TypeInt, value)
 		_node.SortOrder = value
+	}
+	if value, ok := _c.mutation.EstimateConvertible(); ok {
+		_spec.SetField(status.FieldEstimateConvertible, field.TypeBool, value)
+		_node.EstimateConvertible = value
+	}
+	if value, ok := _c.mutation.DocumentRole(); ok {
+		_spec.SetField(status.FieldDocumentRole, field.TypeString, value)
+		_node.DocumentRole = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(status.FieldCreatedAt, field.TypeTime, value)

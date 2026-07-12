@@ -3,10 +3,12 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
@@ -15,14 +17,19 @@ import (
 )
 
 type ActivityHandler struct {
-	svc       *services.ActivityService
-	userSvc   *services.UserService
-	policySvc *services.PolicyService
-	objects   objectref.Directory
+	svc        *services.ActivityService
+	userSvc    *services.UserService
+	policySvc  *services.PolicyService
+	objects    objectref.Directory
+	conversion conversionService
 }
 
-func NewActivityHandler(svc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService, objects objectref.Directory) *ActivityHandler {
-	return &ActivityHandler{svc: svc, userSvc: userSvc, policySvc: policySvc, objects: objects}
+func NewActivityHandler(svc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService, objects objectref.Directory, conversionServices ...conversionService) *ActivityHandler {
+	var conversionSvc conversionService
+	if len(conversionServices) > 0 {
+		conversionSvc = conversionServices[0]
+	}
+	return &ActivityHandler{svc: svc, userSvc: userSvc, policySvc: policySvc, objects: objects, conversion: conversionSvc}
 }
 
 func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerFunc {
@@ -47,7 +54,7 @@ func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerF
 			return
 		}
 
-		entries, err := h.svc.ListForObject(r.Context(), ref, 25)
+		entries, err := h.activityForObject(r.Context(), u.ID, u.CompanyID, u.Role, ref)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -63,6 +70,34 @@ func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerF
 			Entries: rows,
 		}))
 	}
+}
+
+func (h *ActivityHandler) activityForObject(ctx context.Context, userID, companyID int64, role string, ref objectref.Ref) ([]services.ActivityEntry, error) {
+	if h.conversion != nil && (ref.Type == objectref.TypeEstimate || ref.Type == objectref.TypeInvoice) {
+		estimateID := ref.ID
+		actor := conversion.Actor{ID: userID, CompanyID: companyID, Role: role}
+		if ref.Type == objectref.TypeInvoice {
+			eligibility, err := h.conversion.RevertEligibility(ctx, actor, ref.ID)
+			if err == nil && eligibility.Active != nil {
+				estimateID = eligibility.Active.EstimateID
+			} else if err != nil && !errors.Is(err, conversion.ErrNotFound) {
+				return nil, err
+			}
+		}
+		if ref.Type == objectref.TypeEstimate || estimateID != ref.ID {
+			timeline, err := h.conversion.Timeline(ctx, actor, estimateID)
+			if err != nil {
+				return nil, err
+			}
+			entries := make([]services.ActivityEntry, 0, len(timeline))
+			for _, entry := range timeline {
+				target, _ := objectref.Parse(entry.ObjectType, entry.ObjectID)
+				entries = append(entries, services.ActivityEntry{ID: entry.ID, ActorID: entry.ActorID, Action: entry.Action, Target: target, HistoricalTarget: fmt.Sprintf("%s #%d", entry.ObjectType, entry.ObjectID), Metadata: string(entry.Metadata), CreatedAt: entry.CreatedAt})
+			}
+			return entries, nil
+		}
+	}
+	return h.svc.ListForObject(ctx, ref, 25)
 }
 
 func (h *ActivityHandler) ListByType(objectType objectref.Type) http.HandlerFunc {
@@ -201,7 +236,8 @@ func (h *ActivityHandler) entriesToRows(ctx context.Context, entries []services.
 
 		entityURL := ""
 		if e.Target.Valid() {
-			if url, ok := h.objects.URL(e.Target); ok {
+			exists, _ := h.objects.Exists(ctx, e.Target, objectref.ExistsAny)
+			if url, ok := h.objects.URL(e.Target); exists && ok {
 				entityURL = url
 			}
 		}

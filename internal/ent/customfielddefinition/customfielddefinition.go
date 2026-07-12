@@ -19,6 +19,8 @@ const (
 	FieldObjectType = "object_type"
 	// FieldName holds the string denoting the name field in the database.
 	FieldName = "name"
+	// FieldConversionKey holds the string denoting the conversion_key field in the database.
+	FieldConversionKey = "conversion_key"
 	// FieldFieldType holds the string denoting the field_type field in the database.
 	FieldFieldType = "field_type"
 	// FieldRequired holds the string denoting the required field in the database.
@@ -41,6 +43,7 @@ var Columns = []string{
 	FieldCompanyID,
 	FieldObjectType,
 	FieldName,
+	FieldConversionKey,
 	FieldFieldType,
 	FieldRequired,
 	FieldOptions,
@@ -101,6 +104,11 @@ func ByObjectType(opts ...sql.OrderTermOption) OrderOption {
 // ByName orders the results by the name field.
 func ByName(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldName, opts...).ToFunc()
+}
+
+// ByConversionKey orders the results by the conversion_key field.
+func ByConversionKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConversionKey, opts...).ToFunc()
 }
 
 // ByFieldType orders the results by the field_type field.

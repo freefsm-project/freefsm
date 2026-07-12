@@ -23,6 +23,8 @@ type CustomFieldDefinition struct {
 	ObjectType string `json:"object_type,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
+	// ConversionKey holds the value of the "conversion_key" field.
+	ConversionKey *string `json:"conversion_key,omitempty"`
 	// FieldType holds the value of the "field_type" field.
 	FieldType string `json:"field_type,omitempty"`
 	// Required holds the value of the "required" field.
@@ -47,7 +49,7 @@ func (*CustomFieldDefinition) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case customfielddefinition.FieldID, customfielddefinition.FieldCompanyID, customfielddefinition.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
-		case customfielddefinition.FieldObjectType, customfielddefinition.FieldName, customfielddefinition.FieldFieldType, customfielddefinition.FieldOptions:
+		case customfielddefinition.FieldObjectType, customfielddefinition.FieldName, customfielddefinition.FieldConversionKey, customfielddefinition.FieldFieldType, customfielddefinition.FieldOptions:
 			values[i] = new(sql.NullString)
 		case customfielddefinition.FieldCreatedAt, customfielddefinition.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -90,6 +92,13 @@ func (_m *CustomFieldDefinition) assignValues(columns []string, values []any) er
 				return fmt.Errorf("unexpected type %T for field name", values[i])
 			} else if value.Valid {
 				_m.Name = value.String
+			}
+		case customfielddefinition.FieldConversionKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field conversion_key", values[i])
+			} else if value.Valid {
+				_m.ConversionKey = new(string)
+				*_m.ConversionKey = value.String
 			}
 		case customfielddefinition.FieldFieldType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -173,6 +182,11 @@ func (_m *CustomFieldDefinition) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)
+	builder.WriteString(", ")
+	if v := _m.ConversionKey; v != nil {
+		builder.WriteString("conversion_key=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("field_type=")
 	builder.WriteString(_m.FieldType)

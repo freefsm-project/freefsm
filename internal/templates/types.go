@@ -444,22 +444,26 @@ type EstimateRow struct {
 }
 
 type EstimateDetail struct {
-	ID           int64
-	CustomerID   int64
-	Customer     string
-	JobID        int64
-	StatusID     int64
-	StatusName   string
-	StatusColor  string
-	Title        string
-	Notes        string
-	TaxRate      string
-	LineItems    []services.LineItem
-	Tags         []TagRow
-	AllTags      []TagRow
-	CustomFields []CustomFieldDisplay
-	FileList     FileListPageData
-	ArchivedAt   string
+	ID             int64
+	CustomerID     int64
+	Customer       string
+	JobID          int64
+	StatusID       int64
+	StatusName     string
+	StatusColor    string
+	Title          string
+	Notes          string
+	TaxRate        string
+	LineItems      []services.LineItem
+	Tags           []TagRow
+	AllTags        []TagRow
+	CustomFields   []CustomFieldDisplay
+	FileList       FileListPageData
+	ArchivedAt     string
+	CanConvert     bool
+	ConvertKey     string
+	ConvertBlocker string
+	CanManage      bool
 }
 
 type EstimateListPageData struct {
@@ -530,6 +534,12 @@ type InvoiceDetail struct {
 	CustomFields       []CustomFieldDisplay
 	FileList           FileListPageData
 	ArchivedAt         string
+	Converted          bool
+	CanRevert          bool
+	RevertKey          string
+	RevertBlockers     []string
+	CanManage          bool
+	CanSettle          bool
 }
 
 type InvoiceListPageData struct {
@@ -613,6 +623,7 @@ type InvoiceFormPageData struct {
 	CustomersJSON     string
 	CustomFields      []CustomFieldDisplay
 	CancelURL         string
+	FormAction        string
 }
 
 type DocumentPreviewData struct {
@@ -759,11 +770,14 @@ func estimateFormAction(isNew bool, id int64) string {
 	return fmt.Sprintf("/estimates/%d", id)
 }
 
-func invoiceFormAction(isNew bool, id int64) string {
-	if isNew {
+func invoiceFormAction(p InvoiceFormPageData) string {
+	if p.FormAction != "" {
+		return p.FormAction
+	}
+	if p.IsNew {
 		return "/invoices"
 	}
-	return fmt.Sprintf("/invoices/%d", id)
+	return fmt.Sprintf("/invoices/%d", p.Invoice.ID)
 }
 
 func invoiceFormCancelURL(p InvoiceFormPageData) string {
@@ -1252,13 +1266,15 @@ type CommentsWidgetData struct {
 }
 
 type CustomFieldDefRow struct {
-	ID         int64
-	ObjectType string
-	Name       string
-	FieldType  string
-	Required   bool
-	Options    string
-	SortOrder  int
+	ID            int64
+	ObjectType    string
+	Name          string
+	FieldType     string
+	Required      bool
+	Options       string
+	SortOrder     int
+	ConversionKey string
+	Counterpart   string
 }
 
 type CustomFieldDefFormData struct {
@@ -1538,6 +1554,20 @@ type AssetStatusRow struct {
 
 type JobStatusListPageData struct {
 	Statuses []JobStatusRow
+}
+
+type DocumentStatusPageData struct {
+	ObjectType string
+	Statuses   []DocumentStatusRow
+}
+
+type DocumentStatusRow struct {
+	ID          int64
+	Name        string
+	Color       string
+	SortOrder   int
+	Convertible bool
+	Draft       bool
 }
 
 type JobStatusRow struct {

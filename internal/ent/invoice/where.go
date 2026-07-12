@@ -134,6 +134,11 @@ func DeletedAt(v time.Time) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldDeletedAt, v))
 }
 
+// ConversionHiddenAt applies equality check predicate on the "conversion_hidden_at" field. It's identical to ConversionHiddenAtEQ.
+func ConversionHiddenAt(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldConversionHiddenAt, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldCreatedAt, v))
@@ -1017,6 +1022,56 @@ func DeletedAtIsNil() predicate.Invoice {
 // DeletedAtNotNil applies the NotNil predicate on the "deleted_at" field.
 func DeletedAtNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldDeletedAt))
+}
+
+// ConversionHiddenAtEQ applies the EQ predicate on the "conversion_hidden_at" field.
+func ConversionHiddenAtEQ(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldConversionHiddenAt, v))
+}
+
+// ConversionHiddenAtNEQ applies the NEQ predicate on the "conversion_hidden_at" field.
+func ConversionHiddenAtNEQ(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldConversionHiddenAt, v))
+}
+
+// ConversionHiddenAtIn applies the In predicate on the "conversion_hidden_at" field.
+func ConversionHiddenAtIn(vs ...time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldConversionHiddenAt, vs...))
+}
+
+// ConversionHiddenAtNotIn applies the NotIn predicate on the "conversion_hidden_at" field.
+func ConversionHiddenAtNotIn(vs ...time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldConversionHiddenAt, vs...))
+}
+
+// ConversionHiddenAtGT applies the GT predicate on the "conversion_hidden_at" field.
+func ConversionHiddenAtGT(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldConversionHiddenAt, v))
+}
+
+// ConversionHiddenAtGTE applies the GTE predicate on the "conversion_hidden_at" field.
+func ConversionHiddenAtGTE(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldConversionHiddenAt, v))
+}
+
+// ConversionHiddenAtLT applies the LT predicate on the "conversion_hidden_at" field.
+func ConversionHiddenAtLT(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldConversionHiddenAt, v))
+}
+
+// ConversionHiddenAtLTE applies the LTE predicate on the "conversion_hidden_at" field.
+func ConversionHiddenAtLTE(v time.Time) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldConversionHiddenAt, v))
+}
+
+// ConversionHiddenAtIsNil applies the IsNil predicate on the "conversion_hidden_at" field.
+func ConversionHiddenAtIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldConversionHiddenAt))
+}
+
+// ConversionHiddenAtNotNil applies the NotNil predicate on the "conversion_hidden_at" field.
+func ConversionHiddenAtNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldConversionHiddenAt))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

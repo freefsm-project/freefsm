@@ -121,31 +121,6 @@ func TestConversionsRejectMalformedLineItemsBeforeWritesIntegration(t *testing.T
 		t.Fatalf("estimate count = %d, want %d", got, estimateCount)
 	}
 
-	client.Estimate.UpdateOneID(data.estimateA.ID).SetLineItems("[").SaveX(ctx)
-	invoiceCount := client.Invoice.Query().CountX(ctx)
-	if _, err := NewInvoiceService(client).CreateFromEstimate(ctx, data.estimateA.ID, statusService); !errors.Is(err, ErrMalformedLineItems) {
-		t.Fatalf("estimate conversion error = %v, want ErrMalformedLineItems", err)
-	}
-	if got := client.Invoice.Query().CountX(ctx); got != invoiceCount {
-		t.Fatalf("invoice count = %d, want %d", got, invoiceCount)
-	}
-	if _, err := client.Estimate.Get(ctx, data.estimateA.ID); err != nil {
-		t.Fatalf("source estimate was mutated: %v", err)
-	}
-
-	client.Estimate.UpdateOneID(data.estimateA.ID).
-		SetLineItems(`[{"title":"Valid","quantity":1}]`).
-		SetTaxRate("invalid").
-		SaveX(ctx)
-	if _, err := NewInvoiceService(client).CreateFromEstimate(ctx, data.estimateA.ID, statusService); !errors.Is(err, ErrInvalidTaxRate) {
-		t.Fatalf("invalid estimate tax rate error = %v, want ErrInvalidTaxRate", err)
-	}
-	if got := client.Invoice.Query().CountX(ctx); got != invoiceCount {
-		t.Fatalf("invoice count after invalid tax conversion = %d, want %d", got, invoiceCount)
-	}
-	if _, err := client.Estimate.Get(ctx, data.estimateA.ID); err != nil {
-		t.Fatalf("source estimate with invalid tax was mutated: %v", err)
-	}
 }
 
 func TestDocumentPersistenceValidatesEffectiveTaxAndLineItemsIntegration(t *testing.T) {

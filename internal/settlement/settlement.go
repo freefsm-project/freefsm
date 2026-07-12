@@ -21,6 +21,7 @@ var (
 	ErrForbidden           = errors.New("settlement operation forbidden")
 	ErrIdempotencyConflict = errors.New("idempotency key reused with a different request")
 	ErrArchived            = errors.New("archived invoice cannot be settled")
+	ErrHidden              = errors.New("conversion-hidden invoice cannot be settled")
 	ErrVoid                = errors.New("void invoice cannot be settled")
 	ErrDependency          = errors.New("operation has active dependants")
 	ErrNotFound            = errors.New("settlement record not found")
@@ -378,13 +379,17 @@ type lockedInvoice struct {
 func lockInvoice(ctx context.Context, tx pgx.Tx, companyID, id int64) (lockedInvoice, error) {
 	var i lockedInvoice
 	var archived *time.Time
+	var hidden *time.Time
 	var status string
-	err := tx.QueryRow(ctx, `SELECT i.id,i.customer_id,i.line_items::text,i.tax_rate::text,i.deleted_at,coalesce(s.name,'') FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.company_id=$1 AND i.id=$2 FOR UPDATE OF i`, companyID, id).Scan(&i.id, &i.customerID, &i.lineItems, &i.taxRate, &archived, &status)
+	err := tx.QueryRow(ctx, `SELECT i.id,i.customer_id,i.line_items::text,i.tax_rate::text,i.deleted_at,i.conversion_hidden_at,coalesce(s.name,'') FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.company_id=$1 AND i.id=$2 FOR UPDATE OF i`, companyID, id).Scan(&i.id, &i.customerID, &i.lineItems, &i.taxRate, &archived, &hidden, &status)
 	if err != nil {
 		return i, err
 	}
 	if archived != nil {
 		return i, ErrArchived
+	}
+	if hidden != nil {
+		return i, ErrHidden
 	}
 	if strings.EqualFold(status, "void") {
 		return i, ErrVoid

@@ -8,20 +8,41 @@ templ InvoiceShow(p InvoiceDetail) {
 		if p.ArchivedAt == "" {
 			<div class="work-item-detail-actions">
 			<div class="work-item-detail-action-group">
-			if p.CanFinalize {
+			if p.CanFinalize && p.CanManage {
 				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/finalize", p.ID)) } method="post" hx-confirm="Finalize this invoice? This will set the invoice and due dates from current settings.">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button type="submit">Finalize Invoice</button>
 				</form>
 			}
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
+			if p.CanManage {
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Title) }>Edit</a>
+			}
+			if p.CanRevert {
+				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/revert-to-estimate", p.ID)) } method="post" hx-confirm="Revert this invoice? The invoice will disappear and its number remains consumed. Current values and relations return to the original Draft Estimate.">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<input type="hidden" name="idempotency_key" value={ p.RevertKey }/>
+					<button type="submit" class="outline">Revert to Estimate</button>
+				</form>
+			}
+			if p.CanManage {
 				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", p.ID)) } method="post" hx-confirm="Delete this invoice?">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Title) }>Delete</button>
 				</form>
+			}
 			</div>
 			</div>
+		}
+		if p.Converted && !p.CanRevert && len(p.RevertBlockers) > 0 {
+			<aside>
+				<strong>Cannot revert to Estimate yet</strong>
+				<ul>
+					for _, blocker := range p.RevertBlockers {
+						<li>{ blocker }</li>
+					}
+				</ul>
+			</aside>
 		}
 		if p.ArchivedAt != "" {
 			<div class="work-item-detail-archive-banner">
@@ -51,7 +72,9 @@ templ InvoiceShow(p InvoiceDetail) {
 					<tr><th>Asset</th><td><a href={ templ.URL(fmt.Sprintf("/assets/%d", p.AssetID)) }>{ p.AssetName }</a></td></tr>
 				}
 				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(p.StatusColor) }>{ p.StatusName }</span></td></tr>
-				<tr><th>Settlement State</th><td><span class="status-badge">{ string(p.Settlement.State) }</span></td></tr>
+				if p.CanSettle || p.Settlement.State != "" {
+					<tr><th>Settlement State</th><td><span class="status-badge">{ string(p.Settlement.State) }</span></td></tr>
+				}
 				<tr><th>Invoice Date</th><td>{ p.InvoiceDateDisplay }</td></tr>
 				<tr><th>Due Date</th><td>{ p.DueDateDisplay }</td></tr>
 				<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
@@ -97,11 +120,13 @@ templ InvoiceShow(p InvoiceDetail) {
 				<p><strong>Grand Total: { fmt.Sprintf("$%.2f", grandTotal(p.LineItems, p.TaxRate)) }</strong></p>
 			</div>
 		}
+		if p.CanSettle || p.Settlement.State != "" {
 		<div class="work-item-detail-totals">
 			<p><strong>Total: { cents(p.Settlement.TotalCents) }</strong></p>
 			<p><strong>Settled: { cents(p.Settlement.SettledCents) }</strong></p>
 			<p><strong>Amount Due: { cents(p.Settlement.AmountDueCents) }</strong></p>
 		</div>
+		}
 		if len(p.Settlement.Payments) > 0 {
 			<h3>Payments</h3>
 			<div style="overflow-x: auto;">
@@ -157,7 +182,7 @@ templ InvoiceShow(p InvoiceDetail) {
 			</tbody></table>
 			</div>
 		}
-		if p.ArchivedAt == "" {
+		if p.ArchivedAt == "" && p.CanSettle {
 		<details open>
 			<summary>Record Payment</summary>
 			<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments", p.ID)) } method="post" class="inline-add-form">

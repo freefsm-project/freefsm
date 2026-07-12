@@ -61,13 +61,13 @@ func (d *EntDirectory) Exists(ctx context.Context, ref Ref, mode ExistenceMode) 
 		}
 		return q.Exist(ctx)
 	case TypeEstimate:
-		q := d.client.Estimate.Query().Where(estimate.IDEQ(ref.ID))
+		q := d.client.Estimate.Query().Where(estimate.IDEQ(ref.ID), estimate.ConversionHiddenAtIsNil())
 		if mode == ExistsActive {
 			q = q.Where(estimate.DeletedAtIsNil())
 		}
 		return q.Exist(ctx)
 	case TypeInvoice:
-		q := d.client.Invoice.Query().Where(invoice.IDEQ(ref.ID))
+		q := d.client.Invoice.Query().Where(invoice.IDEQ(ref.ID), invoice.ConversionHiddenAtIsNil())
 		if mode == ExistsActive {
 			q = q.Where(invoice.DeletedAtIsNil())
 		}
@@ -162,12 +162,12 @@ func (d *EntDirectory) lookupName(ctx context.Context, ref Ref) string {
 			return p.Name
 		}
 	case TypeEstimate:
-		e, err := d.client.Estimate.Get(ctx, ref.ID)
+		e, err := d.client.Estimate.Query().Where(estimate.IDEQ(ref.ID), estimate.ConversionHiddenAtIsNil()).Only(ctx)
 		if err == nil {
 			return e.Title
 		}
 	case TypeInvoice:
-		i, err := d.client.Invoice.Get(ctx, ref.ID)
+		i, err := d.client.Invoice.Query().Where(invoice.IDEQ(ref.ID), invoice.ConversionHiddenAtIsNil()).Only(ctx)
 		if err == nil {
 			return i.Title
 		}

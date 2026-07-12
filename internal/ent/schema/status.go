@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"time"
 
 	"entgo.io/ent"
@@ -29,6 +30,13 @@ func (Status) Fields() []ent.Field {
 		field.String("name").NotEmpty(),
 		field.String("color").Default("#6B7280"),
 		field.Int("sort_order").Default(0),
+		field.Bool("estimate_convertible").Default(false),
+		field.String("document_role").Default("standard").Validate(func(v string) error {
+			if v != "standard" && v != "draft" {
+				return fmt.Errorf("invalid document role %q", v)
+			}
+			return nil
+		}),
 		field.Time("created_at").Default(time.Now),
 	}
 }
@@ -46,5 +54,6 @@ func (Status) Edges() []ent.Edge {
 func (Status) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("workflow_id"),
+		index.Fields("workflow_id", "document_role"),
 	}
 }

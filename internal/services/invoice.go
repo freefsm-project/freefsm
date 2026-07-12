@@ -10,6 +10,8 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/companysettings"
 	"github.com/freefsm-project/freefsm/internal/ent/invoice"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrNegativeInvoiceTotal = errors.New("invoice total must not be negative")
@@ -26,10 +28,15 @@ func invoiceSettlementState(totalCents, settledCents int64) string {
 
 type InvoiceService struct {
 	client *ent.Client
+	db     *pgxpool.Pool
 }
 
-func NewInvoiceService(client *ent.Client) *InvoiceService {
-	return &InvoiceService{client: client}
+func NewInvoiceService(client *ent.Client, db ...*pgxpool.Pool) *InvoiceService {
+	s := &InvoiceService{client: client}
+	if len(db) > 0 {
+		s.db = db[0]
+	}
+	return s
 }
 
 type InvoiceCreateParams struct {
@@ -63,7 +70,7 @@ type InvoiceUpdateParams struct {
 }
 
 func (s *InvoiceService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Invoice, int, error) {
-	q := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil())
+	q := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil())
 
 	if search != "" {
 		q = q.Where(invoice.TitleContainsFold(search))
@@ -93,7 +100,7 @@ func (s *InvoiceService) List(ctx context.Context, search string, statusID int64
 
 func (s *InvoiceService) ListByCustomer(ctx context.Context, customerID int64, limit int) ([]*ent.Invoice, error) {
 	q := s.client.Invoice.Query().
-		Where(invoice.DeletedAtIsNil(), invoice.CustomerIDEQ(customerID)).
+		Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil(), invoice.CustomerIDEQ(customerID)).
 		Order(ent.Desc(invoice.FieldCreatedAt))
 	if limit > 0 {
 		q = q.Limit(limit)
@@ -106,7 +113,7 @@ func (s *InvoiceService) LatestByJobIDs(ctx context.Context, jobIDs []int64) (ma
 		return nil, nil
 	}
 	invoices, err := s.client.Invoice.Query().
-		Where(invoice.DeletedAtIsNil(), invoice.JobIDIn(jobIDs...)).
+		Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil(), invoice.JobIDIn(jobIDs...)).
 		Order(ent.Desc(invoice.FieldCreatedAt)).
 		All(ctx)
 	if err != nil {
@@ -125,7 +132,7 @@ func (s *InvoiceService) LatestByJobIDs(ctx context.Context, jobIDs []int64) (ma
 }
 
 func (s *InvoiceService) ListForCustomer(ctx context.Context, customerID int64, search string, statusID int64, page, perPage int) ([]*ent.Invoice, int, error) {
-	q := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil(), invoice.CustomerIDEQ(customerID))
+	q := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil(), invoice.CustomerIDEQ(customerID))
 
 	if search != "" {
 		q = q.Where(invoice.TitleContainsFold(search))
@@ -146,7 +153,7 @@ func (s *InvoiceService) ListForCustomer(ctx context.Context, customerID int64, 
 }
 
 func (s *InvoiceService) GetByID(ctx context.Context, id int64) (*ent.Invoice, error) {
-	i, err := s.client.Invoice.Get(ctx, id)
+	i, err := s.client.Invoice.Query().Where(invoice.IDEQ(id), invoice.ConversionHiddenAtIsNil()).Only(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get invoice %d: %w", id, err)
 	}
@@ -175,10 +182,20 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 	if err := validateEstimateCustomer(ctx, s.client, params.CustomerID, params.EstimateID, true); err != nil {
 		return nil, err
 	}
+	customer, err := s.client.Customer.Get(ctx, params.CustomerID)
+	if err != nil {
+		return nil, fmt.Errorf("get invoice customer: %w", err)
+	}
+	if err := validateDocumentStatus(ctx, s.client, params.StatusID, customer.CompanyID, "invoice"); err != nil {
+		return nil, err
+	}
 
 	customFields := params.CustomFields
 	if customFields == "" {
 		customFields = "[]"
+	}
+	if s.db != nil {
+		return s.createTransactionally(ctx, params, taxRate, lineItems, customFields, totals.Total.MinorUnits())
 	}
 	b := s.client.Invoice.Create().
 		SetCustomerID(params.CustomerID).
@@ -209,6 +226,52 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		return nil, fmt.Errorf("create invoice: %w", err)
 	}
 	return i, nil
+}
+
+func (s *InvoiceService) createTransactionally(ctx context.Context, params InvoiceCreateParams, taxRate, lineItems, customFields string, totalCents int64) (*ent.Invoice, error) {
+	cs, err := s.client.CompanySettings.Query().First(ctx)
+	if err != nil || cs.CompanyID == nil {
+		return nil, fmt.Errorf("load company settings: %w", err)
+	}
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	var next int64
+	if err = tx.QueryRow(ctx, `SELECT next_invoice_number FROM company_settings WHERE company_id=$1 FOR UPDATE`, *cs.CompanyID).Scan(&next); err != nil {
+		return nil, err
+	}
+	number := next
+	if params.InvoiceNumber != nil {
+		number = *params.InvoiceNumber
+	}
+	if number <= 0 {
+		return nil, errors.New("invoice number must be greater than zero")
+	}
+	var used bool
+	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM invoices WHERE company_id=$1 AND invoice_number=$2)`, *cs.CompanyID, number).Scan(&used); err != nil {
+		return nil, err
+	}
+	if used {
+		return nil, fmt.Errorf("invoice number %d is already in use", number)
+	}
+	var id int64
+	err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state)
+		VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14) RETURNING id`,
+		*cs.CompanyID, params.CustomerID, params.JobID, params.EstimateID, params.StatusID, number, params.Title, params.Notes, params.InvoiceDate, params.DueDate, taxRate, lineItems, customFields, invoiceSettlementState(totalCents, 0)).Scan(&id)
+	if err != nil {
+		return nil, fmt.Errorf("create invoice: %w", err)
+	}
+	if number >= next {
+		if _, err = tx.Exec(ctx, `UPDATE company_settings SET next_invoice_number=$1 WHERE company_id=$2`, number+1, *cs.CompanyID); err != nil {
+			return nil, err
+		}
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return s.GetByID(ctx, id)
 }
 
 func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpdateParams) (*ent.Invoice, error) {
@@ -307,6 +370,9 @@ func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpd
 		}
 	}
 	if params.StatusID != nil {
+		if err := validateDocumentStatus(ctx, s.client, *params.StatusID, current.CompanyID, "invoice"); err != nil {
+			return nil, err
+		}
 		u.SetStatusID(*params.StatusID)
 	}
 	if params.Title != nil {
@@ -446,6 +512,13 @@ func (s *InvoiceService) Restore(ctx context.Context, id int64) error {
 }
 
 func (s *InvoiceService) Finalize(ctx context.Context, id int64, statusID int64, invoiceDate time.Time, defaultDueDays int) (*ent.Invoice, error) {
+	current, err := s.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateDocumentStatus(ctx, s.client, statusID, current.CompanyID, "invoice"); err != nil {
+		return nil, err
+	}
 	dueDate := invoiceDate.AddDate(0, 0, defaultDueDays)
 	i, err := s.client.Invoice.UpdateOneID(id).
 		SetStatusID(statusID).
@@ -459,6 +532,13 @@ func (s *InvoiceService) Finalize(ctx context.Context, id int64, statusID int64,
 }
 
 func (s *InvoiceService) SetStatus(ctx context.Context, id int64, statusID int64) error {
+	current, err := s.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err := validateDocumentStatus(ctx, s.client, statusID, current.CompanyID, "invoice"); err != nil {
+		return err
+	}
 	if _, err := s.client.Invoice.UpdateOneID(id).SetStatusID(statusID).Save(ctx); err != nil {
 		return fmt.Errorf("set invoice status %d: %w", id, err)
 	}
@@ -477,94 +557,13 @@ func (s *InvoiceService) LineItems(i *ent.Invoice) []LineItem {
 	return items
 }
 
-func (s *InvoiceService) CreateFromEstimate(ctx context.Context, estimateID int64, statusSvc *StatusService) (*ent.Invoice, error) {
-	e, err := s.client.Estimate.Get(ctx, estimateID)
-	if err != nil {
-		return nil, fmt.Errorf("get estimate %d: %w", estimateID, err)
-	}
-
-	draftStatus, _ := statusSvc.FindByName(ctx, "invoice", "Draft")
-	var statusID int64
-	if draftStatus != nil {
-		statusID = draftStatus.ID
-	}
-
-	items, err := DecodeLineItems(e.LineItems)
-	if err != nil {
-		return nil, fmt.Errorf("parse estimate %d line items: %w", estimateID, err)
-	}
-	encodedLineItems, err := EncodeLineItems(items)
-	if err != nil {
-		return nil, fmt.Errorf("encode estimate %d line items: %w", estimateID, err)
-	}
-	totals, err := CalculateTotals(items, e.TaxRate)
-	if err != nil {
-		return nil, fmt.Errorf("calculate estimate %d totals: %w", estimateID, err)
-	}
-	now := time.Now()
-
-	custID := e.CustomerID
-	if custID == nil || *custID <= 0 {
-		return nil, errors.New("estimate customer is required to create an invoice")
-	}
-	jobID := e.JobID
-	if err := validateJobCustomer(ctx, s.client, int64Value(custID), int64Value(jobID), false); err != nil {
-		return nil, err
-	}
-
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback()
-
-	if err := tx.Estimate.DeleteOneID(estimateID).Exec(ctx); err != nil {
-		return nil, fmt.Errorf("delete estimate %d: %w", estimateID, err)
-	}
-	cs, err := tx.CompanySettings.Query().First(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("load company settings: %w", err)
-	}
-	invoiceNumber := cs.NextInvoiceNumber
-
-	b := tx.Invoice.Create().
-		SetID(estimateID).
-		SetInvoiceNumber(invoiceNumber).
-		SetTitle(e.Title).
-		SetNotes(e.Notes).
-		SetTaxRate(e.TaxRate).
-		SetLineItems(encodedLineItems).
-		SetSettlementState(invoiceSettlementState(totals.Total.MinorUnits(), 0)).
-		SetStatusID(statusID).
-		SetInvoiceDate(now).
-		SetDueDate(now.AddDate(0, 0, 30)).
-		SetCustomerID(*custID).
-		SetNillableJobID(jobID)
-	if cs.CompanyID != nil {
-		b.SetCompanyID(*cs.CompanyID)
-	}
-	i, err := b.Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("create invoice: %w", err)
-	}
-	if _, err := tx.CompanySettings.UpdateOneID(cs.ID).SetNextInvoiceNumber(invoiceNumber + 1).Save(ctx); err != nil {
-		return nil, fmt.Errorf("update next invoice number: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit transaction: %w", err)
-	}
-
-	return i, nil
-}
-
 func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService, defaultTaxRate string) (*ent.Invoice, error) {
 	j, err := s.client.Job.Get(ctx, jobID)
 	if err != nil {
 		return nil, fmt.Errorf("get job %d: %w", jobID, err)
 	}
 
-	newStatus, _ := statusSvc.FindByName(ctx, "invoice", "Draft")
+	newStatus, _ := statusSvc.DraftForObjectType(ctx, "invoice")
 	var statusID int64
 	if newStatus != nil {
 		statusID = newStatus.ID

@@ -45,6 +45,8 @@ const (
 	FieldCustomFields = "custom_fields"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
+	// FieldConversionHiddenAt holds the string denoting the conversion_hidden_at field in the database.
+	FieldConversionHiddenAt = "conversion_hidden_at"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
@@ -72,6 +74,7 @@ var Columns = []string{
 	FieldDisplaySettings,
 	FieldCustomFields,
 	FieldDeletedAt,
+	FieldConversionHiddenAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
@@ -195,6 +198,11 @@ func ByCustomFields(opts ...sql.OrderTermOption) OrderOption {
 // ByDeletedAt orders the results by the deleted_at field.
 func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
+}
+
+// ByConversionHiddenAt orders the results by the conversion_hidden_at field.
+func ByConversionHiddenAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldConversionHiddenAt, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

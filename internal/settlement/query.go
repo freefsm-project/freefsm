@@ -73,7 +73,7 @@ func (s *Service) InvoiceSettlement(ctx context.Context, actor Actor, invoiceID 
 	}
 	var out InvoiceSettlement
 	var encoded, tax string
-	err := s.db.QueryRow(ctx, `SELECT id,customer_id,settlement_state,line_items::text,tax_rate::text FROM invoices WHERE company_id=$1 AND id=$2`, actor.CompanyID, invoiceID).Scan(&out.InvoiceID, &out.CustomerID, &out.State, &encoded, &tax)
+	err := s.db.QueryRow(ctx, `SELECT id,customer_id,settlement_state,line_items::text,tax_rate::text FROM invoices WHERE company_id=$1 AND id=$2 AND conversion_hidden_at IS NULL`, actor.CompanyID, invoiceID).Scan(&out.InvoiceID, &out.CustomerID, &out.State, &encoded, &tax)
 	if err != nil {
 		return out, err
 	}
@@ -132,7 +132,7 @@ func (s *Service) CustomerSettlement(ctx context.Context, actor Actor, customerI
 		return CustomerSettlement{}, err
 	}
 	out := CustomerSettlement{CustomerID: customerID}
-	rows, err := s.db.Query(ctx, `SELECT c.id,c.source_payment_id,c.customer_id,p.invoice_id,c.source_date,c.original_amount_cents,available.amount_cents,p.method,p.reference FROM customer_credits c JOIN invoice_payments p ON p.id=c.source_payment_id CROSS JOIN LATERAL (SELECT c.original_amount_cents-coalesce((SELECT sum(a.amount_cents) FROM credit_applications a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=a.id)),0)-coalesce((SELECT sum(ra.amount_cents) FROM credit_refund_allocations ra WHERE ra.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_refund' AND r.operation_id=ra.refund_id)),0) amount_cents) available WHERE c.company_id=$1 AND c.customer_id=$2 AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='payment' AND r.operation_id=c.source_payment_id) ORDER BY c.source_date,c.id`, actor.CompanyID, customerID)
+	rows, err := s.db.Query(ctx, `SELECT c.id,c.source_payment_id,c.customer_id,p.invoice_id,c.source_date,c.original_amount_cents,available.amount_cents,p.method,p.reference FROM customer_credits c JOIN invoice_payments p ON p.id=c.source_payment_id JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id AND i.conversion_hidden_at IS NULL CROSS JOIN LATERAL (SELECT c.original_amount_cents-coalesce((SELECT sum(a.amount_cents) FROM credit_applications a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=a.id)),0)-coalesce((SELECT sum(ra.amount_cents) FROM credit_refund_allocations ra WHERE ra.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_refund' AND r.operation_id=ra.refund_id)),0) amount_cents) available WHERE c.company_id=$1 AND c.customer_id=$2 AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='payment' AND r.operation_id=c.source_payment_id) ORDER BY c.source_date,c.id`, actor.CompanyID, customerID)
 	if err != nil {
 		return out, err
 	}
@@ -150,7 +150,7 @@ func (s *Service) CustomerSettlement(ctx context.Context, actor Actor, customerI
 		return out, err
 	}
 	rows.Close()
-	rows, err = s.db.Query(ctx, `SELECT a.id,a.credit_id,a.invoice_id,a.amount_cents,a.effective_date,r.id,r.effective_date,r.reason FROM credit_applications a LEFT JOIN settlement_reversals r ON r.operation_type='credit_application' AND r.operation_id=a.id WHERE a.company_id=$1 AND a.customer_id=$2 ORDER BY a.effective_date,a.id`, actor.CompanyID, customerID)
+	rows, err = s.db.Query(ctx, `SELECT a.id,a.credit_id,a.invoice_id,a.amount_cents,a.effective_date,r.id,r.effective_date,r.reason FROM credit_applications a JOIN invoices i ON i.id=a.invoice_id AND i.company_id=a.company_id AND i.conversion_hidden_at IS NULL LEFT JOIN settlement_reversals r ON r.operation_type='credit_application' AND r.operation_id=a.id WHERE a.company_id=$1 AND a.customer_id=$2 ORDER BY a.effective_date,a.id`, actor.CompanyID, customerID)
 	if err != nil {
 		return out, err
 	}

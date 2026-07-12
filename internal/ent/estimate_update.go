@@ -226,6 +226,26 @@ func (_u *EstimateUpdate) ClearDeletedAt() *EstimateUpdate {
 	return _u
 }
 
+// SetConversionHiddenAt sets the "conversion_hidden_at" field.
+func (_u *EstimateUpdate) SetConversionHiddenAt(v time.Time) *EstimateUpdate {
+	_u.mutation.SetConversionHiddenAt(v)
+	return _u
+}
+
+// SetNillableConversionHiddenAt sets the "conversion_hidden_at" field if the given value is not nil.
+func (_u *EstimateUpdate) SetNillableConversionHiddenAt(v *time.Time) *EstimateUpdate {
+	if v != nil {
+		_u.SetConversionHiddenAt(*v)
+	}
+	return _u
+}
+
+// ClearConversionHiddenAt clears the value of the "conversion_hidden_at" field.
+func (_u *EstimateUpdate) ClearConversionHiddenAt() *EstimateUpdate {
+	_u.mutation.ClearConversionHiddenAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *EstimateUpdate) SetUpdatedAt(v time.Time) *EstimateUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -338,6 +358,12 @@ func (_u *EstimateUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(estimate.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ConversionHiddenAt(); ok {
+		_spec.SetField(estimate.FieldConversionHiddenAt, field.TypeTime, value)
+	}
+	if _u.mutation.ConversionHiddenAtCleared() {
+		_spec.ClearField(estimate.FieldConversionHiddenAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(estimate.FieldUpdatedAt, field.TypeTime, value)
@@ -560,6 +586,26 @@ func (_u *EstimateUpdateOne) ClearDeletedAt() *EstimateUpdateOne {
 	return _u
 }
 
+// SetConversionHiddenAt sets the "conversion_hidden_at" field.
+func (_u *EstimateUpdateOne) SetConversionHiddenAt(v time.Time) *EstimateUpdateOne {
+	_u.mutation.SetConversionHiddenAt(v)
+	return _u
+}
+
+// SetNillableConversionHiddenAt sets the "conversion_hidden_at" field if the given value is not nil.
+func (_u *EstimateUpdateOne) SetNillableConversionHiddenAt(v *time.Time) *EstimateUpdateOne {
+	if v != nil {
+		_u.SetConversionHiddenAt(*v)
+	}
+	return _u
+}
+
+// ClearConversionHiddenAt clears the value of the "conversion_hidden_at" field.
+func (_u *EstimateUpdateOne) ClearConversionHiddenAt() *EstimateUpdateOne {
+	_u.mutation.ClearConversionHiddenAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *EstimateUpdateOne) SetUpdatedAt(v time.Time) *EstimateUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -702,6 +748,12 @@ func (_u *EstimateUpdateOne) sqlSave(ctx context.Context) (_node *Estimate, err 
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(estimate.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ConversionHiddenAt(); ok {
+		_spec.SetField(estimate.FieldConversionHiddenAt, field.TypeTime, value)
+	}
+	if _u.mutation.ConversionHiddenAtCleared() {
+		_spec.ClearField(estimate.FieldConversionHiddenAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(estimate.FieldUpdatedAt, field.TypeTime, value)

@@ -199,6 +199,68 @@ func TestSettlementMigration042Integration(t *testing.T) {
 	}
 }
 
+func TestConversionMigration043BackfillsLegacyRelationOwnershipIntegration(t *testing.T) {
+	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set FREEFSM_TEST_DATABASE_URL to run PostgreSQL migration tests")
+	}
+	db, ctx := migrationDatabaseThrough041(t, dsn)
+	seedLegacySettlement(t, ctx, db, "[]", "[]", "Sent")
+	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+		t.Fatal(err)
+	}
+	down, err := fs.ReadFile(MigrationFS(), "043_estimate_invoice_conversion.down.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Pool.Exec(ctx, string(down)); err != nil {
+		t.Fatalf("down 043: %v", err)
+	}
+	if _, err = db.Pool.Exec(ctx, `DELETE FROM schema_migrations WHERE name='043_estimate_invoice_conversion'`); err != nil {
+		t.Fatal(err)
+	}
+	var companyID, actorID, estimateID int64
+	if err = db.Pool.QueryRow(ctx, `SELECT id FROM companies LIMIT 1`).Scan(&companyID); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Pool.QueryRow(ctx, `SELECT id FROM users WHERE company_id=$1 LIMIT 1`, companyID).Scan(&actorID); err != nil {
+		t.Fatal(err)
+	}
+	var customerID int64
+	if err = db.Pool.QueryRow(ctx, `SELECT id FROM customers WHERE company_id=$1 LIMIT 1`, companyID).Scan(&customerID); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Pool.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,title) VALUES($1,$2,'Legacy relations') RETURNING id`, companyID, customerID).Scan(&estimateID); err != nil {
+		t.Fatal(err)
+	}
+	statements := []string{
+		`INSERT INTO files(company_id,object_type,object_id,original_name,stored_name,mime_type,file_size,file_path,uploaded_by) VALUES(NULL,'estimate',$1,'a','b','text/plain',1,'p',$2)`,
+		`INSERT INTO comments(company_id,object_type,object_id,author_id,content) VALUES(NULL,'estimate',$1,$2,'legacy')`,
+		`INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id) VALUES(NULL,$2,'legacy','estimate',$1)`,
+	}
+	for _, statement := range statements {
+		if _, err = db.Pool.Exec(ctx, statement, estimateID, actorID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var tagID int64
+	if err = db.Pool.QueryRow(ctx, `INSERT INTO tags(company_id,name) VALUES($1,'Legacy') RETURNING id`, companyID).Scan(&tagID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = db.Pool.Exec(ctx, `INSERT INTO tag_links(company_id,tag_id,object_type,object_id) VALUES(NULL,$1,'estimate',$2)`, tagID, estimateID); err != nil {
+		t.Fatal(err)
+	}
+	if err = db.Migrate(ctx, MigrationFS()); err != nil {
+		t.Fatalf("migrate 043: %v", err)
+	}
+	for _, table := range []string{"files", "comments", "activity_logs", "tag_links"} {
+		var bad int
+		if err = db.Pool.QueryRow(ctx, `SELECT count(*) FROM `+pgx.Identifier{table}.Sanitize()+` WHERE company_id IS DISTINCT FROM $1`, companyID).Scan(&bad); err != nil || bad != 0 {
+			t.Fatalf("%s bad ownership=%d err=%v", table, bad, err)
+		}
+	}
+}
+
 func migrationDatabaseThrough041(t *testing.T, dsn string) (*DB, context.Context) {
 	t.Helper()
 	ctx := context.Background()

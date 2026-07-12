@@ -26,6 +26,7 @@ func (CustomFieldDefinition) Fields() []ent.Field {
 		field.Int64("company_id").Optional().Nillable(),
 		field.String("object_type").NotEmpty(),
 		field.String("name").NotEmpty(),
+		field.String("conversion_key").Optional().Nillable(),
 		field.String("field_type").NotEmpty(),
 		field.Bool("required").Default(false),
 		field.String("options").Default("[]"),
@@ -38,5 +39,6 @@ func (CustomFieldDefinition) Fields() []ent.Field {
 func (CustomFieldDefinition) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("object_type", "sort_order"),
+		index.Fields("company_id", "object_type", "conversion_key").Unique(),
 	}
 }

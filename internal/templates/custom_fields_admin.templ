@@ -11,17 +11,23 @@ templ CustomFieldDefIndex(p CustomFieldDefListPageData) {
 		<div class="work-queue-wrap">
 		<table class="work-queue-table">
 			<thead>
-				<tr><th>Name</th><th>Entity</th><th>Type</th><th>Required</th><th>Order</th><th></th></tr>
+				<tr><th>Name</th><th>Entity</th><th>Type</th><th>Conversion Pair</th><th>Required</th><th>Order</th><th></th></tr>
 			</thead>
 			<tbody>
 				if len(p.Definitions) == 0 {
-					<tr><td colspan="6">No custom fields defined yet.</td></tr>
+					<tr><td colspan="7">No custom fields defined yet.</td></tr>
 				} else {
 					for _, d := range p.Definitions {
 						<tr>
 							<td><strong>{ d.Name }</strong></td>
 							<td>{ d.ObjectType }</td>
 							<td>{ d.FieldType }</td>
+							<td>
+								{ d.ConversionKey }
+								if d.ConversionKey != "" {
+									<small>{ d.Counterpart }</small>
+								}
+							</td>
 							<td>
 								if d.Required {
 									Yes
@@ -52,7 +58,7 @@ templ CustomFieldDefIndex(p CustomFieldDefListPageData) {
 
 templ CustomFieldDefForm(p CustomFieldDefFormData) {
 	@Layout("Custom Field - " + formTitle(p)) {
-		<form action="/settings/custom-fields" method="post" autocomplete="off" class="entity-form compact-form">
+		<form action={ templ.URL(customFieldDefFormAction(p)) } method="post" autocomplete="off" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			if !p.IsNew {
 				<input type="hidden" name="id" value={ fmt.Sprintf("%d", p.Def.ID) }/>
@@ -100,6 +106,16 @@ templ CustomFieldDefForm(p CustomFieldDefFormData) {
 				<input type="text" name="options" value={ p.Def.Options } placeholder='["Option 1","Option 2"]'/>
 				<small>JSON array of strings. Only used for select/checkbox field types.</small>
 			</label>
+			if p.Def.ObjectType == "estimate" || p.Def.ObjectType == "invoice" || p.IsNew {
+				<label>
+					Conversion Key (optional)
+					<input type="text" name="conversion_key" value={ p.Def.ConversionKey } pattern="[A-Za-z0-9][A-Za-z0-9_-]*"/>
+					<small>Only paired Estimate and Invoice fields with the same key, type, and compatible options transfer during conversion and revert.</small>
+					if p.Errors["conversion_key"] != "" {
+						<small class="error-msg">{ p.Errors["conversion_key"] }</small>
+					}
+				</label>
+			}
 			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href="/settings/custom-fields" role="button" class="outline">Cancel</a>
@@ -113,4 +129,9 @@ func formTitle(p CustomFieldDefFormData) string {
 		return "New Field"
 	}
 	return "Edit " + p.Def.Name
+}
+
+func customFieldDefFormAction(p CustomFieldDefFormData) string {
+	if p.IsNew { return "/settings/custom-fields" }
+	return fmt.Sprintf("/settings/custom-fields/%d", p.Def.ID)
 }

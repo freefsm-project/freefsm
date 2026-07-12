@@ -15,10 +15,51 @@ import (
 var (
 	ErrReplacementStatusNeeded  = errors.New("replacement status is required")
 	ErrInvalidReplacementStatus = errors.New("replacement must be a different status for the same object type")
+	ErrDraftStatusRequired      = errors.New("document workflow must retain one Draft role status")
+	ErrInvalidStatusCapability  = errors.New("status capability is invalid for its object type")
 )
 
 type StatusService struct {
 	client *ent.Client
+}
+
+func (s *StatusService) UpdateDocumentCapabilities(ctx context.Context, id int64, estimateConvertible bool, documentRole string) (*ent.Status, error) {
+	documentRole = strings.TrimSpace(documentRole)
+	if documentRole != "standard" && documentRole != "draft" {
+		return nil, ErrInvalidStatusCapability
+	}
+	st, err := s.client.Status.Query().Where(status.IDEQ(id)).WithWorkflow().Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get status %d: %w", id, err)
+	}
+	objectType := st.Edges.Workflow.ObjectType
+	if estimateConvertible && objectType != "estimate" {
+		return nil, ErrInvalidStatusCapability
+	}
+	if documentRole == "draft" && objectType != "estimate" && objectType != "invoice" {
+		return nil, ErrInvalidStatusCapability
+	}
+	if st.DocumentRole == "draft" && documentRole != "draft" {
+		return nil, ErrDraftStatusRequired
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if documentRole == "draft" {
+		if _, err = tx.Status.Update().Where(status.WorkflowIDEQ(st.WorkflowID), status.IDNEQ(id), status.DocumentRoleEQ("draft")).SetDocumentRole("standard").Save(ctx); err != nil {
+			return nil, err
+		}
+	}
+	updated, err := tx.Status.UpdateOneID(id).SetEstimateConvertible(estimateConvertible).SetDocumentRole(documentRole).Save(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("update status capabilities: %w", err)
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return updated, nil
 }
 
 func NewStatusService(client *ent.Client) *StatusService {
@@ -44,6 +85,14 @@ func (s *StatusService) WorkflowByObjectType(ctx context.Context, objectType str
 		return nil, fmt.Errorf("get %s status workflow: %w", objectType, err)
 	}
 	return wf, nil
+}
+
+func (s *StatusService) DraftForObjectType(ctx context.Context, objectType string) (*ent.Status, error) {
+	st, err := s.client.Status.Query().Where(status.DocumentRoleEQ("draft"), status.HasWorkflowWith(statusworkflow.ObjectTypeEQ(objectType))).Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get %s Draft role status: %w", objectType, err)
+	}
+	return st, nil
 }
 
 func (s *StatusService) CreateForObjectType(ctx context.Context, objectType, name, color string, sortOrder int) (*ent.Status, error) {

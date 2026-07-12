@@ -509,17 +509,17 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 		Where(customer.DeletedAtIsNil(), customer.CreatedAtGTE(startOfMonth)).
 		Count(ctx)
 	totalJobs, _ := s.client.Job.Query().Where(job.DeletedAtIsNil()).Count(ctx)
-	totalEstimates, _ := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil()).Count(ctx)
-	totalInvoices, _ := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil()).Count(ctx)
+	totalEstimates, _ := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil()).Count(ctx)
+	totalInvoices, _ := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil()).Count(ctx)
 	totalProjects, _ := s.client.Project.Query().Where(project.DeletedAtIsNil()).Count(ctx)
 	newJobsToday, _ := s.client.Job.Query().
 		Where(job.DeletedAtIsNil(), job.CreatedAtGTE(startOfToday), job.CreatedAtLT(startOfTomorrow)).
 		Count(ctx)
 	newQuotesToday, _ := s.client.Estimate.Query().
-		Where(estimate.DeletedAtIsNil(), estimate.CreatedAtGTE(startOfToday), estimate.CreatedAtLT(startOfTomorrow)).
+		Where(estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil(), estimate.CreatedAtGTE(startOfToday), estimate.CreatedAtLT(startOfTomorrow)).
 		Count(ctx)
 	newInvoicesToday, _ := s.client.Invoice.Query().
-		Where(invoice.DeletedAtIsNil(), invoice.InvoiceDateGTE(startOfToday), invoice.InvoiceDateLT(startOfTomorrow)).
+		Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil(), invoice.InvoiceDateGTE(startOfToday), invoice.InvoiceDateLT(startOfTomorrow)).
 		Count(ctx)
 	customersCreatedToday, _ := s.client.Customer.Query().
 		Where(customer.DeletedAtIsNil(), customer.CreatedAtGTE(startOfToday), customer.CreatedAtLT(startOfTomorrow)).
@@ -555,10 +555,10 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 
 	// Invoices
 	invoicesPaid, _ := s.client.Invoice.Query().
-		Where(invoice.DeletedAtIsNil(), invoice.SettlementStateEQ("paid")).
+		Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil(), invoice.SettlementStateEQ("paid")).
 		Count(ctx)
 
-	unpaidInvoicePredicates := []predicate.Invoice{invoice.DeletedAtIsNil()}
+	unpaidInvoicePredicates := []predicate.Invoice{invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil()}
 	unpaidInvoicePredicates = append(unpaidInvoicePredicates, invoice.SettlementStateNEQ("paid"))
 	if draftStatusID != 0 {
 		unpaidInvoicePredicates = append(unpaidInvoicePredicates, invoice.StatusIDNEQ(draftStatusID))
@@ -598,6 +598,7 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 	allInvoices, err := s.client.Invoice.Query().
 		Where(
 			invoice.DeletedAtIsNil(),
+			invoice.ConversionHiddenAtIsNil(),
 			invoice.StatusIDNEQ(draftStatusID),
 			invoice.StatusIDNEQ(voidStatusID),
 		).
@@ -630,12 +631,12 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 		Limit(5).
 		All(ctx)
 	recentInvoices, _ := s.client.Invoice.Query().
-		Where(invoice.DeletedAtIsNil()).
+		Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil()).
 		Order(ent.Desc(invoice.FieldCreatedAt)).
 		Limit(5).
 		All(ctx)
 	recentEstimates, _ := s.client.Estimate.Query().
-		Where(estimate.DeletedAtIsNil()).
+		Where(estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil()).
 		Order(ent.Desc("created_at")).
 		Limit(5).
 		All(ctx)
@@ -809,7 +810,7 @@ func (s *DashboardService) jobMonthlyBars(ctx context.Context, loc *time.Locatio
 func (s *DashboardService) invoiceMonthlyBars(ctx context.Context, loc *time.Location, starts []time.Time, now time.Time, draftStatusID, voidStatusID int64) []DashboardMonthlyBar {
 	counts := make([]dashboardMonthlyCounts, len(starts))
 	invoices, _ := s.client.Invoice.Query().
-		Where(invoice.DeletedAtIsNil(), invoice.InvoiceDateGTE(starts[0]), invoice.InvoiceDateLT(starts[len(starts)-1].AddDate(0, 1, 0))).
+		Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil(), invoice.InvoiceDateGTE(starts[0]), invoice.InvoiceDateLT(starts[len(starts)-1].AddDate(0, 1, 0))).
 		All(ctx)
 	for _, inv := range invoices {
 		if dashboardStatusIDEquals(inv.StatusID, draftStatusID) || dashboardStatusIDEquals(inv.StatusID, voidStatusID) {

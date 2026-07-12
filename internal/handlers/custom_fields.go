@@ -33,15 +33,35 @@ func (h *CustomFieldHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows := make([]templates.CustomFieldDefRow, len(defs))
+	paired := make(map[string]*ent.CustomFieldDefinition)
+	for _, d := range defs {
+		if d.ConversionKey != nil {
+			paired[d.ObjectType+":"+*d.ConversionKey] = d
+		}
+	}
 	for i, d := range defs {
+		counterpart := ""
+		if d.ConversionKey != nil && (d.ObjectType == "estimate" || d.ObjectType == "invoice") {
+			otherType := "estimate"
+			if d.ObjectType == "estimate" {
+				otherType = "invoice"
+			}
+			if other := paired[otherType+":"+*d.ConversionKey]; other != nil {
+				counterpart = other.Name + " (" + otherType + ")"
+			} else {
+				counterpart = "Unpaired"
+			}
+		}
 		rows[i] = templates.CustomFieldDefRow{
-			ID:         d.ID,
-			ObjectType: d.ObjectType,
-			Name:       d.Name,
-			FieldType:  d.FieldType,
-			Required:   d.Required,
-			Options:    d.Options,
-			SortOrder:  d.SortOrder,
+			ID:            d.ID,
+			ObjectType:    d.ObjectType,
+			Name:          d.Name,
+			FieldType:     d.FieldType,
+			Required:      d.Required,
+			Options:       d.Options,
+			SortOrder:     d.SortOrder,
+			ConversionKey: stringValue(d.ConversionKey),
+			Counterpart:   counterpart,
 		}
 	}
 
@@ -70,17 +90,21 @@ func (h *CustomFieldHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	sortOrder, _ := strconv.Atoi(r.FormValue("sort_order"))
 	params := services.CustomFieldDefCreateParams{
-		ObjectType: r.FormValue("object_type"),
-		Name:       name,
-		FieldType:  r.FormValue("field_type"),
-		Required:   r.FormValue("required") == "true",
-		Options:    r.FormValue("options"),
-		SortOrder:  sortOrder,
+		ObjectType:    r.FormValue("object_type"),
+		Name:          name,
+		FieldType:     r.FormValue("field_type"),
+		Required:      r.FormValue("required") == "true",
+		Options:       r.FormValue("options"),
+		SortOrder:     sortOrder,
+		ConversionKey: r.FormValue("conversion_key"),
 	}
 
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		data := newDefFormData()
+		data.Def.ObjectType, data.Def.Name, data.Def.FieldType, data.Def.ConversionKey = params.ObjectType, name, params.FieldType, params.ConversionKey
+		data.Errors = map[string]string{"conversion_key": err.Error()}
+		templates.CustomFieldDefForm(data).Render(r.Context(), w)
 		return
 	}
 
@@ -103,7 +127,7 @@ func (h *CustomFieldHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		defs, err := h.svc.ListAll(r.Context())
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		var found *templates.CustomFieldDefRow
@@ -112,7 +136,7 @@ func (h *CustomFieldHandler) Update(w http.ResponseWriter, r *http.Request) {
 				r := templates.CustomFieldDefRow{
 					ID: d.ID, ObjectType: d.ObjectType, Name: d.Name,
 					FieldType: d.FieldType, Required: d.Required,
-					Options: d.Options, SortOrder: d.SortOrder,
+					Options: d.Options, SortOrder: d.SortOrder, ConversionKey: stringValue(d.ConversionKey),
 				}
 				found = &r
 				break
@@ -167,16 +191,26 @@ func (h *CustomFieldHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	sortOrder, _ := strconv.Atoi(r.FormValue("sort_order"))
 	params := services.CustomFieldDefUpdateParams{
-		Name:      &name,
-		FieldType: strPtr(r.FormValue("field_type")),
-		Required:  boolPtr(r.FormValue("required") == "true"),
-		Options:   strPtr(r.FormValue("options")),
-		SortOrder: &sortOrder,
+		Name:          &name,
+		FieldType:     strPtr(r.FormValue("field_type")),
+		Required:      boolPtr(r.FormValue("required") == "true"),
+		Options:       strPtr(r.FormValue("options")),
+		SortOrder:     &sortOrder,
+		ConversionKey: strPtr(r.FormValue("conversion_key")),
 	}
 
 	result, err := h.svc.Update(r.Context(), id, params)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		data := templates.CustomFieldDefFormData{Def: templates.CustomFieldDefRow{ID: id, Name: name, FieldType: r.FormValue("field_type"), Required: r.FormValue("required") == "true", Options: r.FormValue("options"), SortOrder: sortOrder, ConversionKey: r.FormValue("conversion_key")}, IsNew: false, ObjectTypes: services.CustomFieldObjectTypes, FieldTypes: services.CustomFieldTypes, Errors: map[string]string{"conversion_key": err.Error()}}
+		defs, _ := h.svc.ListAll(r.Context())
+		for _, d := range defs {
+			if d.ID == id {
+				data.Def.ObjectType = d.ObjectType
+				break
+			}
+		}
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		templates.CustomFieldDefForm(data).Render(r.Context(), w)
 		return
 	}
 
@@ -291,3 +325,10 @@ func parseCustomFieldValues(r *http.Request) string {
 }
 
 func fmtInt64(n int64) string { return fmt.Sprintf("%d", n) }
+
+func stringValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}

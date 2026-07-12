@@ -54,8 +54,8 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role 
 		return false
 	}
 	switch action {
-	case PolicyRead, PolicyCreate, PolicyAttachFile:
-	case PolicyUpdate, PolicyDelete:
+	case PolicyRead, PolicyCreate, PolicyUpdate, PolicyAttachFile:
+	case PolicyDelete:
 		return false
 	default:
 		return false
@@ -65,6 +65,9 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role 
 	}
 	switch ref.Type {
 	case objectref.TypeJob:
+		if action == PolicyUpdate {
+			return false
+		}
 		return s.IsUserAssignedToJob(ctx, ref.ID, userID)
 	case objectref.TypeCustomer:
 		return s.canAccessCustomer(ctx, ref.ID, userID)
@@ -73,9 +76,11 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role 
 	case objectref.TypeAsset:
 		return s.canAccessAsset(ctx, ref.ID, userID)
 	case objectref.TypeEstimate:
-		return false
+		e, err := s.client.Estimate.Get(ctx, ref.ID)
+		return err == nil && e.JobID != nil && s.IsUserAssignedToJob(ctx, *e.JobID, userID)
 	case objectref.TypeInvoice:
-		return false
+		i, err := s.client.Invoice.Get(ctx, ref.ID)
+		return err == nil && i.JobID != nil && s.IsUserAssignedToJob(ctx, *i.JobID, userID)
 	default:
 		return false
 	}
@@ -106,6 +111,19 @@ func (s *PolicyService) IsUserAssignedToJob(ctx context.Context, jobID, userID i
 	}
 	active, err := s.client.Job.Query().Where(job.IDEQ(jobID), job.DeletedAtIsNil()).Exist(ctx)
 	return err == nil && active
+}
+
+// CanCreateDocumentForJob is the handler seam for technician document creation.
+// Company ownership remains the caller/module's responsibility because the legacy
+// policy service does not carry an actor company scope.
+func (s *PolicyService) CanCreateDocumentForJob(ctx context.Context, userID int64, role string, jobID int64) bool {
+	if userID <= 0 || jobID <= 0 {
+		return false
+	}
+	if role == "admin" || role == "dispatcher" {
+		return true
+	}
+	return (role == "tech" || role == "technician") && s.IsUserAssignedToJob(ctx, jobID, userID)
 }
 
 func (s *PolicyService) canAccessCustomer(ctx context.Context, customerID, userID int64) bool {

@@ -69,6 +69,11 @@ func Name(v string) predicate.CustomFieldDefinition {
 	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldName, v))
 }
 
+// ConversionKey applies equality check predicate on the "conversion_key" field. It's identical to ConversionKeyEQ.
+func ConversionKey(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldConversionKey, v))
+}
+
 // FieldType applies equality check predicate on the "field_type" field. It's identical to FieldTypeEQ.
 func FieldType(v string) predicate.CustomFieldDefinition {
 	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldFieldType, v))
@@ -277,6 +282,81 @@ func NameEqualFold(v string) predicate.CustomFieldDefinition {
 // NameContainsFold applies the ContainsFold predicate on the "name" field.
 func NameContainsFold(v string) predicate.CustomFieldDefinition {
 	return predicate.CustomFieldDefinition(sql.FieldContainsFold(FieldName, v))
+}
+
+// ConversionKeyEQ applies the EQ predicate on the "conversion_key" field.
+func ConversionKeyEQ(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldConversionKey, v))
+}
+
+// ConversionKeyNEQ applies the NEQ predicate on the "conversion_key" field.
+func ConversionKeyNEQ(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNEQ(FieldConversionKey, v))
+}
+
+// ConversionKeyIn applies the In predicate on the "conversion_key" field.
+func ConversionKeyIn(vs ...string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldIn(FieldConversionKey, vs...))
+}
+
+// ConversionKeyNotIn applies the NotIn predicate on the "conversion_key" field.
+func ConversionKeyNotIn(vs ...string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNotIn(FieldConversionKey, vs...))
+}
+
+// ConversionKeyGT applies the GT predicate on the "conversion_key" field.
+func ConversionKeyGT(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldGT(FieldConversionKey, v))
+}
+
+// ConversionKeyGTE applies the GTE predicate on the "conversion_key" field.
+func ConversionKeyGTE(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldGTE(FieldConversionKey, v))
+}
+
+// ConversionKeyLT applies the LT predicate on the "conversion_key" field.
+func ConversionKeyLT(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldLT(FieldConversionKey, v))
+}
+
+// ConversionKeyLTE applies the LTE predicate on the "conversion_key" field.
+func ConversionKeyLTE(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldLTE(FieldConversionKey, v))
+}
+
+// ConversionKeyContains applies the Contains predicate on the "conversion_key" field.
+func ConversionKeyContains(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldContains(FieldConversionKey, v))
+}
+
+// ConversionKeyHasPrefix applies the HasPrefix predicate on the "conversion_key" field.
+func ConversionKeyHasPrefix(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldHasPrefix(FieldConversionKey, v))
+}
+
+// ConversionKeyHasSuffix applies the HasSuffix predicate on the "conversion_key" field.
+func ConversionKeyHasSuffix(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldHasSuffix(FieldConversionKey, v))
+}
+
+// ConversionKeyIsNil applies the IsNil predicate on the "conversion_key" field.
+func ConversionKeyIsNil() predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldIsNull(FieldConversionKey))
+}
+
+// ConversionKeyNotNil applies the NotNil predicate on the "conversion_key" field.
+func ConversionKeyNotNil() predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNotNull(FieldConversionKey))
+}
+
+// ConversionKeyEqualFold applies the EqualFold predicate on the "conversion_key" field.
+func ConversionKeyEqualFold(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEqualFold(FieldConversionKey, v))
+}
+
+// ConversionKeyContainsFold applies the ContainsFold predicate on the "conversion_key" field.
+func ConversionKeyContainsFold(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldContainsFold(FieldConversionKey, v))
 }
 
 // FieldTypeEQ applies the EQ predicate on the "field_type" field.

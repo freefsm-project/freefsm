@@ -316,27 +316,27 @@ func init() {
 	// customfielddefinition.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	customfielddefinition.NameValidator = customfielddefinitionDescName.Validators[0].(func(string) error)
 	// customfielddefinitionDescFieldType is the schema descriptor for field_type field.
-	customfielddefinitionDescFieldType := customfielddefinitionFields[4].Descriptor()
+	customfielddefinitionDescFieldType := customfielddefinitionFields[5].Descriptor()
 	// customfielddefinition.FieldTypeValidator is a validator for the "field_type" field. It is called by the builders before save.
 	customfielddefinition.FieldTypeValidator = customfielddefinitionDescFieldType.Validators[0].(func(string) error)
 	// customfielddefinitionDescRequired is the schema descriptor for required field.
-	customfielddefinitionDescRequired := customfielddefinitionFields[5].Descriptor()
+	customfielddefinitionDescRequired := customfielddefinitionFields[6].Descriptor()
 	// customfielddefinition.DefaultRequired holds the default value on creation for the required field.
 	customfielddefinition.DefaultRequired = customfielddefinitionDescRequired.Default.(bool)
 	// customfielddefinitionDescOptions is the schema descriptor for options field.
-	customfielddefinitionDescOptions := customfielddefinitionFields[6].Descriptor()
+	customfielddefinitionDescOptions := customfielddefinitionFields[7].Descriptor()
 	// customfielddefinition.DefaultOptions holds the default value on creation for the options field.
 	customfielddefinition.DefaultOptions = customfielddefinitionDescOptions.Default.(string)
 	// customfielddefinitionDescSortOrder is the schema descriptor for sort_order field.
-	customfielddefinitionDescSortOrder := customfielddefinitionFields[7].Descriptor()
+	customfielddefinitionDescSortOrder := customfielddefinitionFields[8].Descriptor()
 	// customfielddefinition.DefaultSortOrder holds the default value on creation for the sort_order field.
 	customfielddefinition.DefaultSortOrder = customfielddefinitionDescSortOrder.Default.(int)
 	// customfielddefinitionDescCreatedAt is the schema descriptor for created_at field.
-	customfielddefinitionDescCreatedAt := customfielddefinitionFields[8].Descriptor()
+	customfielddefinitionDescCreatedAt := customfielddefinitionFields[9].Descriptor()
 	// customfielddefinition.DefaultCreatedAt holds the default value on creation for the created_at field.
 	customfielddefinition.DefaultCreatedAt = customfielddefinitionDescCreatedAt.Default.(func() time.Time)
 	// customfielddefinitionDescUpdatedAt is the schema descriptor for updated_at field.
-	customfielddefinitionDescUpdatedAt := customfielddefinitionFields[9].Descriptor()
+	customfielddefinitionDescUpdatedAt := customfielddefinitionFields[10].Descriptor()
 	// customfielddefinition.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	customfielddefinition.DefaultUpdatedAt = customfielddefinitionDescUpdatedAt.Default.(func() time.Time)
 	// customfielddefinition.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -528,11 +528,11 @@ func init() {
 	// estimate.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	estimate.DefaultCustomFields = estimateDescCustomFields.Default.(string)
 	// estimateDescCreatedAt is the schema descriptor for created_at field.
-	estimateDescCreatedAt := estimateFields[11].Descriptor()
+	estimateDescCreatedAt := estimateFields[12].Descriptor()
 	// estimate.DefaultCreatedAt holds the default value on creation for the created_at field.
 	estimate.DefaultCreatedAt = estimateDescCreatedAt.Default.(func() time.Time)
 	// estimateDescUpdatedAt is the schema descriptor for updated_at field.
-	estimateDescUpdatedAt := estimateFields[12].Descriptor()
+	estimateDescUpdatedAt := estimateFields[13].Descriptor()
 	// estimate.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	estimate.DefaultUpdatedAt = estimateDescUpdatedAt.Default.(func() time.Time)
 	// estimate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -604,11 +604,11 @@ func init() {
 	// invoice.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	invoice.DefaultCustomFields = invoiceDescCustomFields.Default.(string)
 	// invoiceDescCreatedAt is the schema descriptor for created_at field.
-	invoiceDescCreatedAt := invoiceFields[17].Descriptor()
+	invoiceDescCreatedAt := invoiceFields[18].Descriptor()
 	// invoice.DefaultCreatedAt holds the default value on creation for the created_at field.
 	invoice.DefaultCreatedAt = invoiceDescCreatedAt.Default.(func() time.Time)
 	// invoiceDescUpdatedAt is the schema descriptor for updated_at field.
-	invoiceDescUpdatedAt := invoiceFields[18].Descriptor()
+	invoiceDescUpdatedAt := invoiceFields[19].Descriptor()
 	// invoice.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	invoice.DefaultUpdatedAt = invoiceDescUpdatedAt.Default.(func() time.Time)
 	// invoice.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -829,8 +829,18 @@ func init() {
 	statusDescSortOrder := statusFields[5].Descriptor()
 	// status.DefaultSortOrder holds the default value on creation for the sort_order field.
 	status.DefaultSortOrder = statusDescSortOrder.Default.(int)
+	// statusDescEstimateConvertible is the schema descriptor for estimate_convertible field.
+	statusDescEstimateConvertible := statusFields[6].Descriptor()
+	// status.DefaultEstimateConvertible holds the default value on creation for the estimate_convertible field.
+	status.DefaultEstimateConvertible = statusDescEstimateConvertible.Default.(bool)
+	// statusDescDocumentRole is the schema descriptor for document_role field.
+	statusDescDocumentRole := statusFields[7].Descriptor()
+	// status.DefaultDocumentRole holds the default value on creation for the document_role field.
+	status.DefaultDocumentRole = statusDescDocumentRole.Default.(string)
+	// status.DocumentRoleValidator is a validator for the "document_role" field. It is called by the builders before save.
+	status.DocumentRoleValidator = statusDescDocumentRole.Validators[0].(func(string) error)
 	// statusDescCreatedAt is the schema descriptor for created_at field.
-	statusDescCreatedAt := statusFields[6].Descriptor()
+	statusDescCreatedAt := statusFields[8].Descriptor()
 	// status.DefaultCreatedAt holds the default value on creation for the created_at field.
 	status.DefaultCreatedAt = statusDescCreatedAt.Default.(func() time.Time)
 	statusworkflowFields := schema.StatusWorkflow{}.Fields()

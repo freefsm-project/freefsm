@@ -6929,24 +6929,25 @@ func (m *CompanySettingsMutation) ResetEdge(name string) error {
 // CustomFieldDefinitionMutation represents an operation that mutates the CustomFieldDefinition nodes in the graph.
 type CustomFieldDefinitionMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *int64
-	company_id    *int64
-	addcompany_id *int64
-	object_type   *string
-	name          *string
-	field_type    *string
-	required      *bool
-	options       *string
-	sort_order    *int
-	addsort_order *int
-	created_at    *time.Time
-	updated_at    *time.Time
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*CustomFieldDefinition, error)
-	predicates    []predicate.CustomFieldDefinition
+	op             Op
+	typ            string
+	id             *int64
+	company_id     *int64
+	addcompany_id  *int64
+	object_type    *string
+	name           *string
+	conversion_key *string
+	field_type     *string
+	required       *bool
+	options        *string
+	sort_order     *int
+	addsort_order  *int
+	created_at     *time.Time
+	updated_at     *time.Time
+	clearedFields  map[string]struct{}
+	done           bool
+	oldValue       func(context.Context) (*CustomFieldDefinition, error)
+	predicates     []predicate.CustomFieldDefinition
 }
 
 var _ ent.Mutation = (*CustomFieldDefinitionMutation)(nil)
@@ -7193,6 +7194,55 @@ func (m *CustomFieldDefinitionMutation) OldName(ctx context.Context) (v string, 
 // ResetName resets all changes to the "name" field.
 func (m *CustomFieldDefinitionMutation) ResetName() {
 	m.name = nil
+}
+
+// SetConversionKey sets the "conversion_key" field.
+func (m *CustomFieldDefinitionMutation) SetConversionKey(s string) {
+	m.conversion_key = &s
+}
+
+// ConversionKey returns the value of the "conversion_key" field in the mutation.
+func (m *CustomFieldDefinitionMutation) ConversionKey() (r string, exists bool) {
+	v := m.conversion_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConversionKey returns the old "conversion_key" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldConversionKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConversionKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConversionKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConversionKey: %w", err)
+	}
+	return oldValue.ConversionKey, nil
+}
+
+// ClearConversionKey clears the value of the "conversion_key" field.
+func (m *CustomFieldDefinitionMutation) ClearConversionKey() {
+	m.conversion_key = nil
+	m.clearedFields[customfielddefinition.FieldConversionKey] = struct{}{}
+}
+
+// ConversionKeyCleared returns if the "conversion_key" field was cleared in this mutation.
+func (m *CustomFieldDefinitionMutation) ConversionKeyCleared() bool {
+	_, ok := m.clearedFields[customfielddefinition.FieldConversionKey]
+	return ok
+}
+
+// ResetConversionKey resets all changes to the "conversion_key" field.
+func (m *CustomFieldDefinitionMutation) ResetConversionKey() {
+	m.conversion_key = nil
+	delete(m.clearedFields, customfielddefinition.FieldConversionKey)
 }
 
 // SetFieldType sets the "field_type" field.
@@ -7465,7 +7515,7 @@ func (m *CustomFieldDefinitionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomFieldDefinitionMutation) Fields() []string {
-	fields := make([]string, 0, 9)
+	fields := make([]string, 0, 10)
 	if m.company_id != nil {
 		fields = append(fields, customfielddefinition.FieldCompanyID)
 	}
@@ -7474,6 +7524,9 @@ func (m *CustomFieldDefinitionMutation) Fields() []string {
 	}
 	if m.name != nil {
 		fields = append(fields, customfielddefinition.FieldName)
+	}
+	if m.conversion_key != nil {
+		fields = append(fields, customfielddefinition.FieldConversionKey)
 	}
 	if m.field_type != nil {
 		fields = append(fields, customfielddefinition.FieldFieldType)
@@ -7507,6 +7560,8 @@ func (m *CustomFieldDefinitionMutation) Field(name string) (ent.Value, bool) {
 		return m.ObjectType()
 	case customfielddefinition.FieldName:
 		return m.Name()
+	case customfielddefinition.FieldConversionKey:
+		return m.ConversionKey()
 	case customfielddefinition.FieldFieldType:
 		return m.FieldType()
 	case customfielddefinition.FieldRequired:
@@ -7534,6 +7589,8 @@ func (m *CustomFieldDefinitionMutation) OldField(ctx context.Context, name strin
 		return m.OldObjectType(ctx)
 	case customfielddefinition.FieldName:
 		return m.OldName(ctx)
+	case customfielddefinition.FieldConversionKey:
+		return m.OldConversionKey(ctx)
 	case customfielddefinition.FieldFieldType:
 		return m.OldFieldType(ctx)
 	case customfielddefinition.FieldRequired:
@@ -7575,6 +7632,13 @@ func (m *CustomFieldDefinitionMutation) SetField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetName(v)
+		return nil
+	case customfielddefinition.FieldConversionKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConversionKey(v)
 		return nil
 	case customfielddefinition.FieldFieldType:
 		v, ok := value.(string)
@@ -7678,6 +7742,9 @@ func (m *CustomFieldDefinitionMutation) ClearedFields() []string {
 	if m.FieldCleared(customfielddefinition.FieldCompanyID) {
 		fields = append(fields, customfielddefinition.FieldCompanyID)
 	}
+	if m.FieldCleared(customfielddefinition.FieldConversionKey) {
+		fields = append(fields, customfielddefinition.FieldConversionKey)
+	}
 	return fields
 }
 
@@ -7695,6 +7762,9 @@ func (m *CustomFieldDefinitionMutation) ClearField(name string) error {
 	case customfielddefinition.FieldCompanyID:
 		m.ClearCompanyID()
 		return nil
+	case customfielddefinition.FieldConversionKey:
+		m.ClearConversionKey()
+		return nil
 	}
 	return fmt.Errorf("unknown CustomFieldDefinition nullable field %s", name)
 }
@@ -7711,6 +7781,9 @@ func (m *CustomFieldDefinitionMutation) ResetField(name string) error {
 		return nil
 	case customfielddefinition.FieldName:
 		m.ResetName()
+		return nil
+	case customfielddefinition.FieldConversionKey:
+		m.ResetConversionKey()
 		return nil
 	case customfielddefinition.FieldFieldType:
 		m.ResetFieldType()
@@ -12032,29 +12105,30 @@ func (m *DashboardWidgetMutation) ResetEdge(name string) error {
 // EstimateMutation represents an operation that mutates the Estimate nodes in the graph.
 type EstimateMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *int64
-	company_id     *int64
-	addcompany_id  *int64
-	customer_id    *int64
-	addcustomer_id *int64
-	job_id         *int64
-	addjob_id      *int64
-	status_id      *int64
-	addstatus_id   *int64
-	title          *string
-	notes          *string
-	tax_rate       *string
-	line_items     *string
-	custom_fields  *string
-	deleted_at     *time.Time
-	created_at     *time.Time
-	updated_at     *time.Time
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*Estimate, error)
-	predicates     []predicate.Estimate
+	op                   Op
+	typ                  string
+	id                   *int64
+	company_id           *int64
+	addcompany_id        *int64
+	customer_id          *int64
+	addcustomer_id       *int64
+	job_id               *int64
+	addjob_id            *int64
+	status_id            *int64
+	addstatus_id         *int64
+	title                *string
+	notes                *string
+	tax_rate             *string
+	line_items           *string
+	custom_fields        *string
+	deleted_at           *time.Time
+	conversion_hidden_at *time.Time
+	created_at           *time.Time
+	updated_at           *time.Time
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*Estimate, error)
+	predicates           []predicate.Estimate
 }
 
 var _ ent.Mutation = (*EstimateMutation)(nil)
@@ -12670,6 +12744,55 @@ func (m *EstimateMutation) ResetDeletedAt() {
 	delete(m.clearedFields, estimate.FieldDeletedAt)
 }
 
+// SetConversionHiddenAt sets the "conversion_hidden_at" field.
+func (m *EstimateMutation) SetConversionHiddenAt(t time.Time) {
+	m.conversion_hidden_at = &t
+}
+
+// ConversionHiddenAt returns the value of the "conversion_hidden_at" field in the mutation.
+func (m *EstimateMutation) ConversionHiddenAt() (r time.Time, exists bool) {
+	v := m.conversion_hidden_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConversionHiddenAt returns the old "conversion_hidden_at" field's value of the Estimate entity.
+// If the Estimate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EstimateMutation) OldConversionHiddenAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConversionHiddenAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConversionHiddenAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConversionHiddenAt: %w", err)
+	}
+	return oldValue.ConversionHiddenAt, nil
+}
+
+// ClearConversionHiddenAt clears the value of the "conversion_hidden_at" field.
+func (m *EstimateMutation) ClearConversionHiddenAt() {
+	m.conversion_hidden_at = nil
+	m.clearedFields[estimate.FieldConversionHiddenAt] = struct{}{}
+}
+
+// ConversionHiddenAtCleared returns if the "conversion_hidden_at" field was cleared in this mutation.
+func (m *EstimateMutation) ConversionHiddenAtCleared() bool {
+	_, ok := m.clearedFields[estimate.FieldConversionHiddenAt]
+	return ok
+}
+
+// ResetConversionHiddenAt resets all changes to the "conversion_hidden_at" field.
+func (m *EstimateMutation) ResetConversionHiddenAt() {
+	m.conversion_hidden_at = nil
+	delete(m.clearedFields, estimate.FieldConversionHiddenAt)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *EstimateMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -12776,7 +12899,7 @@ func (m *EstimateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EstimateMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.company_id != nil {
 		fields = append(fields, estimate.FieldCompanyID)
 	}
@@ -12806,6 +12929,9 @@ func (m *EstimateMutation) Fields() []string {
 	}
 	if m.deleted_at != nil {
 		fields = append(fields, estimate.FieldDeletedAt)
+	}
+	if m.conversion_hidden_at != nil {
+		fields = append(fields, estimate.FieldConversionHiddenAt)
 	}
 	if m.created_at != nil {
 		fields = append(fields, estimate.FieldCreatedAt)
@@ -12841,6 +12967,8 @@ func (m *EstimateMutation) Field(name string) (ent.Value, bool) {
 		return m.CustomFields()
 	case estimate.FieldDeletedAt:
 		return m.DeletedAt()
+	case estimate.FieldConversionHiddenAt:
+		return m.ConversionHiddenAt()
 	case estimate.FieldCreatedAt:
 		return m.CreatedAt()
 	case estimate.FieldUpdatedAt:
@@ -12874,6 +13002,8 @@ func (m *EstimateMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldCustomFields(ctx)
 	case estimate.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
+	case estimate.FieldConversionHiddenAt:
+		return m.OldConversionHiddenAt(ctx)
 	case estimate.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case estimate.FieldUpdatedAt:
@@ -12956,6 +13086,13 @@ func (m *EstimateMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDeletedAt(v)
+		return nil
+	case estimate.FieldConversionHiddenAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConversionHiddenAt(v)
 		return nil
 	case estimate.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -13067,6 +13204,9 @@ func (m *EstimateMutation) ClearedFields() []string {
 	if m.FieldCleared(estimate.FieldDeletedAt) {
 		fields = append(fields, estimate.FieldDeletedAt)
 	}
+	if m.FieldCleared(estimate.FieldConversionHiddenAt) {
+		fields = append(fields, estimate.FieldConversionHiddenAt)
+	}
 	return fields
 }
 
@@ -13095,6 +13235,9 @@ func (m *EstimateMutation) ClearField(name string) error {
 		return nil
 	case estimate.FieldDeletedAt:
 		m.ClearDeletedAt()
+		return nil
+	case estimate.FieldConversionHiddenAt:
+		m.ClearConversionHiddenAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Estimate nullable field %s", name)
@@ -13133,6 +13276,9 @@ func (m *EstimateMutation) ResetField(name string) error {
 		return nil
 	case estimate.FieldDeletedAt:
 		m.ResetDeletedAt()
+		return nil
+	case estimate.FieldConversionHiddenAt:
+		m.ResetConversionHiddenAt()
 		return nil
 	case estimate.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -14884,37 +15030,38 @@ func (m *InvitationTokenMutation) ResetEdge(name string) error {
 // InvoiceMutation represents an operation that mutates the Invoice nodes in the graph.
 type InvoiceMutation struct {
 	config
-	op                Op
-	typ               string
-	id                *int64
-	invoice_number    *int64
-	addinvoice_number *int64
-	company_id        *int64
-	addcompany_id     *int64
-	customer_id       *int64
-	addcustomer_id    *int64
-	job_id            *int64
-	addjob_id         *int64
-	estimate_id       *int64
-	addestimate_id    *int64
-	status_id         *int64
-	addstatus_id      *int64
-	title             *string
-	notes             *string
-	invoice_date      *time.Time
-	due_date          *time.Time
-	tax_rate          *string
-	line_items        *string
-	settlement_state  *string
-	display_settings  *string
-	custom_fields     *string
-	deleted_at        *time.Time
-	created_at        *time.Time
-	updated_at        *time.Time
-	clearedFields     map[string]struct{}
-	done              bool
-	oldValue          func(context.Context) (*Invoice, error)
-	predicates        []predicate.Invoice
+	op                   Op
+	typ                  string
+	id                   *int64
+	invoice_number       *int64
+	addinvoice_number    *int64
+	company_id           *int64
+	addcompany_id        *int64
+	customer_id          *int64
+	addcustomer_id       *int64
+	job_id               *int64
+	addjob_id            *int64
+	estimate_id          *int64
+	addestimate_id       *int64
+	status_id            *int64
+	addstatus_id         *int64
+	title                *string
+	notes                *string
+	invoice_date         *time.Time
+	due_date             *time.Time
+	tax_rate             *string
+	line_items           *string
+	settlement_state     *string
+	display_settings     *string
+	custom_fields        *string
+	deleted_at           *time.Time
+	conversion_hidden_at *time.Time
+	created_at           *time.Time
+	updated_at           *time.Time
+	clearedFields        map[string]struct{}
+	done                 bool
+	oldValue             func(context.Context) (*Invoice, error)
+	predicates           []predicate.Invoice
 }
 
 var _ ent.Mutation = (*InvoiceMutation)(nil)
@@ -15800,6 +15947,55 @@ func (m *InvoiceMutation) ResetDeletedAt() {
 	delete(m.clearedFields, invoice.FieldDeletedAt)
 }
 
+// SetConversionHiddenAt sets the "conversion_hidden_at" field.
+func (m *InvoiceMutation) SetConversionHiddenAt(t time.Time) {
+	m.conversion_hidden_at = &t
+}
+
+// ConversionHiddenAt returns the value of the "conversion_hidden_at" field in the mutation.
+func (m *InvoiceMutation) ConversionHiddenAt() (r time.Time, exists bool) {
+	v := m.conversion_hidden_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConversionHiddenAt returns the old "conversion_hidden_at" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldConversionHiddenAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConversionHiddenAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConversionHiddenAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConversionHiddenAt: %w", err)
+	}
+	return oldValue.ConversionHiddenAt, nil
+}
+
+// ClearConversionHiddenAt clears the value of the "conversion_hidden_at" field.
+func (m *InvoiceMutation) ClearConversionHiddenAt() {
+	m.conversion_hidden_at = nil
+	m.clearedFields[invoice.FieldConversionHiddenAt] = struct{}{}
+}
+
+// ConversionHiddenAtCleared returns if the "conversion_hidden_at" field was cleared in this mutation.
+func (m *InvoiceMutation) ConversionHiddenAtCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldConversionHiddenAt]
+	return ok
+}
+
+// ResetConversionHiddenAt resets all changes to the "conversion_hidden_at" field.
+func (m *InvoiceMutation) ResetConversionHiddenAt() {
+	m.conversion_hidden_at = nil
+	delete(m.clearedFields, invoice.FieldConversionHiddenAt)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *InvoiceMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -15906,7 +16102,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 19)
 	if m.invoice_number != nil {
 		fields = append(fields, invoice.FieldInvoiceNumber)
 	}
@@ -15955,6 +16151,9 @@ func (m *InvoiceMutation) Fields() []string {
 	if m.deleted_at != nil {
 		fields = append(fields, invoice.FieldDeletedAt)
 	}
+	if m.conversion_hidden_at != nil {
+		fields = append(fields, invoice.FieldConversionHiddenAt)
+	}
 	if m.created_at != nil {
 		fields = append(fields, invoice.FieldCreatedAt)
 	}
@@ -16001,6 +16200,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.CustomFields()
 	case invoice.FieldDeletedAt:
 		return m.DeletedAt()
+	case invoice.FieldConversionHiddenAt:
+		return m.ConversionHiddenAt()
 	case invoice.FieldCreatedAt:
 		return m.CreatedAt()
 	case invoice.FieldUpdatedAt:
@@ -16046,6 +16247,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldCustomFields(ctx)
 	case invoice.FieldDeletedAt:
 		return m.OldDeletedAt(ctx)
+	case invoice.FieldConversionHiddenAt:
+		return m.OldConversionHiddenAt(ctx)
 	case invoice.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case invoice.FieldUpdatedAt:
@@ -16170,6 +16373,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDeletedAt(v)
+		return nil
+	case invoice.FieldConversionHiddenAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConversionHiddenAt(v)
 		return nil
 	case invoice.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -16308,6 +16518,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldDeletedAt) {
 		fields = append(fields, invoice.FieldDeletedAt)
 	}
+	if m.FieldCleared(invoice.FieldConversionHiddenAt) {
+		fields = append(fields, invoice.FieldConversionHiddenAt)
+	}
 	return fields
 }
 
@@ -16339,6 +16552,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 		return nil
 	case invoice.FieldDeletedAt:
 		m.ClearDeletedAt()
+		return nil
+	case invoice.FieldConversionHiddenAt:
+		m.ClearConversionHiddenAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Invoice nullable field %s", name)
@@ -16395,6 +16611,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldDeletedAt:
 		m.ResetDeletedAt()
+		return nil
+	case invoice.FieldConversionHiddenAt:
+		m.ResetConversionHiddenAt()
 		return nil
 	case invoice.FieldCreatedAt:
 		m.ResetCreatedAt()
@@ -23745,22 +23964,24 @@ func (m *ProjectMutation) ResetEdge(name string) error {
 // StatusMutation represents an operation that mutates the Status nodes in the graph.
 type StatusMutation struct {
 	config
-	op              Op
-	typ             string
-	id              *int64
-	company_id      *int64
-	addcompany_id   *int64
-	name            *string
-	color           *string
-	sort_order      *int
-	addsort_order   *int
-	created_at      *time.Time
-	clearedFields   map[string]struct{}
-	workflow        *int64
-	clearedworkflow bool
-	done            bool
-	oldValue        func(context.Context) (*Status, error)
-	predicates      []predicate.Status
+	op                   Op
+	typ                  string
+	id                   *int64
+	company_id           *int64
+	addcompany_id        *int64
+	name                 *string
+	color                *string
+	sort_order           *int
+	addsort_order        *int
+	estimate_convertible *bool
+	document_role        *string
+	created_at           *time.Time
+	clearedFields        map[string]struct{}
+	workflow             *int64
+	clearedworkflow      bool
+	done                 bool
+	oldValue             func(context.Context) (*Status, error)
+	predicates           []predicate.Status
 }
 
 var _ ent.Mutation = (*StatusMutation)(nil)
@@ -24101,6 +24322,78 @@ func (m *StatusMutation) ResetSortOrder() {
 	m.addsort_order = nil
 }
 
+// SetEstimateConvertible sets the "estimate_convertible" field.
+func (m *StatusMutation) SetEstimateConvertible(b bool) {
+	m.estimate_convertible = &b
+}
+
+// EstimateConvertible returns the value of the "estimate_convertible" field in the mutation.
+func (m *StatusMutation) EstimateConvertible() (r bool, exists bool) {
+	v := m.estimate_convertible
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEstimateConvertible returns the old "estimate_convertible" field's value of the Status entity.
+// If the Status object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StatusMutation) OldEstimateConvertible(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEstimateConvertible is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEstimateConvertible requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEstimateConvertible: %w", err)
+	}
+	return oldValue.EstimateConvertible, nil
+}
+
+// ResetEstimateConvertible resets all changes to the "estimate_convertible" field.
+func (m *StatusMutation) ResetEstimateConvertible() {
+	m.estimate_convertible = nil
+}
+
+// SetDocumentRole sets the "document_role" field.
+func (m *StatusMutation) SetDocumentRole(s string) {
+	m.document_role = &s
+}
+
+// DocumentRole returns the value of the "document_role" field in the mutation.
+func (m *StatusMutation) DocumentRole() (r string, exists bool) {
+	v := m.document_role
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDocumentRole returns the old "document_role" field's value of the Status entity.
+// If the Status object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StatusMutation) OldDocumentRole(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDocumentRole is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDocumentRole requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDocumentRole: %w", err)
+	}
+	return oldValue.DocumentRole, nil
+}
+
+// ResetDocumentRole resets all changes to the "document_role" field.
+func (m *StatusMutation) ResetDocumentRole() {
+	m.document_role = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *StatusMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -24198,7 +24491,7 @@ func (m *StatusMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *StatusMutation) Fields() []string {
-	fields := make([]string, 0, 6)
+	fields := make([]string, 0, 8)
 	if m.company_id != nil {
 		fields = append(fields, status.FieldCompanyID)
 	}
@@ -24213,6 +24506,12 @@ func (m *StatusMutation) Fields() []string {
 	}
 	if m.sort_order != nil {
 		fields = append(fields, status.FieldSortOrder)
+	}
+	if m.estimate_convertible != nil {
+		fields = append(fields, status.FieldEstimateConvertible)
+	}
+	if m.document_role != nil {
+		fields = append(fields, status.FieldDocumentRole)
 	}
 	if m.created_at != nil {
 		fields = append(fields, status.FieldCreatedAt)
@@ -24235,6 +24534,10 @@ func (m *StatusMutation) Field(name string) (ent.Value, bool) {
 		return m.Color()
 	case status.FieldSortOrder:
 		return m.SortOrder()
+	case status.FieldEstimateConvertible:
+		return m.EstimateConvertible()
+	case status.FieldDocumentRole:
+		return m.DocumentRole()
 	case status.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -24256,6 +24559,10 @@ func (m *StatusMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldColor(ctx)
 	case status.FieldSortOrder:
 		return m.OldSortOrder(ctx)
+	case status.FieldEstimateConvertible:
+		return m.OldEstimateConvertible(ctx)
+	case status.FieldDocumentRole:
+		return m.OldDocumentRole(ctx)
 	case status.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -24301,6 +24608,20 @@ func (m *StatusMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSortOrder(v)
+		return nil
+	case status.FieldEstimateConvertible:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEstimateConvertible(v)
+		return nil
+	case status.FieldDocumentRole:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDocumentRole(v)
 		return nil
 	case status.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -24408,6 +24729,12 @@ func (m *StatusMutation) ResetField(name string) error {
 		return nil
 	case status.FieldSortOrder:
 		m.ResetSortOrder()
+		return nil
+	case status.FieldEstimateConvertible:
+		m.ResetEstimateConvertible()
+		return nil
+	case status.FieldDocumentRole:
+		m.ResetDocumentRole()
 		return nil
 	case status.FieldCreatedAt:
 		m.ResetCreatedAt()

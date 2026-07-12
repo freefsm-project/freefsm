@@ -94,6 +94,7 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 		invoices, err = s.client.Invoice.Query().
 			Where(
 				invoice.DeletedAtIsNil(),
+				invoice.ConversionHiddenAtIsNil(),
 				invoice.Or(
 					invoice.TitleContainsFold(q),
 					invoice.NotesContainsFold(q),
@@ -108,6 +109,7 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 		estimates, err = s.client.Estimate.Query().
 			Where(
 				estimate.DeletedAtIsNil(),
+				estimate.ConversionHiddenAtIsNil(),
 				estimate.Or(
 					estimate.TitleContainsFold(q),
 					estimate.NotesContainsFold(q),
@@ -177,11 +179,11 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 			}
 		}
 		invResults[i] = SearchResult{
-			ID:   inv.ID,
-			Type: "invoice",
-			Name: inv.Title,
+			ID:         inv.ID,
+			Type:       "invoice",
+			Name:       inv.Title,
 			CustomerID: inv.CustomerID,
-			Customer: custName,
+			Customer:   custName,
 			StatusID: func() int64 {
 				if inv.StatusID != nil {
 					return *inv.StatusID

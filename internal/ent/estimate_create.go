@@ -160,6 +160,20 @@ func (_c *EstimateCreate) SetNillableDeletedAt(v *time.Time) *EstimateCreate {
 	return _c
 }
 
+// SetConversionHiddenAt sets the "conversion_hidden_at" field.
+func (_c *EstimateCreate) SetConversionHiddenAt(v time.Time) *EstimateCreate {
+	_c.mutation.SetConversionHiddenAt(v)
+	return _c
+}
+
+// SetNillableConversionHiddenAt sets the "conversion_hidden_at" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableConversionHiddenAt(v *time.Time) *EstimateCreate {
+	if v != nil {
+		_c.SetConversionHiddenAt(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *EstimateCreate) SetCreatedAt(v time.Time) *EstimateCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -353,6 +367,10 @@ func (_c *EstimateCreate) createSpec() (*Estimate, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(estimate.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
+	}
+	if value, ok := _c.mutation.ConversionHiddenAt(); ok {
+		_spec.SetField(estimate.FieldConversionHiddenAt, field.TypeTime, value)
+		_node.ConversionHiddenAt = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(estimate.FieldCreatedAt, field.TypeTime, value)

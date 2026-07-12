@@ -330,6 +330,26 @@ func (_u *InvoiceUpdate) ClearDeletedAt() *InvoiceUpdate {
 	return _u
 }
 
+// SetConversionHiddenAt sets the "conversion_hidden_at" field.
+func (_u *InvoiceUpdate) SetConversionHiddenAt(v time.Time) *InvoiceUpdate {
+	_u.mutation.SetConversionHiddenAt(v)
+	return _u
+}
+
+// SetNillableConversionHiddenAt sets the "conversion_hidden_at" field if the given value is not nil.
+func (_u *InvoiceUpdate) SetNillableConversionHiddenAt(v *time.Time) *InvoiceUpdate {
+	if v != nil {
+		_u.SetConversionHiddenAt(*v)
+	}
+	return _u
+}
+
+// ClearConversionHiddenAt clears the value of the "conversion_hidden_at" field.
+func (_u *InvoiceUpdate) ClearConversionHiddenAt() *InvoiceUpdate {
+	_u.mutation.ClearConversionHiddenAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *InvoiceUpdate) SetUpdatedAt(v time.Time) *InvoiceUpdate {
 	_u.mutation.SetUpdatedAt(v)
@@ -469,6 +489,12 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(invoice.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ConversionHiddenAt(); ok {
+		_spec.SetField(invoice.FieldConversionHiddenAt, field.TypeTime, value)
+	}
+	if _u.mutation.ConversionHiddenAtCleared() {
+		_spec.ClearField(invoice.FieldConversionHiddenAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoice.FieldUpdatedAt, field.TypeTime, value)
@@ -795,6 +821,26 @@ func (_u *InvoiceUpdateOne) ClearDeletedAt() *InvoiceUpdateOne {
 	return _u
 }
 
+// SetConversionHiddenAt sets the "conversion_hidden_at" field.
+func (_u *InvoiceUpdateOne) SetConversionHiddenAt(v time.Time) *InvoiceUpdateOne {
+	_u.mutation.SetConversionHiddenAt(v)
+	return _u
+}
+
+// SetNillableConversionHiddenAt sets the "conversion_hidden_at" field if the given value is not nil.
+func (_u *InvoiceUpdateOne) SetNillableConversionHiddenAt(v *time.Time) *InvoiceUpdateOne {
+	if v != nil {
+		_u.SetConversionHiddenAt(*v)
+	}
+	return _u
+}
+
+// ClearConversionHiddenAt clears the value of the "conversion_hidden_at" field.
+func (_u *InvoiceUpdateOne) ClearConversionHiddenAt() *InvoiceUpdateOne {
+	_u.mutation.ClearConversionHiddenAt()
+	return _u
+}
+
 // SetUpdatedAt sets the "updated_at" field.
 func (_u *InvoiceUpdateOne) SetUpdatedAt(v time.Time) *InvoiceUpdateOne {
 	_u.mutation.SetUpdatedAt(v)
@@ -964,6 +1010,12 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	}
 	if _u.mutation.DeletedAtCleared() {
 		_spec.ClearField(invoice.FieldDeletedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ConversionHiddenAt(); ok {
+		_spec.SetField(invoice.FieldConversionHiddenAt, field.TypeTime, value)
+	}
+	if _u.mutation.ConversionHiddenAtCleared() {
+		_spec.ClearField(invoice.FieldConversionHiddenAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(invoice.FieldUpdatedAt, field.TypeTime, value)

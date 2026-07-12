@@ -214,6 +214,7 @@ var (
 		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "object_type", Type: field.TypeString},
 		{Name: "name", Type: field.TypeString},
+		{Name: "conversion_key", Type: field.TypeString, Nullable: true},
 		{Name: "field_type", Type: field.TypeString},
 		{Name: "required", Type: field.TypeBool, Default: false},
 		{Name: "options", Type: field.TypeString, Default: "[]"},
@@ -230,7 +231,12 @@ var (
 			{
 				Name:    "customfielddefinition_object_type_sort_order",
 				Unique:  false,
-				Columns: []*schema.Column{CustomFieldDefinitionsColumns[2], CustomFieldDefinitionsColumns[7]},
+				Columns: []*schema.Column{CustomFieldDefinitionsColumns[2], CustomFieldDefinitionsColumns[8]},
+			},
+			{
+				Name:    "customfielddefinition_company_id_object_type_conversion_key",
+				Unique:  true,
+				Columns: []*schema.Column{CustomFieldDefinitionsColumns[1], CustomFieldDefinitionsColumns[2], CustomFieldDefinitionsColumns[4]},
 			},
 		},
 	}
@@ -388,6 +394,7 @@ var (
 		{Name: "line_items", Type: field.TypeString, Default: "[]"},
 		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "conversion_hidden_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -488,6 +495,7 @@ var (
 		{Name: "display_settings", Type: field.TypeString, Default: "{}"},
 		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "conversion_hidden_at", Type: field.TypeTime, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}
@@ -743,6 +751,8 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "color", Type: field.TypeString, Default: "#6B7280"},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
+		{Name: "estimate_convertible", Type: field.TypeBool, Default: false},
+		{Name: "document_role", Type: field.TypeString, Default: "standard"},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "workflow_id", Type: field.TypeInt64},
 	}
@@ -754,7 +764,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "statuses_status_workflows_statuses",
-				Columns:    []*schema.Column{StatusesColumns[6]},
+				Columns:    []*schema.Column{StatusesColumns[8]},
 				RefColumns: []*schema.Column{StatusWorkflowsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -763,7 +773,12 @@ var (
 			{
 				Name:    "status_workflow_id",
 				Unique:  false,
-				Columns: []*schema.Column{StatusesColumns[6]},
+				Columns: []*schema.Column{StatusesColumns[8]},
+			},
+			{
+				Name:    "status_workflow_id_document_role",
+				Unique:  false,
+				Columns: []*schema.Column{StatusesColumns[8], StatusesColumns[6]},
 			},
 		},
 	}

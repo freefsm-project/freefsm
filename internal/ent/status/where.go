@@ -80,6 +80,16 @@ func SortOrder(v int) predicate.Status {
 	return predicate.Status(sql.FieldEQ(FieldSortOrder, v))
 }
 
+// EstimateConvertible applies equality check predicate on the "estimate_convertible" field. It's identical to EstimateConvertibleEQ.
+func EstimateConvertible(v bool) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldEstimateConvertible, v))
+}
+
+// DocumentRole applies equality check predicate on the "document_role" field. It's identical to DocumentRoleEQ.
+func DocumentRole(v string) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldDocumentRole, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.Status {
 	return predicate.Status(sql.FieldEQ(FieldCreatedAt, v))
@@ -323,6 +333,81 @@ func SortOrderLT(v int) predicate.Status {
 // SortOrderLTE applies the LTE predicate on the "sort_order" field.
 func SortOrderLTE(v int) predicate.Status {
 	return predicate.Status(sql.FieldLTE(FieldSortOrder, v))
+}
+
+// EstimateConvertibleEQ applies the EQ predicate on the "estimate_convertible" field.
+func EstimateConvertibleEQ(v bool) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldEstimateConvertible, v))
+}
+
+// EstimateConvertibleNEQ applies the NEQ predicate on the "estimate_convertible" field.
+func EstimateConvertibleNEQ(v bool) predicate.Status {
+	return predicate.Status(sql.FieldNEQ(FieldEstimateConvertible, v))
+}
+
+// DocumentRoleEQ applies the EQ predicate on the "document_role" field.
+func DocumentRoleEQ(v string) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldDocumentRole, v))
+}
+
+// DocumentRoleNEQ applies the NEQ predicate on the "document_role" field.
+func DocumentRoleNEQ(v string) predicate.Status {
+	return predicate.Status(sql.FieldNEQ(FieldDocumentRole, v))
+}
+
+// DocumentRoleIn applies the In predicate on the "document_role" field.
+func DocumentRoleIn(vs ...string) predicate.Status {
+	return predicate.Status(sql.FieldIn(FieldDocumentRole, vs...))
+}
+
+// DocumentRoleNotIn applies the NotIn predicate on the "document_role" field.
+func DocumentRoleNotIn(vs ...string) predicate.Status {
+	return predicate.Status(sql.FieldNotIn(FieldDocumentRole, vs...))
+}
+
+// DocumentRoleGT applies the GT predicate on the "document_role" field.
+func DocumentRoleGT(v string) predicate.Status {
+	return predicate.Status(sql.FieldGT(FieldDocumentRole, v))
+}
+
+// DocumentRoleGTE applies the GTE predicate on the "document_role" field.
+func DocumentRoleGTE(v string) predicate.Status {
+	return predicate.Status(sql.FieldGTE(FieldDocumentRole, v))
+}
+
+// DocumentRoleLT applies the LT predicate on the "document_role" field.
+func DocumentRoleLT(v string) predicate.Status {
+	return predicate.Status(sql.FieldLT(FieldDocumentRole, v))
+}
+
+// DocumentRoleLTE applies the LTE predicate on the "document_role" field.
+func DocumentRoleLTE(v string) predicate.Status {
+	return predicate.Status(sql.FieldLTE(FieldDocumentRole, v))
+}
+
+// DocumentRoleContains applies the Contains predicate on the "document_role" field.
+func DocumentRoleContains(v string) predicate.Status {
+	return predicate.Status(sql.FieldContains(FieldDocumentRole, v))
+}
+
+// DocumentRoleHasPrefix applies the HasPrefix predicate on the "document_role" field.
+func DocumentRoleHasPrefix(v string) predicate.Status {
+	return predicate.Status(sql.FieldHasPrefix(FieldDocumentRole, v))
+}
+
+// DocumentRoleHasSuffix applies the HasSuffix predicate on the "document_role" field.
+func DocumentRoleHasSuffix(v string) predicate.Status {
+	return predicate.Status(sql.FieldHasSuffix(FieldDocumentRole, v))
+}
+
+// DocumentRoleEqualFold applies the EqualFold predicate on the "document_role" field.
+func DocumentRoleEqualFold(v string) predicate.Status {
+	return predicate.Status(sql.FieldEqualFold(FieldDocumentRole, v))
+}
+
+// DocumentRoleContainsFold applies the ContainsFold predicate on the "document_role" field.
+func DocumentRoleContainsFold(v string) predicate.Status {
+	return predicate.Status(sql.FieldContainsFold(FieldDocumentRole, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

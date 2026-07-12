@@ -49,6 +49,8 @@ type Invoice struct {
 	CustomFields string `json:"custom_fields,omitempty"`
 	// DeletedAt holds the value of the "deleted_at" field.
 	DeletedAt *time.Time `json:"deleted_at,omitempty"`
+	// ConversionHiddenAt holds the value of the "conversion_hidden_at" field.
+	ConversionHiddenAt *time.Time `json:"conversion_hidden_at,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// UpdatedAt holds the value of the "updated_at" field.
@@ -65,7 +67,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullInt64)
 		case invoice.FieldTitle, invoice.FieldNotes, invoice.FieldTaxRate, invoice.FieldLineItems, invoice.FieldSettlementState, invoice.FieldDisplaySettings, invoice.FieldCustomFields:
 			values[i] = new(sql.NullString)
-		case invoice.FieldInvoiceDate, invoice.FieldDueDate, invoice.FieldDeletedAt, invoice.FieldCreatedAt, invoice.FieldUpdatedAt:
+		case invoice.FieldInvoiceDate, invoice.FieldDueDate, invoice.FieldDeletedAt, invoice.FieldConversionHiddenAt, invoice.FieldCreatedAt, invoice.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -189,6 +191,13 @@ func (_m *Invoice) assignValues(columns []string, values []any) error {
 				_m.DeletedAt = new(time.Time)
 				*_m.DeletedAt = value.Time
 			}
+		case invoice.FieldConversionHiddenAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field conversion_hidden_at", values[i])
+			} else if value.Valid {
+				_m.ConversionHiddenAt = new(time.Time)
+				*_m.ConversionHiddenAt = value.Time
+			}
 		case invoice.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -292,6 +301,11 @@ func (_m *Invoice) String() string {
 	builder.WriteString(", ")
 	if v := _m.DeletedAt; v != nil {
 		builder.WriteString("deleted_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.ConversionHiddenAt; v != nil {
+		builder.WriteString("conversion_hidden_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")

@@ -24,6 +24,10 @@ const (
 	FieldColor = "color"
 	// FieldSortOrder holds the string denoting the sort_order field in the database.
 	FieldSortOrder = "sort_order"
+	// FieldEstimateConvertible holds the string denoting the estimate_convertible field in the database.
+	FieldEstimateConvertible = "estimate_convertible"
+	// FieldDocumentRole holds the string denoting the document_role field in the database.
+	FieldDocumentRole = "document_role"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// EdgeWorkflow holds the string denoting the workflow edge name in mutations.
@@ -47,6 +51,8 @@ var Columns = []string{
 	FieldName,
 	FieldColor,
 	FieldSortOrder,
+	FieldEstimateConvertible,
+	FieldDocumentRole,
 	FieldCreatedAt,
 }
 
@@ -67,6 +73,12 @@ var (
 	DefaultColor string
 	// DefaultSortOrder holds the default value on creation for the "sort_order" field.
 	DefaultSortOrder int
+	// DefaultEstimateConvertible holds the default value on creation for the "estimate_convertible" field.
+	DefaultEstimateConvertible bool
+	// DefaultDocumentRole holds the default value on creation for the "document_role" field.
+	DefaultDocumentRole string
+	// DocumentRoleValidator is a validator for the "document_role" field. It is called by the builders before save.
+	DocumentRoleValidator func(string) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -102,6 +114,16 @@ func ByColor(opts ...sql.OrderTermOption) OrderOption {
 // BySortOrder orders the results by the sort_order field.
 func BySortOrder(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSortOrder, opts...).ToFunc()
+}
+
+// ByEstimateConvertible orders the results by the estimate_convertible field.
+func ByEstimateConvertible(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEstimateConvertible, opts...).ToFunc()
+}
+
+// ByDocumentRole orders the results by the document_role field.
+func ByDocumentRole(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDocumentRole, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

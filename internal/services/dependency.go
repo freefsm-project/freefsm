@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/asset"
 	"github.com/freefsm-project/freefsm/internal/ent/customercontact"
@@ -13,7 +14,6 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/job"
 	"github.com/freefsm-project/freefsm/internal/ent/project"
 	"github.com/freefsm-project/freefsm/internal/ent/taglink"
-	"entgo.io/ent/dialect/sql"
 )
 
 type DependencyService struct {
@@ -32,10 +32,10 @@ func (s *DependencyService) CanDeleteCustomer(ctx context.Context, id int64) (bo
 	if n, _ := s.client.Project.Query().Where(project.CustomerID(id), project.DeletedAtIsNil()).Count(ctx); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d project(s)", n))
 	}
-	if n, _ := s.client.Estimate.Query().Where(estimate.CustomerID(id)).Count(ctx); n > 0 {
+	if n, _ := s.client.Estimate.Query().Where(estimate.CustomerID(id), estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil()).Count(ctx); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d estimate(s)", n))
 	}
-	if n, _ := s.client.Invoice.Query().Where(invoice.CustomerID(id)).Count(ctx); n > 0 {
+	if n, _ := s.client.Invoice.Query().Where(invoice.CustomerID(id), invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil()).Count(ctx); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d invoice(s)", n))
 	}
 	if n, _ := s.client.Asset.Query().Where(asset.CustomerID(id), asset.DeletedAtIsNil()).Count(ctx); n > 0 {
@@ -62,10 +62,10 @@ func (s *DependencyService) CanDeleteCustomer(ctx context.Context, id int64) (bo
 }
 
 func (s *DependencyService) CanDeleteJob(ctx context.Context, id int64) (bool, string) {
-	if n, _ := s.client.Estimate.Query().Where(estimate.JobID(id)).Count(ctx); n > 0 {
+	if n, _ := s.client.Estimate.Query().Where(estimate.JobID(id), estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil()).Count(ctx); n > 0 {
 		return false, fmt.Sprintf("Cannot delete job — it has %d linked estimate(s)", n)
 	}
-	if n, _ := s.client.Invoice.Query().Where(invoice.JobID(id)).Count(ctx); n > 0 {
+	if n, _ := s.client.Invoice.Query().Where(invoice.JobID(id), invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil()).Count(ctx); n > 0 {
 		return false, fmt.Sprintf("Cannot delete job — it has %d linked invoice(s)", n)
 	}
 	return true, ""
@@ -79,14 +79,14 @@ func (s *DependencyService) CanDeleteProject(ctx context.Context, id int64) (boo
 }
 
 func (s *DependencyService) CanDeleteEstimate(ctx context.Context, id int64) (bool, string) {
-	if n, _ := s.client.Invoice.Query().Where(invoice.EstimateID(id)).Count(ctx); n > 0 {
+	if n, _ := s.client.Invoice.Query().Where(invoice.EstimateID(id), invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil()).Count(ctx); n > 0 {
 		return false, fmt.Sprintf("Cannot delete estimate — it has %d linked invoice(s)", n)
 	}
 	return true, ""
 }
 
 func (s *DependencyService) CanDeleteInvoice(ctx context.Context, id int64) (bool, string) {
-	n, err := s.client.Invoice.Query().Where(invoice.IDEQ(id), func(sel *sql.Selector) {
+	n, err := s.client.Invoice.Query().Where(invoice.IDEQ(id), invoice.ConversionHiddenAtIsNil(), func(sel *sql.Selector) {
 		invoiceID := sel.C(invoice.FieldID)
 		sel.Where(sql.ExprP(`EXISTS(SELECT 1 FROM invoice_payments p WHERE p.invoice_id=` + invoiceID + `) OR EXISTS(SELECT 1 FROM credit_applications a WHERE a.invoice_id=` + invoiceID + `)`))
 	}).Count(ctx)
@@ -120,7 +120,7 @@ func (s *DependencyService) CanDeleteItem(ctx context.Context, id int64) (bool, 
 			}
 		}
 	}
-	estimates, _ := s.client.Estimate.Query().All(ctx)
+	estimates, _ := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil()).All(ctx)
 	for _, e := range estimates {
 		var items []LineItem
 		if err := json.Unmarshal([]byte(e.LineItems), &items); err == nil {
@@ -132,7 +132,7 @@ func (s *DependencyService) CanDeleteItem(ctx context.Context, id int64) (bool, 
 			}
 		}
 	}
-	invoices, _ := s.client.Invoice.Query().All(ctx)
+	invoices, _ := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil()).All(ctx)
 	for _, i := range invoices {
 		var items []LineItem
 		if err := json.Unmarshal([]byte(i.LineItems), &items); err == nil {

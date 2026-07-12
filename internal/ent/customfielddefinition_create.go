@@ -46,6 +46,20 @@ func (_c *CustomFieldDefinitionCreate) SetName(v string) *CustomFieldDefinitionC
 	return _c
 }
 
+// SetConversionKey sets the "conversion_key" field.
+func (_c *CustomFieldDefinitionCreate) SetConversionKey(v string) *CustomFieldDefinitionCreate {
+	_c.mutation.SetConversionKey(v)
+	return _c
+}
+
+// SetNillableConversionKey sets the "conversion_key" field if the given value is not nil.
+func (_c *CustomFieldDefinitionCreate) SetNillableConversionKey(v *string) *CustomFieldDefinitionCreate {
+	if v != nil {
+		_c.SetConversionKey(*v)
+	}
+	return _c
+}
+
 // SetFieldType sets the "field_type" field.
 func (_c *CustomFieldDefinitionCreate) SetFieldType(v string) *CustomFieldDefinitionCreate {
 	_c.mutation.SetFieldType(v)
@@ -269,6 +283,10 @@ func (_c *CustomFieldDefinitionCreate) createSpec() (*CustomFieldDefinition, *sq
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(customfielddefinition.FieldName, field.TypeString, value)
 		_node.Name = value
+	}
+	if value, ok := _c.mutation.ConversionKey(); ok {
+		_spec.SetField(customfielddefinition.FieldConversionKey, field.TypeString, value)
+		_node.ConversionKey = &value
 	}
 	if value, ok := _c.mutation.FieldType(); ok {
 		_spec.SetField(customfielddefinition.FieldFieldType, field.TypeString, value)

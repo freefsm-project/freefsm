@@ -91,6 +91,7 @@ templ SettingsPage(p SettingsPageData) {
 			</div>
 			if !p.IsSetup {
 				<p><a href="/settings/job-statuses">Manage job statuses</a></p>
+				<p><a href="/settings/document-statuses/estimate">Manage estimate statuses</a> &middot; <a href="/settings/document-statuses/invoice">Manage invoice statuses</a></p>
 			}
 			<button type="submit" class="settings-submit">{ settingsButtonText(p.IsSetup) }</button>
 		</div>

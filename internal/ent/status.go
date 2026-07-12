@@ -28,6 +28,10 @@ type Status struct {
 	Color string `json:"color,omitempty"`
 	// SortOrder holds the value of the "sort_order" field.
 	SortOrder int `json:"sort_order,omitempty"`
+	// EstimateConvertible holds the value of the "estimate_convertible" field.
+	EstimateConvertible bool `json:"estimate_convertible,omitempty"`
+	// DocumentRole holds the value of the "document_role" field.
+	DocumentRole string `json:"document_role,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
@@ -61,9 +65,11 @@ func (*Status) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case status.FieldEstimateConvertible:
+			values[i] = new(sql.NullBool)
 		case status.FieldID, status.FieldCompanyID, status.FieldWorkflowID, status.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
-		case status.FieldName, status.FieldColor:
+		case status.FieldName, status.FieldColor, status.FieldDocumentRole:
 			values[i] = new(sql.NullString)
 		case status.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -118,6 +124,18 @@ func (_m *Status) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field sort_order", values[i])
 			} else if value.Valid {
 				_m.SortOrder = int(value.Int64)
+			}
+		case status.FieldEstimateConvertible:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field estimate_convertible", values[i])
+			} else if value.Valid {
+				_m.EstimateConvertible = value.Bool
+			}
+		case status.FieldDocumentRole:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field document_role", values[i])
+			} else if value.Valid {
+				_m.DocumentRole = value.String
 			}
 		case status.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -182,6 +200,12 @@ func (_m *Status) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("sort_order=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SortOrder))
+	builder.WriteString(", ")
+	builder.WriteString("estimate_convertible=")
+	builder.WriteString(fmt.Sprintf("%v", _m.EstimateConvertible))
+	builder.WriteString(", ")
+	builder.WriteString("document_role=")
+	builder.WriteString(_m.DocumentRole)
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

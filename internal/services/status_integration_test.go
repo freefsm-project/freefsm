@@ -66,3 +66,32 @@ func TestStatusServiceBelongsToObjectType(t *testing.T) {
 		t.Fatalf("invoice status belongs to job = %v, %v; want false, nil", ok, err)
 	}
 }
+
+func TestStatusServiceValidatesConversionCapabilities(t *testing.T) {
+	client := openPolicyTestClient(t)
+	defer client.Close()
+	ctx := context.Background()
+	svc := NewStatusService(client)
+	jobs := client.StatusWorkflow.Create().SetName("Jobs").SetObjectType("job").SaveX(ctx)
+	jobStatus := client.Status.Create().SetWorkflowID(jobs.ID).SetName("Ready").SaveX(ctx)
+	if _, err := svc.UpdateDocumentCapabilities(ctx, jobStatus.ID, true, "standard"); !errors.Is(err, ErrInvalidStatusCapability) {
+		t.Fatalf("job convertible error=%v", err)
+	}
+	estimates := client.StatusWorkflow.Create().SetName("Estimates").SetObjectType("estimate").SaveX(ctx)
+	draft := client.Status.Create().SetWorkflowID(estimates.ID).SetName("Initial").SetDocumentRole("draft").SaveX(ctx)
+	approved := client.Status.Create().SetWorkflowID(estimates.ID).SetName("Approved").SaveX(ctx)
+	if _, err := svc.UpdateDocumentCapabilities(ctx, draft.ID, false, "standard"); !errors.Is(err, ErrDraftStatusRequired) {
+		t.Fatalf("draft removal error=%v", err)
+	}
+	updated, err := svc.UpdateDocumentCapabilities(ctx, approved.ID, true, "draft")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !updated.EstimateConvertible || updated.DocumentRole != "draft" {
+		t.Fatalf("updated=%#v", updated)
+	}
+	draft = client.Status.GetX(ctx, draft.ID)
+	if draft.DocumentRole != "standard" {
+		t.Fatalf("previous draft role=%q", draft.DocumentRole)
+	}
+}

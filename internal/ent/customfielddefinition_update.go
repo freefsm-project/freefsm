@@ -83,6 +83,26 @@ func (_u *CustomFieldDefinitionUpdate) SetNillableName(v *string) *CustomFieldDe
 	return _u
 }
 
+// SetConversionKey sets the "conversion_key" field.
+func (_u *CustomFieldDefinitionUpdate) SetConversionKey(v string) *CustomFieldDefinitionUpdate {
+	_u.mutation.SetConversionKey(v)
+	return _u
+}
+
+// SetNillableConversionKey sets the "conversion_key" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdate) SetNillableConversionKey(v *string) *CustomFieldDefinitionUpdate {
+	if v != nil {
+		_u.SetConversionKey(*v)
+	}
+	return _u
+}
+
+// ClearConversionKey clears the value of the "conversion_key" field.
+func (_u *CustomFieldDefinitionUpdate) ClearConversionKey() *CustomFieldDefinitionUpdate {
+	_u.mutation.ClearConversionKey()
+	return _u
+}
+
 // SetFieldType sets the "field_type" field.
 func (_u *CustomFieldDefinitionUpdate) SetFieldType(v string) *CustomFieldDefinitionUpdate {
 	_u.mutation.SetFieldType(v)
@@ -240,6 +260,12 @@ func (_u *CustomFieldDefinitionUpdate) sqlSave(ctx context.Context) (_node int, 
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(customfielddefinition.FieldName, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.ConversionKey(); ok {
+		_spec.SetField(customfielddefinition.FieldConversionKey, field.TypeString, value)
+	}
+	if _u.mutation.ConversionKeyCleared() {
+		_spec.ClearField(customfielddefinition.FieldConversionKey, field.TypeString)
+	}
 	if value, ok := _u.mutation.FieldType(); ok {
 		_spec.SetField(customfielddefinition.FieldFieldType, field.TypeString, value)
 	}
@@ -330,6 +356,26 @@ func (_u *CustomFieldDefinitionUpdateOne) SetNillableName(v *string) *CustomFiel
 	if v != nil {
 		_u.SetName(*v)
 	}
+	return _u
+}
+
+// SetConversionKey sets the "conversion_key" field.
+func (_u *CustomFieldDefinitionUpdateOne) SetConversionKey(v string) *CustomFieldDefinitionUpdateOne {
+	_u.mutation.SetConversionKey(v)
+	return _u
+}
+
+// SetNillableConversionKey sets the "conversion_key" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdateOne) SetNillableConversionKey(v *string) *CustomFieldDefinitionUpdateOne {
+	if v != nil {
+		_u.SetConversionKey(*v)
+	}
+	return _u
+}
+
+// ClearConversionKey clears the value of the "conversion_key" field.
+func (_u *CustomFieldDefinitionUpdateOne) ClearConversionKey() *CustomFieldDefinitionUpdateOne {
+	_u.mutation.ClearConversionKey()
 	return _u
 }
 
@@ -519,6 +565,12 @@ func (_u *CustomFieldDefinitionUpdateOne) sqlSave(ctx context.Context) (_node *C
 	}
 	if value, ok := _u.mutation.Name(); ok {
 		_spec.SetField(customfielddefinition.FieldName, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ConversionKey(); ok {
+		_spec.SetField(customfielddefinition.FieldConversionKey, field.TypeString, value)
+	}
+	if _u.mutation.ConversionKeyCleared() {
+		_spec.ClearField(customfielddefinition.FieldConversionKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.FieldType(); ok {
 		_spec.SetField(customfielddefinition.FieldFieldType, field.TypeString, value)

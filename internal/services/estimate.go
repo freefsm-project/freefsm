@@ -40,7 +40,7 @@ type EstimateUpdateParams struct {
 }
 
 func (s *EstimateService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Estimate, int, error) {
-	q := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil())
+	q := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil())
 
 	if search != "" {
 		q = q.Where(estimate.TitleContainsFold(search))
@@ -70,7 +70,7 @@ func (s *EstimateService) List(ctx context.Context, search string, statusID int6
 
 func (s *EstimateService) ListByCustomer(ctx context.Context, customerID int64, limit int) ([]*ent.Estimate, error) {
 	q := s.client.Estimate.Query().
-		Where(estimate.DeletedAtIsNil(), estimate.CustomerIDEQ(customerID)).
+		Where(estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil(), estimate.CustomerIDEQ(customerID)).
 		Order(ent.Desc(estimate.FieldCreatedAt))
 	if limit > 0 {
 		q = q.Limit(limit)
@@ -79,7 +79,7 @@ func (s *EstimateService) ListByCustomer(ctx context.Context, customerID int64, 
 }
 
 func (s *EstimateService) ListForCustomer(ctx context.Context, customerID int64, search string, statusID int64, page, perPage int) ([]*ent.Estimate, int, error) {
-	q := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil(), estimate.CustomerIDEQ(customerID))
+	q := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil(), estimate.CustomerIDEQ(customerID))
 
 	if search != "" {
 		q = q.Where(estimate.TitleContainsFold(search))
@@ -100,7 +100,7 @@ func (s *EstimateService) ListForCustomer(ctx context.Context, customerID int64,
 }
 
 func (s *EstimateService) GetByID(ctx context.Context, id int64) (*ent.Estimate, error) {
-	e, err := s.client.Estimate.Get(ctx, id)
+	e, err := s.client.Estimate.Query().Where(estimate.IDEQ(id), estimate.ConversionHiddenAtIsNil()).Only(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get estimate %d: %w", id, err)
 	}
@@ -120,6 +120,13 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 		return nil, fmt.Errorf("encode estimate line items: %w", err)
 	}
 	if err := validateJobCustomer(ctx, s.client, params.CustomerID, params.JobID, true); err != nil {
+		return nil, err
+	}
+	customer, err := s.client.Customer.Get(ctx, params.CustomerID)
+	if err != nil {
+		return nil, fmt.Errorf("get estimate customer: %w", err)
+	}
+	if err := validateDocumentStatus(ctx, s.client, params.StatusID, customer.CompanyID, "estimate"); err != nil {
 		return nil, err
 	}
 
@@ -205,6 +212,9 @@ func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateU
 		}
 	}
 	if params.StatusID != nil {
+		if err := validateDocumentStatus(ctx, s.client, *params.StatusID, current.CompanyID, "estimate"); err != nil {
+			return nil, err
+		}
 		u.SetStatusID(*params.StatusID)
 	}
 	if params.Title != nil {
@@ -264,7 +274,7 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 		return nil, fmt.Errorf("get job %d: %w", jobID, err)
 	}
 
-	draftStatus, _ := statusSvc.FindByName(ctx, "estimate", "Draft")
+	draftStatus, _ := statusSvc.DraftForObjectType(ctx, "estimate")
 	var statusID int64
 	if draftStatus != nil {
 		statusID = draftStatus.ID
