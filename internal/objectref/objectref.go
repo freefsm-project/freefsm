@@ -221,7 +221,7 @@ func URL(ref Ref) (string, bool) {
 	case TypeCustomField:
 		return "/settings/custom-fields", true
 	case TypeJobStatus:
-		return "/settings/job-statuses", true
+		return "/settings/statuses/job", true
 	case TypeTag:
 		return "/tags/" + id, true
 	case TypeUser:

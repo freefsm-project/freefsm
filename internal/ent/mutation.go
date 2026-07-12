@@ -4327,6 +4327,7 @@ type CompanySettingsMutation struct {
 	smtp_password                   *string
 	smtp_from                       *string
 	email_auto_cc                   *string
+	email_tracking_enabled          *bool
 	invoice_email_subject           *string
 	invoice_email_body              *string
 	estimate_email_subject          *string
@@ -5272,6 +5273,42 @@ func (m *CompanySettingsMutation) ResetEmailAutoCc() {
 	m.email_auto_cc = nil
 }
 
+// SetEmailTrackingEnabled sets the "email_tracking_enabled" field.
+func (m *CompanySettingsMutation) SetEmailTrackingEnabled(b bool) {
+	m.email_tracking_enabled = &b
+}
+
+// EmailTrackingEnabled returns the value of the "email_tracking_enabled" field in the mutation.
+func (m *CompanySettingsMutation) EmailTrackingEnabled() (r bool, exists bool) {
+	v := m.email_tracking_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEmailTrackingEnabled returns the old "email_tracking_enabled" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldEmailTrackingEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEmailTrackingEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEmailTrackingEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEmailTrackingEnabled: %w", err)
+	}
+	return oldValue.EmailTrackingEnabled, nil
+}
+
+// ResetEmailTrackingEnabled resets all changes to the "email_tracking_enabled" field.
+func (m *CompanySettingsMutation) ResetEmailTrackingEnabled() {
+	m.email_tracking_enabled = nil
+}
+
 // SetInvoiceEmailSubject sets the "invoice_email_subject" field.
 func (m *CompanySettingsMutation) SetInvoiceEmailSubject(s string) {
 	m.invoice_email_subject = &s
@@ -6046,7 +6083,7 @@ func (m *CompanySettingsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompanySettingsMutation) Fields() []string {
-	fields := make([]string, 0, 40)
+	fields := make([]string, 0, 41)
 	if m.company_id != nil {
 		fields = append(fields, companysettings.FieldCompanyID)
 	}
@@ -6106,6 +6143,9 @@ func (m *CompanySettingsMutation) Fields() []string {
 	}
 	if m.email_auto_cc != nil {
 		fields = append(fields, companysettings.FieldEmailAutoCc)
+	}
+	if m.email_tracking_enabled != nil {
+		fields = append(fields, companysettings.FieldEmailTrackingEnabled)
 	}
 	if m.invoice_email_subject != nil {
 		fields = append(fields, companysettings.FieldInvoiceEmailSubject)
@@ -6215,6 +6255,8 @@ func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 		return m.SMTPFrom()
 	case companysettings.FieldEmailAutoCc:
 		return m.EmailAutoCc()
+	case companysettings.FieldEmailTrackingEnabled:
+		return m.EmailTrackingEnabled()
 	case companysettings.FieldInvoiceEmailSubject:
 		return m.InvoiceEmailSubject()
 	case companysettings.FieldInvoiceEmailBody:
@@ -6304,6 +6346,8 @@ func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (en
 		return m.OldSMTPFrom(ctx)
 	case companysettings.FieldEmailAutoCc:
 		return m.OldEmailAutoCc(ctx)
+	case companysettings.FieldEmailTrackingEnabled:
+		return m.OldEmailTrackingEnabled(ctx)
 	case companysettings.FieldInvoiceEmailSubject:
 		return m.OldInvoiceEmailSubject(ctx)
 	case companysettings.FieldInvoiceEmailBody:
@@ -6492,6 +6536,13 @@ func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEmailAutoCc(v)
+		return nil
+	case companysettings.FieldEmailTrackingEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEmailTrackingEnabled(v)
 		return nil
 	case companysettings.FieldInvoiceEmailSubject:
 		v, ok := value.(string)
@@ -6813,6 +6864,9 @@ func (m *CompanySettingsMutation) ResetField(name string) error {
 		return nil
 	case companysettings.FieldEmailAutoCc:
 		m.ResetEmailAutoCc()
+		return nil
+	case companysettings.FieldEmailTrackingEnabled:
+		m.ResetEmailTrackingEnabled()
 		return nil
 	case companysettings.FieldInvoiceEmailSubject:
 		m.ResetInvoiceEmailSubject()
@@ -23964,24 +24018,26 @@ func (m *ProjectMutation) ResetEdge(name string) error {
 // StatusMutation represents an operation that mutates the Status nodes in the graph.
 type StatusMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *int64
-	company_id           *int64
-	addcompany_id        *int64
-	name                 *string
-	color                *string
-	sort_order           *int
-	addsort_order        *int
-	estimate_convertible *bool
-	document_role        *string
-	created_at           *time.Time
-	clearedFields        map[string]struct{}
-	workflow             *int64
-	clearedworkflow      bool
-	done                 bool
-	oldValue             func(context.Context) (*Status, error)
-	predicates           []predicate.Status
+	op                  Op
+	typ                 string
+	id                  *int64
+	company_id          *int64
+	addcompany_id       *int64
+	name                *string
+	color               *string
+	sort_order          *int
+	addsort_order       *int
+	category_key        *string
+	category_order      *int
+	addcategory_order   *int
+	is_category_default *bool
+	created_at          *time.Time
+	clearedFields       map[string]struct{}
+	workflow            *int64
+	clearedworkflow     bool
+	done                bool
+	oldValue            func(context.Context) (*Status, error)
+	predicates          []predicate.Status
 }
 
 var _ ent.Mutation = (*StatusMutation)(nil)
@@ -24322,76 +24378,132 @@ func (m *StatusMutation) ResetSortOrder() {
 	m.addsort_order = nil
 }
 
-// SetEstimateConvertible sets the "estimate_convertible" field.
-func (m *StatusMutation) SetEstimateConvertible(b bool) {
-	m.estimate_convertible = &b
+// SetCategoryKey sets the "category_key" field.
+func (m *StatusMutation) SetCategoryKey(s string) {
+	m.category_key = &s
 }
 
-// EstimateConvertible returns the value of the "estimate_convertible" field in the mutation.
-func (m *StatusMutation) EstimateConvertible() (r bool, exists bool) {
-	v := m.estimate_convertible
+// CategoryKey returns the value of the "category_key" field in the mutation.
+func (m *StatusMutation) CategoryKey() (r string, exists bool) {
+	v := m.category_key
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldEstimateConvertible returns the old "estimate_convertible" field's value of the Status entity.
+// OldCategoryKey returns the old "category_key" field's value of the Status entity.
 // If the Status object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *StatusMutation) OldEstimateConvertible(ctx context.Context) (v bool, err error) {
+func (m *StatusMutation) OldCategoryKey(ctx context.Context) (v string, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldEstimateConvertible is only allowed on UpdateOne operations")
+		return v, errors.New("OldCategoryKey is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldEstimateConvertible requires an ID field in the mutation")
+		return v, errors.New("OldCategoryKey requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldEstimateConvertible: %w", err)
+		return v, fmt.Errorf("querying old value for OldCategoryKey: %w", err)
 	}
-	return oldValue.EstimateConvertible, nil
+	return oldValue.CategoryKey, nil
 }
 
-// ResetEstimateConvertible resets all changes to the "estimate_convertible" field.
-func (m *StatusMutation) ResetEstimateConvertible() {
-	m.estimate_convertible = nil
+// ResetCategoryKey resets all changes to the "category_key" field.
+func (m *StatusMutation) ResetCategoryKey() {
+	m.category_key = nil
 }
 
-// SetDocumentRole sets the "document_role" field.
-func (m *StatusMutation) SetDocumentRole(s string) {
-	m.document_role = &s
+// SetCategoryOrder sets the "category_order" field.
+func (m *StatusMutation) SetCategoryOrder(i int) {
+	m.category_order = &i
+	m.addcategory_order = nil
 }
 
-// DocumentRole returns the value of the "document_role" field in the mutation.
-func (m *StatusMutation) DocumentRole() (r string, exists bool) {
-	v := m.document_role
+// CategoryOrder returns the value of the "category_order" field in the mutation.
+func (m *StatusMutation) CategoryOrder() (r int, exists bool) {
+	v := m.category_order
 	if v == nil {
 		return
 	}
 	return *v, true
 }
 
-// OldDocumentRole returns the old "document_role" field's value of the Status entity.
+// OldCategoryOrder returns the old "category_order" field's value of the Status entity.
 // If the Status object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *StatusMutation) OldDocumentRole(ctx context.Context) (v string, err error) {
+func (m *StatusMutation) OldCategoryOrder(ctx context.Context) (v int, err error) {
 	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDocumentRole is only allowed on UpdateOne operations")
+		return v, errors.New("OldCategoryOrder is only allowed on UpdateOne operations")
 	}
 	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDocumentRole requires an ID field in the mutation")
+		return v, errors.New("OldCategoryOrder requires an ID field in the mutation")
 	}
 	oldValue, err := m.oldValue(ctx)
 	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDocumentRole: %w", err)
+		return v, fmt.Errorf("querying old value for OldCategoryOrder: %w", err)
 	}
-	return oldValue.DocumentRole, nil
+	return oldValue.CategoryOrder, nil
 }
 
-// ResetDocumentRole resets all changes to the "document_role" field.
-func (m *StatusMutation) ResetDocumentRole() {
-	m.document_role = nil
+// AddCategoryOrder adds i to the "category_order" field.
+func (m *StatusMutation) AddCategoryOrder(i int) {
+	if m.addcategory_order != nil {
+		*m.addcategory_order += i
+	} else {
+		m.addcategory_order = &i
+	}
+}
+
+// AddedCategoryOrder returns the value that was added to the "category_order" field in this mutation.
+func (m *StatusMutation) AddedCategoryOrder() (r int, exists bool) {
+	v := m.addcategory_order
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCategoryOrder resets all changes to the "category_order" field.
+func (m *StatusMutation) ResetCategoryOrder() {
+	m.category_order = nil
+	m.addcategory_order = nil
+}
+
+// SetIsCategoryDefault sets the "is_category_default" field.
+func (m *StatusMutation) SetIsCategoryDefault(b bool) {
+	m.is_category_default = &b
+}
+
+// IsCategoryDefault returns the value of the "is_category_default" field in the mutation.
+func (m *StatusMutation) IsCategoryDefault() (r bool, exists bool) {
+	v := m.is_category_default
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIsCategoryDefault returns the old "is_category_default" field's value of the Status entity.
+// If the Status object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *StatusMutation) OldIsCategoryDefault(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIsCategoryDefault is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIsCategoryDefault requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIsCategoryDefault: %w", err)
+	}
+	return oldValue.IsCategoryDefault, nil
+}
+
+// ResetIsCategoryDefault resets all changes to the "is_category_default" field.
+func (m *StatusMutation) ResetIsCategoryDefault() {
+	m.is_category_default = nil
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -24491,7 +24603,7 @@ func (m *StatusMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *StatusMutation) Fields() []string {
-	fields := make([]string, 0, 8)
+	fields := make([]string, 0, 9)
 	if m.company_id != nil {
 		fields = append(fields, status.FieldCompanyID)
 	}
@@ -24507,11 +24619,14 @@ func (m *StatusMutation) Fields() []string {
 	if m.sort_order != nil {
 		fields = append(fields, status.FieldSortOrder)
 	}
-	if m.estimate_convertible != nil {
-		fields = append(fields, status.FieldEstimateConvertible)
+	if m.category_key != nil {
+		fields = append(fields, status.FieldCategoryKey)
 	}
-	if m.document_role != nil {
-		fields = append(fields, status.FieldDocumentRole)
+	if m.category_order != nil {
+		fields = append(fields, status.FieldCategoryOrder)
+	}
+	if m.is_category_default != nil {
+		fields = append(fields, status.FieldIsCategoryDefault)
 	}
 	if m.created_at != nil {
 		fields = append(fields, status.FieldCreatedAt)
@@ -24534,10 +24649,12 @@ func (m *StatusMutation) Field(name string) (ent.Value, bool) {
 		return m.Color()
 	case status.FieldSortOrder:
 		return m.SortOrder()
-	case status.FieldEstimateConvertible:
-		return m.EstimateConvertible()
-	case status.FieldDocumentRole:
-		return m.DocumentRole()
+	case status.FieldCategoryKey:
+		return m.CategoryKey()
+	case status.FieldCategoryOrder:
+		return m.CategoryOrder()
+	case status.FieldIsCategoryDefault:
+		return m.IsCategoryDefault()
 	case status.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -24559,10 +24676,12 @@ func (m *StatusMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldColor(ctx)
 	case status.FieldSortOrder:
 		return m.OldSortOrder(ctx)
-	case status.FieldEstimateConvertible:
-		return m.OldEstimateConvertible(ctx)
-	case status.FieldDocumentRole:
-		return m.OldDocumentRole(ctx)
+	case status.FieldCategoryKey:
+		return m.OldCategoryKey(ctx)
+	case status.FieldCategoryOrder:
+		return m.OldCategoryOrder(ctx)
+	case status.FieldIsCategoryDefault:
+		return m.OldIsCategoryDefault(ctx)
 	case status.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -24609,19 +24728,26 @@ func (m *StatusMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSortOrder(v)
 		return nil
-	case status.FieldEstimateConvertible:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetEstimateConvertible(v)
-		return nil
-	case status.FieldDocumentRole:
+	case status.FieldCategoryKey:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.SetDocumentRole(v)
+		m.SetCategoryKey(v)
+		return nil
+	case status.FieldCategoryOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCategoryOrder(v)
+		return nil
+	case status.FieldIsCategoryDefault:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIsCategoryDefault(v)
 		return nil
 	case status.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -24644,6 +24770,9 @@ func (m *StatusMutation) AddedFields() []string {
 	if m.addsort_order != nil {
 		fields = append(fields, status.FieldSortOrder)
 	}
+	if m.addcategory_order != nil {
+		fields = append(fields, status.FieldCategoryOrder)
+	}
 	return fields
 }
 
@@ -24656,6 +24785,8 @@ func (m *StatusMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedCompanyID()
 	case status.FieldSortOrder:
 		return m.AddedSortOrder()
+	case status.FieldCategoryOrder:
+		return m.AddedCategoryOrder()
 	}
 	return nil, false
 }
@@ -24678,6 +24809,13 @@ func (m *StatusMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddSortOrder(v)
+		return nil
+	case status.FieldCategoryOrder:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCategoryOrder(v)
 		return nil
 	}
 	return fmt.Errorf("unknown Status numeric field %s", name)
@@ -24730,11 +24868,14 @@ func (m *StatusMutation) ResetField(name string) error {
 	case status.FieldSortOrder:
 		m.ResetSortOrder()
 		return nil
-	case status.FieldEstimateConvertible:
-		m.ResetEstimateConvertible()
+	case status.FieldCategoryKey:
+		m.ResetCategoryKey()
 		return nil
-	case status.FieldDocumentRole:
-		m.ResetDocumentRole()
+	case status.FieldCategoryOrder:
+		m.ResetCategoryOrder()
+		return nil
+	case status.FieldIsCategoryDefault:
+		m.ResetIsCategoryDefault()
 		return nil
 	case status.FieldCreatedAt:
 		m.ResetCreatedAt()

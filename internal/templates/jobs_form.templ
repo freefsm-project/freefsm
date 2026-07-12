@@ -83,17 +83,6 @@ templ JobForm(p JobFormPageData) {
 	</div>
 			<div class="grid">
 				<label>
-					Status
-					<select name="status_id">
-						for _, s := range p.Statuses {
-							<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.Job.StatusID == s.Value }>{ s.Label }</option>
-						}
-					</select>
-					if p.Errors["status_id"] != "" {
-						<small class="error-msg">{ p.Errors["status_id"] }</small>
-					}
-				</label>
-				<label>
 					Billing Type
 					<select name="billing_type">
 						for _, b := range p.BillingTypes {

@@ -80,14 +80,19 @@ func SortOrder(v int) predicate.Status {
 	return predicate.Status(sql.FieldEQ(FieldSortOrder, v))
 }
 
-// EstimateConvertible applies equality check predicate on the "estimate_convertible" field. It's identical to EstimateConvertibleEQ.
-func EstimateConvertible(v bool) predicate.Status {
-	return predicate.Status(sql.FieldEQ(FieldEstimateConvertible, v))
+// CategoryKey applies equality check predicate on the "category_key" field. It's identical to CategoryKeyEQ.
+func CategoryKey(v string) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldCategoryKey, v))
 }
 
-// DocumentRole applies equality check predicate on the "document_role" field. It's identical to DocumentRoleEQ.
-func DocumentRole(v string) predicate.Status {
-	return predicate.Status(sql.FieldEQ(FieldDocumentRole, v))
+// CategoryOrder applies equality check predicate on the "category_order" field. It's identical to CategoryOrderEQ.
+func CategoryOrder(v int) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldCategoryOrder, v))
+}
+
+// IsCategoryDefault applies equality check predicate on the "is_category_default" field. It's identical to IsCategoryDefaultEQ.
+func IsCategoryDefault(v bool) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldIsCategoryDefault, v))
 }
 
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
@@ -335,79 +340,119 @@ func SortOrderLTE(v int) predicate.Status {
 	return predicate.Status(sql.FieldLTE(FieldSortOrder, v))
 }
 
-// EstimateConvertibleEQ applies the EQ predicate on the "estimate_convertible" field.
-func EstimateConvertibleEQ(v bool) predicate.Status {
-	return predicate.Status(sql.FieldEQ(FieldEstimateConvertible, v))
+// CategoryKeyEQ applies the EQ predicate on the "category_key" field.
+func CategoryKeyEQ(v string) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldCategoryKey, v))
 }
 
-// EstimateConvertibleNEQ applies the NEQ predicate on the "estimate_convertible" field.
-func EstimateConvertibleNEQ(v bool) predicate.Status {
-	return predicate.Status(sql.FieldNEQ(FieldEstimateConvertible, v))
+// CategoryKeyNEQ applies the NEQ predicate on the "category_key" field.
+func CategoryKeyNEQ(v string) predicate.Status {
+	return predicate.Status(sql.FieldNEQ(FieldCategoryKey, v))
 }
 
-// DocumentRoleEQ applies the EQ predicate on the "document_role" field.
-func DocumentRoleEQ(v string) predicate.Status {
-	return predicate.Status(sql.FieldEQ(FieldDocumentRole, v))
+// CategoryKeyIn applies the In predicate on the "category_key" field.
+func CategoryKeyIn(vs ...string) predicate.Status {
+	return predicate.Status(sql.FieldIn(FieldCategoryKey, vs...))
 }
 
-// DocumentRoleNEQ applies the NEQ predicate on the "document_role" field.
-func DocumentRoleNEQ(v string) predicate.Status {
-	return predicate.Status(sql.FieldNEQ(FieldDocumentRole, v))
+// CategoryKeyNotIn applies the NotIn predicate on the "category_key" field.
+func CategoryKeyNotIn(vs ...string) predicate.Status {
+	return predicate.Status(sql.FieldNotIn(FieldCategoryKey, vs...))
 }
 
-// DocumentRoleIn applies the In predicate on the "document_role" field.
-func DocumentRoleIn(vs ...string) predicate.Status {
-	return predicate.Status(sql.FieldIn(FieldDocumentRole, vs...))
+// CategoryKeyGT applies the GT predicate on the "category_key" field.
+func CategoryKeyGT(v string) predicate.Status {
+	return predicate.Status(sql.FieldGT(FieldCategoryKey, v))
 }
 
-// DocumentRoleNotIn applies the NotIn predicate on the "document_role" field.
-func DocumentRoleNotIn(vs ...string) predicate.Status {
-	return predicate.Status(sql.FieldNotIn(FieldDocumentRole, vs...))
+// CategoryKeyGTE applies the GTE predicate on the "category_key" field.
+func CategoryKeyGTE(v string) predicate.Status {
+	return predicate.Status(sql.FieldGTE(FieldCategoryKey, v))
 }
 
-// DocumentRoleGT applies the GT predicate on the "document_role" field.
-func DocumentRoleGT(v string) predicate.Status {
-	return predicate.Status(sql.FieldGT(FieldDocumentRole, v))
+// CategoryKeyLT applies the LT predicate on the "category_key" field.
+func CategoryKeyLT(v string) predicate.Status {
+	return predicate.Status(sql.FieldLT(FieldCategoryKey, v))
 }
 
-// DocumentRoleGTE applies the GTE predicate on the "document_role" field.
-func DocumentRoleGTE(v string) predicate.Status {
-	return predicate.Status(sql.FieldGTE(FieldDocumentRole, v))
+// CategoryKeyLTE applies the LTE predicate on the "category_key" field.
+func CategoryKeyLTE(v string) predicate.Status {
+	return predicate.Status(sql.FieldLTE(FieldCategoryKey, v))
 }
 
-// DocumentRoleLT applies the LT predicate on the "document_role" field.
-func DocumentRoleLT(v string) predicate.Status {
-	return predicate.Status(sql.FieldLT(FieldDocumentRole, v))
+// CategoryKeyContains applies the Contains predicate on the "category_key" field.
+func CategoryKeyContains(v string) predicate.Status {
+	return predicate.Status(sql.FieldContains(FieldCategoryKey, v))
 }
 
-// DocumentRoleLTE applies the LTE predicate on the "document_role" field.
-func DocumentRoleLTE(v string) predicate.Status {
-	return predicate.Status(sql.FieldLTE(FieldDocumentRole, v))
+// CategoryKeyHasPrefix applies the HasPrefix predicate on the "category_key" field.
+func CategoryKeyHasPrefix(v string) predicate.Status {
+	return predicate.Status(sql.FieldHasPrefix(FieldCategoryKey, v))
 }
 
-// DocumentRoleContains applies the Contains predicate on the "document_role" field.
-func DocumentRoleContains(v string) predicate.Status {
-	return predicate.Status(sql.FieldContains(FieldDocumentRole, v))
+// CategoryKeyHasSuffix applies the HasSuffix predicate on the "category_key" field.
+func CategoryKeyHasSuffix(v string) predicate.Status {
+	return predicate.Status(sql.FieldHasSuffix(FieldCategoryKey, v))
 }
 
-// DocumentRoleHasPrefix applies the HasPrefix predicate on the "document_role" field.
-func DocumentRoleHasPrefix(v string) predicate.Status {
-	return predicate.Status(sql.FieldHasPrefix(FieldDocumentRole, v))
+// CategoryKeyEqualFold applies the EqualFold predicate on the "category_key" field.
+func CategoryKeyEqualFold(v string) predicate.Status {
+	return predicate.Status(sql.FieldEqualFold(FieldCategoryKey, v))
 }
 
-// DocumentRoleHasSuffix applies the HasSuffix predicate on the "document_role" field.
-func DocumentRoleHasSuffix(v string) predicate.Status {
-	return predicate.Status(sql.FieldHasSuffix(FieldDocumentRole, v))
+// CategoryKeyContainsFold applies the ContainsFold predicate on the "category_key" field.
+func CategoryKeyContainsFold(v string) predicate.Status {
+	return predicate.Status(sql.FieldContainsFold(FieldCategoryKey, v))
 }
 
-// DocumentRoleEqualFold applies the EqualFold predicate on the "document_role" field.
-func DocumentRoleEqualFold(v string) predicate.Status {
-	return predicate.Status(sql.FieldEqualFold(FieldDocumentRole, v))
+// CategoryOrderEQ applies the EQ predicate on the "category_order" field.
+func CategoryOrderEQ(v int) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldCategoryOrder, v))
 }
 
-// DocumentRoleContainsFold applies the ContainsFold predicate on the "document_role" field.
-func DocumentRoleContainsFold(v string) predicate.Status {
-	return predicate.Status(sql.FieldContainsFold(FieldDocumentRole, v))
+// CategoryOrderNEQ applies the NEQ predicate on the "category_order" field.
+func CategoryOrderNEQ(v int) predicate.Status {
+	return predicate.Status(sql.FieldNEQ(FieldCategoryOrder, v))
+}
+
+// CategoryOrderIn applies the In predicate on the "category_order" field.
+func CategoryOrderIn(vs ...int) predicate.Status {
+	return predicate.Status(sql.FieldIn(FieldCategoryOrder, vs...))
+}
+
+// CategoryOrderNotIn applies the NotIn predicate on the "category_order" field.
+func CategoryOrderNotIn(vs ...int) predicate.Status {
+	return predicate.Status(sql.FieldNotIn(FieldCategoryOrder, vs...))
+}
+
+// CategoryOrderGT applies the GT predicate on the "category_order" field.
+func CategoryOrderGT(v int) predicate.Status {
+	return predicate.Status(sql.FieldGT(FieldCategoryOrder, v))
+}
+
+// CategoryOrderGTE applies the GTE predicate on the "category_order" field.
+func CategoryOrderGTE(v int) predicate.Status {
+	return predicate.Status(sql.FieldGTE(FieldCategoryOrder, v))
+}
+
+// CategoryOrderLT applies the LT predicate on the "category_order" field.
+func CategoryOrderLT(v int) predicate.Status {
+	return predicate.Status(sql.FieldLT(FieldCategoryOrder, v))
+}
+
+// CategoryOrderLTE applies the LTE predicate on the "category_order" field.
+func CategoryOrderLTE(v int) predicate.Status {
+	return predicate.Status(sql.FieldLTE(FieldCategoryOrder, v))
+}
+
+// IsCategoryDefaultEQ applies the EQ predicate on the "is_category_default" field.
+func IsCategoryDefaultEQ(v bool) predicate.Status {
+	return predicate.Status(sql.FieldEQ(FieldIsCategoryDefault, v))
+}
+
+// IsCategoryDefaultNEQ applies the NEQ predicate on the "is_category_default" field.
+func IsCategoryDefaultNEQ(v bool) predicate.Status {
+	return predicate.Status(sql.FieldNEQ(FieldIsCategoryDefault, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

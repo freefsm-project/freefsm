@@ -110,6 +110,7 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		PDFShowLineItemDescriptions: r.FormValue("pdf_show_line_item_descriptions") == "on",
 		MapTileURL:                  mapTileURL,
 		GeocoderURL:                 geocoderURL,
+		EmailTrackingEnabled:        r.FormValue("email_tracking_enabled") == "on",
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -231,6 +232,9 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 			}
 			if oldSettings.GeocoderURL != newSettings.GeocoderURL {
 				changed = append(changed, "geocoder_url")
+			}
+			if oldSettings.EmailTrackingEnabled != newSettings.EmailTrackingEnabled {
+				changed = append(changed, "email_tracking_enabled")
 			}
 			if len(changed) > 0 {
 				h.activitySvc.Record(r.Context(), u.ID, "settings_updated", objectref.New(objectref.TypeCompanySettings, newSettings.ID), map[string]interface{}{

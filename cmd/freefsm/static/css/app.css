@@ -3244,3 +3244,81 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
 .settings-tab-content.active {
   display: block;
 }
+.status-settings-header { display: flex; align-items: end; justify-content: space-between; gap: 1.5rem; margin-bottom: 1.5rem; }
+.status-settings-header h2 { margin: .25rem 0; }
+.status-settings-header p { margin: 0; max-width: 48rem; color: var(--pico-muted-color); }
+.status-settings-back { font-size: .875rem; text-decoration: none; }
+.status-create-button { flex: 0 0 auto; margin: 0; }
+.status-category-scroll { max-width: 100%; padding-bottom: 1rem; overflow-x: auto; }
+.status-category-board { display: grid; grid-auto-flow: column; grid-auto-columns: 14rem; gap: .75rem; min-width: max-content; align-items: start; }
+.status-category { width: 14rem; min-height: 8rem; margin: 0; padding: .625rem; background: var(--pico-card-background-color); border: 1px solid var(--pico-muted-border-color); border-radius: .4rem; }
+.status-category > header { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; margin-bottom: .625rem; padding-bottom: .5rem; border-bottom: 1px solid var(--pico-muted-border-color); }
+.status-category > header h3 { margin: 0; font-size: .95rem; }
+.status-category > header small { color: var(--pico-muted-color); white-space: nowrap; }
+.status-category-list { display: grid; gap: .45rem; min-height: 3rem; border-radius: .3rem; transition: background-color .15s, outline-color .15s; }
+.status-chip { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: .4rem; width: 100%; min-height: 3.1rem; margin: 0; padding: .45rem .4rem .45rem .55rem; overflow: hidden; color: var(--pico-color); background: var(--status-background); border: 1px solid color-mix(in srgb, var(--status-color) 35%, var(--pico-muted-border-color)); border-left: .35rem solid var(--status-color); border-radius: .3rem; box-shadow: none; font: inherit; text-align: left; appearance: none; }
+.status-chip:hover { color: var(--pico-color); background: var(--status-background-hover); border-color: color-mix(in srgb, var(--status-color) 50%, var(--pico-muted-border-color)); border-left-color: var(--status-color); box-shadow: none; }
+.status-chip:active { color: var(--pico-color); background: var(--status-background-active); border-color: color-mix(in srgb, var(--status-color) 55%, var(--pico-muted-border-color)); border-left-color: var(--status-color); box-shadow: none; }
+.status-chip:focus-visible { outline: 2px solid var(--pico-primary-focus); outline-offset: 2px; }
+.status-chip[draggable="true"] { cursor: grab; }
+.status-chip-name { min-width: 0; overflow: hidden; font-size: .875rem; font-weight: 650; line-height: 1.15; text-overflow: ellipsis; white-space: nowrap; }
+.status-chip-label { min-width: 0; display: flex; align-items: center; gap: .4rem; }
+.status-chip-facts { grid-column: 1; display: flex; flex-wrap: wrap; gap: .2rem .4rem; color: var(--pico-muted-color); font-size: .7rem; }
+.status-default-marker { font-weight: 700; }
+.status-edit-button { grid-column: 2; grid-row: 1 / span 2; padding: .25rem .4rem; color: var(--pico-primary); font-size: .72rem; font-weight: 600; }
+.status-automatic { padding: .15rem .35rem; color: var(--pico-muted-color); background: var(--pico-code-background-color); border-radius: 99px; font-size: .65rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.status-chip.is-dragging { cursor: grabbing; opacity: .4; }
+.status-category-list.is-drop-target { background: color-mix(in srgb, var(--pico-primary) 8%, transparent); outline: 2px dashed var(--pico-primary); outline-offset: .2rem; }
+.status-chip.drop-before::before, .status-chip.drop-after::after { position: absolute; right: 0; left: 0; height: 3px; content: ""; background: var(--pico-primary); }
+.status-chip.drop-before::before { top: -1px; }
+.status-chip.drop-after::after { bottom: -1px; }
+.status-dialog { width: min(42rem, calc(100% - 2rem)); max-height: calc(100vh - 2rem); padding: 0; border-radius: .5rem; }
+.status-dialog::backdrop { background: rgb(0 0 0 / .52); }
+.status-dialog-content, .status-dialog-form { margin: 0; padding: 1rem 1.25rem; }
+.status-dialog-content > header, .status-dialog-form > header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+.status-dialog h3, .status-dialog h4, .status-dialog header small { margin: 0; }
+.status-dialog h4 { font-size: .9rem; }
+.status-dialog-close { width: 2.25rem; min-width: 2.25rem; height: 2.25rem; margin: 0; padding: 0; color: var(--pico-muted-color); background: transparent; border: 0; font-size: 1.5rem; }
+.status-dialog-section { margin: 0; padding: .9rem 0; border-top: 1px solid var(--pico-muted-border-color); }
+.status-edit-fields, .status-move-fields { display: grid; grid-template-columns: minmax(0, 1fr) 8rem; gap: .75rem; }
+.status-dialog label { margin-bottom: .6rem; }
+.status-dialog input, .status-dialog select { margin-bottom: 0; }
+.status-facts p { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; margin: .4rem 0 .75rem; color: var(--pico-muted-color); font-size: .82rem; }
+.status-facts strong { color: var(--pico-color); }
+.status-section-help, .status-danger p, .status-cross-category-note p { margin: .25rem 0 .65rem; color: var(--pico-muted-color); font-size: .82rem; }
+.status-cross-category-note { margin: .25rem 0 .75rem; padding: .65rem; border-left: .25rem solid var(--pico-primary); background: var(--pico-code-background-color); }
+.status-confirm { display: flex; align-items: start; gap: .5rem; font-size: .85rem; }
+.status-confirm input { flex: 0 0 auto; }
+.status-order-actions, .status-dialog footer { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .5rem; }
+.status-order-actions button, .status-dialog footer button, .status-dialog-section > button, .status-dialog-section form > button { width: auto; margin: 0; }
+.status-danger { border-top-color: var(--pico-del-color); }
+.status-danger h4 { color: var(--pico-del-color); }
+.status-noscript-note { margin: 1rem 0; padding: .75rem; border: 1px solid var(--pico-muted-border-color); }
+.js .status-noscript-note { display: none; }
+.no-js .status-dialog-container dialog.status-dialog:not([open]) { display: block; position: static; width: 100%; max-height: none; margin: 1rem 0; }
+.no-js .status-dialog-container .status-dialog-close { display: none; }
+@media (max-width: 700px) {
+  .status-settings-header { align-items: stretch; flex-direction: column; }
+  .status-create-button { width: 100%; }
+  .status-category-scroll { overflow-x: visible; }
+  .status-category-board { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: 1fr; min-width: 0; }
+  .status-category { width: 100%; }
+  .status-chip { min-height: 3.5rem; }
+  .status-edit-fields, .status-move-fields { grid-template-columns: 1fr; }
+  .status-order-actions { flex-wrap: wrap; }
+}
+.delivery-history {
+  display: grid;
+  gap: 1rem;
+}
+
+.delivery-history-item {
+  overflow-wrap: anywhere;
+}
+
+.delivery-history-item header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .5rem;
+}

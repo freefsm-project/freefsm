@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/companysettings"
 )
 
 type CompanySettingsService struct {
@@ -16,6 +17,11 @@ func NewCompanySettingsService(client *ent.Client) *CompanySettingsService {
 
 func (s *CompanySettingsService) Get(ctx context.Context) (*ent.CompanySettings, error) {
 	return s.client.CompanySettings.Query().First(ctx)
+}
+
+// GetForCompany is required by background work, where request tenant context is absent.
+func (s *CompanySettingsService) GetForCompany(ctx context.Context, companyID int64) (*ent.CompanySettings, error) {
+	return s.client.CompanySettings.Query().Where(companysettings.CompanyIDEQ(companyID)).Only(ctx)
 }
 
 type CompanySettingsParams struct {
@@ -55,6 +61,7 @@ type CompanySettingsParams struct {
 	PDFShowLineItemDescriptions bool
 	MapTileURL                  string
 	GeocoderURL                 string
+	EmailTrackingEnabled        bool
 }
 
 func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsParams) error {
@@ -99,6 +106,7 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetPdfShowLineItemDescriptions(p.PDFShowLineItemDescriptions).
 		SetMapTileURL(p.MapTileURL).
 		SetGeocoderURL(p.GeocoderURL).
+		SetEmailTrackingEnabled(p.EmailTrackingEnabled).
 		Save(ctx)
 	return err
 }

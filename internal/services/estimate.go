@@ -31,7 +31,6 @@ type EstimateCreateParams struct {
 type EstimateUpdateParams struct {
 	CustomerID   *int64
 	JobID        *int64
-	StatusID     *int64
 	Title        *string
 	Notes        *string
 	TaxRate      *string
@@ -126,7 +125,8 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 	if err != nil {
 		return nil, fmt.Errorf("get estimate customer: %w", err)
 	}
-	if err := validateDocumentStatus(ctx, s.client, params.StatusID, customer.CompanyID, "estimate"); err != nil {
+	statusID, err := creationStatus(ctx, s.client, 0, customer.CompanyID, "estimate", "estimate:draft")
+	if err != nil {
 		return nil, err
 	}
 
@@ -145,9 +145,7 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 	if params.JobID > 0 {
 		b.SetJobID(params.JobID)
 	}
-	if params.StatusID > 0 {
-		b.SetStatusID(params.StatusID)
-	}
+	b.SetStatusID(statusID)
 
 	e, err := b.Save(ctx)
 	if err != nil {
@@ -211,12 +209,6 @@ func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateU
 			u.ClearJobID()
 		}
 	}
-	if params.StatusID != nil {
-		if err := validateDocumentStatus(ctx, s.client, *params.StatusID, current.CompanyID, "estimate"); err != nil {
-			return nil, err
-		}
-		u.SetStatusID(*params.StatusID)
-	}
 	if params.Title != nil {
 		u.SetTitle(*params.Title)
 	}
@@ -274,12 +266,6 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 		return nil, fmt.Errorf("get job %d: %w", jobID, err)
 	}
 
-	draftStatus, _ := statusSvc.DraftForObjectType(ctx, "estimate")
-	var statusID int64
-	if draftStatus != nil {
-		statusID = draftStatus.ID
-	}
-
 	items, err := DecodeLineItems(j.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("parse job %d line items: %w", jobID, err)
@@ -288,7 +274,7 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 	return s.Create(ctx, EstimateCreateParams{
 		CustomerID:   j.CustomerID,
 		JobID:        j.ID,
-		StatusID:     statusID,
+		StatusID:     0,
 		Title:        j.JobType,
 		Notes:        j.Notes,
 		TaxRate:      defaultTaxRate,

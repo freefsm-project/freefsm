@@ -1,0 +1,259 @@
+package templates
+
+import (
+	"fmt"
+	"strings"
+
+	templpkg "github.com/a-h/templ"
+)
+
+templ StatusSettingsPage(p StatusSettingsPageData) {
+	@Layout(statusSettingsTitle(p.ObjectType)) {
+		<div data-status-settings>
+		<header class="status-settings-header">
+			<div>
+				<a class="status-settings-back" href="/settings">&larr; Back to Settings</a>
+				<h2>{ statusSettingsTitle(p.ObjectType) }</h2>
+				if p.ObjectType == "invoice" {
+					<p>Customize the label and color of each fixed invoice state. Payment states update automatically.</p>
+				} else {
+					<p>Keep each workflow easy to scan. Drag statuses to reorder or move them between fixed categories.</p>
+				}
+			</div>
+			if p.ObjectType != "invoice" {
+				<button type="button" class="status-create-button" data-open-dialog="status-create-dialog">Create Custom Status</button>
+			}
+		</header>
+		<div class="status-category-scroll" data-status-board data-object-type={ p.ObjectType }>
+			<div class="status-category-board">
+				for _, category := range p.Categories {
+					<section class="status-category" data-category={ category.Key }>
+						<header>
+							<h3>{ category.Label }</h3>
+							if category.Automatic {
+								<span class="status-automatic">Automatic</span>
+							} else {
+								<small>{ statusCount(len(category.Statuses)) }</small>
+							}
+						</header>
+						<div class="status-category-list" data-status-list>
+							for _, status := range category.Statuses {
+								<button type="button" class="status-chip" style={ statusAccent(status.Color) } data-open-dialog={ fmt.Sprintf("status-edit-%d", status.ID) } aria-label={ fmt.Sprintf("Edit %s status", status.Name) } data-status-id={ fmt.Sprintf("%d", status.ID) } data-category={ category.Key } data-usage={ fmt.Sprintf("%d", status.Usage) } data-default={ fmt.Sprintf("%t", status.Default) } if p.ObjectType != "invoice" { draggable="true" }>
+									<span class="status-chip-label"><span class="status-chip-name">{ status.Name }</span></span>
+									<span class="status-chip-facts">
+										if status.Default {
+											<span class="status-default-marker">Default</span>
+										}
+										<span>{ usageCount(status.Usage) }</span>
+									</span>
+									<span class="status-edit-button" aria-hidden="true">Edit</span>
+								</button>
+							}
+						</div>
+					</section>
+				}
+			</div>
+		</div>
+		<div class="status-dialog-container" data-status-dialogs>
+		if p.ObjectType != "invoice" {
+			<dialog id="status-create-dialog" class="status-dialog" aria-labelledby="status-create-title">
+				<form method="post" action={ templ.URL("/settings/statuses/" + p.ObjectType) } class="status-dialog-form status-create-form">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<header><h3 id="status-create-title">Create Custom Status</h3><button type="button" class="status-dialog-close" data-close-dialog aria-label="Close create status dialog">&times;</button></header>
+					<label>Category<select name="category" required>
+						for _, category := range p.Categories {
+							<option value={ category.Key }>{ category.Label }</option>
+						}
+					</select></label>
+					<label>Status label<input name="name" required autocomplete="off" autofocus/></label>
+					<label>Color<input type="color" name="color" value="#6B7280"/></label>
+					<footer><button type="button" class="secondary outline" data-close-dialog>Cancel</button><button type="submit">Create status</button></footer>
+				</form>
+			</dialog>
+		}
+		for _, category := range p.Categories {
+			for index, status := range category.Statuses {
+				@statusEditDialog(p, category, status, index)
+			}
+		}
+		<p class="status-noscript-note"><strong>JavaScript is unavailable.</strong> Status forms are expanded below so you can still manage this workflow.</p>
+		</div>
+		<script>
+			(function () {
+				const root = document.currentScript.closest('[data-status-settings]');
+				if (!root || root.dataset.statusSettingsInitialized === 'true') return;
+				root.dataset.statusSettingsInitialized = 'true';
+				const board = root.querySelector('[data-status-board]');
+				function dialogById(id) { return root.querySelector('#' + CSS.escape(id)); }
+				function moveForm(dialog) { return dialog.querySelector('.status-move-form'); }
+				function syncMoveState(form) {
+					if (!form) return;
+					const crossCategory = form.elements.category.value !== form.dataset.originalCategory;
+					const needsConfirmation = crossCategory && Number(form.dataset.usage) > 0;
+					const needsReplacement = crossCategory && form.dataset.default === 'true';
+					const warning = form.querySelector('.status-cross-category-note');
+					const confirmGroup = form.querySelector('.status-confirm');
+					const replacementGroup = form.querySelector('.status-source-replacement');
+					warning.hidden = !crossCategory;
+					confirmGroup.hidden = !needsConfirmation;
+					replacementGroup.hidden = !needsReplacement;
+					form.elements.confirm_in_use.required = needsConfirmation;
+					form.elements.source_replacement_id.required = needsReplacement;
+					if (!needsConfirmation) form.elements.confirm_in_use.checked = false;
+					if (!needsReplacement) form.elements.source_replacement_id.value = '';
+				}
+				function resetDialog(dialog) {
+					const form = moveForm(dialog);
+					if (!form) return;
+					form.elements.category.value = form.dataset.originalCategory;
+					form.elements.order.value = form.dataset.originalOrder;
+					form.elements.confirm_in_use.checked = false;
+					form.elements.source_replacement_id.value = '';
+					syncMoveState(form);
+				}
+				function openDialog(dialog) {
+					resetDialog(dialog);
+					dialog.showModal();
+					const field = dialog.querySelector('[autofocus]');
+					if (field) field.focus();
+				}
+				let suppressUntil = 0;
+				root.addEventListener('click', function (event) {
+					const opener = event.target.closest('[data-open-dialog]');
+					if (opener) {
+						if (opener.matches('.status-chip') && Date.now() < suppressUntil) { suppressUntil = 0; return; }
+						const dialog = dialogById(opener.dataset.openDialog);
+						if (dialog && !dialog.open) openDialog(dialog);
+						return;
+					}
+					const closer = event.target.closest('[data-close-dialog]');
+					if (closer) { closer.closest('dialog').close(); return; }
+				});
+				root.querySelectorAll('.status-dialog').forEach(function (dialog) {
+					dialog.addEventListener('click', function (event) { if (event.target === dialog) dialog.close(); });
+					dialog.addEventListener('close', function () { resetDialog(dialog); });
+				});
+				root.addEventListener('change', function (event) {
+					if (event.target.matches('.status-move-form [name="category"]')) syncMoveState(event.target.form);
+				});
+				if (!board || board.dataset.objectType === 'invoice') return;
+				let dragged = null;
+				board.addEventListener('dragstart', function (event) {
+					dragged = event.target.closest('[data-status-id]');
+					if (dragged) { dragged.classList.add('is-dragging'); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', dragged.dataset.statusId); }
+				});
+				board.addEventListener('dragend', function () { suppressUntil = Date.now() + 200; clearDragState(); });
+				board.addEventListener('dragover', function (event) {
+					const list = event.target.closest('[data-status-list]');
+					if (!list || !dragged) return;
+					event.preventDefault();
+					event.dataTransfer.dropEffect = 'move';
+					board.querySelectorAll('.is-drop-target').forEach(function (el) { el.classList.remove('is-drop-target'); });
+					board.querySelectorAll('.drop-before,.drop-after').forEach(function (el) { el.classList.remove('drop-before','drop-after'); });
+					list.classList.add('is-drop-target');
+					const target = event.target.closest('[data-status-id]');
+					if (target && target !== dragged) target.classList.add(event.clientY < target.getBoundingClientRect().top + target.offsetHeight / 2 ? 'drop-before' : 'drop-after');
+				});
+				board.addEventListener('drop', function (event) {
+					const list = event.target.closest('[data-status-list]');
+					if (!list || !dragged) return;
+					event.preventDefault();
+					const target = event.target.closest('[data-status-id]');
+					if (target === dragged) { suppressUntil = Date.now() + 200; clearDragState(); return; }
+					const destination = list.closest('[data-category]').dataset.category;
+					const rows = Array.from(list.querySelectorAll('[data-status-id]')).filter(function (row) { return row !== dragged; });
+					let position = rows.length + 1;
+					if (target && target !== dragged) {
+						const targetIndex = rows.indexOf(target);
+						position = targetIndex + (event.clientY >= target.getBoundingClientRect().top + target.offsetHeight / 2 ? 2 : 1);
+					}
+					const dialog = dialogById('status-edit-' + dragged.dataset.statusId);
+					const form = moveForm(dialog);
+					resetDialog(dialog);
+					form.elements.category.value = destination;
+					form.elements.order.value = position;
+					const crossCategory = destination !== dragged.dataset.category;
+					syncMoveState(form);
+					if (crossCategory) {
+						dialog.showModal();
+						const field = dialog.querySelector('[autofocus]');
+						if (field) field.focus();
+					} else {
+						form.requestSubmit();
+					}
+					suppressUntil = Date.now() + 200;
+					clearDragState();
+				});
+				function clearDragState() {
+					board.querySelectorAll('.is-dragging,.is-drop-target,.drop-before,.drop-after').forEach(function (el) { el.classList.remove('is-dragging','is-drop-target','drop-before','drop-after'); });
+					dragged = null;
+				}
+			})();
+		</script>
+		</div>
+	}
+}
+
+templ statusEditDialog(p StatusSettingsPageData, category StatusCategoryColumn, status StatusSettingsRow, index int) {
+	<dialog id={ fmt.Sprintf("status-edit-%d", status.ID) } class="status-dialog" aria-labelledby={ fmt.Sprintf("status-edit-title-%d", status.ID) }>
+		<div class="status-dialog-content">
+			<header><div><small>Edit status</small><h3 id={ fmt.Sprintf("status-edit-title-%d", status.ID) }>{ status.Name }</h3></div><button type="button" class="status-dialog-close" data-close-dialog aria-label={ fmt.Sprintf("Close edit %s dialog", status.Name) }>&times;</button></header>
+			<form method="post" action={ templ.URL(fmt.Sprintf("/settings/statuses/%s/%d", p.ObjectType, status.ID)) } class="status-dialog-section">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<div class="status-edit-fields"><label>Status label<input name="name" value={ status.Name } required autofocus/></label><label>Color<input type="color" name="color" value={ statusColor(status.Color) }/></label></div>
+				<button type="submit">Save appearance</button>
+			</form>
+			<section class="status-dialog-section status-facts" aria-label="Status facts"><h4>Status facts</h4><p><span>Category <strong>{ category.Label }</strong></span><span>Usage <strong>{ usageCount(status.Usage) }</strong></span><span>Default <strong>{ defaultLabel(status.Default) }</strong></span></p>
+				if p.ObjectType != "invoice" && !status.Default {
+					<form method="post" action={ templ.URL(fmt.Sprintf("/settings/statuses/%s/%d/default", p.ObjectType, status.ID)) }><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><button type="submit" class="outline">Make category default</button></form>
+				}
+			</section>
+			if p.ObjectType != "invoice" {
+				<section class="status-dialog-section"><h4>Move or reorder</h4><p class="status-section-help">Use Up and Down for an accessible same-category reorder, or choose a destination and position.</p>
+					<form class="status-move-form" method="post" action={ templ.URL(fmt.Sprintf("/settings/statuses/%s/%d/move", p.ObjectType, status.ID)) } hx-confirm="Move this status and update its workflow category?" data-original-category={ category.Key } data-original-order={ fmt.Sprintf("%d", status.Order) } data-default={ fmt.Sprintf("%t", status.Default) } data-usage={ fmt.Sprintf("%d", status.Usage) }>
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<div class="status-move-fields"><label>Destination category<select name="category">
+							for _, destination := range p.Categories {
+								<option value={ destination.Key } selected?={ destination.Key == category.Key }>{ destination.Label }</option>
+							}
+						</select></label><label>Position<input type="number" min="1" name="order" value={ fmt.Sprintf("%d", status.Order) }/></label></div>
+						<div class="status-cross-category-note" hidden><strong>Cross-category move</strong><p>This changes what the status means in the workflow. Review the safeguards below before moving it.</p></div>
+						<label class="status-source-replacement" hidden>Source default replacement<select name="source_replacement_id"><option value="">Select replacement</option>
+							for _, replacement := range category.Statuses {
+								if replacement.ID != status.ID {
+									<option value={ fmt.Sprintf("%d", replacement.ID) }>{ replacement.Name }</option>
+								}
+							}
+						</select></label>
+						<label class="status-confirm" hidden><input type="checkbox" name="confirm_in_use" value="true"/> Confirm category change for records using this status</label>
+						<div class="status-order-actions"><button type="submit" class="outline" name="requested_order" value={ fmt.Sprintf("%d", index) } disabled?={ index == 0 } aria-label={ fmt.Sprintf("Move %s up", status.Name) }>Up</button><button type="submit" class="outline" name="requested_order" value={ fmt.Sprintf("%d", index+2) } disabled?={ index == len(category.Statuses)-1 } aria-label={ fmt.Sprintf("Move %s down", status.Name) }>Down</button><button type="submit">Move status</button></div>
+					</form>
+				</section>
+				<section class="status-dialog-section status-danger"><h4>Delete status</h4><p>Records using this status must be reassigned within the same category.</p>
+					<form method="post" action={ templ.URL(fmt.Sprintf("/settings/statuses/%s/%d/delete", p.ObjectType, status.ID)) } hx-confirm="Delete this status and reassign every record using it?">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><label>Replacement status<select name="replacement_status_id"><option value="">Select replacement</option>
+							for _, replacement := range category.Statuses {
+								if replacement.ID != status.ID {
+									<option value={ fmt.Sprintf("%d", replacement.ID) }>{ replacement.Name }</option>
+								}
+							}
+						</select></label><button type="submit" class="contrast outline">Delete status</button>
+					</form>
+				</section>
+			}
+		</div>
+	</dialog>
+}
+
+func statusSettingsTitle(objectType string) string { return strings.ToUpper(objectType[:1]) + objectType[1:] + " Status Settings" }
+func statusCount(count int) string { if count == 1 { return "1 status" }; return fmt.Sprintf("%d statuses", count) }
+func usageCount(count int) string { if count == 1 { return "1 record" }; return fmt.Sprintf("%d records", count) }
+func defaultLabel(value bool) string { if value { return "Yes" }; return "No" }
+func statusAccent(color string) templpkg.SafeCSS {
+	color = statusColor(color)
+	return templpkg.SafeCSS("--status-color:" + color + ";--status-background:" + hexToRGBA(color, 0.30) + ";--status-background-hover:" + hexToRGBA(color, 0.38) + ";--status-background-active:" + hexToRGBA(color, 0.44))
+}
+func statusColor(color string) string {
+	if len(color) != 7 || color[0] != '#' || strings.IndexFunc(color[1:], func(r rune) bool { return !strings.ContainsRune("0123456789abcdefABCDEF", r) }) != -1 { return "#6B7280" }
+	return color
+}

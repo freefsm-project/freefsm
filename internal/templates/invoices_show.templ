@@ -71,7 +71,7 @@ templ InvoiceShow(p InvoiceDetail) {
 				if p.AssetID > 0 {
 					<tr><th>Asset</th><td><a href={ templ.URL(fmt.Sprintf("/assets/%d", p.AssetID)) }>{ p.AssetName }</a></td></tr>
 				}
-				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(p.StatusColor) }>{ p.StatusName }</span></td></tr>
+				<tr><th>Status</th><td>@StatusControl("invoice", p.ID, p.StatusID, p.StatusName, p.StatusColor, p.Statuses, p.ArchivedAt == "" && p.CanManage)</td></tr>
 				if p.CanSettle || p.Settlement.State != "" {
 					<tr><th>Settlement State</th><td><span class="status-badge">{ string(p.Settlement.State) }</span></td></tr>
 				}
@@ -237,6 +237,7 @@ templ InvoiceShow(p InvoiceDetail) {
 			<h3>Notes</h3>
 			<p>{ p.Notes }</p>
 		}
+		@DeliveryHistory("invoice", p.ID, p.Deliveries, p.ArchivedAt != "")
 		if p.ArchivedAt != "" {
 			<div hx-get={ templ.URL(fmt.Sprintf("/invoices/%d/comments?read_only=1", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
 				<p>Loading comments...</p>

@@ -1,0 +1,11 @@
+DROP TRIGGER IF EXISTS document_delivery_no_delete ON document_deliveries;
+DROP FUNCTION IF EXISTS guard_document_delivery_delete();
+DROP TRIGGER IF EXISTS document_delivery_event_immutable ON document_delivery_events;
+DROP FUNCTION IF EXISTS guard_document_delivery_event();
+DROP TRIGGER IF EXISTS document_delivery_update_guard ON document_deliveries;
+DROP FUNCTION IF EXISTS guard_document_delivery_update();
+DROP TRIGGER IF EXISTS document_delivery_reference_guard ON document_deliveries;
+DROP FUNCTION IF EXISTS validate_document_delivery_reference();
+DROP TABLE IF EXISTS document_delivery_events;
+DROP TABLE IF EXISTS document_deliveries;
+ALTER TABLE company_settings DROP COLUMN IF EXISTS email_tracking_enabled;

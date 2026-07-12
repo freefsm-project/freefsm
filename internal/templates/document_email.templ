@@ -8,6 +8,7 @@ templ DocumentEmailCompose(p DocumentEmailData) {
 		}
 		<form action={ templ.URL(p.ActionURL) } method="post">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="idempotency_key" value={ p.IdempotencyKey }/>
 			<label>
 				To
 				<input type="text" name="to" value={ p.To } required/>
@@ -29,7 +30,7 @@ templ DocumentEmailCompose(p DocumentEmailData) {
 				Body
 				<textarea name="body" rows="10" required>{ p.Body }</textarea>
 			</label>
-			<button type="submit">Send Email</button>
+			<button type="submit">Queue Email</button>
 		</form>
 	}
 }

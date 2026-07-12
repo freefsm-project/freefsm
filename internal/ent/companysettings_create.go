@@ -300,6 +300,20 @@ func (_c *CompanySettingsCreate) SetNillableEmailAutoCc(v *string) *CompanySetti
 	return _c
 }
 
+// SetEmailTrackingEnabled sets the "email_tracking_enabled" field.
+func (_c *CompanySettingsCreate) SetEmailTrackingEnabled(v bool) *CompanySettingsCreate {
+	_c.mutation.SetEmailTrackingEnabled(v)
+	return _c
+}
+
+// SetNillableEmailTrackingEnabled sets the "email_tracking_enabled" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableEmailTrackingEnabled(v *bool) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetEmailTrackingEnabled(*v)
+	}
+	return _c
+}
+
 // SetInvoiceEmailSubject sets the "invoice_email_subject" field.
 func (_c *CompanySettingsCreate) SetInvoiceEmailSubject(v string) *CompanySettingsCreate {
 	_c.mutation.SetInvoiceEmailSubject(v)
@@ -697,6 +711,10 @@ func (_c *CompanySettingsCreate) defaults() {
 		v := companysettings.DefaultEmailAutoCc
 		_c.mutation.SetEmailAutoCc(v)
 	}
+	if _, ok := _c.mutation.EmailTrackingEnabled(); !ok {
+		v := companysettings.DefaultEmailTrackingEnabled
+		_c.mutation.SetEmailTrackingEnabled(v)
+	}
 	if _, ok := _c.mutation.InvoiceEmailSubject(); !ok {
 		v := companysettings.DefaultInvoiceEmailSubject
 		_c.mutation.SetInvoiceEmailSubject(v)
@@ -837,6 +855,9 @@ func (_c *CompanySettingsCreate) check() error {
 	}
 	if _, ok := _c.mutation.EmailAutoCc(); !ok {
 		return &ValidationError{Name: "email_auto_cc", err: errors.New(`ent: missing required field "CompanySettings.email_auto_cc"`)}
+	}
+	if _, ok := _c.mutation.EmailTrackingEnabled(); !ok {
+		return &ValidationError{Name: "email_tracking_enabled", err: errors.New(`ent: missing required field "CompanySettings.email_tracking_enabled"`)}
 	}
 	if _, ok := _c.mutation.InvoiceEmailSubject(); !ok {
 		return &ValidationError{Name: "invoice_email_subject", err: errors.New(`ent: missing required field "CompanySettings.invoice_email_subject"`)}
@@ -1009,6 +1030,10 @@ func (_c *CompanySettingsCreate) createSpec() (*CompanySettings, *sqlgraph.Creat
 	if value, ok := _c.mutation.EmailAutoCc(); ok {
 		_spec.SetField(companysettings.FieldEmailAutoCc, field.TypeString, value)
 		_node.EmailAutoCc = value
+	}
+	if value, ok := _c.mutation.EmailTrackingEnabled(); ok {
+		_spec.SetField(companysettings.FieldEmailTrackingEnabled, field.TypeBool, value)
+		_node.EmailTrackingEnabled = value
 	}
 	if value, ok := _c.mutation.InvoiceEmailSubject(); ok {
 		_spec.SetField(companysettings.FieldInvoiceEmailSubject, field.TypeString, value)

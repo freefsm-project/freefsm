@@ -12,6 +12,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
@@ -27,6 +28,7 @@ type ProjectHandler struct {
 	defSvc      *services.CustomFieldDefinitionService
 	activitySvc *services.ActivityService
 	policySvc   *services.PolicyService
+	statusflow  *statusflow.Service
 }
 
 func NewProjectHandler(svc *services.ProjectService, custSvc *services.CustomerService, statusSvc *services.StatusService, locSvc *services.LocationService, jobSvc *services.JobService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, activitySvc *services.ActivityService, policySvc *services.PolicyService) *ProjectHandler {
@@ -145,6 +147,7 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 	ctx := middleware.WithPageHeaderTitle(r.Context(), p.Name)
 	templates.ProjectShow(templates.ProjectShowPageData{
 		Project:      d,
+		Statuses:     statusOptions(statuses),
 		Jobs:         jobRows,
 		Tags:         tagsToRows(tags),
 		AllTags:      tagsToRows(allTags),
@@ -229,7 +232,6 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
-	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	completion, _ := strconv.ParseFloat(r.FormValue("completion_percentage"), 64)
 	name := r.FormValue("name")
@@ -250,7 +252,6 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		d := &templates.ProjectDetail{
 			Name:                 name,
 			CustomerID:           custID,
-			StatusID:             statusID,
 			LocationID:           locationID,
 			CompletionPercentage: completion,
 			Notes:                r.FormValue("notes"),
@@ -278,7 +279,7 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CustomerID:           custID,
 		Name:                 name,
 		Description:          r.FormValue("description"),
-		StatusID:             statusID,
+		StatusID:             0,
 		LocationID:           locationID,
 		CompletionPercentage: completion,
 		StartTime:            parseDatePtr(r.FormValue("start_time"), loc),
@@ -322,7 +323,6 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
-	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	completion, _ := strconv.ParseFloat(r.FormValue("completion_percentage"), 64)
 	name := r.FormValue("name")
@@ -344,7 +344,6 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 			ID:                   id,
 			Name:                 name,
 			CustomerID:           custID,
-			StatusID:             statusID,
 			LocationID:           locationID,
 			CompletionPercentage: completion,
 			Notes:                r.FormValue("notes"),
@@ -372,7 +371,6 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		CustomerID:           int64Ptr(custID),
 		Name:                 formPtr(r.FormValue("name")),
 		Description:          formPtr(r.FormValue("description")),
-		StatusID:             int64Ptr(statusID),
 		LocationID:           &locationID,
 		CompletionPercentage: &completion,
 		StartTime:            parseDatePtr(r.FormValue("start_time"), loc),
@@ -386,6 +384,10 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
+	if u == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeProject, id), map[string]interface{}{
 			"entity_name": result.Name,
@@ -415,14 +417,6 @@ func (h *ProjectHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "project name is required", http.StatusBadRequest)
 		return
 	}
-	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
-	if ok, err := h.statusSvc.BelongsToObjectType(r.Context(), statusID, "project"); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	} else if !ok {
-		http.Error(w, "invalid project status", http.StatusBadRequest)
-		return
-	}
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	completion, _ := strconv.ParseFloat(r.FormValue("completion_percentage"), 64)
 	loc := middleware.CompanyLocation(r.Context())
@@ -430,7 +424,7 @@ func (h *ProjectHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		CustomerID:           custID,
 		Name:                 name,
 		Description:          r.FormValue("description"),
-		StatusID:             statusID,
+		StatusID:             0,
 		LocationID:           locationID,
 		CompletionPercentage: completion,
 		StartTime:            parseDatePtr(r.FormValue("start_time"), loc),

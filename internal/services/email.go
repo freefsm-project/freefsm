@@ -3,6 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"net/smtp"
 	"strings"
 	"time"
+
+	"github.com/freefsm-project/freefsm/internal/ent"
 )
 
 type EmailService struct {
@@ -124,14 +127,74 @@ func (s *EmailService) SendEmailTo(ctx context.Context, recipients EmailRecipien
 	}
 	envelopeRecipients := recipients.EnvelopeRecipients()
 
+	return s.sendBuilt(ctx, cs, from, envelopeRecipients, msg)
+}
+
+// SendDocumentSnapshot sends a fully rendered immutable outbox snapshot.
+func (s *EmailService) SendDocumentSnapshot(ctx context.Context, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachment EmailAttachment) error {
+	cs, err := s.svc.Get(ctx)
+	if err != nil || cs == nil || cs.SMTPHost == "" {
+		return fmt.Errorf("SMTP not configured")
+	}
+	from := sanitizeHeader(cs.SMTPFrom)
+	msg, err := buildDocumentEmailMessage(from, recipients, subject, textBody, htmlBody, messageID, attachment)
+	if err != nil {
+		return err
+	}
+	return s.sendBuilt(ctx, cs, from, recipients.EnvelopeRecipients(), msg)
+}
+
+func (s *EmailService) SendCompanyDocumentSnapshot(ctx context.Context, companyID int64, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachment EmailAttachment) error {
+	cs, err := s.svc.GetForCompany(ctx, companyID)
+	if err != nil || cs == nil || cs.SMTPHost == "" {
+		return fmt.Errorf("SMTP not configured for company %d", companyID)
+	}
+	from := sanitizeHeader(cs.SMTPFrom)
+	msg, err := buildDocumentEmailMessage(from, recipients, subject, textBody, htmlBody, messageID, attachment)
+	if err != nil {
+		return err
+	}
+	return s.sendBuilt(ctx, cs, from, recipients.EnvelopeRecipients(), msg)
+}
+
+func (s *EmailService) sendBuilt(ctx context.Context, cs *ent.CompanySettings, from string, envelopeRecipients []string, msg string) error {
 	addr := fmt.Sprintf("%s:%d", cs.SMTPHost, cs.SMTPPort)
 	if cs.SMTPPort == 465 {
-		return s.sendTLS(addr, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
+		return s.sendTLS(ctx, addr, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
 	}
 	if cs.SMTPPort == 587 {
-		return s.sendWithSTARTTLS(addr, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
+		return s.sendWithSTARTTLS(ctx, addr, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
 	}
-	return s.sendPlain(addr, cs.SMTPHost, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
+	return s.sendPlain(ctx, addr, cs.SMTPHost, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
+}
+
+func buildDocumentEmailMessage(from string, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachment EmailAttachment) (string, error) {
+	if len(recipients.To) == 0 || sanitizeHeader(messageID) == "" {
+		return "", fmt.Errorf("recipient and message ID are required")
+	}
+	sum := sha256.Sum256([]byte(messageID))
+	mixed := fmt.Sprintf("freefsm-mixed-%x", sum[:12])
+	alt := fmt.Sprintf("freefsm-alt-%x", sum[12:24])
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "From: %s\r\nTo: %s\r\n", sanitizeHeader(from), sanitizeHeader(strings.Join(recipients.To, ", ")))
+	if len(recipients.CC) > 0 {
+		fmt.Fprintf(&buf, "Cc: %s\r\n", sanitizeHeader(strings.Join(recipients.CC, ", ")))
+	}
+	fmt.Fprintf(&buf, "Subject: %s\r\nMessage-ID: %s\r\nMIME-Version: 1.0\r\nContent-Type: multipart/mixed; boundary=%q\r\n\r\n", mime.QEncoding.Encode("UTF-8", sanitizeHeader(subject)), sanitizeHeader(messageID), mixed)
+	fmt.Fprintf(&buf, "--%s\r\nContent-Type: multipart/alternative; boundary=%q\r\n\r\n", mixed, alt)
+	fmt.Fprintf(&buf, "--%s\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n", alt, textBody)
+	if htmlBody != "" {
+		fmt.Fprintf(&buf, "--%s\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n", alt, htmlBody)
+	}
+	fmt.Fprintf(&buf, "--%s--\r\n", alt)
+	filename := sanitizeHeader(attachment.Filename)
+	if filename == "" {
+		return "", fmt.Errorf("attachment filename is required")
+	}
+	fmt.Fprintf(&buf, "--%s\r\nContent-Type: application/pdf\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: %s\r\n\r\n", mixed, mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	writeBase64Lines(&buf, attachment.Data)
+	fmt.Fprintf(&buf, "\r\n--%s--\r\n", mixed)
+	return buf.String(), nil
 }
 
 func ParseEmailRecipients(to, cc, bcc string) (EmailRecipients, error) {
@@ -246,70 +309,103 @@ func writeBase64Lines(buf *bytes.Buffer, data []byte) {
 	buf.WriteString(encoded)
 }
 
-func (s *EmailService) sendWithSTARTTLS(addr, user, password, from string, recipients []string, msg string) error {
+func (s *EmailService) sendWithSTARTTLS(ctx context.Context, addr, user, password, from string, recipients []string, msg string) error {
 	host := strings.Split(addr, ":")[0]
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	stop := closeOnCancel(ctx, conn)
+	defer stop()
+	setContextDeadline(ctx, conn)
 
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
 		return fmt.Errorf("SMTP client: %w", err)
 	}
-	defer client.Quit()
+	defer client.Close()
 
 	tlsConfig := &tls.Config{ServerName: host}
 	if ok, _ := client.Extension("STARTTLS"); ok {
 		if err := client.StartTLS(tlsConfig); err != nil {
 			return fmt.Errorf("STARTTLS: %w", err)
 		}
+	} else {
+		return fmt.Errorf("STARTTLS required but server does not advertise it")
 	}
 
 	return sendSMTPMessage(client, host, user, password, from, recipients, msg)
 }
 
-func (s *EmailService) sendTLS(addr, user, password, from string, recipients []string, msg string) error {
+func (s *EmailService) sendTLS(ctx context.Context, addr, user, password, from string, recipients []string, msg string) error {
 	host := strings.Split(addr, ":")[0]
 
 	tlsConfig := &tls.Config{ServerName: host}
 
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	conn, err := tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
+	raw, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("TLS connect: %w", err)
 	}
+	conn := tls.Client(raw, tlsConfig)
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	stop := closeOnCancel(ctx, conn)
+	defer stop()
+	setContextDeadline(ctx, conn)
+	if err := conn.HandshakeContext(ctx); err != nil {
+		return fmt.Errorf("TLS handshake: %w", err)
+	}
 
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
 		return fmt.Errorf("SMTP client: %w", err)
 	}
-	defer client.Quit()
+	defer client.Close()
 
 	return sendSMTPMessage(client, host, user, password, from, recipients, msg)
 }
 
-func (s *EmailService) sendPlain(addr, host, user, password, from string, recipients []string, msg string) error {
+func (s *EmailService) sendPlain(ctx context.Context, addr, host, user, password, from string, recipients []string, msg string) error {
 	dialer := &net.Dialer{Timeout: 10 * time.Second}
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("connect: %w", err)
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(10 * time.Second))
+	stop := closeOnCancel(ctx, conn)
+	defer stop()
+	setContextDeadline(ctx, conn)
 
 	client, err := smtp.NewClient(conn, host)
 	if err != nil {
 		return fmt.Errorf("SMTP client: %w", err)
 	}
-	defer client.Quit()
+	defer client.Close()
 
 	return sendSMTPMessage(client, host, user, password, from, recipients, msg)
+}
+
+func setContextDeadline(ctx context.Context, conn net.Conn) {
+	deadline := time.Now().Add(10 * time.Second)
+	if d, ok := ctx.Deadline(); ok && d.Before(deadline) {
+		deadline = d
+	}
+	_ = conn.SetDeadline(deadline)
+}
+
+func closeOnCancel(ctx context.Context, conn net.Conn) func() {
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = conn.SetDeadline(time.Now())
+			_ = conn.Close()
+		case <-done:
+		}
+	}()
+	return func() { close(done) }
 }
 
 func sendSMTPMessage(client *smtp.Client, host, user, password, from string, recipients []string, msg string) error {
@@ -335,7 +431,8 @@ func sendSMTPMessage(client *smtp.Client, host, user, password, from string, rec
 	if err != nil {
 		return fmt.Errorf("write: %w", err)
 	}
-	w.Close()
-
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("final DATA acceptance: %w", err)
+	}
 	return nil
 }

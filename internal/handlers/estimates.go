@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/conversion"
+	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -38,14 +40,15 @@ type EstimateHandler struct {
 	tagLinkSvc  *services.TagLinkService
 	defSvc      *services.CustomFieldDefinitionService
 	fileSvc     *services.FileService
-	emailSvc    *services.EmailService
+	deliverySvc *delivery.Service
 	activitySvc *services.ActivityService
 	policySvc   *services.PolicyService
 	conversion  conversionService
+	statusflow  *statusflow.Service
 }
 
-func NewEstimateHandler(svc *services.EstimateService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, invoiceSvc *services.InvoiceService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, emailSvc *services.EmailService, activitySvc *services.ActivityService, policySvc *services.PolicyService, conversionSvc conversionService) *EstimateHandler {
-	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, emailSvc: emailSvc, activitySvc: activitySvc, policySvc: policySvc, conversion: conversionSvc}
+func NewEstimateHandler(svc *services.EstimateService, custSvc *services.CustomerService, jobSvc *services.JobService, statusSvc *services.StatusService, itemSvc *services.ItemService, invoiceSvc *services.InvoiceService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, deliverySvc *delivery.Service, activitySvc *services.ActivityService, policySvc *services.PolicyService, conversionSvc conversionService) *EstimateHandler {
+	return &EstimateHandler{svc: svc, custSvc: custSvc, jobSvc: jobSvc, statusSvc: statusSvc, itemSvc: itemSvc, invoiceSvc: invoiceSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, fileSvc: fileSvc, deliverySvc: deliverySvc, activitySvc: activitySvc, policySvc: policySvc, conversion: conversionSvc}
 }
 
 func conversionActor(r *http.Request) (conversion.Actor, bool) {
@@ -136,12 +139,13 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := estimateToDetail(r.Context(), e, statuses)
+	d.Statuses = statusOptions(statuses)
 	u, _ := middleware.UserFromContext(r.Context())
 	d.CanManage = u != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeEstimate, id), policyUpdate)
 	convertibleStatus := false
 	for _, status := range statuses {
 		if e.StatusID != nil && status.ID == *e.StatusID {
-			convertibleStatus = status.EstimateConvertible
+			convertibleStatus = true
 			break
 		}
 	}
@@ -173,6 +177,14 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.CustomFields = buildCustomFieldDisplay(defs, e.CustomFields)
 	files, _ := h.fileSvc.List(r.Context(), objectref.New(objectref.TypeEstimate, id))
 	d.FileList = templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "estimate"}
+	if u != nil {
+		history, historyErr := h.deliverySvc.History(r.Context(), u.CompanyID, delivery.DocumentRef{Type: "estimate", ID: id})
+		if historyErr != nil {
+			internalServerError(w, r, "load estimate delivery history", historyErr)
+			return
+		}
+		d.Deliveries = deliveryHistoryRows(history)
+	}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), e.Title)
 	templates.EstimateShow(d).Render(ctx, w)
 }
@@ -252,7 +264,6 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !h.authorizeDestinationJob(w, r, custID, jobID) {
 		return
 	}
-	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	taxRate := r.FormValue("tax_rate")
 	if taxRate == "" {
 		taxRate = "0"
@@ -267,7 +278,7 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	params := services.EstimateCreateParams{
 		CustomerID:   custID,
 		JobID:        jobID,
-		StatusID:     statusID,
+		StatusID:     0,
 		Title:        r.FormValue("title"),
 		Notes:        r.FormValue("notes"),
 		TaxRate:      taxRate,
@@ -322,7 +333,6 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if !h.authorizeDestinationJob(w, r, custID, jobID) {
 		return
 	}
-	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	taxRate := r.FormValue("tax_rate")
 	taxRatePtr := formPtr(taxRate)
 	if taxRate == "" {
@@ -342,7 +352,6 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	params := services.EstimateUpdateParams{
 		CustomerID:   int64Ptr(custID),
 		JobID:        &jobID,
-		StatusID:     int64Ptr(statusID),
 		Title:        formPtr(r.FormValue("title")),
 		Notes:        formPtr(r.FormValue("notes")),
 		TaxRate:      taxRatePtr,
@@ -355,6 +364,10 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
+	if u == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
 			"entity_name": result.Title,
@@ -400,7 +413,7 @@ func writeConversionError(w http.ResponseWriter, r *http.Request, err error) {
 		http.NotFound(w, r)
 	case errors.Is(err, conversion.ErrArchived), errors.Is(err, conversion.ErrIdempotencyConflict), errors.Is(err, conversion.ErrTransactionConflict):
 		http.Error(w, err.Error(), http.StatusConflict)
-	case errors.Is(err, conversion.ErrNotConvertible), errors.Is(err, conversion.ErrSettlement):
+	case errors.Is(err, conversion.ErrSettlement):
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 	default:
 		internalServerError(w, r, "conversion operation", err)
@@ -538,13 +551,14 @@ func (h *EstimateHandler) Email(w http.ResponseWriter, r *http.Request) {
 	}
 	cs := middleware.CompanyFromContext(r.Context())
 	data := templates.DocumentEmailData{
-		ObjectType: "estimate",
-		ObjectID:   id,
-		Title:      doc.Title,
-		BackURL:    fmt.Sprintf("/estimates/%d/pdf/preview", id),
-		ActionURL:  fmt.Sprintf("/estimates/%d/email", id),
-		To:         doc.CustomerEmail,
-		CC:         emailAutoCC(cs),
+		ObjectType:     "estimate",
+		ObjectID:       id,
+		Title:          doc.Title,
+		BackURL:        fmt.Sprintf("/estimates/%d/pdf/preview", id),
+		ActionURL:      fmt.Sprintf("/estimates/%d/email", id),
+		To:             doc.CustomerEmail,
+		CC:             emailAutoCC(cs),
+		IdempotencyKey: uuid.NewString(),
 	}
 	data.Subject, data.Body = documentEmailDefaults("estimate", doc, cs)
 	if r.Method == http.MethodGet {
@@ -560,6 +574,7 @@ func (h *EstimateHandler) Email(w http.ResponseWriter, r *http.Request) {
 	data.BCC = r.FormValue("bcc")
 	data.Subject = r.FormValue("subject")
 	data.Body = r.FormValue("body")
+	data.IdempotencyKey = r.FormValue("idempotency_key")
 	recipients, err := services.ParseEmailRecipients(data.To, data.CC, data.BCC)
 	if err != nil {
 		data.Error = err.Error()
@@ -571,20 +586,22 @@ func (h *EstimateHandler) Email(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	savedFile, filename, err := saveVersionedDocumentPDF(r.Context(), h.fileSvc, "estimate", id, doc, u.ID)
+	key, err := uuid.Parse(data.IdempotencyKey)
+	if err != nil || data.Subject == "" || data.Body == "" {
+		data.Error = "valid idempotency key, subject, and body are required"
+		templates.DocumentEmailCompose(data).Render(r.Context(), w)
+		return
+	}
+	_, err = h.deliverySvc.Queue(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, delivery.QueueRequest{Key: key, Document: delivery.DocumentRef{Type: "estimate", ID: id}, Snapshot: delivery.Snapshot{To: recipients.To, CC: recipients.CC, BCC: recipients.BCC, Subject: data.Subject, TextBody: data.Body, HTMLBody: safeEmailHTML(data.Body), PDF: doc.Data, PDFFilename: doc.Filename}})
 	if err != nil {
-		data.Error = err.Error()
-		templates.DocumentEmailCompose(data).Render(r.Context(), w)
+		writeDeliveryError(w, r, err, data)
 		return
 	}
-	if err := h.emailSvc.SendEmailWithAttachmentTo(r.Context(), recipients, data.Subject, data.Body, filename, "application/pdf", doc.Data); err != nil {
-		_ = h.fileSvc.Delete(r.Context(), savedFile.ID)
-		data.Error = err.Error()
-		templates.DocumentEmailCompose(data).Render(r.Context(), w)
-		return
-	}
-	h.activitySvc.Record(r.Context(), u.ID, "email_sent", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "to": data.To, "cc": data.CC, "bcc_count": len(recipients.BCC), "file_name": filename})
-	http.Redirect(w, r, fmt.Sprintf("/estimates/%d?flash=Estimate+emailed", id), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/estimates/%d?flash=Estimate+email+queued", id), http.StatusSeeOther)
+}
+
+func (h *EstimateHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) {
+	retryDocumentDelivery(h.deliverySvc, "estimate", w, r)
 }
 
 func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64) (documentPDF, error) {

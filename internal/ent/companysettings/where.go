@@ -154,6 +154,11 @@ func EmailAutoCc(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldEmailAutoCc, v))
 }
 
+// EmailTrackingEnabled applies equality check predicate on the "email_tracking_enabled" field. It's identical to EmailTrackingEnabledEQ.
+func EmailTrackingEnabled(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldEmailTrackingEnabled, v))
+}
+
 // InvoiceEmailSubject applies equality check predicate on the "invoice_email_subject" field. It's identical to InvoiceEmailSubjectEQ.
 func InvoiceEmailSubject(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldInvoiceEmailSubject, v))
@@ -1462,6 +1467,16 @@ func EmailAutoCcEqualFold(v string) predicate.CompanySettings {
 // EmailAutoCcContainsFold applies the ContainsFold predicate on the "email_auto_cc" field.
 func EmailAutoCcContainsFold(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldContainsFold(FieldEmailAutoCc, v))
+}
+
+// EmailTrackingEnabledEQ applies the EQ predicate on the "email_tracking_enabled" field.
+func EmailTrackingEnabledEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldEmailTrackingEnabled, v))
+}
+
+// EmailTrackingEnabledNEQ applies the NEQ predicate on the "email_tracking_enabled" field.
+func EmailTrackingEnabledNEQ(v bool) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldEmailTrackingEnabled, v))
 }
 
 // InvoiceEmailSubjectEQ applies the EQ predicate on the "invoice_email_subject" field.

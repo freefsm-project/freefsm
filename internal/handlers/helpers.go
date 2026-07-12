@@ -67,6 +67,17 @@ func statusOptions(statuses []*ent.Status) []templates.SelectOption {
 	return opts
 }
 
+func invoiceManualStatusOptions(statuses []*ent.Status) []templates.SelectOption {
+	manual := make([]*ent.Status, 0, 4)
+	for _, status := range statuses {
+		switch status.CategoryKey {
+		case "invoice:draft", "invoice:invoiced", "invoice:sent", "invoice:void":
+			manual = append(manual, status)
+		}
+	}
+	return statusOptions(manual)
+}
+
 func customerOptions(customers []*ent.Customer) []templates.SelectOption {
 	opts := make([]templates.SelectOption, len(customers))
 	for i, c := range customers {
@@ -152,11 +163,30 @@ func statusColor(statuses []*ent.Status, id *int64) string {
 	return "#6B7280"
 }
 
+func statusCategory(statuses []*ent.Status, id *int64) string {
+	if id == nil {
+		return ""
+	}
+	for _, status := range statuses {
+		if status.ID == *id {
+			return status.CategoryKey
+		}
+	}
+	return ""
+}
+
 func int64Ptr(v int64) *int64 {
 	if v == 0 {
 		return nil
 	}
 	return &v
+}
+
+func statusIDValue(id *int64) int64 {
+	if id == nil {
+		return 0
+	}
+	return *id
 }
 
 func formPtr(v string) *string {

@@ -42,6 +42,7 @@ func (CompanySettings) Fields() []ent.Field {
 		field.String("smtp_password").Default(""),
 		field.String("smtp_from").Default(""),
 		field.String("email_auto_cc").Default(""),
+		field.Bool("email_tracking_enabled").Default(false),
 		field.String("invoice_email_subject").Default("Invoice {invoice_number} from {business_name}"),
 		field.String("invoice_email_body").Default("Hello {customer_name},\n\nPlease find invoice {invoice_number} attached.\n\nThank you,\n{business_name}"),
 		field.String("estimate_email_subject").Default("Estimate {estimate_number} from {business_name}"),

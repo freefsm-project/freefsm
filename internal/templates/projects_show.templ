@@ -39,7 +39,7 @@ templ ProjectShow(p ProjectShowPageData) {
 		<table class="work-item-detail-meta">
 			<tbody>
 				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.Project.CustomerID)) }>{ p.Project.CustomerName }</a></td></tr>
-				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(p.Project.StatusColor) }>{ p.Project.StatusName }</span></td></tr>
+				<tr><th>Status</th><td>@StatusControl("project", p.Project.ID, p.Project.StatusID, p.Project.StatusName, p.Project.StatusColor, p.Statuses, p.Project.ArchivedAt == "" && canManageOperational(ctx))</td></tr>
 				<tr><th>Progress</th><td>
 					<progress value={ fmt.Sprintf("%.0f", p.Project.CompletionPercentage) } max="100"></progress>
 					<small>{ fmt.Sprintf("%.0f%%", p.Project.CompletionPercentage) }</small>

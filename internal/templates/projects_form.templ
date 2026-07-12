@@ -34,15 +34,6 @@ templ ProjectForm(p ProjectFormPageData) {
 				</label>
 				<div class="grid">
 					<label>
-						Status
-						<select name="status_id">
-							<option value="0">No Status</option>
-							for _, s := range p.Statuses {
-								<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.Project.StatusID == s.Value }>{ s.Label }</option>
-							}
-						</select>
-					</label>
-					<label>
 						Location
 						<select name="location_id" id="project-location-select" data-selected={ fmt.Sprintf("%d", p.Project.LocationID) }>
 							<option value="0">No Location</option>

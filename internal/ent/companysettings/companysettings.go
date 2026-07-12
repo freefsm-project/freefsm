@@ -53,6 +53,8 @@ const (
 	FieldSMTPFrom = "smtp_from"
 	// FieldEmailAutoCc holds the string denoting the email_auto_cc field in the database.
 	FieldEmailAutoCc = "email_auto_cc"
+	// FieldEmailTrackingEnabled holds the string denoting the email_tracking_enabled field in the database.
+	FieldEmailTrackingEnabled = "email_tracking_enabled"
 	// FieldInvoiceEmailSubject holds the string denoting the invoice_email_subject field in the database.
 	FieldInvoiceEmailSubject = "invoice_email_subject"
 	// FieldInvoiceEmailBody holds the string denoting the invoice_email_body field in the database.
@@ -120,6 +122,7 @@ var Columns = []string{
 	FieldSMTPPassword,
 	FieldSMTPFrom,
 	FieldEmailAutoCc,
+	FieldEmailTrackingEnabled,
 	FieldInvoiceEmailSubject,
 	FieldInvoiceEmailBody,
 	FieldEstimateEmailSubject,
@@ -191,6 +194,8 @@ var (
 	DefaultSMTPFrom string
 	// DefaultEmailAutoCc holds the default value on creation for the "email_auto_cc" field.
 	DefaultEmailAutoCc string
+	// DefaultEmailTrackingEnabled holds the default value on creation for the "email_tracking_enabled" field.
+	DefaultEmailTrackingEnabled bool
 	// DefaultInvoiceEmailSubject holds the default value on creation for the "invoice_email_subject" field.
 	DefaultInvoiceEmailSubject string
 	// DefaultInvoiceEmailBody holds the default value on creation for the "invoice_email_body" field.
@@ -341,6 +346,11 @@ func BySMTPFrom(opts ...sql.OrderTermOption) OrderOption {
 // ByEmailAutoCc orders the results by the email_auto_cc field.
 func ByEmailAutoCc(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEmailAutoCc, opts...).ToFunc()
+}
+
+// ByEmailTrackingEnabled orders the results by the email_tracking_enabled field.
+func ByEmailTrackingEnabled(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEmailTrackingEnabled, opts...).ToFunc()
 }
 
 // ByInvoiceEmailSubject orders the results by the invoice_email_subject field.

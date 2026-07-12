@@ -66,3 +66,19 @@ func TestEnvelopeRecipientsDedupesAcrossGroups(t *testing.T) {
 		t.Fatalf("EnvelopeRecipients = %q, want %q", got, want)
 	}
 }
+
+func TestDocumentMessageHasStableBoundariesAndMessageID(t *testing.T) {
+	r := EmailRecipients{To: []string{"to@example.com"}}
+	a := EmailAttachment{Filename: "doc.pdf", Data: []byte("pdf")}
+	first, err := buildDocumentEmailMessage("from@example.com", r, "Subject", "text", "<b>html</b>", "<stable@example>", a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := buildDocumentEmailMessage("from@example.com", r, "Subject", "text", "<b>html</b>", "<stable@example>", a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first != second || !strings.Contains(first, "Message-ID: <stable@example>\r\n") {
+		t.Fatal("document MIME is not deterministic")
+	}
+}

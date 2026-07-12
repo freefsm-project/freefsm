@@ -9,8 +9,6 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/job"
 	"github.com/freefsm-project/freefsm/internal/ent/jobassignment"
-	"github.com/freefsm-project/freefsm/internal/ent/status"
-	"github.com/freefsm-project/freefsm/internal/ent/statusworkflow"
 	"github.com/freefsm-project/freefsm/internal/ent/user"
 )
 
@@ -54,7 +52,6 @@ type JobUpdateParams struct {
 	AssetID           *int64
 	JobType           *string
 	Subtitle          *string
-	StatusID          *int64
 	BillingType       *string
 	StartTime         *time.Time
 	EndTime           *time.Time
@@ -261,6 +258,14 @@ func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.J
 	if err := validateJobCustomerLinks(ctx, s.client, params.CustomerID, params.ProjectID, params.LocationID, params.CustomerContactID, params.AssetID); err != nil {
 		return nil, err
 	}
+	customer, err := s.client.Customer.Get(ctx, params.CustomerID)
+	if err != nil {
+		return nil, fmt.Errorf("get job customer: %w", err)
+	}
+	statusID, err := creationStatus(ctx, s.client, 0, customer.CompanyID, "job", "job:new")
+	if err != nil {
+		return nil, err
+	}
 
 	b := s.client.Job.Create().
 		SetCustomerID(params.CustomerID).
@@ -275,9 +280,7 @@ func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.J
 		SetSubtasks(SerializeSubtasks(params.Subtasks)).
 		SetCustomFields(params.CustomFields)
 
-	if params.StatusID > 0 {
-		b.SetStatusID(params.StatusID)
-	}
+	b.SetStatusID(statusID)
 
 	if params.ProjectID > 0 {
 		b.SetProjectID(params.ProjectID)
@@ -331,11 +334,6 @@ func (s *JobService) CreateNextOccurrence(ctx context.Context, sourceID int64, n
 	if err != nil {
 		return nil, err
 	}
-	newStatusID, err := s.newJobStatusID(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	var delta time.Duration
 	if source.StartTime != nil && !source.StartTime.IsZero() {
 		delta = nextStart.Sub(*source.StartTime)
@@ -361,7 +359,6 @@ func (s *JobService) CreateNextOccurrence(ctx context.Context, sourceID int64, n
 		AssetID:           int64Value(source.AssetID),
 		JobType:           source.JobType,
 		Subtitle:          source.Subtitle,
-		StatusID:          newStatusID,
 		BillingType:       source.BillingType,
 		StartTime:         nextStart,
 		EndTime:           nextStart.Add(time.Hour),
@@ -382,19 +379,6 @@ func (s *JobService) CreateNextOccurrence(ctx context.Context, sourceID int64, n
 		params.ArrivalEnd = time.Time{}
 	}
 	return s.Create(ctx, params)
-}
-
-func (s *JobService) newJobStatusID(ctx context.Context) (int64, error) {
-	st, err := s.client.Status.Query().
-		Where(
-			status.NameEqualFold("New"),
-			status.HasWorkflowWith(statusworkflow.ObjectTypeEQ("job")),
-		).
-		Only(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("find New job status: %w", err)
-	}
-	return st.ID, nil
 }
 
 func shiftedTime(t *time.Time, delta time.Duration) time.Time {
@@ -495,9 +479,6 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 	}
 	if params.Subtitle != nil {
 		u.SetSubtitle(*params.Subtitle)
-	}
-	if params.StatusID != nil {
-		u.SetStatusID(*params.StatusID)
 	}
 	if params.BillingType != nil {
 		u.SetBillingType(*params.BillingType)

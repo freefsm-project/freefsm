@@ -1,0 +1,45 @@
+package templates
+
+import "fmt"
+
+templ DeliveryHistory(objectType string, objectID int64, rows []DeliveryHistoryRow, archived bool) {
+	<h3>Delivery History</h3>
+	if len(rows) == 0 {
+		<p>No document emails have been queued.</p>
+	}
+	if len(rows) > 0 {
+		<div class="delivery-history">
+		for _, row := range rows {
+			<article class="delivery-history-item">
+				<header><strong>{ row.State }</strong><span>{ row.QueuedAt }</span></header>
+				<p><strong>To:</strong> { row.Recipients }</p>
+				<p>Attempts: { fmt.Sprintf("%d", row.Attempts) } | Opens: { fmt.Sprintf("%d", row.OpenCount) }</p>
+				if row.AcceptedAt != "" {
+					<p>Accepted: { row.AcceptedAt }</p>
+				}
+				if row.DeliveredAt != "" {
+					<p>Delivered: { row.DeliveredAt }</p>
+				}
+				if row.BouncedAt != "" {
+					<p>Bounced: { row.BouncedAt }</p>
+				}
+				if row.FailedAt != "" {
+					<p>Failed: { row.FailedAt }</p>
+				}
+				if row.OpenedAt != "" {
+					<p>Last open: { row.OpenedAt }</p>
+				}
+				if row.LastError != "" {
+					<p class="document-error">{ row.LastError }</p>
+				}
+				if row.CanRetry && !archived {
+					<form action={ templ.URL(fmt.Sprintf("/%ss/%d/deliveries/%d/retry", objectType, objectID, row.ID)) } method="post">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ row.RetryKey }/>
+						<label>Retry reason<input name="reason" required/></label><button type="submit">Queue retry</button>
+					</form>
+				}
+			</article>
+		}
+		</div>
+	}
+}

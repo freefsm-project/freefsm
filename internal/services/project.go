@@ -88,6 +88,14 @@ func (s *ProjectService) Create(ctx context.Context, params ProjectCreateParams)
 	if err := validateCustomerLocation(ctx, s.client, params.CustomerID, params.LocationID); err != nil {
 		return nil, err
 	}
+	customer, err := s.client.Customer.Get(ctx, params.CustomerID)
+	if err != nil {
+		return nil, fmt.Errorf("get project customer: %w", err)
+	}
+	statusID, err := creationStatus(ctx, s.client, 0, customer.CompanyID, "project", "project:new")
+	if err != nil {
+		return nil, err
+	}
 
 	b := s.client.Project.Create().
 		SetCustomerID(params.CustomerID).
@@ -97,9 +105,7 @@ func (s *ProjectService) Create(ctx context.Context, params ProjectCreateParams)
 		SetNotes(params.Notes).
 		SetCustomFields(params.CustomFields)
 
-	if params.StatusID > 0 {
-		b.SetStatusID(params.StatusID)
-	}
+	b.SetStatusID(statusID)
 	if params.LocationID > 0 {
 		b.SetLocationID(params.LocationID)
 	}
@@ -121,7 +127,6 @@ type ProjectUpdateParams struct {
 	CustomerID           *int64
 	Name                 *string
 	Description          *string
-	StatusID             *int64
 	LocationID           *int64
 	CompletionPercentage *float64
 	StartTime            *time.Time
@@ -157,13 +162,6 @@ func (s *ProjectService) Update(ctx context.Context, id int64, params ProjectUpd
 	}
 	if params.Description != nil {
 		b.SetDescription(*params.Description)
-	}
-	if params.StatusID != nil {
-		if *params.StatusID > 0 {
-			b.SetStatusID(*params.StatusID)
-		} else {
-			b.ClearStatusID()
-		}
 	}
 	if params.LocationID != nil {
 		if *params.LocationID > 0 {

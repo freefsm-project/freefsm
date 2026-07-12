@@ -90,8 +90,7 @@ templ SettingsPage(p SettingsPageData) {
 				</label>
 			</div>
 			if !p.IsSetup {
-				<p><a href="/settings/job-statuses">Manage job statuses</a></p>
-				<p><a href="/settings/document-statuses/estimate">Manage estimate statuses</a> &middot; <a href="/settings/document-statuses/invoice">Manage invoice statuses</a></p>
+				<p class="settings-status-links"><a href="/settings/statuses/job">Job statuses</a> &middot; <a href="/settings/statuses/project">Project statuses</a> &middot; <a href="/settings/statuses/estimate">Estimate statuses</a> &middot; <a href="/settings/statuses/invoice">Invoice statuses</a></p>
 			}
 			<button type="submit" class="settings-submit">{ settingsButtonText(p.IsSetup) }</button>
 		</div>
@@ -147,6 +146,11 @@ templ SettingsPage(p SettingsPageData) {
 					<textarea name="estimate_email_body" rows="6" placeholder="Hello {customer_name},">{ p.Settings.EstimateEmailBody }</textarea>
 				</label>
 				<p class="settings-help">Available placeholders: <code>{ "{customer_name}" }</code>, <code>{ "{business_name}" }</code>, <code>{ "{invoice_number}" }</code>, <code>{ "{estimate_number}" }</code>, <code>{ "{job_name}" }</code>, <code>{ "{job_type}" }</code>, <code>{ "{job_subtitle}" }</code>, and <code>{ "{date}" }</code>.</p>
+				<label>
+					<input type="checkbox" name="email_tracking_enabled" checked?={ p.Settings.EmailTrackingEnabled }/>
+					Track document email opens
+				</label>
+				<p class="settings-help">Adds a one-pixel image to queued document emails. Opens are approximate because mail clients and privacy proxies may block, cache, or prefetch images. FreeFSM stores only first/last open time and a count; no IP address or user agent is retained.</p>
 				<div class="settings-test-actions">
 					<button type="button"
 						hx-post="/settings/test-email"

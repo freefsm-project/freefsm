@@ -1,0 +1,18 @@
+package templates
+
+import "fmt"
+
+templ StatusControl(objectType string, id, statusID int64, name, color string, statuses []SelectOption, editable bool) {
+	if editable {
+		<form action={ templ.URL(fmt.Sprintf("/%ss/%d/status", objectType, id)) } method="post" class="job-status-form">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<select name="status_id" class="job-status-select" style={ badgeStyle(color) } onchange="this.form.submit()">
+				for _, status := range statuses {
+					<option value={ fmt.Sprintf("%d", status.Value) } selected?={ statusID == status.Value }>{ status.Label }</option>
+				}
+			</select>
+		</form>
+	} else {
+		<span class="status-badge" style={ badgeStyle(color) }>{ name }</span>
+	}
+}

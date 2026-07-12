@@ -40,14 +40,6 @@ templ InvoiceForm(p InvoiceFormPageData) {
 						<small class="error-msg">{ p.Errors["title"] }</small>
 					}
 				</label>
-				<label>
-					Status
-					<select name="status_id">
-						for _, s := range p.Statuses {
-							<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.Invoice.StatusID == s.Value }>{ s.Label }</option>
-						}
-					</select>
-				</label>
 			</div>
 			<div class="grid">
 				<label>

@@ -36,14 +36,6 @@ templ EstimateForm(p EstimateFormPageData) {
 						<small class="error-msg">{ p.Errors["title"] }</small>
 					}
 				</label>
-				<label>
-					Status
-					<select name="status_id">
-						for _, s := range p.Statuses {
-							<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.Estimate.StatusID == s.Value }>{ s.Label }</option>
-						}
-					</select>
-				</label>
 			</div>
 			<label>
 				Tax Rate

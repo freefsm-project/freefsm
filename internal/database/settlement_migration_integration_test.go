@@ -128,16 +128,16 @@ func TestSettlementMigration042Integration(t *testing.T) {
 		}
 		var allocated, credit int64
 		var state, status string
-		if err := db.Pool.QueryRow(ctx, `SELECT coalesce(sum(a.amount_cents),0),coalesce((SELECT sum(original_amount_cents) FROM customer_credits),0),i.settlement_state,s.name FROM invoices i JOIN statuses s ON s.id=i.status_id LEFT JOIN payment_invoice_allocations a ON a.invoice_id=i.id WHERE i.id=$1 GROUP BY i.settlement_state,s.name`, invoiceID).Scan(&allocated, &credit, &state, &status); err != nil {
+		if err := db.Pool.QueryRow(ctx, `SELECT coalesce(sum(a.amount_cents),0),coalesce((SELECT sum(original_amount_cents) FROM customer_credits),0),i.settlement_state,s.category_key FROM invoices i JOIN statuses s ON s.id=i.status_id LEFT JOIN payment_invoice_allocations a ON a.invoice_id=i.id WHERE i.id=$1 GROUP BY i.settlement_state,s.category_key`, invoiceID).Scan(&allocated, &credit, &state, &status); err != nil {
 			t.Fatal(err)
 		}
-		if allocated != 10000 || credit != 2000 || state != "paid" || !strings.EqualFold(status, "Sent") {
+		if allocated != 10000 || credit != 2000 || state != "paid" || status != "invoice:sent" {
 			t.Fatalf("allocated=%d credit=%d state=%s status=%s", allocated, credit, state, status)
 		}
 		var paymentsColumn, staging, removedStatuses bool
 		_ = db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='invoices' AND column_name='payments')`).Scan(&paymentsColumn)
 		_ = db.Pool.QueryRow(ctx, `SELECT to_regclass('settlement_migration_payments') IS NOT NULL`).Scan(&staging)
-		_ = db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE w.object_type='invoice' AND lower(s.name) IN ('paid','partially paid'))`).Scan(&removedStatuses)
+		_ = db.Pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE w.object_type='invoice' AND s.category_key IN ('invoice:paid','invoice:partially_paid'))`).Scan(&removedStatuses)
 		if paymentsColumn || staging || removedStatuses {
 			t.Fatalf("paymentsColumn=%v staging=%v removedStatuses=%v", paymentsColumn, staging, removedStatuses)
 		}
@@ -206,7 +206,22 @@ func TestConversionMigration043BackfillsLegacyRelationOwnershipIntegration(t *te
 	}
 	db, ctx := migrationDatabaseThrough041(t, dsn)
 	seedLegacySettlement(t, ctx, db, "[]", "[]", "Sent")
-	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+	through043 := fstest.MapFS{}
+	entries, err := fs.ReadDir(MigrationFS(), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() >= "044_" {
+			continue
+		}
+		data, readErr := fs.ReadFile(MigrationFS(), entry.Name())
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		through043[entry.Name()] = &fstest.MapFile{Data: data}
+	}
+	if err := db.Migrate(ctx, through043); err != nil {
 		t.Fatal(err)
 	}
 	down, err := fs.ReadFile(MigrationFS(), "043_estimate_invoice_conversion.down.sql")

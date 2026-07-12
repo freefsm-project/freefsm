@@ -265,6 +265,7 @@ type ProjectListPageData struct {
 
 type ProjectShowPageData struct {
 	Project      ProjectDetail
+	Statuses     []SelectOption
 	Jobs         []JobRow
 	Tags         []TagRow
 	AllTags      []TagRow
@@ -464,6 +465,8 @@ type EstimateDetail struct {
 	ConvertKey     string
 	ConvertBlocker string
 	CanManage      bool
+	Deliveries     []DeliveryHistoryRow
+	Statuses       []SelectOption
 }
 
 type EstimateListPageData struct {
@@ -540,6 +543,8 @@ type InvoiceDetail struct {
 	RevertBlockers     []string
 	CanManage          bool
 	CanSettle          bool
+	Deliveries         []DeliveryHistoryRow
+	Statuses           []SelectOption
 }
 
 type InvoiceListPageData struct {
@@ -639,17 +644,25 @@ type DocumentPreviewData struct {
 }
 
 type DocumentEmailData struct {
-	ObjectType string
-	ObjectID   int64
-	Title      string
-	BackURL    string
-	ActionURL  string
-	To         string
-	CC         string
-	BCC        string
-	Subject    string
-	Body       string
-	Error      string
+	ObjectType     string
+	ObjectID       int64
+	Title          string
+	BackURL        string
+	ActionURL      string
+	To             string
+	CC             string
+	BCC            string
+	Subject        string
+	Body           string
+	Error          string
+	IdempotencyKey string
+}
+
+type DeliveryHistoryRow struct {
+	ID                                                                                                       int64
+	State, Recipients, QueuedAt, AcceptedAt, DeliveredAt, BouncedAt, FailedAt, OpenedAt, LastError, RetryKey string
+	OpenCount, Attempts                                                                                      int
+	CanRetry                                                                                                 bool
 }
 
 func jobFormTitle(isNew bool) string {
@@ -1552,28 +1565,23 @@ type AssetStatusRow struct {
 	SortOrder int
 }
 
-type JobStatusListPageData struct {
-	Statuses []JobStatusRow
-}
-
-type DocumentStatusPageData struct {
+type StatusSettingsPageData struct {
 	ObjectType string
-	Statuses   []DocumentStatusRow
+	Categories []StatusCategoryColumn
 }
 
-type DocumentStatusRow struct {
-	ID          int64
-	Name        string
-	Color       string
-	SortOrder   int
-	Convertible bool
-	Draft       bool
+type StatusCategoryColumn struct {
+	Key       string
+	Label     string
+	Automatic bool
+	Statuses  []StatusSettingsRow
 }
 
-type JobStatusRow struct {
-	ID         int64
-	Name       string
-	Color      string
-	SortOrder  int
-	UsageCount int
+type StatusSettingsRow struct {
+	ID      int64
+	Name    string
+	Color   string
+	Order   int
+	Default bool
+	Usage   int
 }

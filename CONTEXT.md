@@ -37,8 +37,28 @@ An Estimate custom-field definition and an Invoice custom-field definition expli
 _Avoid_: Same-name field, inferred field match
 
 **Invoice Status**:
-The workflow state of an Invoice, independent of whether its value has been settled.
+The effective state presented for an Invoice. Partially Paid and Paid reflect settlement; otherwise the Invoice's preserved Manual Invoice Status applies.
 _Avoid_: Payment status, monetary status
+
+**Status Category**:
+A fixed semantic stage in an object's lifecycle. Categories provide stable meaning for behavior and reporting, while their labels and colors may be customized. Job categories are New, Travel Time, In Progress, Pending, Completed, and Canceled. Project categories are New, In Progress, Pending, Completed, and Canceled. Estimate categories are Draft, Estimate, Sent, Accepted, Rejected, and Completed.
+_Avoid_: Status label, workflow column
+
+**Status Label**:
+The customizable, unique display name of a Status Category within one object type.
+_Avoid_: Status Category, state
+
+**Default Status**:
+The Status selected by default for a Status Category when an object enters that category.
+_Avoid_: Initial category, global default
+
+**Manual Invoice Status**:
+The preserved user-selected Invoice workflow slot: Draft, Invoiced, Sent, or Void. It remains unchanged while settlement determines the effective Invoice Status.
+_Avoid_: Settlement State, effective Invoice Status
+
+**Effective Invoice Status**:
+The Invoice Status presented for behavior and reporting. Paid takes precedence over Partially Paid, which takes precedence over the Manual Invoice Status.
+_Avoid_: Stored status, payment history
 
 **Payment**:
 An immutable positive receipt against one Invoice.
@@ -47,6 +67,29 @@ _Avoid_: Credit, transaction
 **Settlement State**:
 The monetary state of an Invoice: Unpaid, Partially Paid, or Paid. It is separate from Invoice Status.
 _Avoid_: Invoice Status, payment status
+
+**Effective Invoice Status**:
+The displayed status derived with strict precedence: manual Void; manual Draft when no active settlement exists; Partially Paid for active partial settlement; Paid for paid active settlement or a manually non-Draft Invoice projected Paid; otherwise the preserved Manual Invoice Status.
+
+**Document Delivery**:
+One requested transmission of an immutable document snapshot and its PDF by email. Its lifecycle is Queued, Sending, Accepted, Delivered, Bounced, or Failed.
+_Avoid_: Status email, notification
+
+**Accepted Delivery**:
+A Document Delivery accepted by the receiving mail system for onward delivery. Acceptance does not establish that the message reached the recipient.
+_Avoid_: Delivered, read
+
+**Delivered Delivery**:
+A Document Delivery for which the email provider supplies evidence of delivery to the recipient's mail system.
+_Avoid_: Accepted, opened
+
+**Delivery Evidence**:
+Provider-supplied information about acceptance, delivery, bounce, failure, or an enabled recipient open signal.
+_Avoid_: Proof of reading, generic SMTP response
+
+**Open Signal**:
+An optional, imperfect indication that a recipient may have opened a delivered message, represented only by the first and most recent observed times and an observation count. Open tracking is disabled by default.
+_Avoid_: Read receipt, proof of viewing
 
 **Customer Credit**:
 Unused value from an overpayment, owned by one Customer and linked to the originating Payment. Credit is unresolved while its available value is greater than zero.
@@ -68,7 +111,7 @@ _Avoid_: Edit, deletion, cancellation
 
 - Conversion always removes the Estimate from normal user-visible behavior. There is no option to retain it alongside the resulting Invoice.
 - Conversion preserves immutable provenance while giving the resulting Invoice an identity independent of the source Estimate.
-- An Estimate may be converted only when its Estimate Status explicitly grants the conversion capability; status names do not imply convertibility.
+- Any active Estimate may be converted, regardless of its Estimate Status.
 - Conversion transfers the Estimate's current files, tags, and comments to the resulting Invoice.
 - Revert to Estimate restores the original Estimate identity as Draft, using the current Invoice document values. It combines the original estimate-only custom fields with the current values of Shared Custom Fields and transfers all current files, tags, and comments back to the Estimate.
 - Reversion never permits an Invoice number to be reused. A later conversion creates a new Conversion Cycle and a newly identified Invoice.

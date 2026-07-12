@@ -7,11 +7,13 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/conversion"
+	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/settlement"
+	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -62,6 +64,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	invoiceService := services.NewInvoiceService(entClient, db)
 	settlementService := settlement.New(db)
 	conversionService := conversion.New(db)
+	statusflowService := statusflow.New(db)
+	deliveryService := delivery.New(db, cfg.PublicURL)
 	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc, policySvc, objects)
 	defSvc := services.NewCustomFieldDefinitionService(entClient)
 	cfHandler := NewCustomFieldHandler(defSvc, activitySvc, depSvc)
@@ -73,6 +77,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	activityHandler := NewActivityHandler(activitySvc, userService, policySvc, objects, conversionService)
 
 	customerHandler := NewCustomerHandler(customerService, contactSvc, locationSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc, jobService, estimateService, invoiceService, statusService, settlementService)
+	customerHandler.statusflow = statusflowService
 	itemHandler := NewItemHandler(itemService, activitySvc)
 	// Asset services
 	assetTypeSvc := services.NewAssetTypeService(entClient)
@@ -80,17 +85,20 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	assetSvc := services.NewAssetService(entClient)
 
 	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, assetTypeSvc, assetStatusSvc, fileSvc, activitySvc, userService, policySvc, timeEntrySvc)
+	jobHandler.statusflow = statusflowService
 	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc, policySvc)
+	projectHandler.statusflow = statusflowService
 	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService, userService, locationSvc, invoiceService, activitySvc, cfg)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
 	inviteSvc := services.NewInvitationService(entClient)
-	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc, policySvc, conversionService)
-	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, emailSvc, activitySvc, policySvc, settlementService, conversionService)
+	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, deliveryService, activitySvc, policySvc, conversionService)
+	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, deliveryService, activitySvc, policySvc, settlementService, conversionService)
+	estimateHandler.statusflow = statusflowService
+	invoiceHandler.statusflow = statusflowService
 	tagHandler := NewTagHandler(tagSvc, tagLinkSvc, activitySvc, depSvc)
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc, cfg.UploadDir)
-	jobStatusHandler := NewJobStatusHandler(statusService, activitySvc)
-	documentStatusHandler := NewDocumentStatusHandler(statusService)
+	statusSettingsHandler := NewStatusSettingsHandler(statusflowService)
 	userHandler := NewUserHandler(userService, emailSvc, inviteSvc, companySettingsSvc, activitySvc, cfg)
 	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, jobService, activitySvc)
 	authHandler := NewAuthHandler(db, sessions, userService, companySettingsSvc, emailSvc, services.NewPasswordResetService(entClient), inviteSvc, activitySvc, cfg)
@@ -121,7 +129,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	searchHandler := NewSearchHandler(services.NewSearchService(entClient))
+	searchHandler := NewSearchHandler(services.NewSearchService(entClient, db))
 
 	// Authenticated routes
 	r.Group(func(r chi.Router) {
@@ -184,6 +192,9 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/jobs", jobHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/jobs/activity", activityHandler.ListByType(objectref.TypeJob))
 		r.Post("/jobs/{id}/status", jobHandler.UpdateStatus)
+		r.Post("/projects/{id}/status", transitionStatus(statusflowService, statusflow.Project))
+		r.Post("/estimates/{id}/status", transitionStatus(statusflowService, statusflow.Estimate))
+		r.Post("/invoices/{id}/status", transitionStatus(statusflowService, statusflow.Invoice))
 		r.Post("/jobs/{id}/clock-in", jobHandler.ClockIn)
 		r.Post("/jobs/{id}/clock-out", jobHandler.ClockOut)
 		r.Get("/jobs/{id}", jobHandler.Show)
@@ -255,6 +266,16 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.With(activeObjectGuard(objectref.TypeInvoice)).Get("/invoices/{id}/edit", invoiceHandler.Update)
 		r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}", invoiceHandler.Update)
 		r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/revert-to-estimate", invoiceHandler.RevertToEstimate)
+		r.With(activeObjectGuard(objectref.TypeEstimate)).Get("/estimates/{id}/email", estimateHandler.Email)
+		r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/email", estimateHandler.Email)
+		r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/deliveries/{delivery_id}/retry", estimateHandler.RetryDelivery)
+		r.Get("/estimates/{id}/pdf", estimateHandler.PDF)
+		r.Get("/estimates/{id}/pdf/preview", estimateHandler.PreviewPDF)
+		r.With(activeObjectGuard(objectref.TypeInvoice)).Get("/invoices/{id}/email", invoiceHandler.Email)
+		r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/email", invoiceHandler.Email)
+		r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/deliveries/{delivery_id}/retry", invoiceHandler.RetryDelivery)
+		r.Get("/invoices/{id}/pdf", invoiceHandler.PDF)
+		r.Get("/invoices/{id}/pdf/preview", invoiceHandler.PreviewPDF)
 
 		// Office-only billing and general document mutations.
 		r.Group(func(r chi.Router) {
@@ -263,11 +284,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Get("/estimates/new", estimateHandler.Create)
 			r.Post("/estimates", estimateHandler.Create)
 			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/delete", estimateHandler.Delete)
-			r.Get("/estimates/{id}/pdf", estimateHandler.PDF)
-			r.Get("/estimates/{id}/pdf/preview", estimateHandler.PreviewPDF)
 			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/pdf/save", estimateHandler.SavePDF)
-			r.With(activeObjectGuard(objectref.TypeEstimate)).Get("/estimates/{id}/email", estimateHandler.Email)
-			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/email", estimateHandler.Email)
 			r.Get("/invoices/new", invoiceHandler.Create)
 			r.Post("/invoices", invoiceHandler.Create)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/delete", invoiceHandler.Delete)
@@ -276,11 +293,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/payments/{payment_id}/reverse", invoiceHandler.ReversePayment)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications", invoiceHandler.ApplyCredit)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications/{application_id}/reverse", invoiceHandler.ReverseCreditApplication)
-			r.Get("/invoices/{id}/pdf", invoiceHandler.PDF)
-			r.Get("/invoices/{id}/pdf/preview", invoiceHandler.PreviewPDF)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/pdf/save", invoiceHandler.SavePDF)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Get("/invoices/{id}/email", invoiceHandler.Email)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/email", invoiceHandler.Email)
 		})
 
 		// Entity tagging
@@ -357,7 +370,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Get("/settings/activity", activityHandler.ListByType(objectref.TypeCompanySettings))
 			r.Get("/settings/custom-fields/activity", activityHandler.ListByType(objectref.TypeCustomField))
 			r.Get("/settings/assets/activity", activityHandler.ListForAssetSettings)
-			r.Get("/settings/job-statuses/activity", activityHandler.ListByType(objectref.TypeJobStatus))
 			r.Get("/tags/activity", activityHandler.ListByType(objectref.TypeTag))
 			r.Get("/users/activity", activityHandler.ListByType(objectref.TypeUser))
 			r.Get("/tags", tagHandler.List)
@@ -385,13 +397,12 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/settings/asset-statuses", assetStatusHandler.Create)
 			r.Post("/settings/asset-statuses/{id}", assetStatusHandler.Update)
 			r.Post("/settings/asset-statuses/{id}/delete", assetStatusHandler.Delete)
-			r.Get("/settings/job-statuses", jobStatusHandler.List)
-			r.Post("/settings/job-statuses", jobStatusHandler.Create)
-			r.Post("/settings/job-statuses/{id}", jobStatusHandler.Update)
-			r.Post("/settings/job-statuses/{id}/delete", jobStatusHandler.Delete)
-			r.Get("/settings/document-statuses/{type}", documentStatusHandler.List)
-			r.Post("/settings/document-statuses/{type}", documentStatusHandler.Create)
-			r.Post("/settings/document-statuses/{type}/{id}", documentStatusHandler.Update)
+			r.Get("/settings/statuses/{type}", statusSettingsHandler.List)
+			r.Post("/settings/statuses/{type}", statusSettingsHandler.Create)
+			r.Post("/settings/statuses/{type}/{id}", statusSettingsHandler.Update)
+			r.Post("/settings/statuses/{type}/{id}/default", statusSettingsHandler.Default)
+			r.Post("/settings/statuses/{type}/{id}/move", statusSettingsHandler.Move)
+			r.Post("/settings/statuses/{type}/{id}/delete", statusSettingsHandler.Delete)
 			r.Get("/users", userHandler.List)
 			r.Get("/users/new", userHandler.Create)
 			r.Post("/users", userHandler.Create)

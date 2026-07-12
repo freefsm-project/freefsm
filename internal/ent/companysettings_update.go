@@ -342,6 +342,20 @@ func (_u *CompanySettingsUpdate) SetNillableEmailAutoCc(v *string) *CompanySetti
 	return _u
 }
 
+// SetEmailTrackingEnabled sets the "email_tracking_enabled" field.
+func (_u *CompanySettingsUpdate) SetEmailTrackingEnabled(v bool) *CompanySettingsUpdate {
+	_u.mutation.SetEmailTrackingEnabled(v)
+	return _u
+}
+
+// SetNillableEmailTrackingEnabled sets the "email_tracking_enabled" field if the given value is not nil.
+func (_u *CompanySettingsUpdate) SetNillableEmailTrackingEnabled(v *bool) *CompanySettingsUpdate {
+	if v != nil {
+		_u.SetEmailTrackingEnabled(*v)
+	}
+	return _u
+}
+
 // SetInvoiceEmailSubject sets the "invoice_email_subject" field.
 func (_u *CompanySettingsUpdate) SetInvoiceEmailSubject(v string) *CompanySettingsUpdate {
 	_u.mutation.SetInvoiceEmailSubject(v)
@@ -731,6 +745,9 @@ func (_u *CompanySettingsUpdate) sqlSave(ctx context.Context) (_node int, err er
 	}
 	if value, ok := _u.mutation.EmailAutoCc(); ok {
 		_spec.SetField(companysettings.FieldEmailAutoCc, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.EmailTrackingEnabled(); ok {
+		_spec.SetField(companysettings.FieldEmailTrackingEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.InvoiceEmailSubject(); ok {
 		_spec.SetField(companysettings.FieldInvoiceEmailSubject, field.TypeString, value)
@@ -1122,6 +1139,20 @@ func (_u *CompanySettingsUpdateOne) SetEmailAutoCc(v string) *CompanySettingsUpd
 func (_u *CompanySettingsUpdateOne) SetNillableEmailAutoCc(v *string) *CompanySettingsUpdateOne {
 	if v != nil {
 		_u.SetEmailAutoCc(*v)
+	}
+	return _u
+}
+
+// SetEmailTrackingEnabled sets the "email_tracking_enabled" field.
+func (_u *CompanySettingsUpdateOne) SetEmailTrackingEnabled(v bool) *CompanySettingsUpdateOne {
+	_u.mutation.SetEmailTrackingEnabled(v)
+	return _u
+}
+
+// SetNillableEmailTrackingEnabled sets the "email_tracking_enabled" field if the given value is not nil.
+func (_u *CompanySettingsUpdateOne) SetNillableEmailTrackingEnabled(v *bool) *CompanySettingsUpdateOne {
+	if v != nil {
+		_u.SetEmailTrackingEnabled(*v)
 	}
 	return _u
 }
@@ -1545,6 +1576,9 @@ func (_u *CompanySettingsUpdateOne) sqlSave(ctx context.Context) (_node *Company
 	}
 	if value, ok := _u.mutation.EmailAutoCc(); ok {
 		_spec.SetField(companysettings.FieldEmailAutoCc, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.EmailTrackingEnabled(); ok {
+		_spec.SetField(companysettings.FieldEmailTrackingEnabled, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.InvoiceEmailSubject(); ok {
 		_spec.SetField(companysettings.FieldInvoiceEmailSubject, field.TypeString, value)

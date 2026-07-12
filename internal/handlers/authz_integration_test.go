@@ -41,7 +41,7 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 	archivedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Archived Route Job").SetDeletedAt(time.Now()).SaveX(ctx)
 	unassignedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Unassigned Route Job").SaveX(ctx)
 	workflow := client.StatusWorkflow.Create().SetObjectType("job").SetName("Job Workflow").SaveX(ctx)
-	status := client.Status.Create().SetWorkflowID(workflow.ID).SetName("Scheduled").SetColor("#336699").SetSortOrder(1).SaveX(ctx)
+	status := client.Status.Create().SetWorkflowID(workflow.ID).SetName("Scheduled").SetColor("#336699").SetSortOrder(1).SetCategoryKey("job:pending").SetCategoryOrder(1).SetIsCategoryDefault(true).SaveX(ctx)
 	estimate := client.Estimate.Create().SetCustomerID(customer.ID).SetTitle("Protected Estimate").SaveX(ctx)
 	invoice := client.Invoice.Create().
 		SetCompanyID(companyID).

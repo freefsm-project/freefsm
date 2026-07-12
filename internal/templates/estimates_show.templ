@@ -54,7 +54,7 @@ templ EstimateShow(p EstimateDetail) {
 		<table class="work-item-detail-meta">
 			<tbody>
 				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
-				<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(p.StatusColor) }>{ p.StatusName }</span></td></tr>
+				<tr><th>Status</th><td>@StatusControl("estimate", p.ID, p.StatusID, p.StatusName, p.StatusColor, p.Statuses, p.ArchivedAt == "" && p.CanManage)</td></tr>
 				<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
 			</tbody>
 		</table>
@@ -102,6 +102,7 @@ templ EstimateShow(p EstimateDetail) {
 			<h3>Notes</h3>
 			<p>{ p.Notes }</p>
 		}
+		@DeliveryHistory("estimate", p.ID, p.Deliveries, p.ArchivedAt != "")
 		if p.ArchivedAt != "" {
 			<div hx-get={ templ.URL(fmt.Sprintf("/estimates/%d/comments?read_only=1", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
 				<p>Loading comments...</p>

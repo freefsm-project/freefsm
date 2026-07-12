@@ -21,7 +21,6 @@ import (
 var (
 	ErrForbidden           = errors.New("conversion operation forbidden")
 	ErrNotFound            = errors.New("document not found")
-	ErrNotConvertible      = errors.New("estimate status is not convertible")
 	ErrArchived            = errors.New("archived document must be restored first")
 	ErrSettlement          = errors.New("invoice has financial settlement blockers")
 	ErrIdempotencyConflict = errors.New("idempotency key reused with a different request")
@@ -80,8 +79,7 @@ func New(db *pgxpool.Pool) *Service { return &Service{db: db, now: time.Now} }
 func (s *Service) ConversionEligibility(ctx context.Context, actor Actor, estimateID int64) (Eligibility, error) {
 	var jobID *int64
 	var deletedAt, hiddenAt *time.Time
-	var convertible bool
-	err := s.db.QueryRow(ctx, `SELECT e.job_id,e.deleted_at,e.conversion_hidden_at,s.estimate_convertible FROM estimates e LEFT JOIN statuses s ON s.id=e.status_id WHERE e.company_id=$1 AND e.id=$2`, actor.CompanyID, estimateID).Scan(&jobID, &deletedAt, &hiddenAt, &convertible)
+	err := s.db.QueryRow(ctx, `SELECT e.job_id,e.deleted_at,e.conversion_hidden_at FROM estimates e WHERE e.company_id=$1 AND e.id=$2`, actor.CompanyID, estimateID).Scan(&jobID, &deletedAt, &hiddenAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Eligibility{}, ErrNotFound
 	}
@@ -96,7 +94,7 @@ func (s *Service) ConversionEligibility(ctx context.Context, actor Actor, estima
 	if err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
 		return Eligibility{}, err
 	}
-	e := Eligibility{Allowed: deletedAt == nil && hiddenAt == nil && convertible}
+	e := Eligibility{Allowed: deletedAt == nil && hiddenAt == nil}
 	var r Result
 	err = tx.QueryRow(ctx, `SELECT id,estimate_id,invoice_id,invoice_number FROM estimate_invoice_conversion_cycles WHERE company_id=$1 AND estimate_id=$2 AND reverted_at IS NULL`, actor.CompanyID, estimateID).Scan(&r.CycleID, &r.EstimateID, &r.InvoiceID, &r.InvoiceNumber)
 	if err == nil {
@@ -179,8 +177,7 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 		var title, notes, taxRate string
 		var lineItems, customFields, snapshot []byte
 		var deletedAt, hiddenAt *time.Time
-		var convertible bool
-		err := tx.QueryRow(ctx, `SELECT e.customer_id,e.job_id,e.title,e.notes,e.tax_rate::text,e.line_items,e.custom_fields,e.deleted_at,e.conversion_hidden_at,s.estimate_convertible,to_jsonb(e) FROM estimates e LEFT JOIN statuses s ON s.id=e.status_id JOIN status_workflows w ON w.id=s.workflow_id AND w.object_type='estimate' WHERE e.company_id=$1 AND e.id=$2 FOR UPDATE OF e`, actor.CompanyID, req.EstimateID).Scan(&customerID, &jobID, &title, &notes, &taxRate, &lineItems, &customFields, &deletedAt, &hiddenAt, &convertible, &snapshot)
+		err := tx.QueryRow(ctx, `SELECT e.customer_id,e.job_id,e.title,e.notes,e.tax_rate::text,e.line_items,e.custom_fields,e.deleted_at,e.conversion_hidden_at,to_jsonb(e) FROM estimates e WHERE e.company_id=$1 AND e.id=$2 FOR UPDATE OF e`, actor.CompanyID, req.EstimateID).Scan(&customerID, &jobID, &title, &notes, &taxRate, &lineItems, &customFields, &deletedAt, &hiddenAt, &snapshot)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return Result{}, ErrNotFound
 		}
@@ -191,10 +188,7 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 			return Result{}, ErrArchived
 		}
 		if hiddenAt != nil {
-			return Result{}, ErrNotConvertible
-		}
-		if !convertible {
-			return Result{}, ErrNotConvertible
+			return Result{}, ErrNotFound
 		}
 		if err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
 			return Result{}, err
@@ -224,7 +218,7 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 			return Result{}, err
 		}
 		var statusID int64
-		if err = tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.company_id=$1 AND w.company_id=$1 AND w.object_type='invoice' AND s.document_role='draft'`, actor.CompanyID).Scan(&statusID); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.company_id=$1 AND w.company_id=$1 AND w.object_type='invoice' AND s.category_key='invoice:draft' AND s.is_category_default`, actor.CompanyID).Scan(&statusID); err != nil {
 			return Result{}, fmt.Errorf("resolve invoice draft status: %w", err)
 		}
 		now := s.now()
@@ -285,11 +279,14 @@ func (s *Service) Revert(ctx context.Context, actor Actor, req RevertRequest) (R
 			return Result{}, fmt.Errorf("%w: %v", ErrSettlement, blockers)
 		}
 		var draftStatus int64
-		if err = tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.company_id=$1 AND w.company_id=$1 AND w.object_type='estimate' AND s.document_role='draft'`, actor.CompanyID).Scan(&draftStatus); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.company_id=$1 AND w.company_id=$1 AND w.object_type='estimate' AND s.category_key='estimate:draft' AND s.is_category_default`, actor.CompanyID).Scan(&draftStatus); err != nil {
 			return Result{}, fmt.Errorf("resolve estimate draft status: %w", err)
 		}
 		now := s.now()
 		if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.conversion_revert_cycle',$1,true)`, r.CycleID.String()); err != nil {
+			return Result{}, err
+		}
+		if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.status_transition','allowed',true)`); err != nil {
 			return Result{}, err
 		}
 		mergedCustom, err := mergeRevertCustomFields(ctx, tx, actor.CompanyID, sourceCustom, invoiceCustom)

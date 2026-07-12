@@ -82,14 +82,26 @@ func TestConvertRevertAndReconvertIntegration(t *testing.T) {
 		t.Fatal("revert result not marked reverted")
 	}
 	var title, role string
-	if err = f.db.Pool.QueryRow(ctx, `SELECT e.title,s.document_role FROM estimates e JOIN statuses s ON s.id=e.status_id WHERE e.id=$1 AND e.conversion_hidden_at IS NULL`, estimateID).Scan(&title, &role); err != nil {
+	if err = f.db.Pool.QueryRow(ctx, `SELECT e.title,split_part(s.category_key,':',2) FROM estimates e JOIN statuses s ON s.id=e.status_id WHERE e.id=$1 AND e.conversion_hidden_at IS NULL`, estimateID).Scan(&title, &role); err != nil {
 		t.Fatal(err)
 	}
 	if title != "Current invoice" || role != "draft" {
 		t.Fatalf("restored title=%q role=%q", title, role)
 	}
-	if _, err = f.db.Pool.Exec(ctx, `UPDATE estimates SET status_id=$1 WHERE id=$2`, f.estimateAccepted, estimateID); err != nil {
-		t.Fatal(err)
+	tx, txErr := f.db.Pool.Begin(ctx)
+	if txErr != nil {
+		t.Fatal(txErr)
+	}
+	if _, txErr = tx.Exec(ctx, `SELECT set_config('freefsm.status_transition','allowed',true)`); txErr == nil {
+		_, txErr = tx.Exec(ctx, `UPDATE estimates SET status_id=$1 WHERE id=$2`, f.estimateAccepted, estimateID)
+	}
+	if txErr == nil {
+		txErr = tx.Commit(ctx)
+	} else {
+		_ = tx.Rollback(ctx)
+	}
+	if txErr != nil {
+		t.Fatal(txErr)
 	}
 	second, err := svc.Convert(ctx, actor, conversion.ConvertRequest{Operation: conversion.Operation{Key: uuid.New()}, EstimateID: estimateID})
 	if err != nil {
@@ -120,8 +132,8 @@ func TestConversionPolicyStatusArchiveAndSettlementBlockersIntegration(t *testin
 	}
 	admin := conversion.Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
 	tech := conversion.Actor{ID: f.tech, CompanyID: f.company, Role: "tech"}
-	if _, err := svc.Convert(ctx, admin, conversion.ConvertRequest{Operation: conversion.Operation{Key: uuid.New()}, EstimateID: create(f.estimateDraft, f.job)}); !errors.Is(err, conversion.ErrNotConvertible) {
-		t.Fatalf("draft conversion=%v", err)
+	if _, err := svc.Convert(ctx, admin, conversion.ConvertRequest{Operation: conversion.Operation{Key: uuid.New()}, EstimateID: create(f.estimateDraft, f.job)}); err != nil {
+		t.Fatalf("active draft conversion=%v", err)
 	}
 	if _, err := svc.Convert(ctx, tech, conversion.ConvertRequest{Operation: conversion.Operation{Key: uuid.New()}, EstimateID: create(f.estimateAccepted, nil)}); !errors.Is(err, conversion.ErrForbidden) {
 		t.Fatalf("customer-only tech conversion=%v", err)
@@ -371,14 +383,19 @@ func TestDatabaseRejectsInvalidDocumentStatusOwnershipIntegration(t *testing.T) 
 	if err := f.db.Pool.QueryRow(ctx, `INSERT INTO status_workflows(company_id,name,object_type) VALUES($1,'Other Estimate','estimate') RETURNING id`, otherCompany).Scan(&otherWorkflow); err != nil {
 		t.Fatal(err)
 	}
-	if err := f.db.Pool.QueryRow(ctx, `INSERT INTO statuses(company_id,workflow_id,name) VALUES($1,$2,'Custom') RETURNING id`, otherCompany, otherWorkflow).Scan(&otherStatus); err != nil {
+	if _, err := f.db.Pool.Exec(ctx, `INSERT INTO statuses(company_id,workflow_id,name,category_key,category_order,is_category_default) VALUES
+	 ($1,$2,'Draft','estimate:draft',1,true),($1,$2,'Custom','estimate:estimate',1,true),($1,$2,'Sent','estimate:sent',1,true),
+	 ($1,$2,'Accepted','estimate:accepted',1,true),($1,$2,'Rejected','estimate:rejected',1,true),($1,$2,'Completed','estimate:completed',1,true)`, otherCompany, otherWorkflow); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.Pool.QueryRow(ctx, `SELECT id FROM statuses WHERE workflow_id=$1 AND category_key='estimate:estimate'`, otherWorkflow).Scan(&otherStatus); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.db.Pool.Exec(ctx, `INSERT INTO estimates(company_id,customer_id,status_id,title) VALUES($1,$2,$3,'cross company')`, f.company, f.customer, otherStatus); err == nil {
 		t.Fatal("database accepted cross-company estimate status")
 	}
 	var custom int64
-	if err := f.db.Pool.QueryRow(ctx, `INSERT INTO statuses(company_id,workflow_id,name) SELECT $1,id,'Custom' FROM status_workflows WHERE company_id=$1 AND object_type='estimate' RETURNING id`, f.company).Scan(&custom); err != nil {
+	if err := f.db.Pool.QueryRow(ctx, `INSERT INTO statuses(company_id,workflow_id,name,category_key,category_order,is_category_default) SELECT $1,id,'Custom','estimate:estimate',2,false FROM status_workflows WHERE company_id=$1 AND object_type='estimate' RETURNING id`, f.company).Scan(&custom); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.db.Pool.Exec(ctx, `INSERT INTO estimates(company_id,customer_id,status_id,title) VALUES($1,$2,$3,'valid custom')`, f.company, f.customer, custom); err != nil {
@@ -471,9 +488,15 @@ func newFixture(t *testing.T) *fixture {
 	var ew, iw int64
 	_ = db.Pool.QueryRow(ctx, `INSERT INTO status_workflows(company_id,name,object_type) VALUES($1,'Estimate','estimate') RETURNING id`, f.company).Scan(&ew)
 	_ = db.Pool.QueryRow(ctx, `INSERT INTO status_workflows(company_id,name,object_type) VALUES($1,'Invoice','invoice') RETURNING id`, f.company).Scan(&iw)
-	_ = db.Pool.QueryRow(ctx, `INSERT INTO statuses(company_id,workflow_id,name,document_role) VALUES($1,$2,'Draft','draft') RETURNING id`, f.company, ew).Scan(&f.estimateDraft)
-	_ = db.Pool.QueryRow(ctx, `INSERT INTO statuses(company_id,workflow_id,name,estimate_convertible) VALUES($1,$2,'Approved',true) RETURNING id`, f.company, ew).Scan(&f.estimateAccepted)
-	_, err = db.Pool.Exec(ctx, `INSERT INTO statuses(company_id,workflow_id,name,document_role) VALUES($1,$2,'Draft','draft')`, f.company, iw)
+	_, _ = db.Pool.Exec(ctx, `INSERT INTO statuses(company_id,workflow_id,name,category_key,category_order,is_category_default) VALUES
+	 ($1,$2,'Draft','estimate:draft',1,true),($1,$2,'Approved','estimate:accepted',1,true),
+	 ($1,$2,'Estimate','estimate:estimate',1,true),($1,$2,'Sent','estimate:sent',1,true),
+	 ($1,$2,'Rejected','estimate:rejected',1,true),($1,$2,'Completed','estimate:completed',1,true)`, f.company, ew)
+	_ = db.Pool.QueryRow(ctx, `SELECT id FROM statuses WHERE workflow_id=$1 AND category_key='estimate:draft'`, ew).Scan(&f.estimateDraft)
+	_ = db.Pool.QueryRow(ctx, `SELECT id FROM statuses WHERE workflow_id=$1 AND category_key='estimate:accepted'`, ew).Scan(&f.estimateAccepted)
+	_, err = db.Pool.Exec(ctx, `INSERT INTO statuses(company_id,workflow_id,name,category_key,category_order,is_category_default) VALUES
+	 ($1,$2,'Draft','invoice:draft',1,true),($1,$2,'Invoiced','invoice:invoiced',1,true),($1,$2,'Sent','invoice:sent',1,true),
+	 ($1,$2,'Partially Paid','invoice:partially_paid',1,true),($1,$2,'Paid','invoice:paid',1,true),($1,$2,'Void','invoice:void',1,true)`, f.company, iw)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -75,30 +75,36 @@ func (_c *StatusCreate) SetNillableSortOrder(v *int) *StatusCreate {
 	return _c
 }
 
-// SetEstimateConvertible sets the "estimate_convertible" field.
-func (_c *StatusCreate) SetEstimateConvertible(v bool) *StatusCreate {
-	_c.mutation.SetEstimateConvertible(v)
+// SetCategoryKey sets the "category_key" field.
+func (_c *StatusCreate) SetCategoryKey(v string) *StatusCreate {
+	_c.mutation.SetCategoryKey(v)
 	return _c
 }
 
-// SetNillableEstimateConvertible sets the "estimate_convertible" field if the given value is not nil.
-func (_c *StatusCreate) SetNillableEstimateConvertible(v *bool) *StatusCreate {
+// SetCategoryOrder sets the "category_order" field.
+func (_c *StatusCreate) SetCategoryOrder(v int) *StatusCreate {
+	_c.mutation.SetCategoryOrder(v)
+	return _c
+}
+
+// SetNillableCategoryOrder sets the "category_order" field if the given value is not nil.
+func (_c *StatusCreate) SetNillableCategoryOrder(v *int) *StatusCreate {
 	if v != nil {
-		_c.SetEstimateConvertible(*v)
+		_c.SetCategoryOrder(*v)
 	}
 	return _c
 }
 
-// SetDocumentRole sets the "document_role" field.
-func (_c *StatusCreate) SetDocumentRole(v string) *StatusCreate {
-	_c.mutation.SetDocumentRole(v)
+// SetIsCategoryDefault sets the "is_category_default" field.
+func (_c *StatusCreate) SetIsCategoryDefault(v bool) *StatusCreate {
+	_c.mutation.SetIsCategoryDefault(v)
 	return _c
 }
 
-// SetNillableDocumentRole sets the "document_role" field if the given value is not nil.
-func (_c *StatusCreate) SetNillableDocumentRole(v *string) *StatusCreate {
+// SetNillableIsCategoryDefault sets the "is_category_default" field if the given value is not nil.
+func (_c *StatusCreate) SetNillableIsCategoryDefault(v *bool) *StatusCreate {
 	if v != nil {
-		_c.SetDocumentRole(*v)
+		_c.SetIsCategoryDefault(*v)
 	}
 	return _c
 }
@@ -171,13 +177,13 @@ func (_c *StatusCreate) defaults() {
 		v := status.DefaultSortOrder
 		_c.mutation.SetSortOrder(v)
 	}
-	if _, ok := _c.mutation.EstimateConvertible(); !ok {
-		v := status.DefaultEstimateConvertible
-		_c.mutation.SetEstimateConvertible(v)
+	if _, ok := _c.mutation.CategoryOrder(); !ok {
+		v := status.DefaultCategoryOrder
+		_c.mutation.SetCategoryOrder(v)
 	}
-	if _, ok := _c.mutation.DocumentRole(); !ok {
-		v := status.DefaultDocumentRole
-		_c.mutation.SetDocumentRole(v)
+	if _, ok := _c.mutation.IsCategoryDefault(); !ok {
+		v := status.DefaultIsCategoryDefault
+		_c.mutation.SetIsCategoryDefault(v)
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := status.DefaultCreatedAt()
@@ -204,16 +210,24 @@ func (_c *StatusCreate) check() error {
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		return &ValidationError{Name: "sort_order", err: errors.New(`ent: missing required field "Status.sort_order"`)}
 	}
-	if _, ok := _c.mutation.EstimateConvertible(); !ok {
-		return &ValidationError{Name: "estimate_convertible", err: errors.New(`ent: missing required field "Status.estimate_convertible"`)}
+	if _, ok := _c.mutation.CategoryKey(); !ok {
+		return &ValidationError{Name: "category_key", err: errors.New(`ent: missing required field "Status.category_key"`)}
 	}
-	if _, ok := _c.mutation.DocumentRole(); !ok {
-		return &ValidationError{Name: "document_role", err: errors.New(`ent: missing required field "Status.document_role"`)}
-	}
-	if v, ok := _c.mutation.DocumentRole(); ok {
-		if err := status.DocumentRoleValidator(v); err != nil {
-			return &ValidationError{Name: "document_role", err: fmt.Errorf(`ent: validator failed for field "Status.document_role": %w`, err)}
+	if v, ok := _c.mutation.CategoryKey(); ok {
+		if err := status.CategoryKeyValidator(v); err != nil {
+			return &ValidationError{Name: "category_key", err: fmt.Errorf(`ent: validator failed for field "Status.category_key": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.CategoryOrder(); !ok {
+		return &ValidationError{Name: "category_order", err: errors.New(`ent: missing required field "Status.category_order"`)}
+	}
+	if v, ok := _c.mutation.CategoryOrder(); ok {
+		if err := status.CategoryOrderValidator(v); err != nil {
+			return &ValidationError{Name: "category_order", err: fmt.Errorf(`ent: validator failed for field "Status.category_order": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.IsCategoryDefault(); !ok {
+		return &ValidationError{Name: "is_category_default", err: errors.New(`ent: missing required field "Status.is_category_default"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Status.created_at"`)}
@@ -269,13 +283,17 @@ func (_c *StatusCreate) createSpec() (*Status, *sqlgraph.CreateSpec) {
 		_spec.SetField(status.FieldSortOrder, field.TypeInt, value)
 		_node.SortOrder = value
 	}
-	if value, ok := _c.mutation.EstimateConvertible(); ok {
-		_spec.SetField(status.FieldEstimateConvertible, field.TypeBool, value)
-		_node.EstimateConvertible = value
+	if value, ok := _c.mutation.CategoryKey(); ok {
+		_spec.SetField(status.FieldCategoryKey, field.TypeString, value)
+		_node.CategoryKey = value
 	}
-	if value, ok := _c.mutation.DocumentRole(); ok {
-		_spec.SetField(status.FieldDocumentRole, field.TypeString, value)
-		_node.DocumentRole = value
+	if value, ok := _c.mutation.CategoryOrder(); ok {
+		_spec.SetField(status.FieldCategoryOrder, field.TypeInt, value)
+		_node.CategoryOrder = value
+	}
+	if value, ok := _c.mutation.IsCategoryDefault(); ok {
+		_spec.SetField(status.FieldIsCategoryDefault, field.TypeBool, value)
+		_node.IsCategoryDefault = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(status.FieldCreatedAt, field.TypeTime, value)

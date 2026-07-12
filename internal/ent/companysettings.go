@@ -57,6 +57,8 @@ type CompanySettings struct {
 	SMTPFrom string `json:"smtp_from,omitempty"`
 	// EmailAutoCc holds the value of the "email_auto_cc" field.
 	EmailAutoCc string `json:"email_auto_cc,omitempty"`
+	// EmailTrackingEnabled holds the value of the "email_tracking_enabled" field.
+	EmailTrackingEnabled bool `json:"email_tracking_enabled,omitempty"`
 	// InvoiceEmailSubject holds the value of the "invoice_email_subject" field.
 	InvoiceEmailSubject string `json:"invoice_email_subject,omitempty"`
 	// InvoiceEmailBody holds the value of the "invoice_email_body" field.
@@ -105,7 +107,7 @@ func (*CompanySettings) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case companysettings.FieldPasswordRequireUppercase, companysettings.FieldPasswordRequireLowercase, companysettings.FieldPasswordRequireDigit, companysettings.FieldPasswordRequireSpecial, companysettings.FieldPdfShowLineItemDescriptions:
+		case companysettings.FieldEmailTrackingEnabled, companysettings.FieldPasswordRequireUppercase, companysettings.FieldPasswordRequireLowercase, companysettings.FieldPasswordRequireDigit, companysettings.FieldPasswordRequireSpecial, companysettings.FieldPdfShowLineItemDescriptions:
 			values[i] = new(sql.NullBool)
 		case companysettings.FieldID, companysettings.FieldCompanyID, companysettings.FieldNextInvoiceNumber, companysettings.FieldDefaultDueDays, companysettings.FieldSMTPPort, companysettings.FieldPasswordMinLength:
 			values[i] = new(sql.NullInt64)
@@ -254,6 +256,12 @@ func (_m *CompanySettings) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field email_auto_cc", values[i])
 			} else if value.Valid {
 				_m.EmailAutoCc = value.String
+			}
+		case companysettings.FieldEmailTrackingEnabled:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field email_tracking_enabled", values[i])
+			} else if value.Valid {
+				_m.EmailTrackingEnabled = value.Bool
 			}
 		case companysettings.FieldInvoiceEmailSubject:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -472,6 +480,9 @@ func (_m *CompanySettings) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("email_auto_cc=")
 	builder.WriteString(_m.EmailAutoCc)
+	builder.WriteString(", ")
+	builder.WriteString("email_tracking_enabled=")
+	builder.WriteString(fmt.Sprintf("%v", _m.EmailTrackingEnabled))
 	builder.WriteString(", ")
 	builder.WriteString("invoice_email_subject=")
 	builder.WriteString(_m.InvoiceEmailSubject)

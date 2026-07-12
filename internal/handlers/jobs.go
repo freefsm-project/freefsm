@@ -14,6 +14,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
@@ -36,6 +37,7 @@ type JobHandler struct {
 	userSvc      *services.UserService
 	policySvc    *services.PolicyService
 	timeEntrySvc *services.TimeEntryService
+	statusflow   *statusflow.Service
 }
 
 func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, assetTypeSvc *services.AssetTypeService, assetStatSvc *services.AssetStatusService, fileSvc *services.FileService, activitySvc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService, timeEntrySvc *services.TimeEntryService) *JobHandler {
@@ -220,29 +222,21 @@ func (h *JobHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
-	ok, err = h.statusSvc.BelongsToObjectType(r.Context(), statusID, "job")
-	if err != nil {
-		internalServerError(w, r, "check job status", err)
-		return
-	}
-	if !ok {
-		http.Error(w, "invalid status", http.StatusBadRequest)
+	if h.statusflow == nil {
+		http.Error(w, "status workflow unavailable", http.StatusInternalServerError)
 		return
 	}
 	statuses := h.statusesForSelect(r.Context())
-	oldStatus := statusName(statuses, j.StatusID)
-	result, err := h.svc.Update(r.Context(), id, services.JobUpdateParams{StatusID: int64Ptr(statusID)})
+	err = h.statusflow.TransitionJob(r.Context(), statusflow.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, id, statusID)
 	if err != nil {
-		internalServerError(w, r, "update job status", err)
+		statusflowHTTPError(w, err)
 		return
 	}
-	newStatus := statusName(statuses, result.StatusID)
-	h.activitySvc.Record(r.Context(), u.ID, "status_changed", objectref.New(objectref.TypeJob, id), map[string]interface{}{
-		"entity_name": result.JobType,
-		"actor_name":  u.Name,
-		"old_status":  oldStatus,
-		"new_status":  newStatus,
-	})
+	result, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		internalServerError(w, r, "reload job status", err)
+		return
+	}
 
 	if r.Header.Get("HX-Request") == "true" {
 		d := jobToDetail(r.Context(), result, statuses)
@@ -379,10 +373,6 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
-	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
-	if !h.validJobStatus(w, r, statusID, h.jobFormFromRequest(r, 0)) {
-		return
-	}
 	projectID, _ := strconv.ParseInt(r.FormValue("project_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	contactID, _ := strconv.ParseInt(r.FormValue("customer_contact_id"), 10, 64)
@@ -396,7 +386,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		AssetID:           assetID,
 		JobType:           r.FormValue("job_type"),
 		Subtitle:          r.FormValue("subtitle"),
-		StatusID:          statusID,
+		StatusID:          0,
 		BillingType:       r.FormValue("billing_type"),
 		StartTime:         parseTime(r.FormValue("start_time"), loc),
 		EndTime:           parseTime(r.FormValue("end_time"), loc),
@@ -504,10 +494,6 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
-	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
-	if !h.validJobStatus(w, r, statusID, h.jobFormFromRequest(r, id)) {
-		return
-	}
 	projectID, _ := strconv.ParseInt(r.FormValue("project_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	contactID, _ := strconv.ParseInt(r.FormValue("customer_contact_id"), 10, 64)
@@ -520,7 +506,6 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		AssetID:           &assetID,
 		JobType:           formPtr(r.FormValue("job_type")),
 		Subtitle:          formPtr(r.FormValue("subtitle")),
-		StatusID:          int64Ptr(statusID),
 		BillingType:       formPtr(r.FormValue("billing_type")),
 		Notes:             formPtr(r.FormValue("notes")),
 		TechNotes:         formPtr(r.FormValue("tech_notes")),
@@ -557,6 +542,10 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
+	if u == nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"entity_name": result.JobType,

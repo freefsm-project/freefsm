@@ -223,84 +223,88 @@ func init() {
 	companysettingsDescEmailAutoCc := companysettingsFields[20].Descriptor()
 	// companysettings.DefaultEmailAutoCc holds the default value on creation for the email_auto_cc field.
 	companysettings.DefaultEmailAutoCc = companysettingsDescEmailAutoCc.Default.(string)
+	// companysettingsDescEmailTrackingEnabled is the schema descriptor for email_tracking_enabled field.
+	companysettingsDescEmailTrackingEnabled := companysettingsFields[21].Descriptor()
+	// companysettings.DefaultEmailTrackingEnabled holds the default value on creation for the email_tracking_enabled field.
+	companysettings.DefaultEmailTrackingEnabled = companysettingsDescEmailTrackingEnabled.Default.(bool)
 	// companysettingsDescInvoiceEmailSubject is the schema descriptor for invoice_email_subject field.
-	companysettingsDescInvoiceEmailSubject := companysettingsFields[21].Descriptor()
+	companysettingsDescInvoiceEmailSubject := companysettingsFields[22].Descriptor()
 	// companysettings.DefaultInvoiceEmailSubject holds the default value on creation for the invoice_email_subject field.
 	companysettings.DefaultInvoiceEmailSubject = companysettingsDescInvoiceEmailSubject.Default.(string)
 	// companysettingsDescInvoiceEmailBody is the schema descriptor for invoice_email_body field.
-	companysettingsDescInvoiceEmailBody := companysettingsFields[22].Descriptor()
+	companysettingsDescInvoiceEmailBody := companysettingsFields[23].Descriptor()
 	// companysettings.DefaultInvoiceEmailBody holds the default value on creation for the invoice_email_body field.
 	companysettings.DefaultInvoiceEmailBody = companysettingsDescInvoiceEmailBody.Default.(string)
 	// companysettingsDescEstimateEmailSubject is the schema descriptor for estimate_email_subject field.
-	companysettingsDescEstimateEmailSubject := companysettingsFields[23].Descriptor()
+	companysettingsDescEstimateEmailSubject := companysettingsFields[24].Descriptor()
 	// companysettings.DefaultEstimateEmailSubject holds the default value on creation for the estimate_email_subject field.
 	companysettings.DefaultEstimateEmailSubject = companysettingsDescEstimateEmailSubject.Default.(string)
 	// companysettingsDescEstimateEmailBody is the schema descriptor for estimate_email_body field.
-	companysettingsDescEstimateEmailBody := companysettingsFields[24].Descriptor()
+	companysettingsDescEstimateEmailBody := companysettingsFields[25].Descriptor()
 	// companysettings.DefaultEstimateEmailBody holds the default value on creation for the estimate_email_body field.
 	companysettings.DefaultEstimateEmailBody = companysettingsDescEstimateEmailBody.Default.(string)
 	// companysettingsDescTimezone is the schema descriptor for timezone field.
-	companysettingsDescTimezone := companysettingsFields[25].Descriptor()
+	companysettingsDescTimezone := companysettingsFields[26].Descriptor()
 	// companysettings.DefaultTimezone holds the default value on creation for the timezone field.
 	companysettings.DefaultTimezone = companysettingsDescTimezone.Default.(string)
 	// companysettingsDescDateFormat is the schema descriptor for date_format field.
-	companysettingsDescDateFormat := companysettingsFields[26].Descriptor()
+	companysettingsDescDateFormat := companysettingsFields[27].Descriptor()
 	// companysettings.DefaultDateFormat holds the default value on creation for the date_format field.
 	companysettings.DefaultDateFormat = companysettingsDescDateFormat.Default.(string)
 	// companysettingsDescPasswordMinLength is the schema descriptor for password_min_length field.
-	companysettingsDescPasswordMinLength := companysettingsFields[27].Descriptor()
+	companysettingsDescPasswordMinLength := companysettingsFields[28].Descriptor()
 	// companysettings.DefaultPasswordMinLength holds the default value on creation for the password_min_length field.
 	companysettings.DefaultPasswordMinLength = companysettingsDescPasswordMinLength.Default.(int)
 	// companysettingsDescPasswordRequireUppercase is the schema descriptor for password_require_uppercase field.
-	companysettingsDescPasswordRequireUppercase := companysettingsFields[28].Descriptor()
+	companysettingsDescPasswordRequireUppercase := companysettingsFields[29].Descriptor()
 	// companysettings.DefaultPasswordRequireUppercase holds the default value on creation for the password_require_uppercase field.
 	companysettings.DefaultPasswordRequireUppercase = companysettingsDescPasswordRequireUppercase.Default.(bool)
 	// companysettingsDescPasswordRequireLowercase is the schema descriptor for password_require_lowercase field.
-	companysettingsDescPasswordRequireLowercase := companysettingsFields[29].Descriptor()
+	companysettingsDescPasswordRequireLowercase := companysettingsFields[30].Descriptor()
 	// companysettings.DefaultPasswordRequireLowercase holds the default value on creation for the password_require_lowercase field.
 	companysettings.DefaultPasswordRequireLowercase = companysettingsDescPasswordRequireLowercase.Default.(bool)
 	// companysettingsDescPasswordRequireDigit is the schema descriptor for password_require_digit field.
-	companysettingsDescPasswordRequireDigit := companysettingsFields[30].Descriptor()
+	companysettingsDescPasswordRequireDigit := companysettingsFields[31].Descriptor()
 	// companysettings.DefaultPasswordRequireDigit holds the default value on creation for the password_require_digit field.
 	companysettings.DefaultPasswordRequireDigit = companysettingsDescPasswordRequireDigit.Default.(bool)
 	// companysettingsDescPasswordRequireSpecial is the schema descriptor for password_require_special field.
-	companysettingsDescPasswordRequireSpecial := companysettingsFields[31].Descriptor()
+	companysettingsDescPasswordRequireSpecial := companysettingsFields[32].Descriptor()
 	// companysettings.DefaultPasswordRequireSpecial holds the default value on creation for the password_require_special field.
 	companysettings.DefaultPasswordRequireSpecial = companysettingsDescPasswordRequireSpecial.Default.(bool)
 	// companysettingsDescInvoiceColor is the schema descriptor for invoice_color field.
-	companysettingsDescInvoiceColor := companysettingsFields[32].Descriptor()
+	companysettingsDescInvoiceColor := companysettingsFields[33].Descriptor()
 	// companysettings.DefaultInvoiceColor holds the default value on creation for the invoice_color field.
 	companysettings.DefaultInvoiceColor = companysettingsDescInvoiceColor.Default.(string)
 	// companysettingsDescInvoiceFooter is the schema descriptor for invoice_footer field.
-	companysettingsDescInvoiceFooter := companysettingsFields[33].Descriptor()
+	companysettingsDescInvoiceFooter := companysettingsFields[34].Descriptor()
 	// companysettings.DefaultInvoiceFooter holds the default value on creation for the invoice_footer field.
 	companysettings.DefaultInvoiceFooter = companysettingsDescInvoiceFooter.Default.(string)
 	// companysettingsDescInvoiceLogoPath is the schema descriptor for invoice_logo_path field.
-	companysettingsDescInvoiceLogoPath := companysettingsFields[34].Descriptor()
+	companysettingsDescInvoiceLogoPath := companysettingsFields[35].Descriptor()
 	// companysettings.DefaultInvoiceLogoPath holds the default value on creation for the invoice_logo_path field.
 	companysettings.DefaultInvoiceLogoPath = companysettingsDescInvoiceLogoPath.Default.(string)
 	// companysettingsDescInvoicePaymentTerms is the schema descriptor for invoice_payment_terms field.
-	companysettingsDescInvoicePaymentTerms := companysettingsFields[35].Descriptor()
+	companysettingsDescInvoicePaymentTerms := companysettingsFields[36].Descriptor()
 	// companysettings.DefaultInvoicePaymentTerms holds the default value on creation for the invoice_payment_terms field.
 	companysettings.DefaultInvoicePaymentTerms = companysettingsDescInvoicePaymentTerms.Default.(string)
 	// companysettingsDescPdfShowLineItemDescriptions is the schema descriptor for pdf_show_line_item_descriptions field.
-	companysettingsDescPdfShowLineItemDescriptions := companysettingsFields[36].Descriptor()
+	companysettingsDescPdfShowLineItemDescriptions := companysettingsFields[37].Descriptor()
 	// companysettings.DefaultPdfShowLineItemDescriptions holds the default value on creation for the pdf_show_line_item_descriptions field.
 	companysettings.DefaultPdfShowLineItemDescriptions = companysettingsDescPdfShowLineItemDescriptions.Default.(bool)
 	// companysettingsDescMapTileURL is the schema descriptor for map_tile_url field.
-	companysettingsDescMapTileURL := companysettingsFields[37].Descriptor()
+	companysettingsDescMapTileURL := companysettingsFields[38].Descriptor()
 	// companysettings.DefaultMapTileURL holds the default value on creation for the map_tile_url field.
 	companysettings.DefaultMapTileURL = companysettingsDescMapTileURL.Default.(string)
 	// companysettingsDescGeocoderURL is the schema descriptor for geocoder_url field.
-	companysettingsDescGeocoderURL := companysettingsFields[38].Descriptor()
+	companysettingsDescGeocoderURL := companysettingsFields[39].Descriptor()
 	// companysettings.DefaultGeocoderURL holds the default value on creation for the geocoder_url field.
 	companysettings.DefaultGeocoderURL = companysettingsDescGeocoderURL.Default.(string)
 	// companysettingsDescCreatedAt is the schema descriptor for created_at field.
-	companysettingsDescCreatedAt := companysettingsFields[39].Descriptor()
+	companysettingsDescCreatedAt := companysettingsFields[40].Descriptor()
 	// companysettings.DefaultCreatedAt holds the default value on creation for the created_at field.
 	companysettings.DefaultCreatedAt = companysettingsDescCreatedAt.Default.(func() time.Time)
 	// companysettingsDescUpdatedAt is the schema descriptor for updated_at field.
-	companysettingsDescUpdatedAt := companysettingsFields[40].Descriptor()
+	companysettingsDescUpdatedAt := companysettingsFields[41].Descriptor()
 	// companysettings.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	companysettings.DefaultUpdatedAt = companysettingsDescUpdatedAt.Default.(func() time.Time)
 	// companysettings.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -820,7 +824,21 @@ func init() {
 	// statusDescName is the schema descriptor for name field.
 	statusDescName := statusFields[3].Descriptor()
 	// status.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	status.NameValidator = statusDescName.Validators[0].(func(string) error)
+	status.NameValidator = func() func(string) error {
+		validators := statusDescName.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(name string) error {
+			for _, fn := range fns {
+				if err := fn(name); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	// statusDescColor is the schema descriptor for color field.
 	statusDescColor := statusFields[4].Descriptor()
 	// status.DefaultColor holds the default value on creation for the color field.
@@ -829,18 +847,36 @@ func init() {
 	statusDescSortOrder := statusFields[5].Descriptor()
 	// status.DefaultSortOrder holds the default value on creation for the sort_order field.
 	status.DefaultSortOrder = statusDescSortOrder.Default.(int)
-	// statusDescEstimateConvertible is the schema descriptor for estimate_convertible field.
-	statusDescEstimateConvertible := statusFields[6].Descriptor()
-	// status.DefaultEstimateConvertible holds the default value on creation for the estimate_convertible field.
-	status.DefaultEstimateConvertible = statusDescEstimateConvertible.Default.(bool)
-	// statusDescDocumentRole is the schema descriptor for document_role field.
-	statusDescDocumentRole := statusFields[7].Descriptor()
-	// status.DefaultDocumentRole holds the default value on creation for the document_role field.
-	status.DefaultDocumentRole = statusDescDocumentRole.Default.(string)
-	// status.DocumentRoleValidator is a validator for the "document_role" field. It is called by the builders before save.
-	status.DocumentRoleValidator = statusDescDocumentRole.Validators[0].(func(string) error)
+	// statusDescCategoryKey is the schema descriptor for category_key field.
+	statusDescCategoryKey := statusFields[6].Descriptor()
+	// status.CategoryKeyValidator is a validator for the "category_key" field. It is called by the builders before save.
+	status.CategoryKeyValidator = func() func(string) error {
+		validators := statusDescCategoryKey.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(category_key string) error {
+			for _, fn := range fns {
+				if err := fn(category_key); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// statusDescCategoryOrder is the schema descriptor for category_order field.
+	statusDescCategoryOrder := statusFields[7].Descriptor()
+	// status.DefaultCategoryOrder holds the default value on creation for the category_order field.
+	status.DefaultCategoryOrder = statusDescCategoryOrder.Default.(int)
+	// status.CategoryOrderValidator is a validator for the "category_order" field. It is called by the builders before save.
+	status.CategoryOrderValidator = statusDescCategoryOrder.Validators[0].(func(int) error)
+	// statusDescIsCategoryDefault is the schema descriptor for is_category_default field.
+	statusDescIsCategoryDefault := statusFields[8].Descriptor()
+	// status.DefaultIsCategoryDefault holds the default value on creation for the is_category_default field.
+	status.DefaultIsCategoryDefault = statusDescIsCategoryDefault.Default.(bool)
 	// statusDescCreatedAt is the schema descriptor for created_at field.
-	statusDescCreatedAt := statusFields[8].Descriptor()
+	statusDescCreatedAt := statusFields[9].Descriptor()
 	// status.DefaultCreatedAt holds the default value on creation for the created_at field.
 	status.DefaultCreatedAt = statusDescCreatedAt.Default.(func() time.Time)
 	statusworkflowFields := schema.StatusWorkflow{}.Fields()

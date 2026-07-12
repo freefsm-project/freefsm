@@ -11,6 +11,8 @@ func TestInvoiceCreateAndUnsettledUpdateProjectCanonicalState(t *testing.T) {
 	defer client.Close()
 	ctx := context.Background()
 	data := createOwnershipFixture(ctx, t, client)
+	workflow := client.StatusWorkflow.Create().SetName("Invoices").SetObjectType("invoice").SaveX(ctx)
+	client.Status.Create().SetWorkflowID(workflow.ID).SetName("Preparation").SetCategoryKey("invoice:draft").SetCategoryOrder(1).SetIsCategoryDefault(true).SaveX(ctx)
 	client.CompanySettings.Create().SetBusinessName("Test").SaveX(ctx)
 	svc := NewInvoiceService(client)
 

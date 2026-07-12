@@ -14,6 +14,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/settlement"
+	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
@@ -33,6 +34,7 @@ type CustomerHandler struct {
 	invoiceSvc  *services.InvoiceService
 	statusSvc   *services.StatusService
 	settlement  settlementService
+	statusflow  *statusflow.Service
 }
 
 func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.CustomerContactService, locationSvc *services.LocationService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, fileSvc *services.FileService, activitySvc *services.ActivityService, policySvc *services.PolicyService, jobSvc *services.JobService, estimateSvc *services.EstimateService, invoiceSvc *services.InvoiceService, statusSvc *services.StatusService, settlement settlementService) *CustomerHandler {
@@ -894,19 +896,32 @@ func (h *CustomerHandler) customerInvoiceRows(ctx context.Context, invoices []*e
 	statuses := h.statusesByType(ctx, "invoice")
 	rows := make([]templates.InvoiceRow, len(invoices))
 	for i, inv := range invoices {
-		rows[i] = invoiceRow(ctx, inv, statuses, map[int64]string{invCustID(inv): ""})
+		rows[i] = invoiceRow(ctx, h.effectiveInvoice(ctx, inv), statuses, map[int64]string{invCustID(inv): ""})
 	}
 	return rows
 }
 
+func (h *CustomerHandler) effectiveInvoice(ctx context.Context, invoice *ent.Invoice) *ent.Invoice {
+	if invoice == nil || invoice.CompanyID == nil || h.statusflow == nil {
+		return invoice
+	}
+	effective, err := h.statusflow.EffectiveInvoiceStatus(ctx, *invoice.CompanyID, invoice.ID)
+	if err != nil {
+		return invoice
+	}
+	copy := *invoice
+	copy.StatusID = &effective.ID
+	return &copy
+}
+
 func addInvoiceFinancial(summary *templates.CustomerFinancialSummary, inv *ent.Invoice, view settlement.InvoiceSettlement, invoiceStatuses []*ent.Status, loc *time.Location) {
 	today := time.Now().In(loc).Truncate(24 * time.Hour)
-	status := strings.ToLower(statusName(invoiceStatuses, inv.StatusID))
-	if status != "void" {
+	category := statusCategory(invoiceStatuses, inv.StatusID)
+	if category != "invoice:void" {
 		summary.TotalInvoiced += float64(view.TotalCents) / 100
 		summary.TotalPaid += float64(view.SettledCents) / 100
 	}
-	if status == "draft" || status == "void" || view.AmountDueCents <= 0 {
+	if category == "invoice:draft" || category == "invoice:void" || view.AmountDueCents <= 0 {
 		return
 	}
 	balance := float64(view.AmountDueCents) / 100

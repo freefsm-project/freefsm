@@ -11,6 +11,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/job"
 	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 	"github.com/freefsm-project/freefsm/internal/ent/project"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type SearchResult struct {
@@ -27,10 +28,15 @@ type SearchResult struct {
 
 type SearchService struct {
 	client *ent.Client
+	db     *pgxpool.Pool
 }
 
-func NewSearchService(client *ent.Client) *SearchService {
-	return &SearchService{client: client}
+func NewSearchService(client *ent.Client, db ...*pgxpool.Pool) *SearchService {
+	service := &SearchService{client: client}
+	if len(db) > 0 {
+		service.db = db[0]
+	}
+	return service
 }
 
 func (s *SearchService) Search(ctx context.Context, q string, limit int, userID int64, role string) ([]SearchResult, []SearchResult, []SearchResult, []SearchResult, []SearchResult, error) {
@@ -164,6 +170,10 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 	projResults := projectsToSearchResults(projects, custMap, statusMap)
 
 	invResults := make([]SearchResult, len(invoices))
+	effectiveIDs, err := s.effectiveInvoiceStatusIDs(ctx, invoices)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
 	for i, inv := range invoices {
 		var custName string
 		if inv.CustomerID > 0 {
@@ -172,24 +182,20 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 			}
 		}
 		var stName, stColor string
-		if inv.StatusID != nil {
-			if s, ok := statusMap[*inv.StatusID]; ok {
+		effectiveID := effectiveIDs[inv.ID]
+		if effectiveID > 0 {
+			if s, ok := statusMap[effectiveID]; ok {
 				stName = s.Name
 				stColor = s.Color
 			}
 		}
 		invResults[i] = SearchResult{
-			ID:         inv.ID,
-			Type:       "invoice",
-			Name:       inv.Title,
-			CustomerID: inv.CustomerID,
-			Customer:   custName,
-			StatusID: func() int64 {
-				if inv.StatusID != nil {
-					return *inv.StatusID
-				}
-				return 0
-			}(),
+			ID:          inv.ID,
+			Type:        "invoice",
+			Name:        inv.Title,
+			CustomerID:  inv.CustomerID,
+			Customer:    custName,
+			StatusID:    effectiveID,
 			StatusName:  stName,
 			StatusColor: stColor,
 		}
@@ -233,6 +239,35 @@ func (s *SearchService) Search(ctx context.Context, q string, limit int, userID 
 	}
 
 	return trimSearchResults(custResults, limit), trimSearchResults(jobResults, limit), trimSearchResults(projResults, limit), trimSearchResults(invResults, limit), trimSearchResults(estResults, limit), nil
+}
+
+func (s *SearchService) effectiveInvoiceStatusIDs(ctx context.Context, invoices []*ent.Invoice) (map[int64]int64, error) {
+	result := make(map[int64]int64, len(invoices))
+	for _, invoice := range invoices {
+		if invoice.StatusID != nil {
+			result[invoice.ID] = *invoice.StatusID
+		}
+	}
+	if s.db == nil || len(invoices) == 0 {
+		return result, nil
+	}
+	ids := make([]int64, len(invoices))
+	for i, invoice := range invoices {
+		ids[i] = invoice.ID
+	}
+	rows, err := s.db.Query(ctx, `SELECT invoice_id,status_id FROM invoice_effective_status WHERE invoice_id=ANY($1)`, ids)
+	if err != nil {
+		return nil, fmt.Errorf("resolve effective invoice search statuses: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var invoiceID, statusID int64
+		if err = rows.Scan(&invoiceID, &statusID); err != nil {
+			return nil, err
+		}
+		result[invoiceID] = statusID
+	}
+	return result, rows.Err()
 }
 
 func (s *SearchService) searchTech(ctx context.Context, q string, limit int, userID int64) ([]SearchResult, []SearchResult, []SearchResult, error) {

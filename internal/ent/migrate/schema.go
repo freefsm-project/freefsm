@@ -181,6 +181,7 @@ var (
 		{Name: "smtp_password", Type: field.TypeString, Default: ""},
 		{Name: "smtp_from", Type: field.TypeString, Default: ""},
 		{Name: "email_auto_cc", Type: field.TypeString, Default: ""},
+		{Name: "email_tracking_enabled", Type: field.TypeBool, Default: false},
 		{Name: "invoice_email_subject", Type: field.TypeString, Default: "Invoice {invoice_number} from {business_name}"},
 		{Name: "invoice_email_body", Type: field.TypeString, Default: "Hello {customer_name},\n\nPlease find invoice {invoice_number} attached.\n\nThank you,\n{business_name}"},
 		{Name: "estimate_email_subject", Type: field.TypeString, Default: "Estimate {estimate_number} from {business_name}"},
@@ -751,8 +752,9 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "color", Type: field.TypeString, Default: "#6B7280"},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
-		{Name: "estimate_convertible", Type: field.TypeBool, Default: false},
-		{Name: "document_role", Type: field.TypeString, Default: "standard"},
+		{Name: "category_key", Type: field.TypeString},
+		{Name: "category_order", Type: field.TypeInt, Default: 1},
+		{Name: "is_category_default", Type: field.TypeBool, Default: false},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "workflow_id", Type: field.TypeInt64},
 	}
@@ -764,7 +766,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "statuses_status_workflows_statuses",
-				Columns:    []*schema.Column{StatusesColumns[8]},
+				Columns:    []*schema.Column{StatusesColumns[9]},
 				RefColumns: []*schema.Column{StatusWorkflowsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -773,12 +775,12 @@ var (
 			{
 				Name:    "status_workflow_id",
 				Unique:  false,
-				Columns: []*schema.Column{StatusesColumns[8]},
+				Columns: []*schema.Column{StatusesColumns[9]},
 			},
 			{
-				Name:    "status_workflow_id_document_role",
-				Unique:  false,
-				Columns: []*schema.Column{StatusesColumns[8], StatusesColumns[6]},
+				Name:    "status_workflow_id_category_key_category_order",
+				Unique:  true,
+				Columns: []*schema.Column{StatusesColumns[9], StatusesColumns[5], StatusesColumns[6]},
 			},
 		},
 	}

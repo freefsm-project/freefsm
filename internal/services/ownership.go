@@ -34,6 +34,39 @@ func validateCustomerLocation(ctx context.Context, client *ent.Client, customerI
 
 var ErrInvalidDocumentStatus = fmt.Errorf("status must belong to the same company and document workflow")
 
+func creationStatus(ctx context.Context, client *ent.Client, requested int64, companyID *int64, objectType, category string) (int64, error) {
+	if requested > 0 {
+		if err := validateDocumentStatus(ctx, client, requested, companyID, objectType); err != nil {
+			return 0, err
+		}
+		if objectType == "invoice" {
+			selected, err := client.Status.Get(ctx, requested)
+			if err != nil {
+				return 0, fmt.Errorf("load initial invoice status: %w", err)
+			}
+			if selected.CategoryKey == "invoice:partially_paid" || selected.CategoryKey == "invoice:paid" {
+				return 0, ErrInvalidDocumentStatus
+			}
+		}
+		return requested, nil
+	}
+	q := client.Status.Query().Where(
+		status.CategoryKeyEQ(category),
+		status.IsCategoryDefaultEQ(true),
+		status.HasWorkflowWith(statusworkflow.ObjectTypeEQ(objectType)),
+	)
+	if companyID != nil {
+		q = q.Where(status.CompanyIDEQ(*companyID), status.HasWorkflowWith(statusworkflow.CompanyIDEQ(*companyID)))
+	} else {
+		q = q.Where(status.CompanyIDIsNil(), status.HasWorkflowWith(statusworkflow.CompanyIDIsNil()))
+	}
+	st, err := q.Only(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("resolve %s creation status for category %s: %w", objectType, category, err)
+	}
+	return st.ID, nil
+}
+
 func validateDocumentStatus(ctx context.Context, client *ent.Client, statusID int64, companyID *int64, objectType string) error {
 	if statusID <= 0 {
 		return nil
