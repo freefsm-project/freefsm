@@ -23,6 +23,23 @@ func TestParse(t *testing.T) {
 	}
 }
 
+func TestFakeDirectoryTagTargetCompanyIDIsStrictAndRecordsCalls(t *testing.T) {
+	ref := New(TypeInvoice, 42)
+	d := &FakeDirectory{TagTargetCompanyIDs: map[Ref]*int64{ref: int64TestPointer(7)}}
+	companyID, err := d.TagTargetCompanyID(context.Background(), ref)
+	if err != nil || companyID != 7 {
+		t.Fatalf("company=%d err=%v", companyID, err)
+	}
+	if len(d.TagTargetCompanyCalls) != 1 || d.TagTargetCompanyCalls[0] != ref {
+		t.Fatalf("calls=%v", d.TagTargetCompanyCalls)
+	}
+	if _, err := d.TagTargetCompanyID(context.Background(), New(TypeInvoice, 43)); err == nil {
+		t.Fatal("missing ownership error=nil")
+	}
+}
+
+func int64TestPointer(v int64) *int64 { return &v }
+
 func TestCapabilitiesAndAdminOnly(t *testing.T) {
 	for _, typ := range AllTypes() {
 		if !typ.Has(CapActivity) {

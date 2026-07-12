@@ -186,7 +186,7 @@ func (h *TimeEntryHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clockInStr := displayDateTime(r.Context(), result.ClockIn)
-	h.activitySvc.Record(r.Context(), user.ID, "clocked_in", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
+	h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "clocked_in", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
 		"entity_name": fmt.Sprintf("%s — %s", user.Name, clockInStr),
 		"actor_name":  user.Name,
 	})
@@ -222,7 +222,7 @@ func (h *TimeEntryHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 	if result.JobID != nil && *result.JobID > 0 {
 		if jobID, jobName := h.timeEntryJob(r.Context(), result); jobID > 0 && jobName != "" {
 			entityName = fmt.Sprintf("%s — %s — %s (%s)", user.Name, jobName, clockInStr, duration)
-			h.activitySvc.Record(r.Context(), user.ID, "clocked_out", objectref.New(objectref.TypeJob, jobID), map[string]interface{}{
+			h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "clocked_out", objectref.New(objectref.TypeJob, jobID), map[string]interface{}{
 				"entity_name":   fmt.Sprintf("%s — %s (%s)", jobName, clockInStr, duration),
 				"actor_name":    user.Name,
 				"time_entry_id": result.ID,
@@ -231,7 +231,7 @@ func (h *TimeEntryHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	h.activitySvc.Record(r.Context(), user.ID, "clocked_out", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
+	h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "clocked_out", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
 		"entity_name":   entityName,
 		"actor_name":    user.Name,
 		"time_entry_id": result.ID,
@@ -343,7 +343,7 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if result.ClockOut != nil {
 		entityName += fmt.Sprintf(" — %s", displayTime(r.Context(), *result.ClockOut))
 	}
-	h.activitySvc.Record(r.Context(), user.ID, "updated", objectref.New(objectref.TypeTimeEntry, id), map[string]interface{}{
+	h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "updated", objectref.New(objectref.TypeTimeEntry, id), map[string]interface{}{
 		"entity_name": entityName,
 		"actor_name":  user.Name,
 	})
@@ -385,7 +385,7 @@ func (h *TimeEntryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	h.activitySvc.Record(r.Context(), user.ID, "deleted", objectref.New(objectref.TypeTimeEntry, id), map[string]interface{}{
+	h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "deleted", objectref.New(objectref.TypeTimeEntry, id), map[string]interface{}{
 		"entity_name": entityName,
 		"actor_name":  user.Name,
 	})

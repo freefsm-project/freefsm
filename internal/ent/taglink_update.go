@@ -48,12 +48,6 @@ func (_u *TagLinkUpdate) AddCompanyID(v int64) *TagLinkUpdate {
 	return _u
 }
 
-// ClearCompanyID clears the value of the "company_id" field.
-func (_u *TagLinkUpdate) ClearCompanyID() *TagLinkUpdate {
-	_u.mutation.ClearCompanyID()
-	return _u
-}
-
 // SetTagID sets the "tag_id" field.
 func (_u *TagLinkUpdate) SetTagID(v int64) *TagLinkUpdate {
 	_u.mutation.ResetTagID()
@@ -170,9 +164,6 @@ func (_u *TagLinkUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedCompanyID(); ok {
 		_spec.AddField(taglink.FieldCompanyID, field.TypeInt64, value)
 	}
-	if _u.mutation.CompanyIDCleared() {
-		_spec.ClearField(taglink.FieldCompanyID, field.TypeInt64)
-	}
 	if value, ok := _u.mutation.TagID(); ok {
 		_spec.SetField(taglink.FieldTagID, field.TypeInt64, value)
 	}
@@ -226,12 +217,6 @@ func (_u *TagLinkUpdateOne) SetNillableCompanyID(v *int64) *TagLinkUpdateOne {
 // AddCompanyID adds value to the "company_id" field.
 func (_u *TagLinkUpdateOne) AddCompanyID(v int64) *TagLinkUpdateOne {
 	_u.mutation.AddCompanyID(v)
-	return _u
-}
-
-// ClearCompanyID clears the value of the "company_id" field.
-func (_u *TagLinkUpdateOne) ClearCompanyID() *TagLinkUpdateOne {
-	_u.mutation.ClearCompanyID()
 	return _u
 }
 
@@ -380,9 +365,6 @@ func (_u *TagLinkUpdateOne) sqlSave(ctx context.Context) (_node *TagLink, err er
 	}
 	if value, ok := _u.mutation.AddedCompanyID(); ok {
 		_spec.AddField(taglink.FieldCompanyID, field.TypeInt64, value)
-	}
-	if _u.mutation.CompanyIDCleared() {
-		_spec.ClearField(taglink.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.TagID(); ok {
 		_spec.SetField(taglink.FieldTagID, field.TypeInt64, value)

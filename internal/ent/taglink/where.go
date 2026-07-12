@@ -119,16 +119,6 @@ func CompanyIDLTE(v int64) predicate.TagLink {
 	return predicate.TagLink(sql.FieldLTE(FieldCompanyID, v))
 }
 
-// CompanyIDIsNil applies the IsNil predicate on the "company_id" field.
-func CompanyIDIsNil() predicate.TagLink {
-	return predicate.TagLink(sql.FieldIsNull(FieldCompanyID))
-}
-
-// CompanyIDNotNil applies the NotNil predicate on the "company_id" field.
-func CompanyIDNotNil() predicate.TagLink {
-	return predicate.TagLink(sql.FieldNotNull(FieldCompanyID))
-}
-
 // TagIDEQ applies the EQ predicate on the "tag_id" field.
 func TagIDEQ(v int64) predicate.TagLink {
 	return predicate.TagLink(sql.FieldEQ(FieldTagID, v))

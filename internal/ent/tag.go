@@ -18,7 +18,7 @@ type Tag struct {
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
 	// CompanyID holds the value of the "company_id" field.
-	CompanyID *int64 `json:"company_id,omitempty"`
+	CompanyID int64 `json:"company_id,omitempty"`
 	// Name holds the value of the "name" field.
 	Name string `json:"name,omitempty"`
 	// Color holds the value of the "color" field.
@@ -64,8 +64,7 @@ func (_m *Tag) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field company_id", values[i])
 			} else if value.Valid {
-				_m.CompanyID = new(int64)
-				*_m.CompanyID = value.Int64
+				_m.CompanyID = value.Int64
 			}
 		case tag.FieldName:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -121,10 +120,8 @@ func (_m *Tag) String() string {
 	var builder strings.Builder
 	builder.WriteString("Tag(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	if v := _m.CompanyID; v != nil {
-		builder.WriteString("company_id=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
+	builder.WriteString("company_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CompanyID))
 	builder.WriteString(", ")
 	builder.WriteString("name=")
 	builder.WriteString(_m.Name)

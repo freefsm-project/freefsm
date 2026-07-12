@@ -9,6 +9,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/activitylog"
+	"github.com/freefsm-project/freefsm/internal/ent/user"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 )
 
@@ -31,7 +32,10 @@ func NewActivityService(client *ent.Client, objects objectref.Directory) *Activi
 	return &ActivityService{client: client, objects: objects}
 }
 
-func (s *ActivityService) Record(ctx context.Context, actorID int64, action string, target objectref.Ref, metadata map[string]interface{}) error {
+func (s *ActivityService) Record(ctx context.Context, companyID, actorID int64, action string, target objectref.Ref, metadata map[string]interface{}) error {
+	if err := validateActivityIDs(companyID, actorID); err != nil {
+		return err
+	}
 	if err := s.validateTarget(target); err != nil {
 		return err
 	}
@@ -39,12 +43,23 @@ func (s *ActivityService) Record(ctx context.Context, actorID int64, action stri
 	if action == "" {
 		return fmt.Errorf("activity action must not be empty")
 	}
+	if s.client == nil {
+		return fmt.Errorf("activity client is required")
+	}
+	actorExists, err := s.client.User.Query().Where(user.IDEQ(actorID), user.CompanyIDEQ(companyID)).Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("validate activity actor: %w", err)
+	}
+	if !actorExists {
+		return fmt.Errorf("activity actor not found for company")
+	}
 
 	md, err := json.Marshal(metadata)
 	if err != nil {
 		md = []byte("{}")
 	}
 	_, err = s.client.ActivityLog.Create().
+		SetCompanyID(companyID).
 		SetActorID(actorID).
 		SetAction(action).
 		SetObjectType(target.ObjectType()).
@@ -57,12 +72,16 @@ func (s *ActivityService) Record(ctx context.Context, actorID int64, action stri
 	return nil
 }
 
-func (s *ActivityService) ListForObject(ctx context.Context, target objectref.Ref, limit int) ([]ActivityEntry, error) {
+func (s *ActivityService) ListForObject(ctx context.Context, companyID int64, target objectref.Ref, limit int) ([]ActivityEntry, error) {
+	if err := validateCompanyID(companyID); err != nil {
+		return nil, err
+	}
 	if err := s.validateTarget(target); err != nil {
 		return nil, err
 	}
 	q := s.client.ActivityLog.Query().
 		Where(
+			activitylog.CompanyIDEQ(companyID),
 			activitylog.ObjectTypeEQ(target.ObjectType()),
 			activitylog.ObjectIDEQ(target.ObjectID()),
 		).
@@ -77,8 +96,11 @@ func (s *ActivityService) ListForObject(ctx context.Context, target objectref.Re
 	return mapActivityEntries(entries), nil
 }
 
-func (s *ActivityService) ListAll(ctx context.Context, offset, limit int, isAdmin bool) ([]ActivityEntry, int, error) {
-	q := s.client.ActivityLog.Query()
+func (s *ActivityService) ListAll(ctx context.Context, companyID int64, offset, limit int, isAdmin bool) ([]ActivityEntry, int, error) {
+	if err := validateCompanyID(companyID); err != nil {
+		return nil, 0, err
+	}
+	q := s.client.ActivityLog.Query().Where(activitylog.CompanyIDEQ(companyID))
 	if !isAdmin {
 		for _, t := range objectref.AdminOnlyTypes() {
 			q = q.Where(activitylog.ObjectTypeNEQ(string(t)))
@@ -99,12 +121,15 @@ func (s *ActivityService) ListAll(ctx context.Context, offset, limit int, isAdmi
 	return mapActivityEntries(entries), total, nil
 }
 
-func (s *ActivityService) ListByType(ctx context.Context, typ objectref.Type, offset, limit int) ([]ActivityEntry, int, error) {
+func (s *ActivityService) ListByType(ctx context.Context, companyID int64, typ objectref.Type, offset, limit int) ([]ActivityEntry, int, error) {
+	if err := validateCompanyID(companyID); err != nil {
+		return nil, 0, err
+	}
 	if err := s.validateType(typ); err != nil {
 		return nil, 0, err
 	}
 	q := s.client.ActivityLog.Query().
-		Where(activitylog.ObjectTypeEQ(string(typ)))
+		Where(activitylog.CompanyIDEQ(companyID), activitylog.ObjectTypeEQ(string(typ)))
 	total, err := q.Count(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count activity by type: %w", err)
@@ -120,7 +145,10 @@ func (s *ActivityService) ListByType(ctx context.Context, typ objectref.Type, of
 	return mapActivityEntries(entries), total, nil
 }
 
-func (s *ActivityService) ListByTypeAndActions(ctx context.Context, typ objectref.Type, actions []string, offset, limit int) ([]ActivityEntry, int, error) {
+func (s *ActivityService) ListByTypeAndActions(ctx context.Context, companyID int64, typ objectref.Type, actions []string, offset, limit int) ([]ActivityEntry, int, error) {
+	if err := validateCompanyID(companyID); err != nil {
+		return nil, 0, err
+	}
 	if err := s.validateType(typ); err != nil {
 		return nil, 0, err
 	}
@@ -134,6 +162,7 @@ func (s *ActivityService) ListByTypeAndActions(ctx context.Context, typ objectre
 	}
 	q := s.client.ActivityLog.Query().
 		Where(
+			activitylog.CompanyIDEQ(companyID),
 			activitylog.ObjectTypeEQ(string(typ)),
 			activitylog.ActionIn(actions...),
 		)
@@ -152,7 +181,10 @@ func (s *ActivityService) ListByTypeAndActions(ctx context.Context, typ objectre
 	return mapActivityEntries(entries), total, nil
 }
 
-func (s *ActivityService) ListByTypes(ctx context.Context, types []objectref.Type, offset, limit int) ([]ActivityEntry, int, error) {
+func (s *ActivityService) ListByTypes(ctx context.Context, companyID int64, types []objectref.Type, offset, limit int) ([]ActivityEntry, int, error) {
+	if err := validateCompanyID(companyID); err != nil {
+		return nil, 0, err
+	}
 	if len(types) == 0 {
 		return nil, 0, fmt.Errorf("activity types must not be empty")
 	}
@@ -164,7 +196,7 @@ func (s *ActivityService) ListByTypes(ctx context.Context, types []objectref.Typ
 		objectTypes[i] = string(typ)
 	}
 	q := s.client.ActivityLog.Query().
-		Where(activitylog.ObjectTypeIn(objectTypes...))
+		Where(activitylog.CompanyIDEQ(companyID), activitylog.ObjectTypeIn(objectTypes...))
 	total, err := q.Count(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count activity by types: %w", err)
@@ -178,6 +210,16 @@ func (s *ActivityService) ListByTypes(ctx context.Context, types []objectref.Typ
 		return nil, 0, fmt.Errorf("list activity by types: %w", err)
 	}
 	return mapActivityEntries(entries), total, nil
+}
+
+func validateActivityIDs(companyID, actorID int64) error {
+	if err := validateCompanyID(companyID); err != nil {
+		return err
+	}
+	if actorID <= 0 {
+		return fmt.Errorf("activity actor id must be positive: %d", actorID)
+	}
+	return nil
 }
 
 func (s *ActivityService) validateTarget(target objectref.Ref) error {

@@ -2,12 +2,14 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/tag"
 	"github.com/freefsm-project/freefsm/internal/ent/taglink"
 	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type TagLinkService struct {
@@ -19,46 +21,57 @@ func NewTagLinkService(client *ent.Client, objects objectref.Directory) *TagLink
 	return &TagLinkService{client: client, objects: objects}
 }
 
-func (s *TagLinkService) Attach(ctx context.Context, tagID int64, ref objectref.Ref) (*ent.TagLink, error) {
-	if err := s.validateRef(ctx, ref, objectref.ExistsActive); err != nil {
+func (s *TagLinkService) Attach(ctx context.Context, companyID, tagID int64, ref objectref.Ref) (*ent.TagLink, error) {
+	if err := validateCompanyID(companyID); err != nil {
 		return nil, err
 	}
-	if err := s.validateTag(ctx, tagID); err != nil {
+	if err := s.validateRef(ctx, companyID, ref, objectref.ExistsActive); err != nil {
+		return nil, err
+	}
+	if err := s.validateTag(ctx, companyID, tagID); err != nil {
 		return nil, err
 	}
 
 	// Check if link already exists
 	exists, err := s.client.TagLink.Query().
-		Where(taglink.TagIDEQ(tagID), taglink.ObjectTypeEQ(ref.ObjectType()), taglink.ObjectIDEQ(ref.ObjectID())).
+		Where(taglink.CompanyIDEQ(companyID), taglink.TagIDEQ(tagID), taglink.ObjectTypeEQ(ref.ObjectType()), taglink.ObjectIDEQ(ref.ObjectID())).
 		Exist(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("check tag link: %w", err)
 	}
 	if exists {
-		return nil, fmt.Errorf("tag already attached")
+		return nil, fmt.Errorf("%w: tag already attached", ErrTagConflict)
 	}
 
 	l, err := s.client.TagLink.Create().
+		SetCompanyID(companyID).
 		SetTagID(tagID).
 		SetObjectType(ref.ObjectType()).
 		SetObjectID(ref.ObjectID()).
 		Save(ctx)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return nil, fmt.Errorf("%w: tag already attached", ErrTagConflict)
+		}
 		return nil, fmt.Errorf("attach tag: %w", err)
 	}
 	return l, nil
 }
 
-func (s *TagLinkService) Detach(ctx context.Context, tagID int64, ref objectref.Ref) error {
-	if err := s.validateRef(ctx, ref, objectref.ExistsActive); err != nil {
+func (s *TagLinkService) Detach(ctx context.Context, companyID, tagID int64, ref objectref.Ref) error {
+	if err := validateCompanyID(companyID); err != nil {
 		return err
 	}
-	if err := s.validateTag(ctx, tagID); err != nil {
+	if err := s.validateRef(ctx, companyID, ref, objectref.ExistsActive); err != nil {
+		return err
+	}
+	if err := s.validateTag(ctx, companyID, tagID); err != nil {
 		return err
 	}
 
 	_, err := s.client.TagLink.Delete().
-		Where(taglink.TagIDEQ(tagID), taglink.ObjectTypeEQ(ref.ObjectType()), taglink.ObjectIDEQ(ref.ObjectID())).
+		Where(taglink.CompanyIDEQ(companyID), taglink.TagIDEQ(tagID), taglink.ObjectTypeEQ(ref.ObjectType()), taglink.ObjectIDEQ(ref.ObjectID())).
 		Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("detach tag: %w", err)
@@ -66,13 +79,16 @@ func (s *TagLinkService) Detach(ctx context.Context, tagID int64, ref objectref.
 	return nil
 }
 
-func (s *TagLinkService) ListForObject(ctx context.Context, ref objectref.Ref) ([]*ent.Tag, error) {
-	if err := s.validateRef(ctx, ref, objectref.ExistsAny); err != nil {
+func (s *TagLinkService) ListForObject(ctx context.Context, companyID int64, ref objectref.Ref) ([]*ent.Tag, error) {
+	if err := validateCompanyID(companyID); err != nil {
+		return nil, err
+	}
+	if err := s.validateRef(ctx, companyID, ref, objectref.ExistsAny); err != nil {
 		return nil, err
 	}
 
 	links, err := s.client.TagLink.Query().
-		Where(taglink.ObjectTypeEQ(ref.ObjectType()), taglink.ObjectIDEQ(ref.ObjectID())).
+		Where(taglink.CompanyIDEQ(companyID), taglink.ObjectTypeEQ(ref.ObjectType()), taglink.ObjectIDEQ(ref.ObjectID())).
 		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list tags for object: %w", err)
@@ -88,7 +104,7 @@ func (s *TagLinkService) ListForObject(ctx context.Context, ref objectref.Ref) (
 	}
 
 	tags, err := s.client.Tag.Query().
-		Where(tag.IDIn(tagIDs...)).
+		Where(tag.CompanyIDEQ(companyID), tag.IDIn(tagIDs...)).
 		Order(ent.Asc(tag.FieldName)).
 		All(ctx)
 	if err != nil {
@@ -97,23 +113,26 @@ func (s *TagLinkService) ListForObject(ctx context.Context, ref objectref.Ref) (
 	return tags, nil
 }
 
-func (s *TagLinkService) ListObjectsWithTag(ctx context.Context, tagID int64, typ objectref.Type) ([]*ent.TagLink, error) {
+func (s *TagLinkService) ListObjectsWithTag(ctx context.Context, companyID, tagID int64, typ objectref.Type) ([]*ent.TagLink, error) {
+	if err := validateCompanyID(companyID); err != nil {
+		return nil, err
+	}
 	if err := s.validateType(typ); err != nil {
 		return nil, err
 	}
-	if err := s.validateTag(ctx, tagID); err != nil {
+	if err := s.validateTag(ctx, companyID, tagID); err != nil {
 		return nil, err
 	}
 
 	return s.client.TagLink.Query().
-		Where(taglink.TagIDEQ(tagID), taglink.ObjectTypeEQ(string(typ))).
+		Where(taglink.CompanyIDEQ(companyID), taglink.TagIDEQ(tagID), taglink.ObjectTypeEQ(string(typ))).
 		All(ctx)
 }
 
-func (s *TagLinkService) validateRef(ctx context.Context, ref objectref.Ref, mode objectref.ExistenceMode) error {
+func (s *TagLinkService) validateRef(ctx context.Context, companyID int64, ref objectref.Ref, mode objectref.ExistenceMode) error {
 	if !ref.Valid() {
 		if _, err := objectref.Parse(ref.ObjectType(), ref.ObjectID()); err != nil {
-			return err
+			return fmt.Errorf("%w: %v", ErrTagInvalid, err)
 		}
 	}
 	if err := s.validateType(ref.Type); err != nil {
@@ -125,9 +144,16 @@ func (s *TagLinkService) validateRef(ctx context.Context, ref objectref.Ref, mod
 	}
 	if !exists {
 		if mode == objectref.ExistsActive {
-			return fmt.Errorf("tag target not found or archived: %s %d", ref.Type, ref.ID)
+			return fmt.Errorf("%w: target not found or archived: %s %d", ErrTagNotFound, ref.Type, ref.ID)
 		}
-		return fmt.Errorf("tag target not found: %s %d", ref.Type, ref.ID)
+		return fmt.Errorf("%w: target %s %d", ErrTagNotFound, ref.Type, ref.ID)
+	}
+	owner, err := s.objects.TagTargetCompanyID(ctx, ref)
+	if err != nil {
+		return fmt.Errorf("validate tag target ownership: %w", err)
+	}
+	if owner != companyID {
+		return fmt.Errorf("%w: target %s %d", ErrTagNotFound, ref.Type, ref.ID)
 	}
 	return nil
 }
@@ -142,16 +168,16 @@ func (s *TagLinkService) validateType(typ objectref.Type) error {
 	return nil
 }
 
-func (s *TagLinkService) validateTag(ctx context.Context, tagID int64) error {
+func (s *TagLinkService) validateTag(ctx context.Context, companyID, tagID int64) error {
 	if tagID <= 0 {
-		return fmt.Errorf("tag id must be positive: %d", tagID)
+		return fmt.Errorf("%w: tag id must be positive: %d", ErrTagInvalid, tagID)
 	}
-	exists, err := s.client.Tag.Query().Where(tag.IDEQ(tagID)).Exist(ctx)
+	exists, err := s.client.Tag.Query().Where(tag.IDEQ(tagID), tag.CompanyIDEQ(companyID)).Exist(ctx)
 	if err != nil {
 		return fmt.Errorf("validate tag: %w", err)
 	}
 	if !exists {
-		return fmt.Errorf("tag not found: %d", tagID)
+		return fmt.Errorf("%w: %d", ErrTagNotFound, tagID)
 	}
 	return nil
 }

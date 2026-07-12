@@ -298,7 +298,7 @@ func (h *ScheduleHandler) recordScheduleActivity(r *http.Request, j *ent.Job, ol
 	if newAssignee != "" {
 		metadata["new_assignee"] = newAssignee
 	}
-	if err := h.activitySvc.Record(r.Context(), u.ID, action, objectref.New(objectref.TypeJob, j.ID), metadata); err != nil {
+	if err := h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, action, objectref.New(objectref.TypeJob, j.ID), metadata); err != nil {
 		slog.Error("record schedule activity", "error", err, "job_id", j.ID, "action", action)
 	}
 }

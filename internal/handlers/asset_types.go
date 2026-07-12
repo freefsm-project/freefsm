@@ -79,7 +79,7 @@ func (h *AssetTypeHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "type_created", objectref.New(objectref.TypeAssetType, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "type_created", objectref.New(objectref.TypeAssetType, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -110,7 +110,7 @@ func (h *AssetTypeHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "type_updated", objectref.New(objectref.TypeAssetType, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "type_updated", objectref.New(objectref.TypeAssetType, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -141,7 +141,7 @@ func (h *AssetTypeHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "type_deleted", objectref.New(objectref.TypeAssetType, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "type_deleted", objectref.New(objectref.TypeAssetType, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
@@ -199,7 +199,7 @@ func (h *AssetStatusHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "status_created", objectref.New(objectref.TypeAssetStatus, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "status_created", objectref.New(objectref.TypeAssetStatus, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -234,7 +234,7 @@ func (h *AssetStatusHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "status_updated", objectref.New(objectref.TypeAssetStatus, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "status_updated", objectref.New(objectref.TypeAssetStatus, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -265,7 +265,7 @@ func (h *AssetStatusHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "status_deleted", objectref.New(objectref.TypeAssetStatus, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "status_deleted", objectref.New(objectref.TypeAssetStatus, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})

@@ -138,10 +138,10 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	d.Assignments = assignments
 	d.Subtasks = services.ParseSubtasks(j.Subtasks)
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeJob, j.ID))
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeJob, j.ID))
 	var allTags []*ent.Tag
 	if isAdminOrDispatcher(u) {
-		allTags, _ = h.tagSvc.ListAll(r.Context())
+		allTags, _ = h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	}
 	d.Tags = tagsToRows(tags)
 	d.AllTags = tagsToRows(allTags)
@@ -281,13 +281,13 @@ func (h *JobHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 	}
 	clockInStr := displayDateTime(r.Context(), result.ClockIn)
 	jobName := jobDisplayName(j)
-	h.activitySvc.Record(r.Context(), u.ID, "clocked_in", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_in", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
 		"entity_name":   fmt.Sprintf("%s — %s — %s", u.Name, jobName, clockInStr),
 		"actor_name":    u.Name,
 		"time_entry_id": result.ID,
 		"clock_in":      clockInStr,
 	})
-	h.activitySvc.Record(r.Context(), u.ID, "clocked_in", objectref.New(objectref.TypeJob, id), map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_in", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 		"entity_name":   fmt.Sprintf("%s — %s", jobName, clockInStr),
 		"actor_name":    u.Name,
 		"time_entry_id": result.ID,
@@ -341,14 +341,14 @@ func (h *JobHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
 	clockInStr := displayDateTime(r.Context(), result.ClockIn)
 	jobName := jobDisplayName(j)
-	h.activitySvc.Record(r.Context(), u.ID, "clocked_out", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_out", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
 		"entity_name":   fmt.Sprintf("%s — %s — %s (%s)", u.Name, jobName, clockInStr, duration),
 		"actor_name":    u.Name,
 		"time_entry_id": result.ID,
 		"clock_in":      clockInStr,
 		"duration":      duration,
 	})
-	h.activitySvc.Record(r.Context(), u.ID, "clocked_out", objectref.New(objectref.TypeJob, id), map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_out", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 		"entity_name":   fmt.Sprintf("%s — %s (%s)", jobName, clockInStr, duration),
 		"actor_name":    u.Name,
 		"time_entry_id": result.ID,
@@ -408,7 +408,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeJob, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeJob, result.ID), map[string]interface{}{
 			"entity_name": result.JobType,
 			"actor_name":  u.Name,
 		})
@@ -440,7 +440,7 @@ func (h *JobHandler) CreateNextOccurrence(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created_next_occurrence", objectref.New(objectref.TypeJob, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created_next_occurrence", objectref.New(objectref.TypeJob, result.ID), map[string]interface{}{
 			"entity_name":   result.JobType,
 			"actor_name":    u.Name,
 			"source_job_id": id,
@@ -547,7 +547,7 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeJob, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "updated", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"entity_name": result.JobType,
 			"actor_name":  u.Name,
 		})
@@ -573,7 +573,7 @@ func (h *JobHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeJob, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "archived", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
@@ -598,7 +598,7 @@ func (h *JobHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeJob, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "restored", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"entity_name": j.JobType,
 			"actor_name":  u.Name,
 		})
@@ -649,7 +649,7 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 		if !subtasks[idx].Completed {
 			action = "subtask_uncompleted"
 		}
-		h.activitySvc.Record(r.Context(), u.ID, action, objectref.New(objectref.TypeJob, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, action, objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": subtasks[idx].Title,
 		})
@@ -950,17 +950,22 @@ func statusID(j *ent.Job) int64 {
 }
 
 func (h *JobHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeJob, id))
-	if err != nil {
-		http.Error(w, err.Error(), 500)
+	u, ok := requireTagCompany(w, r)
+	if !ok {
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil && tag != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeJob, id), map[string]interface{}{
+	id, tagID, ok := tagRouteIDs(w, r)
+	if !ok {
+		return
+	}
+	tag, _ := h.tagSvc.GetByID(r.Context(), u.CompanyID, tagID)
+	_, err := h.tagLinkSvc.Attach(r.Context(), u.CompanyID, tagID, objectref.New(objectref.TypeJob, id))
+	if err != nil {
+		writeTagError(w, err)
+		return
+	}
+	if tag != nil {
+		recordTagActivity(r, h.activitySvc, u, "tag_attached", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})
@@ -969,16 +974,21 @@ func (h *JobHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *JobHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeJob, id)); err != nil {
-		http.Error(w, err.Error(), 500)
+	u, ok := requireTagCompany(w, r)
+	if !ok {
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil && tag != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeJob, id), map[string]interface{}{
+	id, tagID, ok := tagRouteIDs(w, r)
+	if !ok {
+		return
+	}
+	tag, _ := h.tagSvc.GetByID(r.Context(), u.CompanyID, tagID)
+	if err := h.tagLinkSvc.Detach(r.Context(), u.CompanyID, tagID, objectref.New(objectref.TypeJob, id)); err != nil {
+		writeTagError(w, err)
+		return
+	}
+	if tag != nil {
+		recordTagActivity(r, h.activitySvc, u, "tag_detached", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"actor_name": u.Name,
 			"tag_name":   tag.Name,
 		})
@@ -987,8 +997,12 @@ func (h *JobHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *JobHandler) loadTagWidget(w http.ResponseWriter, r *http.Request, jobID int64) {
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeJob, jobID))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	u, ok := requireTagCompany(w, r)
+	if !ok {
+		return
+	}
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeJob, jobID))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	d := templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/jobs/%d", jobID),
 		Tags:    tagsToRows(tags),

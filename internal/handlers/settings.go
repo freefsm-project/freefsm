@@ -237,7 +237,7 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 				changed = append(changed, "email_tracking_enabled")
 			}
 			if len(changed) > 0 {
-				h.activitySvc.Record(r.Context(), u.ID, "settings_updated", objectref.New(objectref.TypeCompanySettings, newSettings.ID), map[string]interface{}{
+				h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "settings_updated", objectref.New(objectref.TypeCompanySettings, newSettings.ID), map[string]interface{}{
 					"entity_name": "Company Settings",
 					"actor_name":  u.Name,
 					"changed":     strings.Join(changed, ", "),
@@ -318,7 +318,7 @@ func (h *SettingsHandler) UploadInvoiceLogo(w http.ResponseWriter, r *http.Reque
 
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "logo_uploaded", objectref.New(objectref.TypeCompanySettings, cs.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "logo_uploaded", objectref.New(objectref.TypeCompanySettings, cs.ID), map[string]interface{}{
 			"entity_name": "Company Settings",
 			"actor_name":  u.Name,
 		})

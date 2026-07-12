@@ -60,12 +60,13 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	password := r.FormValue("password")
 
 	var id int64
+	var companyID int64
 	var name string
 	var hash string
 	var forceChange bool
 	err := h.db.QueryRow(r.Context(),
-		"SELECT id, name, password_hash, force_password_change FROM users WHERE email = $1 AND is_active = true", email,
-	).Scan(&id, &name, &hash, &forceChange)
+		"SELECT id, company_id, name, password_hash, force_password_change FROM users WHERE email = $1 AND is_active = true", email,
+	).Scan(&id, &companyID, &name, &hash, &forceChange)
 	if err != nil {
 		http.Redirect(w, r, "/login?error=invalid+credentials", http.StatusSeeOther)
 		return
@@ -89,7 +90,7 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 		MaxAge: 604800,
 	})
 
-	h.activitySvc.Record(r.Context(), id, "logged_in", objectref.New(objectref.TypeUser, id), map[string]interface{}{
+	h.activitySvc.Record(r.Context(), companyID, id, "logged_in", objectref.New(objectref.TypeUser, id), map[string]interface{}{
 		"entity_name": name,
 		"actor_name":  name,
 	})
@@ -200,7 +201,7 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u, err := h.userSvc.GetByID(r.Context(), uid); err == nil {
-		h.activitySvc.Record(r.Context(), uid, "invite_accepted", objectref.New(objectref.TypeUser, uid), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), *u.CompanyID, uid, "invite_accepted", objectref.New(objectref.TypeUser, uid), map[string]interface{}{
 			"entity_name": u.Name,
 			"actor_name":  u.Name,
 		})

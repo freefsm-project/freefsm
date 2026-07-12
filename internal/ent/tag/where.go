@@ -114,16 +114,6 @@ func CompanyIDLTE(v int64) predicate.Tag {
 	return predicate.Tag(sql.FieldLTE(FieldCompanyID, v))
 }
 
-// CompanyIDIsNil applies the IsNil predicate on the "company_id" field.
-func CompanyIDIsNil() predicate.Tag {
-	return predicate.Tag(sql.FieldIsNull(FieldCompanyID))
-}
-
-// CompanyIDNotNil applies the NotNil predicate on the "company_id" field.
-func CompanyIDNotNil() predicate.Tag {
-	return predicate.Tag(sql.FieldNotNull(FieldCompanyID))
-}
-
 // NameEQ applies the EQ predicate on the "name" field.
 func NameEQ(v string) predicate.Tag {
 	return predicate.Tag(sql.FieldEQ(FieldName, v))

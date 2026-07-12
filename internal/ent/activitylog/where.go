@@ -129,16 +129,6 @@ func CompanyIDLTE(v int64) predicate.ActivityLog {
 	return predicate.ActivityLog(sql.FieldLTE(FieldCompanyID, v))
 }
 
-// CompanyIDIsNil applies the IsNil predicate on the "company_id" field.
-func CompanyIDIsNil() predicate.ActivityLog {
-	return predicate.ActivityLog(sql.FieldIsNull(FieldCompanyID))
-}
-
-// CompanyIDNotNil applies the NotNil predicate on the "company_id" field.
-func CompanyIDNotNil() predicate.ActivityLog {
-	return predicate.ActivityLog(sql.FieldNotNull(FieldCompanyID))
-}
-
 // ActorIDEQ applies the EQ predicate on the "actor_id" field.
 func ActorIDEQ(v int64) predicate.ActivityLog {
 	return predicate.ActivityLog(sql.FieldEQ(FieldActorID, v))

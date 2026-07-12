@@ -77,6 +77,7 @@ type Directory interface {
 	Describe(t Type) (Descriptor, bool)
 	Supports(t Type, cap Capability) bool
 	Exists(ctx context.Context, ref Ref, mode ExistenceMode) (bool, error)
+	TagTargetCompanyID(ctx context.Context, ref Ref) (int64, error)
 	DisplayName(ctx context.Context, ref Ref) (string, error)
 	URL(ref Ref) (string, bool)
 }
@@ -86,6 +87,7 @@ var (
 	ErrInvalidID         = errors.New("object id must be positive")
 	ErrUnsupportedMode   = errors.New("unsupported existence mode")
 	ErrActiveUnsupported = errors.New("active existence requires archive capability")
+	ErrOwnershipMissing  = errors.New("object company ownership is missing")
 )
 
 var knownTypes = map[Type]struct{}{

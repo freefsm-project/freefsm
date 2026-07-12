@@ -18,7 +18,7 @@ type ActivityLog struct {
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
 	// CompanyID holds the value of the "company_id" field.
-	CompanyID *int64 `json:"company_id,omitempty"`
+	CompanyID int64 `json:"company_id,omitempty"`
 	// ActorID holds the value of the "actor_id" field.
 	ActorID int64 `json:"actor_id,omitempty"`
 	// Action holds the value of the "action" field.
@@ -70,8 +70,7 @@ func (_m *ActivityLog) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field company_id", values[i])
 			} else if value.Valid {
-				_m.CompanyID = new(int64)
-				*_m.CompanyID = value.Int64
+				_m.CompanyID = value.Int64
 			}
 		case activitylog.FieldActorID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -145,10 +144,8 @@ func (_m *ActivityLog) String() string {
 	var builder strings.Builder
 	builder.WriteString("ActivityLog(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	if v := _m.CompanyID; v != nil {
-		builder.WriteString("company_id=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
+	builder.WriteString("company_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CompanyID))
 	builder.WriteString(", ")
 	builder.WriteString("actor_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ActorID))

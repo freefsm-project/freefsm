@@ -78,7 +78,7 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 	}
 
 	if user != nil {
-		h.activitySvc.Record(r.Context(), user.ID, "password_changed", objectref.New(objectref.TypeUser, user.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "password_changed", objectref.New(objectref.TypeUser, user.ID), map[string]interface{}{
 			"entity_name": user.Name,
 			"actor_name":  user.Name,
 		})

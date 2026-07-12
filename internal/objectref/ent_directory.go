@@ -89,6 +89,61 @@ func (d *EntDirectory) Exists(ctx context.Context, ref Ref, mode ExistenceMode) 
 	}
 }
 
+func (d *EntDirectory) TagTargetCompanyID(ctx context.Context, ref Ref) (int64, error) {
+	if !ref.Valid() {
+		return 0, fmt.Errorf("company ownership: invalid object reference")
+	}
+	var companyID *int64
+	var err error
+	switch ref.Type {
+	case TypeCustomer:
+		var v *ent.Customer
+		v, err = d.client.Customer.Get(ctx, ref.ID)
+		if err == nil {
+			companyID = v.CompanyID
+		}
+	case TypeJob:
+		var v *ent.Job
+		v, err = d.client.Job.Get(ctx, ref.ID)
+		if err == nil {
+			companyID = v.CompanyID
+		}
+	case TypeProject:
+		var v *ent.Project
+		v, err = d.client.Project.Get(ctx, ref.ID)
+		if err == nil {
+			companyID = v.CompanyID
+		}
+	case TypeEstimate:
+		var v *ent.Estimate
+		v, err = d.client.Estimate.Get(ctx, ref.ID)
+		if err == nil {
+			companyID = v.CompanyID
+		}
+	case TypeInvoice:
+		var v *ent.Invoice
+		v, err = d.client.Invoice.Get(ctx, ref.ID)
+		if err == nil {
+			companyID = v.CompanyID
+		}
+	case TypeAsset:
+		var v *ent.Asset
+		v, err = d.client.Asset.Get(ctx, ref.ID)
+		if err == nil {
+			companyID = v.CompanyID
+		}
+	default:
+		return 0, fmt.Errorf("company ownership unsupported for %s", ref.Type)
+	}
+	if err != nil {
+		return 0, err
+	}
+	if companyID == nil || *companyID <= 0 {
+		return 0, fmt.Errorf("%w: %s %d", ErrOwnershipMissing, ref.Type, ref.ID)
+	}
+	return *companyID, nil
+}
+
 func (d *EntDirectory) DisplayName(ctx context.Context, ref Ref) (string, error) {
 	if !Known(ref.Type) {
 		return "", fmt.Errorf("%w: %s", ErrUnknownType, ref.Type)

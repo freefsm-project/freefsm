@@ -102,7 +102,7 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	entityName := objectDisplayName(r.Context(), h.objects, ref)
-	h.activitySvc.Record(r.Context(), u.ID, "file_uploaded", ref, map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "file_uploaded", ref, map[string]interface{}{
 		"entity_name": entityName,
 		"actor_name":  u.Name,
 		"file_name":   fh.Filename,
@@ -191,7 +191,7 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	entityName := objectDisplayName(r.Context(), h.objects, ref)
-	h.activitySvc.Record(r.Context(), u.ID, "file_deleted", ref, map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "file_deleted", ref, map[string]interface{}{
 		"entity_name": entityName,
 		"actor_name":  u.Name,
 		"file_name":   f.OriginalName,
@@ -237,7 +237,7 @@ func (h *FileHandler) Rename(w http.ResponseWriter, r *http.Request) {
 	}
 
 	entityName := objectDisplayName(r.Context(), h.objects, ref)
-	h.activitySvc.Record(r.Context(), u.ID, "file_renamed", ref, map[string]interface{}{
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "file_renamed", ref, map[string]interface{}{
 		"entity_name": entityName,
 		"actor_name":  u.Name,
 		"file_name":   name,

@@ -12,7 +12,7 @@ var (
 	// ActivityLogsColumns holds the columns for the "activity_logs" table.
 	ActivityLogsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "company_id", Type: field.TypeInt64},
 		{Name: "actor_id", Type: field.TypeInt64},
 		{Name: "action", Type: field.TypeString},
 		{Name: "object_type", Type: field.TypeString},
@@ -801,7 +801,7 @@ var (
 	// TagsColumns holds the columns for the "tags" table.
 	TagsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "company_id", Type: field.TypeInt64},
 		{Name: "name", Type: field.TypeString},
 		{Name: "color", Type: field.TypeString, Default: "#3B82F6"},
 		{Name: "created_at", Type: field.TypeTime},
@@ -815,7 +815,7 @@ var (
 	// TagLinksColumns holds the columns for the "tag_links" table.
 	TagLinksColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "company_id", Type: field.TypeInt64},
 		{Name: "tag_id", Type: field.TypeInt64},
 		{Name: "object_type", Type: field.TypeString},
 		{Name: "object_id", Type: field.TypeInt64},

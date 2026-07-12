@@ -33,7 +33,7 @@ func TestRequireActiveObjectUsesDirectory(t *testing.T) {
 		{name: "active", path: "/customers/1", want: http.StatusNoContent},
 		{name: "inactive", path: "/customers/2", want: http.StatusForbidden},
 		{name: "adapter error", path: "/customers/3", want: http.StatusInternalServerError},
-		{name: "bad id", path: "/customers/nope", want: http.StatusNotFound},
+		{name: "bad id", path: "/customers/nope", want: http.StatusBadRequest},
 	}
 
 	for _, tt := range cases {

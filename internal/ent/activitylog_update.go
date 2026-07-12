@@ -48,12 +48,6 @@ func (_u *ActivityLogUpdate) AddCompanyID(v int64) *ActivityLogUpdate {
 	return _u
 }
 
-// ClearCompanyID clears the value of the "company_id" field.
-func (_u *ActivityLogUpdate) ClearCompanyID() *ActivityLogUpdate {
-	_u.mutation.ClearCompanyID()
-	return _u
-}
-
 // SetActorID sets the "actor_id" field.
 func (_u *ActivityLogUpdate) SetActorID(v int64) *ActivityLogUpdate {
 	_u.mutation.ResetActorID()
@@ -203,9 +197,6 @@ func (_u *ActivityLogUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.AddedCompanyID(); ok {
 		_spec.AddField(activitylog.FieldCompanyID, field.TypeInt64, value)
 	}
-	if _u.mutation.CompanyIDCleared() {
-		_spec.ClearField(activitylog.FieldCompanyID, field.TypeInt64)
-	}
 	if value, ok := _u.mutation.ActorID(); ok {
 		_spec.SetField(activitylog.FieldActorID, field.TypeInt64, value)
 	}
@@ -265,12 +256,6 @@ func (_u *ActivityLogUpdateOne) SetNillableCompanyID(v *int64) *ActivityLogUpdat
 // AddCompanyID adds value to the "company_id" field.
 func (_u *ActivityLogUpdateOne) AddCompanyID(v int64) *ActivityLogUpdateOne {
 	_u.mutation.AddCompanyID(v)
-	return _u
-}
-
-// ClearCompanyID clears the value of the "company_id" field.
-func (_u *ActivityLogUpdateOne) ClearCompanyID() *ActivityLogUpdateOne {
-	_u.mutation.ClearCompanyID()
 	return _u
 }
 
@@ -452,9 +437,6 @@ func (_u *ActivityLogUpdateOne) sqlSave(ctx context.Context) (_node *ActivityLog
 	}
 	if value, ok := _u.mutation.AddedCompanyID(); ok {
 		_spec.AddField(activitylog.FieldCompanyID, field.TypeInt64, value)
-	}
-	if _u.mutation.CompanyIDCleared() {
-		_spec.ClearField(activitylog.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ActorID(); ok {
 		_spec.SetField(activitylog.FieldActorID, field.TypeInt64, value)

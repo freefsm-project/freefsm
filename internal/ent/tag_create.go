@@ -26,14 +26,6 @@ func (_c *TagCreate) SetCompanyID(v int64) *TagCreate {
 	return _c
 }
 
-// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
-func (_c *TagCreate) SetNillableCompanyID(v *int64) *TagCreate {
-	if v != nil {
-		_c.SetCompanyID(*v)
-	}
-	return _c
-}
-
 // SetName sets the "name" field.
 func (_c *TagCreate) SetName(v string) *TagCreate {
 	_c.mutation.SetName(v)
@@ -121,6 +113,9 @@ func (_c *TagCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *TagCreate) check() error {
+	if _, ok := _c.mutation.CompanyID(); !ok {
+		return &ValidationError{Name: "company_id", err: errors.New(`ent: missing required field "Tag.company_id"`)}
+	}
 	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "Tag.name"`)}
 	}
@@ -169,7 +164,7 @@ func (_c *TagCreate) createSpec() (*Tag, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := _c.mutation.CompanyID(); ok {
 		_spec.SetField(tag.FieldCompanyID, field.TypeInt64, value)
-		_node.CompanyID = &value
+		_node.CompanyID = value
 	}
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(tag.FieldName, field.TypeString, value)

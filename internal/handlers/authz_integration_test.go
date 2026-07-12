@@ -16,11 +16,38 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/activitylog"
 	"github.com/freefsm-project/freefsm/internal/ent/enttest"
+	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
+
+func TestTagMutationSucceedsWhenActivityRecordingFailsIntegration(t *testing.T) {
+	client, pool := openHandlerTestDB(t)
+	defer client.Close()
+	defer pool.Close()
+	const companyID int64 = 77
+	h := NewTagHandler(
+		services.NewTagService(client),
+		nil,
+		services.NewActivityService(nil, &objectref.FakeDirectory{}),
+		nil,
+	)
+	req := httptest.NewRequest(http.MethodPost, "/tags?name=Best+Effort", nil)
+	req = req.WithContext(context.WithValue(req.Context(), middleware.UserKey, &middleware.UserInfo{ID: 9, CompanyID: companyID, Name: "Admin", Role: "admin"}))
+	rr := httptest.NewRecorder()
+	h.Create(rr, req)
+	if rr.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
+	}
+	tags, err := services.NewTagService(client).ListAll(context.Background(), companyID)
+	if err != nil || len(tags) != 1 || tags[0].Name != "Best Effort" {
+		t.Fatalf("persisted tags=%v err=%v", tags, err)
+	}
+}
 
 func TestHTTPAuthorizationBoundaries(t *testing.T) {
 	client, pool := openHandlerTestDB(t)
@@ -50,6 +77,11 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 		SetInvoiceDate(time.Now()).
 		SetDueDate(time.Now()).
 		SaveX(ctx)
+	tag := client.Tag.Create().SetCompanyID(companyID).SetName("Route Tag").SaveX(ctx)
+	const otherCompanyID int64 = 2
+	otherCustomer := client.Customer.Create().SetCompanyID(otherCompanyID).SetDisplayName("Other Customer").SaveX(ctx)
+	otherInvoice := client.Invoice.Create().SetCompanyID(otherCompanyID).SetCustomerID(otherCustomer.ID).SetTitle("Other Invoice").SetInvoiceDate(time.Now()).SetDueDate(time.Now()).SaveX(ctx)
+	otherTag := client.Tag.Create().SetCompanyID(otherCompanyID).SetName("Other Tag").SaveX(ctx)
 	contact := client.CustomerContact.Create().SetCustomerID(customer.ID).SetFirstName("Protected").SetLastName("Contact").SaveX(ctx)
 	location := client.Location.Create().SetObjectType("customer").SetObjectID(customer.ID).SetTitle("Protected Location").SaveX(ctx)
 	client.JobAssignment.Create().SetJobID(assignedJob.ID).SetUserID(tech.ID).SaveX(ctx)
@@ -88,6 +120,39 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 		expectStatus(t, router, dispatcherCookie, http.MethodGet, fmt.Sprintf("/estimates/%d", estimate.ID), http.StatusOK)
 		expectStatus(t, router, dispatcherCookie, http.MethodGet, fmt.Sprintf("/jobs/%d", assignedJob.ID), http.StatusOK)
 		expectStatus(t, router, dispatcherCookie, http.MethodGet, fmt.Sprintf("/jobs/%d", archivedJob.ID), http.StatusOK)
+	})
+
+	t.Run("invoice tag route ownership and errors", func(t *testing.T) {
+		path := fmt.Sprintf("/invoices/%d/tags/%d/attach", invoice.ID, tag.ID)
+		expectStatus(t, router, nil, http.MethodPost, path, http.StatusUnauthorized)
+		expectStatus(t, router, techCookie, http.MethodPost, path, http.StatusForbidden)
+		expectStatus(t, router, adminCookie, http.MethodPost, "/invoices/not-an-id/tags/1/attach", http.StatusBadRequest)
+		expectStatus(t, router, adminCookie, http.MethodPost, fmt.Sprintf("/invoices/%d/tags/%d/attach", invoice.ID, otherTag.ID), http.StatusNotFound)
+		expectStatus(t, router, adminCookie, http.MethodPost, fmt.Sprintf("/invoices/%d/tags/%d/attach", otherInvoice.ID, tag.ID), http.StatusNotFound)
+		expectStatus(t, router, adminCookie, http.MethodPost, path, http.StatusOK)
+		expectStatus(t, router, adminCookie, http.MethodPost, path, http.StatusConflict)
+		expectStatus(t, router, adminCookie, http.MethodPost, fmt.Sprintf("/tags/%d/delete", tag.ID), http.StatusConflict)
+		expectStatus(t, router, adminCookie, http.MethodPost, fmt.Sprintf("/invoices/%d/tags/%d/detach", invoice.ID, tag.ID), http.StatusOK)
+		expectStatus(t, router, adminCookie, http.MethodPost, "/tags?name=Lifecycle", http.StatusSeeOther)
+		expectStatus(t, router, adminCookie, http.MethodPost, fmt.Sprintf("/tags/%d?name=", otherTag.ID), http.StatusNotFound)
+		var lifecycle *ent.Tag
+		for _, candidate := range client.Tag.Query().AllX(ctx) {
+			if candidate.Name == "Lifecycle" && candidate.CompanyID == companyID {
+				lifecycle = candidate
+				break
+			}
+		}
+		if lifecycle == nil {
+			t.Fatal("created lifecycle tag not found")
+		}
+		expectStatus(t, router, adminCookie, http.MethodPost, fmt.Sprintf("/tags/%d?name=Lifecycle+Updated", lifecycle.ID), http.StatusSeeOther)
+		expectStatus(t, router, adminCookie, http.MethodPost, fmt.Sprintf("/tags/%d/delete", lifecycle.ID), http.StatusSeeOther)
+		for _, action := range []string{"tag_attached", "tag_detached", "tag_created", "tag_updated", "tag_deleted"} {
+			count, err := client.ActivityLog.Query().Where(activitylog.CompanyIDEQ(companyID), activitylog.ActionEQ(action)).Count(ctx)
+			if err != nil || count != 1 {
+				t.Fatalf("%s activity count=%d err=%v", action, count, err)
+			}
+		}
 	})
 
 	t.Run("tech cannot mutate assigned jobs", func(t *testing.T) {

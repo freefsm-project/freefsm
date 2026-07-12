@@ -109,7 +109,7 @@ func (h *CustomFieldHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if u, ok := middleware.UserFromContext(r.Context()); ok && h.activitySvc != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "field_created", objectref.New(objectref.TypeCustomField, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "field_created", objectref.New(objectref.TypeCustomField, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -215,7 +215,7 @@ func (h *CustomFieldHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if u, ok := middleware.UserFromContext(r.Context()); ok && h.activitySvc != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "field_updated", objectref.New(objectref.TypeCustomField, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "field_updated", objectref.New(objectref.TypeCustomField, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -248,7 +248,7 @@ func (h *CustomFieldHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if u, ok := middleware.UserFromContext(r.Context()); ok && h.activitySvc != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "field_deleted", objectref.New(objectref.TypeCustomField, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "field_deleted", objectref.New(objectref.TypeCustomField, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})

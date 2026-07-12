@@ -34,6 +34,10 @@ func Auth(sessions *services.SessionService, userFn UserProvider) func(http.Hand
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie("session")
 			if err != nil {
+				if r.Method != http.MethodGet {
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}
@@ -43,6 +47,10 @@ func Auth(sessions *services.SessionService, userFn UserProvider) func(http.Hand
 				http.SetCookie(w, &http.Cookie{
 					Name: "session", Value: "", Path: "/", MaxAge: -1,
 				})
+				if r.Method != http.MethodGet {
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return
 			}

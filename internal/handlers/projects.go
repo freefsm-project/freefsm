@@ -138,10 +138,10 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 		d.ArchivedAt = displayDate(r.Context(), *p.DeletedAt)
 	}
 
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeProject, id))
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeProject, id))
 	var allTags []*ent.Tag
 	if isAdminOrDispatcher(u) {
-		allTags, _ = h.tagSvc.ListAll(r.Context())
+		allTags, _ = h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "project")
 	ctx := middleware.WithPageHeaderTitle(r.Context(), p.Name)
@@ -166,27 +166,30 @@ func filterReadableJobs(ctx context.Context, policySvc *services.PolicyService, 
 }
 
 func (h *ProjectHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeProject, id))
-	if err != nil {
-		http.Error(w, err.Error(), 500)
+	u, ok := requireTagCompany(w, r)
+	if !ok {
 		return
 	}
-	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
+	id, tagID, ok := tagRouteIDs(w, r)
+	if !ok {
+		return
+	}
+	_, err := h.tagLinkSvc.Attach(r.Context(), u.CompanyID, tagID, objectref.New(objectref.TypeProject, id))
+	if err != nil {
+		writeTagError(w, err)
+		return
+	}
+	tag, _ := h.tagSvc.GetByID(r.Context(), u.CompanyID, tagID)
 	tagName := ""
 	if tag != nil {
 		tagName = tag.Name
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeProject, id), map[string]interface{}{
-			"tag_name":   tagName,
-			"actor_name": u.Name,
-		})
-	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeProject, id))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	recordTagActivity(r, h.activitySvc, u, "tag_attached", objectref.New(objectref.TypeProject, id), map[string]interface{}{
+		"tag_name":   tagName,
+		"actor_name": u.Name,
+	})
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeProject, id))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/projects/%d", id),
 		Tags:    tagsToRows(tags),
@@ -195,26 +198,29 @@ func (h *ProjectHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProjectHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
+	u, ok := requireTagCompany(w, r)
+	if !ok {
+		return
+	}
+	id, tagID, ok := tagRouteIDs(w, r)
+	if !ok {
+		return
+	}
+	tag, _ := h.tagSvc.GetByID(r.Context(), u.CompanyID, tagID)
 	tagName := ""
 	if tag != nil {
 		tagName = tag.Name
 	}
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeProject, id)); err != nil {
-		http.Error(w, err.Error(), 500)
+	if err := h.tagLinkSvc.Detach(r.Context(), u.CompanyID, tagID, objectref.New(objectref.TypeProject, id)); err != nil {
+		writeTagError(w, err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeProject, id), map[string]interface{}{
-			"tag_name":   tagName,
-			"actor_name": u.Name,
-		})
-	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeProject, id))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	recordTagActivity(r, h.activitySvc, u, "tag_detached", objectref.New(objectref.TypeProject, id), map[string]interface{}{
+		"tag_name":   tagName,
+		"actor_name": u.Name,
+	})
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeProject, id))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/projects/%d", id),
 		Tags:    tagsToRows(tags),
@@ -294,7 +300,7 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeProject, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeProject, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -389,7 +395,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeProject, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "updated", objectref.New(objectref.TypeProject, id), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -438,7 +444,7 @@ func (h *ProjectHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeProject, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeProject, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
 			"actor_name":  u.Name,
 		})
@@ -464,7 +470,7 @@ func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeProject, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "archived", objectref.New(objectref.TypeProject, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
@@ -489,7 +495,7 @@ func (h *ProjectHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeProject, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "restored", objectref.New(objectref.TypeProject, id), map[string]interface{}{
 			"entity_name": p.Name,
 			"actor_name":  u.Name,
 		})

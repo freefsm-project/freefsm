@@ -23,7 +23,7 @@ func (ActivityLog) Annotations() []schema.Annotation {
 func (ActivityLog) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
-		field.Int64("company_id").Optional().Nillable(),
+		field.Int64("company_id"),
 		field.Int64("actor_id"),
 		field.String("action").NotEmpty(),
 		field.String("object_type").NotEmpty(),

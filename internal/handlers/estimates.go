@@ -169,8 +169,8 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.LineItems = h.svc.LineItems(e)
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeEstimate, id))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeEstimate, id))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	d.Tags = tagsToRows(tags)
 	d.AllTags = tagsToRows(allTags)
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "estimate")
@@ -190,26 +190,29 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *EstimateHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	u, ok := requireTagCompany(w, r)
+	if !ok {
+		return
+	}
+	id, tagID, ok := tagRouteIDs(w, r)
+	if !ok {
+		return
+	}
 	if !h.authorizeEstimate(w, r, id, policyUpdate) {
 		return
 	}
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeEstimate, id))
+	tag, _ := h.tagSvc.GetByID(r.Context(), u.CompanyID, tagID)
+	_, err := h.tagLinkSvc.Attach(r.Context(), u.CompanyID, tagID, objectref.New(objectref.TypeEstimate, id))
 	if err != nil {
-		internalServerError(w, r, "attach estimate tag", err)
+		writeTagError(w, err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
-			"actor_name": u.Name,
-			"tag_name":   tag.Name,
-		})
-	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeEstimate, id))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	recordTagActivity(r, h.activitySvc, u, "tag_attached", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
+		"actor_name": u.Name,
+		"tag_name":   tag.Name,
+	})
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeEstimate, id))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/estimates/%d", id),
 		Tags:    tagsToRows(tags),
@@ -218,25 +221,28 @@ func (h *EstimateHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *EstimateHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	u, ok := requireTagCompany(w, r)
+	if !ok {
+		return
+	}
+	id, tagID, ok := tagRouteIDs(w, r)
+	if !ok {
+		return
+	}
 	if !h.authorizeEstimate(w, r, id, policyUpdate) {
 		return
 	}
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeEstimate, id)); err != nil {
-		internalServerError(w, r, "detach estimate tag", err)
+	tag, _ := h.tagSvc.GetByID(r.Context(), u.CompanyID, tagID)
+	if err := h.tagLinkSvc.Detach(r.Context(), u.CompanyID, tagID, objectref.New(objectref.TypeEstimate, id)); err != nil {
+		writeTagError(w, err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
-			"actor_name": u.Name,
-			"tag_name":   tag.Name,
-		})
-	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeEstimate, id))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	recordTagActivity(r, h.activitySvc, u, "tag_detached", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
+		"actor_name": u.Name,
+		"tag_name":   tag.Name,
+	})
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeEstimate, id))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/estimates/%d", id),
 		Tags:    tagsToRows(tags),
@@ -292,7 +298,7 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeEstimate, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeEstimate, result.ID), map[string]interface{}{
 			"entity_name": result.Title,
 			"actor_name":  u.Name,
 		})
@@ -369,7 +375,7 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "updated", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
 			"entity_name": result.Title,
 			"actor_name":  u.Name,
 		})
@@ -443,7 +449,7 @@ func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeEstimate, est.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeEstimate, est.ID), map[string]interface{}{
 			"entity_name": est.Title,
 			"actor_name":  u.Name,
 			"job_id":      id,
@@ -527,7 +533,7 @@ func (h *EstimateHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		internalServerError(w, r, "save estimate pdf", err)
 		return
 	}
-	h.activitySvc.Record(r.Context(), u.ID, "pdf_saved", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "file_name": filename})
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "pdf_saved", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "file_name": filename})
 	http.Redirect(w, r, fmt.Sprintf("/estimates/%d/pdf/preview?flash=PDF+saved", id), http.StatusSeeOther)
 }
 
@@ -655,7 +661,7 @@ func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "archived", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
@@ -680,7 +686,7 @@ func (h *EstimateHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "restored", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
 			"entity_name": e.Title,
 			"actor_name":  u.Name,
 		})

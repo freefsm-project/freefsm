@@ -14,7 +14,7 @@ func requireActiveObject(objects objectref.Directory, objectType objectref.Type)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 			if err != nil || id <= 0 {
-				http.NotFound(w, r)
+				http.Error(w, "invalid object id", http.StatusBadRequest)
 				return
 			}
 			ref := objectref.New(objectType, id)

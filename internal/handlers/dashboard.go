@@ -175,7 +175,7 @@ func dashboardUser(user *middleware.UserInfo) services.DashboardUser {
 func handleLogout(w http.ResponseWriter, r *http.Request, sessions *services.SessionService, activitySvc *services.ActivityService) {
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil && activitySvc != nil {
-		activitySvc.Record(r.Context(), u.ID, "logged_out", objectref.New(objectref.TypeUser, u.ID), map[string]interface{}{
+		activitySvc.Record(r.Context(), u.CompanyID, u.ID, "logged_out", objectref.New(objectref.TypeUser, u.ID), map[string]interface{}{
 			"entity_name": u.Name,
 			"actor_name":  u.Name,
 		})

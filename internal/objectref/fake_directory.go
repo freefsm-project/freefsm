@@ -6,12 +6,30 @@ import (
 )
 
 type FakeDirectory struct {
-	Descriptors map[Type]Descriptor
-	Names       map[Ref]string
-	Active      map[Ref]bool
-	Any         map[Ref]bool
-	URLs        map[Ref]string
-	Errors      map[Ref]error
+	Descriptors           map[Type]Descriptor
+	Names                 map[Ref]string
+	Active                map[Ref]bool
+	Any                   map[Ref]bool
+	URLs                  map[Ref]string
+	Errors                map[Ref]error
+	TagTargetCompanyIDs   map[Ref]*int64
+	TagTargetCompanyCalls []Ref
+}
+
+func (d *FakeDirectory) TagTargetCompanyID(ctx context.Context, ref Ref) (int64, error) {
+	_ = ctx
+	if d == nil {
+		return 0, fmt.Errorf("%w: %s %d", ErrOwnershipMissing, ref.Type, ref.ID)
+	}
+	d.TagTargetCompanyCalls = append(d.TagTargetCompanyCalls, ref)
+	if err := d.err(ref); err != nil {
+		return 0, err
+	}
+	id, ok := d.TagTargetCompanyIDs[ref]
+	if !ok || id == nil || *id <= 0 {
+		return 0, fmt.Errorf("%w: %s %d", ErrOwnershipMissing, ref.Type, ref.ID)
+	}
+	return *id, nil
 }
 
 func (d *FakeDirectory) Parse(objectType string, objectID int64) (Ref, error) {

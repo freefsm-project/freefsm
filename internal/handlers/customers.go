@@ -93,11 +93,15 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeCustomer, c.ID))
-	var allTags []*ent.Tag
 	u, _ := middleware.UserFromContext(r.Context())
+	if u == nil || u.CompanyID <= 0 {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, c.ID))
+	var allTags []*ent.Tag
 	if isAdminOrDispatcher(u) {
-		allTags, _ = h.tagSvc.ListAll(r.Context())
+		allTags, _ = h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
 	files, _ := h.fileSvc.List(r.Context(), objectref.New(objectref.TypeCustomer, c.ID))
@@ -188,7 +192,7 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeCustomer, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeCustomer, result.ID), map[string]interface{}{
 			"entity_name": result.DisplayName,
 			"actor_name":  u.Name,
 		})
@@ -197,6 +201,10 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
+	u, ok := requireTagCompany(w, r)
+	if !ok {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.NotFound(w, r)
@@ -213,8 +221,8 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		data.CustomFields = buildCustomFieldDisplay(defs, c.CustomFields)
 		locations, _ := h.locationSvc.ListByCustomer(r.Context(), c.ID)
 		contacts, _ := h.contactSvc.ListByCustomer(r.Context(), c.ID)
-		tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeCustomer, c.ID))
-		allTags, _ := h.tagSvc.ListAll(r.Context())
+		tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, c.ID))
+		allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 		data.Locations = locationRows(locations)
 		data.Contacts = contactRows(contacts)
 		data.Tags = tagsToRows(tags)
@@ -249,9 +257,8 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "updated", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"entity_name": result.DisplayName,
 			"actor_name":  u.Name,
 		})
@@ -291,7 +298,7 @@ func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "archived", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"entity_name": entityName,
 			"actor_name":  u.Name,
 		})
@@ -316,7 +323,7 @@ func (h *CustomerHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "restored", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"entity_name": c.DisplayName,
 			"actor_name":  u.Name,
 		})
@@ -511,7 +518,7 @@ func (h *CustomerHandler) CreateLocation(w http.ResponseWriter, r *http.Request)
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "location_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "location_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": l.Title,
 		})
@@ -549,7 +556,7 @@ func (h *CustomerHandler) CreateLocationInline(w http.ResponseWriter, r *http.Re
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "location_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "location_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": l.Title,
 		})
@@ -599,7 +606,7 @@ func (h *CustomerHandler) UpdateLocation(w http.ResponseWriter, r *http.Request)
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "location_updated", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "location_updated", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": l.Title,
 		})
@@ -624,7 +631,7 @@ func (h *CustomerHandler) DeleteLocation(w http.ResponseWriter, r *http.Request)
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "location_deleted", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "location_deleted", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": l.Title,
 		})
@@ -655,7 +662,7 @@ func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) 
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "contact_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "contact_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": r.FormValue("first_name") + " " + r.FormValue("last_name"),
 		})
@@ -691,7 +698,7 @@ func (h *CustomerHandler) CreateContactInline(w http.ResponseWriter, r *http.Req
 	label := strings.TrimSpace(c.FirstName + " " + c.LastName)
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "contact_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "contact_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": label,
 		})
@@ -739,7 +746,7 @@ func (h *CustomerHandler) UpdateContact(w http.ResponseWriter, r *http.Request) 
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "contact_updated", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "contact_updated", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": c.FirstName + " " + c.LastName,
 		})
@@ -774,7 +781,7 @@ func (h *CustomerHandler) DeleteContact(w http.ResponseWriter, r *http.Request) 
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "contact_deleted", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "contact_deleted", objectref.New(objectref.TypeCustomer, custID), map[string]interface{}{
 			"actor_name":  u.Name,
 			"entity_name": contact.FirstName + " " + contact.LastName,
 		})
@@ -787,23 +794,26 @@ func (h *CustomerHandler) DeleteContact(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *CustomerHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeCustomer, id))
-	if err != nil {
-		http.Error(w, err.Error(), 500)
+	u, ok := requireTagCompany(w, r)
+	if !ok {
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
-			"actor_name": u.Name,
-			"tag_name":   tag.Name,
-		})
+	id, tagID, ok := tagRouteIDs(w, r)
+	if !ok {
+		return
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeCustomer, id))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	tag, _ := h.tagSvc.GetByID(r.Context(), u.CompanyID, tagID)
+	_, err := h.tagLinkSvc.Attach(r.Context(), u.CompanyID, tagID, objectref.New(objectref.TypeCustomer, id))
+	if err != nil {
+		writeTagError(w, err)
+		return
+	}
+	recordTagActivity(r, h.activitySvc, u, "tag_attached", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
+		"actor_name": u.Name,
+		"tag_name":   tag.Name,
+	})
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, id))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/customers/%d", id),
 		Tags:    tagsToRows(tags),
@@ -812,22 +822,25 @@ func (h *CustomerHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CustomerHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeCustomer, id)); err != nil {
-		http.Error(w, err.Error(), 500)
+	u, ok := requireTagCompany(w, r)
+	if !ok {
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
-			"actor_name": u.Name,
-			"tag_name":   tag.Name,
-		})
+	id, tagID, ok := tagRouteIDs(w, r)
+	if !ok {
+		return
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeCustomer, id))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	tag, _ := h.tagSvc.GetByID(r.Context(), u.CompanyID, tagID)
+	if err := h.tagLinkSvc.Detach(r.Context(), u.CompanyID, tagID, objectref.New(objectref.TypeCustomer, id)); err != nil {
+		writeTagError(w, err)
+		return
+	}
+	recordTagActivity(r, h.activitySvc, u, "tag_detached", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
+		"actor_name": u.Name,
+		"tag_name":   tag.Name,
+	})
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, id))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/customers/%d", id),
 		Tags:    tagsToRows(tags),

@@ -164,9 +164,16 @@ func (s *DependencyService) CanDeleteAssetStatus(ctx context.Context, id int64) 
 	return true, ""
 }
 
-func (s *DependencyService) CanDeleteTag(ctx context.Context, id int64) (bool, string) {
-	if n, _ := s.client.TagLink.Query().Where(taglink.TagID(id)).Count(ctx); n > 0 {
-		return false, fmt.Sprintf("Cannot delete tag — it is attached to %d item(s)", n)
+func (s *DependencyService) CanDeleteTag(ctx context.Context, companyID, id int64) (bool, string, error) {
+	if companyID <= 0 {
+		return false, "Cannot verify tag ownership", fmt.Errorf("company id must be positive")
 	}
-	return true, ""
+	n, err := s.client.TagLink.Query().Where(taglink.CompanyIDEQ(companyID), taglink.TagID(id)).Count(ctx)
+	if err != nil {
+		return false, "Cannot verify tag dependencies", fmt.Errorf("count tag links: %w", err)
+	}
+	if n > 0 {
+		return false, fmt.Sprintf("Cannot delete tag — it is attached to %d item(s)", n), nil
+	}
+	return true, "", nil
 }

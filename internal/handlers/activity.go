@@ -97,16 +97,20 @@ func (h *ActivityHandler) activityForObject(ctx context.Context, userID, company
 			return entries, nil
 		}
 	}
-	return h.svc.ListForObject(ctx, ref, 25)
+	return h.svc.ListForObject(ctx, companyID, ref, 25)
 }
 
 func (h *ActivityHandler) ListByType(objectType objectref.Type) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		u, ok := activityUser(w, r)
+		if !ok {
+			return
+		}
 		page := activityPage(r)
 		perPage := 10
 		offset := (page - 1) * perPage
 
-		entries, total, err := h.svc.ListByType(r.Context(), objectType, offset, perPage)
+		entries, total, err := h.svc.ListByType(r.Context(), u.CompanyID, objectType, offset, perPage)
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -135,11 +139,15 @@ func (h *ActivityHandler) ListByType(objectType objectref.Type) http.HandlerFunc
 }
 
 func (h *ActivityHandler) ListForAssetSettings(w http.ResponseWriter, r *http.Request) {
+	u, ok := activityUser(w, r)
+	if !ok {
+		return
+	}
 	page := activityPage(r)
 	perPage := 10
 	offset := (page - 1) * perPage
 
-	entries, total, err := h.svc.ListByTypes(r.Context(), []objectref.Type{objectref.TypeAssetType, objectref.TypeAssetStatus}, offset, perPage)
+	entries, total, err := h.svc.ListByTypes(r.Context(), u.CompanyID, []objectref.Type{objectref.TypeAssetType, objectref.TypeAssetStatus}, offset, perPage)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -167,11 +175,15 @@ func (h *ActivityHandler) ListForAssetSettings(w http.ResponseWriter, r *http.Re
 }
 
 func (h *ActivityHandler) ListSchedule(w http.ResponseWriter, r *http.Request) {
+	u, ok := activityUser(w, r)
+	if !ok {
+		return
+	}
 	page := activityPage(r)
 	perPage := 10
 	offset := (page - 1) * perPage
 
-	entries, total, err := h.svc.ListByTypeAndActions(r.Context(), objectref.TypeJob, []string{"scheduled", "rescheduled", "dispatched"}, offset, perPage)
+	entries, total, err := h.svc.ListByTypeAndActions(r.Context(), u.CompanyID, objectref.TypeJob, []string{"scheduled", "rescheduled", "dispatched"}, offset, perPage)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -197,10 +209,13 @@ func (h *ActivityHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	perPage := 25
 	offset := (page - 1) * perPage
 
-	u, _ := middleware.UserFromContext(r.Context())
+	u, ok := activityUser(w, r)
+	if !ok {
+		return
+	}
 	isAdmin := u != nil && u.Role == "admin"
 
-	entries, total, err := h.svc.ListAll(r.Context(), offset, perPage, isAdmin)
+	entries, total, err := h.svc.ListAll(r.Context(), u.CompanyID, offset, perPage, isAdmin)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -219,6 +234,15 @@ func (h *ActivityHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 		Total:      total,
 		TotalPages: totalPages,
 	}).Render(r.Context(), w)
+}
+
+func activityUser(w http.ResponseWriter, r *http.Request) (*middleware.UserInfo, bool) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.CompanyID <= 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil, false
+	}
+	return u, true
 }
 
 func (h *ActivityHandler) entriesToRows(ctx context.Context, entries []services.ActivityEntry) []templates.ActivityEntry {

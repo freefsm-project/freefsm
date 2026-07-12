@@ -122,7 +122,7 @@ func (h *CommentHandler) Create(objectType objectref.Type) http.HandlerFunc {
 		if len(preview) > 100 {
 			preview = preview[:100]
 		}
-		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_added", ref, map[string]interface{}{
+		_ = h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "comment_added", ref, map[string]interface{}{
 			"entity_name":     entityName,
 			"comment_preview": preview,
 		})
@@ -170,7 +170,7 @@ func (h *CommentHandler) Delete(objectType objectref.Type) http.HandlerFunc {
 			return
 		}
 
-		_ = h.activitySvc.Record(r.Context(), u.ID, "comment_deleted", ref, map[string]interface{}{
+		_ = h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "comment_deleted", ref, map[string]interface{}{
 			"entity_name":     entityName,
 			"comment_preview": preview,
 		})

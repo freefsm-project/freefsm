@@ -10,6 +10,11 @@ import (
 )
 
 func Seed(ctx context.Context, client *ent.Client) error {
+	settings, err := client.CompanySettings.Query().First(ctx)
+	if err != nil || settings.CompanyID == nil || *settings.CompanyID <= 0 {
+		return fmt.Errorf("seed requires company-owned settings")
+	}
+	companyID := *settings.CompanyID
 	// Idempotency check
 	count, err := client.Customer.Query().Count(ctx)
 	if err != nil {
@@ -141,6 +146,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 	}
 	for i, d := range tagData {
 		t, err := client.Tag.Create().
+			SetCompanyID(companyID).
 			SetName(d.Name).
 			SetColor(d.Color).
 			Save(ctx)
@@ -223,6 +229,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 	// --- Tag Links for Jobs ---
 	for i, j := range jobs {
 		_, err := client.TagLink.Create().
+			SetCompanyID(companyID).
 			SetTagID(tags[i%5].ID).
 			SetObjectType("job").
 			SetObjectID(j.ID).

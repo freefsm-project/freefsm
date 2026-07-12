@@ -26,14 +26,6 @@ func (_c *ActivityLogCreate) SetCompanyID(v int64) *ActivityLogCreate {
 	return _c
 }
 
-// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
-func (_c *ActivityLogCreate) SetNillableCompanyID(v *int64) *ActivityLogCreate {
-	if v != nil {
-		_c.SetCompanyID(*v)
-	}
-	return _c
-}
-
 // SetActorID sets the "actor_id" field.
 func (_c *ActivityLogCreate) SetActorID(v int64) *ActivityLogCreate {
 	_c.mutation.SetActorID(v)
@@ -139,6 +131,9 @@ func (_c *ActivityLogCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *ActivityLogCreate) check() error {
+	if _, ok := _c.mutation.CompanyID(); !ok {
+		return &ValidationError{Name: "company_id", err: errors.New(`ent: missing required field "ActivityLog.company_id"`)}
+	}
 	if _, ok := _c.mutation.ActorID(); !ok {
 		return &ValidationError{Name: "actor_id", err: errors.New(`ent: missing required field "ActivityLog.actor_id"`)}
 	}
@@ -201,7 +196,7 @@ func (_c *ActivityLogCreate) createSpec() (*ActivityLog, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := _c.mutation.CompanyID(); ok {
 		_spec.SetField(activitylog.FieldCompanyID, field.TypeInt64, value)
-		_node.CompanyID = &value
+		_node.CompanyID = value
 	}
 	if value, ok := _c.mutation.ActorID(); ok {
 		_spec.SetField(activitylog.FieldActorID, field.TypeInt64, value)

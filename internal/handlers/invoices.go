@@ -181,8 +181,8 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.PaymentKey, d.ApplyCreditKey = newOperationKey(), newOperationKey()
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeInvoice, id))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeInvoice, id))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	d.Tags = tagsToRows(tags)
 	d.AllTags = tagsToRows(allTags)
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
@@ -202,26 +202,29 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *InvoiceHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	u, ok := requireTagCompany(w, r)
+	if !ok {
+		return
+	}
+	id, tagID, ok := tagRouteIDs(w, r)
+	if !ok {
+		return
+	}
 	if !h.authorizeInvoice(w, r, id, policyUpdate) {
 		return
 	}
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	_, err := h.tagLinkSvc.Attach(r.Context(), tagID, objectref.New(objectref.TypeInvoice, id))
+	tag, _ := h.tagSvc.GetByID(r.Context(), u.CompanyID, tagID)
+	_, err := h.tagLinkSvc.Attach(r.Context(), u.CompanyID, tagID, objectref.New(objectref.TypeInvoice, id))
 	if err != nil {
-		internalServerError(w, r, "attach invoice tag", err)
+		writeTagError(w, err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_attached", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
-			"actor_name": u.Name,
-			"tag_name":   tag.Name,
-		})
-	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeInvoice, id))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	recordTagActivity(r, h.activitySvc, u, "tag_attached", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
+		"actor_name": u.Name,
+		"tag_name":   tag.Name,
+	})
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeInvoice, id))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/invoices/%d", id),
 		Tags:    tagsToRows(tags),
@@ -230,25 +233,28 @@ func (h *InvoiceHandler) AttachTag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *InvoiceHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
-	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	u, ok := requireTagCompany(w, r)
+	if !ok {
+		return
+	}
+	id, tagID, ok := tagRouteIDs(w, r)
+	if !ok {
+		return
+	}
 	if !h.authorizeInvoice(w, r, id, policyUpdate) {
 		return
 	}
-	tagID, _ := strconv.ParseInt(chi.URLParam(r, "tag_id"), 10, 64)
-	tag, _ := h.tagSvc.GetByID(r.Context(), tagID)
-	if err := h.tagLinkSvc.Detach(r.Context(), tagID, objectref.New(objectref.TypeInvoice, id)); err != nil {
-		internalServerError(w, r, "detach invoice tag", err)
+	tag, _ := h.tagSvc.GetByID(r.Context(), u.CompanyID, tagID)
+	if err := h.tagLinkSvc.Detach(r.Context(), u.CompanyID, tagID, objectref.New(objectref.TypeInvoice, id)); err != nil {
+		writeTagError(w, err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "tag_detached", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
-			"actor_name": u.Name,
-			"tag_name":   tag.Name,
-		})
-	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), objectref.New(objectref.TypeInvoice, id))
-	allTags, _ := h.tagSvc.ListAll(r.Context())
+	recordTagActivity(r, h.activitySvc, u, "tag_detached", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
+		"actor_name": u.Name,
+		"tag_name":   tag.Name,
+	})
+	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeInvoice, id))
+	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	templates.TagWidget(templates.TagWidgetData{
 		BaseURL: fmt.Sprintf("/invoices/%d", id),
 		Tags:    tagsToRows(tags),
@@ -317,7 +323,7 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "created", objectref.New(objectref.TypeInvoice, result.ID), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeInvoice, result.ID), map[string]interface{}{
 			"entity_name": result.Title,
 			"actor_name":  u.Name,
 		})
@@ -417,7 +423,7 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "updated", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "updated", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"entity_name": result.Title,
 			"actor_name":  u.Name,
 		})
@@ -447,7 +453,7 @@ func (h *InvoiceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "archived", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "archived", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"entity_name": title,
 			"actor_name":  u.Name,
 		})
@@ -472,7 +478,7 @@ func (h *InvoiceHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
-		h.activitySvc.Record(r.Context(), u.ID, "restored", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
+		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "restored", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
 			"entity_name": i.Title,
 			"actor_name":  u.Name,
 		})
@@ -913,7 +919,7 @@ func (h *InvoiceHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		internalServerError(w, r, "save invoice pdf", err)
 		return
 	}
-	h.activitySvc.Record(r.Context(), u.ID, "pdf_saved", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "file_name": filename})
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "pdf_saved", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{"entity_name": doc.Title, "actor_name": u.Name, "file_name": filename})
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d/pdf/preview?flash=PDF+saved", id), http.StatusSeeOther)
 }
 

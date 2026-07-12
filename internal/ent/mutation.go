@@ -223,7 +223,7 @@ func (m *ActivityLogMutation) CompanyID() (r int64, exists bool) {
 // OldCompanyID returns the old "company_id" field's value of the ActivityLog entity.
 // If the ActivityLog object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityLogMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+func (m *ActivityLogMutation) OldCompanyID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
 	}
@@ -255,24 +255,10 @@ func (m *ActivityLogMutation) AddedCompanyID() (r int64, exists bool) {
 	return *v, true
 }
 
-// ClearCompanyID clears the value of the "company_id" field.
-func (m *ActivityLogMutation) ClearCompanyID() {
-	m.company_id = nil
-	m.addcompany_id = nil
-	m.clearedFields[activitylog.FieldCompanyID] = struct{}{}
-}
-
-// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
-func (m *ActivityLogMutation) CompanyIDCleared() bool {
-	_, ok := m.clearedFields[activitylog.FieldCompanyID]
-	return ok
-}
-
 // ResetCompanyID resets all changes to the "company_id" field.
 func (m *ActivityLogMutation) ResetCompanyID() {
 	m.company_id = nil
 	m.addcompany_id = nil
-	delete(m.clearedFields, activitylog.FieldCompanyID)
 }
 
 // SetActorID sets the "actor_id" field.
@@ -758,11 +744,7 @@ func (m *ActivityLogMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *ActivityLogMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(activitylog.FieldCompanyID) {
-		fields = append(fields, activitylog.FieldCompanyID)
-	}
-	return fields
+	return nil
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -775,11 +757,6 @@ func (m *ActivityLogMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *ActivityLogMutation) ClearField(name string) error {
-	switch name {
-	case activitylog.FieldCompanyID:
-		m.ClearCompanyID()
-		return nil
-	}
 	return fmt.Errorf("unknown ActivityLog nullable field %s", name)
 }
 
@@ -25743,7 +25720,7 @@ func (m *TagMutation) CompanyID() (r int64, exists bool) {
 // OldCompanyID returns the old "company_id" field's value of the Tag entity.
 // If the Tag object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TagMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+func (m *TagMutation) OldCompanyID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
 	}
@@ -25775,24 +25752,10 @@ func (m *TagMutation) AddedCompanyID() (r int64, exists bool) {
 	return *v, true
 }
 
-// ClearCompanyID clears the value of the "company_id" field.
-func (m *TagMutation) ClearCompanyID() {
-	m.company_id = nil
-	m.addcompany_id = nil
-	m.clearedFields[tag.FieldCompanyID] = struct{}{}
-}
-
-// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
-func (m *TagMutation) CompanyIDCleared() bool {
-	_, ok := m.clearedFields[tag.FieldCompanyID]
-	return ok
-}
-
 // ResetCompanyID resets all changes to the "company_id" field.
 func (m *TagMutation) ResetCompanyID() {
 	m.company_id = nil
 	m.addcompany_id = nil
-	delete(m.clearedFields, tag.FieldCompanyID)
 }
 
 // SetName sets the "name" field.
@@ -26064,11 +26027,7 @@ func (m *TagMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *TagMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(tag.FieldCompanyID) {
-		fields = append(fields, tag.FieldCompanyID)
-	}
-	return fields
+	return nil
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -26081,11 +26040,6 @@ func (m *TagMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *TagMutation) ClearField(name string) error {
-	switch name {
-	case tag.FieldCompanyID:
-		m.ClearCompanyID()
-		return nil
-	}
 	return fmt.Errorf("unknown Tag nullable field %s", name)
 }
 
@@ -26299,7 +26253,7 @@ func (m *TagLinkMutation) CompanyID() (r int64, exists bool) {
 // OldCompanyID returns the old "company_id" field's value of the TagLink entity.
 // If the TagLink object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TagLinkMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+func (m *TagLinkMutation) OldCompanyID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
 	}
@@ -26331,24 +26285,10 @@ func (m *TagLinkMutation) AddedCompanyID() (r int64, exists bool) {
 	return *v, true
 }
 
-// ClearCompanyID clears the value of the "company_id" field.
-func (m *TagLinkMutation) ClearCompanyID() {
-	m.company_id = nil
-	m.addcompany_id = nil
-	m.clearedFields[taglink.FieldCompanyID] = struct{}{}
-}
-
-// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
-func (m *TagLinkMutation) CompanyIDCleared() bool {
-	_, ok := m.clearedFields[taglink.FieldCompanyID]
-	return ok
-}
-
 // ResetCompanyID resets all changes to the "company_id" field.
 func (m *TagLinkMutation) ResetCompanyID() {
 	m.company_id = nil
 	m.addcompany_id = nil
-	delete(m.clearedFields, taglink.FieldCompanyID)
 }
 
 // SetTagID sets the "tag_id" field.
@@ -26734,11 +26674,7 @@ func (m *TagLinkMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *TagLinkMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(taglink.FieldCompanyID) {
-		fields = append(fields, taglink.FieldCompanyID)
-	}
-	return fields
+	return nil
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -26751,11 +26687,6 @@ func (m *TagLinkMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *TagLinkMutation) ClearField(name string) error {
-	switch name {
-	case taglink.FieldCompanyID:
-		m.ClearCompanyID()
-		return nil
-	}
 	return fmt.Errorf("unknown TagLink nullable field %s", name)
 }
 

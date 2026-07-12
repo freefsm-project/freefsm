@@ -31,6 +31,10 @@ func (d activityTestDirectory) Exists(context.Context, objectref.Ref, objectref.
 	return true, nil
 }
 
+func (d activityTestDirectory) TagTargetCompanyID(context.Context, objectref.Ref) (int64, error) {
+	return 1, nil
+}
+
 func (d activityTestDirectory) DisplayName(_ context.Context, ref objectref.Ref) (string, error) {
 	name, ok := d.names[ref]
 	if !ok {
