@@ -134,12 +134,13 @@ func openPolicyTestClient(t *testing.T) *ent.Client {
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}
-	defer db.Close()
 	if _, err := db.Exec(`CREATE SCHEMA ` + schemaName); err != nil {
+		_ = db.Close()
 		t.Fatalf("create test schema: %v", err)
 	}
 	t.Cleanup(func() {
 		_, _ = db.Exec(`DROP SCHEMA ` + schemaName + ` CASCADE`)
+		_ = db.Close()
 	})
 
 	schemaDSN, err := dsnWithSearchPath(dsn, schemaName)

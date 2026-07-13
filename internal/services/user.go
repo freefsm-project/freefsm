@@ -43,6 +43,7 @@ func (s *UserService) ListAll(ctx context.Context) ([]*ent.User, error) {
 }
 
 type UserCreateParams struct {
+	CompanyID        int64
 	Name             string
 	Email            string
 	Password         string
@@ -51,8 +52,15 @@ type UserCreateParams struct {
 }
 
 func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User, error) {
+	if p.CompanyID <= 0 {
+		return nil, fmt.Errorf("create user: company is required")
+	}
+	if !p.SendWelcomeEmail && p.Password == "" {
+		return nil, fmt.Errorf("create user: password is required")
+	}
 	password := p.Password
 	active := true
+	now := time.Now()
 
 	if p.SendWelcomeEmail {
 		password = generateUnusablePassword()
@@ -64,25 +72,22 @@ func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	u, err := s.client.User.Create().
+	create := s.client.User.Create().
+		SetCompanyID(p.CompanyID).
 		SetName(p.Name).
 		SetEmail(p.Email).
 		SetPasswordHash(string(hash)).
 		SetRole(p.Role).
 		SetIsActive(active).
-		SetForcePasswordChange(false).
-		Save(ctx)
+		SetForcePasswordChange(false)
+	if p.SendWelcomeEmail {
+		create.SetWelcomeEmailSentAt(now)
+	} else {
+		create.SetOnboardingCompletedAt(now)
+	}
+	u, err := create.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
-	}
-
-	if p.SendWelcomeEmail {
-		_, err = s.client.User.UpdateOne(u).
-			SetWelcomeEmailSentAt(time.Now()).
-			Save(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("update welcome sent at: %w", err)
-		}
 	}
 
 	return u, nil
@@ -124,16 +129,15 @@ func (s *UserService) SetActive(ctx context.Context, id int64, active bool) erro
 	return s.client.User.UpdateOneID(id).SetIsActive(active).Exec(ctx)
 }
 
-func (s *UserService) ActivateWithPassword(ctx context.Context, id int64, password string) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+func (s *UserService) CompleteOnboarding(ctx context.Context, id int64) error {
+	_, err := s.client.User.Update().
+		Where(user.IDEQ(id), user.OnboardingCompletedAtIsNil()).
+		SetOnboardingCompletedAt(time.Now()).
+		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("hash password: %w", err)
+		return fmt.Errorf("complete onboarding: %w", err)
 	}
-	return s.client.User.UpdateOneID(id).
-		SetPasswordHash(string(hash)).
-		SetIsActive(true).
-		SetForcePasswordChange(false).
-		Exec(ctx)
+	return nil
 }
 
 func (s *UserService) SetPassword(ctx context.Context, id int64, password string) error {
@@ -252,22 +256,6 @@ func (s *UserService) ValidatePassword(password string, cs *ent.CompanySettings)
 		return fmt.Errorf("password must contain a special character")
 	}
 	return nil
-}
-
-func (s *UserService) ResendWelcomeEmail(ctx context.Context, id int64) (*ent.User, error) {
-	u, err := s.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	_, err = s.client.User.UpdateOne(u).
-		SetIsActive(false).
-		SetForcePasswordChange(false).
-		SetWelcomeEmailSentAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("update user: %w", err)
-	}
-	return u, nil
 }
 
 func generateUnusablePassword() string {

@@ -27883,27 +27883,28 @@ func (m *TimeEntryMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                    Op
-	typ                   string
-	id                    *int64
-	company_id            *int64
-	addcompany_id         *int64
-	email                 *string
-	password_hash         *string
-	name                  *string
-	role                  *string
-	font_size             *string
-	last_schedule_tab     *string
-	last_schedule_period  *string
-	is_active             *bool
-	force_password_change *bool
-	welcome_email_sent_at *time.Time
-	created_at            *time.Time
-	updated_at            *time.Time
-	clearedFields         map[string]struct{}
-	done                  bool
-	oldValue              func(context.Context) (*User, error)
-	predicates            []predicate.User
+	op                      Op
+	typ                     string
+	id                      *int64
+	company_id              *int64
+	addcompany_id           *int64
+	email                   *string
+	password_hash           *string
+	name                    *string
+	role                    *string
+	font_size               *string
+	last_schedule_tab       *string
+	last_schedule_period    *string
+	is_active               *bool
+	force_password_change   *bool
+	welcome_email_sent_at   *time.Time
+	created_at              *time.Time
+	updated_at              *time.Time
+	onboarding_completed_at *time.Time
+	clearedFields           map[string]struct{}
+	done                    bool
+	oldValue                func(context.Context) (*User, error)
+	predicates              []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -28525,6 +28526,55 @@ func (m *UserMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
+// SetOnboardingCompletedAt sets the "onboarding_completed_at" field.
+func (m *UserMutation) SetOnboardingCompletedAt(t time.Time) {
+	m.onboarding_completed_at = &t
+}
+
+// OnboardingCompletedAt returns the value of the "onboarding_completed_at" field in the mutation.
+func (m *UserMutation) OnboardingCompletedAt() (r time.Time, exists bool) {
+	v := m.onboarding_completed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOnboardingCompletedAt returns the old "onboarding_completed_at" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldOnboardingCompletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOnboardingCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOnboardingCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOnboardingCompletedAt: %w", err)
+	}
+	return oldValue.OnboardingCompletedAt, nil
+}
+
+// ClearOnboardingCompletedAt clears the value of the "onboarding_completed_at" field.
+func (m *UserMutation) ClearOnboardingCompletedAt() {
+	m.onboarding_completed_at = nil
+	m.clearedFields[user.FieldOnboardingCompletedAt] = struct{}{}
+}
+
+// OnboardingCompletedAtCleared returns if the "onboarding_completed_at" field was cleared in this mutation.
+func (m *UserMutation) OnboardingCompletedAtCleared() bool {
+	_, ok := m.clearedFields[user.FieldOnboardingCompletedAt]
+	return ok
+}
+
+// ResetOnboardingCompletedAt resets all changes to the "onboarding_completed_at" field.
+func (m *UserMutation) ResetOnboardingCompletedAt() {
+	m.onboarding_completed_at = nil
+	delete(m.clearedFields, user.FieldOnboardingCompletedAt)
+}
+
 // Where appends a list predicates to the UserMutation builder.
 func (m *UserMutation) Where(ps ...predicate.User) {
 	m.predicates = append(m.predicates, ps...)
@@ -28559,7 +28609,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 14)
 	if m.company_id != nil {
 		fields = append(fields, user.FieldCompanyID)
 	}
@@ -28599,6 +28649,9 @@ func (m *UserMutation) Fields() []string {
 	if m.updated_at != nil {
 		fields = append(fields, user.FieldUpdatedAt)
 	}
+	if m.onboarding_completed_at != nil {
+		fields = append(fields, user.FieldOnboardingCompletedAt)
+	}
 	return fields
 }
 
@@ -28633,6 +28686,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.CreatedAt()
 	case user.FieldUpdatedAt:
 		return m.UpdatedAt()
+	case user.FieldOnboardingCompletedAt:
+		return m.OnboardingCompletedAt()
 	}
 	return nil, false
 }
@@ -28668,6 +28723,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldCreatedAt(ctx)
 	case user.FieldUpdatedAt:
 		return m.OldUpdatedAt(ctx)
+	case user.FieldOnboardingCompletedAt:
+		return m.OldOnboardingCompletedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown User field %s", name)
 }
@@ -28768,6 +28825,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUpdatedAt(v)
 		return nil
+	case user.FieldOnboardingCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOnboardingCompletedAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
 }
@@ -28819,6 +28883,9 @@ func (m *UserMutation) ClearedFields() []string {
 	if m.FieldCleared(user.FieldWelcomeEmailSentAt) {
 		fields = append(fields, user.FieldWelcomeEmailSentAt)
 	}
+	if m.FieldCleared(user.FieldOnboardingCompletedAt) {
+		fields = append(fields, user.FieldOnboardingCompletedAt)
+	}
 	return fields
 }
 
@@ -28838,6 +28905,9 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldWelcomeEmailSentAt:
 		m.ClearWelcomeEmailSentAt()
+		return nil
+	case user.FieldOnboardingCompletedAt:
+		m.ClearOnboardingCompletedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown User nullable field %s", name)
@@ -28885,6 +28955,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldUpdatedAt:
 		m.ResetUpdatedAt()
+		return nil
+	case user.FieldOnboardingCompletedAt:
+		m.ResetOnboardingCompletedAt()
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)

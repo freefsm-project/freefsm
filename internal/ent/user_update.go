@@ -207,6 +207,26 @@ func (_u *UserUpdate) SetUpdatedAt(v time.Time) *UserUpdate {
 	return _u
 }
 
+// SetOnboardingCompletedAt sets the "onboarding_completed_at" field.
+func (_u *UserUpdate) SetOnboardingCompletedAt(v time.Time) *UserUpdate {
+	_u.mutation.SetOnboardingCompletedAt(v)
+	return _u
+}
+
+// SetNillableOnboardingCompletedAt sets the "onboarding_completed_at" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableOnboardingCompletedAt(v *time.Time) *UserUpdate {
+	if v != nil {
+		_u.SetOnboardingCompletedAt(*v)
+	}
+	return _u
+}
+
+// ClearOnboardingCompletedAt clears the value of the "onboarding_completed_at" field.
+func (_u *UserUpdate) ClearOnboardingCompletedAt() *UserUpdate {
+	_u.mutation.ClearOnboardingCompletedAt()
+	return _u
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
@@ -324,6 +344,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.OnboardingCompletedAt(); ok {
+		_spec.SetField(user.FieldOnboardingCompletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.OnboardingCompletedAtCleared() {
+		_spec.ClearField(user.FieldOnboardingCompletedAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -524,6 +550,26 @@ func (_u *UserUpdateOne) SetUpdatedAt(v time.Time) *UserUpdateOne {
 	return _u
 }
 
+// SetOnboardingCompletedAt sets the "onboarding_completed_at" field.
+func (_u *UserUpdateOne) SetOnboardingCompletedAt(v time.Time) *UserUpdateOne {
+	_u.mutation.SetOnboardingCompletedAt(v)
+	return _u
+}
+
+// SetNillableOnboardingCompletedAt sets the "onboarding_completed_at" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableOnboardingCompletedAt(v *time.Time) *UserUpdateOne {
+	if v != nil {
+		_u.SetOnboardingCompletedAt(*v)
+	}
+	return _u
+}
+
+// ClearOnboardingCompletedAt clears the value of the "onboarding_completed_at" field.
+func (_u *UserUpdateOne) ClearOnboardingCompletedAt() *UserUpdateOne {
+	_u.mutation.ClearOnboardingCompletedAt()
+	return _u
+}
+
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
@@ -671,6 +717,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if value, ok := _u.mutation.OnboardingCompletedAt(); ok {
+		_spec.SetField(user.FieldOnboardingCompletedAt, field.TypeTime, value)
+	}
+	if _u.mutation.OnboardingCompletedAtCleared() {
+		_spec.ClearField(user.FieldOnboardingCompletedAt, field.TypeTime)
 	}
 	_node = &User{config: _u.config}
 	_spec.Assign = _node.assignValues

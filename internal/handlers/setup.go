@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -65,6 +68,12 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var companyID int64
+	if err := h.db.QueryRow(r.Context(), `SELECT min(id) FROM companies HAVING count(*) = 1`).Scan(&companyID); err != nil {
+		internalServerError(w, r, "resolve setup company", fmt.Errorf("setup requires exactly one company: %w", err))
+		return
+	}
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		internalServerError(w, r, "hash setup password", err)
@@ -73,11 +82,15 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 
 	var userID int64
 	err = h.db.QueryRow(r.Context(),
-		`INSERT INTO users (email, password_hash, name, role) VALUES ($1, $2, $3, 'admin') RETURNING id`,
-		email, string(hash), name,
+		`INSERT INTO users (company_id, email, password_hash, name, role, onboarding_completed_at) VALUES ($1, $2, $3, $4, 'admin', NOW()) RETURNING id`,
+		companyID, email, string(hash), name,
 	).Scan(&userID)
 	if err != nil {
-		http.Redirect(w, r, "/setup?error=email+already+in+use", http.StatusSeeOther)
+		if isUniqueViolation(err) {
+			http.Redirect(w, r, "/setup?error=email+already+in+use", http.StatusSeeOther)
+			return
+		}
+		internalServerError(w, r, "create setup admin", err)
 		return
 	}
 
@@ -95,6 +108,11 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 	})
 
 	http.Redirect(w, r, "/setup/company", http.StatusSeeOther)
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
 func needsSetup(ctx context.Context, db *pgxpool.Pool) bool {

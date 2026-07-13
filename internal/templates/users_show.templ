@@ -8,10 +8,12 @@ templ UserShow(p UserDetailPage) {
 		<div class="work-item-detail-actions">
 			<div class="work-item-detail-action-group">
 				<a href={ templ.URL(fmt.Sprintf("/users/%d/edit", p.User.ID)) } role="button" class="outline">Edit</a>
-				<form action={ templ.URL(fmt.Sprintf("/users/%d/resend-welcome", p.User.ID)) } method="post">
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button class="outline">Resend Welcome</button>
-				</form>
+				if p.CanResendWelcome {
+					<form action={ templ.URL(fmt.Sprintf("/users/%d/resend-welcome", p.User.ID)) } method="post">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button class="outline">Resend Welcome</button>
+					</form>
+				}
 				<form action={ templ.URL(fmt.Sprintf("/users/%d/disable", p.User.ID)) } method="post">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast">

@@ -119,6 +119,11 @@ func UpdatedAt(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldUpdatedAt, v))
 }
 
+// OnboardingCompletedAt applies equality check predicate on the "onboarding_completed_at" field. It's identical to OnboardingCompletedAtEQ.
+func OnboardingCompletedAt(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldOnboardingCompletedAt, v))
+}
+
 // CompanyIDEQ applies the EQ predicate on the "company_id" field.
 func CompanyIDEQ(v int64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldCompanyID, v))
@@ -772,6 +777,56 @@ func UpdatedAtLT(v time.Time) predicate.User {
 // UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
 func UpdatedAtLTE(v time.Time) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldUpdatedAt, v))
+}
+
+// OnboardingCompletedAtEQ applies the EQ predicate on the "onboarding_completed_at" field.
+func OnboardingCompletedAtEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldOnboardingCompletedAt, v))
+}
+
+// OnboardingCompletedAtNEQ applies the NEQ predicate on the "onboarding_completed_at" field.
+func OnboardingCompletedAtNEQ(v time.Time) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldOnboardingCompletedAt, v))
+}
+
+// OnboardingCompletedAtIn applies the In predicate on the "onboarding_completed_at" field.
+func OnboardingCompletedAtIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldIn(FieldOnboardingCompletedAt, vs...))
+}
+
+// OnboardingCompletedAtNotIn applies the NotIn predicate on the "onboarding_completed_at" field.
+func OnboardingCompletedAtNotIn(vs ...time.Time) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldOnboardingCompletedAt, vs...))
+}
+
+// OnboardingCompletedAtGT applies the GT predicate on the "onboarding_completed_at" field.
+func OnboardingCompletedAtGT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGT(FieldOnboardingCompletedAt, v))
+}
+
+// OnboardingCompletedAtGTE applies the GTE predicate on the "onboarding_completed_at" field.
+func OnboardingCompletedAtGTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldOnboardingCompletedAt, v))
+}
+
+// OnboardingCompletedAtLT applies the LT predicate on the "onboarding_completed_at" field.
+func OnboardingCompletedAtLT(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLT(FieldOnboardingCompletedAt, v))
+}
+
+// OnboardingCompletedAtLTE applies the LTE predicate on the "onboarding_completed_at" field.
+func OnboardingCompletedAtLTE(v time.Time) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldOnboardingCompletedAt, v))
+}
+
+// OnboardingCompletedAtIsNil applies the IsNil predicate on the "onboarding_completed_at" field.
+func OnboardingCompletedAtIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldOnboardingCompletedAt))
+}
+
+// OnboardingCompletedAtNotNil applies the NotNil predicate on the "onboarding_completed_at" field.
+func OnboardingCompletedAtNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldOnboardingCompletedAt))
 }
 
 // And groups predicates with the AND operator between them.

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -51,19 +52,36 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.ParseForm()
+	a, ok := middleware.UserFromContext(r.Context())
+	if !ok || a == nil || a.CompanyID <= 0 {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	sendWelcome := r.FormValue("send_welcome_email") == "on"
+	if !sendWelcome {
+		cs, err := h.csSvc.GetForCompany(r.Context(), a.CompanyID)
+		if err != nil {
+			internalServerError(w, r, "get company password policy", err)
+			return
+		}
+		if err := h.svc.ValidatePassword(r.FormValue("password"), cs); err != nil {
+			http.Redirect(w, r, "/users/new?flash="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
+	}
 	result, err := h.svc.Create(r.Context(), services.UserCreateParams{
+		CompanyID:        a.CompanyID,
 		Name:             r.FormValue("name"),
 		Email:            r.FormValue("email"),
 		Password:         r.FormValue("password"),
 		Role:             r.FormValue("role"),
-		SendWelcomeEmail: r.FormValue("send_welcome_email") == "on",
+		SendWelcomeEmail: sendWelcome,
 	})
 	if err != nil {
 		internalServerError(w, r, "create user", err)
 		return
 	}
 
-	a, _ := middleware.UserFromContext(r.Context())
 	if a != nil && h.activitySvc != nil {
 		h.activitySvc.Record(r.Context(), a.CompanyID, a.ID, "user_created", objectref.New(objectref.TypeUser, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
@@ -71,8 +89,8 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	if r.FormValue("send_welcome_email") == "on" {
-		token, err := h.inviteSvc.CreateInvite(r.Context(), result.ID)
+	if sendWelcome {
+		token, err := h.inviteSvc.CreateInvite(r.Context(), a.CompanyID, result.ID)
 		if err != nil {
 			internalServerError(w, r, "create invitation", err)
 			return
@@ -94,12 +112,22 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *UserHandler) Show(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	u, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
+	a, ok := middleware.UserFromContext(r.Context())
+	if !ok || a == nil {
 		http.NotFound(w, r)
 		return
 	}
-	templates.UserShow(templates.UserDetailPage{User: userToRow(u)}).Render(r.Context(), w)
+	u, err := h.svc.GetByID(r.Context(), id)
+	if err != nil || u.CompanyID == nil || *u.CompanyID != a.CompanyID {
+		http.NotFound(w, r)
+		return
+	}
+	canResend, err := h.inviteSvc.CanResendWelcome(r.Context(), a.CompanyID, id)
+	if err != nil {
+		internalServerError(w, r, "check welcome resend eligibility", err)
+		return
+	}
+	templates.UserShow(templates.UserDetailPage{User: userToRow(u), CanResendWelcome: canResend}).Render(r.Context(), w)
 }
 
 func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -218,23 +246,19 @@ func (h *UserHandler) Preferences(w http.ResponseWriter, r *http.Request) {
 
 func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	user, err := h.svc.ResendWelcomeEmail(r.Context(), id)
-	if err != nil {
-		internalServerError(w, r, "prepare welcome resend", err)
+	a, ok := middleware.UserFromContext(r.Context())
+	if !ok || a == nil {
+		http.Error(w, "welcome invitation cannot be resent", http.StatusConflict)
 		return
 	}
-	token, err := h.inviteSvc.CreateInvite(r.Context(), user.ID)
+	user, token, err := h.inviteSvc.RenewPendingInvite(r.Context(), a.CompanyID, id)
 	if err != nil {
-		internalServerError(w, r, "create invitation", err)
+		if errors.Is(err, services.ErrWelcomeResendIneligible) {
+			http.Error(w, "welcome invitation cannot be resent", http.StatusConflict)
+			return
+		}
+		internalServerError(w, r, "renew welcome invitation", err)
 		return
-	}
-
-	a, _ := middleware.UserFromContext(r.Context())
-	if a != nil && h.activitySvc != nil {
-		h.activitySvc.Record(r.Context(), a.CompanyID, a.ID, "welcome_resent", objectref.New(objectref.TypeUser, id), map[string]interface{}{
-			"entity_name": user.Name,
-			"actor_name":  a.Name,
-		})
 	}
 
 	inviteURL := absoluteAppURL(h.cfg, r, "/accept-invite?token="+url.QueryEscape(token))
@@ -242,6 +266,12 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 		slog.Error("resend welcome email", "error", err, "user", user.Email)
 		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+failed", id), http.StatusSeeOther)
 		return
+	}
+	if h.activitySvc != nil {
+		h.activitySvc.Record(r.Context(), a.CompanyID, a.ID, "welcome_resent", objectref.New(objectref.TypeUser, id), map[string]interface{}{
+			"entity_name": user.Name,
+			"actor_name":  a.Name,
+		})
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+resent", id), http.StatusSeeOther)

@@ -35,5 +35,6 @@ func (User) Fields() []ent.Field {
 		field.Time("welcome_email_sent_at").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 		field.Time("updated_at").Default(time.Now).UpdateDefault(time.Now),
+		field.Time("onboarding_completed_at").Optional().Nillable(),
 	}
 }

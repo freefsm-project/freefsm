@@ -227,12 +227,13 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}
-	defer db.Close()
 	if _, err := db.Exec(`CREATE SCHEMA ` + schemaName); err != nil {
+		_ = db.Close()
 		t.Fatalf("create test schema: %v", err)
 	}
 	t.Cleanup(func() {
 		_, _ = db.Exec(`DROP SCHEMA ` + schemaName + ` CASCADE`)
+		_ = db.Close()
 	})
 
 	schemaDSN, err := dsnWithSearchPath(dsn, schemaName)
@@ -246,14 +247,21 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
 	t.Cleanup(func() { _ = schemaDB.Close() })
 
 	client := enttest.NewClient(t, enttest.WithOptions(ent.Driver(entsql.OpenDB(dialect.Postgres, schemaDB))))
-	if _, err := schemaDB.Exec(`CREATE TABLE sessions (
+	if _, err := schemaDB.Exec(`ALTER TABLE users ALTER COLUMN created_at SET DEFAULT NOW();
+	ALTER TABLE users ALTER COLUMN updated_at SET DEFAULT NOW();
+	CREATE TABLE companies (
+		id BIGSERIAL PRIMARY KEY,
+		name TEXT NOT NULL,
+		slug TEXT NOT NULL UNIQUE
+	);
+	CREATE TABLE sessions (
 		id BIGSERIAL PRIMARY KEY,
 		token_hash TEXT NOT NULL UNIQUE,
 		user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		expires_at TIMESTAMPTZ NOT NULL,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 	)`); err != nil {
-		t.Fatalf("create sessions table: %v", err)
+		t.Fatalf("configure handler test schema: %v", err)
 	}
 	if _, err := schemaDB.Exec(`
 		CREATE TABLE invoice_payments (id UUID PRIMARY KEY, company_id BIGINT NOT NULL, invoice_id BIGINT NOT NULL, amount_cents BIGINT NOT NULL, method TEXT NOT NULL, received_date DATE NOT NULL, reference TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '');

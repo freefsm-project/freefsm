@@ -576,7 +576,8 @@ type UserDetail struct {
 }
 
 type UserDetailPage struct {
-	User UserRow
+	User             UserRow
+	CanResendWelcome bool
 }
 
 type UserFormData struct {

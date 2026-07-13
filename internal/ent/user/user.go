@@ -39,6 +39,8 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
+	// FieldOnboardingCompletedAt holds the string denoting the onboarding_completed_at field in the database.
+	FieldOnboardingCompletedAt = "onboarding_completed_at"
 	// Table holds the table name of the user in the database.
 	Table = "users"
 )
@@ -59,6 +61,7 @@ var Columns = []string{
 	FieldWelcomeEmailSentAt,
 	FieldCreatedAt,
 	FieldUpdatedAt,
+	FieldOnboardingCompletedAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -169,4 +172,9 @@ func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 // ByUpdatedAt orders the results by the updated_at field.
 func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
+}
+
+// ByOnboardingCompletedAt orders the results by the onboarding_completed_at field.
+func ByOnboardingCompletedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOnboardingCompletedAt, opts...).ToFunc()
 }

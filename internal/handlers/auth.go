@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/url"
 
@@ -80,6 +82,11 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 	token, err := h.sessions.Create(r.Context(), id)
 	if err != nil {
 		internalServerError(w, r, "create session", err)
+		return
+	}
+	if err := h.userSvc.CompleteOnboarding(r.Context(), id); err != nil {
+		_ = h.sessions.Delete(context.WithoutCancel(r.Context()), token)
+		internalServerError(w, r, "complete onboarding", err)
 		return
 	}
 
@@ -182,26 +189,31 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	token := r.FormValue("token")
 	password := r.FormValue("password")
-	uid, err := h.inviteSvc.ValidateInvite(r.Context(), token)
+	target, err := h.inviteSvc.ValidateInvite(r.Context(), token)
 	if err != nil {
 		http.Error(w, "invalid invitation", http.StatusBadRequest)
 		return
 	}
-	cs, _ := h.csSvc.Get(r.Context())
+	cs, err := h.csSvc.GetForCompany(r.Context(), target.CompanyID)
+	if err != nil {
+		internalServerError(w, r, "get invitation company password policy", err)
+		return
+	}
 	if err := h.userSvc.ValidatePassword(password, cs); err != nil {
 		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Error: err.Error()}))
 		return
 	}
-	if err := h.userSvc.ActivateWithPassword(r.Context(), uid, password); err != nil {
-		internalServerError(w, r, "activate invited user", err)
+	u, err := h.inviteSvc.AcceptInvite(r.Context(), token, password)
+	if errors.Is(err, services.ErrInvalidInvitation) {
+		http.Error(w, "invalid invitation", http.StatusBadRequest)
 		return
 	}
-	if err := h.inviteSvc.ConsumeInvite(r.Context(), token); err != nil {
-		internalServerError(w, r, "consume invitation", err)
+	if err != nil {
+		internalServerError(w, r, "accept invitation", err)
 		return
 	}
-	if u, err := h.userSvc.GetByID(r.Context(), uid); err == nil {
-		h.activitySvc.Record(r.Context(), *u.CompanyID, uid, "invite_accepted", objectref.New(objectref.TypeUser, uid), map[string]interface{}{
+	if h.activitySvc != nil {
+		h.activitySvc.Record(r.Context(), target.CompanyID, u.ID, "invite_accepted", objectref.New(objectref.TypeUser, u.ID), map[string]interface{}{
 			"entity_name": u.Name,
 			"actor_name":  u.Name,
 		})

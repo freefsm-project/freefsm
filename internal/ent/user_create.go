@@ -178,6 +178,20 @@ func (_c *UserCreate) SetNillableUpdatedAt(v *time.Time) *UserCreate {
 	return _c
 }
 
+// SetOnboardingCompletedAt sets the "onboarding_completed_at" field.
+func (_c *UserCreate) SetOnboardingCompletedAt(v time.Time) *UserCreate {
+	_c.mutation.SetOnboardingCompletedAt(v)
+	return _c
+}
+
+// SetNillableOnboardingCompletedAt sets the "onboarding_completed_at" field if the given value is not nil.
+func (_c *UserCreate) SetNillableOnboardingCompletedAt(v *time.Time) *UserCreate {
+	if v != nil {
+		_c.SetOnboardingCompletedAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *UserCreate) SetID(v int64) *UserCreate {
 	_c.mutation.SetID(v)
@@ -386,6 +400,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(user.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
+	}
+	if value, ok := _c.mutation.OnboardingCompletedAt(); ok {
+		_spec.SetField(user.FieldOnboardingCompletedAt, field.TypeTime, value)
+		_node.OnboardingCompletedAt = &value
 	}
 	return _node, _spec
 }
