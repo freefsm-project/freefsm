@@ -10,6 +10,16 @@ html[data-font-size="large"] {
   font-size: 16px;
 }
 
+/* Use native WebKit pickers instead of Pico's date and time icon. */
+input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]):is([type="date"], [type="datetime-local"], [type="month"], [type="time"], [type="week"]) {
+  background-image: none;
+}
+
+input:is([type="date"], [type="datetime-local"], [type="month"], [type="time"], [type="week"])::-webkit-calendar-picker-indicator {
+  margin-right: 0;
+  opacity: 1;
+}
+
 /* Layout */
 body {
   margin: 0;
