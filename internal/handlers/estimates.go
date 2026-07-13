@@ -175,7 +175,7 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.AllTags = tagsToRows(allTags)
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "estimate")
 	d.CustomFields = buildCustomFieldDisplay(defs, e.CustomFields)
-	files, _ := h.fileSvc.List(r.Context(), objectref.New(objectref.TypeEstimate, id))
+	files, _ := h.fileSvc.List(r.Context(), u.CompanyID, objectref.New(objectref.TypeEstimate, id))
 	d.FileList = templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "estimate"}
 	if u != nil {
 		history, historyErr := h.deliverySvc.History(r.Context(), u.CompanyID, delivery.DocumentRef{Type: "estimate", ID: id})
@@ -528,7 +528,7 @@ func (h *EstimateHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	_, filename, err := saveVersionedDocumentPDF(r.Context(), h.fileSvc, "estimate", id, doc, u.ID)
+	_, filename, err := saveVersionedDocumentPDF(r.Context(), h.fileSvc, u.CompanyID, "estimate", id, doc, u.ID)
 	if err != nil {
 		internalServerError(w, r, "save estimate pdf", err)
 		return

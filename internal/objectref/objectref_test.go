@@ -23,17 +23,17 @@ func TestParse(t *testing.T) {
 	}
 }
 
-func TestFakeDirectoryTagTargetCompanyIDIsStrictAndRecordsCalls(t *testing.T) {
+func TestFakeDirectoryTargetCompanyIDIsStrictAndRecordsCalls(t *testing.T) {
 	ref := New(TypeInvoice, 42)
-	d := &FakeDirectory{TagTargetCompanyIDs: map[Ref]*int64{ref: int64TestPointer(7)}}
-	companyID, err := d.TagTargetCompanyID(context.Background(), ref)
+	d := &FakeDirectory{TargetCompanyIDs: map[Ref]*int64{ref: int64TestPointer(7)}}
+	companyID, err := d.TargetCompanyID(context.Background(), ref)
 	if err != nil || companyID != 7 {
 		t.Fatalf("company=%d err=%v", companyID, err)
 	}
-	if len(d.TagTargetCompanyCalls) != 1 || d.TagTargetCompanyCalls[0] != ref {
-		t.Fatalf("calls=%v", d.TagTargetCompanyCalls)
+	if len(d.TargetCompanyCalls) != 1 || d.TargetCompanyCalls[0] != ref {
+		t.Fatalf("calls=%v", d.TargetCompanyCalls)
 	}
-	if _, err := d.TagTargetCompanyID(context.Background(), New(TypeInvoice, 43)); err == nil {
+	if _, err := d.TargetCompanyID(context.Background(), New(TypeInvoice, 43)); err == nil {
 		t.Fatal("missing ownership error=nil")
 	}
 }

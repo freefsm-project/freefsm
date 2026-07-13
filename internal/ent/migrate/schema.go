@@ -420,7 +420,7 @@ var (
 	// FilesColumns holds the columns for the "files" table.
 	FilesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "company_id", Type: field.TypeInt64},
 		{Name: "object_type", Type: field.TypeString},
 		{Name: "object_id", Type: field.TypeInt64},
 		{Name: "original_name", Type: field.TypeString},

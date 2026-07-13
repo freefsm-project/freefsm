@@ -187,7 +187,7 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.AllTags = tagsToRows(allTags)
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
 	d.CustomFields = buildCustomFieldDisplay(defs, i.CustomFields)
-	files, _ := h.fileSvc.List(r.Context(), objectref.New(objectref.TypeInvoice, id))
+	files, _ := h.fileSvc.List(r.Context(), u.CompanyID, objectref.New(objectref.TypeInvoice, id))
 	d.FileList = templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "invoice"}
 	if u != nil {
 		history, historyErr := h.deliverySvc.History(r.Context(), u.CompanyID, delivery.DocumentRef{Type: "invoice", ID: id})
@@ -914,7 +914,7 @@ func (h *InvoiceHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	_, filename, err := saveVersionedDocumentPDF(r.Context(), h.fileSvc, "invoice", id, doc, u.ID)
+	_, filename, err := saveVersionedDocumentPDF(r.Context(), h.fileSvc, u.CompanyID, "invoice", id, doc, u.ID)
 	if err != nil {
 		internalServerError(w, r, "save invoice pdf", err)
 		return

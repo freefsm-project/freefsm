@@ -39,9 +39,9 @@ func TestTagServicesIsolateCompaniesIntegration(t *testing.T) {
 	refA := objectref.New(objectref.TypeCustomer, 11)
 	refB := objectref.New(objectref.TypeCustomer, 22)
 	directory := &objectref.FakeDirectory{
-		Active:              map[objectref.Ref]bool{refA: true, refB: true},
-		Any:                 map[objectref.Ref]bool{refA: true, refB: true},
-		TagTargetCompanyIDs: map[objectref.Ref]*int64{refA: int64Pointer(companyA), refB: int64Pointer(companyB)},
+		Active:           map[objectref.Ref]bool{refA: true, refB: true},
+		Any:              map[objectref.Ref]bool{refA: true, refB: true},
+		TargetCompanyIDs: map[objectref.Ref]*int64{refA: int64Pointer(companyA), refB: int64Pointer(companyB)},
 	}
 	links := NewTagLinkService(client, directory)
 	if _, err = links.Attach(ctx, companyA, tagB.ID, refA); err == nil {
@@ -78,15 +78,15 @@ func TestTagLinkServiceChecksOwnershipForEveryTaggableTypeIntegration(t *testing
 		active[ref] = true
 		owners[ref] = int64Pointer(companyB)
 	}
-	directory := &objectref.FakeDirectory{Active: active, Any: active, TagTargetCompanyIDs: owners}
+	directory := &objectref.FakeDirectory{Active: active, Any: active, TargetCompanyIDs: owners}
 	svc := NewTagLinkService(client, directory)
 	for ref := range active {
 		if _, err := svc.Attach(ctx, companyA, tag.ID, ref); err == nil {
 			t.Errorf("Attach accepted %s owned by another company", ref.Type)
 		}
 	}
-	if len(directory.TagTargetCompanyCalls) != len(types) {
-		t.Fatalf("ownership calls=%d want %d", len(directory.TagTargetCompanyCalls), len(types))
+	if len(directory.TargetCompanyCalls) != len(types) {
+		t.Fatalf("ownership calls=%d want %d", len(directory.TargetCompanyCalls), len(types))
 	}
 }
 

@@ -89,7 +89,7 @@ func (d *EntDirectory) Exists(ctx context.Context, ref Ref, mode ExistenceMode) 
 	}
 }
 
-func (d *EntDirectory) TagTargetCompanyID(ctx context.Context, ref Ref) (int64, error) {
+func (d *EntDirectory) TargetCompanyID(ctx context.Context, ref Ref) (int64, error) {
 	if !ref.Valid() {
 		return 0, fmt.Errorf("company ownership: invalid object reference")
 	}

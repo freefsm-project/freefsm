@@ -3,8 +3,10 @@ package services
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/file"
+	"github.com/freefsm-project/freefsm/internal/ent/user"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/google/uuid"
 )
@@ -57,20 +60,12 @@ func (s *FileService) SupportsFiles(ref objectref.Ref) bool {
 	return ref.Valid() && s.objects.Supports(ref.Type, objectref.CapFiles)
 }
 
-func (s *FileService) TargetExists(ctx context.Context, ref objectref.Ref) bool {
-	if !s.SupportsFiles(ref) {
-		return false
-	}
-	exists, err := s.objects.Exists(ctx, ref, objectref.ExistsActive)
-	return err == nil && exists
+func (s *FileService) TargetExists(ctx context.Context, companyID int64, ref objectref.Ref) bool {
+	return s.validateTarget(ctx, companyID, ref, objectref.ExistsActive) == nil
 }
 
-func (s *FileService) TargetExistsAny(ctx context.Context, ref objectref.Ref) bool {
-	if !s.SupportsFiles(ref) {
-		return false
-	}
-	exists, err := s.objects.Exists(ctx, ref, objectref.ExistsAny)
-	return err == nil && exists
+func (s *FileService) TargetExistsAny(ctx context.Context, companyID int64, ref objectref.Ref) bool {
+	return s.validateTarget(ctx, companyID, ref, objectref.ExistsAny) == nil
 }
 
 func (s *FileService) MaxSize() int64 {
@@ -81,28 +76,48 @@ func (s *FileService) UploadDir() string {
 	return s.uploadDir
 }
 
-func (s *FileService) List(ctx context.Context, ref objectref.Ref) ([]*ent.File, error) {
-	if err := s.validateTarget(ctx, ref, objectref.ExistsAny); err != nil {
+func (s *FileService) List(ctx context.Context, companyID int64, ref objectref.Ref) ([]*ent.File, error) {
+	if err := s.validateTarget(ctx, companyID, ref, objectref.ExistsAny); err != nil {
 		return nil, err
 	}
 
 	return s.client.File.Query().
-		Where(file.ObjectType(ref.ObjectType()), file.ObjectID(ref.ObjectID())).
-		Order(ent.Desc(file.FieldCreatedAt)).
+		Where(file.CompanyIDEQ(companyID), file.ObjectType(ref.ObjectType()), file.ObjectID(ref.ObjectID())).
+		Order(ent.Desc(file.FieldCreatedAt), ent.Desc(file.FieldID)).
 		All(ctx)
 }
 
-func (s *FileService) GetByID(ctx context.Context, id int64) (*ent.File, error) {
-	f, err := s.client.File.Get(ctx, id)
+func (s *FileService) GetByID(ctx context.Context, companyID, id int64) (*ent.File, error) {
+	if err := validateFileCompanyID(companyID); err != nil {
+		return nil, err
+	}
+	f, err := s.client.File.Query().Where(file.IDEQ(id), file.CompanyIDEQ(companyID)).Only(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get file %d: %w", id, err)
+	}
+	ref, err := objectref.Parse(f.ObjectType, f.ObjectID)
+	if err != nil || s.validateTarget(ctx, companyID, ref, objectref.ExistsAny) != nil {
+		return nil, fmt.Errorf("get file %d: %w", id, &ent.NotFoundError{})
 	}
 	return f, nil
 }
 
-func (s *FileService) Create(ctx context.Context, ref objectref.Ref, originalName string, mimeType string, fileSize int64, reader io.Reader, uploadedBy int64) (*ent.File, error) {
-	if err := s.validateTarget(ctx, ref, objectref.ExistsActive); err != nil {
+func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref.Ref, originalName string, mimeType string, fileSize int64, reader io.Reader, uploadedBy int64) (*ent.File, error) {
+	if err := s.validateTarget(ctx, companyID, ref, objectref.ExistsActive); err != nil {
 		return nil, err
+	}
+	if fileSize < 0 {
+		return nil, fmt.Errorf("file size %d cannot be negative", fileSize)
+	}
+	if uploadedBy <= 0 {
+		return nil, fmt.Errorf("invalid uploaded by user ID: %d", uploadedBy)
+	}
+	uploaderExists, err := s.client.User.Query().Where(user.IDEQ(uploadedBy), user.CompanyIDEQ(companyID)).Exist(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("validate uploaded by user: %w", err)
+	}
+	if !uploaderExists {
+		return nil, fmt.Errorf("uploaded by user %d not found", uploadedBy)
 	}
 	if !s.ValidateMIMEType(mimeType) {
 		return nil, fmt.Errorf("invalid MIME type: %s", mimeType)
@@ -125,35 +140,70 @@ func (s *FileService) Create(ctx context.Context, ref objectref.Ref, originalNam
 	if err != nil {
 		return nil, fmt.Errorf("create file on disk: %w", err)
 	}
-	defer f.Close()
+	cleanup := func() error {
+		closeErr := f.Close()
+		removeErr := os.Remove(filePath)
+		if os.IsNotExist(removeErr) {
+			removeErr = nil
+		}
+		return errors.Join(closeErr, removeErr)
+	}
+	failWrite := func(err error) (*ent.File, error) {
+		return nil, errors.Join(err, cleanup())
+	}
 
-	if _, err := io.Copy(f, reader); err != nil {
-		return nil, fmt.Errorf("write file to disk: %w", err)
+	copyLimit := s.maxSize
+	if copyLimit < math.MaxInt64 {
+		copyLimit++
+	}
+	actualSize, err := io.Copy(f, io.LimitReader(reader, copyLimit))
+	if err != nil {
+		return failWrite(fmt.Errorf("write file to disk: %w", err))
+	}
+	if actualSize > s.maxSize {
+		return failWrite(fmt.Errorf("file size %d exceeds maximum %d", actualSize, s.maxSize))
+	}
+	if actualSize != fileSize {
+		return failWrite(fmt.Errorf("file size mismatch: declared %d, read %d", fileSize, actualSize))
+	}
+	if err := f.Close(); err != nil {
+		removeErr := os.Remove(filePath)
+		if os.IsNotExist(removeErr) {
+			removeErr = nil
+		}
+		return nil, errors.Join(fmt.Errorf("close file on disk: %w", err), removeErr)
 	}
 
 	entFile, err := s.client.File.Create().
+		SetCompanyID(companyID).
 		SetObjectType(ref.ObjectType()).
 		SetObjectID(ref.ObjectID()).
 		SetOriginalName(originalName).
 		SetStoredName(storedName).
 		SetMimeType(mimeType).
-		SetFileSize(fileSize).
+		SetFileSize(actualSize).
 		SetFilePath(filePath).
 		SetUploadedBy(uploadedBy).
 		Save(ctx)
 	if err != nil {
-		_ = os.Remove(filePath)
-		return nil, fmt.Errorf("create file record: %w", err)
+		removeErr := os.Remove(filePath)
+		if os.IsNotExist(removeErr) {
+			removeErr = nil
+		}
+		return nil, errors.Join(fmt.Errorf("create file record: %w", err), removeErr)
 	}
 
 	return entFile, nil
 }
 
-func (s *FileService) CreateBytes(ctx context.Context, ref objectref.Ref, originalName string, mimeType string, data []byte, uploadedBy int64) (*ent.File, error) {
-	return s.Create(ctx, ref, originalName, mimeType, int64(len(data)), bytes.NewReader(data), uploadedBy)
+func (s *FileService) CreateBytes(ctx context.Context, companyID int64, ref objectref.Ref, originalName string, mimeType string, data []byte, uploadedBy int64) (*ent.File, error) {
+	return s.Create(ctx, companyID, ref, originalName, mimeType, int64(len(data)), bytes.NewReader(data), uploadedBy)
 }
 
-func (s *FileService) validateTarget(ctx context.Context, ref objectref.Ref, mode objectref.ExistenceMode) error {
+func (s *FileService) validateTarget(ctx context.Context, companyID int64, ref objectref.Ref, mode objectref.ExistenceMode) error {
+	if err := validateFileCompanyID(companyID); err != nil {
+		return err
+	}
 	if !s.SupportsFiles(ref) {
 		return fmt.Errorf("invalid object type: %s", ref.ObjectType())
 	}
@@ -164,26 +214,41 @@ func (s *FileService) validateTarget(ctx context.Context, ref objectref.Ref, mod
 	if !exists {
 		return fmt.Errorf("target %s %d not found", ref.ObjectType(), ref.ObjectID())
 	}
+	targetCompanyID, err := s.objects.TargetCompanyID(ctx, ref)
+	if err != nil || targetCompanyID != companyID {
+		return fmt.Errorf("target %s %d not found", ref.ObjectType(), ref.ObjectID())
+	}
 	return nil
 }
 
-func (s *FileService) Delete(ctx context.Context, id int64) error {
-	f, err := s.client.File.Get(ctx, id)
+func (s *FileService) Delete(ctx context.Context, companyID, id int64) error {
+	f, err := s.GetByID(ctx, companyID, id)
 	if err != nil {
-		return fmt.Errorf("get file %d: %w", id, err)
+		return err
+	}
+	ref, err := objectref.Parse(f.ObjectType, f.ObjectID)
+	if err != nil || s.validateTarget(ctx, companyID, ref, objectref.ExistsActive) != nil {
+		return fmt.Errorf("delete file %d: %w", id, &ent.NotFoundError{})
 	}
 
 	if err := os.Remove(f.FilePath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove file from disk: %w", err)
 	}
 
-	if err := s.client.File.DeleteOneID(id).Exec(ctx); err != nil {
+	deleted, err := s.client.File.Delete().Where(file.IDEQ(id), file.CompanyIDEQ(companyID)).Exec(ctx)
+	if err != nil {
 		return fmt.Errorf("delete file record: %w", err)
+	}
+	if deleted == 0 {
+		return fmt.Errorf("delete file %d: %w", id, &ent.NotFoundError{})
 	}
 	return nil
 }
 
-func (s *FileService) Rename(ctx context.Context, id int64, originalName string) error {
+func (s *FileService) Rename(ctx context.Context, companyID, id int64, originalName string) error {
+	if err := validateFileCompanyID(companyID); err != nil {
+		return err
+	}
 	originalName = strings.TrimSpace(originalName)
 	if originalName == "" {
 		return fmt.Errorf("file name is required")
@@ -195,8 +260,27 @@ func (s *FileService) Rename(ctx context.Context, id int64, originalName string)
 		return fmt.Errorf("file name cannot contain path separators")
 	}
 
-	if err := s.client.File.UpdateOneID(id).SetOriginalName(originalName).Exec(ctx); err != nil {
+	f, err := s.GetByID(ctx, companyID, id)
+	if err != nil {
+		return err
+	}
+	ref, err := objectref.Parse(f.ObjectType, f.ObjectID)
+	if err != nil || s.validateTarget(ctx, companyID, ref, objectref.ExistsActive) != nil {
+		return fmt.Errorf("rename file %d: %w", id, &ent.NotFoundError{})
+	}
+	updated, err := s.client.File.Update().Where(file.IDEQ(id), file.CompanyIDEQ(companyID)).SetOriginalName(originalName).Save(ctx)
+	if err != nil {
 		return fmt.Errorf("rename file %d: %w", id, err)
+	}
+	if updated == 0 {
+		return fmt.Errorf("rename file %d: %w", id, &ent.NotFoundError{})
+	}
+	return nil
+}
+
+func validateFileCompanyID(companyID int64) error {
+	if companyID <= 0 {
+		return fmt.Errorf("company ID must be positive")
 	}
 	return nil
 }

@@ -77,7 +77,7 @@ type Directory interface {
 	Describe(t Type) (Descriptor, bool)
 	Supports(t Type, cap Capability) bool
 	Exists(ctx context.Context, ref Ref, mode ExistenceMode) (bool, error)
-	TagTargetCompanyID(ctx context.Context, ref Ref) (int64, error)
+	TargetCompanyID(ctx context.Context, ref Ref) (int64, error)
 	DisplayName(ctx context.Context, ref Ref) (string, error)
 	URL(ref Ref) (string, bool)
 }

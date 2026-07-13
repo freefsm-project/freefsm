@@ -18,7 +18,7 @@ type File struct {
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
 	// CompanyID holds the value of the "company_id" field.
-	CompanyID *int64 `json:"company_id,omitempty"`
+	CompanyID int64 `json:"company_id,omitempty"`
 	// ObjectType holds the value of the "object_type" field.
 	ObjectType string `json:"object_type,omitempty"`
 	// ObjectID holds the value of the "object_id" field.
@@ -76,8 +76,7 @@ func (_m *File) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field company_id", values[i])
 			} else if value.Valid {
-				_m.CompanyID = new(int64)
-				*_m.CompanyID = value.Int64
+				_m.CompanyID = value.Int64
 			}
 		case file.FieldObjectType:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -169,10 +168,8 @@ func (_m *File) String() string {
 	var builder strings.Builder
 	builder.WriteString("File(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	if v := _m.CompanyID; v != nil {
-		builder.WriteString("company_id=")
-		builder.WriteString(fmt.Sprintf("%v", *v))
-	}
+	builder.WriteString("company_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.CompanyID))
 	builder.WriteString(", ")
 	builder.WriteString("object_type=")
 	builder.WriteString(_m.ObjectType)

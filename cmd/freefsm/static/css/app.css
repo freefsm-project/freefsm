@@ -739,6 +739,76 @@ html[data-theme="dark"] .theme-icon-moon {
   margin-bottom: 0;
 }
 
+.files-upload-status {
+  margin-top: 0.65rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+}
+
+.files-upload-summary {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.files-upload-summary-failed {
+  color: var(--pico-del-color);
+}
+
+.files-upload-error {
+  margin: 0 0 0.4rem;
+  color: var(--pico-del-color);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.files-upload-list {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.files-upload-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding-top: 0.3rem;
+  border-top: 1px solid var(--pico-muted-border-color);
+  font-size: 0.82rem;
+}
+
+.files-upload-name {
+  overflow-wrap: anywhere;
+}
+
+.files-upload-state {
+  color: var(--pico-muted-color);
+  text-align: right;
+}
+
+.files-upload-uploading .files-upload-state {
+  color: var(--pico-primary);
+}
+
+.files-upload-uploaded .files-upload-state {
+  color: var(--pico-ins-color);
+}
+
+.files-upload-failed .files-upload-state {
+  color: var(--pico-del-color);
+}
+
+.files-upload-refresh {
+  display: inline-block;
+  margin-top: 0.65rem;
+  font-size: 0.82rem;
+}
+
 .files-gallery-card {
   margin-top: 0.75rem;
 }
@@ -981,6 +1051,15 @@ html[data-theme="dark"] .theme-icon-moon {
   .files-upload-row {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .files-upload-item {
+    grid-template-columns: 1fr;
+    gap: 0.1rem;
+  }
+
+  .files-upload-state {
+    text-align: left;
   }
 
   .files-preview-header {

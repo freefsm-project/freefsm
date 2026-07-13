@@ -23,7 +23,7 @@ func (File) Annotations() []schema.Annotation {
 func (File) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
-		field.Int64("company_id").Optional().Nillable(),
+		field.Int64("company_id"),
 		field.String("object_type").NotEmpty(),
 		field.Int64("object_id"),
 		field.String("original_name").NotEmpty(),

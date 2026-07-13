@@ -48,12 +48,6 @@ func (_u *FileUpdate) AddCompanyID(v int64) *FileUpdate {
 	return _u
 }
 
-// ClearCompanyID clears the value of the "company_id" field.
-func (_u *FileUpdate) ClearCompanyID() *FileUpdate {
-	_u.mutation.ClearCompanyID()
-	return _u
-}
-
 // SetObjectType sets the "object_type" field.
 func (_u *FileUpdate) SetObjectType(v string) *FileUpdate {
 	_u.mutation.SetObjectType(v)
@@ -267,9 +261,6 @@ func (_u *FileUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedCompanyID(); ok {
 		_spec.AddField(file.FieldCompanyID, field.TypeInt64, value)
 	}
-	if _u.mutation.CompanyIDCleared() {
-		_spec.ClearField(file.FieldCompanyID, field.TypeInt64)
-	}
 	if value, ok := _u.mutation.ObjectType(); ok {
 		_spec.SetField(file.FieldObjectType, field.TypeString, value)
 	}
@@ -341,12 +332,6 @@ func (_u *FileUpdateOne) SetNillableCompanyID(v *int64) *FileUpdateOne {
 // AddCompanyID adds value to the "company_id" field.
 func (_u *FileUpdateOne) AddCompanyID(v int64) *FileUpdateOne {
 	_u.mutation.AddCompanyID(v)
-	return _u
-}
-
-// ClearCompanyID clears the value of the "company_id" field.
-func (_u *FileUpdateOne) ClearCompanyID() *FileUpdateOne {
-	_u.mutation.ClearCompanyID()
 	return _u
 }
 
@@ -592,9 +577,6 @@ func (_u *FileUpdateOne) sqlSave(ctx context.Context) (_node *File, err error) {
 	}
 	if value, ok := _u.mutation.AddedCompanyID(); ok {
 		_spec.AddField(file.FieldCompanyID, field.TypeInt64, value)
-	}
-	if _u.mutation.CompanyIDCleared() {
-		_spec.ClearField(file.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ObjectType(); ok {
 		_spec.SetField(file.FieldObjectType, field.TypeString, value)

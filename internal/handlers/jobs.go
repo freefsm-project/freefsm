@@ -191,7 +191,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "job")
 	d.CustomFields = buildCustomFieldDisplay(defs, j.CustomFields)
-	files, _ := h.fileSvc.List(r.Context(), objectref.New(objectref.TypeJob, j.ID))
+	files, _ := h.fileSvc.List(r.Context(), u.CompanyID, objectref.New(objectref.TypeJob, j.ID))
 	d.FileList = templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: j.ID, ObjectType: "job"}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), j.JobType)
 	templates.JobShow(d).Render(ctx, w)

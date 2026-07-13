@@ -103,21 +103,21 @@ func emailAutoCC(cs *ent.CompanySettings) string {
 	return cs.EmailAutoCc
 }
 
-func saveVersionedDocumentPDF(ctx context.Context, fileSvc *services.FileService, objectType string, objectID int64, doc documentPDF, uploadedBy int64) (*ent.File, string, error) {
+func saveVersionedDocumentPDF(ctx context.Context, fileSvc *services.FileService, companyID int64, objectType string, objectID int64, doc documentPDF, uploadedBy int64) (*ent.File, string, error) {
 	ref, err := objectref.Parse(objectType, objectID)
 	if err != nil {
 		return nil, "", err
 	}
-	filename := nextVersionedDocumentPDFName(ctx, fileSvc, ref, doc.Number)
-	f, err := fileSvc.CreateBytes(ctx, ref, filename, "application/pdf", doc.Data, uploadedBy)
+	filename := nextVersionedDocumentPDFName(ctx, fileSvc, companyID, ref, doc.Number)
+	f, err := fileSvc.CreateBytes(ctx, companyID, ref, filename, "application/pdf", doc.Data, uploadedBy)
 	if err != nil {
 		return nil, "", err
 	}
 	return f, filename, nil
 }
 
-func nextVersionedDocumentPDFName(ctx context.Context, fileSvc *services.FileService, ref objectref.Ref, base string) string {
-	files, err := fileSvc.List(ctx, ref)
+func nextVersionedDocumentPDFName(ctx context.Context, fileSvc *services.FileService, companyID int64, ref objectref.Ref, base string) string {
+	files, err := fileSvc.List(ctx, companyID, ref)
 	if err != nil {
 		return fmt.Sprintf("%s-v001.pdf", base)
 	}

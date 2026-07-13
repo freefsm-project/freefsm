@@ -31,7 +31,7 @@ func (d activityTestDirectory) Exists(context.Context, objectref.Ref, objectref.
 	return true, nil
 }
 
-func (d activityTestDirectory) TagTargetCompanyID(context.Context, objectref.Ref) (int64, error) {
+func (d activityTestDirectory) TargetCompanyID(context.Context, objectref.Ref) (int64, error) {
 	return 1, nil
 }
 

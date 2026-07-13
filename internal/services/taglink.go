@@ -148,7 +148,7 @@ func (s *TagLinkService) validateRef(ctx context.Context, companyID int64, ref o
 		}
 		return fmt.Errorf("%w: target %s %d", ErrTagNotFound, ref.Type, ref.ID)
 	}
-	owner, err := s.objects.TagTargetCompanyID(ctx, ref)
+	owner, err := s.objects.TargetCompanyID(ctx, ref)
 	if err != nil {
 		return fmt.Errorf("validate tag target ownership: %w", err)
 	}

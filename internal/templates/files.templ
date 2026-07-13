@@ -2,8 +2,13 @@ package templates
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 )
+
+func fileUploadURL(objectType string, objectID int64) string {
+	return fmt.Sprintf("/files?object_type=%s&object_id=%d", url.QueryEscape(objectType), objectID)
+}
 
 templ FileUploadWidget(objectType string, objectID int64, redirect string) {
 	@FileUploadWidgetWithTitle(objectType, objectID, redirect, true)
@@ -14,7 +19,7 @@ templ FileUploadWidgetWithTitle(objectType string, objectID int64, redirect stri
 		if showTitle {
 			<h3>Files</h3>
 		}
-		<form action="/files" method="post" enctype="multipart/form-data" hx-post="/files" hx-swap="none" class="files-drop-form" ondragover="filesDragOver(event, this)" ondragleave="filesDragLeave(event, this)" ondrop="filesHandleDrop(event, this)">
+		<form action={ templ.URL(fileUploadURL(objectType, objectID)) } method="post" enctype="multipart/form-data" hx-post={ templ.URL(fileUploadURL(objectType, objectID)) } hx-swap="none" class="files-drop-form" ondragover="filesDragOver(event, this)" ondragleave="filesDragLeave(event, this)" ondrop="filesHandleDrop(event, this)">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<input type="hidden" name="object_type" value={ objectType }/>
 			<input type="hidden" name="object_id" value={ fmt.Sprintf("%d", objectID) }/>
@@ -22,12 +27,18 @@ templ FileUploadWidgetWithTitle(objectType string, objectID int64, redirect stri
 			<div class="files-drop-zone">
 				<div>
 					<strong>Drop files here</strong>
-					<small>or choose a file to attach</small>
+					<small data-files-prompt>or choose a file to attach</small>
 				</div>
 				<div class="files-upload-row">
 					<input type="file" name="file" required/>
-					<button type="submit" class="small customer-add-button">Upload</button>
+					<button type="submit" class="small customer-add-button">Upload files</button>
 				</div>
+			</div>
+			<div class="files-upload-status" aria-live="polite" aria-atomic="false" hidden>
+				<p class="files-upload-error" hidden></p>
+				<p class="files-upload-summary"></p>
+				<ol class="files-upload-list"></ol>
+				<a href={ templ.URL(redirect) } class="files-upload-refresh" hidden>Refresh attachments</a>
 			</div>
 		</form>
 	</div>
@@ -138,7 +149,7 @@ templ FileList(p FileListPageData) {
 				}
 			</div>
 		} else {
-			<p class="files-empty"><small>No files attached. Drop a file into the card above to attach one.</small></p>
+			<p class="files-empty"><small>No files attached. Drop files into the card above to attach them.</small></p>
 		}
 		@FilePreviewDialog()
 		@FileWidgetScript()
@@ -182,26 +193,168 @@ templ FileWidgetScript() {
 			if (!form.contains(event.relatedTarget)) form.classList.remove('files-drop-active');
 		}
 
-		async function filesHandleDrop(event, form) {
+		function filesUploadLimit() {
+			return 10;
+		}
+
+		function filesSetUploadError(form, message) {
+			const status = form.querySelector('.files-upload-status');
+			const error = form.querySelector('.files-upload-error');
+			if (!status || !error) return;
+			status.hidden = false;
+			error.hidden = false;
+			error.textContent = message;
+		}
+
+		function filesValidateSelection(form, files) {
+			if (files.length <= filesUploadLimit()) return true;
+			filesSetUploadError(form, 'You can upload up to 10 files at a time. No files were uploaded.');
+			const input = form.querySelector('input[type="file"][name="file"]');
+			if (input) input.value = '';
+			return false;
+		}
+
+		function filesHandleDrop(event, form) {
 			event.preventDefault();
 			form.classList.remove('files-drop-active');
 			const files = Array.from(event.dataTransfer.files || []);
 			if (!files.length) return;
-			const redirect = form.querySelector('[name="redirect"]')?.value || window.location.pathname;
-			for (const file of files) {
+			filesQueueUploads(form, files);
+		}
+
+		function filesHandleSubmit(event) {
+			event.preventDefault();
+			event.stopPropagation();
+			const form = event.currentTarget;
+			const input = form.querySelector('input[type="file"][name="file"]');
+			const files = Array.from(input?.files || []);
+			if (!files.length) {
+				filesSetUploadError(form, 'Choose at least one file to upload.');
+				return;
+			}
+			filesQueueUploads(form, files);
+		}
+
+		function filesSafeRedirect(value) {
+			try {
+				const target = new URL(value || window.location.pathname, window.location.href);
+				if (target.origin !== window.location.origin || !['http:', 'https:'].includes(target.protocol)) {
+					return window.location.pathname + window.location.search;
+				}
+				return target.pathname + target.search + target.hash;
+			} catch (_) {
+				return window.location.pathname + window.location.search;
+			}
+		}
+
+		function filesQueueRow(file) {
+			const row = document.createElement('li');
+			row.className = 'files-upload-item files-upload-queued';
+			const name = document.createElement('span');
+			name.className = 'files-upload-name';
+			name.textContent = file.name;
+			const state = document.createElement('span');
+			state.className = 'files-upload-state';
+			state.textContent = 'Queued';
+			row.append(name, state);
+			return { file, row, state };
+		}
+
+		function filesSetQueueState(item, state, detail) {
+			item.row.className = 'files-upload-item files-upload-' + state;
+			item.state.textContent = detail ? state[0].toUpperCase() + state.slice(1) + ': ' + detail : state[0].toUpperCase() + state.slice(1);
+		}
+
+		async function filesUploadQueueItem(form, item, queue) {
+			filesSetQueueState(item, 'uploading');
+			try {
 				const body = new FormData(form);
-				body.set('file', file);
+				body.set('file', item.file);
 				const response = await fetch(form.action, {
 					method: 'POST',
 					body,
 					headers: { 'HX-Request': 'true' }
 				});
 				if (!response.ok) {
-					alert(await response.text() || 'Upload failed');
-					return;
+					const serverError = (await response.text()).trim();
+					throw new Error(serverError || 'The server rejected this file.');
 				}
+				queue.redirect = response.headers.get('HX-Redirect') || queue.redirect;
+				queue.uploaded++;
+				filesSetQueueState(item, 'uploaded');
+			} catch (error) {
+				queue.failed++;
+				filesSetQueueState(item, 'failed', error instanceof Error ? error.message : 'Upload failed.');
 			}
-			window.location.href = redirect;
+		}
+
+		async function filesQueueUploads(form, files) {
+			if (form.dataset.filesUploading === 'true' || !filesValidateSelection(form, files)) return;
+
+			const input = form.querySelector('input[type="file"][name="file"]');
+			const button = form.querySelector('button[type="submit"]');
+			const status = form.querySelector('.files-upload-status');
+			const error = form.querySelector('.files-upload-error');
+			const summary = form.querySelector('.files-upload-summary');
+			const list = form.querySelector('.files-upload-list');
+			const refresh = form.querySelector('.files-upload-refresh');
+			if (!input || !button || !status || !error || !summary || !list || !refresh) return;
+
+			form.dataset.filesUploading = 'true';
+			button.disabled = true;
+			input.disabled = true;
+			status.hidden = false;
+			error.hidden = true;
+			error.textContent = '';
+			refresh.hidden = true;
+			summary.className = 'files-upload-summary';
+			summary.textContent = files.length === 1 ? 'Uploading 1 file...' : 'Uploading ' + files.length + ' files...';
+			list.replaceChildren();
+
+			const items = files.map(filesQueueRow);
+			items.forEach(item => list.appendChild(item.row));
+			const queue = {
+				next: 0,
+				uploaded: 0,
+				failed: 0,
+				redirect: form.querySelector('[name="redirect"]')?.value || window.location.pathname
+			};
+			const worker = async () => {
+				while (queue.next < items.length) {
+					const item = items[queue.next++];
+					await filesUploadQueueItem(form, item, queue);
+				}
+			};
+			const workers = Array.from({ length: Math.min(2, files.length) }, () => worker());
+			await Promise.all(workers);
+
+			delete form.dataset.filesUploading;
+			button.disabled = false;
+			input.disabled = false;
+			input.value = '';
+			if (queue.failed === 0) {
+				summary.textContent = queue.uploaded === 1 ? '1 file uploaded.' : queue.uploaded + ' files uploaded.';
+				window.location.assign(filesSafeRedirect(queue.redirect));
+				return;
+			}
+
+			summary.className = 'files-upload-summary files-upload-summary-failed';
+			summary.textContent = queue.uploaded + ' uploaded; ' + queue.failed + ' failed. You can choose files again to retry.';
+			refresh.hidden = false;
+		}
+
+		function filesEnhanceForms(root) {
+			const forms = root.matches?.('.files-drop-form') ? [root] : Array.from(root.querySelectorAll?.('.files-drop-form') || []);
+			forms.forEach(form => {
+				if (form.dataset.filesEnhanced === 'true') return;
+				const input = form.querySelector('input[type="file"][name="file"]');
+				if (!input) return;
+				form.dataset.filesEnhanced = 'true';
+				input.multiple = true;
+				form.querySelector('[data-files-prompt]')?.replaceChildren('or choose up to 10 files to attach');
+				input.addEventListener('change', () => filesValidateSelection(form, Array.from(input.files || [])));
+				form.addEventListener('submit', filesHandleSubmit);
+			});
 		}
 
 		function filesOpenModal(button) {
@@ -308,6 +461,12 @@ templ FileWidgetScript() {
 			const action = filesSelectedAction(dialog?.dataset.fileDeleteUrl, /^\/files\/\d+\/delete$/);
 			if (!action || !confirm('Delete this file?')) return;
 			filesPostModalAction(action);
+		}
+
+		filesEnhanceForms(document);
+		if (!window.filesWidgetAfterSwapInstalled) {
+			window.filesWidgetAfterSwapInstalled = true;
+			document.body.addEventListener('htmx:afterSwap', event => filesEnhanceForms(event.target));
 		}
 	</script>
 }

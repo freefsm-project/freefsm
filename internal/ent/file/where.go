@@ -144,16 +144,6 @@ func CompanyIDLTE(v int64) predicate.File {
 	return predicate.File(sql.FieldLTE(FieldCompanyID, v))
 }
 
-// CompanyIDIsNil applies the IsNil predicate on the "company_id" field.
-func CompanyIDIsNil() predicate.File {
-	return predicate.File(sql.FieldIsNull(FieldCompanyID))
-}
-
-// CompanyIDNotNil applies the NotNil predicate on the "company_id" field.
-func CompanyIDNotNil() predicate.File {
-	return predicate.File(sql.FieldNotNull(FieldCompanyID))
-}
-
 // ObjectTypeEQ applies the EQ predicate on the "object_type" field.
 func ObjectTypeEQ(v string) predicate.File {
 	return predicate.File(sql.FieldEQ(FieldObjectType, v))
