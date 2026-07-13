@@ -281,16 +281,15 @@ func (h *ActivityHandler) entriesToRows(ctx context.Context, entries []services.
 		}
 
 		rows = append(rows, templates.ActivityEntry{
-			ID:           e.ID,
-			ActorName:    actorName,
-			Action:       e.Action,
-			TargetType:   string(e.Target.Type),
-			EntityName:   entityName,
-			EntityURL:    entityURL,
-			Icon:         activityIcon(e.Action),
-			Metadata:     meta,
-			RelativeTime: services.ActivityRelativeTime(e.CreatedAt),
-			CreatedAt:    displayDateTime(ctx, e.CreatedAt),
+			ID:         e.ID,
+			ActorName:  actorName,
+			Action:     e.Action,
+			TargetType: string(e.Target.Type),
+			EntityName: entityName,
+			EntityURL:  entityURL,
+			Icon:       activityIcon(e.Action),
+			Metadata:   meta,
+			CreatedAt:  displayDateTime(ctx, e.CreatedAt),
 		})
 	}
 	return rows

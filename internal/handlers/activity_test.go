@@ -65,14 +65,14 @@ func TestEntriesToRowsResolvesTargetsWithoutDroppingMalformedEntries(t *testing.
 	customer := objectref.New(objectref.TypeCustomer, 7)
 	missingJob := objectref.New(objectref.TypeJob, 9)
 	h := &ActivityHandler{objects: activityTestDirectory{names: map[objectref.Ref]string{customer: "Directory Customer"}}}
-	now := time.Now()
+	createdAt := time.Date(2026, time.June, 29, 14, 0, 0, 0, time.UTC)
 
 	rows := h.entriesToRows(context.Background(), []services.ActivityEntry{
-		{ID: 1, ActorID: 1, Action: "updated", Target: customer, HistoricalTarget: "Old Customer", Metadata: `{"actor_name":"Alex","entity_name":"Metadata Customer"}`, CreatedAt: now},
-		{ID: 2, ActorID: 1, Action: "updated", Target: customer, Metadata: `{"actor_name":"Alex"}`, CreatedAt: now},
-		{ID: 3, ActorID: 1, Action: "deleted", Target: missingJob, HistoricalTarget: "Deleted Job", Metadata: `{bad`, CreatedAt: now},
-		{ID: 4, ActorID: 1, Action: "deleted", Target: objectref.Ref{}, HistoricalTarget: "Legacy Target", Metadata: `{"actor_name":"Alex"}`, CreatedAt: now},
-		{ID: 5, ActorID: 1, Action: "deleted", Target: missingJob, Metadata: `{"actor_name":"Alex"}`, CreatedAt: now},
+		{ID: 1, ActorID: 1, Action: "updated", Target: customer, HistoricalTarget: "Old Customer", Metadata: `{"actor_name":"Alex","entity_name":"Metadata Customer"}`, CreatedAt: createdAt},
+		{ID: 2, ActorID: 1, Action: "updated", Target: customer, Metadata: `{"actor_name":"Alex"}`, CreatedAt: createdAt},
+		{ID: 3, ActorID: 1, Action: "deleted", Target: missingJob, HistoricalTarget: "Deleted Job", Metadata: `{bad`, CreatedAt: createdAt},
+		{ID: 4, ActorID: 1, Action: "deleted", Target: objectref.Ref{}, HistoricalTarget: "Legacy Target", Metadata: `{"actor_name":"Alex"}`, CreatedAt: createdAt},
+		{ID: 5, ActorID: 1, Action: "deleted", Target: missingJob, Metadata: `{"actor_name":"Alex"}`, CreatedAt: createdAt},
 	})
 
 	if len(rows) != 5 {
@@ -92,5 +92,8 @@ func TestEntriesToRowsResolvesTargetsWithoutDroppingMalformedEntries(t *testing.
 	}
 	if rows[4].EntityName != "job #9" {
 		t.Fatalf("known target fallback = %q", rows[4].EntityName)
+	}
+	if rows[0].CreatedAt != "Jun 29, 2026 2:00 PM" {
+		t.Fatalf("created timestamp = %q, want %q", rows[0].CreatedAt, "Jun 29, 2026 2:00 PM")
 	}
 }

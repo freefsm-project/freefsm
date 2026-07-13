@@ -29,3 +29,18 @@ func TestFormatCompanyDateTimeUsesSelectedTimeStyle(t *testing.T) {
 		t.Fatalf("FormatCompanyDateTime() = %q, want %q", got, want)
 	}
 }
+
+func TestFormatCompanyDateTimeConvertsToCompanyTimezoneAcrossDateBoundary(t *testing.T) {
+	t.Parallel()
+
+	loc, err := time.LoadLocation("America/Los_Angeles")
+	if err != nil {
+		t.Fatalf("load company timezone: %v", err)
+	}
+	when := time.Date(2026, time.June, 29, 1, 30, 0, 0, time.UTC)
+	cs := &ent.CompanySettings{DateFormat: "02/01/2006"}
+
+	if got, want := FormatCompanyDateTime(when, loc, cs), "28/06/2026 18:30"; got != want {
+		t.Fatalf("FormatCompanyDateTime() = %q, want %q", got, want)
+	}
+}

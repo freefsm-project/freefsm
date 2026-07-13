@@ -6,16 +6,15 @@ import (
 )
 
 type ActivityEntry struct {
-	ID           int64
-	ActorName    string
-	Action       string
-	TargetType   string
-	EntityName   string
-	EntityURL    string
-	Icon         string
-	Metadata     ActivityMetadata
-	RelativeTime string
-	CreatedAt    string
+	ID         int64
+	ActorName  string
+	Action     string
+	TargetType string
+	EntityName string
+	EntityURL  string
+	Icon       string
+	Metadata   ActivityMetadata
+	CreatedAt  string
 }
 
 type ActivityMetadata struct {

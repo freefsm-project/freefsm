@@ -5,6 +5,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/a-h/templ"
 )
 
 func TestScheduleActivityVerbAndClass(t *testing.T) {
@@ -66,5 +68,63 @@ func TestActivityWidgetUsesPreparedIdentityAndPlainTargetName(t *testing.T) {
 	}
 	if !strings.Contains(html, "Historical Customer") || strings.Contains(html, `href=""`) {
 		t.Fatalf("widget did not render an unlinked target name: %s", html)
+	}
+}
+
+func TestActivityRenderersShowAbsoluteTimestamp(t *testing.T) {
+	const absoluteTimestamp = "Jul 13, 2026 2:45 PM"
+	entry := ActivityEntry{
+		ActorName:  "Alex",
+		Action:     "updated",
+		EntityName: "Customer record",
+		CreatedAt:  absoluteTimestamp,
+	}
+
+	tests := []struct {
+		name      string
+		component templ.Component
+	}{
+		{
+			name: "widget",
+			component: ActivityWidget(ActivityWidgetData{
+				DOMID:   "activity-customer-42",
+				Entries: []ActivityEntry{entry},
+			}),
+		},
+		{
+			name: "recent list",
+			component: ActivityRecentList(ActivityPageData{
+				Entries: []ActivityEntry{entry},
+			}),
+		},
+		{
+			name: "index",
+			component: ActivityIndex(ActivityPageData{
+				Entries: []ActivityEntry{entry},
+			}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var output bytes.Buffer
+			if err := tt.component.Render(context.Background(), &output); err != nil {
+				t.Fatal(err)
+			}
+
+			html := output.String()
+			if !strings.Contains(html, absoluteTimestamp) {
+				t.Fatalf("absolute timestamp was not visible: %s", html)
+			}
+			if strings.Contains(html, `title="`+absoluteTimestamp+`"`) {
+				t.Fatalf("absolute timestamp was retained as a title tooltip: %s", html)
+			}
+			lowerHTML := strings.ToLower(html)
+			for _, relativeWording := range []string{" ago", "just now", "yesterday"} {
+				if strings.Contains(lowerHTML, relativeWording) {
+					t.Fatalf("rendered relative timestamp %q: %s", relativeWording, html)
+				}
+			}
+		})
 	}
 }

@@ -1107,10 +1107,35 @@ html[data-theme="dark"] .theme-icon-moon {
   flex-shrink: 0;
   color: var(--pico-muted-color);
   font-size: 0.8rem;
+  white-space: nowrap;
 }
 
 .activity-time-compact {
   font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .activity-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 0.6rem;
+    row-gap: 0.1rem;
+  }
+
+  .activity-icon {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+
+  .activity-body {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .activity-time {
+    grid-column: 2;
+    grid-row: 2;
+  }
 }
 
 .comments-list-item {
