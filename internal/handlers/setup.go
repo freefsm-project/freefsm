@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
@@ -20,11 +22,13 @@ import (
 type SetupHandler struct {
 	db       *pgxpool.Pool
 	sessions *services.SessionService
+	userSvc  *services.UserService
+	csSvc    *services.CompanySettingsService
 	cfg      *config.Config
 }
 
-func NewSetupHandler(db *pgxpool.Pool, sessions *services.SessionService, cfg *config.Config) *SetupHandler {
-	return &SetupHandler{db: db, sessions: sessions, cfg: cfg}
+func NewSetupHandler(db *pgxpool.Pool, sessions *services.SessionService, userSvc *services.UserService, csSvc *services.CompanySettingsService, cfg *config.Config) *SetupHandler {
+	return &SetupHandler{db: db, sessions: sessions, userSvc: userSvc, csSvc: csSvc, cfg: cfg}
 }
 
 func (h *SetupHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -63,14 +67,27 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("email")
 	password := r.FormValue("password")
 
-	if name == "" || email == "" || password == "" {
+	if name == "" || email == "" {
 		http.Redirect(w, r, "/setup?error=all+fields+required", http.StatusSeeOther)
+		return
+	}
+	if err := validatePasswordConfirmation(password, r.FormValue("confirm_password")); err != nil {
+		http.Redirect(w, r, "/setup?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
 	var companyID int64
 	if err := h.db.QueryRow(r.Context(), `SELECT min(id) FROM companies HAVING count(*) = 1`).Scan(&companyID); err != nil {
 		internalServerError(w, r, "resolve setup company", fmt.Errorf("setup requires exactly one company: %w", err))
+		return
+	}
+	cs, err := h.csSvc.GetForCompany(r.Context(), companyID)
+	if err != nil && !ent.IsNotFound(err) {
+		internalServerError(w, r, "get setup password policy", err)
+		return
+	}
+	if err := h.userSvc.ValidatePassword(password, cs); err != nil {
+		http.Redirect(w, r, "/setup?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 

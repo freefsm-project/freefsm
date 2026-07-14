@@ -77,7 +77,30 @@ func SetupPage(p SetupPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"> <label>Setup Token <input type=\"password\" name=\"token\" placeholder=\"Setup token from server admin\" required></label> <label>Name <input type=\"text\" name=\"name\" placeholder=\"Your name\" required></label> <label>Email <input type=\"email\" name=\"email\" placeholder=\"email@example.com\" required></label> <label>Password <input type=\"password\" name=\"password\" placeholder=\"Password\" required minlength=\"8\"></label> <button type=\"submit\">Create Admin Account</button></form></article>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = PasswordField(PasswordFieldOptions{
+				ID: "setup-token", Name: "token", Label: "Setup Token",
+				Placeholder: "Setup token from server admin", Autocomplete: "off", Required: true,
+			}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<label>Name <input type=\"text\" name=\"name\" placeholder=\"Your name\" required></label> <label>Email <input type=\"email\" name=\"email\" placeholder=\"email@example.com\" required></label>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = NewPasswordFields(NewPasswordFieldsOptions{
+				ID: "setup-password", Name: "password", Label: "Password", Placeholder: "Password",
+				ConfirmID: "setup-confirm-password", ConfirmLabel: "Confirm Password", ConfirmPlaceholder: "Confirm password",
+				Autocomplete: "new-password", MinLength: 8, Required: true,
+			}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<button type=\"submit\">Create Admin Account</button></form></article>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

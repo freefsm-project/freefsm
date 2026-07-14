@@ -77,7 +77,18 @@ func LoginPage(p LoginPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"> <label>Email <input type=\"email\" name=\"email\" placeholder=\"email@example.com\" required autofocus></label> <label>Password <input type=\"password\" name=\"password\" placeholder=\"Password\" required></label> <button type=\"submit\">Sign In</button></form><p class=\"auth-link auth-link-center\"><a href=\"/forgot-password\">Forgot password?</a></p></article>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"> <label>Email <input type=\"email\" name=\"email\" placeholder=\"email@example.com\" required autofocus></label>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = PasswordField(PasswordFieldOptions{
+				ID: "login-password", Name: "password", Label: "Password", Placeholder: "Password",
+				Autocomplete: "current-password", Required: true,
+			}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<button type=\"submit\">Sign In</button></form><p class=\"auth-link auth-link-center\"><a href=\"/forgot-password\">Forgot password?</a></p></article>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

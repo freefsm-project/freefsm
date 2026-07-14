@@ -14,10 +14,12 @@ templ UserForm(p UserFormData) {
 				<input type="email" name="email" value={ p.User.User.Email } required/>
 			</label>
 			if p.IsNew {
-				<label id="password_field" class="is-hidden">
-					Password
-					<input type="password" name="password" minlength="8"/>
-				</label>
+				@NewPasswordFields(NewPasswordFieldsOptions{
+					ID: "user-password", Name: "password", Label: "Password", Placeholder: "Password",
+					ConfirmID: "user-confirm-password", ConfirmLabel: "Confirm Password", ConfirmPlaceholder: "Confirm password",
+					Autocomplete: "new-password", MinLength: 8, Disabled: true,
+					WrapperID: "password_fields", WrapperClass: "is-hidden",
+				})
 				<label>
 					<input type="checkbox" name="send_welcome_email" id="send_welcome_email" checked/>
 					Send welcome email with temporary password
@@ -40,13 +42,16 @@ templ UserForm(p UserFormData) {
 			<script>
 			(function() {
 				var cb = document.getElementById('send_welcome_email');
-				var pw = document.getElementById('password_field');
-				var input = pw.querySelector('input');
+				var fields = document.getElementById('password_fields');
+				var inputs = fields.querySelectorAll('input');
 				function sync() {
 					var show = !cb.checked;
-					pw.classList.toggle('is-hidden', !show);
-					if (show) input.setAttribute('required', '');
-					else input.removeAttribute('required');
+					fields.classList.toggle('is-hidden', !show);
+					inputs.forEach(function(input) {
+						input.disabled = !show;
+						input.required = show;
+						if (!show) input.value = '';
+					});
 				}
 				cb.addEventListener('change', sync);
 				sync();

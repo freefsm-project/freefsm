@@ -79,48 +79,67 @@ func ChangePasswordPage(p ChangePasswordData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"> <label>Current Password <input type=\"password\" name=\"current_password\" required autofocus></label> <label>New Password <input type=\"password\" name=\"new_password\" id=\"new_password\" required></label> <label>Confirm New Password <input type=\"password\" name=\"confirm_password\" required></label><div class=\"password-policy\"><div class=\"policy-item\" id=\"policy-length\">At least ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = PasswordField(PasswordFieldOptions{
+				ID: "current_password", Name: "current_password", Label: "Current Password",
+				Autocomplete: "current-password", Required: true, Autofocus: true,
+			}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = NewPasswordFields(NewPasswordFieldsOptions{
+				ID: "new_password", Name: "new_password", Label: "New Password",
+				ConfirmID: "confirm_password", ConfirmLabel: "Confirm New Password",
+				Autocomplete: "new-password", MinLength: p.MinLength, Required: true,
+			}).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"password-policy\"><div class=\"policy-item\" id=\"policy-length\">At least ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", p.MinLength))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/change_password.templ`, Line: 27, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/change_password.templ`, Line: 24, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, " characters</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " characters</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.RequireUpper {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"policy-item\" id=\"policy-upper\">One uppercase letter</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"policy-item\" id=\"policy-upper\">One uppercase letter</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			if p.RequireLower {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<div class=\"policy-item\" id=\"policy-lower\">One lowercase letter</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"policy-item\" id=\"policy-lower\">One lowercase letter</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			if p.RequireDigit {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<div class=\"policy-item\" id=\"policy-digit\">One digit</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"policy-item\" id=\"policy-digit\">One digit</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
 			if p.RequireSpecial {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<div class=\"policy-item\" id=\"policy-special\">One special character</div>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<div class=\"policy-item\" id=\"policy-special\">One special character</div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</div><button type=\"submit\">Change Password</button></form><script>\n\t\t\t\t(function() {\n\t\t\t\t\tvar pw = document.getElementById('new_password');\n\t\t\t\t\tif (!pw) return;\n\t\t\t\t\tpw.addEventListener('input', function() {\n\t\t\t\t\t\tvar v = pw.value;\n\t\t\t\t\t\tvar set = function(id, ok) {\n\t\t\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\t\t\tif (el) el.classList.toggle('valid', ok);\n\t\t\t\t\t\t};\n\t\t\t\t\t\tset('policy-length', v.length >= { fmt.Sprintf(\"%d\", p.MinLength) });\n\t\t\t\t\t\tset('policy-upper', /[A-Z]/.test(v));\n\t\t\t\t\t\tset('policy-lower', /[a-z]/.test(v));\n\t\t\t\t\t\tset('policy-digit', /\\d/.test(v));\n\t\t\t\t\t\tset('policy-special', /[^A-Za-z0-9]/.test(v));\n\t\t\t\t\t});\n\t\t\t\t})();\n\t\t\t</script></article>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><button type=\"submit\">Change Password</button></form><script>\n\t\t\t\t(function() {\n\t\t\t\t\tvar pw = document.getElementById('new_password');\n\t\t\t\t\tif (!pw) return;\n\t\t\t\t\tpw.addEventListener('input', function() {\n\t\t\t\t\t\tvar v = pw.value;\n\t\t\t\t\t\tvar set = function(id, ok) {\n\t\t\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\t\t\tif (el) el.classList.toggle('valid', ok);\n\t\t\t\t\t\t};\n\t\t\t\t\t\tset('policy-length', v.length >= { fmt.Sprintf(\"%d\", p.MinLength) });\n\t\t\t\t\t\tset('policy-upper', /[A-Z]/.test(v));\n\t\t\t\t\t\tset('policy-lower', /[a-z]/.test(v));\n\t\t\t\t\t\tset('policy-digit', /\\d/.test(v));\n\t\t\t\t\t\tset('policy-special', /[^A-Za-z0-9]/.test(v));\n\t\t\t\t\t});\n\t\t\t\t})();\n\t\t\t</script></article>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

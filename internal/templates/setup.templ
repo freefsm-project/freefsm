@@ -12,10 +12,10 @@ templ SetupPage(p SetupPageData) {
 			}
 			<form action="/setup" method="post">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-				<label>
-					Setup Token
-					<input type="password" name="token" placeholder="Setup token from server admin" required/>
-				</label>
+				@PasswordField(PasswordFieldOptions{
+					ID: "setup-token", Name: "token", Label: "Setup Token",
+					Placeholder: "Setup token from server admin", Autocomplete: "off", Required: true,
+				})
 				<label>
 					Name
 					<input type="text" name="name" placeholder="Your name" required/>
@@ -24,10 +24,11 @@ templ SetupPage(p SetupPageData) {
 					Email
 					<input type="email" name="email" placeholder="email@example.com" required/>
 				</label>
-				<label>
-					Password
-					<input type="password" name="password" placeholder="Password" required minlength="8"/>
-				</label>
+				@NewPasswordFields(NewPasswordFieldsOptions{
+					ID: "setup-password", Name: "password", Label: "Password", Placeholder: "Password",
+					ConfirmID: "setup-confirm-password", ConfirmLabel: "Confirm Password", ConfirmPlaceholder: "Confirm password",
+					Autocomplete: "new-password", MinLength: 8, Required: true,
+				})
 				<button type="submit">Create Admin Account</button>
 			</form>
 		</article>

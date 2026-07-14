@@ -19,10 +19,10 @@ templ LoginPage(p LoginPageData) {
 					Email
 					<input type="email" name="email" placeholder="email@example.com" required autofocus/>
 				</label>
-				<label>
-					Password
-					<input type="password" name="password" placeholder="Password" required/>
-				</label>
+				@PasswordField(PasswordFieldOptions{
+					ID: "login-password", Name: "password", Label: "Password", Placeholder: "Password",
+					Autocomplete: "current-password", Required: true,
+				})
 				<button type="submit">Sign In</button>
 			</form>
 			<p class="auth-link auth-link-center">

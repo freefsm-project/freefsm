@@ -45,7 +45,11 @@ templ UserShow(p UserDetailPage) {
 			<summary>Reset Password</summary>
 			<form action={ templ.URL(fmt.Sprintf("/users/%d/reset-password", p.User.ID)) } method="post" class="inline-add-form">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-				<label>New Password <input type="password" name="password" required minlength="8"/></label>
+				@NewPasswordFields(NewPasswordFieldsOptions{
+					ID: "admin-reset-password", Name: "password", Label: "New Password", Placeholder: "New password",
+					ConfirmID: "admin-reset-confirm-password", ConfirmLabel: "Confirm New Password", ConfirmPlaceholder: "Confirm new password",
+					Autocomplete: "new-password", MinLength: 8, Required: true,
+				})
 				<button type="submit">Reset Password</button>
 			</form>
 		</details>

@@ -58,13 +58,21 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sendWelcome := r.FormValue("send_welcome_email") == "on"
+	password := r.FormValue("password")
+	if sendWelcome {
+		password = ""
+	}
 	if !sendWelcome {
+		if err := validatePasswordConfirmation(password, r.FormValue("confirm_password")); err != nil {
+			http.Redirect(w, r, "/users/new?flash="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
 		cs, err := h.csSvc.GetForCompany(r.Context(), a.CompanyID)
 		if err != nil {
 			internalServerError(w, r, "get company password policy", err)
 			return
 		}
-		if err := h.svc.ValidatePassword(r.FormValue("password"), cs); err != nil {
+		if err := h.svc.ValidatePassword(password, cs); err != nil {
 			http.Redirect(w, r, "/users/new?flash="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 			return
 		}
@@ -73,7 +81,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CompanyID:        a.CompanyID,
 		Name:             r.FormValue("name"),
 		Email:            r.FormValue("email"),
-		Password:         r.FormValue("password"),
+		Password:         password,
 		Role:             r.FormValue("role"),
 		SendWelcomeEmail: sendWelcome,
 	})
@@ -194,8 +202,26 @@ func (h *UserHandler) Disable(w http.ResponseWriter, r *http.Request) {
 func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	r.ParseForm()
+	a, ok := middleware.UserFromContext(r.Context())
+	if !ok || a == nil {
+		http.NotFound(w, r)
+		return
+	}
+	target, err := h.svc.GetByID(r.Context(), id)
+	if err != nil || target.CompanyID == nil || *target.CompanyID != a.CompanyID {
+		http.NotFound(w, r)
+		return
+	}
 	password := r.FormValue("password")
-	cs, _ := h.csSvc.Get(r.Context())
+	if err := validatePasswordConfirmation(password, r.FormValue("confirm_password")); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=%s", id, url.QueryEscape(err.Error())), http.StatusSeeOther)
+		return
+	}
+	cs, err := h.csSvc.GetForCompany(r.Context(), *target.CompanyID)
+	if err != nil {
+		internalServerError(w, r, "get target company password policy", err)
+		return
+	}
 	if err := h.svc.ValidatePassword(password, cs); err != nil {
 		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=%s", id, url.QueryEscape(err.Error())), http.StatusSeeOther)
 		return
@@ -205,15 +231,11 @@ func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.svc.GetByID(r.Context(), id)
-	if err == nil {
-		a, _ := middleware.UserFromContext(r.Context())
-		if a != nil && h.activitySvc != nil {
-			h.activitySvc.Record(r.Context(), a.CompanyID, a.ID, "password_reset", objectref.New(objectref.TypeUser, id), map[string]interface{}{
-				"entity_name": user.Name,
-				"actor_name":  a.Name,
-			})
-		}
+	if h.activitySvc != nil {
+		h.activitySvc.Record(r.Context(), a.CompanyID, a.ID, "password_reset", objectref.New(objectref.TypeUser, id), map[string]interface{}{
+			"entity_name": target.Name,
+			"actor_name":  a.Name,
+		})
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Password+reset", id), http.StatusSeeOther)

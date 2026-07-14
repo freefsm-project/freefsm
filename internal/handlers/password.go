@@ -1,14 +1,18 @@
 package handlers
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 )
+
+var errUserCompanyRequired = errors.New("user company is required")
 
 type PasswordHandler struct {
 	userSvc     *services.UserService
@@ -28,8 +32,13 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 	}
 
 	if r.Method == http.MethodGet {
-		cs, _ := h.csSvc.Get(r.Context())
+		cs, err := h.csSvc.GetForCompany(r.Context(), user.CompanyID)
+		if err != nil {
+			internalServerError(w, r, "get password policy", err)
+			return
+		}
 		templates.ChangePasswordPage(templates.ChangePasswordData{
+			Error:          r.URL.Query().Get("error"),
 			MinLength:      cs.PasswordMinLength,
 			RequireUpper:   cs.PasswordRequireUppercase,
 			RequireLower:   cs.PasswordRequireLowercase,
@@ -42,10 +51,8 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 	r.ParseForm()
 	current := r.FormValue("current_password")
 	newPass := r.FormValue("new_password")
-	confirm := r.FormValue("confirm_password")
-
-	if newPass != confirm {
-		http.Redirect(w, r, "/change-password?error=passwords+do+not+match", http.StatusSeeOther)
+	if err := validatePasswordConfirmation(newPass, r.FormValue("confirm_password")); err != nil {
+		http.Redirect(w, r, "/change-password?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
@@ -57,14 +64,22 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 
 	// Verify current password
 	if err := h.userSvc.Authenticate(r.Context(), u.Email, current); err != nil {
-		http.Redirect(w, r, "/change-password?error=current+password+incorrect", http.StatusSeeOther)
+		http.Redirect(w, r, "/change-password?error="+url.QueryEscape("current password incorrect"), http.StatusSeeOther)
 		return
 	}
 
 	// Validate against company policy
-	cs, _ := h.csSvc.Get(r.Context())
+	if u.CompanyID == nil {
+		internalServerError(w, r, "get password policy", errUserCompanyRequired)
+		return
+	}
+	cs, err := h.csSvc.GetForCompany(r.Context(), *u.CompanyID)
+	if err != nil {
+		internalServerError(w, r, "get password policy", err)
+		return
+	}
 	if err := h.userSvc.ValidatePassword(newPass, cs); err != nil {
-		http.Redirect(w, r, "/change-password?error="+err.Error(), http.StatusSeeOther)
+		http.Redirect(w, r, "/change-password?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 
@@ -77,7 +92,7 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 		slog.Error("clear force_password_change", "error", err)
 	}
 
-	if user != nil {
+	if h.activitySvc != nil {
 		h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "password_changed", objectref.New(objectref.TypeUser, user.ID), map[string]interface{}{
 			"entity_name": user.Name,
 			"actor_name":  user.Name,

@@ -658,6 +658,58 @@ html[data-theme="dark"] .theme-icon-moon {
   margin-bottom: 1rem;
 }
 
+.password-fields {
+  min-width: 0;
+}
+
+.password-field {
+  margin-bottom: var(--pico-spacing);
+}
+
+.password-field > label {
+  display: block;
+  margin-bottom: 0.375rem;
+}
+
+.password-input-control {
+  position: relative;
+}
+
+.password-input-control input {
+  margin-bottom: 0;
+  padding-right: 4.75rem;
+}
+
+.password-reveal-button {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  width: auto;
+  min-width: 3.5rem;
+  min-height: 2.25rem;
+  margin: 0;
+  padding: 0.3rem 0.65rem;
+  transform: translateY(-50%);
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.password-reveal-button:focus-visible {
+  outline: 2px solid var(--pico-primary-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .password-input-control input {
+    padding-right: 5.25rem;
+  }
+
+  .password-reveal-button {
+    min-width: 4rem;
+    min-height: 2.75rem;
+  }
+}
+
 /* Document previews and email compose */
 .document-toolbar {
   display: flex;

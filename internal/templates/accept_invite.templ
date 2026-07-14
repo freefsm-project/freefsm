@@ -14,10 +14,11 @@ templ AcceptInvitePage(p ResetPasswordData) {
 				<form action="/accept-invite" method="post">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<input type="hidden" name="token" value={ p.Token }/>
-					<label>
-						Password
-						<input type="password" name="password" placeholder="Password" required minlength="8" autofocus/>
-					</label>
+					@NewPasswordFields(NewPasswordFieldsOptions{
+						ID: "invite-password", Name: "password", Label: "Password", Placeholder: "Password",
+						ConfirmID: "invite-confirm-password", ConfirmLabel: "Confirm Password", ConfirmPlaceholder: "Confirm password",
+						Autocomplete: "new-password", MinLength: 8, Required: true, Autofocus: true,
+					})
 					<button type="submit">Activate Account</button>
 				</form>
 			}

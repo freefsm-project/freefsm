@@ -120,7 +120,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	r.Get("/accept-invite", authHandler.AcceptInvite)
 	r.With(authPostLimiter).Post("/accept-invite", authHandler.AcceptInvite)
 
-	setupHandler := NewSetupHandler(db, sessions, cfg)
+	setupHandler := NewSetupHandler(db, sessions, userService, companySettingsSvc, cfg)
 	r.Get("/setup", setupHandler.ServeHTTP)
 	r.With(authPostLimiter).Post("/setup", setupHandler.ServeHTTP)
 

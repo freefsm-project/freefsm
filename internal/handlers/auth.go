@@ -157,7 +157,22 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid token", 400)
 		return
 	}
-	cs, _ := h.csSvc.Get(r.Context())
+	u, err := h.userSvc.GetByID(r.Context(), uid)
+	if err != nil || u.CompanyID == nil {
+		http.Error(w, "invalid token", http.StatusBadRequest)
+		return
+	}
+	if err := validatePasswordConfirmation(password, r.FormValue("confirm_password")); err != nil {
+		render(w, r, templates.ResetPasswordPage(templates.ResetPasswordData{
+			Token: token, Valid: true, Error: err.Error(),
+		}))
+		return
+	}
+	cs, err := h.csSvc.GetForCompany(r.Context(), *u.CompanyID)
+	if err != nil {
+		internalServerError(w, r, "get reset password policy", err)
+		return
+	}
 	if err := h.userSvc.ValidatePassword(password, cs); err != nil {
 		render(w, r, templates.ResetPasswordPage(templates.ResetPasswordData{
 			Token: token, Valid: true, Error: err.Error(),
@@ -192,6 +207,10 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 	target, err := h.inviteSvc.ValidateInvite(r.Context(), token)
 	if err != nil {
 		http.Error(w, "invalid invitation", http.StatusBadRequest)
+		return
+	}
+	if err := validatePasswordConfirmation(password, r.FormValue("confirm_password")); err != nil {
+		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Error: err.Error()}))
 		return
 	}
 	cs, err := h.csSvc.GetForCompany(r.Context(), target.CompanyID)
