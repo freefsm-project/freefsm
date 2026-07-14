@@ -1361,22 +1361,16 @@ html[data-theme="dark"] .theme-icon-moon {
   margin-top: 0.25rem;
 }
 
-.pagination-nav,
-.activity-pagination {
+.pagination-nav {
   display: flex;
   justify-content: center;
   gap: 0.5rem;
   margin-top: 1rem;
 }
 
-.pagination-status,
-.activity-pagination-status {
+.pagination-status {
   color: var(--pico-muted-color);
   line-height: 1.8rem;
-}
-
-.activity-pagination-button {
-  font-size: 0.8rem;
 }
 
 .tag-widget {

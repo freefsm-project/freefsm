@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/customer"
 	"github.com/freefsm-project/freefsm/internal/ent/job"
 	"github.com/freefsm-project/freefsm/internal/ent/jobassignment"
 	"github.com/freefsm-project/freefsm/internal/ent/user"
@@ -250,24 +251,63 @@ func (s *JobService) GetByID(ctx context.Context, id int64) (*ent.Job, error) {
 	return j, nil
 }
 
-func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.Job, error) {
+func (s *JobService) GetByIDForCompany(ctx context.Context, companyID, id int64) (*ent.Job, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("get job for company: company is required")
+	}
+	j, err := s.client.Job.Query().Where(job.IDEQ(id), job.CompanyIDEQ(companyID)).Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get job %d for company: %w", id, err)
+	}
+	return j, nil
+}
+
+func (s *JobService) activeCustomerForCompany(ctx context.Context, companyID, customerID int64) (*ent.Customer, error) {
+	if customerID <= 0 {
+		return nil, invalidJobInput("customer is required")
+	}
+	jobCustomer, err := s.client.Customer.Query().Where(customer.IDEQ(customerID), customer.CompanyIDEQ(companyID), customer.DeletedAtIsNil()).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, invalidJobInput("customer does not exist, is archived, or belongs to another company")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get active job customer for company: %w", err)
+	}
+	return jobCustomer, nil
+}
+
+func (s *JobService) Create(ctx context.Context, companyID int64, params JobCreateParams) (*ent.Job, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("create job: company is required")
+	}
 	lineItems, err := EncodeLineItems(params.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("encode job line items: %w", err)
 	}
-	if err := validateJobCustomerLinks(ctx, s.client, params.CustomerID, params.ProjectID, params.LocationID, params.CustomerContactID, params.AssetID); err != nil {
+	jobCustomer, err := s.activeCustomerForCompany(ctx, companyID, params.CustomerID)
+	if err != nil {
 		return nil, err
 	}
-	customer, err := s.client.Customer.Get(ctx, params.CustomerID)
-	if err != nil {
-		return nil, fmt.Errorf("get job customer: %w", err)
+	if err := validateJobCustomerLinks(ctx, s.client, companyID, params.CustomerID, params.ProjectID, params.LocationID, params.CustomerContactID, params.AssetID); err != nil {
+		return nil, err
 	}
-	statusID, err := creationStatus(ctx, s.client, 0, customer.CompanyID, "job", "job:new")
+	statusID, err := creationStatus(ctx, s.client, params.StatusID, jobCustomer.CompanyID, "job", "job:new")
+	if err != nil {
+		return nil, err
+	}
+	assignments, err := s.hydrateAssignments(ctx, companyID, params.Assignments)
 	if err != nil {
 		return nil, err
 	}
 
-	b := s.client.Job.Create().
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin create job transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txClient := tx.Client()
+	b := txClient.Job.Create().
+		SetCompanyID(companyID).
 		SetCustomerID(params.CustomerID).
 		SetJobType(params.JobType).
 		SetSubtitle(params.Subtitle).
@@ -310,27 +350,32 @@ func (s *JobService) Create(ctx context.Context, params JobCreateParams) (*ent.J
 		b.SetArrivalWindowEnd(params.ArrivalEnd)
 	}
 
-	assignments, err := s.hydrateAssignments(ctx, params.Assignments)
-	if err != nil {
-		return nil, err
-	}
 	b.SetAssignments(SerializeAssignments(s.assignmentsForStorage(params.Assignments, assignments)))
 
 	j, err := b.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create job: %w", err)
 	}
-	if err := s.replaceAssignments(ctx, j.ID, assignments); err != nil {
+	if err := s.replaceAssignments(ctx, txClient, j.ID, assignments); err != nil {
 		return nil, err
 	}
-	return j, nil
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit create job transaction: %w", err)
+	}
+	return j.Unwrap(), nil
 }
 
-func (s *JobService) CreateNextOccurrence(ctx context.Context, sourceID int64, nextStart time.Time) (*ent.Job, error) {
+func (s *JobService) CreateNextOccurrence(ctx context.Context, companyID, sourceID int64, nextStart time.Time) (*ent.Job, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("create next job occurrence: company is required")
+	}
 	if nextStart.IsZero() {
 		return nil, fmt.Errorf("next occurrence start time is required")
 	}
-	source, err := s.GetByID(ctx, sourceID)
+	source, err := s.GetByIDForCompany(ctx, companyID, sourceID)
+	if ent.IsNotFound(err) {
+		return nil, invalidJobInput("source job does not belong to company")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +423,7 @@ func (s *JobService) CreateNextOccurrence(ctx context.Context, sourceID int64, n
 		params.ArrivalStart = time.Time{}
 		params.ArrivalEnd = time.Time{}
 	}
-	return s.Create(ctx, params)
+	return s.Create(ctx, companyID, params)
 }
 
 func shiftedTime(t *time.Time, delta time.Duration) time.Time {
@@ -422,7 +467,17 @@ func daysBetween(from, to time.Time) int {
 	return int(toDate.Sub(fromDate).Hours() / 24)
 }
 
-func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParams) (*ent.Job, error) {
+func (s *JobService) Update(ctx context.Context, companyID, id int64, params JobUpdateParams) (*ent.Job, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("update job: company is required")
+	}
+	current, err := s.GetByIDForCompany(ctx, companyID, id)
+	if ent.IsNotFound(err) {
+		return nil, invalidJobInput("job does not belong to company")
+	}
+	if err != nil {
+		return nil, err
+	}
 	var encodedLineItems string
 	if params.LineItems != nil {
 		var err error
@@ -430,10 +485,6 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 		if err != nil {
 			return nil, fmt.Errorf("encode job line items: %w", err)
 		}
-	}
-	current, err := s.GetByID(ctx, id)
-	if err != nil {
-		return nil, err
 	}
 	customerID := current.CustomerID
 	projectID := int64Value(current.ProjectID)
@@ -455,21 +506,47 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 	if params.AssetID != nil {
 		assetID = *params.AssetID
 	}
-	if err := validateProjectCustomer(ctx, s.client, customerID, projectID, params.ProjectID != nil && projectID != int64Value(current.ProjectID)); err != nil {
-		return nil, err
+	customerChanged := params.CustomerID != nil && *params.CustomerID != current.CustomerID
+	projectChanged := params.ProjectID != nil && *params.ProjectID != int64Value(current.ProjectID)
+	locationChanged := params.LocationID != nil && *params.LocationID != int64Value(current.LocationID)
+	contactChanged := params.CustomerContactID != nil && *params.CustomerContactID != int64Value(current.CustomerContactID)
+	assetChanged := params.AssetID != nil && *params.AssetID != int64Value(current.AssetID)
+	if customerChanged {
+		if _, err := s.activeCustomerForCompany(ctx, companyID, customerID); err != nil {
+			return nil, err
+		}
 	}
-	if err := validateCustomerLocation(ctx, s.client, customerID, locationID); err != nil {
-		return nil, err
+	projectToValidate, locationToValidate, contactToValidate, assetToValidate := int64(0), int64(0), int64(0), int64(0)
+	if customerChanged || projectChanged {
+		projectToValidate = projectID
 	}
-	if err := validateContactCustomer(ctx, s.client, customerID, contactID); err != nil {
-		return nil, err
+	if customerChanged || locationChanged {
+		locationToValidate = locationID
 	}
-	if err := validateAssetCustomer(ctx, s.client, customerID, assetID, params.AssetID != nil && assetID != int64Value(current.AssetID)); err != nil {
+	if customerChanged || contactChanged {
+		contactToValidate = contactID
+	}
+	if customerChanged || assetChanged {
+		assetToValidate = assetID
+	}
+	if err := validateJobCustomerLinks(ctx, s.client, companyID, customerID, projectToValidate, locationToValidate, contactToValidate, assetToValidate); err != nil {
 		return nil, err
 	}
 
-	u := s.client.Job.UpdateOneID(id)
 	var assignments []JobAssignment
+	if params.Assignments != nil {
+		assignments, err = s.hydrateAssignments(ctx, companyID, *params.Assignments)
+		if err != nil {
+			return nil, err
+		}
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("begin update job transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txClient := tx.Client()
+	u := txClient.Job.UpdateOneID(id)
 
 	if params.CustomerID != nil {
 		u.SetCustomerID(*params.CustomerID)
@@ -543,11 +620,6 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 		u.SetVisits(SerializeVisits(*params.Visits))
 	}
 	if params.Assignments != nil {
-		var err error
-		assignments, err = s.hydrateAssignments(ctx, *params.Assignments)
-		if err != nil {
-			return nil, err
-		}
 		u.SetAssignments(SerializeAssignments(s.assignmentsForStorage(*params.Assignments, assignments)))
 	}
 	if params.Subtasks != nil {
@@ -559,15 +631,25 @@ func (s *JobService) Update(ctx context.Context, id int64, params JobUpdateParam
 		return nil, fmt.Errorf("update job %d: %w", id, err)
 	}
 	if params.Assignments != nil {
-		if err := s.replaceAssignments(ctx, id, assignments); err != nil {
+		if err := s.replaceAssignments(ctx, txClient, id, assignments); err != nil {
 			return nil, err
 		}
 	}
-	return j, nil
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit update job transaction: %w", err)
+	}
+	return j.Unwrap(), nil
 }
 
 func (s *JobService) Move(ctx context.Context, id, userID int64, startTime, endTime time.Time) (*ent.Job, error) {
-	assignments, err := s.hydrateAssignments(ctx, []JobAssignment{{UserID: userID}})
+	current, err := s.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if current.CompanyID == nil {
+		return nil, fmt.Errorf("move job: company is required")
+	}
+	assignments, err := s.hydrateAssignments(ctx, *current.CompanyID, []JobAssignment{{UserID: userID}})
 	if err != nil {
 		return nil, err
 	}
@@ -583,7 +665,7 @@ func (s *JobService) Move(ctx context.Context, id, userID int64, startTime, endT
 	if err != nil {
 		return nil, fmt.Errorf("move job %d: %w", id, err)
 	}
-	if err := s.replaceAssignments(ctx, id, assignments); err != nil {
+	if err := s.replaceAssignments(ctx, s.client, id, assignments); err != nil {
 		return nil, err
 	}
 	return j, nil
@@ -630,22 +712,25 @@ func (s *JobService) Assignments(ctx context.Context, jobID int64) ([]JobAssignm
 	return assignments, nil
 }
 
-func (s *JobService) replaceAssignments(ctx context.Context, jobID int64, assignments []JobAssignment) error {
-	if _, err := s.client.JobAssignment.Delete().Where(jobassignment.JobIDEQ(jobID)).Exec(ctx); err != nil {
+func (s *JobService) replaceAssignments(ctx context.Context, client *ent.Client, jobID int64, assignments []JobAssignment) error {
+	if _, err := client.JobAssignment.Delete().Where(jobassignment.JobIDEQ(jobID)).Exec(ctx); err != nil {
 		return fmt.Errorf("delete job assignments: %w", err)
 	}
 	for _, assignment := range assignments {
 		if assignment.UserID <= 0 {
 			continue
 		}
-		if _, err := s.client.JobAssignment.Create().SetJobID(jobID).SetUserID(assignment.UserID).SetRole(strings.TrimSpace(assignment.Role)).Save(ctx); err != nil {
+		if _, err := client.JobAssignment.Create().SetJobID(jobID).SetUserID(assignment.UserID).SetRole(strings.TrimSpace(assignment.Role)).Save(ctx); err != nil {
 			return fmt.Errorf("create job assignment: %w", err)
 		}
 	}
 	return nil
 }
 
-func (s *JobService) hydrateAssignments(ctx context.Context, assignments []JobAssignment) ([]JobAssignment, error) {
+func (s *JobService) hydrateAssignments(ctx context.Context, companyID int64, assignments []JobAssignment) ([]JobAssignment, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("hydrate job assignments: company is required")
+	}
 	seen := map[int64]bool{}
 	userIDs := make([]int64, 0, len(assignments))
 	for _, assignment := range assignments {
@@ -658,13 +743,16 @@ func (s *JobService) hydrateAssignments(ctx context.Context, assignments []JobAs
 	if len(userIDs) == 0 {
 		return nil, nil
 	}
-	users, err := s.client.User.Query().Where(user.IDIn(userIDs...)).All(ctx)
+	users, err := s.client.User.Query().Where(user.IDIn(userIDs...), user.CompanyIDEQ(companyID)).All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list assignment users: %w", err)
 	}
 	names := make(map[int64]string, len(users))
 	for _, u := range users {
 		names[u.ID] = u.Name
+	}
+	if len(users) != len(userIDs) {
+		return nil, invalidJobInput("assignment user does not belong to company")
 	}
 	hydrated := make([]JobAssignment, 0, len(userIDs))
 	seen = map[int64]bool{}

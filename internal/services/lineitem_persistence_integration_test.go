@@ -15,7 +15,7 @@ func TestLineItemPersistenceRejectsInvalidDataWithoutWritesIntegration(t *testin
 	invalid := []LineItem{{Title: "Invalid", Quantity: 0}}
 
 	jobCount := client.Job.Query().CountX(ctx)
-	if _, err := NewJobService(client).Create(ctx, JobCreateParams{CustomerID: data.customerA.ID, JobType: "Invalid", LineItems: invalid}); !errors.Is(err, ErrInvalidLineItem) {
+	if _, err := NewJobService(client).Create(ctx, 1, JobCreateParams{CustomerID: data.customerA.ID, JobType: "Invalid", LineItems: invalid}); !errors.Is(err, ErrInvalidLineItem) {
 		t.Fatalf("job create error = %v, want ErrInvalidLineItem", err)
 	}
 	if got := client.Job.Query().CountX(ctx); got != jobCount {
@@ -39,7 +39,7 @@ func TestLineItemPersistenceRejectsInvalidDataWithoutWritesIntegration(t *testin
 	}
 
 	original := data.jobA.LineItems
-	if _, err := NewJobService(client).Update(ctx, data.jobA.ID, JobUpdateParams{LineItems: &invalid}); !errors.Is(err, ErrInvalidLineItem) {
+	if _, err := NewJobService(client).Update(ctx, 1, data.jobA.ID, JobUpdateParams{LineItems: &invalid}); !errors.Is(err, ErrInvalidLineItem) {
 		t.Fatalf("job update error = %v, want ErrInvalidLineItem", err)
 	}
 	if got := client.Job.GetX(ctx, data.jobA.ID).LineItems; got != original {
@@ -78,7 +78,7 @@ func TestLineItemPersistencePreservesEmptyAndFractionalQuantitiesIntegration(t *
 	service := NewJobService(client)
 
 	items := []LineItem{{Title: "Fractional labor", UnitPrice: 20, Quantity: 1.25}}
-	updated, err := service.Update(ctx, data.jobA.ID, JobUpdateParams{LineItems: &items})
+	updated, err := service.Update(ctx, 1, data.jobA.ID, JobUpdateParams{LineItems: &items})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestLineItemPersistencePreservesEmptyAndFractionalQuantitiesIntegration(t *
 	}
 
 	empty := []LineItem{}
-	updated, err = service.Update(ctx, data.jobA.ID, JobUpdateParams{LineItems: &empty})
+	updated, err = service.Update(ctx, 1, data.jobA.ID, JobUpdateParams{LineItems: &empty})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestLineItemPersistencePreservesEmptyAndFractionalQuantitiesIntegration(t *
 		t.Fatalf("explicit empty line items = %q, want []", updated.LineItems)
 	}
 
-	updated, err = service.Update(ctx, data.jobA.ID, JobUpdateParams{})
+	updated, err = service.Update(ctx, 1, data.jobA.ID, JobUpdateParams{})
 	if err != nil {
 		t.Fatal(err)
 	}

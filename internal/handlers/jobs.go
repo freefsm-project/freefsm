@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -17,31 +19,46 @@ import (
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 type JobHandler struct {
-	svc          *services.JobService
-	custSvc      *services.CustomerService
-	statusSvc    *services.StatusService
-	projectSvc   *services.ProjectService
-	locSvc       *services.LocationService
-	contactSvc   *services.CustomerContactService
-	tagSvc       *services.TagService
-	tagLinkSvc   *services.TagLinkService
-	defSvc       *services.CustomFieldDefinitionService
-	assetSvc     *services.AssetService
-	assetTypeSvc *services.AssetTypeService
-	assetStatSvc *services.AssetStatusService
-	fileSvc      *services.FileService
-	activitySvc  *services.ActivityService
-	userSvc      *services.UserService
-	policySvc    *services.PolicyService
-	timeEntrySvc *services.TimeEntryService
-	statusflow   *statusflow.Service
+	svc              *services.JobService
+	custSvc          *services.CustomerService
+	statusSvc        *services.StatusService
+	projectSvc       *services.ProjectService
+	locSvc           *services.LocationService
+	contactSvc       *services.CustomerContactService
+	tagSvc           *services.TagService
+	tagLinkSvc       *services.TagLinkService
+	defSvc           *services.CustomFieldDefinitionService
+	assetSvc         *services.AssetService
+	assetTypeSvc     *services.AssetTypeService
+	assetStatSvc     *services.AssetStatusService
+	fileSvc          *services.FileService
+	activitySvc      *services.ActivityService
+	userSvc          *services.UserService
+	policySvc        *services.PolicyService
+	timeEntrySvc     *services.TimeEntryService
+	statusflow       *statusflow.Service
+	createJob        func(context.Context, int64, services.JobCreateParams) (*ent.Job, error)
+	updateJob        func(context.Context, int64, int64, services.JobUpdateParams) (*ent.Job, error)
+	createNext       func(context.Context, int64, int64, time.Time) (*ent.Job, error)
+	canUpdateJob     func(context.Context, int64, string, int64) bool
+	getJobForCompany func(context.Context, int64, int64) (*ent.Job, error)
+	newJobFormData   func(context.Context, int64) templates.JobFormPageData
+	editJobFormData  func(context.Context, *ent.Job) templates.JobFormPageData
 }
 
 func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, assetTypeSvc *services.AssetTypeService, assetStatSvc *services.AssetStatusService, fileSvc *services.FileService, activitySvc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService, timeEntrySvc *services.TimeEntryService) *JobHandler {
-	return &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, assetSvc: assetSvc, assetTypeSvc: assetTypeSvc, assetStatSvc: assetStatSvc, fileSvc: fileSvc, activitySvc: activitySvc, userSvc: userSvc, policySvc: policySvc, timeEntrySvc: timeEntrySvc}
+	h := &JobHandler{svc: svc, custSvc: custSvc, statusSvc: statusSvc, projectSvc: projectSvc, locSvc: locSvc, contactSvc: contactSvc, tagSvc: tagSvc, tagLinkSvc: tagLinkSvc, defSvc: defSvc, assetSvc: assetSvc, assetTypeSvc: assetTypeSvc, assetStatSvc: assetStatSvc, fileSvc: fileSvc, activitySvc: activitySvc, userSvc: userSvc, policySvc: policySvc, timeEntrySvc: timeEntrySvc, createJob: svc.Create, updateJob: svc.Update, createNext: svc.CreateNextOccurrence, getJobForCompany: svc.GetByIDForCompany, canUpdateJob: func(ctx context.Context, userID int64, role string, jobID int64) bool {
+		return policySvc.CanAccessObject(ctx, userID, role, objectref.New(objectref.TypeJob, jobID), policyUpdate)
+	}}
+	h.newJobFormData = h.newJobForm
+	h.editJobFormData = func(ctx context.Context, job *ent.Job) templates.JobFormPageData {
+		return h.formDataFromJob(ctx, job, h.statusesForSelect(ctx))
+	}
+	return h
 }
 
 func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -362,14 +379,71 @@ func redirectToJob(w http.ResponseWriter, r *http.Request, id int64, flash strin
 	http.Redirect(w, r, fmt.Sprintf("/jobs/%d?flash=%s", id, url.QueryEscape(flash)), http.StatusSeeOther)
 }
 
+func validJobFormIdentity(r *http.Request, mode string, jobID int64) bool {
+	modes := r.Form["form_mode"]
+	jobIDs := r.Form["job_id"]
+	if len(modes) != 1 || modes[0] != mode || len(jobIDs) != 1 {
+		return false
+	}
+	return jobIDs[0] == strconv.FormatInt(jobID, 10)
+}
+
+func staleJobForm(w http.ResponseWriter) {
+	http.Error(w, "This form is out of date. Reload the page and try again.", http.StatusConflict)
+}
+
+func handleInvalidJobInput(w http.ResponseWriter, err error) bool {
+	if !errors.Is(err, services.ErrInvalidJobInput) {
+		return false
+	}
+	http.Error(w, "Invalid job details", http.StatusBadRequest)
+	return true
+}
+
+func handleJobStatusConfigurationError(w http.ResponseWriter, r *http.Request, operation string, submittedCustomerID, authenticatedCompanyID int64, err error) bool {
+	var configErr *services.StatusConfigurationError
+	if !errors.As(err, &configErr) {
+		return false
+	}
+
+	slog.Error("job status configuration unavailable",
+		"request_id", chimiddleware.GetReqID(r.Context()),
+		"version", config.Version,
+		"commit", config.Commit,
+		"route", r.URL.Path,
+		"operation", operation,
+		"submitted_customer_id", submittedCustomerID,
+		"authenticated_company_id", authenticatedCompanyID,
+		"error_company_id", configErr.CompanyID,
+		"error_object_type", configErr.ObjectType,
+		"error_category", configErr.Category,
+	)
+	http.Error(w, "Service temporarily unavailable", http.StatusServiceUnavailable)
+	return true
+}
+
 func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.CompanyID <= 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if r.Method == http.MethodGet {
+		w.Header().Set("Cache-Control", "no-store")
 		customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
-		templates.JobForm(h.newJobForm(r.Context(), customerID)).Render(r.Context(), w)
+		newJobFormData := h.newJobFormData
+		if newJobFormData == nil {
+			newJobFormData = h.newJobForm
+		}
+		templates.JobForm(newJobFormData(r.Context(), customerID)).Render(r.Context(), w)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", 400)
+		return
+	}
+	if !validJobFormIdentity(r, "create", 0) {
+		staleJobForm(w)
 		return
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
@@ -401,13 +475,22 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if params.BillingType == "" {
 		params.BillingType = "flat_rate"
 	}
-	result, err := h.svc.Create(r.Context(), params)
+	createJob := h.createJob
+	if createJob == nil {
+		createJob = h.svc.Create
+	}
+	result, err := createJob(r.Context(), u.CompanyID, params)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		if handleJobStatusConfigurationError(w, r, "create", custID, u.CompanyID, err) {
+			return
+		}
+		if handleInvalidJobInput(w, err) {
+			return
+		}
+		internalServerError(w, r, "create job", err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
+	if h.activitySvc != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeJob, result.ID), map[string]interface{}{
 			"entity_name": result.JobType,
 			"actor_name":  u.Name,
@@ -423,23 +506,39 @@ func (h *JobHandler) CreateNextOccurrence(w http.ResponseWriter, r *http.Request
 		return
 	}
 	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil {
+	if !ok || u == nil || u.CompanyID <= 0 {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, id), policyUpdate) {
+	canUpdateJob := h.canUpdateJob
+	if canUpdateJob == nil {
+		canUpdateJob = func(ctx context.Context, userID int64, role string, jobID int64) bool {
+			return h.policySvc.CanAccessObject(ctx, userID, role, objectref.New(objectref.TypeJob, jobID), policyUpdate)
+		}
+	}
+	if !canUpdateJob(r.Context(), u.ID, u.Role, id) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	loc := middleware.CompanyLocation(r.Context())
 	now := time.Now().In(loc)
 	nextStart := time.Date(now.Year(), now.Month(), now.Day(), 8, 0, 0, 0, loc)
-	result, err := h.svc.CreateNextOccurrence(r.Context(), id, nextStart)
+	createNext := h.createNext
+	if createNext == nil {
+		createNext = h.svc.CreateNextOccurrence
+	}
+	result, err := createNext(r.Context(), u.CompanyID, id, nextStart)
 	if err != nil {
+		if handleJobStatusConfigurationError(w, r, "create_next_occurrence", 0, u.CompanyID, err) {
+			return
+		}
+		if handleInvalidJobInput(w, err) {
+			return
+		}
 		internalServerError(w, r, "create next occurrence", err)
 		return
 	}
-	if u != nil {
+	if h.activitySvc != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created_next_occurrence", objectref.New(objectref.TypeJob, result.ID), map[string]interface{}{
 			"entity_name":   result.JobType,
 			"actor_name":    u.Name,
@@ -472,25 +571,52 @@ func (h *JobHandler) CancelNextOccurrence(w http.ResponseWriter, r *http.Request
 }
 
 func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.CompanyID <= 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	if r.Method == http.MethodGet {
-		j, err := h.svc.GetByID(r.Context(), id)
+		w.Header().Set("Cache-Control", "no-store")
+		getJobForCompany := h.getJobForCompany
+		if getJobForCompany == nil {
+			getJobForCompany = h.svc.GetByIDForCompany
+		}
+		j, err := getJobForCompany(r.Context(), u.CompanyID, id)
 		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
-		statuses := h.statusesForSelect(r.Context())
-		fd := h.formDataFromJob(r.Context(), j, statuses)
+		editJobFormData := h.editJobFormData
+		if editJobFormData == nil {
+			editJobFormData = func(ctx context.Context, job *ent.Job) templates.JobFormPageData {
+				return h.formDataFromJob(ctx, job, h.statusesForSelect(ctx))
+			}
+		}
+		fd := editJobFormData(r.Context(), j)
 		fd.PendingNextOccurrence = r.URL.Query().Get("pending_next_occurrence") == "1"
 		templates.JobForm(fd).Render(r.Context(), w)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", 400)
+		return
+	}
+	if !validJobFormIdentity(r, "edit", id) {
+		staleJobForm(w)
+		return
+	}
+	getJobForCompany := h.getJobForCompany
+	if getJobForCompany == nil {
+		getJobForCompany = h.svc.GetByIDForCompany
+	}
+	if _, err := getJobForCompany(r.Context(), u.CompanyID, id); err != nil {
+		http.NotFound(w, r)
 		return
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
@@ -536,17 +662,19 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		t := parseDate(dd, loc)
 		params.DueDate = &t
 	}
-	result, err := h.svc.Update(r.Context(), id, params)
+	updateJob := h.updateJob
+	if updateJob == nil {
+		updateJob = h.svc.Update
+	}
+	result, err := updateJob(r.Context(), u.CompanyID, id, params)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		if handleInvalidJobInput(w, err) {
+			return
+		}
+		internalServerError(w, r, "update job", err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	if u != nil {
+	if h.activitySvc != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "updated", objectref.New(objectref.TypeJob, id), map[string]interface{}{
 			"entity_name": result.JobType,
 			"actor_name":  u.Name,
@@ -613,7 +741,7 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil {
+	if !ok || u == nil || u.CompanyID <= 0 {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
@@ -626,7 +754,7 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	j, err := h.svc.GetByID(r.Context(), id)
+	j, err := h.svc.GetByIDForCompany(r.Context(), u.CompanyID, id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -640,7 +768,7 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 	params := services.JobUpdateParams{
 		Subtasks: &subtasks,
 	}
-	if _, err := h.svc.Update(r.Context(), id, params); err != nil {
+	if _, err := h.svc.Update(r.Context(), u.CompanyID, id, params); err != nil {
 		internalServerError(w, r, "toggle job subtask", err)
 		return
 	}
@@ -705,7 +833,6 @@ func (h *JobHandler) jobFormFromRequest(r *http.Request, id int64) templates.Job
 	assetID, _ := strconv.ParseInt(r.FormValue("asset_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
 	fd := h.newJobForm(r.Context(), customerID)
-	fd.IsNew = id == 0
 	fd.Job.ID = id
 	fd.Job.CustomerID = customerID
 	fd.Job.ProjectID = projectID
@@ -750,7 +877,6 @@ func (h *JobHandler) newJobForm(ctx context.Context, customerID int64) templates
 			BillingType: "flat_rate",
 			StartTime:   time.Now().Format("2006-01-02") + "T08:00",
 		},
-		IsNew:                   true,
 		Customers:               customerOptions(customers),
 		Projects:                projectOptions(projects),
 		Locations:               locationOptions(locations),
@@ -786,7 +912,6 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses [
 	}
 	return templates.JobFormPageData{
 		Job:                     &d,
-		IsNew:                   false,
 		Customers:               customerOptions(customers),
 		Projects:                projectOptions(projects),
 		Locations:               locationOptions(locations),

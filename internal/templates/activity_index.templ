@@ -69,16 +69,15 @@ templ ActivityIndex(p ActivityPageData) {
 					</div>
 				}
 			</div>
-			if p.TotalPages > 1 {
-				<div class="activity-pagination">
-					if p.Page > 1 {
-						<a href={ "?page=" + sprintHTML(p.Page-1) } role="button" class="outline activity-pagination-button">Previous</a>
+			if p.NewerURL != "" || p.OlderURL != "" {
+				<nav class="pagination-nav" aria-label="Activity pages">
+					if p.NewerURL != "" {
+						<a href={ templ.URL(p.NewerURL) } role="button" class="outline">Newer</a>
 					}
-					<small class="activity-pagination-status">Page { sprintHTML(p.Page) } of { sprintHTML(p.TotalPages) } ({ sprintHTML(p.Total) } entries)</small>
-					if p.Page < p.TotalPages {
-						<a href={ "?page=" + sprintHTML(p.Page+1) } role="button" class="outline activity-pagination-button">Next</a>
+					if p.OlderURL != "" {
+						<a href={ templ.URL(p.OlderURL) } role="button" class="outline">Older</a>
 					}
-				</div>
+				</nav>
 			}
 		}
 	}

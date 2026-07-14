@@ -240,12 +240,7 @@ func (d *EntDirectory) lookupName(ctx context.Context, ref Ref) string {
 		te, err := d.client.TimeEntry.Get(ctx, ref.ID)
 		if err == nil {
 			cs, _ := d.client.CompanySettings.Query().First(ctx)
-			loc := companySettingsLocation(cs)
-			clockIn := formatCompanyDateTime(te.ClockIn, loc, cs)
-			if te.ClockOut != nil {
-				return fmt.Sprintf("%s — %s", clockIn, formatCompanyTime(*te.ClockOut, loc, cs))
-			}
-			return clockIn
+			return TimeEntryDisplayName(te.ClockIn, te.ClockOut, cs)
 		}
 	case TypeAssetType:
 		at, err := d.client.AssetType.Get(ctx, ref.ID)
@@ -290,6 +285,15 @@ func (d *EntDirectory) lookupName(ctx context.Context, ref Ref) string {
 }
 
 const defaultDateFormat = "Jan 2, 2006"
+
+func TimeEntryDisplayName(clockIn time.Time, clockOut *time.Time, settings *ent.CompanySettings) string {
+	loc := companySettingsLocation(settings)
+	name := formatCompanyDateTime(clockIn, loc, settings)
+	if clockOut != nil {
+		name += " — " + formatCompanyTime(*clockOut, loc, settings)
+	}
+	return name
+}
 
 func formatCompanyDateTime(t time.Time, loc *time.Location, cs *ent.CompanySettings) string {
 	if t.IsZero() {

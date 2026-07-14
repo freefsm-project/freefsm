@@ -10,7 +10,8 @@ func TestCreationDefaultsUseCategoriesAfterLabelsAreRenamed(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
 	ctx := context.Background()
-	customer := client.Customer.Create().SetDisplayName("Defaults customer").SaveX(ctx)
+	const companyID int64 = 101
+	customer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Defaults customer").SaveX(ctx)
 	client.CompanySettings.Create().SetBusinessName("Defaults").SaveX(ctx)
 	defaults := map[string]struct{ category, label string }{
 		"job":      {"job:new", "Queued locally"},
@@ -20,12 +21,12 @@ func TestCreationDefaultsUseCategoriesAfterLabelsAreRenamed(t *testing.T) {
 	}
 	statusIDs := map[string]int64{}
 	for typ, item := range defaults {
-		workflow := client.StatusWorkflow.Create().SetName(typ).SetObjectType(typ).SaveX(ctx)
-		statusIDs[typ] = client.Status.Create().SetWorkflowID(workflow.ID).SetName(item.label).SetCategoryKey(item.category).SetCategoryOrder(1).SetIsCategoryDefault(true).SaveX(ctx).ID
+		workflow := client.StatusWorkflow.Create().SetCompanyID(companyID).SetName(typ).SetObjectType(typ).SaveX(ctx)
+		statusIDs[typ] = client.Status.Create().SetCompanyID(companyID).SetWorkflowID(workflow.ID).SetName(item.label).SetCategoryKey(item.category).SetCategoryOrder(1).SetIsCategoryDefault(true).SaveX(ctx).ID
 	}
 
 	jobSvc := NewJobService(client)
-	job, err := jobSvc.Create(ctx, JobCreateParams{CustomerID: customer.ID, JobType: "Install"})
+	job, err := jobSvc.Create(ctx, companyID, JobCreateParams{CustomerID: customer.ID, JobType: "Install"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +42,7 @@ func TestCreationDefaultsUseCategoriesAfterLabelsAreRenamed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	next, err := jobSvc.CreateNextOccurrence(ctx, job.ID, time.Now().AddDate(0, 0, 7))
+	next, err := jobSvc.CreateNextOccurrence(ctx, companyID, job.ID, time.Now().AddDate(0, 0, 7))
 	if err != nil {
 		t.Fatal(err)
 	}

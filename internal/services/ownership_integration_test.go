@@ -49,7 +49,7 @@ func TestServicesRejectCrossCustomerLinksIntegration(t *testing.T) {
 		{
 			name: "job rejects foreign project",
 			run: func() error {
-				_, err := NewJobService(client).Create(ctx, JobCreateParams{
+				_, err := NewJobService(client).Create(ctx, 1, JobCreateParams{
 					CustomerID: data.customerB.ID,
 					ProjectID:  data.projectA.ID,
 					JobType:    "Bad Job",
@@ -61,7 +61,7 @@ func TestServicesRejectCrossCustomerLinksIntegration(t *testing.T) {
 		{
 			name: "job rejects foreign contact",
 			run: func() error {
-				_, err := NewJobService(client).Create(ctx, JobCreateParams{
+				_, err := NewJobService(client).Create(ctx, 1, JobCreateParams{
 					CustomerID:        data.customerB.ID,
 					CustomerContactID: data.contactA.ID,
 					JobType:           "Bad Job",
@@ -73,7 +73,7 @@ func TestServicesRejectCrossCustomerLinksIntegration(t *testing.T) {
 		{
 			name: "job rejects foreign asset",
 			run: func() error {
-				_, err := NewJobService(client).Create(ctx, JobCreateParams{
+				_, err := NewJobService(client).Create(ctx, 1, JobCreateParams{
 					CustomerID: data.customerB.ID,
 					AssetID:    data.assetA.ID,
 					JobType:    "Bad Job",
@@ -148,7 +148,7 @@ func TestServicesRejectCustomerChangeWithExistingForeignLinkIntegration(t *testi
 	if _, err := NewProjectService(client).Update(ctx, data.projectA.ID, ProjectUpdateParams{CustomerID: &newCustomerID}); err == nil || !strings.Contains(err.Error(), "location does not belong to customer") {
 		t.Fatalf("project customer change error = %v, want location ownership error", err)
 	}
-	if _, err := NewJobService(client).Update(ctx, data.jobA.ID, JobUpdateParams{CustomerID: &newCustomerID}); err == nil || !strings.Contains(err.Error(), "project does not belong to customer") {
+	if _, err := NewJobService(client).Update(ctx, 1, data.jobA.ID, JobUpdateParams{CustomerID: &newCustomerID}); err == nil || !strings.Contains(err.Error(), "project does not belong to customer") {
 		t.Fatalf("job customer change error = %v, want project ownership error", err)
 	}
 }
@@ -162,7 +162,7 @@ func TestServicesAllowUnchangedArchivedLinksIntegration(t *testing.T) {
 	client.Project.UpdateOneID(data.projectA.ID).SetDeletedAt(time.Now()).SaveX(ctx)
 
 	notes := "unchanged archived project link should not block notes edit"
-	if _, err := NewJobService(client).Update(ctx, data.jobA.ID, JobUpdateParams{Notes: &notes}); err != nil {
+	if _, err := NewJobService(client).Update(ctx, 1, data.jobA.ID, JobUpdateParams{Notes: &notes}); err != nil {
 		t.Fatalf("update with unchanged archived link: %v", err)
 	}
 }
@@ -175,7 +175,7 @@ func TestServicesClearOptionalLinkedIDsIntegration(t *testing.T) {
 	data := createOwnershipFixture(ctx, t, client)
 	zero := int64(0)
 
-	jobResult, err := NewJobService(client).Update(ctx, data.jobA.ID, JobUpdateParams{
+	jobResult, err := NewJobService(client).Update(ctx, 1, data.jobA.ID, JobUpdateParams{
 		ProjectID:         &zero,
 		LocationID:        &zero,
 		CustomerContactID: &zero,
@@ -256,14 +256,16 @@ type ownershipFixture struct {
 
 func createOwnershipFixture(ctx context.Context, t *testing.T, client *ent.Client) ownershipFixture {
 	t.Helper()
-	customerA := client.Customer.Create().SetDisplayName("Customer A").SaveX(ctx)
-	customerB := client.Customer.Create().SetDisplayName("Customer B").SaveX(ctx)
-	locationA := client.Location.Create().SetObjectType("customer").SetObjectID(customerA.ID).SetTitle("Customer A Location").SaveX(ctx)
+	const companyID int64 = 1
+	customerA := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Customer A").SaveX(ctx)
+	customerB := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Customer B").SaveX(ctx)
+	locationA := client.Location.Create().SetCompanyID(companyID).SetObjectType("customer").SetObjectID(customerA.ID).SetTitle("Customer A Location").SaveX(ctx)
 	assetType := client.AssetType.Create().SetName("Equipment").SaveX(ctx)
-	assetA := client.Asset.Create().SetCustomerID(customerA.ID).SetLocationID(locationA.ID).SetAssetTypeID(assetType.ID).SetName("Asset A").SaveX(ctx)
-	contactA := client.CustomerContact.Create().SetCustomerID(customerA.ID).SetFirstName("Contact A").SaveX(ctx)
-	projectA := client.Project.Create().SetCustomerID(customerA.ID).SetLocationID(locationA.ID).SetName("Project A").SaveX(ctx)
+	assetA := client.Asset.Create().SetCompanyID(companyID).SetCustomerID(customerA.ID).SetLocationID(locationA.ID).SetAssetTypeID(assetType.ID).SetName("Asset A").SaveX(ctx)
+	contactA := client.CustomerContact.Create().SetCompanyID(companyID).SetCustomerID(customerA.ID).SetFirstName("Contact A").SaveX(ctx)
+	projectA := client.Project.Create().SetCompanyID(companyID).SetCustomerID(customerA.ID).SetLocationID(locationA.ID).SetName("Project A").SaveX(ctx)
 	jobA := client.Job.Create().
+		SetCompanyID(companyID).
 		SetCustomerID(customerA.ID).
 		SetProjectID(projectA.ID).
 		SetLocationID(locationA.ID).

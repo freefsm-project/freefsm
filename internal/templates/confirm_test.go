@@ -39,7 +39,7 @@ func TestJobQuickCreateDialogsAreOutsideJobForm(t *testing.T) {
 	}
 	text := string(content)
 
-	formStart := strings.Index(text, `<form action={ templ.URL(jobFormAction(p.IsNew, p.Job.ID)) }`)
+	formStart := strings.Index(text, `<form action={ templ.URL(jobFormAction(p.Job.ID)) }`)
 	if formStart == -1 {
 		t.Fatal("job form start not found")
 	}

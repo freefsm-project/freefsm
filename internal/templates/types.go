@@ -401,7 +401,6 @@ type JobListPageData struct {
 type JobFormPageData struct {
 	Job                     *JobDetail
 	Errors                  map[string]string
-	IsNew                   bool
 	Customers               []SelectOption
 	Projects                []SelectOption
 	Locations               []SelectOption
@@ -666,8 +665,8 @@ type DeliveryHistoryRow struct {
 	CanRetry                                                                                                 bool
 }
 
-func jobFormTitle(isNew bool) string {
-	if isNew {
+func jobFormTitle(id int64) string {
+	if id == 0 {
 		return "New Job"
 	}
 	return "Edit Job"
@@ -770,11 +769,18 @@ func itemFormAction(isNew bool, id int64) string {
 	return fmt.Sprintf("/items/%d", id)
 }
 
-func jobFormAction(isNew bool, id int64) string {
-	if isNew {
+func jobFormAction(id int64) string {
+	if id == 0 {
 		return "/jobs"
 	}
 	return fmt.Sprintf("/jobs/%d", id)
+}
+
+func jobFormMode(id int64) string {
+	if id == 0 {
+		return "create"
+	}
+	return "edit"
 }
 
 func estimateFormAction(isNew bool, id int64) string {

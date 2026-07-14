@@ -36,6 +36,42 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{ActivityLogsColumns[7]},
 			},
+			{
+				Name:    "activitylog_company_id_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityLogsColumns[1], ActivityLogsColumns[7], ActivityLogsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						ActivityLogsColumns[7].Name: true,
+
+						ActivityLogsColumns[0].Name: true,
+					},
+				},
+			},
+			{
+				Name:    "activitylog_company_id_object_type_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityLogsColumns[1], ActivityLogsColumns[4], ActivityLogsColumns[7], ActivityLogsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						ActivityLogsColumns[7].Name: true,
+
+						ActivityLogsColumns[0].Name: true,
+					},
+				},
+			},
+			{
+				Name:    "activitylog_company_id_object_type_object_id_created_at_id",
+				Unique:  false,
+				Columns: []*schema.Column{ActivityLogsColumns[1], ActivityLogsColumns[4], ActivityLogsColumns[5], ActivityLogsColumns[7], ActivityLogsColumns[0]},
+				Annotation: &entsql.IndexAnnotation{
+					DescColumns: map[string]bool{
+						ActivityLogsColumns[7].Name: true,
+
+						ActivityLogsColumns[0].Name: true,
+					},
+				},
+			},
 		},
 	}
 	// AssetsColumns holds the columns for the "assets" table.

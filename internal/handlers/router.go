@@ -58,6 +58,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	tagLinkSvc := services.NewTagLinkService(entClient, objects)
 	commentSvc := services.NewCommentService(entClient, objects)
 	activitySvc := services.NewActivityService(entClient, objects)
+	activityResolver := services.NewActivityResolver(entClient)
 	depSvc := services.NewDependencyService(entClient)
 	policySvc := services.NewPolicyService(entClient, objects)
 	estimateService := services.NewEstimateService(entClient)
@@ -74,7 +75,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	// File service
 	fileSvc := services.NewFileService(entClient, objects, cfg.UploadDir, cfg.MaxUploadSize)
 	fileHandler := NewFileHandler(fileSvc, activitySvc, policySvc, objects)
-	activityHandler := NewActivityHandler(activitySvc, userService, policySvc, objects, conversionService)
+	activityHandler := NewActivityHandler(activitySvc, activityResolver, policySvc, conversionService)
 
 	customerHandler := NewCustomerHandler(customerService, contactSvc, locationSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc, jobService, estimateService, invoiceService, statusService, settlementService)
 	customerHandler.statusflow = statusflowService

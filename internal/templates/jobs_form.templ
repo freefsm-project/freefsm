@@ -3,10 +3,12 @@ package templates
 import "fmt"
 
 templ JobForm(p JobFormPageData) {
-	@Layout(jobFormTitle(p.IsNew)) {
+	@Layout(jobFormTitle(p.Job.ID)) {
 
-		<form action={ templ.URL(jobFormAction(p.IsNew, p.Job.ID)) } method="post" autocomplete="off" class="compact-form">
+		<form action={ templ.URL(jobFormAction(p.Job.ID)) } method="post" autocomplete="off" class="compact-form" hx-history="false">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="form_mode" value={ jobFormMode(p.Job.ID) }/>
+			<input type="hidden" name="job_id" value={ fmt.Sprintf("%d", p.Job.ID) }/>
 			<label>
 				Customer <small class="required-marker">*</small>
 				<select name="customer_id" id="job-customer-select" required>

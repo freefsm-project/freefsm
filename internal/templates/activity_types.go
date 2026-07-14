@@ -1,7 +1,6 @@
 package templates
 
 import (
-	"fmt"
 	"strings"
 )
 
@@ -41,16 +40,18 @@ type ActivityMetadata struct {
 }
 
 type ActivityWidgetData struct {
-	DOMID   string
-	Entries []ActivityEntry
+	DOMID      string
+	Entries    []ActivityEntry
+	HasMore    bool
+	ViewAllURL string
 }
 
 type ActivityPageData struct {
 	Entries    []ActivityEntry
-	Page       int
-	PerPage    int
-	Total      int
-	TotalPages int
+	HasMore    bool
+	ViewAllURL string
+	OlderURL   string
+	NewerURL   string
 }
 
 func activityVerb(action string) string {
@@ -213,12 +214,4 @@ func scheduleWindow(start, end string) string {
 		return start
 	}
 	return start + "-" + end
-}
-
-func sprintHTML(vals ...interface{}) string {
-	var sb strings.Builder
-	for _, v := range vals {
-		fmt.Fprint(&sb, v)
-	}
-	return sb.String()
 }

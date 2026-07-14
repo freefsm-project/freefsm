@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
@@ -34,6 +35,49 @@ func validateCustomerLocation(ctx context.Context, client *ent.Client, customerI
 
 var ErrInvalidDocumentStatus = fmt.Errorf("status must belong to the same company and document workflow")
 
+var ErrInvalidJobInput = errors.New("invalid job input")
+
+type JobInputError struct {
+	Cause error
+}
+
+func (e *JobInputError) Error() string {
+	if e == nil || e.Cause == nil {
+		return ErrInvalidJobInput.Error()
+	}
+	return fmt.Sprintf("%s: %v", ErrInvalidJobInput, e.Cause)
+}
+
+func (e *JobInputError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+func (e *JobInputError) Is(target error) bool {
+	return target == ErrInvalidJobInput
+}
+
+func invalidJobInput(message string) error {
+	return &JobInputError{Cause: errors.New(message)}
+}
+
+type StatusConfigurationError struct {
+	CompanyID  int64
+	ObjectType string
+	Category   string
+	Cause      error
+}
+
+func (e *StatusConfigurationError) Error() string {
+	return "status configuration unavailable"
+}
+
+func (e *StatusConfigurationError) Unwrap() error {
+	return e.Cause
+}
+
 func creationStatus(ctx context.Context, client *ent.Client, requested int64, companyID *int64, objectType, category string) (int64, error) {
 	if requested > 0 {
 		if err := validateDocumentStatus(ctx, client, requested, companyID, objectType); err != nil {
@@ -62,7 +106,11 @@ func creationStatus(ctx context.Context, client *ent.Client, requested int64, co
 	}
 	st, err := q.Only(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("resolve %s creation status for category %s: %w", objectType, category, err)
+		var id int64
+		if companyID != nil {
+			id = *companyID
+		}
+		return 0, &StatusConfigurationError{CompanyID: id, ObjectType: objectType, Category: category, Cause: err}
 	}
 	return st.ID, nil
 }
@@ -190,18 +238,48 @@ func validateEstimateCustomer(ctx context.Context, client *ent.Client, customerI
 	return nil
 }
 
-func validateJobCustomerLinks(ctx context.Context, client *ent.Client, customerID, projectID, locationID, contactID, assetID int64) error {
-	if err := validateProjectCustomer(ctx, client, customerID, projectID, true); err != nil {
-		return err
+func validateJobCustomerLinks(ctx context.Context, client *ent.Client, companyID, customerID, projectID, locationID, contactID, assetID int64) error {
+	checks := []struct {
+		name   string
+		id     int64
+		exists func() (bool, error)
+	}{
+		{
+			name: "project", id: projectID,
+			exists: func() (bool, error) {
+				return client.Project.Query().Where(project.IDEQ(projectID), project.CompanyIDEQ(companyID), project.CustomerIDEQ(customerID), project.DeletedAtIsNil()).Exist(ctx)
+			},
+		},
+		{
+			name: "location", id: locationID,
+			exists: func() (bool, error) {
+				return client.Location.Query().Where(location.IDEQ(locationID), location.CompanyIDEQ(companyID), location.ObjectTypeEQ("customer"), location.ObjectIDEQ(customerID)).Exist(ctx)
+			},
+		},
+		{
+			name: "contact", id: contactID,
+			exists: func() (bool, error) {
+				return client.CustomerContact.Query().Where(customercontact.IDEQ(contactID), customercontact.CompanyIDEQ(companyID), customercontact.CustomerIDEQ(customerID)).Exist(ctx)
+			},
+		},
+		{
+			name: "asset", id: assetID,
+			exists: func() (bool, error) {
+				return client.Asset.Query().Where(asset.IDEQ(assetID), asset.CompanyIDEQ(companyID), asset.CustomerID(customerID), asset.DeletedAtIsNil()).Exist(ctx)
+			},
+		},
 	}
-	if err := validateCustomerLocation(ctx, client, customerID, locationID); err != nil {
-		return err
-	}
-	if err := validateContactCustomer(ctx, client, customerID, contactID); err != nil {
-		return err
-	}
-	if err := validateAssetCustomer(ctx, client, customerID, assetID, true); err != nil {
-		return err
+	for _, check := range checks {
+		if check.id <= 0 {
+			continue
+		}
+		exists, err := check.exists()
+		if err != nil {
+			return fmt.Errorf("validate %s customer and company: %w", check.name, err)
+		}
+		if !exists {
+			return invalidJobInput(fmt.Sprintf("%s does not belong to customer and company", check.name))
+		}
 	}
 	return nil
 }

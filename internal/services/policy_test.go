@@ -68,3 +68,14 @@ func TestPolicyServiceWithoutDirectoryFailsClosed(t *testing.T) {
 		t.Fatal("CanAccessObject() = true without directory, want false")
 	}
 }
+
+func TestPolicyRoleAllowsTechnicianAliases(t *testing.T) {
+	for _, role := range []string{"tech", "technician"} {
+		if !policyRoleAllows(role, objectref.TypeJob, PolicyRead) {
+			t.Fatalf("policyRoleAllows(%q, job, read) = false", role)
+		}
+		if policyRoleAllows(role, objectref.TypeJob, PolicyDelete) {
+			t.Fatalf("policyRoleAllows(%q, job, delete) = true", role)
+		}
+	}
+}

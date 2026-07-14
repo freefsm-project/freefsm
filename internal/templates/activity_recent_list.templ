@@ -65,16 +65,8 @@ templ ActivityRecentList(p ActivityPageData) {
 				</div>
 			}
 		</div>
-		if p.TotalPages > 1 {
-			<div class="activity-pagination">
-				if p.Page > 1 {
-					<a href={ "?page=" + sprintHTML(p.Page-1) } role="button" class="outline activity-pagination-button">Previous</a>
-				}
-				<small class="activity-pagination-status">Page { sprintHTML(p.Page) } of { sprintHTML(p.TotalPages) }</small>
-				if p.Page < p.TotalPages {
-					<a href={ "?page=" + sprintHTML(p.Page+1) } role="button" class="outline activity-pagination-button">Next</a>
-				}
-			</div>
+		if p.HasMore && p.ViewAllURL != "" {
+			<footer class="activity-footer"><a href={ templ.URL(p.ViewAllURL) }>View all activity</a></footer>
 		}
 	}
 }

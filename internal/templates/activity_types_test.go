@@ -128,3 +128,24 @@ func TestActivityRenderersShowAbsoluteTimestamp(t *testing.T) {
 		})
 	}
 }
+
+func TestActivityNavigationHasNoTotalsOrPageNumbers(t *testing.T) {
+	var output bytes.Buffer
+	component := ActivityIndex(ActivityPageData{
+		Entries:  []ActivityEntry{{ActorName: "Alex", Action: "updated", EntityName: "Customer"}},
+		NewerURL: "/activity?cursor=newer&type=customer",
+		OlderURL: "/activity?cursor=older&type=customer",
+	})
+	if err := component.Render(context.Background(), &output); err != nil {
+		t.Fatal(err)
+	}
+	html := output.String()
+	for _, unwanted := range []string{"Page 1", "entries)", "activity-pagination", "?page="} {
+		if strings.Contains(html, unwanted) {
+			t.Fatalf("activity index contains legacy pagination %q: %s", unwanted, html)
+		}
+	}
+	if !strings.Contains(html, "Newer") || !strings.Contains(html, "Older") || !strings.Contains(html, "type=customer") {
+		t.Fatalf("cursor navigation missing preserved filters: %s", html)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/google/uuid"
@@ -91,7 +92,7 @@ func (s *Service) ConversionEligibility(ctx context.Context, actor Actor, estima
 		return Eligibility{}, err
 	}
 	defer tx.Rollback(ctx)
-	if err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
+	if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
 		return Eligibility{}, err
 	}
 	e := Eligibility{Allowed: deletedAt == nil && hiddenAt == nil}
@@ -122,7 +123,7 @@ func (s *Service) RevertEligibility(ctx context.Context, actor Actor, invoiceID 
 		return Eligibility{}, err
 	}
 	defer tx.Rollback(ctx)
-	if err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
+	if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
 		return Eligibility{}, err
 	}
 	b, err := settlement.RevertBlockers(ctx, tx, actor.CompanyID, invoiceID)
@@ -140,6 +141,36 @@ func (s *Service) RevertEligibility(ctx context.Context, actor Actor, invoiceID 
 	return e, nil
 }
 
+// ActivityEstimateID resolves and authorizes the root estimate for a conversion activity request.
+func (s *Service) ActivityEstimateID(ctx context.Context, actor Actor, document objectref.Ref) (int64, error) {
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	var estimateID int64
+	var jobID *int64
+	switch document.Type {
+	case objectref.TypeEstimate:
+		err = tx.QueryRow(ctx, `SELECT id,job_id FROM estimates WHERE company_id=$1 AND id=$2`, actor.CompanyID, document.ID).Scan(&estimateID, &jobID)
+	case objectref.TypeInvoice:
+		err = tx.QueryRow(ctx, `SELECT c.estimate_id,i.job_id FROM estimate_invoice_conversion_cycles c JOIN invoices i ON i.id=c.invoice_id AND i.company_id=c.company_id WHERE c.company_id=$1 AND c.invoice_id=$2`, actor.CompanyID, document.ID).Scan(&estimateID, &jobID)
+	default:
+		return 0, ErrNotFound
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, err
+	}
+	if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
+		return 0, err
+	}
+	return estimateID, nil
+}
+
 // Timeline preserves original activity targets and assembles all documents in the estimate's conversion history.
 func (s *Service) Timeline(ctx context.Context, actor Actor, estimateID int64) ([]TimelineEntry, error) {
 	var jobID *int64
@@ -151,7 +182,7 @@ func (s *Service) Timeline(ctx context.Context, actor Actor, estimateID int64) (
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
-	if err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
+	if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
 		return nil, err
 	}
 	rows, err := tx.Query(ctx, `SELECT a.id,a.object_type,a.object_id,a.action,a.actor_id,a.metadata,a.created_at FROM activity_logs a WHERE a.company_id=$1 AND ((a.object_type='estimate' AND a.object_id=$2) OR (a.object_type='invoice' AND a.object_id IN (SELECT invoice_id FROM estimate_invoice_conversion_cycles WHERE company_id=$1 AND estimate_id=$2))) ORDER BY a.created_at,a.id`, actor.CompanyID, estimateID)
@@ -171,7 +202,7 @@ func (s *Service) Timeline(ctx context.Context, actor Actor, estimateID int64) (
 }
 
 func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) (Result, error) {
-	return s.transact(ctx, actor, "convert", req.Operation, req, func(tx pgx.Tx) (Result, error) {
+	return s.transact(ctx, actor, "convert", req.Operation, req, func(tx pgx.Tx, actorName string) (Result, error) {
 		var customerID int64
 		var jobID *int64
 		var title, notes, taxRate string
@@ -190,7 +221,7 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 		if hiddenAt != nil {
 			return Result{}, ErrNotFound
 		}
-		if err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
+		if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
 			return Result{}, err
 		}
 		items, err := services.DecodeLineItems(string(lineItems))
@@ -240,7 +271,7 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 		if err = transferRelations(ctx, tx, actor.CompanyID, "estimate", req.EstimateID, "invoice", invoiceID); err != nil {
 			return Result{}, err
 		}
-		if err = logActivity(ctx, tx, actor, "estimate", req.EstimateID, "estimate_converted", cycleID, invoiceID); err != nil {
+		if err = logActivity(ctx, tx, actor, actorName, title, "estimate", req.EstimateID, "estimate_converted", cycleID, invoiceID); err != nil {
 			return Result{}, err
 		}
 		return Result{CycleID: cycleID, EstimateID: req.EstimateID, InvoiceID: invoiceID, InvoiceNumber: number, SourceCustomFields: customFields, InvoiceCustomFields: invoiceCustom}, nil
@@ -248,7 +279,7 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 }
 
 func (s *Service) Revert(ctx context.Context, actor Actor, req RevertRequest) (Result, error) {
-	return s.transact(ctx, actor, "revert", req.Operation, req, func(tx pgx.Tx) (Result, error) {
+	return s.transact(ctx, actor, "revert", req.Operation, req, func(tx pgx.Tx, actorName string) (Result, error) {
 		var r Result
 		var jobID *int64
 		var deletedAt, hiddenAt *time.Time
@@ -268,7 +299,7 @@ func (s *Service) Revert(ctx context.Context, actor Actor, req RevertRequest) (R
 		if hiddenAt != nil {
 			return Result{}, ErrNotFound
 		}
-		if err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
+		if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
 			return Result{}, err
 		}
 		blockers, err := settlement.RevertBlockers(ctx, tx, actor.CompanyID, r.InvoiceID)
@@ -305,7 +336,7 @@ func (s *Service) Revert(ctx context.Context, actor Actor, req RevertRequest) (R
 		if err = transferRelations(ctx, tx, actor.CompanyID, "invoice", r.InvoiceID, "estimate", r.EstimateID); err != nil {
 			return Result{}, err
 		}
-		if err = logActivity(ctx, tx, actor, "invoice", r.InvoiceID, "invoice_conversion_reverted", r.CycleID, r.EstimateID); err != nil {
+		if err = logActivity(ctx, tx, actor, actorName, title, "invoice", r.InvoiceID, "invoice_conversion_reverted", r.CycleID, r.EstimateID); err != nil {
 			return Result{}, err
 		}
 		r.Reverted = true
@@ -315,32 +346,37 @@ func (s *Service) Revert(ctx context.Context, actor Actor, req RevertRequest) (R
 	})
 }
 
-func authorizeDocument(ctx context.Context, tx pgx.Tx, a Actor, jobID *int64) error {
+func authorizeDocument(ctx context.Context, tx pgx.Tx, a Actor, jobID *int64) (string, error) {
 	if a.ID <= 0 || a.CompanyID <= 0 {
-		return ErrForbidden
+		return "", ErrForbidden
 	}
-	var role string
-	if err := tx.QueryRow(ctx, `SELECT role FROM users WHERE id=$1 AND company_id=$2`, a.ID, a.CompanyID).Scan(&role); err != nil {
-		return ErrForbidden
+	var role, name string
+	if err := tx.QueryRow(ctx, `SELECT role,name FROM users WHERE id=$1 AND company_id=$2`, a.ID, a.CompanyID).Scan(&role, &name); errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrForbidden
+	} else if err != nil {
+		return "", err
 	}
 	if role != a.Role {
-		return ErrForbidden
+		return "", ErrForbidden
 	}
 	if role == "admin" || role == "dispatcher" {
-		return nil
+		return name, nil
 	}
 	if role != "tech" && role != "technician" || jobID == nil {
-		return ErrForbidden
+		return "", ErrForbidden
 	}
 	var ok bool
 	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM job_assignments a JOIN jobs j ON j.id=a.job_id WHERE a.job_id=$1 AND a.user_id=$2 AND j.company_id=$3 AND j.deleted_at IS NULL)`, *jobID, a.ID, a.CompanyID).Scan(&ok)
-	if err != nil || !ok {
-		return ErrForbidden
+	if err != nil {
+		return "", err
 	}
-	return nil
+	if !ok {
+		return "", ErrForbidden
+	}
+	return name, nil
 }
 
-func authorizeRequest(ctx context.Context, tx pgx.Tx, actor Actor, request any) error {
+func authorizeRequest(ctx context.Context, tx pgx.Tx, actor Actor, request any) (string, error) {
 	var jobID *int64
 	var err error
 	switch req := request.(type) {
@@ -349,13 +385,13 @@ func authorizeRequest(ctx context.Context, tx pgx.Tx, actor Actor, request any) 
 	case RevertRequest:
 		err = tx.QueryRow(ctx, `SELECT job_id FROM invoices WHERE company_id=$1 AND id=$2`, actor.CompanyID, req.InvoiceID).Scan(&jobID)
 	default:
-		return ErrForbidden
+		return "", ErrForbidden
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
+		return "", ErrNotFound
 	}
 	if err != nil {
-		return err
+		return "", err
 	}
 	return authorizeDocument(ctx, tx, actor, jobID)
 }
@@ -465,18 +501,18 @@ func transferRelations(ctx context.Context, tx pgx.Tx, companyID int64, from str
 	}
 	return nil
 }
-func logActivity(ctx context.Context, tx pgx.Tx, a Actor, typ string, id int64, action string, cycle uuid.UUID, other int64) error {
+func logActivity(ctx context.Context, tx pgx.Tx, a Actor, actorName, entityName, typ string, id int64, action string, cycle uuid.UUID, other int64) error {
 	direction := "estimate_to_invoice"
 	estimateID, invoiceID := id, other
 	if typ == "invoice" {
 		direction = "invoice_to_estimate"
 		estimateID, invoiceID = other, id
 	}
-	metadata, _ := json.Marshal(map[string]any{"conversion_cycle_id": cycle, "estimate_id": estimateID, "invoice_id": invoiceID, "direction": direction})
+	metadata, _ := json.Marshal(map[string]any{"conversion_cycle_id": cycle, "estimate_id": estimateID, "invoice_id": invoiceID, "direction": direction, "actor_name": actorName, "entity_name": entityName})
 	_, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,$3,$4,$5,$6)`, a.CompanyID, a.ID, action, typ, id, metadata)
 	return err
 }
-func (s *Service) transact(ctx context.Context, a Actor, kind string, op Operation, request any, fn func(pgx.Tx) (Result, error)) (Result, error) {
+func (s *Service) transact(ctx context.Context, a Actor, kind string, op Operation, request any, fn func(pgx.Tx, string) (Result, error)) (Result, error) {
 	if op.Key == uuid.Nil {
 		return Result{}, errors.New("idempotency UUID is required")
 	}
@@ -502,13 +538,14 @@ func (s *Service) transact(ctx context.Context, a Actor, kind string, op Operati
 	return Result{}, ErrTransactionConflict
 }
 
-func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Operation, request any, fingerprint string, fn func(pgx.Tx) (Result, error)) (Result, error) {
+func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Operation, request any, fingerprint string, fn func(pgx.Tx, string) (Result, error)) (Result, error) {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 	if err != nil {
 		return Result{}, err
 	}
 	defer tx.Rollback(ctx)
-	if err = authorizeRequest(ctx, tx, a, request); err != nil {
+	actorName, err := authorizeRequest(ctx, tx, a, request)
+	if err != nil {
 		return Result{}, err
 	}
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, fmt.Sprintf("%d:%s:%s", a.CompanyID, kind, op.Key)); err != nil {
@@ -534,7 +571,7 @@ func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Ope
 	if _, err = tx.Exec(ctx, `INSERT INTO estimate_invoice_conversion_operations(company_id,operation,idempotency_key,actor_id,request_fingerprint) VALUES($1,$2,$3,$4,$5)`, a.CompanyID, kind, op.Key, a.ID, fingerprint); err != nil {
 		return Result{}, err
 	}
-	r, err := fn(tx)
+	r, err := fn(tx, actorName)
 	if err != nil {
 		return Result{}, err
 	}

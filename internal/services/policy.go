@@ -38,26 +38,10 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role 
 	if action == PolicyAttachFile && !s.objects.Supports(ref.Type, objectref.CapFiles) {
 		return false
 	}
-	if role == "admin" {
-		return s.targetExists(ctx, ref, action)
+	if role == "admin" || role == "dispatcher" {
+		return policyRoleAllows(role, ref.Type, action) && s.targetExists(ctx, ref, action)
 	}
-	if role == "dispatcher" {
-		switch ref.Type {
-		case objectref.TypeCustomer, objectref.TypeJob, objectref.TypeProject, objectref.TypeEstimate,
-			objectref.TypeInvoice, objectref.TypeAsset, objectref.TypeItem, objectref.TypeTimeEntry:
-			return s.targetExists(ctx, ref, action)
-		default:
-			return false
-		}
-	}
-	if role != "tech" {
-		return false
-	}
-	switch action {
-	case PolicyRead, PolicyCreate, PolicyUpdate, PolicyAttachFile:
-	case PolicyDelete:
-		return false
-	default:
+	if !policyRoleAllows(role, ref.Type, action) {
 		return false
 	}
 	if !s.targetExists(ctx, ref, action) || s.client == nil {
@@ -84,6 +68,37 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role 
 	default:
 		return false
 	}
+}
+
+func policyRoleAllows(role string, typ objectref.Type, action PolicyAction) bool {
+	if !validPolicyAction(action) {
+		return false
+	}
+	switch role {
+	case "admin":
+		return true
+	case "dispatcher":
+		switch typ {
+		case objectref.TypeCustomer, objectref.TypeJob, objectref.TypeProject, objectref.TypeEstimate,
+			objectref.TypeInvoice, objectref.TypeAsset, objectref.TypeItem, objectref.TypeTimeEntry:
+			return true
+		default:
+			return false
+		}
+	case "tech", "technician":
+		switch action {
+		case PolicyRead, PolicyCreate, PolicyUpdate, PolicyAttachFile:
+			return true
+		default:
+			return false
+		}
+	default:
+		return false
+	}
+}
+
+func isTechnicianRole(role string) bool {
+	return role == "tech" || role == "technician"
 }
 
 func validPolicyAction(action PolicyAction) bool {
@@ -123,7 +138,7 @@ func (s *PolicyService) CanCreateDocumentForJob(ctx context.Context, userID int6
 	if role == "admin" || role == "dispatcher" {
 		return true
 	}
-	return (role == "tech" || role == "technician") && s.IsUserAssignedToJob(ctx, jobID, userID)
+	return isTechnicianRole(role) && s.IsUserAssignedToJob(ctx, jobID, userID)
 }
 
 func (s *PolicyService) canAccessCustomer(ctx context.Context, customerID, userID int64) bool {

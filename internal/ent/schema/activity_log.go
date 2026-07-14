@@ -37,5 +37,11 @@ func (ActivityLog) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("object_type", "object_id"),
 		index.Fields("created_at"),
+		index.Fields("company_id", "created_at", "id").
+			Annotations(entsql.DescColumns("created_at", "id")),
+		index.Fields("company_id", "object_type", "created_at", "id").
+			Annotations(entsql.DescColumns("created_at", "id")),
+		index.Fields("company_id", "object_type", "object_id", "created_at", "id").
+			Annotations(entsql.DescColumns("created_at", "id")),
 	}
 }

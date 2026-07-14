@@ -66,6 +66,9 @@ templ ActivityWidget(p ActivityWidgetData) {
 					</div>
 				}
 			</div>
+			if p.HasMore && p.ViewAllURL != "" {
+				<footer class="activity-footer"><a href={ templ.URL(p.ViewAllURL) }>View all activity</a></footer>
+			}
 		}
 	</div>
 }

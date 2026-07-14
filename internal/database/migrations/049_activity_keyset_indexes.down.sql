@@ -1,0 +1,3 @@
+DROP INDEX activity_logs_company_object_created_id_idx;
+DROP INDEX activity_logs_company_type_created_id_idx;
+DROP INDEX activity_logs_company_created_id_idx;

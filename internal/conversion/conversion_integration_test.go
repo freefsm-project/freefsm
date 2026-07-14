@@ -13,6 +13,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/database"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -116,6 +117,156 @@ func TestConvertRevertAndReconvertIntegration(t *testing.T) {
 	}
 	if len(timeline) < 3 {
 		t.Fatalf("combined timeline entries=%d", len(timeline))
+	}
+}
+
+func TestActivityEstimateIDResolvesConversionRootIntegration(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	svc := conversion.New(f.db.Pool)
+	admin := conversion.Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
+	var estimateID int64
+	if err := f.db.Pool.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,job_id,status_id,title,line_items) VALUES($1,$2,$3,$4,'History','[]') RETURNING id`, f.company, f.customer, f.job, f.estimateAccepted).Scan(&estimateID); err != nil {
+		t.Fatal(err)
+	}
+	first, err := svc.Convert(ctx, admin, conversion.ConvertRequest{Operation: conversion.Operation{Key: uuid.New()}, EstimateID: estimateID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.Revert(ctx, admin, conversion.RevertRequest{Operation: conversion.Operation{Key: uuid.New()}, InvoiceID: first.InvoiceID}); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := f.db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.status_transition','allowed',true)`); err == nil {
+		_, err = tx.Exec(ctx, `UPDATE estimates SET status_id=$1 WHERE id=$2`, f.estimateAccepted, estimateID)
+	}
+	if err == nil {
+		err = tx.Commit(ctx)
+	} else {
+		_ = tx.Rollback(ctx)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := svc.Convert(ctx, admin, conversion.ConvertRequest{Operation: conversion.Operation{Key: uuid.New()}, EstimateID: estimateID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inputs := []objectref.Ref{
+		objectref.New(objectref.TypeEstimate, estimateID),
+		objectref.New(objectref.TypeInvoice, first.InvoiceID),
+		objectref.New(objectref.TypeInvoice, second.InvoiceID),
+	}
+	for _, input := range inputs {
+		got, err := svc.ActivityEstimateID(ctx, admin, input)
+		if err != nil {
+			t.Fatalf("ActivityEstimateID(%v): %v", input, err)
+		}
+		if got != estimateID {
+			t.Fatalf("ActivityEstimateID(%v) = %d, want %d", input, got, estimateID)
+		}
+	}
+
+	paymentID := uuid.New()
+	if _, err = f.db.Pool.Exec(ctx, `INSERT INTO invoice_payments(id,company_id,customer_id,invoice_id,amount_cents,method,received_date,actor_id) VALUES($1,$2,$3,$4,1,'cash',CURRENT_DATE,$5)`, paymentID, f.company, f.customer, second.InvoiceID, f.admin); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.db.Pool.Exec(ctx, `INSERT INTO payment_invoice_allocations(payment_id,invoice_id,amount_cents) VALUES($1,$2,1)`, paymentID, second.InvoiceID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := svc.ActivityEstimateID(ctx, admin, inputs[2]); err != nil || got != estimateID {
+		t.Fatalf("activity root consulted settlement eligibility: id=%d err=%v", got, err)
+	}
+}
+
+func TestActivityEstimateIDTenantAndAuthorizationIntegration(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	svc := conversion.New(f.db.Pool)
+	admin := conversion.Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
+	tech := conversion.Actor{ID: f.tech, CompanyID: f.company, Role: "tech"}
+	var estimateID int64
+	if err := f.db.Pool.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,job_id,status_id,title,line_items) VALUES($1,$2,$3,$4,'Authorized history','[]') RETURNING id`, f.company, f.customer, f.job, f.estimateAccepted).Scan(&estimateID); err != nil {
+		t.Fatal(err)
+	}
+	r, err := svc.Convert(ctx, admin, conversion.ConvertRequest{Operation: conversion.Operation{Key: uuid.New()}, EstimateID: estimateID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	invoiceRef := objectref.New(objectref.TypeInvoice, r.InvoiceID)
+	if _, err = svc.ActivityEstimateID(ctx, tech, invoiceRef); !errors.Is(err, conversion.ErrForbidden) {
+		t.Fatalf("unassigned technician error = %v", err)
+	}
+	if _, err = f.db.Pool.Exec(ctx, `INSERT INTO job_assignments(job_id,user_id) VALUES($1,$2)`, f.job, f.tech); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := svc.ActivityEstimateID(ctx, tech, invoiceRef); err != nil || got != estimateID {
+		t.Fatalf("assigned technician: id=%d err=%v", got, err)
+	}
+	if _, err = svc.ActivityEstimateID(ctx, conversion.Actor{ID: f.tech, CompanyID: f.company, Role: "admin"}, invoiceRef); !errors.Is(err, conversion.ErrForbidden) {
+		t.Fatalf("spoofed role error = %v", err)
+	}
+
+	var otherCompany, otherAdmin int64
+	if err = f.db.Pool.QueryRow(ctx, `INSERT INTO companies(name,slug) VALUES('Other history','other-history') RETURNING id`).Scan(&otherCompany); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.db.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'other-history@example.test','x','Other Admin','admin') RETURNING id`, otherCompany).Scan(&otherAdmin); err != nil {
+		t.Fatal(err)
+	}
+	otherActor := conversion.Actor{ID: otherAdmin, CompanyID: otherCompany, Role: "admin"}
+	if _, err = svc.ActivityEstimateID(ctx, otherActor, invoiceRef); !errors.Is(err, conversion.ErrNotFound) {
+		t.Fatalf("cross-tenant invoice error = %v", err)
+	}
+	if _, err = svc.ActivityEstimateID(ctx, admin, objectref.New(objectref.TypeInvoice, r.InvoiceID+1000000)); !errors.Is(err, conversion.ErrNotFound) {
+		t.Fatalf("unknown invoice error = %v", err)
+	}
+	if _, err = svc.ActivityEstimateID(ctx, admin, objectref.New(objectref.TypeJob, f.job)); !errors.Is(err, conversion.ErrNotFound) {
+		t.Fatalf("unsupported document error = %v", err)
+	}
+
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err = svc.ActivityEstimateID(canceled, admin, invoiceRef); !errors.Is(err, context.Canceled) || errors.Is(err, conversion.ErrNotFound) || errors.Is(err, conversion.ErrForbidden) {
+		t.Fatalf("infrastructure error mapping = %v", err)
+	}
+}
+
+func TestConversionActivitySnapshotsNamesIntegration(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	svc := conversion.New(f.db.Pool)
+	admin := conversion.Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
+	var estimateID int64
+	if err := f.db.Pool.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,job_id,status_id,title,line_items) VALUES($1,$2,$3,$4,'Snapshot title','[]') RETURNING id`, f.company, f.customer, f.job, f.estimateAccepted).Scan(&estimateID); err != nil {
+		t.Fatal(err)
+	}
+	r, err := svc.Convert(ctx, admin, conversion.ConvertRequest{Operation: conversion.Operation{Key: uuid.New()}, EstimateID: estimateID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var metadata string
+	if err := f.db.Pool.QueryRow(ctx, `SELECT metadata::text FROM activity_logs WHERE company_id=$1 AND object_type='estimate' AND object_id=$2 AND action='estimate_converted' ORDER BY id DESC LIMIT 1`, f.company, estimateID).Scan(&metadata); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(metadata, `"actor_name": "Admin"`) || !strings.Contains(metadata, `"entity_name": "Snapshot title"`) {
+		t.Fatalf("conversion metadata = %s", metadata)
+	}
+	if _, err = f.db.Pool.Exec(ctx, `UPDATE invoices SET title='Revert snapshot' WHERE id=$1`, r.InvoiceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = svc.Revert(ctx, admin, conversion.RevertRequest{Operation: conversion.Operation{Key: uuid.New()}, InvoiceID: r.InvoiceID}); err != nil {
+		t.Fatal(err)
+	}
+	if err = f.db.Pool.QueryRow(ctx, `SELECT metadata::text FROM activity_logs WHERE company_id=$1 AND object_type='invoice' AND object_id=$2 AND action='invoice_conversion_reverted' ORDER BY id DESC LIMIT 1`, f.company, r.InvoiceID).Scan(&metadata); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(metadata, `"actor_name": "Admin"`) || !strings.Contains(metadata, `"entity_name": "Revert snapshot"`) {
+		t.Fatalf("revert metadata = %s", metadata)
 	}
 }
 
