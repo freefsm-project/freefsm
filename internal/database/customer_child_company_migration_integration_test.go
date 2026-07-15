@@ -40,6 +40,11 @@ func TestCustomerChildCompanyMigration050BackfillsNullOwnershipIntegration(t *te
 	if otherCompanyID != nil {
 		t.Fatalf("non-customer location company_id = %v, want NULL", *otherCompanyID)
 	}
+	var applied bool
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name='050_customer_child_company_backfill')`), &applied)
+	if !applied {
+		t.Fatal("migration 050 was not recorded as applied")
+	}
 
 	down, err := fs.ReadFile(MigrationFS(), "050_customer_child_company_backfill.down.sql")
 	if err != nil {
@@ -55,29 +60,49 @@ func TestCustomerChildCompanyMigration050BackfillsNullOwnershipIntegration(t *te
 	}
 }
 
-func TestCustomerChildCompanyMigration050PreflightRollsBackIntegration(t *testing.T) {
+func TestCustomerChildCompanyMigration050LeavesAmbiguousOwnershipForAuditIntegration(t *testing.T) {
 	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("set FREEFSM_TEST_DATABASE_URL")
 	}
 	db, ctx := customerChildMigrationDatabaseThrough049(t, dsn)
-	companyID, customerID, _ := seedCustomerChildMigrationParents(t, ctx, db, "rollback")
-	_, otherCustomerID, _ := seedCustomerChildMigrationParents(t, ctx, db, "other")
+	companyID, customerID, _ := seedCustomerChildMigrationParents(t, ctx, db, "owned")
+	_, otherCustomerID, _ := seedCustomerChildMigrationParents(t, ctx, db, "mismatch")
 	var legacyProjectID int64
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO projects(customer_id,name) VALUES($1,'Legacy project') RETURNING id`, customerID), &legacyProjectID)
-	if _, err := db.Pool.Exec(ctx, `INSERT INTO customer_contacts(company_id,customer_id,first_name) VALUES($1,$2,'Mismatch')`, companyID, otherCustomerID); err != nil {
-		t.Fatal(err)
-	}
+	var mismatchedContactID int64
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO customer_contacts(company_id,customer_id,first_name) VALUES($1,$2,'Mismatch') RETURNING id`, companyID, otherCustomerID), &mismatchedContactID)
+	var unownedCustomerID int64
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO customers(display_name) VALUES('Unowned customer') RETURNING id`), &unownedCustomerID)
+	var unownedContactID int64
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO customer_contacts(customer_id,first_name) VALUES($1,'Unowned parent') RETURNING id`, unownedCustomerID), &unownedContactID)
+	var missingParentLocationID int64
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO locations(object_type,object_id,title) VALUES('customer',9223372036854775807,'Missing parent') RETURNING id`), &missingParentLocationID)
 
-	if err := db.Migrate(ctx, MigrationFS()); err == nil {
-		t.Fatal("migration accepted explicit child-parent company mismatch")
+	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+		t.Fatalf("migrate 050 with ambiguous legacy ownership: %v", err)
 	}
-	var projectCompanyID *int64
+	var projectCompanyID, mismatchedCompanyID, unownedCompanyID, missingParentCompanyID *int64
 	var applied bool
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT company_id FROM projects WHERE id=$1`, legacyProjectID), &projectCompanyID)
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT company_id FROM customer_contacts WHERE id=$1`, mismatchedContactID), &mismatchedCompanyID)
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT company_id FROM customer_contacts WHERE id=$1`, unownedContactID), &unownedCompanyID)
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT company_id FROM locations WHERE id=$1`, missingParentLocationID), &missingParentCompanyID)
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name='050_customer_child_company_backfill')`), &applied)
-	if projectCompanyID != nil || applied {
-		t.Fatalf("rollback failed: project company=%v applied=%v", projectCompanyID, applied)
+	if projectCompanyID == nil || *projectCompanyID != companyID {
+		t.Errorf("owned project company_id = %v, want %d", projectCompanyID, companyID)
+	}
+	if mismatchedCompanyID == nil || *mismatchedCompanyID != companyID {
+		t.Errorf("explicit mismatch company_id = %v, want unchanged %d", mismatchedCompanyID, companyID)
+	}
+	if unownedCompanyID != nil {
+		t.Errorf("unowned-parent contact company_id = %v, want NULL", *unownedCompanyID)
+	}
+	if missingParentCompanyID != nil {
+		t.Errorf("missing-parent location company_id = %v, want NULL", *missingParentCompanyID)
+	}
+	if !applied {
+		t.Error("migration 050 was not recorded as applied")
 	}
 }
 
