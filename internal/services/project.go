@@ -84,20 +84,21 @@ type ProjectCreateParams struct {
 	CustomFields         string
 }
 
-func (s *ProjectService) Create(ctx context.Context, params ProjectCreateParams) (*ent.Project, error) {
-	if err := validateCustomerLocation(ctx, s.client, params.CustomerID, params.LocationID); err != nil {
+func (s *ProjectService) Create(ctx context.Context, companyID int64, params ProjectCreateParams) (*ent.Project, error) {
+	projectCustomer, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, params.CustomerID)
+	if err != nil {
 		return nil, err
 	}
-	customer, err := s.client.Customer.Get(ctx, params.CustomerID)
-	if err != nil {
-		return nil, fmt.Errorf("get project customer: %w", err)
+	if err := validateCustomerLocationForCompany(ctx, s.client, companyID, params.CustomerID, params.LocationID); err != nil {
+		return nil, err
 	}
-	statusID, err := creationStatus(ctx, s.client, 0, customer.CompanyID, "project", "project:new")
+	statusID, err := creationStatus(ctx, s.client, 0, projectCustomer.CompanyID, "project", "project:new")
 	if err != nil {
 		return nil, err
 	}
 
 	b := s.client.Project.Create().
+		SetCompanyID(companyID).
 		SetCustomerID(params.CustomerID).
 		SetName(params.Name).
 		SetDescription(params.Description).
@@ -135,9 +136,15 @@ type ProjectUpdateParams struct {
 	CustomFields         *string
 }
 
-func (s *ProjectService) Update(ctx context.Context, id int64, params ProjectUpdateParams) (*ent.Project, error) {
+func (s *ProjectService) Update(ctx context.Context, companyID, id int64, params ProjectUpdateParams) (*ent.Project, error) {
 	current, err := s.GetByID(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if current.CompanyID != nil && *current.CompanyID != companyID {
+		return nil, fmt.Errorf("project does not belong to company")
+	}
+	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, current.CustomerID); err != nil {
 		return nil, err
 	}
 	customerID := current.CustomerID
@@ -148,11 +155,14 @@ func (s *ProjectService) Update(ctx context.Context, id int64, params ProjectUpd
 	if params.LocationID != nil {
 		locationID = *params.LocationID
 	}
-	if err := validateCustomerLocation(ctx, s.client, customerID, locationID); err != nil {
+	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, customerID); err != nil {
+		return nil, err
+	}
+	if err := validateCustomerLocationForCompany(ctx, s.client, companyID, customerID, locationID); err != nil {
 		return nil, err
 	}
 
-	b := s.client.Project.UpdateOneID(id)
+	b := s.client.Project.UpdateOneID(id).SetCompanyID(companyID)
 
 	if params.CustomerID != nil {
 		b.SetCustomerID(*params.CustomerID)

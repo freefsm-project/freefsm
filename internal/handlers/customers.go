@@ -150,6 +150,11 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.CompanyID <= 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if r.Method == http.MethodGet {
 		data := newFormData()
 		defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
@@ -185,18 +190,15 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if params.AccountType == "" {
 		params.AccountType = "individual"
 	}
-	result, err := h.svc.Create(r.Context(), params)
+	result, err := h.svc.Create(r.Context(), u.CompanyID, params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeCustomer, result.ID), map[string]interface{}{
-			"entity_name": result.DisplayName,
-			"actor_name":  u.Name,
-		})
-	}
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeCustomer, result.ID), map[string]interface{}{
+		"entity_name": result.DisplayName,
+		"actor_name":  u.Name,
+	})
 	http.Redirect(w, r, fmt.Sprintf("/customers/%d/edit?flash=%s", result.ID, url.QueryEscape("Customer created. Locations and contacts can now be added.")), http.StatusSeeOther)
 }
 
@@ -502,7 +504,8 @@ func (h *CustomerHandler) CreateLocation(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	r.ParseForm()
-	l, err := h.locationSvc.CreateForCustomer(r.Context(), id, services.CustomerLocationCreateParams{
+	u, _ := middleware.UserFromContext(r.Context())
+	l, err := h.locationSvc.CreateForCustomer(r.Context(), u.CompanyID, id, services.CustomerLocationCreateParams{
 		Title:     r.FormValue("title"),
 		Address1:  r.FormValue("address_1"),
 		Address2:  r.FormValue("address_2"),
@@ -516,7 +519,6 @@ func (h *CustomerHandler) CreateLocation(w http.ResponseWriter, r *http.Request)
 		internalServerError(w, r, "create customer location", err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "location_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
@@ -540,7 +542,8 @@ func (h *CustomerHandler) CreateLocationInline(w http.ResponseWriter, r *http.Re
 		http.Error(w, "title is required", http.StatusBadRequest)
 		return
 	}
-	l, err := h.locationSvc.CreateForCustomer(r.Context(), id, services.CustomerLocationCreateParams{
+	u, _ := middleware.UserFromContext(r.Context())
+	l, err := h.locationSvc.CreateForCustomer(r.Context(), u.CompanyID, id, services.CustomerLocationCreateParams{
 		Title:     title,
 		Address1:  r.FormValue("address_1"),
 		Address2:  r.FormValue("address_2"),
@@ -554,7 +557,6 @@ func (h *CustomerHandler) CreateLocationInline(w http.ResponseWriter, r *http.Re
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "location_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
@@ -649,7 +651,8 @@ func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	r.ParseForm()
-	_, err := h.contactSvc.Create(r.Context(), id, services.ContactCreateParams{
+	u, _ := middleware.UserFromContext(r.Context())
+	_, err := h.contactSvc.Create(r.Context(), u.CompanyID, id, services.ContactCreateParams{
 		FirstName: r.FormValue("first_name"),
 		LastName:  r.FormValue("last_name"),
 		Email:     r.FormValue("email"),
@@ -660,7 +663,6 @@ func (h *CustomerHandler) CreateContact(w http.ResponseWriter, r *http.Request) 
 		internalServerError(w, r, "create customer contact", err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "contact_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,
@@ -684,7 +686,8 @@ func (h *CustomerHandler) CreateContactInline(w http.ResponseWriter, r *http.Req
 		http.Error(w, "first name is required", http.StatusBadRequest)
 		return
 	}
-	c, err := h.contactSvc.Create(r.Context(), id, services.ContactCreateParams{
+	u, _ := middleware.UserFromContext(r.Context())
+	c, err := h.contactSvc.Create(r.Context(), u.CompanyID, id, services.ContactCreateParams{
 		FirstName: firstName,
 		LastName:  r.FormValue("last_name"),
 		Email:     r.FormValue("email"),
@@ -696,7 +699,6 @@ func (h *CustomerHandler) CreateContactInline(w http.ResponseWriter, r *http.Req
 		return
 	}
 	label := strings.TrimSpace(c.FirstName + " " + c.LastName)
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "contact_created", objectref.New(objectref.TypeCustomer, id), map[string]interface{}{
 			"actor_name":  u.Name,

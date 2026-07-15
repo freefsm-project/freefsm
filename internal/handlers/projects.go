@@ -229,6 +229,11 @@ func (h *ProjectHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.CompanyID <= 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if r.Method == http.MethodGet {
 		templates.ProjectForm(h.newProjectForm(r.Context())).Render(r.Context(), w)
 		return
@@ -293,22 +298,24 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Notes:                r.FormValue("notes"),
 		CustomFields:         parseCustomFieldValues(r),
 	}
-	result, err := h.svc.Create(r.Context(), params)
+	result, err := h.svc.Create(r.Context(), u.CompanyID, params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeProject, result.ID), map[string]interface{}{
-			"entity_name": result.Name,
-			"actor_name":  u.Name,
-		})
-	}
+	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeProject, result.ID), map[string]interface{}{
+		"entity_name": result.Name,
+		"actor_name":  u.Name,
+	})
 	http.Redirect(w, r, "/projects?flash=Project+created", http.StatusSeeOther)
 }
 
 func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.CompanyID <= 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.NotFound(w, r)
@@ -384,14 +391,9 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Notes:                formPtr(r.FormValue("notes")),
 		CustomFields:         strPtr(parseCustomFieldValues(r)),
 	}
-	result, err := h.svc.Update(r.Context(), id, params)
+	result, err := h.svc.Update(r.Context(), u.CompanyID, id, params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
-		return
-	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u == nil {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 	if u != nil {
@@ -404,6 +406,11 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProjectHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.CompanyID <= 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
@@ -426,7 +433,7 @@ func (h *ProjectHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	completion, _ := strconv.ParseFloat(r.FormValue("completion_percentage"), 64)
 	loc := middleware.CompanyLocation(r.Context())
-	result, err := h.svc.Create(r.Context(), services.ProjectCreateParams{
+	result, err := h.svc.Create(r.Context(), u.CompanyID, services.ProjectCreateParams{
 		CustomerID:           custID,
 		Name:                 name,
 		Description:          r.FormValue("description"),
@@ -442,7 +449,6 @@ func (h *ProjectHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeProject, result.ID), map[string]interface{}{
 			"entity_name": result.Name,

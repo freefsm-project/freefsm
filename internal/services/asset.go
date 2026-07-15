@@ -7,6 +7,8 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/asset"
+	"github.com/freefsm-project/freefsm/internal/ent/assetstatus"
+	"github.com/freefsm-project/freefsm/internal/ent/assettype"
 	"github.com/freefsm-project/freefsm/internal/ent/job"
 )
 
@@ -112,14 +114,26 @@ func (s *AssetService) GetByID(ctx context.Context, id int64) (*ent.Asset, error
 	return a, nil
 }
 
-func (s *AssetService) Create(ctx context.Context, params AssetCreateParams) (*ent.Asset, error) {
+func (s *AssetService) Create(ctx context.Context, companyID int64, params AssetCreateParams) (*ent.Asset, error) {
+	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, params.CustomerID); err != nil {
+		return nil, err
+	}
+	if err := validateAssetTypeForCompany(ctx, s.client, companyID, params.AssetTypeID); err != nil {
+		return nil, err
+	}
+	if params.AssetStatusID != nil && *params.AssetStatusID > 0 {
+		if err := validateAssetStatusForCompany(ctx, s.client, companyID, *params.AssetStatusID); err != nil {
+			return nil, err
+		}
+	}
 	if params.LocationID != nil {
-		if err := validateCustomerLocation(ctx, s.client, params.CustomerID, *params.LocationID); err != nil {
+		if err := validateCustomerLocationForCompany(ctx, s.client, companyID, params.CustomerID, *params.LocationID); err != nil {
 			return nil, err
 		}
 	}
 
 	b := s.client.Asset.Create().
+		SetCompanyID(companyID).
 		SetCustomerID(params.CustomerID).
 		SetAssetTypeID(params.AssetTypeID).
 		SetName(params.Name).
@@ -149,24 +163,49 @@ func (s *AssetService) Create(ctx context.Context, params AssetCreateParams) (*e
 	return a, nil
 }
 
-func (s *AssetService) Update(ctx context.Context, id int64, params AssetUpdateParams) (*ent.Asset, error) {
+func (s *AssetService) Update(ctx context.Context, companyID, id int64, params AssetUpdateParams) (*ent.Asset, error) {
 	current, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	if current.CompanyID != nil && *current.CompanyID != companyID {
+		return nil, fmt.Errorf("asset does not belong to company")
+	}
+	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, current.CustomerID); err != nil {
+		return nil, err
+	}
 	customerID := current.CustomerID
 	locationID := int64Value(current.LocationID)
+	assetTypeID := current.AssetTypeID
+	assetStatusID := int64Value(current.AssetStatusID)
 	if params.CustomerID != nil {
 		customerID = *params.CustomerID
 	}
 	if params.LocationID != nil {
 		locationID = *params.LocationID
 	}
-	if err := validateCustomerLocation(ctx, s.client, customerID, locationID); err != nil {
+	if params.AssetTypeID != nil {
+		assetTypeID = *params.AssetTypeID
+	}
+	if params.AssetStatusID != nil {
+		assetStatusID = *params.AssetStatusID
+	}
+	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, customerID); err != nil {
+		return nil, err
+	}
+	if err := validateAssetTypeForCompany(ctx, s.client, companyID, assetTypeID); err != nil {
+		return nil, err
+	}
+	if assetStatusID > 0 {
+		if err := validateAssetStatusForCompany(ctx, s.client, companyID, assetStatusID); err != nil {
+			return nil, err
+		}
+	}
+	if err := validateCustomerLocationForCompany(ctx, s.client, companyID, customerID, locationID); err != nil {
 		return nil, err
 	}
 
-	u := s.client.Asset.UpdateOneID(id)
+	u := s.client.Asset.UpdateOneID(id).SetCompanyID(companyID)
 
 	if params.CustomerID != nil {
 		u.SetCustomerID(*params.CustomerID)
@@ -218,6 +257,37 @@ func (s *AssetService) Update(ctx context.Context, id int64, params AssetUpdateP
 		return nil, fmt.Errorf("update asset %d: %w", id, err)
 	}
 	return a, nil
+}
+
+func validateAssetTypeForCompany(ctx context.Context, client *ent.Client, companyID, assetTypeID int64) error {
+	if assetTypeID <= 0 {
+		return fmt.Errorf("asset type is required")
+	}
+	exists, err := client.AssetType.Query().Where(
+		assettype.IDEQ(assetTypeID),
+		assettype.Or(assettype.CompanyIDEQ(companyID), assettype.CompanyIDIsNil()),
+	).Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("validate asset type ownership: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("asset type does not belong to company")
+	}
+	return nil
+}
+
+func validateAssetStatusForCompany(ctx context.Context, client *ent.Client, companyID, assetStatusID int64) error {
+	exists, err := client.AssetStatus.Query().Where(
+		assetstatus.IDEQ(assetStatusID),
+		assetstatus.Or(assetstatus.CompanyIDEQ(companyID), assetstatus.CompanyIDIsNil()),
+	).Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("validate asset status ownership: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("asset status does not belong to company")
+	}
+	return nil
 }
 
 func (s *AssetService) Delete(ctx context.Context, id int64) error {

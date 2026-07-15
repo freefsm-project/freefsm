@@ -30,7 +30,7 @@ func TestCreationDefaultsUseCategoriesAfterLabelsAreRenamed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	project, err := NewProjectService(client).Create(ctx, ProjectCreateParams{CustomerID: customer.ID, Name: "Project"})
+	project, err := NewProjectService(client).Create(ctx, companyID, ProjectCreateParams{CustomerID: customer.ID, Name: "Project"})
 	if err != nil {
 		t.Fatal(err)
 	}

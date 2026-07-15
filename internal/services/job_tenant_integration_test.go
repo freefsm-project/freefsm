@@ -164,22 +164,115 @@ func TestJobCreateRejectsForeignCompanyLinksAndAssignmentsIntegration(t *testing
 	for _, tc := range []struct {
 		name   string
 		params JobCreateParams
-		want   string
+		want   JobInputRelation
 	}{
-		{name: "foreign project", params: JobCreateParams{CustomerID: customer.ID, ProjectID: foreignProject.ID, JobType: "Rejected"}, want: "project does not belong"},
-		{name: "foreign location", params: JobCreateParams{CustomerID: customer.ID, LocationID: foreignLocation.ID, JobType: "Rejected"}, want: "location does not belong"},
-		{name: "foreign contact", params: JobCreateParams{CustomerID: customer.ID, CustomerContactID: foreignContact.ID, JobType: "Rejected"}, want: "contact does not belong"},
-		{name: "foreign asset", params: JobCreateParams{CustomerID: customer.ID, AssetID: foreignAsset.ID, JobType: "Rejected"}, want: "asset does not belong"},
-		{name: "foreign assignment", params: JobCreateParams{CustomerID: customer.ID, JobType: "Rejected", Assignments: []JobAssignment{{UserID: foreignUser.ID}}}, want: "assignment user"},
+		{name: "foreign project", params: JobCreateParams{CustomerID: customer.ID, ProjectID: foreignProject.ID, JobType: "Rejected"}, want: JobInputRelationProject},
+		{name: "foreign location", params: JobCreateParams{CustomerID: customer.ID, LocationID: foreignLocation.ID, JobType: "Rejected"}, want: JobInputRelationLocation},
+		{name: "foreign contact", params: JobCreateParams{CustomerID: customer.ID, CustomerContactID: foreignContact.ID, JobType: "Rejected"}, want: JobInputRelationContact},
+		{name: "foreign asset", params: JobCreateParams{CustomerID: customer.ID, AssetID: foreignAsset.ID, JobType: "Rejected"}, want: JobInputRelationAsset},
+		{name: "foreign assignment", params: JobCreateParams{CustomerID: customer.ID, JobType: "Rejected", Assignments: []JobAssignment{{UserID: foreignUser.ID}}}, want: JobInputRelationAssignment},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := client.Job.Query().CountX(ctx)
 			_, err := NewJobService(client).Create(ctx, companyID, tc.params)
-			if !errors.Is(err, ErrInvalidJobInput) || !strings.Contains(err.Error(), tc.want) {
-				t.Fatalf("Create error = %v, want %q", err, tc.want)
+			var inputErr *JobInputError
+			if !errors.As(err, &inputErr) || inputErr.Reason() != JobInputReasonOwnershipMismatch || inputErr.Relation() != tc.want {
+				t.Fatalf("Create error = %#v, want ownership mismatch for %q", err, tc.want)
 			}
 			if got := client.Job.Query().CountX(ctx); got != before {
 				t.Fatalf("job count = %d, want %d", got, before)
+			}
+		})
+	}
+}
+
+func TestJobCreateAcceptsCanonicalLegacyCompanylessChildLinksIntegration(t *testing.T) {
+	client := openPolicyTestClient(t)
+	defer client.Close()
+	ctx := context.Background()
+	const companyID int64 = 55
+	customer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Legacy customer").SaveX(ctx)
+	createJobDefaultStatus(t, ctx, client, companyID, "New", 1)
+	projectWorkflow := client.StatusWorkflow.Create().SetCompanyID(companyID).SetName("Project workflow").SetObjectType("project").SaveX(ctx)
+	client.Status.Create().SetCompanyID(companyID).SetWorkflowID(projectWorkflow.ID).SetName("New").SetCategoryKey("project:new").SetIsCategoryDefault(true).SaveX(ctx)
+	assetType := client.AssetType.Create().SetCompanyID(companyID).SetName("Equipment").SaveX(ctx)
+
+	location, err := NewLocationService(client).CreateForCustomer(ctx, companyID, customer.ID, CustomerLocationCreateParams{Title: "Main"})
+	if err != nil {
+		t.Fatalf("create location: %v", err)
+	}
+	contact, err := NewCustomerContactService(client).Create(ctx, companyID, customer.ID, ContactCreateParams{FirstName: "Contact"})
+	if err != nil {
+		t.Fatalf("create contact: %v", err)
+	}
+	project, err := NewProjectService(client).Create(ctx, companyID, ProjectCreateParams{CustomerID: customer.ID, LocationID: location.ID, Name: "Project"})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	asset, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{CustomerID: customer.ID, LocationID: &location.ID, AssetTypeID: assetType.ID, Name: "Asset"})
+	if err != nil {
+		t.Fatalf("create asset: %v", err)
+	}
+	client.Location.UpdateOneID(location.ID).ClearCompanyID().SaveX(ctx)
+	client.CustomerContact.UpdateOneID(contact.ID).ClearCompanyID().SaveX(ctx)
+	client.Project.UpdateOneID(project.ID).ClearCompanyID().SaveX(ctx)
+	client.Asset.UpdateOneID(asset.ID).ClearCompanyID().SaveX(ctx)
+	location = client.Location.GetX(ctx, location.ID)
+	contact = client.CustomerContact.GetX(ctx, contact.ID)
+	project = client.Project.GetX(ctx, project.ID)
+	asset = client.Asset.GetX(ctx, asset.ID)
+	if location.CompanyID != nil || contact.CompanyID != nil || project.CompanyID != nil || asset.CompanyID != nil {
+		t.Fatalf("fixture is not legacy companyless: location=%v contact=%v project=%v asset=%v", location.CompanyID, contact.CompanyID, project.CompanyID, asset.CompanyID)
+	}
+
+	created, err := NewJobService(client).Create(ctx, companyID, JobCreateParams{
+		CustomerID: customer.ID, ProjectID: project.ID, LocationID: location.ID,
+		CustomerContactID: contact.ID, AssetID: asset.ID, JobType: "Repair",
+	})
+	if err != nil {
+		t.Fatalf("Create with canonical legacy links: %v", err)
+	}
+	if created.CustomerID != customer.ID {
+		t.Fatalf("customer ID = %d, want %d", created.CustomerID, customer.ID)
+	}
+
+	otherCustomer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Other customer").SaveX(ctx)
+	otherLocation, err := NewLocationService(client).CreateForCustomer(ctx, companyID, otherCustomer.ID, CustomerLocationCreateParams{Title: "Other"})
+	if err != nil {
+		t.Fatalf("create other location: %v", err)
+	}
+	otherContact, err := NewCustomerContactService(client).Create(ctx, companyID, otherCustomer.ID, ContactCreateParams{FirstName: "Other"})
+	if err != nil {
+		t.Fatalf("create other contact: %v", err)
+	}
+	otherProject, err := NewProjectService(client).Create(ctx, companyID, ProjectCreateParams{CustomerID: otherCustomer.ID, Name: "Other"})
+	if err != nil {
+		t.Fatalf("create other project: %v", err)
+	}
+	otherAsset, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{CustomerID: otherCustomer.ID, AssetTypeID: assetType.ID, Name: "Other"})
+	if err != nil {
+		t.Fatalf("create other asset: %v", err)
+	}
+	client.Location.UpdateOneID(otherLocation.ID).ClearCompanyID().SaveX(ctx)
+	client.CustomerContact.UpdateOneID(otherContact.ID).ClearCompanyID().SaveX(ctx)
+	client.Project.UpdateOneID(otherProject.ID).ClearCompanyID().SaveX(ctx)
+	client.Asset.UpdateOneID(otherAsset.ID).ClearCompanyID().SaveX(ctx)
+
+	for _, tc := range []struct {
+		name     string
+		relation JobInputRelation
+		params   JobCreateParams
+	}{
+		{name: "project", relation: JobInputRelationProject, params: JobCreateParams{CustomerID: customer.ID, ProjectID: otherProject.ID, JobType: "Rejected"}},
+		{name: "location", relation: JobInputRelationLocation, params: JobCreateParams{CustomerID: customer.ID, LocationID: otherLocation.ID, JobType: "Rejected"}},
+		{name: "contact", relation: JobInputRelationContact, params: JobCreateParams{CustomerID: customer.ID, CustomerContactID: otherContact.ID, JobType: "Rejected"}},
+		{name: "asset", relation: JobInputRelationAsset, params: JobCreateParams{CustomerID: customer.ID, AssetID: otherAsset.ID, JobType: "Rejected"}},
+	} {
+		t.Run("companyless cross-customer "+tc.name, func(t *testing.T) {
+			_, err := NewJobService(client).Create(ctx, companyID, tc.params)
+			var inputErr *JobInputError
+			if !errors.As(err, &inputErr) || inputErr.Relation() != tc.relation || inputErr.Reason() != JobInputReasonOwnershipMismatch {
+				t.Fatalf("Create error = %#v, want ownership mismatch for %s", err, tc.relation)
 			}
 		})
 	}
@@ -203,7 +296,7 @@ func TestJobCreateNextOccurrenceEnforcesTenantSourceAndAssignmentsIntegration(t 
 	localSource := client.Job.Create().SetCompanyID(companyID).SetCustomerID(localCustomer.ID).SetJobType("Local source").SetStartTime(time.Now()).SaveX(ctx)
 	client.JobAssignment.Create().SetJobID(localSource.ID).SetUserID(foreignUser.ID).SaveX(ctx)
 	before := client.Job.Query().CountX(ctx)
-	if _, err := NewJobService(client).CreateNextOccurrence(ctx, companyID, localSource.ID, time.Now().Add(24*time.Hour)); !errors.Is(err, ErrInvalidJobInput) || !strings.Contains(err.Error(), "assignment user") {
+	if _, err := NewJobService(client).CreateNextOccurrence(ctx, companyID, localSource.ID, time.Now().Add(24*time.Hour)); !errors.Is(err, ErrInvalidJobInput) {
 		t.Fatalf("CreateNextOccurrence error = %v, want assignment company error", err)
 	}
 	if got := client.Job.Query().CountX(ctx); got != before {

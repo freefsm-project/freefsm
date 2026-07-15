@@ -80,11 +80,12 @@ type CustomerLocationUpdateParams struct {
 	IsPrimary *bool
 }
 
-func (s *LocationService) CreateForCustomer(ctx context.Context, customerID int64, params CustomerLocationCreateParams) (*ent.Location, error) {
-	if err := validateActiveCustomer(ctx, s.client, customerID); err != nil {
+func (s *LocationService) CreateForCustomer(ctx context.Context, companyID, customerID int64, params CustomerLocationCreateParams) (*ent.Location, error) {
+	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, customerID); err != nil {
 		return nil, err
 	}
 	l, err := s.client.Location.Create().
+		SetCompanyID(companyID).
 		SetObjectType("customer").
 		SetObjectID(customerID).
 		SetTitle(params.Title).

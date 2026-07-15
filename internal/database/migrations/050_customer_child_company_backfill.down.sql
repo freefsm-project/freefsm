@@ -1,0 +1,1 @@
+-- Intentional no-op: the provenance of a backfilled NULL company_id cannot be restored safely.

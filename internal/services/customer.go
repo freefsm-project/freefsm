@@ -112,7 +112,10 @@ func (s *CustomerService) GetByID(ctx context.Context, id int64) (*ent.Customer,
 	return c, nil
 }
 
-func (s *CustomerService) Create(ctx context.Context, params CustomerCreateParams) (*ent.Customer, error) {
+func (s *CustomerService) Create(ctx context.Context, companyID int64, params CustomerCreateParams) (*ent.Customer, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("create customer: company is required")
+	}
 	displayName := params.DisplayName
 	if displayName == "" {
 		if params.FirstName != "" || params.LastName != "" {
@@ -127,6 +130,7 @@ func (s *CustomerService) Create(ctx context.Context, params CustomerCreateParam
 
 	c, err := s.client.Customer.
 		Create().
+		SetCompanyID(companyID).
 		SetFirstName(params.FirstName).
 		SetLastName(params.LastName).
 		SetDisplayName(displayName).

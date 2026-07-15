@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -203,6 +204,11 @@ func TestForeignJobUpdateDoesNotCallMutation(t *testing.T) {
 }
 
 func TestJobMutationsMapExpectedValidationErrorToSafeBadRequest(t *testing.T) {
+	var logs bytes.Buffer
+	oldLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(oldLogger) })
+
 	tests := []struct {
 		name string
 		path string
@@ -214,15 +220,16 @@ func TestJobMutationsMapExpectedValidationErrorToSafeBadRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			logs.Reset()
 			h := &JobHandler{
 				getJobForCompany: func(context.Context, int64, int64) (*ent.Job, error) {
 					return &ent.Job{ID: 41}, nil
 				},
 				createJob: func(context.Context, int64, services.JobCreateParams) (*ent.Job, error) {
-					return nil, fmt.Errorf("private relation detail: %w", services.ErrInvalidJobInput)
+					return nil, fmt.Errorf("private relation detail: %w", services.NewJobInputError(services.JobInputReasonOwnershipMismatch, services.JobInputRelationProject))
 				},
 				updateJob: func(context.Context, int64, int64, services.JobUpdateParams) (*ent.Job, error) {
-					return nil, fmt.Errorf("private relation detail: %w", services.ErrInvalidJobInput)
+					return nil, fmt.Errorf("private relation detail: %w", services.NewJobInputError(services.JobInputReasonOwnershipMismatch, services.JobInputRelationProject))
 				},
 			}
 			req := authenticatedJobRequest(http.MethodPost, tt.path, tt.form)
@@ -238,7 +245,62 @@ func TestJobMutationsMapExpectedValidationErrorToSafeBadRequest(t *testing.T) {
 			if strings.Contains(rr.Body.String(), "private relation detail") {
 				t.Fatalf("response exposed service details: %q", rr.Body.String())
 			}
+			logOutput := logs.String()
+			for _, want := range []string{`"authenticated_company_id":7`, `"reason":"ownership_mismatch"`, `"relation":"project"`, `"operation":"` + tt.name + `"`} {
+				if !strings.Contains(logOutput, want) {
+					t.Errorf("structured log missing %s: %s", want, logOutput)
+				}
+			}
+			if strings.Contains(logOutput, "private relation detail") {
+				t.Fatalf("structured log exposed wrapped internal details: %s", logOutput)
+			}
 		})
+	}
+}
+
+func TestInvalidJobInputLogBoundsRequestControlledContext(t *testing.T) {
+	var logs bytes.Buffer
+	oldLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(oldLogger) })
+
+	oversized := strings.Repeat("x", jobLogValueMaxBytes*4)
+	handler := chimiddleware.RequestID(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		handleInvalidJobInput(w, r, "create", services.NewJobInputError(services.JobInputReasonOwnershipMismatch, services.JobInputRelationProject))
+	}))
+	req := authenticatedJobRequest(http.MethodPost, "/jobs/"+oversized, url.Values{})
+	req.Header.Set("X-Request-ID", oversized)
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest || rr.Body.String() != "Invalid job details\n" {
+		t.Fatalf("response status=%d body=%q, want generic 400", rr.Code, rr.Body.String())
+	}
+	var entry map[string]any
+	if err := json.Unmarshal(logs.Bytes(), &entry); err != nil {
+		t.Fatalf("decode structured log: %v", err)
+	}
+	for _, key := range []string{"request_id", "route"} {
+		value, ok := entry[key].(string)
+		if !ok {
+			t.Fatalf("%s log value = %#v, want string", key, entry[key])
+		}
+		if len(value) > jobLogValueMaxBytes {
+			t.Errorf("%s log length = %d, want <= %d", key, len(value), jobLogValueMaxBytes)
+		}
+	}
+	if entry["request_id"] != oversized[:jobLogValueMaxBytes] {
+		t.Fatalf("request_id = %#v, want capped request header", entry["request_id"])
+	}
+	wantRoute := ("/jobs/" + oversized)[:jobLogValueMaxBytes]
+	if entry["route"] != wantRoute {
+		t.Fatalf("route = %#v, want %q", entry["route"], wantRoute)
+	}
+	if entry["reason"] != string(services.JobInputReasonOwnershipMismatch) || entry["relation"] != string(services.JobInputRelationProject) {
+		t.Fatalf("diagnostic fields = reason %#v relation %#v", entry["reason"], entry["relation"])
+	}
+	if strings.Contains(logs.String(), oversized) {
+		t.Fatal("structured log contains unbounded request-controlled value")
 	}
 }
 

@@ -264,11 +264,11 @@ func (s *JobService) GetByIDForCompany(ctx context.Context, companyID, id int64)
 
 func (s *JobService) activeCustomerForCompany(ctx context.Context, companyID, customerID int64) (*ent.Customer, error) {
 	if customerID <= 0 {
-		return nil, invalidJobInput("customer is required")
+		return nil, invalidJobInput(JobInputReasonRequired, JobInputRelationCustomer)
 	}
 	jobCustomer, err := s.client.Customer.Query().Where(customer.IDEQ(customerID), customer.CompanyIDEQ(companyID), customer.DeletedAtIsNil()).Only(ctx)
 	if ent.IsNotFound(err) {
-		return nil, invalidJobInput("customer does not exist, is archived, or belongs to another company")
+		return nil, invalidJobInput(JobInputReasonOwnershipMismatch, JobInputRelationCustomer)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("get active job customer for company: %w", err)
@@ -374,7 +374,7 @@ func (s *JobService) CreateNextOccurrence(ctx context.Context, companyID, source
 	}
 	source, err := s.GetByIDForCompany(ctx, companyID, sourceID)
 	if ent.IsNotFound(err) {
-		return nil, invalidJobInput("source job does not belong to company")
+		return nil, invalidJobInput(JobInputReasonOwnershipMismatch, JobInputRelationJob)
 	}
 	if err != nil {
 		return nil, err
@@ -473,7 +473,7 @@ func (s *JobService) Update(ctx context.Context, companyID, id int64, params Job
 	}
 	current, err := s.GetByIDForCompany(ctx, companyID, id)
 	if ent.IsNotFound(err) {
-		return nil, invalidJobInput("job does not belong to company")
+		return nil, invalidJobInput(JobInputReasonOwnershipMismatch, JobInputRelationJob)
 	}
 	if err != nil {
 		return nil, err
@@ -752,7 +752,7 @@ func (s *JobService) hydrateAssignments(ctx context.Context, companyID int64, as
 		names[u.ID] = u.Name
 	}
 	if len(users) != len(userIDs) {
-		return nil, invalidJobInput("assignment user does not belong to company")
+		return nil, invalidJobInput(JobInputReasonOwnershipMismatch, JobInputRelationAssignment)
 	}
 	hydrated := make([]JobAssignment, 0, len(userIDs))
 	seen = map[int64]bool{}

@@ -38,29 +38,70 @@ var ErrInvalidDocumentStatus = fmt.Errorf("status must belong to the same compan
 var ErrInvalidJobInput = errors.New("invalid job input")
 
 type JobInputError struct {
-	Cause error
+	reason   JobInputReason
+	relation JobInputRelation
 }
+
+type JobInputReason string
+
+const (
+	JobInputReasonUnknown           JobInputReason = "unknown"
+	JobInputReasonRequired          JobInputReason = "required"
+	JobInputReasonOwnershipMismatch JobInputReason = "ownership_mismatch"
+)
+
+type JobInputRelation string
+
+const (
+	JobInputRelationUnknown    JobInputRelation = "unknown"
+	JobInputRelationCustomer   JobInputRelation = "customer"
+	JobInputRelationProject    JobInputRelation = "project"
+	JobInputRelationLocation   JobInputRelation = "location"
+	JobInputRelationContact    JobInputRelation = "contact"
+	JobInputRelationAsset      JobInputRelation = "asset"
+	JobInputRelationAssignment JobInputRelation = "assignment"
+	JobInputRelationJob        JobInputRelation = "job"
+)
 
 func (e *JobInputError) Error() string {
-	if e == nil || e.Cause == nil {
-		return ErrInvalidJobInput.Error()
-	}
-	return fmt.Sprintf("%s: %v", ErrInvalidJobInput, e.Cause)
+	return ErrInvalidJobInput.Error()
 }
 
-func (e *JobInputError) Unwrap() error {
+func (e *JobInputError) Reason() JobInputReason {
 	if e == nil {
-		return nil
+		return JobInputReasonUnknown
 	}
-	return e.Cause
+	return e.reason
+}
+
+func (e *JobInputError) Relation() JobInputRelation {
+	if e == nil {
+		return JobInputRelationUnknown
+	}
+	return e.relation
 }
 
 func (e *JobInputError) Is(target error) bool {
 	return target == ErrInvalidJobInput
 }
 
-func invalidJobInput(message string) error {
-	return &JobInputError{Cause: errors.New(message)}
+func NewJobInputError(reason JobInputReason, relation JobInputRelation) *JobInputError {
+	switch reason {
+	case JobInputReasonRequired, JobInputReasonOwnershipMismatch:
+	default:
+		reason = JobInputReasonUnknown
+	}
+	switch relation {
+	case JobInputRelationCustomer, JobInputRelationProject, JobInputRelationLocation, JobInputRelationContact,
+		JobInputRelationAsset, JobInputRelationAssignment, JobInputRelationJob:
+	default:
+		relation = JobInputRelationUnknown
+	}
+	return &JobInputError{reason: reason, relation: relation}
+}
+
+func invalidJobInput(reason JobInputReason, relation JobInputRelation) error {
+	return NewJobInputError(reason, relation)
 }
 
 type StatusConfigurationError struct {
@@ -145,6 +186,44 @@ func validateActiveCustomer(ctx context.Context, client *ent.Client, customerID 
 	}
 	if !exists {
 		return fmt.Errorf("customer does not exist or is archived")
+	}
+	return nil
+}
+
+func activeCustomerOwnedByCompany(ctx context.Context, client *ent.Client, companyID, customerID int64) (*ent.Customer, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("company is required")
+	}
+	if customerID <= 0 {
+		return nil, fmt.Errorf("customer is required")
+	}
+	c, err := client.Customer.Query().
+		Where(customer.IDEQ(customerID), customer.CompanyIDEQ(companyID), customer.DeletedAtIsNil()).
+		Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, fmt.Errorf("customer does not exist, is archived, or belongs to another company")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("validate customer ownership: %w", err)
+	}
+	return c, nil
+}
+
+func validateCustomerLocationForCompany(ctx context.Context, client *ent.Client, companyID, customerID, locationID int64) error {
+	if locationID <= 0 {
+		return nil
+	}
+	exists, err := client.Location.Query().Where(
+		location.IDEQ(locationID),
+		location.ObjectTypeEQ("customer"),
+		location.ObjectIDEQ(customerID),
+		location.Or(location.CompanyIDEQ(companyID), location.CompanyIDIsNil()),
+	).Exist(ctx)
+	if err != nil {
+		return fmt.Errorf("validate location customer and company: %w", err)
+	}
+	if !exists {
+		return fmt.Errorf("location does not belong to customer and company")
 	}
 	return nil
 }
@@ -247,25 +326,25 @@ func validateJobCustomerLinks(ctx context.Context, client *ent.Client, companyID
 		{
 			name: "project", id: projectID,
 			exists: func() (bool, error) {
-				return client.Project.Query().Where(project.IDEQ(projectID), project.CompanyIDEQ(companyID), project.CustomerIDEQ(customerID), project.DeletedAtIsNil()).Exist(ctx)
+				return client.Project.Query().Where(project.IDEQ(projectID), project.Or(project.CompanyIDEQ(companyID), project.CompanyIDIsNil()), project.CustomerIDEQ(customerID), project.DeletedAtIsNil()).Exist(ctx)
 			},
 		},
 		{
 			name: "location", id: locationID,
 			exists: func() (bool, error) {
-				return client.Location.Query().Where(location.IDEQ(locationID), location.CompanyIDEQ(companyID), location.ObjectTypeEQ("customer"), location.ObjectIDEQ(customerID)).Exist(ctx)
+				return client.Location.Query().Where(location.IDEQ(locationID), location.Or(location.CompanyIDEQ(companyID), location.CompanyIDIsNil()), location.ObjectTypeEQ("customer"), location.ObjectIDEQ(customerID)).Exist(ctx)
 			},
 		},
 		{
 			name: "contact", id: contactID,
 			exists: func() (bool, error) {
-				return client.CustomerContact.Query().Where(customercontact.IDEQ(contactID), customercontact.CompanyIDEQ(companyID), customercontact.CustomerIDEQ(customerID)).Exist(ctx)
+				return client.CustomerContact.Query().Where(customercontact.IDEQ(contactID), customercontact.Or(customercontact.CompanyIDEQ(companyID), customercontact.CompanyIDIsNil()), customercontact.CustomerIDEQ(customerID)).Exist(ctx)
 			},
 		},
 		{
 			name: "asset", id: assetID,
 			exists: func() (bool, error) {
-				return client.Asset.Query().Where(asset.IDEQ(assetID), asset.CompanyIDEQ(companyID), asset.CustomerID(customerID), asset.DeletedAtIsNil()).Exist(ctx)
+				return client.Asset.Query().Where(asset.IDEQ(assetID), asset.Or(asset.CompanyIDEQ(companyID), asset.CompanyIDIsNil()), asset.CustomerID(customerID), asset.DeletedAtIsNil()).Exist(ctx)
 			},
 		},
 	}
@@ -278,7 +357,7 @@ func validateJobCustomerLinks(ctx context.Context, client *ent.Client, companyID
 			return fmt.Errorf("validate %s customer and company: %w", check.name, err)
 		}
 		if !exists {
-			return invalidJobInput(fmt.Sprintf("%s does not belong to customer and company", check.name))
+			return invalidJobInput(JobInputReasonOwnershipMismatch, JobInputRelation(check.name))
 		}
 	}
 	return nil

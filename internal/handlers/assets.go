@@ -183,6 +183,11 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.CompanyID <= 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if r.Method == http.MethodGet {
 		customers, _ := h.customerSvc.ListAll(r.Context())
 		assetTypes, _ := h.assetTypeSvc.List(r.Context())
@@ -227,12 +232,11 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CustomFields:  parseCustomFieldValues(r),
 	}
 
-	result, err := h.svc.Create(r.Context(), params)
+	result, err := h.svc.Create(r.Context(), u.CompanyID, params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeAsset, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
@@ -243,6 +247,11 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.CompanyID <= 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
@@ -280,7 +289,7 @@ func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		statusID = &assetStatusID
 	}
 	loc := middleware.CompanyLocation(r.Context())
-	result, err := h.svc.Create(r.Context(), services.AssetCreateParams{
+	result, err := h.svc.Create(r.Context(), u.CompanyID, services.AssetCreateParams{
 		CustomerID:      customerID,
 		LocationID:      locID,
 		AssetTypeID:     assetTypeID,
@@ -298,7 +307,6 @@ func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeAsset, result.ID), map[string]interface{}{
 			"entity_name": result.Name,
@@ -309,6 +317,11 @@ func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.CompanyID <= 0 {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.NotFound(w, r)
@@ -364,12 +377,11 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		CustomFields:  strPtr(parseCustomFieldValues(r)),
 	}
 
-	result, err := h.svc.Update(r.Context(), id, params)
+	result, err := h.svc.Update(r.Context(), u.CompanyID, id, params)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
 	if u != nil {
 		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "updated", objectref.New(objectref.TypeAsset, id), map[string]interface{}{
 			"entity_name": result.Name,

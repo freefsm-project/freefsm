@@ -43,12 +43,13 @@ type ContactUpdateParams struct {
 	Notes     *string
 }
 
-func (s *CustomerContactService) Create(ctx context.Context, customerID int64, params ContactCreateParams) (*ent.CustomerContact, error) {
-	if err := validateActiveCustomer(ctx, s.client, customerID); err != nil {
+func (s *CustomerContactService) Create(ctx context.Context, companyID, customerID int64, params ContactCreateParams) (*ent.CustomerContact, error) {
+	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, customerID); err != nil {
 		return nil, err
 	}
 
 	c, err := s.client.CustomerContact.Create().
+		SetCompanyID(companyID).
 		SetCustomerID(customerID).
 		SetFirstName(params.FirstName).
 		SetLastName(params.LastName).

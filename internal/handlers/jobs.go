@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/ent"
@@ -392,10 +393,37 @@ func staleJobForm(w http.ResponseWriter) {
 	http.Error(w, "This form is out of date. Reload the page and try again.", http.StatusConflict)
 }
 
-func handleInvalidJobInput(w http.ResponseWriter, err error) bool {
-	if !errors.Is(err, services.ErrInvalidJobInput) {
+const jobLogValueMaxBytes = 256
+
+func boundedJobLogValue(value string) string {
+	value = strings.ToValidUTF8(value, "")
+	if len(value) <= jobLogValueMaxBytes {
+		return value
+	}
+	value = value[:jobLogValueMaxBytes]
+	for !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value
+}
+
+func handleInvalidJobInput(w http.ResponseWriter, r *http.Request, operation string, err error) bool {
+	var inputErr *services.JobInputError
+	if !errors.As(err, &inputErr) {
 		return false
 	}
+	var companyID int64
+	if u, ok := middleware.UserFromContext(r.Context()); ok && u != nil {
+		companyID = u.CompanyID
+	}
+	slog.Warn("invalid job input",
+		"request_id", boundedJobLogValue(chimiddleware.GetReqID(r.Context())),
+		"route", boundedJobLogValue(r.URL.Path),
+		"operation", operation,
+		"authenticated_company_id", companyID,
+		"reason", inputErr.Reason(),
+		"relation", inputErr.Relation(),
+	)
 	http.Error(w, "Invalid job details", http.StatusBadRequest)
 	return true
 }
@@ -407,10 +435,10 @@ func handleJobStatusConfigurationError(w http.ResponseWriter, r *http.Request, o
 	}
 
 	slog.Error("job status configuration unavailable",
-		"request_id", chimiddleware.GetReqID(r.Context()),
+		"request_id", boundedJobLogValue(chimiddleware.GetReqID(r.Context())),
 		"version", config.Version,
 		"commit", config.Commit,
-		"route", r.URL.Path,
+		"route", boundedJobLogValue(r.URL.Path),
 		"operation", operation,
 		"submitted_customer_id", submittedCustomerID,
 		"authenticated_company_id", authenticatedCompanyID,
@@ -484,7 +512,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		if handleJobStatusConfigurationError(w, r, "create", custID, u.CompanyID, err) {
 			return
 		}
-		if handleInvalidJobInput(w, err) {
+		if handleInvalidJobInput(w, r, "create", err) {
 			return
 		}
 		internalServerError(w, r, "create job", err)
@@ -532,7 +560,7 @@ func (h *JobHandler) CreateNextOccurrence(w http.ResponseWriter, r *http.Request
 		if handleJobStatusConfigurationError(w, r, "create_next_occurrence", 0, u.CompanyID, err) {
 			return
 		}
-		if handleInvalidJobInput(w, err) {
+		if handleInvalidJobInput(w, r, "create_next_occurrence", err) {
 			return
 		}
 		internalServerError(w, r, "create next occurrence", err)
@@ -668,7 +696,7 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := updateJob(r.Context(), u.CompanyID, id, params)
 	if err != nil {
-		if handleInvalidJobInput(w, err) {
+		if handleInvalidJobInput(w, r, "update", err) {
 			return
 		}
 		internalServerError(w, r, "update job", err)
