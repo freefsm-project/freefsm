@@ -25,7 +25,7 @@ func TestCustomerChildCompanyMigration050BackfillsNullOwnershipIntegration(t *te
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO locations(object_type,object_id,title) VALUES('customer',$1,'Legacy location') RETURNING id`, customerID), &customerLocationID)
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO locations(object_type,object_id,title) VALUES('company',$1,'Company location') RETURNING id`, companyID), &otherLocationID)
 
-	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+	if err := db.Migrate(ctx, customerChildMigrationFSThrough050(t)); err != nil {
 		t.Fatalf("migrate 050: %v", err)
 	}
 	for table, id := range map[string]int64{"projects": projectID, "customer_contacts": contactID, "assets": assetID, "locations": customerLocationID} {
@@ -79,7 +79,7 @@ func TestCustomerChildCompanyMigration050LeavesAmbiguousOwnershipForAuditIntegra
 	var missingParentLocationID int64
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO locations(object_type,object_id,title) VALUES('customer',9223372036854775807,'Missing parent') RETURNING id`), &missingParentLocationID)
 
-	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+	if err := db.Migrate(ctx, customerChildMigrationFSThrough050(t)); err != nil {
 		t.Fatalf("migrate 050 with ambiguous legacy ownership: %v", err)
 	}
 	var projectCompanyID, mismatchedCompanyID, unownedCompanyID, missingParentCompanyID *int64
@@ -155,4 +155,24 @@ func customerChildMigrationDatabaseThrough049(t *testing.T, dsn string) (*DB, co
 		t.Fatalf("migrate through 049: %v", err)
 	}
 	return db, ctx
+}
+
+func customerChildMigrationFSThrough050(t *testing.T) fs.FS {
+	t.Helper()
+	through050 := fstest.MapFS{}
+	entries, err := fs.ReadDir(MigrationFS(), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Name() >= "051_" {
+			continue
+		}
+		data, readErr := fs.ReadFile(MigrationFS(), entry.Name())
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		through050[entry.Name()] = &fstest.MapFile{Data: data}
+	}
+	return through050
 }

@@ -145,6 +145,7 @@ templ JobForm(p JobFormPageData) {
 								<td>
 									<select x-model.number="a.user_id">
 										<option value="0">Select user...</option>
+										<option :value="a.preserved_user_id || 0" :hidden="!a.preserved_user_id" :disabled="!a.preserved_user_id" x-text="a.preserved_user_id ? a.name + ' (inactive)' : ''"></option>
 										for _, u := range p.Users {
 											<option value={ fmt.Sprintf("%d", u.Value) }>{ u.Label }</option>
 										}

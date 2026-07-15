@@ -140,24 +140,112 @@ func TestJobHandlersAuthenticateBeforeParsingOrClassifyingForm(t *testing.T) {
 }
 
 func TestJobFormGETsDisableCaching(t *testing.T) {
+	var newCompanyID, requestedCustomerID, editCompanyID int64
 	h := &JobHandler{
-		newJobFormData: func(context.Context, int64) templates.JobFormPageData {
+		newJobFormData: func(_ context.Context, companyID, customerID int64) templates.JobFormPageData {
+			newCompanyID = companyID
+			requestedCustomerID = customerID
 			return templates.JobFormPageData{Job: &templates.JobDetail{}, Errors: map[string]string{}}
 		},
 		getJobForCompany: func(context.Context, int64, int64) (*ent.Job, error) {
 			return &ent.Job{ID: 41}, nil
 		},
-		editJobFormData: func(context.Context, *ent.Job) templates.JobFormPageData {
-			return templates.JobFormPageData{Job: &templates.JobDetail{ID: 41}, Errors: map[string]string{}}
+		editJobFormData: func(_ context.Context, companyID int64, _ *ent.Job) (templates.JobFormPageData, error) {
+			editCompanyID = companyID
+			return templates.JobFormPageData{Job: &templates.JobDetail{ID: 41}, Errors: map[string]string{}}, nil
 		},
 	}
 
-	for _, path := range []string{"/jobs/new", "/jobs/41/edit"} {
+	for _, path := range []string{"/jobs/new?customer_id=13", "/jobs/41/edit"} {
 		req := authenticatedJobRequest(http.MethodGet, path, url.Values{})
 		rr := httptest.NewRecorder()
 		jobMutationTestRouter(h).ServeHTTP(rr, req)
 		if got := rr.Header().Get("Cache-Control"); got != "no-store" {
 			t.Errorf("GET %s Cache-Control = %q, want no-store", path, got)
+		}
+	}
+	if newCompanyID != 7 || editCompanyID != 7 {
+		t.Fatalf("form builder company IDs = new %d, edit %d; want authenticated company 7", newCompanyID, editCompanyID)
+	}
+	if requestedCustomerID != 13 {
+		t.Fatalf("new form requested customer ID = %d, want 13", requestedCustomerID)
+	}
+}
+
+func TestJobEditGETDoesNotRenderFormWhenEditFormDataFails(t *testing.T) {
+	var gotCompanyID, gotJobID int64
+	h := &JobHandler{
+		getJobForCompany: func(context.Context, int64, int64) (*ent.Job, error) {
+			return &ent.Job{ID: 41}, nil
+		},
+		editJobFormData: func(_ context.Context, companyID int64, job *ent.Job) (templates.JobFormPageData, error) {
+			gotCompanyID, gotJobID = companyID, job.ID
+			return templates.JobFormPageData{}, errors.New("list existing assignment users")
+		},
+	}
+	req := authenticatedJobRequest(http.MethodGet, "/jobs/41/edit", url.Values{})
+	rr := httptest.NewRecorder()
+	jobMutationTestRouter(h).ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want %d; body=%q", rr.Code, http.StatusInternalServerError, rr.Body.String())
+	}
+	if rr.Body.String() != "Internal Server Error\n" {
+		t.Fatalf("body = %q, want generic internal server error", rr.Body.String())
+	}
+	if strings.Contains(rr.Body.String(), "<form") {
+		t.Fatalf("response rendered a destructive edit form: %q", rr.Body.String())
+	}
+	if gotCompanyID != 7 || gotJobID != 41 {
+		t.Fatalf("edit form builder arguments = company %d, job %d; want company 7, job 41", gotCompanyID, gotJobID)
+	}
+}
+
+func TestCustomerIDFromOptionsRejectsUnavailablePreselection(t *testing.T) {
+	customers := []*ent.Customer{{ID: 12}, {ID: 14}}
+	for _, tt := range []struct {
+		name      string
+		requested int64
+		want      int64
+	}{
+		{name: "tenant customer", requested: 12, want: 12},
+		{name: "foreign customer", requested: 13, want: 0},
+		{name: "companyless customer excluded from scoped options", requested: 15, want: 0},
+		{name: "no preselection", requested: 0, want: 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := customerIDFromOptions(customers, tt.requested); got != tt.want {
+				t.Fatalf("customerIDFromOptions() = %d, want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSerializeJobFormAssignmentsPreservesOnlyTenantUsersAndMarksInactive(t *testing.T) {
+	assignments := []services.JobAssignment{
+		{UserID: 21, Name: "Untrusted active name", Role: "lead"},
+		{UserID: 22, Name: "Untrusted inactive name", Role: "helper"},
+		{UserID: 23, Name: "Foreign user", Role: "foreign"},
+		{Name: "Legacy technician", Role: "legacy"},
+	}
+	tenantUsers := []*ent.User{
+		{ID: 21, Name: "Active Technician", IsActive: true},
+		{ID: 22, Name: "Former Technician", IsActive: false},
+	}
+
+	got := serializeJobFormAssignments(assignments, tenantUsers)
+	for _, want := range []string{
+		`{"user_id":21,"name":"Active Technician","role":"lead"}`,
+		`{"user_id":22,"name":"Former Technician","role":"helper","preserved_user_id":22}`,
+		`{"user_id":0,"name":"Legacy technician","role":"legacy"}`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("serialized assignments missing %s: %s", want, got)
+		}
+	}
+	for _, unwanted := range []string{"Foreign user", "Untrusted active name", "Untrusted inactive name"} {
+		if strings.Contains(got, unwanted) {
+			t.Errorf("serialized assignments contains unscoped or untrusted name %q: %s", unwanted, got)
 		}
 	}
 }

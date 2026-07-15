@@ -42,6 +42,22 @@ func (s *UserService) ListAll(ctx context.Context) ([]*ent.User, error) {
 	return s.client.User.Query().Order(ent.Asc(user.FieldName)).All(ctx)
 }
 
+func (s *UserService) ListActiveForCompany(ctx context.Context, companyID int64) ([]*ent.User, error) {
+	return s.client.User.Query().
+		Where(user.CompanyIDEQ(companyID), user.IsActive(true)).
+		Order(ent.Asc(user.FieldName)).
+		All(ctx)
+}
+
+func (s *UserService) ListByIDsForCompany(ctx context.Context, companyID int64, ids []int64) ([]*ent.User, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	return s.client.User.Query().
+		Where(user.CompanyIDEQ(companyID), user.IDIn(ids...)).
+		All(ctx)
+}
+
 type UserCreateParams struct {
 	CompanyID        int64
 	Name             string

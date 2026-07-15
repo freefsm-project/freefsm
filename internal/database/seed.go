@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/status"
+	"github.com/freefsm-project/freefsm/internal/ent/statusworkflow"
+	"github.com/freefsm-project/freefsm/internal/ent/user"
 )
 
 func Seed(ctx context.Context, client *ent.Client) error {
@@ -23,7 +26,60 @@ func Seed(ctx context.Context, client *ent.Client) error {
 	if count > 0 {
 		return fmt.Errorf("database already has %d customer(s); seeding skipped", count)
 	}
+	seedUser, err := client.User.Query().
+		Where(user.CompanyIDEQ(companyID), user.RoleEQ("admin"), user.IsActiveEQ(true)).
+		Order(ent.Asc(user.FieldID)).
+		First(ctx)
+	if err != nil {
+		return fmt.Errorf("resolve company admin for seed time entries: %w", err)
+	}
 
+	const (
+		jobObjectType      = "job"
+		estimateObjectType = "estimate"
+		invoiceObjectType  = "invoice"
+		jobNew             = "job:new"
+		jobPending         = "job:pending"
+		jobInProgress      = "job:in_progress"
+		jobCompleted       = "job:completed"
+		estimateDraft      = "estimate:draft"
+		estimateSent       = "estimate:sent"
+		estimateAccepted   = "estimate:accepted"
+		invoiceInvoiced    = "invoice:invoiced"
+		invoiceSent        = "invoice:sent"
+	)
+	statusIDs := make(map[string]int64)
+	statusCategories := []struct {
+		objectType string
+		category   string
+	}{
+		{jobObjectType, jobNew},
+		{jobObjectType, jobPending},
+		{jobObjectType, jobInProgress},
+		{jobObjectType, jobCompleted},
+		{estimateObjectType, estimateDraft},
+		{estimateObjectType, estimateSent},
+		{estimateObjectType, estimateAccepted},
+		{invoiceObjectType, invoiceInvoiced},
+		{invoiceObjectType, invoiceSent},
+	}
+	for _, requested := range statusCategories {
+		resolved, err := client.Status.Query().
+			Where(
+				status.CompanyIDEQ(companyID),
+				status.CategoryKeyEQ(requested.category),
+				status.IsCategoryDefaultEQ(true),
+				status.HasWorkflowWith(
+					statusworkflow.CompanyIDEQ(companyID),
+					statusworkflow.ObjectTypeEQ(requested.objectType),
+				),
+			).
+			Only(ctx)
+		if err != nil {
+			return fmt.Errorf("resolve %s status %s: %w", requested.objectType, requested.category, err)
+		}
+		statusIDs[requested.category] = resolved.ID
+	}
 	now := time.Now()
 
 	// --- Customers (5) ---
@@ -46,6 +102,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 	}
 	for i, d := range customerData {
 		c, err := client.Customer.Create().
+			SetCompanyID(companyID).
 			SetDisplayName(d.DisplayName).
 			SetEmail(d.Email).
 			SetPhone(d.Phone).
@@ -88,6 +145,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		installed := time.Date(d.InstalledYr, 1, 15, 0, 0, 0, 0, time.UTC)
 		warranty := time.Date(d.WarrantyYr, 1, 15, 0, 0, 0, 0, time.UTC)
 		a, err := client.Asset.Create().
+			SetCompanyID(companyID).
 			SetName(d.Name).
 			SetSerialNumber(d.SerialNumber).
 			SetModel(d.Model).
@@ -121,6 +179,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 	}
 	for i, d := range itemData {
 		it, err := client.Item.Create().
+			SetCompanyID(companyID).
 			SetName(d.Name).
 			SetType(d.Type).
 			SetUnitPrice(d.UnitPrice).
@@ -171,6 +230,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 	}
 	for i, d := range projectData {
 		p, err := client.Project.Create().
+			SetCompanyID(companyID).
 			SetName(d.Name).
 			SetDescription(d.Description).
 			SetCustomerID(customers[d.CustIdx].ID).
@@ -192,25 +252,26 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		CustIdx   int
 		ProjIdx   int
 		AssetIdx  int
-		StatusID  int64
+		Status    string
 		StartOff  time.Duration
 		EndOff    time.Duration
 		Notes     string
 		TechNotes string
 	}{
-		{"AC Repair", "Building 2 Unit B3", 0, 0, 0, 1, -24 * time.Hour, -2 * time.Hour, "Unit not cooling, low refrigerant suspected", "Found leak at evaporator coil, recharged system"},
-		{"Chiller Maintenance", "Primary chiller Q2 service", 4, 4, 3, 4, -72 * time.Hour, -48 * time.Hour, "Scheduled quarterly maintenance", "Replaced worn bearings, checked compressor amp draw"},
-		{"Thermostat Install", "Admin wing smart thermostats", 1, 0, -1, 2, -168 * time.Hour, -144 * time.Hour, "Install 24 smart thermostats with centralized control", "All units online, programming complete"},
-		{"Duct Cleaning", "Main distribution ducts", 2, 2, -1, 3, -96 * time.Hour, -80 * time.Hour, "Annual duct cleaning per maintenance contract", "Removed 18 lbs of debris, sanitized all runs"},
-		{"Compressor Replacement", "Unit C7 rooftop", 3, 3, -1, 4, -48 * time.Hour, -24 * time.Hour, "Compressor seized, emergency replacement", "New unit online, pressures nominal, customer approved"},
+		{"AC Repair", "Building 2 Unit B3", 0, 0, 0, jobNew, -24 * time.Hour, -2 * time.Hour, "Unit not cooling, low refrigerant suspected", "Found leak at evaporator coil, recharged system"},
+		{"Chiller Maintenance", "Primary chiller Q2 service", 4, 4, 3, jobCompleted, -72 * time.Hour, -48 * time.Hour, "Scheduled quarterly maintenance", "Replaced worn bearings, checked compressor amp draw"},
+		{"Thermostat Install", "Admin wing smart thermostats", 1, 0, -1, jobPending, -168 * time.Hour, -144 * time.Hour, "Install 24 smart thermostats with centralized control", "All units online, programming complete"},
+		{"Duct Cleaning", "Main distribution ducts", 2, 2, -1, jobInProgress, -96 * time.Hour, -80 * time.Hour, "Annual duct cleaning per maintenance contract", "Removed 18 lbs of debris, sanitized all runs"},
+		{"Compressor Replacement", "Unit C7 rooftop", 3, 3, -1, jobCompleted, -48 * time.Hour, -24 * time.Hour, "Compressor seized, emergency replacement", "New unit online, pressures nominal, customer approved"},
 	}
 	for i, d := range jobData {
 		b := client.Job.Create().
+			SetCompanyID(companyID).
 			SetJobType(d.JobType).
 			SetSubtitle(d.Subtitle).
 			SetCustomerID(customers[d.CustIdx].ID).
 			SetProjectID(projects[d.ProjIdx].ID).
-			SetStatusID(d.StatusID).
+			SetStatusID(statusIDs[d.Status]).
 			SetStartTime(now.Add(d.StartOff)).
 			SetEndTime(now.Add(d.EndOff)).
 			SetNotes(d.Notes).
@@ -242,18 +303,18 @@ func Seed(ctx context.Context, client *ent.Client) error {
 	// --- Estimates (5) ---
 	estimates := make([]*ent.Estimate, 5)
 	estData := []struct {
-		Title    string
-		CustIdx  int
-		JobIdx   int
-		StatusID int64
-		TaxRate  string
-		Items    []map[string]interface{}
+		Title   string
+		CustIdx int
+		JobIdx  int
+		Status  string
+		TaxRate string
+		Items   []map[string]interface{}
 	}{
-		{"HVAC Repair Estimate - Acme", 0, 0, 2, "8.25", nil},
-		{"Chiller Service Quote - Regional", 3, 1, 2, "8.25", nil},
-		{"Smart Thermostat Proposal - Metro", 1, 2, 3, "8.25", nil},
-		{"Duct Cleaning Estimate - Mall", 2, 3, 2, "8.25", nil},
-		{"Compressor Replacement Quote - Tower", 3, 4, 1, "8.25", nil},
+		{"HVAC Repair Estimate - Acme", 0, 0, estimateSent, "8.25", nil},
+		{"Chiller Service Quote - Regional", 3, 1, estimateSent, "8.25", nil},
+		{"Smart Thermostat Proposal - Metro", 1, 2, estimateAccepted, "8.25", nil},
+		{"Duct Cleaning Estimate - Mall", 2, 3, estimateSent, "8.25", nil},
+		{"Compressor Replacement Quote - Tower", 3, 4, estimateDraft, "8.25", nil},
 	}
 
 	for i, d := range estData {
@@ -264,10 +325,11 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		liJSON, _ := json.Marshal(lineItems)
 
 		e, err := client.Estimate.Create().
+			SetCompanyID(companyID).
 			SetTitle(d.Title).
 			SetCustomerID(customers[d.CustIdx].ID).
 			SetJobID(jobs[d.JobIdx].ID).
-			SetStatusID(d.StatusID).
+			SetStatusID(statusIDs[d.Status]).
 			SetTaxRate(d.TaxRate).
 			SetLineItems(string(liJSON)).
 			Save(ctx)
@@ -283,14 +345,14 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		CustIdx     int
 		JobIdx      int
 		EstimateIdx int
-		StatusID    int64
+		Status      string
 		TaxRate     string
 	}{
-		{"Invoice - Acme Office Repair", 0, 1, -1, 3, "8.25"},
-		{"Invoice - Regional Hospital Maint", 3, 1, 1, 2, "8.25"},
-		{"Invoice - Metro Mall Thermostats", 1, 2, 2, 2, "8.25"},
-		{"Invoice - Downtown Tower Compressor", 3, 4, 4, 2, "8.25"},
-		{"Invoice - Warehouse Duct Cleaning", 2, 3, 3, 3, "8.25"},
+		{"Invoice - Acme Office Repair", 0, 1, -1, invoiceSent, "8.25"},
+		{"Invoice - Regional Hospital Maint", 3, 1, 1, invoiceInvoiced, "8.25"},
+		{"Invoice - Metro Mall Thermostats", 1, 2, 2, invoiceInvoiced, "8.25"},
+		{"Invoice - Downtown Tower Compressor", 3, 4, 4, invoiceInvoiced, "8.25"},
+		{"Invoice - Warehouse Duct Cleaning", 2, 3, 3, invoiceSent, "8.25"},
 	}
 
 	for i, d := range invoiceData {
@@ -301,11 +363,12 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		liJSON, _ := json.Marshal(lineItems)
 
 		invCreate := client.Invoice.Create().
+			SetCompanyID(companyID).
 			SetInvoiceNumber(int64(i + 1)).
 			SetTitle(d.Title).
 			SetCustomerID(customers[d.CustIdx].ID).
 			SetJobID(jobs[d.JobIdx].ID).
-			SetStatusID(d.StatusID).
+			SetStatusID(statusIDs[d.Status]).
 			SetTaxRate(d.TaxRate).
 			SetLineItems(string(liJSON)).
 			SetInvoiceDate(now.AddDate(1, -(i + 1), 0)).
@@ -323,12 +386,13 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		_ = inv
 	}
 
-	// --- Time Entries (5) for admin user (ID 1) ---
+	// --- Time Entries (5) for the company admin ---
 	for i := 0; i < 5; i++ {
 		clockIn := now.AddDate(0, 0, -(i + 1)).Add(-8 * time.Hour)
 		clockOut := clockIn.Add(7*time.Hour + 30*time.Minute)
 		_, err := client.TimeEntry.Create().
-			SetUserID(1).
+			SetCompanyID(companyID).
+			SetUserID(seedUser.ID).
 			SetClockIn(clockIn).
 			SetClockOut(clockOut).
 			SetNotes(fmt.Sprintf("Routine maintenance day %d", i+1)).

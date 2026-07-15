@@ -64,3 +64,33 @@ func TestHXBoostedJobFormKeepsCanonicalAction(t *testing.T) {
 		t.Fatalf("boosted-compatible edit form action is not canonical: %s", html)
 	}
 }
+
+func TestJobFormKeepsInactiveExistingAssignmentRowSpecific(t *testing.T) {
+	var rendered bytes.Buffer
+	err := JobForm(JobFormPageData{
+		Job:                     &JobDetail{ID: 73},
+		Errors:                  map[string]string{},
+		BillingTypes:            []string{"flat_rate"},
+		Users:                   []SelectOption{{Value: 21, Label: "Active Technician"}},
+		ExistingAssignmentsJSON: `[{"user_id":22,"name":"Former Technician","role":"helper","preserved_user_id":22}]`,
+	}).Render(context.Background(), &rendered)
+	if err != nil {
+		t.Fatalf("render JobForm: %v", err)
+	}
+
+	html := rendered.String()
+	for _, want := range []string{
+		`data-existing="[{&#34;user_id&#34;:22,&#34;name&#34;:&#34;Former Technician&#34;`,
+		`:value="a.preserved_user_id || 0"`,
+		`a.name + ' (inactive)'`,
+		`<option value="21">Active Technician</option>`,
+		`add() { this.items.push({user_id:0,name:'',role:''}); }`,
+	} {
+		if !strings.Contains(html, want) {
+			t.Errorf("rendered form missing %q", want)
+		}
+	}
+	if strings.Contains(html, `<option value="22">Former Technician`) {
+		t.Fatalf("inactive user was rendered as a general assignment choice: %s", html)
+	}
+}

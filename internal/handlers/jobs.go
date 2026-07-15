@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -47,8 +48,8 @@ type JobHandler struct {
 	createNext       func(context.Context, int64, int64, time.Time) (*ent.Job, error)
 	canUpdateJob     func(context.Context, int64, string, int64) bool
 	getJobForCompany func(context.Context, int64, int64) (*ent.Job, error)
-	newJobFormData   func(context.Context, int64) templates.JobFormPageData
-	editJobFormData  func(context.Context, *ent.Job) templates.JobFormPageData
+	newJobFormData   func(context.Context, int64, int64) templates.JobFormPageData
+	editJobFormData  func(context.Context, int64, *ent.Job) (templates.JobFormPageData, error)
 }
 
 func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, statusSvc *services.StatusService, projectSvc *services.ProjectService, locSvc *services.LocationService, contactSvc *services.CustomerContactService, tagSvc *services.TagService, tagLinkSvc *services.TagLinkService, defSvc *services.CustomFieldDefinitionService, assetSvc *services.AssetService, assetTypeSvc *services.AssetTypeService, assetStatSvc *services.AssetStatusService, fileSvc *services.FileService, activitySvc *services.ActivityService, userSvc *services.UserService, policySvc *services.PolicyService, timeEntrySvc *services.TimeEntryService) *JobHandler {
@@ -56,8 +57,8 @@ func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, 
 		return policySvc.CanAccessObject(ctx, userID, role, objectref.New(objectref.TypeJob, jobID), policyUpdate)
 	}}
 	h.newJobFormData = h.newJobForm
-	h.editJobFormData = func(ctx context.Context, job *ent.Job) templates.JobFormPageData {
-		return h.formDataFromJob(ctx, job, h.statusesForSelect(ctx))
+	h.editJobFormData = func(ctx context.Context, companyID int64, job *ent.Job) (templates.JobFormPageData, error) {
+		return h.formDataFromJob(ctx, companyID, job, h.statusesForSelect(ctx))
 	}
 	return h
 }
@@ -463,7 +464,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		if newJobFormData == nil {
 			newJobFormData = h.newJobForm
 		}
-		templates.JobForm(newJobFormData(r.Context(), customerID)).Render(r.Context(), w)
+		templates.JobForm(newJobFormData(r.Context(), u.CompanyID, customerID)).Render(r.Context(), w)
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -622,11 +623,15 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		editJobFormData := h.editJobFormData
 		if editJobFormData == nil {
-			editJobFormData = func(ctx context.Context, job *ent.Job) templates.JobFormPageData {
-				return h.formDataFromJob(ctx, job, h.statusesForSelect(ctx))
+			editJobFormData = func(ctx context.Context, companyID int64, job *ent.Job) (templates.JobFormPageData, error) {
+				return h.formDataFromJob(ctx, companyID, job, h.statusesForSelect(ctx))
 			}
 		}
-		fd := editJobFormData(r.Context(), j)
+		fd, err := editJobFormData(r.Context(), u.CompanyID, j)
+		if err != nil {
+			internalServerError(w, r, "build job edit form", err)
+			return
+		}
 		fd.PendingNextOccurrence = r.URL.Query().Get("pending_next_occurrence") == "1"
 		templates.JobForm(fd).Render(r.Context(), w)
 		return
@@ -853,14 +858,14 @@ func (h *JobHandler) validJobStatus(w http.ResponseWriter, r *http.Request, stat
 	return false
 }
 
-func (h *JobHandler) jobFormFromRequest(r *http.Request, id int64) templates.JobFormPageData {
+func (h *JobHandler) jobFormFromRequest(r *http.Request, companyID, id int64) templates.JobFormPageData {
 	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	projectID, _ := strconv.ParseInt(r.FormValue("project_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	contactID, _ := strconv.ParseInt(r.FormValue("customer_contact_id"), 10, 64)
 	assetID, _ := strconv.ParseInt(r.FormValue("asset_id"), 10, 64)
 	statusID, _ := strconv.ParseInt(r.FormValue("status_id"), 10, 64)
-	fd := h.newJobForm(r.Context(), customerID)
+	fd := h.newJobForm(r.Context(), companyID, customerID)
 	fd.Job.ID = id
 	fd.Job.CustomerID = customerID
 	fd.Job.ProjectID = projectID
@@ -882,22 +887,22 @@ func (h *JobHandler) jobFormFromRequest(r *http.Request, id int64) templates.Job
 	return fd
 }
 
-func (h *JobHandler) newJobForm(ctx context.Context, customerID int64) templates.JobFormPageData {
+func (h *JobHandler) newJobForm(ctx context.Context, companyID, customerID int64) templates.JobFormPageData {
 	statuses := h.statusesForSelect(ctx)
 	projectStatuses, _ := h.statusSvc.ByObjectType(ctx, "project")
-	customers, _ := h.custSvc.ListAll(ctx)
+	customers, _ := h.custSvc.ListAllForCompany(ctx, companyID)
+	customerID = customerIDFromOptions(customers, customerID)
 	var projects []*ent.Project
-	if customerID > 0 {
-		projects, _ = h.projectSvc.ListByCustomer(ctx, customerID)
-	}
-	locations, _ := h.locSvc.ListByCustomer(ctx, customerID)
+	var locations []*ent.Location
 	var assets []*ent.Asset
 	if customerID > 0 {
+		projects, _ = h.projectSvc.ListByCustomer(ctx, customerID)
+		locations, _ = h.locSvc.ListByCustomer(ctx, customerID)
 		assets, _ = h.assetSvc.ListForCustomer(ctx, customerID)
 	}
 	assetTypes, _ := h.assetTypeSvc.List(ctx)
 	assetStatuses, _ := h.assetStatSvc.List(ctx)
-	users, _ := h.userSvc.ListAll(ctx)
+	users, _ := h.userSvc.ListActiveForCompany(ctx, companyID)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	return templates.JobFormPageData{
 		Job: &templates.JobDetail{
@@ -923,20 +928,24 @@ func (h *JobHandler) newJobForm(ctx context.Context, customerID int64) templates
 	}
 }
 
-func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses []*ent.Status) templates.JobFormPageData {
+func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *ent.Job, statuses []*ent.Status) (templates.JobFormPageData, error) {
 	projectStatuses, _ := h.statusSvc.ByObjectType(ctx, "project")
-	customers, _ := h.custSvc.ListAll(ctx)
+	customers, _ := h.custSvc.ListAllForCompany(ctx, companyID)
 	projects, _ := h.projectSvc.ListByCustomer(ctx, j.CustomerID)
 	locations, _ := h.locSvc.ListByCustomer(ctx, j.CustomerID)
 	assets, _ := h.assetSvc.ListForCustomer(ctx, j.CustomerID)
 	assetTypes, _ := h.assetTypeSvc.List(ctx)
 	assetStatuses, _ := h.assetStatSvc.List(ctx)
-	users, _ := h.userSvc.ListAll(ctx)
+	users, _ := h.userSvc.ListActiveForCompany(ctx, companyID)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	d := jobToDetail(ctx, j, statuses)
 	assignments, _ := h.svc.Assignments(ctx, j.ID)
 	if len(assignments) == 0 {
 		assignments = services.ParseAssignments(j.Assignments)
+	}
+	assignmentUsers, err := h.userSvc.ListByIDsForCompany(ctx, companyID, assignmentUserIDs(assignments))
+	if err != nil {
+		return templates.JobFormPageData{}, fmt.Errorf("list existing assignment users: %w", err)
 	}
 	return templates.JobFormPageData{
 		Job:                     &d,
@@ -951,11 +960,66 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, j *ent.Job, statuses [
 		Statuses:                statusOptions(statuses),
 		BillingTypes:            services.JobBillingTypes,
 		ExistingVisitsJSON:      services.SerializeVisits(services.ParseVisits(j.Visits)),
-		ExistingAssignmentsJSON: services.SerializeAssignments(assignments),
+		ExistingAssignmentsJSON: serializeJobFormAssignments(assignments, assignmentUsers),
 		ExistingSubtasksJSON:    services.SerializeSubtasks(services.ParseSubtasks(j.Subtasks)),
 		CustomFields:            buildCustomFieldDisplay(defs, j.CustomFields),
 		Errors:                  map[string]string{},
+	}, nil
+}
+
+type jobFormAssignment struct {
+	UserID          int64  `json:"user_id"`
+	Name            string `json:"name"`
+	Role            string `json:"role"`
+	PreservedUserID int64  `json:"preserved_user_id,omitempty"`
+}
+
+func assignmentUserIDs(assignments []services.JobAssignment) []int64 {
+	ids := make([]int64, 0, len(assignments))
+	for _, assignment := range assignments {
+		if assignment.UserID > 0 {
+			ids = append(ids, assignment.UserID)
+		}
 	}
+	return ids
+}
+
+func serializeJobFormAssignments(assignments []services.JobAssignment, tenantUsers []*ent.User) string {
+	usersByID := make(map[int64]*ent.User, len(tenantUsers))
+	for _, user := range tenantUsers {
+		usersByID[user.ID] = user
+	}
+
+	items := make([]jobFormAssignment, 0, len(assignments))
+	for _, assignment := range assignments {
+		if assignment.UserID <= 0 {
+			items = append(items, jobFormAssignment{Name: assignment.Name, Role: assignment.Role})
+			continue
+		}
+		user := usersByID[assignment.UserID]
+		if user == nil {
+			continue
+		}
+		item := jobFormAssignment{UserID: user.ID, Name: user.Name, Role: assignment.Role}
+		if !user.IsActive {
+			item.PreservedUserID = user.ID
+		}
+		items = append(items, item)
+	}
+	if len(items) == 0 {
+		return "[]"
+	}
+	encoded, _ := json.Marshal(items)
+	return string(encoded)
+}
+
+func customerIDFromOptions(customers []*ent.Customer, requestedID int64) int64 {
+	for _, customer := range customers {
+		if customer.ID == requestedID {
+			return requestedID
+		}
+	}
+	return 0
 }
 
 func userOptions(users []*ent.User) []templates.SelectOption {
