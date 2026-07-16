@@ -6,10 +6,11 @@ templ Pagination(p PaginationData) {
 	if p.TotalPages > 1 {
 		<nav aria-label="Pagination" class="pagination-nav">
 			if p.CurrentPage > 1 {
-				<a href={ templ.URL(fmt.Sprintf("%s?page=%d", p.BaseURL, p.CurrentPage-1)) }
+				<a href={ templ.URL(listURL(p.BaseURL, p.Query, p.CurrentPage-1)) }
 					role="button" class="outline"
-					hx-get={ templ.URL(fmt.Sprintf("%s?page=%d", p.BaseURL, p.CurrentPage-1)) }
+					hx-get={ templ.URL(listURL(p.BaseURL, p.Query, p.CurrentPage-1)) }
 					hx-target={ p.Target }
+					hx-sync={ p.Target + ":replace" }
 					hx-swap="outerHTML"
 					hx-push-url="true"
 					hx-indicator="this"
@@ -17,10 +18,11 @@ templ Pagination(p PaginationData) {
 			}
 			<small class="pagination-status">Page { fmt.Sprintf("%d", p.CurrentPage) } of { fmt.Sprintf("%d", p.TotalPages) }</small>
 			if p.CurrentPage < p.TotalPages {
-				<a href={ templ.URL(fmt.Sprintf("%s?page=%d", p.BaseURL, p.CurrentPage+1)) }
+				<a href={ templ.URL(listURL(p.BaseURL, p.Query, p.CurrentPage+1)) }
 					role="button" class="outline"
-					hx-get={ templ.URL(fmt.Sprintf("%s?page=%d", p.BaseURL, p.CurrentPage+1)) }
+					hx-get={ templ.URL(listURL(p.BaseURL, p.Query, p.CurrentPage+1)) }
 					hx-target={ p.Target }
+					hx-sync={ p.Target + ":replace" }
 					hx-swap="outerHTML"
 					hx-push-url="true"
 					hx-indicator="this"

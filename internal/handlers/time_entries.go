@@ -35,20 +35,36 @@ func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
 	perPage := 25
 
 	user, _ := middleware.UserFromContext(r.Context())
-	isAdmin := user != nil && user.Role == "admin"
-	isDispatcher := user != nil && user.Role == "dispatcher"
+	if user == nil {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	isAdmin := user.Role == "admin"
+	isDispatcher := user.Role == "dispatcher"
 	canViewAll := isAdmin || isDispatcher
 
 	var filterUserID int64
 	if canViewAll {
 		filterUserID, _ = strconv.ParseInt(r.URL.Query().Get("user_id"), 10, 64)
-	} else if user != nil {
+	} else {
 		filterUserID = user.ID
 	}
 
 	search := r.URL.Query().Get("search")
+	dateFrom := r.URL.Query().Get("date_from")
+	dateTo := r.URL.Query().Get("date_to")
+	from, before, err := parseTimeEntryDateRange(dateFrom, dateTo, middleware.CompanyLocation(r.Context()))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	entries, total, err := h.svc.List(r.Context(), filterUserID, search, page, perPage, canViewAll)
+	entries, total, err := h.svc.List(r.Context(), services.TimeEntryListFilter{
+		UserID:        filterUserID,
+		Search:        search,
+		ClockInFrom:   from,
+		ClockInBefore: before,
+	}, page, perPage)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -87,15 +103,41 @@ func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
 		Total:          total,
 		TotalPages:     services.TimeEntryPaginationTotalPages(total, perPage),
 		Search:         search,
+		UserID:         filterUserID,
+		DateFrom:       dateFrom,
+		DateTo:         dateTo,
 		ShowUserFilter: canViewAll,
 		Users:          users,
 	}
 
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
-		render(w, r, templates.TimeEntriesTable(data))
+		render(w, r, templates.TimeEntriesListContent(data))
 		return
 	}
 	render(w, r, templates.TimeEntriesIndex(data))
+}
+
+func parseTimeEntryDateRange(dateFrom, dateTo string, loc *time.Location) (*time.Time, *time.Time, error) {
+	var from, before *time.Time
+	if dateFrom != "" {
+		parsed, err := time.ParseInLocation("2006-01-02", dateFrom, loc)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid date_from")
+		}
+		from = &parsed
+	}
+	if dateTo != "" {
+		parsed, err := time.ParseInLocation("2006-01-02", dateTo, loc)
+		if err != nil {
+			return nil, nil, fmt.Errorf("invalid date_to")
+		}
+		exclusive := parsed.AddDate(0, 0, 1)
+		before = &exclusive
+	}
+	if from != nil && before != nil && !from.Before(*before) {
+		return nil, nil, fmt.Errorf("date_from must not be after date_to")
+	}
+	return from, before, nil
 }
 
 func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {

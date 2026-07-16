@@ -4,17 +4,7 @@ import "fmt"
 
 templ ItemsIndex(p ItemListPageData) {
 	@Layout("Items") {
-
-		<div class="list-toolbar work-queue-toolbar">
-			<form class="work-queue-filters" hx-get="/items" hx-target="#item-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
-				<input type="search" name="search" placeholder="Search by name or SKU..."
-					value={ p.Search }
-					hx-trigger="input changed delay:300ms"/>
-				<span id="search-spinner" class="spinner htmx-indicator"></span>
-			</form>
-			<a href="/items/new" role="button">New Item</a>
-		</div>
-		@ItemsTable(p)
+		@ItemsListContent(p)
 
 		<div hx-get="/items/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
@@ -22,8 +12,18 @@ templ ItemsIndex(p ItemListPageData) {
 	}
 }
 
+templ ItemsListContent(p ItemListPageData) {
+	<div id="item-list-content" class="focused-list-content">
+		@ListToolbar(ListToolbarData{
+			Action: "/items", Target: "#item-list-content", Search: p.Search,
+			SearchPlaceholder: "Search by name or SKU...", NewURL: "/items/new", NewLabel: "New Item",
+		})
+		@ItemsTable(p)
+	</div>
+}
+
 templ ItemsTable(p ItemListPageData) {
-	<div id="item-table-wrap">
+	<div class="focused-list-results">
 		<div class="work-queue-wrap">
 			<table class="work-queue-table">
 			<thead>
@@ -74,7 +74,8 @@ templ ItemsTable(p ItemListPageData) {
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
 			BaseURL:     "/items",
-			Target:      "#item-table-wrap",
+			Query:       listQuery(p.Search, nil, nil),
+			Target:      "#item-list-content",
 		})
 	</div>
 }

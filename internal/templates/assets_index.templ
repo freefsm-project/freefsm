@@ -4,28 +4,7 @@ import "fmt"
 
 templ AssetIndex(p AssetListPageData) {
 	@Layout("Assets") {
-		<div class="list-toolbar work-queue-toolbar">
-			<form class="work-queue-filters" hx-get="/assets" hx-target="#asset-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
-				<input type="search" name="search" placeholder="Search assets..."
-					value={ p.Search }
-					hx-trigger="input changed delay:300ms"/>
-				<select name="asset_type_id" hx-trigger="change">
-					<option value="0">All Types</option>
-					for _, t := range p.AssetTypes {
-						<option value={ fmt.Sprintf("%d", t.Value) } selected?={ p.AssetTypeID == t.Value }>{ t.Label }</option>
-					}
-				</select>
-				<select name="asset_status_id" hx-trigger="change">
-					<option value="0">All Statuses</option>
-					for _, s := range p.AssetStatuses {
-						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.AssetStatusID == s.Value }>{ s.Label }</option>
-					}
-				</select>
-				<span id="search-spinner" class="spinner htmx-indicator"></span>
-			</form>
-			<a href="/assets/new" role="button">New Asset</a>
-		</div>
-		@AssetTable(p)
+		@AssetListContent(p)
 
 		<div hx-get="/assets/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
@@ -33,8 +12,39 @@ templ AssetIndex(p AssetListPageData) {
 	}
 }
 
+templ AssetListContent(p AssetListPageData) {
+	<div id="asset-list-content" class="focused-list-content">
+		@ListToolbar(ListToolbarData{
+			Action: "/assets", Target: "#asset-list-content", Search: p.Search,
+			SearchPlaceholder: "Search assets...", NewURL: "/assets/new", NewLabel: "New Asset",
+			ShowFilter: true,
+			Filters: filterValues("asset_type_id", fmt.Sprintf("%d", p.AssetTypeID), "asset_status_id", fmt.Sprintf("%d", p.AssetStatusID)),
+			Scope: customerScope(p.CustomerID),
+			FilterCount: activeFilterCount(filterValues("asset_type_id", fmt.Sprintf("%d", p.AssetTypeID), "asset_status_id", fmt.Sprintf("%d", p.AssetStatusID))),
+		}) {
+			<label>Asset type
+				<select name="asset_type_id">
+					<option value="0">All Types</option>
+					for _, t := range p.AssetTypes {
+						<option value={ fmt.Sprintf("%d", t.Value) } selected?={ p.AssetTypeID == t.Value }>{ t.Label }</option>
+					}
+				</select>
+			</label>
+			<label>Asset status
+				<select name="asset_status_id">
+					<option value="0">All Statuses</option>
+					for _, s := range p.AssetStatuses {
+						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.AssetStatusID == s.Value }>{ s.Label }</option>
+					}
+				</select>
+			</label>
+		}
+		@AssetTable(p)
+	</div>
+}
+
 templ AssetTable(p AssetListPageData) {
-	<div id="asset-table-wrap">
+	<div class="focused-list-results">
 		<div class="work-queue-wrap">
 			<table class="work-queue-table">
 			<thead>
@@ -95,7 +105,8 @@ templ AssetTable(p AssetListPageData) {
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
 			BaseURL:     "/assets",
-			Target:      "#asset-table-wrap",
+			Query:       listQuery(p.Search, filterValues("asset_type_id", fmt.Sprintf("%d", p.AssetTypeID), "asset_status_id", fmt.Sprintf("%d", p.AssetStatusID)), customerScope(p.CustomerID)),
+			Target:      "#asset-list-content",
 		})
 	</div>
 }

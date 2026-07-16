@@ -4,23 +4,7 @@ import "fmt"
 
 templ ProjectIndex(p ProjectListPageData) {
 	@Layout("Projects") {
-
-		<div class="list-toolbar work-queue-toolbar">
-			<form class="work-queue-filters" hx-get="/projects" hx-target="#project-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
-				<input type="search" name="search" placeholder="Search projects..."
-					value={ p.Search }
-					hx-trigger="input changed delay:300ms"/>
-				<select name="status_id" hx-trigger="change">
-					<option value="0">All Statuses</option>
-					for _, s := range p.Statuses {
-						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
-					}
-				</select>
-				<span id="search-spinner" class="spinner htmx-indicator"></span>
-			</form>
-			<a href="/projects/new" role="button">New Project</a>
-		</div>
-		@ProjectTable(p)
+		@ProjectListContent(p)
 
 		<div hx-get="/projects/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
@@ -28,8 +12,29 @@ templ ProjectIndex(p ProjectListPageData) {
 	}
 }
 
+templ ProjectListContent(p ProjectListPageData) {
+	<div id="project-list-content" class="focused-list-content">
+		@ListToolbar(ListToolbarData{
+			Action: "/projects", Target: "#project-list-content", Search: p.Search,
+			SearchPlaceholder: "Search projects...", NewURL: "/projects/new", NewLabel: "New Project",
+			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)),
+			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
+		}) {
+			<label>Project status
+				<select name="status_id">
+					<option value="0">All Statuses</option>
+					for _, s := range p.Statuses {
+						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
+					}
+				</select>
+			</label>
+		}
+		@ProjectTable(p)
+	</div>
+}
+
 templ ProjectTable(p ProjectListPageData) {
-	<div id="project-table-wrap">
+	<div class="focused-list-results">
 		<div class="work-queue-wrap">
 			<table class="work-queue-table">
 			<thead>
@@ -80,7 +85,8 @@ templ ProjectTable(p ProjectListPageData) {
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
 			BaseURL:     "/projects",
-			Target:      "#project-table-wrap",
+			Query:       listQuery(p.Search, filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), nil),
+			Target:      "#project-list-content",
 		})
 	</div>
 }

@@ -4,26 +4,7 @@ import "fmt"
 
 templ InvoicesIndex(p InvoiceListPageData) {
 	@Layout("Invoices") {
-
-		<div class="list-toolbar work-queue-toolbar">
-			<form class="work-queue-filters" hx-get="/invoices" hx-target="#invoice-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
-				<input type="search" name="search" placeholder="Search by title..."
-					value={ p.Search }
-					hx-trigger="input changed delay:300ms"/>
-				<select name="status_id" hx-trigger="change">
-					<option value="0">All Statuses</option>
-					for _, s := range p.Statuses {
-						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
-					}
-				</select>
-				if p.CustomerID > 0 {
-					<input type="hidden" name="customer_id" value={ fmt.Sprintf("%d", p.CustomerID) }/>
-				}
-				<span id="search-spinner" class="spinner htmx-indicator"></span>
-			</form>
-			<a href="/invoices/new" role="button">New Invoice</a>
-		</div>
-		@InvoicesTable(p)
+		@InvoicesListContent(p)
 
 		<div hx-get="/invoices/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
@@ -31,8 +12,29 @@ templ InvoicesIndex(p InvoiceListPageData) {
 	}
 }
 
+templ InvoicesListContent(p InvoiceListPageData) {
+	<div id="invoice-list-content" class="focused-list-content">
+		@ListToolbar(ListToolbarData{
+			Action: "/invoices", Target: "#invoice-list-content", Search: p.Search,
+			SearchPlaceholder: "Search by title...", NewURL: "/invoices/new", NewLabel: "New Invoice",
+			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), Scope: customerScope(p.CustomerID),
+			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
+		}) {
+			<label>Invoice status
+				<select name="status_id">
+					<option value="0">All Statuses</option>
+					for _, s := range p.Statuses {
+						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
+					}
+				</select>
+			</label>
+		}
+		@InvoicesTable(p)
+	</div>
+}
+
 templ InvoicesTable(p InvoiceListPageData) {
-	<div id="invoice-table-wrap">
+	<div class="focused-list-results">
 		<div class="work-queue-wrap">
 			<table class="work-queue-table">
 			<thead>
@@ -76,8 +78,9 @@ templ InvoicesTable(p InvoiceListPageData) {
 		@Pagination(PaginationData{
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
-			BaseURL:     customerScopedListURL("/invoices", p.CustomerID),
-			Target:      "#invoice-table-wrap",
+			BaseURL:     "/invoices",
+			Query:       listQuery(p.Search, filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), customerScope(p.CustomerID)),
+			Target:      "#invoice-list-content",
 		})
 	</div>
 }

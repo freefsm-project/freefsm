@@ -1,0 +1,68 @@
+package templates
+
+import "fmt"
+
+templ ListToolbar(p ListToolbarData) {
+	<div class="focused-list-toolbar"
+		x-data="{ search: $el.dataset.search }"
+		data-search={ p.Search }
+		hx-sync={ p.Target + ":replace" }>
+		<div class="focused-list-actions">
+			if p.NewURL != "" {
+				<a href={ templ.URL(p.NewURL) } role="button" class="focused-list-new">{ p.NewLabel }</a>
+			}
+			if p.ShowFilter {
+				<details class="focused-list-filter">
+					<summary role="button" class="secondary outline">
+						Filter
+						if p.FilterCount > 0 {
+							<span class="focused-list-filter-count" aria-label={ fmt.Sprintf("%d active filters", p.FilterCount) }>{ fmt.Sprintf("%d", p.FilterCount) }</span>
+						}
+					</summary>
+					<form method="get" action={ templ.URL(p.Action) }
+						class="focused-list-filter-panel"
+						hx-get={ templ.URL(p.Action) }
+						hx-target={ p.Target }
+						hx-swap="outerHTML"
+						hx-push-url="true">
+						<input id={ listFilterSearchID(p.Target) } type="hidden" name="search" value={ p.Search } x-bind:value="search"/>
+						for _, field := range queryFields(p.Scope) {
+							<input type="hidden" name={ field.Name } value={ field.Value }/>
+						}
+						{ children... }
+						<div class="focused-list-filter-actions">
+							<button type="submit">Apply</button>
+							<a href={ templ.URL(listURL(p.Action, listQuery(p.Search, nil, p.Scope), 1)) }
+								role="button" class="secondary outline"
+								hx-get={ templ.URL(listURL(p.Action, p.Scope, 1)) }
+								hx-include={ "#" + listFilterSearchID(p.Target) }
+								hx-target={ p.Target }
+								hx-swap="outerHTML"
+								hx-push-url="true">Clear</a>
+						</div>
+					</form>
+				</details>
+			}
+		</div>
+		<form method="get" action={ templ.URL(p.Action) }
+			class="focused-list-search"
+			hx-get={ templ.URL(p.Action) }
+			hx-target={ p.Target }
+			hx-swap="outerHTML"
+			hx-push-url="true"
+			hx-indicator="find .spinner">
+			for _, field := range queryFields(p.Scope) {
+				<input type="hidden" name={ field.Name } value={ field.Value }/>
+			}
+			for _, field := range queryFields(p.Filters) {
+				<input type="hidden" name={ field.Name } value={ field.Value }/>
+			}
+			<label class="visually-hidden" for={ listSearchID(p.Target) }>Search</label>
+			<input id={ listSearchID(p.Target) } type="search" name="search" placeholder={ p.SearchPlaceholder }
+				value={ p.Search }
+				x-model="search"
+				hx-trigger="input changed delay:300ms, search"/>
+			<span class="spinner htmx-indicator" aria-hidden="true"></span>
+		</form>
+	</div>
+}

@@ -4,26 +4,7 @@ import "fmt"
 
 templ EstimatesIndex(p EstimateListPageData) {
 	@Layout("Estimates") {
-
-		<div class="list-toolbar work-queue-toolbar">
-			<form class="work-queue-filters" hx-get="/estimates" hx-target="#estimate-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
-				<input type="search" name="search" placeholder="Search by title..."
-					value={ p.Search }
-					hx-trigger="input changed delay:300ms"/>
-				<select name="status_id" hx-trigger="change">
-					<option value="0">All Statuses</option>
-					for _, s := range p.Statuses {
-						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
-					}
-				</select>
-				if p.CustomerID > 0 {
-					<input type="hidden" name="customer_id" value={ fmt.Sprintf("%d", p.CustomerID) }/>
-				}
-				<span id="search-spinner" class="spinner htmx-indicator"></span>
-			</form>
-			<a href="/estimates/new" role="button">New Estimate</a>
-		</div>
-		@EstimatesTable(p)
+		@EstimatesListContent(p)
 
 		<div hx-get="/estimates/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
@@ -31,8 +12,29 @@ templ EstimatesIndex(p EstimateListPageData) {
 	}
 }
 
+templ EstimatesListContent(p EstimateListPageData) {
+	<div id="estimate-list-content" class="focused-list-content">
+		@ListToolbar(ListToolbarData{
+			Action: "/estimates", Target: "#estimate-list-content", Search: p.Search,
+			SearchPlaceholder: "Search by title...", NewURL: "/estimates/new", NewLabel: "New Estimate",
+			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), Scope: customerScope(p.CustomerID),
+			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
+		}) {
+			<label>Estimate status
+				<select name="status_id">
+					<option value="0">All Statuses</option>
+					for _, s := range p.Statuses {
+						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
+					}
+				</select>
+			</label>
+		}
+		@EstimatesTable(p)
+	</div>
+}
+
 templ EstimatesTable(p EstimateListPageData) {
-	<div id="estimate-table-wrap">
+	<div class="focused-list-results">
 		<div class="work-queue-wrap">
 			<table class="work-queue-table">
 			<thead>
@@ -72,8 +74,9 @@ templ EstimatesTable(p EstimateListPageData) {
 		@Pagination(PaginationData{
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
-			BaseURL:     customerScopedListURL("/estimates", p.CustomerID),
-			Target:      "#estimate-table-wrap",
+			BaseURL:     "/estimates",
+			Query:       listQuery(p.Search, filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), customerScope(p.CustomerID)),
+			Target:      "#estimate-list-content",
 		})
 	</div>
 }

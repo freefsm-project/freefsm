@@ -39,18 +39,28 @@ type TimeEntryUpdateParams struct {
 	Notes    *string
 }
 
-func (s *TimeEntryService) List(ctx context.Context, userID int64, search string, page, perPage int, isAdmin bool) ([]*ent.TimeEntry, int, error) {
+type TimeEntryListFilter struct {
+	UserID        int64
+	Search        string
+	ClockInFrom   *time.Time
+	ClockInBefore *time.Time
+}
+
+func (s *TimeEntryService) List(ctx context.Context, filter TimeEntryListFilter, page, perPage int) ([]*ent.TimeEntry, int, error) {
 	q := s.client.TimeEntry.Query().
 		Order(ent.Desc(timeentry.FieldClockIn))
 
-	if !isAdmin {
-		q = q.Where(timeentry.UserIDEQ(userID))
+	if filter.UserID > 0 {
+		q = q.Where(timeentry.UserIDEQ(filter.UserID))
 	}
-	if userID > 0 && isAdmin {
-		q = q.Where(timeentry.UserIDEQ(userID))
+	if filter.Search != "" {
+		q = q.Where(timeentry.NotesContainsFold(filter.Search))
 	}
-	if search != "" {
-		q = q.Where(timeentry.NotesContainsFold(search))
+	if filter.ClockInFrom != nil {
+		q = q.Where(timeentry.ClockInGTE(*filter.ClockInFrom))
+	}
+	if filter.ClockInBefore != nil {
+		q = q.Where(timeentry.ClockInLT(*filter.ClockInBefore))
 	}
 
 	total, err := q.Count(ctx)

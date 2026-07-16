@@ -314,6 +314,153 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 /* Dense work queue primitives */
+.focused-list-content {
+  --focused-list-control-height: 2.25rem;
+}
+
+.focused-list-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 30rem) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--pico-spacing);
+  margin-bottom: calc(var(--pico-spacing) * 0.75);
+}
+
+.focused-list-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: calc(var(--pico-spacing) * 0.5);
+  min-width: max-content;
+}
+
+.focused-list-new,
+.focused-list-filter > summary,
+.focused-list-filter-actions > * {
+  box-sizing: border-box;
+  display: inline-flex;
+  height: var(--focused-list-control-height);
+  min-height: var(--focused-list-control-height);
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: calc(var(--pico-form-element-spacing-vertical) * 0.65) calc(var(--pico-form-element-spacing-horizontal) * 0.8);
+  font-size: 0.875rem;
+  line-height: 1.2;
+}
+
+.focused-list-filter {
+  position: relative;
+  margin: 0;
+}
+
+.focused-list-filter > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(var(--pico-spacing) * 0.4);
+  list-style: none;
+}
+
+.focused-list-filter > summary::-webkit-details-marker {
+  display: none;
+}
+
+.focused-list-filter > summary[role="button"]::after {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  float: none;
+}
+
+.focused-list-filter[open] > summary {
+  margin-bottom: 0;
+}
+
+.focused-list-filter-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.25rem;
+  min-height: 1.25rem;
+  padding-inline: 0.3rem;
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-primary-background);
+  color: var(--pico-primary-inverse);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.focused-list-filter-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--pico-spacing) * 0.35);
+  left: 0;
+  display: grid;
+  gap: calc(var(--pico-spacing) * 0.65);
+  min-width: min(22rem, calc(100vw - var(--pico-spacing) * 2));
+  margin: 0;
+  padding: var(--pico-spacing);
+  border: var(--pico-border-width) solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+  box-shadow: var(--pico-box-shadow);
+}
+
+.focused-list-filter-panel label {
+  margin: 0;
+  color: var(--pico-muted-color);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.focused-list-filter-panel :is(input, select) {
+  height: var(--focused-list-control-height);
+  margin: calc(var(--pico-spacing) * 0.25) 0 0;
+  padding-block: 0.3rem;
+  font-size: 0.875rem;
+  line-height: 1.2;
+}
+
+.focused-list-filter-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: calc(var(--pico-spacing) * 0.5);
+  padding-top: calc(var(--pico-spacing) * 0.25);
+}
+
+.focused-list-search {
+  position: relative;
+  grid-column: 2;
+  width: 100%;
+  margin: 0;
+}
+
+.focused-list-search input[type="search"] {
+  height: var(--focused-list-control-height);
+  margin: 0;
+  padding-block: 0.3rem;
+  font-size: 0.875rem;
+  line-height: 1.2;
+}
+
+.focused-list-search .spinner {
+  position: absolute;
+  top: 50%;
+  right: calc(var(--pico-spacing) * 0.75);
+  transform: translateY(-50%);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .work-queue-toolbar {
   align-items: center;
   gap: 0.75rem;
@@ -433,6 +580,31 @@ html[data-theme="dark"] .theme-icon-moon {
 }
 
 @media (max-width: 700px) {
+  .focused-list-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: calc(var(--pico-spacing) * 0.6);
+  }
+
+  .focused-list-actions {
+    grid-row: 1;
+  }
+
+  .focused-list-search {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .focused-list-filter-panel {
+    position: fixed;
+    top: auto;
+    right: var(--pico-spacing);
+    bottom: var(--pico-spacing);
+    left: var(--pico-spacing);
+    min-width: 0;
+    max-height: calc(100vh - var(--pico-spacing) * 2);
+    overflow-y: auto;
+  }
+
   .work-queue-toolbar,
   .work-queue-filters {
     align-items: stretch;

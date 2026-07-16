@@ -53,7 +53,7 @@ func (h *ItemHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
-		templates.ItemsTable(data).Render(r.Context(), w)
+		templates.ItemsListContent(data).Render(r.Context(), w)
 		return
 	}
 	templates.ItemsIndex(data).Render(r.Context(), w)

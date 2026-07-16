@@ -58,3 +58,38 @@ func TestTimeEntryUpdateSetsAndClearsJob(t *testing.T) {
 		t.Fatalf("JobID = %v, want nil", updated.JobID)
 	}
 }
+
+func TestTimeEntryListFiltersByUserSearchAndClockInRange(t *testing.T) {
+	client := openPolicyTestClient(t)
+	defer client.Close()
+
+	ctx := context.Background()
+	svc := NewTimeEntryService(client)
+	selectedUser := client.User.Create().SetName("Selected Tech").SetEmail("selected-list@example.com").SetPasswordHash("hash").SetRole("tech").SaveX(ctx)
+	otherUser := client.User.Create().SetName("Other Tech").SetEmail("other-list@example.com").SetPasswordHash("hash").SetRole("tech").SaveX(ctx)
+	from := time.Date(2026, time.July, 10, 4, 0, 0, 0, time.UTC)
+	before := time.Date(2026, time.July, 11, 4, 0, 0, 0, time.UTC)
+
+	client.TimeEntry.Create().SetUserID(selectedUser.ID).SetClockIn(from).SetNotes("matching repair").SaveX(ctx)
+	client.TimeEntry.Create().SetUserID(selectedUser.ID).SetClockIn(before.Add(-time.Nanosecond)).SetNotes("matching repair").SaveX(ctx)
+	client.TimeEntry.Create().SetUserID(selectedUser.ID).SetClockIn(from.Add(-time.Nanosecond)).SetNotes("matching repair before range").SaveX(ctx)
+	client.TimeEntry.Create().SetUserID(selectedUser.ID).SetClockIn(before).SetNotes("matching repair after range").SaveX(ctx)
+	client.TimeEntry.Create().SetUserID(selectedUser.ID).SetClockIn(from.Add(time.Hour)).SetNotes("different work").SaveX(ctx)
+	client.TimeEntry.Create().SetUserID(otherUser.ID).SetClockIn(from.Add(time.Hour)).SetNotes("matching repair other user").SaveX(ctx)
+
+	entries, total, err := svc.List(ctx, TimeEntryListFilter{
+		UserID:        selectedUser.ID,
+		Search:        "MATCHING",
+		ClockInFrom:   &from,
+		ClockInBefore: &before,
+	}, 1, 25)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if total != 2 || len(entries) != 2 {
+		t.Fatalf("total=%d len(entries)=%d, want 2", total, len(entries))
+	}
+	if !entries[0].ClockIn.Equal(before.Add(-time.Nanosecond)) || !entries[1].ClockIn.Equal(from) {
+		t.Fatalf("clock-ins = [%s, %s], want exclusive upper and inclusive lower boundaries", entries[0].ClockIn, entries[1].ClockIn)
+	}
+}

@@ -4,28 +4,7 @@ import "fmt"
 
 templ JobsIndex(p JobListPageData) {
 	@Layout("Jobs") {
-
-		<div class="list-toolbar work-queue-toolbar">
-			<form class="work-queue-filters" hx-get="/jobs" hx-target="#job-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
-				<input type="search" name="search" placeholder="Search by type or subtitle..."
-					value={ p.Search }
-					hx-trigger="input changed delay:300ms"/>
-				<select name="status_id" hx-trigger="change">
-					<option value="0">All Statuses</option>
-					for _, s := range p.Statuses {
-						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
-					}
-				</select>
-				if p.CustomerID > 0 {
-					<input type="hidden" name="customer_id" value={ fmt.Sprintf("%d", p.CustomerID) }/>
-				}
-				<span id="search-spinner" class="spinner htmx-indicator"></span>
-			</form>
-			if canManageOperational(ctx) {
-				<a href="/jobs/new" role="button">New Job</a>
-			}
-		</div>
-		@JobsTable(p)
+		@JobsListContent(p)
 
 		if canManageOperational(ctx) {
 			<div hx-get="/jobs/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
@@ -35,8 +14,29 @@ templ JobsIndex(p JobListPageData) {
 	}
 }
 
+templ JobsListContent(p JobListPageData) {
+	<div id="job-list-content" class="focused-list-content">
+		@ListToolbar(ListToolbarData{
+			Action: "/jobs", Target: "#job-list-content", Search: p.Search,
+			SearchPlaceholder: "Search by type or subtitle...", NewURL: operationalNewURL(ctx, "/jobs/new"), NewLabel: "New Job",
+			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), Scope: customerScope(p.CustomerID),
+			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
+		}) {
+			<label>Job status
+				<select name="status_id">
+					<option value="0">All Statuses</option>
+					for _, s := range p.Statuses {
+						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
+					}
+				</select>
+			</label>
+		}
+		@JobsTable(p)
+	</div>
+}
+
 templ JobsTable(p JobListPageData) {
-	<div id="job-table-wrap">
+	<div class="focused-list-results">
 		<div class="work-queue-wrap">
 			<table class="work-queue-table">
 			<thead>
@@ -90,8 +90,9 @@ templ JobsTable(p JobListPageData) {
 		@Pagination(PaginationData{
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
-			BaseURL:     customerScopedListURL("/jobs", p.CustomerID),
-			Target:      "#job-table-wrap",
+			BaseURL:     "/jobs",
+			Query:       listQuery(p.Search, filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), customerScope(p.CustomerID)),
+			Target:      "#job-list-content",
 		})
 	</div>
 }

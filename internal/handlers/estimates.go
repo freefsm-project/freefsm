@@ -117,7 +117,7 @@ func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
-		templates.EstimatesTable(data).Render(r.Context(), w)
+		templates.EstimatesListContent(data).Render(r.Context(), w)
 		return
 	}
 	templates.EstimatesIndex(data).Render(r.Context(), w)

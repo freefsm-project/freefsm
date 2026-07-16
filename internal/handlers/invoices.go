@@ -103,7 +103,7 @@ func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
-		templates.InvoicesTable(data).Render(r.Context(), w)
+		templates.InvoicesListContent(data).Render(r.Context(), w)
 		return
 	}
 	templates.InvoicesIndex(data).Render(r.Context(), w)

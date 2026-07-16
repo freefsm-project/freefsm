@@ -96,7 +96,7 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
-		templates.AssetTable(data).Render(r.Context(), w)
+		templates.AssetListContent(data).Render(r.Context(), w)
 		return
 	}
 	templates.AssetIndex(data).Render(r.Context(), w)

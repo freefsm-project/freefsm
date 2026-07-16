@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -215,7 +216,119 @@ type PaginationData struct {
 	CurrentPage int
 	TotalPages  int
 	BaseURL     string
+	Query       url.Values
 	Target      string
+}
+
+type ListToolbarData struct {
+	Action            string
+	Target            string
+	Search            string
+	SearchPlaceholder string
+	NewURL            string
+	NewLabel          string
+	ShowFilter        bool
+	FilterCount       int
+	Filters           url.Values
+	Scope             url.Values
+}
+
+type ListQueryField struct {
+	Name  string
+	Value string
+}
+
+func listQuery(search string, filters, scope url.Values) url.Values {
+	query := cloneQuery(scope)
+	for key, values := range filters {
+		query[key] = append([]string(nil), values...)
+	}
+	if search != "" {
+		query.Set("search", search)
+	}
+	return query
+}
+
+func filterValues(pairs ...string) url.Values {
+	query := url.Values{}
+	for i := 0; i+1 < len(pairs); i += 2 {
+		if pairs[i+1] != "" && pairs[i+1] != "0" {
+			query.Set(pairs[i], pairs[i+1])
+		}
+	}
+	return query
+}
+
+func timeEntryFilters(p TimeEntryListPageData) url.Values {
+	filters := filterValues("date_from", p.DateFrom, "date_to", p.DateTo)
+	if p.ShowUserFilter && p.UserID > 0 {
+		filters.Set("user_id", strconv.FormatInt(p.UserID, 10))
+	}
+	return filters
+}
+
+func listSearchID(target string) string {
+	return strings.TrimPrefix(target, "#") + "-search"
+}
+
+func listFilterSearchID(target string) string {
+	return listSearchID(target) + "-filter"
+}
+
+func operationalNewURL(ctx context.Context, target string) string {
+	if canManageOperational(ctx) {
+		return target
+	}
+	return ""
+}
+
+func cloneQuery(query url.Values) url.Values {
+	cloned := make(url.Values, len(query))
+	for key, values := range query {
+		cloned[key] = append([]string(nil), values...)
+	}
+	return cloned
+}
+
+func queryFields(query url.Values) []ListQueryField {
+	keys := make([]string, 0, len(query))
+	for key := range query {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	fields := make([]ListQueryField, 0, len(query))
+	for _, key := range keys {
+		for _, value := range query[key] {
+			fields = append(fields, ListQueryField{Name: key, Value: value})
+		}
+	}
+	return fields
+}
+
+func listURL(base string, query url.Values, page int) string {
+	query = cloneQuery(query)
+	if page > 1 {
+		query.Set("page", strconv.Itoa(page))
+	} else {
+		query.Del("page")
+	}
+	if encoded := query.Encode(); encoded != "" {
+		return base + "?" + encoded
+	}
+	return base
+}
+
+func activeFilterCount(filters url.Values) int {
+	count := 0
+	for _, values := range filters {
+		for _, value := range values {
+			if value != "" && value != "0" {
+				count++
+			}
+		}
+	}
+	return count
 }
 
 type ProjectRow struct {
@@ -1121,11 +1234,12 @@ func schedulePeriodTabClass(active bool) string {
 	return "schedule-period-tab"
 }
 
-func customerScopedListURL(base string, customerID int64) string {
-	if customerID <= 0 {
-		return base
+func customerScope(customerID int64) url.Values {
+	query := url.Values{}
+	if customerID > 0 {
+		query.Set("customer_id", strconv.FormatInt(customerID, 10))
 	}
-	return fmt.Sprintf("%s?customer_id=%d", base, customerID)
+	return query
 }
 
 type ContactRow struct {

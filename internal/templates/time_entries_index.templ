@@ -4,26 +4,7 @@ import "fmt"
 
 templ TimeEntriesIndex(p TimeEntryListPageData) {
 	@Layout("Timesheets") {
-
-		<div class="list-toolbar work-queue-toolbar">
-			<form class="work-queue-filters" hx-get="/time-entries" hx-target="#time-entry-table-wrap" hx-swap="outerHTML" hx-push-url="true" hx-indicator="#search-spinner">
-				if p.ShowUserFilter {
-					<select name="user_id" hx-trigger="change">
-						<option value="">All Users</option>
-						for _, u := range p.Users {
-							<option value={ fmt.Sprintf("%d", u.ID) } selected?={ p.UserID == u.ID }>{ u.Name }</option>
-						}
-					</select>
-				}
-				<input type="date" name="date_from" value={ p.DateFrom }/>
-				<input type="date" name="date_to" value={ p.DateTo }/>
-				<input type="search" name="search" placeholder="Search notes..."
-					value={ p.Search }
-					hx-trigger="input changed delay:300ms"/>
-				<span id="search-spinner" class="spinner htmx-indicator"></span>
-			</form>
-		</div>
-		@TimeEntriesTable(p)
+		@TimeEntriesListContent(p)
 
 		<div hx-get="/time-entries/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
@@ -31,8 +12,33 @@ templ TimeEntriesIndex(p TimeEntryListPageData) {
 	}
 }
 
+templ TimeEntriesListContent(p TimeEntryListPageData) {
+	<div id="time-entry-list-content" class="focused-list-content">
+		@ListToolbar(ListToolbarData{
+			Action: "/time-entries", Target: "#time-entry-list-content", Search: p.Search,
+			SearchPlaceholder: "Search notes...", ShowFilter: true,
+			Filters: timeEntryFilters(p),
+			FilterCount: activeFilterCount(timeEntryFilters(p)),
+		}) {
+			if p.ShowUserFilter {
+				<label>User
+					<select name="user_id">
+						<option value="">All Users</option>
+						for _, u := range p.Users {
+							<option value={ fmt.Sprintf("%d", u.ID) } selected?={ p.UserID == u.ID }>{ u.Name }</option>
+						}
+					</select>
+				</label>
+			}
+			<label>From date<input type="date" name="date_from" value={ p.DateFrom }/></label>
+			<label>To date<input type="date" name="date_to" value={ p.DateTo }/></label>
+		}
+		@TimeEntriesTable(p)
+	</div>
+}
+
 templ TimeEntriesTable(p TimeEntryListPageData) {
-	<div id="time-entry-table-wrap">
+	<div class="focused-list-results">
 		<div class="work-queue-wrap">
 			<table class="work-queue-table">
 			<thead>
@@ -96,7 +102,8 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
 			BaseURL:     "/time-entries",
-			Target:      "#time-entry-table-wrap",
+			Query:       listQuery(p.Search, timeEntryFilters(p), nil),
+			Target:      "#time-entry-list-content",
 		})
 	</div>
 }

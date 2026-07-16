@@ -72,7 +72,7 @@ func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
-		templates.CustomerTable(data).Render(r.Context(), w)
+		templates.CustomerListContent(data).Render(r.Context(), w)
 		return
 	}
 	templates.CustomerIndex(data).Render(r.Context(), w)

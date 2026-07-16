@@ -71,7 +71,7 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
-		templates.ProjectTable(data).Render(r.Context(), w)
+		templates.ProjectListContent(data).Render(r.Context(), w)
 		return
 	}
 	templates.ProjectIndex(data).Render(r.Context(), w)
