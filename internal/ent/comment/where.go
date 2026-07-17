@@ -129,16 +129,6 @@ func CompanyIDLTE(v int64) predicate.Comment {
 	return predicate.Comment(sql.FieldLTE(FieldCompanyID, v))
 }
 
-// CompanyIDIsNil applies the IsNil predicate on the "company_id" field.
-func CompanyIDIsNil() predicate.Comment {
-	return predicate.Comment(sql.FieldIsNull(FieldCompanyID))
-}
-
-// CompanyIDNotNil applies the NotNil predicate on the "company_id" field.
-func CompanyIDNotNil() predicate.Comment {
-	return predicate.Comment(sql.FieldNotNull(FieldCompanyID))
-}
-
 // ObjectTypeEQ applies the EQ predicate on the "object_type" field.
 func ObjectTypeEQ(v string) predicate.Comment {
 	return predicate.Comment(sql.FieldEQ(FieldObjectType, v))

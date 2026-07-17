@@ -173,7 +173,7 @@ var (
 	// CommentsColumns holds the columns for the "comments" table.
 	CommentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
-		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "company_id", Type: field.TypeInt64},
 		{Name: "object_type", Type: field.TypeString},
 		{Name: "object_id", Type: field.TypeInt64},
 		{Name: "author_id", Type: field.TypeInt64},

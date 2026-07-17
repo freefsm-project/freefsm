@@ -17,6 +17,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/activitylog"
+	commentent "github.com/freefsm-project/freefsm/internal/ent/comment"
 	"github.com/freefsm-project/freefsm/internal/ent/enttest"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -64,9 +65,9 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 	admin := client.User.Create().SetCompanyID(companyID).SetEmail("admin@example.test").SetPasswordHash("hash").SetName("Admin").SetRole("admin").SaveX(ctx)
 	dispatcher := client.User.Create().SetCompanyID(companyID).SetEmail("dispatcher@example.test").SetPasswordHash("hash").SetName("Dispatcher").SetRole("dispatcher").SaveX(ctx)
 	customer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Route Customer").SaveX(ctx)
-	assignedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Assigned Route Job").SetBillingType("hourly").SetLineItems(`[{"title":"Billable","quantity":1,"unit_price":100}]`).SaveX(ctx)
-	archivedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Archived Route Job").SetDeletedAt(time.Now()).SaveX(ctx)
-	unassignedJob := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Unassigned Route Job").SaveX(ctx)
+	assignedJob := client.Job.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetJobType("Assigned Route Job").SetBillingType("hourly").SetLineItems(`[{"title":"Billable","quantity":1,"unit_price":100}]`).SaveX(ctx)
+	archivedJob := client.Job.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetJobType("Archived Route Job").SetDeletedAt(time.Now()).SaveX(ctx)
+	unassignedJob := client.Job.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetJobType("Unassigned Route Job").SaveX(ctx)
 	workflow := client.StatusWorkflow.Create().SetObjectType("job").SetName("Job Workflow").SaveX(ctx)
 	status := client.Status.Create().SetWorkflowID(workflow.ID).SetName("Scheduled").SetColor("#336699").SetSortOrder(1).SetCategoryKey("job:pending").SetCategoryOrder(1).SetIsCategoryDefault(true).SaveX(ctx)
 	estimate := client.Estimate.Create().SetCustomerID(customer.ID).SetTitle("Protected Estimate").SaveX(ctx)
@@ -186,6 +187,40 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 		expectStatus(t, router, dispatcherCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/edit", archivedJob.ID), http.StatusForbidden)
 		expectStatus(t, router, dispatcherCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/create-invoice", archivedJob.ID), http.StatusForbidden)
 		expectStatus(t, router, dispatcherCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/comments", archivedJob.ID), http.StatusForbidden)
+	})
+
+	t.Run("dispatcher can add a comment from the job view", func(t *testing.T) {
+		const content = "job-view comment regression"
+		path := fmt.Sprintf("/jobs/%d/comments", assignedJob.ID)
+		form := url.Values{"content": {content}}
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(form.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(dispatcherCookie)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("POST %s status = %d, want %d; body: %s", path, rr.Code, http.StatusOK, rr.Body.String())
+		}
+		assertContains(t, rr.Body.String(), content)
+
+		createdComment := client.Comment.Query().Where(commentent.ContentEQ(content)).OnlyX(ctx)
+		if createdComment.CompanyID != companyID || createdComment.ObjectType != string(objectref.TypeJob) || createdComment.ObjectID != assignedJob.ID || createdComment.AuthorID != dispatcher.ID || createdComment.Content != content {
+			t.Fatalf("created comment = %+v", createdComment)
+		}
+	})
+
+	t.Run("comment delete is bound to URL parent", func(t *testing.T) {
+		createdComment := client.Comment.Create().SetCompanyID(companyID).SetObjectType(string(objectref.TypeJob)).SetObjectID(assignedJob.ID).SetAuthorID(admin.ID).SetContent("parent-bound").SaveX(ctx)
+		wrongPath := fmt.Sprintf("/jobs/%d/comments/%d/delete", unassignedJob.ID, createdComment.ID)
+		expectStatus(t, router, adminCookie, http.MethodPost, wrongPath, http.StatusNotFound)
+		if !client.Comment.Query().Where(commentent.IDEQ(createdComment.ID)).ExistX(ctx) {
+			t.Fatal("comment deleted through wrong parent URL")
+		}
+		validPath := fmt.Sprintf("/jobs/%d/comments/%d/delete", assignedJob.ID, createdComment.ID)
+		expectStatus(t, router, adminCookie, http.MethodPost, validPath, http.StatusOK)
+		if client.Comment.Query().Where(commentent.IDEQ(createdComment.ID)).ExistX(ctx) {
+			t.Fatal("comment still exists after valid deletion")
+		}
 	})
 
 	t.Run("tech page hides commercial data", func(t *testing.T) {

@@ -3637,7 +3637,7 @@ func (m *CommentMutation) CompanyID() (r int64, exists bool) {
 // OldCompanyID returns the old "company_id" field's value of the Comment entity.
 // If the Comment object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CommentMutation) OldCompanyID(ctx context.Context) (v *int64, err error) {
+func (m *CommentMutation) OldCompanyID(ctx context.Context) (v int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldCompanyID is only allowed on UpdateOne operations")
 	}
@@ -3669,24 +3669,10 @@ func (m *CommentMutation) AddedCompanyID() (r int64, exists bool) {
 	return *v, true
 }
 
-// ClearCompanyID clears the value of the "company_id" field.
-func (m *CommentMutation) ClearCompanyID() {
-	m.company_id = nil
-	m.addcompany_id = nil
-	m.clearedFields[comment.FieldCompanyID] = struct{}{}
-}
-
-// CompanyIDCleared returns if the "company_id" field was cleared in this mutation.
-func (m *CommentMutation) CompanyIDCleared() bool {
-	_, ok := m.clearedFields[comment.FieldCompanyID]
-	return ok
-}
-
 // ResetCompanyID resets all changes to the "company_id" field.
 func (m *CommentMutation) ResetCompanyID() {
 	m.company_id = nil
 	m.addcompany_id = nil
-	delete(m.clearedFields, comment.FieldCompanyID)
 }
 
 // SetObjectType sets the "object_type" field.
@@ -4172,11 +4158,7 @@ func (m *CommentMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *CommentMutation) ClearedFields() []string {
-	var fields []string
-	if m.FieldCleared(comment.FieldCompanyID) {
-		fields = append(fields, comment.FieldCompanyID)
-	}
-	return fields
+	return nil
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -4189,11 +4171,6 @@ func (m *CommentMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *CommentMutation) ClearField(name string) error {
-	switch name {
-	case comment.FieldCompanyID:
-		m.ClearCompanyID()
-		return nil
-	}
 	return fmt.Errorf("unknown Comment nullable field %s", name)
 }
 

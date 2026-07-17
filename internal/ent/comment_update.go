@@ -49,12 +49,6 @@ func (_u *CommentUpdate) AddCompanyID(v int64) *CommentUpdate {
 	return _u
 }
 
-// ClearCompanyID clears the value of the "company_id" field.
-func (_u *CommentUpdate) ClearCompanyID() *CommentUpdate {
-	_u.mutation.ClearCompanyID()
-	return _u
-}
-
 // SetObjectType sets the "object_type" field.
 func (_u *CommentUpdate) SetObjectType(v string) *CommentUpdate {
 	_u.mutation.SetObjectType(v)
@@ -205,9 +199,6 @@ func (_u *CommentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedCompanyID(); ok {
 		_spec.AddField(comment.FieldCompanyID, field.TypeInt64, value)
 	}
-	if _u.mutation.CompanyIDCleared() {
-		_spec.ClearField(comment.FieldCompanyID, field.TypeInt64)
-	}
 	if value, ok := _u.mutation.ObjectType(); ok {
 		_spec.SetField(comment.FieldObjectType, field.TypeString, value)
 	}
@@ -267,12 +258,6 @@ func (_u *CommentUpdateOne) SetNillableCompanyID(v *int64) *CommentUpdateOne {
 // AddCompanyID adds value to the "company_id" field.
 func (_u *CommentUpdateOne) AddCompanyID(v int64) *CommentUpdateOne {
 	_u.mutation.AddCompanyID(v)
-	return _u
-}
-
-// ClearCompanyID clears the value of the "company_id" field.
-func (_u *CommentUpdateOne) ClearCompanyID() *CommentUpdateOne {
-	_u.mutation.ClearCompanyID()
 	return _u
 }
 
@@ -455,9 +440,6 @@ func (_u *CommentUpdateOne) sqlSave(ctx context.Context) (_node *Comment, err er
 	}
 	if value, ok := _u.mutation.AddedCompanyID(); ok {
 		_spec.AddField(comment.FieldCompanyID, field.TypeInt64, value)
-	}
-	if _u.mutation.CompanyIDCleared() {
-		_spec.ClearField(comment.FieldCompanyID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.ObjectType(); ok {
 		_spec.SetField(comment.FieldObjectType, field.TypeString, value)

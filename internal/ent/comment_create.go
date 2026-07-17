@@ -26,14 +26,6 @@ func (_c *CommentCreate) SetCompanyID(v int64) *CommentCreate {
 	return _c
 }
 
-// SetNillableCompanyID sets the "company_id" field if the given value is not nil.
-func (_c *CommentCreate) SetNillableCompanyID(v *int64) *CommentCreate {
-	if v != nil {
-		_c.SetCompanyID(*v)
-	}
-	return _c
-}
-
 // SetObjectType sets the "object_type" field.
 func (_c *CommentCreate) SetObjectType(v string) *CommentCreate {
 	_c.mutation.SetObjectType(v)
@@ -139,6 +131,9 @@ func (_c *CommentCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *CommentCreate) check() error {
+	if _, ok := _c.mutation.CompanyID(); !ok {
+		return &ValidationError{Name: "company_id", err: errors.New(`ent: missing required field "Comment.company_id"`)}
+	}
 	if _, ok := _c.mutation.ObjectType(); !ok {
 		return &ValidationError{Name: "object_type", err: errors.New(`ent: missing required field "Comment.object_type"`)}
 	}
@@ -201,7 +196,7 @@ func (_c *CommentCreate) createSpec() (*Comment, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := _c.mutation.CompanyID(); ok {
 		_spec.SetField(comment.FieldCompanyID, field.TypeInt64, value)
-		_node.CompanyID = &value
+		_node.CompanyID = value
 	}
 	if value, ok := _c.mutation.ObjectType(); ok {
 		_spec.SetField(comment.FieldObjectType, field.TypeString, value)

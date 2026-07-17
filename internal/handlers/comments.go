@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -25,14 +26,14 @@ func NewCommentHandler(svc *services.CommentService, userSvc *services.UserServi
 
 func (h *CommentHandler) List(objectType objectref.Type) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ref, err := h.refFromRequest(objectType, r)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
 		u, ok := middleware.UserFromContext(r.Context())
 		if !ok || u == nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		ref, err := h.refFromRequest(objectType, r)
+		if err != nil {
+			http.NotFound(w, r)
 			return
 		}
 		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyRead) {
@@ -40,9 +41,9 @@ func (h *CommentHandler) List(objectType objectref.Type) http.HandlerFunc {
 			return
 		}
 
-		comments, err := h.svc.ListForObject(r.Context(), ref)
+		comments, err := h.svc.ListForObject(r.Context(), u.CompanyID, ref)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			h.handleServiceError(w, r, err)
 			return
 		}
 
@@ -54,11 +55,23 @@ func (h *CommentHandler) List(objectType objectref.Type) http.HandlerFunc {
 		readOnly := r.URL.Query().Get("read_only") == "1"
 		hideTitle := r.URL.Query().Get("hide_title") == "1"
 		rows := make([]templates.CommentRow, len(comments))
+		authorIDs := make([]int64, len(comments))
 		for i, c := range comments {
-			author, _ := h.userSvc.GetByID(r.Context(), c.AuthorID)
+			authorIDs[i] = c.AuthorID
+		}
+		authors, err := h.userSvc.ListByIDsForCompany(r.Context(), u.CompanyID, authorIDs)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		authorNames := make(map[int64]string, len(authors))
+		for _, author := range authors {
+			authorNames[author.ID] = author.Name
+		}
+		for i, c := range comments {
 			authorName := "Unknown"
-			if author != nil {
-				authorName = author.Name
+			if name, ok := authorNames[c.AuthorID]; ok {
+				authorName = name
 			}
 
 			canDelete := u.ID == c.AuthorID || isAdminOrDispatcher(u)
@@ -85,15 +98,14 @@ func (h *CommentHandler) List(objectType objectref.Type) http.HandlerFunc {
 
 func (h *CommentHandler) Create(objectType objectref.Type) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ref, err := h.refFromRequest(objectType, r)
-		if err != nil {
-			http.NotFound(w, r)
-			return
-		}
-
 		u, ok := middleware.UserFromContext(r.Context())
 		if !ok || u == nil {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		ref, err := h.refFromRequest(objectType, r)
+		if err != nil {
+			http.NotFound(w, r)
 			return
 		}
 		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyCreate) {
@@ -111,9 +123,9 @@ func (h *CommentHandler) Create(objectType objectref.Type) http.HandlerFunc {
 			return
 		}
 
-		_, err = h.svc.Create(r.Context(), ref, u.ID, content)
+		_, err = h.svc.Create(r.Context(), u.CompanyID, ref, u.ID, content)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			h.handleServiceError(w, r, err)
 			return
 		}
 
@@ -133,25 +145,29 @@ func (h *CommentHandler) Create(objectType objectref.Type) http.HandlerFunc {
 
 func (h *CommentHandler) Delete(objectType objectref.Type) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		u, ok := middleware.UserFromContext(r.Context())
+		if !ok || u == nil {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		ref, err := h.refFromRequest(objectType, r)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
 		commentID, err := strconv.ParseInt(chi.URLParam(r, "cid"), 10, 64)
 		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
 
-		comment, err := h.svc.GetByID(r.Context(), commentID)
+		comment, err := h.svc.GetByID(r.Context(), u.CompanyID, commentID)
 		if err != nil {
-			http.Error(w, err.Error(), 500)
+			h.handleServiceError(w, r, err)
 			return
 		}
-		ref, err := h.objects.Parse(string(objectType), comment.ObjectID)
-		if err != nil || comment.ObjectType != ref.ObjectType() {
+		if comment.ObjectType != ref.ObjectType() || comment.ObjectID != ref.ObjectID() {
 			http.NotFound(w, r)
-			return
-		}
-		u, ok := middleware.UserFromContext(r.Context())
-		if !ok || u == nil {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
 		if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyDelete) && !(u.ID == comment.AuthorID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyCreate)) {
@@ -165,8 +181,8 @@ func (h *CommentHandler) Delete(objectType objectref.Type) http.HandlerFunc {
 			preview = preview[:100]
 		}
 
-		if err := h.svc.Delete(r.Context(), commentID); err != nil {
-			http.Error(w, err.Error(), 500)
+		if err := h.svc.Delete(r.Context(), u.CompanyID, ref, commentID); err != nil {
+			h.handleServiceError(w, r, err)
 			return
 		}
 
@@ -177,6 +193,18 @@ func (h *CommentHandler) Delete(objectType objectref.Type) http.HandlerFunc {
 
 		h.List(objectType).ServeHTTP(w, r)
 	}
+}
+
+func (h *CommentHandler) handleServiceError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, services.ErrCommentNotFound) {
+		http.NotFound(w, r)
+		return
+	}
+	if errors.Is(err, services.ErrCommentInvalid) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
 func (h *CommentHandler) refFromRequest(objectType objectref.Type, r *http.Request) (objectref.Ref, error) {
