@@ -40,6 +40,10 @@ func (TimeEntry) Fields() []ent.Field {
 func (TimeEntry) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("user_id", "clock_out"),
+		index.Fields("user_id").
+			Unique().
+			StorageKey("time_entries_one_active_per_user").
+			Annotations(entsql.IndexWhere("clock_out IS NULL")),
 		index.Fields("job_id"),
 		index.Fields("clock_in"),
 	}

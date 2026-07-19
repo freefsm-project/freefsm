@@ -902,6 +902,14 @@ var (
 				Columns: []*schema.Column{TimeEntriesColumns[2], TimeEntriesColumns[6]},
 			},
 			{
+				Name:    "time_entries_one_active_per_user",
+				Unique:  true,
+				Columns: []*schema.Column{TimeEntriesColumns[2]},
+				Annotation: &entsql.IndexAnnotation{
+					Where: "clock_out IS NULL",
+				},
+			},
+			{
 				Name:    "timeentry_job_id",
 				Unique:  false,
 				Columns: []*schema.Column{TimeEntriesColumns[3]},

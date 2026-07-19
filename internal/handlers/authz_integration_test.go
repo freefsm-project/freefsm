@@ -294,7 +294,12 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
 		token_hash TEXT NOT NULL UNIQUE,
 		user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		expires_at TIMESTAMPTZ NOT NULL,
-		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		kind TEXT NOT NULL DEFAULT 'web',
+		last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+		revoked_at TIMESTAMPTZ,
+		device_name TEXT,
+		CONSTRAINT sessions_kind_check CHECK (kind IN ('web', 'mobile'))
 	)`); err != nil {
 		t.Fatalf("configure handler test schema: %v", err)
 	}

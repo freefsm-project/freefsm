@@ -5,17 +5,26 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/ent/job"
 	"github.com/freefsm-project/freefsm/internal/ent/timeentry"
+	"github.com/freefsm-project/freefsm/internal/ent/user"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type TimeEntryService struct {
 	client *ent.Client
 }
 
-var ErrActiveTimeEntry = errors.New("user already has an active time entry")
+var (
+	ErrActiveTimeEntry    = errors.New("user already has an active time entry")
+	ErrTimeEntryNotActive = errors.New("time entry is not active")
+)
+
+const activeTimeEntryIndex = "time_entries_one_active_per_user"
 
 func NewTimeEntryService(client *ent.Client) *TimeEntryService {
 	return &TimeEntryService{client: client}
@@ -101,6 +110,20 @@ func (s *TimeEntryService) GetActiveByUser(ctx context.Context, userID int64) (*
 	return te, nil
 }
 
+func (s *TimeEntryService) GetActiveByUserForCompany(ctx context.Context, companyID, userID int64) (*ent.TimeEntry, error) {
+	te, err := s.client.TimeEntry.Query().
+		Where(
+			timeentry.CompanyIDEQ(companyID),
+			timeentry.UserIDEQ(userID),
+			timeentry.ClockOutIsNil(),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get active time entry for company: %w", err)
+	}
+	return te, nil
+}
+
 func (s *TimeEntryService) HasActiveEntry(ctx context.Context, userID int64) (bool, error) {
 	count, err := s.client.TimeEntry.Query().
 		Where(
@@ -126,11 +149,16 @@ func (s *TimeEntryService) ensureNoActiveEntry(ctx context.Context, userID int64
 }
 
 func (s *TimeEntryService) ClockIn(ctx context.Context, params TimeEntryCreateParams) (*ent.TimeEntry, error) {
+	companyID, err := s.creationCompanyID(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("clock in: %w", err)
+	}
 	if err := s.ensureNoActiveEntry(ctx, params.UserID); err != nil {
 		return nil, err
 	}
 	c := s.client.TimeEntry.
 		Create().
+		SetCompanyID(companyID).
 		SetUserID(params.UserID).
 		SetIsManual(false).
 		SetClockIn(time.Now()).
@@ -142,35 +170,93 @@ func (s *TimeEntryService) ClockIn(ctx context.Context, params TimeEntryCreatePa
 	}
 	te, err := c.Save(ctx)
 	if err != nil {
+		if isActiveTimeEntryConflict(err) {
+			return nil, ErrActiveTimeEntry
+		}
 		return nil, fmt.Errorf("clock in: %w", err)
 	}
 	return te, nil
 }
 
 func (s *TimeEntryService) ClockOut(ctx context.Context, entryID int64) (*ent.TimeEntry, error) {
-	te, err := s.client.TimeEntry.UpdateOneID(entryID).
+	updated, err := s.client.TimeEntry.Update().
+		Where(timeentry.IDEQ(entryID), timeentry.ClockOutIsNil()).
 		SetClockOut(time.Now()).
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("clock out: %w", err)
 	}
+	if updated == 0 {
+		_, err := s.client.TimeEntry.Get(ctx, entryID)
+		if err != nil {
+			return nil, fmt.Errorf("clock out: get time entry %d: %w", entryID, err)
+		}
+		return nil, ErrTimeEntryNotActive
+	}
+	te, err := s.client.TimeEntry.Get(ctx, entryID)
+	if err != nil {
+		return nil, fmt.Errorf("clock out: reload time entry: %w", err)
+	}
 	return te, nil
 }
 
+func isActiveTimeEntryConflict(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505" && pgErr.ConstraintName == activeTimeEntryIndex
+	}
+	return ent.IsConstraintError(err) && strings.Contains(err.Error(), activeTimeEntryIndex)
+}
+
 func (s *TimeEntryService) Create(ctx context.Context, params TimeEntryCreateParams) (*ent.TimeEntry, error) {
-	te, err := s.client.TimeEntry.
+	companyID, err := s.creationCompanyID(ctx, params)
+	if err != nil {
+		return nil, fmt.Errorf("create time entry: %w", err)
+	}
+	c := s.client.TimeEntry.
 		Create().
+		SetCompanyID(companyID).
 		SetUserID(params.UserID).
 		SetIsManual(true).
 		SetClockIn(time.Now()).
 		SetNotes(params.Notes).
 		SetNillableLatitude(params.Latitude).
-		SetNillableLongitude(params.Longitude).
-		Save(ctx)
+		SetNillableLongitude(params.Longitude)
+	if params.JobID > 0 {
+		c.SetJobID(params.JobID)
+	}
+	te, err := c.Save(ctx)
 	if err != nil {
+		if isActiveTimeEntryConflict(err) {
+			return nil, ErrActiveTimeEntry
+		}
 		return nil, fmt.Errorf("create time entry: %w", err)
 	}
 	return te, nil
+}
+
+func (s *TimeEntryService) creationCompanyID(ctx context.Context, params TimeEntryCreateParams) (int64, error) {
+	u, err := s.client.User.Query().
+		Where(user.IDEQ(params.UserID), user.CompanyIDNotNil(), user.IsActive(true)).
+		Only(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("get active company-owned user: %w", err)
+	}
+	companyID := *u.CompanyID
+	if params.JobID == 0 {
+		return companyID, nil
+	}
+
+	exists, err := s.client.Job.Query().
+		Where(job.IDEQ(params.JobID), job.CompanyIDEQ(companyID), job.DeletedAtIsNil()).
+		Exist(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("validate job ownership: %w", err)
+	}
+	if !exists {
+		return 0, fmt.Errorf("job does not belong to user's company or is archived")
+	}
+	return companyID, nil
 }
 
 func (s *TimeEntryService) Update(ctx context.Context, id int64, params TimeEntryUpdateParams) (*ent.TimeEntry, error) {

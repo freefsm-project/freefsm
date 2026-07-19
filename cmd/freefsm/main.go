@@ -16,6 +16,7 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
+	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/delivery"
@@ -25,9 +26,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/go-chi/chi/v5"
-	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
-	"github.com/justinas/nosurf"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
@@ -139,26 +138,21 @@ func run() error {
 	entClient := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, sqldb)))
 	defer entClient.Close()
 
-	r := chi.NewRouter()
-	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
-	r.Use(chimw.Logger)
-	r.Use(chimw.Recoverer)
-	r.Use(middleware.Flash)
-	r.Use(middleware.Theme)
-	r.Use(middleware.CSRFToken)
-	r.Use(middleware.CurrentPath)
-	r.Use(middleware.Company(services.NewCompanySettingsService(entClient)))
+	webRouter := chi.NewRouter()
+	webRouter.Use(middleware.Flash)
+	webRouter.Use(middleware.Theme)
+	webRouter.Use(middleware.CSRFToken)
+	webRouter.Use(middleware.CurrentPath)
+	webRouter.Use(middleware.Company(services.NewCompanySettingsService(entClient)))
 
-	r.Handle("/static/*", http.StripPrefix("/static/", staticHandler()))
+	webRouter.Handle("/static/*", http.StripPrefix("/static/", staticHandler()))
 	deliveryService := delivery.New(db.Pool, cfg.PublicURL)
-	r.Get("/delivery/open/{token}", deliveryService.OpenHandler)
-	r.Mount("/", handlers.New(db.Pool, entClient, sessions, cfg))
-
-	csrfHandler := nosurf.New(r)
-	csrfHandler.SetIsTLSFunc(func(r *http.Request) bool {
-		return middleware.IsHTTPS(r)
-	})
+	webRouter.Get("/delivery/open/{token}", deliveryService.OpenHandler)
+	webRouter.Mount("/", handlers.New(db.Pool, entClient, sessions, cfg))
+	applicationHandler := newApplicationHandler(
+		apiv1.NewRouter(db.Pool, entClient, sessions),
+		webRouter,
+	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -175,7 +169,7 @@ func run() error {
 		}
 	}()
 
-	srv := newHTTPServer(cfg.Addr, csrfHandler)
+	srv := newHTTPServer(cfg.Addr, applicationHandler)
 	serverErr := make(chan error, 1)
 	go func() {
 		slog.Info("listening", "addr", cfg.Addr)

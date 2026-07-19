@@ -10,6 +10,8 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/customer"
 	"github.com/freefsm-project/freefsm/internal/ent/job"
 	"github.com/freefsm-project/freefsm/internal/ent/jobassignment"
+	"github.com/freefsm-project/freefsm/internal/ent/status"
+	"github.com/freefsm-project/freefsm/internal/ent/statusworkflow"
 	"github.com/freefsm-project/freefsm/internal/ent/user"
 )
 
@@ -70,6 +72,16 @@ type JobUpdateParams struct {
 
 func (s *JobService) ListAll(ctx context.Context) ([]*ent.Job, error) {
 	return s.client.Job.Query().Where(job.DeletedAtIsNil()).Order(ent.Desc(job.FieldStartTime)).All(ctx)
+}
+
+func (s *JobService) ListAllForCompany(ctx context.Context, companyID int64) ([]*ent.Job, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("list jobs for company: company is required")
+	}
+	return s.client.Job.Query().
+		Where(job.CompanyIDEQ(companyID), job.DeletedAtIsNil()).
+		Order(ent.Desc(job.FieldStartTime)).
+		All(ctx)
 }
 
 func (s *JobService) ListByDateRange(ctx context.Context, start, end time.Time) ([]*ent.Job, error) {
@@ -241,6 +253,41 @@ func (s *JobService) ListAssignedAll(ctx context.Context, userID int64) ([]*ent.
 		Order(ent.Desc(job.FieldStartTime)).
 		Order(ent.Desc(job.FieldCreatedAt)).
 		All(ctx)
+}
+
+func (s *JobService) ListAssignedAllForCompany(ctx context.Context, companyID, userID int64) ([]*ent.Job, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("list assigned jobs for company: company is required")
+	}
+	jobIDs, err := s.assignedJobIDs(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(jobIDs) == 0 {
+		return nil, nil
+	}
+	return s.client.Job.Query().
+		Where(job.CompanyIDEQ(companyID), job.DeletedAtIsNil(), job.IDIn(jobIDs...)).
+		Order(ent.Desc(job.FieldStartTime)).
+		Order(ent.Desc(job.FieldCreatedAt)).
+		All(ctx)
+}
+
+func (s *StatusService) ByObjectTypeForCompany(ctx context.Context, companyID int64, objectType string) ([]*ent.Status, error) {
+	if companyID <= 0 {
+		return nil, fmt.Errorf("list statuses for company: company is required")
+	}
+	statuses, err := s.client.Status.Query().
+		Where(
+			status.CompanyIDEQ(companyID),
+			status.HasWorkflowWith(statusworkflow.CompanyIDEQ(companyID), statusworkflow.ObjectTypeEQ(objectType)),
+		).
+		Order(ent.Asc(status.FieldSortOrder)).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list statuses for company: %w", err)
+	}
+	return statuses, nil
 }
 
 func (s *JobService) GetByID(ctx context.Context, id int64) (*ent.Job, error) {

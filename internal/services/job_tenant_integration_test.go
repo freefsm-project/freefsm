@@ -34,6 +34,69 @@ func TestJobCreateUsesTenantDefaultStatusAfterRenameIntegration(t *testing.T) {
 	}
 }
 
+func TestMobileJobQueriesAreCompanyScopedIntegration(t *testing.T) {
+	client := openPolicyTestClient(t)
+	defer client.Close()
+	ctx := context.Background()
+	const companyID int64 = 13
+
+	user := client.User.Create().SetCompanyID(companyID).SetEmail("scoped-jobs@example.test").SetPasswordHash("hash").SetName("Tech").SaveX(ctx)
+	localCustomer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Local").SaveX(ctx)
+	foreignCustomer := client.Customer.Create().SetCompanyID(14).SetDisplayName("Foreign").SaveX(ctx)
+	local := client.Job.Create().SetCompanyID(companyID).SetCustomerID(localCustomer.ID).SetJobType("Local").SaveX(ctx)
+	archived := client.Job.Create().SetCompanyID(companyID).SetCustomerID(localCustomer.ID).SetJobType("Archived").SetDeletedAt(time.Now()).SaveX(ctx)
+	foreign := client.Job.Create().SetCompanyID(14).SetCustomerID(foreignCustomer.ID).SetJobType("Foreign").SaveX(ctx)
+	for _, jobID := range []int64{local.ID, archived.ID, foreign.ID} {
+		client.JobAssignment.Create().SetJobID(jobID).SetUserID(user.ID).SaveX(ctx)
+	}
+
+	svc := NewJobService(client)
+	all, err := svc.ListAllForCompany(ctx, companyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 1 || all[0].ID != local.ID {
+		t.Fatalf("ListAllForCompany = %v, want only job %d", jobIDs(all), local.ID)
+	}
+	assigned, err := svc.ListAssignedAllForCompany(ctx, companyID, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(assigned) != 1 || assigned[0].ID != local.ID {
+		t.Fatalf("ListAssignedAllForCompany = %v, want only job %d", jobIDs(assigned), local.ID)
+	}
+}
+
+func TestStatusQueryIsCompanyAndWorkflowScopedIntegration(t *testing.T) {
+	client := openPolicyTestClient(t)
+	defer client.Close()
+	ctx := context.Background()
+	const companyID int64 = 15
+
+	localWorkflow := client.StatusWorkflow.Create().SetCompanyID(companyID).SetName("Local jobs").SetObjectType("job").SaveX(ctx)
+	projectWorkflow := client.StatusWorkflow.Create().SetCompanyID(companyID).SetName("Local projects").SetObjectType("project").SaveX(ctx)
+	foreignWorkflow := client.StatusWorkflow.Create().SetCompanyID(16).SetName("Foreign jobs").SetObjectType("job").SaveX(ctx)
+	local := client.Status.Create().SetCompanyID(companyID).SetWorkflowID(localWorkflow.ID).SetName("Local").SetCategoryKey("job:new").SaveX(ctx)
+	client.Status.Create().SetCompanyID(companyID).SetWorkflowID(projectWorkflow.ID).SetName("Project").SetCategoryKey("project:new").SaveX(ctx)
+	client.Status.Create().SetCompanyID(16).SetWorkflowID(foreignWorkflow.ID).SetName("Foreign").SetCategoryKey("job:new").SaveX(ctx)
+
+	statuses, err := NewStatusService(client).ByObjectTypeForCompany(ctx, companyID, "job")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statuses) != 1 || statuses[0].ID != local.ID {
+		t.Fatalf("ByObjectTypeForCompany returned %d statuses, want only %d", len(statuses), local.ID)
+	}
+}
+
+func jobIDs(jobs []*ent.Job) []int64 {
+	ids := make([]int64, len(jobs))
+	for i, job := range jobs {
+		ids[i] = job.ID
+	}
+	return ids
+}
+
 func TestJobCreateRejectsCustomerOutsideAuthenticatedCompanyBeforeWriteIntegration(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
