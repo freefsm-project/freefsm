@@ -24,6 +24,10 @@ _Avoid_: Role, arbitrary policy rule
 The Customer, relevant Contacts, Location, Assets, Project, files, comments, and activity needed to understand and perform a Job assigned to a Product User. Assignment scope originates only from a Job.
 _Avoid_: Customer assignment, tenant-wide access
 
+**Offline Authorization Lease**:
+A finite grant allowing a conforming client to expose synchronized Assigned Job Context and stage permitted actions while disconnected. Server acceptance still depends on current authorization when the actions synchronize.
+_Avoid_: Offline session, cached Permission
+
 **Customer**:
 The person or organization responsible for invoices and the owner of any credit created by overpayment.
 _Avoid_: Account, client
