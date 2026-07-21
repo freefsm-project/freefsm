@@ -4,6 +4,26 @@ This context describes how Estimates become Invoices, how that change may be rev
 
 ## Language
 
+**Deployment Operator**:
+The person responsible for the host, dependencies, secrets, upgrades, backup, restore, and recovery of a FreeFSM instance. This authority does not imply access as a Product User.
+_Avoid_: Administrator, system user
+
+**Product User**:
+An authenticated person who has exactly one Role.
+_Avoid_: Deployment Operator, Customer
+
+**Role**:
+A named set of Permissions assigned to a Product User. Administrator is the protected full-authority Role; Dispatcher and Technician are configurable default Roles and actor personas, not authorization conditions.
+_Avoid_: Actor, job title
+
+**Permission**:
+A product-defined action and, where applicable, a fixed data scope granted through a Role. Authorization depends on Permissions rather than Role names.
+_Avoid_: Role, arbitrary policy rule
+
+**Assigned Job Context**:
+The Customer, relevant Contacts, Location, Assets, Project, files, comments, and activity needed to understand and perform a Job assigned to a Product User. Assignment scope originates only from a Job.
+_Avoid_: Customer assignment, tenant-wide access
+
 **Customer**:
 The person or organization responsible for invoices and the owner of any credit created by overpayment.
 _Avoid_: Account, client
