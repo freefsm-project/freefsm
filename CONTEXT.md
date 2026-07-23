@@ -17,12 +17,24 @@ A named set of Permissions assigned to a Product User. Administrator is the prot
 _Avoid_: Actor, job title
 
 **Permission**:
-A product-defined action and, where applicable, a fixed data scope granted through a Role. Authorization depends on Permissions rather than Role names.
+A product-defined action and, where applicable, one of the fixed scopes All Records, Assigned Jobs, Assigned Job Context, or Own Records, granted through a Role. Authorization depends on Permissions rather than Role names.
 _Avoid_: Role, arbitrary policy rule
 
+**All Records**:
+All records in the single FreeFSM instance that the permitted action can target.
+_Avoid_: Cross-instance access, unrestricted action
+
+**Assigned Jobs**:
+Jobs assigned to the Product User and the Job-bound actions permitted for those Jobs.
+_Avoid_: Customer assignment, general Job access
+
 **Assigned Job Context**:
-The Customer, relevant Contacts, Location, Assets, Project, files, comments, and activity needed to understand and perform a Job assigned to a Product User. Assignment scope originates only from a Job.
-_Avoid_: Customer assignment, tenant-wide access
+A closed, read-only first-link projection from a Job assigned to the Product User. It contains no sibling or unrelated records and does not expand relationships further, except for purpose-limited service-history summaries for linked Assets.
+_Avoid_: Customer assignment, another assignment anchor, recursive relationship expansion
+
+**Own Records**:
+Records selected by type-specific stable authorization anchors: Time Entry subject, Comment original author, File original uploader, and client session authenticated Product User. Later edits, reassignment, conversion or reversion, archive or restore, and Role changes do not transfer the own-scope anchor.
+_Avoid_: Current editor, current parent, Role-derived ownership
 
 **Offline Authorization Lease**:
 A finite grant allowing a conforming client to expose synchronized Assigned Job Context and stage permitted actions while disconnected. Server acceptance still depends on current authorization when the actions synchronize.
@@ -37,7 +49,7 @@ A request for payment belonging to exactly one Customer.
 _Avoid_: Bill, payment
 
 **Estimate**:
-A proposed document that may become an independently identified Invoice when its status permits conversion.
+A proposed document. Any active Estimate may be converted into an independently identified Invoice.
 _Avoid_: Quote, draft Invoice
 
 **Conversion**:
@@ -142,4 +154,4 @@ _Avoid_: Edit, deletion, cancellation
 - Conversion and reversion are atomic, idempotent, and fully audited.
 - Reversion requires every active settlement effect and every overpayment credit effect of the Invoice to be fully unwound.
 - An archived Invoice must be restored before it can be reverted to an Estimate.
-- Technicians may create, convert, or revert documents only for Jobs assigned to them. Dispatchers and administrators are unrestricted. Documents belonging only to a Customer are controlled by office roles.
+- Product-defined Permissions authorize document creation, conversion, and reversion by scope: Assigned Jobs authority applies only to documents for assigned Jobs; All Records authority is unrestricted and is required for Customer-only documents.
