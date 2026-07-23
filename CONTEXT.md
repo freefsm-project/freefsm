@@ -69,8 +69,84 @@ A finite grant allowing a conforming client to expose synchronized Assigned Job 
 _Avoid_: Offline session, cached Permission
 
 **Customer**:
-The person or organization responsible for invoices and the owner of any credit created by overpayment.
-_Avoid_: Account, client
+An Individual or Organization represented by a service-and-billing master record, responsible for invoices and the owner of any credit created by overpayment. Customer Kind is descriptive and editable; v1 has no lead, opportunity, pipeline, or other CRM lifecycle.
+_Avoid_: Account, client, sales lead
+
+**Contact**:
+An independently identified, reusable person belonging immutably to exactly one Customer and available to that Customer's work records.
+_Avoid_: Product User, Job-only contact
+
+**Location**:
+An independently identified, reusable service place belonging immutably to exactly one Customer and available to that Customer's work records.
+_Avoid_: Job-only address, shared Customer location
+
+**Primary Customer Record**:
+The optional single Primary Contact or Primary Location used as an office form default for one Customer. Primary designation never creates a Job link or grants Assigned Job Context.
+_Avoid_: Automatic Job relationship, authorization anchor
+
+**Asset**:
+An independently identified, reusable piece of equipment with a required immutable tenant-unique Asset Number and one immutable Asset Ownership Class. Its identity persists across Customer ownership transfers, placements, returns, and later placements.
+_Avoid_: Item, Job-only equipment, separate leased-asset type
+
+**Asset Ownership Class**:
+The immutable classification of an Asset as Customer-owned or Company-owned. A Customer-owned Asset has exactly one current Customer owner; a Company-owned Asset belongs to the operating organization and has zero or one current Customer placement.
+_Avoid_: Asset status, Customer placement
+
+**Asset Placement**:
+The current assignment of a Company-owned Asset to a Customer. It begins through explicit placement and ends only through explicit return or transfer; Lease expiration does not move the Asset or end its placement.
+_Avoid_: Customer ownership, Lease term, Job link
+
+**Asset Association Event**:
+An audited, reasoned, effective-dated transfer, placement, return, or correction that preserves an Asset's complete Customer association timeline. Events cannot take effect in the future; audited backdating is allowed only when derived association periods remain non-overlapping and affected relationships remain valid.
+_Avoid_: Current Customer overwrite, Job reassignment, Lease expiration
+
+**Historical Job-Asset Link**:
+A retained provenance relationship after an Asset leaves the Customer associated with a Job. It preserves prior service history but is no longer an operational Job link and grants no current Asset or new-Customer context.
+_Avoid_: Operational Job relationship, current Asset authorization, deleted link
+
+**Asset Service Entry**:
+A revisioned service record for exactly one Asset serviced through one Job, containing its service date and summary and one or more responsible Product Users. A Job-Asset relationship has zero or more entries; they never gate Job completion or turn shared Job notes into Asset history.
+_Avoid_: Field Notes, linked Job summary, Asset internal notes
+
+**Asset Service History**:
+The history of Asset Service Entries. All Records Asset view may show the complete lifetime history, while Customer and Assigned Job Context projections show only entries from association periods involving that Customer.
+_Avoid_: Full linked Job history, cross-Customer context, activity feed
+
+**Lease**:
+An independently identified agreement with one Customer covering one or more Company-owned Assets. Its term and lifecycle are distinct from Asset Placement, so it may expire while its Assets remain with the Customer.
+_Avoid_: Asset Placement, Customer-owned Asset, automatic return
+
+**Project**:
+An independently identified, reusable grouping of zero or more Jobs belonging immutably to exactly one Customer. It may link one Location belonging to that Customer; its Jobs retain their own independent Location links.
+_Avoid_: Job, shared Customer project
+
+**Project Progress**:
+The manually maintained percentage from 0 through 100 describing a Project's progress. Entering a Completed Project Status presents 100 while retaining the last non-completed value, which is restored when the Project leaves Completed.
+_Avoid_: Completed Job ratio, Project Status, weighted milestone progress
+
+**Service Notes**:
+Office-maintained operational instructions on a Customer, Contact, Location, Asset, or Project that are deliberately included in Assigned Job Context when that record is linked. They are distinct from internal notes, custom fields, Comments, and activity feeds.
+_Avoid_: Internal notes, Field Notes, unrestricted custom field
+
+**Item**:
+An independently identified, tenant-wide Service or Product catalog record with separately authorized base, Pricebook, and Item Cost facets. Names may repeat; a nonblank SKU is unique across active and archived Items and is never silently reused.
+_Avoid_: Document line, Customer-owned item, Pricebook entry
+
+**Pricebook Facet**:
+The commercial fields of an Item used during work or document preparation, including SKU, nonnegative sale price, and tax treatment. A Job, Estimate, or Invoice line receives an editable snapshot with Item provenance, so later Item edits or archive never rewrite the line.
+_Avoid_: Separate price record, live document pricing, cost ledger
+
+**Item Cost Facet**:
+The sensitive internal unit-cost fields of an Item, protected by a Permission separate from Item base and Pricebook commercial view. It is not included in the Technician default or copied into customer-facing document lines.
+_Avoid_: Sale price, Pricebook Facet, document cost
+
+**Customer Related Work**:
+The permission-filtered, non-recursive union of Projects, Jobs, Estimates, and Invoices belonging directly to one Customer. Each record appears once; Contacts, Locations, Assets, and Leases use separate Customer sections.
+_Avoid_: Recursive relationship graph, Customer master records, unfiltered totals
+
+**Customer Receivables**:
+The positive outstanding value of visible, active, non-Draft, non-Void Invoices for one Customer. Unapplied Customer Credit remains separate; aging uses Current, 1-30, 31-60, 61-90, 91+, and No Due Date buckets.
+_Avoid_: Draft forecast, automatically netted credit, hidden Invoice total
 
 **Job**:
 A work order belonging to exactly one Customer from creation onward. A new Job requires only its Customer and Job Title, enters the configured default New Status, and may otherwise remain unplanned. Customer ownership anchors relationship consistency but does not grant authorization.
@@ -81,7 +157,7 @@ The required free-text summary identifying the work requested. It is not a confi
 _Avoid_: Job Type, subtitle
 
 **Job Relationships**:
-A Job may link one service Location, one Project, any number of Contacts and Assets, and any number of independently identified Estimates and Invoices. Operational links must belong to the Job's Customer; each linked Estimate or Invoice belongs to at most one Job.
+A Job may operationally link one service Location, one Project, any number of Contacts and Assets, and any number of independently identified Estimates and Invoices. Operational links must currently belong to or be placed with the Job's Customer; an Asset link becomes historical when that association ends, and each Estimate or Invoice belongs to at most one Job.
 _Avoid_: Authorization scope, recursive context, document subordination
 
 **Field Notes**:
@@ -93,7 +169,7 @@ The explicitly permitted actions a Product User may perform on an assigned Job w
 _Avoid_: Technician Job editing, UI-based authority, implicit planning access
 
 **Job Customer Reassignment**:
-The atomic replacement of a Job's Customer. It clears the Job's Location, Project, Contact, and Asset links and reassigns its linked Estimates and editable draft Invoices to the new Customer. A linked finalized or settled Invoice blocks reassignment until unlinked.
+The atomic replacement of a Job's Customer. It clears the Job's operational Location, Project, Contact, and Asset links and reassigns its linked Estimates and editable draft Invoices to the new Customer. A linked finalized or settled Invoice blocks reassignment until unlinked; any Asset Service Entry blocks reassignment permanently to preserve service provenance.
 _Avoid_: Customer inheritance, implicit document context
 
 **Job Schedule**:
