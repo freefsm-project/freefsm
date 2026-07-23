@@ -36,6 +36,34 @@ _Avoid_: Customer assignment, another assignment anchor, recursive relationship 
 Records selected by type-specific stable authorization anchors: Time Entry subject, Comment original author, File original uploader, and client session authenticated Product User. Later edits, reassignment, conversion or reversion, archive or restore, and Role changes do not transfer the own-scope anchor.
 _Avoid_: Current editor, current parent, Role-derived ownership
 
+**Time Entry**:
+A time interval recorded for exactly one Product User, optionally linked to one Job. An active Time Entry has no end time; a Product User may have at most one active Time Entry across the instance, and accepted non-void entries for the same subject may not overlap. Assignment loss or Job archive blocks new Job clock-ins but does not prevent the subject from clocking out an existing active entry, which retains its Job link. Responsive web supports live clocking and manual creation, correction, and void; the public field API and offline synchronization support the acting user's standalone and assigned-Job clock-in/out. Duration is exact elapsed time derived from its instants; display, billing, or payroll rounding never changes the entry.
+_Avoid_: Timesheet, Job duration, schedule
+
+**Manual Time Entry**:
+A closed historical Time Entry created with explicit start and end times, both no later than the time of creation and with the end after the start. Manual creation cannot create an active Time Entry.
+_Avoid_: Clock adjustment, scheduled time, open manual entry
+
+**Time Entry Correction**:
+An immutable before-and-after revision that preserves the Time Entry identity and subject while changing its start, end, Job link, or notes. It records the actor, acceptance time, and required reason and updates the current projection. Corrected times cannot be future times; closing requires a valid end, while reopening removes the end and must preserve sole-active-entry and non-overlap invariants. Own Records retains correction authority after Job access is lost; only a retained Job identity and title snapshot remain visible, and the link may be kept or cleared but may be changed only to a currently authorized, non-archived Job.
+_Avoid_: Overwrite, replacement Time Entry, subject transfer
+
+**Time Entry Void**:
+A terminal immutable event that records actor, time, and required reason, marks a Time Entry void without deleting it, and ends any active effect without supplying a missing end time. Voided entries are excluded from ordinary totals and exports unless explicitly requested; correction uses a replacement Manual Time Entry rather than unvoiding.
+_Avoid_: Delete, correction, reversible status
+
+**Timesheets**:
+The authorized reporting projection of current Time Entry states, not a separate record type. It supports date-range, subject, Job, lifecycle, and manual-or-clocked filters; active durations are provisional as of query time, voids are opt-in and excluded from totals, and exact cross-midnight duration is split at company-timezone midnight for grouping by Product User or Job.
+_Avoid_: Time Entry, payroll ledger, export permission
+
+**Clock Event**:
+An idempotent clock-in or clock-out fact with separate occurrence and server-acceptance times. Online web events use server time for both; offline events use the client-captured occurrence time, subject to lease, ordering, and Time Entry invariants when accepted. The Clock Out action automatically targets the subject's sole active Time Entry while carrying its stable identity for race-safe acceptance.
+_Avoid_: Time Entry correction, schedule event, receipt time
+
+**GPS Observation**:
+An optional immutable, client-reported location observation attached to a clock-in or clock-out event. It contains latitude and longitude as a complete pair within valid geographic ranges, capture time no later than acceptance, and nonnegative accuracy in meters when supplied by the client. Offline capture must fall within its authorization lease. Invalid or unavailable evidence may be explicitly omitted without blocking clocking; correction or void retains accepted observations, and v1 performs no continuous or background tracking.
+_Avoid_: Verified presence, route history, required clock location
+
 **Offline Authorization Lease**:
 A finite grant allowing a conforming client to expose synchronized Assigned Job Context and stage permitted actions while disconnected. Server acceptance still depends on current authorization when the actions synchronize.
 _Avoid_: Offline session, cached Permission
@@ -43,6 +71,54 @@ _Avoid_: Offline session, cached Permission
 **Customer**:
 The person or organization responsible for invoices and the owner of any credit created by overpayment.
 _Avoid_: Account, client
+
+**Job**:
+A work order belonging to exactly one Customer from creation onward. A new Job requires only its Customer and Job Title, enters the configured default New Status, and may otherwise remain unplanned. Customer ownership anchors relationship consistency but does not grant authorization.
+_Avoid_: Visit, Project, Customer assignment
+
+**Job Title**:
+The required free-text summary identifying the work requested. It is not a configured classification or type taxonomy.
+_Avoid_: Job Type, subtitle
+
+**Job Relationships**:
+A Job may link one service Location, one Project, any number of Contacts and Assets, and any number of independently identified Estimates and Invoices. Operational links must belong to the Job's Customer; each linked Estimate or Invoice belongs to at most one Job.
+_Avoid_: Authorization scope, recursive context, document subordination
+
+**Field Notes**:
+A shared Job facet for observations recorded during field execution, distinct from planning details and Comments. Its explicit Edit Permission supports Assigned Jobs and All Records scopes and is included in the Technician default; current notes follow Job View, and revisions follow authorized Job activity. Revision-guarded editing is supported through responsive web, the public field API, and offline synchronization.
+_Avoid_: Technician Notes, service instructions, unaudited shared text
+
+**Field Execution**:
+The explicitly permitted actions a Product User may perform on an assigned Job without general Job-edit authority: Job Status change, Subtask completion or reopening, and Field Notes editing. Comments, Files, Time Entries, GPS Observations, documents, and Payments remain separately authorized resources and actions; every other mutable Job field remains an office planning or service detail.
+_Avoid_: Technician Job editing, UI-based authority, implicit planning access
+
+**Job Customer Reassignment**:
+The atomic replacement of a Job's Customer. It clears the Job's Location, Project, Contact, and Asset links and reassigns its linked Estimates and editable draft Invoices to the new Customer. A linked finalized or settled Invoice blocks reassignment until unlinked.
+_Avoid_: Customer inheritance, implicit document context
+
+**Job Schedule**:
+The single optional schedule belonging to a Job, comprising a planned start and end and an optional customer-facing arrival window that contains the planned start. A Job may be unscheduled; an arrival window cannot exist without a planned interval, and v1 has no independently scheduled visits within a Job.
+_Avoid_: Visit schedule, recurring occurrence
+
+**Job Due Date**:
+The optional local calendar date by which a Job is expected to reach a Completed Status. It is independent of the Job Schedule. After that date, a non-archived Job is overdue unless its Status Category is Completed or Canceled; overdue and scheduling beyond the date warn without changing Status or blocking work.
+_Avoid_: Scheduled end, automatic completion, hard deadline
+
+**Operational Time**:
+An exact instant displayed and edited in the company timezone by default. Intervals may cross midnight and require the end after the start; ambiguous daylight-saving times require an explicit offset choice, and nonexistent local times are invalid.
+_Avoid_: Naive local timestamp, silently shifted time
+
+**Job Assignment**:
+The set of zero or more enabled Product Users assigned to perform a Job. Assignment does not grant authority; incompatible current Permissions warn without blocking assignment. Disabled users cannot receive new assignments, while existing assignments remain visible as unavailable. All assignees share the Job Schedule and have equal Assigned Jobs authority when granted; v1 has no primary assignee, per-assignee schedule, or assignment-role label.
+_Avoid_: Customer assignment, primary technician, Visit assignment, lead/helper label
+
+**Dispatch**:
+An atomic office planning action that changes a Job Schedule, a Job Assignment, or both. Scheduling and assignment remain independent. Every drag-and-drop move in calendar or dispatch views only proposes a date, time, and target assignee; the same modal presents the proposal, arrival window, and complete assignee set for editing, and no change occurs until confirmation succeeds.
+_Avoid_: Status transition, automatic assignment
+
+**Schedule Conflict**:
+An overlap between the Job Schedules of Jobs assigned to the same Product User. It is a visible warning rather than a prohibition; an authorized user may explicitly acknowledge and accept the conflict, and that acknowledgment is audited.
+_Avoid_: Validation failure, unassigned schedule overlap
 
 **Invoice**:
 A request for payment belonging to exactly one Customer.
@@ -87,6 +163,14 @@ _Avoid_: Status Category, state
 **Default Status**:
 The Status selected by default for a Status Category when an object enters that category.
 _Avoid_: Initial category, global default
+
+**Job Status Transition**:
+An explicit move of an active Job to any configured Job Status. V1 has no transition graph; creation alone selects a Status implicitly, and scheduling, assignment, clocking, and Subtask actions never change Status. Completed and Canceled categories do not close the Job, and archive remains the separate read-only lifecycle boundary.
+_Avoid_: Job closure, archive, implicit workflow gate
+
+**Subtask**:
+A stably identified, ordered unit of work within a Job, with a required title and a completion projection retaining the responsible actor and time. Completion, reopening, reordering, and removal do not change its identity or the Job Status; removal hides it from the active list while retaining audit and synchronization history.
+_Avoid_: Array index, Job Status, disposable checklist row
 
 **Manual Invoice Status**:
 The preserved user-selected Invoice workflow slot: Draft, Invoiced, Sent, or Void. It remains unchanged while settlement determines the effective Invoice Status.
