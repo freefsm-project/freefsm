@@ -39,6 +39,15 @@ templ LineItemEditor(p LineItemEditorData) {
 					this.syncCustomerTax();
 				},
 				add() { this.items.push(makeItem()); },
+				addOnEnter(event) {
+					if (!event.target.matches('input[type="text"], input[type="number"]')) return;
+					// Enter may confirm an IME candidate rather than finish a line.
+					if (event.isComposing || event.keyCode === 229) return;
+					event.preventDefault();
+					if (event.repeat) return;
+					this.add();
+					this.$nextTick(() => this.$refs.lineRows.querySelector('tr:last-child input[type="text"]').focus());
+				},
 				remove(index) { this.items.splice(index, 1); },
 				applyCatalogItem(item, catalogItem) {
 					item.item_id = Number(catalogItem.id) || 0;
@@ -120,7 +129,7 @@ templ LineItemEditor(p LineItemEditorData) {
 		<legend>Line Items</legend>
 		<table>
 			<thead><tr><th>Catalog</th><th>Title</th><th>Description</th><th>Qty</th><th>Price</th><th>Discount</th><th>Surcharge</th><th>Taxable</th><th>Total</th><th></th></tr></thead>
-			<tbody>
+			<tbody x-ref="lineRows" @keydown.enter="addOnEnter($event)">
 				<template x-for="(item, index) in items" :key="index">
 					<tr>
 						<td><select x-model.number="item.item_id" x-init="$nextTick(() => { $el.value = String(item.item_id || 0) })" @change="selectItem(index, $el.value)"><option value="0">Free-text line</option><template x-for="catalogItem in catalog" :key="catalogItem.id"><option :value="catalogItem.id" :selected="Number(catalogItem.id) === Number(item.item_id)" x-text="catalogItem.name"></option></template></select></td>
@@ -132,15 +141,15 @@ templ LineItemEditor(p LineItemEditorData) {
 						<td><input type="number" x-model="item.surcharge" step="0.01" min="0" class="input-width-100" aria-label="Surcharge"/></td>
 						<td><input type="checkbox" x-model="item.taxable" aria-label="Taxable line item"/></td>
 						<td><span x-text="lineTotal(item).toFixed(2)"></span></td>
-						<td><button @click.prevent="remove(index)" class="outline contrast small" aria-label="Remove line item">X</button></td>
+						<td><button type="button" @click.prevent="remove(index)" class="outline contrast small" aria-label="Remove line item">X</button></td>
 					</tr>
 				</template>
 			</tbody>
 		</table>
 		<div class="line-item-actions">
-			<button @click.prevent="add()" class="outline">Add Line</button>
+			<button type="button" @click.prevent="add()" class="outline">Add Line</button>
 			if canManageOperational(ctx) {
-				<button @click.prevent="openCreateItemModal()" class="outline">Create Item</button>
+				<button type="button" @click.prevent="openCreateItemModal()" class="outline">Create Item</button>
 			}
 		</div>
 		if canManageOperational(ctx) {
