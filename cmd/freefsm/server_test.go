@@ -7,9 +7,49 @@ import (
 	"testing"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	appmw "github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/go-chi/chi/v5"
 )
+
+func TestApplicationAdmissionPrecedesEveryDatabaseRoute(t *testing.T) {
+	c, err := instancecontrol.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshed, accessed := 0, 0
+	app := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if refreshed <= accessed {
+			t.Fatal("database access before refresh")
+		}
+		accessed++
+		w.WriteHeader(204)
+	})
+	status := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(202) })
+	h := newApplicationHandler(app, app, instanceRoutes{control: c, refresh: func() error { refreshed++; return nil }, backup: status})
+	for _, path := range []string{"/api/v1/probe", "/settings", "/delivery/open/token"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != 204 {
+			t.Fatalf("%s: %d", path, w.Code)
+		}
+	}
+	if err := c.KeepClosed(); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/v1/probe", "/settings", "/delivery/open/token"} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if w.Code != 503 {
+			t.Fatalf("%s: %d", path, w.Code)
+		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("POST", "/settings/backup/status", nil))
+	if w.Code != 202 || accessed != 3 || refreshed != 3 {
+		t.Fatalf("status %d, accessed %d, refreshed %d", w.Code, accessed, refreshed)
+	}
+}
 
 func TestApplicationHandlerSeparatesAPICSRFAndWebRoutes(t *testing.T) {
 	api := chi.NewRouter()

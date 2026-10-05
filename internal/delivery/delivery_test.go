@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/database"
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -105,6 +106,38 @@ func TestQueueWorkerTrackingAndEvidenceIntegration(t *testing.T) {
 	}
 	sender := &fakeSender{}
 	hook := &fakeHook{}
+	control, err := instancecontrol.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := control.DisableEmail(); err != nil {
+		t.Fatal(err)
+	}
+	control, err = instancecontrol.New(control.StateDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.SetInstanceControl(control)
+	if processed, err := svc.ProcessOne(ctx, sender, hook); processed || err != nil {
+		t.Fatalf("disabled processing = %v, %v", processed, err)
+	}
+	var state string
+	var attempts int
+	if err := f.db.Pool.QueryRow(ctx, `SELECT state,lifetime_attempt_count FROM document_deliveries WHERE id=$1`, d.ID).Scan(&state, &attempts); err != nil {
+		t.Fatal(err)
+	}
+	if state != "queued" || attempts != 0 || sender.calls != 0 || hook.calls != 0 {
+		t.Fatalf("disabled work advanced: state=%s attempts=%d sends=%d hooks=%d", state, attempts, sender.calls, hook.calls)
+	}
+	if _, err := svc.Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, request); !errors.Is(err, instancecontrol.ErrEmailDisabled) {
+		t.Fatalf("disabled manual queue: %v", err)
+	}
+	if err := svc.ManualRetry(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, d.ID, "retry"); !errors.Is(err, instancecontrol.ErrEmailDisabled) {
+		t.Fatalf("disabled retry: %v", err)
+	}
+	if err := control.EnableEmail(); err != nil {
+		t.Fatal(err)
+	}
 	ok, err := svc.ProcessOne(ctx, sender, hook)
 	if err != nil || !ok || hook.calls != 1 || !hook.changed {
 		t.Fatalf("process = %v %v, hook=%+v", ok, err, hook)

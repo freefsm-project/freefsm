@@ -58,6 +58,12 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sendWelcome := r.FormValue("send_welcome_email") == "on"
+	if sendWelcome {
+		if err := h.emailSvc.CheckAvailability(r.Context()); err != nil {
+			http.Redirect(w, r, "/users/new?flash="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+			return
+		}
+	}
 	password := r.FormValue("password")
 	if sendWelcome {
 		password = ""
@@ -106,6 +112,8 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		inviteURL := absoluteAppURL(h.cfg, r, "/accept-invite?token="+url.QueryEscape(token))
 		if err := h.emailSvc.SendWelcomeEmail(r.Context(), result.Email, result.Name, inviteURL); err != nil {
 			slog.Error("send welcome email", "error", err, "user", result.Email)
+			http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", result.ID)+url.QueryEscape("User created, but welcome email failed: "+err.Error()), http.StatusSeeOther)
+			return
 		}
 		if a != nil && h.activitySvc != nil {
 			h.activitySvc.Record(r.Context(), a.CompanyID, a.ID, "welcome_invite_sent", objectref.New(objectref.TypeUser, result.ID), map[string]interface{}{
@@ -271,6 +279,10 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 	a, ok := middleware.UserFromContext(r.Context())
 	if !ok || a == nil {
 		http.Error(w, "welcome invitation cannot be resent", http.StatusConflict)
+		return
+	}
+	if err := h.emailSvc.CheckAvailability(r.Context()); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
 	user, token, err := h.inviteSvc.RenewPendingInvite(r.Context(), a.CompanyID, id)

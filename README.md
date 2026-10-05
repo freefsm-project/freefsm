@@ -3,7 +3,7 @@
 Self-hosted, open-source field service management for FreeBSD and Linux.
 Single static Go binary, PostgreSQL backend, and no npm dependencies.
 
-This README describes functionality released through `v0.6.0`.
+This README describes functionality released through `v0.7.0`.
 
 ## Features
 
@@ -24,6 +24,7 @@ This README describes functionality released through `v0.6.0`.
 - **Comments** — notes on customers, projects, jobs, assets, estimates, and invoices
 - **User Management** — roles, welcome emails, password policies, force password change
 - **Company Settings** — branding, email config, timezone, invoice numbering, status workflows, map settings, document defaults, security policies
+- **Whole-instance Backup and Restore** — administrator-only password-encrypted archives, reviewed instance replacement, crash recovery, session expiry, and persistent outbound-email disablement after restore
 - **Dark Mode** — persistent theme toggle
 - **Activity / Audit Log** — audited business actions with per-record and administrative activity views
 - **File Attachments** — customer, job, estimate, invoice, and asset uploads; queued drag-and-drop batches of up to 10; PNG/JPEG/GIF, PDF, plain text, legacy/OpenXML Microsoft Office, ZIP, and JSON formats; image/PDF preview and disk storage
@@ -51,6 +52,7 @@ This README describes functionality released through `v0.6.0`.
 
 - Go 1.25.10+
 - PostgreSQL 16+
+- Matching-major `pg_dump` and `pg_restore` on the service's PATH for backup and restore
 - `ent` CLI: `go install entgo.io/ent/cmd/ent@v0.14.6`
 - `templ` CLI: `go install github.com/a-h/templ/cmd/templ@v0.3.1020`
 - Ensure `$HOME/go/bin` is in `$PATH`
@@ -116,7 +118,8 @@ Seeding refuses to run and exits unsuccessfully if any customers already exist.
 | `FREEFSM_SESSION_SECRET` | *(required)* | Required startup value currently reserved for session configuration |
 | `FREEFSM_SETUP_TOKEN` | *(required)* | Initial admin registration token |
 | `FREEFSM_PUBLIC_URL` | *(empty)* | Optional public origin; recommended for externally valid email links and tracking URLs |
-| `FREEFSM_UPLOAD_DIR` | `/var/lib/freefsm/uploads` | File upload storage on all OSes; the FreeBSD deployment config overrides this with `/var/db/freefsm/uploads` |
+| `FREEFSM_UPLOAD_DIR` | `/var/lib/freefsm/uploads` (Linux); `/var/db/freefsm/uploads` (FreeBSD) | File upload storage |
+| `FREEFSM_STATE_DIR` | `state` sibling of the upload directory | Persistent recovery and instance-control storage; defaults to `/var/lib/freefsm/state` on Linux or `/var/db/freefsm/state` on FreeBSD; must be disjoint from uploads |
 | `FREEFSM_MAX_UPLOAD_SIZE` | `26214400` (25 MB) | Maximum upload file size in bytes |
 | `FREEFSM_TILE_URL` | `https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png` | Default map tile URL template |
 | `FREEFSM_GEOCODER_URL` | *(empty)* | Optional geocoder base URL for map location lookup |
@@ -158,6 +161,7 @@ freefsm/
 │   └── static/            # CSS, JS (Pico, HTMX, Alpine)
 ├── internal/
 │   ├── api/v1/            # Bearer-authenticated mobile JSON API
+│   ├── backup/            # Encrypted whole-instance archives and recovery
 │   ├── config/            # Env loading + DSN builder
 │   ├── conversion/        # Estimate/invoice conversion and reversal
 │   ├── database/          # pgxpool connection + SQL migration runner
@@ -166,6 +170,7 @@ freefsm/
 │   ├── ent/
 │   │   └── schema/        # ent schema definitions
 │   ├── handlers/          # HTTP handlers (chi routes)
+│   ├── instancecontrol/   # Maintenance, locking, and persistent email gate
 │   ├── middleware/         # Auth, Flash, user context, CSRF
 │   ├── objectref/          # Typed business-object references and capabilities
 │   ├── settlement/         # Payments, credits, refunds, and reversals
@@ -251,6 +256,22 @@ systemctl enable --now freefsm
 gmake install-freebsd
 service freefsm start
 ```
+
+## Whole-instance backup and restore
+
+Administrators can use **Settings → Backup** to create
+password-encrypted `.age` archives and replace an instance from a reviewed archive.
+Fresh account-password verification is required for download and restore.
+Development builds (including dirty, untagged and `go run` builds) support backup
+and restore and are explicitly labeled. All restores require matching trusted-local
+database schemas; between two releases the exact version and commit must also match.
+
+Successful restore expires all sessions and persistently disables outbound email.
+Log in using a restored account and review SMTP settings and queued work before
+explicitly enabling email. Archive passwords are not retained or recoverable.
+Deployment Operators remain responsible for host and infrastructure recovery.
+See [deployment and persistent recovery storage](deploy/README.md#whole-instance-backup-and-recovery)
+before using the feature.
 
 ## License
 

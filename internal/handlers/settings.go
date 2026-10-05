@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
@@ -19,6 +20,8 @@ import (
 )
 
 type SettingsHandler struct {
+	control     *instancecontrol.Control
+	users       *services.UserService
 	svc         *services.CompanySettingsService
 	emailSvc    *services.EmailService
 	activitySvc *services.ActivityService
@@ -32,8 +35,9 @@ func NewSettingsHandler(svc *services.CompanySettingsService, emailSvc *services
 func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
 	cs, _ := h.svc.Get(r.Context())
 	render(w, r, templates.SettingsPage(templates.SettingsPageData{
-		Settings: cs,
-		IsSetup:  r.URL.Path == "/setup/company",
+		Settings:      cs,
+		IsSetup:       r.URL.Path == "/setup/company",
+		EmailDisabled: h.control != nil && h.control.EmailDisabled(),
 	}))
 }
 
@@ -258,6 +262,11 @@ func mapTileURLSample(tileURL string) string {
 }
 
 func (h *SettingsHandler) TestEmail(w http.ResponseWriter, r *http.Request) {
+	if err := h.emailSvc.CheckAvailability(r.Context()); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		render(w, r, templates.TestEmailResult(false, "Outbound email is disabled or unavailable. An administrator must explicitly enable it in Settings."))
+		return
+	}
 	u, ok := middleware.UserFromContext(r.Context())
 	if !ok || u == nil {
 		http.Error(w, "Unauthorized", 401)
@@ -269,6 +278,28 @@ func (h *SettingsHandler) TestEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render(w, r, templates.TestEmailResult(true, ""))
+}
+
+func (h *SettingsHandler) EnableEmail(w http.ResponseWriter, r *http.Request) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil || u.Role != "admin" {
+		http.Error(w, "Forbidden", 403)
+		return
+	}
+	if h.users == nil {
+		http.Error(w, "Administrator verification unavailable", 503)
+		return
+	}
+	active, err := h.users.GetByID(r.Context(), u.ID)
+	if err != nil || !active.IsActive || active.Role != "admin" || active.ForcePasswordChange {
+		http.Error(w, "Forbidden", 403)
+		return
+	}
+	if h.control == nil || h.control.EnableEmail() != nil {
+		http.Error(w, "Email could not be enabled", 503)
+		return
+	}
+	http.Redirect(w, r, "/settings?flash=Outbound+email+enabled", http.StatusSeeOther)
 }
 
 func (h *SettingsHandler) UploadInvoiceLogo(w http.ResponseWriter, r *http.Request) {

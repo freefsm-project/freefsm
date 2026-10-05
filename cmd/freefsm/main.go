@@ -17,18 +17,22 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
+	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/handlers"
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/go-chi/chi/v5"
 	"github.com/joho/godotenv"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -87,6 +91,52 @@ func run() error {
 	slog.SetDefault(logger)
 
 	slog.Info("starting freefsm", "version", config.Version, "commit", config.Commit)
+	control, err := instancecontrol.New(cfg.StateDir)
+	if err != nil {
+		return err
+	}
+	var pool *pgxpool.Pool
+	disabledReason := config.BackupDisabledReason()
+	backupConfig := backup.Config{
+		DSN: cfg.DSN(), UploadDir: cfg.UploadDir, StateDir: cfg.StateDir,
+		Version: config.Version, Commit: config.Commit, BuildKind: backup.BuildKind(config.BuildKind), Control: control,
+		RecoveryOnly: disabledReason != "",
+		// Ent uses uncached extended-protocol execution below. Only pgxpool
+		// retains prepared statements and needs generation-driven resetting.
+		ResetConnections: func() {
+			if pool != nil {
+				pool.Reset()
+			}
+		},
+	}
+	manager, err := backup.New(backupConfig)
+	if errors.Is(err, backup.ErrUnsupportedRelease) {
+		disabledReason = backup.ErrUnsupportedRelease.Error()
+		backupConfig.RecoveryOnly = true
+		manager, err = backup.New(backupConfig)
+	}
+	if err != nil {
+		return err
+	}
+	defer manager.Shutdown()
+	if err := manager.Recover(context.Background()); err != nil {
+		return err
+	}
+	// Reserve startup against another process's operation until all migrations,
+	// seed work and client construction are finished. No session access can race.
+	startupUnlock, err := control.OperationLock()
+	if err != nil {
+		return err
+	}
+	defer startupUnlock()
+	startupCtx, startupRelease, err := control.Enter(context.Background())
+	if err != nil {
+		return err
+	}
+	defer startupRelease()
+	if err := manager.RefreshConnections(); err != nil {
+		return err
+	}
 
 	if err := os.MkdirAll(cfg.UploadDir, 0750); err != nil {
 		slog.Error("create upload directory", "dir", cfg.UploadDir, "error", err)
@@ -98,29 +148,30 @@ func run() error {
 	}
 	slog.Info("upload directory ready", "dir", cfg.UploadDir)
 
-	db, err := database.Connect(context.Background(), cfg.DSN())
+	db, err := database.Connect(startupCtx, cfg.DSN())
 	if err != nil {
 		slog.Error("database connect", "error", err)
 		return err
 	}
 	defer db.Close()
+	pool = db.Pool
 	slog.Info("database connected")
 
-	if err := db.Migrate(context.Background(), database.MigrationFS()); err != nil {
+	if err := db.Migrate(startupCtx, database.MigrationFS()); err != nil {
 		slog.Error("database migrate", "error", err)
-		os.Exit(1)
+		return err
 	}
 	slog.Info("database migrations applied")
 
 	if *seedFlag {
-		sqldb, err := sql.Open("pgx", cfg.DSN())
+		sqldb, err := openEntDB(cfg.DSN())
 		if err != nil {
 			slog.Error("ent database connect", "error", err)
 			return err
 		}
 		entClient := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, sqldb)))
 		defer entClient.Close()
-		if err := database.Seed(context.Background(), entClient); err != nil {
+		if err := database.Seed(startupCtx, entClient); err != nil {
 			slog.Error("seed demo data", "error", err)
 			return err
 		}
@@ -130,13 +181,15 @@ func run() error {
 
 	sessions := services.NewSessionService(db.Pool)
 
-	sqldb, err := sql.Open("pgx", cfg.DSN())
+	sqldb, err := openEntDB(cfg.DSN())
 	if err != nil {
 		slog.Error("ent database connect", "error", err)
 		return err
 	}
 	entClient := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, sqldb)))
 	defer entClient.Close()
+	// Drain engine jobs before closing either application client on every exit.
+	defer manager.Shutdown()
 
 	webRouter := chi.NewRouter()
 	webRouter.Use(middleware.Flash)
@@ -147,20 +200,28 @@ func run() error {
 
 	webRouter.Handle("/static/*", http.StripPrefix("/static/", staticHandler()))
 	deliveryService := delivery.New(db.Pool, cfg.PublicURL)
+	deliveryService.SetInstanceControl(control)
+	deliveryService.SetBeforeWork(manager.RefreshConnections)
 	webRouter.Get("/delivery/open/{token}", deliveryService.OpenHandler)
-	webRouter.Mount("/", handlers.New(db.Pool, entClient, sessions, cfg))
+	webRouter.Mount("/", handlers.New(db.Pool, entClient, sessions, cfg, control))
+	backupRouter := handlers.NewBackupRouter(manager, control, services.NewUserService(entClient), services.NewCompanySettingsService(entClient), sessions, disabledReason)
 	applicationHandler := newApplicationHandler(
 		apiv1.NewRouter(db.Pool, entClient, sessions),
 		webRouter,
+		instanceRoutes{control: control, refresh: manager.RefreshConnections, backup: backupRouter},
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	workerEmail := services.NewEmailService(services.NewCompanySettingsService(entClient))
+	workerEmail.SetInstanceControl(control)
 	worker := &delivery.Worker{
 		Service: deliveryService,
-		Sender:  delivery.NewSMTPSender(services.NewEmailService(services.NewCompanySettingsService(entClient))),
+		Sender:  delivery.NewSMTPSender(workerEmail),
 		Hook:    statusflow.NewAcceptanceHook(statusflow.New(db.Pool)),
 	}
+	startupRelease()
+	startupUnlock()
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
@@ -198,8 +259,23 @@ func run() error {
 	case <-shutdownCtx.Done():
 		slog.Warn("document delivery worker drain timed out")
 	}
+	manager.Shutdown()
 	if serverErr == nil {
 		return errors.New("HTTP server stopped unexpectedly")
 	}
 	return nil
+}
+
+func openEntDB(dsn string) (*sql.DB, error) {
+	cfg, err := pgx.ParseConfig(dsn)
+	if err != nil {
+		return nil, err
+	}
+	// Ent's database/sql driver does not explicitly prepare statements. Disable
+	// pgx's implicit statement/description caches so schema OIDs cannot survive a
+	// restore in idle sql.DB connections. QueryExecModeExec keeps bind parameters.
+	cfg.DefaultQueryExecMode = pgx.QueryExecModeExec
+	cfg.StatementCacheCapacity = 0
+	cfg.DescriptionCacheCapacity = 0
+	return stdlib.OpenDB(*cfg), nil
 }

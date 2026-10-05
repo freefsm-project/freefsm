@@ -1,0 +1,4 @@
+comment = 'Empty extension for disposable backup preflight tests only'
+default_version = '1.0'
+superuser = false
+relocatable = true

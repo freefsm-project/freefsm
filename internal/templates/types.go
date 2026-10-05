@@ -725,8 +725,9 @@ type ResetPasswordData struct {
 }
 
 type SettingsPageData struct {
-	Settings *ent.CompanySettings
-	IsSetup  bool
+	EmailDisabled bool
+	Settings      *ent.CompanySettings
+	IsSetup       bool
 }
 
 type InvoiceFormPageData struct {

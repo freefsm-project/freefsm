@@ -1,0 +1,224 @@
+package templates
+
+import "github.com/freefsm-project/freefsm/internal/config"
+
+templ EmailDisabledBanner(disabled bool) {
+	if disabled {
+		<article role="alert">
+			<strong>Outbound email is disabled.</strong>
+			<p>Review the restored SMTP settings and pending work before enabling email. Enabling permits eligible queued messages and retries, account invitations and password resets to send.</p>
+			<form action="/settings/enable-email" method="post">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<button type="submit">Enable outbound email, including eligible queued work</button>
+			</form>
+		</article>
+	}
+}
+
+templ BackupPage(destination, disabledReason string, emailDisabled bool) {
+	@Layout("Settings") {
+		@EmailDisabledBanner(emailDisabled)
+		@SettingsTabs("backup", false)
+		<h2>Backup and restore</h2>
+		<p>Destination: <strong>{ destination }</strong></p>
+		<p>Destination build: <strong>{ config.BuildKind }</strong> ({ config.Version }, commit { config.Commit }).</p>
+		<p>Development backups are labeled development. Restores involving development require matching database schemas. Between releases, the exact version and commit must also match.</p>
+		<p>Whole-instance operations temporarily block normal access and background work. Archives contain all product accounts, settings, history and durable files. Host configuration stays on the destination.</p>
+		if disabledReason != "" {
+			<p role="alert">{ disabledReason }</p>
+		} else {
+			<div id="backup-ui" data-csrf={ csrfToken(ctx) } hx-boost="false" hx-history="false">
+				<article>
+					<h2>Create encrypted backup</h2>
+					<p>The archive password is independent of your account password. It is never retained and cannot be recovered. Store it safely: losing it makes the backup unusable.</p>
+					<form id="backup-create" action="/settings/backup/create" method="post">
+						<label>Archive encryption password<input type="password" name="archive_password" autocomplete="new-password" required maxlength="1024"/></label>
+						<button>Create backup</button>
+					</form>
+				</article>
+				<article>
+					<h2>Upload backup for review</h2>
+					<form id="backup-upload" action="/settings/backup/upload" method="post">
+						<label>Encrypted archive (.age)<input type="file" name="archive" accept=".age" required/></label>
+						<label>Archive password<input type="password" name="archive_password" autocomplete="off" required maxlength="1024"/></label>
+						<button>Upload and validate</button>
+					</form>
+				</article>
+				<p id="backup-progress" role="status" aria-live="polite"></p>
+				<button id="backup-dismiss" type="button" hidden>Dismiss saved operation status</button>
+				<article id="backup-review" hidden>
+					<h2>Validated archive</h2>
+					<pre id="backup-metadata"></pre>
+					<p>Restore completely replaces this destination's users, passwords, settings, business records, financial history and files. All sessions will expire. Log in with a restored account afterward. Outbound email will remain disabled until an administrator explicitly enables it.</p>
+					<form id="backup-restore" action="/settings/backup/restore" method="post">
+						<input type="hidden" name="operation"/>
+						<input type="hidden" name="archive_digest"/>
+						<label>Type the destination name exactly: { destination }<input name="confirmation" autocomplete="off" required/></label>
+						<label>Current destination account password<input type="password" name="current_password" autocomplete="current-password" required/></label>
+						<button>Replace this instance</button>
+					</form>
+				</article>
+				<article id="backup-download" hidden>
+					<h2>Encrypted backup ready</h2>
+					<p>Download expires after one hour. Enter your current account password to download directly to your browser.</p>
+					<form action="/settings/backup/download" method="post">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<input type="hidden" name="operation"/>
+						<label>Current account password<input type="password" name="current_password" autocomplete="current-password" required/></label>
+						<button>Download encrypted .age file</button>
+					</form>
+				</article>
+			</div>
+			@BackupProgressScript()
+		}
+	}
+}
+
+// This shell deliberately has no Layout, company/session lookup or mutation controls.
+templ BackupStatusPage(token string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<meta name="referrer" content="no-referrer"/>
+			<title>Instance operation status</title>
+		</head>
+		<body>
+			<h1>Instance operation status</h1>
+			<p>This page only reports the operation saved in this browser tab. Normal access may be temporarily unavailable.</p>
+			<div id="backup-ui" data-csrf={ token } data-status-only="true">
+				<p id="backup-progress" role="status" aria-live="polite">No saved operation in this tab.</p>
+				<button id="backup-dismiss" type="button" hidden>Dismiss saved operation status</button>
+				<p><a id="backup-controls" href="/settings/backup">Return to administrator controls</a></p>
+			</div>
+			@BackupProgressScript()
+		</body>
+	</html>
+}
+
+templ BackupProgressScript() {
+	<script>
+			(() => {
+				const root = document.getElementById('backup-ui');
+				const progress = document.getElementById('backup-progress');
+				const dismiss = document.getElementById('backup-dismiss');
+				const storageKey = 'freefsm.backup.status';
+				let generation = 0;
+				let busy = false;
+				function remember(op) {
+					// Never persist passwords, archive metadata, confirmations or account data.
+					try { sessionStorage.setItem(storageKey, JSON.stringify({id: op.ID, kind: op.Kind})); }
+					catch (error) {
+						if (!document.getElementById('backup-storage-warning')) {
+							const warning = document.createElement('p'); warning.id = 'backup-storage-warning';
+							warning.textContent = 'Browser status storage is unavailable. Keep this page open to follow the operation.'; root.prepend(warning);
+						}
+						return false;
+					}
+					dismiss.hidden = false;
+					return true;
+				}
+				function hideControls() {
+					for (const id of ['backup-review', 'backup-download']) {
+						const control = document.getElementById(id); if (control) control.hidden = true;
+					}
+				}
+				dismiss.addEventListener('click', () => {
+					generation++; busy = false; sessionStorage.removeItem(storageKey);
+					dismiss.hidden = true; hideControls();
+					progress.textContent = 'Saved status dismissed. This does not cancel a running operation.';
+				});
+				async function post(path, body, headers = {}) {
+					const response = await fetch('/settings/backup/' + path, {method: 'POST', body, headers: {'X-CSRF-Token': root.dataset.csrf, ...headers}, cache: 'no-store', referrerPolicy: 'no-referrer', signal: path === 'status' ? AbortSignal.timeout(15000) : undefined});
+					if (!response.ok) { const error = new Error(await response.text()); error.status = response.status; throw error; }
+					return response.json();
+				}
+				async function follow(op) {
+					const current = ++generation;
+					busy = true;
+					dismiss.hidden = false;
+					for (; current === generation && root.isConnected;) {
+						progress.textContent = op.Kind + ': ' + op.Phase;
+						if (op.Phase === 'failed') { progress.textContent = op.Error; busy = false; return; }
+						if (op.Kind === 'restore' && op.Phase === 'complete') {
+							// Replace any pre-restore administrator DOM with the status-only shell.
+							if (!root.dataset.statusOnly) { location.replace(remember(op) ? '/settings/backup/status-page' : '/login'); return; }
+							progress.textContent = 'Restore complete. Email is disabled. Log in again with a restored account.';
+							const a = document.createElement('a'); a.href = '/login'; a.textContent = ' Log in';
+							a.addEventListener('click', () => sessionStorage.removeItem(storageKey));
+							progress.append(a); document.getElementById('backup-controls').hidden = true; busy = false; return;
+						}
+						if (op.Kind === 'backup' && op.Phase === 'complete') {
+							const download = document.getElementById('backup-download');
+							if (download) { download.hidden = false; download.querySelector('[name=operation]').value = op.ID; }
+							else progress.textContent = 'Backup complete. Return to administrator controls to authenticate and download.';
+							busy = false;
+							return;
+						}
+						if (op.Kind === 'upload' && op.Phase === 'ready') {
+							busy = false;
+							const review = document.getElementById('backup-review');
+							if (!review) { progress.textContent = 'Upload validated. Return to administrator controls to review and confirm restore.'; return; }
+							review.hidden = false;
+							document.getElementById('backup-metadata').textContent = 'Source: ' + op.SourceName + '\nSource build: ' + op.BuildKind + '\nCaptured: ' + op.CapturedAt + '\nVersion: ' + op.Version + '\nCommit: ' + op.Commit;
+							const form = document.getElementById('backup-restore'); form.elements.operation.value = op.ID; form.elements.archive_digest.value = op.ArchiveDigest;
+							return;
+						}
+						await new Promise(resolve => setTimeout(resolve, 1500));
+						while (current === generation && root.isConnected) {
+							try {
+								const next = await post('status', null, {'X-Backup-Operation': op.ID});
+								if (current !== generation || !root.isConnected) return;
+								op = next; remember(op); break;
+							} catch (error) {
+								if (current !== generation || !root.isConnected) return;
+								if (error.status && error.status < 500 && error.status !== 429) {
+									progress.textContent = error.status === 404 ? 'Operation not found or expired. The saved status can be dismissed.' : 'Status unavailable. Reload to refresh browser authorization, or dismiss this saved status.';
+									busy = false; return;
+								}
+								progress.textContent = 'Connection interrupted. Retrying operation status; the server operation continues.';
+								await new Promise(resolve => setTimeout(resolve, 3000));
+							}
+						}
+					}
+				}
+				for (const action of ['create', 'upload', 'restore']) {
+					const actionForm = document.getElementById('backup-' + action);
+					if (!actionForm) continue;
+					actionForm.addEventListener('submit', async event => {
+						event.preventDefault(); if (busy) return; busy = true;
+						const form = event.target;
+						try {
+							progress.textContent = action === 'upload' ? 'Uploading encrypted archive…' : 'Starting operation…';
+							let op;
+							if (action === 'upload') {
+								const password = JSON.stringify(form.elements.archive_password.value); form.elements.archive_password.value = '';
+								op = await post(action, form.elements.archive.files[0], {'Content-Type': 'application/octet-stream', 'X-Archive-Password': password.replace(/[\u007f-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))});
+							} else {
+								const body = new URLSearchParams(new FormData(form));
+								form.querySelectorAll('input[type=password]').forEach(input => input.value = '');
+								op = await post(action, body);
+							}
+							// Reload/back lands on a DB-free shell even after sessions expire.
+							if (remember(op)) history.replaceState(null, '', '/settings/backup/status-page');
+							hideControls();
+							await follow(op);
+						} catch (error) { progress.textContent = error.message; busy = false; }
+					});
+				}
+				function resume() {
+					if (!root.isConnected) return;
+					try {
+						const saved = JSON.parse(sessionStorage.getItem(storageKey));
+						if (saved && typeof saved.id === 'string' && ['backup', 'upload', 'restore'].includes(saved.kind)) {
+							hideControls(); follow({ID: saved.id, Kind: saved.kind, Phase: 'resuming'});
+						}
+					} catch (error) { progress.textContent = 'Browser status storage is unavailable. Keep this page open to follow the operation.'; }
+				}
+				window.addEventListener('pagehide', () => { generation++; });
+				window.addEventListener('pageshow', event => { if (event.persisted) resume(); });
+				resume();
+			})();
+	</script>
+}

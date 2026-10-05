@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/delivery"
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -22,6 +23,8 @@ func safeEmailHTML(body string) string {
 
 func writeDeliveryError(w http.ResponseWriter, r *http.Request, err error, data templates.DocumentEmailData) {
 	switch {
+	case errors.Is(err, instancecontrol.ErrEmailDisabled), errors.Is(err, instancecontrol.ErrMaintenance):
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 	case errors.Is(err, delivery.ErrForbidden):
 		http.Error(w, "Forbidden", http.StatusForbidden)
 	case errors.Is(err, delivery.ErrNotFound):
@@ -92,6 +95,8 @@ func retryDocumentDelivery(svc *delivery.Service, objectType string, w http.Resp
 	err = svc.ManualRetry(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, deliveryID, r.FormValue("reason"), key)
 	if err != nil {
 		switch {
+		case errors.Is(err, instancecontrol.ErrEmailDisabled), errors.Is(err, instancecontrol.ErrMaintenance):
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		case errors.Is(err, delivery.ErrForbidden):
 			http.Error(w, "Forbidden", http.StatusForbidden)
 		case errors.Is(err, delivery.ErrNotFound):

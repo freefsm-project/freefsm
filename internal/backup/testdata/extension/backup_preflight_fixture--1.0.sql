@@ -1,0 +1,1 @@
+-- Deliberately empty: preflight rejects the extension itself, not its objects.

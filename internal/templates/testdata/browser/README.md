@@ -1,5 +1,21 @@
 # Document-line Enter regression
 
+## Backup browser workflow
+
+The backup regression renders the real backup page and production HTMX, with
+intercepted engine responses. It checks native `.age` browser download (no HTMX
+interception), raw uploads including Unicode/whitespace archive passwords,
+POST/header capability polling, safely displayed source metadata and restore
+confirmation binding. It complements the real PostgreSQL handler test rather than
+substituting for the 1 GB proxy acceptance exercise.
+
+```sh
+BROWSER_TESTS=1 BROWSER_EXECUTABLE=/usr/bin/chromium-browser go test ./internal/templates -run '^TestBackupBrowserWorkflow$' -count=1 -v
+FREEFSM_BACKUP_TEST_ADMIN_URL='postgres://.../postgres?sslmode=disable' go test -race ./internal/handlers -run '^TestBackupHTTPRoundTrip$' -count=1 -v
+```
+
+## Document-line setup and execution
+
 This opt-in Go test serves the real rendered `InvoiceForm` and `EstimateForm`
 and repository static assets (including production Alpine) from an ephemeral
 HTTP server. No database, application server, CDN, or mocked editor is used.

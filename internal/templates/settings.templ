@@ -2,21 +2,37 @@ package templates
 
 import "fmt"
 
+// Navigation is outside the settings form so operation pages can share it.
+templ SettingsTabs(active string, isSetup bool) {
+	<div class="settings-tabs" aria-label="Settings sections" hx-boost="false">
+		@SettingsTab("company", "Company", active)
+		@SettingsTab("email", "Email", active)
+		@SettingsTab("pdf", "PDF", active)
+		if !isSetup {
+			@SettingsTab("map", "Map", active)
+		}
+		@SettingsTab("security", "Security", active)
+		if !isSetup {
+			<a href="/settings/backup" data-tab="backup" class={ templ.KV("active", active == "backup") } aria-current={ fmt.Sprint(active == "backup") }>Backup</a>
+		}
+	</div>
+}
+
+templ SettingsTab(name, label, active string) {
+	if active == "backup" {
+		<a href={ templ.URL("/settings#tab-" + name) } data-tab={ name }>{ label }</a>
+	} else {
+		<button type="button" data-tab={ name } class={ templ.KV("active", active == name) } aria-current={ fmt.Sprint(active == name) } onclick="switchSettingsTab(this.dataset.tab)">{ label }</button>
+	}
+}
+
 templ SettingsPage(p SettingsPageData) {
 	@Layout("Settings") {
+		@EmailDisabledBanner(p.EmailDisabled)
+		@SettingsTabs("company", p.IsSetup)
 		<form action={ templ.URL(settingsFormAction(p.IsSetup)) } method="post">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			
-			<!-- Tab Navigation -->
-			<div class="settings-tabs">
-				<button type="button" class="active" data-tab="company" onclick="switchSettingsTab('company')">Company</button>
-				<button type="button" data-tab="email" onclick="switchSettingsTab('email')">Email</button>
-				<button type="button" data-tab="pdf" onclick="switchSettingsTab('pdf')">PDF</button>
-				if !p.IsSetup {
-					<button type="button" data-tab="map" onclick="switchSettingsTab('map')">Map</button>
-				}
-				<button type="button" data-tab="security" onclick="switchSettingsTab('security')">Security</button>
-			</div>
 			
 			<!-- Company Tab -->
 			<div class="settings-tab-content active" id="tab-company">
@@ -262,14 +278,18 @@ templ SettingsPage(p SettingsPageData) {
 				}
 			})();
 			function switchSettingsTab(name) {
+				var panel = document.getElementById('tab-' + name);
+				if (!panel) return;
 				document.querySelectorAll('.settings-tab-content').forEach(function(el) {
 					el.classList.remove('active');
 				});
-				document.querySelectorAll('.settings-tabs button').forEach(function(el) {
+				document.querySelectorAll('.settings-tabs [data-tab]').forEach(function(el) {
 					el.classList.remove('active');
+					el.setAttribute('aria-current', 'false');
 				});
-				document.getElementById('tab-' + name).classList.add('active');
+				panel.classList.add('active');
 				document.querySelector('[data-tab="' + name + '"]').classList.add('active');
+				document.querySelector('[data-tab="' + name + '"]').setAttribute('aria-current', 'true');
 			}
 		</script>
 	}

@@ -3542,12 +3542,14 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
 /* Settings Tab Navigation */
 .settings-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 0;
   border-bottom: 1px solid var(--pico-muted-border-color);
   margin-bottom: 1.5rem;
 }
 
-.settings-tabs button {
+.settings-tabs button,
+.settings-tabs a {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -3557,13 +3559,16 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
   color: var(--pico-muted-color);
   transition: all 0.15s;
   margin-bottom: -1px;
+  text-decoration: none;
 }
 
-.settings-tabs button:hover {
+.settings-tabs button:hover,
+.settings-tabs a:hover {
   color: var(--pico-color);
 }
 
-.settings-tabs button.active {
+.settings-tabs button.active,
+.settings-tabs a.active {
   color: var(--pico-primary);
   border-bottom-color: var(--pico-primary);
   font-weight: 500;

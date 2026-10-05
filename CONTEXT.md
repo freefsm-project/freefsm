@@ -5,7 +5,7 @@ This context describes how Estimates become Invoices, how that change may be rev
 ## Language
 
 **Deployment Operator**:
-The person responsible for the host, dependencies, secrets, upgrades, backup, restore, and recovery of a FreeFSM instance. This authority does not imply access as a Product User.
+The person responsible for the host, dependencies, host-supplied secrets, upgrades, infrastructure backups, and infrastructure recovery of a FreeFSM instance. This authority does not imply access as a Product User. The protected Administrator Role has manual complete-instance backup and restore authority in Admin Settings; other Roles do not gain this authority. These product operations do not transfer deployment or infrastructure recovery responsibilities away from the Deployment Operator.
 _Avoid_: Administrator, system user
 
 **Product User**:

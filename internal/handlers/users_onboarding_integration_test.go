@@ -155,7 +155,8 @@ func TestCreateWelcomeUserDoesNotRequirePasswordConfirmation(t *testing.T) {
 	w := httptest.NewRecorder()
 	h.Create(w, r)
 
-	if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/users?flash=User+created" {
+	location, _ := url.QueryUnescape(w.Header().Get("Location"))
+	if w.Code != http.StatusSeeOther || !strings.Contains(location, "User created, but welcome email failed: SMTP not configured") {
 		t.Fatalf("welcome creation response = (%d, %q)", w.Code, w.Header().Get("Location"))
 	}
 	created := client.User.Query().OnlyX(ctx)

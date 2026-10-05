@@ -9,6 +9,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
@@ -18,8 +19,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionService, cfg *config.Config) http.Handler {
+func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionService, cfg *config.Config, controls ...*instancecontrol.Control) http.Handler {
 	r := chi.NewRouter()
+	var control *instancecontrol.Control
+	if len(controls) > 0 {
+		control = controls[0]
+	}
 
 	userService := services.NewUserService(entClient)
 	userFn := func(ctx context.Context, userID int64) (*middleware.UserInfo, error) {
@@ -67,6 +72,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	conversionService := conversion.New(db)
 	statusflowService := statusflow.New(db)
 	deliveryService := delivery.New(db, cfg.PublicURL)
+	deliveryService.SetInstanceControl(control)
 	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc, policySvc, objects)
 	defSvc := services.NewCustomFieldDefinitionService(entClient)
 	cfHandler := NewCustomFieldHandler(defSvc, activitySvc, depSvc)
@@ -92,6 +98,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService, userService, locationSvc, invoiceService, activitySvc, cfg)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
+	emailSvc.SetInstanceControl(control)
 	inviteSvc := services.NewInvitationService(entClient)
 	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, deliveryService, activitySvc, policySvc, conversionService)
 	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, deliveryService, activitySvc, policySvc, settlementService, conversionService)
@@ -99,6 +106,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	invoiceHandler.statusflow = statusflowService
 	tagHandler := NewTagHandler(tagSvc, tagLinkSvc, activitySvc, depSvc)
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc, cfg.UploadDir)
+	settingsHandler.control = control
+	settingsHandler.users = userService
 	statusSettingsHandler := NewStatusSettingsHandler(statusflowService)
 	userHandler := NewUserHandler(userService, emailSvc, inviteSvc, companySettingsSvc, activitySvc, cfg)
 	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, jobService, activitySvc)
@@ -385,6 +394,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/setup/company", settingsHandler.Save)
 			r.Post("/settings/invoice-logo", settingsHandler.UploadInvoiceLogo)
 			r.Post("/settings/test-email", settingsHandler.TestEmail)
+			r.Post("/settings/enable-email", settingsHandler.EnableEmail)
 			r.Get("/settings/custom-fields", cfHandler.List)
 			r.Get("/settings/custom-fields/new", cfHandler.Create)
 			r.Post("/settings/custom-fields", cfHandler.Create)

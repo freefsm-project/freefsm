@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -131,16 +132,30 @@ type ProviderEvidenceRecorder interface {
 }
 
 type Service struct {
-	db        *pgxpool.Pool
-	publicURL string
-	now       func() time.Time
+	beforeWork func() error
+	control    *instancecontrol.Control
+	db         *pgxpool.Pool
+	publicURL  string
+	now        func() time.Time
 }
 
 func New(db *pgxpool.Pool, publicURL string) *Service {
 	return &Service{db: db, publicURL: strings.TrimRight(publicURL, "/"), now: time.Now}
 }
 
+// SetInstanceControl configures admission before requests or workers start.
+func (s *Service) SetInstanceControl(control *instancecontrol.Control) { s.control = control }
+
+// SetBeforeWork installs the process-local connection-generation refresh. Set it
+// during initialization; ProcessOne calls it after admission and before claiming.
+func (s *Service) SetBeforeWork(fn func() error) { s.beforeWork = fn }
+
 func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery, error) {
+	ctx, release, err := s.control.EnterEmail(ctx)
+	if err != nil {
+		return Delivery{}, err
+	}
+	defer release()
 	if a.ID <= 0 || a.CompanyID <= 0 || r.Key == uuid.Nil || (r.Document.Type != "estimate" && r.Document.Type != "invoice") || r.Document.ID <= 0 || len(r.Snapshot.To) == 0 || strings.TrimSpace(r.Snapshot.Subject) == "" || len(r.Snapshot.PDF) == 0 || strings.TrimSpace(r.Snapshot.PDFFilename) == "" {
 		return Delivery{}, ErrInvalid
 	}
@@ -378,6 +393,19 @@ func (s *Service) Claim(ctx context.Context) (Delivery, error) {
 }
 
 func (s *Service) ProcessOne(ctx context.Context, sender Sender, hook AcceptanceHook) (bool, error) {
+	ctx, release, err := s.control.EnterEmail(ctx)
+	if errors.Is(err, instancecontrol.ErrMaintenance) || errors.Is(err, instancecontrol.ErrEmailDisabled) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer release()
+	if s.beforeWork != nil {
+		if err := s.beforeWork(); err != nil {
+			return false, err
+		}
+	}
 	d, err := s.Claim(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
@@ -465,6 +493,11 @@ func retryDelay(attempt int) time.Duration {
 }
 
 func (s *Service) ManualRetry(ctx context.Context, a Actor, id int64, reason string, keys ...uuid.UUID) error {
+	ctx, release, err := s.control.EnterEmail(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 	reason = strings.TrimSpace(reason)
 	if reason == "" {
 		return ErrInvalid

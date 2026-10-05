@@ -15,3 +15,5 @@ FREEFSM_UPLOAD_DIR=/var/db/freefsm/uploads
 FREEFSM_SESSION_SECRET=generate-a-random-secret-here
 FREEFSM_SETUP_TOKEN=generate-a-random-setup-token-here
 FREEFSM_PUBLIC_URL=https://fsm.example.com
+# Persistent recovery/admission/email state, outside the upload root. Never use /tmp.
+FREEFSM_STATE_DIR=/var/db/freefsm/state

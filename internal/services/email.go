@@ -15,10 +15,27 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 )
 
 type EmailService struct {
-	svc *CompanySettingsService
+	svc     *CompanySettingsService
+	control *instancecontrol.Control
+}
+
+// SetInstanceControl must be called during startup before serving requests.
+func (s *EmailService) SetInstanceControl(control *instancecontrol.Control) { s.control = control }
+
+// CheckAvailability exposes the global email gate without querying account data.
+func (s *EmailService) CheckAvailability(ctx context.Context) error {
+	if s == nil || s.control == nil {
+		return nil
+	}
+	return s.control.CheckEmail(ctx)
+}
+
+func (s *EmailService) EmailDisabled() bool {
+	return s != nil && s.control != nil && s.control.EmailDisabled()
 }
 
 type EmailAttachment struct {
@@ -111,6 +128,11 @@ func (s *EmailService) SendEmailWithAttachmentTo(ctx context.Context, recipients
 }
 
 func (s *EmailService) SendEmailTo(ctx context.Context, recipients EmailRecipients, subject, body string, attachments ...EmailAttachment) error {
+	ctx, release, err := s.control.EnterEmail(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 	cs, err := s.svc.Get(ctx)
 	if err != nil || cs == nil || cs.SMTPHost == "" {
 		return fmt.Errorf("SMTP not configured")
@@ -132,6 +154,11 @@ func (s *EmailService) SendEmailTo(ctx context.Context, recipients EmailRecipien
 
 // SendDocumentSnapshot sends a fully rendered immutable outbox snapshot.
 func (s *EmailService) SendDocumentSnapshot(ctx context.Context, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachment EmailAttachment) error {
+	ctx, release, err := s.control.EnterEmail(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 	cs, err := s.svc.Get(ctx)
 	if err != nil || cs == nil || cs.SMTPHost == "" {
 		return fmt.Errorf("SMTP not configured")
@@ -145,6 +172,11 @@ func (s *EmailService) SendDocumentSnapshot(ctx context.Context, recipients Emai
 }
 
 func (s *EmailService) SendCompanyDocumentSnapshot(ctx context.Context, companyID int64, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachment EmailAttachment) error {
+	ctx, release, err := s.control.EnterEmail(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 	cs, err := s.svc.GetForCompany(ctx, companyID)
 	if err != nil || cs == nil || cs.SMTPHost == "" {
 		return fmt.Errorf("SMTP not configured for company %d", companyID)
@@ -158,6 +190,11 @@ func (s *EmailService) SendCompanyDocumentSnapshot(ctx context.Context, companyI
 }
 
 func (s *EmailService) sendBuilt(ctx context.Context, cs *ent.CompanySettings, from string, envelopeRecipients []string, msg string) error {
+	ctx, release, err := s.control.EnterEmail(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
 	addr := fmt.Sprintf("%s:%d", cs.SMTPHost, cs.SMTPPort)
 	if cs.SMTPPort == 465 {
 		return s.sendTLS(ctx, addr, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)

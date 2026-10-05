@@ -115,6 +115,10 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		render(w, r, templates.ForgotPasswordPage(templates.ForgotPasswordData{}))
 		return
 	}
+	if err := h.emailSvc.CheckAvailability(r.Context()); err != nil {
+		http.Error(w, err.Error(), http.StatusServiceUnavailable)
+		return
+	}
 	r.ParseForm()
 	email := r.FormValue("email")
 	u, err := h.userSvc.GetByEmail(r.Context(), email)

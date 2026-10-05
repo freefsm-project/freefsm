@@ -28,21 +28,23 @@ sqlc:
 build: generate
 	@echo "building $(BINARY)..."
 	@mkdir -p $(BUILD_DIR)
-	@COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo "dev"); \
-	 DIRTY=$$(git diff --quiet && git diff --cached --quiet || echo ".dirty"); \
-	 VERSION=$$(git describe --tags --dirty 2>/dev/null || echo "0.1.0-dev.$$COMMIT$$DIRTY"); \
-	 PATH="$(_PATH_EXTRA):$$PATH" CGO_ENABLED=0 $(GO) build \
-	 -ldflags "-s -w -X $(MODULE)/internal/config.Version=$$VERSION -X $(MODULE)/internal/config.Commit=$$COMMIT" \
+	@COMMIT=$$(git rev-parse HEAD 2>/dev/null || echo "none"); \
+	 VERSION=$$(git describe --tags --exact-match HEAD 2>/dev/null || echo "dev"); \
+	 EXACT=false; \
+	 if [ "$$VERSION" != dev ] && [ -z "$$(git status --porcelain --untracked-files=normal)" ]; then EXACT=true; else VERSION=dev; fi; \
+	 PATH="$(_PATH_EXTRA):$$PATH" CGO_ENABLED=0 $(GO) build -buildvcs=true \
+	 -ldflags "-s -w -X $(MODULE)/internal/config.Version=$$VERSION -X $(MODULE)/internal/config.Commit=$$COMMIT -X $(MODULE)/internal/config.ExactRelease=$$EXACT -X $(MODULE)/internal/config.BuildKind=$$(if [ $$EXACT = true ]; then echo release; else echo development; fi)" \
 	 -o $(BUILD_DIR)/$(BINARY) ./cmd/freefsm/
 
 compile:
 	@echo "building $(BINARY)..."
 	@mkdir -p $(BUILD_DIR)
-	@COMMIT=$$(git rev-parse --short HEAD 2>/dev/null || echo "dev"); \
-	 DIRTY=$$(git diff --quiet && git diff --cached --quiet || echo ".dirty"); \
-	 VERSION=$$(git describe --tags --dirty 2>/dev/null || echo "0.1.0-dev.$$COMMIT$$DIRTY"); \
-	 PATH="$(_PATH_EXTRA):$$PATH" CGO_ENABLED=0 $(GO) build \
-	 -ldflags "-s -w -X $(MODULE)/internal/config.Version=$$VERSION -X $(MODULE)/internal/config.Commit=$$COMMIT" \
+	@COMMIT=$$(git rev-parse HEAD 2>/dev/null || echo "none"); \
+	 VERSION=$$(git describe --tags --exact-match HEAD 2>/dev/null || echo "dev"); \
+	 EXACT=false; \
+	 if [ "$$VERSION" != dev ] && [ -z "$$(git status --porcelain --untracked-files=normal)" ]; then EXACT=true; else VERSION=dev; fi; \
+	 PATH="$(_PATH_EXTRA):$$PATH" CGO_ENABLED=0 $(GO) build -buildvcs=true \
+	 -ldflags "-s -w -X $(MODULE)/internal/config.Version=$$VERSION -X $(MODULE)/internal/config.Commit=$$COMMIT -X $(MODULE)/internal/config.ExactRelease=$$EXACT -X $(MODULE)/internal/config.BuildKind=$$(if [ $$EXACT = true ]; then echo release; else echo development; fi)" \
 	 -o $(BUILD_DIR)/$(BINARY) ./cmd/freefsm/
 
 install: compile
