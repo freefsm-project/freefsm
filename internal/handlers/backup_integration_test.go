@@ -147,7 +147,7 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.router = NewBackupRouter(f.manager, f.control, services.NewUserService(f.client), services.NewCompanySettingsService(f.client), f.sessions, "")
+		f.router = NewBackupRouter(f.manager, f.control, services.NewUserService(f.client), services.NewCompanySettingsService(f.client), f.sessions, "", backupTestActivityHandler(f.client))
 		r := httptest.NewRequest("GET", "/settings/backup", nil)
 		r.AddCookie(&http.Cookie{Name: "session", Value: f.web})
 		w := httptest.NewRecorder()

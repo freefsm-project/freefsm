@@ -10,6 +10,7 @@ type Config struct {
     RecoveryOnly bool // recover unsupported builds without permitting transfers
     ResetConnections func()
     ReportFailure func(Diagnostic) // optional structured operator log sink
+    ActivitySink func(context.Context, ActivityEvent) error
 }
 func New(Config) (*Manager, error)
 func (*Manager) Recover(context.Context) error
@@ -17,6 +18,10 @@ func (*Manager) StartBackup(actorID int64, sourceName, password string) (Operati
 func (*Manager) StageUpload(context.Context, int64, io.Reader, string) (Operation, error)
 func (*Manager) StartRestore(ctx context.Context, actorID int64, operationID,
     destinationName, confirmation string) (Operation, error)
+func (*Manager) StartBackupFor(ActivityActor, string, string) (Operation, error)
+func (*Manager) StageUploadFor(context.Context, ActivityActor, io.Reader, string) (Operation, error)
+func (*Manager) StartRestoreFor(context.Context, ActivityActor, string, string, string) (Operation, error)
+func (*Manager) RecordDownload(context.Context, ActivityActor, string) error
 func (*Manager) Status(actorID int64, id string) (Operation, error)
 func (*Manager) StatusCapability(id string) (Operation, error)
 func (*Manager) OpenDownload(actorID int64, id string) (io.ReadCloser, string, int64, error)
@@ -113,6 +118,55 @@ sessions receive past `expires_at` and current `revoked_at`; persistent email
 disablement precedes the durable success decision.
 
 ## Recovery and resources
+
+### Backup activity
+
+Production composition supplies `services.WriteBackupActivity` using the configured
+DSN before `Recover`; its short-lived pgx connection works before Ent startup and
+after schema replacement. Call the `For` APIs with freshly authenticated actor and
+company **name snapshots**, never user-submitted labels. Legacy ID-only methods
+remain for callers without a sink; a configured sink requires a name snapshot.
+After opening a download, call `RecordDownload` before sending bytes. An insert
+failure denies that download attempt without changing its backup operation.
+
+The engine publishes backup/validation outcomes, including synchronous upload read
+failures, without relying on polling. One bounded `pending-activity.json` record
+outside disposable staging directories stores a stable key and occurrence time.
+An interrupted attempt retains a safe interrupted-failure event. Publication failure
+blocks further operations until startup replay succeeds. This prevents stale
+destination outcomes from being merged into a subsequently restored archive.
+
+Restore journals store the trusted actor snapshot and independent random keys for
+`restore_started` and its outcome. Start is inserted before capturing the rollback
+copy. Successful replacement restores the archive's activity history plus this
+restore's start/completion; unrelated destination history is not carried forward.
+The recorder stores NULL actor links and attributes ownership to the current
+company, so missing or colliding restored numeric user IDs cannot impersonate the
+initiator. Event metadata contains only allowlisted facts, never passwords,
+capabilities, filesystem paths or raw errors.
+
+After database/files/session/email protection and the durable commit decision,
+recovery replays start/completion idempotently before deleting any recovery copy.
+A publication failure at this point leaves the restore committed (status remains
+`complete`, with `Failure`/`Error` reporting required recovery), admission closed,
+and evidence intact for startup retry. It never emits `restore_failed` or rolls
+back a durable commit. Rolled-back attempts replay start/failure into the original
+database. Keys and event times survive retries; the database's unique event key
+prevents duplicate rows even after a crash following insertion. Legacy v0.7
+journals without activity fields recover without inventing actor snapshots.
+
+New activity-bearing journals require migration 054 already present in their
+database/recovery material, as guaranteed by this build's migrated runtime and
+schema validation. Ordinary startup without pending events never queries the
+activity schema before migrations.
+
+`TestRestoreActivityDurablePublication` covers real restored actor-ID collisions,
+missing actors, company ownership, history selection, publication failure, rollback
+and stable replay timestamps. `TestRestoreActivitySIGKILLReplay` kills real child
+processes before publication, after publication and before commit, then recovers
+twice in fresh processes. Ordinary pending outcomes and download gating have
+separate tests; integration tests require `FREEFSM_BACKUP_TEST_ADMIN_URL` pointing
+at a disposable PostgreSQL cluster.
 
 The external atomic/fsynced journal transitions through:
 

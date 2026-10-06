@@ -13,6 +13,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -21,9 +22,10 @@ import (
 )
 
 type backupEngine interface {
-	StartBackup(int64, string, string) (backup.Operation, error)
-	StageUpload(context.Context, int64, io.Reader, string) (backup.Operation, error)
-	StartRestore(context.Context, int64, string, string, string) (backup.Operation, error)
+	StartBackupFor(backup.ActivityActor, string, string) (backup.Operation, error)
+	StageUploadFor(context.Context, backup.ActivityActor, io.Reader, string) (backup.Operation, error)
+	StartRestoreFor(context.Context, backup.ActivityActor, string, string, string) (backup.Operation, error)
+	RecordDownload(context.Context, backup.ActivityActor, string) error
 	Status(int64, string) (backup.Operation, error)
 	StatusCapability(string) (backup.Operation, error)
 	OpenDownload(int64, string) (io.ReadCloser, string, int64, error)
@@ -41,20 +43,21 @@ type BackupHandler struct {
 	refresh        func() error
 	users          backupUsers
 	settings       backupSettings
+	activity       *ActivityHandler
 	disabledReason string
 }
 
-func NewBackupRouter(manager *backup.Manager, control *instancecontrol.Control, users *services.UserService, settings *services.CompanySettingsService, sessions *services.SessionService, disabledReason string) http.Handler {
-	h := &BackupHandler{manager: manager, control: control, refresh: manager.RefreshConnections, users: users, settings: settings, disabledReason: disabledReason}
+func NewBackupRouter(manager *backup.Manager, control *instancecontrol.Control, users *services.UserService, settings *services.CompanySettingsService, sessions *services.SessionService, disabledReason string, activity *ActivityHandler) http.Handler {
+	h := &BackupHandler{manager: manager, control: control, refresh: manager.RefreshConnections, users: users, settings: settings, disabledReason: disabledReason, activity: activity}
 	auth := middleware.Auth(sessions, func(ctx context.Context, id int64) (*middleware.UserInfo, error) {
 		u, err := users.GetByID(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		if !u.IsActive || u.ForcePasswordChange {
+		if u == nil || !u.IsActive || u.ForcePasswordChange || u.CompanyID == nil || *u.CompanyID <= 0 {
 			return nil, errors.New("account unavailable")
 		}
-		return &middleware.UserInfo{ID: u.ID, Name: u.Name, Email: u.Email, Role: u.Role}, nil
+		return &middleware.UserInfo{ID: u.ID, CompanyID: *u.CompanyID, Name: u.Name, Email: u.Email, Role: u.Role}, nil
 	})
 	csrf := nosurf.New(h.controlRoutes(auth))
 	csrf.SetIsTLSFunc(middleware.IsHTTPS)
@@ -93,11 +96,20 @@ func (h *BackupHandler) controlRoutes(auth func(http.Handler) http.Handler) http
 	r.Use(middleware.Theme)
 	r.Use(middleware.CurrentPath)
 	r.Get("/settings/backup", h.page)
+	r.Get("/settings/backup/activity", h.listActivity)
 	r.Post("/settings/backup/create", h.create)
 	r.Post("/settings/backup/upload", h.upload)
 	r.Post("/settings/backup/restore", h.restore)
 	r.Post("/settings/backup/download", h.download)
 	return h.routeDispatch(r, auth)
+}
+
+func (h *BackupHandler) listActivity(w http.ResponseWriter, r *http.Request) {
+	if h.activity == nil {
+		http.Error(w, "Activity unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	h.activity.ListByType(objectref.TypeInstance)(w, r)
 }
 
 func (h *BackupHandler) routeDispatch(routes http.Handler, auth func(http.Handler) http.Handler) http.Handler {
@@ -174,7 +186,7 @@ func (h *BackupHandler) actor(w http.ResponseWriter, r *http.Request, reauthenti
 		return nil, false
 	}
 	u, err := h.users.GetByID(r.Context(), info.ID)
-	if err != nil || !u.IsActive || u.Role != "admin" || u.ForcePasswordChange {
+	if err != nil || u == nil || !u.IsActive || u.Role != "admin" || u.ForcePasswordChange || u.CompanyID == nil || *u.CompanyID <= 0 {
 		http.Error(w, "Forbidden", 403)
 		return nil, false
 	}
@@ -201,7 +213,7 @@ func (h *BackupHandler) create(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	op, err := h.manager.StartBackup(u.ID, name, r.PostFormValue("archive_password"))
+	op, err := h.manager.StartBackupFor(backupActorSnapshot(u, name), name, r.PostFormValue("archive_password"))
 	h.result(w, op, err)
 }
 func (h *BackupHandler) upload(w http.ResponseWriter, r *http.Request) {
@@ -215,7 +227,11 @@ func (h *BackupHandler) upload(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Archive password required", 400)
 		return
 	}
-	op, err := h.manager.StageUpload(r.Context(), u.ID, r.Body, password)
+	name, ok := h.destination(w, r)
+	if !ok {
+		return
+	}
+	op, err := h.manager.StageUploadFor(r.Context(), backupActorSnapshot(u, name), r.Body, password)
 	h.result(w, op, err)
 }
 func (h *BackupHandler) restore(w http.ResponseWriter, r *http.Request) {
@@ -233,7 +249,7 @@ func (h *BackupHandler) restore(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Archive review expired or does not match", 409)
 		return
 	}
-	op, err = h.manager.StartRestore(r.Context(), u.ID, id, name, r.PostFormValue("confirmation"))
+	op, err = h.manager.StartRestoreFor(r.Context(), backupActorSnapshot(u, name), id, name, r.PostFormValue("confirmation"))
 	h.result(w, op, err)
 }
 func (h *BackupHandler) download(w http.ResponseWriter, r *http.Request) {
@@ -247,10 +263,22 @@ func (h *BackupHandler) download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer f.Close()
+	name, ok := h.destination(w, r)
+	if !ok {
+		return
+	}
+	if err := h.manager.RecordDownload(r.Context(), backupActorSnapshot(u, name), r.PostFormValue("operation")); err != nil {
+		http.Error(w, "Could not record backup download activity", http.StatusServiceUnavailable)
+		return
+	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", `attachment; filename="freefsm-backup.age"`)
 	w.Header().Set("Content-Length", strconv.FormatInt(size, 10))
 	_, _ = io.Copy(w, f)
+}
+
+func backupActorSnapshot(u *ent.User, companyName string) backup.ActivityActor {
+	return backup.ActivityActor{ID: u.ID, CompanyID: *u.CompanyID, Name: u.Name, CompanyName: companyName}
 }
 func (h *BackupHandler) result(w http.ResponseWriter, op backup.Operation, err error) {
 	if err != nil {

@@ -54,6 +54,7 @@ templ ActivityRecentList(p ActivityPageData) {
 								}
 							}
 						</span>
+						@BackupActivityPreview(e)
 						if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
 							<p class="activity-preview activity-preview-compact">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>
 						}

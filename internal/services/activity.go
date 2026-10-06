@@ -97,7 +97,8 @@ type ActivityService struct {
 }
 
 type ActivityEntry struct {
-	ID               int64
+	ID int64
+	// ActorID is zero for historical snapshots without a current-user link.
 	ActorID          int64
 	Action           string
 	Target           objectref.Ref
@@ -503,10 +504,12 @@ func mapActivityEntries(rows []*ent.ActivityLog) []ActivityEntry {
 	for i, row := range rows {
 		entry := ActivityEntry{
 			ID:        row.ID,
-			ActorID:   row.ActorID,
 			Action:    row.Action,
 			Metadata:  row.Metadata,
 			CreatedAt: row.CreatedAt,
+		}
+		if row.ActorID != nil {
+			entry.ActorID = *row.ActorID
 		}
 		if target, err := objectref.Parse(row.ObjectType, row.ObjectID); err == nil {
 			entry.Target = target

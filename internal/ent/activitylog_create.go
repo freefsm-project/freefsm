@@ -32,6 +32,28 @@ func (_c *ActivityLogCreate) SetActorID(v int64) *ActivityLogCreate {
 	return _c
 }
 
+// SetNillableActorID sets the "actor_id" field if the given value is not nil.
+func (_c *ActivityLogCreate) SetNillableActorID(v *int64) *ActivityLogCreate {
+	if v != nil {
+		_c.SetActorID(*v)
+	}
+	return _c
+}
+
+// SetEventKey sets the "event_key" field.
+func (_c *ActivityLogCreate) SetEventKey(v string) *ActivityLogCreate {
+	_c.mutation.SetEventKey(v)
+	return _c
+}
+
+// SetNillableEventKey sets the "event_key" field if the given value is not nil.
+func (_c *ActivityLogCreate) SetNillableEventKey(v *string) *ActivityLogCreate {
+	if v != nil {
+		_c.SetEventKey(*v)
+	}
+	return _c
+}
+
 // SetAction sets the "action" field.
 func (_c *ActivityLogCreate) SetAction(v string) *ActivityLogCreate {
 	_c.mutation.SetAction(v)
@@ -134,9 +156,6 @@ func (_c *ActivityLogCreate) check() error {
 	if _, ok := _c.mutation.CompanyID(); !ok {
 		return &ValidationError{Name: "company_id", err: errors.New(`ent: missing required field "ActivityLog.company_id"`)}
 	}
-	if _, ok := _c.mutation.ActorID(); !ok {
-		return &ValidationError{Name: "actor_id", err: errors.New(`ent: missing required field "ActivityLog.actor_id"`)}
-	}
 	if _, ok := _c.mutation.Action(); !ok {
 		return &ValidationError{Name: "action", err: errors.New(`ent: missing required field "ActivityLog.action"`)}
 	}
@@ -200,7 +219,11 @@ func (_c *ActivityLogCreate) createSpec() (*ActivityLog, *sqlgraph.CreateSpec) {
 	}
 	if value, ok := _c.mutation.ActorID(); ok {
 		_spec.SetField(activitylog.FieldActorID, field.TypeInt64, value)
-		_node.ActorID = value
+		_node.ActorID = &value
+	}
+	if value, ok := _c.mutation.EventKey(); ok {
+		_spec.SetField(activitylog.FieldEventKey, field.TypeString, value)
+		_node.EventKey = &value
 	}
 	if value, ok := _c.mutation.Action(); ok {
 		_spec.SetField(activitylog.FieldAction, field.TypeString, value)

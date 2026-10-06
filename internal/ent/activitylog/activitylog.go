@@ -17,6 +17,8 @@ const (
 	FieldCompanyID = "company_id"
 	// FieldActorID holds the string denoting the actor_id field in the database.
 	FieldActorID = "actor_id"
+	// FieldEventKey holds the string denoting the event_key field in the database.
+	FieldEventKey = "event_key"
 	// FieldAction holds the string denoting the action field in the database.
 	FieldAction = "action"
 	// FieldObjectType holds the string denoting the object_type field in the database.
@@ -36,6 +38,7 @@ var Columns = []string{
 	FieldID,
 	FieldCompanyID,
 	FieldActorID,
+	FieldEventKey,
 	FieldAction,
 	FieldObjectType,
 	FieldObjectID,
@@ -80,6 +83,11 @@ func ByCompanyID(opts ...sql.OrderTermOption) OrderOption {
 // ByActorID orders the results by the actor_id field.
 func ByActorID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldActorID, opts...).ToFunc()
+}
+
+// ByEventKey orders the results by the event_key field.
+func ByEventKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEventKey, opts...).ToFunc()
 }
 
 // ByAction orders the results by the action field.

@@ -231,7 +231,22 @@ func buildDiagnostic(err error, phase string) Diagnostic {
 	return d
 }
 
+// reportedFailure carries a restore's already-reported work failure through
+// rollback to the async job owner. A later publication/recovery failure wraps
+// it and receives its own diagnostic rather than replacing the original facts.
+type reportedFailure struct {
+	error
+	failure Failure
+}
+
+func (e *reportedFailure) Unwrap() error { return e.error }
+
 func (m *Manager) reportFailure(err error, phase string) Failure {
+	// Only the exact error is reusable. Do not use errors.As: a new outer
+	// recovery failure must be reported even when its cause was already reported.
+	if reported, ok := err.(*reportedFailure); ok {
+		return reported.failure
+	}
 	d := buildDiagnostic(err, phase)
 	// One fixed-size record, atomically replaced. Recovery evidence never expires
 	// because a diagnostic was written. Reporting failure cannot reopen admission.

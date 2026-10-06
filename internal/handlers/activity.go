@@ -132,6 +132,10 @@ func (h *ActivityHandler) ListByType(objectType objectref.Type) http.HandlerFunc
 		if !ok {
 			return
 		}
+		if objectType.AdminOnly() && u.Role != "admin" {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		page, rows, err := h.listAndResolve(r.Context(), u, services.TypeActivityScope{Types: []objectref.Type{objectType}}, embeddedActivityLimit, nil, "")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -374,7 +378,10 @@ func activityRows(ctx context.Context, entries []services.ActivityEntry, resolut
 			actorName = resolution.ActorNames[entry.ActorID]
 		}
 		if actorName == "" {
-			actorName = fmt.Sprintf("User #%d", entry.ActorID)
+			actorName = "Historical administrator"
+			if entry.ActorID > 0 {
+				actorName = fmt.Sprintf("User #%d", entry.ActorID)
+			}
 		}
 		target := resolution.Targets[entry.Target]
 		entityName := meta.EntityName

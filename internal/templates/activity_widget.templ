@@ -55,6 +55,7 @@ templ ActivityWidget(p ActivityWidgetData) {
 									}
 								}
 							</span>
+							@BackupActivityPreview(e)
 							if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
 								<p class="activity-preview">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>
 							}
@@ -71,4 +72,10 @@ templ ActivityWidget(p ActivityWidgetData) {
 			}
 		}
 	</div>
+}
+
+templ BackupActivityPreview(e ActivityEntry) {
+	if detail := BackupActivityDetail(e); detail != "" {
+		<p class="activity-preview">{ detail }</p>
+	}
 }

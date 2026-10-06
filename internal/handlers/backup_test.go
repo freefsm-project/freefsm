@@ -14,8 +14,55 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/services"
 	"golang.org/x/crypto/bcrypt"
 )
+
+func backupTestActivityHandler(client *ent.Client) *ActivityHandler {
+	return NewActivityHandler(services.NewActivityService(client, objectref.NewEntDirectory(client)), services.NewActivityResolver(client), nil, nil)
+}
+
+func TestBackupActivityRouteIsCompanyScopedAndAdminOnly(t *testing.T) {
+	c, err := instancecontrol.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lister := &activityListFake{page: services.ActivityPage{HasOlder: true, Entries: []services.ActivityEntry{{ID: 1, Action: "restore_completed", Target: objectref.Instance(), Metadata: `{"actor_name":"Original administrator"}`}}}}
+	h := &BackupHandler{control: c, refresh: func() error { return nil }, activity: NewActivityHandler(lister, &activityResolverFake{}, nil, nil)}
+	role := "admin"
+	auth := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), middleware.UserKey, &middleware.UserInfo{ID: 7, CompanyID: 42, Role: role})))
+		})
+	}
+	routes := h.controlRoutes(auth)
+	for _, candidate := range []string{"dispatcher", "tech", "admin"} {
+		role = candidate
+		w := httptest.NewRecorder()
+		routes.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/settings/backup/activity", nil))
+		if candidate != "admin" {
+			if w.Code != 403 || len(lister.requests) != 0 {
+				t.Fatalf("unauthorized activity: %s %d", candidate, w.Code)
+			}
+			continue
+		}
+		if w.Code != 200 || !strings.Contains(w.Body.String(), "Original administrator") || !strings.Contains(w.Body.String(), "/activity?type=instance") {
+			t.Fatalf("admin activity: %d %s", w.Code, w.Body)
+		}
+	}
+	if len(lister.requests) != 1 || lister.requests[0].CompanyID != 42 {
+		t.Fatalf("activity company scope: %+v", lister.requests)
+	}
+	if err := c.KeepClosed(); err != nil {
+		t.Fatal(err)
+	}
+	w := httptest.NewRecorder()
+	routes.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/settings/backup/activity", nil))
+	if w.Code != 503 || len(lister.requests) != 1 {
+		t.Fatal("maintenance exposed authenticated activity")
+	}
+}
 
 type statusBackup struct {
 	backupEngine
@@ -36,7 +83,8 @@ func (backupSettingsFixture) Get(context.Context) (*ent.CompanySettings, error) 
 
 type workflowBackup struct {
 	backupEngine
-	downloads, restores int
+	downloads, restores, downloadEvents int
+	activityError                       error
 }
 
 func (m *workflowBackup) Status(actor int64, id string) (backup.Operation, error) {
@@ -45,12 +93,20 @@ func (m *workflowBackup) Status(actor int64, id string) (backup.Operation, error
 	}
 	return backup.Operation{ID: id, Kind: "upload", Phase: "ready", ArchiveDigest: "immutable-digest"}, nil
 }
-func (m *workflowBackup) StartRestore(_ context.Context, actor int64, id, destination, confirmation string) (backup.Operation, error) {
-	if actor != 7 || id != "reviewed" || destination != "Trusted destination" || confirmation != destination {
+func (m *workflowBackup) StartRestoreFor(_ context.Context, actor backup.ActivityActor, id, destination, confirmation string) (backup.Operation, error) {
+	if actor.ID != 7 || actor.Name != "Trusted administrator" || actor.CompanyID != 4 || actor.CompanyName != "Trusted destination" || id != "reviewed" || destination != "Trusted destination" || confirmation != destination {
 		return backup.Operation{}, backup.ErrInvalid
 	}
 	m.restores++
 	return backup.Operation{ID: id, Phase: "queued"}, nil
+}
+
+func (m *workflowBackup) RecordDownload(_ context.Context, actor backup.ActivityActor, id string) error {
+	if m.downloads == 0 || actor.ID != 7 || actor.Name != "Trusted administrator" || actor.CompanyID != 4 || actor.CompanyName != "Trusted destination" || id != "reviewed" {
+		return backup.ErrInvalid
+	}
+	m.downloadEvents++
+	return m.activityError
 }
 func (m *workflowBackup) OpenDownload(actor int64, id string) (io.ReadCloser, string, int64, error) {
 	if actor != 7 || id != "reviewed" {
@@ -69,7 +125,8 @@ func TestBackupAuthorizationAndFreshConfirmation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u := &backupUserFixture{ent.User{ID: 7, Role: "admin", IsActive: true, PasswordHash: string(hash)}}
+	companyID := int64(4)
+	u := &backupUserFixture{ent.User{ID: 7, CompanyID: &companyID, Name: "Trusted administrator", Role: "admin", IsActive: true, PasswordHash: string(hash)}}
 	m := &workflowBackup{}
 	refreshes := 0
 	h := &BackupHandler{manager: m, control: c, users: u, settings: backupSettingsFixture{}, refresh: func() error { refreshes++; return nil }}
@@ -122,8 +179,12 @@ func TestBackupAuthorizationAndFreshConfirmation(t *testing.T) {
 	if w := request("download", "current-password", "reviewed", "", ""); w.Code != 200 || w.Body.String() != "encrypted" || !strings.Contains(w.Header().Get("Content-Disposition"), ".age") {
 		t.Fatalf("download: %d %s", w.Code, w.Body)
 	}
-	if m.restores != 1 || m.downloads != 1 {
+	if m.restores != 1 || m.downloads != 1 || m.downloadEvents != 1 {
 		t.Fatal("expected authorized engine boundaries")
+	}
+	m.activityError = io.ErrUnexpectedEOF
+	if w := request("download", "current-password", "reviewed", "", ""); w.Code != 503 || strings.Contains(w.Body.String(), "encrypted") || w.Header().Get("Content-Disposition") != "" {
+		t.Fatalf("streamed download despite activity failure: %d %s", w.Code, w.Body)
 	}
 }
 
@@ -164,7 +225,7 @@ func TestBackupMaintenanceStatusDoesNotUseAuthentication(t *testing.T) {
 		// The shared script references authenticated controls, but those references
 		// are not rendered controls. Check markup, not bare IDs anywhere in JS.
 		// TestBackupBrowserWorkflow additionally checks the live Chromium DOM.
-		for _, forbiddenMarkup := range []string{"<form", "<input", "Destination:"} {
+		for _, forbiddenMarkup := range []string{"<form", "<input", "Destination:", `id="backup-activity"`} {
 			if strings.Contains(w.Body.String(), forbiddenMarkup) {
 				t.Fatalf("status shell exposes control or account markup %s", forbiddenMarkup)
 			}

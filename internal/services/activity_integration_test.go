@@ -17,6 +17,8 @@ import (
 	"github.com/freefsm-project/freefsm/internal/objectref"
 )
 
+func activityActorID(id int64) *int64 { return &id }
+
 func TestActivityServiceRejectsInvalidInputs(t *testing.T) {
 	ctx := context.Background()
 	svc := NewActivityService(nil, &objectref.FakeDirectory{})
@@ -130,9 +132,9 @@ func TestConversionActivityPredicateUsesBoundedExistsSQL(t *testing.T) {
 
 func TestMapActivityEntriesPreservesMalformedHistoricalTargets(t *testing.T) {
 	rows := []*ent.ActivityLog{
-		{ID: 1, ActorID: 2, Action: "created", ObjectType: "customer", ObjectID: 3, Metadata: "{}"},
-		{ID: 4, ActorID: 5, Action: "legacy", ObjectType: "removed_type", ObjectID: 6, Metadata: "{}"},
-		{ID: 7, ActorID: 8, Action: "invalid_id", ObjectType: "job", ObjectID: 0, Metadata: "{}"},
+		{ID: 1, ActorID: activityActorID(2), Action: "created", ObjectType: "customer", ObjectID: 3, Metadata: "{}"},
+		{ID: 4, ActorID: activityActorID(5), Action: "legacy", ObjectType: "removed_type", ObjectID: 6, Metadata: "{}"},
+		{ID: 7, ActorID: activityActorID(8), Action: "invalid_id", ObjectType: "job", ObjectID: 0, Metadata: "{}"},
 	}
 
 	entries := mapActivityEntries(rows)

@@ -58,6 +58,7 @@ templ ActivityIndex(p ActivityPageData) {
 									<span class="shared-widget-muted">({ e.TargetType })</span>
 								}
 							</span>
+							@BackupActivityPreview(e)
 							if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
 								<p class="activity-preview activity-preview-compact">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>
 							}

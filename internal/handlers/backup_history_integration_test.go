@@ -381,7 +381,7 @@ func newHistoryBackupInstance(t *testing.T, admin *pgx.Conn, dsn, name string) *
 	historyCheck(t, err)
 	f.mobile, err = f.sessions.CreateMobile(ctx, f.actor, "history phone")
 	historyCheck(t, err)
-	f.router = NewBackupRouter(f.manager, f.control, services.NewUserService(f.client), services.NewCompanySettingsService(f.client), f.sessions, "")
+	f.router = NewBackupRouter(f.manager, f.control, services.NewUserService(f.client), services.NewCompanySettingsService(f.client), f.sessions, "", backupTestActivityHandler(f.client))
 	r := httptest.NewRequest(http.MethodGet, "/settings/backup", nil)
 	r.AddCookie(&http.Cookie{Name: "session", Value: f.web})
 	w := httptest.NewRecorder()

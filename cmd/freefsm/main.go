@@ -25,6 +25,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/handlers"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/go-chi/chi/v5"
@@ -101,6 +102,12 @@ func run() error {
 		DSN: cfg.DSN(), UploadDir: cfg.UploadDir, StateDir: cfg.StateDir,
 		Version: config.Version, Commit: config.Commit, BuildKind: backup.BuildKind(config.BuildKind), Control: control,
 		RecoveryOnly: disabledReason != "",
+		ActivitySink: func(ctx context.Context, event backup.ActivityEvent) error {
+			return services.WriteBackupActivity(ctx, cfg.DSN(), event)
+		},
+		ReportFailure: func(d backup.Diagnostic) {
+			slog.Error("backup operation diagnostic", "category", d.Failure.Category, "phase", d.Failure.Phase, "diagnostic_id", d.Failure.DiagnosticID, "causes", d.Causes, "persistence_failed", d.PersistenceFailed)
+		},
 		// Ent uses uncached extended-protocol execution below. Only pgxpool
 		// retains prepared statements and needs generation-driven resetting.
 		ResetConnections: func() {
@@ -204,7 +211,8 @@ func run() error {
 	deliveryService.SetBeforeWork(manager.RefreshConnections)
 	webRouter.Get("/delivery/open/{token}", deliveryService.OpenHandler)
 	webRouter.Mount("/", handlers.New(db.Pool, entClient, sessions, cfg, control))
-	backupRouter := handlers.NewBackupRouter(manager, control, services.NewUserService(entClient), services.NewCompanySettingsService(entClient), sessions, disabledReason)
+	backupActivity := handlers.NewActivityHandler(services.NewActivityService(entClient, objectref.NewEntDirectory(entClient)), services.NewActivityResolver(entClient), nil, nil)
+	backupRouter := handlers.NewBackupRouter(manager, control, services.NewUserService(entClient), services.NewCompanySettingsService(entClient), sessions, disabledReason, backupActivity)
 	applicationHandler := newApplicationHandler(
 		apiv1.NewRouter(db.Pool, entClient, sessions),
 		webRouter,

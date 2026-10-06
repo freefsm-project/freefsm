@@ -17,6 +17,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
+	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -25,7 +26,10 @@ const crashArchivePassword = "disposable-engine-crash-test-password"
 
 // Environment handling and process barriers exist only in this test binary.
 // Production binaries have neither this entry point nor an environment failpoint.
-type crashChildSpec struct{ DSN, UploadDir, StateDir, Archive, Mode, Checkpoint, Ready string }
+type crashChildSpec struct {
+	DSN, UploadDir, StateDir, Archive, Mode, Checkpoint, Ready string
+	Activity                                                   bool
+}
 
 func TestBackupCrashChild(t *testing.T) {
 	path := os.Getenv("FREEFSM_BACKUP_CRASH_CHILD_SPEC")
@@ -45,6 +49,11 @@ func TestBackupCrashChild(t *testing.T) {
 		t.Fatal(e)
 	}
 	cfg := Config{DSN: spec.DSN, UploadDir: spec.UploadDir, StateDir: spec.StateDir, Version: "v1.2.3", Commit: "abcdef1234567", Control: c, ResetConnections: func() {}}
+	if spec.Activity {
+		cfg.ActivitySink = func(ctx context.Context, event ActivityEvent) error {
+			return services.WriteBackupActivity(ctx, spec.DSN, event)
+		}
+	}
 	if spec.Mode == "recover" {
 		cfg.BuildKind = BuildDevelopment
 		cfg.Version = "dev"
@@ -80,7 +89,8 @@ func TestBackupCrashChild(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	op, e := m.StageUpload(context.Background(), 1, f, crashArchivePassword)
+	actor := ActivityActor{ID: 1, CompanyID: 1, Name: "Destination administrator", CompanyName: "Destination company"}
+	op, e := m.StageUploadFor(context.Background(), actor, f, crashArchivePassword)
 	_ = f.Close()
 	if e != nil {
 		t.Fatal(e)
@@ -89,7 +99,7 @@ func TestBackupCrashChild(t *testing.T) {
 	if op.Phase != "ready" {
 		t.Fatalf("stage: %+v", op)
 	}
-	op, e = m.StartRestore(context.Background(), 1, op.ID, "destination", "destination")
+	op, e = m.StartRestoreFor(context.Background(), actor, op.ID, "destination", "destination")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -251,7 +261,7 @@ func stageCrashArchive(t *testing.T, m *Manager, p string) Operation {
 func runCrashChild(t *testing.T, m *Manager, archive, mode, checkpoint string) {
 	t.Helper()
 	dir := t.TempDir()
-	spec := crashChildSpec{DSN: m.cfg.DSN, UploadDir: m.cfg.UploadDir, StateDir: m.cfg.StateDir, Archive: archive, Mode: mode, Checkpoint: checkpoint, Ready: filepath.Join(dir, "ready.json")}
+	spec := crashChildSpec{DSN: m.cfg.DSN, UploadDir: m.cfg.UploadDir, StateDir: m.cfg.StateDir, Archive: archive, Mode: mode, Checkpoint: checkpoint, Ready: filepath.Join(dir, "ready.json"), Activity: m.cfg.ActivitySink != nil}
 	path := filepath.Join(dir, "child.json")
 	if e := atomicJSON(path, spec); e != nil {
 		t.Fatal(e)

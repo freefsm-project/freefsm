@@ -64,6 +64,11 @@ func ActorID(v int64) predicate.ActivityLog {
 	return predicate.ActivityLog(sql.FieldEQ(FieldActorID, v))
 }
 
+// EventKey applies equality check predicate on the "event_key" field. It's identical to EventKeyEQ.
+func EventKey(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldEQ(FieldEventKey, v))
+}
+
 // Action applies equality check predicate on the "action" field. It's identical to ActionEQ.
 func Action(v string) predicate.ActivityLog {
 	return predicate.ActivityLog(sql.FieldEQ(FieldAction, v))
@@ -167,6 +172,91 @@ func ActorIDLT(v int64) predicate.ActivityLog {
 // ActorIDLTE applies the LTE predicate on the "actor_id" field.
 func ActorIDLTE(v int64) predicate.ActivityLog {
 	return predicate.ActivityLog(sql.FieldLTE(FieldActorID, v))
+}
+
+// ActorIDIsNil applies the IsNil predicate on the "actor_id" field.
+func ActorIDIsNil() predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldIsNull(FieldActorID))
+}
+
+// ActorIDNotNil applies the NotNil predicate on the "actor_id" field.
+func ActorIDNotNil() predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldNotNull(FieldActorID))
+}
+
+// EventKeyEQ applies the EQ predicate on the "event_key" field.
+func EventKeyEQ(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldEQ(FieldEventKey, v))
+}
+
+// EventKeyNEQ applies the NEQ predicate on the "event_key" field.
+func EventKeyNEQ(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldNEQ(FieldEventKey, v))
+}
+
+// EventKeyIn applies the In predicate on the "event_key" field.
+func EventKeyIn(vs ...string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldIn(FieldEventKey, vs...))
+}
+
+// EventKeyNotIn applies the NotIn predicate on the "event_key" field.
+func EventKeyNotIn(vs ...string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldNotIn(FieldEventKey, vs...))
+}
+
+// EventKeyGT applies the GT predicate on the "event_key" field.
+func EventKeyGT(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldGT(FieldEventKey, v))
+}
+
+// EventKeyGTE applies the GTE predicate on the "event_key" field.
+func EventKeyGTE(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldGTE(FieldEventKey, v))
+}
+
+// EventKeyLT applies the LT predicate on the "event_key" field.
+func EventKeyLT(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldLT(FieldEventKey, v))
+}
+
+// EventKeyLTE applies the LTE predicate on the "event_key" field.
+func EventKeyLTE(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldLTE(FieldEventKey, v))
+}
+
+// EventKeyContains applies the Contains predicate on the "event_key" field.
+func EventKeyContains(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldContains(FieldEventKey, v))
+}
+
+// EventKeyHasPrefix applies the HasPrefix predicate on the "event_key" field.
+func EventKeyHasPrefix(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldHasPrefix(FieldEventKey, v))
+}
+
+// EventKeyHasSuffix applies the HasSuffix predicate on the "event_key" field.
+func EventKeyHasSuffix(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldHasSuffix(FieldEventKey, v))
+}
+
+// EventKeyIsNil applies the IsNil predicate on the "event_key" field.
+func EventKeyIsNil() predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldIsNull(FieldEventKey))
+}
+
+// EventKeyNotNil applies the NotNil predicate on the "event_key" field.
+func EventKeyNotNil() predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldNotNull(FieldEventKey))
+}
+
+// EventKeyEqualFold applies the EqualFold predicate on the "event_key" field.
+func EventKeyEqualFold(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldEqualFold(FieldEventKey, v))
+}
+
+// EventKeyContainsFold applies the ContainsFold predicate on the "event_key" field.
+func EventKeyContainsFold(v string) predicate.ActivityLog {
+	return predicate.ActivityLog(sql.FieldContainsFold(FieldEventKey, v))
 }
 
 // ActionEQ applies the EQ predicate on the "action" field.

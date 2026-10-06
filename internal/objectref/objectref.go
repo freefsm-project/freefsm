@@ -25,6 +25,7 @@ const (
 	TypeJobStatus       Type = "job_status"
 	TypeTag             Type = "tag"
 	TypeUser            Type = "user"
+	TypeInstance        Type = "instance"
 )
 
 type Capability uint8
@@ -62,8 +63,11 @@ func (r Ref) ObjectID() int64 {
 }
 
 func (r Ref) Valid() bool {
-	return Known(r.Type) && r.ID > 0
+	return Known(r.Type) && r.ID > 0 && (r.Type != TypeInstance || r.ID == 1)
 }
+
+// Instance is the single running instance, not a persistent backup record.
+func Instance() Ref { return New(TypeInstance, 1) }
 
 type Descriptor struct {
 	Type         Type
@@ -91,6 +95,7 @@ var (
 )
 
 var knownTypes = map[Type]struct{}{
+	TypeInstance:        {},
 	TypeCustomer:        {},
 	TypeJob:             {},
 	TypeProject:         {},
@@ -109,6 +114,7 @@ var knownTypes = map[Type]struct{}{
 }
 
 var descriptors = map[Type]Descriptor{
+	TypeInstance:        {Type: TypeInstance, SingularName: "instance", AdminOnly: true, Capabilities: CapActivity},
 	TypeCustomer:        {Type: TypeCustomer, SingularName: "customer", Capabilities: CapActivity | CapFiles | CapArchive | CapTags | CapComments},
 	TypeJob:             {Type: TypeJob, SingularName: "job", Capabilities: CapActivity | CapFiles | CapArchive | CapTags | CapComments},
 	TypeProject:         {Type: TypeProject, SingularName: "project", Capabilities: CapActivity | CapFiles | CapArchive | CapTags | CapComments},
@@ -131,7 +137,7 @@ func Parse(typ string, id int64) (Ref, error) {
 	if !Known(t) {
 		return Ref{}, fmt.Errorf("%w: %s", ErrUnknownType, typ)
 	}
-	if id <= 0 {
+	if id <= 0 || (t == TypeInstance && id != 1) {
 		return Ref{}, fmt.Errorf("%w: %d", ErrInvalidID, id)
 	}
 	return Ref{Type: t, ID: id}, nil
@@ -154,6 +160,7 @@ func AdminOnlyTypes() []Type {
 
 func AllTypes() []Type {
 	return []Type{
+		TypeInstance,
 		TypeCustomer,
 		TypeJob,
 		TypeProject,
@@ -195,11 +202,13 @@ func (t Type) AdminOnly() bool {
 }
 
 func URL(ref Ref) (string, bool) {
-	if !Known(ref.Type) || ref.ID <= 0 {
+	if !ref.Valid() {
 		return "", false
 	}
 	id := strconv.FormatInt(ref.ID, 10)
 	switch ref.Type {
+	case TypeInstance:
+		return "/settings/backup", true
 	case TypeCustomer:
 		return "/customers/" + id, true
 	case TypeJob:
@@ -237,7 +246,7 @@ func validateExists(ref Ref, mode ExistenceMode) error {
 	if !Known(ref.Type) {
 		return fmt.Errorf("%w: %s", ErrUnknownType, ref.Type)
 	}
-	if ref.ID <= 0 {
+	if ref.ID <= 0 || (ref.Type == TypeInstance && ref.ID != 1) {
 		return fmt.Errorf("%w: %d", ErrInvalidID, ref.ID)
 	}
 	if mode != ExistsAny && mode != ExistsActive {

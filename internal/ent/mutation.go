@@ -89,6 +89,7 @@ type ActivityLogMutation struct {
 	addcompany_id *int64
 	actor_id      *int64
 	addactor_id   *int64
+	event_key     *string
 	action        *string
 	object_type   *string
 	object_id     *int64
@@ -279,7 +280,7 @@ func (m *ActivityLogMutation) ActorID() (r int64, exists bool) {
 // OldActorID returns the old "actor_id" field's value of the ActivityLog entity.
 // If the ActivityLog object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ActivityLogMutation) OldActorID(ctx context.Context) (v int64, err error) {
+func (m *ActivityLogMutation) OldActorID(ctx context.Context) (v *int64, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldActorID is only allowed on UpdateOne operations")
 	}
@@ -311,10 +312,73 @@ func (m *ActivityLogMutation) AddedActorID() (r int64, exists bool) {
 	return *v, true
 }
 
+// ClearActorID clears the value of the "actor_id" field.
+func (m *ActivityLogMutation) ClearActorID() {
+	m.actor_id = nil
+	m.addactor_id = nil
+	m.clearedFields[activitylog.FieldActorID] = struct{}{}
+}
+
+// ActorIDCleared returns if the "actor_id" field was cleared in this mutation.
+func (m *ActivityLogMutation) ActorIDCleared() bool {
+	_, ok := m.clearedFields[activitylog.FieldActorID]
+	return ok
+}
+
 // ResetActorID resets all changes to the "actor_id" field.
 func (m *ActivityLogMutation) ResetActorID() {
 	m.actor_id = nil
 	m.addactor_id = nil
+	delete(m.clearedFields, activitylog.FieldActorID)
+}
+
+// SetEventKey sets the "event_key" field.
+func (m *ActivityLogMutation) SetEventKey(s string) {
+	m.event_key = &s
+}
+
+// EventKey returns the value of the "event_key" field in the mutation.
+func (m *ActivityLogMutation) EventKey() (r string, exists bool) {
+	v := m.event_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEventKey returns the old "event_key" field's value of the ActivityLog entity.
+// If the ActivityLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ActivityLogMutation) OldEventKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEventKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEventKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEventKey: %w", err)
+	}
+	return oldValue.EventKey, nil
+}
+
+// ClearEventKey clears the value of the "event_key" field.
+func (m *ActivityLogMutation) ClearEventKey() {
+	m.event_key = nil
+	m.clearedFields[activitylog.FieldEventKey] = struct{}{}
+}
+
+// EventKeyCleared returns if the "event_key" field was cleared in this mutation.
+func (m *ActivityLogMutation) EventKeyCleared() bool {
+	_, ok := m.clearedFields[activitylog.FieldEventKey]
+	return ok
+}
+
+// ResetEventKey resets all changes to the "event_key" field.
+func (m *ActivityLogMutation) ResetEventKey() {
+	m.event_key = nil
+	delete(m.clearedFields, activitylog.FieldEventKey)
 }
 
 // SetAction sets the "action" field.
@@ -551,12 +615,15 @@ func (m *ActivityLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ActivityLogMutation) Fields() []string {
-	fields := make([]string, 0, 7)
+	fields := make([]string, 0, 8)
 	if m.company_id != nil {
 		fields = append(fields, activitylog.FieldCompanyID)
 	}
 	if m.actor_id != nil {
 		fields = append(fields, activitylog.FieldActorID)
+	}
+	if m.event_key != nil {
+		fields = append(fields, activitylog.FieldEventKey)
 	}
 	if m.action != nil {
 		fields = append(fields, activitylog.FieldAction)
@@ -585,6 +652,8 @@ func (m *ActivityLogMutation) Field(name string) (ent.Value, bool) {
 		return m.CompanyID()
 	case activitylog.FieldActorID:
 		return m.ActorID()
+	case activitylog.FieldEventKey:
+		return m.EventKey()
 	case activitylog.FieldAction:
 		return m.Action()
 	case activitylog.FieldObjectType:
@@ -608,6 +677,8 @@ func (m *ActivityLogMutation) OldField(ctx context.Context, name string) (ent.Va
 		return m.OldCompanyID(ctx)
 	case activitylog.FieldActorID:
 		return m.OldActorID(ctx)
+	case activitylog.FieldEventKey:
+		return m.OldEventKey(ctx)
 	case activitylog.FieldAction:
 		return m.OldAction(ctx)
 	case activitylog.FieldObjectType:
@@ -640,6 +711,13 @@ func (m *ActivityLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetActorID(v)
+		return nil
+	case activitylog.FieldEventKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEventKey(v)
 		return nil
 	case activitylog.FieldAction:
 		v, ok := value.(string)
@@ -744,7 +822,14 @@ func (m *ActivityLogMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *ActivityLogMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(activitylog.FieldActorID) {
+		fields = append(fields, activitylog.FieldActorID)
+	}
+	if m.FieldCleared(activitylog.FieldEventKey) {
+		fields = append(fields, activitylog.FieldEventKey)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -757,6 +842,14 @@ func (m *ActivityLogMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *ActivityLogMutation) ClearField(name string) error {
+	switch name {
+	case activitylog.FieldActorID:
+		m.ClearActorID()
+		return nil
+	case activitylog.FieldEventKey:
+		m.ClearEventKey()
+		return nil
+	}
 	return fmt.Errorf("unknown ActivityLog nullable field %s", name)
 }
 
@@ -769,6 +862,9 @@ func (m *ActivityLogMutation) ResetField(name string) error {
 		return nil
 	case activitylog.FieldActorID:
 		m.ResetActorID()
+		return nil
+	case activitylog.FieldEventKey:
+		m.ResetEventKey()
 		return nil
 	case activitylog.FieldAction:
 		m.ResetAction()

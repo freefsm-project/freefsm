@@ -42,6 +42,8 @@ func (d *EntDirectory) Exists(ctx context.Context, ref Ref, mode ExistenceMode) 
 	}
 
 	switch ref.Type {
+	case TypeInstance:
+		return true, nil
 	case TypeCustomer:
 		q := d.client.Customer.Query().Where(customer.IDEQ(ref.ID))
 		if mode == ExistsActive {
@@ -145,6 +147,9 @@ func (d *EntDirectory) TargetCompanyID(ctx context.Context, ref Ref) (int64, err
 }
 
 func (d *EntDirectory) DisplayName(ctx context.Context, ref Ref) (string, error) {
+	if ref == Instance() {
+		return "Instance backup and restore", nil
+	}
 	if !Known(ref.Type) {
 		return "", fmt.Errorf("%w: %s", ErrUnknownType, ref.Type)
 	}

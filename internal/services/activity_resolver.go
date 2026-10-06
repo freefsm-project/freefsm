@@ -108,6 +108,16 @@ func (r *ActivityResolver) Resolve(ctx context.Context, companyID int64, viewer 
 	}
 
 	for typ, ids := range targetIDs {
+		if typ == objectref.TypeInstance {
+			ref := objectref.Instance()
+			readable := viewer.Role == "admin"
+			url := ""
+			if readable {
+				url, _ = objectref.URL(ref)
+			}
+			result.Targets[ref] = ActivityTargetResolution{DisplayName: "Instance backup and restore", Exists: true, Readable: readable, URL: url}
+			continue
+		}
 		var records []activityTargetRecord
 		var err error
 		if typ == objectref.TypeCompanySettings {

@@ -44,6 +44,9 @@ type Config struct {
 	// ReportFailure receives bounded, sanitized diagnostics, never raw errors,
 	// SQL, command arguments, paths, credentials or subprocess stderr.
 	ReportFailure func(Diagnostic)
+	// ActivitySink must persist idempotently by event Key and support recovery
+	// before application pools exist. Nil preserves unaudited legacy callers.
+	ActivitySink func(context.Context, ActivityEvent) error
 }
 type Operation struct {
 	ID, Kind, Phase, Error, SourceName, Version, Commit, ArchiveDigest string
@@ -53,12 +56,15 @@ type Operation struct {
 }
 type job struct {
 	Operation
-	actor    int64
-	dir      string
-	manifest manifest
-	readers  int
-	active   bool
-	lease    *os.File
+	actor         int64
+	activityActor ActivityActor
+	committed     bool
+	outcome       ActivityEvent
+	dir           string
+	manifest      manifest
+	readers       int
+	active        bool
+	lease         *os.File
 }
 type Manager struct {
 	cfg        Config
@@ -76,6 +82,7 @@ type journal struct {
 	Phase, Recovery        string
 	EmailDisabled          bool
 	UploadDir, Destination string
+	Start, Outcome         *ActivityEvent `json:",omitempty"`
 }
 
 const prereleaseIdentifier = `(?:0|[1-9][0-9]*|[0-9]*[A-Za-z-][0-9A-Za-z-]*)`
@@ -149,6 +156,9 @@ func (m *Manager) writeJournal(j journal) error {
 
 // Caller must hold OperationLock. Lstat also rejects dangling journal symlinks.
 func (m *Manager) requireNoJournal() error {
+	if _, err := os.Lstat(m.pendingPath()); !errors.Is(err, os.ErrNotExist) {
+		return ErrRecoveryRequired
+	}
 	if _, err := os.Lstat(m.journalPath()); !errors.Is(err, os.ErrNotExist) {
 		return ErrRecoveryRequired
 	}
@@ -197,6 +207,9 @@ func (m *Manager) Recover(ctx context.Context) (retErr error) {
 			return e
 		}
 	} else if !errors.Is(e, os.ErrNotExist) {
+		return e
+	}
+	if e = m.replayPending(ctx); e != nil {
 		return e
 	}
 	entries, e := os.ReadDir(m.root)
@@ -256,6 +269,20 @@ func (m *Manager) resolve(ctx context.Context, j journal) error {
 	case "capturing", "committed", "rolled-back":
 	default:
 		return engineFailure(FailureRecoveryRequired, "unknown recovery phase")
+	}
+	if j.Start != nil {
+		if e := m.publish(ctx, *j.Start); e != nil {
+			return e
+		}
+		if j.Outcome == nil {
+			return ErrRecoveryRequired
+		}
+		if e := m.publish(ctx, *j.Outcome); e != nil {
+			return e
+		}
+		if e := m.check("activity-published"); e != nil {
+			return e
+		}
 	}
 	if e := m.cleanupRecovery(dir); e != nil {
 		return e
@@ -437,18 +464,27 @@ func (m *Manager) run(j *job, unlock func(), fn func(context.Context) error) {
 		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Hour)
 		defer cancel()
 		e := fn(ctx)
+		m.mu.Lock()
+		phase := j.Phase
+		m.mu.Unlock()
 		var failure Failure
 		if e != nil {
-			m.mu.Lock()
-			phase := j.Phase
-			m.mu.Unlock()
 			failure = m.reportFailure(e, phase)
+		}
+		if j.Kind != "restore" {
+			if auditErr := m.finishActivity(j, failure); auditErr != nil {
+				e = classified(FailureRecoveryRequired, errors.Join(auditErr, e))
+				failure = m.reportFailure(e, phase)
+			}
 		}
 		m.mu.Lock()
 		defer m.mu.Unlock()
 		j.active = false
 		if e != nil {
 			j.Phase = "failed"
+			if j.committed {
+				j.Phase = "complete"
+			}
 			j.Failure = failure
 			j.Error = failure.Message
 		} else if j.Kind == "upload" {
@@ -491,11 +527,21 @@ func (m *Manager) StatusCapability(id string) (Operation, error) {
 	return j.Operation, nil
 }
 func (m *Manager) StartBackup(actor int64, source, password string) (Operation, error) {
+	return m.StartBackupFor(ActivityActor{ID: actor}, source, password)
+}
+func (m *Manager) StartBackupFor(actor ActivityActor, source, password string) (Operation, error) {
+	if !m.validActor(actor) {
+		return Operation{}, ErrInvalid
+	}
 	if password == "" || len(password) > 1024 || source == "" || len(source) > 256 {
 		return Operation{}, ErrInvalid
 	}
-	j, unlock, e := m.newJob(actor, "backup")
+	j, unlock, e := m.newJob(actor.ID, "backup")
 	if e != nil {
+		return Operation{}, e
+	}
+	if e = m.beginActivity(j, actor, "backup_failed"); e != nil {
+		m.cancelJob(j, unlock)
 		return Operation{}, e
 	}
 	m.run(j, unlock, func(ctx context.Context) error {
@@ -543,7 +589,7 @@ func (m *Manager) StartBackup(actor int64, source, password string) (Operation, 
 		}
 		return nil
 	})
-	return m.Status(actor, j.ID)
+	return m.Status(actor.ID, j.ID)
 }
 func (m *Manager) capture(ctx context.Context, dir, source string) (manifest, error) {
 	man := manifest{Format: 1, Source: source, BuildKind: m.cfg.BuildKind, Version: m.cfg.Version, Commit: m.cfg.Commit, Captured: time.Now().UTC()}
@@ -577,6 +623,12 @@ func (m *Manager) capture(ctx context.Context, dir, source string) (manifest, er
 // StageUpload streams input synchronously to bounded disk storage; authenticated
 // decryption and full validation continue on a job context after input EOF.
 func (m *Manager) StageUpload(ctx context.Context, actor int64, r io.Reader, password string) (Operation, error) {
+	return m.StageUploadFor(ctx, ActivityActor{ID: actor}, r, password)
+}
+func (m *Manager) StageUploadFor(ctx context.Context, actor ActivityActor, r io.Reader, password string) (Operation, error) {
+	if !m.validActor(actor) {
+		return Operation{}, ErrInvalid
+	}
 	if m.cfg.RecoveryOnly {
 		return Operation{}, ErrInvalid
 	}
@@ -586,8 +638,12 @@ func (m *Manager) StageUpload(ctx context.Context, actor int64, r io.Reader, pas
 	if e := space(m.root, 256<<20); e != nil {
 		return Operation{}, e
 	}
-	j, unlock, e := m.newJob(actor, "upload")
+	j, unlock, e := m.newJob(actor.ID, "upload")
 	if e != nil {
+		return Operation{}, e
+	}
+	if e = m.beginActivity(j, actor, "backup_validation_failed"); e != nil {
+		m.cancelJob(j, unlock)
 		return Operation{}, e
 	}
 	f, e := os.OpenFile(filepath.Join(j.dir, "archive.age"), os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
@@ -606,6 +662,11 @@ func (m *Manager) StageUpload(ctx context.Context, actor int64, r io.Reader, pas
 		e = errors.Join(e, f.Close())
 	}
 	if e != nil {
+		failure := m.reportFailure(e, "uploading")
+		if auditErr := m.finishActivity(j, failure); auditErr != nil {
+			e = classified(FailureRecoveryRequired, errors.Join(auditErr, e))
+			m.reportFailure(e, "uploading")
+		}
 		unlock()
 		m.mu.Lock()
 		delete(m.jobs, j.ID)
@@ -670,7 +731,7 @@ func (m *Manager) StageUpload(ctx context.Context, actor int64, r io.Reader, pas
 		m.mu.Unlock()
 		return nil
 	})
-	return m.Status(actor, j.ID)
+	return m.Status(actor.ID, j.ID)
 }
 
 type contextReader struct {
@@ -685,6 +746,12 @@ func (r *contextReader) Read(p []byte) (int, error) {
 	return r.r.Read(p)
 }
 func (m *Manager) StartRestore(ctx context.Context, actor int64, id, destination, confirmation string) (Operation, error) {
+	return m.StartRestoreFor(ctx, ActivityActor{ID: actor}, id, destination, confirmation)
+}
+func (m *Manager) StartRestoreFor(ctx context.Context, actor ActivityActor, id, destination, confirmation string) (Operation, error) {
+	if !m.validActor(actor) {
+		return Operation{}, ErrInvalid
+	}
 	if m.cfg.RecoveryOnly {
 		return Operation{}, ErrInvalid
 	}
@@ -696,7 +763,7 @@ func (m *Manager) StartRestore(ctx context.Context, actor int64, id, destination
 	}
 	m.mu.Lock()
 	j := m.jobs[id]
-	if m.closed || j == nil || j.actor != actor || j.Phase != "ready" || time.Now().After(j.ExpiresAt) {
+	if m.closed || j == nil || j.actor != actor.ID || j.Phase != "ready" || time.Now().After(j.ExpiresAt) {
 		m.mu.Unlock()
 		return Operation{}, ErrInvalid
 	}
@@ -711,34 +778,54 @@ func (m *Manager) StartRestore(ctx context.Context, actor int64, id, destination
 		return Operation{}, e
 	}
 	j.active = true
+	j.activityActor = actor
 	j.Kind = "restore"
 	j.Phase = "queued"
 	m.wg.Add(1)
 	m.mu.Unlock()
 	m.run(j, unlock, func(ctx context.Context) error { return m.restore(ctx, j) })
-	return m.Status(actor, id)
+	return m.Status(actor.ID, id)
 }
 func (m *Manager) restore(ctx context.Context, j *job) error {
-	m.phase(j, "preflight")
-	if e := m.preflight(ctx); e != nil {
-		return e
-	}
-	digest, e := digestFile(filepath.Join(j.dir, "archive.age"))
-	if e != nil || digest != j.ArchiveDigest {
-		return engineFailure(FailureArchiveIntegrity, "staged archive changed")
-	}
-	release, e := m.cfg.Control.Maintenance(ctx)
-	if e != nil {
-		return e
-	}
-	defer release()
 	recovery := j.ID + "-recovery"
 	dir := filepath.Join(m.root, recovery)
 	state := journal{Phase: "capturing", Recovery: recovery, EmailDisabled: m.cfg.Control.EmailDisabled()}
-	if e = m.writeJournal(state); e != nil {
+	if m.cfg.ActivitySink != nil {
+		start, err := m.activity(j.activityActor, "restore_started")
+		if err != nil {
+			return err
+		}
+		outcome, err := m.activity(j.activityActor, "restore_failed")
+		if err != nil {
+			return err
+		}
+		setActivityFailure(&outcome, interruptedActivityFailure("recovering"))
+		state.Start, state.Outcome = &start, &outcome
+	}
+	if e := m.writeJournal(state); e != nil {
 		return e
 	}
+	release, e := m.cfg.Control.Maintenance(ctx)
+	if e != nil {
+		// The accepted attempt has durable evidence even when draining normal
+		// admissions fails. Startup will publish its interrupted outcome.
+		return classified(FailureRecoveryRequired, e)
+	}
+	defer release()
 	workErr := func() error {
+		if state.Start != nil {
+			if e := m.publish(ctx, *state.Start); e != nil {
+				return e
+			}
+		}
+		m.phase(j, "preflight")
+		if e := m.preflight(ctx); e != nil {
+			return e
+		}
+		digest, e := digestFile(filepath.Join(j.dir, "archive.age"))
+		if e != nil || digest != j.ArchiveDigest {
+			return engineFailure(FailureArchiveIntegrity, "staged archive changed")
+		}
 		m.phase(j, "recovery-copy")
 		if e := privateDir(dir); e != nil {
 			return e
@@ -798,9 +885,15 @@ func (m *Manager) restore(ctx context.Context, j *job) error {
 		m.cfg.ResetConnections()
 		m.phase(j, "committing")
 		state.Phase = "committed"
+		if state.Outcome != nil {
+			state.Outcome.Action = "restore_completed"
+			state.Outcome.OccurredAt = time.Now().UTC()
+			setActivityFailure(state.Outcome, Failure{})
+		}
 		if e = m.writeJournal(state); e != nil {
 			return e
 		}
+		j.committed = true
 		return m.check("committed-durable")
 	}()
 	if workErr != nil && state.Phase == "committed" {
@@ -823,6 +916,15 @@ func (m *Manager) restore(ctx context.Context, j *job) error {
 	failedPhase := j.Phase
 	m.mu.Unlock()
 	if workErr != nil {
+		failure := m.reportFailure(workErr, failedPhase)
+		workErr = &reportedFailure{error: workErr, failure: failure}
+		if state.Outcome != nil {
+			setActivityFailure(state.Outcome, failure)
+			state.Outcome.OccurredAt = time.Now().UTC()
+			if e = m.writeJournal(state); e != nil {
+				return classified(FailureRecoveryRequired, e)
+			}
+		}
 		m.phase(j, "rolling-back")
 	}
 	if e = m.resolve(recoveryCtx, state); e != nil {

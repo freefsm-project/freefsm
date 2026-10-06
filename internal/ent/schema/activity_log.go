@@ -24,7 +24,8 @@ func (ActivityLog) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
 		field.Int64("company_id"),
-		field.Int64("actor_id"),
+		field.Int64("actor_id").Optional().Nillable(),
+		field.String("event_key").Optional().Nillable().Unique(),
 		field.String("action").NotEmpty(),
 		field.String("object_type").NotEmpty(),
 		field.Int64("object_id"),

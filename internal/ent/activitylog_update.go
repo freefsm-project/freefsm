@@ -69,6 +69,32 @@ func (_u *ActivityLogUpdate) AddActorID(v int64) *ActivityLogUpdate {
 	return _u
 }
 
+// ClearActorID clears the value of the "actor_id" field.
+func (_u *ActivityLogUpdate) ClearActorID() *ActivityLogUpdate {
+	_u.mutation.ClearActorID()
+	return _u
+}
+
+// SetEventKey sets the "event_key" field.
+func (_u *ActivityLogUpdate) SetEventKey(v string) *ActivityLogUpdate {
+	_u.mutation.SetEventKey(v)
+	return _u
+}
+
+// SetNillableEventKey sets the "event_key" field if the given value is not nil.
+func (_u *ActivityLogUpdate) SetNillableEventKey(v *string) *ActivityLogUpdate {
+	if v != nil {
+		_u.SetEventKey(*v)
+	}
+	return _u
+}
+
+// ClearEventKey clears the value of the "event_key" field.
+func (_u *ActivityLogUpdate) ClearEventKey() *ActivityLogUpdate {
+	_u.mutation.ClearEventKey()
+	return _u
+}
+
 // SetAction sets the "action" field.
 func (_u *ActivityLogUpdate) SetAction(v string) *ActivityLogUpdate {
 	_u.mutation.SetAction(v)
@@ -203,6 +229,15 @@ func (_u *ActivityLogUpdate) sqlSave(ctx context.Context) (_node int, err error)
 	if value, ok := _u.mutation.AddedActorID(); ok {
 		_spec.AddField(activitylog.FieldActorID, field.TypeInt64, value)
 	}
+	if _u.mutation.ActorIDCleared() {
+		_spec.ClearField(activitylog.FieldActorID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.EventKey(); ok {
+		_spec.SetField(activitylog.FieldEventKey, field.TypeString, value)
+	}
+	if _u.mutation.EventKeyCleared() {
+		_spec.ClearField(activitylog.FieldEventKey, field.TypeString)
+	}
 	if value, ok := _u.mutation.Action(); ok {
 		_spec.SetField(activitylog.FieldAction, field.TypeString, value)
 	}
@@ -277,6 +312,32 @@ func (_u *ActivityLogUpdateOne) SetNillableActorID(v *int64) *ActivityLogUpdateO
 // AddActorID adds value to the "actor_id" field.
 func (_u *ActivityLogUpdateOne) AddActorID(v int64) *ActivityLogUpdateOne {
 	_u.mutation.AddActorID(v)
+	return _u
+}
+
+// ClearActorID clears the value of the "actor_id" field.
+func (_u *ActivityLogUpdateOne) ClearActorID() *ActivityLogUpdateOne {
+	_u.mutation.ClearActorID()
+	return _u
+}
+
+// SetEventKey sets the "event_key" field.
+func (_u *ActivityLogUpdateOne) SetEventKey(v string) *ActivityLogUpdateOne {
+	_u.mutation.SetEventKey(v)
+	return _u
+}
+
+// SetNillableEventKey sets the "event_key" field if the given value is not nil.
+func (_u *ActivityLogUpdateOne) SetNillableEventKey(v *string) *ActivityLogUpdateOne {
+	if v != nil {
+		_u.SetEventKey(*v)
+	}
+	return _u
+}
+
+// ClearEventKey clears the value of the "event_key" field.
+func (_u *ActivityLogUpdateOne) ClearEventKey() *ActivityLogUpdateOne {
+	_u.mutation.ClearEventKey()
 	return _u
 }
 
@@ -443,6 +504,15 @@ func (_u *ActivityLogUpdateOne) sqlSave(ctx context.Context) (_node *ActivityLog
 	}
 	if value, ok := _u.mutation.AddedActorID(); ok {
 		_spec.AddField(activitylog.FieldActorID, field.TypeInt64, value)
+	}
+	if _u.mutation.ActorIDCleared() {
+		_spec.ClearField(activitylog.FieldActorID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.EventKey(); ok {
+		_spec.SetField(activitylog.FieldEventKey, field.TypeString, value)
+	}
+	if _u.mutation.EventKeyCleared() {
+		_spec.ClearField(activitylog.FieldEventKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.Action(); ok {
 		_spec.SetField(activitylog.FieldAction, field.TypeString, value)

@@ -20,7 +20,9 @@ type ActivityLog struct {
 	// CompanyID holds the value of the "company_id" field.
 	CompanyID int64 `json:"company_id,omitempty"`
 	// ActorID holds the value of the "actor_id" field.
-	ActorID int64 `json:"actor_id,omitempty"`
+	ActorID *int64 `json:"actor_id,omitempty"`
+	// EventKey holds the value of the "event_key" field.
+	EventKey *string `json:"event_key,omitempty"`
 	// Action holds the value of the "action" field.
 	Action string `json:"action,omitempty"`
 	// ObjectType holds the value of the "object_type" field.
@@ -41,7 +43,7 @@ func (*ActivityLog) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case activitylog.FieldID, activitylog.FieldCompanyID, activitylog.FieldActorID, activitylog.FieldObjectID:
 			values[i] = new(sql.NullInt64)
-		case activitylog.FieldAction, activitylog.FieldObjectType, activitylog.FieldMetadata:
+		case activitylog.FieldEventKey, activitylog.FieldAction, activitylog.FieldObjectType, activitylog.FieldMetadata:
 			values[i] = new(sql.NullString)
 		case activitylog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -76,7 +78,15 @@ func (_m *ActivityLog) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field actor_id", values[i])
 			} else if value.Valid {
-				_m.ActorID = value.Int64
+				_m.ActorID = new(int64)
+				*_m.ActorID = value.Int64
+			}
+		case activitylog.FieldEventKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field event_key", values[i])
+			} else if value.Valid {
+				_m.EventKey = new(string)
+				*_m.EventKey = value.String
 			}
 		case activitylog.FieldAction:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -147,8 +157,15 @@ func (_m *ActivityLog) String() string {
 	builder.WriteString("company_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CompanyID))
 	builder.WriteString(", ")
-	builder.WriteString("actor_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ActorID))
+	if v := _m.ActorID; v != nil {
+		builder.WriteString("actor_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.EventKey; v != nil {
+		builder.WriteString("event_key=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("action=")
 	builder.WriteString(_m.Action)

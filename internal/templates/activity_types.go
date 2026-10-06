@@ -17,26 +17,34 @@ type ActivityEntry struct {
 }
 
 type ActivityMetadata struct {
-	EntityName      string `json:"entity_name,omitempty"`
-	ActorName       string `json:"actor_name,omitempty"`
-	TagName         string `json:"tag_name,omitempty"`
-	FileName        string `json:"file_name,omitempty"`
-	CommentPreview  string `json:"comment_preview,omitempty"`
-	OldStatus       string `json:"old_status,omitempty"`
-	NewStatus       string `json:"new_status,omitempty"`
-	Amount          string `json:"amount,omitempty"`
-	Changed         string `json:"changed,omitempty"`
-	OldStart        string `json:"old_start,omitempty"`
-	NewStart        string `json:"new_start,omitempty"`
-	OldEnd          string `json:"old_end,omitempty"`
-	NewEnd          string `json:"new_end,omitempty"`
-	OldStartDisplay string `json:"old_start_display,omitempty"`
-	NewStartDisplay string `json:"new_start_display,omitempty"`
-	OldEndDisplay   string `json:"old_end_display,omitempty"`
-	NewEndDisplay   string `json:"new_end_display,omitempty"`
-	OldAssignee     string `json:"old_assignee,omitempty"`
-	NewAssignee     string `json:"new_assignee,omitempty"`
-	Source          string `json:"source,omitempty"`
+	ActorCompanyName string `json:"actor_company_name,omitempty"`
+	SourceName       string `json:"source_name,omitempty"`
+	BuildKind        string `json:"build_kind,omitempty"`
+	Version          string `json:"version,omitempty"`
+	FailureCategory  string `json:"failure_category,omitempty"`
+	FailurePhase     string `json:"failure_phase,omitempty"`
+	FailureMessage   string `json:"failure_message,omitempty"`
+	DiagnosticID     string `json:"diagnostic_id,omitempty"`
+	EntityName       string `json:"entity_name,omitempty"`
+	ActorName        string `json:"actor_name,omitempty"`
+	TagName          string `json:"tag_name,omitempty"`
+	FileName         string `json:"file_name,omitempty"`
+	CommentPreview   string `json:"comment_preview,omitempty"`
+	OldStatus        string `json:"old_status,omitempty"`
+	NewStatus        string `json:"new_status,omitempty"`
+	Amount           string `json:"amount,omitempty"`
+	Changed          string `json:"changed,omitempty"`
+	OldStart         string `json:"old_start,omitempty"`
+	NewStart         string `json:"new_start,omitempty"`
+	OldEnd           string `json:"old_end,omitempty"`
+	NewEnd           string `json:"new_end,omitempty"`
+	OldStartDisplay  string `json:"old_start_display,omitempty"`
+	NewStartDisplay  string `json:"new_start_display,omitempty"`
+	OldEndDisplay    string `json:"old_end_display,omitempty"`
+	NewEndDisplay    string `json:"new_end_display,omitempty"`
+	OldAssignee      string `json:"old_assignee,omitempty"`
+	NewAssignee      string `json:"new_assignee,omitempty"`
+	Source           string `json:"source,omitempty"`
 }
 
 type ActivityWidgetData struct {
@@ -56,6 +64,22 @@ type ActivityPageData struct {
 
 func activityVerb(action string) string {
 	switch action {
+	case "backup_created":
+		return "created an encrypted backup of"
+	case "backup_failed":
+		return "could not create a backup of"
+	case "backup_validated":
+		return "validated an uploaded backup for"
+	case "backup_validation_failed":
+		return "could not validate an uploaded backup for"
+	case "backup_download_started":
+		return "started downloading a backup of"
+	case "restore_started":
+		return "started restoring"
+	case "restore_completed":
+		return "completed restoring"
+	case "restore_failed":
+		return "could not complete restoring"
 	case "created", "type_created", "status_created", "field_created", "tag_created", "user_created", "contact_created", "location_created":
 		return "created"
 	case "updated", "type_updated", "status_updated", "field_updated", "tag_updated", "user_updated", "contact_updated", "location_updated":
@@ -125,6 +149,12 @@ func activityVerb(action string) string {
 
 func activityActionClass(action string) string {
 	switch action {
+	case "backup_created", "backup_validated", "restore_completed":
+		return "activity-created"
+	case "backup_failed", "backup_validation_failed", "restore_failed":
+		return "activity-deleted"
+	case "backup_download_started", "restore_started":
+		return "activity-file"
 	case "created", "type_created", "status_created", "field_created", "tag_created", "user_created", "contact_created", "location_created":
 		return "activity-created"
 	case "updated", "type_updated", "status_updated", "field_updated", "tag_updated", "user_updated", "contact_updated", "location_updated", "settings_updated":
@@ -168,6 +198,25 @@ func activityActionClass(action string) string {
 	default:
 		return ""
 	}
+}
+
+func BackupActivityDetail(e ActivityEntry) string {
+	if e.TargetType != "instance" {
+		return ""
+	}
+	m := e.Metadata
+	parts := []string{}
+	for _, field := range [][2]string{
+		{"Administrator company", m.ActorCompanyName}, {"Source", m.SourceName},
+		{"Build", m.BuildKind}, {"Version", m.Version},
+		{"Category", m.FailureCategory}, {"Phase", m.FailurePhase},
+		{"Reason", m.FailureMessage}, {"Diagnostic ID", m.DiagnosticID},
+	} {
+		if field[1] != "" {
+			parts = append(parts, field[0]+": "+field[1])
+		}
+	}
+	return strings.Join(parts, "; ")
 }
 
 // TruncateText truncates a string to the given max rune count, adding "..." if truncated.

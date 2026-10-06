@@ -71,6 +71,12 @@ templ BackupPage(destination, disabledReason string, emailDisabled bool) {
 			</div>
 			@BackupProgressScript()
 		}
+		<section aria-label="Backup and restore activity" class="shared-widget">
+			<h3>Backup and restore activity</h3>
+			<div id="backup-activity" hx-get="/settings/backup/activity" hx-trigger="load, backupActivityChanged from:body" hx-swap="innerHTML">
+				<p>Loading activity…</p>
+			</div>
+		</section>
 	}
 }
 
@@ -106,6 +112,9 @@ templ BackupProgressScript() {
 				const storageKey = 'freefsm.backup.status';
 				let generation = 0;
 				let busy = false;
+				function refreshActivity() {
+					if (!root.dataset.statusOnly) document.body.dispatchEvent(new CustomEvent('backupActivityChanged'));
+				}
 				function remember(op) {
 					// Never persist passwords, archive metadata, confirmations or account data.
 					try { sessionStorage.setItem(storageKey, JSON.stringify({id: op.ID, kind: op.Kind})); }
@@ -140,16 +149,31 @@ templ BackupProgressScript() {
 					dismiss.hidden = false;
 					for (; current === generation && root.isConnected;) {
 						progress.textContent = op.Kind + ': ' + op.Phase;
-						if (op.Phase === 'failed') { progress.textContent = op.Error; busy = false; return; }
+						if (op.Phase === 'failed') { progress.textContent = op.Error; busy = false; refreshActivity(); return; }
 						if (op.Kind === 'restore' && op.Phase === 'complete') {
 							// Replace any pre-restore administrator DOM with the status-only shell.
-							if (!root.dataset.statusOnly) { location.replace(remember(op) ? '/settings/backup/status-page' : '/login'); return; }
+							if (!root.dataset.statusOnly) {
+								if (remember(op)) { location.replace('/settings/backup/status-page'); return; }
+								// Storage can be unavailable. Still discard the old account/activity
+								// DOM and present the terminal status without implying login is ready.
+								root.replaceChildren(progress); root.dataset.statusOnly = 'true';
+								document.body.replaceChildren(root);
+							}
+							const controls = document.getElementById('backup-controls');
+							if (controls) controls.hidden = true;
+							if (op.Failure?.Category || op.Failure?.Message || op.Error) {
+								progress.textContent = 'Restore committed, but the instance is unavailable pending recovery. Ask the deployment operator to restart the server and complete recovery before signing in.';
+								const message = op.Failure?.Message || op.Error;
+								if (message) progress.append(document.createTextNode(' ' + message));
+								busy = false; return;
+							}
 							progress.textContent = 'Restore complete. Email is disabled. Log in again with a restored account.';
 							const a = document.createElement('a'); a.href = '/login'; a.textContent = ' Log in';
 							a.addEventListener('click', () => sessionStorage.removeItem(storageKey));
-							progress.append(a); document.getElementById('backup-controls').hidden = true; busy = false; return;
+							progress.append(a); busy = false; return;
 						}
 						if (op.Kind === 'backup' && op.Phase === 'complete') {
+							refreshActivity();
 							const download = document.getElementById('backup-download');
 							if (download) { download.hidden = false; download.querySelector('[name=operation]').value = op.ID; }
 							else progress.textContent = 'Backup complete. Return to administrator controls to authenticate and download.';
@@ -157,6 +181,7 @@ templ BackupProgressScript() {
 							return;
 						}
 						if (op.Kind === 'upload' && op.Phase === 'ready') {
+							refreshActivity();
 							busy = false;
 							const review = document.getElementById('backup-review');
 							if (!review) { progress.textContent = 'Upload validated. Return to administrator controls to review and confirm restore.'; return; }

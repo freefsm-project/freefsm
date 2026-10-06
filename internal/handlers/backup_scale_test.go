@@ -151,7 +151,7 @@ func TestBackupBrowserNginxScale(t *testing.T) {
 		scaleCheck(t, err)
 		mux := http.NewServeMux()
 		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
-		router := NewBackupRouter(f.manager, f.control, services.NewUserService(f.client), services.NewCompanySettingsService(f.client), f.sessions, "")
+		router := NewBackupRouter(f.manager, f.control, services.NewUserService(f.client), services.NewCompanySettingsService(f.client), f.sessions, "", backupTestActivityHandler(f.client))
 		mux.Handle("/settings/backup", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { router.ServeHTTP(w, r) }))
 		mux.Handle("/settings/backup/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/settings/backup/upload" {
