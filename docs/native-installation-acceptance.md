@@ -2,8 +2,156 @@
 
 ## Disposition
 
-**Incomplete / blocked**, observed 2026-10-11. This is supporting execution
-evidence, not Linux/FreeBSD release acceptance. Issue #107 remains open.
+**Implementation and isolated Linux checks completed; native release acceptance
+still blocked**, observed 2026-10-11. Issue #107 remains open. The current results
+below supersede the explicitly historical initial checkpoint later in this file.
+
+## Current implementation and TDD evidence
+
+- CLI `-recover-admin EMAIL` accepts a password and matching confirmation on stdin,
+  resets only an existing enabled Admin, enforces the saved password policy, forces
+  browser password replacement, and revokes browser/mobile sessions and recovery
+  links. Operation/maintenance locks drain in-flight requests before database
+  locks recheck identity/policy. Password, credential revocation and host-attributed
+  audit commit together; audit failure rolls back. No new user or product Role.
+- Startup now rejects PostgreSQL <16 and absent/mismatched `pg_dump`/`pg_restore`
+  before any migrations/bootstrap. Interrupted-restore recovery retains priority.
+- FreeBSD live config is service-owned mode 0600; existing values survive reinstall,
+  legacy modes tighten, and symlinks are rejected. Required state/upload/log roots
+  have service ownership. The rc.d script installs in `/usr/local/etc/rc.d`; the
+  old `/etc/rc.d` location must be reviewed/relocated to prevent duplicate services.
+- Linux's former root-owned log directory conflicted with its service-user log
+  file setting. The staged Linux installer now creates service-owned writable log,
+  upload and state roots; `DESTDIR` suppresses systemd reload. Both platform
+  Makefile install targets were exercised in temporary destination roots.
+- `deploy/verify-postgres.sh` runs isolated container executable/DB compatibility
+  regressions and backup HTTP round trips, without host ports or services.
+- Backup HTTP regression now uses the production embedded migration filesystem,
+  so its compiled runner works without a source checkout inside the target.
+
+Red → green observations: missing-tool startup previously migrated and listened
+until the test timeout; recovery initially failed with `flag provided but not
+defined`; staged installer initially had no safe installer entry point. Each was
+followed by its implementation and a passing test. Supplementary denial/failure/
+concurrency tests then verified current policy, unknown/non-Admin/disabled targets,
+password confirmation, audit rollback, concurrent Role change, competing-process
+exclusion, old browser/mobile denial, and actual HTTP forced password replacement.
+
+The native foreground executable also passed first Admin/company bootstrap and
+persisted Customer/Job create/list workflows with SMTP absent and with SMTP/maps
+pointing at an unreachable loopback endpoint. A real Chromium journey passed
+recovered login → forced password replacement → persisted Customer creation →
+Job creation → both lists. This new browser test uses the actual executable and
+database, not intercepted engine responses or fabricated sessions.
+
+### Coordination boundary with #19
+
+Recovery-specific paths are `internal/hostrecovery/recovery.go`,
+`cmd/freefsm/recovery.go`, and CLI dispatch in `cmd/freefsm/main.go`. It currently
+recognizes the existing `users.role = 'admin'` identity under a database lock.
+**When #19's reviewed cutover lands, replace this single explicit predicate with
+the protected Role identity and add its Role table to the commit-time locking
+protocol. Do not use a Role-label fallback or auto-grant permissions.** No Role
+schema, grants, existing authorization editors, or migration implementation were
+changed here. The integration tip available during execution remained `580e95a`.
+
+### Current commands/results
+
+The native disposable PostgreSQL 18.6 cluster is on port **55507**. Its existing
+empty test extension was enabled without touching host extension files:
+
+```sql
+-- Executed ONLY against the disposable cluster on 127.0.0.1:55507.
+ALTER SYSTEM SET extension_control_path = '/tmp/opencode/freefsm-v1-107/internal/backup/testdata:$system';
+SELECT pg_reload_conf();
+```
+
+`TestBackupCreateUnsupportedLayout`, including the extension case, then passed.
+This resolves the initial environment failure recorded below.
+
+```sh
+make build
+make lint
+FREEFSM_TEST_DATABASE_URL='postgres://adam@127.0.0.1:55507/freefsm_test?sslmode=disable' \
+FREEFSM_BACKUP_TEST_ADMIN_URL='postgres://adam@127.0.0.1:55507/postgres?sslmode=disable' \
+BROWSER_TESTS=1 BROWSER_EXECUTABLE=/usr/bin/chromium-browser \
+NODE_PATH=/home/adam/repos/freefsm/internal/templates/testdata/browser/node_modules \
+make test
+```
+
+**Passed**, including race-enabled real DB integration, existing backup suites,
+both existing browser regressions, the new executable/HTTP/browser tests, and
+staged platform installs. Local full log:
+`/tmp/opencode/freefsm-v1-107-implementation-test.log`. Remaining skips in this
+invocation: the <16 rejection test (run separately on 15 below), the intentional
+crash-child helper (run by its parent tests), and the opt-in 1 GiB nginx scale
+harness. Skipped scale is not a pass. Later staged-installer checks additionally
+passed `go test -v ./deploy -count=1`; shell syntax and `git diff --check` passed.
+
+Both install scripts were also run as container root with `postgres:postgres`
+as a distinct disposable service identity. `stat` recorded Linux config
+`600 root:root`, FreeBSD config `600 postgres:postgres`, both log roots
+`750 postgres:postgres`, and both state roots `700 postgres:postgres`. This checks
+real ownership separation in disposable Linux storage; it is not systemd/rc.d
+execution or native FreeBSD proof.
+
+```sh
+sh deploy/verify-postgres.sh 16
+sh deploy/verify-postgres.sh 17
+sh deploy/verify-postgres.sh 15
+```
+
+| Disposable container | Actual result | Image digest |
+| --- | --- | --- |
+| PostgreSQL/tools 16.15 | Executable bootstrap, core workflows, recovery success/denial/failure/concurrency; backup history round trip 3.48s, six HTTP compatibility cases 17.94s: passed | `sha256:75adc2a65806c96bc0e59030230bfe3f1c1b0d6d8f8181a8913e2b8b53bdc166` |
+| PostgreSQL/tools 17.11 | Same executable matrix; backup history round trip 3.49s, six HTTP compatibility cases 18.21s: passed | `sha256:3cec7eb015ba8adb28139fa5c83b8489cdf0e666e53dfdf20f598ae0cc8739e3` |
+| PostgreSQL/tools 15.19 | Actionable unsupported-server failure with zero tables created: passed | `sha256:a5f9ead8ed7cb25abc36bea51fb9bb2be8d5579ed4ef3d28876027e438391ff0` |
+
+The 16/17 runners intentionally skip the <16 negative case; the 15 runner runs
+only that rejection case. No support for running the application on 15 is claimed.
+Container test binaries are static, without the race detector; the native 18
+suite above runs `go test -v -race ./...`. All containers use `--network none`
+and temporary databases, with application roles NOSUPERUSER/NOCREATEDB.
+
+Matrix executable SHA256:
+`4185af83211bfbd16f52e81187bd6c152e6fa923c84cd1556572704f1936377c`.
+Built by `make build` from `dda1f44` plus this implementation's working changes;
+identity is **development**, not a published release. Backup HTTP tests retain
+their explicitly injected compatibility identities. Local matrix logs are
+`/tmp/opencode/freefsm-v1-107-pg16-matrix.log` and `...-pg17-matrix.log`.
+
+Initial matrix attempts exposed two harness issues that were corrected and rerun:
+private SELinux `:Z` relabeling of one shared executable collided between parallel
+containers (now shared `:z` for that artifact); backup HTTP tests assumed on-disk
+migrations (now production embedded migrations). Neither failed attempt counts as
+acceptance. Native browser harness development also corrected an ambiguous button
+selector and supplied the browser's real Origin header in HTTP form submissions.
+
+### Current external acceptance gates
+
+1. Published candidate tag/commit, target architecture list, actual Linux/FreeBSD
+   artifacts and their independently published checksums are still needed.
+2. Native service-managed install/start/stop/restart and full reboot remain unrun
+   on both OSes. The dev host is authorized only for builds/tests and isolated
+   instances, not workstation reboot or system-service mutation. Supply disposable
+   systemd/FreeBSD rc.d targets with persistent storage and reboot access, or
+   separately authorize a specific Linux service-install test. No native FreeBSD
+   target or usable VM tooling was established, and no host packages were installed.
+3. Release owner must declare the supported-major/OS matrix. Real native Linux
+   PostgreSQL 18 tests and container 16/17 tests are useful evidence, not proof
+   of native FreeBSD capability or every future major implied by “16+”.
+4. Operator TLS/firewall/proxy boundary and zero default telemetry/update-check
+   egress still need execution/capture in the actual deployment topology.
+   Network-disabled containers do not prove absence of attempted egress.
+5. Adapt and rerun recovery against #19's protected identity when merged; broader
+   bootstrap/authorization concurrency and immutable audit enforcement belong to
+   that foundation. Native upgrade/reboot data preservation and the scale gate
+   remain unproven by these tests. No schema migration was added here.
+
+## Initial checkpoint (historical)
+
+The remainder records the initial investigation and its then-missing proof.
+Implementation/fixture/seam blockers resolved above are not current blockers.
 
 Worktree: `/tmp/opencode/freefsm-v1-107`, branch `implement/v1-107`.
 Starting source: `580e95ab9c3eed179ee0a5164c3e144126b15caf`.

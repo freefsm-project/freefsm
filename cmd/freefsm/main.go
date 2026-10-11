@@ -46,7 +46,11 @@ func main() {
 func run() error {
 	configFile := flag.String("config", "", "path to config file (optional)")
 	seedFlag := flag.Bool("seed", false, "seed demo data and exit")
+	recoverAdmin := flag.String("recover-admin", "", "reset an existing enabled Admin by email; read password and confirmation from stdin, then exit")
 	flag.Parse()
+	if *recoverAdmin != "" && *seedFlag {
+		return errors.New("-recover-admin cannot be combined with -seed")
+	}
 
 	if *configFile != "" {
 		if err := godotenv.Load(*configFile); err != nil {
@@ -136,6 +140,9 @@ func run() error {
 		return err
 	}
 	defer startupUnlock()
+	if *recoverAdmin != "" {
+		return recoverAdminPassword(cfg, control, *recoverAdmin)
+	}
 	startupCtx, startupRelease, err := control.Enter(context.Background())
 	if err != nil {
 		return err
@@ -163,6 +170,12 @@ func run() error {
 	defer db.Close()
 	pool = db.Pool
 	slog.Info("database connected")
+	preflightCtx, preflightCancel := context.WithTimeout(startupCtx, 15*time.Second)
+	err = db.CheckCompatibility(preflightCtx)
+	preflightCancel()
+	if err != nil {
+		return err
+	}
 
 	if err := db.Migrate(startupCtx, database.MigrationFS()); err != nil {
 		slog.Error("database migrate", "error", err)
