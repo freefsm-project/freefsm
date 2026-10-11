@@ -21,11 +21,14 @@ gmake build
 make build
 ```
 
-After building, verify the binary checksum to confirm identical output:
+After building, record the binary checksum:
 
 ```sh
 gmake checksum
 ```
+
+This records the local artifact's identity; it does not verify a published
+release. See the per-target verification procedure below.
 
 ## Setup
 
@@ -160,19 +163,26 @@ like a secret. It is accepted for setup only while no users exist.
 7.  Start the service:
     `sudo service freefsm start`
 
-## Cross-Platform Check
+## Per-target release verification
 
-To verify both platforms produce identical binaries:
+Linux and FreeBSD executables target different operating systems and are not
+expected to have identical bytes. Verify **each downloaded artifact against its
+own published SHA256**, using the release's exact OS/architecture filename. On
+Linux use `sha256sum <artifact>`; on FreeBSD use `sha256 -q <artifact>`. Compare
+that result with the checksum published for that artifact. A locally calculated
+checksum without a published value is an identity record, not release verification.
 
-```sh
-# On Linux
-make build && make checksum
-# On FreeBSD
-gmake build && gmake checksum
-# Compare the SHA256 hashes
-```
+For source builds, install the pinned ent and templ generators and Go version
+listed in the root README, check out the intended tag, and run `make build`
+(Linux) or `gmake build` (FreeBSD). Record `git rev-parse HEAD`, `git status
+--porcelain`, `go version`, `go version -m dist/freefsm`, and `make checksum`
+(`gmake checksum` on FreeBSD). Generated files must be present before running
+`make lint` or the database-backed `make test` in a fresh checkout. A development
+build does not replace execution of the actual versioned release artifact.
 
-If the checksums differ, check that:
-- Both platforms use the same `go` version (`go version`)
-- Both use GNU Make (not BSD `make` on FreeBSD)
-- Both checked out the same git commit
+Native installation acceptance additionally requires service-managed bootstrap,
+start/stop/restart and host reboot, matching-major PostgreSQL backup tools, and
+persisted workflows without optional providers. Containers and cross-compilation
+are supporting checks, not native FreeBSD or host-reboot evidence. The current
+[native installation evidence and blockers](../docs/native-installation-acceptance.md)
+record which gates have actually been exercised.
