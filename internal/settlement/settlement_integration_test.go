@@ -56,7 +56,7 @@ func TestRecordPaymentIsAtomicAndIdempotentIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = db.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'settlement@example.test','x','Actor','admin') RETURNING id`, companyID).Scan(&actorID)
+	err = db.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'settlement@example.test','$2a$10$abcdefghijklmnopqrstuu1234567890123456789012345678901','Actor','admin') RETURNING id`, companyID).Scan(&actorID)
 	if err != nil {
 		t.Fatal(err)
 	}

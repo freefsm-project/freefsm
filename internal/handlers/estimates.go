@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
@@ -163,7 +164,7 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if e.CustomerID != nil && *e.CustomerID > 0 {
-		customer, _ := h.custSvc.GetByID(r.Context(), *e.CustomerID)
+		customer, _ := customerForDocument(r.Context(), h.custSvc, *e.CustomerID, valueInt64(e.JobID))
 		if customer != nil {
 			d.Customer = customer.DisplayName
 		}
@@ -274,7 +275,11 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if taxRate == "" {
 		taxRate = "0"
 	}
-	taxRate = taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate)
+	taxRate, err := taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate, jobID)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
 	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), taxRate)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -346,7 +351,11 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		taxRatePtr = &t
 	}
 	if taxRatePtr != nil {
-		t := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr)
+		t, err := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr, jobID)
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
 		taxRatePtr = &t
 	}
 	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), *taxRatePtr)
@@ -442,7 +451,11 @@ func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	defaultTaxRate := taxRateForCustomer(r.Context(), h.custSvc, j.CustomerID, companyDefaultTaxRate(r.Context()))
+	defaultTaxRate, err := taxRateForCustomer(r.Context(), h.custSvc, j.CustomerID, companyDefaultTaxRate(r.Context()), j.ID)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
 	est, err := h.svc.CreateFromJob(r.Context(), id, h.statusSvc, defaultTaxRate)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -618,7 +631,7 @@ func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64) (do
 	statuses, _ := h.statusSvc.ByObjectType(ctx, "estimate")
 	var customer *ent.Customer
 	if e.CustomerID != nil && *e.CustomerID > 0 {
-		c, _ := h.custSvc.GetByID(ctx, *e.CustomerID)
+		c, _ := customerForDocument(ctx, h.custSvc, *e.CustomerID, valueInt64(e.JobID))
 		customer = c
 	}
 	var job *ent.Job
@@ -709,8 +722,12 @@ func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64)
 	if err != nil {
 		return templates.EstimateFormPageData{}, err
 	}
+	effectiveTax, err := taxRateForCustomer(ctx, h.custSvc, customerID, defaultTaxRate)
+	if err != nil {
+		return templates.EstimateFormPageData{}, err
+	}
 	return templates.EstimateFormPageData{
-		Estimate:          &templates.EstimateDetail{CustomerID: customerID, TaxRate: taxRateForCustomer(ctx, h.custSvc, customerID, defaultTaxRate)},
+		Estimate:          &templates.EstimateDetail{CustomerID: customerID, TaxRate: effectiveTax},
 		IsNew:             true,
 		Customers:         customerOptions(customers),
 		Jobs:              jobOptions(jobs),
@@ -728,6 +745,19 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
 	d := estimateToDetail(ctx, e, statuses)
+	if request, ok := authorization.FromContext(ctx); ok {
+		p, err := request.Service.Principal(ctx, request.Actor)
+		if err != nil {
+			return templates.EstimateFormPageData{}, err
+		}
+		if !p.Allows("customer.view", authorization.All) {
+			defaultTaxRate = e.TaxRate
+		}
+	}
+	options, err := documentCustomerOptions(ctx, customers, d.CustomerID, d.JobID)
+	if err != nil {
+		return templates.EstimateFormPageData{}, err
+	}
 	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, e.LineItems, defaultTaxRate)
 	if err != nil {
 		return templates.EstimateFormPageData{}, err
@@ -735,7 +765,7 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 	return templates.EstimateFormPageData{
 		Estimate:          &d,
 		IsNew:             false,
-		Customers:         customerOptions(customers),
+		Customers:         options,
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         bootstrap.ItemsJSON,

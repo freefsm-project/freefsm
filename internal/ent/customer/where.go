@@ -94,6 +94,11 @@ func Notes(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldNotes, v))
 }
 
+// ServiceNotes applies equality check predicate on the "service_notes" field. It's identical to ServiceNotesEQ.
+func ServiceNotes(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldServiceNotes, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldEQ(FieldStatus, v))
@@ -672,6 +677,71 @@ func NotesEqualFold(v string) predicate.Customer {
 // NotesContainsFold applies the ContainsFold predicate on the "notes" field.
 func NotesContainsFold(v string) predicate.Customer {
 	return predicate.Customer(sql.FieldContainsFold(FieldNotes, v))
+}
+
+// ServiceNotesEQ applies the EQ predicate on the "service_notes" field.
+func ServiceNotesEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEQ(FieldServiceNotes, v))
+}
+
+// ServiceNotesNEQ applies the NEQ predicate on the "service_notes" field.
+func ServiceNotesNEQ(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldNEQ(FieldServiceNotes, v))
+}
+
+// ServiceNotesIn applies the In predicate on the "service_notes" field.
+func ServiceNotesIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldIn(FieldServiceNotes, vs...))
+}
+
+// ServiceNotesNotIn applies the NotIn predicate on the "service_notes" field.
+func ServiceNotesNotIn(vs ...string) predicate.Customer {
+	return predicate.Customer(sql.FieldNotIn(FieldServiceNotes, vs...))
+}
+
+// ServiceNotesGT applies the GT predicate on the "service_notes" field.
+func ServiceNotesGT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGT(FieldServiceNotes, v))
+}
+
+// ServiceNotesGTE applies the GTE predicate on the "service_notes" field.
+func ServiceNotesGTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldGTE(FieldServiceNotes, v))
+}
+
+// ServiceNotesLT applies the LT predicate on the "service_notes" field.
+func ServiceNotesLT(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLT(FieldServiceNotes, v))
+}
+
+// ServiceNotesLTE applies the LTE predicate on the "service_notes" field.
+func ServiceNotesLTE(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldLTE(FieldServiceNotes, v))
+}
+
+// ServiceNotesContains applies the Contains predicate on the "service_notes" field.
+func ServiceNotesContains(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContains(FieldServiceNotes, v))
+}
+
+// ServiceNotesHasPrefix applies the HasPrefix predicate on the "service_notes" field.
+func ServiceNotesHasPrefix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasPrefix(FieldServiceNotes, v))
+}
+
+// ServiceNotesHasSuffix applies the HasSuffix predicate on the "service_notes" field.
+func ServiceNotesHasSuffix(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldHasSuffix(FieldServiceNotes, v))
+}
+
+// ServiceNotesEqualFold applies the EqualFold predicate on the "service_notes" field.
+func ServiceNotesEqualFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldEqualFold(FieldServiceNotes, v))
+}
+
+// ServiceNotesContainsFold applies the ContainsFold predicate on the "service_notes" field.
+func ServiceNotesContainsFold(v string) predicate.Customer {
+	return predicate.Customer(sql.FieldContainsFold(FieldServiceNotes, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

@@ -73,7 +73,11 @@ templ JobShow(p JobDetail) {
 		}
 		<table class="work-item-detail-meta">
 			<tbody>
-				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
+				if canCustomer(ctx,"view") {
+					<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
+				} else if canCustomer(ctx,"context") {
+					<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/jobs/%d/customer-context",p.ID)) }>View assigned Job context</a></td></tr>
+				}
 				<tr><th>Status</th><td>@JobStatusControl(p)</td></tr>
 				if canManageOperational(ctx) {
 					<tr><th>Billing Type</th><td>{ p.BillingType }</td></tr>

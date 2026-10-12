@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
@@ -66,7 +67,7 @@ func (h *handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	result := make([]jobDTO, 0, len(jobs))
 	for _, job := range jobs {
-		result = append(result, makeJobDTO(job, statuses, actor.Role))
+		result = append(result, h.visibleJobDTO(r, job, statuses, actor.Role))
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -81,7 +82,7 @@ func (h *handler) getJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "could not load job statuses")
 		return
 	}
-	writeJSON(w, http.StatusOK, makeJobDTO(job, statuses, actor.Role))
+	writeJSON(w, http.StatusOK, h.visibleJobDTO(r, job, statuses, actor.Role))
 }
 
 type statusRequest struct {
@@ -119,7 +120,7 @@ func (h *handler) updateJobStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "status changed but statuses could not be loaded")
 		return
 	}
-	writeJSON(w, http.StatusOK, makeJobDTO(updated, statuses, actor.Role))
+	writeJSON(w, http.StatusOK, h.visibleJobDTO(r, updated, statuses, actor.Role))
 }
 
 type subtaskRequest struct {
@@ -217,6 +218,18 @@ func (h *handler) requireOpenJob(w http.ResponseWriter, r *http.Request, job *en
 		return false
 	}
 	return true
+}
+
+func (h *handler) visibleJobDTO(r *http.Request, job *ent.Job, statuses map[int64]statusDTO, role string) jobDTO {
+	dto := makeJobDTO(job, statuses, role)
+	if request, ok := authorization.FromContext(r.Context()); ok && dto.CustomerID != nil {
+		if request.Service.CustomerAccess(r.Context(), request.Actor, job.CustomerID, "customer.view") != nil {
+			if _, err := request.Service.JobCustomer(r.Context(), request.Actor, job.ID); err != nil {
+				dto.CustomerID = nil
+			}
+		}
+	}
+	return dto
 }
 
 func makeJobDTO(job *ent.Job, statuses map[int64]statusDTO, role string) jobDTO {

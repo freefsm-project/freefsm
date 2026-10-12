@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/customer"
 	"github.com/freefsm-project/freefsm/internal/ent/estimate"
@@ -356,6 +357,9 @@ func (s *SearchService) searchTech(ctx context.Context, q string, limit int, use
 }
 
 func (s *SearchService) searchTechCustomers(ctx context.Context, q string, limit int, userID int64, jobCustomerIDs []int64) ([]*ent.Customer, error) {
+	if _, ok := authorization.FromContext(ctx); ok {
+		return s.client.Customer.Query().Where(customer.DeletedAtIsNil(), customer.Or(customer.DisplayNameContainsFold(q), customer.FirstNameContainsFold(q), customer.LastNameContainsFold(q), customer.EmailContainsFold(q), customer.PhoneContains(q), customer.CompanyNameContainsFold(q))).Limit(limit).All(ctx)
+	}
 	access := []predicate.Customer{customer.AssignedToEQ(userID)}
 	if len(jobCustomerIDs) > 0 {
 		access = append(access, customer.IDIn(jobCustomerIDs...))

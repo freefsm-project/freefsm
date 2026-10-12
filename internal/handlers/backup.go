@@ -57,7 +57,7 @@ func NewBackupRouter(manager *backup.Manager, control *instancecontrol.Control, 
 		if u == nil || !u.IsActive || u.ForcePasswordChange || u.CompanyID == nil || *u.CompanyID <= 0 {
 			return nil, errors.New("account unavailable")
 		}
-		return &middleware.UserInfo{ID: u.ID, CompanyID: *u.CompanyID, Name: u.Name, Email: u.Email, Role: u.Role}, nil
+		return &middleware.UserInfo{ID: u.ID, CompanyID: *u.CompanyID, Name: u.Name, Email: u.Email, Role: u.Role, AuthorizationLoaded: true, ProtectedAdministrator: u.IsActive && u.AuthorizationRoleID != nil && *u.AuthorizationRoleID == 1}, nil
 	})
 	csrf := nosurf.New(h.controlRoutes(auth))
 	csrf.SetIsTLSFunc(middleware.IsHTTPS)
@@ -186,7 +186,7 @@ func (h *BackupHandler) actor(w http.ResponseWriter, r *http.Request, reauthenti
 		return nil, false
 	}
 	u, err := h.users.GetByID(r.Context(), info.ID)
-	if err != nil || u == nil || !u.IsActive || u.Role != "admin" || u.ForcePasswordChange || u.CompanyID == nil || *u.CompanyID <= 0 {
+	if err != nil || u == nil || !u.IsActive || u.AuthorizationRoleID == nil || *u.AuthorizationRoleID != 1 || u.ForcePasswordChange || u.CompanyID == nil || *u.CompanyID <= 0 {
 		http.Error(w, "Forbidden", 403)
 		return nil, false
 	}

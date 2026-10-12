@@ -152,7 +152,7 @@ func CustomerListContent(p CustomerListPageData) templ.Component {
 		})
 		templ_7745c5c3_Err = ListToolbar(ListToolbarData{
 			Action: "/customers", Target: "#customer-list-content", Search: p.Search,
-			SearchPlaceholder: "Search customers...", NewURL: "/customers/new", NewLabel: "New Customer",
+			SearchPlaceholder: "Search customers...", NewURL: customerNewURL(ctx), NewLabel: "New Customer",
 			ShowFilter: true, Filters: filterValues("status", p.StatusFilter),
 			FilterCount: activeFilterCount(filterValues("status", p.StatusFilter)),
 		}).Render(templ.WithChildren(ctx, templ_7745c5c3_Var4), templ_7745c5c3_Buffer)

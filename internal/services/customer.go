@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/customer"
 )
@@ -228,6 +229,9 @@ func (s *CustomerService) Delete(ctx context.Context, id int64) error {
 }
 
 func (s *CustomerService) Archive(ctx context.Context, id int64) error {
+	if request, ok := authorization.FromContext(ctx); ok {
+		return request.Service.CustomerLifecycle(ctx, request.Actor, id, false)
+	}
 	now := time.Now()
 	_, err := s.client.Customer.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
 	if err != nil {
@@ -237,6 +241,9 @@ func (s *CustomerService) Archive(ctx context.Context, id int64) error {
 }
 
 func (s *CustomerService) Restore(ctx context.Context, id int64) error {
+	if request, ok := authorization.FromContext(ctx); ok {
+		return request.Service.CustomerLifecycle(ctx, request.Actor, id, true)
+	}
 	_, err := s.client.Customer.UpdateOneID(id).ClearDeletedAt().Save(ctx)
 	if err != nil {
 		return fmt.Errorf("restore customer %d: %w", id, err)

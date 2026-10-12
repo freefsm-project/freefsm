@@ -33,7 +33,7 @@ func TestBackupActivityRouteIsCompanyScopedAndAdminOnly(t *testing.T) {
 	role := "admin"
 	auth := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), middleware.UserKey, &middleware.UserInfo{ID: 7, CompanyID: 42, Role: role})))
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), middleware.UserKey, &middleware.UserInfo{ID: 7, CompanyID: 42, Role: role, ProtectedAdministrator: role == "admin", AuthorizationLoaded: true})))
 		})
 	}
 	routes := h.controlRoutes(auth)
@@ -126,7 +126,8 @@ func TestBackupAuthorizationAndFreshConfirmation(t *testing.T) {
 		t.Fatal(err)
 	}
 	companyID := int64(4)
-	u := &backupUserFixture{ent.User{ID: 7, CompanyID: &companyID, Name: "Trusted administrator", Role: "admin", IsActive: true, PasswordHash: string(hash)}}
+	protectedRoleID := int64(1)
+	u := &backupUserFixture{ent.User{ID: 7, CompanyID: &companyID, Name: "Trusted administrator", Role: "admin", AuthorizationRoleID: &protectedRoleID, IsActive: true, PasswordHash: string(hash)}}
 	m := &workflowBackup{}
 	refreshes := 0
 	h := &BackupHandler{manager: m, control: c, users: u, settings: backupSettingsFixture{}, refresh: func() error { refreshes++; return nil }}
@@ -135,7 +136,7 @@ func TestBackupAuthorizationAndFreshConfirmation(t *testing.T) {
 			if refreshes == 0 {
 				t.Fatal("auth before refresh")
 			}
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), middleware.UserKey, &middleware.UserInfo{ID: 7, Role: u.user.Role})))
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), middleware.UserKey, &middleware.UserInfo{ID: 7, Role: u.user.Role, ProtectedAdministrator: u.user.Role == "admin"})))
 		})
 	}
 	routes := h.controlRoutes(auth)

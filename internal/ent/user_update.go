@@ -111,6 +111,33 @@ func (_u *UserUpdate) SetNillableRole(v *string) *UserUpdate {
 	return _u
 }
 
+// SetAuthorizationRoleID sets the "authorization_role_id" field.
+func (_u *UserUpdate) SetAuthorizationRoleID(v int64) *UserUpdate {
+	_u.mutation.ResetAuthorizationRoleID()
+	_u.mutation.SetAuthorizationRoleID(v)
+	return _u
+}
+
+// SetNillableAuthorizationRoleID sets the "authorization_role_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAuthorizationRoleID(v *int64) *UserUpdate {
+	if v != nil {
+		_u.SetAuthorizationRoleID(*v)
+	}
+	return _u
+}
+
+// AddAuthorizationRoleID adds value to the "authorization_role_id" field.
+func (_u *UserUpdate) AddAuthorizationRoleID(v int64) *UserUpdate {
+	_u.mutation.AddAuthorizationRoleID(v)
+	return _u
+}
+
+// ClearAuthorizationRoleID clears the value of the "authorization_role_id" field.
+func (_u *UserUpdate) ClearAuthorizationRoleID() *UserUpdate {
+	_u.mutation.ClearAuthorizationRoleID()
+	return _u
+}
+
 // SetFontSize sets the "font_size" field.
 func (_u *UserUpdate) SetFontSize(v string) *UserUpdate {
 	_u.mutation.SetFontSize(v)
@@ -321,6 +348,15 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Role(); ok {
 		_spec.SetField(user.FieldRole, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.AuthorizationRoleID(); ok {
+		_spec.SetField(user.FieldAuthorizationRoleID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedAuthorizationRoleID(); ok {
+		_spec.AddField(user.FieldAuthorizationRoleID, field.TypeInt64, value)
+	}
+	if _u.mutation.AuthorizationRoleIDCleared() {
+		_spec.ClearField(user.FieldAuthorizationRoleID, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.FontSize(); ok {
 		_spec.SetField(user.FieldFontSize, field.TypeString, value)
 	}
@@ -451,6 +487,33 @@ func (_u *UserUpdateOne) SetNillableRole(v *string) *UserUpdateOne {
 	if v != nil {
 		_u.SetRole(*v)
 	}
+	return _u
+}
+
+// SetAuthorizationRoleID sets the "authorization_role_id" field.
+func (_u *UserUpdateOne) SetAuthorizationRoleID(v int64) *UserUpdateOne {
+	_u.mutation.ResetAuthorizationRoleID()
+	_u.mutation.SetAuthorizationRoleID(v)
+	return _u
+}
+
+// SetNillableAuthorizationRoleID sets the "authorization_role_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAuthorizationRoleID(v *int64) *UserUpdateOne {
+	if v != nil {
+		_u.SetAuthorizationRoleID(*v)
+	}
+	return _u
+}
+
+// AddAuthorizationRoleID adds value to the "authorization_role_id" field.
+func (_u *UserUpdateOne) AddAuthorizationRoleID(v int64) *UserUpdateOne {
+	_u.mutation.AddAuthorizationRoleID(v)
+	return _u
+}
+
+// ClearAuthorizationRoleID clears the value of the "authorization_role_id" field.
+func (_u *UserUpdateOne) ClearAuthorizationRoleID() *UserUpdateOne {
+	_u.mutation.ClearAuthorizationRoleID()
 	return _u
 }
 
@@ -693,6 +756,15 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.Role(); ok {
 		_spec.SetField(user.FieldRole, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AuthorizationRoleID(); ok {
+		_spec.SetField(user.FieldAuthorizationRoleID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedAuthorizationRoleID(); ok {
+		_spec.AddField(user.FieldAuthorizationRoleID, field.TypeInt64, value)
+	}
+	if _u.mutation.AuthorizationRoleIDCleared() {
+		_spec.ClearField(user.FieldAuthorizationRoleID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.FontSize(); ok {
 		_spec.SetField(user.FieldFontSize, field.TypeString, value)

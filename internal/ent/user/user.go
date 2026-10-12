@@ -23,6 +23,8 @@ const (
 	FieldName = "name"
 	// FieldRole holds the string denoting the role field in the database.
 	FieldRole = "role"
+	// FieldAuthorizationRoleID holds the string denoting the authorization_role_id field in the database.
+	FieldAuthorizationRoleID = "authorization_role_id"
 	// FieldFontSize holds the string denoting the font_size field in the database.
 	FieldFontSize = "font_size"
 	// FieldLastScheduleTab holds the string denoting the last_schedule_tab field in the database.
@@ -53,6 +55,7 @@ var Columns = []string{
 	FieldPasswordHash,
 	FieldName,
 	FieldRole,
+	FieldAuthorizationRoleID,
 	FieldFontSize,
 	FieldLastScheduleTab,
 	FieldLastSchedulePeriod,
@@ -132,6 +135,11 @@ func ByName(opts ...sql.OrderTermOption) OrderOption {
 // ByRole orders the results by the role field.
 func ByRole(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRole, opts...).ToFunc()
+}
+
+// ByAuthorizationRoleID orders the results by the authorization_role_id field.
+func ByAuthorizationRoleID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAuthorizationRoleID, opts...).ToFunc()
 }
 
 // ByFontSize orders the results by the font_size field.

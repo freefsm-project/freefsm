@@ -132,8 +132,10 @@ templ Layout(title string, children ...templ.Component) {
 				<nav>
 					<a href="/" class={ templ.KV("active", isActivePath(ctx, "/")) }>Dashboard</a>
 					<a href="/schedule" class={ templ.KV("active", isActivePath(ctx, "/schedule")) }>Schedule</a>
-				if canManageOperational(ctx) {
+				if canCustomer(ctx,"view") {
 					<a href="/customers" class={ templ.KV("active", isActivePath(ctx, "/customers")) }>Customers</a>
+				}
+				if canManageOperational(ctx) {
 					<a href="/assets" class={ templ.KV("active", isActivePath(ctx, "/assets")) }>Assets</a>
 				}
 				<a href="/jobs" class={ templ.KV("active", isActivePath(ctx, "/jobs")) }>Jobs</a>
@@ -152,7 +154,10 @@ templ Layout(title string, children ...templ.Component) {
 				<a href="/activity" class={ templ.KV("active", isActivePath(ctx, "/activity")) }>Activity</a>
 			}
 			</nav>
-			if getUser(ctx) != nil && getUser(ctx).Role == "admin" {
+			if canReviewAuthorization(ctx) {
+				<a href="/settings/authorization">Authorization review</a>
+			}
+			if canAdmin(ctx) {
 					<hr class="sidebar-divider"/>
 					<details class="dropdown">
 						<summary>Administration</summary>

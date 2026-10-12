@@ -542,7 +542,7 @@ func seedCrashSessions(t *testing.T, m *Manager, label string) {
 	defer c.Close(ctx)
 	var userID int64
 	err = c.QueryRow(ctx, `INSERT INTO public.users(email,password_hash,name,role,company_id)
-		SELECT $1,'fixture-only-not-a-password-hash',$2,'admin',id FROM public.companies ORDER BY id LIMIT 1 RETURNING id`, label+"@crash.invalid", label).Scan(&userID)
+		SELECT $1,'$2a$10$abcdefghijklmnopqrstuu1234567890123456789012345678901',$2,'admin',id FROM public.companies ORDER BY id LIMIT 1 RETURNING id`, label+"@crash.invalid", label).Scan(&userID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -100,7 +100,7 @@ func (d *EntDirectory) TargetCompanyID(ctx context.Context, ref Ref) (int64, err
 	switch ref.Type {
 	case TypeCustomer:
 		var v *ent.Customer
-		v, err = d.client.Customer.Get(ctx, ref.ID)
+		v, err = d.client.Customer.Query().Where(customer.IDEQ(ref.ID)).Select(customer.FieldID, customer.FieldCompanyID).Only(ctx)
 		if err == nil {
 			companyID = v.CompanyID
 		}

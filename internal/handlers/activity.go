@@ -118,7 +118,7 @@ func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerF
 			DOMID:      fmt.Sprintf("activity-%s-%d", ref.Type, ref.ID),
 			Entries:    rows,
 			HasMore:    page.HasOlder,
-			ViewAllURL: viewAllActivityURL(page.HasOlder, filters, u.Role == "admin" || u.Role == "dispatcher"),
+			ViewAllURL: viewAllActivityURL(page.HasOlder, filters, u.ProtectedAdministrator || u.Role == "admin" || u.Role == "dispatcher"),
 		}))
 	}
 }
@@ -132,7 +132,7 @@ func (h *ActivityHandler) ListByType(objectType objectref.Type) http.HandlerFunc
 		if !ok {
 			return
 		}
-		if objectType.AdminOnly() && u.Role != "admin" {
+		if objectType.AdminOnly() && !u.ProtectedAdministrator {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -183,7 +183,7 @@ func (h *ActivityHandler) ListSchedule(w http.ResponseWriter, r *http.Request) {
 		"action": {"scheduled", "rescheduled", "dispatched"},
 	}
 	viewAll := ""
-	if u.Role == "admin" || u.Role == "dispatcher" {
+	if u.ProtectedAdministrator || u.Role == "admin" || u.Role == "dispatcher" {
 		viewAll = viewAllActivityURL(page.HasOlder, filters, true)
 	}
 	templates.ActivityRecentList(templates.ActivityPageData{Entries: rows, HasMore: page.HasOlder, ViewAllURL: viewAll}).Render(r.Context(), w)
@@ -194,7 +194,7 @@ func (h *ActivityHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if u.Role != "admin" && u.Role != "dispatcher" {
+	if !u.ProtectedAdministrator && u.Role != "admin" && u.Role != "dispatcher" {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -257,7 +257,7 @@ func (h *ActivityHandler) parseIndexRequest(ctx context.Context, values url.Valu
 		return out, err
 	}
 	for _, typ := range types {
-		if typ.AdminOnly() && u.Role != "admin" {
+		if typ.AdminOnly() && !u.ProtectedAdministrator {
 			out.forbidden = true
 			return out, nil
 		}
@@ -283,7 +283,7 @@ func (h *ActivityHandler) parseIndexRequest(ctx context.Context, values url.Valu
 		if parseErr != nil || refErr != nil || !ref.Type.Has(objectref.CapActivity) {
 			return out, errors.New("invalid activity object")
 		}
-		if ref.Type.AdminOnly() && u.Role != "admin" {
+		if ref.Type.AdminOnly() && !u.ProtectedAdministrator {
 			out.forbidden = true
 			return out, nil
 		}
@@ -325,7 +325,7 @@ func (h *ActivityHandler) parseIndexRequest(ctx context.Context, values url.Valu
 			out.filters.Add("action", action)
 		}
 	} else {
-		out.scope = services.TenantActivityScope{IncludeAdminOnly: u.Role == "admin", Actions: actions}
+		out.scope = services.TenantActivityScope{IncludeAdminOnly: u.ProtectedAdministrator, Actions: actions}
 		for _, action := range actions {
 			out.filters.Add("action", action)
 		}
@@ -359,7 +359,7 @@ func (h *ActivityHandler) listAndResolve(ctx context.Context, u *middleware.User
 	if err != nil {
 		return services.ActivityPage{}, nil, err
 	}
-	resolution, err := h.resolver.Resolve(ctx, u.CompanyID, services.ActivityViewer{ID: u.ID, Role: u.Role}, page.Entries)
+	resolution, err := h.resolver.Resolve(ctx, u.CompanyID, services.ActivityViewer{ID: u.ID, Role: u.Role, ProtectedAdministrator: u.ProtectedAdministrator}, page.Entries)
 	if err != nil {
 		return services.ActivityPage{}, nil, err
 	}

@@ -56,6 +56,7 @@ func TestCommentServiceCreatePersistsCompanyAgainstMigratedSchemaIntegration(t *
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO companies(name,slug) VALUES('Comment owner','comment-owner') RETURNING id`).Scan(&companyID); err != nil {
 		t.Fatal(err)
 	}
+	client.User.Create().SetCompanyID(companyID).SetEmail("bootstrap@example.test").SetPasswordHash("$2a$10$abcdefghijklmnopqrstuu1234567890123456789012345678901").SetName("Bootstrap").SetRole("admin").SaveX(ctx)
 	author := client.User.Create().SetCompanyID(companyID).SetEmail("comment-schema@example.test").SetPasswordHash("hash").SetName("Commenter").SetRole("dispatcher").SaveX(ctx)
 	target := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Comment Target").SaveX(ctx)
 	created, err := services.NewCommentService(client, objectref.NewEntDirectory(client)).Create(

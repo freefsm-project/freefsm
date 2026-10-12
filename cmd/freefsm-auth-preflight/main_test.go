@@ -5,10 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/url"
 	"os"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/database"
@@ -55,7 +57,22 @@ func TestPreflightCommandInventoriesMigratedDatabaseReadOnly(t *testing.T) {
 	}
 	defer pool.Close()
 	db := &database.DB{Pool: pool}
-	if err := db.Migrate(ctx, database.MigrationFS()); err != nil {
+	legacy := fstest.MapFS{}
+	entries, err := fs.ReadDir(database.MigrationFS(), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() > "054_backup_activity.up.sql" {
+			continue
+		}
+		b, err := fs.ReadFile(database.MigrationFS(), e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		legacy[e.Name()] = &fstest.MapFile{Data: b}
+	}
+	if err := db.Migrate(ctx, legacy); err != nil {
 		t.Fatal(err)
 	}
 	// Enforce read-only at connection level as well as in the inventory's

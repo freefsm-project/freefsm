@@ -357,7 +357,7 @@ func TestObjectActivityPolicyDenialHappensBeforeList(t *testing.T) {
 
 func requestWithActivityUser(target, role string) *http.Request {
 	request := httptest.NewRequest(http.MethodGet, target, nil)
-	user := &middleware.UserInfo{ID: 1, CompanyID: 2, Role: role}
+	user := &middleware.UserInfo{ID: 1, CompanyID: 2, Role: role, ProtectedAdministrator: role == "admin", AuthorizationLoaded: true}
 	return request.WithContext(context.WithValue(request.Context(), middleware.UserKey, user))
 }
 

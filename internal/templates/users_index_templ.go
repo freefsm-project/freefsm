@@ -43,7 +43,7 @@ func UsersIndex(p UserListData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"work-queue-toolbar list-toolbar entity-form-actions-end\"><a href=\"/users/new\" role=\"button\">New User</a></div><div class=\"work-queue-wrap\"><table class=\"work-queue-table\"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Active</th><th></th></tr></thead> <tbody>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"work-queue-toolbar list-toolbar entity-form-actions-end\"><a href=\"/users/new\" role=\"button\">New User</a></div><div class=\"work-queue-wrap\"><table class=\"work-queue-table\"><thead><tr><th>Name</th><th>Email</th><th>Recorded legacy role</th><th>Active</th><th></th></tr></thead> <tbody>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/companysettings"
 	"github.com/freefsm-project/freefsm/internal/ent/invoice"
@@ -219,6 +220,15 @@ func (s *InvoiceService) GetByID(ctx context.Context, id int64) (*ent.Invoice, e
 }
 
 func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams) (*ent.Invoice, error) {
+	var customerCompanyID *int64
+	if request, ok := authorization.FromContext(ctx); ok {
+		input, err := request.Service.DocumentCustomer(ctx, request.Actor, params.CustomerID, params.JobID, params.TaxRate)
+		if err != nil {
+			return nil, err
+		}
+		customerCompanyID = &input.CompanyID
+		params.TaxRate = input.TaxRate
+	}
 	taxRate := params.TaxRate
 	if taxRate == "" {
 		taxRate = "0"
@@ -240,11 +250,14 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 	if err := validateEstimateCustomer(ctx, s.client, params.CustomerID, params.EstimateID, true); err != nil {
 		return nil, err
 	}
-	customer, err := s.client.Customer.Get(ctx, params.CustomerID)
-	if err != nil {
-		return nil, fmt.Errorf("get invoice customer: %w", err)
+	if customerCompanyID == nil {
+		customer, err := s.client.Customer.Get(ctx, params.CustomerID)
+		if err != nil {
+			return nil, fmt.Errorf("get invoice customer: %w", err)
+		}
+		customerCompanyID = customer.CompanyID
 	}
-	statusID, err := creationStatus(ctx, s.client, 0, customer.CompanyID, "invoice", "invoice:draft")
+	statusID, err := creationStatus(ctx, s.client, 0, customerCompanyID, "invoice", "invoice:draft")
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +271,7 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		return s.createTransactionally(ctx, params, taxRate, lineItems, customFields, totals.Total.MinorUnits())
 	}
 	b := s.client.Invoice.Create().
+		SetNillableCompanyID(customerCompanyID).
 		SetCustomerID(params.CustomerID).
 		SetSettlementState(invoiceSettlementState(totals.Total.MinorUnits(), 0)).
 		SetTitle(params.Title).

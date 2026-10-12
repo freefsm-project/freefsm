@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/estimate"
 )
@@ -107,6 +108,15 @@ func (s *EstimateService) GetByID(ctx context.Context, id int64) (*ent.Estimate,
 }
 
 func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParams) (*ent.Estimate, error) {
+	var customerCompanyID *int64
+	if request, ok := authorization.FromContext(ctx); ok {
+		input, err := request.Service.DocumentCustomer(ctx, request.Actor, params.CustomerID, params.JobID, params.TaxRate)
+		if err != nil {
+			return nil, err
+		}
+		customerCompanyID = &input.CompanyID
+		params.TaxRate = input.TaxRate
+	}
 	taxRate := params.TaxRate
 	if taxRate == "" {
 		taxRate = "0"
@@ -121,11 +131,14 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 	if err := validateJobCustomer(ctx, s.client, params.CustomerID, params.JobID, true); err != nil {
 		return nil, err
 	}
-	customer, err := s.client.Customer.Get(ctx, params.CustomerID)
-	if err != nil {
-		return nil, fmt.Errorf("get estimate customer: %w", err)
+	if customerCompanyID == nil {
+		customer, err := s.client.Customer.Get(ctx, params.CustomerID)
+		if err != nil {
+			return nil, fmt.Errorf("get estimate customer: %w", err)
+		}
+		customerCompanyID = customer.CompanyID
 	}
-	statusID, err := creationStatus(ctx, s.client, 0, customer.CompanyID, "estimate", "estimate:draft")
+	statusID, err := creationStatus(ctx, s.client, 0, customerCompanyID, "estimate", "estimate:draft")
 	if err != nil {
 		return nil, err
 	}
@@ -135,6 +148,7 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 		customFields = "[]"
 	}
 	b := s.client.Estimate.Create().
+		SetNillableCompanyID(customerCompanyID).
 		SetCustomerID(params.CustomerID).
 		SetTitle(params.Title).
 		SetNotes(params.Notes).

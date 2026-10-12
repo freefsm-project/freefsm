@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -100,7 +101,7 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, c.ID))
 	var allTags []*ent.Tag
-	if isAdminOrDispatcher(u) {
+	if customerPermission(r, "customer.edit") {
 		allTags, _ = h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
@@ -114,6 +115,12 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 		jobs, _ = h.jobSvc.ListByCustomer(r.Context(), c.ID, 10)
 		estimates, _ = h.estimateSvc.ListByCustomer(r.Context(), c.ID, 10)
 		invoices, _ = h.invoiceSvc.ListByCustomer(r.Context(), c.ID, 10)
+	}
+	// Settlement and related work remain in their owning legacy domains. A
+	// migrated Customer grant may narrow those projections, never authorize
+	// a legacy financial action or make an operational page fail to load.
+	showFinancial := customerPermission(r, "customer.financial.view") && isAdminOrDispatcher(u)
+	if showFinancial {
 		allInvoices, queryErr := h.invoiceSvc.ListByCustomer(r.Context(), c.ID, 0)
 		if queryErr != nil {
 			internalServerError(w, r, "load customer invoices", queryErr)
@@ -133,19 +140,20 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), c.DisplayName)
 	templates.CustomerShow(templates.CustomerShowPageData{
-		Customer:     customerToDetail(r.Context(), c),
-		Locations:    locationRows(locations),
-		Contacts:     contactRows(contacts),
-		Jobs:         h.customerJobRows(r.Context(), jobs),
-		Estimates:    h.customerEstimateRows(r.Context(), estimates),
-		Invoices:     h.customerInvoiceRows(r.Context(), invoices),
-		Financial:    financial,
-		Tags:         tagsToRows(tags),
-		AllTags:      tagsToRows(allTags),
-		CustomFields: buildCustomFieldDisplay(defs, c.CustomFields),
-		FileList:     templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: c.ID, ObjectType: "customer"},
-		Settlement:   customerSettlement,
-		RefundKey:    newOperationKey(),
+		ShowFinancial: showFinancial,
+		Customer:      customerToDetail(r.Context(), c),
+		Locations:     locationRows(locations),
+		Contacts:      contactRows(contacts),
+		Jobs:          h.customerJobRows(r.Context(), jobs),
+		Estimates:     h.customerEstimateRows(r.Context(), estimates),
+		Invoices:      h.customerInvoiceRows(r.Context(), invoices),
+		Financial:     financial,
+		Tags:          tagsToRows(tags),
+		AllTags:       tagsToRows(allTags),
+		CustomFields:  buildCustomFieldDisplay(defs, c.CustomFields),
+		FileList:      templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: c.ID, ObjectType: "customer"},
+		Settlement:    customerSettlement,
+		RefundKey:     newOperationKey(),
 	}).Render(ctx, w)
 }
 
@@ -164,6 +172,15 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", 400)
+		return
+	}
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		result, err := request.Service.SaveCustomer(r.Context(), request.Actor, 0, customerInput(r))
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/customers/%d/edit", result.ID), http.StatusSeeOther)
 		return
 	}
 	params := services.CustomerCreateParams{
@@ -234,6 +251,15 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", 400)
+		return
+	}
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		_, err := request.Service.SaveCustomer(r.Context(), request.Actor, id, customerInput(r))
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/customers/%d", id), http.StatusSeeOther)
 		return
 	}
 	params := services.CustomerUpdateParams{
@@ -343,6 +369,7 @@ func customerToDetail(ctx context.Context, c *ent.Customer) templates.CustomerDe
 		Phone:           c.Phone,
 		CompanyName:     c.CompanyName,
 		Notes:           c.Notes,
+		ServiceNotes:    c.ServiceNotes,
 		Status:          c.Status,
 		AccountType:     c.AccountType,
 		BillingAddress1: c.BillingAddress1,

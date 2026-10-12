@@ -31,6 +31,7 @@ func (Customer) Fields() []ent.Field {
 		field.String("phone").Default(""),
 		field.String("company_name").Default(""),
 		field.String("notes").Default(""),
+		field.String("service_notes").Default(""),
 		field.String("status").Default("lead"),
 		field.String("account_type").Default("individual"),
 		field.Int64("assigned_to").Optional().Nillable(),

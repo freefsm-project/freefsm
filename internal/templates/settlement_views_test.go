@@ -28,23 +28,24 @@ func TestInvoiceShowRendersSeparateSettlementAndReversedHistory(t *testing.T) {
 	}
 }
 
-func TestCustomerShowCreditIsRoleVisibleAndIncludesRefundHistory(t *testing.T) {
+func TestCustomerShowCreditRequiresFinancialGrantAndIncludesRefundHistory(t *testing.T) {
 	data := CustomerShowPageData{Customer: CustomerDetail{ID: 2, DisplayName: "Acme"}, Settlement: settlement.CustomerSettlement{AvailableCreditCents: 500, Sources: []settlement.CreditSource{{ID: uuid.New(), SourcePaymentID: uuid.New(), InvoiceID: 7, OriginalCents: 1000, AvailableCents: 500}}, Refunds: []settlement.RefundEntry{{ID: uuid.New(), AmountCents: 500, Reason: "requested", Reversal: &settlement.ReversalEntry{Reason: "returned"}}}}}
-	render := func(role string) string {
+	render := func(financial bool) string {
+		data.ShowFinancial = financial
 		var out bytes.Buffer
-		ctx := context.WithValue(context.Background(), middleware.UserKey, &middleware.UserInfo{Role: role})
+		ctx := context.WithValue(context.Background(), middleware.UserKey, &middleware.UserInfo{Role: "custom", CustomerView: true, CustomerFinancial: financial, AuthorizationLoaded: true})
 		if err := CustomerShow(data).Render(ctx, &out); err != nil {
 			t.Fatal(err)
 		}
 		return out.String()
 	}
-	admin := render("admin")
+	admin := render(true)
 	for _, want := range []string{"Customer Credit", "$5.00", "requested", "returned"} {
 		if !strings.Contains(admin, want) {
 			t.Errorf("admin view missing %q", want)
 		}
 	}
-	if strings.Contains(render("technician"), "Customer Credit") {
+	if strings.Contains(render(false), "Customer Credit") {
 		t.Error("technician view exposed customer credit")
 	}
 }

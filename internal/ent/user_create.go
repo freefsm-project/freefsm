@@ -66,6 +66,20 @@ func (_c *UserCreate) SetNillableRole(v *string) *UserCreate {
 	return _c
 }
 
+// SetAuthorizationRoleID sets the "authorization_role_id" field.
+func (_c *UserCreate) SetAuthorizationRoleID(v int64) *UserCreate {
+	_c.mutation.SetAuthorizationRoleID(v)
+	return _c
+}
+
+// SetNillableAuthorizationRoleID sets the "authorization_role_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableAuthorizationRoleID(v *int64) *UserCreate {
+	if v != nil {
+		_c.SetAuthorizationRoleID(*v)
+	}
+	return _c
+}
+
 // SetFontSize sets the "font_size" field.
 func (_c *UserCreate) SetFontSize(v string) *UserCreate {
 	_c.mutation.SetFontSize(v)
@@ -368,6 +382,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Role(); ok {
 		_spec.SetField(user.FieldRole, field.TypeString, value)
 		_node.Role = value
+	}
+	if value, ok := _c.mutation.AuthorizationRoleID(); ok {
+		_spec.SetField(user.FieldAuthorizationRoleID, field.TypeInt64, value)
+		_node.AuthorizationRoleID = &value
 	}
 	if value, ok := _c.mutation.FontSize(); ok {
 		_spec.SetField(user.FieldFontSize, field.TypeString, value)

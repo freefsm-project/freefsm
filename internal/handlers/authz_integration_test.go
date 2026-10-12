@@ -163,12 +163,12 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 	})
 
 	t.Run("tech cannot mutate customer subresources", func(t *testing.T) {
-		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/customers/%d/contacts/%d/edit", customer.ID, contact.ID), http.StatusForbidden)
-		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/contacts/%d", customer.ID, contact.ID), http.StatusForbidden)
-		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/contacts/%d/delete", customer.ID, contact.ID), http.StatusForbidden)
-		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/customers/%d/locations/%d/edit", customer.ID, location.ID), http.StatusForbidden)
-		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/locations/%d", customer.ID, location.ID), http.StatusForbidden)
-		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/locations/%d/delete", customer.ID, location.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/customers/%d/contacts/%d/edit", customer.ID, contact.ID), http.StatusNotFound)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/contacts/%d", customer.ID, contact.ID), http.StatusNotFound)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/contacts/%d/delete", customer.ID, contact.ID), http.StatusNotFound)
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/customers/%d/locations/%d/edit", customer.ID, location.ID), http.StatusNotFound)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/locations/%d", customer.ID, location.ID), http.StatusNotFound)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/customers/%d/locations/%d/delete", customer.ID, location.ID), http.StatusNotFound)
 	})
 
 	t.Run("archived job pages are read-only", func(t *testing.T) {
@@ -318,6 +318,21 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
 	pool, err := pgxpool.New(context.Background(), schemaDSN)
 	if err != nil {
 		t.Fatalf("open test pool: %v", err)
+	}
+	// This older Ent regression fixture declares its three actors' grants
+	// explicitly. Production migration/HTTP/invariant tests use the complete
+	// migrated fixture in customer_permissions_integration_test.go instead.
+	if _, err := pool.Exec(context.Background(), `CREATE TABLE authorization_state(ready boolean,fresh_install boolean);INSERT INTO authorization_state VALUES(true,false);
+ CREATE TABLE authorization_roles(id bigint PRIMARY KEY,name text,protected boolean,revision bigint);INSERT INTO authorization_roles VALUES(1,'Administrator',true,1),(2,'Dispatcher',false,1),(3,'Technician',false,1);
+ CREATE TABLE authorization_legacy_approvers(user_id bigint);
+ CREATE TABLE authorization_grants(role_id bigint,permission text,scope text);
+ INSERT INTO authorization_grants SELECT r,p,'A' FROM unnest(ARRAY[1,2]) r CROSS JOIN unnest(ARRAY['customer.view','customer.create','customer.edit','customer.financial.view','customer.archived.view','customer.archive','customer.restore']) p;
+ INSERT INTO authorization_grants VALUES(3,'customer.view','C');
+ CREATE TABLE authorization_permissions(permission text,scope text);
+ INSERT INTO authorization_permissions SELECT DISTINCT permission,scope FROM authorization_grants;
+ CREATE FUNCTION fixture_role_grants() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.authorization_role_id:=CASE NEW.role WHEN 'admin' THEN 1 WHEN 'dispatcher' THEN 2 ELSE 3 END;RETURN NEW;END $$;
+ CREATE TRIGGER fixture_role_grants BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION fixture_role_grants();`); err != nil {
+		t.Fatal(err)
 	}
 	return client, pool
 }

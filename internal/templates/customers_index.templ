@@ -16,7 +16,7 @@ templ CustomerListContent(p CustomerListPageData) {
 	<div id="customer-list-content" class="focused-list-content">
 		@ListToolbar(ListToolbarData{
 			Action: "/customers", Target: "#customer-list-content", Search: p.Search,
-			SearchPlaceholder: "Search customers...", NewURL: "/customers/new", NewLabel: "New Customer",
+			SearchPlaceholder: "Search customers...", NewURL: customerNewURL(ctx), NewLabel: "New Customer",
 			ShowFilter: true, Filters: filterValues("status", p.StatusFilter),
 			FilterCount: activeFilterCount(filterValues("status", p.StatusFilter)),
 		}) {

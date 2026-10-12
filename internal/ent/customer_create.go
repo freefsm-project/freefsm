@@ -124,6 +124,20 @@ func (_c *CustomerCreate) SetNillableNotes(v *string) *CustomerCreate {
 	return _c
 }
 
+// SetServiceNotes sets the "service_notes" field.
+func (_c *CustomerCreate) SetServiceNotes(v string) *CustomerCreate {
+	_c.mutation.SetServiceNotes(v)
+	return _c
+}
+
+// SetNillableServiceNotes sets the "service_notes" field if the given value is not nil.
+func (_c *CustomerCreate) SetNillableServiceNotes(v *string) *CustomerCreate {
+	if v != nil {
+		_c.SetServiceNotes(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *CustomerCreate) SetStatus(v string) *CustomerCreate {
 	_c.mutation.SetStatus(v)
@@ -399,6 +413,10 @@ func (_c *CustomerCreate) defaults() {
 		v := customer.DefaultNotes
 		_c.mutation.SetNotes(v)
 	}
+	if _, ok := _c.mutation.ServiceNotes(); !ok {
+		v := customer.DefaultServiceNotes
+		_c.mutation.SetServiceNotes(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := customer.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -472,6 +490,9 @@ func (_c *CustomerCreate) check() error {
 	}
 	if _, ok := _c.mutation.Notes(); !ok {
 		return &ValidationError{Name: "notes", err: errors.New(`ent: missing required field "Customer.notes"`)}
+	}
+	if _, ok := _c.mutation.ServiceNotes(); !ok {
+		return &ValidationError{Name: "service_notes", err: errors.New(`ent: missing required field "Customer.service_notes"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Customer.status"`)}
@@ -569,6 +590,10 @@ func (_c *CustomerCreate) createSpec() (*Customer, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Notes(); ok {
 		_spec.SetField(customer.FieldNotes, field.TypeString, value)
 		_node.Notes = value
+	}
+	if value, ok := _c.mutation.ServiceNotes(); ok {
+		_spec.SetField(customer.FieldServiceNotes, field.TypeString, value)
+		_node.ServiceNotes = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(customer.FieldStatus, field.TypeString, value)

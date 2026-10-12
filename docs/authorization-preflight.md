@@ -1,8 +1,9 @@
-# Legacy authorization inventory — ticket #19 prerequisite
+# Customer authorization and Administrator-reviewed cutover
 
-**Status: review tooling only. Ticket #19 is not implemented end to end.**
-The application still uses legacy authorization. This command neither expands
-the authorization schema nor enables the Customer permission cutover.
+Migration 055 expands authorization non-destructively. Existing installations
+must complete an authenticated Product Administrator review at
+`/settings/authorization` before Customer authorization becomes available.
+The standalone inventory command remains read-only; it never approves cutover.
 
 ## Run the inventory
 
@@ -69,40 +70,144 @@ No recorded grants can be reconstructed from these labels. The production
 upgrade must preserve the discriminator as a recorded legacy fact, rather than
 reinterpret it as a v1 grant set or invent grant-edit history.
 
-## Review required before existing-installation cutover
+## Approved existing-installation workflow
 
-For an inventory fingerprint, the review must explicitly answer:
+Run the inventory before migrating a legacy installation, then inspect its
+recorded identities, role discriminator values, and any unknown storage. The
+inventory fingerprint is evidence, not authority. After migration:
 
-1. Which existing user identities map to which new Role identities, and which
-   enabled, authenticatable identity or identities retain protected
-   Administrator authority?
-2. What explicit grants, including an explicitly empty set where appropriate,
-   are approved for existing nonprotected Roles? Fresh-install defaults are not
-   an upgrade mapping.
-3. For forks or unknown storage, what recorded Role/grant facts and relationships
-   must be preserved, and what evidence resolves each unsupported mapping?
+1. An existing authenticated Product Administrator opens **Authorization
+   review**. Migration records the identities that had the actual legacy
+   Administrator discriminator. This is the only transitional use of that
+   discriminator: those identities can review/approve, but cannot use the
+   ordinary sealed administration editors until cutover.
+2. Create or edit explicit Role grant sets. Existing-installation Dispatcher
+   and Technician templates have **no grants**. Empty grants (`[]`) are valid.
+   No legacy label is translated into permissions or membership automatically.
+3. Explicitly select and approve a new Role for **each user**, including the
+   reviewer. The page shows the Role's grants and binds approval to a consistent
+   review snapshot. Changes to identities or grants invalidate stale approvals.
+4. Select at least one enabled, authenticatable user for the protected
+   Administrator Role. Type `APPROVE CUTOVER` and activate the reviewed decisions.
+   Missing/stale decisions or loss of the last authenticatable Administrator
+   reject the entire cutover. User IDs, legacy discriminator strings, Customer
+   IDs, links, and recorded fields remain intact.
+5. After activation, only protected Role identity authorizes sealed editors.
+   The transitional approver list no longer grants anything. Membership and
+   effective permissions survive process restart without reseeding.
 
-The reviewed mapping import, authority to approve it, and transactional cutover
-are not implemented by this command. A Deployment Operator running an inventory
-does not become a Product User or gain authority to edit product grants.
+A Deployment Operator running the CLI gains no Product User authority. If no
+existing Product Administrator can authenticate, cutover stays blocked; this
+flow cannot create an operator account or bypass product authentication.
 
-## Remaining ticket acceptance
+## Fresh installations and Role management
 
-Only the known-schema read-only inventory prerequisite has implementation and
-new database/CLI tests. These remain open:
+Fresh installations receive the canonical Administrator, Dispatcher and
+Technician grant sets. The uninitialized first Administrator bootstrap is the
+only automatic protected membership. Subsequent users start in an empty-grant
+Role; assign their Role explicitly in Authorization. If all empty-grant Roles
+have been removed, create one before adding a user. Existing installations
+never receive fresh-install nonprotected defaults.
 
-- Explicit Role identities, closed permission catalog and scope validation,
-  View prerequisites, protected Administrator identity/name/grants and all editor
-  seals, including existing user Role assignment routes.
-- Canonical fresh-install grants, reviewed existing-installation mapping/import,
-  startup cutover guard, and upgrade/restart relationship preservation.
-- Customer View/Create/Edit on every browser, HTTP/API, lookup, search, activity,
-  dashboard and related-record projection; closed Assigned Job Context allowlist
-  including a distinct Service Notes field; no Customer-assignment authority.
-- Atomic mutations and immutable audit; grant narrowing/revocation at commit;
-  last-enabled-authenticatable-Administrator concurrency protection.
-- Production-route denial/failure/concurrency tests, visible-denied versus
-  invisible-resource results, persisted Customer browser journeys, and complete
-  acceptance evidence. Existing legacy tests passing do not prove v1 compliance.
+The protected Role identity/name/grants cannot be renamed, removed or weakened.
+New catalog permissions automatically reach only protected Administrator, at
+their broadest valid scope. Other Roles may be renamed or atomically removed
+with explicit replacement of assigned users. Role edits use expected revisions;
+stale editors cannot restore concurrently revoked grants. Legacy user forms no
+longer offer authority assignment; direct changes to `users.role` are rejected.
+
+The editor accepts a JSON array of closed catalog entries, for example:
+
+```json
+[
+  {"permission":"customer.view","scope":"A"},
+  {"permission":"customer.create","scope":"A"},
+  {"permission":"customer.edit","scope":"A"}
+]
+```
+
+| Scope | Meaning |
+| --- | --- |
+| A | All Records, within the application's recorded company boundary |
+| J | Currently assigned Jobs / explicit Job-bound actions |
+| C | Closed, read-only Assigned Job Context |
+| O | Own Records, using the domain's stable subject/author/uploader anchor |
+| U | Unscoped configuration |
+| S | Sealed Administrator authority, never assignable to ordinary Roles |
+
+Unsupported permission/scope pairs, duplicate pairs and missing View prerequisites
+reject the complete grant edit. Narrowing View must also remove incompatible
+dependent actions. Customer Create/Edit require Customer View A. Customer View C
+requires Job View J or A; it never permits master editing.
+
+A Role can combine independent valid scopes (for example Time View O and J)
+without widening them to All Records. Each scope retains its own target anchor.
+
+## Migrated versus legacy boundary
+
+`internal/authorization` owns Customer operational View/Create/Edit, closed
+Customer context, the explicit grant model and sealed authority management.
+Authenticated web and API requests carry server-derived actor/session context.
+Customer query filtering runs before counts and limits across existing Ent
+consumers (lists, search, lookups, activity, related-record and document-source
+projections). Ordinary Customer queries require View A; Customer assignment and
+known IDs do not authorize them. Invisible Customers return 404; denied actions
+on visible Customers return 403. Existing Customer lifecycle routes additionally
+require their independent lifecycle grants.
+
+Assigned Job context is available at `/jobs/{id}/customer-context` in the browser
+and `/api/v1/jobs/{id}/customer-context` for bearer clients. It requires explicit
+current assignment and a non-archived Job, regardless of descriptive Job Status.
+The DTO contains only identity/name/kind/main phone/email and Service Notes. It
+contains no billing/tax/financial/internal-note/custom-field/sibling data. Service
+Notes is a new independent field; existing internal notes are not reclassified
+or copied into it.
+
+Existing Job-bound document creation/editing uses a separate selected-input
+projection: current Customer identity plus an effective tax rate authorized by
+captured-pricing View. This retains tax-exemption effects without returning the
+master exemption flag, billing details, internal notes or sibling Customers.
+Its Customer selector contains only the explicit assigned Job's Customer when
+the user has Context rather than All Records. Document renderers similarly use
+only allowed contextual names/contact data instead of reopening the master.
+
+The catalog also declares future-domain permissions and initial grants. Their
+business actions migrate in their owning slices. Jobs, documents, settlement,
+collaboration and other masters retain their legacy action rules; those rules
+cannot bypass the migrated Customer boundary or authorize Customer details
+writes. In particular, the optional legacy settlement/related-work panels retain
+their own authority checks; Customer operational access alone does not authorize
+financial actions. Billing/tax fields and the financial panel additionally
+require Customer financial View. Closed Context never enters the master page.
+
+Customer details writes use one PostgreSQL transaction for effects, ordinary
+activity projection and immutable `authorization_audit`. Authority/session state
+is reloaded under a transaction mutex shared by grants, Roles, user and session
+writers, with a final identity/session check before commit. A revocation that
+commits before the mutation's authorization check rejects the whole action;
+once a mutation holds the lock, revocations serialize after its commit. A
+deferred database invariant protects the last enabled authenticatable
+Administrator even through legacy writers. Audit failure rolls back effects;
+denials produce security logs, not success audit.
+
+## Evidence
+
+- `internal/authorization/authorization_integration_test.go`: actual migrations,
+  explicit review and stale snapshots, scope/prerequisite rejection, immutable
+  protected authority, defaults/new permissions, atomic Role replacement,
+  revocation contention, audit failure, last-Administrator concurrency and a
+  fresh-process restart probe retaining identities and relationships.
+- `internal/handlers/customer_permissions_integration_test.go`: production
+  router/session/DB cutover, editor denial, custom/renamed/empty grants, Customer
+  mutation/audit, 403/404 distinction, financial projection denial, API/browser
+  context allowlist, assignment loss and filtered search.
+- `TestCustomerPermissionsPersistedBrowser`: Chromium through production HTTP,
+  CSRF and PostgreSQL; persisted create/edit, hidden restricted inputs and a
+  protected Administrator's grant revocation through the real Role editor.
+
+Run the persisted browser test with `BROWSER_TESTS=1`, an installed Chromium
+`BROWSER_EXECUTABLE`, Playwright dependencies, and an explicit disposable
+`FREEFSM_TEST_DATABASE_URL`. Ordinary `make test` skips browser opt-ins; those
+skips are not acceptance evidence.
 
 The coordinator must verify the completed ticket before closure.

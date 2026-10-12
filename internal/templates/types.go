@@ -62,8 +62,39 @@ func canManageOperational(ctx context.Context) bool {
 }
 
 func canAdmin(ctx context.Context) bool {
-	u := getUser(ctx)
-	return u != nil && u.Role == "admin"
+	u, ok := middleware.UserFromContext(ctx)
+	return ok && u != nil && u.ProtectedAdministrator
+}
+
+func canCustomer(ctx context.Context, action string) bool {
+	u, ok := middleware.UserFromContext(ctx)
+	if !ok || u == nil {
+		return false
+	}
+	switch action {
+	case "view":
+		return u.CustomerView
+	case "create":
+		return u.CustomerCreate
+	case "edit":
+		return u.CustomerEdit
+	case "financial":
+		return u.CustomerFinancial
+	case "context":
+		return u.CustomerContext
+	}
+	return false
+}
+
+func canReviewAuthorization(ctx context.Context) bool {
+	u, ok := middleware.UserFromContext(ctx)
+	return ok && u != nil && u.CanReviewAuthorization
+}
+func customerNewURL(ctx context.Context) string {
+	if canCustomer(ctx, "create") {
+		return "/customers/new"
+	}
+	return ""
 }
 
 type User struct {
@@ -139,19 +170,20 @@ type CustomerRow struct {
 }
 
 type CustomerShowPageData struct {
-	Customer     CustomerDetail
-	Locations    []LocationRow
-	Contacts     []ContactRow
-	Jobs         []JobRow
-	Estimates    []EstimateRow
-	Invoices     []InvoiceRow
-	Financial    CustomerFinancialSummary
-	Tags         []TagRow
-	AllTags      []TagRow
-	CustomFields []CustomFieldDisplay
-	FileList     FileListPageData
-	Settlement   settlement.CustomerSettlement
-	RefundKey    string
+	ShowFinancial bool
+	Customer      CustomerDetail
+	Locations     []LocationRow
+	Contacts      []ContactRow
+	Jobs          []JobRow
+	Estimates     []EstimateRow
+	Invoices      []InvoiceRow
+	Financial     CustomerFinancialSummary
+	Tags          []TagRow
+	AllTags       []TagRow
+	CustomFields  []CustomFieldDisplay
+	FileList      FileListPageData
+	Settlement    settlement.CustomerSettlement
+	RefundKey     string
 }
 
 type CustomerFinancialSummary struct {
@@ -168,6 +200,7 @@ type CustomerFinancialSummary struct {
 }
 
 type CustomerDetail struct {
+	ServiceNotes    string
 	ID              int64
 	FirstName       string
 	LastName        string

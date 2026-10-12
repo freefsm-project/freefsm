@@ -10,8 +10,9 @@ import (
 
 func TestAdministrationMenuOmitsStatusSettingsShortcut(t *testing.T) {
 	ctx := context.WithValue(context.Background(), middleware.UserKey, &middleware.UserInfo{
-		Name: "Admin",
-		Role: "admin",
+		Name:                   "Admin",
+		Role:                   "admin",
+		ProtectedAdministrator: true,
 	})
 
 	var out strings.Builder

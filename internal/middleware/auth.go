@@ -17,14 +17,23 @@ const (
 )
 
 type UserInfo struct {
-	ID                 int64
-	Name               string
-	Email              string
-	Role               string
-	FontSize           string
-	LastScheduleTab    string
-	LastSchedulePeriod string
-	CompanyID          int64 // future multi-tenant: populated from user.company_id
+	ID                     int64
+	Name                   string
+	Email                  string
+	Role                   string
+	ProtectedAdministrator bool
+	AuthorizationReady     bool
+	AuthorizationLoaded    bool
+	CustomerView           bool
+	CustomerCreate         bool
+	CustomerEdit           bool
+	CustomerFinancial      bool
+	CustomerContext        bool
+	CanReviewAuthorization bool
+	FontSize               string
+	LastScheduleTab        string
+	LastSchedulePeriod     string
+	CompanyID              int64 // future multi-tenant: populated from user.company_id
 }
 
 type UserProvider func(ctx context.Context, userID int64) (*UserInfo, error)
@@ -56,9 +65,12 @@ func Auth(sessions *services.SessionService, userFn UserProvider) func(http.Hand
 			}
 
 			user, err := userFn(r.Context(), userID)
-			if err == nil {
+			if err == nil && user != nil {
 				ctx := context.WithValue(r.Context(), UserKey, user)
 				r = r.WithContext(ctx)
+			} else {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
 			}
 
 			next.ServeHTTP(w, r)
@@ -101,7 +113,7 @@ func CSRFFromContext(ctx context.Context) string {
 func AdminOnly(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		u, ok := UserFromContext(r.Context())
-		if !ok || u == nil || u.Role != "admin" {
+		if !ok || u == nil || !u.ProtectedAdministrator {
 			http.Error(w, "Forbidden", 403)
 			return
 		}

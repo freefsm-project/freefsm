@@ -79,6 +79,11 @@ func Role(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldRole, v))
 }
 
+// AuthorizationRoleID applies equality check predicate on the "authorization_role_id" field. It's identical to AuthorizationRoleIDEQ.
+func AuthorizationRoleID(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAuthorizationRoleID, v))
+}
+
 // FontSize applies equality check predicate on the "font_size" field. It's identical to FontSizeEQ.
 func FontSize(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldFontSize, v))
@@ -432,6 +437,56 @@ func RoleEqualFold(v string) predicate.User {
 // RoleContainsFold applies the ContainsFold predicate on the "role" field.
 func RoleContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldRole, v))
+}
+
+// AuthorizationRoleIDEQ applies the EQ predicate on the "authorization_role_id" field.
+func AuthorizationRoleIDEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAuthorizationRoleID, v))
+}
+
+// AuthorizationRoleIDNEQ applies the NEQ predicate on the "authorization_role_id" field.
+func AuthorizationRoleIDNEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldAuthorizationRoleID, v))
+}
+
+// AuthorizationRoleIDIn applies the In predicate on the "authorization_role_id" field.
+func AuthorizationRoleIDIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldIn(FieldAuthorizationRoleID, vs...))
+}
+
+// AuthorizationRoleIDNotIn applies the NotIn predicate on the "authorization_role_id" field.
+func AuthorizationRoleIDNotIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldAuthorizationRoleID, vs...))
+}
+
+// AuthorizationRoleIDGT applies the GT predicate on the "authorization_role_id" field.
+func AuthorizationRoleIDGT(v int64) predicate.User {
+	return predicate.User(sql.FieldGT(FieldAuthorizationRoleID, v))
+}
+
+// AuthorizationRoleIDGTE applies the GTE predicate on the "authorization_role_id" field.
+func AuthorizationRoleIDGTE(v int64) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldAuthorizationRoleID, v))
+}
+
+// AuthorizationRoleIDLT applies the LT predicate on the "authorization_role_id" field.
+func AuthorizationRoleIDLT(v int64) predicate.User {
+	return predicate.User(sql.FieldLT(FieldAuthorizationRoleID, v))
+}
+
+// AuthorizationRoleIDLTE applies the LTE predicate on the "authorization_role_id" field.
+func AuthorizationRoleIDLTE(v int64) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldAuthorizationRoleID, v))
+}
+
+// AuthorizationRoleIDIsNil applies the IsNil predicate on the "authorization_role_id" field.
+func AuthorizationRoleIDIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldAuthorizationRoleID))
+}
+
+// AuthorizationRoleIDNotNil applies the NotNil predicate on the "authorization_role_id" field.
+func AuthorizationRoleIDNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldAuthorizationRoleID))
 }
 
 // FontSizeEQ applies the EQ predicate on the "font_size" field.

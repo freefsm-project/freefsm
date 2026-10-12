@@ -627,7 +627,7 @@ func newFixture(t *testing.T) *fixture {
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO customers(company_id,display_name) VALUES($1,'Customer') RETURNING id`, f.company).Scan(&f.customer); err != nil {
 		t.Fatal(err)
 	}
-	if err = db.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'admin@conversion.test','x','Admin','admin') RETURNING id`, f.company).Scan(&f.admin); err != nil {
+	if err = db.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'admin@conversion.test','$2a$10$abcdefghijklmnopqrstuu1234567890123456789012345678901','Admin','admin') RETURNING id`, f.company).Scan(&f.admin); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'tech@conversion.test','x','Tech','tech') RETURNING id`, f.company).Scan(&f.tech); err != nil {

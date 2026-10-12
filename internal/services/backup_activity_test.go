@@ -98,7 +98,7 @@ func TestBackupActivityRejectsIncompleteFacts(t *testing.T) {
 func TestBackupActivityResolverDoesNotResolveHistoricalActorIDs(t *testing.T) {
 	resolver := NewActivityResolver(nil)
 	for _, role := range []string{"admin", "dispatcher", "tech"} {
-		result, err := resolver.Resolve(context.Background(), 42, ActivityViewer{ID: 7, Role: role}, []ActivityEntry{{Target: objectref.Instance(), Metadata: `{"actor_name":"Historical administrator"}`}})
+		result, err := resolver.Resolve(context.Background(), 42, ActivityViewer{ID: 7, Role: role, ProtectedAdministrator: role == "admin"}, []ActivityEntry{{Target: objectref.Instance(), Metadata: `{"actor_name":"Historical administrator"}`}})
 		if err != nil || result.ActorErr != nil || len(result.ActorNames) != 0 {
 			t.Fatalf("historical actor triggered a user lookup: %+v, %v", result, err)
 		}

@@ -282,7 +282,7 @@ func (h *SettingsHandler) TestEmail(w http.ResponseWriter, r *http.Request) {
 
 func (h *SettingsHandler) EnableEmail(w http.ResponseWriter, r *http.Request) {
 	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil || u.Role != "admin" {
+	if !ok || u == nil || !u.ProtectedAdministrator {
 		http.Error(w, "Forbidden", 403)
 		return
 	}
@@ -291,7 +291,7 @@ func (h *SettingsHandler) EnableEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	active, err := h.users.GetByID(r.Context(), u.ID)
-	if err != nil || !active.IsActive || active.Role != "admin" || active.ForcePasswordChange {
+	if err != nil || !active.IsActive || active.AuthorizationRoleID == nil || *active.AuthorizationRoleID != 1 || active.ForcePasswordChange {
 		http.Error(w, "Forbidden", 403)
 		return
 	}

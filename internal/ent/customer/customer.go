@@ -29,6 +29,8 @@ const (
 	FieldCompanyName = "company_name"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// FieldServiceNotes holds the string denoting the service_notes field in the database.
+	FieldServiceNotes = "service_notes"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldAccountType holds the string denoting the account_type field in the database.
@@ -74,6 +76,7 @@ var Columns = []string{
 	FieldPhone,
 	FieldCompanyName,
 	FieldNotes,
+	FieldServiceNotes,
 	FieldStatus,
 	FieldAccountType,
 	FieldAssignedTo,
@@ -116,6 +119,8 @@ var (
 	DefaultCompanyName string
 	// DefaultNotes holds the default value on creation for the "notes" field.
 	DefaultNotes string
+	// DefaultServiceNotes holds the default value on creation for the "service_notes" field.
+	DefaultServiceNotes string
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// DefaultAccountType holds the default value on creation for the "account_type" field.
@@ -188,6 +193,11 @@ func ByCompanyName(opts ...sql.OrderTermOption) OrderOption {
 // ByNotes orders the results by the notes field.
 func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNotes, opts...).ToFunc()
+}
+
+// ByServiceNotes orders the results by the service_notes field.
+func ByServiceNotes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldServiceNotes, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

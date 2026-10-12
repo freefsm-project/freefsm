@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	entsql "entgo.io/ent/dialect/sql"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/asset"
 	"github.com/freefsm-project/freefsm/internal/ent/assetstatus"
@@ -28,8 +29,9 @@ import (
 )
 
 type ActivityViewer struct {
-	ID   int64
-	Role string
+	ProtectedAdministrator bool
+	ID                     int64
+	Role                   string
 }
 
 type ActivityTargetResolution struct {
@@ -110,7 +112,7 @@ func (r *ActivityResolver) Resolve(ctx context.Context, companyID int64, viewer 
 	for typ, ids := range targetIDs {
 		if typ == objectref.TypeInstance {
 			ref := objectref.Instance()
-			readable := viewer.Role == "admin"
+			readable := viewer.ProtectedAdministrator
 			url := ""
 			if readable {
 				url, _ = objectref.URL(ref)
@@ -155,6 +157,18 @@ func (r *ActivityResolver) Resolve(ctx context.Context, companyID int64, viewer 
 				DisplayName: record.name,
 				Exists:      true,
 			}
+			if record.ref.Type == objectref.TypeCustomer {
+				if request, ok := authorization.FromContext(ctx); ok {
+					resolution.Readable = request.Service.CustomerAccess(ctx, request.Actor, record.ref.ID, "customer.view") == nil
+					if resolution.Readable {
+						resolution.URL, _ = objectref.URL(record.ref)
+					}
+					result.Targets[record.ref] = resolution
+					continue
+				}
+				result.Targets[record.ref] = ActivityTargetResolution{}
+				continue
+			}
 			if scopeErr != nil && isTechnicianRole(viewer.Role) && technicianTypeNeedsScope(record.ref.Type) {
 				resolution.Err = fmt.Errorf("resolve technician activity access: %w", scopeErr)
 			} else {
@@ -188,6 +202,12 @@ func technicianTypeNeedsScope(typ objectref.Type) bool {
 }
 
 func activityTargetReadable(viewer ActivityViewer, target activityTargetRecord, scope activityTechnicianScope) bool {
+	if target.ref.Type == objectref.TypeCustomer {
+		return false
+	}
+	if target.ref.Type.AdminOnly() {
+		return viewer.ProtectedAdministrator
+	}
 	if !policyRoleAllows(viewer.Role, target.ref.Type, PolicyRead) {
 		return false
 	}
@@ -197,8 +217,6 @@ func activityTargetReadable(viewer ActivityViewer, target activityTargetRecord, 
 	switch target.ref.Type {
 	case objectref.TypeJob:
 		return !target.archived && scope.jobs[target.ref.ID]
-	case objectref.TypeCustomer:
-		return !target.archived && (scope.customers[target.ref.ID] || pointerEqual(target.assignedTo, viewer.ID))
 	case objectref.TypeProject:
 		return !target.archived && (scope.projects[target.ref.ID] || scope.directCustomers[target.customerID])
 	case objectref.TypeAsset:

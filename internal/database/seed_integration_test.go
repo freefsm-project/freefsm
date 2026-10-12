@@ -43,7 +43,7 @@ func TestSeedAssignsResolvedCompanyToAllCreatedEntitiesIntegration(t *testing.T)
 	}
 	var companyID int64
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT company_id FROM company_settings`), &companyID)
-	if _, err = db.Pool.Exec(ctx, `INSERT INTO users(id,company_id,email,password_hash,name,role) VALUES(51001,$1,'seed-admin@example.test','x','Seed Admin','admin')`, companyID); err != nil {
+	if _, err = db.Pool.Exec(ctx, `INSERT INTO users(id,company_id,email,password_hash,name,role) VALUES(51001,$1,'seed-admin@example.test','$2a$10$abcdefghijklmnopqrstuu1234567890123456789012345678901','Seed Admin','admin')`, companyID); err != nil {
 		t.Fatal(err)
 	}
 

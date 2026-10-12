@@ -386,7 +386,7 @@ func newDeliveryFixture(t *testing.T) *deliveryFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'admin@d.test','x','Admin','admin') RETURNING id`, f.company).Scan(&f.admin); err != nil {
+	if err = db.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'admin@d.test','$2a$10$abcdefghijklmnopqrstuu1234567890123456789012345678901','Admin','admin') RETURNING id`, f.company).Scan(&f.admin); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'tech@d.test','x','Tech','tech') RETURNING id`, f.company).Scan(&f.tech); err != nil {

@@ -306,7 +306,7 @@ func statusDB(t *testing.T) (*pgxpool.Pool, int64, int64, int64, int64) {
 	}
 	var company, admin, tech, customer int64
 	mustScan(t, wrapped.Pool.QueryRow(ctx, `INSERT INTO companies(name,slug) VALUES('Status','status-flow') RETURNING id`), &company)
-	mustScan(t, wrapped.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'admin@status.test','x','Admin','admin') RETURNING id`, company), &admin)
+	mustScan(t, wrapped.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'admin@status.test','$2a$10$abcdefghijklmnopqrstuu1234567890123456789012345678901','Admin','admin') RETURNING id`, company), &admin)
 	mustScan(t, wrapped.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'tech@status.test','x','Tech','tech') RETURNING id`, company), &tech)
 	mustScan(t, wrapped.Pool.QueryRow(ctx, `INSERT INTO customers(company_id,display_name) VALUES($1,'Customer') RETURNING id`, company), &customer)
 	return wrapped.Pool, company, admin, tech, customer

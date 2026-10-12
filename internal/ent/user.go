@@ -27,6 +27,8 @@ type User struct {
 	Name string `json:"name,omitempty"`
 	// Role holds the value of the "role" field.
 	Role string `json:"role,omitempty"`
+	// AuthorizationRoleID holds the value of the "authorization_role_id" field.
+	AuthorizationRoleID *int64 `json:"authorization_role_id,omitempty"`
 	// FontSize holds the value of the "font_size" field.
 	FontSize string `json:"font_size,omitempty"`
 	// LastScheduleTab holds the value of the "last_schedule_tab" field.
@@ -55,7 +57,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case user.FieldIsActive, user.FieldForcePasswordChange:
 			values[i] = new(sql.NullBool)
-		case user.FieldID, user.FieldCompanyID:
+		case user.FieldID, user.FieldCompanyID, user.FieldAuthorizationRoleID:
 			values[i] = new(sql.NullInt64)
 		case user.FieldEmail, user.FieldPasswordHash, user.FieldName, user.FieldRole, user.FieldFontSize, user.FieldLastScheduleTab, user.FieldLastSchedulePeriod:
 			values[i] = new(sql.NullString)
@@ -112,6 +114,13 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field role", values[i])
 			} else if value.Valid {
 				_m.Role = value.String
+			}
+		case user.FieldAuthorizationRoleID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field authorization_role_id", values[i])
+			} else if value.Valid {
+				_m.AuthorizationRoleID = new(int64)
+				*_m.AuthorizationRoleID = value.Int64
 			}
 		case user.FieldFontSize:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -221,6 +230,11 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("role=")
 	builder.WriteString(_m.Role)
+	builder.WriteString(", ")
+	if v := _m.AuthorizationRoleID; v != nil {
+		builder.WriteString("authorization_role_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("font_size=")
 	builder.WriteString(_m.FontSize)

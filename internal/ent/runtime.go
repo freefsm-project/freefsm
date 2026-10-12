@@ -375,48 +375,52 @@ func init() {
 	customerDescNotes := customerFields[8].Descriptor()
 	// customer.DefaultNotes holds the default value on creation for the notes field.
 	customer.DefaultNotes = customerDescNotes.Default.(string)
+	// customerDescServiceNotes is the schema descriptor for service_notes field.
+	customerDescServiceNotes := customerFields[9].Descriptor()
+	// customer.DefaultServiceNotes holds the default value on creation for the service_notes field.
+	customer.DefaultServiceNotes = customerDescServiceNotes.Default.(string)
 	// customerDescStatus is the schema descriptor for status field.
-	customerDescStatus := customerFields[9].Descriptor()
+	customerDescStatus := customerFields[10].Descriptor()
 	// customer.DefaultStatus holds the default value on creation for the status field.
 	customer.DefaultStatus = customerDescStatus.Default.(string)
 	// customerDescAccountType is the schema descriptor for account_type field.
-	customerDescAccountType := customerFields[10].Descriptor()
+	customerDescAccountType := customerFields[11].Descriptor()
 	// customer.DefaultAccountType holds the default value on creation for the account_type field.
 	customer.DefaultAccountType = customerDescAccountType.Default.(string)
 	// customerDescBillingAddress1 is the schema descriptor for billing_address_1 field.
-	customerDescBillingAddress1 := customerFields[14].Descriptor()
+	customerDescBillingAddress1 := customerFields[15].Descriptor()
 	// customer.DefaultBillingAddress1 holds the default value on creation for the billing_address_1 field.
 	customer.DefaultBillingAddress1 = customerDescBillingAddress1.Default.(string)
 	// customerDescBillingAddress2 is the schema descriptor for billing_address_2 field.
-	customerDescBillingAddress2 := customerFields[15].Descriptor()
+	customerDescBillingAddress2 := customerFields[16].Descriptor()
 	// customer.DefaultBillingAddress2 holds the default value on creation for the billing_address_2 field.
 	customer.DefaultBillingAddress2 = customerDescBillingAddress2.Default.(string)
 	// customerDescBillingCity is the schema descriptor for billing_city field.
-	customerDescBillingCity := customerFields[16].Descriptor()
+	customerDescBillingCity := customerFields[17].Descriptor()
 	// customer.DefaultBillingCity holds the default value on creation for the billing_city field.
 	customer.DefaultBillingCity = customerDescBillingCity.Default.(string)
 	// customerDescBillingState is the schema descriptor for billing_state field.
-	customerDescBillingState := customerFields[17].Descriptor()
+	customerDescBillingState := customerFields[18].Descriptor()
 	// customer.DefaultBillingState holds the default value on creation for the billing_state field.
 	customer.DefaultBillingState = customerDescBillingState.Default.(string)
 	// customerDescBillingZipCode is the schema descriptor for billing_zip_code field.
-	customerDescBillingZipCode := customerFields[18].Descriptor()
+	customerDescBillingZipCode := customerFields[19].Descriptor()
 	// customer.DefaultBillingZipCode holds the default value on creation for the billing_zip_code field.
 	customer.DefaultBillingZipCode = customerDescBillingZipCode.Default.(string)
 	// customerDescTaxExempt is the schema descriptor for tax_exempt field.
-	customerDescTaxExempt := customerFields[19].Descriptor()
+	customerDescTaxExempt := customerFields[20].Descriptor()
 	// customer.DefaultTaxExempt holds the default value on creation for the tax_exempt field.
 	customer.DefaultTaxExempt = customerDescTaxExempt.Default.(bool)
 	// customerDescCustomFields is the schema descriptor for custom_fields field.
-	customerDescCustomFields := customerFields[20].Descriptor()
+	customerDescCustomFields := customerFields[21].Descriptor()
 	// customer.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	customer.DefaultCustomFields = customerDescCustomFields.Default.(string)
 	// customerDescCreatedAt is the schema descriptor for created_at field.
-	customerDescCreatedAt := customerFields[22].Descriptor()
+	customerDescCreatedAt := customerFields[23].Descriptor()
 	// customer.DefaultCreatedAt holds the default value on creation for the created_at field.
 	customer.DefaultCreatedAt = customerDescCreatedAt.Default.(func() time.Time)
 	// customerDescUpdatedAt is the schema descriptor for updated_at field.
-	customerDescUpdatedAt := customerFields[23].Descriptor()
+	customerDescUpdatedAt := customerFields[24].Descriptor()
 	// customer.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	customer.DefaultUpdatedAt = customerDescUpdatedAt.Default.(func() time.Time)
 	// customer.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -956,31 +960,31 @@ func init() {
 	// user.DefaultRole holds the default value on creation for the role field.
 	user.DefaultRole = userDescRole.Default.(string)
 	// userDescFontSize is the schema descriptor for font_size field.
-	userDescFontSize := userFields[6].Descriptor()
+	userDescFontSize := userFields[7].Descriptor()
 	// user.DefaultFontSize holds the default value on creation for the font_size field.
 	user.DefaultFontSize = userDescFontSize.Default.(string)
 	// userDescLastScheduleTab is the schema descriptor for last_schedule_tab field.
-	userDescLastScheduleTab := userFields[7].Descriptor()
+	userDescLastScheduleTab := userFields[8].Descriptor()
 	// user.DefaultLastScheduleTab holds the default value on creation for the last_schedule_tab field.
 	user.DefaultLastScheduleTab = userDescLastScheduleTab.Default.(string)
 	// userDescLastSchedulePeriod is the schema descriptor for last_schedule_period field.
-	userDescLastSchedulePeriod := userFields[8].Descriptor()
+	userDescLastSchedulePeriod := userFields[9].Descriptor()
 	// user.DefaultLastSchedulePeriod holds the default value on creation for the last_schedule_period field.
 	user.DefaultLastSchedulePeriod = userDescLastSchedulePeriod.Default.(string)
 	// userDescIsActive is the schema descriptor for is_active field.
-	userDescIsActive := userFields[9].Descriptor()
+	userDescIsActive := userFields[10].Descriptor()
 	// user.DefaultIsActive holds the default value on creation for the is_active field.
 	user.DefaultIsActive = userDescIsActive.Default.(bool)
 	// userDescForcePasswordChange is the schema descriptor for force_password_change field.
-	userDescForcePasswordChange := userFields[10].Descriptor()
+	userDescForcePasswordChange := userFields[11].Descriptor()
 	// user.DefaultForcePasswordChange holds the default value on creation for the force_password_change field.
 	user.DefaultForcePasswordChange = userDescForcePasswordChange.Default.(bool)
 	// userDescCreatedAt is the schema descriptor for created_at field.
-	userDescCreatedAt := userFields[12].Descriptor()
+	userDescCreatedAt := userFields[13].Descriptor()
 	// user.DefaultCreatedAt holds the default value on creation for the created_at field.
 	user.DefaultCreatedAt = userDescCreatedAt.Default.(func() time.Time)
 	// userDescUpdatedAt is the schema descriptor for updated_at field.
-	userDescUpdatedAt := userFields[13].Descriptor()
+	userDescUpdatedAt := userFields[14].Descriptor()
 	// user.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	user.DefaultUpdatedAt = userDescUpdatedAt.Default.(func() time.Time)
 	// user.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

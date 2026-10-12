@@ -13,15 +13,15 @@ templ CustomerForm(p CustomerFormPageData) {
 				<aside class="customer-edit-side-rail">
 					<article class="dashboard-panel">
 						@DashboardSubcardTop("Locations")
-						@LocationsListCompact(p.Locations, p.Customer.ID, false)
+						@LocationsListCompact(p.Locations, p.Customer.ID, !canManageOperational(ctx))
 					</article>
 					<article class="dashboard-panel">
 						@DashboardSubcardTop("Contacts")
-						@ContactsListCompact(p.Contacts, p.Customer.ID, false)
+						@ContactsListCompact(p.Contacts, p.Customer.ID, !canManageOperational(ctx))
 					</article>
 					<article class="dashboard-panel">
 						@DashboardSubcardTop("Tags")
-						@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: false})
+						@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: !canManageOperational(ctx)})
 					</article>
 				</aside>
 			</div>
@@ -95,7 +95,11 @@ templ CustomerFormFields(p CustomerFormPageData) {
 				<textarea name="notes" rows="3">{ p.Customer.Notes }</textarea>
 			</label>
 		@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
+		<label>Service Notes (shared with assigned Job context)
+			<textarea name="service_notes" rows="3">{ p.Customer.ServiceNotes }</textarea>
+		</label>
 	</fieldset>
+	if canCustomer(ctx,"financial") {
 	<fieldset>
 		<legend>Billing Address</legend>
 		<label>
@@ -122,9 +126,11 @@ templ CustomerFormFields(p CustomerFormPageData) {
 		</div>
 		<label>
 			<input type="checkbox" name="tax_exempt" value="true" checked?={ p.Customer.TaxExempt }/>
+			<input type="hidden" name="tax_exempt_present" value="1"/>
 			Tax exempt
 		</label>
 	</fieldset>
+	}
 	<div class="entity-form-actions">
 		<button type="submit">{ customerFormSubmitLabel(p.IsNew) }</button>
 		<a href="/customers" role="button" class="outline">Cancel</a>

@@ -27,7 +27,7 @@ func seedActivityActor(t *testing.T, m *Manager, id int64, name string) Activity
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = c.Exec(context.Background(), `INSERT INTO users(id,company_id,email,password_hash,name,role) VALUES($1,$1,$2,'unused',$2,'admin')`, id, name)
+	_, err = c.Exec(context.Background(), `INSERT INTO users(id,company_id,email,password_hash,name,role) VALUES($1,$1,$2,'$2a$10$abcdefghijklmnopqrstuu1234567890123456789012345678901',$2,'admin')`, id, name)
 	if err != nil {
 		t.Fatal(err)
 	}

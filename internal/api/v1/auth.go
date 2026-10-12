@@ -2,10 +2,16 @@ package v1
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/go-chi/chi/v5"
 )
 
 type actorContextKey struct{}
@@ -90,8 +96,32 @@ func (h *handler) bearerAuth(next http.Handler) http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), actorContextKey{}, user)
 		ctx = context.WithValue(ctx, tokenContextKey{}, token)
+		if h.deps.Authorization != nil {
+			sum := sha256.Sum256([]byte(token))
+			ctx = authorization.WithActor(ctx, h.deps.Authorization, authorization.Actor{UserID: user.ID, SessionHash: hex.EncodeToString(sum[:]), Channel: "api"})
+		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+func (h *handler) customerContext(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		writeError(w, 404, "not_found", "not found")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, 404, "not_found", "not found")
+		return
+	}
+	c, err := req.Service.JobCustomer(r.Context(), req.Actor, id)
+	if err != nil {
+		slog.Warn("authorization request rejected", "actor_id", req.Actor.UserID, "path", r.URL.Path, "channel", "api", "status", http.StatusNotFound)
+		writeError(w, 404, "not_found", "not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, c)
 }
 
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {

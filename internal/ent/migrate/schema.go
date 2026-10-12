@@ -289,6 +289,7 @@ var (
 		{Name: "phone", Type: field.TypeString, Default: ""},
 		{Name: "company_name", Type: field.TypeString, Default: ""},
 		{Name: "notes", Type: field.TypeString, Default: ""},
+		{Name: "service_notes", Type: field.TypeString, Default: ""},
 		{Name: "status", Type: field.TypeString, Default: "lead"},
 		{Name: "account_type", Type: field.TypeString, Default: "individual"},
 		{Name: "assigned_to", Type: field.TypeInt64, Nullable: true},
@@ -329,7 +330,7 @@ var (
 			{
 				Name:    "customer_status",
 				Unique:  false,
-				Columns: []*schema.Column{CustomersColumns[9]},
+				Columns: []*schema.Column{CustomersColumns[10]},
 			},
 		},
 	}
@@ -930,6 +931,7 @@ var (
 		{Name: "password_hash", Type: field.TypeString},
 		{Name: "name", Type: field.TypeString},
 		{Name: "role", Type: field.TypeString, Default: "tech"},
+		{Name: "authorization_role_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "font_size", Type: field.TypeString, Default: "medium"},
 		{Name: "last_schedule_tab", Type: field.TypeString, Default: "calendar"},
 		{Name: "last_schedule_period", Type: field.TypeString, Default: "month"},

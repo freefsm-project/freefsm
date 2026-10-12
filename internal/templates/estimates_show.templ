@@ -53,7 +53,11 @@ templ EstimateShow(p EstimateDetail) {
 		}
 		<table class="work-item-detail-meta">
 			<tbody>
-				<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
+				if canCustomer(ctx,"view") {
+					<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
+				} else if p.JobID > 0 && canCustomer(ctx,"context") {
+					<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/jobs/%d/customer-context",p.JobID)) }>{ p.Customer }</a></td></tr>
+				}
 				<tr><th>Status</th><td>@StatusControl("estimate", p.ID, p.StatusID, p.StatusName, p.StatusColor, p.Statuses, p.ArchivedAt == "" && p.CanManage)</td></tr>
 				<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
 			</tbody>

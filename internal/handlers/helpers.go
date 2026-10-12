@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -93,15 +94,64 @@ func companyDefaultTaxRate(ctx context.Context) string {
 	return "0"
 }
 
-func taxRateForCustomer(ctx context.Context, custSvc *services.CustomerService, customerID int64, defaultTaxRate string) string {
+func taxRateForCustomer(ctx context.Context, custSvc *services.CustomerService, customerID int64, defaultTaxRate string, jobIDs ...int64) (string, error) {
 	if customerID <= 0 {
-		return defaultTaxRate
+		return defaultTaxRate, nil
+	}
+	if request, ok := authorization.FromContext(ctx); ok {
+		var jobID int64
+		if len(jobIDs) > 0 {
+			jobID = jobIDs[0]
+		}
+		input, err := request.Service.DocumentCustomer(ctx, request.Actor, customerID, jobID, defaultTaxRate)
+		return input.TaxRate, err
 	}
 	c, err := custSvc.GetByID(ctx, customerID)
 	if err == nil && c != nil && c.TaxExempt {
-		return "0"
+		return "0", nil
 	}
-	return defaultTaxRate
+	return defaultTaxRate, nil
+}
+
+func documentCustomerOptions(ctx context.Context, customers []*ent.Customer, customerID, jobID int64) ([]templates.SelectOption, error) {
+	options := customerOptions(customers)
+	if request, ok := authorization.FromContext(ctx); ok && jobID > 0 {
+		for _, option := range options {
+			if option.Value == customerID {
+				return options, nil
+			}
+		}
+		c, err := request.Service.JobCustomer(ctx, request.Actor, jobID)
+		if err != nil {
+			return nil, err
+		}
+		if c.ID != customerID {
+			return nil, authorization.ErrNotFound
+		}
+		return []templates.SelectOption{{Value: c.ID, Label: c.DisplayName}}, nil
+	}
+	return options, nil
+}
+
+// Adapt the closed Job projection for legacy document renderers. This does not
+// grant a master query or populate billing, tax, internal notes or custom fields.
+func customerForDocument(ctx context.Context, svc *services.CustomerService, customerID, jobID int64) (*ent.Customer, error) {
+	c, err := svc.GetByID(ctx, customerID)
+	if err == nil {
+		return c, nil
+	}
+	request, ok := authorization.FromContext(ctx)
+	if !ok || jobID <= 0 {
+		return nil, err
+	}
+	projection, err := request.Service.JobCustomer(ctx, request.Actor, jobID)
+	if err != nil {
+		return nil, err
+	}
+	if projection.ID != customerID {
+		return nil, authorization.ErrNotFound
+	}
+	return &ent.Customer{ID: projection.ID, DisplayName: projection.DisplayName, FirstName: projection.FirstName, LastName: projection.LastName, CompanyName: projection.OrganizationName, Phone: projection.Phone, Email: projection.Email}, nil
 }
 
 type handlerCustomerTaxContext struct {
@@ -113,6 +163,15 @@ func (c handlerCustomerTaxContext) DefaultTaxRate() string                { retu
 func (c handlerCustomerTaxContext) CustomerTaxExemptions() map[int64]bool { return c.exemptions }
 
 func lineItemEditorBootstrap(ctx context.Context, itemSvc *services.ItemService, customers []*ent.Customer, existingLineItems, defaultTaxRate string) (services.EditorBootstrap, error) {
+	if request, ok := authorization.FromContext(ctx); ok {
+		p, err := request.Service.Principal(ctx, request.Actor)
+		if err != nil {
+			return services.EditorBootstrap{}, err
+		}
+		if !p.Allows("customer.financial.view", authorization.All) {
+			customers = nil
+		}
+	}
 	items, err := itemSvc.ListActive(ctx)
 	if err != nil {
 		return services.EditorBootstrap{}, fmt.Errorf("list line item catalog: %w", err)

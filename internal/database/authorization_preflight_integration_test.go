@@ -3,10 +3,12 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -16,7 +18,7 @@ func TestAuthorizationPreflightPreservesLegacyFactsWithoutInferringGrants(t *tes
 		t.Skip("set FREEFSM_TEST_DATABASE_URL to run PostgreSQL preflight tests")
 	}
 	db, ctx := activityMigrationDatabaseThrough048(t, dsn)
-	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+	if err := db.Migrate(ctx, legacyPreflightFS(t)); err != nil {
 		t.Fatal(err)
 	}
 	const secret = "recognizable-password-hash-never-export"
@@ -69,7 +71,7 @@ func TestAuthorizationPreflightStopsOnUnrecognizedAuthorityStorage(t *testing.T)
 		t.Skip("set FREEFSM_TEST_DATABASE_URL")
 	}
 	db, ctx := activityMigrationDatabaseThrough048(t, dsn)
-	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+	if err := db.Migrate(ctx, legacyPreflightFS(t)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `ALTER TABLE users ADD COLUMN permission_overrides jsonb NOT NULL DEFAULT '{}'`); err != nil {
@@ -90,7 +92,7 @@ func TestAuthorizationPreflightUsesOneSnapshotAcrossConcurrentChanges(t *testing
 		t.Skip("set FREEFSM_TEST_DATABASE_URL")
 	}
 	db, ctx := activityMigrationDatabaseThrough048(t, dsn)
-	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+	if err := db.Migrate(ctx, legacyPreflightFS(t)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO users(email,password_hash,name,role) VALUES ('snapshot@example.test','x','Before','tech')`); err != nil {
@@ -145,4 +147,24 @@ func TestAuthorizationPreflightUsesOneSnapshotAcrossConcurrentChanges(t *testing
 	if err != nil || after.Users[0].Name != "After" || !strings.Contains(strings.Join(after.Migrations, " "), "999_concurrent") || after.Fingerprint == got.report.Fingerprint {
 		t.Fatalf("new inventory did not observe committed change: %+v err=%v", after, err)
 	}
+}
+
+func legacyPreflightFS(t *testing.T) fs.FS {
+	t.Helper()
+	out := fstest.MapFS{}
+	entries, err := fs.ReadDir(MigrationFS(), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() > "054_backup_activity.up.sql" {
+			continue
+		}
+		b, err := fs.ReadFile(MigrationFS(), e.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		out[e.Name()] = &fstest.MapFile{Data: b}
+	}
+	return out
 }

@@ -33,6 +33,8 @@ type Customer struct {
 	CompanyName string `json:"company_name,omitempty"`
 	// Notes holds the value of the "notes" field.
 	Notes string `json:"notes,omitempty"`
+	// ServiceNotes holds the value of the "service_notes" field.
+	ServiceNotes string `json:"service_notes,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// AccountType holds the value of the "account_type" field.
@@ -75,7 +77,7 @@ func (*Customer) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case customer.FieldID, customer.FieldCompanyID, customer.FieldAssignedTo, customer.FieldPipelineStatusID, customer.FieldLeadSourceID:
 			values[i] = new(sql.NullInt64)
-		case customer.FieldFirstName, customer.FieldLastName, customer.FieldDisplayName, customer.FieldEmail, customer.FieldPhone, customer.FieldCompanyName, customer.FieldNotes, customer.FieldStatus, customer.FieldAccountType, customer.FieldBillingAddress1, customer.FieldBillingAddress2, customer.FieldBillingCity, customer.FieldBillingState, customer.FieldBillingZipCode, customer.FieldCustomFields:
+		case customer.FieldFirstName, customer.FieldLastName, customer.FieldDisplayName, customer.FieldEmail, customer.FieldPhone, customer.FieldCompanyName, customer.FieldNotes, customer.FieldServiceNotes, customer.FieldStatus, customer.FieldAccountType, customer.FieldBillingAddress1, customer.FieldBillingAddress2, customer.FieldBillingCity, customer.FieldBillingState, customer.FieldBillingZipCode, customer.FieldCustomFields:
 			values[i] = new(sql.NullString)
 		case customer.FieldDeletedAt, customer.FieldCreatedAt, customer.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -148,6 +150,12 @@ func (_m *Customer) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field notes", values[i])
 			} else if value.Valid {
 				_m.Notes = value.String
+			}
+		case customer.FieldServiceNotes:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field service_notes", values[i])
+			} else if value.Valid {
+				_m.ServiceNotes = value.String
 			}
 		case customer.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -304,6 +312,9 @@ func (_m *Customer) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("notes=")
 	builder.WriteString(_m.Notes)
+	builder.WriteString(", ")
+	builder.WriteString("service_notes=")
+	builder.WriteString(_m.ServiceNotes)
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)

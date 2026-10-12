@@ -77,9 +77,13 @@ func TestTagLinkServiceAttachAgainstSchemaThrough045Integration(t *testing.T) {
 		t.Fatal(err)
 	}
 	tag := client.Tag.Create().SetCompanyID(companyID).SetName("Priority").SaveX(ctx)
-	customer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Tagged Customer").SaveX(ctx)
+	// Build a genuine 045 Customer row before the new schema is installed.
+	var legacyCustomerID int64
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO customers(company_id,display_name) VALUES($1,'Tagged Customer') RETURNING id`, companyID).Scan(&legacyCustomerID); err != nil {
+		t.Fatal(err)
+	}
 
-	_, err = services.NewTagLinkService(client, objectref.NewEntDirectory(client)).Attach(ctx, companyID, tag.ID, objectref.New(objectref.TypeCustomer, customer.ID))
+	_, err = services.NewTagLinkService(client, objectref.NewEntDirectory(client)).Attach(ctx, companyID, tag.ID, objectref.New(objectref.TypeCustomer, legacyCustomerID))
 	if err != nil {
 		t.Fatalf("Attach should set company ownership: %v", err)
 	}

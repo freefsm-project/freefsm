@@ -90,10 +90,10 @@ func TestActivityResolverBatchesAndDeduplicates(t *testing.T) {
 	if len(store.targetCalls[objectref.TypeJob]) != 1 || !reflect.DeepEqual(store.targetCalls[objectref.TypeJob][0], []int64{20}) {
 		t.Fatalf("job calls = %#v", store.targetCalls[objectref.TypeJob])
 	}
-	if got.ActorNames[1] != "Current Actor" || got.Targets[customer].DisplayName != "Current Customer" {
+	if got.ActorNames[1] != "Current Actor" || got.Targets[customer].DisplayName != "" {
 		t.Fatalf("resolution trusted metadata or lost current values: %#v", got)
 	}
-	if got.Targets[customer].URL != "/customers/10" || got.Targets[job].URL != "/jobs/20" {
+	if got.Targets[customer].URL != "" || got.Targets[job].URL != "/jobs/20" {
 		t.Fatalf("authorized URLs = %#v", got.Targets)
 	}
 }
@@ -152,8 +152,11 @@ func TestActivityResolverOfficePolicyMatchesPolicyServiceTypes(t *testing.T) {
 		for _, typ := range objectref.AllTypes() {
 			t.Run(role+"/"+string(typ), func(t *testing.T) {
 				target := activityTargetRecord{ref: objectref.New(typ, 1)}
-				got := activityTargetReadable(ActivityViewer{ID: 1, Role: role}, target, activityTechnicianScope{})
+				got := activityTargetReadable(ActivityViewer{ID: 1, Role: role, ProtectedAdministrator: role == "admin"}, target, activityTechnicianScope{})
 				want := policyRoleAllows(role, typ, PolicyRead)
+				if typ == objectref.TypeCustomer {
+					want = false
+				}
 				if got != want {
 					t.Fatalf("activity read = %v, policy type rule = %v", got, want)
 				}
@@ -180,8 +183,8 @@ func TestActivityResolverTechnicianPolicySemantics(t *testing.T) {
 	}{
 		{name: "assigned active job", target: activityTargetRecord{ref: objectref.New(objectref.TypeJob, assignedJobID)}, want: true},
 		{name: "archived assigned job", target: activityTargetRecord{ref: objectref.New(objectref.TypeJob, assignedJobID), archived: true}},
-		{name: "linked customer", target: activityTargetRecord{ref: objectref.New(objectref.TypeCustomer, 20)}, want: true},
-		{name: "direct customer", target: activityTargetRecord{ref: objectref.New(objectref.TypeCustomer, 21), assignedTo: &viewer.ID}, want: true},
+		{name: "linked customer requires migrated authority", target: activityTargetRecord{ref: objectref.New(objectref.TypeCustomer, 20)}, want: false},
+		{name: "direct customer assignment is not authority", target: activityTargetRecord{ref: objectref.New(objectref.TypeCustomer, 21), assignedTo: &viewer.ID}, want: false},
 		{name: "archived direct customer", target: activityTargetRecord{ref: objectref.New(objectref.TypeCustomer, 21), assignedTo: &viewer.ID, archived: true}},
 		{name: "linked project", target: activityTargetRecord{ref: objectref.New(objectref.TypeProject, 30)}, want: true},
 		{name: "project through direct customer", target: activityTargetRecord{ref: objectref.New(objectref.TypeProject, 31), customerID: 21}, want: true},

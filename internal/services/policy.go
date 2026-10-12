@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/asset"
 	"github.com/freefsm-project/freefsm/internal/ent/customer"
@@ -32,6 +33,22 @@ func NewPolicyService(client *ent.Client, objects objectref.Directory) *PolicySe
 }
 
 func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role string, ref objectref.Ref, action PolicyAction) bool {
+	if ref.Type == objectref.TypeCustomer {
+		r, ok := authorization.FromContext(ctx)
+		if !ok {
+			return false
+		}
+		if r.Service.CustomerAccess(ctx, r.Actor, ref.ID, "customer.view") != nil {
+			return false
+		}
+		if action == PolicyRead {
+			return true
+		}
+		// Customer details writes use authorization.SaveCustomer. This
+		// generic policy remains the legacy collaboration/child-action
+		// boundary until those domains migrate; Customer Edit must not
+		// implicitly grant an independent collaboration action.
+	}
 	if userID <= 0 || !ref.Valid() || s.objects == nil || !validPolicyAction(action) {
 		return false
 	}

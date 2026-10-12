@@ -157,7 +157,7 @@ func (h *DashboardHandler) SaveCompanyDefaultWidgets(w http.ResponseWriter, r *h
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if user.Role != "admin" {
+	if !user.ProtectedAdministrator {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

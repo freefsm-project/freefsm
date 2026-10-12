@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
@@ -142,7 +143,7 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if i.CustomerID > 0 {
-		customer, _ := h.custSvc.GetByID(r.Context(), i.CustomerID)
+		customer, _ := customerForDocument(r.Context(), h.custSvc, i.CustomerID, valueInt64(i.JobID))
 		if customer != nil {
 			d.Customer = customer.DisplayName
 		}
@@ -291,7 +292,11 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if taxRate == "" {
 		taxRate = "0"
 	}
-	taxRate = taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate)
+	taxRate, err = taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate, jobID)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
 	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), taxRate)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -380,7 +385,11 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		taxRatePtr = &t
 	}
 	if taxRatePtr != nil {
-		t := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr)
+		t, err := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr, jobID)
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
 		taxRatePtr = &t
 	}
 	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), *taxRatePtr)
@@ -568,6 +577,19 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
 	d := invoiceToDetail(ctx, i, statuses)
+	if request, ok := authorization.FromContext(ctx); ok {
+		p, err := request.Service.Principal(ctx, request.Actor)
+		if err != nil {
+			return templates.InvoiceFormPageData{}, err
+		}
+		if !p.Allows("customer.view", authorization.All) {
+			defaultTaxRate = i.TaxRate
+		}
+	}
+	options, err := documentCustomerOptions(ctx, customers, i.CustomerID, d.JobID)
+	if err != nil {
+		return templates.InvoiceFormPageData{}, err
+	}
 	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, i.LineItems, defaultTaxRate)
 	if err != nil {
 		return templates.InvoiceFormPageData{}, err
@@ -575,7 +597,7 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 	return templates.InvoiceFormPageData{
 		Invoice:           &d,
 		IsNew:             false,
-		Customers:         customerOptions(customers),
+		Customers:         options,
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         bootstrap.ItemsJSON,
@@ -676,13 +698,22 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	defaultTaxRate := taxRateForCustomer(r.Context(), h.custSvc, j.CustomerID, companyDefaultTaxRate(r.Context()))
+	defaultTaxRate, err := taxRateForCustomer(r.Context(), h.custSvc, j.CustomerID, companyDefaultTaxRate(r.Context()), j.ID)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
 	statuses := h.statusesForSelect(r.Context())
 	statusID := h.defaultInvoiceStatusID(r.Context(), statusflow.InvoiceDraft)
 	customers, _ := h.custSvc.ListAll(r.Context())
+	options, err := documentCustomerOptions(r.Context(), customers, j.CustomerID, j.ID)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
 	jobs, _ := h.jobsForEditor(r.Context())
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
-	bootstrap, err := lineItemEditorBootstrap(r.Context(), h.itemSvc, customers, j.LineItems, companyDefaultTaxRate(r.Context()))
+	bootstrap, err := lineItemEditorBootstrap(r.Context(), h.itemSvc, customers, j.LineItems, defaultTaxRate)
 	if err != nil {
 		internalServerError(w, r, "build invoice editor", err)
 		return
@@ -697,7 +728,7 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 			TaxRate:    defaultTaxRate,
 		},
 		IsNew:             true,
-		Customers:         customerOptions(customers),
+		Customers:         options,
 		Jobs:              jobOptions(jobs),
 		Statuses:          statusOptions(statuses),
 		ItemsJSON:         bootstrap.ItemsJSON,
@@ -771,7 +802,11 @@ func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Reque
 		http.NotFound(w, r)
 		return
 	}
-	defaultTaxRate := taxRateForCustomer(r.Context(), h.custSvc, id, companyDefaultTaxRate(r.Context()))
+	defaultTaxRate, err := taxRateForCustomer(r.Context(), h.custSvc, id, companyDefaultTaxRate(r.Context()))
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
 	statuses := h.statusesForSelect(r.Context())
 	statusID := h.defaultInvoiceStatusID(r.Context(), statusflow.InvoiceDraft)
 	customers, _ := h.custSvc.ListAll(r.Context())
@@ -1012,7 +1047,7 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (docu
 	}
 	var customer *ent.Customer
 	if i.CustomerID > 0 {
-		c, _ := h.custSvc.GetByID(ctx, i.CustomerID)
+		c, _ := customerForDocument(ctx, h.custSvc, i.CustomerID, valueInt64(i.JobID))
 		customer = c
 	}
 	var job *ent.Job

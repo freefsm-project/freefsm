@@ -34,7 +34,8 @@ func TestBackupActivityHTTPVisibilityIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	client.ActivityLog.Create().SetCompanyID(companyID).SetAction("created").SetObjectType("customer").SetObjectID(1).SetMetadata(`{"actor_name":"Ordinary customer actor","entity_name":"Ordinary customer activity"}`).SaveX(ctx)
+	customer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Ordinary customer activity").SaveX(ctx)
+	client.ActivityLog.Create().SetCompanyID(companyID).SetAction("created").SetObjectType("customer").SetObjectID(customer.ID).SetMetadata(`{"actor_name":"Ordinary customer actor","entity_name":"Ordinary customer activity"}`).SaveX(ctx)
 	control, err := instancecontrol.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

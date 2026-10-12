@@ -1,0 +1,129 @@
+package templates
+
+import (
+	"encoding/json"
+	"fmt"
+	"github.com/freefsm-project/freefsm/internal/authorization"
+)
+
+func grantJSON(grants []authorization.Grant) string { b, _ := json.Marshal(grants); return string(b) }
+
+func reviewedRoleName(p authorization.Review, id *int64) string {
+	if id != nil {
+		for _, role := range p.Roles {
+			if role.ID == *id {
+				return role.Name
+			}
+		}
+	}
+	return "Not yet reviewed"
+}
+
+templ AuthorizationReview(p authorization.Review) {
+	@Layout("Authorization") {
+		<h1>Authorization</h1>
+		if !p.Ready {
+			<p role="status">Customer access is blocked pending explicit Administrator review. Existing Role labels do not grant v1 permissions. Approve every user after reviewing the selected Role's grants.</p>
+		}
+		<h2>Roles and explicit grants</h2>
+		for _, role := range p.Roles {
+			<article>
+				<h3>{ role.Name }</h3>
+				if role.Protected {
+					<p>Protected Administrator: immutable complete authority.</p>
+				} else {
+					<form action="/settings/authorization/roles" method="post">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<input type="hidden" name="role_id" value={ fmt.Sprint(role.ID) }/>
+						<input type="hidden" name="role_revision" value={ fmt.Sprint(role.Revision) }/>
+						<label>Name <input name="name" required value={ role.Name }/></label>
+						<label>Explicit grants (JSON array; [] grants no permissions)<textarea name="grants" required rows="6">{ grantJSON(role.Grants) }</textarea></label>
+						<button>Save Role and grants</button>
+					</form>
+					if p.Ready {
+						<form action="/settings/authorization/roles/remove" method="post">
+							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+							<input type="hidden" name="role_id" value={ fmt.Sprint(role.ID) }/>
+							<label>
+								Replacement Role for assigned users
+								<select name="replacement_id" required>
+									<option value="">Choose explicitly</option>
+									for _, replacement := range p.Roles {
+										if replacement.ID != role.ID {
+											<option value={ fmt.Sprint(replacement.ID) }>{ replacement.Name }</option>
+										}
+									}
+								</select>
+							</label>
+							<button class="outline">Remove and replace Role</button>
+						</form>
+					}
+				}
+			</article>
+		}
+		<details>
+			<summary>Create Role</summary>
+			<form action="/settings/authorization/roles" method="post">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<label>Name <input name="name" required/></label>
+				<label>Explicit grants <textarea name="grants" required>[]</textarea></label><button>Create Role</button>
+			</form>
+		</details>
+		<h2>Individual user decisions</h2>
+		for _, user := range p.Users {
+			<article>
+				<h3>{ user.Name }</h3>
+				<p>{ user.Email } — recorded legacy value: { user.LegacyRole }</p>
+				<p>Current or approved Role: { reviewedRoleName(p,user.RoleID) }</p>
+				if user.Reviewed {
+					<p>Current identity and Role grants reviewed.</p>
+				}
+				<form action="/settings/authorization/assign" method="post">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<input type="hidden" name="user_id" value={ fmt.Sprint(user.ID) }/>
+					<input type="hidden" name="snapshot" value={ p.Snapshot }/>
+					if !p.Ready {
+						<input type="hidden" name="review" value="true"/>
+					}
+					<label>
+						Role
+						<select name="role_id" required>
+							<option value="">Choose explicitly</option>
+							for _, role := range p.Roles {
+								<option value={ fmt.Sprint(role.ID) }>{ role.Name }</option>
+							}
+						</select>
+					</label>
+					<button>Approve this user's Role and grants</button>
+				</form>
+			</article>
+		}
+		if !p.Ready {
+			<form action="/settings/authorization/cutover" method="post">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<label>Type APPROVE CUTOVER to activate the reviewed decisions<input name="confirmation" required autocomplete="off"/></label>
+				<button>Activate reviewed Customer authorization</button>
+			</form>
+		}
+	}
+}
+
+templ CustomerJobContext(c authorization.CustomerContext) {
+	@Layout("Customer context") {
+		<h1>{ c.DisplayName }</h1>
+		<dl>
+			<dt>Kind</dt>
+			<dd>{ c.Kind }</dd>
+			<dt>Person</dt>
+			<dd>{ c.FirstName } { c.LastName }</dd>
+			<dt>Organization</dt>
+			<dd>{ c.OrganizationName }</dd>
+			<dt>Phone</dt>
+			<dd>{ c.Phone }</dd>
+			<dt>Email</dt>
+			<dd>{ c.Email }</dd>
+			<dt>Service Notes</dt>
+			<dd class="preserve-whitespace">{ c.ServiceNotes }</dd>
+		</dl>
+	}
+}

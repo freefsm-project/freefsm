@@ -7974,6 +7974,7 @@ type CustomerMutation struct {
 	phone                 *string
 	company_name          *string
 	notes                 *string
+	service_notes         *string
 	status                *string
 	account_type          *string
 	assigned_to           *int64
@@ -8422,6 +8423,42 @@ func (m *CustomerMutation) OldNotes(ctx context.Context) (v string, err error) {
 // ResetNotes resets all changes to the "notes" field.
 func (m *CustomerMutation) ResetNotes() {
 	m.notes = nil
+}
+
+// SetServiceNotes sets the "service_notes" field.
+func (m *CustomerMutation) SetServiceNotes(s string) {
+	m.service_notes = &s
+}
+
+// ServiceNotes returns the value of the "service_notes" field in the mutation.
+func (m *CustomerMutation) ServiceNotes() (r string, exists bool) {
+	v := m.service_notes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldServiceNotes returns the old "service_notes" field's value of the Customer entity.
+// If the Customer object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomerMutation) OldServiceNotes(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldServiceNotes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldServiceNotes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldServiceNotes: %w", err)
+	}
+	return oldValue.ServiceNotes, nil
+}
+
+// ResetServiceNotes resets all changes to the "service_notes" field.
+func (m *CustomerMutation) ResetServiceNotes() {
+	m.service_notes = nil
 }
 
 // SetStatus sets the "status" field.
@@ -9113,7 +9150,7 @@ func (m *CustomerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomerMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
 	if m.company_id != nil {
 		fields = append(fields, customer.FieldCompanyID)
 	}
@@ -9137,6 +9174,9 @@ func (m *CustomerMutation) Fields() []string {
 	}
 	if m.notes != nil {
 		fields = append(fields, customer.FieldNotes)
+	}
+	if m.service_notes != nil {
+		fields = append(fields, customer.FieldServiceNotes)
 	}
 	if m.status != nil {
 		fields = append(fields, customer.FieldStatus)
@@ -9207,6 +9247,8 @@ func (m *CustomerMutation) Field(name string) (ent.Value, bool) {
 		return m.CompanyName()
 	case customer.FieldNotes:
 		return m.Notes()
+	case customer.FieldServiceNotes:
+		return m.ServiceNotes()
 	case customer.FieldStatus:
 		return m.Status()
 	case customer.FieldAccountType:
@@ -9262,6 +9304,8 @@ func (m *CustomerMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldCompanyName(ctx)
 	case customer.FieldNotes:
 		return m.OldNotes(ctx)
+	case customer.FieldServiceNotes:
+		return m.OldServiceNotes(ctx)
 	case customer.FieldStatus:
 		return m.OldStatus(ctx)
 	case customer.FieldAccountType:
@@ -9356,6 +9400,13 @@ func (m *CustomerMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetNotes(v)
+		return nil
+	case customer.FieldServiceNotes:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetServiceNotes(v)
 		return nil
 	case customer.FieldStatus:
 		v, ok := value.(string)
@@ -9618,6 +9669,9 @@ func (m *CustomerMutation) ResetField(name string) error {
 		return nil
 	case customer.FieldNotes:
 		m.ResetNotes()
+		return nil
+	case customer.FieldServiceNotes:
+		m.ResetServiceNotes()
 		return nil
 	case customer.FieldStatus:
 		m.ResetStatus()
@@ -27956,28 +28010,30 @@ func (m *TimeEntryMutation) ResetEdge(name string) error {
 // UserMutation represents an operation that mutates the User nodes in the graph.
 type UserMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *int64
-	company_id              *int64
-	addcompany_id           *int64
-	email                   *string
-	password_hash           *string
-	name                    *string
-	role                    *string
-	font_size               *string
-	last_schedule_tab       *string
-	last_schedule_period    *string
-	is_active               *bool
-	force_password_change   *bool
-	welcome_email_sent_at   *time.Time
-	created_at              *time.Time
-	updated_at              *time.Time
-	onboarding_completed_at *time.Time
-	clearedFields           map[string]struct{}
-	done                    bool
-	oldValue                func(context.Context) (*User, error)
-	predicates              []predicate.User
+	op                       Op
+	typ                      string
+	id                       *int64
+	company_id               *int64
+	addcompany_id            *int64
+	email                    *string
+	password_hash            *string
+	name                     *string
+	role                     *string
+	authorization_role_id    *int64
+	addauthorization_role_id *int64
+	font_size                *string
+	last_schedule_tab        *string
+	last_schedule_period     *string
+	is_active                *bool
+	force_password_change    *bool
+	welcome_email_sent_at    *time.Time
+	created_at               *time.Time
+	updated_at               *time.Time
+	onboarding_completed_at  *time.Time
+	clearedFields            map[string]struct{}
+	done                     bool
+	oldValue                 func(context.Context) (*User, error)
+	predicates               []predicate.User
 }
 
 var _ ent.Mutation = (*UserMutation)(nil)
@@ -28296,6 +28352,76 @@ func (m *UserMutation) OldRole(ctx context.Context) (v string, err error) {
 // ResetRole resets all changes to the "role" field.
 func (m *UserMutation) ResetRole() {
 	m.role = nil
+}
+
+// SetAuthorizationRoleID sets the "authorization_role_id" field.
+func (m *UserMutation) SetAuthorizationRoleID(i int64) {
+	m.authorization_role_id = &i
+	m.addauthorization_role_id = nil
+}
+
+// AuthorizationRoleID returns the value of the "authorization_role_id" field in the mutation.
+func (m *UserMutation) AuthorizationRoleID() (r int64, exists bool) {
+	v := m.authorization_role_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAuthorizationRoleID returns the old "authorization_role_id" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldAuthorizationRoleID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAuthorizationRoleID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAuthorizationRoleID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAuthorizationRoleID: %w", err)
+	}
+	return oldValue.AuthorizationRoleID, nil
+}
+
+// AddAuthorizationRoleID adds i to the "authorization_role_id" field.
+func (m *UserMutation) AddAuthorizationRoleID(i int64) {
+	if m.addauthorization_role_id != nil {
+		*m.addauthorization_role_id += i
+	} else {
+		m.addauthorization_role_id = &i
+	}
+}
+
+// AddedAuthorizationRoleID returns the value that was added to the "authorization_role_id" field in this mutation.
+func (m *UserMutation) AddedAuthorizationRoleID() (r int64, exists bool) {
+	v := m.addauthorization_role_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearAuthorizationRoleID clears the value of the "authorization_role_id" field.
+func (m *UserMutation) ClearAuthorizationRoleID() {
+	m.authorization_role_id = nil
+	m.addauthorization_role_id = nil
+	m.clearedFields[user.FieldAuthorizationRoleID] = struct{}{}
+}
+
+// AuthorizationRoleIDCleared returns if the "authorization_role_id" field was cleared in this mutation.
+func (m *UserMutation) AuthorizationRoleIDCleared() bool {
+	_, ok := m.clearedFields[user.FieldAuthorizationRoleID]
+	return ok
+}
+
+// ResetAuthorizationRoleID resets all changes to the "authorization_role_id" field.
+func (m *UserMutation) ResetAuthorizationRoleID() {
+	m.authorization_role_id = nil
+	m.addauthorization_role_id = nil
+	delete(m.clearedFields, user.FieldAuthorizationRoleID)
 }
 
 // SetFontSize sets the "font_size" field.
@@ -28682,7 +28808,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 15)
 	if m.company_id != nil {
 		fields = append(fields, user.FieldCompanyID)
 	}
@@ -28697,6 +28823,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.role != nil {
 		fields = append(fields, user.FieldRole)
+	}
+	if m.authorization_role_id != nil {
+		fields = append(fields, user.FieldAuthorizationRoleID)
 	}
 	if m.font_size != nil {
 		fields = append(fields, user.FieldFontSize)
@@ -28743,6 +28872,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Name()
 	case user.FieldRole:
 		return m.Role()
+	case user.FieldAuthorizationRoleID:
+		return m.AuthorizationRoleID()
 	case user.FieldFontSize:
 		return m.FontSize()
 	case user.FieldLastScheduleTab:
@@ -28780,6 +28911,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldName(ctx)
 	case user.FieldRole:
 		return m.OldRole(ctx)
+	case user.FieldAuthorizationRoleID:
+		return m.OldAuthorizationRoleID(ctx)
 	case user.FieldFontSize:
 		return m.OldFontSize(ctx)
 	case user.FieldLastScheduleTab:
@@ -28841,6 +28974,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRole(v)
+		return nil
+	case user.FieldAuthorizationRoleID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAuthorizationRoleID(v)
 		return nil
 	case user.FieldFontSize:
 		v, ok := value.(string)
@@ -28916,6 +29056,9 @@ func (m *UserMutation) AddedFields() []string {
 	if m.addcompany_id != nil {
 		fields = append(fields, user.FieldCompanyID)
 	}
+	if m.addauthorization_role_id != nil {
+		fields = append(fields, user.FieldAuthorizationRoleID)
+	}
 	return fields
 }
 
@@ -28926,6 +29069,8 @@ func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case user.FieldCompanyID:
 		return m.AddedCompanyID()
+	case user.FieldAuthorizationRoleID:
+		return m.AddedAuthorizationRoleID()
 	}
 	return nil, false
 }
@@ -28942,6 +29087,13 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddCompanyID(v)
 		return nil
+	case user.FieldAuthorizationRoleID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAuthorizationRoleID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown User numeric field %s", name)
 }
@@ -28952,6 +29104,9 @@ func (m *UserMutation) ClearedFields() []string {
 	var fields []string
 	if m.FieldCleared(user.FieldCompanyID) {
 		fields = append(fields, user.FieldCompanyID)
+	}
+	if m.FieldCleared(user.FieldAuthorizationRoleID) {
+		fields = append(fields, user.FieldAuthorizationRoleID)
 	}
 	if m.FieldCleared(user.FieldWelcomeEmailSentAt) {
 		fields = append(fields, user.FieldWelcomeEmailSentAt)
@@ -28975,6 +29130,9 @@ func (m *UserMutation) ClearField(name string) error {
 	switch name {
 	case user.FieldCompanyID:
 		m.ClearCompanyID()
+		return nil
+	case user.FieldAuthorizationRoleID:
+		m.ClearAuthorizationRoleID()
 		return nil
 	case user.FieldWelcomeEmailSentAt:
 		m.ClearWelcomeEmailSentAt()
@@ -29004,6 +29162,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldRole:
 		m.ResetRole()
+		return nil
+	case user.FieldAuthorizationRoleID:
+		m.ResetAuthorizationRoleID()
 		return nil
 	case user.FieldFontSize:
 		m.ResetFontSize()

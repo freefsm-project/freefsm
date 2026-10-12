@@ -67,12 +67,12 @@ func TestActivityResolverTenantScopeAndQueryBatchingIntegration(t *testing.T) {
 		t.Fatal("cross-tenant actor was resolved")
 	}
 	local := got.Targets[objectref.New(objectref.TypeCustomer, localCustomer.ID)]
-	if local.DisplayName != "Current Local Name" || !local.Exists || !local.Readable || local.URL == "" {
+	if local.DisplayName != "" || local.Exists || local.Readable || local.URL != "" {
 		t.Fatalf("local target = %#v", local)
 	}
 	archived := got.Targets[objectref.New(objectref.TypeCustomer, archivedCustomer.ID)]
-	if archived.DisplayName != "Archived Local Name" || !archived.Exists || !archived.Readable || archived.URL == "" {
-		t.Fatalf("archived admin-readable target = %#v", archived)
+	if archived.DisplayName != "" || archived.Exists || archived.Readable || archived.URL != "" {
+		t.Fatalf("legacy role label authorized archived Customer = %#v", archived)
 	}
 	for _, ref := range []objectref.Ref{
 		objectref.New(objectref.TypeCustomer, foreignCustomer.ID),

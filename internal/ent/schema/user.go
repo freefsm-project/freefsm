@@ -27,6 +27,7 @@ func (User) Fields() []ent.Field {
 		field.String("password_hash").NotEmpty(),
 		field.String("name").NotEmpty(),
 		field.String("role").Default("tech"),
+		field.Int64("authorization_role_id").Optional().Nillable(),
 		field.String("font_size").Default("medium"),
 		field.String("last_schedule_tab").Default("calendar"),
 		field.String("last_schedule_period").Default("month"),

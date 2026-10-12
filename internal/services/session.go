@@ -75,7 +75,7 @@ func (s *SessionService) Validate(ctx context.Context, token string) (int64, err
 	}
 	var userID int64
 	err := s.db.QueryRow(ctx,
-		`SELECT user_id FROM sessions WHERE token_hash = $1 AND kind = 'web' AND expires_at > NOW()`,
+		`SELECT user_id FROM sessions WHERE token_hash = $1 AND kind = 'web' AND revoked_at IS NULL AND expires_at > NOW()`,
 		hashSessionToken(token),
 	).Scan(&userID)
 	if err != nil {

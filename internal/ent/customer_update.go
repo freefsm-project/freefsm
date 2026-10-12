@@ -153,6 +153,20 @@ func (_u *CustomerUpdate) SetNillableNotes(v *string) *CustomerUpdate {
 	return _u
 }
 
+// SetServiceNotes sets the "service_notes" field.
+func (_u *CustomerUpdate) SetServiceNotes(v string) *CustomerUpdate {
+	_u.mutation.SetServiceNotes(v)
+	return _u
+}
+
+// SetNillableServiceNotes sets the "service_notes" field if the given value is not nil.
+func (_u *CustomerUpdate) SetNillableServiceNotes(v *string) *CustomerUpdate {
+	if v != nil {
+		_u.SetServiceNotes(*v)
+	}
+	return _u
+}
+
 // SetStatus sets the "status" field.
 func (_u *CustomerUpdate) SetStatus(v string) *CustomerUpdate {
 	_u.mutation.SetStatus(v)
@@ -479,6 +493,9 @@ func (_u *CustomerUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(customer.FieldNotes, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.ServiceNotes(); ok {
+		_spec.SetField(customer.FieldServiceNotes, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(customer.FieldStatus, field.TypeString, value)
 	}
@@ -683,6 +700,20 @@ func (_u *CustomerUpdateOne) SetNotes(v string) *CustomerUpdateOne {
 func (_u *CustomerUpdateOne) SetNillableNotes(v *string) *CustomerUpdateOne {
 	if v != nil {
 		_u.SetNotes(*v)
+	}
+	return _u
+}
+
+// SetServiceNotes sets the "service_notes" field.
+func (_u *CustomerUpdateOne) SetServiceNotes(v string) *CustomerUpdateOne {
+	_u.mutation.SetServiceNotes(v)
+	return _u
+}
+
+// SetNillableServiceNotes sets the "service_notes" field if the given value is not nil.
+func (_u *CustomerUpdateOne) SetNillableServiceNotes(v *string) *CustomerUpdateOne {
+	if v != nil {
+		_u.SetServiceNotes(*v)
 	}
 	return _u
 }
@@ -1042,6 +1073,9 @@ func (_u *CustomerUpdateOne) sqlSave(ctx context.Context) (_node *Customer, err 
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(customer.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.ServiceNotes(); ok {
+		_spec.SetField(customer.FieldServiceNotes, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(customer.FieldStatus, field.TypeString, value)

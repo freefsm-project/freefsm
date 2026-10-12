@@ -25,14 +25,8 @@ templ UserForm(p UserFormData) {
 					Send welcome email with temporary password
 				</label>
 			}
-			<label>
-				Role
-				<select name="role">
-					for _, r := range p.Roles {
-						<option value={ r } selected?={ p.User.User.Role == r }>{ r }</option>
-					}
-				</select>
-			</label>
+			<input type="hidden" name="role" value={ p.User.User.Role }/>
+			<p>Role authority is managed through <a href="/settings/authorization">Authorization</a>. New users start in an empty-grant Role (initially No permissions).</p>
 			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href="/users" role="button" class="outline">Cancel</a>

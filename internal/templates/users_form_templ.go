@@ -112,58 +112,25 @@ func UserForm(p UserFormData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<label>Role <select name=\"role\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<input type=\"hidden\" name=\"role\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			for _, r := range p.Roles {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<option value=\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var7 string
-				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(r)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 32, Col: 23}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\"")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				if p.User.User.Role == r {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, " selected")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, ">")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				var templ_7745c5c3_Var8 string
-				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(r)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 32, Col: 65}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</option>")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
+			var templ_7745c5c3_Var7 string
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.User.User.Role)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 28, Col: 60}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</select></label><div class=\"entity-form-actions\"><button type=\"submit\">Save</button> <a href=\"/users\" role=\"button\" class=\"outline\">Cancel</a></div></form>")
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"><p>Role authority is managed through <a href=\"/settings/authorization\">Authorization</a>. New users start in an empty-grant Role (initially No permissions).</p><div class=\"entity-form-actions\"><button type=\"submit\">Save</button> <a href=\"/users\" role=\"button\" class=\"outline\">Cancel</a></div></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.IsNew {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<script>\n\t\t\t(function() {\n\t\t\t\tvar cb = document.getElementById('send_welcome_email');\n\t\t\t\tvar fields = document.getElementById('password_fields');\n\t\t\t\tvar inputs = fields.querySelectorAll('input');\n\t\t\t\tfunction sync() {\n\t\t\t\t\tvar show = !cb.checked;\n\t\t\t\t\tfields.classList.toggle('is-hidden', !show);\n\t\t\t\t\tinputs.forEach(function(input) {\n\t\t\t\t\t\tinput.disabled = !show;\n\t\t\t\t\t\tinput.required = show;\n\t\t\t\t\t\tif (!show) input.value = '';\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tcb.addEventListener('change', sync);\n\t\t\t\tsync();\n\t\t\t})();\n\t\t\t</script>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<script>\n\t\t\t(function() {\n\t\t\t\tvar cb = document.getElementById('send_welcome_email');\n\t\t\t\tvar fields = document.getElementById('password_fields');\n\t\t\t\tvar inputs = fields.querySelectorAll('input');\n\t\t\t\tfunction sync() {\n\t\t\t\t\tvar show = !cb.checked;\n\t\t\t\t\tfields.classList.toggle('is-hidden', !show);\n\t\t\t\t\tinputs.forEach(function(input) {\n\t\t\t\t\t\tinput.disabled = !show;\n\t\t\t\t\t\tinput.required = show;\n\t\t\t\t\t\tif (!show) input.value = '';\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tcb.addEventListener('change', sync);\n\t\t\t\tsync();\n\t\t\t})();\n\t\t\t</script>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -66,29 +67,32 @@ type policyService interface {
 }
 
 type Dependencies struct {
-	Sessions    SessionService
-	Users       userService
-	Jobs        jobService
-	Statuses    statusService
-	TimeEntries timeEntryService
-	Mutations   apiMutationService
-	StatusFlow  statusFlowService
-	Policy      policyService
+	Authorization *authorization.Service
+	Sessions      SessionService
+	Users         userService
+	Jobs          jobService
+	Statuses      statusService
+	TimeEntries   timeEntryService
+	Mutations     apiMutationService
+	StatusFlow    statusFlowService
+	Policy        policyService
 }
 
 // NewRouter constructs a router from existing FreeFSM services. Mount the returned
 // handler with http.StripPrefix("/api/v1", ...) or chi.Mount("/api/v1", ...).
 func NewRouter(db *pgxpool.Pool, client *ent.Client, sessions SessionService) http.Handler {
+	authorization.InstallCustomerBoundary(client)
 	objects := objectref.NewEntDirectory(client)
 	return New(Dependencies{
-		Sessions:    sessions,
-		Users:       services.NewUserService(client),
-		Jobs:        services.NewJobService(client),
-		Statuses:    services.NewStatusService(client),
-		TimeEntries: services.NewTimeEntryService(client),
-		Mutations:   services.NewAPIMutationService(db),
-		StatusFlow:  statusflow.New(db),
-		Policy:      services.NewPolicyService(client, objects),
+		Authorization: authorization.New(db),
+		Sessions:      sessions,
+		Users:         services.NewUserService(client),
+		Jobs:          services.NewJobService(client),
+		Statuses:      services.NewStatusService(client),
+		TimeEntries:   services.NewTimeEntryService(client),
+		Mutations:     services.NewAPIMutationService(db),
+		StatusFlow:    statusflow.New(db),
+		Policy:        services.NewPolicyService(client, objects),
 	})
 }
 
@@ -111,6 +115,7 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/me", h.me)
 		r.Get("/jobs", h.listJobs)
 		r.Get("/jobs/{id}", h.getJob)
+		r.Get("/jobs/{id}/customer-context", h.customerContext)
 		r.Post("/jobs/{id}/status", h.updateJobStatus)
 		r.Get("/time-entries/active", h.activeTimeEntry)
 		r.Post("/jobs/{id}/clock-in", h.clockIn)

@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/delivery"
@@ -21,6 +23,9 @@ import (
 
 func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionService, cfg *config.Config, controls ...*instancecontrol.Control) http.Handler {
 	r := chi.NewRouter()
+	authority := authorization.New(db)
+	authorization.InstallCustomerBoundary(entClient)
+	authorityHandler := authorizationHandler{svc: authority}
 	var control *instancecontrol.Control
 	if len(controls) > 0 {
 		control = controls[0]
@@ -32,14 +37,27 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		if err != nil {
 			return nil, err
 		}
+		if !u.IsActive {
+			return nil, fmt.Errorf("disabled user")
+		}
+		principal, authErr := authority.Administrator(ctx, authorization.Actor{UserID: userID})
 		info := &middleware.UserInfo{
-			ID:                 u.ID,
-			Name:               u.Name,
-			Email:              u.Email,
-			Role:               u.Role,
-			FontSize:           u.FontSize,
-			LastScheduleTab:    u.LastScheduleTab,
-			LastSchedulePeriod: u.LastSchedulePeriod,
+			ID:                     u.ID,
+			Name:                   u.Name,
+			Email:                  u.Email,
+			Role:                   u.Role,
+			AuthorizationLoaded:    true,
+			AuthorizationReady:     principal.Ready,
+			ProtectedAdministrator: authErr == nil && principal.Protected && principal.Ready,
+			CustomerView:           principal.Allows("customer.view", authorization.All),
+			CustomerCreate:         principal.Allows("customer.create", authorization.All),
+			CustomerEdit:           principal.Allows("customer.edit", authorization.All),
+			CustomerFinancial:      principal.Allows("customer.financial.view", authorization.All),
+			CustomerContext:        principal.Allows("customer.view", authorization.Context),
+			CanReviewAuthorization: authErr == nil && principal.Protected,
+			FontSize:               u.FontSize,
+			LastScheduleTab:        u.LastScheduleTab,
+			LastSchedulePeriod:     u.LastSchedulePeriod,
 		}
 		if u.CompanyID != nil {
 			info.CompanyID = *u.CompanyID
@@ -145,6 +163,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	r.Group(func(r chi.Router) {
 		r.Use(authMW)
 		r.Use(middleware.ForcePasswordChange(userService))
+		r.Use(bindAuthorization(authority))
 		r.Get("/change-password", passwordHandler.ChangePassword)
 		r.Post("/change-password", passwordHandler.ChangePassword)
 		r.Get("/preferences", userHandler.Preferences)
@@ -166,8 +185,18 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.With(middleware.DispatcherOrAdmin).Get("/projects", projectHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/projects/activity", activityHandler.ListByType(objectref.TypeProject))
 		r.Get("/projects/{id}", projectHandler.Show)
-		r.With(middleware.DispatcherOrAdmin).Get("/customers", customerHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/customers/activity", activityHandler.ListByType(objectref.TypeCustomer))
+		r.Get("/customers", customerHandler.List)
+		r.Get("/customers/activity", activityHandler.ListByType(objectref.TypeCustomer))
+		r.Get("/customers/new", customerHandler.Create)
+		r.Post("/customers", customerHandler.Create)
+		r.Get("/customers/{id}/edit", customerHandler.Update)
+		r.Post("/customers/{id}", customerHandler.Update)
+		r.Get("/jobs/{id}/customer-context", authorityHandler.Context)
+		r.Get("/settings/authorization", authorityHandler.Show)
+		r.Post("/settings/authorization/roles", authorityHandler.SaveRole)
+		r.Post("/settings/authorization/roles/remove", authorityHandler.RemoveRole)
+		r.Post("/settings/authorization/assign", authorityHandler.Assign)
+		r.Post("/settings/authorization/cutover", authorityHandler.Cutover)
 		r.Get("/customers/{id}", customerHandler.Show)
 		r.Get("/customers/{id}/contacts", customerHandler.ListContacts)
 		r.Get("/customers/{id}/contacts/options", customerHandler.Contacts)
@@ -227,10 +256,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(activeObjectGuard(objectref.TypeProject)).Get("/projects/{id}/edit", projectHandler.Update)
 			r.With(activeObjectGuard(objectref.TypeProject)).Post("/projects/{id}", projectHandler.Update)
 			r.With(activeObjectGuard(objectref.TypeProject)).Post("/projects/{id}/delete", projectHandler.Delete)
-			r.Get("/customers/new", customerHandler.Create)
-			r.Post("/customers", customerHandler.Create)
-			r.With(activeObjectGuard(objectref.TypeCustomer)).Get("/customers/{id}/edit", customerHandler.Update)
-			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}", customerHandler.Update)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/delete", customerHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/credit/refunds", customerHandler.RefundCredit)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/credit/refunds/{refund_id}/reverse", customerHandler.ReverseRefund)

@@ -9,6 +9,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/user"
 	"golang.org/x/crypto/bcrypt"
@@ -142,6 +143,9 @@ func (s *UserService) Update(ctx context.Context, id int64, p UserUpdateParams) 
 }
 
 func (s *UserService) SetActive(ctx context.Context, id int64, active bool) error {
+	if request, ok := authorization.FromContext(ctx); ok {
+		return request.Service.SetEnabled(ctx, request.Actor, id, active)
+	}
 	return s.client.User.UpdateOneID(id).SetIsActive(active).Exec(ctx)
 }
 
