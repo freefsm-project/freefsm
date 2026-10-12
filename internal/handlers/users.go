@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
@@ -21,6 +22,7 @@ type UserHandler struct {
 	svc         *services.UserService
 	emailSvc    *services.EmailService
 	inviteSvc   *services.InvitationService
+	resetSvc    *services.PasswordResetService
 	csSvc       *services.CompanySettingsService
 	activitySvc *services.ActivityService
 	cfg         *config.Config
@@ -31,12 +33,27 @@ func NewUserHandler(svc *services.UserService, emailSvc *services.EmailService, 
 }
 
 func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
-	users, _ := h.svc.ListAll(r.Context())
+	users, err := h.svc.ListAll(r.Context())
+	if err != nil {
+		internalServerError(w, r, "list users", err)
+		return
+	}
+	roleNames := map[int64]string{}
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		roleNames, err = request.Service.AccountRoleNames(r.Context(), request.Actor)
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+	}
 	rows := make([]templates.UserRow, len(users))
 	for i, u := range users {
 		rows[i] = templates.UserRow{
 			ID: u.ID, Name: u.Name, Email: u.Email,
 			Role: u.Role, IsActive: u.IsActive,
+		}
+		if name, ok := roleNames[u.ID]; ok {
+			rows[i].Role = name
 		}
 	}
 	templates.UsersIndex(templates.UserListData{Users: rows}).Render(r.Context(), w)
@@ -44,10 +61,22 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
+		var options []templates.SelectOption
+		if request, ok := authorization.FromContext(r.Context()); ok {
+			review, err := request.Service.Review(r.Context(), request.Actor)
+			if err != nil {
+				authorizationError(w, r, err)
+				return
+			}
+			for _, role := range review.Roles {
+				options = append(options, templates.SelectOption{Value: role.ID, Label: role.Name})
+			}
+		}
 		templates.UserForm(templates.UserFormData{
-			IsNew: true,
-			User:  &templates.UserDetail{User: templates.UserRow{Role: "tech"}},
-			Roles: []string{"admin", "dispatcher", "tech"},
+			IsNew:       true,
+			User:        &templates.UserDetail{User: templates.UserRow{Role: "tech"}},
+			Roles:       []string{"admin", "dispatcher", "tech"},
+			RoleOptions: options,
 		}).Render(r.Context(), w)
 		return
 	}
@@ -83,12 +112,14 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	roleID, _ := strconv.ParseInt(r.FormValue("role_id"), 10, 64)
 	result, err := h.svc.Create(r.Context(), services.UserCreateParams{
 		CompanyID:        a.CompanyID,
 		Name:             r.FormValue("name"),
 		Email:            r.FormValue("email"),
 		Password:         password,
 		Role:             r.FormValue("role"),
+		RoleID:           roleID,
 		SendWelcomeEmail: sendWelcome,
 	})
 	if err != nil {
@@ -143,7 +174,16 @@ func (h *UserHandler) Show(w http.ResponseWriter, r *http.Request) {
 		internalServerError(w, r, "check welcome resend eligibility", err)
 		return
 	}
-	templates.UserShow(templates.UserDetailPage{User: userToRow(u), CanResendWelcome: canResend}).Render(r.Context(), w)
+	row := userToRow(u)
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		names, err := request.Service.AccountRoleNames(r.Context(), request.Actor)
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		row.Role = names[u.ID]
+	}
+	templates.UserShow(templates.UserDetailPage{User: row, CanResendWelcome: canResend}).Render(r.Context(), w)
 }
 
 func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +201,18 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.ParseForm()
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		if r.Form.Has("role") || r.Form.Has("role_id") || r.Form.Has("is_active") || r.Form.Has("password") {
+			authorizationError(w, r, authorization.ErrConflict)
+			return
+		}
+		if err := request.Service.EditIdentity(r.Context(), request.Actor, id, r.FormValue("name"), r.FormValue("email")); err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=User+updated", id), http.StatusSeeOther)
+		return
+	}
 	_, err := h.svc.Update(r.Context(), id, services.UserUpdateParams{
 		Name:  formPtr(r.FormValue("name")),
 		Email: formPtr(r.FormValue("email")),
@@ -190,7 +242,10 @@ func (h *UserHandler) Disable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newState := !user.IsActive
-	h.svc.SetActive(r.Context(), id, newState)
+	if err := h.svc.SetActive(r.Context(), id, newState); err != nil {
+		authorizationError(w, r, err)
+		return
+	}
 
 	a, _ := middleware.UserFromContext(r.Context())
 	if a != nil && h.activitySvc != nil {
@@ -234,7 +289,7 @@ func (h *UserHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=%s", id, url.QueryEscape(err.Error())), http.StatusSeeOther)
 		return
 	}
-	if err := h.svc.SetPassword(r.Context(), id, password); err != nil {
+	if err := h.svc.ResetPasswordAsAdministrator(r.Context(), id, password); err != nil {
 		internalServerError(w, r, "admin reset password", err)
 		return
 	}
@@ -309,6 +364,41 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+resent", id), http.StatusSeeOther)
+}
+
+func (h *UserHandler) ResendRecovery(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	request, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
+	p, err := request.Service.Administrator(r.Context(), request.Actor)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	u, err := h.svc.GetByID(r.Context(), id)
+	if err != nil || u.CompanyID == nil || *u.CompanyID != p.CompanyID {
+		http.NotFound(w, r)
+		return
+	}
+	if err := h.emailSvc.CheckAvailability(r.Context()); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	token, err := h.resetSvc.CreateToken(r.Context(), id)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	link := absoluteAppURL(h.cfg, r, "/reset-password?token="+url.QueryEscape(token))
+	if err := h.emailSvc.SendPasswordReset(r.Context(), u.Email, u.Name, link); err != nil {
+		slog.Error("send Administrator recovery email", "user_id", id, "error", err)
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Recovery+email+failed", id), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Recovery+email+sent", id), http.StatusSeeOther)
 }
 
 func normalizedFontSize(fontSize string) string {

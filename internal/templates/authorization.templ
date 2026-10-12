@@ -1,12 +1,31 @@
 package templates
 
 import (
-	"encoding/json"
 	"fmt"
 	"github.com/freefsm-project/freefsm/internal/authorization"
 )
 
-func grantJSON(grants []authorization.Grant) string { b, _ := json.Marshal(grants); return string(b) }
+func hasRoleGrant(grants []authorization.Grant, grant authorization.Grant) bool {
+	for _, g := range grants { if g == grant { return true } }
+	return false
+}
+
+templ GrantEditor(options []authorization.GrantOption, grants []authorization.Grant) {
+	<input type="hidden" name="catalog_form" value="true"/>
+	<p>Choose explicit grants. No selections grants no permissions. A: All Records; J: Assigned Jobs; C: read-only Job Context; O: Own; U: configuration. Required Views must have equal or broader scope. Invalid combinations or narrowing with retained dependents are rejected atomically.</p>
+	<details>
+		<summary>Permission catalog and prerequisites</summary>
+		for _, option := range options {
+			<label>
+				<input type="checkbox" name="grant" value={ option.Permission+":"+string(option.Scope) } checked?={ hasRoleGrant(grants, option.Grant) }/>
+				{ option.Permission } / { string(option.Scope) }
+			</label>
+			if option.Requires != "" {
+				<p><small>Requires { option.Requires }</small></p>
+			}
+		}
+	</details>
+}
 
 func reviewedRoleName(p authorization.Review, id *int64) string {
 	if id != nil {
@@ -40,7 +59,7 @@ templ AuthorizationReview(p authorization.Review) {
 						<input type="hidden" name="role_id" value={ fmt.Sprint(role.ID) }/>
 						<input type="hidden" name="role_revision" value={ fmt.Sprint(role.Revision) }/>
 						<label>Name <input name="name" required value={ role.Name }/></label>
-						<label>Explicit grants (JSON array; [] grants no permissions)<textarea name="grants" required rows="6">{ grantJSON(role.Grants) }</textarea></label>
+						@GrantEditor(p.Catalog, role.Grants)
 						<button>Save Role and grants</button>
 					</form>
 					if p.Ready {
@@ -69,7 +88,8 @@ templ AuthorizationReview(p authorization.Review) {
 			<form action="/settings/authorization/roles" method="post">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<label>Name <input name="name" required/></label>
-				<label>Explicit grants <textarea name="grants" required>[]</textarea></label><button>Create Role</button>
+				@GrantEditor(p.Catalog, nil)
+				<button>Create Role</button>
 			</form>
 		</details>
 		<h2>Individual user decisions</h2>

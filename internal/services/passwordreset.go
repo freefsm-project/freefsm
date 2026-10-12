@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/passwordresettoken"
+	"github.com/jackc/pgx/v5"
 )
 
 type PasswordResetService struct {
@@ -27,6 +29,30 @@ func (s *PasswordResetService) CreateToken(ctx context.Context, userID int64) (s
 	}
 	token := hex.EncodeToString(b)
 	hash := sha256.Sum256([]byte(token))
+	if request, ok := authorization.FromContext(ctx); ok {
+		p, err := request.Service.Administrator(ctx, request.Actor)
+		if err != nil {
+			return "", err
+		}
+		err = request.Service.MutateAccountLink(ctx, request.Actor, p.CompanyID, userID, "user.recovery.resend", func(tx pgx.Tx) error {
+			var enabled bool
+			if err := tx.QueryRow(ctx, `SELECT is_active FROM users WHERE id=$1`, userID).Scan(&enabled); err != nil {
+				return err
+			}
+			if !enabled {
+				return authorization.ErrConflict
+			}
+			if _, err := tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id=$1`, userID); err != nil {
+				return err
+			}
+			_, err := tx.Exec(ctx, `INSERT INTO password_reset_tokens(company_id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '1 hour')`, p.CompanyID, userID, hex.EncodeToString(hash[:]))
+			return err
+		})
+		if err != nil {
+			return "", err
+		}
+		return token, nil
+	}
 
 	_, err := s.client.PasswordResetToken.Create().
 		SetTokenHash(hex.EncodeToString(hash[:])).

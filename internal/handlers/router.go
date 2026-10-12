@@ -50,6 +50,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			AuthorizationReady:     principal.Ready,
 			ProtectedAdministrator: authErr == nil && principal.Protected && principal.Ready,
 			CustomerView:           principal.Allows("customer.view", authorization.All),
+			DirectoryView:          principal.Allows("directory.view", authorization.All),
 			CustomerCreate:         principal.Allows("customer.create", authorization.All),
 			CustomerEdit:           principal.Allows("customer.edit", authorization.All),
 			CustomerFinancial:      principal.Allows("customer.financial.view", authorization.All),
@@ -130,6 +131,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	userHandler := NewUserHandler(userService, emailSvc, inviteSvc, companySettingsSvc, activitySvc, cfg)
 	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, jobService, activitySvc)
 	authHandler := NewAuthHandler(db, sessions, userService, companySettingsSvc, emailSvc, services.NewPasswordResetService(entClient), inviteSvc, activitySvc, cfg)
+	userHandler.resetSvc = services.NewPasswordResetService(entClient)
 	passwordHandler := NewPasswordHandler(userService, companySettingsSvc, activitySvc)
 
 	// Asset handlers
@@ -193,6 +195,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/customers/{id}", customerHandler.Update)
 		r.Get("/jobs/{id}/customer-context", authorityHandler.Context)
 		r.Get("/settings/authorization", authorityHandler.Show)
+		r.Get("/directory", authorityHandler.Directory)
 		r.Post("/settings/authorization/roles", authorityHandler.SaveRole)
 		r.Post("/settings/authorization/roles/remove", authorityHandler.RemoveRole)
 		r.Post("/settings/authorization/assign", authorityHandler.Assign)
@@ -447,7 +450,10 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/users/{id}", userHandler.Update)
 			r.Post("/users/{id}/disable", userHandler.Disable)
 			r.Post("/users/{id}/resend-welcome", userHandler.ResendWelcome)
+			r.Post("/users/{id}/resend-recovery", userHandler.ResendRecovery)
 			r.Post("/users/{id}/reset-password", userHandler.ResetPassword)
+			r.Post("/users/{id}/require-change", authorityHandler.AccountSecurity)
+			r.Post("/users/{id}/revoke-sessions", authorityHandler.AccountSecurity)
 		})
 	})
 

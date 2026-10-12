@@ -90,6 +90,11 @@ func canReviewAuthorization(ctx context.Context) bool {
 	u, ok := middleware.UserFromContext(ctx)
 	return ok && u != nil && u.CanReviewAuthorization
 }
+
+func canViewDirectory(ctx context.Context) bool {
+	u, ok := middleware.UserFromContext(ctx)
+	return ok && u != nil && u.DirectoryView
+}
 func customerNewURL(ctx context.Context) string {
 	if canCustomer(ctx, "create") {
 		return "/customers/new"
@@ -726,9 +731,10 @@ type UserDetailPage struct {
 }
 
 type UserFormData struct {
-	User  *UserDetail
-	IsNew bool
-	Roles []string
+	RoleOptions []SelectOption
+	User        *UserDetail
+	IsNew       bool
+	Roles       []string
 }
 
 type ChangePasswordData struct {

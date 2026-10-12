@@ -1,0 +1,20 @@
+package templates
+
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ Directory(people []authorization.DirectoryPerson) {
+	@Layout("Operational directory") {
+		<h1>Operational directory</h1>
+		<table><thead><tr><th>Name</th><th>Email</th><th>Availability</th></tr></thead><tbody>
+			for _, person := range people {
+				<tr><td>{ person.Name }</td><td>{ person.Email }</td><td>
+					if person.Available {
+						<span>Available</span>
+					} else {
+						<span>Unavailable</span>
+					}
+				</td></tr>
+			}
+		</tbody></table>
+	}
+}

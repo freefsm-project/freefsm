@@ -8,6 +8,8 @@ package templates
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
+import "fmt"
+
 func UserForm(p UserFormData) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -48,7 +50,7 @@ func UserForm(p UserFormData) templ.Component {
 			var templ_7745c5c3_Var3 templ.SafeURL
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(userFormAction(p.IsNew, p.User.User.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 6, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 8, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -61,7 +63,7 @@ func UserForm(p UserFormData) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 7, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 9, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
@@ -74,7 +76,7 @@ func UserForm(p UserFormData) templ.Component {
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.User.User.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 10, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 12, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 			if templ_7745c5c3_Err != nil {
@@ -87,7 +89,7 @@ func UserForm(p UserFormData) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.User.User.Email)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 14, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 16, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 			if templ_7745c5c3_Err != nil {
@@ -98,6 +100,46 @@ func UserForm(p UserFormData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if p.IsNew {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<label>Role <select name=\"role_id\" required><option value=\"\">Choose explicitly</option> ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				for _, role := range p.RoleOptions {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<option value=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var7 string
+					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(role.Value))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 23, Col: 46}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var8 string
+					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(role.Label)
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 23, Col: 61}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</option>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "</select></label>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 				templ_7745c5c3_Err = NewPasswordFields(NewPasswordFieldsOptions{
 					ID: "user-password", Name: "password", Label: "Password", Placeholder: "Password",
 					ConfirmID: "user-confirm-password", ConfirmLabel: "Confirm Password", ConfirmPlaceholder: "Confirm password",
@@ -107,30 +149,17 @@ func UserForm(p UserFormData) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, " <label><input type=\"checkbox\" name=\"send_welcome_email\" id=\"send_welcome_email\" checked> Send welcome email with temporary password</label> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, " <label><input type=\"checkbox\" name=\"send_welcome_email\" id=\"send_welcome_email\" checked> Send welcome invitation</label>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<input type=\"hidden\" name=\"role\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var7 string
-			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.User.User.Role)
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/users_form.templ`, Line: 28, Col: 60}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"><p>Role authority is managed through <a href=\"/settings/authorization\">Authorization</a>. New users start in an empty-grant Role (initially No permissions).</p><div class=\"entity-form-actions\"><button type=\"submit\">Save</button> <a href=\"/users\" role=\"button\" class=\"outline\">Cancel</a></div></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<p>Role authority is managed through <a href=\"/settings/authorization\">Authorization</a>. Choose No permissions for an empty-grant Role. Administrator-set passwords must be replaced before normal access.</p><div class=\"entity-form-actions\"><button type=\"submit\">Save</button> <a href=\"/users\" role=\"button\" class=\"outline\">Cancel</a></div></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.IsNew {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<script>\n\t\t\t(function() {\n\t\t\t\tvar cb = document.getElementById('send_welcome_email');\n\t\t\t\tvar fields = document.getElementById('password_fields');\n\t\t\t\tvar inputs = fields.querySelectorAll('input');\n\t\t\t\tfunction sync() {\n\t\t\t\t\tvar show = !cb.checked;\n\t\t\t\t\tfields.classList.toggle('is-hidden', !show);\n\t\t\t\t\tinputs.forEach(function(input) {\n\t\t\t\t\t\tinput.disabled = !show;\n\t\t\t\t\t\tinput.required = show;\n\t\t\t\t\t\tif (!show) input.value = '';\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tcb.addEventListener('change', sync);\n\t\t\t\tsync();\n\t\t\t})();\n\t\t\t</script>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<script>\n\t\t\t(function() {\n\t\t\t\tvar cb = document.getElementById('send_welcome_email');\n\t\t\t\tvar fields = document.getElementById('password_fields');\n\t\t\t\tvar inputs = fields.querySelectorAll('input');\n\t\t\t\tfunction sync() {\n\t\t\t\t\tvar show = !cb.checked;\n\t\t\t\t\tfields.classList.toggle('is-hidden', !show);\n\t\t\t\t\tinputs.forEach(function(input) {\n\t\t\t\t\t\tinput.disabled = !show;\n\t\t\t\t\t\tinput.required = show;\n\t\t\t\t\t\tif (!show) input.value = '';\n\t\t\t\t\t});\n\t\t\t\t}\n\t\t\t\tcb.addEventListener('change', sync);\n\t\t\t\tsync();\n\t\t\t})();\n\t\t\t</script>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

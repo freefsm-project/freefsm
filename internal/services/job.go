@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/customer"
 	"github.com/freefsm-project/freefsm/internal/ent/job"
@@ -701,7 +702,13 @@ func (s *JobService) Move(ctx context.Context, id, userID int64, startTime, endT
 		return nil, err
 	}
 
-	u := s.client.Job.UpdateOneID(id).SetStartTime(startTime).SetAssignments(SerializeAssignments(assignments))
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	txClient := tx.Client()
+	u := txClient.Job.UpdateOneID(id).SetStartTime(startTime).SetAssignments(SerializeAssignments(assignments))
 	if endTime.IsZero() {
 		u.ClearEndTime()
 	} else {
@@ -712,10 +719,13 @@ func (s *JobService) Move(ctx context.Context, id, userID int64, startTime, endT
 	if err != nil {
 		return nil, fmt.Errorf("move job %d: %w", id, err)
 	}
-	if err := s.replaceAssignments(ctx, s.client, id, assignments); err != nil {
+	if err := s.replaceAssignments(ctx, txClient, id, assignments); err != nil {
 		return nil, err
 	}
-	return j, nil
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return j.Unwrap(), nil
 }
 
 func (s *JobService) MoveTime(ctx context.Context, id int64, startTime, endTime time.Time) (*ent.Job, error) {
@@ -760,15 +770,55 @@ func (s *JobService) Assignments(ctx context.Context, jobID int64) ([]JobAssignm
 }
 
 func (s *JobService) replaceAssignments(ctx context.Context, client *ent.Client, jobID int64, assignments []JobAssignment) error {
-	if _, err := client.JobAssignment.Delete().Where(jobassignment.JobIDEQ(jobID)).Exec(ctx); err != nil {
+	existing, err := client.JobAssignment.Query().Where(jobassignment.JobIDEQ(jobID)).All(ctx)
+	if err != nil {
+		return err
+	}
+	retained := map[int64]*ent.JobAssignment{}
+	for _, row := range existing {
+		retained[row.UserID] = row
+	}
+	ids := []int64{}
+	for _, assignment := range assignments {
+		if assignment.UserID > 0 {
+			ids = append(ids, assignment.UserID)
+		}
+	}
+	deletion := client.JobAssignment.Delete().Where(jobassignment.JobIDEQ(jobID))
+	if len(ids) > 0 {
+		deletion.Where(jobassignment.UserIDNotIn(ids...))
+	}
+	if _, err := deletion.Exec(ctx); err != nil {
 		return fmt.Errorf("delete job assignments: %w", err)
 	}
 	for _, assignment := range assignments {
 		if assignment.UserID <= 0 {
 			continue
 		}
+		if row, ok := retained[assignment.UserID]; ok {
+			if row.Role != strings.TrimSpace(assignment.Role) {
+				if err := client.JobAssignment.UpdateOneID(row.ID).SetRole(strings.TrimSpace(assignment.Role)).Exec(ctx); err != nil {
+					return err
+				}
+			}
+			continue
+		}
 		if _, err := client.JobAssignment.Create().SetJobID(jobID).SetUserID(assignment.UserID).SetRole(strings.TrimSpace(assignment.Role)).Save(ctx); err != nil {
 			return fmt.Errorf("create job assignment: %w", err)
+		}
+	}
+	// The assignment statement trigger holds the authorization transaction mutex
+	// through commit, so grant/session/disable writers cannot race this fresh
+	// check. The selected people are an independently authorized input.
+	if len(assignments) > 0 {
+		if request, ok := authorization.FromContext(ctx); ok {
+			p, err := request.Service.Principal(ctx, request.Actor)
+			if err != nil {
+				return err
+			}
+			if !p.Allows("directory.view", authorization.All) {
+				return authorization.ErrForbidden
+			}
 		}
 	}
 	return nil

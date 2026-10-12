@@ -25,6 +25,7 @@ type UserInfo struct {
 	AuthorizationReady     bool
 	AuthorizationLoaded    bool
 	CustomerView           bool
+	DirectoryView          bool
 	CustomerCreate         bool
 	CustomerEdit           bool
 	CustomerFinancial      bool

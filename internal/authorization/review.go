@@ -28,10 +28,11 @@ type ReviewUser struct {
 	Reviewed   bool      `json:"reviewed"`
 }
 type Review struct {
-	Snapshot string       `json:"snapshot"`
-	Ready    bool         `json:"ready"`
-	Roles    []Role       `json:"roles"`
-	Users    []ReviewUser `json:"users"`
+	Catalog  []GrantOption `json:"catalog"`
+	Snapshot string        `json:"snapshot"`
+	Ready    bool          `json:"ready"`
+	Roles    []Role        `json:"roles"`
+	Users    []ReviewUser  `json:"users"`
 }
 
 func (s *Service) Review(ctx context.Context, a Actor) (Review, error) {
@@ -56,6 +57,11 @@ func (s *Service) Review(ctx context.Context, a Actor) (Review, error) {
 
 func loadReview(ctx context.Context, q queryer, p Principal) (Review, error) {
 	result := Review{Ready: p.Ready, Roles: []Role{}, Users: []ReviewUser{}}
+	var err error
+	result.Catalog, err = grantOptions(ctx, q)
+	if err != nil {
+		return result, err
+	}
 	rows, err := q.Query(ctx, `SELECT id,name,protected,revision FROM authorization_roles ORDER BY id`)
 	if err != nil {
 		return result, err

@@ -24,6 +24,20 @@ templ UserShow(p UserDetailPage) {
 						}
 					</button>
 				</form>
+				<form action={ templ.URL(fmt.Sprintf("/users/%d/require-change", p.User.ID)) } method="post">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<button class="outline">Require credential change</button>
+				</form>
+				<form action={ templ.URL(fmt.Sprintf("/users/%d/revoke-sessions", p.User.ID)) } method="post">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<button class="outline">Revoke all sessions</button>
+				</form>
+				if p.User.IsActive {
+					<form action={ templ.URL(fmt.Sprintf("/users/%d/resend-recovery", p.User.ID)) } method="post">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button class="outline">Resend recovery email</button>
+					</form>
+				}
 			</div>
 		</div>
 		<table class="work-item-detail-meta">
