@@ -27,11 +27,15 @@ func (h AcceptanceHook) OnAccepted(ctx context.Context, tx pgx.Tx, d delivery.De
 		return nil
 	}
 	var current *int64
-	query := `SELECT status_id FROM ` + string(typ) + `s WHERE id=$1 AND company_id=$2 AND deleted_at IS NULL FOR UPDATE`
-	if err := tx.QueryRow(ctx, query, d.DocumentID, d.CompanyID).Scan(&current); err != nil {
+	var category CategoryKey
+	query := `SELECT o.status_id,s.category_key FROM ` + string(typ) + `s o JOIN statuses s ON s.id=o.status_id WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL AND o.conversion_hidden_at IS NULL FOR UPDATE OF o,s`
+	if err := tx.QueryRow(ctx, query, d.DocumentID, d.CompanyID).Scan(&current, &category); err != nil {
 		return mapNoRows(err)
 	}
 	if !sameStatus(current, d.ExpectedStatusID) {
+		return nil
+	}
+	if (typ == Estimate && category != EstimateDraft && category != EstimateEstimate) || (typ == Invoice && category != InvoiceInvoiced) {
 		return nil
 	}
 	var target int64

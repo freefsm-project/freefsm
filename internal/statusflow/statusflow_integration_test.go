@@ -294,6 +294,23 @@ func TestAcceptanceHookTransitionsToConfiguredSentDefaultOnlyWhenStatusUnchanged
 	if actual != otherID || logs != 2 {
 		t.Fatalf("stale delivery status=%d logs=%d, want %d/2", actual, logs, otherID)
 	}
+	// The identity can remain unchanged while its meaning changes. Acceptance
+	// must not turn a newly Accepted definition back into Sent.
+	svc := New(db)
+	actor := Actor{ID: admin, CompanyID: company}
+	replacement, err := svc.Create(ctx, actor, CreateRequest{Type: Estimate, Name: "Other proposal", Category: EstimateEstimate})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.Move(ctx, actor, MoveRequest{StatusID: otherID, Category: EstimateAccepted, SourceReplacementID: replacement.ID, ConfirmInUse: true}); err != nil {
+		t.Fatal(err)
+	}
+	d.ExpectedStatusID = &otherID
+	withTx(t, db, func(tx pgx.Tx) error { return hook.OnAccepted(ctx, tx, d) })
+	mustScan(t, db.QueryRow(ctx, `SELECT status_id FROM estimates WHERE id=$1`, estimateID), &actual)
+	if actual != otherID {
+		t.Fatal("delivery overwrote a semantic configuration change")
+	}
 }
 
 func withTx(t *testing.T, db *pgxpool.Pool, fn func(pgx.Tx) error) {
