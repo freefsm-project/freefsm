@@ -146,20 +146,13 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.Statuses = statusOptions(statuses)
 	u, _ := middleware.UserFromContext(r.Context())
 	d.CanManage = templates.DetailCan(r.Context(), "edit")
-	convertibleStatus := false
-	for _, status := range statuses {
-		if e.StatusID != nil && status.ID == *e.StatusID {
-			convertibleStatus = true
-			break
-		}
-	}
-	if actor, ok := conversionActor(r); ok && convertibleStatus {
+	if actor, ok := conversionActor(r); ok {
 		eligibility, eligibilityErr := h.conversion.ConversionEligibility(r.Context(), actor, id)
 		if eligibilityErr == nil {
 			d.CanConvert = eligibility.Allowed
 			d.ConvertKey = uuid.NewString()
 			if !eligibility.Allowed && eligibility.Active == nil {
-				d.ConvertBlocker = "This estimate's current status does not allow conversion."
+				d.ConvertBlocker = "Restore this archived estimate before conversion."
 			}
 		} else if !errors.Is(eligibilityErr, conversion.ErrForbidden) && !errors.Is(eligibilityErr, conversion.ErrNotFound) {
 			internalServerError(w, r, "check estimate conversion eligibility", eligibilityErr)
