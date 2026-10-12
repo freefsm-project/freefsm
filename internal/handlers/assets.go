@@ -369,10 +369,14 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	assetTypeID, _ := strconv.ParseInt(r.FormValue("asset_type_id"), 10, 64)
-	assetStatusID, _ := strconv.ParseInt(r.FormValue("asset_status_id"), 10, 64)
-
 	var statusID *int64
-	if assetStatusID > 0 {
+	// Omitted means unchanged; the form's explicit zero means clear.
+	if r.Form.Has("asset_status_id") {
+		assetStatusID, err := strconv.ParseInt(r.FormValue("asset_status_id"), 10, 64)
+		if err != nil || assetStatusID < 0 {
+			http.Error(w, "invalid asset status", http.StatusBadRequest)
+			return
+		}
 		statusID = &assetStatusID
 	}
 
