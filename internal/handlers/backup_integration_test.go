@@ -112,7 +112,7 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 		if err := os.MkdirAll(f.uploads, 0700); err != nil {
 			t.Fatal(err)
 		}
-		if err := db.Migrate(ctx, os.DirFS("../database/migrations")); err != nil {
+		if err := db.Migrate(ctx, database.MigrationFS()); err != nil {
 			t.Fatal(err)
 		}
 		pgcfg, err := pgx.ParseConfig(u.String())

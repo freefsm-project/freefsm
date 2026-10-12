@@ -3,6 +3,10 @@ MODULE   := github.com/freefsm-project/freefsm
 GO       := go
 
 BUILD_DIR := dist
+# Staging and service ownership for platform installers.
+DESTDIR ?=
+SERVICE_USER ?= freefsm
+SERVICE_GROUP ?= freefsm
 
 # PATH extension for Go binaries
 _PATH_EXTRA := $(HOME)/go/bin
@@ -51,25 +55,16 @@ install: compile
 	@echo "installing..."
 	@install -m 755 $(BUILD_DIR)/$(BINARY) /usr/local/bin/$(BINARY)
 
-install-freebsd: install
-	@install -m 755 deploy/freebsd/freefsm /etc/rc.d/freefsm
-	@install -m 644 deploy/freebsd/freefsm.conf.sample /usr/local/etc/freefsm.conf.sample
-	@if [ ! -f /usr/local/etc/freefsm.conf ]; then \
-		cp /usr/local/etc/freefsm.conf.sample /usr/local/etc/freefsm.conf; \
-		echo "Created /usr/local/etc/freefsm.conf — edit it with your secrets"; \
-	fi
-	@install -d -o freefsm -g freefsm -m 755 /var/log/freefsm
-	@install -d -o freefsm -g freefsm -m 755 /var/db/freefsm/uploads
+install-freebsd: compile
+	@install -d "$(DESTDIR)/usr/local/bin"
+	@install -m 755 $(BUILD_DIR)/$(BINARY) "$(DESTDIR)/usr/local/bin/$(BINARY)"
+	@sh deploy/freebsd/install.sh "$(if $(DESTDIR),$(DESTDIR),/)" "$(SERVICE_USER)" "$(SERVICE_GROUP)"
 
-install-linux: install
-	@install -m 644 deploy/linux/freefsm.service /etc/systemd/system/freefsm.service
-	@if [ ! -f /etc/freefsm.conf ]; then \
-		install -m 600 deploy/linux/freefsm.conf.sample /etc/freefsm.conf; \
-		echo "Created /etc/freefsm.conf — edit it with your secrets"; \
-	fi
-	@install -d -m 755 /var/log/freefsm
-	@install -d -o freefsm -g freefsm -m 755 /var/lib/freefsm/uploads
-	@systemctl daemon-reload
+install-linux: compile
+	@install -d "$(DESTDIR)/usr/local/bin"
+	@install -m 755 $(BUILD_DIR)/$(BINARY) "$(DESTDIR)/usr/local/bin/$(BINARY)"
+	@sh deploy/linux/install.sh "$(if $(DESTDIR),$(DESTDIR),/)" "$(SERVICE_USER)" "$(SERVICE_GROUP)"
+	@if [ -z "$(DESTDIR)" ]; then systemctl daemon-reload; fi
 
 clean:
 	@rm -rf $(BUILD_DIR) internal/repository/
