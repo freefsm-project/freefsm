@@ -6,10 +6,10 @@ import "fmt"
 templ SettingsTabs(active string, isSetup bool) {
 	<div class="settings-tabs" aria-label="Settings sections" hx-boost="false">
 		@SettingsTab("company", "Company", active)
-		@SettingsTab("email", "Email", active)
+		<a href="/settings/mail">Mail</a>
 		@SettingsTab("pdf", "PDF", active)
 		if !isSetup {
-			@SettingsTab("map", "Map", active)
+			<a href="/settings/maps">Map</a>
 		}
 		@SettingsTab("security", "Security", active)
 		if !isSetup {
@@ -113,72 +113,8 @@ templ SettingsPage(p SettingsPageData) {
 		
 		<!-- Email Tab -->
 			<div class="settings-tab-content" id="tab-email">
-				<div class="grid">
-					<label>
-						SMTP Host
-						<input type="text" name="smtp_host" value={ p.Settings.SMTPHost } placeholder="smtp.example.com"/>
-					</label>
-					<label>
-						SMTP Port
-						<input type="number" name="smtp_port" value={ fmt.Sprintf("%d", p.Settings.SMTPPort) }/>
-					</label>
-				</div>
-				<div class="grid">
-					<label>
-						Username
-						<input type="text" name="smtp_user" value={ p.Settings.SMTPUser }/>
-					</label>
-					<label>
-						Password
-						<input type="password" name="smtp_password" value={ p.Settings.SMTPPassword }/>
-					</label>
-				</div>
-				<label>
-					From Address
-					<input type="email" name="smtp_from" value={ p.Settings.SMTPFrom } placeholder="freefsm@example.com"/>
-				</label>
-				<label>
-					Auto CC
-					<input type="text" name="email_auto_cc" value={ p.Settings.EmailAutoCc } placeholder="owner@example.com"/>
-					<small>Inserted into invoice and estimate email CC fields. Separate multiple addresses with commas.</small>
-				</label>
-				<hr/>
-				<h3>Invoice Email Defaults</h3>
-				<label>
-					Subject
-					<input type="text" name="invoice_email_subject" value={ p.Settings.InvoiceEmailSubject } placeholder="Invoice {invoice_number} from {business_name}"/>
-				</label>
-				<label>
-					Body
-					<textarea name="invoice_email_body" rows="6" placeholder="Hello {customer_name},">{ p.Settings.InvoiceEmailBody }</textarea>
-				</label>
-				<h3>Estimate Email Defaults</h3>
-				<label>
-					Subject
-					<input type="text" name="estimate_email_subject" value={ p.Settings.EstimateEmailSubject } placeholder="Estimate {estimate_number} from {business_name}"/>
-				</label>
-				<label>
-					Body
-					<textarea name="estimate_email_body" rows="6" placeholder="Hello {customer_name},">{ p.Settings.EstimateEmailBody }</textarea>
-				</label>
-				<p class="settings-help">Available placeholders: <code>{ "{customer_name}" }</code>, <code>{ "{business_name}" }</code>, <code>{ "{invoice_number}" }</code>, <code>{ "{estimate_number}" }</code>, <code>{ "{job_name}" }</code>, <code>{ "{job_type}" }</code>, <code>{ "{job_subtitle}" }</code>, and <code>{ "{date}" }</code>.</p>
-				<label>
-					<input type="checkbox" name="email_tracking_enabled" checked?={ p.Settings.EmailTrackingEnabled }/>
-					Track document email opens
-				</label>
-				<p class="settings-help">Adds a one-pixel image to queued document emails. Opens are approximate because mail clients and privacy proxies may block, cache, or prefetch images. FreeFSM stores only first/last open time and a count; no IP address or user agent is retained.</p>
-				<div class="settings-test-actions">
-					<button type="button"
-						hx-post="/settings/test-email"
-						hx-target="#test-email-result"
-						hx-swap="innerHTML"
-						hx-include="[name='csrf_token']"
-						class="outline">
-						Send Test Email
-					</button>
-				</div>
-				<div id="test-email-result"></div>
-				<button type="submit" class="settings-submit">{ settingsButtonText(p.IsSetup) }</button>
+				<a href="/settings/mail">Open mail settings</a>
+				<a href="/settings/open-tracking">Open tracking policy</a>
 			</div>
 			
 			<!-- PDF Tab -->
@@ -226,17 +162,7 @@ templ SettingsPage(p SettingsPageData) {
 			if !p.IsSetup {
 				<!-- Map Tab -->
 				<div class="settings-tab-content" id="tab-map">
-					<label>
-						Map Tile URL
-						<input type="text" name="map_tile_url" value={ p.Settings.MapTileURL } placeholder="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"/>
-					</label>
-					<p class="settings-help">URL template used by the schedule map. Include <code>{ "{z}" }</code>, <code>{ "{x}" }</code>, and <code>{ "{y}" }</code> placeholders for zoom and tile coordinates.</p>
-					<label>
-						Geocoder URL
-						<input type="url" name="geocoder_url" value={ p.Settings.GeocoderURL } placeholder="https://nominatim.openstreetmap.org"/>
-					</label>
-					<p class="settings-help">Base URL for the geocoding service used to resolve job locations on the map. Leave blank to disable automatic geocoding.</p>
-					<button type="submit" class="settings-submit">{ settingsButtonText(p.IsSetup) }</button>
+					<a href="/settings/maps">Open map provider settings</a>
 				</div>
 			}
 			
@@ -297,7 +223,7 @@ templ SettingsPage(p SettingsPageData) {
 
 templ TestEmailResult(success bool, message string) {
 	if success {
-		<p class="settings-result settings-result-success">✓ Test email sent successfully</p>
+		<p class="settings-result settings-result-success">Transport accepted the test message. Inbox delivery is not confirmed.</p>
 	} else {
 		<p class="settings-result settings-result-error">✗ Test email failed: { message }</p>
 	}

@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/credentials"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -33,6 +34,12 @@ func authorizationError(w http.ResponseWriter, r *http.Request, err error) {
 	code := http.StatusConflict
 	message := "Request rejected; review the current state and supplied grants"
 	switch {
+	case errors.Is(err, authorization.ErrGeocoder):
+		code = 503
+		message = err.Error()
+	case errors.Is(err, credentials.ErrKey), errors.Is(err, credentials.ErrReview):
+		code = 503
+		message = err.Error()
 	case errors.Is(err, authorization.ErrNotFound):
 		code = 404
 		message = "Not found"

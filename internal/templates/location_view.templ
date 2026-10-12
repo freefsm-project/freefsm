@@ -6,6 +6,9 @@ templ LocationViewRow(customerID int64, l LocationRow, readOnly bool) {
 	<tr id={ templ.SafeURL(fmt.Sprintf("location-%d", l.ID)) }>
 		<td>
 			{ l.Title }
+			if !readOnly {
+				<a href={ templ.URL(fmt.Sprintf("/locations/%d/coordinates",l.ID)) }>Coordinates</a>
+			}
 			if l.IsPrimary {
 				<small>Primary</small>
 			}
@@ -38,6 +41,9 @@ templ LocationViewCard(customerID int64, l LocationRow, readOnly bool) {
 	<div id={ templ.SafeURL(fmt.Sprintf("location-%d", l.ID)) } class="customer-rail-card">
 		<div class="customer-rail-card-header">
 			<strong>{ l.Title }</strong>
+			if !readOnly {
+				<a href={ templ.URL(fmt.Sprintf("/locations/%d/coordinates",l.ID)) }>Coordinates</a>
+			}
 			if l.IsPrimary {
 				<small>Primary</small>
 			}

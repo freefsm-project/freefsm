@@ -1,0 +1,65 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ IntegrationSettingsPage(section string, v authorization.IntegrationSettings, manage, test, disabled, canEnable bool) {
+ @Layout("Integration settings") {
+  if disabled {
+   if canEnable {
+    @EmailDisabledBanner(true)
+   } else {
+    <p role="alert">Outbound email is disabled after restore. An Administrator must explicitly enable it.</p>
+   }
+  }
+  <nav aria-label="Integration settings"><a href="/settings/mail">Mail</a> <a href="/settings/maps">Maps</a> <a href="/settings/open-tracking">Open tracking</a></nav>
+  <h1>{ section } settings</h1>
+  if v.Review != "" {
+   <p role="alert">{ v.Review }</p>
+  }
+  <form method="post">
+   <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+   <input type="hidden" name="revision" value={ v.Revision }/>
+   <fieldset disabled?={ !manage }>
+   if section == "mail" {
+    <label>SMTP host<input name="smtp_host" value={ v.Host }/></label>
+    <label>SMTP port<input type="number" name="smtp_port" value={ fmt.Sprint(v.Port) } min="1" max="65535"/></label>
+    <label>SMTP username<input name="smtp_user" value={ v.User } autocomplete="off"/></label>
+    <label>Replace SMTP password<input type="password" name="smtp_password" autocomplete="new-password"/></label>
+    <p>Credentials are write-only. Leave blank to retain the saved password.</p>
+    <label><input type="checkbox" name="clear_password"/>Explicitly remove the saved password</label>
+    if v.PasswordSet {
+     <p>A password is saved.</p>
+    }
+    <label>Sender address<input type="email" name="smtp_from" value={ v.From }/></label>
+    <label>Default copies<input name="email_auto_cc" value={ v.Copies }/></label>
+    <label>Invoice subject<input name="invoice_email_subject" value={ v.InvoiceSubject }/></label>
+    <label>Invoice body<textarea name="invoice_email_body">{ v.InvoiceBody }</textarea></label>
+    <label>Invoice HTML template<textarea name="invoice_email_html">{ v.InvoiceHTML }</textarea></label>
+    <label>Estimate subject<input name="estimate_email_subject" value={ v.EstimateSubject }/></label>
+    <label>Estimate body<textarea name="estimate_email_body">{ v.EstimateBody }</textarea></label>
+    <label>Estimate HTML template<textarea name="estimate_email_html">{ v.EstimateHTML }</textarea></label>
+    <p>Blank HTML uses the edited plain text. Template placeholders include { "{customer_name}, {business_name}, {document_number}, {invoice_number}, {estimate_number}, {date}" }.</p>
+    <p>SMTP acceptance is transport evidence, not proof of inbox delivery. Saved changes apply to future message content; queued content remains frozen.</p>
+   } else if section == "maps" {
+    <label>Tile URL<input name="map_tile_url" value={ v.TileURL }/></label>
+    <label>Geocoder URL<input name="geocoder_url" value={ v.GeocoderURL }/></label>
+    <p>Blank URLs use operator defaults, if configured. With no geocoder configured, lookup is unavailable and manual entry remains available. Provider settings never update saved coordinates. Use credential-free HTTP(S) providers; URLs with embedded credentials or query tokens require explicit review.</p>
+   } else {
+    <label><input type="checkbox" name="tracking" checked?={ v.Tracking }/>Enable open tracking for future messages</label>
+    <p>Opens are not proof of reading or delivery.</p>
+   }
+   if manage {
+    <button type="submit">Save settings</button>
+   }
+   </fieldset>
+  </form>
+  if section == "mail" && test {
+   <form method="post" action="/settings/test-email">
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+    <label>Test recipient<input type="email" name="recipient" required/></label>
+    <button type="submit">Test saved transport</button>
+   </form>
+  }
+ }
+}

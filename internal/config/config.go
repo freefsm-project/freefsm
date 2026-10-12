@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/freefsm-project/freefsm/internal/credentials"
 	"github.com/joho/godotenv"
 )
 
@@ -59,6 +60,9 @@ type Config struct {
 
 func Load() (*Config, error) {
 	godotenv.Load()
+	if err := credentials.ValidateConfiguration(); err != nil {
+		return nil, err
+	}
 	uploadDefault := "/var/lib/freefsm/uploads"
 	if runtime.GOOS == "freebsd" {
 		uploadDefault = "/var/db/freefsm/uploads"

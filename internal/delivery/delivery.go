@@ -14,10 +14,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/mail"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/credentials"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -85,6 +87,7 @@ type QueueRequest struct {
 	Snapshot Snapshot
 }
 type Delivery struct {
+	From                                                                         string
 	ID, CompanyID, DocumentID, ActorID                                           int64
 	DocumentType, State, Subject, TextBody, HTMLBody, PDFFilename, MessageID     string
 	To, CC, BCC                                                                  []string
@@ -181,9 +184,13 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 		return Delivery{}, err
 	}
 	var tracking bool
+	var from string
 	if err = tx.QueryRow(ctx, `SELECT email_tracking_enabled FROM company_settings WHERE company_id=$1`, a.CompanyID).Scan(&tracking); errors.Is(err, pgx.ErrNoRows) {
 		tracking = false
 	} else if err != nil {
+		return Delivery{}, err
+	}
+	if err = tx.QueryRow(ctx, `SELECT smtp_from FROM company_settings WHERE company_id=$1 FOR SHARE`, a.CompanyID).Scan(&from); err != nil {
 		return Delivery{}, err
 	}
 	fingerprint, err := requestFingerprint(r, statusID, tracking)
@@ -206,6 +213,17 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return Delivery{}, err
 	}
+	var host, password string
+	var port int
+	if err = tx.QueryRow(ctx, `SELECT smtp_host,smtp_port,smtp_password FROM company_settings WHERE company_id=$1`, a.CompanyID).Scan(&host, &port, &password); err != nil {
+		return Delivery{}, err
+	}
+	if _, err = mail.ParseAddress(from); err != nil || host == "" || port < 1 || port > 65535 {
+		return Delivery{}, fmt.Errorf("mail transport not configured")
+	}
+	if _, err = credentials.Open(password); err != nil {
+		return Delivery{}, err
+	}
 	messageID := fmt.Sprintf("<delivery-%d-%s@freefsm.local>", a.CompanyID, r.Key)
 	var tokenHash []byte
 	html := r.Snapshot.HTMLBody
@@ -226,8 +244,8 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 		invoiceID = r.Document.ID
 	}
 	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO document_deliveries(company_id,document_type,document_id,estimate_id,invoice_id,actor_id,idempotency_key,request_fingerprint,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,tracking_enabled,tracking_token_hash)
-	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) ON CONFLICT(company_id,idempotency_key) DO NOTHING RETURNING id`, a.CompanyID, r.Document.Type, r.Document.ID, estimateID, invoiceID, a.ID, r.Key, fingerprint, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, html, r.Snapshot.PDF, r.Snapshot.PDFFilename, messageID, statusID, tracking, tokenHash).Scan(&id)
+	err = tx.QueryRow(ctx, `INSERT INTO document_deliveries(company_id,document_type,document_id,estimate_id,invoice_id,actor_id,idempotency_key,request_fingerprint,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,tracking_enabled,tracking_token_hash,sender_address)
+	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) ON CONFLICT(company_id,idempotency_key) DO NOTHING RETURNING id`, a.CompanyID, r.Document.Type, r.Document.ID, estimateID, invoiceID, a.ID, r.Key, fingerprint, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, html, r.Snapshot.PDF, r.Snapshot.PDFFilename, messageID, statusID, tracking, tokenHash, from).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if err = tx.QueryRow(ctx, `SELECT id,request_fingerprint FROM document_deliveries WHERE company_id=$1 AND idempotency_key=$2`, a.CompanyID, r.Key).Scan(&id, &existingFingerprint); err != nil {
 			return Delivery{}, err
@@ -364,7 +382,7 @@ func (s *Service) Claim(ctx context.Context) (Delivery, error) {
 		}
 	}
 	var id int64
-	err = tx.QueryRow(ctx, `SELECT id FROM document_deliveries WHERE state='queued' AND next_attempt_at<=$1 ORDER BY next_attempt_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, now).Scan(&id)
+	err = tx.QueryRow(ctx, `SELECT id FROM document_deliveries WHERE state='queued' AND sender_address IS NOT NULL AND sender_address<>'' AND next_attempt_at<=$1 ORDER BY next_attempt_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, now).Scan(&id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) && len(staleRows) > 0 {
 			if commitErr := tx.Commit(ctx); commitErr != nil {
@@ -685,6 +703,9 @@ func get(ctx context.Context, q rowQuerier, company, id int64) (Delivery, error)
 	err := q.QueryRow(ctx, `SELECT id,company_id,document_type,document_id,actor_id,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,state,lifetime_attempt_count,cycle_attempt_count,retry_cycle,next_attempt_at,attempt_token,lease_expires_at,provider_identifier,acceptance_evidence::text,last_error,tracking_enabled,first_open_at,last_open_at,open_count,created_at,updated_at,accepted_at,delivered_at,bounced_at,failed_at FROM document_deliveries WHERE id=$1 AND ($2=0 OR company_id=$2)`, id, company).Scan(&d.ID, &d.CompanyID, &d.DocumentType, &d.DocumentID, &d.ActorID, &d.To, &d.CC, &d.BCC, &d.Subject, &d.TextBody, &d.HTMLBody, &d.PDF, &d.PDFFilename, &d.MessageID, &d.ExpectedStatusID, &d.State, &d.LifetimeAttemptCount, &d.CycleAttemptCount, &d.RetryCycle, &d.NextAttemptAt, &token, &d.LeaseExpiresAt, &d.ProviderIdentifier, &d.AcceptanceEvidence, &d.LastError, &d.TrackingEnabled, &d.FirstOpenAt, &d.LastOpenAt, &d.OpenCount, &d.CreatedAt, &d.UpdatedAt, &d.AcceptedAt, &d.DeliveredAt, &d.BouncedAt, &d.FailedAt)
 	if token != nil {
 		d.AttemptToken = *token
+	}
+	if err == nil {
+		err = q.QueryRow(ctx, `SELECT coalesce(sender_address,'') FROM document_deliveries WHERE id=$1`, d.ID).Scan(&d.From)
 	}
 	return d, err
 }

@@ -152,6 +152,8 @@ func TestBackupHistoricalDomainRoundTrip(t *testing.T) {
 
 	// Complete one logical delivery after a permanent failure/manual retry, retain
 	// actual provider evidence, and leave another immutable snapshot queued.
+	_, err = src.pool.Exec(ctx, `UPDATE company_settings SET smtp_host='localhost',smtp_from='history@example.test' WHERE company_id=$1`, src.company)
+	historyCheck(t, err)
 	outbox := delivery.New(src.pool, "https://history.example.test")
 	deliveryActor := delivery.Actor{ID: src.actor, CompanyID: src.company, Role: "admin"}
 	queue := func(invoiceID int64, title string) delivery.Delivery {

@@ -28,6 +28,7 @@ type payload struct {
 }
 type pathMapping struct{ Original, Relative string }
 type manifest struct {
+	ProviderCredentials             []string  `json:"provider_credentials,omitempty"`
 	BuildKind                       BuildKind `json:",omitempty"`
 	Format                          int
 	Source, Version, Commit, Schema string

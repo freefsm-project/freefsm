@@ -21,6 +21,7 @@ import (
 type FailureCategory string
 
 const (
+	FailureProviderKey           FailureCategory = "provider-key"
 	FailureArchiveAuthentication FailureCategory = "archive-authentication"
 	FailureArchiveIntegrity      FailureCategory = "archive-integrity"
 	FailureArchiveFormat         FailureCategory = "archive-format"
@@ -69,6 +70,7 @@ type DiagnosticCause struct {
 }
 
 var failureMessages = map[FailureCategory]string{
+	FailureProviderKey:           "Provider credentials require the original operator encryption keys. Restore FREEFSM_CREDENTIAL_KEYS on this host and retry archive validation.",
 	FailureArchiveAuthentication: "Archive authentication failed. Check the archive password and upload the original encrypted file again.",
 	FailureArchiveIntegrity:      "Archive integrity verification failed. Upload a complete, unmodified backup.",
 	FailureArchiveFormat:         "The archive or database data format is invalid or unsupported. Create a fresh backup with this release.",

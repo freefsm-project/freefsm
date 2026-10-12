@@ -1,0 +1,32 @@
+package templates
+
+import "fmt"
+import "strconv"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+func coordinateValue(v *float64) string {
+ if v == nil { return "" }
+ return strconv.FormatFloat(*v,'f',-1,64)
+}
+
+templ CoordinatesPage(v authorization.Coordinates, manage bool) {
+ @Layout("Location coordinates") {
+  <h1>Review location coordinates</h1>
+  <p>{ v.Address }</p>
+  if v.Proposal {
+   <p>Provider proposal only. Review the coordinates and explicitly accept to save.</p>
+  }
+  <form method="post" action={ templ.URL(fmt.Sprintf("/locations/%d/coordinates",v.ID)) }>
+   <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+   <input type="hidden" name="revision" value={ v.Revision }/>
+   <fieldset disabled?={ !manage }>
+    <label>Latitude<input name="latitude" type="number" step="any" min="-90" max="90" value={ coordinateValue(v.Latitude) } required/></label>
+    <label>Longitude<input name="longitude" type="number" step="any" min="-180" max="180" value={ coordinateValue(v.Longitude) } required/></label>
+    if manage {
+     <button type="submit">Accept coordinates</button>
+     <button type="submit" formaction={ fmt.Sprintf("/locations/%d/coordinates/lookup",v.ID) } formnovalidate>Look up current address</button>
+    }
+   </fieldset>
+  </form>
+ }
+}

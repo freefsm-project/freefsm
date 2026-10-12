@@ -10,8 +10,10 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/delivery"
+	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -19,6 +21,29 @@ import (
 
 func safeEmailHTML(body string) string {
 	return "<!doctype html><html><body><p>" + strings.ReplaceAll(html.EscapeString(body), "\n", "<br>\n") + "</p></body></html>"
+}
+
+func composeHTMLDefault(svc *delivery.Service, r *http.Request, kind string, doc documentPDF, cs *ent.CompanySettings) (string, error) {
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		return "", delivery.ErrForbidden
+	}
+	raw, err := svc.HTMLTemplate(r.Context(), u.CompanyID, kind)
+	if err != nil {
+		return "", err
+	}
+	values := documentEmailValues(doc, cs)
+	for k, v := range values {
+		values[k] = html.EscapeString(v)
+	}
+	return services.RenderEmailTemplate(raw, values), nil
+}
+
+func selectedEmailHTML(text, htmlBody string) string {
+	if htmlBody != "" {
+		return htmlBody
+	}
+	return safeEmailHTML(text)
 }
 
 func writeDeliveryError(w http.ResponseWriter, r *http.Request, err error, data templates.DocumentEmailData) {

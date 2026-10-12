@@ -44,7 +44,12 @@ func documentEmailDefaults(objectType string, doc documentPDF, cs *ent.CompanySe
 	if strings.TrimSpace(body) == "" {
 		body = defaultDocumentEmailBody(objectType)
 	}
-	values := map[string]string{
+	values := documentEmailValues(doc, cs)
+	return services.RenderEmailTemplate(subject, values), services.RenderEmailTemplate(body, values)
+}
+
+func documentEmailValues(doc documentPDF, cs *ent.CompanySettings) map[string]string {
+	return map[string]string{
 		"business_name":   businessName(cs),
 		"customer_name":   doc.CustomerName,
 		"document_title":  doc.Title,
@@ -56,7 +61,6 @@ func documentEmailDefaults(objectType string, doc documentPDF, cs *ent.CompanySe
 		"job_subtitle":    doc.JobSubtitle,
 		"date":            doc.Date,
 	}
-	return services.RenderEmailTemplate(subject, values), services.RenderEmailTemplate(body, values)
 }
 
 func documentJobFields(j *ent.Job) (string, string, string) {

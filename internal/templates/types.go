@@ -90,6 +90,20 @@ func canReviewAuthorization(ctx context.Context) bool {
 	u, ok := middleware.UserFromContext(ctx)
 	return ok && u != nil && u.CanReviewAuthorization
 }
+
+func canViewIntegration(ctx context.Context, section string) bool {
+	u, ok := middleware.UserFromContext(ctx)
+	if !ok || u == nil {
+		return false
+	}
+	if section == "mail" {
+		return u.MailSettingsView
+	}
+	if section == "maps" {
+		return u.MapSettingsView
+	}
+	return false
+}
 func customerNewURL(ctx context.Context) string {
 	if canCustomer(ctx, "create") {
 		return "/customers/new"
@@ -791,6 +805,7 @@ type DocumentPreviewData struct {
 }
 
 type DocumentEmailData struct {
+	HTMLBody       string
 	ObjectType     string
 	ObjectID       int64
 	Title          string

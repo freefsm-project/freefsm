@@ -83,16 +83,6 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetNextInvoiceNumber(p.NextInvoiceNumber).
 		SetEstimatePrefix(p.EstimatePrefix).
 		SetDefaultDueDays(p.DefaultDueDays).
-		SetSMTPHost(p.SmtpHost).
-		SetSMTPPort(p.SmtpPort).
-		SetSMTPUser(p.SmtpUser).
-		SetSMTPPassword(p.SmtpPassword).
-		SetSMTPFrom(p.SmtpFrom).
-		SetEmailAutoCc(p.EmailAutoCC).
-		SetInvoiceEmailSubject(p.InvoiceEmailSubject).
-		SetInvoiceEmailBody(p.InvoiceEmailBody).
-		SetEstimateEmailSubject(p.EstimateEmailSubject).
-		SetEstimateEmailBody(p.EstimateEmailBody).
 		SetTimezone(p.Timezone).
 		SetDateFormat(NormalizeDateFormat(p.DateFormat)).
 		SetPasswordMinLength(p.PasswordMinLength).
@@ -104,9 +94,6 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetInvoiceFooter(p.InvoiceFooter).
 		SetInvoicePaymentTerms(p.InvoicePaymentTerms).
 		SetPdfShowLineItemDescriptions(p.PDFShowLineItemDescriptions).
-		SetMapTileURL(p.MapTileURL).
-		SetGeocoderURL(p.GeocoderURL).
-		SetEmailTrackingEnabled(p.EmailTrackingEnabled).
 		Save(ctx)
 	return err
 }

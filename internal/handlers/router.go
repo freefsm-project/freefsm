@@ -42,6 +42,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		}
 		principal, authErr := authority.Administrator(ctx, authorization.Actor{UserID: userID})
 		info := &middleware.UserInfo{
+			MailSettingsView:       principal.Allows("configuration.mail.view", authorization.Configuration),
+			MapSettingsView:        principal.Allows("configuration.maps.view", authorization.Configuration),
 			ID:                     u.ID,
 			Name:                   u.Name,
 			Email:                  u.Email,
@@ -126,6 +128,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc, cfg.UploadDir)
 	settingsHandler.control = control
 	settingsHandler.users = userService
+	integrations := &integrationHandler{authority: authority, email: emailSvc, control: control, geocoderDefault: cfg.GeocoderURL}
 	statusSettingsHandler := NewStatusSettingsHandler(statusflowService)
 	userHandler := NewUserHandler(userService, emailSvc, inviteSvc, companySettingsSvc, activitySvc, cfg)
 	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, jobService, activitySvc)
@@ -193,6 +196,16 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/customers/{id}", customerHandler.Update)
 		r.Get("/jobs/{id}/customer-context", authorityHandler.Context)
 		r.Get("/settings/authorization", authorityHandler.Show)
+		r.Get("/settings/mail", integrations.settings)
+		r.Get("/locations/{id}/coordinates", integrations.coordinates)
+		r.Post("/locations/{id}/coordinates", integrations.coordinates)
+		r.Post("/locations/{id}/coordinates/lookup", integrations.coordinates)
+		r.Post("/settings/mail", integrations.settings)
+		r.Get("/settings/maps", integrations.settings)
+		r.Post("/settings/maps", integrations.settings)
+		r.Get("/settings/open-tracking", integrations.settings)
+		r.Post("/settings/open-tracking", integrations.settings)
+		r.Post("/settings/test-email", integrations.testMail)
 		r.Post("/settings/authorization/roles", authorityHandler.SaveRole)
 		r.Post("/settings/authorization/roles/remove", authorityHandler.RemoveRole)
 		r.Post("/settings/authorization/assign", authorityHandler.Assign)
@@ -418,8 +431,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Get("/setup/company", settingsHandler.Show)
 			r.Post("/setup/company", settingsHandler.Save)
 			r.Post("/settings/invoice-logo", settingsHandler.UploadInvoiceLogo)
-			r.Post("/settings/test-email", settingsHandler.TestEmail)
-			r.Post("/settings/enable-email", settingsHandler.EnableEmail)
+			r.Post("/settings/enable-email", integrations.enableEmail)
 			r.Get("/settings/custom-fields", cfHandler.List)
 			r.Get("/settings/custom-fields/new", cfHandler.Create)
 			r.Post("/settings/custom-fields", cfHandler.Create)

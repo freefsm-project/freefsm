@@ -15,7 +15,7 @@ type SMTPSender struct{ email *services.EmailService }
 
 func NewSMTPSender(email *services.EmailService) *SMTPSender { return &SMTPSender{email: email} }
 func (s *SMTPSender) Send(ctx context.Context, d Delivery) (SendResult, error) {
-	err := s.email.SendCompanyDocumentSnapshot(ctx, d.CompanyID, services.EmailRecipients{To: d.To, CC: d.CC, BCC: d.BCC}, d.Subject, d.TextBody, d.HTMLBody, d.MessageID, services.EmailAttachment{Filename: d.PDFFilename, ContentType: "application/pdf", Data: d.PDF})
+	err := s.email.SendCompanyDocumentSnapshot(ctx, d.CompanyID, services.EmailRecipients{To: d.To, CC: d.CC, BCC: d.BCC}, d.Subject, d.TextBody, d.HTMLBody, d.MessageID, services.EmailAttachment{Filename: d.PDFFilename, ContentType: "application/pdf", Data: d.PDF}, d.From)
 	if err != nil {
 		return SendResult{}, classifySMTPError(err)
 	}
