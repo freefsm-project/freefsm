@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -14,6 +16,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/file"
 	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -24,7 +27,15 @@ func FileRevision(f *ent.File) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
-func (s *FileService) MutateFileAt(ctx context.Context, company, id int64, original objectref.Ref, name string, remove bool, revision int64) error {
+type FileMutation struct {
+	authorization.FileOperation
+	Name       string `json:"name,omitempty"`
+	Revision   string `json:"revision"`
+	ObjectType string `json:"object_type"`
+	ObjectID   int64  `json:"object_id"`
+}
+
+func (s *FileService) MutateFile(ctx context.Context, company, id int64, in FileMutation, remove bool) error {
 	request, ok := authorization.FromContext(ctx)
 	if !ok {
 		return authorization.ErrForbidden
@@ -32,11 +43,31 @@ func (s *FileService) MutateFileAt(ctx context.Context, company, id int64, origi
 	action := "file.rename"
 	if remove {
 		action = "file.remove"
+		if in.Name != "" {
+			return authorization.ErrFileOperation
+		}
 	}
-	return s.mutateFile(ctx, request, company, id, action, strings.TrimSpace(name), []int64{revision}, original)
+	if in.FileOperation.Validate() != nil {
+		return authorization.ErrFileOperation
+	}
+	in.OperationID = uuid.MustParse(in.OperationID).String()
+	original, err := objectref.Parse(in.ObjectType, in.ObjectID)
+	if err != nil {
+		return authorization.ErrFileOperation
+	}
+	in.Name = strings.TrimSpace(in.Name)
+	if in.OccurredAt != nil {
+		utc := in.OccurredAt.UTC()
+		in.OccurredAt = &utc
+	}
+	return s.mutateFileCommand(ctx, request, company, id, action, in.Name, nil, []objectref.Ref{original}, &in)
 }
 
 func (s *FileService) mutateFile(ctx context.Context, request authorization.Request, company, id int64, action, name string, revision []int64, original ...objectref.Ref) error {
+	return s.mutateFileCommand(ctx, request, company, id, action, name, revision, original, nil)
+}
+
+func (s *FileService) mutateFileCommand(ctx context.Context, request authorization.Request, company, id int64, action, name string, revision []int64, original []objectref.Ref, command *FileMutation) error {
 	f, err := s.client.File.Query().Where(file.IDEQ(id), file.CompanyIDEQ(company)).Only(ctx)
 	if err != nil {
 		return err
@@ -45,10 +76,52 @@ func (s *FileService) mutateFile(ctx context.Context, request authorization.Requ
 	if err != nil {
 		return authorization.ErrNotFound
 	}
+	if err := request.Service.FileAccess(ctx, request.Actor, ref, "", f.UploadedBy); err != nil {
+		return err
+	}
 	if len(original) > 0 && original[0] != ref {
 		return authorization.ErrConflict
 	}
+	var operation []authorization.FileOperation
+	var intent string
+	if command != nil {
+		operation = []authorization.FileOperation{command.FileOperation}
+		encoded, err := json.Marshal([]any{action, id, command})
+		if err != nil {
+			return err
+		}
+		digest := sha256.Sum256(encoded)
+		intent = hex.EncodeToString(digest[:])
+	}
 	return request.Service.FileAction(ctx, request.Actor, ref, action, f.UploadedBy, func(tx pgx.Tx) (int64, any, error) {
+		if command != nil {
+			var published bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM file_publications WHERE user_id=$1 AND operation_id=$2)`, request.Actor.UserID, command.OperationID).Scan(&published); err != nil {
+				return 0, nil, err
+			}
+			if published {
+				return 0, nil, authorization.ErrConflict
+			}
+			var prior, clientKey string
+			err := tx.QueryRow(ctx, `SELECT intent_hash,client_key FROM file_mutation_operations WHERE user_id=$1 AND operation_id=$2`, request.Actor.UserID, command.OperationID).Scan(&prior, &clientKey)
+			if err == nil {
+				if prior != intent || clientKey != request.Actor.SessionHash {
+					return 0, nil, authorization.ErrConflict
+				}
+				return 0, nil, nil
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return 0, nil, err
+			}
+		}
+		finish := func(effectID int64, detail any) (int64, any, error) {
+			if command != nil {
+				if _, err := tx.Exec(ctx, `INSERT INTO file_mutation_operations(user_id,operation_id,client_key,intent_hash,file_id) VALUES($1,$2,$3,$4,$5)`, request.Actor.UserID, command.OperationID, request.Actor.SessionHash, intent, id); err != nil {
+					return 0, nil, err
+				}
+			}
+			return effectID, detail, nil
+		}
 		var encoded []byte
 		if err := tx.QueryRow(ctx, `SELECT to_jsonb(f) FROM files f WHERE id=$1 AND company_id=$2 FOR UPDATE`, id, company).Scan(&encoded); err != nil {
 			return 0, nil, err
@@ -61,7 +134,7 @@ func (s *FileService) mutateFile(ctx context.Context, request authorization.Requ
 			return 0, nil, authorization.ErrConflict
 		}
 		if action == "file.remove" && current.RemovedAt != nil {
-			return 0, nil, nil
+			return finish(0, nil)
 		}
 		if current.RemovedAt != nil {
 			return 0, nil, authorization.ErrNotFound
@@ -74,7 +147,13 @@ func (s *FileService) mutateFile(ctx context.Context, request authorization.Requ
 				return 0, nil, fmt.Errorf("file extension must be preserved")
 			}
 			if name == current.OriginalName {
-				return 0, nil, nil
+				return finish(0, nil)
+			}
+		}
+		if command != nil {
+			revision = []int64{0}
+			if command.Revision == FileRevision(current) {
+				revision[0] = current.Revision
 			}
 		}
 		if len(revision) != 1 || revision[0] != current.Revision {
@@ -85,6 +164,9 @@ func (s *FileService) mutateFile(ctx context.Context, request authorization.Requ
 		} else {
 			_, err = tx.Exec(ctx, `UPDATE files SET original_name=$2,revision=revision+1 WHERE id=$1`, id, name)
 		}
-		return id, map[string]any{"old_name": current.OriginalName, "name": name, "revision": current.Revision + 1, "parent_type": ref.ObjectType(), "parent_id": ref.ID}, err
-	})
+		if err != nil {
+			return 0, nil, err
+		}
+		return finish(id, map[string]any{"old_name": current.OriginalName, "name": name, "revision": current.Revision + 1, "parent_type": ref.ObjectType(), "parent_id": ref.ID})
+	}, operation...)
 }

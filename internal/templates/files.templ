@@ -434,6 +434,9 @@ templ FileWidgetScript() {
 				// Run before HTMX's target listener; otherwise a boosted form and
 				// the upload queue can dispatch two different requests for one click.
 				form.addEventListener('submit', filesHandleSubmit, true);
+				// The enhanced queue owns publication identities. HTMX must not
+				// dispatch a second writer even if another trigger reaches HTMX.
+				form.addEventListener('htmx:beforeRequest', event => event.preventDefault());
 			});
 		}
 

@@ -2,10 +2,30 @@ package authorization
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
+
+var ErrFileOperation = errors.New("invalid File operation attribution")
+
+// FileOperation is client intent, not device identity or acceptance time. Those
+// facts are captured from the authenticated mobile session and database clock.
+type FileOperation struct {
+	OperationID string     `json:"operation_id"`
+	OccurredAt  *time.Time `json:"occurred_at,omitempty"`
+}
+
+func (op FileOperation) Validate() error {
+	id, err := uuid.Parse(op.OperationID)
+	if err != nil || id == uuid.Nil || op.OccurredAt != nil && (op.OccurredAt.IsZero() || op.OccurredAt.After(time.Now())) {
+		return ErrFileOperation
+	}
+	return nil
+}
 
 // fileAccess uses the parent's basic View, never financial or closed Context.
 // The table names are a closed product allowlist, not request SQL.
@@ -93,7 +113,12 @@ func (s *Service) FileAccess(ctx context.Context, a Actor, ref objectref.Ref, pe
 // FileAction serializes with grant/session changes and locks the exact parent
 // and assignment until the File mutation and immutable audit commit together.
 // A zero returned effect ID represents a desired-state no-op (no new audit).
-func (s *Service) FileAction(ctx context.Context, a Actor, ref objectref.Ref, permission string, uploader int64, fn func(pgx.Tx) (int64, any, error)) error {
+func (s *Service) FileAction(ctx context.Context, a Actor, ref objectref.Ref, permission string, uploader int64, fn func(pgx.Tx) (int64, any, error), operation ...FileOperation) error {
+	if a.Channel == "api" && len(operation) > 0 {
+		if err := operation[0].Validate(); err != nil {
+			return err
+		}
+	}
 	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		scope, err := fileAccess(ctx, tx, p, a, ref, permission, uploader, true)
 		if err != nil {
@@ -106,6 +131,45 @@ func (s *Service) FileAction(ctx context.Context, a Actor, ref objectref.Ref, pe
 		if id == 0 {
 			return nil
 		}
+		if a.Channel == "api" {
+			if len(operation) != 1 {
+				return ErrFileOperation
+			}
+			detail, err = fileAPIAuditDetail(ctx, tx, a, operation[0], detail)
+			if err != nil {
+				return err
+			}
+		}
 		return audit(ctx, tx, a, p, permission, scope, "file", id, detail)
 	})
+}
+
+func fileAPIAuditDetail(ctx context.Context, tx pgx.Tx, a Actor, op FileOperation, detail any) (any, error) {
+	m, ok := detail.(map[string]any)
+	if !ok {
+		return nil, ErrFileOperation
+	}
+	var sessionID int64
+	var deviceName string
+	var accepted time.Time
+	if err := tx.QueryRow(ctx, `SELECT id,coalesce(device_name,''),clock_timestamp() FROM sessions WHERE user_id=$1 AND token_hash=$2 AND kind='mobile' AND revoked_at IS NULL AND expires_at>clock_timestamp()`, a.UserID, a.SessionHash).Scan(&sessionID, &deviceName, &accepted); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrForbidden
+		}
+		return nil, err
+	}
+	m["operation_id"] = uuid.MustParse(op.OperationID).String()
+	m["session_id"] = sessionID
+	m["device_name"] = deviceName
+	m["accepted_at"] = accepted
+	m["occurred_at"] = accepted
+	m["occurrence_source"] = "server"
+	if op.OccurredAt != nil {
+		if op.OccurredAt.After(accepted) {
+			return nil, ErrFileOperation
+		}
+		m["occurred_at"] = op.OccurredAt.UTC()
+		m["occurrence_source"] = "client"
+	}
+	return m, nil
 }

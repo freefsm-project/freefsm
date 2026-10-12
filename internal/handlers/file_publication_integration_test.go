@@ -336,14 +336,14 @@ func TestFileResumableAPIPublishesOnlyAfterDigestVerification(t *testing.T) {
 		t.Fatalf("retry duplicated: %d", n)
 	}
 	originalRevision := published.Data.Revision
-	request("POST", "/files/"+fmt.Sprint(published.Data.ID)+"/rename", fmt.Sprintf(`{"name":"renamed.txt","revision":%q,"object_type":"job","object_id":%d}`, originalRevision, j.ID), 200)
-	request("POST", "/files/"+fmt.Sprint(published.Data.ID)+"/rename", fmt.Sprintf(`{"name":"stale.txt","revision":%q,"object_type":"job","object_id":%d}`, originalRevision, j.ID), 409)
+	request("POST", "/files/"+fmt.Sprint(published.Data.ID)+"/rename", fmt.Sprintf(`{"operation_id":"46000000-0000-4000-8000-000000000011","name":"renamed.txt","revision":%q,"object_type":"job","object_id":%d}`, originalRevision, j.ID), 200)
+	request("POST", "/files/"+fmt.Sprint(published.Data.ID)+"/rename", fmt.Sprintf(`{"operation_id":"46000000-0000-4000-8000-000000000012","name":"stale.txt","revision":%q,"object_type":"job","object_id":%d}`, originalRevision, j.ID), 409)
 	metadata := request("GET", fmt.Sprintf("/files/%d/metadata", published.Data.ID), "", 200)
 	if err := json.Unmarshal([]byte(metadata), &published); err != nil {
 		t.Fatal(err)
 	}
-	request("POST", "/files/"+fmt.Sprint(published.Data.ID)+"/remove", fmt.Sprintf(`{"revision":%q,"object_type":"job","object_id":%d}`, published.Data.Revision, j.ID), 200)
-	request("POST", "/files/"+fmt.Sprint(published.Data.ID)+"/remove", fmt.Sprintf(`{"revision":%q,"object_type":"job","object_id":%d}`, originalRevision, j.ID), 200)
+	request("POST", "/files/"+fmt.Sprint(published.Data.ID)+"/remove", fmt.Sprintf(`{"operation_id":"46000000-0000-4000-8000-000000000013","revision":%q,"object_type":"job","object_id":%d}`, published.Data.Revision, j.ID), 200)
+	request("POST", "/files/"+fmt.Sprint(published.Data.ID)+"/remove", fmt.Sprintf(`{"operation_id":"46000000-0000-4000-8000-000000000014","revision":%q,"object_type":"job","object_id":%d}`, originalRevision, j.ID), 200)
 	request("GET", fmt.Sprintf("/files/%d", published.Data.ID), "", 404)
 	const badTransfer = "d90eb9ac-73b0-4744-95b9-2418c3b60047"
 	bad := strings.Replace(string(init), transfer, badTransfer, 1)

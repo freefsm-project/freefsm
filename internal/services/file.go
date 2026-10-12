@@ -139,8 +139,9 @@ func (s *FileService) Metadata(ctx context.Context, companyID, id int64) (*ent.F
 // FilePublication is the stable publication identity, independent of transfer
 // attempts. Digest, when supplied, is SHA-256 of the exact transmitted bytes.
 type FilePublication struct {
-	ID     string
-	Digest string
+	ID         string
+	Digest     string
+	OccurredAt *time.Time
 }
 
 func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref.Ref, originalName string, mimeType string, fileSize int64, reader io.Reader, uploadedBy int64, publication ...FilePublication) (*ent.File, error) {
@@ -250,7 +251,18 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 	if request, ok := authorization.FromContext(ctx); ok {
 		err = request.Service.FileAction(ctx, request.Actor, ref, "file.upload", uploadedBy, func(tx pgx.Tx) (int64, any, error) {
 			var encoded []byte
-			intentBytes, _ := json.Marshal([]any{ref.ObjectType(), ref.ID, originalName, actualSize, hex.EncodeToString(digest.Sum(nil))})
+			var mutated bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM file_mutation_operations WHERE user_id=$1 AND operation_id=$2)`, request.Actor.UserID, identity.ID).Scan(&mutated); err != nil {
+				return 0, nil, err
+			}
+			if mutated {
+				return 0, nil, authorization.ErrConflict
+			}
+			intentFields := []any{ref.ObjectType(), ref.ID, originalName, actualSize, hex.EncodeToString(digest.Sum(nil))}
+			if identity.OccurredAt != nil {
+				intentFields = append(intentFields, identity.OccurredAt.UTC())
+			}
+			intentBytes, _ := json.Marshal(intentFields)
 			intent := string(intentBytes)
 			var prior string
 			err := tx.QueryRow(ctx, `SELECT p.intent,to_jsonb(f) FROM file_publications p JOIN files f ON f.id=p.file_id WHERE p.user_id=$1 AND p.operation_id=$2`, request.Actor.UserID, identity.ID).Scan(&prior, &encoded)
@@ -277,7 +289,7 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 				return 0, nil, err
 			}
 			return entFile.ID, map[string]any{"parent_type": ref.ObjectType(), "parent_id": ref.ID, "name": originalName, "size": actualSize, "publication_id": identity.ID}, nil
-		})
+		}, authorization.FileOperation{OperationID: identity.ID, OccurredAt: identity.OccurredAt})
 	} else {
 		entFile, err = s.client.File.Create().
 			SetCompanyID(companyID).

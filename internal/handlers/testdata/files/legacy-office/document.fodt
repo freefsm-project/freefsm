@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" office:version="1.2" office:mimetype="application/vnd.oasis.opendocument.text">
+  <office:body><office:text>
+    <text:h text:outline-level="1">FreeFSM legacy Word acceptance fixture 46</text:h>
+    <text:p>This real document records a completed field visit. Technician: Alex. Reference: FILE-46.</text:p>
+    <text:p>The upload must retain these exact binary document bytes through download and rename.</text:p>
+  </office:text></office:body>
+</office:document>
