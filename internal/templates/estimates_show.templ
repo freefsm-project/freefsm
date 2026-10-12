@@ -13,11 +13,7 @@ templ EstimateShow(p EstimateDetail) {
 				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Title) }>Edit</a>
 			}
 			if p.CanConvert {
-				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/convert", p.ID)) } method="post" hx-confirm="Convert permanently to a new invoice? This estimate will disappear. Revert is available only after all financial activity is fully unwound.">
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<input type="hidden" name="idempotency_key" value={ p.ConvertKey }/>
-					<button>Convert to Invoice</button>
-				</form>
+				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/convert",p.ID)) } role="button">Convert to Invoice</a>
 			}
 			if p.CanManage {
 				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", p.ID)) } method="post" hx-confirm="Delete this estimate?">

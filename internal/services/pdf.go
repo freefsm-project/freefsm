@@ -35,7 +35,7 @@ type InvoicePDFSettlement struct {
 	AmountDueCents  int64
 }
 
-func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, job *ent.Job, statuses []*ent.Status, cs *ent.CompanySettings) error {
+func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, job *ent.Job, statuses []*ent.Status, cs *ent.CompanySettings, fieldLines ...string) error {
 	if e.NumberLabel == "" || e.Terms == nil {
 		return ErrDocumentPresentationReview
 	}
@@ -50,6 +50,9 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 	writeTopHeader(pdf, "ESTIMATE", number, status, statusColor, cs)
 	writeDetailRow(pdf, customer, job, nil, estimateDetails(e, status, cs), cs)
 	writeDocumentNotes(pdf, e.Notes)
+	for _, line := range fieldLines {
+		writeDocumentNotes(pdf, line)
+	}
 	if e.Terms != nil {
 		writeDocumentNotes(pdf, *e.Terms)
 	}
@@ -62,7 +65,7 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 	return pdf.Output(w)
 }
 
-func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, asset *ent.Asset, statuses []*ent.Status, cs *ent.CompanySettings, settlement InvoicePDFSettlement) error {
+func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, asset *ent.Asset, statuses []*ent.Status, cs *ent.CompanySettings, settlement InvoicePDFSettlement, fieldLines ...string) error {
 	if i.NumberLabel == "" || i.Terms == nil {
 		return ErrDocumentPresentationReview
 	}
@@ -80,6 +83,9 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job
 	writeTopHeader(pdf, "INVOICE", RecordedInvoiceNumber(i, cs), status, color, cs)
 	writeDetailRow(pdf, customer, job, asset, invoiceDetails(i, status, cs), cs)
 	writeDocumentNotes(pdf, i.Notes)
+	for _, line := range fieldLines {
+		writeDocumentNotes(pdf, line)
+	}
 	totals, err := writeLineItems(pdf, items, i.TaxRate, cs)
 	if err != nil {
 		return fmt.Errorf("calculate invoice totals: %w", err)

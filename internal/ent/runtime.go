@@ -347,20 +347,36 @@ func init() {
 	customfielddefinitionDescRequired := customfielddefinitionFields[8].Descriptor()
 	// customfielddefinition.DefaultRequired holds the default value on creation for the required field.
 	customfielddefinition.DefaultRequired = customfielddefinitionDescRequired.Default.(bool)
+	// customfielddefinitionDescRetired is the schema descriptor for retired field.
+	customfielddefinitionDescRetired := customfielddefinitionFields[9].Descriptor()
+	// customfielddefinition.DefaultRetired holds the default value on creation for the retired field.
+	customfielddefinition.DefaultRetired = customfielddefinitionDescRetired.Default.(bool)
+	// customfielddefinitionDescRetiredOptions is the schema descriptor for retired_options field.
+	customfielddefinitionDescRetiredOptions := customfielddefinitionFields[10].Descriptor()
+	// customfielddefinition.DefaultRetiredOptions holds the default value on creation for the retired_options field.
+	customfielddefinition.DefaultRetiredOptions = customfielddefinitionDescRetiredOptions.Default.(string)
+	// customfielddefinitionDescHelpText is the schema descriptor for help_text field.
+	customfielddefinitionDescHelpText := customfielddefinitionFields[11].Descriptor()
+	// customfielddefinition.DefaultHelpText holds the default value on creation for the help_text field.
+	customfielddefinition.DefaultHelpText = customfielddefinitionDescHelpText.Default.(string)
+	// customfielddefinitionDescIncludePdf is the schema descriptor for include_pdf field.
+	customfielddefinitionDescIncludePdf := customfielddefinitionFields[12].Descriptor()
+	// customfielddefinition.DefaultIncludePdf holds the default value on creation for the include_pdf field.
+	customfielddefinition.DefaultIncludePdf = customfielddefinitionDescIncludePdf.Default.(bool)
 	// customfielddefinitionDescOptions is the schema descriptor for options field.
-	customfielddefinitionDescOptions := customfielddefinitionFields[9].Descriptor()
+	customfielddefinitionDescOptions := customfielddefinitionFields[13].Descriptor()
 	// customfielddefinition.DefaultOptions holds the default value on creation for the options field.
 	customfielddefinition.DefaultOptions = customfielddefinitionDescOptions.Default.(string)
 	// customfielddefinitionDescSortOrder is the schema descriptor for sort_order field.
-	customfielddefinitionDescSortOrder := customfielddefinitionFields[10].Descriptor()
+	customfielddefinitionDescSortOrder := customfielddefinitionFields[14].Descriptor()
 	// customfielddefinition.DefaultSortOrder holds the default value on creation for the sort_order field.
 	customfielddefinition.DefaultSortOrder = customfielddefinitionDescSortOrder.Default.(int)
 	// customfielddefinitionDescCreatedAt is the schema descriptor for created_at field.
-	customfielddefinitionDescCreatedAt := customfielddefinitionFields[11].Descriptor()
+	customfielddefinitionDescCreatedAt := customfielddefinitionFields[15].Descriptor()
 	// customfielddefinition.DefaultCreatedAt holds the default value on creation for the created_at field.
 	customfielddefinition.DefaultCreatedAt = customfielddefinitionDescCreatedAt.Default.(func() time.Time)
 	// customfielddefinitionDescUpdatedAt is the schema descriptor for updated_at field.
-	customfielddefinitionDescUpdatedAt := customfielddefinitionFields[12].Descriptor()
+	customfielddefinitionDescUpdatedAt := customfielddefinitionFields[16].Descriptor()
 	// customfielddefinition.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	customfielddefinition.DefaultUpdatedAt = customfielddefinitionDescUpdatedAt.Default.(func() time.Time)
 	// customfielddefinition.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

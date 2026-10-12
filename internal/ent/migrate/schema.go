@@ -264,6 +264,10 @@ var (
 		{Name: "precision", Type: field.TypeInt, Nullable: true},
 		{Name: "default_value", Type: field.TypeString, Nullable: true},
 		{Name: "required", Type: field.TypeBool, Default: false},
+		{Name: "retired", Type: field.TypeBool, Default: false},
+		{Name: "retired_options", Type: field.TypeString, Default: "[]"},
+		{Name: "help_text", Type: field.TypeString, Default: ""},
+		{Name: "include_pdf", Type: field.TypeBool, Default: false},
 		{Name: "options", Type: field.TypeString, Default: "[]"},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
 		{Name: "created_at", Type: field.TypeTime},
@@ -278,7 +282,7 @@ var (
 			{
 				Name:    "customfielddefinition_object_type_sort_order",
 				Unique:  false,
-				Columns: []*schema.Column{CustomFieldDefinitionsColumns[2], CustomFieldDefinitionsColumns[10]},
+				Columns: []*schema.Column{CustomFieldDefinitionsColumns[2], CustomFieldDefinitionsColumns[14]},
 			},
 			{
 				Name:    "customfielddefinition_company_id_object_type_conversion_key",

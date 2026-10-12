@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/customfields"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/settlement"
@@ -22,12 +23,13 @@ import (
 )
 
 var (
-	ErrForbidden           = errors.New("conversion operation forbidden")
-	ErrNotFound            = errors.New("document not found")
-	ErrArchived            = errors.New("archived document must be restored first")
-	ErrSettlement          = errors.New("invoice has financial settlement blockers")
-	ErrIdempotencyConflict = errors.New("idempotency key reused with a different request")
-	ErrTransactionConflict = errors.New("conversion transaction conflict; retry the operation")
+	ErrForbidden             = errors.New("conversion operation forbidden")
+	ErrNotFound              = errors.New("document not found")
+	ErrArchived              = errors.New("archived document must be restored first")
+	ErrSettlement            = errors.New("invoice has financial settlement blockers")
+	ErrIdempotencyConflict   = errors.New("idempotency key reused with a different request")
+	ErrTransactionConflict   = errors.New("conversion transaction conflict; retry the operation")
+	ErrHistoricalFieldReview = errors.New("historical field pairing requires explicit review before reversion")
 )
 
 type Actor struct {
@@ -36,8 +38,9 @@ type Actor struct {
 }
 type Operation struct{ Key uuid.UUID }
 type ConvertRequest struct {
-	Operation  Operation
-	EstimateID int64
+	Operation     Operation
+	EstimateID    int64
+	InvoiceFields *string `json:",omitempty"`
 }
 type RevertRequest struct {
 	Operation Operation
@@ -271,6 +274,76 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 		if err != nil {
 			return Result{}, err
 		}
+		var paired, entered []customfields.Value
+		if err = json.Unmarshal(invoiceCustom, &paired); err != nil {
+			return Result{}, err
+		}
+		if req.InvoiceFields != nil {
+			if err = json.Unmarshal([]byte(*req.InvoiceFields), &entered); err != nil {
+				return Result{}, err
+			}
+		}
+		// Explicit pairing owns the target value, including an explicit empty.
+		pairedIDs := map[int64]bool{}
+		for _, value := range paired {
+			pairedIDs[value.DefinitionID] = true
+		}
+		for _, value := range entered {
+			if !pairedIDs[value.DefinitionID] {
+				paired = append(paired, value)
+			}
+		}
+		pairs, err := customFieldPairs(ctx, tx, actor.CompanyID)
+		if err != nil {
+			return Result{}, err
+		}
+		present := map[int64]bool{}
+		for _, v := range paired {
+			present[v.DefinitionID] = true
+		}
+		for _, target := range pairs {
+			if present[target] {
+				continue
+			}
+			var typ string
+			if err = tx.QueryRow(ctx, `SELECT field_type FROM custom_field_definitions WHERE id=$1`, target).Scan(&typ); err != nil {
+				return Result{}, err
+			}
+			var empty any = ""
+			if typ == "multiselect" {
+				empty = []string{}
+			}
+			paired = append(paired, customfields.Value{DefinitionID: target, Value: empty})
+		}
+		inputBytes, err := json.Marshal(paired)
+		if err != nil {
+			return Result{}, err
+		}
+		input := string(inputBytes)
+		validated, err := customfields.Validate(ctx, tx, "invoice", "[]", &input, customfields.Creation, actor.CompanyID)
+		if err != nil {
+			return Result{}, err
+		}
+		invoiceCustom = []byte(validated)
+		// Freeze the definitions and explicit pairing inside the immutable source
+		// snapshot. Current configuration must never redefine an earlier cycle.
+		var definitions json.RawMessage
+		if err = tx.QueryRow(ctx, `SELECT coalesce(jsonb_agg(to_jsonb(d) ORDER BY id),'[]') FROM custom_field_definitions d WHERE company_id=$1 AND object_type IN ('estimate','invoice')`, actor.CompanyID).Scan(&definitions); err != nil {
+			return Result{}, err
+		}
+		var captured map[string]json.RawMessage
+		if err = json.Unmarshal(snapshot, &captured); err != nil {
+			return Result{}, err
+		}
+		captured["field_definitions"] = definitions
+		captured["field_pairs"], err = json.Marshal(pairs)
+		if err != nil {
+			return Result{}, err
+		}
+		snapshot, err = json.Marshal(captured)
+		if err != nil {
+			return Result{}, err
+		}
 
 		var settingsID, number int64
 		var dueDays *int
@@ -368,8 +441,10 @@ func (s *Service) Revert(ctx context.Context, actor Actor, req RevertRequest) (R
 		if hiddenAt != nil {
 			return Result{}, ErrNotFound
 		}
-		if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
-			return Result{}, err
+		if _, bound := authorization.FromContext(ctx); !bound {
+			if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
+				return Result{}, err
+			}
 		}
 		blockers, err := settlement.RevertBlockers(ctx, tx, actor.CompanyID, r.InvoiceID)
 		if err != nil {
@@ -389,7 +464,18 @@ func (s *Service) Revert(ctx context.Context, actor Actor, req RevertRequest) (R
 		if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.status_transition','allowed',true)`); err != nil {
 			return Result{}, err
 		}
-		mergedCustom, err := mergeRevertCustomFields(ctx, tx, actor.CompanyID, sourceCustom, invoiceCustom)
+		var capturedPairs []byte
+		if err = tx.QueryRow(ctx, `SELECT conversion_field_snapshot(id)->'field_pairs' FROM estimate_invoice_conversion_cycles WHERE id=$1`, r.CycleID).Scan(&capturedPairs); err != nil {
+			return Result{}, err
+		}
+		var pairs map[int64]int64
+		if len(capturedPairs) == 0 || json.Unmarshal(capturedPairs, &pairs) != nil || pairs == nil {
+			return Result{}, fmt.Errorf("%w: /settings/custom-fields/cycles/%s/review", ErrHistoricalFieldReview, r.CycleID)
+		}
+		if err = customfields.CheckCycleValues(ctx, tx, "invoice", r.InvoiceID, string(invoiceCustom)); err != nil {
+			return Result{}, err
+		}
+		mergedCustom, err := mergeRevertCustomFields(sourceCustom, invoiceCustom, pairs)
 		if err != nil {
 			return Result{}, err
 		}
@@ -486,7 +572,7 @@ func decodeCustomFields(encoded []byte) ([]customFieldValue, error) {
 }
 
 func customFieldPairs(ctx context.Context, tx pgx.Tx, companyID int64) (map[int64]int64, error) {
-	rows, err := tx.Query(ctx, `SELECT e.id,i.id FROM custom_field_definitions e JOIN custom_field_definitions i ON i.company_id=e.company_id AND i.conversion_key=e.conversion_key AND i.object_type='invoice' WHERE e.company_id=$1 AND e.object_type='estimate' AND e.conversion_key IS NOT NULL`, companyID)
+	rows, err := tx.Query(ctx, `SELECT e.id,i.id FROM custom_field_definitions e JOIN custom_field_definitions i ON i.company_id=e.company_id AND i.conversion_key=e.conversion_key AND i.object_type='invoice' WHERE e.company_id=$1 AND e.object_type='estimate' AND e.conversion_key IS NOT NULL AND NOT e.retired AND NOT i.retired`, companyID)
 	if err != nil {
 		return nil, err
 	}
@@ -530,16 +616,12 @@ func mapCustomFields(ctx context.Context, tx pgx.Tx, companyID int64, encoded []
 	return json.Marshal(out)
 }
 
-func mergeRevertCustomFields(ctx context.Context, tx pgx.Tx, companyID int64, source, currentInvoice []byte) ([]byte, error) {
+func mergeRevertCustomFields(source, currentInvoice []byte, pairs map[int64]int64) ([]byte, error) {
 	original, err := decodeCustomFields(source)
 	if err != nil {
 		return nil, err
 	}
-	mapped, err := mapCustomFields(ctx, tx, companyID, currentInvoice, "invoice", "estimate", false)
-	if err != nil {
-		return nil, err
-	}
-	current, err := decodeCustomFields(mapped)
+	current, err := decodeCustomFields(currentInvoice)
 	if err != nil {
 		return nil, err
 	}
@@ -550,6 +632,17 @@ func mergeRevertCustomFields(ctx context.Context, tx pgx.Tx, companyID int64, so
 		order = append(order, v.DefinitionID)
 	}
 	for _, v := range current {
+		var target int64
+		for estimate, invoice := range pairs {
+			if invoice == v.DefinitionID {
+				target = estimate
+				break
+			}
+		}
+		if target == 0 {
+			continue
+		}
+		v.DefinitionID = target
 		if _, ok := byID[v.DefinitionID]; !ok {
 			order = append(order, v.DefinitionID)
 		}
@@ -614,6 +707,10 @@ func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Ope
 	}
 	defer tx.Rollback(ctx)
 	var approval *authorization.ConversionAuthority
+	var revertApproval *authorization.ReversionAuthority
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return Result{}, err
+	}
 	var actorName string
 	if bound, ok := authorization.FromContext(ctx); ok && kind == "convert" {
 		input, ok := request.(ConvertRequest)
@@ -625,6 +722,22 @@ func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Ope
 			return Result{}, e
 		}
 		approval = &grant
+		if input.InvoiceFields != nil {
+			if err = bound.Service.AuthorizeConversionValues(ctx, tx, grant); err != nil {
+				return Result{}, err
+			}
+		}
+		err = tx.QueryRow(ctx, `SELECT name FROM users WHERE id=$1 AND company_id=$2`, a.ID, a.CompanyID).Scan(&actorName)
+	} else if bound, ok := authorization.FromContext(ctx); ok && kind == "revert" {
+		input, ok := request.(RevertRequest)
+		if !ok || bound.Actor.UserID != a.ID {
+			return Result{}, ErrForbidden
+		}
+		grant, e := bound.Service.AuthorizeReversion(ctx, tx, bound.Actor, input.InvoiceID)
+		if e != nil {
+			return Result{}, e
+		}
+		revertApproval = &grant
 		err = tx.QueryRow(ctx, `SELECT name FROM users WHERE id=$1 AND company_id=$2`, a.ID, a.CompanyID).Scan(&actorName)
 	} else {
 		actorName, err = authorizeRequest(ctx, tx, a, request)
@@ -662,6 +775,17 @@ func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Ope
 	if approval != nil {
 		bound, _ := authorization.FromContext(ctx)
 		if err := bound.Service.AuditConvertedDocument(ctx, tx, *approval, r.InvoiceID); err != nil {
+			return Result{}, err
+		}
+		if input, ok := request.(ConvertRequest); ok && input.InvoiceFields != nil {
+			if err := bound.Service.AuditConversionValues(ctx, tx, *approval, r.InvoiceID); err != nil {
+				return Result{}, err
+			}
+		}
+	}
+	if revertApproval != nil {
+		bound, _ := authorization.FromContext(ctx)
+		if err := bound.Service.AuditRevertedDocument(ctx, tx, *revertApproval, r.EstimateID); err != nil {
 			return Result{}, err
 		}
 	}

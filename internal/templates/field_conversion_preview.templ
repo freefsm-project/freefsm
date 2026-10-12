@@ -1,0 +1,20 @@
+package templates
+
+import "fmt"
+
+templ FieldConversionPreview(id int64, key string, paired, inputs []CustomFieldDisplay, canEdit bool) {
+ @Layout("Convert Estimate to Invoice") {
+  <h2>Review Invoice Custom Fields</h2>
+  <p>Paired Estimate values take precedence. Unpaired defaults apply only to this new Invoice. Required Invoice values must be supplied before conversion.</p>
+  @CustomFieldsWidget(CustomFieldsWidgetData{Fields:paired})
+  <form action={ templ.URL(fmt.Sprintf("/estimates/%d/convert",id)) } method="post" hx-boost="false">
+   <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+   <input type="hidden" name="idempotency_key" value={ key }/>
+   @CustomFieldsWidget(CustomFieldsWidgetData{Fields:inputs,EditMode:canEdit})
+   if !canEdit {
+    <p>Invoice Edit permission is required to enter Invoice values.</p>
+   }
+   <button type="submit">Convert to Invoice</button>
+  </form>
+ }
+}

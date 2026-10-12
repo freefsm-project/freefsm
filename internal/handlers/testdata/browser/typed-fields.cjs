@@ -211,6 +211,27 @@ const { chromium } = require('playwright-core');
         assert.deepEqual(await page.locator(`select[name="custom_field_${multi}[]"]`).evaluate(el => [...el.selectedOptions].map(o => o.value)),choices);
       }
     }
-    console.log('Persisted production browser: seven types, atomic correction, and consecutive Asset/Project creations with fresh defaults, explicit Yes/No and independently persisted selections.');
+    // A form opened before retirement is pending intent, never permission to
+    // overwrite retained history. Reactivation does not replay that submission.
+    await page.goto(editURL);
+    await page.locator('[name=custom_field_1]').fill('Pending retired edit');
+    const control = await context.newPage();
+    await control.goto(base + '/settings/custom-fields/1/edit');
+    await control.locator('[name=retired]').selectOption('true');
+    await Promise.all([control.waitForURL(base + '/settings/custom-fields'),control.getByRole('button',{name:'Save',exact:true}).click()]);
+    const retiredResponse = page.waitForResponse(r => r.request().method()==='POST' && /\/customers\/\d+$/.test(r.url()));
+    await page.getByRole('button',{name:'Save',exact:true}).click();
+    assert.equal((await retiredResponse).status(),422);
+    await page.goto(editURL);
+    assert.equal(await page.locator('[name=custom_field_1]').count(),0);
+    await page.goto(editURL.replace(/\/edit$/,''));
+    assert.match(await page.locator('body').innerText(),/Explicit browser text/);
+    await control.goto(base + '/settings/custom-fields/1/edit');
+    await control.locator('[name=retired]').selectOption('false');
+    await Promise.all([control.waitForURL(base + '/settings/custom-fields'),control.getByRole('button',{name:'Save',exact:true}).click()]);
+    await page.goto(editURL);
+    assert.equal(await page.locator('[name=custom_field_1]').inputValue(),'Explicit browser text');
+    await control.close();
+    console.log('Persisted production browser: typed fields, atomic correction, inline creation, retirement rejects pending edits, history survives and reactivation never replays.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

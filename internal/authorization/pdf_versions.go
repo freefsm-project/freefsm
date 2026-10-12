@@ -13,6 +13,7 @@ import (
 )
 
 type PDFSource struct {
+	FieldLines   []string
 	Token        string
 	ReviewToken  string
 	Settings     *ent.CompanySettings
@@ -116,7 +117,25 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 	if err := q.QueryRow(ctx, query, id, p.CompanyID).Scan(&settings, &snapshot, &review); err != nil {
 		return PDFSource{}, err
 	}
-	review, err := json.Marshal(struct {
+	fieldLines, err := pdfFieldLines(ctx, q, kind, id, p.CompanyID)
+	if err != nil {
+		return PDFSource{}, err
+	}
+	if len(fieldLines) > 0 {
+		var captured map[string]json.RawMessage
+		if err = json.Unmarshal(snapshot, &captured); err != nil {
+			return PDFSource{}, err
+		}
+		captured["custom_field_lines"], err = json.Marshal(fieldLines)
+		if err != nil {
+			return PDFSource{}, err
+		}
+		snapshot, err = json.Marshal(captured)
+		if err != nil {
+			return PDFSource{}, err
+		}
+	}
+	review, err = json.Marshal(struct {
 		State  json.RawMessage
 		RoleID int64
 		Grants []Grant
@@ -149,7 +168,37 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 		}
 		settled += entry.Amount
 	}
-	return PDFSource{Token: fmt.Sprintf("%x", sha256.Sum256(snapshot)), ReviewToken: fmt.Sprintf("%x", sha256.Sum256(review)), Settings: cs, Snapshot: snapshot, SettledCents: settled}, nil
+	return PDFSource{Token: fmt.Sprintf("%x", sha256.Sum256(snapshot)), ReviewToken: fmt.Sprintf("%x", sha256.Sum256(review)), Settings: cs, Snapshot: snapshot, SettledCents: settled, FieldLines: fieldLines}, nil
+}
+
+func pdfFieldLines(ctx context.Context, q queryer, kind string, id, company int64) ([]string, error) {
+	rows, err := q.Query(ctx, `SELECT f.name,f.field_type,v->'value' FROM `+kind+`s d,jsonb_array_elements(d.custom_fields) v JOIN custom_field_definitions f ON f.id=(v->>'definition_id')::bigint WHERE d.id=$1 AND d.company_id=$2 AND f.include_pdf ORDER BY f.sort_order,f.id`, id, company)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var lines []string
+	for rows.Next() {
+		var name, typ string
+		var raw []byte
+		if err = rows.Scan(&name, &typ, &raw); err != nil {
+			return nil, err
+		}
+		var value any
+		if err = json.Unmarshal(raw, &value); err != nil {
+			return nil, err
+		}
+		text := fmt.Sprint(value)
+		if typ == "checkbox" {
+			if text == "true" {
+				text = "Yes"
+			} else if text == "false" {
+				text = "No"
+			}
+		}
+		lines = append(lines, name+": "+text)
+	}
+	return lines, rows.Err()
 }
 
 func (s *Service) DocumentPDFSource(ctx context.Context, a Actor, kind string, id int64) (PDFSource, error) {

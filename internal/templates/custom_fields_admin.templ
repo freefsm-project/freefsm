@@ -117,6 +117,11 @@ templ CustomFieldDefForm(p CustomFieldDefFormData) {
 				<small>Unique option text identifies each choice within this field. Referenced choices cannot be removed.</small>
 			</label>
 			<label>
+				Retired options (JSON array of option identities)
+				<input type="text" name="retired_options" value={ p.Def.RetiredOptions } placeholder='[]'/>
+				<small>Keep these identities in Options to reserve their names and retain history.</small>
+			</label>
+			<label>
 				Number decimal precision (0–18)
 				<input type="number" name="precision" min="0" max="18" value={ fieldPrecision(p.Def.Precision) }/>
 			</label>
@@ -136,6 +141,20 @@ templ CustomFieldDefForm(p CustomFieldDefFormData) {
 				</label>
 			}
 			<div class="entity-form-actions">
+				<label>Help text<textarea name="help_text">{ p.Def.HelpText }</textarea></label>
+				<label>Include in new PDFs
+					<select name="include_pdf">
+						<option value="false" selected?={ !p.Def.IncludePDF }>No</option>
+						<option value="true" selected?={ p.Def.IncludePDF }>Yes</option>
+					</select>
+				</label>
+				<label>
+					Field availability
+					<select name="retired">
+						<option value="false" selected?={ !p.Def.Retired }>Active</option>
+						<option value="true" selected?={ p.Def.Retired }>Retired (retain history)</option>
+					</select>
+				</label>
 				<button type="submit">Save</button>
 				<a href="/settings/custom-fields" role="button" class="outline">Cancel</a>
 			</div>

@@ -108,6 +108,62 @@ func (_c *CustomFieldDefinitionCreate) SetNillableRequired(v *bool) *CustomField
 	return _c
 }
 
+// SetRetired sets the "retired" field.
+func (_c *CustomFieldDefinitionCreate) SetRetired(v bool) *CustomFieldDefinitionCreate {
+	_c.mutation.SetRetired(v)
+	return _c
+}
+
+// SetNillableRetired sets the "retired" field if the given value is not nil.
+func (_c *CustomFieldDefinitionCreate) SetNillableRetired(v *bool) *CustomFieldDefinitionCreate {
+	if v != nil {
+		_c.SetRetired(*v)
+	}
+	return _c
+}
+
+// SetRetiredOptions sets the "retired_options" field.
+func (_c *CustomFieldDefinitionCreate) SetRetiredOptions(v string) *CustomFieldDefinitionCreate {
+	_c.mutation.SetRetiredOptions(v)
+	return _c
+}
+
+// SetNillableRetiredOptions sets the "retired_options" field if the given value is not nil.
+func (_c *CustomFieldDefinitionCreate) SetNillableRetiredOptions(v *string) *CustomFieldDefinitionCreate {
+	if v != nil {
+		_c.SetRetiredOptions(*v)
+	}
+	return _c
+}
+
+// SetHelpText sets the "help_text" field.
+func (_c *CustomFieldDefinitionCreate) SetHelpText(v string) *CustomFieldDefinitionCreate {
+	_c.mutation.SetHelpText(v)
+	return _c
+}
+
+// SetNillableHelpText sets the "help_text" field if the given value is not nil.
+func (_c *CustomFieldDefinitionCreate) SetNillableHelpText(v *string) *CustomFieldDefinitionCreate {
+	if v != nil {
+		_c.SetHelpText(*v)
+	}
+	return _c
+}
+
+// SetIncludePdf sets the "include_pdf" field.
+func (_c *CustomFieldDefinitionCreate) SetIncludePdf(v bool) *CustomFieldDefinitionCreate {
+	_c.mutation.SetIncludePdf(v)
+	return _c
+}
+
+// SetNillableIncludePdf sets the "include_pdf" field if the given value is not nil.
+func (_c *CustomFieldDefinitionCreate) SetNillableIncludePdf(v *bool) *CustomFieldDefinitionCreate {
+	if v != nil {
+		_c.SetIncludePdf(*v)
+	}
+	return _c
+}
+
 // SetOptions sets the "options" field.
 func (_c *CustomFieldDefinitionCreate) SetOptions(v string) *CustomFieldDefinitionCreate {
 	_c.mutation.SetOptions(v)
@@ -209,6 +265,22 @@ func (_c *CustomFieldDefinitionCreate) defaults() {
 		v := customfielddefinition.DefaultRequired
 		_c.mutation.SetRequired(v)
 	}
+	if _, ok := _c.mutation.Retired(); !ok {
+		v := customfielddefinition.DefaultRetired
+		_c.mutation.SetRetired(v)
+	}
+	if _, ok := _c.mutation.RetiredOptions(); !ok {
+		v := customfielddefinition.DefaultRetiredOptions
+		_c.mutation.SetRetiredOptions(v)
+	}
+	if _, ok := _c.mutation.HelpText(); !ok {
+		v := customfielddefinition.DefaultHelpText
+		_c.mutation.SetHelpText(v)
+	}
+	if _, ok := _c.mutation.IncludePdf(); !ok {
+		v := customfielddefinition.DefaultIncludePdf
+		_c.mutation.SetIncludePdf(v)
+	}
 	if _, ok := _c.mutation.Options(); !ok {
 		v := customfielddefinition.DefaultOptions
 		_c.mutation.SetOptions(v)
@@ -255,6 +327,18 @@ func (_c *CustomFieldDefinitionCreate) check() error {
 	}
 	if _, ok := _c.mutation.Required(); !ok {
 		return &ValidationError{Name: "required", err: errors.New(`ent: missing required field "CustomFieldDefinition.required"`)}
+	}
+	if _, ok := _c.mutation.Retired(); !ok {
+		return &ValidationError{Name: "retired", err: errors.New(`ent: missing required field "CustomFieldDefinition.retired"`)}
+	}
+	if _, ok := _c.mutation.RetiredOptions(); !ok {
+		return &ValidationError{Name: "retired_options", err: errors.New(`ent: missing required field "CustomFieldDefinition.retired_options"`)}
+	}
+	if _, ok := _c.mutation.HelpText(); !ok {
+		return &ValidationError{Name: "help_text", err: errors.New(`ent: missing required field "CustomFieldDefinition.help_text"`)}
+	}
+	if _, ok := _c.mutation.IncludePdf(); !ok {
+		return &ValidationError{Name: "include_pdf", err: errors.New(`ent: missing required field "CustomFieldDefinition.include_pdf"`)}
 	}
 	if _, ok := _c.mutation.Options(); !ok {
 		return &ValidationError{Name: "options", err: errors.New(`ent: missing required field "CustomFieldDefinition.options"`)}
@@ -331,6 +415,22 @@ func (_c *CustomFieldDefinitionCreate) createSpec() (*CustomFieldDefinition, *sq
 	if value, ok := _c.mutation.Required(); ok {
 		_spec.SetField(customfielddefinition.FieldRequired, field.TypeBool, value)
 		_node.Required = value
+	}
+	if value, ok := _c.mutation.Retired(); ok {
+		_spec.SetField(customfielddefinition.FieldRetired, field.TypeBool, value)
+		_node.Retired = value
+	}
+	if value, ok := _c.mutation.RetiredOptions(); ok {
+		_spec.SetField(customfielddefinition.FieldRetiredOptions, field.TypeString, value)
+		_node.RetiredOptions = value
+	}
+	if value, ok := _c.mutation.HelpText(); ok {
+		_spec.SetField(customfielddefinition.FieldHelpText, field.TypeString, value)
+		_node.HelpText = value
+	}
+	if value, ok := _c.mutation.IncludePdf(); ok {
+		_spec.SetField(customfielddefinition.FieldIncludePdf, field.TypeBool, value)
+		_node.IncludePdf = value
 	}
 	if value, ok := _c.mutation.Options(); ok {
 		_spec.SetField(customfielddefinition.FieldOptions, field.TypeString, value)

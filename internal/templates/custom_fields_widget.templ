@@ -9,10 +9,14 @@ templ CustomFieldsWidget(p CustomFieldsWidgetData) {
 			<h4>Custom Fields</h4>
 			<div class="custom-fields-grid">
 				for _, f := range p.Fields {
+					if !p.EditMode || !f.Retired {
 					<div>
 						if p.EditMode {
 							<label>
 								<strong>{ f.Name }</strong>
+								if f.HelpText != "" {
+									<small>{ f.HelpText }</small>
+								}
 								if f.Required {
 									<small class="shared-widget-required"> *</small>
 								}
@@ -31,14 +35,18 @@ templ CustomFieldsWidget(p CustomFieldsWidgetData) {
 									<input type="hidden" name={ fmt.Sprintf("custom_field_%d[]", f.DefinitionID) } value=""/>
 									<select name={ fmt.Sprintf("custom_field_%d[]", f.DefinitionID) } multiple>
 										for _,o := range f.Options {
+											if !slices.Contains(f.RetiredOptions,o) || slices.Contains(f.Selected,o) {
 											<option value={ o } selected?={ slices.Contains(f.Selected,o) }>{ o }</option>
+											}
 										}
 									</select>
 								} else if f.FieldType == "select" {
 									<select name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) }>
 										<option value="">Select...</option>
 										for _, o := range f.Options {
+											if !slices.Contains(f.RetiredOptions,o) || f.Value == o {
 											<option value={ o } selected?={ f.Value == o }>{ o }</option>
+											}
 										}
 									</select>
 								} else if f.FieldType == "checkbox" {
@@ -70,6 +78,7 @@ templ CustomFieldsWidget(p CustomFieldsWidgetData) {
 							}
 						}
 					</div>
+					}
 				}
 			</div>
 		</div>

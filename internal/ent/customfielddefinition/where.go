@@ -94,6 +94,26 @@ func Required(v bool) predicate.CustomFieldDefinition {
 	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldRequired, v))
 }
 
+// Retired applies equality check predicate on the "retired" field. It's identical to RetiredEQ.
+func Retired(v bool) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldRetired, v))
+}
+
+// RetiredOptions applies equality check predicate on the "retired_options" field. It's identical to RetiredOptionsEQ.
+func RetiredOptions(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldRetiredOptions, v))
+}
+
+// HelpText applies equality check predicate on the "help_text" field. It's identical to HelpTextEQ.
+func HelpText(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldHelpText, v))
+}
+
+// IncludePdf applies equality check predicate on the "include_pdf" field. It's identical to IncludePdfEQ.
+func IncludePdf(v bool) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldIncludePdf, v))
+}
+
 // Options applies equality check predicate on the "options" field. It's identical to OptionsEQ.
 func Options(v string) predicate.CustomFieldDefinition {
 	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldOptions, v))
@@ -567,6 +587,156 @@ func RequiredEQ(v bool) predicate.CustomFieldDefinition {
 // RequiredNEQ applies the NEQ predicate on the "required" field.
 func RequiredNEQ(v bool) predicate.CustomFieldDefinition {
 	return predicate.CustomFieldDefinition(sql.FieldNEQ(FieldRequired, v))
+}
+
+// RetiredEQ applies the EQ predicate on the "retired" field.
+func RetiredEQ(v bool) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldRetired, v))
+}
+
+// RetiredNEQ applies the NEQ predicate on the "retired" field.
+func RetiredNEQ(v bool) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNEQ(FieldRetired, v))
+}
+
+// RetiredOptionsEQ applies the EQ predicate on the "retired_options" field.
+func RetiredOptionsEQ(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldRetiredOptions, v))
+}
+
+// RetiredOptionsNEQ applies the NEQ predicate on the "retired_options" field.
+func RetiredOptionsNEQ(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNEQ(FieldRetiredOptions, v))
+}
+
+// RetiredOptionsIn applies the In predicate on the "retired_options" field.
+func RetiredOptionsIn(vs ...string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldIn(FieldRetiredOptions, vs...))
+}
+
+// RetiredOptionsNotIn applies the NotIn predicate on the "retired_options" field.
+func RetiredOptionsNotIn(vs ...string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNotIn(FieldRetiredOptions, vs...))
+}
+
+// RetiredOptionsGT applies the GT predicate on the "retired_options" field.
+func RetiredOptionsGT(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldGT(FieldRetiredOptions, v))
+}
+
+// RetiredOptionsGTE applies the GTE predicate on the "retired_options" field.
+func RetiredOptionsGTE(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldGTE(FieldRetiredOptions, v))
+}
+
+// RetiredOptionsLT applies the LT predicate on the "retired_options" field.
+func RetiredOptionsLT(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldLT(FieldRetiredOptions, v))
+}
+
+// RetiredOptionsLTE applies the LTE predicate on the "retired_options" field.
+func RetiredOptionsLTE(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldLTE(FieldRetiredOptions, v))
+}
+
+// RetiredOptionsContains applies the Contains predicate on the "retired_options" field.
+func RetiredOptionsContains(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldContains(FieldRetiredOptions, v))
+}
+
+// RetiredOptionsHasPrefix applies the HasPrefix predicate on the "retired_options" field.
+func RetiredOptionsHasPrefix(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldHasPrefix(FieldRetiredOptions, v))
+}
+
+// RetiredOptionsHasSuffix applies the HasSuffix predicate on the "retired_options" field.
+func RetiredOptionsHasSuffix(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldHasSuffix(FieldRetiredOptions, v))
+}
+
+// RetiredOptionsEqualFold applies the EqualFold predicate on the "retired_options" field.
+func RetiredOptionsEqualFold(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEqualFold(FieldRetiredOptions, v))
+}
+
+// RetiredOptionsContainsFold applies the ContainsFold predicate on the "retired_options" field.
+func RetiredOptionsContainsFold(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldContainsFold(FieldRetiredOptions, v))
+}
+
+// HelpTextEQ applies the EQ predicate on the "help_text" field.
+func HelpTextEQ(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldHelpText, v))
+}
+
+// HelpTextNEQ applies the NEQ predicate on the "help_text" field.
+func HelpTextNEQ(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNEQ(FieldHelpText, v))
+}
+
+// HelpTextIn applies the In predicate on the "help_text" field.
+func HelpTextIn(vs ...string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldIn(FieldHelpText, vs...))
+}
+
+// HelpTextNotIn applies the NotIn predicate on the "help_text" field.
+func HelpTextNotIn(vs ...string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNotIn(FieldHelpText, vs...))
+}
+
+// HelpTextGT applies the GT predicate on the "help_text" field.
+func HelpTextGT(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldGT(FieldHelpText, v))
+}
+
+// HelpTextGTE applies the GTE predicate on the "help_text" field.
+func HelpTextGTE(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldGTE(FieldHelpText, v))
+}
+
+// HelpTextLT applies the LT predicate on the "help_text" field.
+func HelpTextLT(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldLT(FieldHelpText, v))
+}
+
+// HelpTextLTE applies the LTE predicate on the "help_text" field.
+func HelpTextLTE(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldLTE(FieldHelpText, v))
+}
+
+// HelpTextContains applies the Contains predicate on the "help_text" field.
+func HelpTextContains(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldContains(FieldHelpText, v))
+}
+
+// HelpTextHasPrefix applies the HasPrefix predicate on the "help_text" field.
+func HelpTextHasPrefix(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldHasPrefix(FieldHelpText, v))
+}
+
+// HelpTextHasSuffix applies the HasSuffix predicate on the "help_text" field.
+func HelpTextHasSuffix(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldHasSuffix(FieldHelpText, v))
+}
+
+// HelpTextEqualFold applies the EqualFold predicate on the "help_text" field.
+func HelpTextEqualFold(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEqualFold(FieldHelpText, v))
+}
+
+// HelpTextContainsFold applies the ContainsFold predicate on the "help_text" field.
+func HelpTextContainsFold(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldContainsFold(FieldHelpText, v))
+}
+
+// IncludePdfEQ applies the EQ predicate on the "include_pdf" field.
+func IncludePdfEQ(v bool) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldIncludePdf, v))
+}
+
+// IncludePdfNEQ applies the NEQ predicate on the "include_pdf" field.
+func IncludePdfNEQ(v bool) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNEQ(FieldIncludePdf, v))
 }
 
 // OptionsEQ applies the EQ predicate on the "options" field.

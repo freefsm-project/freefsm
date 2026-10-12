@@ -1217,7 +1217,7 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64, input
 		return services.GenerateInvoicePDF(w, i, customer, job, asset, statuses, cs, services.InvoicePDFSettlement{
 			AmountPaidCents: settlementView.SettledCents,
 			AmountDueCents:  settlementView.AmountDueCents,
-		})
+		}, input.FieldLines...)
 	})
 	if err != nil {
 		return documentPDF{}, err
