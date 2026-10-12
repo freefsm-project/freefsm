@@ -56,11 +56,14 @@ func (h *CustomFieldHandler) List(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		rows[i] = templates.CustomFieldDefRow{
-			ID:         d.ID,
-			ObjectType: d.ObjectType,
-			Name:       d.Name,
-			FieldType:  d.FieldType,
-			Precision:  d.Precision, DefaultValue: stringValue(d.DefaultValue),
+			HelpText: d.HelpText, IncludePDF: d.IncludePdf,
+			Retired:        d.Retired,
+			RetiredOptions: d.RetiredOptions,
+			ID:             d.ID,
+			ObjectType:     d.ObjectType,
+			Name:           d.Name,
+			FieldType:      d.FieldType,
+			Precision:      d.Precision, DefaultValue: stringValue(d.DefaultValue),
 			Required:      d.Required,
 			Options:       d.Options,
 			SortOrder:     d.SortOrder,
@@ -104,7 +107,10 @@ func (h *CustomFieldHandler) Update(w http.ResponseWriter, r *http.Request) {
 		for _, d := range defs {
 			if d.ID == id {
 				r := templates.CustomFieldDefRow{
-					ID: d.ID, ObjectType: d.ObjectType, Name: d.Name,
+					HelpText: d.HelpText, IncludePDF: d.IncludePdf,
+					Retired:        d.Retired,
+					RetiredOptions: d.RetiredOptions,
+					ID:             d.ID, ObjectType: d.ObjectType, Name: d.Name,
 					FieldType: d.FieldType, Required: d.Required,
 					Options: d.Options, SortOrder: d.SortOrder, ConversionKey: stringValue(d.ConversionKey), Precision: d.Precision, DefaultValue: stringValue(d.DefaultValue),
 				}
@@ -186,16 +192,21 @@ func buildCustomFieldDisplay(defs []*ent.CustomFieldDefinition, customFieldsJSON
 	for _, d := range defs {
 		var opts []string
 		json.Unmarshal([]byte(d.Options), &opts)
+		var retired []string
+		json.Unmarshal([]byte(d.RetiredOptions), &retired)
 
 		result = append(result, templates.CustomFieldDisplay{
-			DefinitionID: d.ID,
-			Precision:    d.Precision,
-			Name:         d.Name,
-			FieldType:    d.FieldType,
-			Value:        valueMap[d.ID],
-			Options:      opts,
-			Required:     d.Required,
-			Selected:     selectedMap[d.ID],
+			HelpText:       d.HelpText,
+			Retired:        d.Retired,
+			RetiredOptions: retired,
+			DefinitionID:   d.ID,
+			Precision:      d.Precision,
+			Name:           d.Name,
+			FieldType:      d.FieldType,
+			Value:          valueMap[d.ID],
+			Options:        opts,
+			Required:       d.Required,
+			Selected:       selectedMap[d.ID],
 		})
 	}
 	return result
@@ -204,7 +215,7 @@ func buildCustomFieldDisplay(defs []*ent.CustomFieldDefinition, customFieldsJSON
 func buildCustomFieldInitialDisplay(defs []*ent.CustomFieldDefinition) []templates.CustomFieldDisplay {
 	values := []customfields.Value{}
 	for _, d := range defs {
-		if d.DefaultValue != nil {
+		if d.DefaultValue != nil && !d.Retired {
 			v, err := customfields.DefaultValue(customfields.Definition{ID: d.ID, Name: d.Name, Type: d.FieldType, Default: d.DefaultValue})
 			if err == nil {
 				values = append(values, customfields.Value{DefinitionID: d.ID, Value: v})
@@ -238,7 +249,7 @@ func buildCustomFieldErrorDisplay(defs []*ent.CustomFieldDefinition, old, submit
 	values := map[int64]any{}
 	if creating {
 		for _, d := range defs {
-			if d.DefaultValue != nil {
+			if d.DefaultValue != nil && !d.Retired {
 				v, err := customfields.DefaultValue(customfields.Definition{ID: d.ID, Name: d.Name, Type: d.FieldType, Default: d.DefaultValue})
 				if err == nil {
 					values[d.ID] = v
@@ -349,6 +360,10 @@ func (h *CustomFieldHandler) saveTyped(w http.ResponseWriter, r *http.Request, i
 	request, _ := authorization.FromContext(r.Context())
 	in := authorization.FieldInput{ObjectType: r.PostForm.Get("object_type"), Name: r.PostForm.Get("name"), Type: r.PostForm.Get("field_type"), Options: r.PostForm.Get("options"), ConversionKey: r.PostForm.Get("conversion_key"), Required: r.PostForm.Get("required") == "true"}
 	var inputErr error
+	in.Retired = r.PostForm.Get("retired") == "true"
+	in.RetiredOptions = r.PostForm.Get("retired_options")
+	in.HelpText = r.PostForm.Get("help_text")
+	in.IncludePDF = r.PostForm.Get("include_pdf") == "true"
 	if raw := r.PostForm.Get("sort_order"); raw != "" {
 		var err error
 		in.SortOrder, err = strconv.Atoi(raw)
@@ -384,6 +399,10 @@ func (h *CustomFieldHandler) saveTyped(w http.ResponseWriter, r *http.Request, i
 		data.IsNew = id == 0
 		data.Def = templates.CustomFieldDefRow{ID: id, ObjectType: in.ObjectType, Name: in.Name, FieldType: in.Type, Options: in.Options, Required: in.Required, SortOrder: in.SortOrder, ConversionKey: in.ConversionKey, Precision: in.Precision, DefaultValue: stringValue(in.Default)}
 		data.Errors = map[string]string{"definition": err.Error()}
+		data.Def.Retired = in.Retired
+		data.Def.RetiredOptions = in.RetiredOptions
+		data.Def.HelpText = in.HelpText
+		data.Def.IncludePDF = in.IncludePDF
 		w.WriteHeader(http.StatusUnprocessableEntity)
 		templates.CustomFieldDefForm(data).Render(r.Context(), w)
 		return

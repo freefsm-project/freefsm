@@ -88,6 +88,9 @@ func (s *Service) saveFields(ctx context.Context, a Actor, typ string, id int64,
 			return err
 		}
 		table, _ := customfields.ParentTable(typ)
+		if err = customfields.CheckCycleValues(ctx, tx, typ, id, fields); err != nil {
+			return err
+		}
 		if _, err = tx.Exec(ctx, `UPDATE `+table+` SET custom_fields=$2::jsonb,updated_at=clock_timestamp() WHERE id=$1`, id, fields); err != nil {
 			return err
 		}
@@ -151,6 +154,9 @@ func (s *Service) DetailsTransaction(ctx context.Context, a Actor, typ string, i
 		}
 		fields, err := customfields.Validate(ctx, tx, typ, old, input, mode, p.CompanyID)
 		if err != nil {
+			return err
+		}
+		if err = customfields.CheckCycleValues(ctx, tx, typ, id, fields); err != nil {
 			return err
 		}
 		result, err := write(tx, fields)

@@ -1,5 +1,10 @@
 # Typed Custom Fields (#29)
 
+This documents the typed-field foundation. The following evolution slice is
+implemented and documented in [Custom Field evolution](custom-field-evolution.md),
+which supersedes the future-work statements below concerning retirement,
+conversion snapshots, PDF inclusion and reviewed Job-field reconciliation.
+
 ## Current contract
 
 Definitions support Customer, Project, Job, Asset, Estimate, Invoice and the

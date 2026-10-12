@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/freefsm-project/freefsm/internal/customfields"
 	"io"
 	"net/http"
 	"strconv"
@@ -497,7 +498,7 @@ func (h *EstimateHandler) ConvertToInvoice(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	result, err := h.conversion.Convert(r.Context(), actor, conversion.ConvertRequest{Operation: conversion.Operation{Key: key}, EstimateID: id})
+	result, err := h.conversion.Convert(r.Context(), actor, conversion.ConvertRequest{Operation: conversion.Operation{Key: key}, EstimateID: id, InvoiceFields: parseCustomFieldPatch(r)})
 	if err != nil {
 		writeConversionError(w, r, err)
 		return
@@ -506,6 +507,11 @@ func (h *EstimateHandler) ConvertToInvoice(w http.ResponseWriter, r *http.Reques
 }
 
 func writeConversionError(w http.ResponseWriter, r *http.Request, err error) {
+	var fieldErr *customfields.FieldError
+	if errors.As(err, &fieldErr) {
+		http.Error(w, fieldErr.Error(), http.StatusUnprocessableEntity)
+		return
+	}
 	if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrPending) || errors.Is(err, authorization.ErrConflict) {
 		authorizationError(w, r, err)
 		return
@@ -515,7 +521,7 @@ func writeConversionError(w http.ResponseWriter, r *http.Request, err error) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 	case errors.Is(err, conversion.ErrNotFound):
 		http.NotFound(w, r)
-	case errors.Is(err, conversion.ErrArchived), errors.Is(err, conversion.ErrIdempotencyConflict), errors.Is(err, conversion.ErrTransactionConflict):
+	case errors.Is(err, conversion.ErrArchived), errors.Is(err, conversion.ErrIdempotencyConflict), errors.Is(err, conversion.ErrTransactionConflict), errors.Is(err, conversion.ErrHistoricalFieldReview):
 		http.Error(w, err.Error(), http.StatusConflict)
 	case errors.Is(err, conversion.ErrSettlement):
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
@@ -763,7 +769,7 @@ func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64, inp
 		job, _ = h.jobSvc.GetByID(ctx, *e.JobID)
 	}
 	data, err := generatePDFBytes(func(w io.Writer) error {
-		return services.GenerateEstimatePDF(w, e, customer, job, statuses, cs)
+		return services.GenerateEstimatePDF(w, e, customer, job, statuses, cs, input.FieldLines...)
 	})
 	if err != nil {
 		return documentPDF{}, err

@@ -377,7 +377,7 @@ func TestCustomFieldKeysMapAndMergeIntegration(t *testing.T) {
 	estimateOnly = *insert("estimate", "Estimate only", "")
 	invoiceShared = *insert("invoice", "Renamed invoice label", "shared")
 	invoiceOnly = *insert("invoice", "Invoice only", "")
-	custom := fmt.Sprintf(`[{"definition_id":%d,"value":{"typed":true}},{"definition_id":%d,"value":"estimate-only"}]`, estimateShared, estimateOnly)
+	custom := fmt.Sprintf(`[{"definition_id":%d,"value":"original"},{"definition_id":%d,"value":"estimate-only"}]`, estimateShared, estimateOnly)
 	var estimateID int64
 	if err := f.db.Pool.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,job_id,status_id,title,line_items,custom_fields) VALUES($1,$2,$3,$4,'Fields','[]',$5) RETURNING id`, f.company, f.customer, f.job, f.estimateAccepted, custom).Scan(&estimateID); err != nil {
 		t.Fatal(err)
@@ -394,7 +394,7 @@ func TestCustomFieldKeysMapAndMergeIntegration(t *testing.T) {
 	if !strings.Contains(invoiceCustom, fmt.Sprintf(`"definition_id": %d`, invoiceShared)) || strings.Contains(invoiceCustom, "estimate-only") {
 		t.Fatalf("mapped invoice custom fields=%s", invoiceCustom)
 	}
-	current := fmt.Sprintf(`[{"definition_id":%d,"value":{"typed":"current"}},{"definition_id":%d,"value":"invoice-only"}]`, invoiceShared, invoiceOnly)
+	current := fmt.Sprintf(`[{"definition_id":%d,"value":"current"},{"definition_id":%d,"value":"invoice-only"}]`, invoiceShared, invoiceOnly)
 	if _, err = f.db.Pool.Exec(ctx, `UPDATE invoices SET custom_fields=$1 WHERE id=$2`, current, r.InvoiceID); err != nil {
 		t.Fatal(err)
 	}

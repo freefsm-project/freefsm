@@ -26,12 +26,14 @@ type Value struct {
 	Value        any   `json:"value"`
 }
 type Definition struct {
-	ID         int64
-	Name, Type string
-	Required   bool
-	Precision  *int
-	Default    *string
-	Options    string
+	ID             int64
+	Name, Type     string
+	Required       bool
+	Retired        bool
+	Precision      *int
+	Default        *string
+	Options        string
+	RetiredOptions string
 }
 
 type SaveMode int
@@ -46,14 +48,14 @@ const (
 // share the authorization transaction mutex, including insertion of new fields.
 func Validate(ctx context.Context, tx pgx.Tx, typ string, old string, input *string, mode SaveMode, company int64) (string, error) {
 	creating := mode == Creation
-	rows, err := tx.Query(ctx, `SELECT id,name,field_type,required,precision,default_value,options::text FROM custom_field_definitions WHERE object_type=$1 AND ($2::bigint=0 OR company_id=$2 OR company_id IS NULL) ORDER BY id`, typ, company)
+	rows, err := tx.Query(ctx, `SELECT id,name,field_type,required,precision,default_value,options::text,retired,retired_options::text FROM custom_field_definitions WHERE object_type=$1 AND ($2::bigint=0 OR company_id=$2 OR company_id IS NULL) ORDER BY id`, typ, company)
 	if err != nil {
 		return "", err
 	}
 	defs := map[int64]Definition{}
 	for rows.Next() {
 		var d Definition
-		if err = rows.Scan(&d.ID, &d.Name, &d.Type, &d.Required, &d.Precision, &d.Default, &d.Options); err != nil {
+		if err = rows.Scan(&d.ID, &d.Name, &d.Type, &d.Required, &d.Precision, &d.Default, &d.Options, &d.Retired, &d.RetiredOptions); err != nil {
 			rows.Close()
 			return "", err
 		}
@@ -76,12 +78,15 @@ func Validate(ctx context.Context, tx pgx.Tx, typ string, old string, input *str
 	}
 	if creating {
 		for _, d := range defs {
-			if d.Default != nil {
+			if d.Default != nil && !d.Retired {
 				v, err := DefaultValue(d)
 				if err != nil {
 					return "", err
 				}
 				values[d.ID] = v
+				if err := ValidateSelection(d, nil, v); err != nil {
+					return "", err
+				}
 			}
 		}
 	}
@@ -99,14 +104,20 @@ func Validate(ctx context.Context, tx pgx.Tx, typ string, old string, input *str
 				return "", &FieldError{Name: "Custom Fields", Message: "unknown or repeated field"}
 			}
 			seen[v.DefinitionID] = true
+			if d.Retired {
+				return "", &FieldError{d.ID, d.Name, "retired fields cannot be edited"}
+			}
 			if err := ValidateValue(d, v.Value); err != nil {
+				return "", err
+			}
+			if err := ValidateSelection(d, values[d.ID], v.Value); err != nil {
 				return "", err
 			}
 			values[v.DefinitionID] = v.Value
 		}
 	}
 	for _, d := range defs {
-		if d.Required && Empty(values[d.ID]) && !(creating && (typ == "job" || typ == "lease")) && (mode != ChangedValues || seen[d.ID]) {
+		if d.Required && !d.Retired && Empty(values[d.ID]) && !(creating && (typ == "job" || typ == "lease")) && (mode != ChangedValues || seen[d.ID]) {
 			return "", &FieldError{d.ID, d.Name, "a value is required"}
 		}
 	}
@@ -120,6 +131,43 @@ func Validate(ctx context.Context, tx pgx.Tx, typ string, old string, input *str
 }
 
 var decimal = regexp.MustCompile(`^-?[0-9]+(?:\.[0-9]+)?$`)
+
+// Retired option identities stay reserved. Existing selections can be retained
+// or removed, but can never be newly selected, including through a default.
+func ValidateSelection(d Definition, previous, next any) error {
+	if d.RetiredOptions == "" || d.RetiredOptions == "[]" {
+		return nil
+	}
+	retired, err := Options(d.RetiredOptions)
+	if err != nil {
+		return err
+	}
+	selections := func(v any) map[string]bool {
+		result := map[string]bool{}
+		switch v := v.(type) {
+		case string:
+			result[v] = true
+		case []string:
+			for _, s := range v {
+				result[s] = true
+			}
+		case []any:
+			for _, s := range v {
+				if s, ok := s.(string); ok {
+					result[s] = true
+				}
+			}
+		}
+		return result
+	}
+	old := selections(previous)
+	for selected := range selections(next) {
+		if retired[selected] && !old[selected] {
+			return &FieldError{d.ID, d.Name, "retired options cannot be newly selected"}
+		}
+	}
+	return nil
+}
 
 func ValidateValue(d Definition, value any) error {
 	v, scalar := value.(string)

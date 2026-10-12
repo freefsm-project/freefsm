@@ -21,21 +21,44 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "not_found", "Job not found")
 		return
 	}
-	var values string
-	if r.Method == http.MethodGet {
-		values, err = request.Service.ReadFields(r.Context(), request.Actor, "job", id, false)
-	} else {
-		var input struct {
-			Values json.RawMessage `json:"values"`
+	var state authorization.FieldState
+	if r.Method == http.MethodGet && r.URL.Query().Get("operation_id") != "" {
+		receipt, receiptErr := request.Service.FieldOperationReceipt(r.Context(), request.Actor, id, r.URL.Query().Get("operation_id"))
+		if receiptErr == nil {
+			writeJSON(w, 200, receipt)
+			return
 		}
+		if errors.Is(receiptErr, authorization.ErrNotFound) {
+			writeError(w, 404, "not_found", "Operation not found")
+		} else {
+			writeError(w, 403, "forbidden", "Permission denied")
+		}
+		return
+	}
+	if r.Method == http.MethodGet {
+		state, err = request.Service.ReadFieldState(r.Context(), request.Actor, id)
+	} else {
+		var input authorization.ReviewedFieldPatch
 		if !decodeJSON(w, r, &input) {
 			return
 		}
-		values, err = request.Service.PatchFields(r.Context(), request.Actor, "job", id, string(input.Values))
+		if input.OperationID != "" {
+			state, err = request.Service.PatchFieldsReviewed(r.Context(), request.Actor, id, input)
+		} else {
+			var values string
+			values, err = request.Service.PatchFields(r.Context(), request.Actor, "job", id, string(input.Values))
+			state.Values = json.RawMessage(values)
+		}
 	}
 	if err != nil {
 		var fieldErr *customfields.FieldError
+		var conflict *authorization.FieldConflict
 		switch {
+		case errors.As(err, &conflict):
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.Header().Set("Cache-Control", "no-store")
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": conflict.Code, "recovery": "new_reviewed_operation"}, "comparison": state})
 		case errors.Is(err, authorization.ErrNotFound):
 			writeError(w, 404, "not_found", "Job not found")
 		case errors.Is(err, authorization.ErrForbidden):
@@ -50,5 +73,5 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	writeJSON(w, 200, map[string]any{"values": json.RawMessage(values)})
+	writeJSON(w, 200, state)
 }

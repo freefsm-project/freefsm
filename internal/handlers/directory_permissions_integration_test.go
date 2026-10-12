@@ -218,7 +218,7 @@ func TestDisabledDirectoryPersonCannotReceiveAssignmentAtCommit(t *testing.T) {
 	u := client.User.Create().SetCompanyID(company).SetName("Assignee").SetEmail("assign@test").SetPasswordHash("hash").SetRole("tech").SaveX(ctx)
 	c := client.Customer.Create().SetCompanyID(company).SetFirstName("Customer").SetLastName("Fixture").SetDisplayName("Assignment customer").SaveX(ctx)
 	jobs := services.NewJobService(client)
-	job, err := jobs.Create(ctx, company, services.JobCreateParams{CustomerID: c.ID, BillingType: "flat_rate", CustomFields: "{}", JobType: "Retained assignment", Assignments: []services.JobAssignment{{UserID: u.ID}}})
+	job, err := jobs.Create(ctx, company, services.JobCreateParams{CustomerID: c.ID, BillingType: "flat_rate", CustomFields: "[]", JobType: "Retained assignment", Assignments: []services.JobAssignment{{UserID: u.ID}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +229,7 @@ func TestDisabledDirectoryPersonCannotReceiveAssignmentAtCommit(t *testing.T) {
 	if _, err := jobs.Update(ctx, company, job.ID, services.JobUpdateParams{Assignments: &retained}); err != nil {
 		t.Fatalf("retained disabled assignment: %v", err)
 	}
-	if _, err := jobs.Create(ctx, company, services.JobCreateParams{CustomerID: c.ID, BillingType: "flat_rate", CustomFields: "{}", JobType: "Rejected disabled assignment", Assignments: retained}); err == nil {
+	if _, err := jobs.Create(ctx, company, services.JobCreateParams{CustomerID: c.ID, BillingType: "flat_rate", CustomFields: "[]", JobType: "Rejected disabled assignment", Assignments: retained}); err == nil {
 		t.Fatal("new assignment accepted disabled user")
 	}
 	unassigned := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Move must roll back").SaveX(ctx)

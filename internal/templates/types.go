@@ -1542,17 +1542,21 @@ type CommentsWidgetData struct {
 }
 
 type CustomFieldDefRow struct {
-	Precision     *int
-	DefaultValue  string
-	ID            int64
-	ObjectType    string
-	Name          string
-	FieldType     string
-	Required      bool
-	Options       string
-	SortOrder     int
-	ConversionKey string
-	Counterpart   string
+	HelpText       string
+	IncludePDF     bool
+	RetiredOptions string
+	Retired        bool
+	Precision      *int
+	DefaultValue   string
+	ID             int64
+	ObjectType     string
+	Name           string
+	FieldType      string
+	Required       bool
+	Options        string
+	SortOrder      int
+	ConversionKey  string
+	Counterpart    string
 }
 
 type CustomFieldDefFormData struct {
@@ -1568,14 +1572,17 @@ type CustomFieldDefListPageData struct {
 }
 
 type CustomFieldDisplay struct {
-	Precision    *int
-	Selected     []string
-	DefinitionID int64
-	Name         string
-	FieldType    string
-	Value        string
-	Options      []string
-	Required     bool
+	HelpText       string
+	RetiredOptions []string
+	Retired        bool
+	Precision      *int
+	Selected       []string
+	DefinitionID   int64
+	Name           string
+	FieldType      string
+	Value          string
+	Options        []string
+	Required       bool
 }
 
 type CustomFieldsWidgetData struct {

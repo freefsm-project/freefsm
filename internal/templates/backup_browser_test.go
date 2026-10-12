@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/ent"
 )
@@ -24,6 +25,7 @@ func TestBackupBrowserWorkflow(t *testing.T) {
 	}
 	page := renderComponent(t, BackupPage("Destination", "", false))
 	settings := renderComponent(t, SettingsPage(SettingsPageData{Settings: &ent.CompanySettings{BusinessName: "Destination"}, EmailDisabled: true}))
+	mail := renderComponent(t, IntegrationSettingsPage("mail", authorization.IntegrationSettings{Revision: "mail-revision"}, true, true, false, false))
 	setup := renderComponent(t, SettingsPage(SettingsPageData{Settings: &ent.CompanySettings{}, IsSetup: true}))
 	var activityLoads atomic.Int64
 	activity := func() ActivityPageData {
@@ -35,6 +37,10 @@ func TestBackupBrowserWorkflow(t *testing.T) {
 		w.Header().Set("Content-Type", "text/html")
 		if r.URL.Path == "/settings" {
 			_, _ = w.Write([]byte(settings))
+			return
+		}
+		if r.URL.Path == "/settings/mail" {
+			_, _ = w.Write([]byte(mail))
 			return
 		}
 		if r.URL.Path == "/setup/company" {

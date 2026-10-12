@@ -7484,28 +7484,32 @@ func (m *CompanySettingsMutation) ResetEdge(name string) error {
 // CustomFieldDefinitionMutation represents an operation that mutates the CustomFieldDefinition nodes in the graph.
 type CustomFieldDefinitionMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *int64
-	company_id     *int64
-	addcompany_id  *int64
-	object_type    *string
-	name           *string
-	conversion_key *string
-	field_type     *string
-	precision      *int
-	addprecision   *int
-	default_value  *string
-	required       *bool
-	options        *string
-	sort_order     *int
-	addsort_order  *int
-	created_at     *time.Time
-	updated_at     *time.Time
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*CustomFieldDefinition, error)
-	predicates     []predicate.CustomFieldDefinition
+	op              Op
+	typ             string
+	id              *int64
+	company_id      *int64
+	addcompany_id   *int64
+	object_type     *string
+	name            *string
+	conversion_key  *string
+	field_type      *string
+	precision       *int
+	addprecision    *int
+	default_value   *string
+	required        *bool
+	retired         *bool
+	retired_options *string
+	help_text       *string
+	include_pdf     *bool
+	options         *string
+	sort_order      *int
+	addsort_order   *int
+	created_at      *time.Time
+	updated_at      *time.Time
+	clearedFields   map[string]struct{}
+	done            bool
+	oldValue        func(context.Context) (*CustomFieldDefinition, error)
+	predicates      []predicate.CustomFieldDefinition
 }
 
 var _ ent.Mutation = (*CustomFieldDefinitionMutation)(nil)
@@ -7994,6 +7998,150 @@ func (m *CustomFieldDefinitionMutation) ResetRequired() {
 	m.required = nil
 }
 
+// SetRetired sets the "retired" field.
+func (m *CustomFieldDefinitionMutation) SetRetired(b bool) {
+	m.retired = &b
+}
+
+// Retired returns the value of the "retired" field in the mutation.
+func (m *CustomFieldDefinitionMutation) Retired() (r bool, exists bool) {
+	v := m.retired
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetired returns the old "retired" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldRetired(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetired is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetired requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetired: %w", err)
+	}
+	return oldValue.Retired, nil
+}
+
+// ResetRetired resets all changes to the "retired" field.
+func (m *CustomFieldDefinitionMutation) ResetRetired() {
+	m.retired = nil
+}
+
+// SetRetiredOptions sets the "retired_options" field.
+func (m *CustomFieldDefinitionMutation) SetRetiredOptions(s string) {
+	m.retired_options = &s
+}
+
+// RetiredOptions returns the value of the "retired_options" field in the mutation.
+func (m *CustomFieldDefinitionMutation) RetiredOptions() (r string, exists bool) {
+	v := m.retired_options
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetiredOptions returns the old "retired_options" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldRetiredOptions(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetiredOptions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetiredOptions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetiredOptions: %w", err)
+	}
+	return oldValue.RetiredOptions, nil
+}
+
+// ResetRetiredOptions resets all changes to the "retired_options" field.
+func (m *CustomFieldDefinitionMutation) ResetRetiredOptions() {
+	m.retired_options = nil
+}
+
+// SetHelpText sets the "help_text" field.
+func (m *CustomFieldDefinitionMutation) SetHelpText(s string) {
+	m.help_text = &s
+}
+
+// HelpText returns the value of the "help_text" field in the mutation.
+func (m *CustomFieldDefinitionMutation) HelpText() (r string, exists bool) {
+	v := m.help_text
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHelpText returns the old "help_text" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldHelpText(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHelpText is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHelpText requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHelpText: %w", err)
+	}
+	return oldValue.HelpText, nil
+}
+
+// ResetHelpText resets all changes to the "help_text" field.
+func (m *CustomFieldDefinitionMutation) ResetHelpText() {
+	m.help_text = nil
+}
+
+// SetIncludePdf sets the "include_pdf" field.
+func (m *CustomFieldDefinitionMutation) SetIncludePdf(b bool) {
+	m.include_pdf = &b
+}
+
+// IncludePdf returns the value of the "include_pdf" field in the mutation.
+func (m *CustomFieldDefinitionMutation) IncludePdf() (r bool, exists bool) {
+	v := m.include_pdf
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldIncludePdf returns the old "include_pdf" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldIncludePdf(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldIncludePdf is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldIncludePdf requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldIncludePdf: %w", err)
+	}
+	return oldValue.IncludePdf, nil
+}
+
+// ResetIncludePdf resets all changes to the "include_pdf" field.
+func (m *CustomFieldDefinitionMutation) ResetIncludePdf() {
+	m.include_pdf = nil
+}
+
 // SetOptions sets the "options" field.
 func (m *CustomFieldDefinitionMutation) SetOptions(s string) {
 	m.options = &s
@@ -8192,7 +8340,7 @@ func (m *CustomFieldDefinitionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomFieldDefinitionMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 16)
 	if m.company_id != nil {
 		fields = append(fields, customfielddefinition.FieldCompanyID)
 	}
@@ -8216,6 +8364,18 @@ func (m *CustomFieldDefinitionMutation) Fields() []string {
 	}
 	if m.required != nil {
 		fields = append(fields, customfielddefinition.FieldRequired)
+	}
+	if m.retired != nil {
+		fields = append(fields, customfielddefinition.FieldRetired)
+	}
+	if m.retired_options != nil {
+		fields = append(fields, customfielddefinition.FieldRetiredOptions)
+	}
+	if m.help_text != nil {
+		fields = append(fields, customfielddefinition.FieldHelpText)
+	}
+	if m.include_pdf != nil {
+		fields = append(fields, customfielddefinition.FieldIncludePdf)
 	}
 	if m.options != nil {
 		fields = append(fields, customfielddefinition.FieldOptions)
@@ -8253,6 +8413,14 @@ func (m *CustomFieldDefinitionMutation) Field(name string) (ent.Value, bool) {
 		return m.DefaultValue()
 	case customfielddefinition.FieldRequired:
 		return m.Required()
+	case customfielddefinition.FieldRetired:
+		return m.Retired()
+	case customfielddefinition.FieldRetiredOptions:
+		return m.RetiredOptions()
+	case customfielddefinition.FieldHelpText:
+		return m.HelpText()
+	case customfielddefinition.FieldIncludePdf:
+		return m.IncludePdf()
 	case customfielddefinition.FieldOptions:
 		return m.Options()
 	case customfielddefinition.FieldSortOrder:
@@ -8286,6 +8454,14 @@ func (m *CustomFieldDefinitionMutation) OldField(ctx context.Context, name strin
 		return m.OldDefaultValue(ctx)
 	case customfielddefinition.FieldRequired:
 		return m.OldRequired(ctx)
+	case customfielddefinition.FieldRetired:
+		return m.OldRetired(ctx)
+	case customfielddefinition.FieldRetiredOptions:
+		return m.OldRetiredOptions(ctx)
+	case customfielddefinition.FieldHelpText:
+		return m.OldHelpText(ctx)
+	case customfielddefinition.FieldIncludePdf:
+		return m.OldIncludePdf(ctx)
 	case customfielddefinition.FieldOptions:
 		return m.OldOptions(ctx)
 	case customfielddefinition.FieldSortOrder:
@@ -8358,6 +8534,34 @@ func (m *CustomFieldDefinitionMutation) SetField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRequired(v)
+		return nil
+	case customfielddefinition.FieldRetired:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetired(v)
+		return nil
+	case customfielddefinition.FieldRetiredOptions:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetiredOptions(v)
+		return nil
+	case customfielddefinition.FieldHelpText:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHelpText(v)
+		return nil
+	case customfielddefinition.FieldIncludePdf:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetIncludePdf(v)
 		return nil
 	case customfielddefinition.FieldOptions:
 		v, ok := value.(string)
@@ -8525,6 +8729,18 @@ func (m *CustomFieldDefinitionMutation) ResetField(name string) error {
 		return nil
 	case customfielddefinition.FieldRequired:
 		m.ResetRequired()
+		return nil
+	case customfielddefinition.FieldRetired:
+		m.ResetRetired()
+		return nil
+	case customfielddefinition.FieldRetiredOptions:
+		m.ResetRetiredOptions()
+		return nil
+	case customfielddefinition.FieldHelpText:
+		m.ResetHelpText()
+		return nil
+	case customfielddefinition.FieldIncludePdf:
+		m.ResetIncludePdf()
 		return nil
 	case customfielddefinition.FieldOptions:
 		m.ResetOptions()

@@ -29,6 +29,14 @@ const (
 	FieldDefaultValue = "default_value"
 	// FieldRequired holds the string denoting the required field in the database.
 	FieldRequired = "required"
+	// FieldRetired holds the string denoting the retired field in the database.
+	FieldRetired = "retired"
+	// FieldRetiredOptions holds the string denoting the retired_options field in the database.
+	FieldRetiredOptions = "retired_options"
+	// FieldHelpText holds the string denoting the help_text field in the database.
+	FieldHelpText = "help_text"
+	// FieldIncludePdf holds the string denoting the include_pdf field in the database.
+	FieldIncludePdf = "include_pdf"
 	// FieldOptions holds the string denoting the options field in the database.
 	FieldOptions = "options"
 	// FieldSortOrder holds the string denoting the sort_order field in the database.
@@ -52,6 +60,10 @@ var Columns = []string{
 	FieldPrecision,
 	FieldDefaultValue,
 	FieldRequired,
+	FieldRetired,
+	FieldRetiredOptions,
+	FieldHelpText,
+	FieldIncludePdf,
 	FieldOptions,
 	FieldSortOrder,
 	FieldCreatedAt,
@@ -77,6 +89,14 @@ var (
 	FieldTypeValidator func(string) error
 	// DefaultRequired holds the default value on creation for the "required" field.
 	DefaultRequired bool
+	// DefaultRetired holds the default value on creation for the "retired" field.
+	DefaultRetired bool
+	// DefaultRetiredOptions holds the default value on creation for the "retired_options" field.
+	DefaultRetiredOptions string
+	// DefaultHelpText holds the default value on creation for the "help_text" field.
+	DefaultHelpText string
+	// DefaultIncludePdf holds the default value on creation for the "include_pdf" field.
+	DefaultIncludePdf bool
 	// DefaultOptions holds the default value on creation for the "options" field.
 	DefaultOptions string
 	// DefaultSortOrder holds the default value on creation for the "sort_order" field.
@@ -135,6 +155,26 @@ func ByDefaultValue(opts ...sql.OrderTermOption) OrderOption {
 // ByRequired orders the results by the required field.
 func ByRequired(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRequired, opts...).ToFunc()
+}
+
+// ByRetired orders the results by the retired field.
+func ByRetired(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRetired, opts...).ToFunc()
+}
+
+// ByRetiredOptions orders the results by the retired_options field.
+func ByRetiredOptions(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRetiredOptions, opts...).ToFunc()
+}
+
+// ByHelpText orders the results by the help_text field.
+func ByHelpText(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHelpText, opts...).ToFunc()
+}
+
+// ByIncludePdf orders the results by the include_pdf field.
+func ByIncludePdf(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldIncludePdf, opts...).ToFunc()
 }
 
 // ByOptions orders the results by the options field.

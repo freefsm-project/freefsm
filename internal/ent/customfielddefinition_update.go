@@ -178,6 +178,62 @@ func (_u *CustomFieldDefinitionUpdate) SetNillableRequired(v *bool) *CustomField
 	return _u
 }
 
+// SetRetired sets the "retired" field.
+func (_u *CustomFieldDefinitionUpdate) SetRetired(v bool) *CustomFieldDefinitionUpdate {
+	_u.mutation.SetRetired(v)
+	return _u
+}
+
+// SetNillableRetired sets the "retired" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdate) SetNillableRetired(v *bool) *CustomFieldDefinitionUpdate {
+	if v != nil {
+		_u.SetRetired(*v)
+	}
+	return _u
+}
+
+// SetRetiredOptions sets the "retired_options" field.
+func (_u *CustomFieldDefinitionUpdate) SetRetiredOptions(v string) *CustomFieldDefinitionUpdate {
+	_u.mutation.SetRetiredOptions(v)
+	return _u
+}
+
+// SetNillableRetiredOptions sets the "retired_options" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdate) SetNillableRetiredOptions(v *string) *CustomFieldDefinitionUpdate {
+	if v != nil {
+		_u.SetRetiredOptions(*v)
+	}
+	return _u
+}
+
+// SetHelpText sets the "help_text" field.
+func (_u *CustomFieldDefinitionUpdate) SetHelpText(v string) *CustomFieldDefinitionUpdate {
+	_u.mutation.SetHelpText(v)
+	return _u
+}
+
+// SetNillableHelpText sets the "help_text" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdate) SetNillableHelpText(v *string) *CustomFieldDefinitionUpdate {
+	if v != nil {
+		_u.SetHelpText(*v)
+	}
+	return _u
+}
+
+// SetIncludePdf sets the "include_pdf" field.
+func (_u *CustomFieldDefinitionUpdate) SetIncludePdf(v bool) *CustomFieldDefinitionUpdate {
+	_u.mutation.SetIncludePdf(v)
+	return _u
+}
+
+// SetNillableIncludePdf sets the "include_pdf" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdate) SetNillableIncludePdf(v *bool) *CustomFieldDefinitionUpdate {
+	if v != nil {
+		_u.SetIncludePdf(*v)
+	}
+	return _u
+}
+
 // SetOptions sets the "options" field.
 func (_u *CustomFieldDefinitionUpdate) SetOptions(v string) *CustomFieldDefinitionUpdate {
 	_u.mutation.SetOptions(v)
@@ -333,6 +389,18 @@ func (_u *CustomFieldDefinitionUpdate) sqlSave(ctx context.Context) (_node int, 
 	}
 	if value, ok := _u.mutation.Required(); ok {
 		_spec.SetField(customfielddefinition.FieldRequired, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Retired(); ok {
+		_spec.SetField(customfielddefinition.FieldRetired, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RetiredOptions(); ok {
+		_spec.SetField(customfielddefinition.FieldRetiredOptions, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.HelpText(); ok {
+		_spec.SetField(customfielddefinition.FieldHelpText, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.IncludePdf(); ok {
+		_spec.SetField(customfielddefinition.FieldIncludePdf, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Options(); ok {
 		_spec.SetField(customfielddefinition.FieldOptions, field.TypeString, value)
@@ -512,6 +580,62 @@ func (_u *CustomFieldDefinitionUpdateOne) SetRequired(v bool) *CustomFieldDefini
 func (_u *CustomFieldDefinitionUpdateOne) SetNillableRequired(v *bool) *CustomFieldDefinitionUpdateOne {
 	if v != nil {
 		_u.SetRequired(*v)
+	}
+	return _u
+}
+
+// SetRetired sets the "retired" field.
+func (_u *CustomFieldDefinitionUpdateOne) SetRetired(v bool) *CustomFieldDefinitionUpdateOne {
+	_u.mutation.SetRetired(v)
+	return _u
+}
+
+// SetNillableRetired sets the "retired" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdateOne) SetNillableRetired(v *bool) *CustomFieldDefinitionUpdateOne {
+	if v != nil {
+		_u.SetRetired(*v)
+	}
+	return _u
+}
+
+// SetRetiredOptions sets the "retired_options" field.
+func (_u *CustomFieldDefinitionUpdateOne) SetRetiredOptions(v string) *CustomFieldDefinitionUpdateOne {
+	_u.mutation.SetRetiredOptions(v)
+	return _u
+}
+
+// SetNillableRetiredOptions sets the "retired_options" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdateOne) SetNillableRetiredOptions(v *string) *CustomFieldDefinitionUpdateOne {
+	if v != nil {
+		_u.SetRetiredOptions(*v)
+	}
+	return _u
+}
+
+// SetHelpText sets the "help_text" field.
+func (_u *CustomFieldDefinitionUpdateOne) SetHelpText(v string) *CustomFieldDefinitionUpdateOne {
+	_u.mutation.SetHelpText(v)
+	return _u
+}
+
+// SetNillableHelpText sets the "help_text" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdateOne) SetNillableHelpText(v *string) *CustomFieldDefinitionUpdateOne {
+	if v != nil {
+		_u.SetHelpText(*v)
+	}
+	return _u
+}
+
+// SetIncludePdf sets the "include_pdf" field.
+func (_u *CustomFieldDefinitionUpdateOne) SetIncludePdf(v bool) *CustomFieldDefinitionUpdateOne {
+	_u.mutation.SetIncludePdf(v)
+	return _u
+}
+
+// SetNillableIncludePdf sets the "include_pdf" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdateOne) SetNillableIncludePdf(v *bool) *CustomFieldDefinitionUpdateOne {
+	if v != nil {
+		_u.SetIncludePdf(*v)
 	}
 	return _u
 }
@@ -701,6 +825,18 @@ func (_u *CustomFieldDefinitionUpdateOne) sqlSave(ctx context.Context) (_node *C
 	}
 	if value, ok := _u.mutation.Required(); ok {
 		_spec.SetField(customfielddefinition.FieldRequired, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.Retired(); ok {
+		_spec.SetField(customfielddefinition.FieldRetired, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.RetiredOptions(); ok {
+		_spec.SetField(customfielddefinition.FieldRetiredOptions, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.HelpText(); ok {
+		_spec.SetField(customfielddefinition.FieldHelpText, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.IncludePdf(); ok {
+		_spec.SetField(customfielddefinition.FieldIncludePdf, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.Options(); ok {
 		_spec.SetField(customfielddefinition.FieldOptions, field.TypeString, value)

@@ -33,6 +33,14 @@ type CustomFieldDefinition struct {
 	DefaultValue *string `json:"default_value,omitempty"`
 	// Required holds the value of the "required" field.
 	Required bool `json:"required,omitempty"`
+	// Retired holds the value of the "retired" field.
+	Retired bool `json:"retired,omitempty"`
+	// RetiredOptions holds the value of the "retired_options" field.
+	RetiredOptions string `json:"retired_options,omitempty"`
+	// HelpText holds the value of the "help_text" field.
+	HelpText string `json:"help_text,omitempty"`
+	// IncludePdf holds the value of the "include_pdf" field.
+	IncludePdf bool `json:"include_pdf,omitempty"`
 	// Options holds the value of the "options" field.
 	Options string `json:"options,omitempty"`
 	// SortOrder holds the value of the "sort_order" field.
@@ -49,11 +57,11 @@ func (*CustomFieldDefinition) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case customfielddefinition.FieldRequired:
+		case customfielddefinition.FieldRequired, customfielddefinition.FieldRetired, customfielddefinition.FieldIncludePdf:
 			values[i] = new(sql.NullBool)
 		case customfielddefinition.FieldID, customfielddefinition.FieldCompanyID, customfielddefinition.FieldPrecision, customfielddefinition.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
-		case customfielddefinition.FieldObjectType, customfielddefinition.FieldName, customfielddefinition.FieldConversionKey, customfielddefinition.FieldFieldType, customfielddefinition.FieldDefaultValue, customfielddefinition.FieldOptions:
+		case customfielddefinition.FieldObjectType, customfielddefinition.FieldName, customfielddefinition.FieldConversionKey, customfielddefinition.FieldFieldType, customfielddefinition.FieldDefaultValue, customfielddefinition.FieldRetiredOptions, customfielddefinition.FieldHelpText, customfielddefinition.FieldOptions:
 			values[i] = new(sql.NullString)
 		case customfielddefinition.FieldCreatedAt, customfielddefinition.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -129,6 +137,30 @@ func (_m *CustomFieldDefinition) assignValues(columns []string, values []any) er
 				return fmt.Errorf("unexpected type %T for field required", values[i])
 			} else if value.Valid {
 				_m.Required = value.Bool
+			}
+		case customfielddefinition.FieldRetired:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field retired", values[i])
+			} else if value.Valid {
+				_m.Retired = value.Bool
+			}
+		case customfielddefinition.FieldRetiredOptions:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field retired_options", values[i])
+			} else if value.Valid {
+				_m.RetiredOptions = value.String
+			}
+		case customfielddefinition.FieldHelpText:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field help_text", values[i])
+			} else if value.Valid {
+				_m.HelpText = value.String
+			}
+		case customfielddefinition.FieldIncludePdf:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field include_pdf", values[i])
+			} else if value.Valid {
+				_m.IncludePdf = value.Bool
 			}
 		case customfielddefinition.FieldOptions:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -221,6 +253,18 @@ func (_m *CustomFieldDefinition) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("required=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Required))
+	builder.WriteString(", ")
+	builder.WriteString("retired=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Retired))
+	builder.WriteString(", ")
+	builder.WriteString("retired_options=")
+	builder.WriteString(_m.RetiredOptions)
+	builder.WriteString(", ")
+	builder.WriteString("help_text=")
+	builder.WriteString(_m.HelpText)
+	builder.WriteString(", ")
+	builder.WriteString("include_pdf=")
+	builder.WriteString(fmt.Sprintf("%v", _m.IncludePdf))
 	builder.WriteString(", ")
 	builder.WriteString("options=")
 	builder.WriteString(_m.Options)

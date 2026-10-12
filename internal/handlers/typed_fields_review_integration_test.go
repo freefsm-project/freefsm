@@ -210,11 +210,47 @@ func TestTypedReviewLegacyPairedHiddenSnapshotsSurviveUpgradeHTTP(t *testing.T) 
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Legacy paired customer").SaveX(ctx)
 	e1 := client.Estimate.Create().SetCompanyID(company).SetCustomerID(c.ID).SetTitle("First legacy cycle").SetCustomFields(`[{"definition_id":900,"value":" North "}]`).SaveX(ctx)
 	e2 := client.Estimate.Create().SetCompanyID(company).SetCustomerID(c.ID).SetTitle("Second legacy cycle").SetCustomFields(`[{"definition_id":900,"value":"South"}]`).SaveX(ctx)
-	first := fieldPost(t, router, cookie, fmt.Sprintf("/estimates/%d/convert", e1.ID), url.Values{"idempotency_key": {"29000001-1111-4111-8111-111111111111"}}, 303)
-	firstInvoice := strings.Split(first.Header().Get("Location"), "?")[0]
-	fieldPost(t, router, cookie, firstInvoice+"/revert-to-estimate", url.Values{"idempotency_key": {"29000002-1111-4111-8111-111111111111"}}, 303)
-	second := fieldPost(t, router, cookie, fmt.Sprintf("/estimates/%d/convert", e2.ID), url.Values{"idempotency_key": {"29000003-1111-4111-8111-111111111111"}}, 303)
-	secondInvoice := strings.Split(second.Header().Get("Location"), "?")[0]
+	// Seed recorded pre-v1 cycles rather than running today's conversion code
+	// against a historical schema. No field-pair evidence existed in these rows.
+	legacyCycle := func(estimate int64, number int, reverted bool) string {
+		t.Helper()
+		var invoice int64
+		if err := pool.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,invoice_number,title,custom_fields) SELECT company_id,customer_id,$2,title,jsonb_build_array(jsonb_build_object('definition_id',901,'value',custom_fields->0->'value')) FROM estimates WHERE id=$1 RETURNING id`, estimate, number).Scan(&invoice); err != nil {
+			t.Fatal(err)
+		}
+		cycle := fmt.Sprintf("29000000-0000-4000-8000-%012d", number)
+		if _, err := pool.Exec(ctx, `INSERT INTO estimate_invoice_conversion_cycles(id,company_id,estimate_id,invoice_id,invoice_number,source_snapshot,converted_by) SELECT $1,company_id,id,$2,$3,to_jsonb(e),$4 FROM estimates e WHERE id=$5`, cycle, invoice, number, admin, estimate); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE estimates SET conversion_hidden_at=now() WHERE id=$1`, estimate); err != nil {
+			t.Fatal(err)
+		}
+		if reverted {
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(ctx)
+			if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.conversion_revert_cycle',$1,true)`, cycle); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = tx.Exec(ctx, `UPDATE estimate_invoice_conversion_cycles SET reverted_at=now(),reverted_by=converted_by WHERE id=$1`, cycle); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = tx.Exec(ctx, `UPDATE invoices SET conversion_hidden_at=now() WHERE id=$1`, invoice); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = tx.Exec(ctx, `UPDATE estimates SET conversion_hidden_at=NULL WHERE id=$1`, estimate); err != nil {
+				t.Fatal(err)
+			}
+			if err = tx.Commit(ctx); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return fmt.Sprintf("/invoices/%d", invoice)
+	}
+	firstInvoice := legacyCycle(e1.ID, 901, true)
+	secondInvoice := legacyCycle(e2.ID, 902, false)
 	// Compare the actual legacy identities, option associations, both kinds of
 	// hidden document, immutable source snapshots and conversion receipts.
 	inventory := func() string {
@@ -243,10 +279,21 @@ func TestTypedReviewLegacyPairedHiddenSnapshotsSurviveUpgradeHTTP(t *testing.T) 
 		t.Fatal("failed snapshot update changed history")
 	}
 	fieldPost(t, router, cookie, "/settings/custom-fields", url.Values{"object_type": {"estimate"}, "name": {"Required since upgrade"}, "field_type": {"checkbox"}, "required": {"true"}}, 303)
-	fieldPost(t, router, cookie, secondInvoice+"/revert-to-estimate", url.Values{"idempotency_key": {"29000004-1111-4111-8111-111111111111"}}, 303)
-	path := fmt.Sprintf("/estimates/%d", e2.ID)
-	assertContains(t, requestBody(t, router, cookie, "GET", path+"/custom-fields", 200), `value="South" selected`)
-	fieldPost(t, router, cookie, path, url.Values{"customer_id": {fmt.Sprint(c.ID)}, "title": {"Rejected after recovery"}, "line_items": {"[]"}, "tax_rate": {"0"}}, 422)
+	fieldPost(t, router, cookie, secondInvoice+"/revert-to-estimate", url.Values{"idempotency_key": {"29000004-1111-4111-8111-111111111111"}}, 409)
+	assertContains(t, requestBody(t, router, cookie, "GET", secondInvoice+"/custom-fields", 200), `value="South" selected`)
+	fieldPost(t, router, cookie, "/settings/custom-fields/901", url.Values{"name": {"Legacy invoice selection"}, "field_type": {"select"}, "options": {`["South"," North "]`}}, 422)
+	reviewPath := "/settings/custom-fields/cycles/29000000-0000-4000-8000-000000000902/review"
+	assertContains(t, requestBody(t, router, cookie, "GET", reviewPath, 200), "Historical pairing review")
+	evidence := `{"field_pairs":{"900":901},"field_definitions":[{"id":900,"name":"Legacy estimate selection","field_type":"select","options":"[\" North \",\"South\"]"},{"id":901,"name":"Legacy invoice selection","field_type":"select","options":"[\" North \",\"South\"]"}]}`
+	beforeReview := inventory()
+	fieldPost(t, router, cookie, reviewPath, url.Values{"evidence": {strings.Replace(evidence, `"field_pairs":{"900":901}`, `"field_pairs":{"900":999}`, 1)}, "reason": {"Invalid pairing must not commit"}, "reviewed": {"true"}}, 422)
+	fieldPost(t, router, cookie, reviewPath, url.Values{"evidence": {evidence}, "reason": {"Reviewed original field configuration evidence"}, "reviewed": {"true"}}, 303)
+	if after := inventory(); after != beforeReview {
+		t.Fatal("retrospective review rewrote original cycle evidence")
+	}
+	fieldPost(t, router, cookie, reviewPath, url.Values{"evidence": {evidence}, "reason": {"Cannot replace accepted evidence"}, "reviewed": {"true"}}, 409)
+	fieldPost(t, router, cookie, secondInvoice+"/revert-to-estimate", url.Values{"idempotency_key": {"29000005-1111-4111-8111-111111111111"}}, 303)
+	assertContains(t, requestBody(t, router, cookie, "GET", fmt.Sprintf("/estimates/%d/custom-fields", e2.ID), 200), `value="South" selected`)
 }
 
 func TestTypedReviewJobArchiveWaitsForAssignedDocumentSaveHTTP(t *testing.T) {

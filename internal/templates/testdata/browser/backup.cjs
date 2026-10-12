@@ -114,7 +114,13 @@ const { chromium } = require('playwright-core');
       assert.equal(await page.locator('.settings-tabs .active').getAttribute('data-tab'), tab);
       assert.equal(await page.locator('.settings-tabs [aria-current=true]').getAttribute('data-tab'), tab);
     }
-    assert.equal(await page.locator('.settings-tabs a[href="/settings/mail"]').count(),1,'mail uses independent settings route');
+    await page.getByRole('link', { name: 'Mail', exact: true }).click();
+    await page.waitForURL('**/settings/mail');
+    assert.equal(await page.getByRole('heading', { name: /^mail settings$/i }).isVisible(), true, 'Mail opens its independent settings page');
+    assert.equal(await page.getByLabel('SMTP host').isVisible(), true, 'Mail settings remain operable from Settings navigation');
+    await page.goBack();
+    await page.waitForURL(url => url.pathname === '/settings');
+    assert.equal(await page.getByLabel('Business Name').inputValue(), 'Destination', 'Back returns to Settings');
     assert.equal(await page.locator('.settings-tabs a[href="/settings/maps"]').count(),1,'maps use independent settings route');
     assert.equal(await page.locator('form[action="/settings"] form').count(), 0);
     assert.equal(await page.locator('form[action="/settings/enable-email"]').count(), 1);
