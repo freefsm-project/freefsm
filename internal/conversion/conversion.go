@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/settlement"
@@ -221,8 +223,34 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 		if hiddenAt != nil {
 			return Result{}, ErrNotFound
 		}
-		if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
-			return Result{}, err
+		if _, bound := authorization.FromContext(ctx); bound {
+			var source struct {
+				Label string  `json:"number_label"`
+				Terms *string `json:"terms"`
+			}
+			if err := json.Unmarshal(snapshot, &source); err != nil {
+				return Result{}, err
+			}
+			if source.Label == "" || source.Terms == nil {
+				return Result{}, authorization.ErrConflict
+			}
+		}
+		if _, bound := authorization.FromContext(ctx); bound {
+			var reviewed struct {
+				Label string  `json:"number_label"`
+				Terms *string `json:"terms"`
+			}
+			if err := json.Unmarshal(snapshot, &reviewed); err != nil {
+				return Result{}, err
+			}
+			if reviewed.Label == "" || reviewed.Terms == nil {
+				return Result{}, authorization.ErrConflict
+			}
+		}
+		if _, bound := authorization.FromContext(ctx); !bound {
+			if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
+				return Result{}, err
+			}
 		}
 		items, err := services.DecodeLineItems(string(lineItems))
 		if err != nil {
@@ -245,8 +273,49 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 		}
 
 		var settingsID, number int64
-		if err = tx.QueryRow(ctx, `SELECT id,next_invoice_number FROM company_settings WHERE company_id=$1 FOR UPDATE`, actor.CompanyID).Scan(&settingsID, &number); err != nil {
+		var dueDays *int
+		var timezone, terms string
+		if err = tx.QueryRow(ctx, `SELECT id,next_invoice_number,default_due_days,timezone,invoice_payment_terms FROM company_settings WHERE company_id=$1 FOR UPDATE`, actor.CompanyID).Scan(&settingsID, &number, &dueDays, &timezone, &terms); err != nil {
 			return Result{}, err
+		}
+		var dueOverride, termsOverride *string
+		err = tx.QueryRow(ctx, `SELECT defaults->>'invoice_due_days',defaults->>'invoice_terms' FROM customer_document_defaults WHERE customer_id=$1`, customerID).Scan(&dueOverride, &termsOverride)
+		if err != nil && err != pgx.ErrNoRows {
+			return Result{}, err
+		}
+		if termsOverride != nil {
+			terms = *termsOverride
+		}
+		var sourceTerms struct {
+			Terms *string `json:"terms"`
+		}
+		if err := json.Unmarshal(snapshot, &sourceTerms); err != nil {
+			return Result{}, err
+		}
+		if sourceTerms.Terms != nil {
+			terms = *sourceTerms.Terms
+		}
+		loc, err := time.LoadLocation(timezone)
+		if err != nil {
+			return Result{}, err
+		}
+		date, _ := time.Parse("2006-01-02", s.now().In(loc).Format("2006-01-02"))
+		dueDate := time.Time{}
+		if dueDays != nil {
+			dueDate = date.AddDate(0, 0, *dueDays)
+		}
+		if dueOverride != nil {
+			dueDate = time.Time{}
+			if *dueOverride != "" {
+				days, err := strconv.ParseInt(*dueOverride, 10, 32)
+				if err != nil {
+					return Result{}, fmt.Errorf("invalid Customer due offset")
+				}
+				dueDate = date.AddDate(0, 0, int(days))
+			}
+		}
+		if !dueDate.IsZero() && (dueDate.Year() < 1 || dueDate.Year() > 9999) {
+			return Result{}, fmt.Errorf("due offset produces an unsupported date")
 		}
 		var statusID int64
 		if err = tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.company_id=$1 AND w.company_id=$1 AND w.object_type='invoice' AND s.category_key='invoice:draft' AND s.is_category_default`, actor.CompanyID).Scan(&statusID); err != nil {
@@ -254,7 +323,7 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 		}
 		now := s.now()
 		var invoiceID int64
-		err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`, actor.CompanyID, customerID, jobID, req.EstimateID, statusID, number, title, notes, now, now.AddDate(0, 0, 30), taxRate, lineItems, invoiceCustom, settlementState).Scan(&invoiceID)
+		err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state,terms) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`, actor.CompanyID, customerID, jobID, req.EstimateID, statusID, number, title, notes, date, dueDate, taxRate, lineItems, invoiceCustom, settlementState, terms).Scan(&invoiceID)
 		if err != nil {
 			return Result{}, err
 		}
@@ -330,7 +399,7 @@ func (s *Service) Revert(ctx context.Context, actor Actor, req RevertRequest) (R
 		if _, err = tx.Exec(ctx, `UPDATE invoices SET conversion_hidden_at=$1,updated_at=$1 WHERE id=$2`, now, r.InvoiceID); err != nil {
 			return Result{}, err
 		}
-		if _, err = tx.Exec(ctx, `UPDATE estimates SET customer_id=$1,job_id=$2,status_id=$3,title=$4,notes=$5,tax_rate=$6,line_items=$7,custom_fields=$8,deleted_at=NULL,conversion_hidden_at=NULL,updated_at=$9 WHERE id=$10`, customerID, jobID, draftStatus, title, notes, taxRate, lineItems, mergedCustom, now, r.EstimateID); err != nil {
+		if _, err = tx.Exec(ctx, `UPDATE estimates SET customer_id=$1,job_id=$2,status_id=$3,title=$4,notes=$5,tax_rate=$6,line_items=$7,custom_fields=$8,deleted_at=NULL,conversion_hidden_at=NULL,updated_at=$9,terms=(SELECT terms FROM invoices WHERE id=$11) WHERE id=$10`, customerID, jobID, draftStatus, title, notes, taxRate, lineItems, mergedCustom, now, r.EstimateID, r.InvoiceID); err != nil {
 			return Result{}, err
 		}
 		if err = transferRelations(ctx, tx, actor.CompanyID, "invoice", r.InvoiceID, "estimate", r.EstimateID); err != nil {
@@ -544,7 +613,22 @@ func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Ope
 		return Result{}, err
 	}
 	defer tx.Rollback(ctx)
-	actorName, err := authorizeRequest(ctx, tx, a, request)
+	var approval *authorization.ConversionAuthority
+	var actorName string
+	if bound, ok := authorization.FromContext(ctx); ok && kind == "convert" {
+		input, ok := request.(ConvertRequest)
+		if !ok || bound.Actor.UserID != a.ID {
+			return Result{}, ErrForbidden
+		}
+		grant, e := bound.Service.AuthorizeConversion(ctx, tx, bound.Actor, input.EstimateID)
+		if e != nil {
+			return Result{}, e
+		}
+		approval = &grant
+		err = tx.QueryRow(ctx, `SELECT name FROM users WHERE id=$1 AND company_id=$2`, a.ID, a.CompanyID).Scan(&actorName)
+	} else {
+		actorName, err = authorizeRequest(ctx, tx, a, request)
+	}
 	if err != nil {
 		return Result{}, err
 	}
@@ -574,6 +658,12 @@ func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Ope
 	r, err := fn(tx, actorName)
 	if err != nil {
 		return Result{}, err
+	}
+	if approval != nil {
+		bound, _ := authorization.FromContext(ctx)
+		if err := bound.Service.AuditConvertedDocument(ctx, tx, *approval, r.InvoiceID); err != nil {
+			return Result{}, err
+		}
 	}
 	resultJSON, _ = json.Marshal(r)
 	if _, err = tx.Exec(ctx, `UPDATE estimate_invoice_conversion_operations SET result=$1 WHERE company_id=$2 AND operation=$3 AND idempotency_key=$4`, resultJSON, a.CompanyID, kind, op.Key); err != nil {

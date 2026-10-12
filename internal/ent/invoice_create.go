@@ -34,6 +34,20 @@ func (_c *InvoiceCreate) SetNillableInvoiceNumber(v *int64) *InvoiceCreate {
 	return _c
 }
 
+// SetNumberLabel sets the "number_label" field.
+func (_c *InvoiceCreate) SetNumberLabel(v string) *InvoiceCreate {
+	_c.mutation.SetNumberLabel(v)
+	return _c
+}
+
+// SetNillableNumberLabel sets the "number_label" field if the given value is not nil.
+func (_c *InvoiceCreate) SetNillableNumberLabel(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetNumberLabel(*v)
+	}
+	return _c
+}
+
 // SetCompanyID sets the "company_id" field.
 func (_c *InvoiceCreate) SetCompanyID(v int64) *InvoiceCreate {
 	_c.mutation.SetCompanyID(v)
@@ -120,6 +134,20 @@ func (_c *InvoiceCreate) SetNotes(v string) *InvoiceCreate {
 func (_c *InvoiceCreate) SetNillableNotes(v *string) *InvoiceCreate {
 	if v != nil {
 		_c.SetNotes(*v)
+	}
+	return _c
+}
+
+// SetTerms sets the "terms" field.
+func (_c *InvoiceCreate) SetTerms(v string) *InvoiceCreate {
+	_c.mutation.SetTerms(v)
+	return _c
+}
+
+// SetNillableTerms sets the "terms" field if the given value is not nil.
+func (_c *InvoiceCreate) SetNillableTerms(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetTerms(*v)
 	}
 	return _c
 }
@@ -303,6 +331,10 @@ func (_c *InvoiceCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *InvoiceCreate) defaults() {
+	if _, ok := _c.mutation.NumberLabel(); !ok {
+		v := invoice.DefaultNumberLabel
+		_c.mutation.SetNumberLabel(v)
+	}
 	if _, ok := _c.mutation.Title(); !ok {
 		v := invoice.DefaultTitle
 		_c.mutation.SetTitle(v)
@@ -343,6 +375,9 @@ func (_c *InvoiceCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *InvoiceCreate) check() error {
+	if _, ok := _c.mutation.NumberLabel(); !ok {
+		return &ValidationError{Name: "number_label", err: errors.New(`ent: missing required field "Invoice.number_label"`)}
+	}
 	if _, ok := _c.mutation.CustomerID(); !ok {
 		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "Invoice.customer_id"`)}
 	}
@@ -415,6 +450,10 @@ func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 		_spec.SetField(invoice.FieldInvoiceNumber, field.TypeInt64, value)
 		_node.InvoiceNumber = value
 	}
+	if value, ok := _c.mutation.NumberLabel(); ok {
+		_spec.SetField(invoice.FieldNumberLabel, field.TypeString, value)
+		_node.NumberLabel = value
+	}
 	if value, ok := _c.mutation.CompanyID(); ok {
 		_spec.SetField(invoice.FieldCompanyID, field.TypeInt64, value)
 		_node.CompanyID = &value
@@ -442,6 +481,10 @@ func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Notes(); ok {
 		_spec.SetField(invoice.FieldNotes, field.TypeString, value)
 		_node.Notes = value
+	}
+	if value, ok := _c.mutation.Terms(); ok {
+		_spec.SetField(invoice.FieldTerms, field.TypeString, value)
+		_node.Terms = &value
 	}
 	if value, ok := _c.mutation.InvoiceDate(); ok {
 		_spec.SetField(invoice.FieldInvoiceDate, field.TypeTime, value)

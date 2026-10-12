@@ -4370,6 +4370,12 @@ type CompanySettingsMutation struct {
 	estimate_prefix                 *string
 	default_due_days                *int
 	adddefault_due_days             *int
+	default_invoice_notes           *string
+	default_estimate_notes          *string
+	estimate_terms                  *string
+	default_line_description        *string
+	estimate_valid_days             *int
+	addestimate_valid_days          *int
 	smtp_host                       *string
 	smtp_port                       *int
 	addsmtp_port                    *int
@@ -5049,7 +5055,7 @@ func (m *CompanySettingsMutation) DefaultDueDays() (r int, exists bool) {
 // OldDefaultDueDays returns the old "default_due_days" field's value of the CompanySettings entity.
 // If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *CompanySettingsMutation) OldDefaultDueDays(ctx context.Context) (v int, err error) {
+func (m *CompanySettingsMutation) OldDefaultDueDays(ctx context.Context) (v *int, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldDefaultDueDays is only allowed on UpdateOne operations")
 	}
@@ -5081,10 +5087,238 @@ func (m *CompanySettingsMutation) AddedDefaultDueDays() (r int, exists bool) {
 	return *v, true
 }
 
+// ClearDefaultDueDays clears the value of the "default_due_days" field.
+func (m *CompanySettingsMutation) ClearDefaultDueDays() {
+	m.default_due_days = nil
+	m.adddefault_due_days = nil
+	m.clearedFields[companysettings.FieldDefaultDueDays] = struct{}{}
+}
+
+// DefaultDueDaysCleared returns if the "default_due_days" field was cleared in this mutation.
+func (m *CompanySettingsMutation) DefaultDueDaysCleared() bool {
+	_, ok := m.clearedFields[companysettings.FieldDefaultDueDays]
+	return ok
+}
+
 // ResetDefaultDueDays resets all changes to the "default_due_days" field.
 func (m *CompanySettingsMutation) ResetDefaultDueDays() {
 	m.default_due_days = nil
 	m.adddefault_due_days = nil
+	delete(m.clearedFields, companysettings.FieldDefaultDueDays)
+}
+
+// SetDefaultInvoiceNotes sets the "default_invoice_notes" field.
+func (m *CompanySettingsMutation) SetDefaultInvoiceNotes(s string) {
+	m.default_invoice_notes = &s
+}
+
+// DefaultInvoiceNotes returns the value of the "default_invoice_notes" field in the mutation.
+func (m *CompanySettingsMutation) DefaultInvoiceNotes() (r string, exists bool) {
+	v := m.default_invoice_notes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultInvoiceNotes returns the old "default_invoice_notes" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldDefaultInvoiceNotes(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultInvoiceNotes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultInvoiceNotes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultInvoiceNotes: %w", err)
+	}
+	return oldValue.DefaultInvoiceNotes, nil
+}
+
+// ResetDefaultInvoiceNotes resets all changes to the "default_invoice_notes" field.
+func (m *CompanySettingsMutation) ResetDefaultInvoiceNotes() {
+	m.default_invoice_notes = nil
+}
+
+// SetDefaultEstimateNotes sets the "default_estimate_notes" field.
+func (m *CompanySettingsMutation) SetDefaultEstimateNotes(s string) {
+	m.default_estimate_notes = &s
+}
+
+// DefaultEstimateNotes returns the value of the "default_estimate_notes" field in the mutation.
+func (m *CompanySettingsMutation) DefaultEstimateNotes() (r string, exists bool) {
+	v := m.default_estimate_notes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultEstimateNotes returns the old "default_estimate_notes" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldDefaultEstimateNotes(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultEstimateNotes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultEstimateNotes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultEstimateNotes: %w", err)
+	}
+	return oldValue.DefaultEstimateNotes, nil
+}
+
+// ResetDefaultEstimateNotes resets all changes to the "default_estimate_notes" field.
+func (m *CompanySettingsMutation) ResetDefaultEstimateNotes() {
+	m.default_estimate_notes = nil
+}
+
+// SetEstimateTerms sets the "estimate_terms" field.
+func (m *CompanySettingsMutation) SetEstimateTerms(s string) {
+	m.estimate_terms = &s
+}
+
+// EstimateTerms returns the value of the "estimate_terms" field in the mutation.
+func (m *CompanySettingsMutation) EstimateTerms() (r string, exists bool) {
+	v := m.estimate_terms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEstimateTerms returns the old "estimate_terms" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldEstimateTerms(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEstimateTerms is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEstimateTerms requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEstimateTerms: %w", err)
+	}
+	return oldValue.EstimateTerms, nil
+}
+
+// ResetEstimateTerms resets all changes to the "estimate_terms" field.
+func (m *CompanySettingsMutation) ResetEstimateTerms() {
+	m.estimate_terms = nil
+}
+
+// SetDefaultLineDescription sets the "default_line_description" field.
+func (m *CompanySettingsMutation) SetDefaultLineDescription(s string) {
+	m.default_line_description = &s
+}
+
+// DefaultLineDescription returns the value of the "default_line_description" field in the mutation.
+func (m *CompanySettingsMutation) DefaultLineDescription() (r string, exists bool) {
+	v := m.default_line_description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultLineDescription returns the old "default_line_description" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldDefaultLineDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultLineDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultLineDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultLineDescription: %w", err)
+	}
+	return oldValue.DefaultLineDescription, nil
+}
+
+// ResetDefaultLineDescription resets all changes to the "default_line_description" field.
+func (m *CompanySettingsMutation) ResetDefaultLineDescription() {
+	m.default_line_description = nil
+}
+
+// SetEstimateValidDays sets the "estimate_valid_days" field.
+func (m *CompanySettingsMutation) SetEstimateValidDays(i int) {
+	m.estimate_valid_days = &i
+	m.addestimate_valid_days = nil
+}
+
+// EstimateValidDays returns the value of the "estimate_valid_days" field in the mutation.
+func (m *CompanySettingsMutation) EstimateValidDays() (r int, exists bool) {
+	v := m.estimate_valid_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEstimateValidDays returns the old "estimate_valid_days" field's value of the CompanySettings entity.
+// If the CompanySettings object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CompanySettingsMutation) OldEstimateValidDays(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEstimateValidDays is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEstimateValidDays requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEstimateValidDays: %w", err)
+	}
+	return oldValue.EstimateValidDays, nil
+}
+
+// AddEstimateValidDays adds i to the "estimate_valid_days" field.
+func (m *CompanySettingsMutation) AddEstimateValidDays(i int) {
+	if m.addestimate_valid_days != nil {
+		*m.addestimate_valid_days += i
+	} else {
+		m.addestimate_valid_days = &i
+	}
+}
+
+// AddedEstimateValidDays returns the value that was added to the "estimate_valid_days" field in this mutation.
+func (m *CompanySettingsMutation) AddedEstimateValidDays() (r int, exists bool) {
+	v := m.addestimate_valid_days
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearEstimateValidDays clears the value of the "estimate_valid_days" field.
+func (m *CompanySettingsMutation) ClearEstimateValidDays() {
+	m.estimate_valid_days = nil
+	m.addestimate_valid_days = nil
+	m.clearedFields[companysettings.FieldEstimateValidDays] = struct{}{}
+}
+
+// EstimateValidDaysCleared returns if the "estimate_valid_days" field was cleared in this mutation.
+func (m *CompanySettingsMutation) EstimateValidDaysCleared() bool {
+	_, ok := m.clearedFields[companysettings.FieldEstimateValidDays]
+	return ok
+}
+
+// ResetEstimateValidDays resets all changes to the "estimate_valid_days" field.
+func (m *CompanySettingsMutation) ResetEstimateValidDays() {
+	m.estimate_valid_days = nil
+	m.addestimate_valid_days = nil
+	delete(m.clearedFields, companysettings.FieldEstimateValidDays)
 }
 
 // SetSMTPHost sets the "smtp_host" field.
@@ -6133,7 +6367,7 @@ func (m *CompanySettingsMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CompanySettingsMutation) Fields() []string {
-	fields := make([]string, 0, 41)
+	fields := make([]string, 0, 46)
 	if m.company_id != nil {
 		fields = append(fields, companysettings.FieldCompanyID)
 	}
@@ -6175,6 +6409,21 @@ func (m *CompanySettingsMutation) Fields() []string {
 	}
 	if m.default_due_days != nil {
 		fields = append(fields, companysettings.FieldDefaultDueDays)
+	}
+	if m.default_invoice_notes != nil {
+		fields = append(fields, companysettings.FieldDefaultInvoiceNotes)
+	}
+	if m.default_estimate_notes != nil {
+		fields = append(fields, companysettings.FieldDefaultEstimateNotes)
+	}
+	if m.estimate_terms != nil {
+		fields = append(fields, companysettings.FieldEstimateTerms)
+	}
+	if m.default_line_description != nil {
+		fields = append(fields, companysettings.FieldDefaultLineDescription)
+	}
+	if m.estimate_valid_days != nil {
+		fields = append(fields, companysettings.FieldEstimateValidDays)
 	}
 	if m.smtp_host != nil {
 		fields = append(fields, companysettings.FieldSMTPHost)
@@ -6293,6 +6542,16 @@ func (m *CompanySettingsMutation) Field(name string) (ent.Value, bool) {
 		return m.EstimatePrefix()
 	case companysettings.FieldDefaultDueDays:
 		return m.DefaultDueDays()
+	case companysettings.FieldDefaultInvoiceNotes:
+		return m.DefaultInvoiceNotes()
+	case companysettings.FieldDefaultEstimateNotes:
+		return m.DefaultEstimateNotes()
+	case companysettings.FieldEstimateTerms:
+		return m.EstimateTerms()
+	case companysettings.FieldDefaultLineDescription:
+		return m.DefaultLineDescription()
+	case companysettings.FieldEstimateValidDays:
+		return m.EstimateValidDays()
 	case companysettings.FieldSMTPHost:
 		return m.SMTPHost()
 	case companysettings.FieldSMTPPort:
@@ -6384,6 +6643,16 @@ func (m *CompanySettingsMutation) OldField(ctx context.Context, name string) (en
 		return m.OldEstimatePrefix(ctx)
 	case companysettings.FieldDefaultDueDays:
 		return m.OldDefaultDueDays(ctx)
+	case companysettings.FieldDefaultInvoiceNotes:
+		return m.OldDefaultInvoiceNotes(ctx)
+	case companysettings.FieldDefaultEstimateNotes:
+		return m.OldDefaultEstimateNotes(ctx)
+	case companysettings.FieldEstimateTerms:
+		return m.OldEstimateTerms(ctx)
+	case companysettings.FieldDefaultLineDescription:
+		return m.OldDefaultLineDescription(ctx)
+	case companysettings.FieldEstimateValidDays:
+		return m.OldEstimateValidDays(ctx)
 	case companysettings.FieldSMTPHost:
 		return m.OldSMTPHost(ctx)
 	case companysettings.FieldSMTPPort:
@@ -6544,6 +6813,41 @@ func (m *CompanySettingsMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetDefaultDueDays(v)
+		return nil
+	case companysettings.FieldDefaultInvoiceNotes:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultInvoiceNotes(v)
+		return nil
+	case companysettings.FieldDefaultEstimateNotes:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultEstimateNotes(v)
+		return nil
+	case companysettings.FieldEstimateTerms:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEstimateTerms(v)
+		return nil
+	case companysettings.FieldDefaultLineDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultLineDescription(v)
+		return nil
+	case companysettings.FieldEstimateValidDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEstimateValidDays(v)
 		return nil
 	case companysettings.FieldSMTPHost:
 		v, ok := value.(string)
@@ -6751,6 +7055,9 @@ func (m *CompanySettingsMutation) AddedFields() []string {
 	if m.adddefault_due_days != nil {
 		fields = append(fields, companysettings.FieldDefaultDueDays)
 	}
+	if m.addestimate_valid_days != nil {
+		fields = append(fields, companysettings.FieldEstimateValidDays)
+	}
 	if m.addsmtp_port != nil {
 		fields = append(fields, companysettings.FieldSMTPPort)
 	}
@@ -6771,6 +7078,8 @@ func (m *CompanySettingsMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedNextInvoiceNumber()
 	case companysettings.FieldDefaultDueDays:
 		return m.AddedDefaultDueDays()
+	case companysettings.FieldEstimateValidDays:
+		return m.AddedEstimateValidDays()
 	case companysettings.FieldSMTPPort:
 		return m.AddedSMTPPort()
 	case companysettings.FieldPasswordMinLength:
@@ -6805,6 +7114,13 @@ func (m *CompanySettingsMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddDefaultDueDays(v)
 		return nil
+	case companysettings.FieldEstimateValidDays:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddEstimateValidDays(v)
+		return nil
 	case companysettings.FieldSMTPPort:
 		v, ok := value.(int)
 		if !ok {
@@ -6830,6 +7146,12 @@ func (m *CompanySettingsMutation) ClearedFields() []string {
 	if m.FieldCleared(companysettings.FieldCompanyID) {
 		fields = append(fields, companysettings.FieldCompanyID)
 	}
+	if m.FieldCleared(companysettings.FieldDefaultDueDays) {
+		fields = append(fields, companysettings.FieldDefaultDueDays)
+	}
+	if m.FieldCleared(companysettings.FieldEstimateValidDays) {
+		fields = append(fields, companysettings.FieldEstimateValidDays)
+	}
 	return fields
 }
 
@@ -6846,6 +7168,12 @@ func (m *CompanySettingsMutation) ClearField(name string) error {
 	switch name {
 	case companysettings.FieldCompanyID:
 		m.ClearCompanyID()
+		return nil
+	case companysettings.FieldDefaultDueDays:
+		m.ClearDefaultDueDays()
+		return nil
+	case companysettings.FieldEstimateValidDays:
+		m.ClearEstimateValidDays()
 		return nil
 	}
 	return fmt.Errorf("unknown CompanySettings nullable field %s", name)
@@ -6896,6 +7224,21 @@ func (m *CompanySettingsMutation) ResetField(name string) error {
 		return nil
 	case companysettings.FieldDefaultDueDays:
 		m.ResetDefaultDueDays()
+		return nil
+	case companysettings.FieldDefaultInvoiceNotes:
+		m.ResetDefaultInvoiceNotes()
+		return nil
+	case companysettings.FieldDefaultEstimateNotes:
+		m.ResetDefaultEstimateNotes()
+		return nil
+	case companysettings.FieldEstimateTerms:
+		m.ResetEstimateTerms()
+		return nil
+	case companysettings.FieldDefaultLineDescription:
+		m.ResetDefaultLineDescription()
+		return nil
+	case companysettings.FieldEstimateValidDays:
+		m.ResetEstimateValidDays()
 		return nil
 	case companysettings.FieldSMTPHost:
 		m.ResetSMTPHost()
@@ -12266,6 +12609,9 @@ type EstimateMutation struct {
 	op                   Op
 	typ                  string
 	id                   *int64
+	number_label         *string
+	document_number      *int64
+	adddocument_number   *int64
 	company_id           *int64
 	addcompany_id        *int64
 	customer_id          *int64
@@ -12276,6 +12622,8 @@ type EstimateMutation struct {
 	addstatus_id         *int64
 	title                *string
 	notes                *string
+	terms                *string
+	valid_through        *time.Time
 	tax_rate             *string
 	line_items           *string
 	custom_fields        *string
@@ -12391,6 +12739,112 @@ func (m *EstimateMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetNumberLabel sets the "number_label" field.
+func (m *EstimateMutation) SetNumberLabel(s string) {
+	m.number_label = &s
+}
+
+// NumberLabel returns the value of the "number_label" field in the mutation.
+func (m *EstimateMutation) NumberLabel() (r string, exists bool) {
+	v := m.number_label
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNumberLabel returns the old "number_label" field's value of the Estimate entity.
+// If the Estimate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EstimateMutation) OldNumberLabel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNumberLabel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNumberLabel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNumberLabel: %w", err)
+	}
+	return oldValue.NumberLabel, nil
+}
+
+// ResetNumberLabel resets all changes to the "number_label" field.
+func (m *EstimateMutation) ResetNumberLabel() {
+	m.number_label = nil
+}
+
+// SetDocumentNumber sets the "document_number" field.
+func (m *EstimateMutation) SetDocumentNumber(i int64) {
+	m.document_number = &i
+	m.adddocument_number = nil
+}
+
+// DocumentNumber returns the value of the "document_number" field in the mutation.
+func (m *EstimateMutation) DocumentNumber() (r int64, exists bool) {
+	v := m.document_number
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDocumentNumber returns the old "document_number" field's value of the Estimate entity.
+// If the Estimate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EstimateMutation) OldDocumentNumber(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDocumentNumber is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDocumentNumber requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDocumentNumber: %w", err)
+	}
+	return oldValue.DocumentNumber, nil
+}
+
+// AddDocumentNumber adds i to the "document_number" field.
+func (m *EstimateMutation) AddDocumentNumber(i int64) {
+	if m.adddocument_number != nil {
+		*m.adddocument_number += i
+	} else {
+		m.adddocument_number = &i
+	}
+}
+
+// AddedDocumentNumber returns the value that was added to the "document_number" field in this mutation.
+func (m *EstimateMutation) AddedDocumentNumber() (r int64, exists bool) {
+	v := m.adddocument_number
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearDocumentNumber clears the value of the "document_number" field.
+func (m *EstimateMutation) ClearDocumentNumber() {
+	m.document_number = nil
+	m.adddocument_number = nil
+	m.clearedFields[estimate.FieldDocumentNumber] = struct{}{}
+}
+
+// DocumentNumberCleared returns if the "document_number" field was cleared in this mutation.
+func (m *EstimateMutation) DocumentNumberCleared() bool {
+	_, ok := m.clearedFields[estimate.FieldDocumentNumber]
+	return ok
+}
+
+// ResetDocumentNumber resets all changes to the "document_number" field.
+func (m *EstimateMutation) ResetDocumentNumber() {
+	m.document_number = nil
+	m.adddocument_number = nil
+	delete(m.clearedFields, estimate.FieldDocumentNumber)
 }
 
 // SetCompanyID sets the "company_id" field.
@@ -12745,6 +13199,104 @@ func (m *EstimateMutation) ResetNotes() {
 	m.notes = nil
 }
 
+// SetTerms sets the "terms" field.
+func (m *EstimateMutation) SetTerms(s string) {
+	m.terms = &s
+}
+
+// Terms returns the value of the "terms" field in the mutation.
+func (m *EstimateMutation) Terms() (r string, exists bool) {
+	v := m.terms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTerms returns the old "terms" field's value of the Estimate entity.
+// If the Estimate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EstimateMutation) OldTerms(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTerms is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTerms requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTerms: %w", err)
+	}
+	return oldValue.Terms, nil
+}
+
+// ClearTerms clears the value of the "terms" field.
+func (m *EstimateMutation) ClearTerms() {
+	m.terms = nil
+	m.clearedFields[estimate.FieldTerms] = struct{}{}
+}
+
+// TermsCleared returns if the "terms" field was cleared in this mutation.
+func (m *EstimateMutation) TermsCleared() bool {
+	_, ok := m.clearedFields[estimate.FieldTerms]
+	return ok
+}
+
+// ResetTerms resets all changes to the "terms" field.
+func (m *EstimateMutation) ResetTerms() {
+	m.terms = nil
+	delete(m.clearedFields, estimate.FieldTerms)
+}
+
+// SetValidThrough sets the "valid_through" field.
+func (m *EstimateMutation) SetValidThrough(t time.Time) {
+	m.valid_through = &t
+}
+
+// ValidThrough returns the value of the "valid_through" field in the mutation.
+func (m *EstimateMutation) ValidThrough() (r time.Time, exists bool) {
+	v := m.valid_through
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldValidThrough returns the old "valid_through" field's value of the Estimate entity.
+// If the Estimate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EstimateMutation) OldValidThrough(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldValidThrough is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldValidThrough requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldValidThrough: %w", err)
+	}
+	return oldValue.ValidThrough, nil
+}
+
+// ClearValidThrough clears the value of the "valid_through" field.
+func (m *EstimateMutation) ClearValidThrough() {
+	m.valid_through = nil
+	m.clearedFields[estimate.FieldValidThrough] = struct{}{}
+}
+
+// ValidThroughCleared returns if the "valid_through" field was cleared in this mutation.
+func (m *EstimateMutation) ValidThroughCleared() bool {
+	_, ok := m.clearedFields[estimate.FieldValidThrough]
+	return ok
+}
+
+// ResetValidThrough resets all changes to the "valid_through" field.
+func (m *EstimateMutation) ResetValidThrough() {
+	m.valid_through = nil
+	delete(m.clearedFields, estimate.FieldValidThrough)
+}
+
 // SetTaxRate sets the "tax_rate" field.
 func (m *EstimateMutation) SetTaxRate(s string) {
 	m.tax_rate = &s
@@ -13057,7 +13609,13 @@ func (m *EstimateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EstimateMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 17)
+	if m.number_label != nil {
+		fields = append(fields, estimate.FieldNumberLabel)
+	}
+	if m.document_number != nil {
+		fields = append(fields, estimate.FieldDocumentNumber)
+	}
 	if m.company_id != nil {
 		fields = append(fields, estimate.FieldCompanyID)
 	}
@@ -13075,6 +13633,12 @@ func (m *EstimateMutation) Fields() []string {
 	}
 	if m.notes != nil {
 		fields = append(fields, estimate.FieldNotes)
+	}
+	if m.terms != nil {
+		fields = append(fields, estimate.FieldTerms)
+	}
+	if m.valid_through != nil {
+		fields = append(fields, estimate.FieldValidThrough)
 	}
 	if m.tax_rate != nil {
 		fields = append(fields, estimate.FieldTaxRate)
@@ -13105,6 +13669,10 @@ func (m *EstimateMutation) Fields() []string {
 // schema.
 func (m *EstimateMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case estimate.FieldNumberLabel:
+		return m.NumberLabel()
+	case estimate.FieldDocumentNumber:
+		return m.DocumentNumber()
 	case estimate.FieldCompanyID:
 		return m.CompanyID()
 	case estimate.FieldCustomerID:
@@ -13117,6 +13685,10 @@ func (m *EstimateMutation) Field(name string) (ent.Value, bool) {
 		return m.Title()
 	case estimate.FieldNotes:
 		return m.Notes()
+	case estimate.FieldTerms:
+		return m.Terms()
+	case estimate.FieldValidThrough:
+		return m.ValidThrough()
 	case estimate.FieldTaxRate:
 		return m.TaxRate()
 	case estimate.FieldLineItems:
@@ -13140,6 +13712,10 @@ func (m *EstimateMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *EstimateMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case estimate.FieldNumberLabel:
+		return m.OldNumberLabel(ctx)
+	case estimate.FieldDocumentNumber:
+		return m.OldDocumentNumber(ctx)
 	case estimate.FieldCompanyID:
 		return m.OldCompanyID(ctx)
 	case estimate.FieldCustomerID:
@@ -13152,6 +13728,10 @@ func (m *EstimateMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldTitle(ctx)
 	case estimate.FieldNotes:
 		return m.OldNotes(ctx)
+	case estimate.FieldTerms:
+		return m.OldTerms(ctx)
+	case estimate.FieldValidThrough:
+		return m.OldValidThrough(ctx)
 	case estimate.FieldTaxRate:
 		return m.OldTaxRate(ctx)
 	case estimate.FieldLineItems:
@@ -13175,6 +13755,20 @@ func (m *EstimateMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *EstimateMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case estimate.FieldNumberLabel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNumberLabel(v)
+		return nil
+	case estimate.FieldDocumentNumber:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDocumentNumber(v)
+		return nil
 	case estimate.FieldCompanyID:
 		v, ok := value.(int64)
 		if !ok {
@@ -13216,6 +13810,20 @@ func (m *EstimateMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetNotes(v)
+		return nil
+	case estimate.FieldTerms:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTerms(v)
+		return nil
+	case estimate.FieldValidThrough:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetValidThrough(v)
 		return nil
 	case estimate.FieldTaxRate:
 		v, ok := value.(string)
@@ -13274,6 +13882,9 @@ func (m *EstimateMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *EstimateMutation) AddedFields() []string {
 	var fields []string
+	if m.adddocument_number != nil {
+		fields = append(fields, estimate.FieldDocumentNumber)
+	}
 	if m.addcompany_id != nil {
 		fields = append(fields, estimate.FieldCompanyID)
 	}
@@ -13294,6 +13905,8 @@ func (m *EstimateMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *EstimateMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case estimate.FieldDocumentNumber:
+		return m.AddedDocumentNumber()
 	case estimate.FieldCompanyID:
 		return m.AddedCompanyID()
 	case estimate.FieldCustomerID:
@@ -13311,6 +13924,13 @@ func (m *EstimateMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *EstimateMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case estimate.FieldDocumentNumber:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDocumentNumber(v)
+		return nil
 	case estimate.FieldCompanyID:
 		v, ok := value.(int64)
 		if !ok {
@@ -13347,6 +13967,9 @@ func (m *EstimateMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *EstimateMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(estimate.FieldDocumentNumber) {
+		fields = append(fields, estimate.FieldDocumentNumber)
+	}
 	if m.FieldCleared(estimate.FieldCompanyID) {
 		fields = append(fields, estimate.FieldCompanyID)
 	}
@@ -13358,6 +13981,12 @@ func (m *EstimateMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(estimate.FieldStatusID) {
 		fields = append(fields, estimate.FieldStatusID)
+	}
+	if m.FieldCleared(estimate.FieldTerms) {
+		fields = append(fields, estimate.FieldTerms)
+	}
+	if m.FieldCleared(estimate.FieldValidThrough) {
+		fields = append(fields, estimate.FieldValidThrough)
 	}
 	if m.FieldCleared(estimate.FieldDeletedAt) {
 		fields = append(fields, estimate.FieldDeletedAt)
@@ -13379,6 +14008,9 @@ func (m *EstimateMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *EstimateMutation) ClearField(name string) error {
 	switch name {
+	case estimate.FieldDocumentNumber:
+		m.ClearDocumentNumber()
+		return nil
 	case estimate.FieldCompanyID:
 		m.ClearCompanyID()
 		return nil
@@ -13390,6 +14022,12 @@ func (m *EstimateMutation) ClearField(name string) error {
 		return nil
 	case estimate.FieldStatusID:
 		m.ClearStatusID()
+		return nil
+	case estimate.FieldTerms:
+		m.ClearTerms()
+		return nil
+	case estimate.FieldValidThrough:
+		m.ClearValidThrough()
 		return nil
 	case estimate.FieldDeletedAt:
 		m.ClearDeletedAt()
@@ -13405,6 +14043,12 @@ func (m *EstimateMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *EstimateMutation) ResetField(name string) error {
 	switch name {
+	case estimate.FieldNumberLabel:
+		m.ResetNumberLabel()
+		return nil
+	case estimate.FieldDocumentNumber:
+		m.ResetDocumentNumber()
+		return nil
 	case estimate.FieldCompanyID:
 		m.ResetCompanyID()
 		return nil
@@ -13422,6 +14066,12 @@ func (m *EstimateMutation) ResetField(name string) error {
 		return nil
 	case estimate.FieldNotes:
 		m.ResetNotes()
+		return nil
+	case estimate.FieldTerms:
+		m.ResetTerms()
+		return nil
+	case estimate.FieldValidThrough:
+		m.ResetValidThrough()
 		return nil
 	case estimate.FieldTaxRate:
 		m.ResetTaxRate()
@@ -15170,6 +15820,7 @@ type InvoiceMutation struct {
 	id                   *int64
 	invoice_number       *int64
 	addinvoice_number    *int64
+	number_label         *string
 	company_id           *int64
 	addcompany_id        *int64
 	customer_id          *int64
@@ -15182,6 +15833,7 @@ type InvoiceMutation struct {
 	addstatus_id         *int64
 	title                *string
 	notes                *string
+	terms                *string
 	invoice_date         *time.Time
 	due_date             *time.Time
 	tax_rate             *string
@@ -15371,6 +16023,42 @@ func (m *InvoiceMutation) ResetInvoiceNumber() {
 	m.invoice_number = nil
 	m.addinvoice_number = nil
 	delete(m.clearedFields, invoice.FieldInvoiceNumber)
+}
+
+// SetNumberLabel sets the "number_label" field.
+func (m *InvoiceMutation) SetNumberLabel(s string) {
+	m.number_label = &s
+}
+
+// NumberLabel returns the value of the "number_label" field in the mutation.
+func (m *InvoiceMutation) NumberLabel() (r string, exists bool) {
+	v := m.number_label
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNumberLabel returns the old "number_label" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldNumberLabel(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNumberLabel is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNumberLabel requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNumberLabel: %w", err)
+	}
+	return oldValue.NumberLabel, nil
+}
+
+// ResetNumberLabel resets all changes to the "number_label" field.
+func (m *InvoiceMutation) ResetNumberLabel() {
+	m.number_label = nil
 }
 
 // SetCompanyID sets the "company_id" field.
@@ -15779,6 +16467,55 @@ func (m *InvoiceMutation) OldNotes(ctx context.Context) (v string, err error) {
 // ResetNotes resets all changes to the "notes" field.
 func (m *InvoiceMutation) ResetNotes() {
 	m.notes = nil
+}
+
+// SetTerms sets the "terms" field.
+func (m *InvoiceMutation) SetTerms(s string) {
+	m.terms = &s
+}
+
+// Terms returns the value of the "terms" field in the mutation.
+func (m *InvoiceMutation) Terms() (r string, exists bool) {
+	v := m.terms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTerms returns the old "terms" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldTerms(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTerms is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTerms requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTerms: %w", err)
+	}
+	return oldValue.Terms, nil
+}
+
+// ClearTerms clears the value of the "terms" field.
+func (m *InvoiceMutation) ClearTerms() {
+	m.terms = nil
+	m.clearedFields[invoice.FieldTerms] = struct{}{}
+}
+
+// TermsCleared returns if the "terms" field was cleared in this mutation.
+func (m *InvoiceMutation) TermsCleared() bool {
+	_, ok := m.clearedFields[invoice.FieldTerms]
+	return ok
+}
+
+// ResetTerms resets all changes to the "terms" field.
+func (m *InvoiceMutation) ResetTerms() {
+	m.terms = nil
+	delete(m.clearedFields, invoice.FieldTerms)
 }
 
 // SetInvoiceDate sets the "invoice_date" field.
@@ -16237,9 +16974,12 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 21)
 	if m.invoice_number != nil {
 		fields = append(fields, invoice.FieldInvoiceNumber)
+	}
+	if m.number_label != nil {
+		fields = append(fields, invoice.FieldNumberLabel)
 	}
 	if m.company_id != nil {
 		fields = append(fields, invoice.FieldCompanyID)
@@ -16261,6 +17001,9 @@ func (m *InvoiceMutation) Fields() []string {
 	}
 	if m.notes != nil {
 		fields = append(fields, invoice.FieldNotes)
+	}
+	if m.terms != nil {
+		fields = append(fields, invoice.FieldTerms)
 	}
 	if m.invoice_date != nil {
 		fields = append(fields, invoice.FieldInvoiceDate)
@@ -16305,6 +17048,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case invoice.FieldInvoiceNumber:
 		return m.InvoiceNumber()
+	case invoice.FieldNumberLabel:
+		return m.NumberLabel()
 	case invoice.FieldCompanyID:
 		return m.CompanyID()
 	case invoice.FieldCustomerID:
@@ -16319,6 +17064,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.Title()
 	case invoice.FieldNotes:
 		return m.Notes()
+	case invoice.FieldTerms:
+		return m.Terms()
 	case invoice.FieldInvoiceDate:
 		return m.InvoiceDate()
 	case invoice.FieldDueDate:
@@ -16352,6 +17099,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 	switch name {
 	case invoice.FieldInvoiceNumber:
 		return m.OldInvoiceNumber(ctx)
+	case invoice.FieldNumberLabel:
+		return m.OldNumberLabel(ctx)
 	case invoice.FieldCompanyID:
 		return m.OldCompanyID(ctx)
 	case invoice.FieldCustomerID:
@@ -16366,6 +17115,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldTitle(ctx)
 	case invoice.FieldNotes:
 		return m.OldNotes(ctx)
+	case invoice.FieldTerms:
+		return m.OldTerms(ctx)
 	case invoice.FieldInvoiceDate:
 		return m.OldInvoiceDate(ctx)
 	case invoice.FieldDueDate:
@@ -16403,6 +17154,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetInvoiceNumber(v)
+		return nil
+	case invoice.FieldNumberLabel:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNumberLabel(v)
 		return nil
 	case invoice.FieldCompanyID:
 		v, ok := value.(int64)
@@ -16452,6 +17210,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetNotes(v)
+		return nil
+	case invoice.FieldTerms:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTerms(v)
 		return nil
 	case invoice.FieldInvoiceDate:
 		v, ok := value.(time.Time)
@@ -16650,6 +17415,9 @@ func (m *InvoiceMutation) ClearedFields() []string {
 	if m.FieldCleared(invoice.FieldStatusID) {
 		fields = append(fields, invoice.FieldStatusID)
 	}
+	if m.FieldCleared(invoice.FieldTerms) {
+		fields = append(fields, invoice.FieldTerms)
+	}
 	if m.FieldCleared(invoice.FieldDeletedAt) {
 		fields = append(fields, invoice.FieldDeletedAt)
 	}
@@ -16685,6 +17453,9 @@ func (m *InvoiceMutation) ClearField(name string) error {
 	case invoice.FieldStatusID:
 		m.ClearStatusID()
 		return nil
+	case invoice.FieldTerms:
+		m.ClearTerms()
+		return nil
 	case invoice.FieldDeletedAt:
 		m.ClearDeletedAt()
 		return nil
@@ -16701,6 +17472,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 	switch name {
 	case invoice.FieldInvoiceNumber:
 		m.ResetInvoiceNumber()
+		return nil
+	case invoice.FieldNumberLabel:
+		m.ResetNumberLabel()
 		return nil
 	case invoice.FieldCompanyID:
 		m.ResetCompanyID()
@@ -16722,6 +17496,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldNotes:
 		m.ResetNotes()
+		return nil
+	case invoice.FieldTerms:
+		m.ResetTerms()
 		return nil
 	case invoice.FieldInvoiceDate:
 		m.ResetInvoiceDate()

@@ -28,6 +28,47 @@ func (_u *EstimateUpdate) Where(ps ...predicate.Estimate) *EstimateUpdate {
 	return _u
 }
 
+// SetNumberLabel sets the "number_label" field.
+func (_u *EstimateUpdate) SetNumberLabel(v string) *EstimateUpdate {
+	_u.mutation.SetNumberLabel(v)
+	return _u
+}
+
+// SetNillableNumberLabel sets the "number_label" field if the given value is not nil.
+func (_u *EstimateUpdate) SetNillableNumberLabel(v *string) *EstimateUpdate {
+	if v != nil {
+		_u.SetNumberLabel(*v)
+	}
+	return _u
+}
+
+// SetDocumentNumber sets the "document_number" field.
+func (_u *EstimateUpdate) SetDocumentNumber(v int64) *EstimateUpdate {
+	_u.mutation.ResetDocumentNumber()
+	_u.mutation.SetDocumentNumber(v)
+	return _u
+}
+
+// SetNillableDocumentNumber sets the "document_number" field if the given value is not nil.
+func (_u *EstimateUpdate) SetNillableDocumentNumber(v *int64) *EstimateUpdate {
+	if v != nil {
+		_u.SetDocumentNumber(*v)
+	}
+	return _u
+}
+
+// AddDocumentNumber adds value to the "document_number" field.
+func (_u *EstimateUpdate) AddDocumentNumber(v int64) *EstimateUpdate {
+	_u.mutation.AddDocumentNumber(v)
+	return _u
+}
+
+// ClearDocumentNumber clears the value of the "document_number" field.
+func (_u *EstimateUpdate) ClearDocumentNumber() *EstimateUpdate {
+	_u.mutation.ClearDocumentNumber()
+	return _u
+}
+
 // SetCompanyID sets the "company_id" field.
 func (_u *EstimateUpdate) SetCompanyID(v int64) *EstimateUpdate {
 	_u.mutation.ResetCompanyID()
@@ -161,6 +202,46 @@ func (_u *EstimateUpdate) SetNillableNotes(v *string) *EstimateUpdate {
 	if v != nil {
 		_u.SetNotes(*v)
 	}
+	return _u
+}
+
+// SetTerms sets the "terms" field.
+func (_u *EstimateUpdate) SetTerms(v string) *EstimateUpdate {
+	_u.mutation.SetTerms(v)
+	return _u
+}
+
+// SetNillableTerms sets the "terms" field if the given value is not nil.
+func (_u *EstimateUpdate) SetNillableTerms(v *string) *EstimateUpdate {
+	if v != nil {
+		_u.SetTerms(*v)
+	}
+	return _u
+}
+
+// ClearTerms clears the value of the "terms" field.
+func (_u *EstimateUpdate) ClearTerms() *EstimateUpdate {
+	_u.mutation.ClearTerms()
+	return _u
+}
+
+// SetValidThrough sets the "valid_through" field.
+func (_u *EstimateUpdate) SetValidThrough(v time.Time) *EstimateUpdate {
+	_u.mutation.SetValidThrough(v)
+	return _u
+}
+
+// SetNillableValidThrough sets the "valid_through" field if the given value is not nil.
+func (_u *EstimateUpdate) SetNillableValidThrough(v *time.Time) *EstimateUpdate {
+	if v != nil {
+		_u.SetValidThrough(*v)
+	}
+	return _u
+}
+
+// ClearValidThrough clears the value of the "valid_through" field.
+func (_u *EstimateUpdate) ClearValidThrough() *EstimateUpdate {
+	_u.mutation.ClearValidThrough()
 	return _u
 }
 
@@ -302,6 +383,18 @@ func (_u *EstimateUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.NumberLabel(); ok {
+		_spec.SetField(estimate.FieldNumberLabel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DocumentNumber(); ok {
+		_spec.SetField(estimate.FieldDocumentNumber, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedDocumentNumber(); ok {
+		_spec.AddField(estimate.FieldDocumentNumber, field.TypeInt64, value)
+	}
+	if _u.mutation.DocumentNumberCleared() {
+		_spec.ClearField(estimate.FieldDocumentNumber, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.CompanyID(); ok {
 		_spec.SetField(estimate.FieldCompanyID, field.TypeInt64, value)
 	}
@@ -343,6 +436,18 @@ func (_u *EstimateUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(estimate.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Terms(); ok {
+		_spec.SetField(estimate.FieldTerms, field.TypeString, value)
+	}
+	if _u.mutation.TermsCleared() {
+		_spec.ClearField(estimate.FieldTerms, field.TypeString)
+	}
+	if value, ok := _u.mutation.ValidThrough(); ok {
+		_spec.SetField(estimate.FieldValidThrough, field.TypeTime, value)
+	}
+	if _u.mutation.ValidThroughCleared() {
+		_spec.ClearField(estimate.FieldValidThrough, field.TypeTime)
 	}
 	if value, ok := _u.mutation.TaxRate(); ok {
 		_spec.SetField(estimate.FieldTaxRate, field.TypeString, value)
@@ -386,6 +491,47 @@ type EstimateUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *EstimateMutation
+}
+
+// SetNumberLabel sets the "number_label" field.
+func (_u *EstimateUpdateOne) SetNumberLabel(v string) *EstimateUpdateOne {
+	_u.mutation.SetNumberLabel(v)
+	return _u
+}
+
+// SetNillableNumberLabel sets the "number_label" field if the given value is not nil.
+func (_u *EstimateUpdateOne) SetNillableNumberLabel(v *string) *EstimateUpdateOne {
+	if v != nil {
+		_u.SetNumberLabel(*v)
+	}
+	return _u
+}
+
+// SetDocumentNumber sets the "document_number" field.
+func (_u *EstimateUpdateOne) SetDocumentNumber(v int64) *EstimateUpdateOne {
+	_u.mutation.ResetDocumentNumber()
+	_u.mutation.SetDocumentNumber(v)
+	return _u
+}
+
+// SetNillableDocumentNumber sets the "document_number" field if the given value is not nil.
+func (_u *EstimateUpdateOne) SetNillableDocumentNumber(v *int64) *EstimateUpdateOne {
+	if v != nil {
+		_u.SetDocumentNumber(*v)
+	}
+	return _u
+}
+
+// AddDocumentNumber adds value to the "document_number" field.
+func (_u *EstimateUpdateOne) AddDocumentNumber(v int64) *EstimateUpdateOne {
+	_u.mutation.AddDocumentNumber(v)
+	return _u
+}
+
+// ClearDocumentNumber clears the value of the "document_number" field.
+func (_u *EstimateUpdateOne) ClearDocumentNumber() *EstimateUpdateOne {
+	_u.mutation.ClearDocumentNumber()
+	return _u
 }
 
 // SetCompanyID sets the "company_id" field.
@@ -521,6 +667,46 @@ func (_u *EstimateUpdateOne) SetNillableNotes(v *string) *EstimateUpdateOne {
 	if v != nil {
 		_u.SetNotes(*v)
 	}
+	return _u
+}
+
+// SetTerms sets the "terms" field.
+func (_u *EstimateUpdateOne) SetTerms(v string) *EstimateUpdateOne {
+	_u.mutation.SetTerms(v)
+	return _u
+}
+
+// SetNillableTerms sets the "terms" field if the given value is not nil.
+func (_u *EstimateUpdateOne) SetNillableTerms(v *string) *EstimateUpdateOne {
+	if v != nil {
+		_u.SetTerms(*v)
+	}
+	return _u
+}
+
+// ClearTerms clears the value of the "terms" field.
+func (_u *EstimateUpdateOne) ClearTerms() *EstimateUpdateOne {
+	_u.mutation.ClearTerms()
+	return _u
+}
+
+// SetValidThrough sets the "valid_through" field.
+func (_u *EstimateUpdateOne) SetValidThrough(v time.Time) *EstimateUpdateOne {
+	_u.mutation.SetValidThrough(v)
+	return _u
+}
+
+// SetNillableValidThrough sets the "valid_through" field if the given value is not nil.
+func (_u *EstimateUpdateOne) SetNillableValidThrough(v *time.Time) *EstimateUpdateOne {
+	if v != nil {
+		_u.SetValidThrough(*v)
+	}
+	return _u
+}
+
+// ClearValidThrough clears the value of the "valid_through" field.
+func (_u *EstimateUpdateOne) ClearValidThrough() *EstimateUpdateOne {
+	_u.mutation.ClearValidThrough()
 	return _u
 }
 
@@ -692,6 +878,18 @@ func (_u *EstimateUpdateOne) sqlSave(ctx context.Context) (_node *Estimate, err 
 			}
 		}
 	}
+	if value, ok := _u.mutation.NumberLabel(); ok {
+		_spec.SetField(estimate.FieldNumberLabel, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.DocumentNumber(); ok {
+		_spec.SetField(estimate.FieldDocumentNumber, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedDocumentNumber(); ok {
+		_spec.AddField(estimate.FieldDocumentNumber, field.TypeInt64, value)
+	}
+	if _u.mutation.DocumentNumberCleared() {
+		_spec.ClearField(estimate.FieldDocumentNumber, field.TypeInt64)
+	}
 	if value, ok := _u.mutation.CompanyID(); ok {
 		_spec.SetField(estimate.FieldCompanyID, field.TypeInt64, value)
 	}
@@ -733,6 +931,18 @@ func (_u *EstimateUpdateOne) sqlSave(ctx context.Context) (_node *Estimate, err 
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(estimate.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Terms(); ok {
+		_spec.SetField(estimate.FieldTerms, field.TypeString, value)
+	}
+	if _u.mutation.TermsCleared() {
+		_spec.ClearField(estimate.FieldTerms, field.TypeString)
+	}
+	if value, ok := _u.mutation.ValidThrough(); ok {
+		_spec.SetField(estimate.FieldValidThrough, field.TypeTime, value)
+	}
+	if _u.mutation.ValidThroughCleared() {
+		_spec.ClearField(estimate.FieldValidThrough, field.TypeTime)
 	}
 	if value, ok := _u.mutation.TaxRate(); ok {
 		_spec.SetField(estimate.FieldTaxRate, field.TypeString, value)

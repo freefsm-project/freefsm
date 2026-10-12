@@ -262,12 +262,12 @@ func (_q *EstimateQuery) Clone() *EstimateQuery {
 // Example:
 //
 //	var v []struct {
-//		CompanyID int64 `json:"company_id,omitempty"`
+//		NumberLabel string `json:"number_label,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Estimate.Query().
-//		GroupBy(estimate.FieldCompanyID).
+//		GroupBy(estimate.FieldNumberLabel).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *EstimateQuery) GroupBy(field string, fields ...string) *EstimateGroupBy {
@@ -285,11 +285,11 @@ func (_q *EstimateQuery) GroupBy(field string, fields ...string) *EstimateGroupB
 // Example:
 //
 //	var v []struct {
-//		CompanyID int64 `json:"company_id,omitempty"`
+//		NumberLabel string `json:"number_label,omitempty"`
 //	}
 //
 //	client.Estimate.Query().
-//		Select(estimate.FieldCompanyID).
+//		Select(estimate.FieldNumberLabel).
 //		Scan(ctx, &v)
 func (_q *EstimateQuery) Select(fields ...string) *EstimateSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

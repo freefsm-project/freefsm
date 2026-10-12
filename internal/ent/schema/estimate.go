@@ -23,12 +23,16 @@ func (Estimate) Annotations() []schema.Annotation {
 func (Estimate) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
+		field.String("number_label").Default(""),
+		field.Int64("document_number").Optional().Nillable(),
 		field.Int64("company_id").Optional().Nillable(),
 		field.Int64("customer_id").Optional().Nillable(),
 		field.Int64("job_id").Optional().Nillable(),
 		field.Int64("status_id").Optional().Nillable(),
 		field.String("title").Default(""),
 		field.String("notes").Default(""),
+		field.String("terms").Optional().Nillable(),
+		field.Time("valid_through").Optional().Nillable(),
 		field.String("tax_rate").Default("0"),
 		field.String("line_items").Default("[]"),
 		field.String("custom_fields").Default("[]"),

@@ -5,8 +5,9 @@ import "fmt"
 templ InvoiceForm(p InvoiceFormPageData) {
 	@Layout(invoiceFormTitle(p.IsNew)) {
 
-		<form action={ templ.URL(invoiceFormAction(p)) } method="post" autocomplete="off" class="compact-form">
+		<form action={ templ.URL(invoiceFormAction(p)) } method="post" autocomplete="off" class="compact-form" hx-boost="false">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="default_line_description" value={ p.DefaultLineDescription }/>
 			<label>
 				Customer <small class="required-marker">*</small>
 				<select name="customer_id" required>
@@ -31,7 +32,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 			<div class="grid">
 				<label>
 					Invoice Number
-					<input type="number" name="invoice_number" min="1" value={ invoiceFormNumberValue(p) } placeholder="Leave blank for next number" required?={ !p.IsNew }/>
+					<input type="number" name="invoice_number" min="1" value={ invoiceFormNumberValue(p) } placeholder="Leave blank for next number" required?={ !p.IsNew } readonly?={ !p.IsNew }/>
 				</label>
 				<label>
 					Title <small class="required-marker">*</small>
@@ -60,7 +61,14 @@ templ InvoiceForm(p InvoiceFormPageData) {
 				<textarea name="notes" rows="3">{ p.Invoice.Notes }</textarea>
 			</label>
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
+			<label>Terms<textarea name="terms" rows="3">{ p.Invoice.Terms }</textarea></label>
+			if p.Invoice.TermsUnknown {
+				<p>Legacy terms were not recorded. Review and enter this document's terms before generating a new PDF. Blank explicitly records no terms.</p>
+			}
 			@LineItemEditor(LineItemEditorData{ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON})
+			if p.IsNew {
+				@DocumentDefaultPicker(p.DefaultsJSON,p.PreserveEntered)
+			}
 			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href={ templ.URL(invoiceFormCancelURL(p)) } role="button" class="outline">Cancel</a>

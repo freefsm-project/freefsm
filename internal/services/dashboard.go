@@ -571,7 +571,8 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 		Where(unpaidInvoicePredicates...).
 		Count(ctx)
 
-	overdueInvoicePredicates := append(unpaidInvoicePredicates, invoice.DueDateLT(now))
+	todayDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	overdueInvoicePredicates := append(unpaidInvoicePredicates, invoice.DueDateNEQ(time.Time{}), invoice.DueDateLT(todayDate))
 	invoicesOverdue, _ := s.client.Invoice.Query().
 		Where(overdueInvoicePredicates...).
 		Count(ctx)
@@ -619,7 +620,7 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 		balance := s.invoiceBalance(i, settledByInvoice[i.ID])
 		if balance > 0 {
 			outstanding += balance
-			if !i.DueDate.IsZero() && i.DueDate.Before(now) {
+			if IsCompanyDateOverdue(i.DueDate, now, loc) {
 				overdue += balance
 			}
 		}
@@ -827,13 +828,14 @@ func (s *DashboardService) invoiceMonthlyBars(ctx context.Context, loc *time.Loc
 		if dashboardStatusIDIn(inv.StatusID, draftStatusIDs) || dashboardStatusIDIn(inv.StatusID, voidStatusIDs) {
 			continue
 		}
-		idx := dashboardMonthIndex(inv.InvoiceDate, loc, starts)
+		localDate := time.Date(inv.InvoiceDate.Year(), inv.InvoiceDate.Month(), inv.InvoiceDate.Day(), 0, 0, 0, 0, loc)
+		idx := dashboardMonthIndex(localDate, loc, starts)
 		if idx < 0 {
 			continue
 		}
 		if inv.SettlementState == "paid" {
 			counts[idx].Green++
-		} else if inv.DueDate.Before(now) {
+		} else if IsCompanyDateOverdue(inv.DueDate, now, loc) {
 			counts[idx].Red++
 		} else {
 			counts[idx].Yellow++

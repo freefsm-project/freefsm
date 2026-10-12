@@ -12,7 +12,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -181,7 +180,7 @@ func (s *Service) TransitionInvoice(ctx context.Context, a Actor, id, statusID i
 	return s.transition(ctx, a, Invoice, id, statusID)
 }
 
-func (s *Service) FinalizeInvoice(ctx context.Context, a Actor, id int64, invoiceDate time.Time, dueDays int) error {
+func (s *Service) FinalizeInvoice(ctx context.Context, a Actor, id int64) error {
 	return s.inTx(ctx, func(tx pgx.Tx) error {
 		verified, err := authenticate(ctx, tx, a)
 		if err != nil {
@@ -199,9 +198,8 @@ func (s *Service) FinalizeInvoice(ctx context.Context, a Actor, id int64, invoic
 		if err = tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE w.company_id=$1 AND w.object_type='invoice' AND s.category_key=$2 AND s.is_category_default`, a.CompanyID, InvoiceInvoiced).Scan(&target); err != nil {
 			return mapNoRows(err)
 		}
-		if _, err = tx.Exec(ctx, `UPDATE invoices SET invoice_date=$1,due_date=$2,updated_at=now() WHERE id=$3`, invoiceDate, invoiceDate.AddDate(0, 0, dueDays), id); err != nil {
-			return err
-		}
+		// Dates were initialized when the Draft was created. Finalization must
+		// not reapply changed company defaults to an existing document.
 		return s.transitionTx(ctx, tx, a, Invoice, id, target)
 	})
 }

@@ -41,6 +41,7 @@ func NewInvoiceService(client *ent.Client, db ...*pgxpool.Pool) *InvoiceService 
 }
 
 type InvoiceCreateParams struct {
+	Terms         string
 	InvoiceNumber *int64
 	CustomerID    int64
 	JobID         int64
@@ -56,6 +57,7 @@ type InvoiceCreateParams struct {
 }
 
 type InvoiceUpdateParams struct {
+	Terms         *string
 	InvoiceNumber *int64
 	CustomerID    *int64
 	JobID         *int64
@@ -267,6 +269,22 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 	if customFields == "" {
 		customFields = "[]"
 	}
+	if request, ok := authorization.FromContext(ctx); ok {
+		id, err := request.Service.CreateDocument(ctx, request.Actor, "invoice", authorization.DocumentCreation{CustomerID: params.CustomerID, JobID: params.JobID, EstimateID: params.EstimateID, Title: params.Title, Notes: params.Notes, Terms: params.Terms, TaxRate: taxRate, LineItems: lineItems, CustomFields: customFields, InvoiceDate: params.InvoiceDate, DueDate: params.DueDate, Number: params.InvoiceNumber}, func(rate string) (string, error) {
+			totals, err := CalculateTotals(params.LineItems, rate)
+			if err != nil {
+				return "", err
+			}
+			if totals.Total.MinorUnits() < 0 {
+				return "", ErrNegativeInvoiceTotal
+			}
+			return invoiceSettlementState(totals.Total.MinorUnits(), 0), nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		return s.GetByID(ctx, id)
+	}
 	if s.db != nil {
 		return s.createTransactionally(ctx, params, taxRate, lineItems, customFields, totals.Total.MinorUnits())
 	}
@@ -276,6 +294,7 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		SetSettlementState(invoiceSettlementState(totals.Total.MinorUnits(), 0)).
 		SetTitle(params.Title).
 		SetNotes(params.Notes).
+		SetTerms(params.Terms).
 		SetInvoiceDate(params.InvoiceDate).
 		SetDueDate(params.DueDate).
 		SetTaxRate(taxRate).
@@ -329,9 +348,9 @@ func (s *InvoiceService) createTransactionally(ctx context.Context, params Invoi
 		return nil, fmt.Errorf("invoice number %d is already in use", number)
 	}
 	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state)
-		VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14) RETURNING id`,
-		*cs.CompanyID, params.CustomerID, params.JobID, params.EstimateID, params.StatusID, number, params.Title, params.Notes, params.InvoiceDate, params.DueDate, taxRate, lineItems, customFields, invoiceSettlementState(totalCents, 0)).Scan(&id)
+	err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state,terms)
+		VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15) RETURNING id`,
+		*cs.CompanyID, params.CustomerID, params.JobID, params.EstimateID, params.StatusID, number, params.Title, params.Notes, params.InvoiceDate, params.DueDate, taxRate, lineItems, customFields, invoiceSettlementState(totalCents, 0), params.Terms).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("create invoice: %w", err)
 	}
@@ -414,6 +433,9 @@ func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpd
 	}
 
 	u := s.client.Invoice.UpdateOneID(id)
+	if params.Terms != nil {
+		u.SetTerms(*params.Terms)
+	}
 	if params.InvoiceNumber != nil {
 		if err := s.validateInvoiceNumber(ctx, current.CompanyID, id, *params.InvoiceNumber); err != nil {
 			return nil, err
@@ -543,6 +565,20 @@ func FormatInvoiceNumber(invoiceNumber int64, cs *ent.CompanySettings) string {
 	}
 	prefix := strings.TrimSpace(cs.InvoicePrefix)
 	return fmt.Sprintf("%s%05d", prefix, invoiceNumber)
+}
+
+func RecordedInvoiceNumber(i *ent.Invoice, cs *ent.CompanySettings) string {
+	if i.NumberLabel != "" {
+		return i.NumberLabel
+	}
+	return fmt.Sprintf("Invoice record %d — identity requires review", i.ID)
+}
+
+func RecordedEstimateNumber(e *ent.Estimate, cs *ent.CompanySettings) string {
+	if e.NumberLabel != "" {
+		return e.NumberLabel
+	}
+	return fmt.Sprintf("Estimate record %d — identity requires review", e.ID)
 }
 
 func FormatEstimateNumber(estimateID int64, cs *ent.CompanySettings) string {

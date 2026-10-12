@@ -7,6 +7,9 @@ templ CustomerShow(p CustomerShowPageData) {
 		<div class="work-item-detail customer-dashboard">
 		if canCustomer(ctx,"edit") && p.Customer.ArchivedAt == "" {
 			<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit",p.Customer.ID)) } role="button">Edit Customer</a>
+			if canCustomer(ctx,"financial") {
+				<a href={ templ.URL(fmt.Sprintf("/customers/%d/document-defaults",p.Customer.ID)) } role="button">Document defaults</a>
+			}
 		}
 		if canManageOperational(ctx) && p.Customer.ArchivedAt == "" {
 			<div class="work-item-detail-actions">

@@ -1,0 +1,30 @@
+package templates
+
+import "strconv"
+
+templ DocumentDefaultPicker(choices string,preserve bool) {
+	<script>
+		function documentDefaultPicker(root) {
+			return { init() {
+				const form = root.closest('form');
+				const choices = JSON.parse(root.dataset.choices || '{}');
+				const dirty = new Set();
+				form.addEventListener('input', event => {
+					if (event.isTrusted) { dirty.add(event.target.name); event.target.dataset.entered = 'true'; }
+				});
+				form.querySelector('[name=customer_id]')?.addEventListener('change', event => {
+					if (root.dataset.preserve === 'true') return;
+					const defaults = choices[event.target.value] || choices[''] || {};
+					for (const [name,value] of Object.entries(defaults)) {
+						const input = form.elements.namedItem(name);
+						if (input && !dirty.has(name)) input.value = value;
+					}
+					form.querySelectorAll('textarea[x-model="item.description"]').forEach(input => {
+						if (!input.dataset.entered) { input.value = defaults.default_line_description || ''; input.dispatchEvent(new Event('input', {bubbles:true})); }
+					});
+				});
+			} };
+		}
+	</script>
+	<div x-data="documentDefaultPicker($el)" data-choices={ choices } data-preserve={ strconv.FormatBool(preserve) }></div>
+}

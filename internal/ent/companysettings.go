@@ -44,7 +44,17 @@ type CompanySettings struct {
 	// EstimatePrefix holds the value of the "estimate_prefix" field.
 	EstimatePrefix string `json:"estimate_prefix,omitempty"`
 	// DefaultDueDays holds the value of the "default_due_days" field.
-	DefaultDueDays int `json:"default_due_days,omitempty"`
+	DefaultDueDays *int `json:"default_due_days,omitempty"`
+	// DefaultInvoiceNotes holds the value of the "default_invoice_notes" field.
+	DefaultInvoiceNotes string `json:"default_invoice_notes,omitempty"`
+	// DefaultEstimateNotes holds the value of the "default_estimate_notes" field.
+	DefaultEstimateNotes string `json:"default_estimate_notes,omitempty"`
+	// EstimateTerms holds the value of the "estimate_terms" field.
+	EstimateTerms string `json:"estimate_terms,omitempty"`
+	// DefaultLineDescription holds the value of the "default_line_description" field.
+	DefaultLineDescription string `json:"default_line_description,omitempty"`
+	// EstimateValidDays holds the value of the "estimate_valid_days" field.
+	EstimateValidDays *int `json:"estimate_valid_days,omitempty"`
 	// SMTPHost holds the value of the "smtp_host" field.
 	SMTPHost string `json:"smtp_host,omitempty"`
 	// SMTPPort holds the value of the "smtp_port" field.
@@ -109,9 +119,9 @@ func (*CompanySettings) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case companysettings.FieldEmailTrackingEnabled, companysettings.FieldPasswordRequireUppercase, companysettings.FieldPasswordRequireLowercase, companysettings.FieldPasswordRequireDigit, companysettings.FieldPasswordRequireSpecial, companysettings.FieldPdfShowLineItemDescriptions:
 			values[i] = new(sql.NullBool)
-		case companysettings.FieldID, companysettings.FieldCompanyID, companysettings.FieldNextInvoiceNumber, companysettings.FieldDefaultDueDays, companysettings.FieldSMTPPort, companysettings.FieldPasswordMinLength:
+		case companysettings.FieldID, companysettings.FieldCompanyID, companysettings.FieldNextInvoiceNumber, companysettings.FieldDefaultDueDays, companysettings.FieldEstimateValidDays, companysettings.FieldSMTPPort, companysettings.FieldPasswordMinLength:
 			values[i] = new(sql.NullInt64)
-		case companysettings.FieldBusinessName, companysettings.FieldAddress, companysettings.FieldCity, companysettings.FieldState, companysettings.FieldZip, companysettings.FieldPhone, companysettings.FieldEmail, companysettings.FieldTaxID, companysettings.FieldDefaultTaxRate, companysettings.FieldInvoicePrefix, companysettings.FieldEstimatePrefix, companysettings.FieldSMTPHost, companysettings.FieldSMTPUser, companysettings.FieldSMTPPassword, companysettings.FieldSMTPFrom, companysettings.FieldEmailAutoCc, companysettings.FieldInvoiceEmailSubject, companysettings.FieldInvoiceEmailBody, companysettings.FieldEstimateEmailSubject, companysettings.FieldEstimateEmailBody, companysettings.FieldTimezone, companysettings.FieldDateFormat, companysettings.FieldInvoiceColor, companysettings.FieldInvoiceFooter, companysettings.FieldInvoiceLogoPath, companysettings.FieldInvoicePaymentTerms, companysettings.FieldMapTileURL, companysettings.FieldGeocoderURL:
+		case companysettings.FieldBusinessName, companysettings.FieldAddress, companysettings.FieldCity, companysettings.FieldState, companysettings.FieldZip, companysettings.FieldPhone, companysettings.FieldEmail, companysettings.FieldTaxID, companysettings.FieldDefaultTaxRate, companysettings.FieldInvoicePrefix, companysettings.FieldEstimatePrefix, companysettings.FieldDefaultInvoiceNotes, companysettings.FieldDefaultEstimateNotes, companysettings.FieldEstimateTerms, companysettings.FieldDefaultLineDescription, companysettings.FieldSMTPHost, companysettings.FieldSMTPUser, companysettings.FieldSMTPPassword, companysettings.FieldSMTPFrom, companysettings.FieldEmailAutoCc, companysettings.FieldInvoiceEmailSubject, companysettings.FieldInvoiceEmailBody, companysettings.FieldEstimateEmailSubject, companysettings.FieldEstimateEmailBody, companysettings.FieldTimezone, companysettings.FieldDateFormat, companysettings.FieldInvoiceColor, companysettings.FieldInvoiceFooter, companysettings.FieldInvoiceLogoPath, companysettings.FieldInvoicePaymentTerms, companysettings.FieldMapTileURL, companysettings.FieldGeocoderURL:
 			values[i] = new(sql.NullString)
 		case companysettings.FieldCreatedAt, companysettings.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -219,7 +229,39 @@ func (_m *CompanySettings) assignValues(columns []string, values []any) error {
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field default_due_days", values[i])
 			} else if value.Valid {
-				_m.DefaultDueDays = int(value.Int64)
+				_m.DefaultDueDays = new(int)
+				*_m.DefaultDueDays = int(value.Int64)
+			}
+		case companysettings.FieldDefaultInvoiceNotes:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field default_invoice_notes", values[i])
+			} else if value.Valid {
+				_m.DefaultInvoiceNotes = value.String
+			}
+		case companysettings.FieldDefaultEstimateNotes:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field default_estimate_notes", values[i])
+			} else if value.Valid {
+				_m.DefaultEstimateNotes = value.String
+			}
+		case companysettings.FieldEstimateTerms:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field estimate_terms", values[i])
+			} else if value.Valid {
+				_m.EstimateTerms = value.String
+			}
+		case companysettings.FieldDefaultLineDescription:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field default_line_description", values[i])
+			} else if value.Valid {
+				_m.DefaultLineDescription = value.String
+			}
+		case companysettings.FieldEstimateValidDays:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field estimate_valid_days", values[i])
+			} else if value.Valid {
+				_m.EstimateValidDays = new(int)
+				*_m.EstimateValidDays = int(value.Int64)
 			}
 		case companysettings.FieldSMTPHost:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -460,8 +502,27 @@ func (_m *CompanySettings) String() string {
 	builder.WriteString("estimate_prefix=")
 	builder.WriteString(_m.EstimatePrefix)
 	builder.WriteString(", ")
-	builder.WriteString("default_due_days=")
-	builder.WriteString(fmt.Sprintf("%v", _m.DefaultDueDays))
+	if v := _m.DefaultDueDays; v != nil {
+		builder.WriteString("default_due_days=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("default_invoice_notes=")
+	builder.WriteString(_m.DefaultInvoiceNotes)
+	builder.WriteString(", ")
+	builder.WriteString("default_estimate_notes=")
+	builder.WriteString(_m.DefaultEstimateNotes)
+	builder.WriteString(", ")
+	builder.WriteString("estimate_terms=")
+	builder.WriteString(_m.EstimateTerms)
+	builder.WriteString(", ")
+	builder.WriteString("default_line_description=")
+	builder.WriteString(_m.DefaultLineDescription)
+	builder.WriteString(", ")
+	if v := _m.EstimateValidDays; v != nil {
+		builder.WriteString("estimate_valid_days=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("smtp_host=")
 	builder.WriteString(_m.SMTPHost)

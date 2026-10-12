@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
@@ -28,11 +27,18 @@ import (
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/justinas/nosurf"
 	"golang.org/x/crypto/bcrypt"
 )
 
 func permissionHTTPFixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *ent.Client, http.Handler, *services.SessionService, int64, int64) {
+	return permissionHTTPFixtureSeeded(t, nil, legacy...)
+}
+
+// A seed callback installs recorded pre-configuration facts after migration 057
+// and before forward migrations, while retaining the production HTTP fixture.
+func permissionHTTPFixtureSeeded(t *testing.T, seed func(*pgxpool.Pool), legacy ...bool) (*pgxpool.Pool, *ent.Client, http.Handler, *services.SessionService, int64, int64) {
 	t.Helper()
 	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -51,19 +57,28 @@ func permissionHTTPFixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *ent.Cl
 	if err != nil {
 		t.Fatal(err)
 	}
-	pool, err := pgxpool.New(ctx, scoped)
+	poolConfig, err := pgxpool.ParseConfig(scoped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	poolConfig.ConnConfig.RuntimeParams["application_name"] = schema
+	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
 	migrations := database.MigrationFS()
-	if len(legacy) > 0 && legacy[0] {
+	if (len(legacy) > 0 && legacy[0]) || seed != nil {
+		through := "054_backup_activity.up.sql"
+		if seed != nil {
+			through = "057_protected_host_audit.up.sql"
+		}
 		old := fstest.MapFS{}
 		entries, err := fs.ReadDir(migrations, ".")
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, e := range entries {
-			if e.Name() > "054_backup_activity.up.sql" {
+			if e.Name() > through {
 				continue
 			}
 			b, err := fs.ReadFile(migrations, e.Name())
@@ -77,10 +92,7 @@ func permissionHTTPFixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *ent.Cl
 	if err := (&database.DB{Pool: pool}).Migrate(ctx, migrations); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := sql.Open("pgx", scoped)
-	if err != nil {
-		t.Fatal(err)
-	}
+	raw := stdlib.OpenDB(*poolConfig.ConnConfig)
 	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, raw)))
 	t.Cleanup(func() {
 		client.Close()
@@ -99,6 +111,12 @@ func permissionHTTPFixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *ent.Cl
 	if err := pool.QueryRow(ctx, `INSERT INTO users(company_id,email,name,password_hash,role) VALUES($1,'admin@test','Admin',$2,'admin') RETURNING id`, company, string(hash)).Scan(&admin); err != nil {
 		t.Fatal(err)
 	}
+	if seed != nil {
+		seed(pool)
+		if err := (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS()); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if len(legacy) > 0 && legacy[0] {
 		if _, err := pool.Exec(ctx, `INSERT INTO users(company_id,email,name,password_hash,role) VALUES($1,'legacy@test','Legacy dispatcher','x','dispatcher')`, company); err != nil {
 			t.Fatal(err)
@@ -108,7 +126,8 @@ func permissionHTTPFixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *ent.Cl
 		}
 	}
 	sessions := services.NewSessionService(pool)
-	return pool, client, New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()}), sessions, company, admin
+	router := middleware.Company(services.NewCompanySettingsService(client))(New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()}))
+	return pool, client, router, sessions, company, admin
 }
 
 func TestAdministratorReviewedCutoverThroughProductionHTTP(t *testing.T) {

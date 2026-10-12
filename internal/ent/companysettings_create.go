@@ -216,6 +216,76 @@ func (_c *CompanySettingsCreate) SetNillableDefaultDueDays(v *int) *CompanySetti
 	return _c
 }
 
+// SetDefaultInvoiceNotes sets the "default_invoice_notes" field.
+func (_c *CompanySettingsCreate) SetDefaultInvoiceNotes(v string) *CompanySettingsCreate {
+	_c.mutation.SetDefaultInvoiceNotes(v)
+	return _c
+}
+
+// SetNillableDefaultInvoiceNotes sets the "default_invoice_notes" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableDefaultInvoiceNotes(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetDefaultInvoiceNotes(*v)
+	}
+	return _c
+}
+
+// SetDefaultEstimateNotes sets the "default_estimate_notes" field.
+func (_c *CompanySettingsCreate) SetDefaultEstimateNotes(v string) *CompanySettingsCreate {
+	_c.mutation.SetDefaultEstimateNotes(v)
+	return _c
+}
+
+// SetNillableDefaultEstimateNotes sets the "default_estimate_notes" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableDefaultEstimateNotes(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetDefaultEstimateNotes(*v)
+	}
+	return _c
+}
+
+// SetEstimateTerms sets the "estimate_terms" field.
+func (_c *CompanySettingsCreate) SetEstimateTerms(v string) *CompanySettingsCreate {
+	_c.mutation.SetEstimateTerms(v)
+	return _c
+}
+
+// SetNillableEstimateTerms sets the "estimate_terms" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableEstimateTerms(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetEstimateTerms(*v)
+	}
+	return _c
+}
+
+// SetDefaultLineDescription sets the "default_line_description" field.
+func (_c *CompanySettingsCreate) SetDefaultLineDescription(v string) *CompanySettingsCreate {
+	_c.mutation.SetDefaultLineDescription(v)
+	return _c
+}
+
+// SetNillableDefaultLineDescription sets the "default_line_description" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableDefaultLineDescription(v *string) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetDefaultLineDescription(*v)
+	}
+	return _c
+}
+
+// SetEstimateValidDays sets the "estimate_valid_days" field.
+func (_c *CompanySettingsCreate) SetEstimateValidDays(v int) *CompanySettingsCreate {
+	_c.mutation.SetEstimateValidDays(v)
+	return _c
+}
+
+// SetNillableEstimateValidDays sets the "estimate_valid_days" field if the given value is not nil.
+func (_c *CompanySettingsCreate) SetNillableEstimateValidDays(v *int) *CompanySettingsCreate {
+	if v != nil {
+		_c.SetEstimateValidDays(*v)
+	}
+	return _c
+}
+
 // SetSMTPHost sets the "smtp_host" field.
 func (_c *CompanySettingsCreate) SetSMTPHost(v string) *CompanySettingsCreate {
 	_c.mutation.SetSMTPHost(v)
@@ -683,9 +753,21 @@ func (_c *CompanySettingsCreate) defaults() {
 		v := companysettings.DefaultEstimatePrefix
 		_c.mutation.SetEstimatePrefix(v)
 	}
-	if _, ok := _c.mutation.DefaultDueDays(); !ok {
-		v := companysettings.DefaultDefaultDueDays
-		_c.mutation.SetDefaultDueDays(v)
+	if _, ok := _c.mutation.DefaultInvoiceNotes(); !ok {
+		v := companysettings.DefaultDefaultInvoiceNotes
+		_c.mutation.SetDefaultInvoiceNotes(v)
+	}
+	if _, ok := _c.mutation.DefaultEstimateNotes(); !ok {
+		v := companysettings.DefaultDefaultEstimateNotes
+		_c.mutation.SetDefaultEstimateNotes(v)
+	}
+	if _, ok := _c.mutation.EstimateTerms(); !ok {
+		v := companysettings.DefaultEstimateTerms
+		_c.mutation.SetEstimateTerms(v)
+	}
+	if _, ok := _c.mutation.DefaultLineDescription(); !ok {
+		v := companysettings.DefaultDefaultLineDescription
+		_c.mutation.SetDefaultLineDescription(v)
 	}
 	if _, ok := _c.mutation.SMTPHost(); !ok {
 		v := companysettings.DefaultSMTPHost
@@ -835,8 +917,17 @@ func (_c *CompanySettingsCreate) check() error {
 	if _, ok := _c.mutation.EstimatePrefix(); !ok {
 		return &ValidationError{Name: "estimate_prefix", err: errors.New(`ent: missing required field "CompanySettings.estimate_prefix"`)}
 	}
-	if _, ok := _c.mutation.DefaultDueDays(); !ok {
-		return &ValidationError{Name: "default_due_days", err: errors.New(`ent: missing required field "CompanySettings.default_due_days"`)}
+	if _, ok := _c.mutation.DefaultInvoiceNotes(); !ok {
+		return &ValidationError{Name: "default_invoice_notes", err: errors.New(`ent: missing required field "CompanySettings.default_invoice_notes"`)}
+	}
+	if _, ok := _c.mutation.DefaultEstimateNotes(); !ok {
+		return &ValidationError{Name: "default_estimate_notes", err: errors.New(`ent: missing required field "CompanySettings.default_estimate_notes"`)}
+	}
+	if _, ok := _c.mutation.EstimateTerms(); !ok {
+		return &ValidationError{Name: "estimate_terms", err: errors.New(`ent: missing required field "CompanySettings.estimate_terms"`)}
+	}
+	if _, ok := _c.mutation.DefaultLineDescription(); !ok {
+		return &ValidationError{Name: "default_line_description", err: errors.New(`ent: missing required field "CompanySettings.default_line_description"`)}
 	}
 	if _, ok := _c.mutation.SMTPHost(); !ok {
 		return &ValidationError{Name: "smtp_host", err: errors.New(`ent: missing required field "CompanySettings.smtp_host"`)}
@@ -1005,7 +1096,27 @@ func (_c *CompanySettingsCreate) createSpec() (*CompanySettings, *sqlgraph.Creat
 	}
 	if value, ok := _c.mutation.DefaultDueDays(); ok {
 		_spec.SetField(companysettings.FieldDefaultDueDays, field.TypeInt, value)
-		_node.DefaultDueDays = value
+		_node.DefaultDueDays = &value
+	}
+	if value, ok := _c.mutation.DefaultInvoiceNotes(); ok {
+		_spec.SetField(companysettings.FieldDefaultInvoiceNotes, field.TypeString, value)
+		_node.DefaultInvoiceNotes = value
+	}
+	if value, ok := _c.mutation.DefaultEstimateNotes(); ok {
+		_spec.SetField(companysettings.FieldDefaultEstimateNotes, field.TypeString, value)
+		_node.DefaultEstimateNotes = value
+	}
+	if value, ok := _c.mutation.EstimateTerms(); ok {
+		_spec.SetField(companysettings.FieldEstimateTerms, field.TypeString, value)
+		_node.EstimateTerms = value
+	}
+	if value, ok := _c.mutation.DefaultLineDescription(); ok {
+		_spec.SetField(companysettings.FieldDefaultLineDescription, field.TypeString, value)
+		_node.DefaultLineDescription = value
+	}
+	if value, ok := _c.mutation.EstimateValidDays(); ok {
+		_spec.SetField(companysettings.FieldEstimateValidDays, field.TypeInt, value)
+		_node.EstimateValidDays = &value
 	}
 	if value, ok := _c.mutation.SMTPHost(); ok {
 		_spec.SetField(companysettings.FieldSMTPHost, field.TypeString, value)

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/jung-kurt/gofpdf"
 )
+
+var ErrDocumentPresentationReview = errors.New("document identity and terms require explicit review")
 
 const (
 	pdfMargin = 12.0
@@ -33,6 +36,9 @@ type InvoicePDFSettlement struct {
 }
 
 func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, job *ent.Job, statuses []*ent.Status, cs *ent.CompanySettings) error {
+	if e.NumberLabel == "" || e.Terms == nil {
+		return ErrDocumentPresentationReview
+	}
 	items, err := DecodeLineItems(e.LineItems)
 	if err != nil {
 		return fmt.Errorf("parse estimate line items: %w", err)
@@ -40,10 +46,13 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 
 	pdf := newDocumentPDF()
 	status, statusColor := statusForPDF(statuses, e.StatusID)
-	number := documentNumber("estimate", e.ID, cs)
+	number := RecordedEstimateNumber(e, cs)
 	writeTopHeader(pdf, "ESTIMATE", number, status, statusColor, cs)
 	writeDetailRow(pdf, customer, job, nil, estimateDetails(e, status, cs), cs)
 	writeDocumentNotes(pdf, e.Notes)
+	if e.Terms != nil {
+		writeDocumentNotes(pdf, *e.Terms)
+	}
 	totals, err := writeLineItems(pdf, items, e.TaxRate, cs)
 	if err != nil {
 		return fmt.Errorf("calculate estimate totals: %w", err)
@@ -54,13 +63,21 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 }
 
 func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, asset *ent.Asset, statuses []*ent.Status, cs *ent.CompanySettings, settlement InvoicePDFSettlement) error {
+	if i.NumberLabel == "" || i.Terms == nil {
+		return ErrDocumentPresentationReview
+	}
+	if cs != nil && i.Terms != nil {
+		copy := *cs
+		copy.InvoicePaymentTerms = *i.Terms
+		cs = &copy
+	}
 	items, err := DecodeLineItems(i.LineItems)
 	if err != nil {
 		return fmt.Errorf("parse invoice line items: %w", err)
 	}
 	pdf := newDocumentPDF()
 	status, color := statusForPDF(statuses, i.StatusID)
-	writeTopHeader(pdf, "INVOICE", documentNumber("invoice", i.InvoiceNumber, cs), status, color, cs)
+	writeTopHeader(pdf, "INVOICE", RecordedInvoiceNumber(i, cs), status, color, cs)
 	writeDetailRow(pdf, customer, job, asset, invoiceDetails(i, status, cs), cs)
 	writeDocumentNotes(pdf, i.Notes)
 	totals, err := writeLineItems(pdf, items, i.TaxRate, cs)
@@ -86,9 +103,11 @@ func writeTopHeader(pdf *gofpdf.Fpdf, docType, number, status, statusColor strin
 	accentR, accentG, accentB := accentColor(cs)
 
 	if cs != nil && cs.InvoiceLogoPath != "" {
-		if _, err := os.Stat(cs.InvoiceLogoPath); err == nil {
-			pdf.ImageOptions(cs.InvoiceLogoPath, pdfMargin, 11, 41.6, 0, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
+		if _, err := os.Stat(cs.InvoiceLogoPath); err != nil {
+			pdf.SetError(fmt.Errorf("company logo unavailable: %w", err))
+			return
 		}
+		pdf.ImageOptions(cs.InvoiceLogoPath, pdfMargin, 11, 41.6, 0, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
 	}
 
 	pdf.SetTextColor(0, 0, 0)
@@ -413,12 +432,11 @@ func assetLines(asset *ent.Asset) []string {
 
 func invoiceDetails(i *ent.Invoice, status string, cs *ent.CompanySettings) []string {
 	var lines []string
-	loc := companySettingsLocation(cs)
 	if !i.InvoiceDate.IsZero() {
-		lines = append(lines, "Invoice Date: "+FormatCompanyDate(i.InvoiceDate, loc, cs))
+		lines = append(lines, "Invoice Date: "+FormatLocalDate(i.InvoiceDate, cs))
 	}
 	if !i.DueDate.IsZero() {
-		lines = append(lines, "Due Date: "+FormatCompanyDate(i.DueDate, loc, cs))
+		lines = append(lines, "Due Date: "+FormatLocalDate(i.DueDate, cs))
 	}
 	lines = append(lines, "Status: "+statusText(status))
 	return lines
@@ -426,6 +444,9 @@ func invoiceDetails(i *ent.Invoice, status string, cs *ent.CompanySettings) []st
 
 func estimateDetails(e *ent.Estimate, status string, cs *ent.CompanySettings) []string {
 	var lines []string
+	if e.ValidThrough != nil {
+		lines = append(lines, "Valid Through: "+FormatLocalDate(*e.ValidThrough, cs))
+	}
 	if !e.CreatedAt.IsZero() {
 		lines = append(lines, "Created Date: "+FormatCompanyDate(e.CreatedAt, companySettingsLocation(cs), cs))
 	}

@@ -1,0 +1,80 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ CompanyConfiguration(view authorization.ConfigurationView, message string) {
+	@Layout("Company and document settings") {
+		<h1>Company and document settings</h1>
+		@EmailDisabledBanner(view.EmailDisabled)
+		if view.Administrator {
+			<nav><a href="/settings/advanced">Mail, maps and security</a> · <a href="/settings/backup">Backup</a> · <a href="/settings/authorization">Roles and permissions</a></nav>
+		}
+		if message != "" {
+			<p role="alert">{ message }</p>
+		}
+		<p>Defaults initialize future records. Saved records and existing PDF files retain their history.</p>
+		if len(view.ReviewIssues)>0 {
+			<h2>Stored configuration values require review</h2>
+			<p>The recorded values are retained unchanged. Review and explicitly correct these fields before saving their section.</p>
+			<ul>
+				for _, field := range view.ReviewIssues {
+					<li>{ field }</li>
+				}
+			</ul>
+		}
+		if len(view.LegacyNumbers)>0 {
+			<h2>Legacy numbering requires explicit review</h2>
+			<p>No historical prefixes, sequence semantics or PDF versions have been inferred. Verify each identity against your records before conversion. Existing company identity, branding, defaults and files are retained. Unknown values must remain unresolved.</p>
+			for _, number := range view.LegacyNumbers {
+				<form action="/settings/numbering-review" method="post" hx-boost="false">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<input type="hidden" name="revision" value={ fmt.Sprint(view.Revision) }/>
+					<input type="hidden" name="type" value={ number.Type }/>
+					<input type="hidden" name="id" value={ fmt.Sprint(number.ID) }/>
+					<fieldset disabled?={ !view.ManageDocuments }>
+						<legend>{ number.Type } record { fmt.Sprint(number.ID) }</legend>
+						<label>Verified number<input name="number" type="number" min="1" value={ fmt.Sprint(number.Number) } required readonly?={ number.Type == "invoice" }/></label>
+						<label>Verified complete label<input name="label" required/></label>
+						<label>Verified next sequence number<input name="next_number" type="number" min="1" value={ fmt.Sprint(number.Next) } required/></label>
+						<p>Verify sequence semantics and high-water marks, including gaps, against your records. The next number must exceed this issued number and cannot lower the recorded high-water mark.</p>
+						<label>Type REVIEWED IDENTITY<input name="confirmation" required/></label>
+						<button type="submit">Record reviewed identity</button>
+					</fieldset>
+				</form>
+			}
+		}
+		for _, section := range view.Sections {
+			<h2>{ section.Label }</h2>
+			<form action={ templ.URL(view.FormAction) } method="post" hx-boost="false">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<input type="hidden" name="section" value={ section.Name }/>
+				<input type="hidden" name="revision" value={ fmt.Sprint(view.Revision) }/>
+				<fieldset disabled?={ !section.Manage }>
+					for _, field := range section.Fields {
+						<label>{ field.Label }
+							if field.Kind == "textarea" {
+								<textarea name={ field.Name }>{ section.Values[field.Name] }</textarea>
+							} else if field.Kind == "checkbox" {
+								<select name={ field.Name }><option value="false" selected?={ section.Values[field.Name] != "true" }>No</option><option value="true" selected?={ section.Values[field.Name] == "true" }>Yes</option></select>
+							} else {
+								<input type={ field.Kind } name={ field.Name } value={ section.Values[field.Name] }/>
+							}
+						</label>
+					}
+					if section.Manage {
+						<button type="submit">Save { section.Label }</button>
+					}
+				</fieldset>
+			</form>
+			if section.Name == "company" && section.Manage {
+				<form action="/settings/invoice-logo" method="post" enctype="multipart/form-data" hx-boost="false">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<input type="hidden" name="revision" value={ fmt.Sprint(view.Revision) }/>
+					<label>Company logo (PNG or JPEG)<input type="file" name="file" accept="image/png,image/jpeg" required/></label>
+					<button type="submit">Save logo</button>
+				</form>
+			}
+		}
+	}
+}

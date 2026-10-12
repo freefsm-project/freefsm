@@ -1,0 +1,30 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ CustomerDocumentDefaults(view authorization.CustomerDefaultsView) {
+	@Layout("Customer document defaults") {
+		<h1>Customer document defaults</h1>
+		<p>Used for future initialization only. Explicitly entered document values take precedence. Blank overrides remain blank; select Use company default to inherit.</p>
+		<form method="post" hx-boost="false" action={ templ.URL(fmt.Sprintf("/customers/%d/document-defaults",view.CustomerID)) }>
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="revision" value={ fmt.Sprint(view.Revision) }/>
+			<fieldset disabled?={ !view.Manage }>
+				for _, field := range view.Fields {
+					<label>{ field.Label }
+						if field.Kind == "number" {
+							<input type="number" name={ field.Name } value={ defaultValue(view.Values[field.Name]) }/>
+						} else {
+							<textarea name={ field.Name }>{ defaultValue(view.Values[field.Name]) }</textarea>
+						}
+					</label>
+					<label><input type="checkbox" name={ field.Name+"_inherit" } checked?={ view.Values[field.Name] == nil }/> Use company default</label>
+				}
+				<button type="submit">Save Customer defaults</button>
+			</fieldset>
+		</form>
+	}
+}
+
+func defaultValue(value *string) string { if value==nil{return ""};return *value }

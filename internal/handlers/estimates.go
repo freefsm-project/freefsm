@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -266,9 +267,21 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid form", 400)
 		return
 	}
+	if strings.TrimSpace(r.FormValue("title")) == "" {
+		h.invalidEstimateForm(w, r, "Title is required")
+		return
+	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	if !h.authorizeDestinationJob(w, r, custID, jobID) {
+		return
+	}
+	if err := initializeMissingDocumentFields(r, "estimate", custID, jobID); err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	if !validDocumentDate(r.FormValue("valid_through"), false) {
+		h.invalidEstimateForm(w, r, "Enter a valid Valid Through date or leave it blank")
 		return
 	}
 	taxRate := r.FormValue("tax_rate")
@@ -282,22 +295,28 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), taxRate)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		h.invalidEstimateForm(w, r, err.Error())
 		return
 	}
 
 	params := services.EstimateCreateParams{
+		ValidThrough: parseDatePtr(r.FormValue("valid_through"), time.UTC),
 		CustomerID:   custID,
 		JobID:        jobID,
 		StatusID:     0,
 		Title:        r.FormValue("title"),
 		Notes:        r.FormValue("notes"),
+		Terms:        r.FormValue("terms"),
 		TaxRate:      taxRate,
 		LineItems:    lineItems,
 		CustomFields: parseCustomFieldValues(r),
 	}
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrPending) || errors.Is(err, authorization.ErrConflict) {
+			authorizationError(w, r, err)
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -309,6 +328,33 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	http.Redirect(w, r, "/estimates?flash=Estimate+created", http.StatusSeeOther)
+}
+
+func (h *EstimateHandler) invalidEstimateForm(w http.ResponseWriter, r *http.Request, message string) {
+	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
+	data, err := h.newEstimateForm(r.Context(), customerID)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	data.Estimate.Title = r.FormValue("title")
+	data.Estimate.Notes = r.FormValue("notes")
+	data.Estimate.Terms = r.FormValue("terms")
+	data.Estimate.TaxRate = r.FormValue("tax_rate")
+	data.Estimate.ValidThrough = r.FormValue("valid_through")
+	data.Estimate.JobID, _ = strconv.ParseInt(r.FormValue("job_id"), 10, 64)
+	data.ExistingItemsJSON = submittedLineItems(r.FormValue("line_items"))
+	data.PreserveEntered = true
+	defs, err := h.defSvc.ListForObjectType(r.Context(), "estimate")
+	if err != nil {
+		internalServerError(w, r, "load estimate fields", err)
+		return
+	}
+	data.CustomFields = buildCustomFieldDisplay(defs, parseCustomFieldValues(r))
+	data.DefaultLineDescription = r.FormValue("default_line_description")
+	data.Errors = map[string]string{"title": message}
+	w.WriteHeader(422)
+	render(w, r, templates.EstimateForm(data))
 }
 
 func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -365,12 +411,22 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := services.EstimateUpdateParams{
-		CustomerID:   int64Ptr(custID),
-		JobID:        &jobID,
-		Title:        formPtr(r.FormValue("title")),
-		Notes:        formPtr(r.FormValue("notes")),
-		TaxRate:      taxRatePtr,
-		CustomFields: strPtr(parseCustomFieldValues(r)),
+		ValidThrough:      parseDatePtr(r.FormValue("valid_through"), time.UTC),
+		ClearValidThrough: r.Form.Has("valid_through") && r.FormValue("valid_through") == "",
+		CustomerID:        int64Ptr(custID),
+		JobID:             &jobID,
+		Title:             formPtr(r.FormValue("title")),
+		Notes:             formPtr(r.FormValue("notes")),
+		Terms:             strPtr(r.FormValue("terms")),
+		TaxRate:           taxRatePtr,
+		CustomFields:      strPtr(parseCustomFieldValues(r)),
+	}
+	if !r.Form.Has("terms") {
+		params.Terms = nil
+	}
+	if r.Form.Has("valid_through") && !validDocumentDate(r.FormValue("valid_through"), false) {
+		http.Error(w, "Invalid Valid Through date", 422)
+		return
 	}
 	params.LineItems = &lineItems
 	result, err := h.svc.Update(r.Context(), id, params)
@@ -421,6 +477,10 @@ func (h *EstimateHandler) ConvertToInvoice(w http.ResponseWriter, r *http.Reques
 }
 
 func writeConversionError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrPending) || errors.Is(err, authorization.ErrConflict) {
+		authorizationError(w, r, err)
+		return
+	}
 	switch {
 	case errors.Is(err, conversion.ErrForbidden):
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -477,10 +537,15 @@ func (h *EstimateHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if documentPDFVersions(w, r, "estimate", id, "download", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
+		return h.estimatePDFDocument(ctx, id, input)
+	}) {
+		return
+	}
 	if !h.authorizeEstimate(w, r, id, policyRead) {
 		return
 	}
-	doc, err := h.estimatePDFDocument(r.Context(), id)
+	doc, err := h.estimatePDFDocument(r.Context(), id, PDFRenderInput{})
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -495,6 +560,11 @@ func (h *EstimateHandler) PreviewPDF(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
+		return
+	}
+	if documentPDFVersions(w, r, "estimate", id, "preview", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
+		return h.estimatePDFDocument(ctx, id, input)
+	}) {
 		return
 	}
 	if !h.authorizeEstimate(w, r, id, policyRead) {
@@ -524,10 +594,15 @@ func (h *EstimateHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if documentPDFVersions(w, r, "estimate", id, "save", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
+		return h.estimatePDFDocument(ctx, id, input)
+	}) {
+		return
+	}
 	if !h.authorizeEstimate(w, r, id, policyUpdate) {
 		return
 	}
-	doc, err := h.estimatePDFDocument(r.Context(), id)
+	doc, err := h.estimatePDFDocument(r.Context(), id, PDFRenderInput{})
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -556,10 +631,13 @@ func (h *EstimateHandler) Email(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if selectedPDFEmail(w, r, "estimate", id, h.deliverySvc) {
+		return
+	}
 	if !h.authorizeEstimate(w, r, id, policyUpdate) {
 		return
 	}
-	doc, err := h.estimatePDFDocument(r.Context(), id)
+	doc, err := h.estimatePDFDocument(r.Context(), id, PDFRenderInput{})
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -623,7 +701,11 @@ func (h *EstimateHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) 
 	retryDocumentDelivery(h.deliverySvc, "estimate", w, r)
 }
 
-func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64) (documentPDF, error) {
+func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64, input PDFRenderInput) (documentPDF, error) {
+	cs := input.Presentation
+	if cs == nil {
+		cs = middleware.CompanyFromContext(ctx)
+	}
 	e, err := h.svc.GetByID(ctx, id)
 	if err != nil {
 		return documentPDF{}, err
@@ -639,7 +721,7 @@ func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64) (do
 		job, _ = h.jobSvc.GetByID(ctx, *e.JobID)
 	}
 	data, err := generatePDFBytes(func(w io.Writer) error {
-		return services.GenerateEstimatePDF(w, e, customer, job, statuses, middleware.CompanyFromContext(ctx))
+		return services.GenerateEstimatePDF(w, e, customer, job, statuses, cs)
 	})
 	if err != nil {
 		return documentPDF{}, err
@@ -651,7 +733,7 @@ func (h *EstimateHandler) estimatePDFDocument(ctx context.Context, id int64) (do
 		customerName = customer.DisplayName
 	}
 	jobName, jobType, jobSubtitle := documentJobFields(job)
-	number := services.FormatEstimateNumber(id, middleware.CompanyFromContext(ctx))
+	number := services.RecordedEstimateNumber(e, cs)
 	date := displayDate(ctx, time.Now())
 	return documentPDF{Filename: number + ".pdf", Data: data, Title: e.Title, Number: number, CustomerEmail: to, CustomerName: customerName, JobName: jobName, JobType: jobType, JobSubtitle: jobSubtitle, Date: date, Archived: e.DeletedAt != nil}, nil
 }
@@ -713,6 +795,9 @@ func (h *EstimateHandler) statusesForSelect(ctx context.Context) []*ent.Status {
 }
 
 func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64) (templates.EstimateFormPageData, error) {
+	if middleware.CompanyFromContext(ctx) == nil {
+		return templates.EstimateFormPageData{}, authorization.ErrConfigurationUnavailable
+	}
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
 	jobs, _ := h.jobSvc.ListAll(ctx)
@@ -726,16 +811,37 @@ func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64)
 	if err != nil {
 		return templates.EstimateFormPageData{}, err
 	}
+	detail := &templates.EstimateDetail{CustomerID: customerID, TaxRate: effectiveTax}
+	var customerDefaults map[string]*string
+	if customerID > 0 {
+		if request, ok := authorization.FromContext(ctx); ok {
+			customerDefaults, err = request.Service.DocumentDefaultInputs(ctx, request.Actor, "estimate", customerID, 0)
+			if err != nil {
+				return templates.EstimateFormPageData{}, err
+			}
+		}
+	}
+	defaults := services.ResolveDocumentDefaults(middleware.CompanyFromContext(ctx), "estimate", customerDefaults)
+	detail.Notes = defaults.Notes
+	detail.Terms = defaults.Terms
+	detail.ValidThrough = defaults.DateFrom(time.Now().In(middleware.CompanyLocation(ctx)))
+	lineDescription := defaults.LineDescription
+	choices, err := documentDefaultChoices(ctx, "estimate", customers)
+	if err != nil {
+		return templates.EstimateFormPageData{}, err
+	}
 	return templates.EstimateFormPageData{
-		Estimate:          &templates.EstimateDetail{CustomerID: customerID, TaxRate: effectiveTax},
-		IsNew:             true,
-		Customers:         customerOptions(customers),
-		Jobs:              jobOptions(jobs),
-		Statuses:          statusOptions(statuses),
-		ItemsJSON:         bootstrap.ItemsJSON,
-		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
-		CustomersJSON:     bootstrap.CustomersJSON,
-		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
+		DefaultsJSON:           choices,
+		DefaultLineDescription: lineDescription,
+		Estimate:               detail,
+		IsNew:                  true,
+		Customers:              customerOptions(customers),
+		Jobs:                   jobOptions(jobs),
+		Statuses:               statusOptions(statuses),
+		ItemsJSON:              bootstrap.ItemsJSON,
+		ExistingItemsJSON:      bootstrap.ExistingItemsJSON,
+		CustomersJSON:          bootstrap.CustomersJSON,
+		CustomFields:           buildCustomFieldDisplay(defs, "[]"),
 	}, nil
 }
 
@@ -807,6 +913,7 @@ func (h *EstimateHandler) authorizeDestinationJob(w http.ResponseWriter, r *http
 
 func estimateToDetail(ctx context.Context, e *ent.Estimate, statuses []*ent.Status) templates.EstimateDetail {
 	d := templates.EstimateDetail{
+		NumberLabel: services.RecordedEstimateNumber(e, middleware.CompanyFromContext(ctx)),
 		ID:          e.ID,
 		CustomerID:  estCustID(e),
 		StatusID:    estStatusID(e),
@@ -815,6 +922,13 @@ func estimateToDetail(ctx context.Context, e *ent.Estimate, statuses []*ent.Stat
 		Title:       e.Title,
 		Notes:       e.Notes,
 		TaxRate:     e.TaxRate,
+	}
+	if e.Terms != nil {
+		d.Terms = *e.Terms
+	}
+	d.TermsUnknown = e.Terms == nil
+	if e.ValidThrough != nil {
+		d.ValidThrough = e.ValidThrough.Format("2006-01-02")
 	}
 	if e.JobID != nil {
 		d.JobID = *e.JobID

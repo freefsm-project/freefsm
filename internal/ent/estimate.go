@@ -17,6 +17,10 @@ type Estimate struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
+	// NumberLabel holds the value of the "number_label" field.
+	NumberLabel string `json:"number_label,omitempty"`
+	// DocumentNumber holds the value of the "document_number" field.
+	DocumentNumber *int64 `json:"document_number,omitempty"`
 	// CompanyID holds the value of the "company_id" field.
 	CompanyID *int64 `json:"company_id,omitempty"`
 	// CustomerID holds the value of the "customer_id" field.
@@ -29,6 +33,10 @@ type Estimate struct {
 	Title string `json:"title,omitempty"`
 	// Notes holds the value of the "notes" field.
 	Notes string `json:"notes,omitempty"`
+	// Terms holds the value of the "terms" field.
+	Terms *string `json:"terms,omitempty"`
+	// ValidThrough holds the value of the "valid_through" field.
+	ValidThrough *time.Time `json:"valid_through,omitempty"`
 	// TaxRate holds the value of the "tax_rate" field.
 	TaxRate string `json:"tax_rate,omitempty"`
 	// LineItems holds the value of the "line_items" field.
@@ -51,11 +59,11 @@ func (*Estimate) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case estimate.FieldID, estimate.FieldCompanyID, estimate.FieldCustomerID, estimate.FieldJobID, estimate.FieldStatusID:
+		case estimate.FieldID, estimate.FieldDocumentNumber, estimate.FieldCompanyID, estimate.FieldCustomerID, estimate.FieldJobID, estimate.FieldStatusID:
 			values[i] = new(sql.NullInt64)
-		case estimate.FieldTitle, estimate.FieldNotes, estimate.FieldTaxRate, estimate.FieldLineItems, estimate.FieldCustomFields:
+		case estimate.FieldNumberLabel, estimate.FieldTitle, estimate.FieldNotes, estimate.FieldTerms, estimate.FieldTaxRate, estimate.FieldLineItems, estimate.FieldCustomFields:
 			values[i] = new(sql.NullString)
-		case estimate.FieldDeletedAt, estimate.FieldConversionHiddenAt, estimate.FieldCreatedAt, estimate.FieldUpdatedAt:
+		case estimate.FieldValidThrough, estimate.FieldDeletedAt, estimate.FieldConversionHiddenAt, estimate.FieldCreatedAt, estimate.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -78,6 +86,19 @@ func (_m *Estimate) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int64(value.Int64)
+		case estimate.FieldNumberLabel:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field number_label", values[i])
+			} else if value.Valid {
+				_m.NumberLabel = value.String
+			}
+		case estimate.FieldDocumentNumber:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field document_number", values[i])
+			} else if value.Valid {
+				_m.DocumentNumber = new(int64)
+				*_m.DocumentNumber = value.Int64
+			}
 		case estimate.FieldCompanyID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field company_id", values[i])
@@ -117,6 +138,20 @@ func (_m *Estimate) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field notes", values[i])
 			} else if value.Valid {
 				_m.Notes = value.String
+			}
+		case estimate.FieldTerms:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field terms", values[i])
+			} else if value.Valid {
+				_m.Terms = new(string)
+				*_m.Terms = value.String
+			}
+		case estimate.FieldValidThrough:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field valid_through", values[i])
+			} else if value.Valid {
+				_m.ValidThrough = new(time.Time)
+				*_m.ValidThrough = value.Time
 			}
 		case estimate.FieldTaxRate:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -198,6 +233,14 @@ func (_m *Estimate) String() string {
 	var builder strings.Builder
 	builder.WriteString("Estimate(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("number_label=")
+	builder.WriteString(_m.NumberLabel)
+	builder.WriteString(", ")
+	if v := _m.DocumentNumber; v != nil {
+		builder.WriteString("document_number=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	if v := _m.CompanyID; v != nil {
 		builder.WriteString("company_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
@@ -223,6 +266,16 @@ func (_m *Estimate) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("notes=")
 	builder.WriteString(_m.Notes)
+	builder.WriteString(", ")
+	if v := _m.Terms; v != nil {
+		builder.WriteString("terms=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ValidThrough; v != nil {
+		builder.WriteString("valid_through=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("tax_rate=")
 	builder.WriteString(_m.TaxRate)

@@ -54,6 +54,16 @@ func IDLTE(id int64) predicate.Estimate {
 	return predicate.Estimate(sql.FieldLTE(FieldID, id))
 }
 
+// NumberLabel applies equality check predicate on the "number_label" field. It's identical to NumberLabelEQ.
+func NumberLabel(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldNumberLabel, v))
+}
+
+// DocumentNumber applies equality check predicate on the "document_number" field. It's identical to DocumentNumberEQ.
+func DocumentNumber(v int64) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldDocumentNumber, v))
+}
+
 // CompanyID applies equality check predicate on the "company_id" field. It's identical to CompanyIDEQ.
 func CompanyID(v int64) predicate.Estimate {
 	return predicate.Estimate(sql.FieldEQ(FieldCompanyID, v))
@@ -82,6 +92,16 @@ func Title(v string) predicate.Estimate {
 // Notes applies equality check predicate on the "notes" field. It's identical to NotesEQ.
 func Notes(v string) predicate.Estimate {
 	return predicate.Estimate(sql.FieldEQ(FieldNotes, v))
+}
+
+// Terms applies equality check predicate on the "terms" field. It's identical to TermsEQ.
+func Terms(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldTerms, v))
+}
+
+// ValidThrough applies equality check predicate on the "valid_through" field. It's identical to ValidThroughEQ.
+func ValidThrough(v time.Time) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldValidThrough, v))
 }
 
 // TaxRate applies equality check predicate on the "tax_rate" field. It's identical to TaxRateEQ.
@@ -117,6 +137,121 @@ func CreatedAt(v time.Time) predicate.Estimate {
 // UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
 func UpdatedAt(v time.Time) predicate.Estimate {
 	return predicate.Estimate(sql.FieldEQ(FieldUpdatedAt, v))
+}
+
+// NumberLabelEQ applies the EQ predicate on the "number_label" field.
+func NumberLabelEQ(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldNumberLabel, v))
+}
+
+// NumberLabelNEQ applies the NEQ predicate on the "number_label" field.
+func NumberLabelNEQ(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNEQ(FieldNumberLabel, v))
+}
+
+// NumberLabelIn applies the In predicate on the "number_label" field.
+func NumberLabelIn(vs ...string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldIn(FieldNumberLabel, vs...))
+}
+
+// NumberLabelNotIn applies the NotIn predicate on the "number_label" field.
+func NumberLabelNotIn(vs ...string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNotIn(FieldNumberLabel, vs...))
+}
+
+// NumberLabelGT applies the GT predicate on the "number_label" field.
+func NumberLabelGT(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGT(FieldNumberLabel, v))
+}
+
+// NumberLabelGTE applies the GTE predicate on the "number_label" field.
+func NumberLabelGTE(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGTE(FieldNumberLabel, v))
+}
+
+// NumberLabelLT applies the LT predicate on the "number_label" field.
+func NumberLabelLT(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLT(FieldNumberLabel, v))
+}
+
+// NumberLabelLTE applies the LTE predicate on the "number_label" field.
+func NumberLabelLTE(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLTE(FieldNumberLabel, v))
+}
+
+// NumberLabelContains applies the Contains predicate on the "number_label" field.
+func NumberLabelContains(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldContains(FieldNumberLabel, v))
+}
+
+// NumberLabelHasPrefix applies the HasPrefix predicate on the "number_label" field.
+func NumberLabelHasPrefix(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldHasPrefix(FieldNumberLabel, v))
+}
+
+// NumberLabelHasSuffix applies the HasSuffix predicate on the "number_label" field.
+func NumberLabelHasSuffix(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldHasSuffix(FieldNumberLabel, v))
+}
+
+// NumberLabelEqualFold applies the EqualFold predicate on the "number_label" field.
+func NumberLabelEqualFold(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEqualFold(FieldNumberLabel, v))
+}
+
+// NumberLabelContainsFold applies the ContainsFold predicate on the "number_label" field.
+func NumberLabelContainsFold(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldContainsFold(FieldNumberLabel, v))
+}
+
+// DocumentNumberEQ applies the EQ predicate on the "document_number" field.
+func DocumentNumberEQ(v int64) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldDocumentNumber, v))
+}
+
+// DocumentNumberNEQ applies the NEQ predicate on the "document_number" field.
+func DocumentNumberNEQ(v int64) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNEQ(FieldDocumentNumber, v))
+}
+
+// DocumentNumberIn applies the In predicate on the "document_number" field.
+func DocumentNumberIn(vs ...int64) predicate.Estimate {
+	return predicate.Estimate(sql.FieldIn(FieldDocumentNumber, vs...))
+}
+
+// DocumentNumberNotIn applies the NotIn predicate on the "document_number" field.
+func DocumentNumberNotIn(vs ...int64) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNotIn(FieldDocumentNumber, vs...))
+}
+
+// DocumentNumberGT applies the GT predicate on the "document_number" field.
+func DocumentNumberGT(v int64) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGT(FieldDocumentNumber, v))
+}
+
+// DocumentNumberGTE applies the GTE predicate on the "document_number" field.
+func DocumentNumberGTE(v int64) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGTE(FieldDocumentNumber, v))
+}
+
+// DocumentNumberLT applies the LT predicate on the "document_number" field.
+func DocumentNumberLT(v int64) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLT(FieldDocumentNumber, v))
+}
+
+// DocumentNumberLTE applies the LTE predicate on the "document_number" field.
+func DocumentNumberLTE(v int64) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLTE(FieldDocumentNumber, v))
+}
+
+// DocumentNumberIsNil applies the IsNil predicate on the "document_number" field.
+func DocumentNumberIsNil() predicate.Estimate {
+	return predicate.Estimate(sql.FieldIsNull(FieldDocumentNumber))
+}
+
+// DocumentNumberNotNil applies the NotNil predicate on the "document_number" field.
+func DocumentNumberNotNil() predicate.Estimate {
+	return predicate.Estimate(sql.FieldNotNull(FieldDocumentNumber))
 }
 
 // CompanyIDEQ applies the EQ predicate on the "company_id" field.
@@ -447,6 +582,131 @@ func NotesEqualFold(v string) predicate.Estimate {
 // NotesContainsFold applies the ContainsFold predicate on the "notes" field.
 func NotesContainsFold(v string) predicate.Estimate {
 	return predicate.Estimate(sql.FieldContainsFold(FieldNotes, v))
+}
+
+// TermsEQ applies the EQ predicate on the "terms" field.
+func TermsEQ(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldTerms, v))
+}
+
+// TermsNEQ applies the NEQ predicate on the "terms" field.
+func TermsNEQ(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNEQ(FieldTerms, v))
+}
+
+// TermsIn applies the In predicate on the "terms" field.
+func TermsIn(vs ...string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldIn(FieldTerms, vs...))
+}
+
+// TermsNotIn applies the NotIn predicate on the "terms" field.
+func TermsNotIn(vs ...string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNotIn(FieldTerms, vs...))
+}
+
+// TermsGT applies the GT predicate on the "terms" field.
+func TermsGT(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGT(FieldTerms, v))
+}
+
+// TermsGTE applies the GTE predicate on the "terms" field.
+func TermsGTE(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGTE(FieldTerms, v))
+}
+
+// TermsLT applies the LT predicate on the "terms" field.
+func TermsLT(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLT(FieldTerms, v))
+}
+
+// TermsLTE applies the LTE predicate on the "terms" field.
+func TermsLTE(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLTE(FieldTerms, v))
+}
+
+// TermsContains applies the Contains predicate on the "terms" field.
+func TermsContains(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldContains(FieldTerms, v))
+}
+
+// TermsHasPrefix applies the HasPrefix predicate on the "terms" field.
+func TermsHasPrefix(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldHasPrefix(FieldTerms, v))
+}
+
+// TermsHasSuffix applies the HasSuffix predicate on the "terms" field.
+func TermsHasSuffix(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldHasSuffix(FieldTerms, v))
+}
+
+// TermsIsNil applies the IsNil predicate on the "terms" field.
+func TermsIsNil() predicate.Estimate {
+	return predicate.Estimate(sql.FieldIsNull(FieldTerms))
+}
+
+// TermsNotNil applies the NotNil predicate on the "terms" field.
+func TermsNotNil() predicate.Estimate {
+	return predicate.Estimate(sql.FieldNotNull(FieldTerms))
+}
+
+// TermsEqualFold applies the EqualFold predicate on the "terms" field.
+func TermsEqualFold(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEqualFold(FieldTerms, v))
+}
+
+// TermsContainsFold applies the ContainsFold predicate on the "terms" field.
+func TermsContainsFold(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldContainsFold(FieldTerms, v))
+}
+
+// ValidThroughEQ applies the EQ predicate on the "valid_through" field.
+func ValidThroughEQ(v time.Time) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldValidThrough, v))
+}
+
+// ValidThroughNEQ applies the NEQ predicate on the "valid_through" field.
+func ValidThroughNEQ(v time.Time) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNEQ(FieldValidThrough, v))
+}
+
+// ValidThroughIn applies the In predicate on the "valid_through" field.
+func ValidThroughIn(vs ...time.Time) predicate.Estimate {
+	return predicate.Estimate(sql.FieldIn(FieldValidThrough, vs...))
+}
+
+// ValidThroughNotIn applies the NotIn predicate on the "valid_through" field.
+func ValidThroughNotIn(vs ...time.Time) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNotIn(FieldValidThrough, vs...))
+}
+
+// ValidThroughGT applies the GT predicate on the "valid_through" field.
+func ValidThroughGT(v time.Time) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGT(FieldValidThrough, v))
+}
+
+// ValidThroughGTE applies the GTE predicate on the "valid_through" field.
+func ValidThroughGTE(v time.Time) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGTE(FieldValidThrough, v))
+}
+
+// ValidThroughLT applies the LT predicate on the "valid_through" field.
+func ValidThroughLT(v time.Time) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLT(FieldValidThrough, v))
+}
+
+// ValidThroughLTE applies the LTE predicate on the "valid_through" field.
+func ValidThroughLTE(v time.Time) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLTE(FieldValidThrough, v))
+}
+
+// ValidThroughIsNil applies the IsNil predicate on the "valid_through" field.
+func ValidThroughIsNil() predicate.Estimate {
+	return predicate.Estimate(sql.FieldIsNull(FieldValidThrough))
+}
+
+// ValidThroughNotNil applies the NotNil predicate on the "valid_through" field.
+func ValidThroughNotNil() predicate.Estimate {
+	return predicate.Estimate(sql.FieldNotNull(FieldValidThrough))
 }
 
 // TaxRateEQ applies the EQ predicate on the "tax_rate" field.

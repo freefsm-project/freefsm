@@ -199,9 +199,9 @@ func TestFinalizeInvoiceUsesRenamedInvoicedCategoryDefaultAtomicallyIntegration(
 		t.Fatal(err)
 	}
 	mustScan(t, db.QueryRow(ctx, `SELECT id FROM statuses WHERE workflow_id=$1 AND category_key='invoice:draft'`, workflow), &draftID)
-	mustScan(t, db.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,status_id,invoice_number,title,line_items,settlement_state) VALUES($1,$2,$3,1,'Invoice','[]','paid') RETURNING id`, company, customer, draftID), &invoiceID)
 	date := time.Date(2026, 7, 12, 0, 0, 0, 0, time.UTC)
-	if err := New(db).FinalizeInvoice(ctx, Actor{ID: admin, CompanyID: company}, invoiceID, date, 14); err != nil {
+	mustScan(t, db.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,status_id,invoice_number,title,line_items,settlement_state,invoice_date,due_date) VALUES($1,$2,$3,1,'Invoice','[]','paid',$4,$5) RETURNING id`, company, customer, draftID, date, time.Date(2026, 7, 26, 0, 0, 0, 0, time.UTC)), &invoiceID)
+	if err := New(db).FinalizeInvoice(ctx, Actor{ID: admin, CompanyID: company}, invoiceID); err != nil {
 		t.Fatal(err)
 	}
 	var category string
@@ -306,6 +306,9 @@ func statusDB(t *testing.T) (*pgxpool.Pool, int64, int64, int64, int64) {
 	}
 	var company, admin, tech, customer int64
 	mustScan(t, wrapped.Pool.QueryRow(ctx, `INSERT INTO companies(name,slug) VALUES('Status','status-flow') RETURNING id`), &company)
+	if _, err := wrapped.Pool.Exec(ctx, `INSERT INTO company_settings(company_id) VALUES($1)`, company); err != nil {
+		t.Fatal(err)
+	}
 	mustScan(t, wrapped.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'admin@status.test','$2a$10$abcdefghijklmnopqrstuu1234567890123456789012345678901','Admin','admin') RETURNING id`, company), &admin)
 	mustScan(t, wrapped.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'tech@status.test','x','Tech','tech') RETURNING id`, company), &tech)
 	mustScan(t, wrapped.Pool.QueryRow(ctx, `INSERT INTO customers(company_id,display_name) VALUES($1,'Customer') RETURNING id`, company), &customer)

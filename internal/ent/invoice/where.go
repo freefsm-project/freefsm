@@ -59,6 +59,11 @@ func InvoiceNumber(v int64) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldInvoiceNumber, v))
 }
 
+// NumberLabel applies equality check predicate on the "number_label" field. It's identical to NumberLabelEQ.
+func NumberLabel(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldNumberLabel, v))
+}
+
 // CompanyID applies equality check predicate on the "company_id" field. It's identical to CompanyIDEQ.
 func CompanyID(v int64) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldCompanyID, v))
@@ -92,6 +97,11 @@ func Title(v string) predicate.Invoice {
 // Notes applies equality check predicate on the "notes" field. It's identical to NotesEQ.
 func Notes(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldEQ(FieldNotes, v))
+}
+
+// Terms applies equality check predicate on the "terms" field. It's identical to TermsEQ.
+func Terms(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldTerms, v))
 }
 
 // InvoiceDate applies equality check predicate on the "invoice_date" field. It's identical to InvoiceDateEQ.
@@ -197,6 +207,71 @@ func InvoiceNumberIsNil() predicate.Invoice {
 // InvoiceNumberNotNil applies the NotNil predicate on the "invoice_number" field.
 func InvoiceNumberNotNil() predicate.Invoice {
 	return predicate.Invoice(sql.FieldNotNull(FieldInvoiceNumber))
+}
+
+// NumberLabelEQ applies the EQ predicate on the "number_label" field.
+func NumberLabelEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldNumberLabel, v))
+}
+
+// NumberLabelNEQ applies the NEQ predicate on the "number_label" field.
+func NumberLabelNEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldNumberLabel, v))
+}
+
+// NumberLabelIn applies the In predicate on the "number_label" field.
+func NumberLabelIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldNumberLabel, vs...))
+}
+
+// NumberLabelNotIn applies the NotIn predicate on the "number_label" field.
+func NumberLabelNotIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldNumberLabel, vs...))
+}
+
+// NumberLabelGT applies the GT predicate on the "number_label" field.
+func NumberLabelGT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldNumberLabel, v))
+}
+
+// NumberLabelGTE applies the GTE predicate on the "number_label" field.
+func NumberLabelGTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldNumberLabel, v))
+}
+
+// NumberLabelLT applies the LT predicate on the "number_label" field.
+func NumberLabelLT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldNumberLabel, v))
+}
+
+// NumberLabelLTE applies the LTE predicate on the "number_label" field.
+func NumberLabelLTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldNumberLabel, v))
+}
+
+// NumberLabelContains applies the Contains predicate on the "number_label" field.
+func NumberLabelContains(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContains(FieldNumberLabel, v))
+}
+
+// NumberLabelHasPrefix applies the HasPrefix predicate on the "number_label" field.
+func NumberLabelHasPrefix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasPrefix(FieldNumberLabel, v))
+}
+
+// NumberLabelHasSuffix applies the HasSuffix predicate on the "number_label" field.
+func NumberLabelHasSuffix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasSuffix(FieldNumberLabel, v))
+}
+
+// NumberLabelEqualFold applies the EqualFold predicate on the "number_label" field.
+func NumberLabelEqualFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEqualFold(FieldNumberLabel, v))
+}
+
+// NumberLabelContainsFold applies the ContainsFold predicate on the "number_label" field.
+func NumberLabelContainsFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContainsFold(FieldNumberLabel, v))
 }
 
 // CompanyIDEQ applies the EQ predicate on the "company_id" field.
@@ -567,6 +642,81 @@ func NotesEqualFold(v string) predicate.Invoice {
 // NotesContainsFold applies the ContainsFold predicate on the "notes" field.
 func NotesContainsFold(v string) predicate.Invoice {
 	return predicate.Invoice(sql.FieldContainsFold(FieldNotes, v))
+}
+
+// TermsEQ applies the EQ predicate on the "terms" field.
+func TermsEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEQ(FieldTerms, v))
+}
+
+// TermsNEQ applies the NEQ predicate on the "terms" field.
+func TermsNEQ(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNEQ(FieldTerms, v))
+}
+
+// TermsIn applies the In predicate on the "terms" field.
+func TermsIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldIn(FieldTerms, vs...))
+}
+
+// TermsNotIn applies the NotIn predicate on the "terms" field.
+func TermsNotIn(vs ...string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotIn(FieldTerms, vs...))
+}
+
+// TermsGT applies the GT predicate on the "terms" field.
+func TermsGT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGT(FieldTerms, v))
+}
+
+// TermsGTE applies the GTE predicate on the "terms" field.
+func TermsGTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldGTE(FieldTerms, v))
+}
+
+// TermsLT applies the LT predicate on the "terms" field.
+func TermsLT(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLT(FieldTerms, v))
+}
+
+// TermsLTE applies the LTE predicate on the "terms" field.
+func TermsLTE(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldLTE(FieldTerms, v))
+}
+
+// TermsContains applies the Contains predicate on the "terms" field.
+func TermsContains(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContains(FieldTerms, v))
+}
+
+// TermsHasPrefix applies the HasPrefix predicate on the "terms" field.
+func TermsHasPrefix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasPrefix(FieldTerms, v))
+}
+
+// TermsHasSuffix applies the HasSuffix predicate on the "terms" field.
+func TermsHasSuffix(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldHasSuffix(FieldTerms, v))
+}
+
+// TermsIsNil applies the IsNil predicate on the "terms" field.
+func TermsIsNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldIsNull(FieldTerms))
+}
+
+// TermsNotNil applies the NotNil predicate on the "terms" field.
+func TermsNotNil() predicate.Invoice {
+	return predicate.Invoice(sql.FieldNotNull(FieldTerms))
+}
+
+// TermsEqualFold applies the EqualFold predicate on the "terms" field.
+func TermsEqualFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldEqualFold(FieldTerms, v))
+}
+
+// TermsContainsFold applies the ContainsFold predicate on the "terms" field.
+func TermsContainsFold(v string) predicate.Invoice {
+	return predicate.Invoice(sql.FieldContainsFold(FieldTerms, v))
 }
 
 // InvoiceDateEQ applies the EQ predicate on the "invoice_date" field.

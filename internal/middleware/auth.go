@@ -17,6 +17,7 @@ const (
 )
 
 type UserInfo struct {
+	ConfigurationView      bool
 	ID                     int64
 	Name                   string
 	Email                  string

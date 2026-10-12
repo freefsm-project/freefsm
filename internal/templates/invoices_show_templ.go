@@ -409,9 +409,9 @@ func InvoiceShow(p InvoiceDetail) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var23 string
-			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(invoiceNumber(ctx, p.Number))
+			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(recordedNumber(p.NumberLabel, fmt.Sprintf("Invoice record %d — identity requires review", p.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/invoices_show.templ`, Line: 74, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/invoices_show.templ`, Line: 74, Col: 133}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 			if templ_7745c5c3_Err != nil {
@@ -1294,7 +1294,7 @@ func InvoiceShow(p InvoiceDetail) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout(invoiceNumber(ctx, p.Number)+": "+p.Title).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout(recordedNumber(p.NumberLabel, fmt.Sprintf("Invoice record %d — identity requires review", p.ID))+": "+p.Title).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

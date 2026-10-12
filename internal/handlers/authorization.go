@@ -42,6 +42,9 @@ func authorizationError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, authorization.ErrPending):
 		code = 503
 		message = "Customer authorization is pending Administrator review"
+	case errors.Is(err, authorization.ErrConfigurationUnavailable):
+		code = 503
+		message = "Company configuration is unavailable"
 	}
 	slog.Warn("authorization request rejected", "actor_id", authorizationActor(r).UserID, "path", r.URL.Path, "channel", "web", "status", code)
 	http.Error(w, message, code)

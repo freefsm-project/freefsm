@@ -5,8 +5,14 @@ import "fmt"
 templ EstimateForm(p EstimateFormPageData) {
 	@Layout(estimateFormTitle(p.IsNew)) {
 
-		<form action={ templ.URL(estimateFormAction(p.IsNew, p.Estimate.ID)) } method="post" autocomplete="off" class="compact-form">
+		<form action={ templ.URL(estimateFormAction(p.IsNew, p.Estimate.ID)) } method="post" autocomplete="off" class="compact-form" hx-boost="false">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="default_line_description" value={ p.DefaultLineDescription }/>
+			<label>Terms<textarea name="terms" rows="3">{ p.Estimate.Terms }</textarea></label>
+			if p.Estimate.TermsUnknown {
+				<p>Legacy terms were not recorded. Review and enter this document's terms before generating a new PDF. Blank explicitly records no terms.</p>
+			}
+			<label>Valid through (optional)<input type="date" name="valid_through" value={ p.Estimate.ValidThrough }/></label>
 			<label>
 				Customer <small class="required-marker">*</small>
 				<select name="customer_id" required>
@@ -47,6 +53,9 @@ templ EstimateForm(p EstimateFormPageData) {
 			</label>
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
 			@LineItemEditor(LineItemEditorData{ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON})
+			if p.IsNew {
+				@DocumentDefaultPicker(p.DefaultsJSON,p.PreserveEntered)
+			}
 			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href="/estimates" role="button" class="outline">Cancel</a>
