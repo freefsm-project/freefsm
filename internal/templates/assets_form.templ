@@ -20,7 +20,9 @@ templ AssetForm(p AssetFormPageData) {
 						Asset Type
 						<select name="asset_type_id" required>
 							for _, t := range p.AssetTypes {
+								if !t.Retired || assetTypeSelected(p.Asset, t.Value) {
 								<option value={ fmt.Sprintf("%d", t.Value) } selected?={ assetTypeSelected(p.Asset, t.Value) }>{ t.Label }</option>
+								}
 							}
 						</select>
 					</label>
@@ -29,7 +31,9 @@ templ AssetForm(p AssetFormPageData) {
 						<select name="asset_status_id">
 							<option value="0">No Status</option>
 							for _, s := range p.AssetStatuses {
+								if !s.Retired || assetStatusSelected(p.Asset, s.Value) {
 								<option value={ fmt.Sprintf("%d", s.Value) } selected?={ assetStatusSelected(p.Asset, s.Value) }>{ s.Label }</option>
+								}
 							}
 						</select>
 					</label>

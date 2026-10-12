@@ -262,12 +262,12 @@ func (_q *AssetStatusQuery) Clone() *AssetStatusQuery {
 // Example:
 //
 //	var v []struct {
-//		CompanyID int64 `json:"company_id,omitempty"`
+//		Retired bool `json:"retired,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.AssetStatus.Query().
-//		GroupBy(assetstatus.FieldCompanyID).
+//		GroupBy(assetstatus.FieldRetired).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *AssetStatusQuery) GroupBy(field string, fields ...string) *AssetStatusGroupBy {
@@ -285,11 +285,11 @@ func (_q *AssetStatusQuery) GroupBy(field string, fields ...string) *AssetStatus
 // Example:
 //
 //	var v []struct {
-//		CompanyID int64 `json:"company_id,omitempty"`
+//		Retired bool `json:"retired,omitempty"`
 //	}
 //
 //	client.AssetStatus.Query().
-//		Select(assetstatus.FieldCompanyID).
+//		Select(assetstatus.FieldRetired).
 //		Scan(ctx, &v)
 func (_q *AssetStatusQuery) Select(fields ...string) *AssetStatusSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

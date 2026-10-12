@@ -6,6 +6,7 @@ templ AssetSettingsPage(types AssetTypeListPageData, statuses AssetStatusListPag
 			<h2>Asset Settings</h2>
 			<a href="/settings" role="button" class="outline">Back to Settings</a>
 		</div>
+		<div hx-get="/settings/assets/history" hx-trigger="load" hx-swap="innerHTML"><p>Loading definition history...</p></div>
 		<div class="settings-grid">
 			@AssetTypeList(types)
 			@AssetStatusList(statuses)

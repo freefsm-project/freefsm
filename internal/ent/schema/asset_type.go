@@ -22,6 +22,7 @@ func (AssetType) Annotations() []schema.Annotation {
 
 func (AssetType) Fields() []ent.Field {
 	return []ent.Field{
+		field.Bool("retired").Default(false),
 		field.Int64("id"),
 		field.Int64("company_id").Optional().Nillable(),
 		field.String("name").NotEmpty(),

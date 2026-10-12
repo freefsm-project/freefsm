@@ -21,6 +21,7 @@ func (Tag) Annotations() []schema.Annotation {
 
 func (Tag) Fields() []ent.Field {
 	return []ent.Field{
+		field.Bool("retired").Default(false),
 		field.Int64("id"),
 		field.Int64("company_id"),
 		field.String("name").NotEmpty(),

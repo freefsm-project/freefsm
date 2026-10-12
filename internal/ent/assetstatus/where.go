@@ -54,6 +54,11 @@ func IDLTE(id int64) predicate.AssetStatus {
 	return predicate.AssetStatus(sql.FieldLTE(FieldID, id))
 }
 
+// Retired applies equality check predicate on the "retired" field. It's identical to RetiredEQ.
+func Retired(v bool) predicate.AssetStatus {
+	return predicate.AssetStatus(sql.FieldEQ(FieldRetired, v))
+}
+
 // CompanyID applies equality check predicate on the "company_id" field. It's identical to CompanyIDEQ.
 func CompanyID(v int64) predicate.AssetStatus {
 	return predicate.AssetStatus(sql.FieldEQ(FieldCompanyID, v))
@@ -77,6 +82,16 @@ func SortOrder(v int) predicate.AssetStatus {
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.AssetStatus {
 	return predicate.AssetStatus(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// RetiredEQ applies the EQ predicate on the "retired" field.
+func RetiredEQ(v bool) predicate.AssetStatus {
+	return predicate.AssetStatus(sql.FieldEQ(FieldRetired, v))
+}
+
+// RetiredNEQ applies the NEQ predicate on the "retired" field.
+func RetiredNEQ(v bool) predicate.AssetStatus {
+	return predicate.AssetStatus(sql.FieldNEQ(FieldRetired, v))
 }
 
 // CompanyIDEQ applies the EQ predicate on the "company_id" field.

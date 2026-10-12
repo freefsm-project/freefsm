@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/tag"
@@ -22,6 +23,12 @@ func NewTagLinkService(client *ent.Client, objects objectref.Directory) *TagLink
 }
 
 func (s *TagLinkService) Attach(ctx context.Context, companyID, tagID int64, ref objectref.Ref) (*ent.TagLink, error) {
+	if req, ok := authorization.FromContext(ctx); ok {
+		if err := req.Service.ChangeTagLink(ctx, req.Actor, string(ref.Type), ref.ID, tagID, true); err != nil {
+			return nil, err
+		}
+		return s.client.TagLink.Query().Where(taglink.CompanyIDEQ(companyID), taglink.TagIDEQ(tagID), taglink.ObjectTypeEQ(string(ref.Type)), taglink.ObjectIDEQ(ref.ID)).Only(ctx)
+	}
 	if err := validateCompanyID(companyID); err != nil {
 		return nil, err
 	}
@@ -60,6 +67,9 @@ func (s *TagLinkService) Attach(ctx context.Context, companyID, tagID int64, ref
 }
 
 func (s *TagLinkService) Detach(ctx context.Context, companyID, tagID int64, ref objectref.Ref) error {
+	if req, ok := authorization.FromContext(ctx); ok {
+		return req.Service.ChangeTagLink(ctx, req.Actor, string(ref.Type), ref.ID, tagID, false)
+	}
 	if err := validateCompanyID(companyID); err != nil {
 		return err
 	}

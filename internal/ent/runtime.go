@@ -95,34 +95,42 @@ func init() {
 	asset.UpdateDefaultUpdatedAt = assetDescUpdatedAt.UpdateDefault.(func() time.Time)
 	assetstatusFields := schema.AssetStatus{}.Fields()
 	_ = assetstatusFields
+	// assetstatusDescRetired is the schema descriptor for retired field.
+	assetstatusDescRetired := assetstatusFields[0].Descriptor()
+	// assetstatus.DefaultRetired holds the default value on creation for the retired field.
+	assetstatus.DefaultRetired = assetstatusDescRetired.Default.(bool)
 	// assetstatusDescName is the schema descriptor for name field.
-	assetstatusDescName := assetstatusFields[2].Descriptor()
+	assetstatusDescName := assetstatusFields[3].Descriptor()
 	// assetstatus.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	assetstatus.NameValidator = assetstatusDescName.Validators[0].(func(string) error)
 	// assetstatusDescColor is the schema descriptor for color field.
-	assetstatusDescColor := assetstatusFields[3].Descriptor()
+	assetstatusDescColor := assetstatusFields[4].Descriptor()
 	// assetstatus.DefaultColor holds the default value on creation for the color field.
 	assetstatus.DefaultColor = assetstatusDescColor.Default.(string)
 	// assetstatusDescSortOrder is the schema descriptor for sort_order field.
-	assetstatusDescSortOrder := assetstatusFields[4].Descriptor()
+	assetstatusDescSortOrder := assetstatusFields[5].Descriptor()
 	// assetstatus.DefaultSortOrder holds the default value on creation for the sort_order field.
 	assetstatus.DefaultSortOrder = assetstatusDescSortOrder.Default.(int)
 	// assetstatusDescCreatedAt is the schema descriptor for created_at field.
-	assetstatusDescCreatedAt := assetstatusFields[5].Descriptor()
+	assetstatusDescCreatedAt := assetstatusFields[6].Descriptor()
 	// assetstatus.DefaultCreatedAt holds the default value on creation for the created_at field.
 	assetstatus.DefaultCreatedAt = assetstatusDescCreatedAt.Default.(func() time.Time)
 	assettypeFields := schema.AssetType{}.Fields()
 	_ = assettypeFields
+	// assettypeDescRetired is the schema descriptor for retired field.
+	assettypeDescRetired := assettypeFields[0].Descriptor()
+	// assettype.DefaultRetired holds the default value on creation for the retired field.
+	assettype.DefaultRetired = assettypeDescRetired.Default.(bool)
 	// assettypeDescName is the schema descriptor for name field.
-	assettypeDescName := assettypeFields[2].Descriptor()
+	assettypeDescName := assettypeFields[3].Descriptor()
 	// assettype.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	assettype.NameValidator = assettypeDescName.Validators[0].(func(string) error)
 	// assettypeDescSortOrder is the schema descriptor for sort_order field.
-	assettypeDescSortOrder := assettypeFields[3].Descriptor()
+	assettypeDescSortOrder := assettypeFields[4].Descriptor()
 	// assettype.DefaultSortOrder holds the default value on creation for the sort_order field.
 	assettype.DefaultSortOrder = assettypeDescSortOrder.Default.(int)
 	// assettypeDescCreatedAt is the schema descriptor for created_at field.
-	assettypeDescCreatedAt := assettypeFields[4].Descriptor()
+	assettypeDescCreatedAt := assettypeFields[5].Descriptor()
 	// assettype.DefaultCreatedAt holds the default value on creation for the created_at field.
 	assettype.DefaultCreatedAt = assettypeDescCreatedAt.Default.(func() time.Time)
 	commentFields := schema.Comment{}.Fields()
@@ -919,16 +927,20 @@ func init() {
 	statusworkflow.DefaultCreatedAt = statusworkflowDescCreatedAt.Default.(func() time.Time)
 	tagFields := schema.Tag{}.Fields()
 	_ = tagFields
+	// tagDescRetired is the schema descriptor for retired field.
+	tagDescRetired := tagFields[0].Descriptor()
+	// tag.DefaultRetired holds the default value on creation for the retired field.
+	tag.DefaultRetired = tagDescRetired.Default.(bool)
 	// tagDescName is the schema descriptor for name field.
-	tagDescName := tagFields[2].Descriptor()
+	tagDescName := tagFields[3].Descriptor()
 	// tag.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	tag.NameValidator = tagDescName.Validators[0].(func(string) error)
 	// tagDescColor is the schema descriptor for color field.
-	tagDescColor := tagFields[3].Descriptor()
+	tagDescColor := tagFields[4].Descriptor()
 	// tag.DefaultColor holds the default value on creation for the color field.
 	tag.DefaultColor = tagDescColor.Default.(string)
 	// tagDescCreatedAt is the schema descriptor for created_at field.
-	tagDescCreatedAt := tagFields[4].Descriptor()
+	tagDescCreatedAt := tagFields[5].Descriptor()
 	// tag.DefaultCreatedAt holds the default value on creation for the created_at field.
 	tag.DefaultCreatedAt = tagDescCreatedAt.Default.(func() time.Time)
 	taglinkFields := schema.TagLink{}.Fields()

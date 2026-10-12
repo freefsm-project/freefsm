@@ -129,12 +129,12 @@ func TestTagOwnershipMigration046BackfillsAndEnforcesOwnershipIntegration(t *tes
 	})
 }
 
-func TestTagOwnershipMigration046CleansSupportedOrphansIntegration(t *testing.T) {
+func TestTagOwnershipUpgradePreservesUnmappedReferencesIntegration(t *testing.T) {
 	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("set FREEFSM_TEST_DATABASE_URL")
 	}
-	t.Run("single company removes orphan and down does not restore it", func(t *testing.T) {
+	t.Run("single company orphan requires explicit review before any migration", func(t *testing.T) {
 		db, ctx := tagMigrationDatabaseThrough045(t, dsn)
 		var company, tag int64
 		mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT id FROM companies`), &company)
@@ -142,25 +142,13 @@ func TestTagOwnershipMigration046CleansSupportedOrphansIntegration(t *testing.T)
 		if _, err := db.Pool.Exec(ctx, `INSERT INTO tag_links(company_id,tag_id,object_type,object_id) VALUES($1,$2,'customer',999999)`, company, tag); err != nil {
 			t.Fatal(err)
 		}
-		if err := db.Migrate(ctx, MigrationFS()); err != nil {
-			t.Fatal(err)
+		if err := db.Migrate(ctx, MigrationFS()); err == nil {
+			t.Fatal("upgrade erased unmapped reference")
 		}
-		var owner, links int64
-		mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT company_id FROM tags WHERE id=$1`, tag), &owner)
+		var links int64
 		mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM tag_links WHERE tag_id=$1`, tag), &links)
-		if owner != company || links != 0 {
-			t.Fatalf("owner=%d links=%d", owner, links)
-		}
-		down, err := fs.ReadFile(MigrationFS(), "046_tag_ownership.down.sql")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err = db.Pool.Exec(ctx, string(down)); err != nil {
-			t.Fatal(err)
-		}
-		mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM tag_links WHERE tag_id=$1`, tag), &links)
-		if links != 0 {
-			t.Fatalf("down restored %d deleted orphan links", links)
+		if links != 1 {
+			t.Fatalf("upgrade preserved %d orphan links, want 1", links)
 		}
 	})
 
@@ -416,7 +404,7 @@ func seedTagCompanies(t *testing.T, ctx context.Context, db *DB) (a, b, ca, cb i
 	return
 }
 
-func tagMigrationDatabaseThrough045(t *testing.T, dsn string) (*DB, context.Context) {
+func tagMigrationDatabaseThrough045(t *testing.T, dsn string, before ...string) (*DB, context.Context) {
 	t.Helper()
 	ctx := context.Background()
 	admin, err := Connect(ctx, dsn)
@@ -439,7 +427,11 @@ func tagMigrationDatabaseThrough045(t *testing.T, dsn string) (*DB, context.Cont
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || entry.Name() >= "046_" {
+		cutoff := "046_"
+		if len(before) > 0 {
+			cutoff = before[0]
+		}
+		if entry.IsDir() || entry.Name() >= cutoff {
 			continue
 		}
 		data, e := fs.ReadFile(MigrationFS(), entry.Name())

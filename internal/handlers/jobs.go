@@ -159,7 +159,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.Subtasks = services.ParseSubtasks(j.Subtasks)
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeJob, j.ID))
 	var allTags []*ent.Tag
-	if isAdminOrDispatcher(u) {
+	if canAttachTag(r, "job", id) {
 		allTags, _ = h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	}
 	d.Tags = tagsToRows(tags)
@@ -1229,9 +1229,10 @@ func tagsToRows(tags []*ent.Tag) []templates.TagRow {
 	rows := make([]templates.TagRow, len(tags))
 	for i, t := range tags {
 		rows[i] = templates.TagRow{
-			ID:    t.ID,
-			Name:  t.Name,
-			Color: t.Color,
+			Retired: t.Retired,
+			ID:      t.ID,
+			Name:    t.Name,
+			Color:   t.Color,
 		}
 	}
 	return rows

@@ -6,9 +6,12 @@ templ TagsIndex(p TagListPageData) {
 	@Layout("Tags") {
 		<div class="work-queue-toolbar list-toolbar">
 			<h2>Tags</h2>
-			<a href="/tags/new" role="button">New Tag</a>
+			if vocabularyPermission(ctx, "tags", "manage") {
+				<a href="/tags/new" role="button">New Tag</a>
+			}
 		</div>
 		@TagsTable(p)
+		<div hx-get="/tags/history" hx-trigger="load" hx-swap="innerHTML"><p>Loading definition history...</p></div>
 		<div hx-get="/tags/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent activity...</p>
 		</div>
@@ -25,13 +28,22 @@ templ TagsTable(p TagListPageData) {
 					<div class="tag-card" style={ fmt.Sprintf("border-color:%s", t.Color) }>
 						<div class="tag-card-header">
 							<span class="tag-badge" style={ badgeStyle(t.Color) }>{ t.Name }</span>
+							if t.Retired {
+								<small>Retired</small>
+							}
+							if vocabularyPermission(ctx, "tags", "manage") {
 							<div class="work-item-detail-action-group">
+								<form action={ templ.URL(fmt.Sprintf("/tags/%d/%s", t.ID, retirementAction(t.Retired))) } method="post">
+									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+									<button class="outline small">{ retirementLabel(t.Retired) }</button>
+								</form>
 								<a href={ templ.URL(fmt.Sprintf("/tags/%d/edit", t.ID)) } role="button" class="outline small">Edit</a>
 								<form action={ templ.URL(fmt.Sprintf("/tags/%d/delete", t.ID)) } method="post" hx-confirm="Delete this tag?">
 									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 									<button class="outline contrast small">Del</button>
 								</form>
 							</div>
+							}
 						</div>
 					</div>
 				}

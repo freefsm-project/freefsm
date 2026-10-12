@@ -2369,6 +2369,7 @@ type AssetStatusMutation struct {
 	op            Op
 	typ           string
 	id            *int64
+	retired       *bool
 	company_id    *int64
 	addcompany_id *int64
 	name          *string
@@ -2484,6 +2485,42 @@ func (m *AssetStatusMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetRetired sets the "retired" field.
+func (m *AssetStatusMutation) SetRetired(b bool) {
+	m.retired = &b
+}
+
+// Retired returns the value of the "retired" field in the mutation.
+func (m *AssetStatusMutation) Retired() (r bool, exists bool) {
+	v := m.retired
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetired returns the old "retired" field's value of the AssetStatus entity.
+// If the AssetStatus object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetStatusMutation) OldRetired(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetired is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetired requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetired: %w", err)
+	}
+	return oldValue.Retired, nil
+}
+
+// ResetRetired resets all changes to the "retired" field.
+func (m *AssetStatusMutation) ResetRetired() {
+	m.retired = nil
 }
 
 // SetCompanyID sets the "company_id" field.
@@ -2754,7 +2791,10 @@ func (m *AssetStatusMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetStatusMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 6)
+	if m.retired != nil {
+		fields = append(fields, assetstatus.FieldRetired)
+	}
 	if m.company_id != nil {
 		fields = append(fields, assetstatus.FieldCompanyID)
 	}
@@ -2778,6 +2818,8 @@ func (m *AssetStatusMutation) Fields() []string {
 // schema.
 func (m *AssetStatusMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case assetstatus.FieldRetired:
+		return m.Retired()
 	case assetstatus.FieldCompanyID:
 		return m.CompanyID()
 	case assetstatus.FieldName:
@@ -2797,6 +2839,8 @@ func (m *AssetStatusMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *AssetStatusMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case assetstatus.FieldRetired:
+		return m.OldRetired(ctx)
 	case assetstatus.FieldCompanyID:
 		return m.OldCompanyID(ctx)
 	case assetstatus.FieldName:
@@ -2816,6 +2860,13 @@ func (m *AssetStatusMutation) OldField(ctx context.Context, name string) (ent.Va
 // type.
 func (m *AssetStatusMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case assetstatus.FieldRetired:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetired(v)
+		return nil
 	case assetstatus.FieldCompanyID:
 		v, ok := value.(int64)
 		if !ok {
@@ -2936,6 +2987,9 @@ func (m *AssetStatusMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *AssetStatusMutation) ResetField(name string) error {
 	switch name {
+	case assetstatus.FieldRetired:
+		m.ResetRetired()
+		return nil
 	case assetstatus.FieldCompanyID:
 		m.ResetCompanyID()
 		return nil
@@ -3009,6 +3063,7 @@ type AssetTypeMutation struct {
 	op            Op
 	typ           string
 	id            *int64
+	retired       *bool
 	company_id    *int64
 	addcompany_id *int64
 	name          *string
@@ -3123,6 +3178,42 @@ func (m *AssetTypeMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetRetired sets the "retired" field.
+func (m *AssetTypeMutation) SetRetired(b bool) {
+	m.retired = &b
+}
+
+// Retired returns the value of the "retired" field in the mutation.
+func (m *AssetTypeMutation) Retired() (r bool, exists bool) {
+	v := m.retired
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetired returns the old "retired" field's value of the AssetType entity.
+// If the AssetType object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetTypeMutation) OldRetired(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetired is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetired requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetired: %w", err)
+	}
+	return oldValue.Retired, nil
+}
+
+// ResetRetired resets all changes to the "retired" field.
+func (m *AssetTypeMutation) ResetRetired() {
+	m.retired = nil
 }
 
 // SetCompanyID sets the "company_id" field.
@@ -3357,7 +3448,10 @@ func (m *AssetTypeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetTypeMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
+	if m.retired != nil {
+		fields = append(fields, assettype.FieldRetired)
+	}
 	if m.company_id != nil {
 		fields = append(fields, assettype.FieldCompanyID)
 	}
@@ -3378,6 +3472,8 @@ func (m *AssetTypeMutation) Fields() []string {
 // schema.
 func (m *AssetTypeMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case assettype.FieldRetired:
+		return m.Retired()
 	case assettype.FieldCompanyID:
 		return m.CompanyID()
 	case assettype.FieldName:
@@ -3395,6 +3491,8 @@ func (m *AssetTypeMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *AssetTypeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case assettype.FieldRetired:
+		return m.OldRetired(ctx)
 	case assettype.FieldCompanyID:
 		return m.OldCompanyID(ctx)
 	case assettype.FieldName:
@@ -3412,6 +3510,13 @@ func (m *AssetTypeMutation) OldField(ctx context.Context, name string) (ent.Valu
 // type.
 func (m *AssetTypeMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case assettype.FieldRetired:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetired(v)
+		return nil
 	case assettype.FieldCompanyID:
 		v, ok := value.(int64)
 		if !ok {
@@ -3525,6 +3630,9 @@ func (m *AssetTypeMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *AssetTypeMutation) ResetField(name string) error {
 	switch name {
+	case assettype.FieldRetired:
+		m.ResetRetired()
+		return nil
 	case assettype.FieldCompanyID:
 		m.ResetCompanyID()
 		return nil
@@ -26468,6 +26576,7 @@ type TagMutation struct {
 	op            Op
 	typ           string
 	id            *int64
+	retired       *bool
 	company_id    *int64
 	addcompany_id *int64
 	name          *string
@@ -26581,6 +26690,42 @@ func (m *TagMutation) IDs(ctx context.Context) ([]int64, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetRetired sets the "retired" field.
+func (m *TagMutation) SetRetired(b bool) {
+	m.retired = &b
+}
+
+// Retired returns the value of the "retired" field in the mutation.
+func (m *TagMutation) Retired() (r bool, exists bool) {
+	v := m.retired
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRetired returns the old "retired" field's value of the Tag entity.
+// If the Tag object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TagMutation) OldRetired(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRetired is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRetired requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRetired: %w", err)
+	}
+	return oldValue.Retired, nil
+}
+
+// ResetRetired resets all changes to the "retired" field.
+func (m *TagMutation) ResetRetired() {
+	m.retired = nil
 }
 
 // SetCompanyID sets the "company_id" field.
@@ -26781,7 +26926,10 @@ func (m *TagMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TagMutation) Fields() []string {
-	fields := make([]string, 0, 4)
+	fields := make([]string, 0, 5)
+	if m.retired != nil {
+		fields = append(fields, tag.FieldRetired)
+	}
 	if m.company_id != nil {
 		fields = append(fields, tag.FieldCompanyID)
 	}
@@ -26802,6 +26950,8 @@ func (m *TagMutation) Fields() []string {
 // schema.
 func (m *TagMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case tag.FieldRetired:
+		return m.Retired()
 	case tag.FieldCompanyID:
 		return m.CompanyID()
 	case tag.FieldName:
@@ -26819,6 +26969,8 @@ func (m *TagMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *TagMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case tag.FieldRetired:
+		return m.OldRetired(ctx)
 	case tag.FieldCompanyID:
 		return m.OldCompanyID(ctx)
 	case tag.FieldName:
@@ -26836,6 +26988,13 @@ func (m *TagMutation) OldField(ctx context.Context, name string) (ent.Value, err
 // type.
 func (m *TagMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case tag.FieldRetired:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRetired(v)
+		return nil
 	case tag.FieldCompanyID:
 		v, ok := value.(int64)
 		if !ok {
@@ -26928,6 +27087,9 @@ func (m *TagMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *TagMutation) ResetField(name string) error {
 	switch name {
+	case tag.FieldRetired:
+		m.ResetRetired()
+		return nil
 	case tag.FieldCompanyID:
 		m.ResetCompanyID()
 		return nil

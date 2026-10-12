@@ -11,11 +11,14 @@ SERVICE_GROUP ?= freefsm
 # PATH extension for Go binaries
 _PATH_EXTRA := $(HOME)/go/bin
 
-.PHONY: all build compile clean install generate ent templ sqlc fmt lint test run checksum
+.PHONY: all build compile clean install generate vocabulary ent templ sqlc fmt lint test run checksum
 
 all: generate build
 
-generate: ent templ
+generate: vocabulary ent templ
+
+vocabulary:
+	@$(GO) generate ./internal/vocabulary
 
 ent:
 	@echo "generating ent schema..."

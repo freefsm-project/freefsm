@@ -50,6 +50,18 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 		}
 	}
 	sort.Strings(files)
+	// Run before any earlier migration can clean up legacy polymorphic links.
+	for _, f := range files {
+		if f == "059_vocabulary.up.sql" {
+			findings, err := db.VocabularyPreflight(ctx)
+			if err != nil {
+				return fmt.Errorf("vocabulary preflight: %w", err)
+			}
+			if len(findings) != 0 {
+				return fmt.Errorf("vocabulary preflight requires explicit review: %s", strings.Join(findings, "; "))
+			}
+		}
+	}
 
 	if err := db.ensureMigrationsTable(ctx); err != nil {
 		return fmt.Errorf("ensure migrations table: %w", err)

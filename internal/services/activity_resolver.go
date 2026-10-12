@@ -157,6 +157,21 @@ func (r *ActivityResolver) Resolve(ctx context.Context, companyID int64, viewer 
 				DisplayName: record.name,
 				Exists:      true,
 			}
+			if record.ref.Type == objectref.TypeTag || record.ref.Type == objectref.TypeAssetType || record.ref.Type == objectref.TypeAssetStatus {
+				if request, ok := authorization.FromContext(ctx); ok {
+					domain := "assets"
+					if record.ref.Type == objectref.TypeTag {
+						domain = "tags"
+					}
+					p, err := request.Service.Principal(ctx, request.Actor)
+					resolution.Readable = err == nil && p.Allows("configuration."+domain+".view", authorization.Configuration)
+					if resolution.Readable {
+						resolution.URL, _ = objectref.URL(record.ref)
+					}
+					result.Targets[record.ref] = resolution
+					continue
+				}
+			}
 			if record.ref.Type == objectref.TypeCustomer {
 				if request, ok := authorization.FromContext(ctx); ok {
 					resolution.Readable = request.Service.CustomerAccess(ctx, request.Actor, record.ref.ID, "customer.view") == nil

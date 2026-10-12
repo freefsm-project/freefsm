@@ -143,7 +143,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	// Asset handlers
 	assetHandler := NewAssetHandler(assetSvc, assetTypeSvc, assetStatusSvc, customerService, locationSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc)
 	assetTypeHandler := NewAssetTypeHandler(assetTypeSvc, assetStatusSvc, activitySvc, depSvc)
-	assetStatusHandler := NewAssetStatusHandler(assetStatusSvc, activitySvc, depSvc)
 
 	// Public routes
 	authPostLimiter := middleware.NewRateLimiter(5, time.Minute).Handler
@@ -358,22 +357,26 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications/{application_id}/reverse", invoiceHandler.ReverseCreditApplication)
 		})
 
-		// Entity tagging
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.DispatcherOrAdmin)
-			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/tags/{tag_id}/attach", jobHandler.AttachTag)
-			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/tags/{tag_id}/detach", jobHandler.DetachTag)
-			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/tags/{tag_id}/attach", customerHandler.AttachTag)
-			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/tags/{tag_id}/detach", customerHandler.DetachTag)
-			r.With(activeObjectGuard(objectref.TypeProject)).Post("/projects/{id}/tags/{tag_id}/attach", projectHandler.AttachTag)
-			r.With(activeObjectGuard(objectref.TypeProject)).Post("/projects/{id}/tags/{tag_id}/detach", projectHandler.DetachTag)
-			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/tags/{tag_id}/attach", estimateHandler.AttachTag)
-			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/tags/{tag_id}/detach", estimateHandler.DetachTag)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/tags/{tag_id}/attach", invoiceHandler.AttachTag)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/tags/{tag_id}/detach", invoiceHandler.DetachTag)
-			r.With(activeObjectGuard(objectref.TypeAsset)).Post("/assets/{id}/tags/{tag_id}/attach", assetHandler.AttachTag)
-			r.With(activeObjectGuard(objectref.TypeAsset)).Post("/assets/{id}/tags/{tag_id}/detach", assetHandler.DetachTag)
-		})
+		// Vocabulary configuration and parent-bounded tagging have independent grants.
+		r.With(vocabularyGuard("tags", false)).Get("/tags", tagHandler.List)
+		r.With(vocabularyGuard("tags", true)).Get("/tags/new", tagHandler.Create)
+		r.With(vocabularyGuard("tags", true)).Get("/tags/{id}/edit", tagHandler.Update)
+		r.With(vocabularyGuard("tags", false)).Get("/tags/activity", activityHandler.ListByType(objectref.TypeTag))
+		r.With(vocabularyGuard("tags", false)).Get("/tags/history", vocabularyHistory("tags"))
+		r.With(vocabularyGuard("assets", false)).Get("/settings/assets/history", vocabularyHistory("assets"))
+		r.With(vocabularyGuard("assets", false)).Get("/settings/assets", assetTypeHandler.Show)
+		r.With(vocabularyGuard("assets", false)).Get("/settings/assets/activity", activityHandler.ListForAssetSettings)
+		for _, v := range []struct{ prefix, kind string }{{"/tags", "tag"}, {"/settings/asset-types", "asset_type"}, {"/settings/asset-statuses", "asset_status"}} {
+			r.Post(v.prefix, vocabularyMutation(v.kind, "save"))
+			r.Post(v.prefix+"/{id}", vocabularyMutation(v.kind, "save"))
+			for _, op := range []string{"delete", "retire", "reactivate"} {
+				r.Post(v.prefix+"/{id}/"+op, vocabularyMutation(v.kind, op))
+			}
+		}
+		for _, kind := range []string{"customer", "project", "job", "asset", "estimate", "invoice"} {
+			r.Post("/"+kind+"s/{id}/tags/{tag_id}/attach", tagLinkMutation(kind, true, tagSvc, tagLinkSvc))
+			r.Post("/"+kind+"s/{id}/tags/{tag_id}/detach", tagLinkMutation(kind, false, tagSvc, tagLinkSvc))
+		}
 
 		// Entity comments (list, create, delete)
 		for _, e := range []struct {
@@ -437,15 +440,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			// Admin activity feeds
 			r.Get("/settings/activity", activityHandler.ListByType(objectref.TypeCompanySettings))
 			r.Get("/settings/custom-fields/activity", activityHandler.ListByType(objectref.TypeCustomField))
-			r.Get("/settings/assets/activity", activityHandler.ListForAssetSettings)
-			r.Get("/tags/activity", activityHandler.ListByType(objectref.TypeTag))
 			r.Get("/users/activity", activityHandler.ListByType(objectref.TypeUser))
-			r.Get("/tags", tagHandler.List)
-			r.Get("/tags/new", tagHandler.Create)
-			r.Post("/tags", tagHandler.Create)
-			r.Get("/tags/{id}/edit", tagHandler.Update)
-			r.Post("/tags/{id}", tagHandler.Update)
-			r.Post("/tags/{id}/delete", tagHandler.Delete)
 			r.Get("/settings/advanced", settingsHandler.Show)
 			r.Post("/settings/advanced", settingsHandler.Save)
 			r.Get("/setup/company", settingsHandler.Show)
@@ -457,13 +452,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Get("/settings/custom-fields/{id}/edit", cfHandler.Update)
 			r.Post("/settings/custom-fields/{id}", cfHandler.Update)
 			r.Post("/settings/custom-fields/{id}/delete", cfHandler.Delete)
-			r.Get("/settings/assets", assetTypeHandler.Show)
-			r.Post("/settings/asset-types", assetTypeHandler.Create)
-			r.Post("/settings/asset-types/{id}", assetTypeHandler.Update)
-			r.Post("/settings/asset-types/{id}/delete", assetTypeHandler.Delete)
-			r.Post("/settings/asset-statuses", assetStatusHandler.Create)
-			r.Post("/settings/asset-statuses/{id}", assetStatusHandler.Update)
-			r.Post("/settings/asset-statuses/{id}/delete", assetStatusHandler.Delete)
 			r.Get("/users", userHandler.List)
 			r.Get("/users/new", userHandler.Create)
 			r.Post("/users", userHandler.Create)

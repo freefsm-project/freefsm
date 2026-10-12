@@ -17,6 +17,8 @@ type Tag struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int64 `json:"id,omitempty"`
+	// Retired holds the value of the "retired" field.
+	Retired bool `json:"retired,omitempty"`
 	// CompanyID holds the value of the "company_id" field.
 	CompanyID int64 `json:"company_id,omitempty"`
 	// Name holds the value of the "name" field.
@@ -33,6 +35,8 @@ func (*Tag) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case tag.FieldRetired:
+			values[i] = new(sql.NullBool)
 		case tag.FieldID, tag.FieldCompanyID:
 			values[i] = new(sql.NullInt64)
 		case tag.FieldName, tag.FieldColor:
@@ -60,6 +64,12 @@ func (_m *Tag) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int64(value.Int64)
+		case tag.FieldRetired:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field retired", values[i])
+			} else if value.Valid {
+				_m.Retired = value.Bool
+			}
 		case tag.FieldCompanyID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field company_id", values[i])
@@ -120,6 +130,9 @@ func (_m *Tag) String() string {
 	var builder strings.Builder
 	builder.WriteString("Tag(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("retired=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Retired))
+	builder.WriteString(", ")
 	builder.WriteString("company_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CompanyID))
 	builder.WriteString(", ")

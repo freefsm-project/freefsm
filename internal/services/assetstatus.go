@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/assetstatus"
@@ -31,6 +32,13 @@ func (s *AssetStatusService) GetByID(ctx context.Context, id int64) (*ent.AssetS
 }
 
 func (s *AssetStatusService) Create(ctx context.Context, name, color string, sortOrder int) (*ent.AssetStatus, error) {
+	if req, ok := authorization.FromContext(ctx); ok {
+		id, err := req.Service.ChangeVocabulary(ctx, req.Actor, "asset_status", 0, "save", authorization.VocabularyInput{Name: name, Color: color, SortOrder: sortOrder})
+		if err != nil {
+			return nil, err
+		}
+		return s.GetByID(ctx, id)
+	}
 	as, err := s.client.AssetStatus.Create().
 		SetName(name).
 		SetColor(color).
@@ -43,6 +51,13 @@ func (s *AssetStatusService) Create(ctx context.Context, name, color string, sor
 }
 
 func (s *AssetStatusService) Update(ctx context.Context, id int64, name, color string, sortOrder int) (*ent.AssetStatus, error) {
+	if req, ok := authorization.FromContext(ctx); ok {
+		_, err := req.Service.ChangeVocabulary(ctx, req.Actor, "asset_status", id, "save", authorization.VocabularyInput{Name: name, Color: color, SortOrder: sortOrder})
+		if err != nil {
+			return nil, err
+		}
+		return s.GetByID(ctx, id)
+	}
 	as, err := s.client.AssetStatus.UpdateOneID(id).
 		SetName(name).
 		SetColor(color).
@@ -55,6 +70,10 @@ func (s *AssetStatusService) Update(ctx context.Context, id int64, name, color s
 }
 
 func (s *AssetStatusService) Delete(ctx context.Context, id int64) error {
+	if req, ok := authorization.FromContext(ctx); ok {
+		_, err := req.Service.ChangeVocabulary(ctx, req.Actor, "asset_status", id, "delete", authorization.VocabularyInput{})
+		return err
+	}
 	if err := s.client.AssetStatus.DeleteOneID(id).Exec(ctx); err != nil {
 		return fmt.Errorf("delete asset status %d: %w", id, err)
 	}

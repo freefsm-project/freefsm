@@ -27,6 +27,20 @@ func (_u *AssetTypeUpdate) Where(ps ...predicate.AssetType) *AssetTypeUpdate {
 	return _u
 }
 
+// SetRetired sets the "retired" field.
+func (_u *AssetTypeUpdate) SetRetired(v bool) *AssetTypeUpdate {
+	_u.mutation.SetRetired(v)
+	return _u
+}
+
+// SetNillableRetired sets the "retired" field if the given value is not nil.
+func (_u *AssetTypeUpdate) SetNillableRetired(v *bool) *AssetTypeUpdate {
+	if v != nil {
+		_u.SetRetired(*v)
+	}
+	return _u
+}
+
 // SetCompanyID sets the "company_id" field.
 func (_u *AssetTypeUpdate) SetCompanyID(v int64) *AssetTypeUpdate {
 	_u.mutation.ResetCompanyID()
@@ -143,6 +157,9 @@ func (_u *AssetTypeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.Retired(); ok {
+		_spec.SetField(assettype.FieldRetired, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.CompanyID(); ok {
 		_spec.SetField(assettype.FieldCompanyID, field.TypeInt64, value)
 	}
@@ -179,6 +196,20 @@ type AssetTypeUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *AssetTypeMutation
+}
+
+// SetRetired sets the "retired" field.
+func (_u *AssetTypeUpdateOne) SetRetired(v bool) *AssetTypeUpdateOne {
+	_u.mutation.SetRetired(v)
+	return _u
+}
+
+// SetNillableRetired sets the "retired" field if the given value is not nil.
+func (_u *AssetTypeUpdateOne) SetNillableRetired(v *bool) *AssetTypeUpdateOne {
+	if v != nil {
+		_u.SetRetired(*v)
+	}
+	return _u
 }
 
 // SetCompanyID sets the "company_id" field.
@@ -326,6 +357,9 @@ func (_u *AssetTypeUpdateOne) sqlSave(ctx context.Context) (_node *AssetType, er
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.Retired(); ok {
+		_spec.SetField(assettype.FieldRetired, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CompanyID(); ok {
 		_spec.SetField(assettype.FieldCompanyID, field.TypeInt64, value)

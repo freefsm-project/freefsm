@@ -17,6 +17,9 @@ templ AssetTypeList(p AssetTypeListPageData) {
 				for _, t := range p.Types {
 					<tr>
 						<td>
+							if t.Retired {
+								<small>Retired</small>
+							}
 							<form id={ fmt.Sprintf("asset-type-update-%d", t.ID) } action={ templ.URL(fmt.Sprintf("/settings/asset-types/%d", t.ID)) } method="post">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<input type="text" name="name" value={ t.Name } required/>
@@ -26,16 +29,23 @@ templ AssetTypeList(p AssetTypeListPageData) {
 							<input form={ fmt.Sprintf("asset-type-update-%d", t.ID) } type="number" name="sort_order" value={ fmt.Sprintf("%d", t.SortOrder) } class="input-width-70"/>
 						</td>
 						<td class="work-queue-actions">
+							if vocabularyPermission(ctx, "assets", "manage") {
+							<form action={ templ.URL(fmt.Sprintf("/settings/asset-types/%d/%s", t.ID, retirementAction(t.Retired))) } method="post">
+								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+								<button class="outline small">{ retirementLabel(t.Retired) }</button>
+							</form>
 							<button form={ fmt.Sprintf("asset-type-update-%d", t.ID) } type="submit" class="outline small">Save</button>
 							<form action={ templ.URL(fmt.Sprintf("/settings/asset-types/%d/delete", t.ID)) } method="post" hx-confirm="Delete this type?">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small">Del</button>
 							</form>
+							}
 						</td>
 					</tr>
 				}
 			</tbody>
 		</table>
+		if vocabularyPermission(ctx, "assets", "manage") {
 		<form action="/settings/asset-types" method="post" class="inline-add-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<div class="grid asset-type-add-grid">
@@ -44,6 +54,7 @@ templ AssetTypeList(p AssetTypeListPageData) {
 				<button type="submit">Add</button>
 			</div>
 		</form>
+		}
 	</div>
 }
 
@@ -63,6 +74,9 @@ templ AssetStatusList(p AssetStatusListPageData) {
 				for _, s := range p.Statuses {
 					<tr>
 						<td>
+							if s.Retired {
+								<small>Retired</small>
+							}
 							<form id={ fmt.Sprintf("asset-status-update-%d", s.ID) } action={ templ.URL(fmt.Sprintf("/settings/asset-statuses/%d", s.ID)) } method="post">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<input type="text" name="name" value={ s.Name } required/>
@@ -75,16 +89,23 @@ templ AssetStatusList(p AssetStatusListPageData) {
 							<input form={ fmt.Sprintf("asset-status-update-%d", s.ID) } type="number" name="sort_order" value={ fmt.Sprintf("%d", s.SortOrder) } class="input-width-70"/>
 						</td>
 						<td class="work-queue-actions">
+							if vocabularyPermission(ctx, "assets", "manage") {
+							<form action={ templ.URL(fmt.Sprintf("/settings/asset-statuses/%d/%s", s.ID, retirementAction(s.Retired))) } method="post">
+								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+								<button class="outline small">{ retirementLabel(s.Retired) }</button>
+							</form>
 							<button form={ fmt.Sprintf("asset-status-update-%d", s.ID) } type="submit" class="outline small">Save</button>
 							<form action={ templ.URL(fmt.Sprintf("/settings/asset-statuses/%d/delete", s.ID)) } method="post" hx-confirm="Delete this status?">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small">Del</button>
 							</form>
+							}
 						</td>
 					</tr>
 				}
 			</tbody>
 		</table>
+		if vocabularyPermission(ctx, "assets", "manage") {
 		<form action="/settings/asset-statuses" method="post" class="inline-add-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<div class="grid asset-status-add-grid">
@@ -94,5 +115,6 @@ templ AssetStatusList(p AssetStatusListPageData) {
 				<button type="submit">Add</button>
 			</div>
 		</form>
+		}
 	</div>
 }

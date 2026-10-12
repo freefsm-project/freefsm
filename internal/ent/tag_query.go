@@ -262,12 +262,12 @@ func (_q *TagQuery) Clone() *TagQuery {
 // Example:
 //
 //	var v []struct {
-//		CompanyID int64 `json:"company_id,omitempty"`
+//		Retired bool `json:"retired,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Tag.Query().
-//		GroupBy(tag.FieldCompanyID).
+//		GroupBy(tag.FieldRetired).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *TagQuery) GroupBy(field string, fields ...string) *TagGroupBy {
@@ -285,11 +285,11 @@ func (_q *TagQuery) GroupBy(field string, fields ...string) *TagGroupBy {
 // Example:
 //
 //	var v []struct {
-//		CompanyID int64 `json:"company_id,omitempty"`
+//		Retired bool `json:"retired,omitempty"`
 //	}
 //
 //	client.Tag.Query().
-//		Select(tag.FieldCompanyID).
+//		Select(tag.FieldRetired).
 //		Scan(ctx, &v)
 func (_q *TagQuery) Select(fields ...string) *TagSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
