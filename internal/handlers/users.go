@@ -113,7 +113,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	roleID, _ := strconv.ParseInt(r.FormValue("role_id"), 10, 64)
-	result, err := h.svc.Create(r.Context(), services.UserCreateParams{
+	params := services.UserCreateParams{
 		CompanyID:        a.CompanyID,
 		Name:             r.FormValue("name"),
 		Email:            r.FormValue("email"),
@@ -121,8 +121,20 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Role:             r.FormValue("role"),
 		RoleID:           roleID,
 		SendWelcomeEmail: sendWelcome,
-	})
+	}
+	var result *ent.User
+	var token string
+	var err error
+	if sendWelcome {
+		result, token, err = h.inviteSvc.CreateAccount(r.Context(), params)
+	} else {
+		result, err = h.svc.Create(r.Context(), params)
+	}
 	if err != nil {
+		if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrPending) || errors.Is(err, authorization.ErrConflict) {
+			authorizationError(w, r, err)
+			return
+		}
 		internalServerError(w, r, "create user", err)
 		return
 	}
@@ -135,15 +147,10 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if sendWelcome {
-		token, err := h.inviteSvc.CreateInvite(r.Context(), a.CompanyID, result.ID)
-		if err != nil {
-			http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", result.ID)+url.QueryEscape("Account pending; invitation could not be prepared. Use Resend Welcome on this account."), http.StatusSeeOther)
-			return
-		}
 		inviteURL := absoluteAppURL(h.cfg, r, "/accept-invite?token="+url.QueryEscape(token))
 		if err := h.emailSvc.SendWelcomeEmail(r.Context(), result.Email, result.Name, inviteURL); err != nil {
 			slog.Error("send welcome email", "error", err, "user", result.Email)
-			http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", result.ID)+url.QueryEscape("Account pending; welcome email was not accepted. Check mail settings and resend using Resend Welcome on this account."), http.StatusSeeOther)
+			http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", result.ID)+url.QueryEscape(invitationMailFailure(err)), http.StatusSeeOther)
 			return
 		}
 		if err := h.inviteSvc.RecordMailAccepted(r.Context(), a.CompanyID, result.ID); err != nil {
@@ -371,6 +378,10 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "welcome invitation cannot be resent", http.StatusConflict)
 			return
 		}
+		if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrPending) {
+			authorizationError(w, r, err)
+			return
+		}
 		internalServerError(w, r, "renew welcome invitation", err)
 		return
 	}
@@ -378,7 +389,7 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 	inviteURL := absoluteAppURL(h.cfg, r, "/accept-invite?token="+url.QueryEscape(token))
 	if err := h.emailSvc.SendWelcomeEmail(r.Context(), user.Email, user.Name, inviteURL); err != nil {
 		slog.Error("resend welcome email", "error", err, "user", user.Email)
-		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape("Account pending; welcome email was not accepted. Check mail settings and resend using Resend Welcome."), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape(invitationMailFailure(err)), http.StatusSeeOther)
 		return
 	}
 	if err := h.inviteSvc.RecordMailAccepted(r.Context(), a.CompanyID, id); err != nil {
@@ -445,6 +456,13 @@ func (h *UserHandler) invitationMailAvailable(r *http.Request) error {
 		return err
 	}
 	return h.emailSvc.ValidateConfiguration(r.Context())
+}
+
+func invitationMailFailure(err error) string {
+	if errors.Is(err, services.ErrEmailAcceptanceUncertain) {
+		return "Account pending; mail acceptance is uncertain and the invitation may have arrived. Verify with the recipient or provider before resending. An explicit Resend Welcome replaces the previous link."
+	}
+	return "Account pending; welcome email was not accepted. Check mail settings and resend using Resend Welcome on this account."
 }
 
 func userToRow(u *ent.User) templates.UserRow {

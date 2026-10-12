@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -465,6 +466,31 @@ func TestManualOnboardingRequiresCredentialReplacementAcrossRoleAndAPIHTTP(t *te
 	api.ServeHTTP(response, r)
 	if response.Code != 403 && response.Code != 401 {
 		t.Fatalf("restricted field credential escaped: %d %s", response.Code, response.Body.String())
+	}
+	apiLogin := func(password string) *httptest.ResponseRecorder {
+		body, _ := json.Marshal(map[string]string{"email": u.Email, "password": password, "device_name": "Onboarding API"})
+		r := httptest.NewRequest("POST", "/session", strings.NewReader(string(body)))
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, r)
+		return w
+	}
+	var before, after int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id=$1 AND kind='mobile'`, u.ID).Scan(&before); err != nil {
+		t.Fatal(err)
+	}
+	if w := apiLogin("TemporaryPassword1!"); w.Code != 403 || strings.Contains(w.Body.String(), `"token":`) {
+		t.Fatalf("temporary API login issued access: %d %s", w.Code, w.Body.String())
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id=$1 AND kind='mobile'`, u.ID).Scan(&after); err != nil || after != before {
+		t.Fatalf("temporary API login created a session: %d -> %d, %v", before, after, err)
+	}
+	change := onboardingPost(router, cookie, "/change-password", url.Values{"current_password": {"TemporaryPassword1!"}, "new_password": {"ChosenPassword1!"}, "confirm_password": {"ChosenPassword1!"}})
+	if change.Code != 303 {
+		t.Fatalf("temporary replacement: %d %s", change.Code, change.Body.String())
+	}
+	if w := apiLogin("ChosenPassword1!"); w.Code != 201 || !strings.Contains(w.Body.String(), `"token":`) {
+		t.Fatalf("chosen API login failed: %d %s", w.Code, w.Body.String())
 	}
 }
 

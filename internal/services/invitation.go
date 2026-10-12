@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -43,6 +44,29 @@ func NewInvitationService(client *ent.Client, pool ...*pgxpool.Pool) *Invitation
 		s.pool = pool[0]
 	}
 	return s
+}
+
+// CreateAccount returns the recipient snapshot that was authorized with the
+// first link. It never reloads a newer email after committing that decision.
+func (s *InvitationService) CreateAccount(ctx context.Context, p UserCreateParams) (*ent.User, string, error) {
+	request, ok := authorization.FromContext(ctx)
+	if !ok {
+		return nil, "", authorization.ErrForbidden
+	}
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return nil, "", err
+	}
+	token := hex.EncodeToString(b)
+	hash, err := bcrypt.GenerateFromPassword([]byte(generateUnusablePassword()), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, "", err
+	}
+	id, err := request.Service.CreateInvitedAccount(ctx, request.Actor, authorization.NewAccount{Name: p.Name, Email: p.Email, RoleID: p.RoleID, PasswordHash: string(hash)}, tokenHash(token))
+	if err != nil {
+		return nil, "", err
+	}
+	return &ent.User{ID: id, CompanyID: &p.CompanyID, Name: strings.TrimSpace(p.Name), Email: p.Email, PasswordHash: string(hash), AuthorizationRoleID: &p.RoleID}, token, nil
 }
 
 func (s *InvitationService) CreateInvite(ctx context.Context, companyID, userID int64) (string, error) {

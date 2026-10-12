@@ -1,6 +1,10 @@
 # Invitation and manual onboarding (#21)
 
 Production routes construct the invitation service with the PostgreSQL pool.
+Initial account creation, the first invitation and sealed audit are one
+transaction (`CreateInvitedAccount`), returning the bound recipient snapshot.
+There is no late initial token command that can supersede an intervening disable,
+identity edit or explicit resend.
 Acceptance takes the shared account/Role/security lock (190019), rechecks the
 invitation and pending account, locks and validates the current password policy,
 then commits consumption, the chosen password, activation and immutable own-action
@@ -23,6 +27,14 @@ is described as transport acceptance, not inbox delivery. `welcome_email_sent_at
 is now recorded only after that handoff, together with protected audit. Existing
 timestamps are preserved. A handoff whose confirmation cannot be recorded is
 reported separately; Administrators are told to check before resending.
+Loss of the final SMTP DATA acknowledgment is a typed uncertain-acceptance
+outcome: the invitation may have arrived, so the Administrator must verify before
+an explicit resend. It is never described as definite nonacceptance.
+
+Invitation pages send `Referrer-Policy: no-referrer` and `Cache-Control: no-store`.
+Production request logs use a query-redacted snapshot while handlers receive the
+original URL. Outcome pages, audit payloads and transport error logs omit raw
+invitation secrets and provider diagnostics.
 
 Manual creation retains the existing sealed command's mandatory temporary-
 password restriction. Browser and field access remain blocked across Role changes
@@ -47,6 +59,15 @@ concurrency, account-decision and policy races, atomic audit failure, mail
 availability/failure, sealed denial, restricted manual credentials, and upgrade.
 `TestOnboardingPersistedBrowser` uses CSRF, real Chromium, real SMTP acceptance,
 real password login/replacement, and fresh-router persisted-state verification.
+Review-follow-up tests additionally cover initial issuance interrupted by actual
+sealed disable/email/resend commands, token/audit insertion rollback, Role/session
+loss while create/resend waits, and concurrent resend/redemption. An actual
+pre-040 installation is advanced through pre-048 and current migrations with
+explicit workflow and authorization review, preserving unknown reset-table
+records, consumed/expired invitation facts and completed-disabled evidence.
+Production API login rejects temporary credentials without issuing a mobile
+session, then accepts the chosen credential after browser replacement. Chromium
+checks that resource requests do not carry token-bearing referrers.
 
 The shared policy/UI/manual commit-validation and unknown legacy recovery-token
 classification are coordinated with #22. Until that work is merged, configured
