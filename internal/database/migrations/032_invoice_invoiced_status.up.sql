@@ -2,6 +2,9 @@ INSERT INTO statuses (workflow_id, name, color, sort_order)
 SELECT sw.id, 'Invoiced', '#7C3AED', 2
 FROM status_workflows sw
 WHERE sw.object_type = 'invoice'
+  -- A reviewed modern cutover seeds its canonical slots in 044. Do not add an
+  -- unreviewed label-based definition after the original inventory was sealed.
+  AND nullif(current_setting('freefsm.workflow_review',true),'') IS NULL
   AND NOT EXISTS (
     SELECT 1
     FROM statuses s

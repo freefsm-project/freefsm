@@ -19,6 +19,17 @@ func (s *Service) ParentAccess(ctx context.Context, a Actor, typ string, id int6
 	return err
 }
 
+// WithinParent holds the authority fence and record/assignment locks while a
+// domain reads a coherent action snapshot or commits an authorized effect.
+func (s *Service) WithinParent(ctx context.Context, a Actor, typ string, id int64, permission string, fn func(pgx.Tx, Principal) error) error {
+	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if _, err := parentAccess(ctx, tx, p, typ, id, permission, true); err != nil {
+			return err
+		}
+		return fn(tx, p)
+	})
+}
+
 func parentAccess(ctx context.Context, q queryer, p Principal, typ string, id int64, permission string, locking bool) (Scope, error) {
 	table, ok := customfields.ParentTable(typ)
 	if !ok {

@@ -42,10 +42,10 @@ func TestTransitionAuthorizationAuditAndCategorySemanticsIntegration(t *testing.
 	if category != "job:completed" || logs != 1 {
 		t.Fatalf("category=%s logs=%d", category, logs)
 	}
-	if err := svc.TransitionJob(ctx, Actor{ID: tech, CompanyID: company, Role: "tech"}, job, newID); !errors.Is(err, ErrForbidden) {
+	if err := svc.TransitionJob(ctx, Actor{ID: tech, CompanyID: company, Role: "tech"}, job, newID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("unassigned tech error=%v", err)
 	}
-	if err := svc.TransitionJob(ctx, Actor{ID: tech, CompanyID: company, Role: "admin"}, job, newID); !errors.Is(err, ErrForbidden) {
+	if err := svc.TransitionJob(ctx, Actor{ID: tech, CompanyID: company, Role: "admin"}, job, newID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("spoofed admin transition error=%v", err)
 	}
 	if _, err := svc.Create(ctx, Actor{ID: tech, CompanyID: company, Role: "admin"}, CreateRequest{Type: Job, Name: "Spoof", Category: JobPending}); !errors.Is(err, ErrForbidden) {

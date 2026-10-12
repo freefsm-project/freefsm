@@ -59,9 +59,8 @@ type apiMutationService interface {
 }
 
 type statusFlowService interface {
-	TransitionJob(context.Context, statusflow.Actor, int64, int64) error
+	DiscoverIntents(context.Context, statusflow.Actor, statusflow.ObjectType, int64) ([]statusflow.IntentChoice, error)
 	ApplyIntent(context.Context, statusflow.Actor, statusflow.ObjectType, int64, statusflow.Intent) error
-	ObserveIntent(context.Context, int64, statusflow.ObjectType, int64, int64) (statusflow.Intent, error)
 }
 
 type policyService interface {

@@ -36,6 +36,18 @@ not retargeted to the replacement. Invoice slots remain fixed and ordered.
 ```
 
 Submit that intent to `POST /api/v1/jobs/{id}/status`. Both revisions are required.
+A discovery request requires current Job View at All Records or an active
+Assigned Job scope. Legacy role names grant no access. View alone permits
+discovery but not mutation: the POST independently requires Job Status. The web
+Job Status command uses that same transaction-bound authority. Completed and
+Canceled active Jobs can be changed by any appropriately granted user.
+
+Discovery reads labels, colors, category/order and both revisions together in
+one SQL snapshot under the shared authority/configuration fence and parent locks.
+It cannot pair an old category label with a newly valid meaning token. A waiting
+request rechecks grants, assignment, session and lifecycle before returning data.
+Invisible Jobs return 404; denied mutations on visible Jobs return 403.
+
 A rename is safe. A missing/replaced identity, changed category (including ABA),
 or stale record revision rejects with HTTP 409 and
 `status_reselection_required`. Refresh the authorized choices and explicitly
@@ -43,6 +55,8 @@ reselect; never silently replace the target or revision. The same valid current
 target is an attribution-preserving no-op. Definition management has no field
 API route. `TestWorkflowIntentProductionAPI` and
 `TestStatusIntentRenameSafeMeaningABARequiresReselection` are executable cases.
+The POST success `data` contains only the committed `id` and `status_id`; it does
+not reload an unrelated, legacy-role-dependent Job representation after commit.
 Operation receipts and wider offline synchronization remain owned by their
 dedicated API tickets; these revisions do not substitute for operation IDs.
 
@@ -76,6 +90,15 @@ Invoice definitions consolidated into the fixed slots remain in that evidence.
 Migration 042/044 safeguards apply only when those migrations are pending;
 already-recorded migrations are not rerun. Historical evidence already discarded
 by an older binary cannot be reconstructed and is never invented.
+
+Reviewed one-shot upgrades from pre-032 (and pre-013) schemas carry the reviewed
+cutover marker through earlier migrations. Their old label-only status seeds are
+deferred to 044, which creates any missing fixed categories with explicit
+canonical meanings. No invented mapping is added to the original review, and no
+existing custom label is treated as a semantic instruction. Applied migration
+identities are retained. Full-runner regressions verify stale-review rejection
+before intervening migrations, preserved Job/status/Customer identities, exact
+original evidence, all six Invoice slots and an idempotent restart.
 
 The preflight command currently expects the work tables to exist (schema 007+).
 Earlier incomplete schemas require completing the structural migrations in a

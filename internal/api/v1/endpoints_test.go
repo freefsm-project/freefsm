@@ -84,7 +84,6 @@ func TestUnassignedTechnicianCannotAccessOrMutateJob(t *testing.T) {
 
 	for _, request := range []struct{ method, path string }{
 		{http.MethodGet, "/jobs/4"},
-		{http.MethodPost, "/jobs/4/status"},
 		{http.MethodPost, "/jobs/4/clock-in"},
 		{http.MethodPatch, "/jobs/4/subtasks/0"},
 	} {
@@ -223,7 +222,7 @@ func TestTransactionMutationErrorsKeepStructuredAPIMappings(t *testing.T) {
 	}
 }
 
-func TestClosedAssignedJobRejectsTechnicianStatusAndWorkMutations(t *testing.T) {
+func TestClosedJobStatusUsesWorkflowBoundaryWhileOtherActionsRetainLegacyRules(t *testing.T) {
 	for _, role := range []string{"tech", "technician"} {
 		t.Run(role, func(t *testing.T) {
 			companyID, statusID := int64(12), int64(3)
@@ -240,12 +239,14 @@ func TestClosedAssignedJobRejectsTechnicianStatusAndWorkMutations(t *testing.T) 
 			api := New(deps)
 
 			transition := performAuthorized(api, http.MethodPost, "/jobs/4/status", []byte(`{"status_id":9}`))
-			assertAPIError(t, transition, http.StatusConflict, "job_closed")
+			if transition.Code != http.StatusOK {
+				t.Fatalf("workflow command blocked by legacy closed-state rule: %d %s", transition.Code, transition.Body.String())
+			}
 			clockIn := performAuthorized(api, http.MethodPost, "/jobs/4/clock-in", []byte(`{}`))
 			assertAPIError(t, clockIn, http.StatusConflict, "job_closed")
 			subtask := performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{"completed":true}`))
 			assertAPIError(t, subtask, http.StatusConflict, "job_closed")
-			if flow.calls != 0 || mutations.clockInCalls != 0 || mutations.subtaskCalls != 0 {
+			if flow.calls != 1 || mutations.clockInCalls != 0 || mutations.subtaskCalls != 0 {
 				t.Fatalf("transition calls = %d, clock-in calls = %d, subtask calls = %d", flow.calls, mutations.clockInCalls, mutations.subtaskCalls)
 			}
 		})

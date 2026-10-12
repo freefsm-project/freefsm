@@ -186,7 +186,7 @@ func (s *Service) TransitionInvoice(ctx context.Context, a Actor, id, statusID i
 }
 
 func (s *Service) FinalizeInvoice(ctx context.Context, a Actor, id int64) error {
-	return s.command(ctx, a, Invoice, "invoice.finalize", func(tx pgx.Tx, verified Actor) error {
+	return s.command(ctx, a, Invoice, id, "invoice.finalize", func(tx pgx.Tx, verified Actor) error {
 		a = verified
 		var err error
 		var current CategoryKey
@@ -207,7 +207,7 @@ func (s *Service) FinalizeInvoice(ctx context.Context, a Actor, id int64) error 
 }
 
 func (s *Service) transition(ctx context.Context, a Actor, typ ObjectType, id, statusID int64) error {
-	return s.command(ctx, a, typ, string(typ)+".status", func(tx pgx.Tx, a Actor) error {
+	return s.command(ctx, a, typ, id, string(typ)+".status", func(tx pgx.Tx, a Actor) error {
 		return s.transitionTx(ctx, tx, a, typ, id, statusID)
 	})
 }
@@ -609,7 +609,7 @@ func validColor(color string) bool {
 	_, err := strconv.ParseUint(color[1:], 16, 24)
 	return err == nil
 }
-func (s *Service) command(ctx context.Context, a Actor, typ ObjectType, permission string, fn func(pgx.Tx, Actor) error) error {
+func (s *Service) command(ctx context.Context, a Actor, typ ObjectType, id int64, permission string, fn func(pgx.Tx, Actor) error) error {
 	actor := authorization.Actor{UserID: a.ID, Channel: "web"}
 	if request, ok := authorization.FromContext(ctx); ok {
 		actor = request.Actor
@@ -617,11 +617,7 @@ func (s *Service) command(ctx context.Context, a Actor, typ ObjectType, permissi
 	if actor.UserID != a.ID {
 		return ErrForbidden
 	}
-	scope := authorization.Assigned
-	if typ == Project {
-		scope = authorization.All
-	}
-	err := authorization.New(s.db).WithinPermission(ctx, actor, permission, scope, func(tx pgx.Tx, p authorization.Principal) error {
+	err := authorization.New(s.db).WithinParent(ctx, actor, string(typ), id, permission, func(tx pgx.Tx, p authorization.Principal) error {
 		if p.CompanyID != a.CompanyID {
 			return ErrForbidden
 		}
@@ -634,6 +630,9 @@ func (s *Service) command(ctx context.Context, a Actor, typ ObjectType, permissi
 	})
 	if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrPending) {
 		return ErrForbidden
+	}
+	if errors.Is(err, authorization.ErrNotFound) {
+		return ErrNotFound
 	}
 	return err
 }
