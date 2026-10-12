@@ -163,8 +163,11 @@ also be redirected into the command; protect and remove it when finished.
 The command reconciles pending restore recovery, acquires the instance operation
 lock, drains admitted requests/workers, reads current Admin identity and password
 policy under database locks, then commits the password, forced-change flag,
-revocation of all browser/mobile sessions and recovery links, and host-attributed
-audit together. No plaintext password is logged. Database/audit failure rolls back
+revocation of all browser/mobile sessions and recovery links, ordinary activity,
+and host-attributed immutable audit together. The shared protected audit ledger
+records the host UID and recovery target, with no Product User actor, effective
+Role or product permission scope assigned to the operator. No plaintext password
+or credential hash is recorded in the event. Failure of either audit write rolls back
 all account effects. Concurrent instance operations are rejected. A normal
 policy/target failure releases maintenance; a failed maintenance drain stays closed
 until startup recovery reconciles it. The command exits without starting HTTP,

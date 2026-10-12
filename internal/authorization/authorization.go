@@ -4,9 +4,9 @@ package authorization
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
+
+	"github.com/freefsm-project/freefsm/internal/protectedaudit"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -86,26 +86,29 @@ func principal(ctx context.Context, q queryer, a Actor, transitional bool) (Prin
 		}
 		return p, ErrPending
 	}
-	rows, err := q.Query(ctx, `SELECT g.permission,g.scope,c.scope FROM authorization_grants g JOIN authorization_permissions c ON c.permission=g.permission WHERE g.role_id=$1`, p.RoleID)
+	c, err := loadCatalog(ctx, q)
+	if err != nil {
+		return p, err
+	}
+	for g := range c {
+		p.validScopes[g] = true
+	}
+	rows, err := q.Query(ctx, `SELECT permission,scope FROM authorization_grants WHERE role_id=$1 ORDER BY permission,scope`, p.RoleID)
 	if err != nil {
 		return p, err
 	}
 	defer rows.Close()
-	effective := map[Grant]bool{}
 	for rows.Next() {
-		var perm string
-		var scope Scope
-		var validScope Scope
-		if err := rows.Scan(&perm, &scope, &validScope); err != nil {
+		var grant Grant
+		if err := rows.Scan(&grant.Permission, &grant.Scope); err != nil {
 			return p, err
 		}
-		grant := Grant{perm, scope}
-		if !effective[grant] {
-			p.Grants = append(p.Grants, grant)
-			effective[grant] = true
+		if grant.Scope == Sealed && !p.Protected {
+			continue
 		}
-		p.validScopes[Grant{perm, validScope}] = true
+		p.Grants = append(p.Grants, grant)
 	}
+	p.Grants = c.effective(p.Grants)
 	return p, rows.Err()
 }
 func (s *Service) Principal(ctx context.Context, a Actor) (Principal, error) {
@@ -167,41 +170,11 @@ func (s *Service) transact(ctx context.Context, a Actor, transition, disablingSe
 	return tx.Commit(ctx)
 }
 func audit(ctx context.Context, tx pgx.Tx, a Actor, p Principal, permission string, scope Scope, typ string, id int64, detail any) error {
-	data, err := json.Marshal(detail)
-	if err != nil {
-		return err
-	}
 	channel := a.Channel
 	if channel == "" {
 		channel = "web"
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO authorization_audit(actor_id,role_id,permission,scope,target_type,target_id,channel,detail) VALUES($1,nullif($2,0),$3,$4,$5,$6,$7,$8)`, a.UserID, p.RoleID, permission, scope, typ, id, channel, data)
-	return err
-}
-func validateGrants(ctx context.Context, tx pgx.Tx, grants []Grant) error {
-	seen := map[Grant]bool{}
-	for _, g := range grants {
-		if seen[g] {
-			return fmt.Errorf("duplicate permission/scope")
-		}
-		seen[g] = true
-	}
-	for _, g := range grants {
-		var prereq *string
-		if err := tx.QueryRow(ctx, `SELECT prerequisite FROM authorization_permissions WHERE permission=$1 AND scope=$2`, g.Permission, g.Scope).Scan(&prereq); err != nil || g.Scope == Sealed {
-			return fmt.Errorf("unsupported or sealed grant: %s/%s", g.Permission, g.Scope)
-		}
-		if prereq != nil {
-			requiredScope := g.Scope
-			if g.Scope == Context && *prereq == "job.view" {
-				requiredScope = Assigned
-			}
-			if !seen[Grant{*prereq, requiredScope}] && !(seen[Grant{*prereq, All}] && (requiredScope == Assigned || requiredScope == Context || requiredScope == Own)) {
-				return fmt.Errorf("%s requires compatible %s", g.Permission, *prereq)
-			}
-		}
-	}
-	return nil
+	return protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.UserID, RoleID: p.RoleID, Action: permission, Scope: string(scope), TargetType: typ, TargetID: id, Channel: channel, Detail: detail})
 }
 
 // SaveRole creates a Role when id is zero. Updating an existing Role requires

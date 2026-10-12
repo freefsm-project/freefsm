@@ -11,11 +11,12 @@ import (
 )
 
 type Role struct {
-	ID        int64   `json:"id"`
-	Name      string  `json:"name"`
-	Protected bool    `json:"protected"`
-	Revision  int64   `json:"revision"`
-	Grants    []Grant `json:"grants"`
+	GrantError string  `json:"grant_error,omitempty"`
+	ID         int64   `json:"id"`
+	Name       string  `json:"name"`
+	Protected  bool    `json:"protected"`
+	Revision   int64   `json:"revision"`
+	Grants     []Grant `json:"grants"`
 }
 type ReviewUser struct {
 	Revision   time.Time `json:"revision"`
@@ -91,6 +92,11 @@ func loadReview(ctx context.Context, q queryer, p Principal) (Review, error) {
 		if err != nil {
 			return result, err
 		}
+		if !result.Roles[i].Protected {
+			if err := validateGrants(ctx, q, result.Roles[i].Grants); err != nil {
+				result.Roles[i].GrantError = err.Error()
+			}
+		}
 	}
 	rows, err = q.Query(ctx, `SELECT u.id,u.name,u.email,u.role,CASE WHEN s.ready THEN u.authorization_role_id ELSE v.role_id END,coalesce(v.user_revision=u.updated_at AND v.role_revision=r.revision,false),u.updated_at FROM users u CROSS JOIN authorization_state s LEFT JOIN authorization_reviews v ON v.user_id=u.id LEFT JOIN authorization_roles r ON r.id=v.role_id ORDER BY u.id`)
 	if err != nil {
@@ -130,6 +136,11 @@ func (s *Service) ApproveUser(ctx context.Context, a Actor, userID, roleID int64
 		if shown.Snapshot != reviewedSnapshot {
 			return ErrConflict
 		}
+		for _, role := range shown.Roles {
+			if role.ID == roleID && role.GrantError != "" {
+				return ErrConflict
+			}
+		}
 		tag, err := tx.Exec(ctx, `INSERT INTO authorization_reviews(user_id,role_id,user_revision,role_revision,approved_by)
  SELECT u.id,r.id,u.updated_at,r.revision,$3 FROM users u CROSS JOIN authorization_roles r WHERE u.id=$1 AND r.id=$2
  ON CONFLICT(user_id) DO UPDATE SET role_id=excluded.role_id,user_revision=excluded.user_revision,role_revision=excluded.role_revision,approved_by=excluded.approved_by,approved_at=clock_timestamp()`, userID, roleID, a.UserID)
@@ -156,6 +167,19 @@ func (s *Service) Cutover(ctx context.Context, a Actor) error {
 		}
 		if unresolved {
 			return ErrConflict
+		}
+		review, err := loadReview(ctx, tx, p)
+		if err != nil {
+			return err
+		}
+		invalid := map[int64]bool{}
+		for _, role := range review.Roles {
+			invalid[role.ID] = role.GrantError != ""
+		}
+		for _, user := range review.Users {
+			if user.RoleID == nil || invalid[*user.RoleID] {
+				return ErrConflict
+			}
 		}
 		if _, err := tx.Exec(ctx, `UPDATE users u SET authorization_role_id=v.role_id FROM authorization_reviews v WHERE v.user_id=u.id`); err != nil {
 			return err

@@ -29,6 +29,9 @@ templ AuthorizationReview(p authorization.Review) {
 		for _, role := range p.Roles {
 			<article>
 				<h3>{ role.Name }</h3>
+				if role.GrantError != "" {
+					<p role="alert">These recorded grants need review: { role.GrantError }. Unmet prerequisites deny effective authority.</p>
+				}
 				if role.Protected {
 					<p>Protected Administrator: immutable complete authority.</p>
 				} else {

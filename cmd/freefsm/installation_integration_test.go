@@ -215,6 +215,28 @@ func TestHostRecoveryResetsExistingAdminAtomically(t *testing.T) {
 	if sessions != 0 || tokens != 0 || events != 1 || users != 1 {
 		t.Fatalf("sessions=%d recovery=%d audit=%d users=%d", sessions, tokens, events, users)
 	}
+	var immutableEvents int
+	if err := db.QueryRow(context.Background(), `SELECT count(*) FROM authorization_audit WHERE target_type='user' AND target_id=$1 AND channel='host-local'`, id).Scan(&immutableEvents); err != nil || immutableEvents != 1 {
+		t.Fatalf("immutable host audit=%d err=%v", immutableEvents, err)
+	}
+	var attribution bool
+	if err := db.QueryRow(context.Background(), `SELECT actor_kind='deployment-operator' AND actor_id IS NULL AND role_id IS NULL AND scope IS NULL AND action='admin_password_recovered' AND host_uid=$2 AND outcome='success' AND detail->>'target_role_id'='1' FROM authorization_audit WHERE target_type='user' AND target_id=$1 AND channel='host-local'`, id, fmt.Sprint(os.Getuid())).Scan(&attribution); err != nil || !attribution {
+		t.Fatalf("host audit impersonates a Product User or Role: %v", err)
+	}
+	var encoded string
+	if err := db.QueryRow(context.Background(), `SELECT jsonb_agg(to_jsonb(a))::text FROM authorization_audit a WHERE channel='host-local'`).Scan(&encoded); err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"Temporary-107!", recoveryOldHash, "old-recovery", "old-web", "old-mobile"} {
+		if strings.Contains(encoded, secret) {
+			t.Fatal("credential material entered immutable audit")
+		}
+	}
+	for _, statement := range []string{`UPDATE authorization_audit SET detail='{}' WHERE channel='host-local'`, `DELETE FROM authorization_audit WHERE channel='host-local'`, `TRUNCATE authorization_audit`} {
+		if _, err := db.Exec(context.Background(), statement); err == nil {
+			t.Fatalf("immutable audit accepted mutation: %s", statement)
+		}
+	}
 	base, client := startInstallationHTTP(t, binary, env)
 	resetResponse, err := client.Get(base + "/reset-password?token=old-recovery")
 	if err != nil {
@@ -494,6 +516,7 @@ func TestHostRecoveryRejectsWithoutPartialEffects(t *testing.T) {
 		{"non-admin", "admin@example.test", "Valid-Pass107!\nValid-Pass107!\n", "UPDATE users SET authorization_role_id=2 WHERE email='admin@example.test'", "UPDATE users SET authorization_role_id=1 WHERE email='admin@example.test'"},
 		{"disabled", "admin@example.test", "Valid-Pass107!\nValid-Pass107!\n", "UPDATE users SET is_active=false WHERE email='admin@example.test'", "UPDATE users SET is_active=true WHERE email='admin@example.test'"},
 		{"audit-failure", "admin@example.test", "Valid-Pass107!\nValid-Pass107!\n", `CREATE FUNCTION reject_recovery_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture failure'; END $$; CREATE TRIGGER reject_recovery_audit BEFORE INSERT ON activity_logs FOR EACH ROW EXECUTE FUNCTION reject_recovery_audit()`, "DROP TRIGGER reject_recovery_audit ON activity_logs; DROP FUNCTION reject_recovery_audit()"},
+		{"protected-audit-failure", "admin@example.test", "Valid-Pass107!\nValid-Pass107!\n", `CREATE FUNCTION reject_protected_recovery_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'fixture failure'; END $$; CREATE TRIGGER reject_protected_recovery_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION reject_protected_recovery_audit()`, "DROP TRIGGER reject_protected_recovery_audit ON authorization_audit; DROP FUNCTION reject_protected_recovery_audit()"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.setup != "" {
@@ -508,12 +531,12 @@ func TestHostRecoveryRejectsWithoutPartialEffects(t *testing.T) {
 			}
 			var hash string
 			var force bool
-			var sessions, tokens, events, users int
-			err = db.QueryRow(ctx, `SELECT password_hash,force_password_change,(SELECT count(*) FROM sessions),(SELECT count(*) FROM password_reset_tokens),(SELECT count(*) FROM activity_logs),(SELECT count(*) FROM users) FROM users WHERE id=$1`, id).Scan(&hash, &force, &sessions, &tokens, &events, &users)
+			var sessions, tokens, events, users, immutable int
+			err = db.QueryRow(ctx, `SELECT password_hash,force_password_change,(SELECT count(*) FROM sessions),(SELECT count(*) FROM password_reset_tokens),(SELECT count(*) FROM activity_logs),(SELECT count(*) FROM users),(SELECT count(*) FROM authorization_audit) FROM users WHERE id=$1`, id).Scan(&hash, &force, &sessions, &tokens, &events, &users, &immutable)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if hash != recoveryOldHash || force || sessions != 2 || tokens != 1 || events != 0 || users != 2 {
+			if hash != recoveryOldHash || force || sessions != 2 || tokens != 1 || events != 0 || users != 2 || immutable != 0 {
 				t.Fatal("failed recovery changed persisted state")
 			}
 		})
@@ -630,5 +653,9 @@ func TestHostRecoveryAfterReviewedCutover(t *testing.T) {
 	}
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte("Temporary-107!")) != nil || legacy != "dispatcher" || !protected || !force {
 		t.Fatal("post-cutover recovery changed identity or failed to reset credential")
+	}
+	var immutable int
+	if err := db.QueryRow(context.Background(), `SELECT count(*) FROM authorization_audit a JOIN users u ON u.id=a.target_id WHERE a.action='admin_password_recovered' AND a.actor_kind='deployment-operator' AND a.actor_id IS NULL AND a.role_id IS NULL AND a.scope IS NULL AND a.host_uid=$1 AND u.email='admin@example.test'`, fmt.Sprint(os.Getuid())).Scan(&immutable); err != nil || immutable != 1 {
+		t.Fatalf("post-cutover immutable host attribution=%d err=%v", immutable, err)
 	}
 }

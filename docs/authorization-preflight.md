@@ -211,3 +211,25 @@ Run the persisted browser test with `BROWSER_TESTS=1`, an installed Chromium
 skips are not acceptance evidence.
 
 The coordinator must verify the completed ticket before closure.
+
+## Catalog correction and shared audit (migrations 056–057)
+
+Migration 056 corrects export scopes and View/facet prerequisites using a closed
+product-defined prerequisite table. Parent-bounded grants need an eligible
+compatible parent View; the actual resource/facet must still be authorized at
+runtime. Recorded invalid grants are preserved but do not provide effective
+authority. The Role editor reports missing prerequisites for explicit repair;
+pending approvals for affected Roles are invalidated. Missing views are never
+auto-granted to existing nonprotected Roles. Job runtime authorization remains
+with its owning slice.
+
+Migration 057 shares `internal/protectedaudit` between authorization mutations
+and host recovery. Product events retain their effective Role and scope; host
+recovery records `actor_kind=deployment-operator` and the host UID, with NULL
+product actor, Role and scope. The `action` column preserves the former
+`permission` values and also represents the distinct host recovery action.
+Credentials, session/recovery revocation, ordinary activity and immutable recovery
+audit commit together. Historical ordinary activity is not promoted into invented
+immutable history. No audit browsing interface is introduced.
+
+See `docs/v1-integration-19-107.md` for the full catalog review and regression evidence.

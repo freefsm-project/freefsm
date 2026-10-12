@@ -63,7 +63,7 @@ protected identity/last-Admin races, transactional Customer audit rollback,
 revocation/session-expiry rejection, and persisted browser/API nondisclosure.
 This is a focused integration assessment, not blanket closure approval.
 
-**Confirmed catalog defects need implementer disposition before #19 closure:**
+**Catalog defects reproduced during merge (resolved by follow-up migration 056):**
 
 1. `055_authorization_expansion.up.sql:48` creates Estimate/Invoice export only
    at A, while parent PER-12 specifies J and A. A Role with `estimate.view/J` plus
@@ -78,8 +78,9 @@ acceptance probe failed with these three observations and is retained outside
 the worktree at
 `/tmp/opencode/freefsm-v1-context/merge-019-catalog-probe_test.go`; copy it into
 `internal/authorization` and run `TestMergeCatalogAcceptanceProbe` to reproduce.
-These are pre-existing foundation/catalog findings; no unrelated domain feature
-was added during merge. Existing green tests do not cover these catalog cases.
+These were pre-existing foundation/catalog findings; no unrelated domain feature
+was added during merge. Their scenarios are now permanent public-`SaveRole`
+regressions in `internal/authorization/catalog_contract_test.go`.
 
 **Explicit remaining boundaries:**
 
@@ -88,11 +89,78 @@ was added during merge. Existing green tests do not cover these catalog cases.
   observed in Chromium; the passing combined journey uses legacy `dispatcher`.
   This is consistent with #19's declared future-domain boundary, not evidence
   that Job authorization has migrated or all equivalent-role journeys pass.
-- Host recovery's event commits atomically in `activity_logs`, including tested
-  audit-insert rollback, but does not enter #19's immutable `authorization_audit`.
-  Immutability for this host-attributed event is not established; the owning
-  implementers need to resolve it before claiming shared AUTH-04 acceptance.
+- Host recovery now commits both its ordinary activity projection and a shared
+  immutable audit event with credential changes/revocation (migration 057).
+  The event names the Deployment Operator's host UID, not the target as an
+  acting Product User; actor ID, effective Role and product scope are NULL.
+  Immutable-audit failure rolls back the credential effects and activity too.
 - Pending cutover with no recoverable reviewed protected identity is denied.
   Recovery does not choose a mapping or turn a legacy name into authority.
 - #107's native Linux/FreeBSD service, reboot, release artifact, topology/egress
   and scale gates remain as documented in native installation acceptance.
+
+## Implementer follow-up: full catalog and protected recovery audit
+
+The follow-up starts from merged integration `86e86cb`. It uses forward migrations,
+leaving migration 055 and recorded grants/history intact.
+
+Catalog review used canonical PER-01–14 plus the S6 permission resolution and
+its S8/S11/S13/S16 amendments. In addition to the original three probe failures:
+
+| Correction | Contract |
+| --- | --- |
+| Estimate/Invoice Export J added; Job Export requires Job View | PER-12, AUTH-02 |
+| GPS Export requires GPS View, not merely Time View | PER-08/12 |
+| Restore requires View archived (which requires base View) | PER-11, AUTH-02 |
+| Captured pricing accepts compatible Job **or document** View | PER-06; Customer-only document access does not require unrelated Job View |
+| Collaboration actions require an eligible visible parent | PER-09; Own anchors intersect parent visibility, and Context never unlocks master collaboration |
+| Operational activity export requires compatible parent View | PER-12; facets and the actual parent remain independently checked by owning domains |
+| Credit application/refund require Credit View; application also Invoice View | PER-07, independently authorized selected inputs |
+| Reversals require settlement-history View | PER-07 |
+| Audit Export/security Manage name their corresponding sealed View | PER-13/14 |
+
+Fixed parent alternatives are catalog metadata, not user-authored policies. A
+matching Invoice View never substitutes for Job View on an actual Job action.
+No Job command, route or runtime action rule was migrated in this follow-up.
+Optional financial fields on a resource export still require their own facet
+View; the export grant does not manufacture or imply those grants.
+
+Existing invalid combinations remain recorded, lose effective authority for
+unsatisfied dependent actions, and are marked for explicit Administrator repair.
+Affected pending approvals are invalidated. Neither migration adds missing views
+to nonprotected Roles; fresh Technician still receives no exports. Invalid Role
+sets cannot be approved into a cutover. Repeated migration/restart preserves
+identities and recorded grant facts.
+
+`internal/protectedaudit` is a shared transaction-bound writer. Product events
+retain their actor/effective Role and permission/action scope. Host recovery uses
+a separate, purpose-specific entry point with no Product User or Role attribution.
+The old audit `permission` column is renamed `action` without rewriting values;
+existing events remain product-user facts. Host recovery has no product scope.
+UPDATE, DELETE and TRUNCATE of the immutable ledger are rejected. There is no audit
+browsing UI, and old mutable activity is not backfilled as invented immutable history.
+
+### Follow-up evidence
+
+- Entire closed catalog scope matrix, valid/invalid assignments, every base View
+  prerequisite, representative parent/facet alternatives, scope narrowing and
+  canonical export/sealed defaults: `catalog_scopes_test.go` and
+  `catalog_contract_test.go`.
+- Upgrade from 055 preserves raw grants and old audit values, denies invalid
+  effective authority, invalidates approvals and permits explicit repair:
+  `catalog_upgrade_test.go`.
+- Real CLI/non-superuser PostgreSQL tests assert host attribution, credential
+  redaction, immutable ledger protection, post-cutover recovery, and rollback on
+  failure of **either** audit write: `cmd/freefsm/installation_integration_test.go`.
+- `make lint` and full race-enabled `make test` passed with explicit isolated
+  URLs `postgresql://adam@127.0.0.1:55419/freefsm_v1_19?sslmode=disable` and
+  backup administrator `postgresql://adam@127.0.0.1:55419/postgres?sslmode=disable`.
+  Full output: `/home/adam/.local/share/opencode/tool-output/tool_12dbbedc3001e5YUHvZf8To0Tb`.
+- The persisted Customer authorization and installation recovery/core-workflow
+  Chromium tests passed, as did `TestHostRecoveryAfterReviewedCutover`, using the
+  browser command above with the isolated `freefsm_v1_19` database.
+
+All identified #19 catalog and shared host-audit findings are addressed. #19 is
+implementation-complete for coordinator verification within its declared scope;
+this is not issue closure, a Job-domain migration, or completion of #107's native
+release/OS acceptance gates. Skips and wider matrix limits above still apply.
