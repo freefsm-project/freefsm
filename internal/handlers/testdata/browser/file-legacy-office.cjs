@@ -29,11 +29,11 @@ const { chromium } = require('playwright-core');
     });
     await page.locator('input[type=file][name=file]').setInputFiles(files);
     await page.locator('.files-drop-form button[type=submit]').click();
-    await page.locator('.files-upload-summary').filter({hasText:'2 uploaded; 1 failed'}).waitFor();
-    assert.equal(await page.locator('.files-upload-uploaded').count(),2);
-    await page.getByRole('button',{name:'Retry failed files',exact:true}).click();
     await page.locator('.files-thumb[data-file-name="slides.ppt"]').waitFor();
-    assert.equal(requests,4,'only the lost-response item should be retried: '+JSON.stringify(publications));
+    assert.equal(await page.locator('.files-thumb').count(),3);
+    assert.equal(requests,3,'the lost response should reconcile by receipt without another publication: '+JSON.stringify(publications));
+    assert.equal(new Set(publications).size,3,'each selected file must keep one stable publication identity: '+JSON.stringify(publications));
+    assert.ok(publications.every(id => id !== 'no publication identity'));
     for (const file of files) {
       const tile=page.locator(`.files-thumb[data-file-name="${file.name}"]`);
       const url=await tile.getAttribute('data-file-url');
@@ -43,9 +43,12 @@ const { chromium } = require('playwright-core');
     }
     // A valid DOC under an XLS extension fails without disturbing successes.
     await page.locator('input[type=file][name=file]').setInputFiles({...files[0],name:'mismatched.xls'});
+    const mismatchResponse = page.waitForResponse(response => response.request().method()==='POST' && new URL(response.url()).pathname==='/files');
     await page.locator('.files-drop-form button[type=submit]').click();
-    await page.locator('.files-upload-failed').filter({hasText:'Invalid file type'}).waitFor();
+    assert.equal((await mismatchResponse).status(),400);
+    await page.waitForFunction(() => document.querySelector('.files-drop-form')?.dataset.filesUploading !== 'true');
     assert.equal(await page.locator('.files-thumb').count(),3);
+    assert.equal(await page.locator('.files-thumb[data-file-name="mismatched.xls"]').count(),0);
     await page.reload();
     for (const file of files) {
       const tile=page.locator(`.files-thumb[data-file-name="${file.name}"]`);
@@ -66,6 +69,6 @@ const { chromium } = require('playwright-core');
       await page.waitForFunction(name => !document.querySelector(`.files-thumb[data-file-name="${name}"]`),renamed);
       assert.equal((await page.request.get(base+url)).status(),404);
     }
-    console.log('Real DOC/XLS/PPT persisted batch: 11-file rejection, mixed-success lost-response retry once, mismatch denial, exact downloads, stable-identity rename and removal passed.');
+    console.log('Real DOC/XLS/PPT persisted batch: 11-file rejection, lost-response receipt reconciliation without replay, mismatch denial, exact downloads, stable-identity rename and removal passed.');
   } finally {await browser.close();}
 })().catch(error => {console.error(error);process.exitCode=1;});
