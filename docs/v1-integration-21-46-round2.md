@@ -271,6 +271,11 @@ Every invocation exited 0: templ reported `updates=0`, lint passed, compile
 produced the disk-backed `freefsm` binary and generated-template/diff checks
 were clean.
 
+The coordinator additionally ran the complete `make generate` target after the
+worker finished, with the same disk-backed `TMPDIR`/`GOTMPDIR`, `GOMAXPROCS=2`
+and `GOFLAGS=-p=2`. Vocabulary, Ent and templ generation passed and left the
+tracked tree unchanged (`git status --short` empty; `git diff --check` passed).
+
 ### Full uncached race suite
 
 ```sh
@@ -341,6 +346,36 @@ The focused invocation exited 0. It proves three persisted Files, three distinct
 publication identities with no replay POST, mismatch HTTP 400 with no persistence,
 exact downloads, stable-identity rename and removal.
 
+### Unsuccessful attempts and explicit skips
+
+Earlier attempts are not passes. The initial port-55419 integration database
+run encountered Go linker/tmpfs quota failures. Moving Go temporary files to
+disk exposed the stale revoked-Administrator redirect assertion, then the
+shared fixture server exhausted its storage quota during handler migrations.
+Verification moved to the separately owned port-55429 cluster without restarting
+or changing the shared server. The first owned-cluster run lacked the test-only
+`backup_preflight_fixture` extension. After configuring the repository's fixture
+extension for this owned cluster, another run encountered quota in nested
+installer builds targeting worktree `dist/`. The inherited disk-backed
+`BUILD_DIR` resolved that remaining environment issue. The complete successful
+run above supersedes these attempts. The first browser aggregate failed the
+obsolete legacy-Office retry expectation; the repaired aggregate passed.
+
+The final DB-only full suite explicitly skipped browser opt-ins; all of those
+journeys were then run in the final browser/accessibility aggregate, which has
+**no selected skips**. Remaining opt-in boundaries are:
+
+- `TestStartupRejectsUnsupportedServerBeforeBootstrap`: requires PostgreSQL <16;
+  this verification used PostgreSQL 18.6.
+- `TestBackupBrowserNginxScale`: separate scale/proxy opt-in, not enabled.
+- Standalone `TestAuthorizationRestartProbe` and `TestBackupCrashChild`: helper
+  entry points skip outside their parent-created subprocess contexts; their
+  owning parent tests ran.
+
+The optional 1-GiB backup scenario, full branded browser/real-device matrix and
+native service/reboot/release matrices are not claimed. Backup-admin integration
+was enabled in the successful full suite; it was not skipped for an absent URL.
+
 ### Final process and repository state
 
 The owned cluster identity and shutdown were recorded with:
@@ -358,8 +393,10 @@ ps -ef | rg '[p]ostgres.*postgres-owned|[g]o test|[m]ake test|[n]ode .*testdata/
 The pre-stop check reported PostgreSQL 18.6, UTF8 application/admin databases,
 the owned `/var/tmp/.../postgres-owned` data directory and the repository-local
 test-extension path. `pg_ctl` stopped that cluster cleanly and the post-stop
-readiness check reported `127.0.0.1:55429 - no response`. No shared cluster was
-started, changed or cleaned. Logs are
+readiness check reported `127.0.0.1:55429 - no response`. The shared cluster's
+service, configuration and files were not restarted, modified or cleaned; the
+earlier runs used only the explicitly created integration database and disposable
+backup fixtures. Logs are
 `integration-round2-owned-cluster-final-state.log`,
 `integration-round2-owned-cluster-stop.log` and
 `integration-round2-process-final.log`. A final process and clean-worktree audit
