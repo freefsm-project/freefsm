@@ -172,10 +172,17 @@ templ SettingsPage(p SettingsPageData) {
 			
 			<!-- Security Tab -->
 			<div class="settings-tab-content" id="tab-security">
+				if p.RecoveryReviewCount > 0 {
+					<p role="status">{ fmt.Sprint(p.RecoveryReviewCount) } legacy recovery links have unknown purpose or validity and are quarantined. Review the host-local password_recovery_review report. Verify each account and use Resend recovery or an Administrator temporary reset for a safe replacement; do not reactivate old links.</p>
+				}
+				if p.Settings.PasswordMinLength < 6 || p.Settings.PasswordMinLength > 72 {
+					<p role="alert">Password policy needs explicit Administrator review. Choose a minimum between 6 and 72. Existing passwords have not been changed.</p>
+				}
+				<p>Policy changes apply to future password settings. Use Require password change on a user to require replacement explicitly. Length uses UTF-16 units, matching browser validation; passwords cannot exceed 72 UTF-8 bytes.</p>
 				<div class="grid">
 					<label>
 						Minimum Length
-						<input type="number" name="password_min_length" value={ fmt.Sprintf("%d", p.Settings.PasswordMinLength) } min="6" max="128" required/>
+						<input type="number" name="password_min_length" value={ fmt.Sprintf("%d", p.Settings.PasswordMinLength) } min="6" max="72" required/>
 					</label>
 				</div>
 				<label>

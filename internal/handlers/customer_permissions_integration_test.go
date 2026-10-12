@@ -115,8 +115,10 @@ func permissionHTTPFixtureConfigured(t *testing.T, migrations fs.FS, seed func(*
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO users(company_id,email,name,password_hash,role) VALUES($1,'admin@test','Admin',$2,'admin') RETURNING id`, company, string(hash)).Scan(&admin); err != nil {
-		t.Fatal(err)
+	if !(len(legacy) > 1 && legacy[1]) {
+		if err := pool.QueryRow(ctx, `INSERT INTO users(company_id,email,name,password_hash,role) VALUES($1,'admin@test','Admin',$2,'admin') RETURNING id`, company, string(hash)).Scan(&admin); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if seed != nil {
 		seed(pool)

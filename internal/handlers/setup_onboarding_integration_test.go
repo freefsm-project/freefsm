@@ -28,14 +28,8 @@ func TestIsUniqueViolation(t *testing.T) {
 }
 
 func TestSetupAdminUsesSoleCompanyAndCompletesOnboarding(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
-	defer client.Close()
-	defer pool.Close()
+	pool, client, _, _, companyID, _ := permissionHTTPFixture(t, false, true)
 	ctx := context.Background()
-	var companyID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO companies(name, slug) VALUES('Setup', 'setup') RETURNING id`).Scan(&companyID); err != nil {
-		t.Fatalf("create setup company: %v", err)
-	}
 
 	h := NewSetupHandler(pool, services.NewSessionService(pool), services.NewUserService(client), services.NewCompanySettingsService(client), &config.Config{SetupToken: "setup-secret"})
 	form := url.Values{
@@ -90,16 +84,9 @@ func TestSetupAdminRejectsAmbiguousCompanyOwnership(t *testing.T) {
 }
 
 func TestSetupAdminRequiresConfirmationAndSoleCompanyPolicy(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
-	defer client.Close()
-	defer pool.Close()
+	pool, client, _, _, _, _ := permissionHTTPFixture(t, false, true)
 	ctx := context.Background()
-	var companyID int64
-	if err := pool.QueryRow(ctx, `INSERT INTO companies(name, slug) VALUES('Strict Setup', 'strict-setup') RETURNING id`).Scan(&companyID); err != nil {
-		t.Fatalf("create setup company: %v", err)
-	}
-	client.CompanySettings.Create().
-		SetCompanyID(companyID).
+	client.CompanySettings.Update().
 		SetBusinessName("Strict Setup").
 		SetPasswordMinLength(16).
 		SetPasswordRequireUppercase(true).

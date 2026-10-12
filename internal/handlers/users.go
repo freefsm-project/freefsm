@@ -387,7 +387,7 @@ func (h *UserHandler) ResendRecovery(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	token, err := h.resetSvc.CreateToken(r.Context(), id)
+	token, err := h.resetSvc.CreateToken(r.Context(), id, u.Email)
 	if err != nil {
 		authorizationError(w, r, err)
 		return

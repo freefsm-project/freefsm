@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/passwordpolicy"
 	"strconv"
 	"time"
 
@@ -101,6 +103,9 @@ type AdministrativeSettingsParams struct {
 }
 
 func (s *CompanySettingsService) SaveAdministrativeSettings(ctx context.Context, p AdministrativeSettingsParams) error {
+	if request, ok := authorization.FromContext(ctx); ok {
+		return request.Service.SavePasswordPolicy(ctx, request.Actor, passwordpolicy.Policy{MinLength: p.PasswordMinLength, Upper: p.PasswordRequireUppercase, Lower: p.PasswordRequireLowercase, Digit: p.PasswordRequireDigit, Special: p.PasswordRequireSpecial})
+	}
 	cs, err := s.Get(ctx)
 	if err != nil {
 		return err

@@ -7,20 +7,26 @@ import (
 	"math/big"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/user"
+	"github.com/freefsm-project/freefsm/internal/passwordpolicy"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService struct {
 	client *ent.Client
+	pool   *pgxpool.Pool
 }
 
-func NewUserService(client *ent.Client) *UserService {
-	return &UserService{client: client}
+func NewUserService(client *ent.Client, pools ...*pgxpool.Pool) *UserService {
+	s := &UserService{client: client}
+	if len(pools) > 0 {
+		s.pool = pools[0]
+	}
+	return s
 }
 
 func (s *UserService) GetByID(ctx context.Context, id int64) (*ent.User, error) {
@@ -103,7 +109,7 @@ func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 	if request, ok := authorization.FromContext(ctx); ok {
-		id, err := request.Service.CreateAccount(ctx, request.Actor, authorization.NewAccount{Name: p.Name, Email: p.Email, PasswordHash: string(hash), RoleID: p.RoleID, Invited: p.SendWelcomeEmail})
+		id, err := request.Service.CreateAccount(ctx, request.Actor, authorization.NewAccount{Name: p.Name, Email: p.Email, Password: p.Password, PasswordHash: string(hash), RoleID: p.RoleID, Invited: p.SendWelcomeEmail})
 		if err != nil {
 			return nil, err
 		}
@@ -132,10 +138,9 @@ func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User
 }
 
 type UserUpdateParams struct {
-	Name     *string
-	Email    *string
-	Role     *string
-	Password *string
+	Name  *string
+	Email *string
+	Role  *string
 }
 
 func (s *UserService) Update(ctx context.Context, id int64, p UserUpdateParams) (*ent.User, error) {
@@ -148,13 +153,6 @@ func (s *UserService) Update(ctx context.Context, id int64, p UserUpdateParams) 
 	}
 	if p.Role != nil {
 		u.SetRole(*p.Role)
-	}
-	if p.Password != nil {
-		hash, err := bcrypt.GenerateFromPassword([]byte(*p.Password), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, fmt.Errorf("hash password: %w", err)
-		}
-		u.SetPasswordHash(string(hash))
 	}
 	ret, err := u.Save(ctx)
 	if err != nil {
@@ -183,21 +181,9 @@ func (s *UserService) CompleteOnboarding(ctx context.Context, id int64) error {
 
 func (s *UserService) ResetPasswordAsAdministrator(ctx context.Context, id int64, password string) error {
 	if request, ok := authorization.FromContext(ctx); ok {
-		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		if err != nil {
-			return err
-		}
-		return request.Service.ResetAccountPassword(ctx, request.Actor, id, string(hash))
+		return request.Service.ResetAccountPassword(ctx, request.Actor, id, password)
 	}
-	return s.SetPassword(ctx, id, password)
-}
-
-func (s *UserService) SetPassword(ctx context.Context, id int64, password string) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return fmt.Errorf("hash password: %w", err)
-	}
-	return s.client.User.UpdateOneID(id).SetPasswordHash(string(hash)).Exec(ctx)
+	return authorization.ErrForbidden
 }
 
 func (s *UserService) UpdateFontSize(ctx context.Context, id int64, fontSize string) error {
@@ -258,10 +244,6 @@ func (s *UserService) Authenticate(ctx context.Context, email, password string) 
 	return nil
 }
 
-func (s *UserService) ClearForcePasswordChange(ctx context.Context, id int64) error {
-	return s.client.User.UpdateOneID(id).SetForcePasswordChange(false).Exec(ctx)
-}
-
 func (s *UserService) MustChangePassword(ctx context.Context, userID int64) (bool, error) {
 	u, err := s.client.User.Query().Where(user.IDEQ(userID)).Only(ctx)
 	if err != nil {
@@ -272,42 +254,9 @@ func (s *UserService) MustChangePassword(ctx context.Context, userID int64) (boo
 
 func (s *UserService) ValidatePassword(password string, cs *ent.CompanySettings) error {
 	if cs == nil {
-		cs = &ent.CompanySettings{PasswordMinLength: 8, PasswordRequireUppercase: true, PasswordRequireLowercase: true, PasswordRequireDigit: true, PasswordRequireSpecial: true}
+		return passwordpolicy.Default().Validate(password)
 	}
-	if len(password) < cs.PasswordMinLength {
-		return fmt.Errorf("password must be at least %d characters", cs.PasswordMinLength)
-	}
-	hasUpper := false
-	hasLower := false
-	hasDigit := false
-	hasSpecial := false
-	for _, r := range password {
-		if unicode.IsUpper(r) {
-			hasUpper = true
-		}
-		if unicode.IsLower(r) {
-			hasLower = true
-		}
-		if unicode.IsDigit(r) {
-			hasDigit = true
-		}
-		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
-			hasSpecial = true
-		}
-	}
-	if cs.PasswordRequireUppercase && !hasUpper {
-		return fmt.Errorf("password must contain an uppercase letter")
-	}
-	if cs.PasswordRequireLowercase && !hasLower {
-		return fmt.Errorf("password must contain a lowercase letter")
-	}
-	if cs.PasswordRequireDigit && !hasDigit {
-		return fmt.Errorf("password must contain a digit")
-	}
-	if cs.PasswordRequireSpecial && !hasSpecial {
-		return fmt.Errorf("password must contain a special character")
-	}
-	return nil
+	return (passwordpolicy.Policy{MinLength: cs.PasswordMinLength, Upper: cs.PasswordRequireUppercase, Lower: cs.PasswordRequireLowercase, Digit: cs.PasswordRequireDigit, Special: cs.PasswordRequireSpecial}).Validate(password)
 }
 
 func generateUnusablePassword() string {

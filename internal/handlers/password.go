@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"log/slog"
 	"net/http"
 	"net/url"
 
@@ -83,13 +82,14 @@ func (h *PasswordHandler) ChangePassword(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Update password and clear flag
-	if err := h.userSvc.SetPassword(r.Context(), user.ID, newPass); err != nil {
-		internalServerError(w, r, "change password", err)
+	cookie, err := r.Cookie("session")
+	if err != nil {
+		http.Error(w, "browser session required", http.StatusForbidden)
 		return
 	}
-	if err := h.userSvc.ClearForcePasswordChange(r.Context(), user.ID); err != nil {
-		slog.Error("clear force_password_change", "error", err)
+	if err := h.userSvc.ChangeOwnPassword(r.Context(), user.ID, cookie.Value, current, newPass); err != nil {
+		internalServerError(w, r, "change password", err)
+		return
 	}
 
 	if h.activitySvc != nil {

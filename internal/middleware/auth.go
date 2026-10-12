@@ -169,7 +169,11 @@ func ForcePasswordChange(checker ForcePasswordChecker) func(http.Handler) http.H
 			}
 
 			mustChange, err := checker.MustChangePassword(r.Context(), u.ID)
-			if err == nil && mustChange {
+			if err != nil {
+				http.Error(w, "Credential state unavailable; please try again", http.StatusServiceUnavailable)
+				return
+			}
+			if mustChange {
 				http.Redirect(w, r, "/change-password", http.StatusSeeOther)
 				return
 			}

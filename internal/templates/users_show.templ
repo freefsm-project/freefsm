@@ -62,7 +62,7 @@ templ UserShow(p UserDetailPage) {
 				@NewPasswordFields(NewPasswordFieldsOptions{
 					ID: "admin-reset-password", Name: "password", Label: "New Password", Placeholder: "New password",
 					ConfirmID: "admin-reset-confirm-password", ConfirmLabel: "Confirm New Password", ConfirmPlaceholder: "Confirm new password",
-					Autocomplete: "new-password", MinLength: 8, Required: true,
+					Autocomplete: "new-password", MinLength: companyPasswordMinLength(ctx), Required: true,
 				})
 				<button type="submit">Reset Password</button>
 			</form>

@@ -295,7 +295,7 @@ func UserShow(p UserDetailPage) templ.Component {
 			templ_7745c5c3_Err = NewPasswordFields(NewPasswordFieldsOptions{
 				ID: "admin-reset-password", Name: "password", Label: "New Password", Placeholder: "New password",
 				ConfirmID: "admin-reset-confirm-password", ConfirmLabel: "Confirm New Password", ConfirmPlaceholder: "Confirm new password",
-				Autocomplete: "new-password", MinLength: 8, Required: true,
+				Autocomplete: "new-password", MinLength: companyPasswordMinLength(ctx), Required: true,
 			}).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

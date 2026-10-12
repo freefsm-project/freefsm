@@ -12,6 +12,8 @@ import (
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/passwordpolicy"
+	"github.com/freefsm-project/freefsm/internal/protectedaudit"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -97,8 +99,36 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := h.db.Begin(r.Context())
+	if err != nil {
+		internalServerError(w, r, "begin setup", err)
+		return
+	}
+	defer tx.Rollback(context.WithoutCancel(r.Context()))
+	if _, err = tx.Exec(r.Context(), `SELECT pg_advisory_xact_lock(190019); LOCK TABLE users IN EXCLUSIVE MODE`); err != nil {
+		internalServerError(w, r, "lock setup", err)
+		return
+	}
+	var initialized bool
+	if err = tx.QueryRow(r.Context(), `SELECT EXISTS(SELECT 1 FROM users)`).Scan(&initialized); err != nil {
+		internalServerError(w, r, "check setup", err)
+		return
+	}
+	if initialized {
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
+		return
+	}
+	policy, err := passwordpolicy.Load(r.Context(), tx, companyID)
+	if err != nil {
+		internalServerError(w, r, "lock setup policy", err)
+		return
+	}
+	if err = policy.Validate(password); err != nil {
+		http.Redirect(w, r, "/setup?error="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
 	var userID int64
-	err = h.db.QueryRow(r.Context(),
+	err = tx.QueryRow(r.Context(),
 		`INSERT INTO users (company_id, email, password_hash, name, role, onboarding_completed_at) VALUES ($1, $2, $3, $4, 'admin', NOW()) RETURNING id`,
 		companyID, email, string(hash), name,
 	).Scan(&userID)
@@ -110,8 +140,28 @@ func (h *SetupHandler) create(w http.ResponseWriter, r *http.Request) {
 		internalServerError(w, r, "create setup admin", err)
 		return
 	}
+	var roleID int64
+	if err = tx.QueryRow(r.Context(), `SELECT authorization_role_id FROM users WHERE id=$1`, userID).Scan(&roleID); err != nil {
+		internalServerError(w, r, "resolve setup Role", err)
+		return
+	}
+	if err = protectedaudit.RecordProduct(r.Context(), tx, protectedaudit.ProductAction{ActorID: userID, RoleID: roleID, Action: "user.create", Scope: "S", TargetType: "user", TargetID: userID, Channel: "setup"}); err != nil {
+		internalServerError(w, r, "audit setup", err)
+		return
+	}
+	if err = tx.Commit(r.Context()); err != nil {
+		internalServerError(w, r, "commit setup", err)
+		return
+	}
 
-	token, err := h.sessions.Create(r.Context(), userID)
+	// Account creation has committed. Revalidate the submitted credential under
+	// the session issuer's mutex so an intervening reset cannot publish a stale
+	// setup session after revocation.
+	token, err := h.sessions.CreateAuthenticated(r.Context(), userID, password, "web", "")
+	if errors.Is(err, services.ErrInvalidCredentials) {
+		http.Redirect(w, r, "/login?error=credentials+changed%3B+sign+in+again", http.StatusSeeOther)
+		return
+	}
 	if err != nil {
 		internalServerError(w, r, "create setup session", err)
 		return

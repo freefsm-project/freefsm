@@ -812,15 +812,24 @@ type ForgotPasswordData struct {
 }
 
 type ResetPasswordData struct {
-	Error string
-	Token string
-	Valid bool
+	Policy *ent.CompanySettings
+	Error  string
+	Token  string
+	Valid  bool
+}
+
+func companyPasswordMinLength(ctx context.Context) int {
+	if cs := middleware.CompanyFromContext(ctx); cs != nil {
+		return cs.PasswordMinLength
+	}
+	return 8
 }
 
 type SettingsPageData struct {
-	EmailDisabled bool
-	Settings      *ent.CompanySettings
-	IsSetup       bool
+	RecoveryReviewCount int
+	EmailDisabled       bool
+	Settings            *ent.CompanySettings
+	IsSetup             bool
 }
 
 type InvoiceFormPageData struct {

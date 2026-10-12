@@ -270,6 +270,13 @@ func run() error {
 	startupRelease()
 	startupUnlock()
 	workerDone := make(chan struct{})
+	recoveryDone := make(chan struct{})
+	go func() {
+		defer close(recoveryDone)
+		if err := services.NewPasswordResetService(entClient, db.Pool).RunDispatch(ctx, workerEmail, manager.RefreshConnections); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("recovery worker stopped")
+		}
+	}()
 	go func() {
 		defer close(workerDone)
 		if err := worker.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
@@ -307,6 +314,11 @@ func run() error {
 		slog.Warn("document delivery worker drain timed out")
 	}
 	manager.Shutdown()
+	select {
+	case <-recoveryDone:
+	case <-shutdownCtx.Done():
+		slog.Warn("recovery worker drain timed out")
+	}
 	if serverErr == nil {
 		return errors.New("HTTP server stopped unexpectedly")
 	}

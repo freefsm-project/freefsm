@@ -5,7 +5,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -15,6 +18,8 @@ type SessionService struct {
 	db *pgxpool.Pool
 }
 
+var ErrInvalidCredentials = errors.New("invalid credentials")
+
 const (
 	webSessionLifetime       = 7 * 24 * time.Hour
 	mobileSessionLifetime    = 30 * 24 * time.Hour
@@ -23,6 +28,35 @@ const (
 
 func NewSessionService(db *pgxpool.Pool) *SessionService {
 	return &SessionService{db: db}
+}
+
+// CreateAuthenticated rechecks the password and account under the credential
+// mutex. A login that verified an old password cannot publish after a reset.
+func (s *SessionService) CreateAuthenticated(ctx context.Context, userID int64, password, kind, device string) (string, error) {
+	token, hash, err := newSessionToken()
+	if err != nil {
+		return "", err
+	}
+	err = credentialTransaction(ctx, s.db, func(tx pgx.Tx) error {
+		var stored string
+		var forced bool
+		if err := tx.QueryRow(ctx, `SELECT password_hash,force_password_change FROM users WHERE id=$1 AND is_active FOR UPDATE`, userID).Scan(&stored, &forced); err != nil {
+			return ErrInvalidCredentials
+		}
+		if (kind != "web" && kind != "mobile") || (kind == "mobile" && forced) || bcrypt.CompareHashAndPassword([]byte(stored), []byte(password)) != nil {
+			return ErrInvalidCredentials
+		}
+		lifetime := webSessionLifetime
+		if kind == "mobile" {
+			lifetime = mobileSessionLifetime
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,kind,expires_at,last_used_at,device_name) VALUES($1,$2,$3,clock_timestamp()+$4*interval '1 second',clock_timestamp(),nullif($5,''))`, hash, userID, kind, int64(lifetime/time.Second), device)
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
 func (s *SessionService) Create(ctx context.Context, userID int64) (string, error) {

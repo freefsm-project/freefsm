@@ -27,7 +27,7 @@ templ UserForm(p UserFormData) {
 				@NewPasswordFields(NewPasswordFieldsOptions{
 					ID: "user-password", Name: "password", Label: "Password", Placeholder: "Password",
 					ConfirmID: "user-confirm-password", ConfirmLabel: "Confirm Password", ConfirmPlaceholder: "Confirm password",
-					Autocomplete: "new-password", MinLength: 8, Disabled: true,
+					Autocomplete: "new-password", MinLength: companyPasswordMinLength(ctx), Disabled: true,
 					WrapperID: "password_fields", WrapperClass: "is-hidden",
 				})
 				<label>

@@ -26,7 +26,7 @@ const loginRateLimitWindow = time.Minute
 type transportPeerContextKey struct{}
 
 type SessionService interface {
-	CreateMobile(context.Context, int64, string) (string, error)
+	CreateAuthenticated(context.Context, int64, string, string, string) (string, error)
 	ValidateMobile(context.Context, string) (int64, error)
 	RevokeMobile(context.Context, string) error
 }

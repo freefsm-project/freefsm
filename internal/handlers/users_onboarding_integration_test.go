@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -169,13 +170,12 @@ func TestCreateWelcomeUserDoesNotRequirePasswordConfirmation(t *testing.T) {
 }
 
 func TestAdminResetPasswordIsCompanyScopedAndRequiresConfirmation(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
-	defer client.Close()
-	defer pool.Close()
+	pool, client, _, _, companyID, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
-	const companyID int64 = 94
-
-	client.CompanySettings.Create().SetCompanyID(companyID).SetBusinessName("Admin Company").SetPasswordMinLength(12).SaveX(ctx)
+	if _, err := pool.Exec(ctx, `INSERT INTO companies(id,name,slug) VALUES($1,'Foreign','foreign-reset')`, companyID+1); err != nil {
+		t.Fatal(err)
+	}
+	client.CompanySettings.Update().SetBusinessName("Admin Company").SetPasswordMinLength(12).SaveX(ctx)
 	client.CompanySettings.Create().SetCompanyID(companyID + 1).SetBusinessName("Foreign Company").SetPasswordMinLength(1).SaveX(ctx)
 	oldHash, err := bcrypt.GenerateFromPassword([]byte("OldPassword1!"), bcrypt.MinCost)
 	if err != nil {
@@ -192,7 +192,8 @@ func TestAdminResetPasswordIsCompanyScopedAndRequiresConfirmation(t *testing.T) 
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", strconv.FormatInt(userID, 10))
 		requestCtx := context.WithValue(r.Context(), chi.RouteCtxKey, rctx)
-		requestCtx = context.WithValue(requestCtx, middleware.UserKey, &middleware.UserInfo{ID: 100, CompanyID: companyID, Name: "Admin", Role: "admin"})
+		requestCtx = context.WithValue(requestCtx, middleware.UserKey, &middleware.UserInfo{ID: admin, CompanyID: companyID, Name: "Admin", Role: "admin"})
+		requestCtx = authorization.WithActor(requestCtx, authorization.New(pool), authorization.Actor{UserID: admin})
 		w := httptest.NewRecorder()
 		h.ResetPassword(w, r.WithContext(requestCtx))
 		return w
