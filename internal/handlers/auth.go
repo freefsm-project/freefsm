@@ -227,6 +227,10 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := h.inviteSvc.AcceptInvite(r.Context(), token, password)
+	if errors.Is(err, services.ErrInvitationPassword) {
+		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Error: err.Error()}))
+		return
+	}
 	if errors.Is(err, services.ErrInvalidInvitation) {
 		http.Error(w, "invalid invitation", http.StatusBadRequest)
 		return

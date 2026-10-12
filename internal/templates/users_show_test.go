@@ -25,7 +25,7 @@ func TestUserShowRendersResendWelcomeWhenEligible(t *testing.T) {
 	if !strings.Contains(html, `action="/users/42/resend-welcome"`) || !strings.Contains(html, ">Resend Welcome</button>") {
 		t.Fatal("eligible user page did not render the resend welcome action")
 	}
-	assertUserShowOtherActions(t, html, "Enable")
+	assertUserShowOtherActions(t, html, "Invalidate pending invitation")
 }
 
 func TestUserShowOmitsResendWelcomeWhenIneligible(t *testing.T) {

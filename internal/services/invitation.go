@@ -17,11 +17,13 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/user"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var (
 	ErrInvalidInvitation       = errors.New("invalid or expired invitation")
+	ErrInvitationPassword      = errors.New("invitation password does not satisfy current policy")
 	ErrWelcomeResendIneligible = errors.New("welcome invitation cannot be resent")
 )
 
@@ -32,15 +34,23 @@ type InvitationTarget struct {
 
 type InvitationService struct {
 	client *ent.Client
+	pool   *pgxpool.Pool
 }
 
-func NewInvitationService(client *ent.Client) *InvitationService {
-	return &InvitationService{client: client}
+func NewInvitationService(client *ent.Client, pool ...*pgxpool.Pool) *InvitationService {
+	s := &InvitationService{client: client}
+	if len(pool) > 0 {
+		s.pool = pool[0]
+	}
+	return s
 }
 
 func (s *InvitationService) CreateInvite(ctx context.Context, companyID, userID int64) (string, error) {
 	if request, ok := authorization.FromContext(ctx); ok {
 		return s.sealedInvite(ctx, request, companyID, userID, "user.invite")
+	}
+	if s.pool != nil {
+		return "", authorization.ErrForbidden
 	}
 	if companyID <= 0 {
 		return "", ErrWelcomeResendIneligible
@@ -90,6 +100,9 @@ func (s *InvitationService) RenewPendingInvite(ctx context.Context, companyID, u
 		u, err := s.client.User.Get(ctx, userID)
 		return u, token, err
 	}
+	if s.pool != nil {
+		return nil, "", authorization.ErrForbidden
+	}
 	if companyID <= 0 {
 		return nil, "", ErrWelcomeResendIneligible
 	}
@@ -116,17 +129,9 @@ func (s *InvitationService) RenewPendingInvite(ctx context.Context, companyID, u
 	if err != nil {
 		return nil, "", err
 	}
-	updated, err := tx.User.Update().Where(welcomeInviteTarget(companyID, userID)...).SetWelcomeEmailSentAt(now).Save(ctx)
-	if err != nil {
-		return nil, "", fmt.Errorf("update welcome sent at: %w", err)
-	}
-	if updated != 1 {
-		return nil, "", ErrWelcomeResendIneligible
-	}
 	if err := tx.Commit(); err != nil {
 		return nil, "", fmt.Errorf("commit invitation renewal: %w", err)
 	}
-	u.WelcomeEmailSentAt = &now
 	return u, token, nil
 }
 
@@ -138,7 +143,7 @@ func (s *InvitationService) sealedInvite(ctx context.Context, request authorizat
 	token := hex.EncodeToString(b)
 	err := request.Service.MutateAccountLink(ctx, request.Actor, companyID, userID, action, func(tx pgx.Tx) error {
 		var eligible bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND company_id=$2 AND NOT is_active AND onboarding_completed_at IS NULL AND welcome_email_sent_at IS NOT NULL)`, userID, companyID).Scan(&eligible); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND company_id=$2 AND NOT is_active AND onboarding_completed_at IS NULL)`, userID, companyID).Scan(&eligible); err != nil {
 			return err
 		}
 		if !eligible {
@@ -147,16 +152,29 @@ func (s *InvitationService) sealedInvite(ctx context.Context, request authorizat
 		if _, err := tx.Exec(ctx, `UPDATE invitation_tokens SET consumed_at=clock_timestamp() WHERE user_id=$1 AND company_id=$2 AND consumed_at IS NULL`, userID, companyID); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO invitation_tokens(company_id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '72 hours')`, companyID, userID, tokenHash(token)); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO invitation_tokens(company_id,user_id,token_hash,created_at,expires_at) VALUES($1,$2,$3,statement_timestamp(),statement_timestamp()+interval '72 hours')`, companyID, userID, tokenHash(token)); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `UPDATE users SET welcome_email_sent_at=clock_timestamp() WHERE id=$1`, userID)
-		return err
+		if _, err := tx.Exec(ctx, `UPDATE onboarding_migration_review SET reviewed_at=coalesce(reviewed_at,clock_timestamp()) WHERE user_id=$1`, userID); err != nil {
+			return err
+		}
+		return nil
 	})
 	if err != nil {
 		return "", err
 	}
 	return token, nil
+}
+
+// NeedsOnboardingReview exposes only an Administrator-facing diagnostic, never
+// token contents or an invented activation event.
+func (s *InvitationService) NeedsOnboardingReview(ctx context.Context, companyID, userID int64) (bool, error) {
+	if s.pool == nil {
+		return false, nil
+	}
+	var pending bool
+	err := s.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM onboarding_migration_review r JOIN users u ON u.id=r.user_id WHERE u.id=$1 AND u.company_id=$2 AND r.reviewed_at IS NULL)`, userID, companyID).Scan(&pending)
+	return pending, err
 }
 
 func (s *InvitationService) ValidateInvite(ctx context.Context, token string) (InvitationTarget, error) {
@@ -180,6 +198,9 @@ func (s *InvitationService) ValidateInvite(ctx context.Context, token string) (I
 }
 
 func (s *InvitationService) AcceptInvite(ctx context.Context, token, password string) (*ent.User, error) {
+	if s.pool != nil {
+		return s.acceptPersistedInvitation(ctx, token, password)
+	}
 	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return nil, fmt.Errorf("begin invitation acceptance transaction: %w", err)
@@ -258,10 +279,24 @@ func welcomeInviteTarget(companyID, userID int64) []predicate.User {
 	return []predicate.User{
 		user.IDEQ(userID),
 		user.CompanyIDEQ(companyID),
-		user.WelcomeEmailSentAtNotNil(),
 		user.OnboardingCompletedAtIsNil(),
 		user.IsActiveEQ(false),
 	}
+}
+
+// RecordMailAccepted records only an observed transport handoff, never inbox
+// delivery. A failed record is reported separately from a failed handoff.
+func (s *InvitationService) RecordMailAccepted(ctx context.Context, companyID, userID int64) error {
+	if request, ok := authorization.FromContext(ctx); ok {
+		return request.Service.MutateAccountLink(ctx, request.Actor, companyID, userID, "user.invitation.mail.accepted", func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx, `UPDATE users SET welcome_email_sent_at=clock_timestamp() WHERE id=$1 AND company_id=$2`, userID, companyID)
+			return err
+		})
+	}
+	if s.pool != nil {
+		return authorization.ErrForbidden
+	}
+	return s.client.User.UpdateOneID(userID).SetWelcomeEmailSentAt(time.Now()).Exec(ctx)
 }
 
 func invitationAcceptanceTarget(companyID, userID int64) []predicate.User {
@@ -316,6 +351,7 @@ func createInvite(ctx context.Context, client *ent.Client, companyID, userID int
 		SetCompanyID(companyID).
 		SetTokenHash(hex.EncodeToString(hash[:])).
 		SetUserID(userID).
+		SetCreatedAt(now).
 		SetExpiresAt(now.Add(72 * time.Hour)).
 		Save(ctx)
 	if err != nil {

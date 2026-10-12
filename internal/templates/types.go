@@ -780,6 +780,7 @@ type UserDetail struct {
 type UserDetailPage struct {
 	User             UserRow
 	CanResendWelcome bool
+	OnboardingReview bool
 }
 
 type UserFormData struct {

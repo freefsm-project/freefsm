@@ -61,7 +61,7 @@ func TestResendWelcomeRejectsIneligiblePostWithoutMutation(t *testing.T) {
 	}
 	afterUser := client.User.GetX(ctx, u.ID)
 	afterTokens := client.InvitationToken.Query().Where(invitationtoken.UserIDEQ(u.ID)).AllX(ctx)
-	if afterUser.IsActive != beforeUser.IsActive || !afterUser.WelcomeEmailSentAt.Equal(*beforeUser.WelcomeEmailSentAt) {
+	if afterUser.IsActive != beforeUser.IsActive || afterUser.WelcomeEmailSentAt != nil || beforeUser.WelcomeEmailSentAt != nil {
 		t.Fatal("rejected handler request mutated user")
 	}
 	if len(afterTokens) != 1 || afterTokens[0].ConsumedAt != nil || beforeToken.ConsumedAt != nil {
@@ -120,7 +120,7 @@ func TestCreateDirectUserValidatesActingCompanyPasswordPolicy(t *testing.T) {
 	}
 
 	strongResponse := request("strong-direct@example.test", "StrongPassword1!", "StrongPassword1!")
-	if strongResponse.Code != http.StatusSeeOther || strongResponse.Header().Get("Location") != "/users?flash=User+created" {
+	if strongResponse.Code != http.StatusSeeOther || !strings.Contains(strongResponse.Header().Get("Location"), "Manual+onboarding+completed") {
 		t.Fatalf("strong password response = (%d, %q)", strongResponse.Code, strongResponse.Header().Get("Location"))
 	}
 	created := client.User.Query().OnlyX(ctx)
@@ -136,7 +136,7 @@ func TestCreateWelcomeUserDoesNotRequirePasswordConfirmation(t *testing.T) {
 	ctx := context.Background()
 	const companyID int64 = 93
 
-	client.CompanySettings.Create().SetCompanyID(companyID).SetBusinessName("Welcome Company").SaveX(ctx)
+	client.CompanySettings.Create().SetCompanyID(companyID).SetBusinessName("Welcome Company").SetSMTPHost("127.0.0.1").SetSMTPPort(1).SetSMTPFrom("sender@example.test").SaveX(ctx)
 	userSvc := services.NewUserService(client)
 	settingsSvc := services.NewCompanySettingsService(client)
 	h := NewUserHandler(userSvc, services.NewEmailService(settingsSvc), services.NewInvitationService(client), settingsSvc, nil, nil)
@@ -156,7 +156,7 @@ func TestCreateWelcomeUserDoesNotRequirePasswordConfirmation(t *testing.T) {
 	h.Create(w, r)
 
 	location, _ := url.QueryUnescape(w.Header().Get("Location"))
-	if w.Code != http.StatusSeeOther || !strings.Contains(location, "User created, but welcome email failed: SMTP not configured") {
+	if w.Code != http.StatusSeeOther || !strings.Contains(location, "Account pending; welcome email was not accepted") {
 		t.Fatalf("welcome creation response = (%d, %q)", w.Code, w.Header().Get("Location"))
 	}
 	created := client.User.Query().OnlyX(ctx)

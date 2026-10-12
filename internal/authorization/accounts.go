@@ -23,7 +23,7 @@ func (s *Service) MutateAccountLink(ctx context.Context, a Actor, companyID, use
 			return ErrForbidden
 		}
 		switch action {
-		case "user.invite", "user.welcome.resend", "user.recovery.resend":
+		case "user.invite", "user.welcome.resend", "user.recovery.resend", "user.invitation.mail.accepted":
 		default:
 			return ErrForbidden
 		}
@@ -53,7 +53,7 @@ func (s *Service) CreateAccount(ctx context.Context, a Actor, in NewAccount) (in
 		}
 		// The retained legacy discriminator is not authority. New accounts always
 		// carry an explicit Role identity and never acquire grants from that label.
-		err = tx.QueryRow(ctx, `INSERT INTO users(company_id,name,email,password_hash,role,authorization_role_id,is_active,force_password_change,onboarding_completed_at,welcome_email_sent_at) VALUES($1,$2,$3,$4,'tech',$5,$6,$6,CASE WHEN $6 THEN clock_timestamp() END,CASE WHEN NOT $6 THEN clock_timestamp() END) RETURNING id`, p.CompanyID, strings.TrimSpace(in.Name), in.Email, in.PasswordHash, in.RoleID, !in.Invited).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO users(company_id,name,email,password_hash,role,authorization_role_id,is_active,force_password_change,onboarding_completed_at) VALUES($1,$2,$3,$4,'tech',$5,$6,$6,CASE WHEN $6 THEN clock_timestamp() END) RETURNING id`, p.CompanyID, strings.TrimSpace(in.Name), in.Email, in.PasswordHash, in.RoleID, !in.Invited).Scan(&id)
 		if err != nil {
 			return err
 		}
