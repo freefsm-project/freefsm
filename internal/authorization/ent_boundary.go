@@ -128,7 +128,7 @@ func InstallCustomerBoundary(client *ent.Client) {
 				}))
 			}))
 			if !p.Allows("customer.financial.view", All) {
-				q.(*ent.ActivityLogQuery).Where(activitylog.Or(activitylog.ObjectTypeNEQ("customer"), activitylog.ActionIn("created", "updated", "archived", "restored")))
+				q.(*ent.ActivityLogQuery).Where(activitylog.Or(activitylog.ObjectTypeNEQ("customer"), activitylog.ActionIn("created", "updated", "archived", "restored", "comment_added", "comment_deleted")))
 			}
 		}
 		return nil

@@ -79,7 +79,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	locationSvc := services.NewLocationService(entClient)
 	tagSvc := services.NewTagService(entClient)
 	tagLinkSvc := services.NewTagLinkService(entClient, objects)
-	commentSvc := services.NewCommentService(entClient, objects)
 	activitySvc := services.NewActivityService(entClient, objects)
 	activityResolver := services.NewActivityResolver(entClient)
 	depSvc := services.NewDependencyService(entClient)
@@ -91,7 +90,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	statusflowService := statusflow.New(db)
 	deliveryService := delivery.New(db, cfg.PublicURL)
 	deliveryService.SetInstanceControl(control)
-	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc, policySvc, objects)
+	commentHandler := NewCommentHandler(objects)
 	defSvc := services.NewCustomFieldDefinitionService(entClient)
 	cfHandler := NewCustomFieldHandler(defSvc, activitySvc, depSvc)
 	timeEntrySvc := services.NewTimeEntryService(entClient)
@@ -361,8 +360,9 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			{"/assets", objectref.TypeAsset},
 		} {
 			r.Get(e.prefix+"/{id}/comments", commentHandler.List(e.objType))
-			r.With(activeObjectGuard(e.objType)).Post(e.prefix+"/{id}/comments", commentHandler.Create(e.objType))
-			r.With(activeObjectGuard(e.objType)).Post(e.prefix+"/{id}/comments/{cid}/delete", commentHandler.Delete(e.objType))
+			r.Post(e.prefix+"/{id}/comments", commentHandler.Create(e.objType))
+			r.Post(e.prefix+"/{id}/comments/{cid}/delete", commentHandler.Delete(e.objType))
+			r.Get(e.prefix+"/{id}/comments/{cid}/audit", commentHandler.Audit(e.objType))
 		}
 
 		// Activity

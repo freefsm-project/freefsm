@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -15,6 +16,7 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/activitylog"
 	commentent "github.com/freefsm-project/freefsm/internal/ent/comment"
@@ -103,7 +105,7 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d", unassignedJob.ID), http.StatusForbidden)
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d", archivedJob.ID), http.StatusForbidden)
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/comments", assignedJob.ID), http.StatusOK)
-		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/comments", archivedJob.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/comments", archivedJob.ID), http.StatusNotFound)
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/activity", assignedJob.ID), http.StatusOK)
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/activity", archivedJob.ID), http.StatusForbidden)
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/invoices/%d", invoice.ID), http.StatusForbidden)
@@ -186,7 +188,7 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 
 		expectStatus(t, router, dispatcherCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/edit", archivedJob.ID), http.StatusForbidden)
 		expectStatus(t, router, dispatcherCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/create-invoice", archivedJob.ID), http.StatusForbidden)
-		expectStatus(t, router, dispatcherCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/comments", archivedJob.ID), http.StatusForbidden)
+		expectStatus(t, router, dispatcherCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/comments", archivedJob.ID), http.StatusConflict)
 	})
 
 	t.Run("dispatcher can add a comment from the job view", func(t *testing.T) {
@@ -218,8 +220,11 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 		}
 		validPath := fmt.Sprintf("/jobs/%d/comments/%d/delete", assignedJob.ID, createdComment.ID)
 		expectStatus(t, router, adminCookie, http.MethodPost, validPath, http.StatusOK)
-		if client.Comment.Query().Where(commentent.IDEQ(createdComment.ID)).ExistX(ctx) {
-			t.Fatal("comment still exists after valid deletion")
+		body := requestBody(t, router, adminCookie, http.MethodGet, fmt.Sprintf("/jobs/%d/comments", assignedJob.ID), http.StatusOK)
+		assertContains(t, body, "Removed by Admin")
+		assertNotContains(t, body, "parent-bound")
+		if !client.Comment.Query().Where(commentent.IDEQ(createdComment.ID)).ExistX(ctx) {
+			t.Fatal("removal destroyed retained history")
 		}
 	})
 
@@ -328,11 +333,28 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
  CREATE TABLE authorization_grants(role_id bigint,permission text,scope text);
  INSERT INTO authorization_grants SELECT r,p,'A' FROM unnest(ARRAY[1,2]) r CROSS JOIN unnest(ARRAY['customer.view','customer.create','customer.edit','customer.financial.view','customer.archived.view','customer.archive','customer.restore']) p;
  INSERT INTO authorization_grants VALUES(3,'customer.view','C');
+ INSERT INTO authorization_grants SELECT r,p,'A' FROM unnest(ARRAY[1,2]) r CROSS JOIN unnest(ARRAY['job.view','job.archived.view','comment.add','comment.remove']) p;
+ INSERT INTO authorization_grants VALUES(3,'job.view','J'),(3,'comment.add','J'),(3,'comment.remove','O');
  CREATE TABLE authorization_permissions(permission text,scope text,prerequisite text);
  INSERT INTO authorization_permissions SELECT DISTINCT permission,scope,NULL::text FROM authorization_grants;
  CREATE TABLE authorization_view_requirements(permission text,scope text,requirement text,view_permission text,view_scope text);
  CREATE FUNCTION fixture_role_grants() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.authorization_role_id:=CASE NEW.role WHEN 'admin' THEN 1 WHEN 'dispatcher' THEN 2 ELSE 3 END;RETURN NEW;END $$;
  CREATE TRIGGER fixture_role_grants BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION fixture_role_grants();`); err != nil {
+		t.Fatal(err)
+	}
+	// Keep this older Ent fixture explicit; migrated production coverage lives
+	// in comments_v1_integration_test.go. Comments now use the protected writer.
+	if _, err := pool.Exec(context.Background(), `CREATE TABLE authorization_audit(actor_kind text,actor_id bigint,role_id bigint,action text,scope text,target_type text,target_id bigint,channel text,detail jsonb);
+ ALTER TABLE activity_logs ALTER COLUMN created_at SET DEFAULT NOW();
+ ALTER TABLE comments ALTER COLUMN created_at SET DEFAULT NOW();
+ ALTER TABLE comments ALTER COLUMN updated_at SET DEFAULT NOW();`); err != nil {
+		t.Fatal(err)
+	}
+	commentsMigration, err := fs.ReadFile(database.MigrationFS(), "058_comment_threads.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), string(commentsMigration)); err != nil {
 		t.Fatal(err)
 	}
 	return client, pool
