@@ -287,6 +287,10 @@ func (h authorizationHandler) MasterContext(w http.ResponseWriter, r *http.Reque
 }
 
 func customerPermission(r *http.Request, permission string) bool {
+	return allRecordsPermission(r, permission)
+}
+
+func allRecordsPermission(r *http.Request, permission string) bool {
 	request, ok := authorization.FromContext(r.Context())
 	if !ok {
 		return false

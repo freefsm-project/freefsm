@@ -363,6 +363,9 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 		return nil, fmt.Errorf("begin create job transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := checkItemSelections(ctx, tx, "job", 0, lineItems); err != nil {
+		return nil, err
+	}
 	txClient := tx.Client()
 	b := txClient.Job.Create().
 		SetCompanyID(companyID).
@@ -417,6 +420,9 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 	if err := s.replaceAssignments(ctx, txClient, j.ID, assignments); err != nil {
 		return nil, err
 	}
+	if err := recheckSelectionActor(ctx); err != nil {
+		return nil, err
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit create job transaction: %w", err)
 	}
@@ -424,6 +430,7 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 }
 
 func (s *JobService) CreateNextOccurrence(ctx context.Context, companyID, sourceID int64, nextStart time.Time) (*ent.Job, error) {
+	ctx = authorization.WithCapturedItemSource(ctx, "job", sourceID)
 	if companyID <= 0 {
 		return nil, fmt.Errorf("create next job occurrence: company is required")
 	}
@@ -626,6 +633,11 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 	}
 	defer func() { _ = tx.Rollback() }()
 	txClient := tx.Client()
+	if params.LineItems != nil {
+		if err := checkItemSelections(ctx, tx, "job", id, encodedLineItems); err != nil {
+			return nil, err
+		}
+	}
 	u := txClient.Job.UpdateOneID(id)
 
 	if params.CustomerID != nil {
@@ -712,6 +724,11 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 	}
 	if params.Assignments != nil {
 		if err := s.replaceAssignments(ctx, txClient, id, assignments); err != nil {
+			return nil, err
+		}
+	}
+	if params.LineItems != nil {
+		if err := recheckSelectionActor(ctx); err != nil {
 			return nil, err
 		}
 	}

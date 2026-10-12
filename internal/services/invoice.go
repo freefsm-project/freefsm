@@ -232,6 +232,11 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 			return v, v.ID, nil
 		})
 	}
+	if s.db == nil && needsCatalogTransaction(ctx) {
+		return catalogWrite(ctx, s.client, "invoice", 0, params.LineItems, func(ctx context.Context, c *ent.Client) (*ent.Invoice, error) {
+			return NewInvoiceService(c).Create(ctx, params)
+		})
+	}
 	var customerCompanyID *int64
 	if request, ok := authorization.FromContext(ctx); ok {
 		input, err := request.Service.DocumentCustomer(ctx, request.Actor, params.CustomerID, params.JobID, params.TaxRate)
@@ -339,6 +344,9 @@ func (s *InvoiceService) createTransactionally(ctx context.Context, params Invoi
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	if err := checkItemSelections(ctx, tx, "invoice", 0, lineItems); err != nil {
+		return nil, err
+	}
 	var next int64
 	if err = tx.QueryRow(ctx, `SELECT next_invoice_number FROM company_settings WHERE company_id=$1 FOR UPDATE`, *cs.CompanyID).Scan(&next); err != nil {
 		return nil, err
@@ -369,6 +377,9 @@ func (s *InvoiceService) createTransactionally(ctx context.Context, params Invoi
 			return nil, err
 		}
 	}
+	if err := recheckSelectionActor(ctx); err != nil {
+		return nil, err
+	}
 	if err = tx.Commit(ctx); err != nil {
 		return nil, err
 	}
@@ -391,6 +402,11 @@ func (s *InvoiceService) SaveDetails(ctx context.Context, id int64, params Invoi
 }
 
 func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpdateParams) (*ent.Invoice, error) {
+	if needsCatalogTransaction(ctx) && params.LineItems != nil {
+		return catalogWrite(ctx, s.client, "invoice", id, *params.LineItems, func(ctx context.Context, c *ent.Client) (*ent.Invoice, error) {
+			return NewInvoiceService(c).update(ctx, id, params)
+		})
+	}
 	var encodedLineItems string
 	if params.LineItems != nil {
 		var err error
@@ -651,6 +667,7 @@ func (s *InvoiceService) LineItems(i *ent.Invoice) []LineItem {
 }
 
 func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService, defaultTaxRate string) (*ent.Invoice, error) {
+	ctx = authorization.WithCapturedItemSource(ctx, "job", jobID)
 	j, err := s.client.Job.Get(ctx, jobID)
 	if err != nil {
 		return nil, fmt.Errorf("get job %d: %w", jobID, err)

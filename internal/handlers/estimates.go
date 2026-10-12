@@ -443,7 +443,7 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		if renderFieldSaveError(w, r, h.defSvc, "estimate", err) {
 			return
 		}
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())

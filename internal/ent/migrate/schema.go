@@ -604,13 +604,6 @@ var (
 		Name:       "items",
 		Columns:    ItemsColumns,
 		PrimaryKey: []*schema.Column{ItemsColumns[0]},
-		Indexes: []*schema.Index{
-			{
-				Name:    "item_name",
-				Unique:  true,
-				Columns: []*schema.Column{ItemsColumns[2]},
-			},
-		},
 	}
 	// JobsColumns holds the columns for the "jobs" table.
 	JobsColumns = []*schema.Column{

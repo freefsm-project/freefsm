@@ -148,7 +148,7 @@ templ Layout(title string, children ...templ.Component) {
 						<a href="/estimates" class={ templ.KV("active", isActivePath(ctx, "/estimates")) }>Estimates</a>
 						<a href="/invoices" class={ templ.KV("active", isActivePath(ctx, "/invoices")) }>Invoices</a>
 					}
-				if canManageOperational(ctx) {
+				if itemPermission(ctx, "item.view") {
 					<a href="/items" class={ templ.KV("active", isActivePath(ctx, "/items")) }>Items</a>
 				}
 			<a href="/time-entries" class={ templ.KV("active", isActivePath(ctx, "/time-entries")) }>Timesheets</a>

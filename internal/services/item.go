@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/item"
+	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 )
 
 type ItemService struct {
@@ -18,7 +20,16 @@ func NewItemService(client *ent.Client) *ItemService {
 }
 
 func (s *ItemService) ListActive(ctx context.Context) ([]*ent.Item, error) {
-	return s.client.Item.Query().Where(item.IsActive(true), item.DeletedAtIsNil()).Order(ent.Asc(item.FieldName)).All(ctx)
+	if r, ok := authorization.FromContext(ctx); ok {
+		p, err := r.Service.Principal(ctx, r.Actor)
+		if err != nil {
+			return nil, err
+		}
+		if !p.Allows("item.view", authorization.All) || !p.Allows("pricebook.view", authorization.All) {
+			return []*ent.Item{}, nil
+		}
+	}
+	return s.client.Item.Query().Where(item.IsActive(true), item.DeletedAtIsNil()).Order(ent.Asc(item.FieldName), ent.Asc(item.FieldID)).All(ctx)
 }
 
 type ItemCreateParams struct {
@@ -51,13 +62,16 @@ func (s *ItemService) List(ctx context.Context, search string, page, perPage int
 	q := s.client.Item.Query().Where(item.DeletedAtIsNil())
 
 	if search != "" {
-		q = q.Where(
-			item.Or(
-				item.NameContainsFold(search),
-				item.SkuContainsFold(search),
-				item.DescriptionContainsFold(search),
-			),
-		)
+		filters := []predicate.Item{item.NameContainsFold(search), item.DescriptionContainsFold(search)}
+		pricebook := true
+		if r, ok := authorization.FromContext(ctx); ok {
+			p, err := r.Service.Principal(ctx, r.Actor)
+			pricebook = err == nil && p.Allows("pricebook.view", authorization.All)
+		}
+		if pricebook {
+			filters = append(filters, item.SkuContainsFold(search))
+		}
+		q = q.Where(item.Or(filters...))
 	}
 
 	total, err := q.Count(ctx)
@@ -67,7 +81,7 @@ func (s *ItemService) List(ctx context.Context, search string, page, perPage int
 
 	offset := PaginationOffset(page, perPage)
 	items, err := q.
-		Order(ent.Asc(item.FieldName)).
+		Order(ent.Asc(item.FieldName), ent.Asc(item.FieldID)).
 		Limit(perPage).
 		Offset(offset).
 		All(ctx)

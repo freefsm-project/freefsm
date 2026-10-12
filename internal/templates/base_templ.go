@@ -477,7 +477,7 @@ func Layout(title string, children ...templ.Component) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		if canManageOperational(ctx) {
+		if itemPermission(ctx, "item.view") {
 			var templ_7745c5c3_Var38 = []any{templ.KV("active", isActivePath(ctx, "/items"))}
 			templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var38...)
 			if templ_7745c5c3_Err != nil {
