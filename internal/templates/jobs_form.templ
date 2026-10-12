@@ -502,7 +502,9 @@ templ JobQuickCreateDialogs(p JobFormPageData) {
 						<select id="job-asset-type-id" required>
 							<option value="0">Select asset type...</option>
 							for _, t := range p.AssetTypes {
+								if !t.Retired {
 								<option value={ fmt.Sprintf("%d", t.Value) }>{ t.Label }</option>
+								}
 							}
 						</select>
 					</label>
@@ -510,7 +512,9 @@ templ JobQuickCreateDialogs(p JobFormPageData) {
 						<select id="job-asset-status-id">
 							<option value="0">No Status</option>
 							for _, s := range p.AssetStatuses {
+								if !s.Retired {
 								<option value={ fmt.Sprintf("%d", s.Value) }>{ s.Label }</option>
+								}
 							}
 						</select>
 					</label>

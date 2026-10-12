@@ -101,7 +101,7 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, c.ID))
 	var allTags []*ent.Tag
-	if customerPermission(r, "customer.edit") {
+	if canAttachTag(r, "customer", c.ID) {
 		allTags, _ = h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")

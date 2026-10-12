@@ -131,6 +131,7 @@ var (
 	// AssetStatusesColumns holds the columns for the "asset_statuses" table.
 	AssetStatusesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "retired", Type: field.TypeBool, Default: false},
 		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "name", Type: field.TypeString},
 		{Name: "color", Type: field.TypeString, Default: "#6B7280"},
@@ -146,13 +147,14 @@ var (
 			{
 				Name:    "assetstatus_company_id",
 				Unique:  false,
-				Columns: []*schema.Column{AssetStatusesColumns[1]},
+				Columns: []*schema.Column{AssetStatusesColumns[2]},
 			},
 		},
 	}
 	// AssetTypesColumns holds the columns for the "asset_types" table.
 	AssetTypesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "retired", Type: field.TypeBool, Default: false},
 		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "name", Type: field.TypeString},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
@@ -167,7 +169,7 @@ var (
 			{
 				Name:    "assettype_company_id",
 				Unique:  false,
-				Columns: []*schema.Column{AssetTypesColumns[1]},
+				Columns: []*schema.Column{AssetTypesColumns[2]},
 			},
 		},
 	}
@@ -839,6 +841,7 @@ var (
 	// TagsColumns holds the columns for the "tags" table.
 	TagsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "retired", Type: field.TypeBool, Default: false},
 		{Name: "company_id", Type: field.TypeInt64},
 		{Name: "name", Type: field.TypeString},
 		{Name: "color", Type: field.TypeString, Default: "#3B82F6"},

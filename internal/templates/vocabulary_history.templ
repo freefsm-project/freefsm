@@ -1,0 +1,22 @@
+package templates
+
+import "fmt"
+
+type VocabularyHistoryRow struct {
+ ID int64
+ When, Operation, Before, After string
+}
+
+templ VocabularyHistory(rows []VocabularyHistoryRow, path string, next int64) {
+ <section>
+  <h3>Definition history</h3>
+  <ul>
+   for _, row := range rows {
+    <li><time>{ row.When }</time> { row.Operation }: { row.Before } → { row.After }</li>
+   }
+  </ul>
+  if next != 0 {
+   <a href={ templ.URL(fmt.Sprintf("%s?before=%d", path, next)) }>Older definition history</a>
+  }
+ </section>
+}

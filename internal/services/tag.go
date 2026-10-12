@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"strings"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
@@ -47,6 +48,13 @@ func (s *TagService) GetByID(ctx context.Context, companyID, id int64) (*ent.Tag
 }
 
 func (s *TagService) Create(ctx context.Context, companyID int64, name, color string) (*ent.Tag, error) {
+	if req, ok := authorization.FromContext(ctx); ok {
+		id, err := req.Service.ChangeVocabulary(ctx, req.Actor, "tag", 0, "save", authorization.VocabularyInput{Name: name, Color: color})
+		if err != nil {
+			return nil, err
+		}
+		return s.GetByID(ctx, companyID, id)
+	}
 	if err := validateCompanyID(companyID); err != nil {
 		return nil, err
 	}
@@ -69,6 +77,13 @@ func (s *TagService) Create(ctx context.Context, companyID int64, name, color st
 }
 
 func (s *TagService) Update(ctx context.Context, companyID, id int64, name, color string) (*ent.Tag, error) {
+	if req, ok := authorization.FromContext(ctx); ok {
+		_, err := req.Service.ChangeVocabulary(ctx, req.Actor, "tag", id, "save", authorization.VocabularyInput{Name: name, Color: color})
+		if err != nil {
+			return nil, err
+		}
+		return s.GetByID(ctx, companyID, id)
+	}
 	if err := validateCompanyID(companyID); err != nil {
 		return nil, err
 	}
@@ -91,6 +106,10 @@ func (s *TagService) Update(ctx context.Context, companyID, id int64, name, colo
 }
 
 func (s *TagService) Delete(ctx context.Context, companyID, id int64) error {
+	if req, ok := authorization.FromContext(ctx); ok {
+		_, err := req.Service.ChangeVocabulary(ctx, req.Actor, "tag", id, "delete", authorization.VocabularyInput{})
+		return err
+	}
 	if err := validateCompanyID(companyID); err != nil {
 		return err
 	}

@@ -20,6 +20,20 @@ type AssetTypeCreate struct {
 	hooks    []Hook
 }
 
+// SetRetired sets the "retired" field.
+func (_c *AssetTypeCreate) SetRetired(v bool) *AssetTypeCreate {
+	_c.mutation.SetRetired(v)
+	return _c
+}
+
+// SetNillableRetired sets the "retired" field if the given value is not nil.
+func (_c *AssetTypeCreate) SetNillableRetired(v *bool) *AssetTypeCreate {
+	if v != nil {
+		_c.SetRetired(*v)
+	}
+	return _c
+}
+
 // SetCompanyID sets the "company_id" field.
 func (_c *AssetTypeCreate) SetCompanyID(v int64) *AssetTypeCreate {
 	_c.mutation.SetCompanyID(v)
@@ -109,6 +123,10 @@ func (_c *AssetTypeCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *AssetTypeCreate) defaults() {
+	if _, ok := _c.mutation.Retired(); !ok {
+		v := assettype.DefaultRetired
+		_c.mutation.SetRetired(v)
+	}
 	if _, ok := _c.mutation.SortOrder(); !ok {
 		v := assettype.DefaultSortOrder
 		_c.mutation.SetSortOrder(v)
@@ -121,6 +139,9 @@ func (_c *AssetTypeCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *AssetTypeCreate) check() error {
+	if _, ok := _c.mutation.Retired(); !ok {
+		return &ValidationError{Name: "retired", err: errors.New(`ent: missing required field "AssetType.retired"`)}
+	}
 	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "AssetType.name"`)}
 	}
@@ -166,6 +187,10 @@ func (_c *AssetTypeCreate) createSpec() (*AssetType, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.Retired(); ok {
+		_spec.SetField(assettype.FieldRetired, field.TypeBool, value)
+		_node.Retired = value
 	}
 	if value, ok := _c.mutation.CompanyID(); ok {
 		_spec.SetField(assettype.FieldCompanyID, field.TypeInt64, value)

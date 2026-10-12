@@ -135,15 +135,16 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 	// Get tags
 	tagLinks, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeAsset, id))
 	var allTags []*ent.Tag
-	if isAdminOrDispatcher(u) {
+	if canAttachTag(r, "asset", id) {
 		allTags, _ = h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	}
 	assignedTags := make([]templates.TagRow, 0, len(tagLinks))
 	for _, tl := range tagLinks {
 		assignedTags = append(assignedTags, templates.TagRow{
-			ID:    tl.ID,
-			Name:  tl.Name,
-			Color: tl.Color,
+			Retired: tl.Retired,
+			ID:      tl.ID,
+			Name:    tl.Name,
+			Color:   tl.Color,
 		})
 	}
 	availableTags := make([]templates.TagRow, 0)
@@ -157,9 +158,10 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 		if !found {
 			availableTags = append(availableTags, templates.TagRow{
-				ID:    t.ID,
-				Name:  t.Name,
-				Color: t.Color,
+				Retired: t.Retired,
+				ID:      t.ID,
+				Name:    t.Name,
+				Color:   t.Color,
 			})
 		}
 	}
@@ -234,7 +236,7 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.svc.Create(r.Context(), u.CompanyID, params)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		writeAssetVocabularyError(w, r, err)
 		return
 	}
 	if u != nil {
@@ -304,7 +306,7 @@ func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		CustomFields:    "[]",
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeAssetVocabularyError(w, r, err)
 		return
 	}
 	if u != nil {
@@ -379,7 +381,7 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.svc.Update(r.Context(), u.CompanyID, id, params)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		writeAssetVocabularyError(w, r, err)
 		return
 	}
 	if u != nil {
@@ -567,7 +569,7 @@ func jobRowForAsset(j *ent.Job) templates.JobRow {
 func assetTypesToOptions(types []*ent.AssetType) []templates.SelectOption {
 	options := make([]templates.SelectOption, len(types))
 	for i, t := range types {
-		options[i] = templates.SelectOption{Value: t.ID, Label: t.Name}
+		options[i] = templates.SelectOption{Value: t.ID, Label: t.Name, Retired: t.Retired}
 	}
 	return options
 }
@@ -575,7 +577,7 @@ func assetTypesToOptions(types []*ent.AssetType) []templates.SelectOption {
 func assetStatusesToOptions(statuses []*ent.AssetStatus) []templates.SelectOption {
 	options := make([]templates.SelectOption, len(statuses))
 	for i, s := range statuses {
-		options[i] = templates.SelectOption{Value: s.ID, Label: s.Name}
+		options[i] = templates.SelectOption{Value: s.ID, Label: s.Name, Retired: s.Retired}
 	}
 	return options
 }

@@ -39,6 +39,7 @@ func (h *AssetTypeHandler) Show(w http.ResponseWriter, r *http.Request) {
 	typeRows := make([]templates.AssetTypeRow, len(types))
 	for i, t := range types {
 		typeRows[i] = templates.AssetTypeRow{
+			Retired:   t.Retired,
 			ID:        t.ID,
 			Name:      t.Name,
 			SortOrder: t.SortOrder,
@@ -48,6 +49,7 @@ func (h *AssetTypeHandler) Show(w http.ResponseWriter, r *http.Request) {
 	statusRows := make([]templates.AssetStatusRow, len(statuses))
 	for i, s := range statuses {
 		statusRows[i] = templates.AssetStatusRow{
+			Retired:   s.Retired,
 			ID:        s.ID,
 			Name:      s.Name,
 			Color:     s.Color,

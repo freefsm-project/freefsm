@@ -76,7 +76,11 @@ func TestTagLinkServiceAttachAgainstSchemaThrough045Integration(t *testing.T) {
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO companies(name,slug) VALUES('Tag owner','tag-owner') RETURNING id`).Scan(&companyID); err != nil {
 		t.Fatal(err)
 	}
-	tag := client.Tag.Create().SetCompanyID(companyID).SetName("Priority").SaveX(ctx)
+	// Seed using the historical schema, not today's generated Ent fields.
+	tag := &ent.Tag{}
+	if err := db.Pool.QueryRow(ctx, `INSERT INTO tags(company_id,name) VALUES($1,'Priority') RETURNING id`, companyID).Scan(&tag.ID); err != nil {
+		t.Fatal(err)
+	}
 	// Build a genuine 045 Customer row before the new schema is installed.
 	var legacyCustomerID int64
 	if err := db.Pool.QueryRow(ctx, `INSERT INTO customers(company_id,display_name) VALUES($1,'Tagged Customer') RETURNING id`, companyID).Scan(&legacyCustomerID); err != nil {

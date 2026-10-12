@@ -79,75 +79,81 @@ func TagWidget(p TagWidgetData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if canManageOperational(ctx) && !p.ReadOnly {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<button class=\"tag-remove\" hx-post=\"")
+			if t.Retired {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<small>(retired)</small> ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			if tagPermission(ctx, p.BaseURL, "detach") && !p.ReadOnly {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<button class=\"tag-remove\" hx-post=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%s/tags/%d/detach", p.BaseURL, t.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 14, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 17, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\" hx-target=\"#tag-widget\" hx-swap=\"outerHTML\">×</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\" hx-target=\"#tag-widget\" hx-swap=\"outerHTML\">×</button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</span> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</span> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		if canManageOperational(ctx) && !p.ReadOnly && len(p.AllTags) > len(p.Tags) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<select class=\"tag-select\" hx-on:change=\"htmx.trigger(this, 'addTag')\"><option value=\"\">Add Tag</option> ")
+		if tagPermission(ctx, p.BaseURL, "attach") && !p.ReadOnly && len(p.AllTags) > 0 {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<select class=\"tag-select\" hx-on:change=\"htmx.trigger(this, 'addTag')\"><option value=\"\">Add Tag</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, t := range p.AllTags {
-				if !tagInList(t.ID, p.Tags) {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<option value=\"")
+				if !t.Retired && !tagInList(t.ID, p.Tags) {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<option value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", t.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 29, Col: 46}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 32, Col: 46}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(t.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 29, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/tags_widget.templ`, Line: 32, Col: 57}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</option>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</option>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</select><script>\n\t\t\t\t\tdocument.addEventListener('addTag', function(evt) {\n\t\t\t\t\t\tvar select = evt.target;\n\t\t\t\t\t\tvar tagID = select.value;\n\t\t\t\t\t\tif (!tagID) return;\n\t\t\t\t\t\tvar url = select.closest('#tag-widget').dataset.baseUrl + '/tags/' + tagID + '/attach';\n\t\t\t\t\t\thtmx.ajax('POST', url, {target: '#tag-widget', swap: 'outerHTML'});\n\t\t\t\t\t\tselect.value = '';\n\t\t\t\t\t});\n\t\t\t\t</script>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</select><script>\n\t\t\t\t\tif (!window.freefsmTagListenerInstalled) {\n\t\t\t\t\twindow.freefsmTagListenerInstalled = true;\n\t\t\t\t\tdocument.addEventListener('addTag', function(evt) {\n\t\t\t\t\t\tvar select = evt.target;\n\t\t\t\t\t\tvar tagID = select.value;\n\t\t\t\t\t\tif (!tagID) return;\n\t\t\t\t\t\tvar url = select.closest('#tag-widget').dataset.baseUrl + '/tags/' + tagID + '/attach';\n\t\t\t\t\t\thtmx.ajax('POST', url, {target: '#tag-widget', swap: 'outerHTML'});\n\t\t\t\t\t\tselect.value = '';\n\t\t\t\t\t});\n\t\t\t\t\t}\n\t\t\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

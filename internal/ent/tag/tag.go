@@ -13,6 +13,8 @@ const (
 	Label = "tag"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldRetired holds the string denoting the retired field in the database.
+	FieldRetired = "retired"
 	// FieldCompanyID holds the string denoting the company_id field in the database.
 	FieldCompanyID = "company_id"
 	// FieldName holds the string denoting the name field in the database.
@@ -28,6 +30,7 @@ const (
 // Columns holds all SQL columns for tag fields.
 var Columns = []string{
 	FieldID,
+	FieldRetired,
 	FieldCompanyID,
 	FieldName,
 	FieldColor,
@@ -45,6 +48,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultRetired holds the default value on creation for the "retired" field.
+	DefaultRetired bool
 	// NameValidator is a validator for the "name" field. It is called by the builders before save.
 	NameValidator func(string) error
 	// DefaultColor holds the default value on creation for the "color" field.
@@ -59,6 +64,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByRetired orders the results by the retired field.
+func ByRetired(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRetired, opts...).ToFunc()
 }
 
 // ByCompanyID orders the results by the company_id field.

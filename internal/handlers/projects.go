@@ -140,7 +140,7 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeProject, id))
 	var allTags []*ent.Tag
-	if isAdminOrDispatcher(u) {
+	if canAttachTag(r, "project", id) {
 		allTags, _ = h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "project")

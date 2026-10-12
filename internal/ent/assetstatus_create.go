@@ -20,6 +20,20 @@ type AssetStatusCreate struct {
 	hooks    []Hook
 }
 
+// SetRetired sets the "retired" field.
+func (_c *AssetStatusCreate) SetRetired(v bool) *AssetStatusCreate {
+	_c.mutation.SetRetired(v)
+	return _c
+}
+
+// SetNillableRetired sets the "retired" field if the given value is not nil.
+func (_c *AssetStatusCreate) SetNillableRetired(v *bool) *AssetStatusCreate {
+	if v != nil {
+		_c.SetRetired(*v)
+	}
+	return _c
+}
+
 // SetCompanyID sets the "company_id" field.
 func (_c *AssetStatusCreate) SetCompanyID(v int64) *AssetStatusCreate {
 	_c.mutation.SetCompanyID(v)
@@ -123,6 +137,10 @@ func (_c *AssetStatusCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *AssetStatusCreate) defaults() {
+	if _, ok := _c.mutation.Retired(); !ok {
+		v := assetstatus.DefaultRetired
+		_c.mutation.SetRetired(v)
+	}
 	if _, ok := _c.mutation.Color(); !ok {
 		v := assetstatus.DefaultColor
 		_c.mutation.SetColor(v)
@@ -139,6 +157,9 @@ func (_c *AssetStatusCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *AssetStatusCreate) check() error {
+	if _, ok := _c.mutation.Retired(); !ok {
+		return &ValidationError{Name: "retired", err: errors.New(`ent: missing required field "AssetStatus.retired"`)}
+	}
 	if _, ok := _c.mutation.Name(); !ok {
 		return &ValidationError{Name: "name", err: errors.New(`ent: missing required field "AssetStatus.name"`)}
 	}
@@ -187,6 +208,10 @@ func (_c *AssetStatusCreate) createSpec() (*AssetStatus, *sqlgraph.CreateSpec) {
 	if id, ok := _c.mutation.ID(); ok {
 		_node.ID = id
 		_spec.ID.Value = id
+	}
+	if value, ok := _c.mutation.Retired(); ok {
+		_spec.SetField(assetstatus.FieldRetired, field.TypeBool, value)
+		_node.Retired = value
 	}
 	if value, ok := _c.mutation.CompanyID(); ok {
 		_spec.SetField(assetstatus.FieldCompanyID, field.TypeInt64, value)

@@ -27,6 +27,20 @@ func (_u *TagUpdate) Where(ps ...predicate.Tag) *TagUpdate {
 	return _u
 }
 
+// SetRetired sets the "retired" field.
+func (_u *TagUpdate) SetRetired(v bool) *TagUpdate {
+	_u.mutation.SetRetired(v)
+	return _u
+}
+
+// SetNillableRetired sets the "retired" field if the given value is not nil.
+func (_u *TagUpdate) SetNillableRetired(v *bool) *TagUpdate {
+	if v != nil {
+		_u.SetRetired(*v)
+	}
+	return _u
+}
+
 // SetCompanyID sets the "company_id" field.
 func (_u *TagUpdate) SetCompanyID(v int64) *TagUpdate {
 	_u.mutation.ResetCompanyID()
@@ -130,6 +144,9 @@ func (_u *TagUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.Retired(); ok {
+		_spec.SetField(tag.FieldRetired, field.TypeBool, value)
+	}
 	if value, ok := _u.mutation.CompanyID(); ok {
 		_spec.SetField(tag.FieldCompanyID, field.TypeInt64, value)
 	}
@@ -160,6 +177,20 @@ type TagUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *TagMutation
+}
+
+// SetRetired sets the "retired" field.
+func (_u *TagUpdateOne) SetRetired(v bool) *TagUpdateOne {
+	_u.mutation.SetRetired(v)
+	return _u
+}
+
+// SetNillableRetired sets the "retired" field if the given value is not nil.
+func (_u *TagUpdateOne) SetNillableRetired(v *bool) *TagUpdateOne {
+	if v != nil {
+		_u.SetRetired(*v)
+	}
+	return _u
 }
 
 // SetCompanyID sets the "company_id" field.
@@ -294,6 +325,9 @@ func (_u *TagUpdateOne) sqlSave(ctx context.Context) (_node *Tag, err error) {
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.Retired(); ok {
+		_spec.SetField(tag.FieldRetired, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.CompanyID(); ok {
 		_spec.SetField(tag.FieldCompanyID, field.TypeInt64, value)

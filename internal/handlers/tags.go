@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -38,9 +39,10 @@ func (h *TagHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows := make([]templates.TagRow, len(tags))
 	for i, t := range tags {
 		rows[i] = templates.TagRow{
-			ID:    t.ID,
-			Name:  t.Name,
-			Color: t.Color,
+			Retired: t.Retired,
+			ID:      t.ID,
+			Name:    t.Name,
+			Color:   t.Color,
 		}
 	}
 
@@ -225,8 +227,12 @@ func tagRouteIDs(w http.ResponseWriter, r *http.Request) (int64, int64, bool) {
 	return id, tagID, true
 }
 
-// The tag mutation has already committed; activity is intentionally best-effort.
+// Migrated commands already commit their activity and immutable audit together.
+// This adapter is retained for trusted legacy callers without a request actor.
 func recordTagActivity(r *http.Request, svc *services.ActivityService, u *middleware.UserInfo, action string, target objectref.Ref, metadata map[string]interface{}) {
+	if _, ok := authorization.FromContext(r.Context()); ok {
+		return
+	}
 	if err := svc.Record(r.Context(), u.CompanyID, u.ID, action, target, metadata); err != nil {
 		slog.Error("record tag activity", "error", err, "operation", action, "object_type", target.Type, "object_id", target.ID, "company_id", u.CompanyID, "actor_id", u.ID)
 	}

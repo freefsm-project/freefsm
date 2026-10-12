@@ -262,12 +262,12 @@ func (_q *AssetTypeQuery) Clone() *AssetTypeQuery {
 // Example:
 //
 //	var v []struct {
-//		CompanyID int64 `json:"company_id,omitempty"`
+//		Retired bool `json:"retired,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.AssetType.Query().
-//		GroupBy(assettype.FieldCompanyID).
+//		GroupBy(assettype.FieldRetired).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *AssetTypeQuery) GroupBy(field string, fields ...string) *AssetTypeGroupBy {
@@ -285,11 +285,11 @@ func (_q *AssetTypeQuery) GroupBy(field string, fields ...string) *AssetTypeGrou
 // Example:
 //
 //	var v []struct {
-//		CompanyID int64 `json:"company_id,omitempty"`
+//		Retired bool `json:"retired,omitempty"`
 //	}
 //
 //	client.AssetType.Query().
-//		Select(assettype.FieldCompanyID).
+//		Select(assettype.FieldRetired).
 //		Scan(ctx, &v)
 func (_q *AssetTypeQuery) Select(fields ...string) *AssetTypeSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

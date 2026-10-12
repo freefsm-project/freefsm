@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -132,7 +133,14 @@ func (h *ActivityHandler) ListByType(objectType objectref.Type) http.HandlerFunc
 		if !ok {
 			return
 		}
-		if objectType.AdminOnly() && !u.ProtectedAdministrator {
+		vocabularyView := false
+		if objectType == objectref.TypeTag {
+			if req, ok := authorization.FromContext(r.Context()); ok {
+				p, err := req.Service.Principal(r.Context(), req.Actor)
+				vocabularyView = err == nil && p.Allows("configuration.tags.view", authorization.Configuration)
+			}
+		}
+		if objectType.AdminOnly() && !u.ProtectedAdministrator && !vocabularyView {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}

@@ -8,7 +8,10 @@ templ TagWidget(p TagWidgetData) {
 			for _, t := range p.Tags {
 				<span class="tag-badge" style={ badgeStyle(t.Color) }>
 					{ t.Name }
-					if canManageOperational(ctx) && !p.ReadOnly {
+					if t.Retired {
+						<small> (retired)</small>
+					}
+					if tagPermission(ctx, p.BaseURL, "detach") && !p.ReadOnly {
 						<button
 							class="tag-remove"
 							hx-post={ fmt.Sprintf("%s/tags/%d/detach", p.BaseURL, t.ID) }
@@ -18,19 +21,21 @@ templ TagWidget(p TagWidgetData) {
 					}
 				</span>
 			}
-			if canManageOperational(ctx) && !p.ReadOnly && len(p.AllTags) > len(p.Tags) {
+			if tagPermission(ctx, p.BaseURL, "attach") && !p.ReadOnly && len(p.AllTags) > 0 {
 				<select
 					class="tag-select"
 					hx-on:change="htmx.trigger(this, 'addTag')"
 				>
 					<option value="">Add Tag</option>
 					for _, t := range p.AllTags {
-						if !tagInList(t.ID, p.Tags) {
+						if !t.Retired && !tagInList(t.ID, p.Tags) {
 							<option value={ fmt.Sprintf("%d", t.ID) }>{ t.Name }</option>
 						}
 					}
 				</select>
 				<script>
+					if (!window.freefsmTagListenerInstalled) {
+					window.freefsmTagListenerInstalled = true;
 					document.addEventListener('addTag', function(evt) {
 						var select = evt.target;
 						var tagID = select.value;
@@ -39,6 +44,7 @@ templ TagWidget(p TagWidgetData) {
 						htmx.ajax('POST', url, {target: '#tag-widget', swap: 'outerHTML'});
 						select.value = '';
 					});
+					}
 				</script>
 			}
 		</div>

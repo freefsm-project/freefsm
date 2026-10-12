@@ -528,8 +528,9 @@ type JobDetail struct {
 }
 
 type SelectOption struct {
-	Value int64
-	Label string
+	Retired bool
+	Value   int64
+	Label   string
 }
 
 type JobListPageData struct {
@@ -1394,9 +1395,10 @@ type SchedulePageData struct {
 }
 
 type TagRow struct {
-	ID    int64
-	Name  string
-	Color string
+	Retired bool
+	ID      int64
+	Name    string
+	Color   string
 }
 
 type TagListPageData struct {
@@ -1704,6 +1706,7 @@ type AssetTypeListPageData struct {
 }
 
 type AssetTypeRow struct {
+	Retired   bool
 	ID        int64
 	Name      string
 	SortOrder int
@@ -1714,6 +1717,7 @@ type AssetStatusListPageData struct {
 }
 
 type AssetStatusRow struct {
+	Retired   bool
 	ID        int64
 	Name      string
 	Color     string
