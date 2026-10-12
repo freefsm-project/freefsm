@@ -164,3 +164,62 @@ All identified #19 catalog and shared host-audit findings are addressed. #19 is
 implementation-complete for coordinator verification within its declared scope;
 this is not issue closure, a Job-domain migration, or completion of #107's native
 release/OS acceptance gates. Skips and wider matrix limits above still apply.
+
+## Merger verification of 627386a
+
+Merged `implement/v1-19` at `627386a067c108ab76b234dac3e1370500bad950`
+into the clean integration worktree after inspecting status, diff, and log.
+Reviewed the live #19 acceptance criteria and the implementer handoff at
+`/tmp/opencode/freefsm-v1-context/ticket-019-merger-fixes-evidence.md` against
+the forward migrations, catalog validation/effective-authority filtering,
+review/cutover guards, shared audit writer, and recovery transaction changes.
+
+Independent merger commands (all passed):
+
+```sh
+make lint
+psql 'postgresql://adam@127.0.0.1:55419/postgres?sslmode=disable' -X \
+  -c 'SELECT version(), inet_server_port();'
+createdb -h 127.0.0.1 -p 55419 -U adam freefsm_v1_merge_19_fixes
+FREEFSM_TEST_DATABASE_URL='postgresql://adam@127.0.0.1:55419/freefsm_v1_merge_19_fixes?sslmode=disable' \
+FREEFSM_BACKUP_TEST_ADMIN_URL='postgresql://adam@127.0.0.1:55419/postgres?sslmode=disable' \
+make test
+NODE_PATH=/home/adam/repos/freefsm/internal/templates/testdata/browser/node_modules \
+BROWSER_TESTS=1 BROWSER_EXECUTABLE=/usr/bin/chromium-browser \
+FREEFSM_TEST_DATABASE_URL='postgresql://adam@127.0.0.1:55419/freefsm_v1_merge_19_fixes?sslmode=disable' \
+go test -race ./cmd/freefsm ./internal/handlers \
+  -run '^(TestInstallationBrowserRecoveryAndCoreWorkflows|TestCustomerPermissionsPersistedBrowser|TestHostRecoveryAfterReviewedCutover)$' -count=1 -v
+```
+
+The new merger-only database uses the existing PostgreSQL 18.6 cluster at 55419;
+it is separate from agents' concurrent databases. Full suite output:
+`/home/adam/.local/share/opencode/tool-output/tool_12dcf8f89001q2hziyrWeddSr8`.
+Authorization passed in 20.776s, installed-command tests in 16.777s, real
+backup/restore in 292.760s, and handlers in 94.720s. Separate persisted browser
+checks passed in 4.23s (installation), 2.46s (Customer), and 2.56s (post-cutover
+CLI). Full-suite skips remain exactly the categories described above; the two
+relevant opt-in browser tests were then explicitly executed.
+
+### #19 acceptance, in issue criterion order
+
+| Criterion | Merger assessment and evidence |
+| --- | --- |
+| 1. Explicit Customer scopes and prerequisites across surfaces | Accepted: Customer HTTP scope/mutation and closed-context tests; public SaveRole prerequisite regressions; browser/API boundaries. |
+| 2. One Role, empty grants, closed scope model | Accepted: reviewed empty-role upgrade, protected catalog/default tests and all 1,134 catalog scope-assignment cases. |
+| 3. Sealed editors and no legacy Customer authority | Accepted: production HTTP authorization boundaries, reviewed cutover, legacy endpoint protection and legacy-role denial tests. |
+| 4. Closed assigned-Job Customer projection | Accepted: closed-context HTTP tests cover assignment-bound allowlist, filtering and nondisclosure; direct Customer assignment is not authority. |
+| 5. Non-destructive preflight and explicit mapping review | Accepted: read-only preflight inventory/snapshot tests, unresolved/stale review rejection and preserved-fact upgrade tests. |
+| 6. Fresh defaults, no automatic nonprotected expansion, rename equivalence | Accepted: protected catalog/defaults, catalog correction upgrade and Customer grant rename tests. |
+| 7. Protected identity and last authenticatable Administrator | Accepted: concurrent legacy demotion, atomic Role replacement, protected-state guards and replacement/self-disable tests. |
+| 8. Narrowing, commit-time revocation, denied/invisible behavior | Accepted: prerequisite rejection, stale editor rejection, waiting-request revocation and Customer HTTP/browser nondisclosure tests. |
+| 9. Explicit migrated/legacy boundary and restart usability | Accepted within declared slice: preserved Customer/Job relationships and fresh-process restart; Job actions retain legacy rules as documented above. |
+| 10. Independent authority and atomic immutable audit | Accepted: Customer mutation audit rollback/revocation plus real recovery CLI tests for host attribution, redaction, tamper rejection and rollback on either audit insertion failure. |
+| 11. Preserve installations and recorded facts | Accepted: reviewed upgrade and forward 055-to-057 correction tests preserve raw grants and old product audit values, deny invalid effective grants and require explicit repair. |
+| 12. Real DB/browser/API, denial/failure/concurrency, required commands | Accepted: independent merger lint, explicit disposable-DB full race suite and persisted Chromium checks above. |
+
+**Disposition:** all twelve #19 criteria are accepted within its declared
+Customer/foundation scope; no remaining #19 defect was identified. The catalog
+and shared immutable host-recovery audit findings are resolved. #107 native
+Linux/FreeBSD service/reboot/release, topology/egress and scale gates remain open
+as documented, and Job-domain authorization is still future-slice work. No issue
+was closed and no branch was pushed.
