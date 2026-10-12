@@ -9,6 +9,7 @@ import (
 	"fmt"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/protectedaudit"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
@@ -30,10 +31,10 @@ func ResetExistingAdmin(ctx context.Context, pool *pgxpool.Pool, email, password
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019); LOCK TABLE authorization_state, authorization_roles, company_settings IN SHARE MODE; LOCK TABLE users, sessions, password_reset_tokens IN EXCLUSIVE MODE`); err != nil {
 		return errors.New("Admin recovery requires an initialized, migrated installation")
 	}
-	var id, companyID int64
+	var id, companyID, roleID int64
 	var role string
 	var active, protected, ready bool
-	if err = tx.QueryRow(ctx, `SELECT u.id,u.company_id,r.name,u.is_active,r.protected,s.ready FROM users u JOIN authorization_roles r ON r.id=u.authorization_role_id CROSS JOIN authorization_state s WHERE u.email=$1 FOR UPDATE OF u`, email).Scan(&id, &companyID, &role, &active, &protected, &ready); err != nil {
+	if err = tx.QueryRow(ctx, `SELECT u.id,u.company_id,r.name,u.is_active,r.protected,s.ready,r.id FROM users u JOIN authorization_roles r ON r.id=u.authorization_role_id CROSS JOIN authorization_state s WHERE u.email=$1 FOR UPDATE OF u`, email).Scan(&id, &companyID, &role, &active, &protected, &ready, &roleID); err != nil {
 		return errors.New("recovery target must be an existing enabled Administrator")
 	}
 	if !protected || !active || !ready {
@@ -67,6 +68,9 @@ func ResetExistingAdmin(ctx context.Context, pool *pgxpool.Pool, email, password
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,NULL,'admin_password_recovered','user',$2,$3)`, companyID, id, string(metadata)); err != nil {
 		return errors.New("cannot record Admin recovery audit; no account changes committed")
+	}
+	if err = protectedaudit.RecordHostRecovery(ctx, tx, protectedaudit.HostRecovery{HostUID: hostUID, TargetUserID: id, TargetRoleID: roleID, CompanyID: companyID}); err != nil {
+		return errors.New("cannot record protected Admin recovery audit; no account changes committed")
 	}
 	if err = tx.Commit(ctx); err != nil {
 		return fmt.Errorf("Admin recovery commit was not confirmed; inspect account state before retrying")

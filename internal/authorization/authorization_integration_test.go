@@ -19,7 +19,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func fixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *authorization.Service) {
+func authorizationPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -48,6 +48,13 @@ func fixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *authorization.Servic
 		root.Exec(ctx, `DROP SCHEMA `+pgx.Identifier{schema}.Sanitize()+` CASCADE`)
 		root.Close()
 	})
+	return pool
+}
+
+func fixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *authorization.Service) {
+	t.Helper()
+	pool := authorizationPool(t)
+	ctx := context.Background()
 	db := &database.DB{Pool: pool}
 	if len(legacy) > 0 && legacy[0] {
 		old := fstest.MapFS{}

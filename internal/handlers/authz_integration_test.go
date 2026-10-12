@@ -328,8 +328,9 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
  CREATE TABLE authorization_grants(role_id bigint,permission text,scope text);
  INSERT INTO authorization_grants SELECT r,p,'A' FROM unnest(ARRAY[1,2]) r CROSS JOIN unnest(ARRAY['customer.view','customer.create','customer.edit','customer.financial.view','customer.archived.view','customer.archive','customer.restore']) p;
  INSERT INTO authorization_grants VALUES(3,'customer.view','C');
- CREATE TABLE authorization_permissions(permission text,scope text);
- INSERT INTO authorization_permissions SELECT DISTINCT permission,scope FROM authorization_grants;
+ CREATE TABLE authorization_permissions(permission text,scope text,prerequisite text);
+ INSERT INTO authorization_permissions SELECT DISTINCT permission,scope,NULL::text FROM authorization_grants;
+ CREATE TABLE authorization_view_requirements(permission text,scope text,requirement text,view_permission text,view_scope text);
  CREATE FUNCTION fixture_role_grants() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.authorization_role_id:=CASE NEW.role WHEN 'admin' THEN 1 WHEN 'dispatcher' THEN 2 ELSE 3 END;RETURN NEW;END $$;
  CREATE TRIGGER fixture_role_grants BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION fixture_role_grants();`); err != nil {
 		t.Fatal(err)

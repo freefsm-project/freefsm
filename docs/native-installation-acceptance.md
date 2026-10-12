@@ -148,11 +148,11 @@ selector and supplied the browser's real Origin header in HTTP form submissions.
 4. Operator TLS/firewall/proxy boundary and zero default telemetry/update-check
    egress still need execution/capture in the actual deployment topology.
    Network-disabled containers do not prove absence of attempted egress.
-5. Protected-identity recovery integration and its rerun are complete; broader
-   immutable audit enforcement still needs review (host recovery currently writes
-   an atomic ordinary activity record). Native upgrade/reboot data preservation
-   and the scale gate remain unproven by these tests. No schema migration was added
-   by recovery integration.
+5. Protected-identity recovery integration and its rerun are complete. The #19
+   follow-up adds migration 057 and shared immutable host-attributed audit alongside
+   ordinary activity; failure of either write rolls back recovery. See
+   `docs/v1-integration-19-107.md` for evidence. Native upgrade/reboot data preservation
+   and the scale gate remain unproven by these tests.
 
 ## Initial checkpoint (historical)
 
