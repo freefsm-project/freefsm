@@ -52,6 +52,19 @@ requires an active definition; editing an Asset never reactivates a definition.
 Status is only a descriptive reference and has no work/ownership/lifecycle
 effects. Reactivation changes selection eligibility only.
 
+Asset details updates distinguish an omitted `asset_status_id` (retain the
+existing reference) from an explicit `0` (clear to No Status). Clearing also
+works for retired Statuses without reactivating their definitions or deleting
+their history. Malformed, empty, negative and overflowing submitted IDs reject
+with HTTP 400 rather than becoming an accidental clear. Positive replacements
+continue through the existing active-definition selection checks.
+
+Details saves use the integrated typed-details adapter's effective `asset.edit`
+authority and immutable protected audit in the same transaction. Its actor,
+Role, action, scope, target, timestamp, channel and outcome satisfy the protected
+audit boundary; a complete Type/Status diff or atomic ordinary feed entry is not
+an additional requirement for this command.
+
 Current UI selections omit retired Tags and new retired Type/Status choices.
 Existing retired Type/Status selections remain available on that Asset's edit
 form. Retired Tags remain visible on archived parents. Archived parent Tag
@@ -82,3 +95,25 @@ a writer waits, concurrent definitions/references and the public API exclusion.
 The opt-in Chromium test uses real CSRF-protected HTTP and verifies persisted
 Tag/Type effects. `internal/database/vocabulary_migration_integration_test.go`
 tests preflight and preservation from a genuine historical schema.
+
+### Bounded clear-Status correction (2026-10-12)
+
+`internal/handlers/asset_status_clear_test.go` and
+`internal/handlers/testdata/browser/asset_status_clear.cjs` reproduce the original
+successful-save-but-retained-Status defect through production HTTP and real
+CSRF-protected Chromium submissions. Both failed before the handler correction
+and passed afterwards. A second red/green cycle covers malformed IDs becoming
+accidental clears. Additional regression checks establish omitted/unchanged
+retired preservation, active-only reselection, retained definition history,
+commit-time permission revocation and full details rollback on a failing
+protected audit insert. Browser assertions include detail reload and edit reopen.
+
+With `GOMAXPROCS=2 GOFLAGS=-p=2`, PostgreSQL at `127.0.0.1:55419`, database
+`freefsm_v1_ticket_28_utf8`: `make lint` and explicit database-enabled `make test`
+passed, with backup admin integration enabled against the same cluster's
+`postgres` database. The race-enabled handler selection
+`^TestAssetStatus|^TestVocabulary|^TestAssetVocabulary` passed with
+`BROWSER_TESTS=1`, `/usr/bin/chromium-browser`, and `NODE_PATH` pointing read-only
+to the original checkout's browser dependencies. The full suite leaves unrelated
+browser opt-ins, nginx scale and unsupported-server (<16) checks skipped; the two
+relevant persisted browser journeys ran separately without skips.

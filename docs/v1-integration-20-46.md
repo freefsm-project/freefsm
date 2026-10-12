@@ -84,10 +84,13 @@ their original scope and are not reassessed by the #24 follow-through.
 - **#27:** new intent discovery still uses legacy Job access and separate reads
   can pair presentation with a newer meaning token. The pre-032 inventory gap
   above also remains. Acceptance's separate revision/fence defects are repaired.
-- **#28:** selecting "No Status" on an existing Asset does not clear its Status.
-  `internal/handlers/assets.go` maps the submitted zero to a nil pointer, while
-  `internal/services/asset.go` treats nil as unchanged and requires a nonnil zero
-  to clear. The #29 adapter does provide effective authority and atomic protected
+- **#28 (bounded finding corrected):** the Asset handler now preserves omitted
+  Status as unchanged and passes an explicit zero to the service to clear.
+  Production HTTP and persisted Chromium tests failed before this correction and
+  passed afterwards, including retired-reference preservation/clearing,
+  active-only reselection, authority revocation and protected-audit rollback.
+  See `docs/vocabulary-contract.md` for correction evidence. The #29 adapter
+  provides effective authority and atomic protected
   `asset.edit` audit, including the required actor/Role/action/scope/target/time/
   channel/outcome. The earlier claim that this audit boundary was incomplete is
   withdrawn: a complete Type/Status diff or atomic ordinary feed entry is not an
@@ -111,7 +114,7 @@ the merged production/database/browser checks and independent source review:
 | #25 | Eligible for scoped closure | Equal-grant creation, atomic numbering/fields/Item selection, hidden-number review, future defaults and independent immutable PDF checks pass. Manual Delivery retry remains a separate unresolved Delivery handoff. |
 | #26 | Eligible for scoped closure | Encrypted settings, independent grants, selected HTML/PDF/sender, current transport, coordinates and persisted browser checks pass. |
 | #27 | Keep open | Intent-discovery authorization/coherent snapshot and pre-032 reviewed-upgrade gaps above. |
-| #28 | Keep open pending bounded correction | Atomic authorization/audit is supported; the offered No Status selection silently retains an existing Status. |
+| #28 | Bounded correction verified; coordinator review pending | No Status now clears; HTTP/browser red-green and authority/audit rollback checks pass. |
 | #29 | Eligible for scoped closure | Typed-field validation, whole-command rollback, composed creation and browser correction/default journeys pass. |
 | #31 | Keep open | Existing child-only grants still require unrelated Customer View. |
 | #43 | Eligible for scoped closure | Facets, shared Item selection, captures, current authority, atomic audit, upgrade and persisted browser checks pass. |
