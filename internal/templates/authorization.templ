@@ -131,7 +131,7 @@ templ AuthorizationReview(p authorization.Review) {
 	}
 }
 
-templ CustomerJobContext(c authorization.CustomerContext) {
+templ CustomerJobContext(c authorization.CustomerContext, masters authorization.JobMasterContext) {
 	@Layout("Customer context") {
 		<h1>{ c.DisplayName }</h1>
 		<dl>
@@ -148,5 +148,6 @@ templ CustomerJobContext(c authorization.CustomerContext) {
 			<dt>Service Notes</dt>
 			<dd class="preserve-whitespace">{ c.ServiceNotes }</dd>
 		</dl>
+		@JobMasterContext(masters)
 	}
 }

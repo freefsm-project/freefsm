@@ -1,0 +1,18 @@
+package templates
+
+import "fmt"
+
+type ReceivableBucket struct {Label string; Cents int64; Count int}
+type CustomerReceivables struct {TotalCents int64; Count int; Buckets []ReceivableBucket}
+
+templ CustomerReceivablesCard(p CustomerReceivables) {
+	<article class="dashboard-panel customer-dashboard-financial">
+		<h3>Financial Summary — Receivables</h3>
+		<p>Outstanding: <strong>{ cents(p.TotalCents) }</strong> across { fmt.Sprint(p.Count) } Invoices</p>
+		<table aria-label="Receivables aging"><thead><tr><th>Age</th><th>Due</th><th>Invoices</th><th>Share of receivables</th></tr></thead><tbody>
+		for _,b := range p.Buckets {
+			<tr><th>{ b.Label }</th><td>{ cents(b.Cents) }</td><td>{ fmt.Sprint(b.Count) }</td><td><meter min="0" max={ fmt.Sprint(max(p.TotalCents,1)) } value={ fmt.Sprint(b.Cents) } aria-label={ b.Label }>{ cents(b.Cents) }</meter></td></tr>
+		}
+		</tbody></table>
+	</article>
+}

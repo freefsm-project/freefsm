@@ -263,7 +263,27 @@ func (h authorizationHandler) Context(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(c)
 		return
 	}
-	templates.CustomerJobContext(c).Render(r.Context(), w)
+	masters, err := h.svc.JobMasters(r.Context(), authorizationActor(r), id)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	templates.CustomerJobContext(c, masters).Render(r.Context(), w)
+}
+
+func (h authorizationHandler) MasterContext(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	c, err := h.svc.JobMasters(r.Context(), authorizationActor(r), id)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(c)
+		return
+	}
+	templates.JobMasterContext(c).Render(r.Context(), w)
 }
 
 func customerPermission(r *http.Request, permission string) bool {

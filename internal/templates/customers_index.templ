@@ -1,6 +1,7 @@
 package templates
 
 import "fmt"
+import "net/url"
 
 templ CustomerIndex(p CustomerListPageData) {
 	@Layout("Customers") {
@@ -17,14 +18,13 @@ templ CustomerListContent(p CustomerListPageData) {
 		@ListToolbar(ListToolbarData{
 			Action: "/customers", Target: "#customer-list-content", Search: p.Search,
 			SearchPlaceholder: "Search customers...", NewURL: customerNewURL(ctx), NewLabel: "New Customer",
-			ShowFilter: true, Filters: filterValues("status", p.StatusFilter, "sort",p.Sort,"per_page",fmt.Sprint(p.PerPage)),
-			FilterCount: activeFilterCount(filterValues("status", p.StatusFilter)),
+			ShowFilter: true, Filters: customerListFilters(p),
+			FilterCount: activeFilterCount(customerListFilters(p)),
 		}) {
-			<label>Customer status
-				<select name="status">
-					<option value="">All Statuses</option>
-					for _, s := range []string{"lead", "opportunity", "customer", "lost", "inactive"} {
-						<option value={ s } selected?={ p.StatusFilter == s }>{ s }</option>
+			<label>Page size
+				<select name="per_page">
+					for _, n := range []int{25,50,100} {
+						<option value={ fmt.Sprint(n) } selected?={ p.PerPage == n }>{ fmt.Sprint(n) }</option>
 					}
 				</select>
 			</label>
@@ -35,13 +35,7 @@ templ CustomerListContent(p CustomerListPageData) {
 					<option value="updated" selected?={ p.Sort == "updated" }>Recently updated</option>
 				</select>
 			</label>
-			<label>Results per page
-				<select name="per_page">
-					for _, size := range []int{25,50,100} {
-						<option value={ fmt.Sprint(size) } selected?={ p.PerPage == size }>{ fmt.Sprint(size) }</option>
-					}
-				</select>
-			</label>
+			<label><input type="checkbox" name="archived" value="1" checked?={ p.Archived }/>Include archived Customers</label>
 		}
 		@CustomerTable(p)
 	</div>
@@ -56,7 +50,7 @@ templ CustomerTable(p CustomerListPageData) {
 					<th>Name</th>
 					<th>Email</th>
 					<th>Phone</th>
-					<th>Status</th>
+					<th>Kind</th>
 					<th></th>
 				</tr>
 			</thead>
@@ -83,19 +77,19 @@ templ CustomerTable(p CustomerListPageData) {
 							if c.CompanyName != "" {
 								<br/><small class="work-queue-muted">{ c.CompanyName }</small>
 							}
+							if p.Search != "" {
+								<small>{ c.Match }</small>
+							}
+							if c.Archived {
+								<span>Archived</span>
+							}
 						</td>
 						<td>{ c.Email }</td>
 						<td>{ c.Phone }</td>
-						<td class="work-queue-status"><span class="status-badge" style={ badgeStyle(customerStatusColor(c.Status)) }>{ c.Status }</span></td>
+						<td>{ customerKindLabel(c.AccountType) }</td>
 						<td class="work-queue-actions">
-							if canCustomer(ctx,"edit") {
-							<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", c.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", c.DisplayName) }>Edit</a>
-							}
-							if canCustomer(ctx,"archive") {
-							<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", c.ID)) } method="post" hx-confirm={ fmt.Sprintf("Archive Customer %s? This removes the Customer from active lists and retains its history.", c.DisplayName) }>
-								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<button class="outline contrast small" aria-label={ fmt.Sprintf("Archive Customer %s", c.DisplayName) }>Archive</button>
-							</form>
+							if canCustomer(ctx,"edit") && !c.Archived {
+								<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit", c.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", c.DisplayName) }>Edit</a>
 							}
 						</td>
 					</tr>
@@ -107,8 +101,20 @@ templ CustomerTable(p CustomerListPageData) {
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
 			BaseURL:     "/customers",
-			Query:       listQuery(p.Search, filterValues("status", p.StatusFilter,"sort",p.Sort,"per_page",fmt.Sprint(p.PerPage)), nil),
+			Query:       listQuery(p.Search, customerListFilters(p), nil),
 			Target:      "#customer-list-content",
 		})
 	</div>
+}
+
+func customerKindLabel(kind string) string {
+	if kind=="company" {return "Organization"}
+	if kind=="individual" {return "Individual"}
+	return kind
+}
+
+func customerListFilters(p CustomerListPageData) url.Values {
+	filters:=filterValues("per_page",fmt.Sprint(p.PerPage),"sort",p.Sort)
+	if p.Archived {filters.Set("archived","1")}
+	return filters
 }

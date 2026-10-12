@@ -124,6 +124,25 @@ func (h *handler) customerContext(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, c)
 }
 
+func (h *handler) masterContext(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		writeError(w, 404, "not_found", "not found")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, 404, "not_found", "not found")
+		return
+	}
+	c, err := req.Service.JobMasters(r.Context(), req.Actor, id)
+	if err != nil {
+		writeError(w, 404, "not_found", "not found")
+		return
+	}
+	writeJSON(w, 200, c)
+}
+
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
 	if err := h.deps.Sessions.RevokeMobile(r.Context(), tokenFromContext(r.Context())); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "could not delete session")

@@ -433,17 +433,21 @@ func TestRoleReplacementIsAtomicAndStaleEditorCannotRestoreGrants(t *testing.T) 
 	}
 }
 
-func TestCustomerMutationRetainsNameDefaultsAndLegacyRecordedFields(t *testing.T) {
+func TestCustomerMutationPreservesLegacyRecordedFieldsWithoutCRMLifecycle(t *testing.T) {
 	pool, svc := fixture(t)
 	ctx := context.Background()
 	var admin int64
 	if err := pool.QueryRow(ctx, `INSERT INTO users(company_id,email,name,password_hash,role) SELECT id,'admin@test','Admin','$2a$10$abcdefghijklmnopqrstuu1234567890123456789012345678901','admin' FROM companies LIMIT 1 RETURNING id`).Scan(&admin); err != nil {
 		t.Fatal(err)
 	}
-	first, last, status := "Mary", "Jones", "customer"
-	c, err := svc.SaveCustomer(ctx, authorization.Actor{UserID: admin}, 0, authorization.CustomerInput{FirstName: &first, LastName: &last, Status: &status})
-	if err != nil || c.DisplayName != "Mary Jones" || c.Status != "customer" {
-		t.Fatalf("conformant creation defaults lost: %+v %v", c, err)
+	first, last, name := "Mary", "Jones", "Mary Jones"
+	c, err := svc.SaveCustomer(ctx, authorization.Actor{UserID: admin}, 0, authorization.CustomerInput{FirstName: &first, LastName: &last, DisplayName: &name})
+	if err != nil || c.DisplayName != name {
+		t.Fatalf("explicit identity lost: %+v %v", c, err)
+	}
+	// A retained legacy CRM fact is neither rewritten nor an editable lifecycle.
+	if _, err = pool.Exec(ctx, `UPDATE customers SET status='customer' WHERE id=$1`, c.ID); err != nil {
+		t.Fatal(err)
 	}
 	notes := "Deliberate public service instructions"
 	updated, err := svc.SaveCustomer(ctx, authorization.Actor{UserID: admin}, c.ID, authorization.CustomerInput{ServiceNotes: &notes})

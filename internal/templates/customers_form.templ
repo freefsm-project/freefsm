@@ -13,11 +13,15 @@ templ CustomerForm(p CustomerFormPageData) {
 				<aside class="customer-edit-side-rail">
 					<article class="dashboard-panel">
 						@DashboardSubcardTop("Locations")
-						@LocationsListCompact(p.Locations, p.Customer.ID, !canManageOperational(ctx))
+						if canMaster(ctx,"location.view") {
+							<a href={ templ.URL(fmt.Sprintf("/customers/%d/locations",p.Customer.ID)) }>Manage Locations</a>
+						}
 					</article>
 					<article class="dashboard-panel">
 						@DashboardSubcardTop("Contacts")
-						@ContactsListCompact(p.Contacts, p.Customer.ID, !canManageOperational(ctx))
+						if canMaster(ctx,"contact.view") {
+							<a href={ templ.URL(fmt.Sprintf("/customers/%d/contacts",p.Customer.ID)) }>Manage Contacts</a>
+						}
 					</article>
 					<article class="dashboard-panel">
 						@DashboardSubcardTop("Tags")
@@ -82,7 +86,7 @@ templ CustomerFormFields(p CustomerFormPageData) {
 		</label>
 		<label>
 			Display Name
-			<input type="text" name="display_name" value={ p.Customer.DisplayName }/>
+			<input type="text" name="display_name" value={ p.Customer.DisplayName } required/>
 			if p.Errors["display_name"] != "" {
 				<small class="error-msg">{ p.Errors["display_name"] }</small>
 			}
@@ -103,19 +107,10 @@ templ CustomerFormFields(p CustomerFormPageData) {
 		</label>
 		<div class="grid">
 			<label>
-				Status
-				<select name="status">
-					for _, s := range p.Statuses {
-						<option value={ s } selected?={ p.Customer.Status == s }>{ s }</option>
-					}
-				</select>
-			</label>
-			<label>
-				Account Type
+				Customer kind
 				<select name="account_type">
-					for _, a := range p.AccountTypes {
-						<option value={ a } selected?={ p.Customer.AccountType == a }>{ a }</option>
-					}
+					<option value="individual" selected?={ p.Customer.AccountType == "individual" }>Individual</option>
+					<option value="company" selected?={ p.Customer.AccountType == "company" }>Organization</option>
 				</select>
 			</label>
 		</div>

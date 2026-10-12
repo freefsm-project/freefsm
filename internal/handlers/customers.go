@@ -59,17 +59,23 @@ func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 		sort = "name"
 	}
 	search := r.URL.Query().Get("search")
-	status := r.URL.Query().Get("status")
-
-	customers, total, err := h.svc.List(r.Context(), search, status, page, perPage, sort)
+	request, ok := authorization.FromContext(r.Context())
+	if !ok {
+		http.Error(w, "Forbidden", 403)
+		return
+	}
+	archived := r.URL.Query().Get("archived") == "1"
+	customers, total, err := request.Service.FindCustomers(r.Context(), request.Actor, search, archived, page, perPage, sort)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
 
 	rows := make([]templates.CustomerRow, len(customers))
 	for i, c := range customers {
-		rows[i] = customerRow(c)
+		rows[i] = customerRow(c.Customer)
+		rows[i].Match = c.Match
+		rows[i].Archived = c.Customer.DeletedAt != nil
 	}
 
 	data := templates.CustomerListPageData{
@@ -80,7 +86,7 @@ func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 		Total:        total,
 		TotalPages:   services.PaginationTotalPages(total, perPage),
 		Search:       search,
-		StatusFilter: status,
+		Archived:   archived,
 	}
 
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
@@ -117,54 +123,75 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
 	files, _ := h.fileSvc.List(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, c.ID))
-	locations, _ := h.locationSvc.ListByCustomer(r.Context(), c.ID)
-	contacts, _ := h.contactSvc.ListByCustomer(r.Context(), c.ID)
-	jobs, estimates, invoices := []*ent.Job{}, []*ent.Estimate{}, []*ent.Invoice{}
-	var financial templates.CustomerFinancialSummary
-	var customerSettlement settlement.CustomerSettlement
-	if isAdminOrDispatcher(u) {
-		jobs, _ = h.jobSvc.ListByCustomer(r.Context(), c.ID, 10)
-		estimates, _ = h.estimateSvc.ListByCustomer(r.Context(), c.ID, 10)
-		invoices, _ = h.invoiceSvc.ListByCustomer(r.Context(), c.ID, 10)
-	}
-	// Settlement and related work remain in their owning legacy domains. A
-	// migrated Customer grant may narrow those projections, never authorize
-	// a legacy financial action or make an operational page fail to load.
-	showFinancial := customerPermission(r, "customer.financial.view") && isAdminOrDispatcher(u)
-	if showFinancial {
-		allInvoices, queryErr := h.invoiceSvc.ListByCustomer(r.Context(), c.ID, 0)
-		if queryErr != nil {
-			internalServerError(w, r, "load customer invoices", queryErr)
-			return
-		}
-		actor, _ := settlementActor(r.Context())
-		financial, queryErr = customerFinancialSummary(r.Context(), h.settlement, actor, allInvoices, h.statusesByType(r.Context(), "invoice"), middleware.CompanyLocation(r.Context()))
-		if queryErr != nil {
-			internalServerError(w, r, "load customer invoice settlements", queryErr)
-			return
-		}
-		customerSettlement, err = h.settlement.CustomerSettlement(r.Context(), actor, c.ID)
+	var locations []*ent.Location
+	var contacts []*ent.CustomerContact
+	if customerPermission(r, "location.view") {
+		locations, err = h.locationSvc.ListByCustomer(r.Context(), c.ID)
 		if err != nil {
-			writeSettlementError(w, r, err)
+			internalServerError(w, r, "load Customer Locations", err)
+			return
+		}
+	}
+	if customerPermission(r, "contact.view") {
+		contacts, err = h.contactSvc.ListByCustomer(r.Context(), c.ID)
+		if err != nil {
+			internalServerError(w, r, "load Customer Contacts", err)
+			return
+		}
+	}
+	request, _ := authorization.FromContext(r.Context())
+	showFinancial := customerPermission(r, "customer.financial.view")
+	var receivables templates.CustomerReceivables
+	if showFinancial {
+		receivables, err = customerReceivables(r.Context(), request, c.ID, middleware.CompanyLocation(r.Context()))
+		if err != nil {
+			internalServerError(w, r, "load receivables", err)
+			return
+		}
+	}
+	showCredit := customerPermission(r, "credit.view")
+	var credit int64
+	if showCredit {
+		credit, err = request.Service.CustomerCreditTotal(r.Context(), request.Actor, c.ID)
+		if err != nil {
+			internalServerError(w, r, "load Credit", err)
+			return
+		}
+	}
+	showSettlement := showCredit && customerPermission(r, "settlement.view")
+	var creditHistory settlement.CustomerSettlement
+	if showSettlement {
+		actor, _ := settlementActor(r.Context())
+		creditHistory, err = h.settlement.CustomerMasterSettlement(r.Context(), actor, c.ID)
+		if err != nil {
+			internalServerError(w, r, "load settlement history", err)
 			return
 		}
 	}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), c.DisplayName)
+	work, err := request.Service.CustomerRelatedWork(r.Context(), request.Actor, c.ID)
+	if err != nil {
+		internalServerError(w, r, "load related work", err)
+		return
+	}
 	templates.CustomerShow(templates.CustomerShowPageData{
-		ShowFinancial: showFinancial,
-		Customer:      customerToDetail(r.Context(), c),
-		Locations:     locationRows(locations),
-		Contacts:      contactRows(contacts),
-		Jobs:          h.customerJobRows(r.Context(), jobs),
-		Estimates:     h.customerEstimateRows(r.Context(), estimates),
-		Invoices:      h.customerInvoiceRows(r.Context(), invoices),
-		Financial:     financial,
-		Tags:          tagsToRows(tags),
-		AllTags:       tagsToRows(allTags),
-		CustomFields:  buildCustomFieldDisplay(defs, c.CustomFields),
-		FileList:      templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: c.ID, ObjectType: "customer"},
-		Settlement:    customerSettlement,
-		RefundKey:     newOperationKey(),
+		ShowSettlement:   showSettlement,
+		Settlement:       creditHistory,
+		CanRefund:        isAdminOrDispatcher(u) && customerPermission(r, "credit.refund"),
+		CanReverseRefund: isAdminOrDispatcher(u) && customerPermission(r, "credit.refund.reverse"),
+		Receivables:      receivables,
+		ShowCredit:       showCredit,
+		CreditCents:      credit,
+		RelatedWork:      work,
+		ShowFinancial:    showFinancial,
+		Customer:         customerToDetail(r.Context(), c),
+		Locations:        locationRows(locations),
+		Contacts:         contactRows(contacts),
+		Tags:             tagsToRows(tags),
+		AllTags:          tagsToRows(allTags),
+		CustomFields:     buildCustomFieldDisplay(defs, c.CustomFields),
+		FileList:         templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: c.ID, ObjectType: "customer"},
+		RefundKey:        newOperationKey(),
 	}).Render(ctx, w)
 }
 
@@ -367,6 +394,15 @@ func (h *CustomerHandler) customerSaveError(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		if err := request.Service.ArchiveCustomer(r.Context(), request.Actor, id, r.FormValue("archive_snapshot")); err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		http.Redirect(w, r, fmt.Sprintf("/customers/%d", id), 303)
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)

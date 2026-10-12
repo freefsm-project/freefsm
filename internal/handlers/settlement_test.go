@@ -52,6 +52,10 @@ func TestCustomerFinancialSummaryPropagatesSettlementQueryFailure(t *testing.T) 
 		t.Fatalf("error = %v, want %v", err, want)
 	}
 }
+func (f *fakeSettlement) CustomerMasterSettlement(ctx context.Context, a settlement.Actor, id int64) (settlement.CustomerSettlement, error) {
+	return f.CustomerSettlement(ctx, a, id)
+}
+
 func (*fakeSettlement) CustomerSettlement(context.Context, settlement.Actor, int64) (settlement.CustomerSettlement, error) {
 	return settlement.CustomerSettlement{}, nil
 }

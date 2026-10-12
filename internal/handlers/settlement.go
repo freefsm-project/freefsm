@@ -23,6 +23,7 @@ type settlementService interface {
 	ReverseRefund(context.Context, settlement.Actor, settlement.ReverseRequest) (settlement.Result, error)
 	InvoiceSettlement(context.Context, settlement.Actor, int64) (settlement.InvoiceSettlement, error)
 	CustomerSettlement(context.Context, settlement.Actor, int64) (settlement.CustomerSettlement, error)
+	CustomerMasterSettlement(context.Context, settlement.Actor, int64) (settlement.CustomerSettlement, error)
 }
 
 func settlementActor(ctx context.Context) (settlement.Actor, bool) {

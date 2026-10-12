@@ -246,6 +246,8 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
 		t.Fatalf("configure handler test schema: %v", err)
 	}
 	if _, err := schemaDB.Exec(`
+		ALTER TABLE customer_contacts ADD COLUMN deleted_at timestamptz;
+		ALTER TABLE locations ADD COLUMN deleted_at timestamptz;
 		CREATE TABLE invoice_payments (id UUID PRIMARY KEY, company_id BIGINT NOT NULL, invoice_id BIGINT NOT NULL, amount_cents BIGINT NOT NULL, method TEXT NOT NULL, received_date DATE NOT NULL, reference TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '');
 		CREATE TABLE payment_invoice_allocations (payment_id UUID PRIMARY KEY, invoice_id BIGINT NOT NULL, amount_cents BIGINT NOT NULL);
 		CREATE TABLE customer_credits (id UUID PRIMARY KEY, company_id BIGINT NOT NULL, customer_id BIGINT NOT NULL, source_payment_id UUID NOT NULL, source_date DATE NOT NULL, original_amount_cents BIGINT NOT NULL);

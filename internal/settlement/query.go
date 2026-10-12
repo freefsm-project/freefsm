@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/google/uuid"
 )
 
@@ -131,6 +132,27 @@ func (s *Service) CustomerSettlement(ctx context.Context, actor Actor, customerI
 	if err := authorize(actor); err != nil {
 		return CustomerSettlement{}, err
 	}
+	return s.customerSettlement(ctx, actor, customerID)
+}
+
+// CustomerMasterSettlement is the independently granted Customer dashboard
+// projection. Legacy document workflows migrate in their owning slices.
+func (s *Service) CustomerMasterSettlement(ctx context.Context, actor Actor, customerID int64) (CustomerSettlement, error) {
+	request, ok := authorization.FromContext(ctx)
+	if !ok {
+		return CustomerSettlement{}, ErrForbidden
+	}
+	p, err := request.Service.Principal(ctx, request.Actor)
+	if err != nil || actor.ID != p.UserID || actor.CompanyID != p.CompanyID || !p.Allows("credit.view", authorization.All) || !p.Allows("settlement.view", authorization.All) {
+		return CustomerSettlement{}, ErrForbidden
+	}
+	if err = request.Service.CustomerAccess(ctx, request.Actor, customerID, "customer.view"); err != nil {
+		return CustomerSettlement{}, err
+	}
+	return s.customerSettlement(ctx, actor, customerID)
+}
+
+func (s *Service) customerSettlement(ctx context.Context, actor Actor, customerID int64) (CustomerSettlement, error) {
 	out := CustomerSettlement{CustomerID: customerID}
 	rows, err := s.db.Query(ctx, `SELECT c.id,c.source_payment_id,c.customer_id,p.invoice_id,c.source_date,c.original_amount_cents,available.amount_cents,p.method,p.reference FROM customer_credits c JOIN invoice_payments p ON p.id=c.source_payment_id JOIN invoices i ON i.id=p.invoice_id AND i.company_id=p.company_id AND i.conversion_hidden_at IS NULL CROSS JOIN LATERAL (SELECT c.original_amount_cents-coalesce((SELECT sum(a.amount_cents) FROM credit_applications a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=a.id)),0)-coalesce((SELECT sum(ra.amount_cents) FROM credit_refund_allocations ra WHERE ra.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_refund' AND r.operation_id=ra.refund_id)),0) amount_cents) available WHERE c.company_id=$1 AND c.customer_id=$2 AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='payment' AND r.operation_id=c.source_payment_id) ORDER BY c.source_date,c.id`, actor.CompanyID, customerID)
 	if err != nil {
