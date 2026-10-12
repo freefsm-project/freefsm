@@ -1505,6 +1505,9 @@ type TagWidgetData struct {
 }
 
 type CommentRow struct {
+	ReplyTo   *int64
+	Removal   string
+	CanReply  bool
 	ID        int64
 	Author    string
 	Content   string
@@ -1513,6 +1516,7 @@ type CommentRow struct {
 }
 
 type CommentsWidgetData struct {
+	CanAdd     bool
 	BaseURL    string
 	ObjectType string
 	ObjectID   int64

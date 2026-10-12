@@ -508,6 +508,19 @@ func mapActivityEntries(rows []*ent.ActivityLog) []ActivityEntry {
 			Metadata:  row.Metadata,
 			CreatedAt: row.CreatedAt,
 		}
+		// Legacy Comment activity stored text previews without a stable Comment
+		// link. Preserve those recorded bytes in storage, but never publish them
+		// through ordinary feeds: removal cannot safely identify such previews.
+		if row.Action == "comment_added" || row.Action == "comment_deleted" {
+			var metadata map[string]any
+			if json.Unmarshal([]byte(row.Metadata), &metadata) == nil {
+				delete(metadata, "comment_preview")
+				encoded, _ := json.Marshal(metadata)
+				entry.Metadata = string(encoded)
+			} else {
+				entry.Metadata = "{}"
+			}
+		}
 		if row.ActorID != nil {
 			entry.ActorID = *row.ActorID
 		}

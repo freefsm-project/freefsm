@@ -1,6 +1,7 @@
 package templates
 
 import "fmt"
+import "github.com/google/uuid"
 
 func commentsActionURL(baseURL string, hideTitle bool) string {
 	if hideTitle {
@@ -25,7 +26,10 @@ templ CommentsWidget(p CommentsWidgetData) {
 			<p>No comments yet.</p>
 		} else {
 			for _, c := range p.Comments {
-				<div class="comments-list-item">
+				<div class="comments-list-item" id={ fmt.Sprintf("comment-%d", c.ID) }>
+					if c.ReplyTo != nil {
+						<a href={ templ.SafeURL(fmt.Sprintf("#comment-%d", *c.ReplyTo)) }>Reply to original Comment</a>
+					}
 					<div class="comments-item-header">
 						<strong>{ c.Author }</strong>
 						<div class="comments-item-actions">
@@ -34,18 +38,35 @@ templ CommentsWidget(p CommentsWidgetData) {
 								<button
 									class="outline contrast small customer-add-button comments-delete-button"
 									hx-post={ commentDeleteURL(p.BaseURL, c.ID, p.HideTitle) }
-									hx-confirm="Delete this comment?"
+									hx-vals={ fmt.Sprintf(`{"operation_id":%q}`,uuid.NewString()) }
+									aria-label="Remove Comment"
+									hx-confirm="Remove this Comment? Replies and attribution will be preserved."
 									hx-target={ fmt.Sprintf("closest #comments-%s-%d", p.ObjectType, p.ObjectID) }
 									hx-swap="outerHTML"
 								>×</button>
 							}
 						</div>
 					</div>
-					<p class="comments-content">{ c.Content }</p>
+					if c.Removal != "" {
+						<p class="comments-removed">{ c.Removal }</p>
+					} else {
+						<p class="comments-content" style="white-space: pre-wrap">{ c.Content }</p>
+					}
+					if c.CanReply && !p.ReadOnly {
+						<details><summary>Reply</summary>
+							<form hx-post={ commentsActionURL(p.BaseURL,p.HideTitle) } hx-target={ fmt.Sprintf("#comments-%s-%d",p.ObjectType,p.ObjectID) } hx-swap="outerHTML">
+								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+								<input type="hidden" name="reply_to" value={ fmt.Sprint(c.ID) }/>
+								<input type="hidden" name="operation_id" value={ uuid.NewString() }/>
+								<label>Reply<textarea name="content" rows="2" required></textarea></label>
+								<button type="submit">Add Reply</button>
+							</form>
+						</details>
+					}
 				</div>
 			}
 		}
-		if !p.ReadOnly {
+		if p.CanAdd && !p.ReadOnly {
 			<form
 				hx-post={ commentsActionURL(p.BaseURL, p.HideTitle) }
 				hx-target={ fmt.Sprintf("#comments-%s-%d", p.ObjectType, p.ObjectID) }
@@ -53,6 +74,7 @@ templ CommentsWidget(p CommentsWidgetData) {
 				class="comments-form"
 			>
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<input type="hidden" name="operation_id" value={ uuid.NewString() }/>
 				<label>
 					<textarea name="content" rows="2" placeholder="Add a comment..." class="comments-textarea"></textarea>
 				</label>
