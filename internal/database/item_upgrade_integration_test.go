@@ -1,11 +1,14 @@
 package database
 
 import (
+	"context"
 	"io/fs"
 	"os"
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func TestItemUpgradePreservesIdentitiesSnapshotsAndRejectsInvalidLegacy(t *testing.T) {
@@ -49,7 +52,10 @@ func TestItemUpgradePreservesIdentitiesSnapshotsAndRejectsInvalidLegacy(t *testi
 		t.Fatal(err)
 	}
 	var before string
-	const snapshot = `SELECT jsonb_build_object('item',(SELECT to_jsonb(i) FROM items i WHERE id=4301),'job',(SELECT to_jsonb(j) FROM jobs j WHERE id=4301),'grants',(SELECT coalesce(jsonb_agg(to_jsonb(g) ORDER BY role_id,permission,scope),'[]') FROM authorization_grants g))::text`
+	items := legacyColumnProjection(t, ctx, db, "items")
+	jobs := legacyColumnProjection(t, ctx, db, "jobs")
+	grants := legacyColumnProjection(t, ctx, db, "authorization_grants")
+	snapshot := `SELECT jsonb_build_object('item',(SELECT to_jsonb(i) FROM (SELECT ` + items + ` FROM items WHERE id=4301) i),'job',(SELECT to_jsonb(j) FROM (SELECT ` + jobs + ` FROM jobs WHERE id=4301) j),'grants',(SELECT coalesce(jsonb_agg(to_jsonb(g) ORDER BY role_id,permission,scope),'[]') FROM (SELECT ` + grants + ` FROM authorization_grants) g))::text`
 	if err := db.Pool.QueryRow(ctx, snapshot).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
@@ -72,4 +78,21 @@ func TestItemUpgradePreservesIdentitiesSnapshotsAndRejectsInvalidLegacy(t *testi
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO items(name,sku) VALUES('Another','LEGACY-43')`); err == nil {
 		t.Fatal("old SKU was reused")
 	}
+}
+
+// legacyColumnProjection freezes every pre-upgrade column for both snapshots.
+// Explicit SQL identifiers allow additive columns but fail on dropped/renamed
+// columns, including nullable ones whose loss JSON key lookups could conceal.
+func legacyColumnProjection(t *testing.T, ctx context.Context, db *DB, table string) string {
+	t.Helper()
+	rows, err := db.Pool.Query(ctx, `SELECT * FROM `+pgx.Identifier{table}.Sanitize()+` LIMIT 0`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var columns []string
+	for _, field := range rows.FieldDescriptions() {
+		columns = append(columns, pgx.Identifier{field.Name}.Sanitize())
+	}
+	return strings.Join(columns, ",")
 }

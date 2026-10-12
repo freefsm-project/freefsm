@@ -316,11 +316,7 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		if renderFieldSaveError(w, r, h.defSvc, "estimate", err) {
 			return
 		}
-		if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrPending) || errors.Is(err, authorization.ErrConflict) {
-			authorizationError(w, r, err)
-			return
-		}
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())

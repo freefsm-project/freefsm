@@ -1,10 +1,11 @@
 package database
 
 import (
-	"github.com/freefsm-project/freefsm/internal/credentials"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/freefsm-project/freefsm/internal/credentials"
 )
 
 func TestMailMapUpgradePreservesRecordedFacts(t *testing.T) {
@@ -26,16 +27,19 @@ func TestMailMapUpgradePreservesRecordedFacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	settingsColumns := legacyColumnProjection(t, ctx, db, "company_settings")
+	locationColumns := legacyColumnProjection(t, ctx, db, "locations")
+	deliveryColumns := legacyColumnProjection(t, ctx, db, "document_deliveries")
 	snapshot := func() (string, string, string) {
 		t.Helper()
 		var settings, location, delivery string
-		if err := db.Pool.QueryRow(ctx, `SELECT (to_jsonb(s)-'invoice_email_html'-'estimate_email_html')::text FROM company_settings s LIMIT 1`).Scan(&settings); err != nil {
+		if err := db.Pool.QueryRow(ctx, `SELECT to_jsonb(s)::text FROM (SELECT `+settingsColumns+` FROM company_settings LIMIT 1) s`).Scan(&settings); err != nil {
 			t.Fatal(err)
 		}
-		if err := db.Pool.QueryRow(ctx, `SELECT to_jsonb(l)::text FROM locations l WHERE id=902`).Scan(&location); err != nil {
+		if err := db.Pool.QueryRow(ctx, `SELECT to_jsonb(l)::text FROM (SELECT `+locationColumns+` FROM locations WHERE id=902) l`).Scan(&location); err != nil {
 			t.Fatal(err)
 		}
-		if err := db.Pool.QueryRow(ctx, `SELECT (to_jsonb(d)-'sender_address')::text FROM document_deliveries d WHERE document_id=902`).Scan(&delivery); err != nil {
+		if err := db.Pool.QueryRow(ctx, `SELECT to_jsonb(d)::text FROM (SELECT `+deliveryColumns+` FROM document_deliveries WHERE document_id=902) d`).Scan(&delivery); err != nil {
 			t.Fatal(err)
 		}
 		return settings, location, delivery

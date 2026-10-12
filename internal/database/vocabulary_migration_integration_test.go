@@ -1,8 +1,10 @@
 package database
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -165,6 +167,61 @@ func TestVocabularyUpgradeFromBeforeCompanyColumns(t *testing.T) {
 	if findings, err := db.VocabularyPreflight(ctx); err != nil || len(findings) != 0 {
 		t.Fatalf("valid pre-021 inventory: %v %v", findings, err)
 	}
+	// This fixture also predates archive/conversion columns. Export the actual
+	// legacy inventory read-only and explicitly review its seeded workflows.
+	var before, after int
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`), &before)
+	inventory, err := db.WorkflowPreflight(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations`), &after)
+	if before != after {
+		t.Fatal("workflow inventory applied migrations")
+	}
+	// Migration 032 seeds an additional Invoiced status. Review at the 044
+	// boundary so the mapping covers actual IDs, including that new seed.
+	if err := db.Migrate(ctx, settlementMigrationFS(t)); err != nil {
+		t.Fatal(err)
+	}
+	inventory, err = db.WorkflowPreflight(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evidence struct {
+		Statuses []struct {
+			ID         int64 `json:"id"`
+			WorkflowID int64 `json:"workflow_id"`
+		} `json:"statuses"`
+		Workflows []struct {
+			ID   int64  `json:"id"`
+			Type string `json:"object_type"`
+		} `json:"workflows"`
+	}
+	if err := json.Unmarshal(inventory.Evidence, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	workflowTypes := map[int64]string{}
+	for _, workflow := range evidence.Workflows {
+		workflowTypes[workflow.ID] = workflow.Type
+	}
+	for _, status := range evidence.Statuses {
+		// Explicit fixture review, independent of legacy display labels.
+		category := map[string]string{"job": "job:pending", "project": "project:pending", "estimate": "estimate:estimate", "invoice": "invoice:invoiced"}[workflowTypes[status.WorkflowID]]
+		if category == "" {
+			t.Fatalf("unreviewed fixture workflow %d", status.WorkflowID)
+		}
+		inventory.Mappings[fmt.Sprint(status.ID)] = category
+	}
+	review, err := json.Marshal(inventory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "workflow-review.json")
+	if err := os.WriteFile(path, review, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FREEFSM_WORKFLOW_MAPPING_FILE", path)
 	if err := db.Migrate(ctx, MigrationFS()); err != nil {
 		t.Fatal(err)
 	}

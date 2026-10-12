@@ -79,13 +79,13 @@ func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := templates.CustomerListPageData{
-		Sort:         sort,
-		Customers:    rows,
-		Page:         page,
-		PerPage:      perPage,
-		Total:        total,
-		TotalPages:   services.PaginationTotalPages(total, perPage),
-		Search:       search,
+		Sort:       sort,
+		Customers:  rows,
+		Page:       page,
+		PerPage:    perPage,
+		Total:      total,
+		TotalPages: services.PaginationTotalPages(total, perPage),
+		Search:     search,
 		Archived:   archived,
 	}
 
@@ -344,11 +344,7 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *CustomerHandler) customerSaveError(w http.ResponseWriter, r *http.Request, id int64, err error) {
 	var validation *authorization.CustomerValidationError
 	if !errors.As(err, &validation) && !errors.Is(err, authorization.ErrConflict) {
-		if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrPending) {
-			authorizationError(w, r, err)
-		} else {
-			internalServerError(w, r, "save Customer", err)
-		}
+		authorizationError(w, r, err)
 		return
 	}
 	// The failed command may have waited behind a revocation. Reload current
@@ -364,9 +360,7 @@ func (h *CustomerHandler) customerSaveError(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	data := formDataFromCustomer(r.Context(), c)
-	data.IsNew = id == 0
-	data.OperationID = newOperationKey()
-	data.Revision = r.FormValue("revision")
+	initializeCustomerErrorIdentity(&data, r, id)
 	data.Errors = map[string]string{}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
 	data.CustomFields = buildCustomFieldDisplay(defs, parseCustomFieldValues(r))
@@ -997,6 +991,14 @@ func newFormData() templates.CustomerFormPageData {
 	}
 }
 
+func initializeCustomerErrorIdentity(data *templates.CustomerFormPageData, r *http.Request, id int64) {
+	data.IsNew = id == 0
+	data.OperationID = newOperationKey()
+	// Retained inputs belong to the submitted revision. Only an explicit
+	// conflict comparison may offer the current record's revision for review.
+	data.Revision = r.FormValue("revision")
+}
+
 func (h *CustomerHandler) fieldError(w http.ResponseWriter, r *http.Request, id int64, err error) bool {
 	var fieldErr *customfields.FieldError
 	if !errors.As(err, &fieldErr) {
@@ -1045,6 +1047,7 @@ func (h *CustomerHandler) fieldError(w http.ResponseWriter, r *http.Request, id 
 	}
 	d.CustomFields = buildCustomFieldErrorDisplay(defs, old, parseCustomFieldValues(r), id == 0)
 	d.Errors = map[string]string{"custom_fields": fieldErr.Error()}
+	initializeCustomerErrorIdentity(&d, r, id)
 	w.WriteHeader(http.StatusUnprocessableEntity)
 	templates.CustomerForm(d).Render(r.Context(), w)
 	return true

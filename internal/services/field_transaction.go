@@ -13,6 +13,13 @@ import (
 
 type detailsTxKey struct{}
 
+func createDocument(ctx context.Context, request authorization.Request, kind string, in authorization.DocumentCreation, prepare func(string) (string, error)) (int64, error) {
+	if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+		return request.Service.CreateDocumentInTransaction(ctx, tx, request.Actor, kind, in, prepare)
+	}
+	return request.Service.CreateDocument(ctx, request.Actor, kind, in, prepare)
+}
+
 func needsDetailsTransaction(ctx context.Context) bool {
 	_, ok := authorization.FromContext(ctx)
 	return ok && ctx.Value(detailsTxKey{}) == nil
@@ -67,6 +74,14 @@ func (d *fieldTxDriver) Query(ctx context.Context, query string, args, out any) 
 	rows, err := d.tx.Query(ctx, query, values...)
 	if err != nil {
 		return err
+	}
+	// pgx can report a statement/trigger error only when the result is consumed.
+	// Propagate it before Ent mistakes a missing RowDescription for a scan error.
+	if len(rows.FieldDescriptions()) == 0 {
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
 	}
 	result, ok := out.(*entsql.Rows)
 	if !ok {

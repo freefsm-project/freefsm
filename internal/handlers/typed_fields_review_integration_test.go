@@ -191,7 +191,9 @@ func TestTypedReviewLegacyPairedHiddenSnapshotsSurviveUpgradeHTTP(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if entry.Name() < "058_" {
+		// Keep independent integrated schemas current while exercising the
+		// typed-field upgrade against legacy definitions and conversion history.
+		if entry.Name() != "058_typed_custom_fields.up.sql" {
 			data, err := fs.ReadFile(source, entry.Name())
 			if err != nil {
 				t.Fatal(err)

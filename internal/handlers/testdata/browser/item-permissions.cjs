@@ -8,7 +8,14 @@ const { chromium } = require('playwright-core');
     const context = await browser.newContext();
     await context.addCookies([{ name: 'session', value: readerToken, url: base }]);
     const page = await context.newPage();
-    await page.goto(`${base}/items`);
+    const denied = [];
+    page.on('response', response => {
+      if (response.status() >= 400) denied.push(`${response.status()} ${new URL(response.url()).pathname}`);
+    });
+    const index = await page.goto(`${base}/items`);
+    assert.equal(index.status(), 200, await index.text());
+    assert.equal(page.url(), `${base}/items`);
+    assert.equal(await page.getByRole('button', { name: 'New Item', exact: true }).count(), 1, `${denied.join('\n')}\n${await page.locator('body').innerText()}`);
     await page.getByRole('button', { name: 'New Item', exact: true }).click();
     assert.equal(await page.locator('[name=unit_cost]').count(), 0);
     assert.equal(await page.locator('[name=unit_price]').count(), 0);

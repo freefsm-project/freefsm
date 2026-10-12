@@ -228,7 +228,7 @@ func TestItemConcurrentSKUClaimsAndWaitingSelectionRevocation(t *testing.T) {
 	u := client.User.Create().SetCompanyID(company).SetName("Selection writer").SetEmail("race43@test").SetPasswordHash("x").SetRole("dispatcher").SaveX(ctx)
 	svc := authorization.New(pool)
 	grants := []authorization.Grant{}
-	for _, p := range []string{"item.view", "pricebook.view", "customer.view", "estimate.view", "pricing.view"} {
+	for _, p := range []string{"item.view", "pricebook.view", "customer.view", "estimate.view", "estimate.create", "pricing.view"} {
 		grants = append(grants, authorization.Grant{Permission: p, Scope: authorization.All})
 	}
 	role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Selection writer", grants)
@@ -359,7 +359,11 @@ func TestItemPermissionsPersistedBrowser(t *testing.T) {
 	adminCookie := sessionCookie(t, ctx, sessions, admin)
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
-	mux.Handle("/", nosurf.New(middleware.CSRFToken(router)))
+	csrf := middleware.BrowserCSRF(middleware.CSRFToken(router))
+	csrf.SetFailureHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "CSRF validation failed: "+nosurf.Reason(r).Error(), 400)
+	}))
+	mux.Handle("/", csrf)
 	server := httptest.NewServer(mux)
 	defer server.Close()
 	bctx, cancel := context.WithTimeout(ctx, 90*time.Second)
@@ -396,7 +400,7 @@ func TestItemInlineCreationRequiresFacetsWithoutRequestingCost(t *testing.T) {
 	svc := authorization.New(pool)
 	u := client.User.Create().SetCompanyID(company).SetName("Pricebook editor").SetEmail("inline43@test").SetPasswordHash("x").SetRole("dispatcher").SaveX(ctx)
 	grants := []authorization.Grant{}
-	for _, permission := range []string{"item.view", "item.create", "pricebook.view", "pricebook.create", "customer.view", "estimate.view", "pricing.view"} {
+	for _, permission := range []string{"item.view", "item.create", "pricebook.view", "pricebook.create", "customer.view", "estimate.view", "estimate.create", "pricing.view"} {
 		grants = append(grants, authorization.Grant{Permission: permission, Scope: authorization.All})
 	}
 	role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Pricebook without Cost", grants)
@@ -461,7 +465,7 @@ func TestItemJobSelectionWritersUseTransactionAndPreserveSnapshots(t *testing.T)
 	if _, err := jobs.Update(acting, company, j.ID, services.JobUpdateParams{LineItems: &lines}); err != nil {
 		t.Fatalf("existing capture rejected: %v", err)
 	}
-	if _, err := jobs.Create(acting, company, services.JobCreateParams{CustomerID: c.ID, JobType: "Invalid", LineItems: lines}); !errors.Is(err, authorization.ErrConflict) {
+	if _, err := jobs.Create(acting, company, services.JobCreateParams{CustomerID: c.ID, JobType: "Invalid", LineItems: lines, CustomFields: "[]"}); !errors.Is(err, authorization.ErrConflict) {
 		t.Fatalf("new archived selection: %v", err)
 	}
 	lines = append(lines, lines[0])
@@ -489,7 +493,10 @@ func TestItemSelectionAuditFailureRollsBackCommercialCreation(t *testing.T) {
 		t.Fatal(err)
 	}
 	values := url.Values{"customer_id": {fmt.Sprint(c.ID)}, "title": {"Rejected audited capture"}, "tax_rate": {"0"}, "line_items": {fmt.Sprintf(`[{"item_id":%d,"title":"Selected","quantity":1,"unit_price":15}]`, i.ID)}}
-	itemPost(t, router, cookie, "/estimates", values, 409)
+	t.Run("audit rejection status", func(t *testing.T) {
+		itemPost(t, router, cookie, "/estimates", values, 409)
+	})
+	// A response-mapping failure must not skip the rollback checkpoint.
 	if n := client.Estimate.Query().CountX(ctx); n != 0 {
 		t.Fatalf("audit failure committed %d estimates", n)
 	}

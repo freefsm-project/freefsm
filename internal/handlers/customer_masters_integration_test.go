@@ -191,15 +191,22 @@ func TestCustomerChildrenIndependentPermissionsHTTP(t *testing.T) {
 func TestCustomerMasterIdentityHTTP(t *testing.T) {
 	_, _, router, sessions, _, admin := permissionHTTPFixture(t)
 	cookie := sessionCookie(t, context.Background(), sessions, admin)
-	masterPost(t, router, cookie, "/customers", url.Values{"first_name": {"Cannot substitute"}}, 409)
-	masterPost(t, router, cookie, "/customers", url.Values{"display_name": {"Named"}, "status": {"lead"}}, 409)
+	masterPost(t, router, cookie, "/customers", typedCustomerFormValues(t, router, cookie, "/customers", url.Values{"first_name": {"Cannot substitute"}}), 409)
+	masterPost(t, router, cookie, "/customers", typedCustomerFormValues(t, router, cookie, "/customers", url.Values{"display_name": {"Named"}, "status": {"lead"}}), 409)
+	created := make(map[string]bool)
 	for range 2 {
-		path := masterPost(t, router, cookie, "/customers", url.Values{"display_name": {"Duplicate"}, "account_type": {"individual"}}, 303)
+		// Equal names are distinct creation intents, each from a fresh form.
+		values := typedCustomerFormValues(t, router, cookie, "/customers", url.Values{"display_name": {"Duplicate"}, "account_type": {"individual"}})
+		path := masterPost(t, router, cookie, "/customers", values, 303)
+		if created[path] {
+			t.Fatal("distinct creation intents reused the same Customer")
+		}
+		created[path] = true
 		body := requestBody(t, router, cookie, "GET", path, 200)
 		assertNotContains(t, body, `name="status"`)
 		assertContains(t, body, "Organization")
 		path = strings.TrimSuffix(path, "/edit")
-		masterPost(t, router, cookie, path, url.Values{"account_type": {"company"}}, 303)
+		masterPost(t, router, cookie, path, typedCustomerFormValues(t, router, cookie, path, url.Values{"display_name": {"Duplicate"}, "account_type": {"company"}}), 303)
 		body = requestBody(t, router, cookie, "GET", fmt.Sprintf("%s/edit", path), 200)
 		assertContains(t, body, `value="company" selected`)
 	}

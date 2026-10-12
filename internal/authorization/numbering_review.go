@@ -51,6 +51,12 @@ func (s *Service) ReviewLegacyNumber(ctx context.Context, a Actor, revision int6
 		if _, err := tx.Exec(ctx, `INSERT INTO issued_document_numbers VALUES($1,$2,$3,$4)`, p.CompanyID, kind, number, label); err != nil {
 			return err
 		}
+		// The database permits only the unresolved identity fields to change on
+		// conversion tombstones. Authorization, reservation and audit share this
+		// transaction, so a failed review never leaves a partial identity behind.
+		if _, err := tx.Exec(ctx, `SELECT set_config('freefsm.legacy_number_review','allowed',true)`); err != nil {
+			return err
+		}
 		query := `UPDATE invoices SET number_label=$2 WHERE id=$1`
 		args := []any{id, label}
 		if kind == "estimate" {

@@ -22,14 +22,17 @@ type WorkflowPreflight struct {
 
 func workflowInventory(ctx context.Context, tx pgx.Tx) (WorkflowPreflight, error) {
 	var out WorkflowPreflight
+	// Archive/conversion columns may not exist yet on legacy installations.
+	// Row JSON yields null for absent columns and preserves their values when
+	// present, without changing the schema or omitting any referenced records.
 	err := tx.QueryRow(ctx, `SELECT jsonb_build_object(
 	 'statuses',coalesce((SELECT jsonb_agg(to_jsonb(s) ORDER BY s.id) FROM statuses s),'[]'),
 	 'workflows',coalesce((SELECT jsonb_agg(to_jsonb(w) ORDER BY w.id) FROM status_workflows w),'[]'),
 	 'references',coalesce((SELECT jsonb_agg(r ORDER BY r->>'type',r->>'id') FROM (
-	 SELECT jsonb_build_object('type','job','id',id,'status_id',status_id,'archived_at',deleted_at) r FROM jobs
-	 UNION ALL SELECT jsonb_build_object('type','project','id',id,'status_id',status_id,'archived_at',deleted_at) FROM projects
-	 UNION ALL SELECT jsonb_build_object('type','estimate','id',id,'status_id',status_id,'archived_at',deleted_at,'hidden_at',to_jsonb(estimates)->'conversion_hidden_at') FROM estimates
-	 UNION ALL SELECT jsonb_build_object('type','invoice','id',id,'status_id',status_id,'archived_at',deleted_at,'hidden_at',to_jsonb(invoices)->'conversion_hidden_at') FROM invoices) refs),'[]'))`).Scan(&out.Evidence)
+	 SELECT jsonb_build_object('type','job','id',id,'status_id',status_id,'archived_at',to_jsonb(jobs)->'deleted_at') r FROM jobs
+	 UNION ALL SELECT jsonb_build_object('type','project','id',id,'status_id',status_id,'archived_at',to_jsonb(projects)->'deleted_at') FROM projects
+	 UNION ALL SELECT jsonb_build_object('type','estimate','id',id,'status_id',status_id,'archived_at',to_jsonb(estimates)->'deleted_at','hidden_at',to_jsonb(estimates)->'conversion_hidden_at') FROM estimates
+	 UNION ALL SELECT jsonb_build_object('type','invoice','id',id,'status_id',status_id,'archived_at',to_jsonb(invoices)->'deleted_at','hidden_at',to_jsonb(invoices)->'conversion_hidden_at') FROM invoices) refs),'[]'))`).Scan(&out.Evidence)
 	if err != nil {
 		return out, err
 	}

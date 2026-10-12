@@ -238,7 +238,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/assets/options", jobHandler.AssetOptions)
 		r.Route("/items", func(r chi.Router) {
 			r.Get("/", itemHandler.List)
-			r.With(middleware.DispatcherOrAdmin).Get("/activity", activityHandler.ListByType(objectref.TypeItem))
+			r.Get("/activity", activityHandler.ListByType(objectref.TypeItem))
 			r.Post("/inline", itemHandler.CreateInline)
 			r.Post("/", itemHandler.Create)
 			r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {

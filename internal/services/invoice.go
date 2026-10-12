@@ -232,11 +232,6 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 			return v, v.ID, nil
 		})
 	}
-	if s.db == nil && needsCatalogTransaction(ctx) {
-		return catalogWrite(ctx, s.client, "invoice", 0, params.LineItems, func(ctx context.Context, c *ent.Client) (*ent.Invoice, error) {
-			return NewInvoiceService(c).Create(ctx, params)
-		})
-	}
 	var customerCompanyID *int64
 	if request, ok := authorization.FromContext(ctx); ok {
 		input, err := request.Service.DocumentCustomer(ctx, request.Actor, params.CustomerID, params.JobID, params.TaxRate)
@@ -285,7 +280,7 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		customFields = "[]"
 	}
 	if request, ok := authorization.FromContext(ctx); ok {
-		id, err := request.Service.CreateDocument(ctx, request.Actor, "invoice", authorization.DocumentCreation{CustomerID: params.CustomerID, JobID: params.JobID, EstimateID: params.EstimateID, Title: params.Title, Notes: params.Notes, Terms: params.Terms, TaxRate: taxRate, LineItems: lineItems, CustomFields: customFields, InvoiceDate: params.InvoiceDate, DueDate: params.DueDate, Number: params.InvoiceNumber}, func(rate string) (string, error) {
+		id, err := createDocument(ctx, request, "invoice", authorization.DocumentCreation{CustomerID: params.CustomerID, JobID: params.JobID, EstimateID: params.EstimateID, Title: params.Title, Notes: params.Notes, Terms: params.Terms, TaxRate: taxRate, LineItems: lineItems, CustomFields: customFields, InvoiceDate: params.InvoiceDate, DueDate: params.DueDate, Number: params.InvoiceNumber}, func(rate string) (string, error) {
 			totals, err := CalculateTotals(params.LineItems, rate)
 			if err != nil {
 				return "", err

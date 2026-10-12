@@ -123,11 +123,6 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 			return v, v.ID, nil
 		})
 	}
-	if needsCatalogTransaction(ctx) {
-		return catalogWrite(ctx, s.client, "estimate", 0, params.LineItems, func(ctx context.Context, c *ent.Client) (*ent.Estimate, error) {
-			return NewEstimateService(c).Create(ctx, params)
-		})
-	}
 	var customerCompanyID *int64
 	if request, ok := authorization.FromContext(ctx); ok {
 		input, err := request.Service.DocumentCustomer(ctx, request.Actor, params.CustomerID, params.JobID, params.TaxRate)
@@ -168,7 +163,7 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 		customFields = "[]"
 	}
 	if request, ok := authorization.FromContext(ctx); ok {
-		id, err := request.Service.CreateDocument(ctx, request.Actor, "estimate", authorization.DocumentCreation{CustomerID: params.CustomerID, JobID: params.JobID, Title: params.Title, Notes: params.Notes, Terms: params.Terms, TaxRate: taxRate, LineItems: lineItems, CustomFields: customFields, ValidThrough: params.ValidThrough}, func(rate string) (string, error) { _, err := CalculateTotals(params.LineItems, rate); return "", err })
+		id, err := createDocument(ctx, request, "estimate", authorization.DocumentCreation{CustomerID: params.CustomerID, JobID: params.JobID, Title: params.Title, Notes: params.Notes, Terms: params.Terms, TaxRate: taxRate, LineItems: lineItems, CustomFields: customFields, ValidThrough: params.ValidThrough}, func(rate string) (string, error) { _, err := CalculateTotals(params.LineItems, rate); return "", err })
 		if err != nil {
 			return nil, err
 		}

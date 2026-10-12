@@ -96,6 +96,7 @@ type Delivery struct {
 	To, CC, BCC                                                                  []string
 	PDF                                                                          []byte
 	ExpectedStatusID                                                             *int64
+	ExpectedStatusRevision, ExpectedMeaningRevision                              *uuid.UUID
 	LifetimeAttemptCount, CycleAttemptCount, RetryCycle, OpenCount               int
 	AttemptToken                                                                 uuid.UUID
 	ProviderIdentifier, AcceptanceEvidence, LastError                            string
@@ -176,6 +177,12 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 		return Delivery{}, err
 	}
 	defer tx.Rollback(ctx)
+	// Workflow configuration uses the authorization mutex before any row locks.
+	// Capture a coherent immutable intent under that same fence, including on
+	// the legacy queue path which does not call BindDeliveryPDF.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return Delivery{}, err
+	}
 	request, migrated := authorization.FromContext(ctx)
 	var selected authorization.PDFDeliverySelection
 	if migrated {
@@ -190,8 +197,9 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 		r.Snapshot.PDFFilename = selected.Version.Filename
 	}
 	var jobID, statusID *int64
-	q := fmt.Sprintf(`SELECT job_id,status_id FROM %ss WHERE id=$1 AND company_id=$2 AND deleted_at IS NULL AND conversion_hidden_at IS NULL FOR SHARE`, r.Document.Type)
-	if err = tx.QueryRow(ctx, q, r.Document.ID, a.CompanyID).Scan(&jobID, &statusID); errors.Is(err, pgx.ErrNoRows) {
+	var statusRevision, meaningRevision *uuid.UUID
+	q := fmt.Sprintf(`SELECT o.job_id,o.status_id,o.status_revision,s.meaning_revision FROM %ss o LEFT JOIN statuses s ON s.id=o.status_id WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL AND o.conversion_hidden_at IS NULL FOR SHARE OF o`, r.Document.Type)
+	if err = tx.QueryRow(ctx, q, r.Document.ID, a.CompanyID).Scan(&jobID, &statusID, &statusRevision, &meaningRevision); errors.Is(err, pgx.ErrNoRows) {
 		return Delivery{}, ErrNotFound
 	} else if err != nil {
 		return Delivery{}, err
@@ -265,8 +273,8 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 		invoiceID = r.Document.ID
 	}
 	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO document_deliveries(company_id,document_type,document_id,estimate_id,invoice_id,actor_id,idempotency_key,request_fingerprint,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,tracking_enabled,tracking_token_hash,pdf_version_id,sender_address)
-	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NULLIF($21,0),$22) ON CONFLICT(company_id,idempotency_key) DO NOTHING RETURNING id`, a.CompanyID, r.Document.Type, r.Document.ID, estimateID, invoiceID, a.ID, r.Key, fingerprint, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, html, r.Snapshot.PDF, r.Snapshot.PDFFilename, messageID, statusID, tracking, tokenHash, r.PDFVersionID, from).Scan(&id)
+	err = tx.QueryRow(ctx, `INSERT INTO document_deliveries(company_id,document_type,document_id,estimate_id,invoice_id,actor_id,idempotency_key,request_fingerprint,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,tracking_enabled,tracking_token_hash,pdf_version_id,sender_address,expected_status_revision,expected_meaning_revision)
+	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NULLIF($21,0),$22,$23,$24) ON CONFLICT(company_id,idempotency_key) DO NOTHING RETURNING id`, a.CompanyID, r.Document.Type, r.Document.ID, estimateID, invoiceID, a.ID, r.Key, fingerprint, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, html, r.Snapshot.PDF, r.Snapshot.PDFFilename, messageID, statusID, tracking, tokenHash, r.PDFVersionID, from, statusRevision, meaningRevision).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if err = tx.QueryRow(ctx, `SELECT id,request_fingerprint FROM document_deliveries WHERE company_id=$1 AND idempotency_key=$2`, a.CompanyID, r.Key).Scan(&id, &existingFingerprint); err != nil {
 			return Delivery{}, err
@@ -471,33 +479,60 @@ func (s *Service) ProcessOne(ctx context.Context, sender Sender, hook Acceptance
 	if sendErr != nil {
 		return true, s.failAttempt(ctx, d, sendErr)
 	}
+	// Retry only persistence: SMTP has already accepted this immutable message.
+	// The attempt token still fences lease recovery. A bounded independent
+	// context also allows recording success when the send's caller is canceled.
+	persistCtx, persistCancel := context.WithTimeout(context.WithoutCancel(ctx), SendTimeout)
+	defer persistCancel()
+	for attempt := 0; ; attempt++ {
+		err = s.accept(persistCtx, d, result, hook)
+		var pgErr *pgconn.PgError
+		if err == nil || attempt >= 3 || !errors.As(err, &pgErr) || (pgErr.Code != "40001" && pgErr.Code != "40P01" && pgErr.Code != "55P03") {
+			return true, err
+		}
+		timer := time.NewTimer(time.Duration(attempt+1) * 25 * time.Millisecond)
+		select {
+		case <-persistCtx.Done():
+			timer.Stop()
+			return true, persistCtx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func (s *Service) accept(ctx context.Context, d Delivery, result SendResult, hook AcceptanceHook) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		return true, err
+		return err
 	}
-	defer tx.Rollback(ctx)
+	defer tx.Rollback(context.WithoutCancel(ctx))
+	// Must precede even the delivery row lock, not just the hook's document
+	// locks. Configuration takes this fence before status/document row locks.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return err
+	}
 	if err = allowTransitions(ctx, tx); err != nil {
-		return true, err
+		return err
 	}
 	evidence, _ := json.Marshal(result.Evidence)
 	now := s.now()
 	tag, err := tx.Exec(ctx, `UPDATE document_deliveries SET state='accepted',provider_identifier=$1,acceptance_evidence=$2,accepted_at=$3,attempt_token=NULL,lease_expires_at=NULL,last_error='',updated_at=$3 WHERE id=$4 AND attempt_token=$5 AND state='sending'`, result.ProviderIdentifier, evidence, now, d.ID, d.AttemptToken)
 	if err != nil {
-		return true, err
+		return err
 	}
 	if tag.RowsAffected() != 1 {
-		return true, ErrLeaseLost
+		return ErrLeaseLost
 	}
 	if err = event(ctx, tx, d.ID, d.CompanyID, nil, "state", "sending", "accepted", result.ProviderIdentifier, "", result.Evidence); err != nil {
-		return true, err
+		return err
 	}
 	if _, err = tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,'document_delivery_accepted',$3,$4,jsonb_build_object('delivery_id',$5::bigint))`, d.CompanyID, d.ActorID, d.DocumentType, d.DocumentID, d.ID); err != nil {
-		return true, err
+		return err
 	}
 	if err = hook.OnAccepted(ctx, tx, d); err != nil {
-		return true, err
+		return err
 	}
-	return true, tx.Commit(ctx)
+	return tx.Commit(ctx)
 }
 
 func (s *Service) failAttempt(ctx context.Context, d Delivery, cause error) error {
@@ -736,7 +771,7 @@ func get(ctx context.Context, q rowQuerier, company, id int64) (Delivery, error)
 		d.AttemptToken = *token
 	}
 	if err == nil {
-		err = q.QueryRow(ctx, `SELECT coalesce(sender_address,'') FROM document_deliveries WHERE id=$1`, d.ID).Scan(&d.From)
+		err = q.QueryRow(ctx, `SELECT coalesce(sender_address,''),expected_status_revision,expected_meaning_revision FROM document_deliveries WHERE id=$1`, d.ID).Scan(&d.From, &d.ExpectedStatusRevision, &d.ExpectedMeaningRevision)
 	}
 	return d, err
 }

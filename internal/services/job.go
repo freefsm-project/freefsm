@@ -757,6 +757,11 @@ func (s *JobService) Move(ctx context.Context, id, userID int64, startTime, endT
 	}
 	defer func() { _ = tx.Rollback() }()
 	txClient := tx.Client()
+	// Assignment changes and document/PDF commands take authority before Job
+	// rows. Take the same fence before the schedule write, not in its trigger.
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return nil, err
+	}
 	u := txClient.Job.UpdateOneID(id).SetStartTime(startTime).SetAssignments(SerializeAssignments(assignments))
 	if endTime.IsZero() {
 		u.ClearEndTime()

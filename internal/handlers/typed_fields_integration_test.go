@@ -5,6 +5,7 @@ import (
 	"fmt"
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/authorization"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,6 +17,9 @@ import (
 
 func fieldPost(t *testing.T, router http.Handler, cookie *http.Cookie, path string, values url.Values, want int) *httptest.ResponseRecorder {
 	t.Helper()
+	if want != http.StatusForbidden && want != http.StatusNotFound && (path == "/customers" || regexp.MustCompile(`^/customers/\d+$`).MatchString(path)) {
+		values = typedCustomerFormValues(t, router, cookie, path, values)
+	}
 	r := httptest.NewRequest("POST", path, strings.NewReader(values.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.AddCookie(cookie)
@@ -27,6 +31,31 @@ func fieldPost(t *testing.T, router http.Handler, cookie *http.Cookie, path stri
 	return w
 }
 
+// Capture the same operation and revision controls a user receives before
+// submitting. Call this before acquiring race-test locks, never after waiting.
+func typedCustomerFormValues(t *testing.T, router http.Handler, cookie *http.Cookie, path string, values url.Values) url.Values {
+	t.Helper()
+	formPath := path + "/edit"
+	if path == "/customers" {
+		formPath = path + "/new"
+	}
+	form := requestBody(t, router, cookie, "GET", formPath, 200)
+	result := url.Values{}
+	for key, entries := range values {
+		result[key] = append([]string(nil), entries...)
+	}
+	for _, key := range []string{"operation_id", "revision"} {
+		match := regexp.MustCompile(`name="` + key + `" value="([^"]*)"`).FindStringSubmatch(form)
+		if len(match) != 2 || (match[1] == "" && (key == "operation_id" || path != "/customers")) {
+			t.Fatalf("%s missing %s control", formPath, key)
+		}
+		if !result.Has(key) {
+			result.Set(key, html.UnescapeString(match[1]))
+		}
+	}
+	return result
+}
+
 func TestTypedFieldsConcurrentDefinitionAndAuditFailureHTTP(t *testing.T) {
 	pool, _, router, sessions, _, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
@@ -34,6 +63,11 @@ func TestTypedFieldsConcurrentDefinitionAndAuditFailureHTTP(t *testing.T) {
 	fieldPost(t, router, cookie, "/settings/custom-fields", url.Values{"name": {"Readout"}, "object_type": {"customer"}, "field_type": {"number"}, "precision": {"3"}}, 303)
 	created := fieldPost(t, router, cookie, "/customers", url.Values{"display_name": {"Atomic customer"}, "custom_field_1": {"1.23"}}, 303)
 	path := strings.TrimSuffix(created.Header().Get("Location"), "/edit")
+	var originalFields string
+	if err := pool.QueryRow(ctx, `SELECT custom_fields FROM customers WHERE display_name='Atomic customer'`).Scan(&originalFields); err != nil {
+		t.Fatal(err)
+	}
+	input := typedCustomerFormValues(t, router, cookie, path, url.Values{"display_name": {"Must roll back"}, "custom_field_1": {"1.234"}})
 	writer, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +82,7 @@ func TestTypedFieldsConcurrentDefinitionAndAuditFailureHTTP(t *testing.T) {
 	}
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
-		r := httptest.NewRequest("POST", path, strings.NewReader(url.Values{"display_name": {"Must roll back"}, "custom_field_1": {"1.234"}}.Encode()))
+		r := httptest.NewRequest("POST", path, strings.NewReader(input.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.AddCookie(cookie)
 		w := httptest.NewRecorder()
@@ -82,8 +116,18 @@ func TestTypedFieldsConcurrentDefinitionAndAuditFailureHTTP(t *testing.T) {
 	if _, err = pool.Exec(ctx, `CREATE FUNCTION fail_field_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected audit failure'; END $$; CREATE TRIGGER fail_field_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION fail_field_audit()`); err != nil {
 		t.Fatal(err)
 	}
-	fieldPost(t, router, cookie, path, url.Values{"display_name": {"Audit must roll back"}, "custom_field_1": {"2.00"}}, 409)
+	t.Run("audit rejection status", func(t *testing.T) {
+		fieldPost(t, router, cookie, path, url.Values{"display_name": {"Audit must roll back"}, "custom_field_1": {"2.00"}}, 409)
+	})
+	// Check atomicity even if the handler's error mapping regresses.
 	assertContains(t, requestBody(t, router, cookie, "GET", path, 200), "Atomic customer")
+	var fields string
+	if err := pool.QueryRow(ctx, `SELECT custom_fields FROM customers WHERE display_name='Atomic customer'`).Scan(&fields); err != nil {
+		t.Fatal(err)
+	}
+	if fields != originalFields {
+		t.Fatalf("failed saves changed custom fields: got %s want %s", fields, originalFields)
+	}
 	fieldPost(t, router, cookie, "/settings/custom-fields", url.Values{"name": {"Failed definition"}, "object_type": {"customer"}, "field_type": {"text"}}, 422)
 	assertNotContains(t, requestBody(t, router, cookie, "GET", "/settings/custom-fields", 200), "Failed definition")
 }

@@ -134,6 +134,16 @@ func (h *ActivityHandler) ListByType(objectType objectref.Type) http.HandlerFunc
 			return
 		}
 		vocabularyView := false
+		if objectType == objectref.TypeItem {
+			if req, ok := authorization.FromContext(r.Context()); ok {
+				p, err := req.Service.Principal(r.Context(), req.Actor)
+				if err != nil || !p.Allows("item.view", authorization.All) {
+					authorizationError(w, r, authorization.ErrForbidden)
+					return
+				}
+				vocabularyView = true
+			}
+		}
 		if objectType == objectref.TypeTag {
 			if req, ok := authorization.FromContext(r.Context()); ok {
 				p, err := req.Service.Principal(r.Context(), req.Actor)

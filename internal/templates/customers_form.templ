@@ -7,7 +7,7 @@ templ CustomerForm(p CustomerFormPageData) {
 
 		if !p.IsNew {
 			<div class="customer-edit-layout">
-				<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" hx-boost="false" autocomplete="off" class="entity-form compact-form customer-edit-form" data-save-status-url={ "/web-actions/"+p.OperationID }>
+				<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form customer-edit-form" data-save-status-url={ "/web-actions/"+p.OperationID }>
 					@CustomerFormFields(p)
 				</form>
 				<aside class="customer-edit-side-rail">
@@ -30,7 +30,7 @@ templ CustomerForm(p CustomerFormPageData) {
 				</aside>
 			</div>
 		} else {
-			<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" hx-boost="false" autocomplete="off" class="entity-form compact-form" data-save-status-url={ "/web-actions/"+p.OperationID }>
+			<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form" data-save-status-url={ "/web-actions/"+p.OperationID }>
 				@CustomerFormFields(p)
 			</form>
 		}

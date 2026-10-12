@@ -746,12 +746,23 @@ func TestCompanyConfigurationPDFUsesIndependentGrantsHTTP(t *testing.T) {
 	client.JobAssignment.Create().SetJobID(job.ID).SetUserID(u.ID).SaveX(ctx)
 	client.Invoice.UpdateOne(i).SetJobID(job.ID).SaveX(ctx)
 	expectStatus(t, router, cookie, "POST", fmt.Sprintf("/invoices/%d/pdf/save", i.ID), 303)
+	var versionsBefore int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM document_pdf_versions WHERE document_type='invoice' AND document_id=$1`, i.ID).Scan(&versionsBefore); err != nil {
+		t.Fatal(err)
+	}
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(ctx)
-	if _, err = tx.Exec(ctx, `SELECT id FROM jobs WHERE id=$1 FOR UPDATE`, job.ID); err != nil {
+	// Assignment writers now acquire the authorization fence through a
+	// statement trigger. Take it first, matching production lock order, so
+	// revocation wins without manufacturing a Job/fence deadlock.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		t.Fatal(err)
+	}
+	var blockerPID int
+	if err = tx.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blockerPID); err != nil {
 		t.Fatal(err)
 	}
 	pending := make(chan int, 1)
@@ -765,14 +776,14 @@ func TestCompanyConfigurationPDFUsesIndependentGrantsHTTP(t *testing.T) {
 	deadline := time.Now().Add(5 * time.Second)
 	for {
 		var waiting bool
-		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE application_name=$1 AND wait_event_type='Lock' AND query LIKE '%SELECT id FROM jobs%FOR SHARE%')`, pool.Config().ConnConfig.RuntimeParams["application_name"]).Scan(&waiting); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)) AND wait_event='advisory')`, blockerPID).Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("PDF did not reach its Job commit lock")
+			t.Fatal("PDF did not reach its authorization commit fence")
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -783,7 +794,14 @@ func TestCompanyConfigurationPDFUsesIndependentGrantsHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	if status := <-pending; status != 403 {
-		t.Fatalf("generation after assignment loss=%d", status)
+		t.Errorf("generation after assignment loss=%d", status)
+	}
+	var versionsAfter int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM document_pdf_versions WHERE document_type='invoice' AND document_id=$1`, i.ID).Scan(&versionsAfter); err != nil {
+		t.Fatal(err)
+	}
+	if versionsAfter != versionsBefore {
+		t.Fatalf("assignment loss published a PDF: versions before=%d after=%d", versionsBefore, versionsAfter)
 	}
 	client.Job.UpdateOne(job).SetDeletedAt(time.Now()).SaveX(ctx)
 	expectStatus(t, router, cookie, "GET", fmt.Sprintf("/invoices/%d/pdf", i.ID), 403)

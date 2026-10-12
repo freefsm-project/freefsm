@@ -74,6 +74,11 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 	data := templates.DocumentEmailData{ObjectType: kind, ObjectID: id, Title: doc.Title, BackURL: fmt.Sprintf("/%ss/%d/pdf/preview", kind, id), ActionURL: fmt.Sprintf("/%ss/%d/email", kind, id), To: doc.CustomerEmail, CC: emailAutoCC(cs), IdempotencyKey: uuid.NewString(), PDFVersion: selected.Version.ID, PDFStale: selected.Version.Stale}
 	data.Subject, data.Body = documentEmailDefaults(kind, doc, cs)
 	if r.Method == http.MethodGet {
+		data.HTMLBody, err = composeHTMLDefault(queue, r, kind, doc, cs)
+		if err != nil {
+			internalServerError(w, r, "load email HTML template", err)
+			return true
+		}
 		render(w, r, templates.DocumentEmailCompose(data))
 		return true
 	}
@@ -82,6 +87,7 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 	data.BCC = r.FormValue("bcc")
 	data.Subject = r.FormValue("subject")
 	data.Body = r.FormValue("body")
+	data.HTMLBody = r.FormValue("html_body")
 	data.IdempotencyKey = r.FormValue("idempotency_key")
 	data.ConfirmStalePDF = r.FormValue("confirm_stale_pdf") == "1"
 	recipients, err := services.ParseEmailRecipients(data.To, data.CC, data.BCC)
@@ -93,7 +99,7 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 		return true
 	}
 	u, _ := middleware.UserFromContext(r.Context())
-	_, err = queue.Queue(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, delivery.QueueRequest{Key: key, Document: delivery.DocumentRef{Type: kind, ID: id}, PDFVersionID: selected.Version.ID, ConfirmStalePDF: data.ConfirmStalePDF, Snapshot: delivery.Snapshot{To: recipients.To, CC: recipients.CC, BCC: recipients.BCC, Subject: data.Subject, TextBody: data.Body, HTMLBody: safeEmailHTML(data.Body), PDF: selected.Version.Content, PDFFilename: selected.Version.Filename}})
+	_, err = queue.Queue(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, delivery.QueueRequest{Key: key, Document: delivery.DocumentRef{Type: kind, ID: id}, PDFVersionID: selected.Version.ID, ConfirmStalePDF: data.ConfirmStalePDF, Snapshot: delivery.Snapshot{To: recipients.To, CC: recipients.CC, BCC: recipients.BCC, Subject: data.Subject, TextBody: data.Body, HTMLBody: selectedEmailHTML(data.Body, data.HTMLBody), PDF: selected.Version.Content, PDFFilename: selected.Version.Filename}})
 	if errors.Is(err, authorization.ErrConflict) {
 		data.PDFStale = true
 		data.Error = "The selected PDF is stale. Confirm sending this exact version or select a new version."

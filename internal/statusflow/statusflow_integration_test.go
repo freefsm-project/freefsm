@@ -276,9 +276,18 @@ func TestAcceptanceHookTransitionsToConfiguredSentDefaultOnlyWhenStatusUnchanged
 
 	hook := NewAcceptanceHook(New(db))
 	d := delivery.Delivery{CompanyID: company, ActorID: admin, DocumentType: "estimate", DocumentID: estimateID, ExpectedStatusID: &draftID}
+	// Legacy deliveries without captured revisions are unknown, not evidence
+	// that the current status and its meaning are still the reviewed versions.
 	withTx(t, db, func(tx pgx.Tx) error { return hook.OnAccepted(ctx, tx, d) })
 	var actual int64
 	var logs int
+	mustScan(t, db.QueryRow(ctx, `SELECT status_id FROM estimates WHERE id=$1`, estimateID), &actual)
+	mustScan(t, db.QueryRow(ctx, `SELECT count(*) FROM activity_logs WHERE object_type='estimate' AND object_id=$1 AND action='status_transitioned'`, estimateID), &logs)
+	if actual != draftID || logs != 0 {
+		t.Fatalf("unknown delivery status=%d logs=%d, want %d/0", actual, logs, draftID)
+	}
+	mustScan(t, db.QueryRow(ctx, `SELECT o.status_revision,s.meaning_revision FROM estimates o JOIN statuses s ON s.id=o.status_id WHERE o.id=$1`, estimateID), &d.ExpectedStatusRevision, &d.ExpectedMeaningRevision)
+	withTx(t, db, func(tx pgx.Tx) error { return hook.OnAccepted(ctx, tx, d) })
 	mustScan(t, db.QueryRow(ctx, `SELECT status_id FROM estimates WHERE id=$1`, estimateID), &actual)
 	mustScan(t, db.QueryRow(ctx, `SELECT count(*) FROM activity_logs WHERE object_type='estimate' AND object_id=$1 AND action='status_transitioned'`, estimateID), &logs)
 	if actual != sentID || logs != 1 {
@@ -296,6 +305,8 @@ func TestAcceptanceHookTransitionsToConfiguredSentDefaultOnlyWhenStatusUnchanged
 	}
 	// The identity can remain unchanged while its meaning changes. Acceptance
 	// must not turn a newly Accepted definition back into Sent.
+	d.ExpectedStatusID = &otherID
+	mustScan(t, db.QueryRow(ctx, `SELECT o.status_revision,s.meaning_revision FROM estimates o JOIN statuses s ON s.id=o.status_id WHERE o.id=$1`, estimateID), &d.ExpectedStatusRevision, &d.ExpectedMeaningRevision)
 	svc := New(db)
 	actor := Actor{ID: admin, CompanyID: company}
 	replacement, err := svc.Create(ctx, actor, CreateRequest{Type: Estimate, Name: "Other proposal", Category: EstimateEstimate})
@@ -305,7 +316,6 @@ func TestAcceptanceHookTransitionsToConfiguredSentDefaultOnlyWhenStatusUnchanged
 	if err = svc.Move(ctx, actor, MoveRequest{StatusID: otherID, Category: EstimateAccepted, SourceReplacementID: replacement.ID, ConfirmInUse: true}); err != nil {
 		t.Fatal(err)
 	}
-	d.ExpectedStatusID = &otherID
 	withTx(t, db, func(tx pgx.Tx) error { return hook.OnAccepted(ctx, tx, d) })
 	mustScan(t, db.QueryRow(ctx, `SELECT status_id FROM estimates WHERE id=$1`, estimateID), &actual)
 	if actual != otherID {

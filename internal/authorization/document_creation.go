@@ -2,7 +2,6 @@ package authorization
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -23,6 +22,29 @@ type DocumentCreation struct {
 func (s *Service) CreateDocument(ctx context.Context, a Actor, kind string, in DocumentCreation, prepare func(string) (string, error)) (int64, error) {
 	var id int64
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		var err error
+		id, err = s.createDocument(ctx, tx, a, p, kind, in, prepare)
+		return err
+	})
+	return id, err
+}
+
+// CreateDocumentInTransaction joins the caller's details transaction. It never
+// commits independently: fields, selections, numbering and audits share its fate.
+func (s *Service) CreateDocumentInTransaction(ctx context.Context, tx pgx.Tx, a Actor, kind string, in DocumentCreation, prepare func(string) (string, error)) (int64, error) {
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return 0, err
+	}
+	p, err := principal(ctx, tx, a, false)
+	if err != nil {
+		return 0, err
+	}
+	return s.createDocument(ctx, tx, a, p, kind, in, prepare)
+}
+
+func (s *Service) createDocument(ctx context.Context, tx pgx.Tx, a Actor, p Principal, kind string, in DocumentCreation, prepare func(string) (string, error)) (int64, error) {
+	var id int64
+	err := func() error {
 		if kind != "invoice" && kind != "estimate" {
 			return ErrForbidden
 		}
@@ -43,9 +65,9 @@ func (s *Service) CreateDocument(ctx context.Context, a Actor, kind string, in D
 			return err
 		}
 		assigned := false
-		var captured []byte
 		if in.JobID > 0 {
-			if err := tx.QueryRow(ctx, `SELECT line_items FROM jobs WHERE id=$1 AND company_id=$2 AND customer_id=$3 AND deleted_at IS NULL FOR SHARE`, in.JobID, p.CompanyID, in.CustomerID).Scan(&captured); err == pgx.ErrNoRows {
+			var job int64
+			if err := tx.QueryRow(ctx, `SELECT id FROM jobs WHERE id=$1 AND company_id=$2 AND customer_id=$3 AND deleted_at IS NULL FOR SHARE`, in.JobID, p.CompanyID, in.CustomerID).Scan(&job); err == pgx.ErrNoRows {
 				return ErrNotFound
 			} else if err != nil {
 				return err
@@ -80,37 +102,10 @@ func (s *Service) CreateDocument(ctx context.Context, a Actor, kind string, in D
 				return err
 			}
 		}
-		// A retained Job snapshot is not a new catalog selection. Other Item
-		// references require independently authorized, active Pricebook inputs.
-		type line struct {
-			ItemID int64 `json:"item_id"`
-		}
-		var lines, jobLines []line
-		if err := json.Unmarshal([]byte(in.LineItems), &lines); err != nil {
+		// Only explicit server-owned copy context exempts retained occurrences.
+		// A submitted Job binding alone is not proof of a copied snapshot.
+		if err := s.CheckItemSelections(ctx, a, tx, kind, 0, in.LineItems); err != nil {
 			return err
-		}
-		if len(captured) > 0 {
-			if err := json.Unmarshal(captured, &jobLines); err != nil {
-				return err
-			}
-		}
-		retained := map[int64]bool{}
-		for _, line := range jobLines {
-			retained[line.ItemID] = true
-		}
-		for _, line := range lines {
-			if line.ItemID == 0 || retained[line.ItemID] {
-				continue
-			}
-			if line.ItemID < 0 || !p.Allows("item.view", All) || !p.Allows("pricebook.view", All) {
-				return ErrForbidden
-			}
-			var item int64
-			if err := tx.QueryRow(ctx, `SELECT id FROM items WHERE id=$1 AND company_id=$2 AND deleted_at IS NULL FOR SHARE`, line.ItemID, p.CompanyID).Scan(&item); err == pgx.ErrNoRows {
-				return ErrNotFound
-			} else if err != nil {
-				return err
-			}
 		}
 		if exempt {
 			in.TaxRate = "0"
@@ -147,6 +142,6 @@ func (s *Service) CreateDocument(ctx context.Context, a Actor, kind string, in D
 			return err
 		}
 		return audit(ctx, tx, a, p, kind+".create", scope, kind, id, map[string]any{"number": label, "customer_id": in.CustomerID, "job_id": in.JobID})
-	})
+	}()
 	return id, err
 }
