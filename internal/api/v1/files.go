@@ -20,6 +20,8 @@ import (
 func fileError(w http.ResponseWriter, err error) {
 	status, code, message := 500, "file_unavailable", "File storage is unavailable; retry the same operation"
 	switch {
+	case errors.Is(err, authorization.ErrFileOperation):
+		status, code, message = 400, "invalid_operation", "A nonzero operation UUID and a valid nonfuture occurrence time are required"
 	case errors.Is(err, authorization.ErrNotFound) || ent.IsNotFound(err):
 		status, code, message = 404, "not_found", "File or original parent unavailable"
 	case errors.Is(err, authorization.ErrForbidden):
@@ -156,31 +158,17 @@ func (h *handler) mutateFile(w http.ResponseWriter, r *http.Request, remove bool
 		fileError(w, authorization.ErrNotFound)
 		return
 	}
-	var in struct {
-		Name       string `json:"name"`
-		Revision   string `json:"revision"`
-		ObjectType string `json:"object_type"`
-		ObjectID   int64  `json:"object_id"`
-	}
+	var in services.FileMutation
 	if !decodeFileJSON(w, r, &in) {
 		return
 	}
 	u := actorFromContext(r.Context())
-	original, err := objectref.Parse(in.ObjectType, in.ObjectID)
+	_, err = objectref.Parse(in.ObjectType, in.ObjectID)
 	if err != nil {
 		writeError(w, 400, "original_parent_required", "The original File parent is required; never retarget pending work")
 		return
 	}
-	current, err := h.deps.Files.Metadata(r.Context(), *u.CompanyID, id)
-	if err != nil {
-		fileError(w, err)
-		return
-	}
-	var expected int64
-	if in.Revision == services.FileRevision(current) {
-		expected = current.Revision
-	}
-	err = h.deps.Files.MutateFileAt(r.Context(), *u.CompanyID, id, original, in.Name, remove, expected)
+	err = h.deps.Files.MutateFile(r.Context(), *u.CompanyID, id, in, remove)
 	if err != nil {
 		fileError(w, err)
 		return

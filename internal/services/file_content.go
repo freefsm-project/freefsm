@@ -32,6 +32,16 @@ func validateFileContent(path, name string) (string, error) {
 	if want == "" {
 		return "", fmt.Errorf("invalid file content: unsupported extension")
 	}
+	if ext == ".doc" || ext == ".xls" || ext == ".ppt" {
+		got, err := legacyOfficeType(path)
+		if err != nil {
+			return "", err
+		}
+		if got != want {
+			return "", fmt.Errorf("invalid file content: content does not match extension")
+		}
+		return got, nil
+	}
 	if ext == ".zip" || ext == ".docx" || ext == ".xlsx" || ext == ".pptx" || ext == ".odt" || ext == ".ods" {
 		archive, err := zip.OpenReader(path)
 		if err != nil {

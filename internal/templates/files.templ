@@ -408,6 +408,9 @@ templ FileWidgetScript() {
 				form.querySelector('[data-files-prompt]')?.replaceChildren('or choose up to 10 files to attach');
 				input.addEventListener('change', () => filesValidateSelection(form, Array.from(input.files || [])));
 				form.addEventListener('submit', filesHandleSubmit);
+				// The enhanced queue owns publication identities. HTMX must not
+				// also submit this form (a second writer with a new identity).
+				form.addEventListener('htmx:beforeRequest', event => event.preventDefault());
 			});
 		}
 
