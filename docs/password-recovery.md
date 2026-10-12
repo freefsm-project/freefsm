@@ -41,6 +41,9 @@ Links use their own purpose, expire exactly 3,600 seconds after issuance, and ar
 single-use. They are bound to the current email identity and credential revision.
 Changing the destination email invalidates old-mailbox links, including messages
 already in flight and queued intent. Invitation tokens are never recovery proof.
+Recovery pages use `Cache-Control: no-store` and `Referrer-Policy: no-referrer`,
+including validation/error responses, so subsequent browser requests do not
+disclose the bearer URL through their Referer header. Request logs omit queries.
 Validation, credential update, revocation and immutable audit commit together;
 storage/audit failure rolls back the usable credential state.
 

@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -77,12 +79,27 @@ func TestRecoveryPersistedChromium(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
 	mux.Handle("/", middleware.BrowserCSRF(middleware.CSRFToken(router)))
-	server := httptest.NewServer(mux)
+	var leakedReferrers, referrerProbes atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.Referer(), "/reset-password?token=") {
+			leakedReferrers.Add(1)
+		}
+		if r.URL.Query().Get("recovery-referrer-probe") == "1" {
+			referrerProbes.Add(1)
+		}
+		mux.ServeHTTP(w, r)
+	}))
 	defer server.Close()
 	cmdCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
 	defer cancel()
 	output, err := exec.CommandContext(cmdCtx, "node", "testdata/browser/recovery.cjs", server.URL, acting.Value, other.Value, adminCookie.Value, fmt.Sprint(u.ID), mailbox.URL).CombinedOutput()
 	t.Logf("Chromium: %s", output)
+	if leakedReferrers.Load() != 0 {
+		t.Errorf("browser disclosed recovery bearer URL in %d actual HTTP Referer headers", leakedReferrers.Load())
+	}
+	if referrerProbes.Load() == 0 {
+		t.Error("browser did not exercise same-origin referrer probe")
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

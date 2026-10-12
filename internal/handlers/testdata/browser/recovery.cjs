@@ -13,12 +13,22 @@ const { chromium } = require('playwright-core');
   await page.getByRole('button',{name:'Send Reset Link'}).click();
   await page.getByText('If an enabled account with that email exists, a reset link has been requested.',{exact:false}).waitFor();
   const token=await (await context.request.get(mailbox)).text();assert.match(token,/^[a-f0-9]{64}$/);
-  await page.goto(base+'/reset-password?token='+token);
+   const resetResponse=await page.goto(base+'/reset-password?token='+token);
+   // A real same-origin request must not disclose the bearer-bearing document URL.
+   await page.evaluate(()=>fetch('/login?recovery-referrer-probe=1'));
+   assert.equal(resetResponse.headers()['referrer-policy'],'no-referrer');
+   assert.equal(resetResponse.headers()['cache-control'],'no-store');
   for (const name of ['password','confirm_password']) assert.equal(await page.locator('[name='+name+']').getAttribute('minlength'),'16');
   // The genuine production CSRF boundary rejects a forged credential mutation.
   const forged = await context.request.post(base+'/reset-password',{form:{token,password:'ForgedPassword1!',confirm_password:'ForgedPassword1!'}});
   assert.equal(forged.status(),400);
-  await page.goto(base+'/reset-password?token='+token);
+   await page.goto(base+'/reset-password?token='+token);
+   await page.locator('[name=password]').fill('BrowserRecovered1!');
+   await page.locator('[name=confirm_password]').fill('DifferentPassword1!');
+   const errorResponse=await Promise.all([page.waitForNavigation(),page.getByRole('button',{name:'Reset Password',exact:true}).click()]);
+   assert.equal(errorResponse[0].headers()['referrer-policy'],'no-referrer');
+   assert.equal(errorResponse[0].headers()['cache-control'],'no-store');
+   await page.evaluate(()=>fetch('/login?recovery-referrer-probe=1'));
   await page.locator('[name=password]').fill('BrowserRecovered1!');
   await page.locator('[name=confirm_password]').fill('BrowserRecovered1!');
   await Promise.all([page.waitForNavigation(),page.getByRole('button',{name:'Reset Password',exact:true}).click()]);

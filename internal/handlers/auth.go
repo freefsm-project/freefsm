@@ -138,6 +138,8 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method == http.MethodGet {
 		token := r.URL.Query().Get("token")
 		_, err := h.resetSvc.Validate(r.Context(), token)
