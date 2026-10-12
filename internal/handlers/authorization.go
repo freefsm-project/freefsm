@@ -202,6 +202,10 @@ func (h authorizationHandler) Context(w http.ResponseWriter, r *http.Request) {
 }
 
 func customerPermission(r *http.Request, permission string) bool {
+	return allRecordsPermission(r, permission)
+}
+
+func allRecordsPermission(r *http.Request, permission string) bool {
 	request, ok := authorization.FromContext(r.Context())
 	if !ok {
 		return false

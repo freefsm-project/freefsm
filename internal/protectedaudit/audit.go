@@ -8,7 +8,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ProductAction records the effective product authority used by a command.
@@ -21,7 +21,11 @@ type ProductAction struct {
 	Detail                    any
 }
 
-func RecordProduct(ctx context.Context, tx pgx.Tx, event ProductAction) error {
+type Executor interface {
+	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
+}
+
+func RecordProduct(ctx context.Context, tx Executor, event ProductAction) error {
 	if event.ActorID <= 0 || event.TargetID <= 0 || event.Action == "" || event.Action == "admin_password_recovered" || event.TargetType == "" || event.Channel == "" || event.Channel == "host-local" || !validScope(event.Scope) {
 		return errors.New("invalid product audit attribution")
 	}
@@ -42,7 +46,7 @@ type HostRecovery struct {
 // RecordHostRecovery is deliberately purpose-specific. Host authority can record
 // recovery of a verified protected identity, never manufacture a product actor,
 // Role grant, or arbitrary sealed action. No credential material is accepted.
-func RecordHostRecovery(ctx context.Context, tx pgx.Tx, event HostRecovery) error {
+func RecordHostRecovery(ctx context.Context, tx Executor, event HostRecovery) error {
 	if strings.TrimSpace(event.HostUID) == "" || event.TargetUserID <= 0 || event.TargetRoleID <= 0 || event.CompanyID <= 0 {
 		return errors.New("invalid host recovery audit attribution")
 	}

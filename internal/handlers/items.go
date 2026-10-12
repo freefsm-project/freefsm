@@ -7,59 +7,50 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
-	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
 
-type ItemHandler struct {
-	svc         *services.ItemService
-	activitySvc *services.ActivityService
-}
+type ItemHandler struct{ svc *services.ItemService }
 
-func NewItemHandler(svc *services.ItemService, activitySvc *services.ActivityService) *ItemHandler {
-	return &ItemHandler{svc: svc, activitySvc: activitySvc}
+func NewItemHandler(svc *services.ItemService) *ItemHandler {
+	return &ItemHandler{svc: svc}
 }
 
 func (h *ItemHandler) List(w http.ResponseWriter, r *http.Request) {
+	if !requireItemPermission(w, r, "item.view") {
+		return
+	}
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
 	}
-	perPage := 25
 	search := r.URL.Query().Get("search")
-
-	items, total, err := h.svc.List(r.Context(), search, page, perPage)
+	items, total, err := h.svc.List(r.Context(), search, page, 25)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
-
 	rows := make([]templates.ItemRow, len(items))
-	for i, item := range items {
-		rows[i] = itemRow(item)
+	for n, i := range items {
+		rows[n] = itemRow(i)
 	}
-
-	data := templates.ItemListPageData{
-		Items:      rows,
-		Page:       page,
-		PerPage:    perPage,
-		Total:      total,
-		TotalPages: services.ItemPaginationTotalPages(total, perPage),
-		Search:     search,
-	}
-
+	d := templates.ItemListPageData{Items: rows, Page: page, PerPage: 25, Total: total, TotalPages: services.ItemPaginationTotalPages(total, 25), Search: search}
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
-		templates.ItemsListContent(data).Render(r.Context(), w)
+		templates.ItemsListContent(d).Render(r.Context(), w)
 		return
 	}
-	templates.ItemsIndex(data).Render(r.Context(), w)
+	templates.ItemsIndex(d).Render(r.Context(), w)
 }
 
 func (h *ItemHandler) Show(w http.ResponseWriter, r *http.Request) {
+	if !requireItemPermission(w, r, "item.view") {
+		return
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.NotFound(w, r)
@@ -74,103 +65,29 @@ func (h *ItemHandler) Show(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ItemHandler) Create(w http.ResponseWriter, r *http.Request) {
-	if !requireAdminOrDispatcher(w, r) {
+	if !requireItemPermission(w, r, "item.create") {
 		return
 	}
 	if r.Method == http.MethodGet {
 		templates.ItemForm(newItemForm()).Render(r.Context(), w)
 		return
 	}
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", 400)
-		return
-	}
-	params := services.ItemCreateParams{
-		Name:           r.FormValue("name"),
-		Type:           r.FormValue("type"),
-		Sku:            r.FormValue("sku"),
-		UnitPrice:      parseFloat(r.FormValue("unit_price")),
-		UnitCost:       parseFloat(r.FormValue("unit_cost")),
-		Taxable:        r.FormValue("taxable") == "true",
-		TaxRate:        r.FormValue("tax_rate"),
-		TrackInventory: r.FormValue("track_inventory") == "true",
-		Description:    r.FormValue("description"),
-		IsActive:       r.FormValue("is_active") == "true",
-	}
-	if params.Type == "" {
-		params.Type = "service"
-	}
-	result, err := h.svc.Create(r.Context(), params)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeItem, result.ID), map[string]interface{}{
-			"entity_name": result.Name,
-			"actor_name":  u.Name,
-		})
-	}
-	http.Redirect(w, r, "/items?flash=Item+created", http.StatusSeeOther)
+	h.save(w, r, 0, false)
 }
 
 func (h *ItemHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", 400)
+	if !requireItemPermission(w, r, "item.create") {
 		return
 	}
-	itemType := r.FormValue("type")
-	if itemType == "" {
-		itemType = "product"
-	}
-
-	result, err := h.svc.Create(r.Context(), services.ItemCreateParams{
-		Name:           r.FormValue("name"),
-		Type:           itemType,
-		Sku:            r.FormValue("sku"),
-		UnitPrice:      parseFloat(r.FormValue("unit_price")),
-		UnitCost:       parseFloat(r.FormValue("unit_cost")),
-		Taxable:        r.FormValue("taxable") == "true",
-		TaxRate:        r.FormValue("tax_rate"),
-		TrackInventory: r.FormValue("track_inventory") == "true",
-		Description:    r.FormValue("description"),
-		IsActive:       true,
-	})
-	if err != nil {
-		http.Error(w, err.Error(), 500)
+	if !requireItemPermission(w, r, "pricebook.create") {
 		return
 	}
-
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "created", objectref.New(objectref.TypeItem, result.ID), map[string]interface{}{
-			"entity_name": result.Name,
-			"actor_name":  u.Name,
-		})
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(struct {
-		ID          int64   `json:"id"`
-		Name        string  `json:"name"`
-		Description string  `json:"description"`
-		UnitPrice   float64 `json:"unit_price"`
-		Taxable     bool    `json:"taxable"`
-		TaxRate     string  `json:"tax_rate"`
-	}{
-		ID:          result.ID,
-		Name:        result.Name,
-		Description: result.Description,
-		UnitPrice:   result.UnitPrice,
-		Taxable:     result.Taxable,
-		TaxRate:     result.TaxRate,
-	})
+	h.save(w, r, 0, true)
 }
 
 func (h *ItemHandler) Update(w http.ResponseWriter, r *http.Request) {
-	if !requireAdminOrDispatcher(w, r) {
+	if !allRecordsPermission(r, "item.edit") && !allRecordsPermission(r, "pricebook.edit") && !allRecordsPermission(r, "cost.edit") {
+		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -187,103 +104,97 @@ func (h *ItemHandler) Update(w http.ResponseWriter, r *http.Request) {
 		templates.ItemForm(formDataFromItem(r.Context(), i)).Render(r.Context(), w)
 		return
 	}
+	h.save(w, r, id, false)
+}
+
+func (h *ItemHandler) save(w http.ResponseWriter, r *http.Request, id int64, inline bool) {
+	request, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
 	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", 400)
+		http.Error(w, "Invalid form", 400)
 		return
 	}
-	params := services.ItemUpdateParams{
-		Name:           formPtr(r.FormValue("name")),
-		Type:           formPtr(r.FormValue("type")),
-		Sku:            formPtr(r.FormValue("sku")),
-		UnitPrice:      floatPtr(parseFloat(r.FormValue("unit_price"))),
-		UnitCost:       floatPtr(parseFloat(r.FormValue("unit_cost"))),
-		Taxable:        boolPtr(r.FormValue("taxable") == "true"),
-		TaxRate:        formPtr(r.FormValue("tax_rate")),
-		TrackInventory: boolPtr(r.FormValue("track_inventory") == "true"),
-		Description:    formPtr(r.FormValue("description")),
-		IsActive:       boolPtr(r.FormValue("is_active") == "true"),
+	text := func(key string) *string {
+		if !r.PostForm.Has(key) {
+			return nil
+		}
+		v := r.PostForm.Get(key)
+		return &v
 	}
-	result, err := h.svc.Update(r.Context(), id, params)
+	flag := func(key string) *bool {
+		if !r.PostForm.Has(key) && !r.PostForm.Has(key+"_present") {
+			return nil
+		}
+		v := r.PostForm.Get(key) == "true"
+		return &v
+	}
+	in := authorization.ItemInput{Name: text("name"), Type: text("type"), Description: text("description"), Sku: text("sku"), TaxRate: text("tax_rate"), Taxable: flag("taxable"), TrackInventory: flag("track_inventory"), IsActive: flag("is_active")}
+	for _, f := range []struct {
+		key    string
+		target **float64
+	}{{"unit_price", &in.UnitPrice}, {"unit_cost", &in.UnitCost}} {
+		if r.PostForm.Has(f.key) {
+			v, err := strconv.ParseFloat(r.PostForm.Get(f.key), 64)
+			if err != nil {
+				authorizationError(w, r, err)
+				return
+			}
+			*f.target = &v
+		}
+	}
+	id, err := request.Service.SaveItem(r.Context(), request.Actor, id, in)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "updated", objectref.New(objectref.TypeItem, id), map[string]interface{}{
-			"entity_name": result.Name,
-			"actor_name":  u.Name,
-		})
+	if inline {
+		i, err := h.svc.GetByID(r.Context(), id)
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(201)
+		json.NewEncoder(w).Encode(services.CatalogSnapshotFromItem(i))
+		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/items/%d?flash=Item+updated", id), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/items/%d", id), 303)
 }
 
-func (h *ItemHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	if !requireAdminOrDispatcher(w, r) {
+func (h *ItemHandler) Delete(w http.ResponseWriter, r *http.Request)  { h.archive(w, r, true) }
+func (h *ItemHandler) Restore(w http.ResponseWriter, r *http.Request) { h.archive(w, r, false) }
+func (h *ItemHandler) archive(w http.ResponseWriter, r *http.Request, archived bool) {
+	request, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid id", 400)
-		return
-	}
-	item, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
-	entityName := item.Name
-	if err := h.svc.Archive(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+	if err := request.Service.SetItemArchived(r.Context(), request.Actor, id, archived); err != nil {
+		authorizationError(w, r, err)
 		return
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "archived", objectref.New(objectref.TypeItem, id), map[string]interface{}{
-			"entity_name": entityName,
-			"actor_name":  u.Name,
-		})
-	}
-	http.Redirect(w, r, "/items?flash=Item+archived", http.StatusSeeOther)
+	http.Redirect(w, r, "/items", 303)
 }
 
-func (h *ItemHandler) Restore(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", 400)
-		return
+func requireItemPermission(w http.ResponseWriter, r *http.Request, permission string) bool {
+	if !allRecordsPermission(r, permission) {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return false
 	}
-	i, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	if err := h.svc.Restore(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "restored", objectref.New(objectref.TypeItem, id), map[string]interface{}{
-			"entity_name": i.Name,
-			"actor_name":  u.Name,
-		})
-	}
-	http.Redirect(w, r, "/items/"+strconv.FormatInt(id, 10)+"?flash=Item+restored", http.StatusSeeOther)
+	return true
 }
 
-func parseFloat(v string) float64 {
-	f, _ := strconv.ParseFloat(v, 64)
-	return f
-}
-
-func floatPtr(v float64) *float64 {
-	return &v
-}
-
-func boolPtr(v bool) *bool {
-	return &v
-}
+func parseFloat(v string) float64 { f, _ := strconv.ParseFloat(v, 64); return f }
+func floatPtr(v float64) *float64 { return &v }
+func boolPtr(v bool) *bool        { return &v }
 
 func requireAdminOrDispatcher(w http.ResponseWriter, r *http.Request) bool {
 	u, ok := middleware.UserFromContext(r.Context())
@@ -299,54 +210,19 @@ func requireAdminOrDispatcher(w http.ResponseWriter, r *http.Request) bool {
 }
 
 func itemToDetail(ctx context.Context, i *ent.Item) templates.ItemDetail {
-	d := templates.ItemDetail{
-		ID:             i.ID,
-		Name:           i.Name,
-		Type:           i.Type,
-		Sku:            i.Sku,
-		UnitPrice:      i.UnitPrice,
-		UnitCost:       i.UnitCost,
-		Taxable:        i.Taxable,
-		TaxRate:        i.TaxRate,
-		TrackInventory: i.TrackInventory,
-		Description:    i.Description,
-		IsActive:       i.IsActive,
-	}
+	d := templates.ItemDetail{ID: i.ID, Name: i.Name, Type: i.Type, Sku: i.Sku, UnitPrice: i.UnitPrice, UnitCost: i.UnitCost, Taxable: i.Taxable, TaxRate: i.TaxRate, TrackInventory: i.TrackInventory, Description: i.Description, IsActive: i.IsActive}
 	if i.DeletedAt != nil && !i.DeletedAt.IsZero() {
 		d.ArchivedAt = displayDate(ctx, *i.DeletedAt)
 	}
 	return d
 }
-
 func itemRow(i *ent.Item) templates.ItemRow {
-	return templates.ItemRow{
-		ID:        i.ID,
-		Name:      i.Name,
-		Type:      i.Type,
-		Sku:       i.Sku,
-		UnitPrice: i.UnitPrice,
-		UnitCost:  i.UnitCost,
-		IsActive:  i.IsActive,
-	}
+	return templates.ItemRow{ID: i.ID, Name: i.Name, Type: i.Type, Sku: i.Sku, UnitPrice: i.UnitPrice, UnitCost: i.UnitCost, IsActive: i.IsActive}
 }
-
 func newItemForm() templates.ItemFormPageData {
-	return templates.ItemFormPageData{
-		Item: &templates.ItemDetail{
-			Type:     "service",
-			Taxable:  true,
-			IsActive: true,
-		},
-		IsNew: true,
-		Types: services.ItemTypes,
-	}
+	return templates.ItemFormPageData{Item: &templates.ItemDetail{Type: "service", Taxable: true, IsActive: true}, IsNew: true, Types: services.ItemTypes}
 }
-
 func formDataFromItem(ctx context.Context, i *ent.Item) templates.ItemFormPageData {
 	d := itemToDetail(ctx, i)
-	return templates.ItemFormPageData{
-		Item:  &d,
-		IsNew: false,
-		Types: services.ItemTypes,
-	}
+	return templates.ItemFormPageData{Item: &d, IsNew: false, Types: services.ItemTypes}
 }

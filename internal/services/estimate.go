@@ -108,6 +108,11 @@ func (s *EstimateService) GetByID(ctx context.Context, id int64) (*ent.Estimate,
 }
 
 func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParams) (*ent.Estimate, error) {
+	if needsCatalogTransaction(ctx) {
+		return catalogWrite(ctx, s.client, "estimate", 0, params.LineItems, func(ctx context.Context, c *ent.Client) (*ent.Estimate, error) {
+			return NewEstimateService(c).Create(ctx, params)
+		})
+	}
 	var customerCompanyID *int64
 	if request, ok := authorization.FromContext(ctx); ok {
 		input, err := request.Service.DocumentCustomer(ctx, request.Actor, params.CustomerID, params.JobID, params.TaxRate)
@@ -169,6 +174,11 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 }
 
 func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateUpdateParams) (*ent.Estimate, error) {
+	if needsCatalogTransaction(ctx) && params.LineItems != nil {
+		return catalogWrite(ctx, s.client, "estimate", id, *params.LineItems, func(ctx context.Context, c *ent.Client) (*ent.Estimate, error) {
+			return NewEstimateService(c).Update(ctx, id, params)
+		})
+	}
 	var encodedLineItems string
 	if params.LineItems != nil {
 		var err error
@@ -275,6 +285,7 @@ func EstimatePaginationTotalPages(total, perPage int) int {
 }
 
 func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService, defaultTaxRate string) (*ent.Estimate, error) {
+	ctx = authorization.WithCapturedItemSource(ctx, "job", jobID)
 	j, err := s.client.Job.Get(ctx, jobID)
 	if err != nil {
 		return nil, fmt.Errorf("get job %d: %w", jobID, err)

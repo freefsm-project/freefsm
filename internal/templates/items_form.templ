@@ -7,6 +7,7 @@ templ ItemForm(p ItemFormPageData) {
 
 		<form action={ templ.URL(itemFormAction(p.IsNew, p.Item.ID)) } method="post" autocomplete="off" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			if itemPermission(ctx, "item.edit") || p.IsNew && itemPermission(ctx, "item.create") {
 				<label>
 					Name <small class="required-marker">*</small>
 				<input type="text" name="name" value={ p.Item.Name } required autofocus/>
@@ -23,25 +24,20 @@ templ ItemForm(p ItemFormPageData) {
 						}
 					</select>
 				</label>
-				<label>
-					SKU
-					<input type="text" name="sku" value={ p.Item.Sku } placeholder="Optional"/>
-				</label>
 			</div>
+			}
+			if itemPermission(ctx, "pricebook.edit") && !p.IsNew || p.IsNew && itemPermission(ctx, "pricebook.create") {
+			<label>SKU <input type="text" name="sku" value={ p.Item.Sku } placeholder="Optional"/></label>
 			<div class="grid">
 				<label>
 					Unit Price
 					<input type="number" name="unit_price" step="0.01" min="0"
 						value={ fmt.Sprintf("%.2f", p.Item.UnitPrice) }/>
 				</label>
-				<label>
-					Unit Cost
-					<input type="number" name="unit_cost" step="0.01" min="0"
-						value={ fmt.Sprintf("%.2f", p.Item.UnitCost) }/>
-				</label>
 			</div>
 			<div class="grid">
 				<label>
+					<input type="hidden" name="taxable_present" value="true"/>
 					<input type="checkbox" name="taxable" value="true"
 						checked?={ p.Item.Taxable }/>
 					Taxable
@@ -51,13 +47,20 @@ templ ItemForm(p ItemFormPageData) {
 					<input type="text" name="tax_rate" value={ p.Item.TaxRate } placeholder="e.g. 8.25%"/>
 				</label>
 			</div>
+			}
+			if itemPermission(ctx, "cost.edit") {
+				<label>Unit Cost <input type="number" name="unit_cost" step="0.01" min="0" value={ fmt.Sprintf("%.2f", p.Item.UnitCost) }/></label>
+			}
+			if itemPermission(ctx, "item.edit") || p.IsNew && itemPermission(ctx, "item.create") {
 			<div class="grid">
 				<label>
+					<input type="hidden" name="track_inventory_present" value="true"/>
 					<input type="checkbox" name="track_inventory" value="true"
 						checked?={ p.Item.TrackInventory }/>
 					Track Inventory
 				</label>
 				<label>
+					<input type="hidden" name="is_active_present" value="true"/>
 					<input type="checkbox" name="is_active" value="true"
 						checked?={ p.Item.IsActive }/>
 					Active
@@ -67,6 +70,7 @@ templ ItemForm(p ItemFormPageData) {
 				Description
 				<textarea name="description" rows="3">{ p.Item.Description }</textarea>
 			</label>
+			}
 			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href="/items" role="button" class="outline">Cancel</a>

@@ -14,10 +14,14 @@ templ ItemsIndex(p ItemListPageData) {
 
 templ ItemsListContent(p ItemListPageData) {
 	<div id="item-list-content" class="focused-list-content">
+		if itemPermission(ctx, "item.create") {
 		@ListToolbar(ListToolbarData{
 			Action: "/items", Target: "#item-list-content", Search: p.Search,
 			SearchPlaceholder: "Search by name or SKU...", NewURL: "/items/new", NewLabel: "New Item",
 		})
+		} else {
+		@ListToolbar(ListToolbarData{Action: "/items", Target: "#item-list-content", Search: p.Search, SearchPlaceholder: "Search Items..."})
+		}
 		@ItemsTable(p)
 	</div>
 }
@@ -30,8 +34,9 @@ templ ItemsTable(p ItemListPageData) {
 				<tr>
 					<th>Name</th>
 					<th>Type</th>
-					<th>SKU</th>
-					<th>Price</th>
+					if itemPermission(ctx, "pricebook.view") {
+						<th>SKU</th><th>Price</th>
+					}
 					<th>Active</th>
 					<th></th>
 				</tr>
@@ -40,7 +45,9 @@ templ ItemsTable(p ItemListPageData) {
 				if len(p.Items) == 0 {
 					<tr><td colspan="6" class="work-queue-empty">
 						<p>No items found.</p>
-						<a href="/items/new" role="button" class="outline">Create your first item</a>
+						if itemPermission(ctx, "item.create") {
+							<a href="/items/new" role="button" class="outline">Create your first item</a>
+						}
 					</td></tr>
 				}
 				for _, i := range p.Items {
@@ -49,8 +56,9 @@ templ ItemsTable(p ItemListPageData) {
 							<a href={ templ.URL(fmt.Sprintf("/items/%d", i.ID)) } class="work-queue-title">{ i.Name }</a>
 						</td>
 						<td><mark>{ i.Type }</mark></td>
-						<td>{ i.Sku }</td>
-						<td>{ fmt.Sprintf("$%.2f", i.UnitPrice) }</td>
+						if itemPermission(ctx, "pricebook.view") {
+							<td>{ i.Sku }</td><td>{ fmt.Sprintf("$%.2f", i.UnitPrice) }</td>
+						}
 						<td>
 							if i.IsActive {
 								<ins>&check;</ins>
@@ -59,11 +67,15 @@ templ ItemsTable(p ItemListPageData) {
 							}
 						</td>
 						<td class="work-queue-actions">
+							if itemPermission(ctx, "item.edit") || itemPermission(ctx, "pricebook.edit") || itemPermission(ctx, "cost.edit") {
 							<a href={ templ.URL(fmt.Sprintf("/items/%d/edit", i.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", i.Name) }>Edit</a>
+							}
+							if itemPermission(ctx, "item.archive") {
 							<form action={ templ.URL(fmt.Sprintf("/items/%d/delete", i.ID)) } method="post" hx-confirm="Delete this item?">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", i.Name) }>Del</button>
 							</form>
+							}
 						</td>
 					</tr>
 				}

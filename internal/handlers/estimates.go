@@ -298,7 +298,7 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -375,7 +375,7 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	params.LineItems = &lineItems
 	result, err := h.svc.Update(r.Context(), id, params)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())

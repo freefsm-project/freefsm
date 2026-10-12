@@ -29,6 +29,9 @@ type UserInfo struct {
 	CustomerEdit           bool
 	CustomerFinancial      bool
 	CustomerContext        bool
+	// ItemPermissions is a presentation snapshot of effective grants. Commands
+	// and data projections independently recheck current authority.
+	ItemPermissions        map[string]bool
 	CanReviewAuthorization bool
 	FontSize               string
 	LastScheduleTab        string

@@ -183,8 +183,8 @@ func TestListToolbarOptionalControls(t *testing.T) {
 		if strings.Contains(html, `class="focused-list-filter"`) || strings.Contains(html, `>Filter<`) {
 			t.Fatal("items toolbar rendered Filter")
 		}
-		if !strings.Contains(html, `href="/items/new"`) {
-			t.Fatal("items toolbar omitted New Item")
+		if strings.Contains(html, `href="/items/new"`) {
+			t.Fatal("items toolbar exposed New Item without an Item Create grant")
 		}
 	})
 

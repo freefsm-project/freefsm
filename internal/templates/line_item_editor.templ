@@ -15,7 +15,7 @@ templ LineItemEditor(p LineItemEditorData) {
 			const taxContext = readJSON('customers', '{"default_tax_rate":"0","customers":{}}');
 			const form = root.closest('form');
 			const makeItem = () => ({ item_id: 0, title: '', description: '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: 0, surcharge: 0 });
-			const makeNewItem = () => ({ name: '', type: 'product', sku: '', description: '', unit_price: 0, unit_cost: 0, taxable: true, tax_rate: '', track_inventory: false });
+			const makeNewItem = () => ({ name: '', type: 'product', sku: '', description: '', unit_price: 0, taxable: true, tax_rate: '', track_inventory: false });
 			const parseRate = (value) => (parseFloat(String(value || '').replace('%', '').trim()) || 0) / 100;
 			const roundMoney = (value) => Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * 100) / 100;
 			existing.forEach((item) => {
@@ -97,7 +97,7 @@ templ LineItemEditor(p LineItemEditorData) {
 					this.creatingItem = true;
 					try {
 						const body = new URLSearchParams();
-						['name', 'type', 'sku', 'description', 'unit_price', 'unit_cost', 'tax_rate'].forEach((name) => body.set(name, this.newItem[name] || ''));
+						['name', 'type', 'sku', 'description', 'unit_price', 'tax_rate'].forEach((name) => body.set(name, this.newItem[name] ?? ''));
 						body.set('taxable', this.newItem.taxable ? 'true' : 'false');
 						body.set('track_inventory', this.newItem.track_inventory ? 'true' : 'false');
 						const csrf = document.querySelector('meta[name="csrf-token"]');
@@ -148,18 +148,18 @@ templ LineItemEditor(p LineItemEditorData) {
 		</table>
 		<div class="line-item-actions">
 			<button type="button" @click.prevent="add()" class="outline">Add Line</button>
-			if canManageOperational(ctx) {
+			if itemPermission(ctx, "item.create") && itemPermission(ctx, "pricebook.create") {
 				<button type="button" @click.prevent="openCreateItemModal()" class="outline">Create Item</button>
 			}
 		</div>
-		if canManageOperational(ctx) {
+		if itemPermission(ctx, "item.create") && itemPermission(ctx, "pricebook.create") {
 			<dialog class="item-create-dialog" x-ref="createItemDialog" @click.self="closeCreateItemModal()">
 				<article class="item-create-dialog-card">
 					<header class="item-create-dialog-header"><strong>Create Item</strong><button type="button" class="outline small" @click="closeCreateItemModal()">Close</button></header>
 					<div class="item-create-dialog-body">
 						<label>Name <small class="required-marker">*</small><input type="text" x-model="newItem.name" placeholder="Item name"/></label>
 						<div class="grid"><label>Type<select x-model="newItem.type"><option value="product">product</option><option value="service">service</option></select></label><label>SKU<input type="text" x-model="newItem.sku" placeholder="Optional"/></label></div>
-						<div class="grid"><label>Unit Price<input type="number" x-model="newItem.unit_price" step="0.01" min="0"/></label><label>Unit Cost<input type="number" x-model="newItem.unit_cost" step="0.01" min="0"/></label></div>
+						<label>Unit Price<input type="number" x-model="newItem.unit_price" step="0.01" min="0"/></label>
 						<div class="grid"><label><input type="checkbox" x-model="newItem.taxable"/> Taxable</label><label>Tax Rate<input type="text" x-model="newItem.tax_rate" placeholder="e.g. 8.25%"/></label></div>
 						<label><input type="checkbox" x-model="newItem.track_inventory"/> Track Inventory</label>
 						<label>Description<textarea x-model="newItem.description" rows="3"></textarea></label>

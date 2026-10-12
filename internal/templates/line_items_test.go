@@ -139,8 +139,8 @@ func TestDocumentFormsRenderSharedLineItemEditorContract(t *testing.T) {
 func TestLineItemEditorCreateItemPermission(t *testing.T) {
 	component := LineItemEditor(LineItemEditorData{ItemsJSON: `[]`, ExistingItemsJSON: `[]`, CustomersJSON: `{}`})
 	for _, role := range []string{"admin", "dispatcher"} {
-		if html := renderComponentForRole(t, component, role); !strings.Contains(html, "Create Item") || !strings.Contains(html, "item-create-dialog") {
-			t.Errorf("role %q did not receive inline Create Item controls", role)
+		if html := renderComponentForRole(t, component, role); strings.Contains(html, "Create Item") || strings.Contains(html, "item-create-dialog") {
+			t.Errorf("legacy role %q received inline Create Item controls without explicit grants", role)
 		}
 	}
 	if html := renderComponentForRole(t, component, "technician"); strings.Contains(html, "Create Item") || strings.Contains(html, "item-create-dialog") {
@@ -150,12 +150,17 @@ func TestLineItemEditorCreateItemPermission(t *testing.T) {
 
 func renderComponent(t *testing.T, component templ.Component) string {
 	t.Helper()
-	return renderComponentForRole(t, component, "admin")
+	return renderComponentForUser(t, component, &middleware.UserInfo{Role: "admin", ItemPermissions: map[string]bool{"item.create": true, "pricebook.create": true}})
 }
 
 func renderComponentForRole(t *testing.T, component templ.Component, role string) string {
 	t.Helper()
-	ctx := context.WithValue(context.Background(), middleware.UserKey, &middleware.UserInfo{Role: role})
+	return renderComponentForUser(t, component, &middleware.UserInfo{Role: role})
+}
+
+func renderComponentForUser(t *testing.T, component templ.Component, user *middleware.UserInfo) string {
+	t.Helper()
+	ctx := context.WithValue(context.Background(), middleware.UserKey, user)
 	var output bytes.Buffer
 	if err := component.Render(ctx, &output); err != nil {
 		t.Fatalf("Render() error = %v", err)

@@ -323,7 +323,7 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invoice total must not be negative", http.StatusBadRequest)
 			return
 		}
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -423,7 +423,7 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "invoice total must not be negative", http.StatusBadRequest)
 			return
 		}
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -759,7 +759,7 @@ func (h *InvoiceHandler) CreateForJob(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	h.Create(w, r)
+	h.Create(w, r.WithContext(authorization.WithCapturedItemSource(r.Context(), "job", jobID)))
 }
 
 func (h *InvoiceHandler) jobsForEditor(ctx context.Context) ([]*ent.Job, error) {

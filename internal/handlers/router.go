@@ -25,6 +25,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	r := chi.NewRouter()
 	authority := authorization.New(db)
 	authorization.InstallCustomerBoundary(entClient)
+	authorization.InstallItemBoundary(entClient)
 	authorityHandler := authorizationHandler{svc: authority}
 	var control *instancecontrol.Control
 	if len(controls) > 0 {
@@ -61,6 +62,10 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		}
 		if u.CompanyID != nil {
 			info.CompanyID = *u.CompanyID
+		}
+		info.ItemPermissions = make(map[string]bool)
+		for _, permission := range []string{"item.view", "item.create", "item.edit", "item.archive", "item.restore", "pricebook.view", "pricebook.create", "pricebook.edit", "cost.view", "cost.edit"} {
+			info.ItemPermissions[permission] = principal.Allows(permission, authorization.All)
 		}
 		return info, nil
 	}
@@ -103,7 +108,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 
 	customerHandler := NewCustomerHandler(customerService, contactSvc, locationSvc, tagSvc, tagLinkSvc, defSvc, fileSvc, activitySvc, policySvc, jobService, estimateService, invoiceService, statusService, settlementService)
 	customerHandler.statusflow = statusflowService
-	itemHandler := NewItemHandler(itemService, activitySvc)
+	itemHandler := NewItemHandler(itemService)
 	// Asset services
 	assetTypeSvc := services.NewAssetTypeService(entClient)
 	assetStatusSvc := services.NewAssetStatusService(entClient)
@@ -205,11 +210,11 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/projects/options", projectHandler.ProjectOptions)
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/assets/options", jobHandler.AssetOptions)
 		r.Route("/items", func(r chi.Router) {
-			r.With(middleware.DispatcherOrAdmin).Get("/", itemHandler.List)
+			r.Get("/", itemHandler.List)
 			r.With(middleware.DispatcherOrAdmin).Get("/activity", activityHandler.ListByType(objectref.TypeItem))
-			r.With(middleware.DispatcherOrAdmin).Post("/inline", itemHandler.CreateInline)
+			r.Post("/inline", itemHandler.CreateInline)
 			r.Post("/", itemHandler.Create)
-			r.With(middleware.DispatcherOrAdmin).Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
+			r.Get("/{id}", func(w http.ResponseWriter, r *http.Request) {
 				if chi.URLParam(r, "id") == "new" {
 					itemHandler.Create(w, r)
 					return
@@ -219,6 +224,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(activeObjectGuard(objectref.TypeItem)).Get("/{id}/edit", itemHandler.Update)
 			r.With(activeObjectGuard(objectref.TypeItem)).Post("/{id}", itemHandler.Update)
 			r.With(activeObjectGuard(objectref.TypeItem)).Post("/{id}/delete", itemHandler.Delete)
+			r.Post("/{id}/restore", itemHandler.Restore)
 		})
 		r.Get("/time-entries", timeEntryHandler.List)
 		r.Post("/time-entries/clock-in", timeEntryHandler.ClockIn)
@@ -400,7 +406,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/estimates/{id}/restore", estimateHandler.Restore)
 			r.Post("/invoices/{id}/restore", invoiceHandler.Restore)
 			r.Post("/assets/{id}/restore", assetHandler.Restore)
-			r.Post("/items/{id}/restore", itemHandler.Restore)
 			// Admin activity feeds
 			r.Get("/settings/activity", activityHandler.ListByType(objectref.TypeCompanySettings))
 			r.Get("/settings/custom-fields/activity", activityHandler.ListByType(objectref.TypeCustomField))
