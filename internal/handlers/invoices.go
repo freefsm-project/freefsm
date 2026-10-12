@@ -319,6 +319,9 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
+		if renderFieldSaveError(w, r, h.defSvc, "invoice", err) {
+			return
+		}
 		if errors.Is(err, services.ErrNegativeInvoiceTotal) {
 			http.Error(w, "invoice total must not be negative", http.StatusBadRequest)
 			return
@@ -342,7 +345,13 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.authorizeInvoice(w, r, id, policyUpdate) {
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		if err := request.Service.DetailsAccess(r.Context(), request.Actor, "invoice", id); err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+	} else {
+		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
 	if r.Method == http.MethodGet {
@@ -416,9 +425,12 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.DueDate = &t
 	}
 	params.LineItems = &lineItems
-	params.CustomFields = strPtr(parseCustomFieldValues(r))
-	result, err := h.svc.Update(r.Context(), id, params)
+	params.CustomFields = parseCustomFieldPatch(r)
+	result, err := h.svc.SaveDetails(r.Context(), id, params)
 	if err != nil {
+		if renderFieldSaveError(w, r, h.defSvc, "invoice", err) {
+			return
+		}
 		if errors.Is(err, services.ErrNegativeInvoiceTotal) {
 			http.Error(w, "invoice total must not be negative", http.StatusBadRequest)
 			return
@@ -567,7 +579,7 @@ func (h *InvoiceHandler) newInvoiceForm(ctx context.Context) (templates.InvoiceF
 		ItemsJSON:         bootstrap.ItemsJSON,
 		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
 		CustomersJSON:     bootstrap.CustomersJSON,
-		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
+		CustomFields:      buildCustomFieldInitialDisplay(defs),
 	}, nil
 }
 
@@ -734,7 +746,7 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		ItemsJSON:         bootstrap.ItemsJSON,
 		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
 		CustomersJSON:     bootstrap.CustomersJSON,
-		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
+		CustomFields:      buildCustomFieldInitialDisplay(defs),
 		CancelURL:         fmt.Sprintf("/jobs/%d", id),
 		FormAction:        fmt.Sprintf("/jobs/%d/invoices", id),
 	}
@@ -771,6 +783,9 @@ func (h *InvoiceHandler) jobsForEditor(ctx context.Context) ([]*ent.Job, error) 
 }
 
 func (h *InvoiceHandler) authorizeDestinationJob(w http.ResponseWriter, r *http.Request, customerID, jobID int64) bool {
+	if _, ok := authorization.FromContext(r.Context()); ok {
+		return authorizeFieldDocumentDestination(w, r, customerID, jobID)
+	}
 	if jobID <= 0 {
 		u, _ := middleware.UserFromContext(r.Context())
 		if u != nil && (u.Role == "tech" || u.Role == "technician") {
@@ -830,7 +845,7 @@ func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Reque
 		ItemsJSON:         bootstrap.ItemsJSON,
 		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
 		CustomersJSON:     bootstrap.CustomersJSON,
-		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
+		CustomFields:      buildCustomFieldInitialDisplay(defs),
 		CancelURL:         fmt.Sprintf("/customers/%d", id),
 	}
 	templates.InvoiceForm(data).Render(r.Context(), w)

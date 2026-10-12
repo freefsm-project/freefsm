@@ -115,6 +115,8 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/me", h.me)
 		r.Get("/jobs", h.listJobs)
 		r.Get("/jobs/{id}", h.getJob)
+		r.Get("/jobs/{id}/custom-fields", h.jobFields)
+		r.Patch("/jobs/{id}/custom-fields", h.jobFields)
 		r.Get("/jobs/{id}/customer-context", h.customerContext)
 		r.Post("/jobs/{id}/status", h.updateJobStatus)
 		r.Get("/time-entries/active", h.activeTimeEntry)

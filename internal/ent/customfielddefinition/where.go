@@ -79,6 +79,16 @@ func FieldType(v string) predicate.CustomFieldDefinition {
 	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldFieldType, v))
 }
 
+// Precision applies equality check predicate on the "precision" field. It's identical to PrecisionEQ.
+func Precision(v int) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldPrecision, v))
+}
+
+// DefaultValue applies equality check predicate on the "default_value" field. It's identical to DefaultValueEQ.
+func DefaultValue(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldDefaultValue, v))
+}
+
 // Required applies equality check predicate on the "required" field. It's identical to RequiredEQ.
 func Required(v bool) predicate.CustomFieldDefinition {
 	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldRequired, v))
@@ -422,6 +432,131 @@ func FieldTypeEqualFold(v string) predicate.CustomFieldDefinition {
 // FieldTypeContainsFold applies the ContainsFold predicate on the "field_type" field.
 func FieldTypeContainsFold(v string) predicate.CustomFieldDefinition {
 	return predicate.CustomFieldDefinition(sql.FieldContainsFold(FieldFieldType, v))
+}
+
+// PrecisionEQ applies the EQ predicate on the "precision" field.
+func PrecisionEQ(v int) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldPrecision, v))
+}
+
+// PrecisionNEQ applies the NEQ predicate on the "precision" field.
+func PrecisionNEQ(v int) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNEQ(FieldPrecision, v))
+}
+
+// PrecisionIn applies the In predicate on the "precision" field.
+func PrecisionIn(vs ...int) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldIn(FieldPrecision, vs...))
+}
+
+// PrecisionNotIn applies the NotIn predicate on the "precision" field.
+func PrecisionNotIn(vs ...int) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNotIn(FieldPrecision, vs...))
+}
+
+// PrecisionGT applies the GT predicate on the "precision" field.
+func PrecisionGT(v int) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldGT(FieldPrecision, v))
+}
+
+// PrecisionGTE applies the GTE predicate on the "precision" field.
+func PrecisionGTE(v int) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldGTE(FieldPrecision, v))
+}
+
+// PrecisionLT applies the LT predicate on the "precision" field.
+func PrecisionLT(v int) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldLT(FieldPrecision, v))
+}
+
+// PrecisionLTE applies the LTE predicate on the "precision" field.
+func PrecisionLTE(v int) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldLTE(FieldPrecision, v))
+}
+
+// PrecisionIsNil applies the IsNil predicate on the "precision" field.
+func PrecisionIsNil() predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldIsNull(FieldPrecision))
+}
+
+// PrecisionNotNil applies the NotNil predicate on the "precision" field.
+func PrecisionNotNil() predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNotNull(FieldPrecision))
+}
+
+// DefaultValueEQ applies the EQ predicate on the "default_value" field.
+func DefaultValueEQ(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEQ(FieldDefaultValue, v))
+}
+
+// DefaultValueNEQ applies the NEQ predicate on the "default_value" field.
+func DefaultValueNEQ(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNEQ(FieldDefaultValue, v))
+}
+
+// DefaultValueIn applies the In predicate on the "default_value" field.
+func DefaultValueIn(vs ...string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldIn(FieldDefaultValue, vs...))
+}
+
+// DefaultValueNotIn applies the NotIn predicate on the "default_value" field.
+func DefaultValueNotIn(vs ...string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNotIn(FieldDefaultValue, vs...))
+}
+
+// DefaultValueGT applies the GT predicate on the "default_value" field.
+func DefaultValueGT(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldGT(FieldDefaultValue, v))
+}
+
+// DefaultValueGTE applies the GTE predicate on the "default_value" field.
+func DefaultValueGTE(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldGTE(FieldDefaultValue, v))
+}
+
+// DefaultValueLT applies the LT predicate on the "default_value" field.
+func DefaultValueLT(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldLT(FieldDefaultValue, v))
+}
+
+// DefaultValueLTE applies the LTE predicate on the "default_value" field.
+func DefaultValueLTE(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldLTE(FieldDefaultValue, v))
+}
+
+// DefaultValueContains applies the Contains predicate on the "default_value" field.
+func DefaultValueContains(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldContains(FieldDefaultValue, v))
+}
+
+// DefaultValueHasPrefix applies the HasPrefix predicate on the "default_value" field.
+func DefaultValueHasPrefix(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldHasPrefix(FieldDefaultValue, v))
+}
+
+// DefaultValueHasSuffix applies the HasSuffix predicate on the "default_value" field.
+func DefaultValueHasSuffix(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldHasSuffix(FieldDefaultValue, v))
+}
+
+// DefaultValueIsNil applies the IsNil predicate on the "default_value" field.
+func DefaultValueIsNil() predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldIsNull(FieldDefaultValue))
+}
+
+// DefaultValueNotNil applies the NotNil predicate on the "default_value" field.
+func DefaultValueNotNil() predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldNotNull(FieldDefaultValue))
+}
+
+// DefaultValueEqualFold applies the EqualFold predicate on the "default_value" field.
+func DefaultValueEqualFold(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldEqualFold(FieldDefaultValue, v))
+}
+
+// DefaultValueContainsFold applies the ContainsFold predicate on the "default_value" field.
+func DefaultValueContainsFold(v string) predicate.CustomFieldDefinition {
+	return predicate.CustomFieldDefinition(sql.FieldContainsFold(FieldDefaultValue, v))
 }
 
 // RequiredEQ applies the EQ predicate on the "required" field.

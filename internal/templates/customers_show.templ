@@ -37,6 +37,7 @@ templ CustomerShow(p CustomerShowPageData) {
 		}
 		if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
+			@FieldValuesLink("customer",p.Customer.ID,p.Customer.ArchivedAt=="")
 		}
 		<div class="customer-dashboard-top">
 			<article class="dashboard-panel customer-dashboard-details">

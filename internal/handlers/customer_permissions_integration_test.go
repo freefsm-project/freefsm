@@ -33,6 +33,10 @@ import (
 )
 
 func permissionHTTPFixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *ent.Client, http.Handler, *services.SessionService, int64, int64) {
+	return permissionHTTPFixtureMigrations(t, database.MigrationFS(), legacy...)
+}
+
+func permissionHTTPFixtureMigrations(t *testing.T, migrations fs.FS, legacy ...bool) (*pgxpool.Pool, *ent.Client, http.Handler, *services.SessionService, int64, int64) {
 	t.Helper()
 	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -55,7 +59,6 @@ func permissionHTTPFixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *ent.Cl
 	if err != nil {
 		t.Fatal(err)
 	}
-	migrations := database.MigrationFS()
 	if len(legacy) > 0 && legacy[0] {
 		old := fstest.MapFS{}
 		entries, err := fs.ReadDir(migrations, ".")

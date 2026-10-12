@@ -254,6 +254,8 @@ var (
 		{Name: "name", Type: field.TypeString},
 		{Name: "conversion_key", Type: field.TypeString, Nullable: true},
 		{Name: "field_type", Type: field.TypeString},
+		{Name: "precision", Type: field.TypeInt, Nullable: true},
+		{Name: "default_value", Type: field.TypeString, Nullable: true},
 		{Name: "required", Type: field.TypeBool, Default: false},
 		{Name: "options", Type: field.TypeString, Default: "[]"},
 		{Name: "sort_order", Type: field.TypeInt, Default: 0},
@@ -269,7 +271,7 @@ var (
 			{
 				Name:    "customfielddefinition_object_type_sort_order",
 				Unique:  false,
-				Columns: []*schema.Column{CustomFieldDefinitionsColumns[2], CustomFieldDefinitionsColumns[8]},
+				Columns: []*schema.Column{CustomFieldDefinitionsColumns[2], CustomFieldDefinitionsColumns[10]},
 			},
 			{
 				Name:    "customfielddefinition_company_id_object_type_conversion_key",

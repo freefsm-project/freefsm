@@ -324,23 +324,23 @@ func init() {
 	// customfielddefinition.FieldTypeValidator is a validator for the "field_type" field. It is called by the builders before save.
 	customfielddefinition.FieldTypeValidator = customfielddefinitionDescFieldType.Validators[0].(func(string) error)
 	// customfielddefinitionDescRequired is the schema descriptor for required field.
-	customfielddefinitionDescRequired := customfielddefinitionFields[6].Descriptor()
+	customfielddefinitionDescRequired := customfielddefinitionFields[8].Descriptor()
 	// customfielddefinition.DefaultRequired holds the default value on creation for the required field.
 	customfielddefinition.DefaultRequired = customfielddefinitionDescRequired.Default.(bool)
 	// customfielddefinitionDescOptions is the schema descriptor for options field.
-	customfielddefinitionDescOptions := customfielddefinitionFields[7].Descriptor()
+	customfielddefinitionDescOptions := customfielddefinitionFields[9].Descriptor()
 	// customfielddefinition.DefaultOptions holds the default value on creation for the options field.
 	customfielddefinition.DefaultOptions = customfielddefinitionDescOptions.Default.(string)
 	// customfielddefinitionDescSortOrder is the schema descriptor for sort_order field.
-	customfielddefinitionDescSortOrder := customfielddefinitionFields[8].Descriptor()
+	customfielddefinitionDescSortOrder := customfielddefinitionFields[10].Descriptor()
 	// customfielddefinition.DefaultSortOrder holds the default value on creation for the sort_order field.
 	customfielddefinition.DefaultSortOrder = customfielddefinitionDescSortOrder.Default.(int)
 	// customfielddefinitionDescCreatedAt is the schema descriptor for created_at field.
-	customfielddefinitionDescCreatedAt := customfielddefinitionFields[9].Descriptor()
+	customfielddefinitionDescCreatedAt := customfielddefinitionFields[11].Descriptor()
 	// customfielddefinition.DefaultCreatedAt holds the default value on creation for the created_at field.
 	customfielddefinition.DefaultCreatedAt = customfielddefinitionDescCreatedAt.Default.(func() time.Time)
 	// customfielddefinitionDescUpdatedAt is the schema descriptor for updated_at field.
-	customfielddefinitionDescUpdatedAt := customfielddefinitionFields[10].Descriptor()
+	customfielddefinitionDescUpdatedAt := customfielddefinitionFields[12].Descriptor()
 	// customfielddefinition.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	customfielddefinition.DefaultUpdatedAt = customfielddefinitionDescUpdatedAt.Default.(func() time.Time)
 	// customfielddefinition.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

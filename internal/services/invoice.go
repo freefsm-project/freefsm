@@ -220,6 +220,16 @@ func (s *InvoiceService) GetByID(ctx context.Context, id int64) (*ent.Invoice, e
 }
 
 func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams) (*ent.Invoice, error) {
+	if needsDetailsTransaction(ctx) {
+		return saveDetails(ctx, "invoice", 0, params.JobID, &params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Invoice, int64, error) {
+			params.CustomFields = fields
+			v, err := NewInvoiceService(c).Create(ctx, params)
+			if err != nil {
+				return nil, 0, err
+			}
+			return v, v.ID, nil
+		})
+	}
 	var customerCompanyID *int64
 	if request, ok := authorization.FromContext(ctx); ok {
 		input, err := request.Service.DocumentCustomer(ctx, request.Actor, params.CustomerID, params.JobID, params.TaxRate)
@@ -347,6 +357,21 @@ func (s *InvoiceService) createTransactionally(ctx context.Context, params Invoi
 }
 
 func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpdateParams) (*ent.Invoice, error) {
+	if _, ok := authorization.FromContext(ctx); ok {
+		return s.SaveDetails(ctx, id, params)
+	}
+	return s.update(ctx, id, params)
+}
+
+func (s *InvoiceService) SaveDetails(ctx context.Context, id int64, params InvoiceUpdateParams) (*ent.Invoice, error) {
+	return saveDetails(ctx, "invoice", id, 0, params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Invoice, int64, error) {
+		params.CustomFields = &fields
+		v, err := NewInvoiceService(c).update(ctx, id, params)
+		return v, id, err
+	})
+}
+
+func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpdateParams) (*ent.Invoice, error) {
 	var encodedLineItems string
 	if params.LineItems != nil {
 		var err error

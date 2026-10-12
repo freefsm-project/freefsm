@@ -5,7 +5,7 @@ import "fmt"
 templ JobForm(p JobFormPageData) {
 	@Layout(jobFormTitle(p.Job.ID)) {
 
-		<form action={ templ.URL(jobFormAction(p.Job.ID)) } method="post" autocomplete="off" class="compact-form" hx-history="false">
+		<form action={ templ.URL(jobFormAction(p.Job.ID)) } method="post" hx-boost="false" autocomplete="off" class="compact-form" hx-history="false">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<input type="hidden" name="form_mode" value={ jobFormMode(p.Job.ID) }/>
 			<input type="hidden" name="job_id" value={ fmt.Sprintf("%d", p.Job.ID) }/>
@@ -115,7 +115,7 @@ templ JobForm(p JobFormPageData) {
 				Tech Notes
 				<textarea name="tech_notes" rows="3">{ p.Job.TechNotes }</textarea>
 			</label>
-			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
+			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: canEditJobFields(ctx)})
 			<fieldset x-data="visitsEditor()" data-existing={ p.ExistingVisitsJSON }>
 				<legend>Visits</legend>
 				<table>
@@ -196,8 +196,7 @@ templ JobForm(p JobFormPageData) {
 			const jobAssetSelect = document.getElementById('job-asset-select');
 			function selectedJobCustomerID() { return jobCustomer ? jobCustomer.value : ''; }
 			function csrfToken() {
-				const token = document.querySelector('input[name="csrf_token"]');
-				return token ? token.value : '';
+				return document.querySelector('meta[name="csrf-token"]')?.content || '';
 			}
 			function refreshOptions(select, emptyHTML, url, selectedID) {
 				if (!select) return Promise.resolve();
@@ -248,13 +247,36 @@ templ JobForm(p JobFormPageData) {
 				el.textContent = message || '';
 				el.hidden = !message;
 			}
-			function openJobCreateModal(type) {
+			async function openJobCreateModal(type) {
 				const dialog = document.getElementById('job-' + type + '-dialog');
 				if (!dialog) return;
 				setJobModalError(type, '');
 				if (!selectedJobCustomerID()) setJobModalError(type, 'Select a customer before creating a ' + type + '.');
 				if (type === 'asset') loadModalLocations('job-asset-location-id', jobLocationSelect ? jobLocationSelect.value : 0);
 				if (type === 'project') loadModalLocations('job-project-location-id', jobLocationSelect ? jobLocationSelect.value : 0);
+				// Initialize once per creation attempt from the existing authorized
+				// creation form. Error-response controls contain entered answers, so
+				// their DOM defaults cannot be used to initialize another record.
+				if ((type === 'asset' || type === 'project') && !dialog.dataset.creationFieldsReady) {
+					if (dialog.dataset.creationFieldsLoading) return;
+					const button = document.getElementById('job-' + type + '-create-button');
+					const target = dialog.querySelector('[data-inline-custom-fields]');
+					dialog.dataset.creationFieldsLoading = 'true';
+					button.disabled = true;
+					try {
+						const response = await fetch('/' + type + 's/new', {cache: 'no-store', redirect: 'error'});
+						if (!response.ok) throw new Error('Unable to load creation fields. Close this dialog and try again.');
+						const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+						const fields = page.querySelector('.custom-fields-grid');
+						target.replaceChildren(...(fields ? [fields] : []));
+						dialog.dataset.creationFieldsReady = 'true';
+					} catch (err) {
+						setJobModalError(type, err.message);
+					} finally {
+						delete dialog.dataset.creationFieldsLoading;
+						button.disabled = !dialog.dataset.creationFieldsReady;
+					}
+				}
 				if (!dialog.open) dialog.showModal();
 			}
 			function closeJobCreateModal(type) {
@@ -271,13 +293,31 @@ templ JobForm(p JobFormPageData) {
 					else if (el.id === 'job-project-completion-percentage') el.value = '0';
 					else el.value = '';
 				});
+				const fields = dialog.querySelector('[data-inline-custom-fields]');
+				if (fields) {
+					fields.replaceChildren();
+					delete dialog.dataset.creationFieldsReady;
+				}
 			}
 			function postInline(url, fields) {
 				const body = new URLSearchParams();
 				fields.forEach(([name, value]) => body.set(name, value || ''));
+				const type = url === '/assets/inline' ? 'asset' : url === '/projects/inline' ? 'project' : null;
+				const dialog = type && document.getElementById('job-' + type + '-dialog');
+				if (dialog) dialog.querySelectorAll('[name^="custom_field_"]').forEach(el => {
+					if (el.multiple) [...el.selectedOptions].forEach(option => body.append(el.name, option.value));
+					else body.append(el.name, el.value);
+				});
 				return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrfToken() }, body })
 					.then(async r => {
-						if (!r.ok) throw new Error((await r.text()) || 'Unable to create record.');
+						if (!r.ok) {
+							const text = await r.text();
+							const page = new DOMParser().parseFromString(text, 'text/html');
+							const fields = page.querySelector('.custom-fields-grid');
+							const target = dialog && dialog.querySelector('[data-inline-custom-fields]');
+							if (r.status === 422 && fields && target) target.replaceChildren(fields);
+							throw new Error(page.querySelector('[role="alert"]')?.textContent || page.body.textContent || 'Unable to create record.');
+						}
 						return r.json();
 					});
 			}
@@ -454,6 +494,9 @@ templ JobQuickCreateDialogs(p JobFormPageData) {
 					<label>End Date <input type="date" id="job-project-end-time"/></label>
 				</div>
 				<label>Notes <textarea id="job-project-notes" rows="3"></textarea></label>
+				<div data-inline-custom-fields>
+					@CustomFieldsWidget(CustomFieldsWidgetData{Fields:p.ProjectCustomFields,EditMode:true})
+				</div>
 			</div>
 			<footer class="item-create-dialog-actions">
 				<button type="button" id="job-project-create-button" onclick="createJobProject()">Create Project</button>
@@ -530,6 +573,9 @@ templ JobQuickCreateDialogs(p JobFormPageData) {
 					<label>Warranty Expires <input type="date" id="job-asset-warranty-expires"/></label>
 				</div>
 				<label>Notes <textarea id="job-asset-notes" rows="3"></textarea></label>
+				<div data-inline-custom-fields>
+					@CustomFieldsWidget(CustomFieldsWidgetData{Fields:p.AssetCustomFields,EditMode:true})
+				</div>
 			</div>
 			<footer class="item-create-dialog-actions">
 				<button type="button" id="job-asset-create-button" onclick="createJobAsset()">Create Asset</button>

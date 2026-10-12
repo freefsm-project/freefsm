@@ -298,6 +298,9 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
+		if renderFieldSaveError(w, r, h.defSvc, "estimate", err) {
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -317,7 +320,13 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.authorizeEstimate(w, r, id, policyUpdate) {
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		if err := request.Service.DetailsAccess(r.Context(), request.Actor, "estimate", id); err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+	} else {
+		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
 	if r.Method == http.MethodGet {
@@ -370,11 +379,14 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title:        formPtr(r.FormValue("title")),
 		Notes:        formPtr(r.FormValue("notes")),
 		TaxRate:      taxRatePtr,
-		CustomFields: strPtr(parseCustomFieldValues(r)),
+		CustomFields: parseCustomFieldPatch(r),
 	}
 	params.LineItems = &lineItems
-	result, err := h.svc.Update(r.Context(), id, params)
+	result, err := h.svc.SaveDetails(r.Context(), id, params)
 	if err != nil {
+		if renderFieldSaveError(w, r, h.defSvc, "estimate", err) {
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -456,8 +468,15 @@ func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) 
 		authorizationError(w, r, err)
 		return
 	}
-	est, err := h.svc.CreateFromJob(r.Context(), id, h.statusSvc, defaultTaxRate)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form", 400)
+		return
+	}
+	est, err := h.svc.CreateFromJob(r.Context(), id, h.statusSvc, defaultTaxRate, parseCustomFieldValues(r))
 	if err != nil {
+		if renderFieldSaveError(w, r, h.defSvc, "estimate", err) {
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -735,7 +754,7 @@ func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64)
 		ItemsJSON:         bootstrap.ItemsJSON,
 		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
 		CustomersJSON:     bootstrap.CustomersJSON,
-		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
+		CustomFields:      buildCustomFieldInitialDisplay(defs),
 	}, nil
 }
 
@@ -784,6 +803,9 @@ func (h *EstimateHandler) jobsForEditor(ctx context.Context) ([]*ent.Job, error)
 }
 
 func (h *EstimateHandler) authorizeDestinationJob(w http.ResponseWriter, r *http.Request, customerID, jobID int64) bool {
+	if _, ok := authorization.FromContext(r.Context()); ok {
+		return authorizeFieldDocumentDestination(w, r, customerID, jobID)
+	}
 	if jobID <= 0 {
 		u, _ := middleware.UserFromContext(r.Context())
 		if u != nil && (u.Role == "tech" || u.Role == "technician") {

@@ -115,6 +115,7 @@ templ AssetShow(p AssetShowPageData) {
 		})
 
 		<h3>Custom Fields</h3>
+		@FieldValuesLink("asset",p.Asset.ID,p.Asset.ArchivedAt=="")
 		@CustomFieldsWidget(CustomFieldsWidgetData{
 			Fields:   p.CustomFields,
 			EditMode: false,

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/asset"
 	"github.com/freefsm-project/freefsm/internal/ent/assetstatus"
@@ -115,6 +116,16 @@ func (s *AssetService) GetByID(ctx context.Context, id int64) (*ent.Asset, error
 }
 
 func (s *AssetService) Create(ctx context.Context, companyID int64, params AssetCreateParams) (*ent.Asset, error) {
+	if needsDetailsTransaction(ctx) {
+		return saveDetails(ctx, "asset", 0, 0, &params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Asset, int64, error) {
+			params.CustomFields = fields
+			v, err := NewAssetService(c).Create(ctx, companyID, params)
+			if err != nil {
+				return nil, 0, err
+			}
+			return v, v.ID, nil
+		})
+	}
 	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, params.CustomerID); err != nil {
 		return nil, err
 	}
@@ -164,6 +175,21 @@ func (s *AssetService) Create(ctx context.Context, companyID int64, params Asset
 }
 
 func (s *AssetService) Update(ctx context.Context, companyID, id int64, params AssetUpdateParams) (*ent.Asset, error) {
+	if _, ok := authorization.FromContext(ctx); ok {
+		return s.SaveDetails(ctx, companyID, id, params)
+	}
+	return s.update(ctx, companyID, id, params)
+}
+
+func (s *AssetService) SaveDetails(ctx context.Context, companyID, id int64, params AssetUpdateParams) (*ent.Asset, error) {
+	return saveDetails(ctx, "asset", id, 0, params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Asset, int64, error) {
+		params.CustomFields = &fields
+		v, err := NewAssetService(c).update(ctx, companyID, id, params)
+		return v, id, err
+	})
+}
+
+func (s *AssetService) update(ctx context.Context, companyID, id int64, params AssetUpdateParams) (*ent.Asset, error) {
 	current, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err

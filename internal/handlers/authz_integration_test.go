@@ -70,7 +70,7 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 	unassignedJob := client.Job.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetJobType("Unassigned Route Job").SaveX(ctx)
 	workflow := client.StatusWorkflow.Create().SetObjectType("job").SetName("Job Workflow").SaveX(ctx)
 	status := client.Status.Create().SetWorkflowID(workflow.ID).SetName("Scheduled").SetColor("#336699").SetSortOrder(1).SetCategoryKey("job:pending").SetCategoryOrder(1).SetIsCategoryDefault(true).SaveX(ctx)
-	estimate := client.Estimate.Create().SetCustomerID(customer.ID).SetTitle("Protected Estimate").SaveX(ctx)
+	estimate := client.Estimate.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetTitle("Protected Estimate").SaveX(ctx)
 	invoice := client.Invoice.Create().
 		SetCompanyID(companyID).
 		SetCustomerID(customer.ID).
@@ -328,6 +328,8 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
  CREATE TABLE authorization_grants(role_id bigint,permission text,scope text);
  INSERT INTO authorization_grants SELECT r,p,'A' FROM unnest(ARRAY[1,2]) r CROSS JOIN unnest(ARRAY['customer.view','customer.create','customer.edit','customer.financial.view','customer.archived.view','customer.archive','customer.restore']) p;
  INSERT INTO authorization_grants VALUES(3,'customer.view','C');
+ INSERT INTO authorization_grants SELECT r,p,'A' FROM unnest(ARRAY[1,2]) r CROSS JOIN unnest(ARRAY['job.view','job.archived.view','project.view','asset.view','estimate.view','invoice.view']) p;
+ INSERT INTO authorization_grants VALUES(3,'job.view','J'),(3,'estimate.view','J'),(3,'invoice.view','J');
  CREATE TABLE authorization_permissions(permission text,scope text,prerequisite text);
  INSERT INTO authorization_permissions SELECT DISTINCT permission,scope,NULL::text FROM authorization_grants;
  CREATE TABLE authorization_view_requirements(permission text,scope text,requirement text,view_permission text,view_scope text);

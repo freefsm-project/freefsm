@@ -66,6 +66,34 @@ func (_c *CustomFieldDefinitionCreate) SetFieldType(v string) *CustomFieldDefini
 	return _c
 }
 
+// SetPrecision sets the "precision" field.
+func (_c *CustomFieldDefinitionCreate) SetPrecision(v int) *CustomFieldDefinitionCreate {
+	_c.mutation.SetPrecision(v)
+	return _c
+}
+
+// SetNillablePrecision sets the "precision" field if the given value is not nil.
+func (_c *CustomFieldDefinitionCreate) SetNillablePrecision(v *int) *CustomFieldDefinitionCreate {
+	if v != nil {
+		_c.SetPrecision(*v)
+	}
+	return _c
+}
+
+// SetDefaultValue sets the "default_value" field.
+func (_c *CustomFieldDefinitionCreate) SetDefaultValue(v string) *CustomFieldDefinitionCreate {
+	_c.mutation.SetDefaultValue(v)
+	return _c
+}
+
+// SetNillableDefaultValue sets the "default_value" field if the given value is not nil.
+func (_c *CustomFieldDefinitionCreate) SetNillableDefaultValue(v *string) *CustomFieldDefinitionCreate {
+	if v != nil {
+		_c.SetDefaultValue(*v)
+	}
+	return _c
+}
+
 // SetRequired sets the "required" field.
 func (_c *CustomFieldDefinitionCreate) SetRequired(v bool) *CustomFieldDefinitionCreate {
 	_c.mutation.SetRequired(v)
@@ -291,6 +319,14 @@ func (_c *CustomFieldDefinitionCreate) createSpec() (*CustomFieldDefinition, *sq
 	if value, ok := _c.mutation.FieldType(); ok {
 		_spec.SetField(customfielddefinition.FieldFieldType, field.TypeString, value)
 		_node.FieldType = value
+	}
+	if value, ok := _c.mutation.Precision(); ok {
+		_spec.SetField(customfielddefinition.FieldPrecision, field.TypeInt, value)
+		_node.Precision = &value
+	}
+	if value, ok := _c.mutation.DefaultValue(); ok {
+		_spec.SetField(customfielddefinition.FieldDefaultValue, field.TypeString, value)
+		_node.DefaultValue = &value
 	}
 	if value, ok := _c.mutation.Required(); ok {
 		_spec.SetField(customfielddefinition.FieldRequired, field.TypeBool, value)

@@ -7,7 +7,7 @@ import (
 
 templ AssetForm(p AssetFormPageData) {
 	@Layout(assetFormTitle(p.IsNew)) {
-		<form action={ templ.URL(assetFormAction(p.IsNew, p.Asset)) } method="post" class="entity-form compact-form">
+		<form action={ templ.URL(assetFormAction(p.IsNew, p.Asset)) } method="post" hx-boost="false" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<fieldset>
 				<legend>Asset Details</legend>
@@ -88,6 +88,7 @@ templ AssetForm(p AssetFormPageData) {
 					<textarea name="notes" rows="3">{ assetFormValue(p.Asset, "Notes") }</textarea>
 				</label>
 			</fieldset>
+			@CustomFieldsWidget(CustomFieldsWidgetData{Fields:p.CustomFields,EditMode:true})
 			<div class="grid">
 				<button type="submit">{ assetFormButtonText(p.IsNew) }</button>
 				<a href="/assets" role="button" class="outline">Cancel</a>

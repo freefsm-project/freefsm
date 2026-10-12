@@ -108,6 +108,16 @@ func (s *EstimateService) GetByID(ctx context.Context, id int64) (*ent.Estimate,
 }
 
 func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParams) (*ent.Estimate, error) {
+	if needsDetailsTransaction(ctx) {
+		return saveDetails(ctx, "estimate", 0, params.JobID, &params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Estimate, int64, error) {
+			params.CustomFields = fields
+			v, err := NewEstimateService(c).Create(ctx, params)
+			if err != nil {
+				return nil, 0, err
+			}
+			return v, v.ID, nil
+		})
+	}
 	var customerCompanyID *int64
 	if request, ok := authorization.FromContext(ctx); ok {
 		input, err := request.Service.DocumentCustomer(ctx, request.Actor, params.CustomerID, params.JobID, params.TaxRate)
@@ -169,6 +179,21 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 }
 
 func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateUpdateParams) (*ent.Estimate, error) {
+	if _, ok := authorization.FromContext(ctx); ok {
+		return s.SaveDetails(ctx, id, params)
+	}
+	return s.update(ctx, id, params)
+}
+
+func (s *EstimateService) SaveDetails(ctx context.Context, id int64, params EstimateUpdateParams) (*ent.Estimate, error) {
+	return saveDetails(ctx, "estimate", id, 0, params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Estimate, int64, error) {
+		params.CustomFields = &fields
+		v, err := NewEstimateService(c).update(ctx, id, params)
+		return v, id, err
+	})
+}
+
+func (s *EstimateService) update(ctx context.Context, id int64, params EstimateUpdateParams) (*ent.Estimate, error) {
 	var encodedLineItems string
 	if params.LineItems != nil {
 		var err error
@@ -274,7 +299,7 @@ func EstimatePaginationTotalPages(total, perPage int) int {
 	return TotalPages(total, perPage)
 }
 
-func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService, defaultTaxRate string) (*ent.Estimate, error) {
+func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService, defaultTaxRate string, fields ...string) (*ent.Estimate, error) {
 	j, err := s.client.Job.Get(ctx, jobID)
 	if err != nil {
 		return nil, fmt.Errorf("get job %d: %w", jobID, err)
@@ -285,6 +310,10 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 		return nil, fmt.Errorf("parse job %d line items: %w", jobID, err)
 	}
 
+	values := "[]"
+	if len(fields) > 0 {
+		values = fields[0]
+	}
 	return s.Create(ctx, EstimateCreateParams{
 		CustomerID:   j.CustomerID,
 		JobID:        j.ID,
@@ -292,7 +321,7 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 		Title:        j.JobType,
 		Notes:        j.Notes,
 		TaxRate:      defaultTaxRate,
-		CustomFields: "[]",
+		CustomFields: values,
 		LineItems:    items,
 	})
 }

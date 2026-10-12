@@ -1,0 +1,17 @@
+package templates
+
+templ FieldSaveError(action,message string,fields []CustomFieldDisplay,details []FormInput) {
+ @Layout("Correct Custom Fields") {
+  <h2>Correct Custom Fields</h2>
+  <p role="alert" class="error-msg">{ message }</p>
+  <p>No changes were saved. Your submitted details are retained. Correct the field below to save them together.</p>
+  <form method="post" hx-boost="false" action={ templ.URL(action) }>
+   <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+   for _,d:=range details {
+    <input type="hidden" name={ d.Name } value={ d.Value }/>
+   }
+   @CustomFieldsWidget(CustomFieldsWidgetData{Fields:fields,EditMode:true})
+   <button type="submit">Save details</button>
+  </form>
+ }
+}

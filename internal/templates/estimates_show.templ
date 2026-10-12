@@ -50,6 +50,7 @@ templ EstimateShow(p EstimateDetail) {
 		}
 		if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
+			@FieldValuesLink("estimate",p.ID,p.ArchivedAt=="")
 		}
 		<table class="work-item-detail-meta">
 			<tbody>

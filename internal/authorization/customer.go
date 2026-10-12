@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/freefsm-project/freefsm/internal/customfields"
 	"strings"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
@@ -115,9 +116,21 @@ func (s *Service) SaveCustomer(ctx context.Context, a Actor, id int64, in Custom
 		if in.AccountType != nil && *in.AccountType != "individual" && *in.AccountType != "company" {
 			return fmt.Errorf("invalid Customer kind")
 		}
-		if in.CustomFields != nil && !json.Valid([]byte(*in.CustomFields)) {
-			return fmt.Errorf("invalid custom fields")
+		oldFields := "[]"
+		if id != 0 {
+			if err := tx.QueryRow(ctx, `SELECT custom_fields::text FROM customers WHERE id=$1`, id).Scan(&oldFields); err != nil {
+				return err
+			}
 		}
+		mode := customfields.Details
+		if id == 0 {
+			mode = customfields.Creation
+		}
+		fields, fieldErr := customfields.Validate(ctx, tx, "customer", oldFields, in.CustomFields, mode, p.CompanyID)
+		if fieldErr != nil {
+			return fieldErr
+		}
+		in.CustomFields = &fields
 		if !p.Allows("customer.financial.view", All) && (in.BillingAddress1 != nil || in.BillingAddress2 != nil || in.BillingCity != nil || in.BillingState != nil || in.BillingZipCode != nil || in.TaxExempt != nil) {
 			return ErrForbidden
 		}

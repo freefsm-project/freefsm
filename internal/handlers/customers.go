@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/customfields"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -166,7 +168,7 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		data := newFormData()
 		defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
-		data.CustomFields = buildCustomFieldDisplay(defs, "[]")
+		data.CustomFields = buildCustomFieldInitialDisplay(defs)
 		templates.CustomerForm(data).Render(r.Context(), w)
 		return
 	}
@@ -177,6 +179,9 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if request, ok := authorization.FromContext(r.Context()); ok {
 		result, err := request.Service.SaveCustomer(r.Context(), request.Actor, 0, customerInput(r))
 		if err != nil {
+			if h.fieldError(w, r, 0, err) {
+				return
+			}
 			authorizationError(w, r, err)
 			return
 		}
@@ -256,6 +261,9 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if request, ok := authorization.FromContext(r.Context()); ok {
 		_, err := request.Service.SaveCustomer(r.Context(), request.Actor, id, customerInput(r))
 		if err != nil {
+			if h.fieldError(w, r, id, err) {
+				return
+			}
 			authorizationError(w, r, err)
 			return
 		}
@@ -887,6 +895,59 @@ func newFormData() templates.CustomerFormPageData {
 		Statuses:     services.CustomerStatuses,
 		AccountTypes: services.CustomerAccountTypes,
 	}
+}
+
+func (h *CustomerHandler) fieldError(w http.ResponseWriter, r *http.Request, id int64, err error) bool {
+	var fieldErr *customfields.FieldError
+	if !errors.As(err, &fieldErr) {
+		return false
+	}
+	d := newFormData()
+	d.IsNew = id == 0
+	permission := "customer.edit"
+	if id == 0 {
+		permission = "customer.create"
+	}
+	if !customerPermission(r, permission) {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return true
+	}
+	old := "[]"
+	if id != 0 {
+		c, err := h.svc.GetByID(r.Context(), id)
+		if err != nil {
+			http.NotFound(w, r)
+			return true
+		}
+		d = formDataFromCustomer(r.Context(), c)
+		old = c.CustomFields
+	}
+	fields := map[string]*string{"display_name": &d.Customer.DisplayName, "first_name": &d.Customer.FirstName, "last_name": &d.Customer.LastName, "email": &d.Customer.Email, "phone": &d.Customer.Phone, "company_name": &d.Customer.CompanyName, "service_notes": &d.Customer.ServiceNotes, "notes": &d.Customer.Notes, "account_type": &d.Customer.AccountType, "status": &d.Customer.Status}
+	for name, target := range fields {
+		if r.PostForm.Has(name) {
+			*target = r.PostForm.Get(name)
+		}
+	}
+	if customerPermission(r, "customer.financial.view") {
+		for name, target := range map[string]*string{"billing_address_1": &d.Customer.BillingAddress1, "billing_address_2": &d.Customer.BillingAddress2, "billing_city": &d.Customer.BillingCity, "billing_state": &d.Customer.BillingState, "billing_zip_code": &d.Customer.BillingZipCode} {
+			if r.PostForm.Has(name) {
+				*target = r.PostForm.Get(name)
+			}
+		}
+		if r.PostForm.Has("tax_exempt") || r.PostForm.Has("tax_exempt_present") {
+			d.Customer.TaxExempt = r.PostForm.Get("tax_exempt") == "true"
+		}
+	}
+	defs, loadErr := h.defSvc.ListForObjectType(r.Context(), "customer")
+	if loadErr != nil {
+		http.Error(w, "Unable to load fields", 500)
+		return true
+	}
+	d.CustomFields = buildCustomFieldErrorDisplay(defs, old, parseCustomFieldValues(r), id == 0)
+	d.Errors = map[string]string{"custom_fields": fieldErr.Error()}
+	w.WriteHeader(http.StatusUnprocessableEntity)
+	templates.CustomerForm(d).Render(r.Context(), w)
+	return true
 }
 
 func filesToRows(ctx context.Context, files []*ent.File) []templates.FileRow {

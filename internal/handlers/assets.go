@@ -192,7 +192,9 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		customers, _ := h.customerSvc.ListAll(r.Context())
 		assetTypes, _ := h.assetTypeSvc.List(r.Context())
 		assetStatuses, _ := h.assetStatusSvc.List(r.Context())
+		defs, _ := h.cfSvc.ListForObjectType(r.Context(), "asset")
 		templates.AssetForm(templates.AssetFormPageData{
+			CustomFields:  buildCustomFieldInitialDisplay(defs),
 			IsNew:         true,
 			Customers:     customersToOptions(customers),
 			AssetTypes:    assetTypesToOptions(assetTypes),
@@ -234,6 +236,9 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.svc.Create(r.Context(), u.CompanyID, params)
 	if err != nil {
+		if renderFieldSaveError(w, r, h.cfSvc, "asset", err) {
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -301,9 +306,12 @@ func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		Notes:           r.FormValue("notes"),
 		InstalledAt:     parseDatePtr(r.FormValue("installed_at"), loc),
 		WarrantyExpires: parseDatePtr(r.FormValue("warranty_expires"), loc),
-		CustomFields:    "[]",
+		CustomFields:    parseCustomFieldValues(r),
 	})
 	if err != nil {
+		if renderFieldSaveError(w, r, h.cfSvc, "asset", err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -338,7 +346,9 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		assetTypes, _ := h.assetTypeSvc.List(r.Context())
 		assetStatuses, _ := h.assetStatusSvc.List(r.Context())
 		locations, _ := h.locationSvc.ListByCustomer(r.Context(), asset.CustomerID)
+		defs, _ := h.cfSvc.ListForObjectType(r.Context(), "asset")
 		templates.AssetForm(templates.AssetFormPageData{
+			CustomFields:  buildCustomFieldDisplay(defs, asset.CustomFields),
 			IsNew:         false,
 			Asset:         assetToDetail(r.Context(), asset, assetTypes, assetStatuses),
 			Customers:     customersToOptions(customers),
@@ -374,11 +384,14 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Model:         strPtr(r.FormValue("model")),
 		Manufacturer:  strPtr(r.FormValue("manufacturer")),
 		Notes:         strPtr(r.FormValue("notes")),
-		CustomFields:  strPtr(parseCustomFieldValues(r)),
+		CustomFields:  parseCustomFieldPatch(r),
 	}
 
-	result, err := h.svc.Update(r.Context(), u.CompanyID, id, params)
+	result, err := h.svc.SaveDetails(r.Context(), u.CompanyID, id, params)
 	if err != nil {
+		if renderFieldSaveError(w, r, h.cfSvc, "asset", err) {
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}

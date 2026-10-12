@@ -1,6 +1,7 @@
 package templates
 
 import "fmt"
+import "slices"
 
 templ CustomFieldsWidget(p CustomFieldsWidgetData) {
 	if len(p.Fields) > 0 {
@@ -18,11 +19,21 @@ templ CustomFieldsWidget(p CustomFieldsWidgetData) {
 								if f.FieldType == "text" {
 									<input type="text" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value={ f.Value }/>
 								} else if f.FieldType == "number" {
-									<input type="number" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value={ f.Value } step="any"/>
+									<input type="text" inputmode="decimal" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value={ f.Value }/>
+									if f.Precision != nil {
+										<small>Up to { fmt.Sprint(*f.Precision) } decimal places.</small>
+									}
 								} else if f.FieldType == "date" {
 									<input type="date" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value={ f.Value }/>
 								} else if f.FieldType == "textarea" {
 									<textarea name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } rows="3">{ f.Value }</textarea>
+								} else if f.FieldType == "multiselect" {
+									<input type="hidden" name={ fmt.Sprintf("custom_field_%d[]", f.DefinitionID) } value=""/>
+									<select name={ fmt.Sprintf("custom_field_%d[]", f.DefinitionID) } multiple>
+										for _,o := range f.Options {
+											<option value={ o } selected?={ slices.Contains(f.Selected,o) }>{ o }</option>
+										}
+									</select>
 								} else if f.FieldType == "select" {
 									<select name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) }>
 										<option value="">Select...</option>
@@ -31,18 +42,18 @@ templ CustomFieldsWidget(p CustomFieldsWidgetData) {
 										}
 									</select>
 								} else if f.FieldType == "checkbox" {
-									<div class="custom-field-checkbox">
-										<input type="hidden" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value=""/>
-										<input type="checkbox" name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) } value="true" checked?={ f.Value == "true" }/>
-										<small>{ f.Name }</small>
-									</div>
+									<select name={ fmt.Sprintf("custom_field_%d", f.DefinitionID) }>
+										<option value="" selected?={ f.Value == "" }>Not set</option>
+										<option value="true" selected?={ f.Value == "true" }>Yes</option>
+										<option value="false" selected?={ f.Value == "false" }>No</option>
+									</select>
 								}
 							</label>
 						} else {
 							<label>
 								<strong>{ f.Name }</strong>
 							</label>
-							if f.FieldType == "checkbox" {
+							if f.FieldType == "checkbox" && f.Value != "" {
 								<p>
 									if f.Value == "true" {
 										Yes

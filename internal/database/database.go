@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/customfields"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -87,6 +88,12 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 			}
 		}
 
+		if f == "058_typed_custom_fields.up.sql" {
+			if err := customfields.Preflight(ctx, tx); err != nil {
+				tx.Rollback(ctx)
+				return err
+			}
+		}
 		if _, err := tx.Exec(ctx, string(content)); err != nil {
 			tx.Rollback(ctx)
 			return fmt.Errorf("execute migration %s: %w", f, err)

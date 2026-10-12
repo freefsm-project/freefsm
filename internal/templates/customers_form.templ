@@ -7,7 +7,7 @@ templ CustomerForm(p CustomerFormPageData) {
 
 		if !p.IsNew {
 			<div class="customer-edit-layout">
-				<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form customer-edit-form">
+				<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" hx-boost="false" autocomplete="off" class="entity-form compact-form customer-edit-form">
 					@CustomerFormFields(p)
 				</form>
 				<aside class="customer-edit-side-rail">
@@ -26,7 +26,7 @@ templ CustomerForm(p CustomerFormPageData) {
 				</aside>
 			</div>
 		} else {
-			<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form">
+			<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" hx-boost="false" autocomplete="off" class="entity-form compact-form">
 				@CustomerFormFields(p)
 			</form>
 		}
@@ -35,6 +35,9 @@ templ CustomerForm(p CustomerFormPageData) {
 
 templ CustomerFormFields(p CustomerFormPageData) {
 	<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+	if p.Errors["custom_fields"] != "" {
+		<p role="alert" class="error-msg">{ p.Errors["custom_fields"] }</p>
+	}
 	if p.IsNew {
 		<p><small>Locations and contacts can be added after saving.</small></p>
 	}

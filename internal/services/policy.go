@@ -33,6 +33,13 @@ func NewPolicyService(client *ent.Client, objects objectref.Directory) *PolicySe
 }
 
 func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role string, ref objectref.Ref, action PolicyAction) bool {
+	if request, ok := authorization.FromContext(ctx); ok && action == PolicyRead {
+		switch ref.Type {
+		case objectref.TypeJob, objectref.TypeProject, objectref.TypeAsset, objectref.TypeEstimate, objectref.TypeInvoice:
+			err := request.Service.ParentAccess(ctx, request.Actor, string(ref.Type), ref.ID, "")
+			return err == nil
+		}
+	}
 	if ref.Type == objectref.TypeCustomer {
 		r, ok := authorization.FromContext(ctx)
 		if !ok {
