@@ -32,6 +32,10 @@ func (File) Fields() []ent.Field {
 		field.Int64("file_size"),
 		field.String("file_path").NotEmpty(),
 		field.Int64("uploaded_by"),
+		field.Int64("revision").Default(1),
+		field.Time("removed_at").Optional().Nillable(),
+		field.Int64("removed_by").Optional().Nillable(),
+		field.String("sha256").Optional().Nillable(),
 		field.Time("created_at").Default(time.Now).Immutable(),
 	}
 }

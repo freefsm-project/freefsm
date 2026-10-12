@@ -253,7 +253,7 @@ func run() error {
 	backupActivity := handlers.NewActivityHandler(services.NewActivityService(entClient, objectref.NewEntDirectory(entClient)), services.NewActivityResolver(entClient), nil, nil)
 	backupRouter := handlers.NewBackupRouter(manager, control, services.NewUserService(entClient), services.NewCompanySettingsService(entClient), sessions, disabledReason, backupActivity)
 	applicationHandler := newApplicationHandler(
-		apiv1.NewRouter(db.Pool, entClient, sessions),
+		apiv1.NewRouter(db.Pool, entClient, sessions, services.NewFileService(entClient, objectref.NewEntDirectory(entClient), cfg.UploadDir, cfg.MaxUploadSize)),
 		webRouter,
 		instanceRoutes{control: control, refresh: manager.RefreshConnections, backup: backupRouter},
 	)

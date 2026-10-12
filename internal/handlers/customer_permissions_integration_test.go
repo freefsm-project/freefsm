@@ -133,7 +133,7 @@ func permissionHTTPFixtureConfigured(t *testing.T, migrations fs.FS, seed func(*
 		}
 	}
 	sessions := services.NewSessionService(pool)
-	router := middleware.Company(services.NewCompanySettingsService(client))(New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()}))
+	router := middleware.Company(services.NewCompanySettingsService(client))(New(pool, client, sessions, &config.Config{UploadDir: t.TempDir(), MaxUploadSize: 25 << 20}))
 	return pool, client, router, sessions, company, admin
 }
 

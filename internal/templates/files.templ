@@ -1,10 +1,23 @@
 package templates
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 )
+
+func canUploadFile(ctx context.Context, typ string, id int64) bool {
+	r, ok := authorization.FromContext(ctx)
+	if !ok {
+		return true
+	}
+	ref, err := objectref.Parse(typ, id)
+	return err == nil && r.Service.FileAccess(ctx, r.Actor, ref, "file.upload", r.Actor.UserID) == nil
+}
 
 func fileUploadURL(objectType string, objectID int64) string {
 	return fmt.Sprintf("/files?object_type=%s&object_id=%d", url.QueryEscape(objectType), objectID)
@@ -15,37 +28,45 @@ templ FileUploadWidget(objectType string, objectID int64, redirect string) {
 }
 
 templ FileUploadWidgetWithTitle(objectType string, objectID int64, redirect string, showTitle bool) {
-	<div class="files-widget">
-		if showTitle {
-			<h3>Files</h3>
-		}
-		<form action={ templ.URL(fileUploadURL(objectType, objectID)) } method="post" enctype="multipart/form-data" hx-post={ templ.URL(fileUploadURL(objectType, objectID)) } hx-swap="none" class="files-drop-form" ondragover="filesDragOver(event, this)" ondragleave="filesDragLeave(event, this)" ondrop="filesHandleDrop(event, this)">
-			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-			<input type="hidden" name="object_type" value={ objectType }/>
-			<input type="hidden" name="object_id" value={ fmt.Sprintf("%d", objectID) }/>
-			<input type="hidden" name="redirect" value={ redirect }/>
-			<div class="files-drop-zone">
-				<div>
-					<strong>Drop files here</strong>
-					<small data-files-prompt>or choose a file to attach</small>
+	if canUploadFile(ctx,objectType,objectID) {
+		<div class="files-widget">
+			if showTitle {
+				<h3>Files</h3>
+			}
+			<form action={ templ.URL(fileUploadURL(objectType, objectID)) } method="post" enctype="multipart/form-data" hx-post={ templ.URL(fileUploadURL(objectType, objectID)) } hx-swap="none" class="files-drop-form" ondragover="filesDragOver(event, this)" ondragleave="filesDragLeave(event, this)" ondrop="filesHandleDrop(event, this)">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<input type="hidden" name="object_type" value={ objectType }/>
+				<input type="hidden" name="object_id" value={ fmt.Sprintf("%d", objectID) }/>
+				<input type="hidden" name="redirect" value={ redirect }/>
+				<div class="files-drop-zone">
+					<div>
+						<strong>Drop files here</strong>
+						<small data-files-prompt>or choose a file to attach</small>
+					</div>
+					<div class="files-upload-row">
+						<input type="file" name="file" required/>
+						<button type="submit" class="small customer-add-button">Upload files</button>
+					</div>
 				</div>
-				<div class="files-upload-row">
-					<input type="file" name="file" required/>
-					<button type="submit" class="small customer-add-button">Upload files</button>
+				<small data-files-limit></small>
+				<div class="files-upload-status" aria-live="polite" aria-atomic="false" hidden>
+					<p class="files-upload-error" hidden></p>
+					<p class="files-upload-summary"></p>
+					<ol class="files-upload-list"></ol>
+					<button type="button" class="files-upload-retry" hidden>Retry failed files</button>
+					<a href={ templ.URL(redirect) } class="files-upload-refresh" hidden>Refresh attachments</a>
 				</div>
-			</div>
-			<div class="files-upload-status" aria-live="polite" aria-atomic="false" hidden>
-				<p class="files-upload-error" hidden></p>
-				<p class="files-upload-summary"></p>
-				<ol class="files-upload-list"></ol>
-				<a href={ templ.URL(redirect) } class="files-upload-refresh" hidden>Refresh attachments</a>
-			</div>
-		</form>
-	</div>
+			</form>
+		</div>
+	}
 }
 
 type FileRow struct {
 	ID           int64
+	Revision     int64
+	CanDownload  bool
+	CanRename    bool
+	CanRemove    bool
 	OriginalName string
 	MimeType     string
 	FileSize     string
@@ -54,8 +75,8 @@ type FileRow struct {
 }
 
 type FileListPageData struct {
-	Files    []FileRow
-	ObjectID int64
+	Files      []FileRow
+	ObjectID   int64
 	ObjectType string
 }
 
@@ -127,6 +148,10 @@ templ FileList(p FileListPageData) {
 							type="button"
 							class="files-thumb"
 							data-file-name={ f.OriginalName }
+							data-file-revision={ fmt.Sprint(f.Revision) }
+							data-file-download={ fmt.Sprint(f.CanDownload) }
+							data-file-rename={ fmt.Sprint(f.CanRename) }
+							data-file-remove={ fmt.Sprint(f.CanRemove) }
 							data-file-url={ fmt.Sprintf("/files/%d", f.ID) }
 							data-file-download-url={ fmt.Sprintf("/files/%d?download=1", f.ID) }
 							data-file-rename-url={ fmt.Sprintf("/files/%d/rename", f.ID) }
@@ -135,7 +160,7 @@ templ FileList(p FileListPageData) {
 							onclick="filesOpenModal(this)"
 							aria-label={ fmt.Sprintf("Open %s", f.OriginalName) }
 						>
-							if strings.HasPrefix(f.MimeType, "image/") {
+							if strings.HasPrefix(f.MimeType, "image/") && f.CanDownload {
 								<img src={ templ.URL(fmt.Sprintf("/files/%d", f.ID)) } alt="" loading="lazy"/>
 							} else {
 								<span class="files-thumb-icon">{ fileIconLabel(f.MimeType) }</span>
@@ -162,21 +187,17 @@ templ FilePreviewDialog() {
 			<strong id="files-preview-title">File preview</strong>
 			<div class="files-preview-actions">
 				<a id="files-preview-download" href="#" class="files-preview-action" download>Download</a>
-				if canManageOperational(ctx) {
-					<button type="button" class="files-preview-action" onclick="filesToggleModalRename()">Rename</button>
-					<input type="hidden" id="files-preview-csrf" value={ csrfToken(ctx) }/>
-					<button type="button" class="files-preview-action files-preview-action-danger" onclick="filesDeleteCurrentFile()">Delete</button>
-				}
+				<button type="button" id="files-preview-rename" class="files-preview-action" onclick="filesToggleModalRename()">Rename</button>
+				<input type="hidden" id="files-preview-csrf" value={ csrfToken(ctx) }/>
+				<button type="button" id="files-preview-remove" class="files-preview-action files-preview-action-danger" onclick="filesDeleteCurrentFile()">Remove</button>
 				<button type="button" class="files-preview-action" onclick="filesCloseModal()" aria-label="Close file preview">Close</button>
 			</div>
-			if canManageOperational(ctx) {
-				<form id="files-preview-rename-form" class="files-modal-rename-form" onsubmit="return filesRenameCurrentFile(this)" hidden>
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<input type="text" name="original_name" required maxlength="255"/>
-					<button type="submit" class="small customer-add-button">Save</button>
-					<button type="button" class="outline small customer-add-button" onclick="filesCancelModalRename()">Cancel</button>
-				</form>
-			}
+			<form id="files-preview-rename-form" class="files-modal-rename-form" onsubmit="return filesRenameCurrentFile(this)" hidden>
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<input type="text" name="original_name" required maxlength="255"/>
+				<button type="submit" class="small customer-add-button">Save</button>
+				<button type="button" class="outline small customer-add-button" onclick="filesCancelModalRename()">Cancel</button>
+			</form>
 		</header>
 		<div class="files-preview-body" id="files-preview-body"></div>
 	</dialog>
@@ -257,7 +278,7 @@ templ FileWidgetScript() {
 			state.className = 'files-upload-state';
 			state.textContent = 'Queued';
 			row.append(name, state);
-			return { file, row, state };
+			return { file, row, state, publicationID: crypto.randomUUID(), failed: false };
 		}
 
 		function filesSetQueueState(item, state, detail) {
@@ -265,16 +286,29 @@ templ FileWidgetScript() {
 			item.state.textContent = detail ? state[0].toUpperCase() + state.slice(1) + ': ' + detail : state[0].toUpperCase() + state.slice(1);
 		}
 
+		function filesSendUpload(form, item, body) {
+			return new Promise((resolve, reject) => {
+				const xhr = new XMLHttpRequest();
+				xhr.open('POST', form.action);
+				xhr.setRequestHeader('HX-Request', 'true');
+				xhr.upload.onprogress = event => {
+					if (event.lengthComputable) filesSetQueueState(item, 'uploading', Math.floor(event.loaded * 100 / event.total) + '% transferred; awaiting publication');
+				};
+				xhr.onerror = () => reject(new Error('Connection lost. Retry this file to reconcile its publication.'));
+				xhr.onabort = () => reject(new Error('Transfer interrupted.'));
+				xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300 && !!xhr.getResponseHeader('File-ID'), text: async () => xhr.responseText, headers: { get: name => xhr.getResponseHeader(name) } });
+				xhr.send(body);
+			});
+		}
+
 		async function filesUploadQueueItem(form, item, queue) {
 			filesSetQueueState(item, 'uploading');
+			item.failed = false;
 			try {
 				const body = new FormData(form);
 				body.set('file', item.file);
-				const response = await fetch(form.action, {
-					method: 'POST',
-					body,
-					headers: { 'HX-Request': 'true' }
-				});
+				body.set('publication_id', item.publicationID);
+				const response = await filesSendUpload(form, item, body);
 				if (!response.ok) {
 					const serverError = (await response.text()).trim();
 					throw new Error(serverError || 'The server rejected this file.');
@@ -283,6 +317,7 @@ templ FileWidgetScript() {
 				queue.uploaded++;
 				filesSetQueueState(item, 'uploaded');
 			} catch (error) {
+				item.failed = true;
 				queue.failed++;
 				filesSetQueueState(item, 'failed', error instanceof Error ? error.message : 'Upload failed.');
 			}
@@ -298,6 +333,7 @@ templ FileWidgetScript() {
 			const summary = form.querySelector('.files-upload-summary');
 			const list = form.querySelector('.files-upload-list');
 			const refresh = form.querySelector('.files-upload-refresh');
+			const retry = form.querySelector('.files-upload-retry');
 			if (!input || !button || !status || !error || !summary || !list || !refresh) return;
 
 			form.dataset.filesUploading = 'true';
@@ -307,6 +343,7 @@ templ FileWidgetScript() {
 			error.hidden = true;
 			error.textContent = '';
 			refresh.hidden = true;
+			retry.hidden = true;
 			summary.className = 'files-upload-summary';
 			summary.textContent = files.length === 1 ? 'Uploading 1 file...' : 'Uploading ' + files.length + ' files...';
 			list.replaceChildren();
@@ -339,8 +376,22 @@ templ FileWidgetScript() {
 			}
 
 			summary.className = 'files-upload-summary files-upload-summary-failed';
-			summary.textContent = queue.uploaded + ' uploaded; ' + queue.failed + ' failed. You can choose files again to retry.';
+			summary.textContent = queue.uploaded + ' uploaded; ' + queue.failed + ' failed. Retry failed files to reconcile uncertain outcomes without duplicates.';
 			refresh.hidden = false;
+			retry.hidden = false;
+			retry.onclick = async () => {
+				if (form.dataset.filesUploading === 'true') return;
+				form.dataset.filesUploading = 'true';
+				retry.disabled = true;
+				button.disabled = true;
+				queue.failed = 0;
+				for (const item of items.filter(item => item.failed)) await filesUploadQueueItem(form, item, queue);
+				delete form.dataset.filesUploading;
+				retry.disabled = false;
+				button.disabled = false;
+				summary.textContent = queue.uploaded + ' uploaded; ' + queue.failed + ' failed.';
+				if (!queue.failed) window.location.assign(filesSafeRedirect(queue.redirect));
+			};
 		}
 
 		function filesEnhanceForms(root) {
@@ -351,6 +402,9 @@ templ FileWidgetScript() {
 				if (!input) return;
 				form.dataset.filesEnhanced = 'true';
 				input.multiple = true;
+				fetch('/files/limits').then(r => r.ok ? r.json() : Promise.reject()).then(limits => {
+					form.querySelector('[data-files-limit]').textContent = 'Up to ' + (limits.max_file_bytes / 1048576) + ' MiB per file; 10 files per batch.';
+				}).catch(() => { form.querySelector('[data-files-limit]').textContent = 'Upload limits currently unavailable.'; });
 				form.querySelector('[data-files-prompt]')?.replaceChildren('or choose up to 10 files to attach');
 				input.addEventListener('change', () => filesValidateSelection(form, Array.from(input.files || [])));
 				form.addEventListener('submit', filesHandleSubmit);
@@ -365,11 +419,15 @@ templ FileWidgetScript() {
 			if (!dialog || !title || !body || !download) return;
 			const name = button.dataset.fileName || 'File preview';
 			const url = button.dataset.fileUrl;
-			const kind = button.dataset.fileKind;
+			const kind = button.dataset.fileDownload === 'true' ? button.dataset.fileKind : 'file';
+			download.hidden = button.dataset.fileDownload !== 'true';
+			document.getElementById('files-preview-rename').hidden = button.dataset.fileRename !== 'true';
+			document.getElementById('files-preview-remove').hidden = button.dataset.fileRemove !== 'true';
 			title.textContent = name;
 			download.href = button.dataset.fileDownloadUrl || url;
 			const redirect = window.location.pathname + window.location.search;
 			dialog.dataset.fileRenameUrl = button.dataset.fileRenameUrl || '';
+			dialog.dataset.fileRevision = button.dataset.fileRevision || '';
 			dialog.dataset.fileDeleteUrl = button.dataset.fileDeleteUrl || '';
 			dialog.dataset.redirect = redirect;
 			const renameForm = document.getElementById('files-preview-rename-form');
@@ -431,7 +489,7 @@ templ FileWidgetScript() {
 			const csrf = document.getElementById('files-preview-csrf')?.value || document.querySelector('#files-preview-rename-form [name="csrf_token"]')?.value || '';
 			const dialog = document.getElementById('files-preview-dialog');
 			const redirect = dialog?.dataset.redirect || window.location.pathname;
-			const body = new URLSearchParams({ csrf_token: csrf, redirect });
+			const body = new URLSearchParams({ csrf_token: csrf, redirect, revision: dialog?.dataset.fileRevision || '' });
 			Object.entries(values || {}).forEach(([key, value]) => body.set(key, value));
 			const response = await fetch(action, {
 				method: 'POST',
@@ -459,7 +517,7 @@ templ FileWidgetScript() {
 		function filesDeleteCurrentFile() {
 			const dialog = document.getElementById('files-preview-dialog');
 			const action = filesSelectedAction(dialog?.dataset.fileDeleteUrl, /^\/files\/\d+\/delete$/);
-			if (!action || !confirm('Delete this file?')) return;
+			if (!action || !confirm('Remove this file? Ordinary access will end. Retained history and Delivery snapshots are preserved.')) return;
 			filesPostModalAction(action);
 		}
 

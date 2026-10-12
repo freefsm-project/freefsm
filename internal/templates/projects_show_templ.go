@@ -459,6 +459,16 @@ func ProjectShow(p ProjectShowPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
+			if p.Project.ArchivedAt == "" {
+				templ_7745c5c3_Err = FileUploadWidget("project", p.Project.ID, fmt.Sprintf("/projects/%d", p.Project.ID)).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = FileList(p.FileList).Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			if p.Project.ArchivedAt != "" {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "<div hx-get=\"")
 				if templ_7745c5c3_Err != nil {
@@ -467,7 +477,7 @@ func ProjectShow(p ProjectShowPageData) templ.Component {
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fmt.Sprintf("/projects/%d/comments?read_only=1", p.Project.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/projects_show.templ`, Line: 84, Col: 90}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/projects_show.templ`, Line: 88, Col: 90}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 				if templ_7745c5c3_Err != nil {
@@ -485,7 +495,7 @@ func ProjectShow(p ProjectShowPageData) templ.Component {
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fmt.Sprintf("/projects/%d/comments", p.Project.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/projects_show.templ`, Line: 88, Col: 78}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/projects_show.templ`, Line: 92, Col: 78}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 				if templ_7745c5c3_Err != nil {
@@ -503,7 +513,7 @@ func ProjectShow(p ProjectShowPageData) templ.Component {
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fmt.Sprintf("/projects/%d/activity", p.Project.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/projects_show.templ`, Line: 92, Col: 77}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/projects_show.templ`, Line: 96, Col: 77}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 			if templ_7745c5c3_Err != nil {
