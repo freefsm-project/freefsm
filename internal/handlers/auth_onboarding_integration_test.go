@@ -148,14 +148,10 @@ func TestAcceptInviteUsesInvitationCompanyPasswordPolicy(t *testing.T) {
 }
 
 func TestResetPasswordConfirmationPreservesTokenUntilMatchingSubmission(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
-	defer client.Close()
-	defer pool.Close()
+	pool, client, _, _, companyID, _ := permissionHTTPFixture(t)
 	ctx := context.Background()
-	const companyID int64 = 79
 
-	client.CompanySettings.Create().
-		SetCompanyID(companyID).
+	client.CompanySettings.Update().
 		SetBusinessName("Reset Company").
 		SetPasswordMinLength(12).
 		SetPasswordRequireUppercase(true).
@@ -168,7 +164,7 @@ func TestResetPasswordConfirmationPreservesTokenUntilMatchingSubmission(t *testi
 		t.Fatal(err)
 	}
 	u := client.User.Create().SetCompanyID(companyID).SetEmail("reset@example.test").SetName("Reset User").SetRole("tech").SetPasswordHash(string(oldHash)).SaveX(ctx)
-	resetSvc := services.NewPasswordResetService(client)
+	resetSvc := services.NewPasswordResetService(client, pool)
 	token, err := resetSvc.CreateToken(ctx, u.ID)
 	if err != nil {
 		t.Fatalf("create reset token: %v", err)

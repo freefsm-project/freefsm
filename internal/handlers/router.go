@@ -33,7 +33,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		control = controls[0]
 	}
 
-	userService := services.NewUserService(entClient)
+	userService := services.NewUserService(entClient, db)
 	userFn := func(ctx context.Context, userID int64) (*middleware.UserInfo, error) {
 		u, err := userService.GetByID(ctx, userID)
 		if err != nil {
@@ -128,7 +128,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
 	emailSvc.SetInstanceControl(control)
-	inviteSvc := services.NewInvitationService(entClient)
+	inviteSvc := services.NewInvitationService(entClient, db)
 	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, deliveryService, activitySvc, policySvc, conversionService)
 	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, deliveryService, activitySvc, policySvc, settlementService, conversionService)
 	estimateHandler.statusflow = statusflowService
@@ -142,8 +142,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	statusSettingsHandler := NewStatusSettingsHandler(statusflowService)
 	userHandler := NewUserHandler(userService, emailSvc, inviteSvc, companySettingsSvc, activitySvc, cfg)
 	timeEntryHandler := NewTimeEntryHandler(timeEntrySvc, userService, jobService, activitySvc)
-	authHandler := NewAuthHandler(db, sessions, userService, companySettingsSvc, emailSvc, services.NewPasswordResetService(entClient), inviteSvc, activitySvc, cfg)
-	userHandler.resetSvc = services.NewPasswordResetService(entClient)
+	authHandler := NewAuthHandler(db, sessions, userService, companySettingsSvc, emailSvc, services.NewPasswordResetService(entClient, db), inviteSvc, activitySvc, cfg)
+	userHandler.resetSvc = services.NewPasswordResetService(entClient, db)
 	passwordHandler := NewPasswordHandler(userService, companySettingsSvc, activitySvc)
 
 	// Asset handlers

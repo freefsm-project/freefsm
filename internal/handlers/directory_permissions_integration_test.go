@@ -410,7 +410,7 @@ func TestSealedRecoveryResendReplacesLinkAtomically(t *testing.T) {
 	u := client.User.Create().SetCompanyID(company).SetName("Recovery target").SetEmail("recovery@test").SetPasswordHash("hash").SetRole("tech").SaveX(ctx)
 	cookie := sessionCookie(t, ctx, sessions, u.ID)
 	accountPost(t, router, cookie, fmt.Sprintf("/users/%d/resend-recovery", u.ID), nil, 403)
-	resets := services.NewPasswordResetService(client)
+	resets := services.NewPasswordResetService(client, pool)
 	actorCtx := authorization.WithActor(ctx, authorization.New(pool), authorization.Actor{UserID: admin})
 	first, err := resets.CreateToken(actorCtx, u.ID)
 	if err != nil {

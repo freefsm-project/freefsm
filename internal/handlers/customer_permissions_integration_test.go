@@ -109,14 +109,25 @@ func permissionHTTPFixtureConfigured(t *testing.T, migrations fs.FS, seed func(*
 	})
 	var company, admin int64
 	if err := pool.QueryRow(ctx, `SELECT id FROM companies LIMIT 1`).Scan(&company); err != nil {
-		t.Fatal(err)
+		if err != pgx.ErrNoRows {
+			t.Fatal(err)
+		}
+		// Pre-v1 upgrade fixtures precede the fresh-install bootstrap migration.
+		if err := pool.QueryRow(ctx, `INSERT INTO companies(name,slug) VALUES('Legacy fixture','legacy-fixture') RETURNING id`).Scan(&company); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE company_settings SET company_id=$1 WHERE company_id IS NULL`, company); err != nil {
+			t.Fatal(err)
+		}
 	}
 	hash, err := bcrypt.GenerateFromPassword([]byte("PermissionFixture1!"), bcrypt.MinCost)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO users(company_id,email,name,password_hash,role) VALUES($1,'admin@test','Admin',$2,'admin') RETURNING id`, company, string(hash)).Scan(&admin); err != nil {
-		t.Fatal(err)
+	if !(len(legacy) > 1 && legacy[1]) {
+		if err := pool.QueryRow(ctx, `INSERT INTO users(company_id,email,name,password_hash,role) VALUES($1,'admin@test','Admin',$2,'admin') RETURNING id`, company, string(hash)).Scan(&admin); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if seed != nil {
 		seed(pool)

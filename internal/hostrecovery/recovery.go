@@ -59,7 +59,7 @@ func ResetExistingAdmin(ctx context.Context, pool *pgxpool.Pool, email, password
 	if _, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, id); err != nil {
 		return errors.New("cannot revoke Admin sessions")
 	}
-	if _, err = tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id=$1`, id); err != nil {
+	if _, err = tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id=$1 AND purpose='password-recovery-v1'`, id); err != nil {
 		return errors.New("cannot revoke Admin recovery links")
 	}
 	metadata, err := json.Marshal(map[string]string{"channel": "host-local", "actor": "deployment-operator", "host_uid": hostUID, "target_role": role, "outcome": "success"})

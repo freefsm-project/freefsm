@@ -61,7 +61,7 @@ func TestOnboardingCompletionMigration048BackfillIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+	if err := db.Migrate(ctx, onboardingMigration048(t)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -101,7 +101,7 @@ func TestOnboardingCompletionMigration048DownRemovesOnlyColumnIntegration(t *tes
 	userID := seedOnboardingMigrationUser(t, ctx, db, companyID, "down", false, nil, time.Now())
 	seedOnboardingMigrationInvitation(t, ctx, db, userID, nil, "down", time.Now())
 
-	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+	if err := db.Migrate(ctx, onboardingMigration048(t)); err != nil {
 		t.Fatal(err)
 	}
 	down, err := fs.ReadFile(MigrationFS(), "048_onboarding_completion.down.sql")
@@ -119,6 +119,18 @@ func TestOnboardingCompletionMigration048DownRemovesOnlyColumnIntegration(t *tes
 	if columnExists || tokenCompanyID != companyID {
 		t.Fatalf("column exists=%v token company=%d want %d", columnExists, tokenCompanyID, companyID)
 	}
+}
+
+// These historical tests describe migration 048 as shipped. Forward onboarding
+// corrections are tested separately through the current production HTTP router.
+func onboardingMigration048(t *testing.T) fs.FS {
+	t.Helper()
+	name := "048_onboarding_completion.up.sql"
+	b, err := fs.ReadFile(MigrationFS(), name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fstest.MapFS{name: &fstest.MapFile{Data: b}}
 }
 
 func seedOnboardingMigrationUser(t *testing.T, ctx context.Context, db *DB, companyID int64, name string, active bool, welcomeAt *time.Time, createdAt time.Time) int64 {

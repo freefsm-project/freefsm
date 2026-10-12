@@ -644,73 +644,102 @@ func SettingsPage(p SettingsPageData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<!-- Security Tab --><div class=\"settings-tab-content\" id=\"tab-security\"><div class=\"grid\"><label>Minimum Length <input type=\"number\" name=\"password_min_length\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<!-- Security Tab --><div class=\"settings-tab-content\" id=\"tab-security\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var38 string
-			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", p.Settings.PasswordMinLength))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 178, Col: 109}
+			if p.RecoveryReviewCount > 0 {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "<p role=\"status\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var38 string
+				templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(p.RecoveryReviewCount))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 176, Col: 57}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, " legacy recovery links have unknown purpose or validity and are quarantined. Review the host-local password_recovery_review report. Verify each account and use Resend recovery or an Administrator temporary reset for a safe replacement; do not reactivate old links.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
+			if p.Settings.PasswordMinLength < 6 || p.Settings.PasswordMinLength > 72 {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "<p role=\"alert\">Password policy needs explicit Administrator review. Choose a minimum between 6 and 72. Existing passwords have not been changed.</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<p>Policy changes apply to future password settings. Use Require password change on a user to require replacement explicitly. Length uses UTF-16 units, matching browser validation; passwords cannot exceed 72 UTF-8 bytes.</p><div class=\"grid\"><label>Minimum Length <input type=\"number\" name=\"password_min_length\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\" min=\"6\" max=\"128\" required></label></div><label><input type=\"checkbox\" name=\"password_require_uppercase\"")
+			var templ_7745c5c3_Var39 string
+			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", p.Settings.PasswordMinLength))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 185, Col: 109}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "\" min=\"6\" max=\"72\" required></label></div><label><input type=\"checkbox\" name=\"password_require_uppercase\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.Settings.PasswordRequireUppercase {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, " checked")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "> Require uppercase letter (A–Z)</label> <label><input type=\"checkbox\" name=\"password_require_lowercase\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if p.Settings.PasswordRequireLowercase {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, " checked")
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "> Require lowercase letter (a–z)</label> <label><input type=\"checkbox\" name=\"password_require_digit\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			if p.Settings.PasswordRequireDigit {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, " checked")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "> Require digit (0–9)</label> <label><input type=\"checkbox\" name=\"password_require_special\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "> Require uppercase letter (A–Z)</label> <label><input type=\"checkbox\" name=\"password_require_lowercase\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			if p.Settings.PasswordRequireSpecial {
+			if p.Settings.PasswordRequireLowercase {
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, " checked")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "> Require special character (!@#$%^&* etc.)</label> <button type=\"submit\" class=\"settings-submit\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "> Require lowercase letter (a–z)</label> <label><input type=\"checkbox\" name=\"password_require_digit\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var39 string
-			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.JoinStringErrs(settingsButtonText(p.IsSetup))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 197, Col: 81}
+			if p.Settings.PasswordRequireDigit {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, " checked")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var39))
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "> Require digit (0–9)</label> <label><input type=\"checkbox\" name=\"password_require_special\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "</button></div></form><div hx-get=\"/settings/activity\" hx-trigger=\"load\" hx-swap=\"innerHTML\" class=\"shared-widget\"><p>Loading recent activity...</p></div><script>\n\t\t\t(function() {\n\t\t\t\tvar hash = window.location.hash;\n\t\t\t\tif (hash && hash.indexOf('#tab-') === 0) {\n\t\t\t\t\tswitchSettingsTab(hash.substring(5));\n\t\t\t\t}\n\t\t\t})();\n\t\t\tfunction switchSettingsTab(name) {\n\t\t\t\tvar panel = document.getElementById('tab-' + name);\n\t\t\t\tif (!panel) return;\n\t\t\t\tdocument.querySelectorAll('.settings-tab-content').forEach(function(el) {\n\t\t\t\t\tel.classList.remove('active');\n\t\t\t\t});\n\t\t\t\tdocument.querySelectorAll('.settings-tabs [data-tab]').forEach(function(el) {\n\t\t\t\t\tel.classList.remove('active');\n\t\t\t\t\tel.setAttribute('aria-current', 'false');\n\t\t\t\t});\n\t\t\t\tpanel.classList.add('active');\n\t\t\t\tdocument.querySelector('[data-tab=\"' + name + '\"]').classList.add('active');\n\t\t\t\tdocument.querySelector('[data-tab=\"' + name + '\"]').setAttribute('aria-current', 'true');\n\t\t\t}\n\t\t</script>")
+			if p.Settings.PasswordRequireSpecial {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, " checked")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "> Require special character (!@#$%^&* etc.)</label> <button type=\"submit\" class=\"settings-submit\">")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var40 string
+			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(settingsButtonText(p.IsSetup))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 204, Col: 81}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "</button></div></form><div hx-get=\"/settings/activity\" hx-trigger=\"load\" hx-swap=\"innerHTML\" class=\"shared-widget\"><p>Loading recent activity...</p></div><script>\n\t\t\t(function() {\n\t\t\t\tvar hash = window.location.hash;\n\t\t\t\tif (hash && hash.indexOf('#tab-') === 0) {\n\t\t\t\t\tswitchSettingsTab(hash.substring(5));\n\t\t\t\t}\n\t\t\t})();\n\t\t\tfunction switchSettingsTab(name) {\n\t\t\t\tvar panel = document.getElementById('tab-' + name);\n\t\t\t\tif (!panel) return;\n\t\t\t\tdocument.querySelectorAll('.settings-tab-content').forEach(function(el) {\n\t\t\t\t\tel.classList.remove('active');\n\t\t\t\t});\n\t\t\t\tdocument.querySelectorAll('.settings-tabs [data-tab]').forEach(function(el) {\n\t\t\t\t\tel.classList.remove('active');\n\t\t\t\t\tel.setAttribute('aria-current', 'false');\n\t\t\t\t});\n\t\t\t\tpanel.classList.add('active');\n\t\t\t\tdocument.querySelector('[data-tab=\"' + name + '\"]').classList.add('active');\n\t\t\t\tdocument.querySelector('[data-tab=\"' + name + '\"]').setAttribute('aria-current', 'true');\n\t\t\t}\n\t\t</script>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -740,31 +769,31 @@ func TestEmailResult(success bool, message string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var40 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var40 == nil {
-			templ_7745c5c3_Var40 = templ.NopComponent
+		templ_7745c5c3_Var41 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var41 == nil {
+			templ_7745c5c3_Var41 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
 		if success {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<p class=\"settings-result settings-result-success\">Transport accepted the test message. Inbox delivery is not confirmed.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "<p class=\"settings-result settings-result-success\">Transport accepted the test message. Inbox delivery is not confirmed.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "<p class=\"settings-result settings-result-error\">✗ Test email failed: ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<p class=\"settings-result settings-result-error\">✗ Test email failed: ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var41 string
-			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinStringErrs(message)
+			var templ_7745c5c3_Var42 string
+			templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 232, Col: 83}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 239, Col: 83}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -789,43 +818,43 @@ func InvoiceLogoPreview(path string, cacheBust string) templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var42 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var42 == nil {
-			templ_7745c5c3_Var42 = templ.NopComponent
+		templ_7745c5c3_Var43 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var43 == nil {
+			templ_7745c5c3_Var43 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "<input type=\"text\" name=\"invoice_logo_path\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "<input type=\"text\" name=\"invoice_logo_path\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		var templ_7745c5c3_Var43 string
-		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(path)
+		var templ_7745c5c3_Var44 string
+		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(path)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 237, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 244, Col: 57}
 		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "\" placeholder=\"File path\" readonly class=\"settings-logo-path\"> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "\" placeholder=\"File path\" readonly class=\"settings-logo-path\"> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if path != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<div class=\"settings-logo-preview\"><img src=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "<div class=\"settings-logo-preview\"><img src=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var44 string
-			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(invoiceLogoURL(cacheBust)))
+			var templ_7745c5c3_Var45 string
+			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(invoiceLogoURL(cacheBust)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 240, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/settings.templ`, Line: 247, Col: 50}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "\" alt=\"Logo preview\"></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "\" alt=\"Logo preview\"></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

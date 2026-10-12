@@ -14,15 +14,10 @@ import (
 )
 
 func TestChangePasswordRendersErrorsAndPreservesForceStateUntilSuccess(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
-	defer client.Close()
-	defer pool.Close()
+	pool, client, _, sessions, companyID, _ := permissionHTTPFixture(t)
 	ctx := context.Background()
-	const companyID int64 = 95
 
-	client.CompanySettings.Create().SetCompanyID(companyID - 1).SetBusinessName("Other").SetPasswordMinLength(1).SaveX(ctx)
-	client.CompanySettings.Create().
-		SetCompanyID(companyID).
+	client.CompanySettings.Update().
 		SetBusinessName("Current Company").
 		SetPasswordMinLength(14).
 		SetPasswordRequireUppercase(true).
@@ -42,7 +37,8 @@ func TestChangePasswordRendersErrorsAndPreservesForceStateUntilSuccess(t *testin
 		SetPasswordHash(string(oldHash)).
 		SetForcePasswordChange(true).
 		SaveX(ctx)
-	h := NewPasswordHandler(services.NewUserService(client), services.NewCompanySettingsService(client), nil)
+	h := NewPasswordHandler(services.NewUserService(client, pool), services.NewCompanySettingsService(client), nil)
+	cookie := sessionCookie(t, ctx, sessions, u.ID)
 	userContext := &middleware.UserInfo{ID: u.ID, CompanyID: companyID, Name: u.Name, Role: "admin"}
 
 	get := httptest.NewRequest(http.MethodGet, "/change-password?error=visible+error", nil)
@@ -61,6 +57,7 @@ func TestChangePasswordRendersErrorsAndPreservesForceStateUntilSuccess(t *testin
 		}
 		r := httptest.NewRequest(http.MethodPost, "/change-password", strings.NewReader(form.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		r.AddCookie(cookie)
 		r = r.WithContext(context.WithValue(r.Context(), middleware.UserKey, userContext))
 		w := httptest.NewRecorder()
 		h.ChangePassword(w, r)

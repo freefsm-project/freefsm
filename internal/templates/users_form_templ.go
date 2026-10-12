@@ -143,7 +143,7 @@ func UserForm(p UserFormData) templ.Component {
 				templ_7745c5c3_Err = NewPasswordFields(NewPasswordFieldsOptions{
 					ID: "user-password", Name: "password", Label: "Password", Placeholder: "Password",
 					ConfirmID: "user-confirm-password", ConfirmLabel: "Confirm Password", ConfirmPlaceholder: "Confirm password",
-					Autocomplete: "new-password", MinLength: 8, Disabled: true,
+					Autocomplete: "new-password", MinLength: companyPasswordMinLength(ctx), Disabled: true,
 					WrapperID: "password_fields", WrapperClass: "is-hidden",
 				}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {

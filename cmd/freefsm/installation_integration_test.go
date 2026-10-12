@@ -24,6 +24,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/database"
+	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
@@ -184,8 +185,17 @@ func recoveryFixture(t *testing.T, db *pgx.Conn) int64 {
 			t.Fatal(err)
 		}
 	}
-	if _, err = db.Exec(ctx, `INSERT INTO password_reset_tokens(token_hash,user_id,expires_at) VALUES($1,$2,NOW()+interval '1 hour')`, fmt.Sprintf("%x", sha256.Sum256([]byte("old-recovery"))), id); err != nil {
+	if _, err = db.Exec(ctx, `INSERT INTO password_reset_tokens(token_hash,user_id,company_id,recipient,credential_revision,expires_at,purpose)
+	 SELECT $1,id,company_id,email,credential_revision,NOW()+interval '1 hour','password-recovery-v1' FROM users WHERE id=$2`, fmt.Sprintf("%x", sha256.Sum256([]byte("old-recovery"))), id); err != nil {
 		t.Fatal(err)
+	}
+	proofPool, err := pgxpool.New(ctx, db.Config().ConnString())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer proofPool.Close()
+	if target, err := services.NewPasswordResetService(nil, proofPool).Validate(ctx, "old-recovery"); err != nil || target != id {
+		t.Fatalf("executable host fixture proof invalid before reset: target=%d err=%v", target, err)
 	}
 	return id
 }
@@ -525,6 +535,10 @@ func TestHostRecoveryRejectsWithoutPartialEffects(t *testing.T) {
 				}
 				defer db.Exec(ctx, tc.cleanup)
 			}
+			var priorTokens int
+			if err := db.QueryRow(ctx, `SELECT count(*) FROM password_reset_tokens`).Scan(&priorTokens); err != nil {
+				t.Fatal(err)
+			}
 			output, err := runInstallationCLI(binary, env, tc.input, "-recover-admin", tc.email)
 			if err == nil {
 				t.Fatalf("invalid recovery succeeded: %s", output)
@@ -536,7 +550,7 @@ func TestHostRecoveryRejectsWithoutPartialEffects(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if hash != recoveryOldHash || force || sessions != 2 || tokens != 1 || events != 0 || users != 2 || immutable != 0 {
+			if hash != recoveryOldHash || force || sessions != 2 || tokens != priorTokens || events != 0 || users != 2 || immutable != 0 {
 				t.Fatal("failed recovery changed persisted state")
 			}
 		})

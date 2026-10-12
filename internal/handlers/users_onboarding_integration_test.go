@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent/invitationtoken"
+	"github.com/freefsm-project/freefsm/internal/ent/user"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/go-chi/chi/v5"
@@ -61,7 +63,7 @@ func TestResendWelcomeRejectsIneligiblePostWithoutMutation(t *testing.T) {
 	}
 	afterUser := client.User.GetX(ctx, u.ID)
 	afterTokens := client.InvitationToken.Query().Where(invitationtoken.UserIDEQ(u.ID)).AllX(ctx)
-	if afterUser.IsActive != beforeUser.IsActive || !afterUser.WelcomeEmailSentAt.Equal(*beforeUser.WelcomeEmailSentAt) {
+	if afterUser.IsActive != beforeUser.IsActive || afterUser.WelcomeEmailSentAt != nil || beforeUser.WelcomeEmailSentAt != nil {
 		t.Fatal("rejected handler request mutated user")
 	}
 	if len(afterTokens) != 1 || afterTokens[0].ConsumedAt != nil || beforeToken.ConsumedAt != nil {
@@ -120,7 +122,7 @@ func TestCreateDirectUserValidatesActingCompanyPasswordPolicy(t *testing.T) {
 	}
 
 	strongResponse := request("strong-direct@example.test", "StrongPassword1!", "StrongPassword1!")
-	if strongResponse.Code != http.StatusSeeOther || strongResponse.Header().Get("Location") != "/users?flash=User+created" {
+	if strongResponse.Code != http.StatusSeeOther || !strings.Contains(strongResponse.Header().Get("Location"), "Manual+onboarding+completed") {
 		t.Fatalf("strong password response = (%d, %q)", strongResponse.Code, strongResponse.Header().Get("Location"))
 	}
 	created := client.User.Query().OnlyX(ctx)
@@ -130,36 +132,31 @@ func TestCreateDirectUserValidatesActingCompanyPasswordPolicy(t *testing.T) {
 }
 
 func TestCreateWelcomeUserDoesNotRequirePasswordConfirmation(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
-	defer client.Close()
-	defer pool.Close()
+	pool, client, router, sessions, _, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
-	const companyID int64 = 93
-
-	client.CompanySettings.Create().SetCompanyID(companyID).SetBusinessName("Welcome Company").SaveX(ctx)
-	userSvc := services.NewUserService(client)
-	settingsSvc := services.NewCompanySettingsService(client)
-	h := NewUserHandler(userSvc, services.NewEmailService(settingsSvc), services.NewInvitationService(client), settingsSvc, nil, nil)
+	if _, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_host='127.0.0.1',smtp_port=1,smtp_from='sender@example.test'`); err != nil {
+		t.Fatal(err)
+	}
 	const stalePassword = "StalePassword1!"
 	form := url.Values{
 		"name":               {"Welcome User"},
 		"email":              {"welcome@example.test"},
 		"password":           {stalePassword},
 		"confirm_password":   {"DifferentStalePassword1!"},
-		"role":               {"tech"},
+		"role_id":            {"3"},
 		"send_welcome_email": {"on"},
 	}
 	r := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	r = r.WithContext(context.WithValue(r.Context(), middleware.UserKey, &middleware.UserInfo{ID: 100, CompanyID: companyID, Name: "Admin", Role: "admin"}))
+	r.AddCookie(sessionCookie(t, ctx, sessions, admin))
 	w := httptest.NewRecorder()
-	h.Create(w, r)
+	router.ServeHTTP(w, r)
 
 	location, _ := url.QueryUnescape(w.Header().Get("Location"))
-	if w.Code != http.StatusSeeOther || !strings.Contains(location, "User created, but welcome email failed: SMTP not configured") {
+	if w.Code != http.StatusSeeOther || !strings.Contains(location, "Account pending; welcome email was not accepted") {
 		t.Fatalf("welcome creation response = (%d, %q)", w.Code, w.Header().Get("Location"))
 	}
-	created := client.User.Query().OnlyX(ctx)
+	created := client.User.Query().Where(user.EmailEQ("welcome@example.test")).OnlyX(ctx)
 	if created.IsActive {
 		t.Fatal("welcome user should remain inactive pending invitation")
 	}
@@ -169,13 +166,12 @@ func TestCreateWelcomeUserDoesNotRequirePasswordConfirmation(t *testing.T) {
 }
 
 func TestAdminResetPasswordIsCompanyScopedAndRequiresConfirmation(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
-	defer client.Close()
-	defer pool.Close()
+	pool, client, _, _, companyID, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
-	const companyID int64 = 94
-
-	client.CompanySettings.Create().SetCompanyID(companyID).SetBusinessName("Admin Company").SetPasswordMinLength(12).SaveX(ctx)
+	if _, err := pool.Exec(ctx, `INSERT INTO companies(id,name,slug) VALUES($1,'Foreign','foreign-reset')`, companyID+1); err != nil {
+		t.Fatal(err)
+	}
+	client.CompanySettings.Update().SetBusinessName("Admin Company").SetPasswordMinLength(12).SaveX(ctx)
 	client.CompanySettings.Create().SetCompanyID(companyID + 1).SetBusinessName("Foreign Company").SetPasswordMinLength(1).SaveX(ctx)
 	oldHash, err := bcrypt.GenerateFromPassword([]byte("OldPassword1!"), bcrypt.MinCost)
 	if err != nil {
@@ -192,7 +188,8 @@ func TestAdminResetPasswordIsCompanyScopedAndRequiresConfirmation(t *testing.T) 
 		rctx := chi.NewRouteContext()
 		rctx.URLParams.Add("id", strconv.FormatInt(userID, 10))
 		requestCtx := context.WithValue(r.Context(), chi.RouteCtxKey, rctx)
-		requestCtx = context.WithValue(requestCtx, middleware.UserKey, &middleware.UserInfo{ID: 100, CompanyID: companyID, Name: "Admin", Role: "admin"})
+		requestCtx = context.WithValue(requestCtx, middleware.UserKey, &middleware.UserInfo{ID: admin, CompanyID: companyID, Name: "Admin", Role: "admin"})
+		requestCtx = authorization.WithActor(requestCtx, authorization.New(pool), authorization.Actor{UserID: admin})
 		w := httptest.NewRecorder()
 		h.ResetPassword(w, r.WithContext(requestCtx))
 		return w

@@ -21,7 +21,6 @@ func TestInvitationServiceRenewsWithoutExistingToken(t *testing.T) {
 	ctx := context.Background()
 	svc := NewInvitationService(client)
 	u := createInvitedUser(t, ctx, client, invitationTestCompanyID, "recover")
-	oldWelcomeSentAt := *u.WelcomeEmailSentAt
 
 	eligible, err := svc.CanResendWelcome(ctx, invitationTestCompanyID, u.ID)
 	if err != nil {
@@ -37,8 +36,8 @@ func TestInvitationServiceRenewsWithoutExistingToken(t *testing.T) {
 	if renewed.IsActive {
 		t.Fatal("renewal activated invited user")
 	}
-	if renewed.WelcomeEmailSentAt == nil || !renewed.WelcomeEmailSentAt.After(oldWelcomeSentAt) {
-		t.Fatal("renewal did not update welcome_email_sent_at")
+	if renewed.WelcomeEmailSentAt != nil {
+		t.Fatal("renewal invented a mail handoff before sending")
 	}
 	target, err := svc.ValidateInvite(ctx, token)
 	if err != nil || target != (InvitationTarget{UserID: u.ID, CompanyID: invitationTestCompanyID}) {

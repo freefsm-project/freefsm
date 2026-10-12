@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/url"
 
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/middleware"
@@ -79,7 +78,11 @@ func (h *AuthHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.sessions.Create(r.Context(), id)
+	token, err := h.sessions.CreateAuthenticated(r.Context(), id, password, "web", "")
+	if errors.Is(err, services.ErrInvalidCredentials) {
+		http.Redirect(w, r, "/login?error=invalid+credentials", http.StatusSeeOther)
+		return
+	}
 	if err != nil {
 		internalServerError(w, r, "create session", err)
 		return
@@ -119,30 +122,24 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	if err := h.emailSvc.ValidateConfiguration(r.Context()); err != nil {
+		http.Error(w, "Recovery email is unavailable. Contact an Administrator for a temporary password.", http.StatusServiceUnavailable)
+		return
+	}
 	r.ParseForm()
 	email := r.FormValue("email")
-	u, err := h.userSvc.GetByEmail(r.Context(), email)
-	if err != nil {
-		render(w, r, templates.ForgotPasswordPage(templates.ForgotPasswordData{Success: true}))
+	if err := h.resetSvc.Request(r.Context(), email, absoluteAppURL(h.cfg, r, "/reset-password")); err != nil {
+		http.Error(w, "Recovery requests are temporarily unavailable. Contact an Administrator.", http.StatusServiceUnavailable)
 		return
-	}
-	tok, err := h.resetSvc.CreateToken(r.Context(), u.ID)
-	if err != nil {
-		internalServerError(w, r, "create password reset token", err)
-		return
-	}
-	link := absoluteAppURL(h.cfg, r, "/reset-password?token="+url.QueryEscape(tok))
-	var emailErr string
-	if err := h.emailSvc.SendPasswordReset(r.Context(), email, u.Name, link); err != nil {
-		emailErr = "Failed to send email. Please try again."
 	}
 	render(w, r, templates.ForgotPasswordPage(templates.ForgotPasswordData{
-		Success:  true,
-		EMailErr: emailErr,
+		Success: true,
 	}))
 }
 
 func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method == http.MethodGet {
 		token := r.URL.Query().Get("token")
 		_, err := h.resetSvc.Validate(r.Context(), token)
@@ -150,7 +147,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 			render(w, r, templates.ResetPasswordPage(templates.ResetPasswordData{Error: "Invalid or expired reset link"}))
 			return
 		}
-		render(w, r, templates.ResetPasswordPage(templates.ResetPasswordData{Token: token, Valid: true}))
+		h.renderRecovery(w, r, token, "")
 		return
 	}
 	r.ParseForm()
@@ -167,9 +164,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := validatePasswordConfirmation(password, r.FormValue("confirm_password")); err != nil {
-		render(w, r, templates.ResetPasswordPage(templates.ResetPasswordData{
-			Token: token, Valid: true, Error: err.Error(),
-		}))
+		h.renderRecovery(w, r, token, err.Error())
 		return
 	}
 	cs, err := h.csSvc.GetForCompany(r.Context(), *u.CompanyID)
@@ -178,30 +173,51 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.userSvc.ValidatePassword(password, cs); err != nil {
-		render(w, r, templates.ResetPasswordPage(templates.ResetPasswordData{
-			Token: token, Valid: true, Error: err.Error(),
-		}))
+		h.renderRecovery(w, r, token, err.Error())
 		return
 	}
-	if err := h.userSvc.SetPassword(r.Context(), uid, password); err != nil {
-		render(w, r, templates.ResetPasswordPage(templates.ResetPasswordData{
-			Token: token, Valid: true, Error: "Failed to reset password. Please try again.",
-		}))
+	if err := h.resetSvc.Redeem(r.Context(), token, password); err != nil {
+		h.renderRecovery(w, r, token, "Unable to reset password. Check the current policy or request a new link.")
 		return
 	}
-	h.resetSvc.Consume(r.Context(), token)
 	http.Redirect(w, r, "/login?flash=Password+reset+successfully", http.StatusSeeOther)
 }
 
+func (h *AuthHandler) renderRecovery(w http.ResponseWriter, r *http.Request, token, message string) {
+	id, err := h.resetSvc.Validate(r.Context(), token)
+	if err != nil {
+		http.Error(w, "invalid or expired reset link", http.StatusBadRequest)
+		return
+	}
+	u, err := h.userSvc.GetByID(r.Context(), id)
+	if err != nil || u.CompanyID == nil {
+		http.Error(w, "invalid or expired reset link", http.StatusBadRequest)
+		return
+	}
+	policy, err := h.csSvc.GetForCompany(r.Context(), *u.CompanyID)
+	if err != nil {
+		internalServerError(w, r, "get recovery policy", err)
+		return
+	}
+	render(w, r, templates.ResetPasswordPage(templates.ResetPasswordData{Token: token, Valid: true, Error: message, Policy: policy}))
+}
+
 func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method == http.MethodGet {
 		token := r.URL.Query().Get("token")
-		_, err := h.inviteSvc.ValidateInvite(r.Context(), token)
+		target, err := h.inviteSvc.ValidateInvite(r.Context(), token)
 		if err != nil {
 			render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Error: "Invalid or expired invitation"}))
 			return
 		}
-		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true}))
+		policy, err := h.csSvc.GetForCompany(r.Context(), target.CompanyID)
+		if err != nil {
+			internalServerError(w, r, "get invitation policy", err)
+			return
+		}
+		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Policy: policy}))
 		return
 	}
 
@@ -213,20 +229,29 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid invitation", http.StatusBadRequest)
 		return
 	}
-	if err := validatePasswordConfirmation(password, r.FormValue("confirm_password")); err != nil {
-		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Error: err.Error()}))
-		return
-	}
 	cs, err := h.csSvc.GetForCompany(r.Context(), target.CompanyID)
 	if err != nil {
 		internalServerError(w, r, "get invitation company password policy", err)
 		return
 	}
+	if err := validatePasswordConfirmation(password, r.FormValue("confirm_password")); err != nil {
+		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Error: err.Error(), Policy: cs}))
+		return
+	}
 	if err := h.userSvc.ValidatePassword(password, cs); err != nil {
-		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Error: err.Error()}))
+		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Error: err.Error(), Policy: cs}))
 		return
 	}
 	u, err := h.inviteSvc.AcceptInvite(r.Context(), token, password)
+	if errors.Is(err, services.ErrInvitationPassword) {
+		policy, loadErr := h.csSvc.GetForCompany(r.Context(), target.CompanyID)
+		if loadErr != nil {
+			internalServerError(w, r, "reload invitation password policy", loadErr)
+			return
+		}
+		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Error: err.Error(), Policy: policy}))
+		return
+	}
 	if errors.Is(err, services.ErrInvalidInvitation) {
 		http.Error(w, "invalid invitation", http.StatusBadRequest)
 		return

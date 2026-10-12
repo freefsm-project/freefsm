@@ -17,7 +17,9 @@ templ UserShow(p UserDetailPage) {
 				<form action={ templ.URL(fmt.Sprintf("/users/%d/disable", p.User.ID)) } method="post">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast">
-						if p.User.IsActive {
+						if p.CanResendWelcome {
+							Invalidate pending invitation
+						} else if p.User.IsActive {
 							Disable
 						} else {
 							Enable
@@ -40,6 +42,12 @@ templ UserShow(p UserDetailPage) {
 				}
 			</div>
 		</div>
+		if p.CanResendWelcome {
+			<p>Pending invitation: this account cannot sign in. Invitations expire after 72 hours. Resend Welcome replaces every earlier link; an expired or invalidated link requires Administrator resend.</p>
+		}
+		if p.OnboardingReview {
+			<p>Legacy onboarding needs review: recorded completion has no activation evidence. The original evidence is preserved. Review this person's identity and Role, then explicitly Resend Welcome; old links cannot activate this account.</p>
+		}
 		<table class="work-item-detail-meta">
 			<tbody>
 				<tr><th>Email</th><td>{ p.User.Email }</td></tr>
@@ -62,7 +70,7 @@ templ UserShow(p UserDetailPage) {
 				@NewPasswordFields(NewPasswordFieldsOptions{
 					ID: "admin-reset-password", Name: "password", Label: "New Password", Placeholder: "New password",
 					ConfirmID: "admin-reset-confirm-password", ConfirmLabel: "Confirm New Password", ConfirmPlaceholder: "Confirm new password",
-					Autocomplete: "new-password", MinLength: 8, Required: true,
+					Autocomplete: "new-password", MinLength: companyPasswordMinLength(ctx), Required: true,
 				})
 				<button type="submit">Reset Password</button>
 			</form>

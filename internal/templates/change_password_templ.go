@@ -66,7 +66,7 @@ func ChangePasswordPage(p ChangePasswordData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<form action=\"/change-password\" method=\"post\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<form action=\"/change-password\" method=\"post\" hx-boost=\"false\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -139,7 +139,7 @@ func ChangePasswordPage(p ChangePasswordData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><button type=\"submit\">Change Password</button></form><script>\n\t\t\t\t(function() {\n\t\t\t\t\tvar pw = document.getElementById('new_password');\n\t\t\t\t\tif (!pw) return;\n\t\t\t\t\tpw.addEventListener('input', function() {\n\t\t\t\t\t\tvar v = pw.value;\n\t\t\t\t\t\tvar set = function(id, ok) {\n\t\t\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\t\t\tif (el) el.classList.toggle('valid', ok);\n\t\t\t\t\t\t};\n\t\t\t\t\t\tset('policy-length', v.length >= { fmt.Sprintf(\"%d\", p.MinLength) });\n\t\t\t\t\t\tset('policy-upper', /[A-Z]/.test(v));\n\t\t\t\t\t\tset('policy-lower', /[a-z]/.test(v));\n\t\t\t\t\t\tset('policy-digit', /\\d/.test(v));\n\t\t\t\t\t\tset('policy-special', /[^A-Za-z0-9]/.test(v));\n\t\t\t\t\t});\n\t\t\t\t})();\n\t\t\t</script></article>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div><button type=\"submit\">Change Password</button></form><script>\n\t\t\t\t(function() {\n\t\t\t\t\tvar pw = document.getElementById('new_password');\n\t\t\t\t\tif (!pw) return;\n\t\t\t\t\tpw.addEventListener('input', function() {\n\t\t\t\t\t\tvar v = pw.value;\n\t\t\t\t\t\tvar set = function(id, ok) {\n\t\t\t\t\t\t\tvar el = document.getElementById(id);\n\t\t\t\t\t\t\tif (el) el.classList.toggle('valid', ok);\n\t\t\t\t\t\t};\n\t\t\t\t\t\tset('policy-length', v.length >= pw.minLength);\n\t\t\t\t\t\tset('policy-upper', /[A-Z]/.test(v));\n\t\t\t\t\t\tset('policy-lower', /[a-z]/.test(v));\n\t\t\t\t\t\tset('policy-digit', /\\d/.test(v));\n\t\t\t\t\t\tset('policy-special', /[^A-Za-z0-9]/.test(v));\n\t\t\t\t\t});\n\t\t\t\t})();\n\t\t\t</script></article>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -345,7 +345,7 @@ type fakeSessions struct {
 	revokedToken string
 }
 
-func (f *fakeSessions) CreateMobile(_ context.Context, userID int64, deviceName string) (string, error) {
+func (f *fakeSessions) CreateAuthenticated(_ context.Context, userID int64, _, _, deviceName string) (string, error) {
 	f.createdFor = userID
 	f.deviceName = deviceName
 	return f.token, nil

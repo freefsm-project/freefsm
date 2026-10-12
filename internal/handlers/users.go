@@ -88,8 +88,8 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	sendWelcome := r.FormValue("send_welcome_email") == "on"
 	if sendWelcome {
-		if err := h.emailSvc.CheckAvailability(r.Context()); err != nil {
-			http.Redirect(w, r, "/users/new?flash="+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		if err := h.invitationMailAvailable(r); err != nil {
+			http.Redirect(w, r, "/users/new?flash="+url.QueryEscape("Email unavailable. Use manual onboarding with a temporary password, or configure mail and try again. "+err.Error()), http.StatusSeeOther)
 			return
 		}
 	}
@@ -113,7 +113,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	roleID, _ := strconv.ParseInt(r.FormValue("role_id"), 10, 64)
-	result, err := h.svc.Create(r.Context(), services.UserCreateParams{
+	params := services.UserCreateParams{
 		CompanyID:        a.CompanyID,
 		Name:             r.FormValue("name"),
 		Email:            r.FormValue("email"),
@@ -121,8 +121,20 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Role:             r.FormValue("role"),
 		RoleID:           roleID,
 		SendWelcomeEmail: sendWelcome,
-	})
+	}
+	var result *ent.User
+	var token string
+	var err error
+	if sendWelcome {
+		result, token, err = h.inviteSvc.CreateAccount(r.Context(), params)
+	} else {
+		result, err = h.svc.Create(r.Context(), params)
+	}
 	if err != nil {
+		if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrPending) || errors.Is(err, authorization.ErrConflict) {
+			authorizationError(w, r, err)
+			return
+		}
 		internalServerError(w, r, "create user", err)
 		return
 	}
@@ -135,15 +147,14 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if sendWelcome {
-		token, err := h.inviteSvc.CreateInvite(r.Context(), a.CompanyID, result.ID)
-		if err != nil {
-			internalServerError(w, r, "create invitation", err)
-			return
-		}
 		inviteURL := absoluteAppURL(h.cfg, r, "/accept-invite?token="+url.QueryEscape(token))
 		if err := h.emailSvc.SendWelcomeEmail(r.Context(), result.Email, result.Name, inviteURL); err != nil {
 			slog.Error("send welcome email", "error", err, "user", result.Email)
-			http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", result.ID)+url.QueryEscape("User created, but welcome email failed: "+err.Error()), http.StatusSeeOther)
+			http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", result.ID)+url.QueryEscape(invitationMailFailure(err)), http.StatusSeeOther)
+			return
+		}
+		if err := h.inviteSvc.RecordMailAccepted(r.Context(), a.CompanyID, result.ID); err != nil {
+			http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", result.ID)+url.QueryEscape("Mail transport accepted the invitation, but recording confirmation failed. Account remains pending; check before resending."), http.StatusSeeOther)
 			return
 		}
 		if a != nil && h.activitySvc != nil {
@@ -152,9 +163,11 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 				"actor_name":  a.Name,
 			})
 		}
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", result.ID)+url.QueryEscape("Account pending; mail transport accepted the invitation. This does not confirm inbox delivery."), http.StatusSeeOther)
+		return
 	}
 
-	http.Redirect(w, r, "/users?flash=User+created", http.StatusSeeOther)
+	http.Redirect(w, r, "/users?flash="+url.QueryEscape("Manual onboarding completed. The user must replace the temporary password before normal access."), http.StatusSeeOther)
 }
 
 func (h *UserHandler) Show(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +196,12 @@ func (h *UserHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 		row.Role = names[u.ID]
 	}
-	templates.UserShow(templates.UserDetailPage{User: row, CanResendWelcome: canResend}).Render(r.Context(), w)
+	review, err := h.inviteSvc.NeedsOnboardingReview(r.Context(), a.CompanyID, id)
+	if err != nil {
+		internalServerError(w, r, "load onboarding review", err)
+		return
+	}
+	templates.UserShow(templates.UserDetailPage{User: row, CanResendWelcome: canResend, OnboardingReview: review}).Render(r.Context(), w)
 }
 
 func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -242,6 +260,11 @@ func (h *UserHandler) Disable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newState := !user.IsActive
+	if !user.IsActive && user.OnboardingCompletedAt == nil {
+		// Pending activation is not an enabled/disabled toggle. Only redemption
+		// of a fresh invitation may activate this account.
+		newState = false
+	}
 	if err := h.svc.SetActive(r.Context(), id, newState); err != nil {
 		authorizationError(w, r, err)
 		return
@@ -336,14 +359,27 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "welcome invitation cannot be resent", http.StatusConflict)
 		return
 	}
-	if err := h.emailSvc.CheckAvailability(r.Context()); err != nil {
-		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape(err.Error()), http.StatusSeeOther)
+	eligible, err := h.inviteSvc.CanResendWelcome(r.Context(), a.CompanyID, id)
+	if err != nil {
+		internalServerError(w, r, "check pending invitation", err)
+		return
+	}
+	if !eligible {
+		http.Error(w, "welcome invitation cannot be resent", http.StatusConflict)
+		return
+	}
+	if err := h.invitationMailAvailable(r); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape("Email unavailable. Configure mail and resend this pending invitation. "+err.Error()), http.StatusSeeOther)
 		return
 	}
 	user, token, err := h.inviteSvc.RenewPendingInvite(r.Context(), a.CompanyID, id)
 	if err != nil {
 		if errors.Is(err, services.ErrWelcomeResendIneligible) {
 			http.Error(w, "welcome invitation cannot be resent", http.StatusConflict)
+			return
+		}
+		if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrPending) {
+			authorizationError(w, r, err)
 			return
 		}
 		internalServerError(w, r, "renew welcome invitation", err)
@@ -353,7 +389,11 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 	inviteURL := absoluteAppURL(h.cfg, r, "/accept-invite?token="+url.QueryEscape(token))
 	if err := h.emailSvc.SendWelcomeEmail(r.Context(), user.Email, user.Name, inviteURL); err != nil {
 		slog.Error("resend welcome email", "error", err, "user", user.Email)
-		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+failed", id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape(invitationMailFailure(err)), http.StatusSeeOther)
+		return
+	}
+	if err := h.inviteSvc.RecordMailAccepted(r.Context(), a.CompanyID, id); err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape("Mail transport accepted the invitation, but recording confirmation failed. Check before resending."), http.StatusSeeOther)
 		return
 	}
 	if h.activitySvc != nil {
@@ -363,7 +403,7 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=Welcome+email+resent", id), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape("Account pending; mail transport accepted the replacement invitation. Previous links are invalid."), http.StatusSeeOther)
 }
 
 func (h *UserHandler) ResendRecovery(w http.ResponseWriter, r *http.Request) {
@@ -387,7 +427,7 @@ func (h *UserHandler) ResendRecovery(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
-	token, err := h.resetSvc.CreateToken(r.Context(), id)
+	token, err := h.resetSvc.CreateToken(r.Context(), id, u.Email)
 	if err != nil {
 		authorizationError(w, r, err)
 		return
@@ -406,6 +446,23 @@ func normalizedFontSize(fontSize string) string {
 		return fontSize
 	}
 	return "medium"
+}
+
+func (h *UserHandler) invitationMailAvailable(r *http.Request) error {
+	if h.emailSvc == nil {
+		return fmt.Errorf("email unavailable")
+	}
+	if err := h.emailSvc.CheckAvailability(r.Context()); err != nil {
+		return err
+	}
+	return h.emailSvc.ValidateConfiguration(r.Context())
+}
+
+func invitationMailFailure(err error) string {
+	if errors.Is(err, services.ErrEmailAcceptanceUncertain) {
+		return "Account pending; mail acceptance is uncertain and the invitation may have arrived. Verify with the recipient or provider before resending. An explicit Resend Welcome replaces the previous link."
+	}
+	return "Account pending; welcome email was not accepted. Check mail settings and resend using Resend Welcome on this account."
 }
 
 func userToRow(u *ent.User) templates.UserRow {

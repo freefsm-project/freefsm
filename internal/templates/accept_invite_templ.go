@@ -98,7 +98,7 @@ func AcceptInvitePage(p ResetPasswordData) templ.Component {
 				templ_7745c5c3_Err = NewPasswordFields(NewPasswordFieldsOptions{
 					ID: "invite-password", Name: "password", Label: "Password", Placeholder: "Password",
 					ConfirmID: "invite-confirm-password", ConfirmLabel: "Confirm Password", ConfirmPlaceholder: "Confirm password",
-					Autocomplete: "new-password", MinLength: 8, Required: true, Autofocus: true,
+					Autocomplete: "new-password", MinLength: recoveryMinLength(p), Required: true, Autofocus: true,
 				}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err

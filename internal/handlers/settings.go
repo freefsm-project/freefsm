@@ -61,10 +61,23 @@ func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Settings unavailable", http.StatusServiceUnavailable)
 		return
 	}
+	var recoveryReviewCount int
+	if h.authority != nil {
+		p, err := h.authority.Administrator(r.Context(), authorizationActor(r))
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		if err = h.authority.Pool.QueryRow(r.Context(), `SELECT count(*) FROM password_recovery_review WHERE company_id=$1`, p.CompanyID).Scan(&recoveryReviewCount); err != nil {
+			internalServerError(w, r, "read recovery review", err)
+			return
+		}
+	}
 	render(w, r, templates.SettingsPage(templates.SettingsPageData{
-		Settings:      cs,
-		IsSetup:       r.URL.Path == "/setup/company",
-		EmailDisabled: h.control != nil && h.control.EmailDisabled(),
+		RecoveryReviewCount: recoveryReviewCount,
+		Settings:            cs,
+		IsSetup:             r.URL.Path == "/setup/company",
+		EmailDisabled:       h.control != nil && h.control.EmailDisabled(),
 	}))
 }
 
@@ -110,8 +123,8 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
 	smtpPort, _ := strconv.Atoi(r.FormValue("smtp_port"))
 	pwMinLen, _ := strconv.Atoi(r.FormValue("password_min_length"))
-	if pwMinLen < 6 {
-		http.Redirect(w, r, "/settings?flash=Password+minimum+length+must+be+at+least+6", http.StatusSeeOther)
+	if pwMinLen < 6 || pwMinLen > 72 {
+		http.Redirect(w, r, "/settings/advanced?flash=Password+minimum+length+must+be+between+6+and+72", http.StatusSeeOther)
 		return
 	}
 

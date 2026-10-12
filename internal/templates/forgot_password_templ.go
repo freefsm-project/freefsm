@@ -65,7 +65,7 @@ func ForgotPasswordPage(p ForgotPasswordData) templ.Component {
 				}
 			}
 			if p.Success {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p>A password reset link has been sent to your email.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p>If an enabled account with that email exists, a reset link has been requested. If it does not arrive, contact an Administrator for a temporary password.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

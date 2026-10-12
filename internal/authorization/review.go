@@ -227,6 +227,9 @@ func (s *Service) SetEnabled(ctx context.Context, a Actor, userID int64, enabled
 			if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, userID); err != nil {
 				return err
 			}
+			if _, err := tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id=$1 AND purpose='password-recovery-v1'`, userID); err != nil {
+				return err
+			}
 		}
 		return audit(ctx, tx, a, p, "user.enabled.edit", Sealed, "user", userID, map[string]bool{"enabled": enabled})
 	})

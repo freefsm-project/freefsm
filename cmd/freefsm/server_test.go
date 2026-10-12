@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,7 +12,35 @@ import (
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	appmw "github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 )
+
+func TestApplicationRequestLogsNeverExposeCredentialQueries(t *testing.T) {
+	var logs bytes.Buffer
+	previous := chimw.DefaultLogger
+	chimw.DefaultLogger = chimw.RequestLogger(&chimw.DefaultLogFormatter{Logger: log.New(&logs, "", 0), NoColor: true})
+	t.Cleanup(func() { chimw.DefaultLogger = previous })
+	const token = "credential-canary21-do-not-log"
+	app := newApplicationHandler(http.NotFoundHandler(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("token") != token {
+			t.Error("log redaction changed credential presented to handler")
+		}
+		w.WriteHeader(204)
+	}))
+	for _, path := range []string{"/accept-invite", "/reset-password"} {
+		w := httptest.NewRecorder()
+		app.ServeHTTP(w, httptest.NewRequest("GET", path+"?token="+token, nil))
+		if w.Code != 204 {
+			t.Fatal(w.Code)
+		}
+	}
+	if strings.Contains(logs.String(), token) {
+		t.Fatal("production request logger exposed credential query")
+	}
+	if !strings.Contains(logs.String(), "/accept-invite") || !strings.Contains(logs.String(), "204") {
+		t.Fatal("redaction omitted useful request outcome")
+	}
+}
 
 func TestApplicationAdmissionPrecedesEveryDatabaseRoute(t *testing.T) {
 	c, err := instancecontrol.New(t.TempDir())

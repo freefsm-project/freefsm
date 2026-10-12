@@ -5,11 +5,14 @@ import (
 	"net/mail"
 	"strings"
 
+	"github.com/freefsm-project/freefsm/internal/passwordpolicy"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type NewAccount struct {
 	Name, Email, PasswordHash string
+	Password                  string
 	RoleID                    int64
 	Invited                   bool
 }
@@ -23,7 +26,7 @@ func (s *Service) MutateAccountLink(ctx context.Context, a Actor, companyID, use
 			return ErrForbidden
 		}
 		switch action {
-		case "user.invite", "user.welcome.resend", "user.recovery.resend":
+		case "user.invite", "user.welcome.resend", "user.recovery.resend", "user.invitation.mail.accepted":
 		default:
 			return ErrForbidden
 		}
@@ -42,6 +45,20 @@ func (s *Service) MutateAccountLink(ctx context.Context, a Actor, companyID, use
 }
 
 func (s *Service) CreateAccount(ctx context.Context, a Actor, in NewAccount) (int64, error) {
+	return s.createAccount(ctx, a, in, "")
+}
+
+// CreateInvitedAccount binds the first invitation to the account and recipient
+// decision in one sealed transaction. Only explicit resend may issue a later link.
+func (s *Service) CreateInvitedAccount(ctx context.Context, a Actor, in NewAccount, invitationHash string) (int64, error) {
+	if len(invitationHash) != 64 {
+		return 0, ErrConflict
+	}
+	in.Invited = true
+	return s.createAccount(ctx, a, in, invitationHash)
+}
+
+func (s *Service) createAccount(ctx context.Context, a Actor, in NewAccount, invitationHash string) (int64, error) {
 	var id int64
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		if !p.Protected {
@@ -51,11 +68,30 @@ func (s *Service) CreateAccount(ctx context.Context, a Actor, in NewAccount) (in
 		if strings.TrimSpace(in.Name) == "" || err != nil || address.Address != in.Email || in.RoleID <= 0 {
 			return ErrConflict
 		}
+		if !in.Invited {
+			policy, err := passwordpolicy.Load(ctx, tx, p.CompanyID)
+			if err != nil {
+				return err
+			}
+			if err = policy.Validate(in.Password); err != nil {
+				return err
+			}
+			hash, err := bcrypt.GenerateFromPassword([]byte(in.Password), bcrypt.DefaultCost)
+			if err != nil {
+				return err
+			}
+			in.PasswordHash = string(hash)
+		}
 		// The retained legacy discriminator is not authority. New accounts always
 		// carry an explicit Role identity and never acquire grants from that label.
-		err = tx.QueryRow(ctx, `INSERT INTO users(company_id,name,email,password_hash,role,authorization_role_id,is_active,force_password_change,onboarding_completed_at,welcome_email_sent_at) VALUES($1,$2,$3,$4,'tech',$5,$6,$6,CASE WHEN $6 THEN clock_timestamp() END,CASE WHEN NOT $6 THEN clock_timestamp() END) RETURNING id`, p.CompanyID, strings.TrimSpace(in.Name), in.Email, in.PasswordHash, in.RoleID, !in.Invited).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO users(company_id,name,email,password_hash,role,authorization_role_id,is_active,force_password_change,onboarding_completed_at) VALUES($1,$2,$3,$4,'tech',$5,$6,$6,CASE WHEN $6 THEN clock_timestamp() END) RETURNING id`, p.CompanyID, strings.TrimSpace(in.Name), in.Email, in.PasswordHash, in.RoleID, !in.Invited).Scan(&id)
 		if err != nil {
 			return err
+		}
+		if invitationHash != "" {
+			if _, err := tx.Exec(ctx, `INSERT INTO invitation_tokens(company_id,user_id,token_hash,created_at,expires_at) VALUES($1,$2,$3,statement_timestamp(),statement_timestamp()+interval '72 hours')`, p.CompanyID, id, invitationHash); err != nil {
+				return err
+			}
 		}
 		action := "user.create"
 		if in.Invited {
@@ -66,12 +102,38 @@ func (s *Service) CreateAccount(ctx context.Context, a Actor, in NewAccount) (in
 	return id, err
 }
 
-func (s *Service) ResetAccountPassword(ctx context.Context, a Actor, id int64, hash string) error {
+func (s *Service) SavePasswordPolicy(ctx context.Context, a Actor, policy passwordpolicy.Policy) error {
+	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if !p.Protected || !p.Allows("security.password.manage", Sealed) {
+			return ErrForbidden
+		}
+		if policy.MinLength < 6 || policy.MinLength > 72 {
+			return ErrConflict
+		}
+		if _, err := tx.Exec(ctx, `UPDATE company_settings SET password_min_length=$2,password_require_uppercase=$3,password_require_lowercase=$4,password_require_digit=$5,password_require_special=$6 WHERE company_id=$1`, p.CompanyID, policy.MinLength, policy.Upper, policy.Lower, policy.Digit, policy.Special); err != nil {
+			return err
+		}
+		return audit(ctx, tx, a, p, "security.password.manage", Sealed, "company", p.CompanyID, policy)
+	})
+}
+
+func (s *Service) ResetAccountPassword(ctx context.Context, a Actor, id int64, password string) error {
 	return s.transact(ctx, a, false, id == a.UserID, func(tx pgx.Tx, p Principal) error {
 		if !p.Protected {
 			return ErrForbidden
 		}
-		tag, err := tx.Exec(ctx, `UPDATE users SET password_hash=$3,force_password_change=true WHERE id=$1 AND company_id=$2`, id, p.CompanyID, hash)
+		policy, err := passwordpolicy.Load(ctx, tx, p.CompanyID)
+		if err != nil {
+			return err
+		}
+		if err = policy.Validate(password); err != nil {
+			return err
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		tag, err := tx.Exec(ctx, `UPDATE users SET password_hash=$3,force_password_change=true WHERE id=$1 AND company_id=$2 AND is_active`, id, p.CompanyID, string(hash))
 		if err != nil {
 			return err
 		}
@@ -81,7 +143,7 @@ func (s *Service) ResetAccountPassword(ctx context.Context, a Actor, id int64, h
 		if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, id); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id=$1`, id); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id=$1 AND purpose='password-recovery-v1'`, id); err != nil {
 			return err
 		}
 		return audit(ctx, tx, a, p, "user.password.require_change", Sealed, "user", id, map[string]bool{"temporary_password_set": true})

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -59,7 +61,11 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		passwordChangeRequired(w)
 		return
 	}
-	token, err := h.deps.Sessions.CreateMobile(r.Context(), user.ID, strings.TrimSpace(request.DeviceName))
+	token, err := h.deps.Sessions.CreateAuthenticated(r.Context(), user.ID, request.Password, "mobile", strings.TrimSpace(request.DeviceName))
+	if errors.Is(err, services.ErrInvalidCredentials) {
+		writeError(w, http.StatusUnauthorized, "invalid_credentials", "credentials changed; sign in again")
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "could not create session")
 		return

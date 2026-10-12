@@ -43,6 +43,16 @@ type HostRecovery struct {
 	TargetUserID, TargetRoleID, CompanyID int64
 }
 
+// RecordRecoveryRequest attributes public link issuance honestly: knowing an
+// email address is not authentication as the target Product User.
+func RecordRecoveryRequest(ctx context.Context, tx Executor, userID int64) error {
+	if userID <= 0 {
+		return errors.New("invalid recovery target")
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO authorization_audit(actor_kind,actor_id,role_id,action,scope,target_type,target_id,channel,detail) VALUES('anonymous-request',NULL,NULL,'user.recovery.request',NULL,'user',$1,'recovery','{"initiator":"public recovery request"}')`, userID)
+	return err
+}
+
 // RecordHostRecovery is deliberately purpose-specific. Host authority can record
 // recovery of a verified protected identity, never manufacture a product actor,
 // Role grant, or arbitrary sealed action. No credential material is accepted.
