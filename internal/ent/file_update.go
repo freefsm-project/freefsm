@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -181,6 +182,94 @@ func (_u *FileUpdate) AddUploadedBy(v int64) *FileUpdate {
 	return _u
 }
 
+// SetRevision sets the "revision" field.
+func (_u *FileUpdate) SetRevision(v int64) *FileUpdate {
+	_u.mutation.ResetRevision()
+	_u.mutation.SetRevision(v)
+	return _u
+}
+
+// SetNillableRevision sets the "revision" field if the given value is not nil.
+func (_u *FileUpdate) SetNillableRevision(v *int64) *FileUpdate {
+	if v != nil {
+		_u.SetRevision(*v)
+	}
+	return _u
+}
+
+// AddRevision adds value to the "revision" field.
+func (_u *FileUpdate) AddRevision(v int64) *FileUpdate {
+	_u.mutation.AddRevision(v)
+	return _u
+}
+
+// SetRemovedAt sets the "removed_at" field.
+func (_u *FileUpdate) SetRemovedAt(v time.Time) *FileUpdate {
+	_u.mutation.SetRemovedAt(v)
+	return _u
+}
+
+// SetNillableRemovedAt sets the "removed_at" field if the given value is not nil.
+func (_u *FileUpdate) SetNillableRemovedAt(v *time.Time) *FileUpdate {
+	if v != nil {
+		_u.SetRemovedAt(*v)
+	}
+	return _u
+}
+
+// ClearRemovedAt clears the value of the "removed_at" field.
+func (_u *FileUpdate) ClearRemovedAt() *FileUpdate {
+	_u.mutation.ClearRemovedAt()
+	return _u
+}
+
+// SetRemovedBy sets the "removed_by" field.
+func (_u *FileUpdate) SetRemovedBy(v int64) *FileUpdate {
+	_u.mutation.ResetRemovedBy()
+	_u.mutation.SetRemovedBy(v)
+	return _u
+}
+
+// SetNillableRemovedBy sets the "removed_by" field if the given value is not nil.
+func (_u *FileUpdate) SetNillableRemovedBy(v *int64) *FileUpdate {
+	if v != nil {
+		_u.SetRemovedBy(*v)
+	}
+	return _u
+}
+
+// AddRemovedBy adds value to the "removed_by" field.
+func (_u *FileUpdate) AddRemovedBy(v int64) *FileUpdate {
+	_u.mutation.AddRemovedBy(v)
+	return _u
+}
+
+// ClearRemovedBy clears the value of the "removed_by" field.
+func (_u *FileUpdate) ClearRemovedBy() *FileUpdate {
+	_u.mutation.ClearRemovedBy()
+	return _u
+}
+
+// SetSha256 sets the "sha256" field.
+func (_u *FileUpdate) SetSha256(v string) *FileUpdate {
+	_u.mutation.SetSha256(v)
+	return _u
+}
+
+// SetNillableSha256 sets the "sha256" field if the given value is not nil.
+func (_u *FileUpdate) SetNillableSha256(v *string) *FileUpdate {
+	if v != nil {
+		_u.SetSha256(*v)
+	}
+	return _u
+}
+
+// ClearSha256 clears the value of the "sha256" field.
+func (_u *FileUpdate) ClearSha256() *FileUpdate {
+	_u.mutation.ClearSha256()
+	return _u
+}
+
 // Mutation returns the FileMutation object of the builder.
 func (_u *FileUpdate) Mutation() *FileMutation {
 	return _u.mutation
@@ -293,6 +382,33 @@ func (_u *FileUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedUploadedBy(); ok {
 		_spec.AddField(file.FieldUploadedBy, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.Revision(); ok {
+		_spec.SetField(file.FieldRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedRevision(); ok {
+		_spec.AddField(file.FieldRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.RemovedAt(); ok {
+		_spec.SetField(file.FieldRemovedAt, field.TypeTime, value)
+	}
+	if _u.mutation.RemovedAtCleared() {
+		_spec.ClearField(file.FieldRemovedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.RemovedBy(); ok {
+		_spec.SetField(file.FieldRemovedBy, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedRemovedBy(); ok {
+		_spec.AddField(file.FieldRemovedBy, field.TypeInt64, value)
+	}
+	if _u.mutation.RemovedByCleared() {
+		_spec.ClearField(file.FieldRemovedBy, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.Sha256(); ok {
+		_spec.SetField(file.FieldSha256, field.TypeString, value)
+	}
+	if _u.mutation.Sha256Cleared() {
+		_spec.ClearField(file.FieldSha256, field.TypeString)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -468,6 +584,94 @@ func (_u *FileUpdateOne) AddUploadedBy(v int64) *FileUpdateOne {
 	return _u
 }
 
+// SetRevision sets the "revision" field.
+func (_u *FileUpdateOne) SetRevision(v int64) *FileUpdateOne {
+	_u.mutation.ResetRevision()
+	_u.mutation.SetRevision(v)
+	return _u
+}
+
+// SetNillableRevision sets the "revision" field if the given value is not nil.
+func (_u *FileUpdateOne) SetNillableRevision(v *int64) *FileUpdateOne {
+	if v != nil {
+		_u.SetRevision(*v)
+	}
+	return _u
+}
+
+// AddRevision adds value to the "revision" field.
+func (_u *FileUpdateOne) AddRevision(v int64) *FileUpdateOne {
+	_u.mutation.AddRevision(v)
+	return _u
+}
+
+// SetRemovedAt sets the "removed_at" field.
+func (_u *FileUpdateOne) SetRemovedAt(v time.Time) *FileUpdateOne {
+	_u.mutation.SetRemovedAt(v)
+	return _u
+}
+
+// SetNillableRemovedAt sets the "removed_at" field if the given value is not nil.
+func (_u *FileUpdateOne) SetNillableRemovedAt(v *time.Time) *FileUpdateOne {
+	if v != nil {
+		_u.SetRemovedAt(*v)
+	}
+	return _u
+}
+
+// ClearRemovedAt clears the value of the "removed_at" field.
+func (_u *FileUpdateOne) ClearRemovedAt() *FileUpdateOne {
+	_u.mutation.ClearRemovedAt()
+	return _u
+}
+
+// SetRemovedBy sets the "removed_by" field.
+func (_u *FileUpdateOne) SetRemovedBy(v int64) *FileUpdateOne {
+	_u.mutation.ResetRemovedBy()
+	_u.mutation.SetRemovedBy(v)
+	return _u
+}
+
+// SetNillableRemovedBy sets the "removed_by" field if the given value is not nil.
+func (_u *FileUpdateOne) SetNillableRemovedBy(v *int64) *FileUpdateOne {
+	if v != nil {
+		_u.SetRemovedBy(*v)
+	}
+	return _u
+}
+
+// AddRemovedBy adds value to the "removed_by" field.
+func (_u *FileUpdateOne) AddRemovedBy(v int64) *FileUpdateOne {
+	_u.mutation.AddRemovedBy(v)
+	return _u
+}
+
+// ClearRemovedBy clears the value of the "removed_by" field.
+func (_u *FileUpdateOne) ClearRemovedBy() *FileUpdateOne {
+	_u.mutation.ClearRemovedBy()
+	return _u
+}
+
+// SetSha256 sets the "sha256" field.
+func (_u *FileUpdateOne) SetSha256(v string) *FileUpdateOne {
+	_u.mutation.SetSha256(v)
+	return _u
+}
+
+// SetNillableSha256 sets the "sha256" field if the given value is not nil.
+func (_u *FileUpdateOne) SetNillableSha256(v *string) *FileUpdateOne {
+	if v != nil {
+		_u.SetSha256(*v)
+	}
+	return _u
+}
+
+// ClearSha256 clears the value of the "sha256" field.
+func (_u *FileUpdateOne) ClearSha256() *FileUpdateOne {
+	_u.mutation.ClearSha256()
+	return _u
+}
+
 // Mutation returns the FileMutation object of the builder.
 func (_u *FileUpdateOne) Mutation() *FileMutation {
 	return _u.mutation
@@ -610,6 +814,33 @@ func (_u *FileUpdateOne) sqlSave(ctx context.Context) (_node *File, err error) {
 	}
 	if value, ok := _u.mutation.AddedUploadedBy(); ok {
 		_spec.AddField(file.FieldUploadedBy, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.Revision(); ok {
+		_spec.SetField(file.FieldRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedRevision(); ok {
+		_spec.AddField(file.FieldRevision, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.RemovedAt(); ok {
+		_spec.SetField(file.FieldRemovedAt, field.TypeTime, value)
+	}
+	if _u.mutation.RemovedAtCleared() {
+		_spec.ClearField(file.FieldRemovedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.RemovedBy(); ok {
+		_spec.SetField(file.FieldRemovedBy, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedRemovedBy(); ok {
+		_spec.AddField(file.FieldRemovedBy, field.TypeInt64, value)
+	}
+	if _u.mutation.RemovedByCleared() {
+		_spec.ClearField(file.FieldRemovedBy, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.Sha256(); ok {
+		_spec.SetField(file.FieldSha256, field.TypeString, value)
+	}
+	if _u.mutation.Sha256Cleared() {
+		_spec.ClearField(file.FieldSha256, field.TypeString)
 	}
 	_node = &File{config: _u.config}
 	_spec.Assign = _node.assignValues

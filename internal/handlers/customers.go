@@ -894,10 +894,19 @@ func filesToRows(ctx context.Context, files []*ent.File) []templates.FileRow {
 	for i, f := range files {
 		rows[i] = templates.FileRow{
 			ID:           f.ID,
+			Revision:     f.Revision,
 			OriginalName: f.OriginalName,
 			MimeType:     f.MimeType,
 			FileSize:     services.FormatFileSize(f.FileSize),
 			CreatedAt:    displayDateTime(ctx, f.CreatedAt),
+		}
+		if request, ok := authorization.FromContext(ctx); ok {
+			ref, err := objectref.Parse(f.ObjectType, f.ObjectID)
+			if err == nil {
+				rows[i].CanDownload = request.Service.FileAccess(ctx, request.Actor, ref, "file.download", f.UploadedBy) == nil
+				rows[i].CanRename = request.Service.FileAccess(ctx, request.Actor, ref, "file.rename", f.UploadedBy) == nil
+				rows[i].CanRemove = request.Service.FileAccess(ctx, request.Actor, ref, "file.remove", f.UploadedBy) == nil
+			}
 		}
 	}
 	return rows

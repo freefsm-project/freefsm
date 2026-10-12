@@ -1,19 +1,24 @@
 package handlers
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"unicode"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type FileHandler struct {
@@ -25,6 +30,33 @@ type FileHandler struct {
 
 func NewFileHandler(svc *services.FileService, activitySvc *services.ActivityService, policySvc *services.PolicyService, objects objectref.Directory) *FileHandler {
 	return &FileHandler{svc: svc, activitySvc: activitySvc, policySvc: policySvc, objects: objects}
+}
+
+func (h *FileHandler) Limits(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{"max_file_bytes": h.svc.MaxSize(), "max_batch_files": 10})
+}
+
+func (h *FileHandler) StorageReview(w http.ResponseWriter, r *http.Request) {
+	request, ok := authorization.FromContext(r.Context())
+	if !ok {
+		http.Error(w, "Forbidden", 403)
+		return
+	}
+	p, err := request.Service.Principal(r.Context(), request.Actor)
+	if err != nil || !p.Protected {
+		http.Error(w, "Forbidden", 403)
+		return
+	}
+	issues, err := h.svc.ReviewStorage(r.Context(), p.CompanyID)
+	if err != nil {
+		http.Error(w, "File inventory unavailable", 503)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{"issues": issues, "read_only": true})
 }
 
 func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +75,8 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyAttachFile) {
+	request, authorized := authorization.FromContext(r.Context())
+	if !authorized || request.Service.FileAccess(r.Context(), request.Actor, ref, "file.upload", u.ID) != nil {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -75,9 +108,21 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	fileReader := http.MaxBytesReader(w, f, h.svc.MaxSize())
 	defer fileReader.Close()
-	_, err = h.svc.Create(r.Context(), u.CompanyID, ref, fh.Filename, mimeType, fh.Size, fileReader, u.ID)
+	publicationID, _ := multipartValue(r, "publication_id")
+	if publicationID == "" {
+		publicationID = uuid.NewString()
+	}
+	created, err := h.svc.Create(r.Context(), u.CompanyID, ref, fh.Filename, mimeType, fh.Size, fileReader, u.ID, services.FilePublication{ID: publicationID})
 	if err != nil {
-		if strings.HasPrefix(err.Error(), "invalid MIME type:") {
+		if errors.Is(err, authorization.ErrConflict) {
+			fileMutationError(w, err)
+			return
+		}
+		if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) {
+			http.Error(w, "File publication no longer authorized", http.StatusForbidden)
+			return
+		}
+		if strings.HasPrefix(err.Error(), "invalid MIME type:") || strings.HasPrefix(err.Error(), "invalid file content:") {
 			http.Error(w, "Invalid file type", 400)
 			return
 		}
@@ -93,18 +138,13 @@ func (h *FileHandler) Upload(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid attachment target", 400)
 			return
 		}
-		http.Error(w, err.Error(), 500)
+		http.Error(w, "File publication could not be completed; retry the same operation", 500)
 		return
 	}
 
-	entityName := objectDisplayName(r.Context(), h.objects, ref)
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "file_uploaded", ref, map[string]interface{}{
-		"entity_name": entityName,
-		"actor_name":  u.Name,
-		"file_name":   fh.Filename,
-	})
-
 	redirect, _ := multipartValue(r, "redirect")
+	w.Header().Set("File-ID", strconv.FormatInt(created.ID, 10))
+	w.Header().Set("File-Revision", strconv.FormatInt(created.Revision, 10))
 	redirect = safeLocalRedirect(redirect)
 	writeUploadSuccess(w, r, redirect)
 }
@@ -131,8 +171,20 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyRead) {
+	request, authorized := authorization.FromContext(r.Context())
+	if !authorized || request.Service.FileAccess(r.Context(), request.Actor, ref, "file.download", f.UploadedBy) != nil {
 		http.Error(w, "Forbidden", 403)
+		return
+	}
+	disk, err := os.Open(f.FilePath)
+	if err != nil {
+		http.Error(w, "File bytes are unavailable", 503)
+		return
+	}
+	defer disk.Close()
+	stat, err := disk.Stat()
+	if err != nil || !stat.Mode().IsRegular() || stat.Size() != f.FileSize {
+		http.Error(w, "File bytes are unavailable", 503)
 		return
 	}
 
@@ -146,7 +198,8 @@ func (h *FileHandler) Download(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Content-Type", f.MimeType)
 	w.Header().Set("Content-Length", strconv.FormatInt(f.FileSize, 10))
-	http.ServeFile(w, r, f.FilePath)
+	w.Header().Set("File-Revision", strconv.FormatInt(f.Revision, 10))
+	http.ServeContent(w, r, f.OriginalName, f.CreatedAt, disk)
 }
 
 func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +214,7 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	f, err := h.svc.GetByID(r.Context(), u.CompanyID, id)
+	f, err := h.svc.Metadata(r.Context(), u.CompanyID, id)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -172,24 +225,19 @@ func (h *FileHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyDelete) && !(f.UploadedBy == u.ID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyAttachFile)) {
+	request, authorized := authorization.FromContext(r.Context())
+	if !authorized || request.Service.FileAccess(r.Context(), request.Actor, ref, "file.remove", f.UploadedBy) != nil {
 		http.Error(w, "Forbidden", 403)
 		return
 	}
 
 	redirect := safeLocalRedirect(r.FormValue("redirect"))
 
-	if err := h.svc.Delete(r.Context(), u.CompanyID, id); err != nil {
-		http.Error(w, err.Error(), 500)
+	revision, _ := strconv.ParseInt(r.FormValue("revision"), 10, 64)
+	if err := h.svc.Delete(r.Context(), u.CompanyID, id, revision); err != nil {
+		fileMutationError(w, err)
 		return
 	}
-
-	entityName := objectDisplayName(r.Context(), h.objects, ref)
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "file_deleted", ref, map[string]interface{}{
-		"entity_name": entityName,
-		"actor_name":  u.Name,
-		"file_name":   f.OriginalName,
-	})
 
 	w.Header().Set("HX-Redirect", redirect)
 	w.WriteHeader(200)
@@ -218,27 +266,44 @@ func (h *FileHandler) Rename(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyDelete) && !(f.UploadedBy == u.ID && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, ref, policyAttachFile)) {
+	request, authorized := authorization.FromContext(r.Context())
+	if !authorized || request.Service.FileAccess(r.Context(), request.Actor, ref, "file.rename", f.UploadedBy) != nil {
 		http.Error(w, "Forbidden", 403)
 		return
 	}
 
 	redirect := safeLocalRedirect(r.FormValue("redirect"))
 	name := strings.TrimSpace(r.FormValue("original_name"))
-	if err := h.svc.Rename(r.Context(), u.CompanyID, id, name); err != nil {
-		http.Error(w, err.Error(), 400)
+	revision, _ := strconv.ParseInt(r.FormValue("revision"), 10, 64)
+	if err := h.svc.Rename(r.Context(), u.CompanyID, id, name, revision); err != nil {
+		fileMutationError(w, err)
 		return
 	}
 
-	entityName := objectDisplayName(r.Context(), h.objects, ref)
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "file_renamed", ref, map[string]interface{}{
-		"entity_name": entityName,
-		"actor_name":  u.Name,
-		"file_name":   name,
-	})
-
 	w.Header().Set("HX-Redirect", redirect)
 	w.WriteHeader(200)
+}
+
+func fileMutationError(w http.ResponseWriter, err error) {
+	status := http.StatusInternalServerError
+	message := "File operation could not be completed; retry the same operation"
+	if strings.HasPrefix(err.Error(), "invalid file") || strings.HasPrefix(err.Error(), "file extension") {
+		status = http.StatusBadRequest
+		message = err.Error()
+	}
+	if errors.Is(err, authorization.ErrConflict) {
+		status = http.StatusConflict
+		message = "File revision changed; review the current File"
+	}
+	if errors.Is(err, authorization.ErrForbidden) {
+		status = http.StatusForbidden
+		message = "File action not permitted"
+	}
+	if errors.Is(err, authorization.ErrNotFound) {
+		status = http.StatusNotFound
+		message = "File or original parent unavailable"
+	}
+	http.Error(w, message, status)
 }
 
 func multipartValue(r *http.Request, key string) (string, bool) {

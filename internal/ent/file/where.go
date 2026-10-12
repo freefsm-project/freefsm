@@ -99,6 +99,26 @@ func UploadedBy(v int64) predicate.File {
 	return predicate.File(sql.FieldEQ(FieldUploadedBy, v))
 }
 
+// Revision applies equality check predicate on the "revision" field. It's identical to RevisionEQ.
+func Revision(v int64) predicate.File {
+	return predicate.File(sql.FieldEQ(FieldRevision, v))
+}
+
+// RemovedAt applies equality check predicate on the "removed_at" field. It's identical to RemovedAtEQ.
+func RemovedAt(v time.Time) predicate.File {
+	return predicate.File(sql.FieldEQ(FieldRemovedAt, v))
+}
+
+// RemovedBy applies equality check predicate on the "removed_by" field. It's identical to RemovedByEQ.
+func RemovedBy(v int64) predicate.File {
+	return predicate.File(sql.FieldEQ(FieldRemovedBy, v))
+}
+
+// Sha256 applies equality check predicate on the "sha256" field. It's identical to Sha256EQ.
+func Sha256(v string) predicate.File {
+	return predicate.File(sql.FieldEQ(FieldSha256, v))
+}
+
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.File {
 	return predicate.File(sql.FieldEQ(FieldCreatedAt, v))
@@ -587,6 +607,221 @@ func UploadedByLT(v int64) predicate.File {
 // UploadedByLTE applies the LTE predicate on the "uploaded_by" field.
 func UploadedByLTE(v int64) predicate.File {
 	return predicate.File(sql.FieldLTE(FieldUploadedBy, v))
+}
+
+// RevisionEQ applies the EQ predicate on the "revision" field.
+func RevisionEQ(v int64) predicate.File {
+	return predicate.File(sql.FieldEQ(FieldRevision, v))
+}
+
+// RevisionNEQ applies the NEQ predicate on the "revision" field.
+func RevisionNEQ(v int64) predicate.File {
+	return predicate.File(sql.FieldNEQ(FieldRevision, v))
+}
+
+// RevisionIn applies the In predicate on the "revision" field.
+func RevisionIn(vs ...int64) predicate.File {
+	return predicate.File(sql.FieldIn(FieldRevision, vs...))
+}
+
+// RevisionNotIn applies the NotIn predicate on the "revision" field.
+func RevisionNotIn(vs ...int64) predicate.File {
+	return predicate.File(sql.FieldNotIn(FieldRevision, vs...))
+}
+
+// RevisionGT applies the GT predicate on the "revision" field.
+func RevisionGT(v int64) predicate.File {
+	return predicate.File(sql.FieldGT(FieldRevision, v))
+}
+
+// RevisionGTE applies the GTE predicate on the "revision" field.
+func RevisionGTE(v int64) predicate.File {
+	return predicate.File(sql.FieldGTE(FieldRevision, v))
+}
+
+// RevisionLT applies the LT predicate on the "revision" field.
+func RevisionLT(v int64) predicate.File {
+	return predicate.File(sql.FieldLT(FieldRevision, v))
+}
+
+// RevisionLTE applies the LTE predicate on the "revision" field.
+func RevisionLTE(v int64) predicate.File {
+	return predicate.File(sql.FieldLTE(FieldRevision, v))
+}
+
+// RemovedAtEQ applies the EQ predicate on the "removed_at" field.
+func RemovedAtEQ(v time.Time) predicate.File {
+	return predicate.File(sql.FieldEQ(FieldRemovedAt, v))
+}
+
+// RemovedAtNEQ applies the NEQ predicate on the "removed_at" field.
+func RemovedAtNEQ(v time.Time) predicate.File {
+	return predicate.File(sql.FieldNEQ(FieldRemovedAt, v))
+}
+
+// RemovedAtIn applies the In predicate on the "removed_at" field.
+func RemovedAtIn(vs ...time.Time) predicate.File {
+	return predicate.File(sql.FieldIn(FieldRemovedAt, vs...))
+}
+
+// RemovedAtNotIn applies the NotIn predicate on the "removed_at" field.
+func RemovedAtNotIn(vs ...time.Time) predicate.File {
+	return predicate.File(sql.FieldNotIn(FieldRemovedAt, vs...))
+}
+
+// RemovedAtGT applies the GT predicate on the "removed_at" field.
+func RemovedAtGT(v time.Time) predicate.File {
+	return predicate.File(sql.FieldGT(FieldRemovedAt, v))
+}
+
+// RemovedAtGTE applies the GTE predicate on the "removed_at" field.
+func RemovedAtGTE(v time.Time) predicate.File {
+	return predicate.File(sql.FieldGTE(FieldRemovedAt, v))
+}
+
+// RemovedAtLT applies the LT predicate on the "removed_at" field.
+func RemovedAtLT(v time.Time) predicate.File {
+	return predicate.File(sql.FieldLT(FieldRemovedAt, v))
+}
+
+// RemovedAtLTE applies the LTE predicate on the "removed_at" field.
+func RemovedAtLTE(v time.Time) predicate.File {
+	return predicate.File(sql.FieldLTE(FieldRemovedAt, v))
+}
+
+// RemovedAtIsNil applies the IsNil predicate on the "removed_at" field.
+func RemovedAtIsNil() predicate.File {
+	return predicate.File(sql.FieldIsNull(FieldRemovedAt))
+}
+
+// RemovedAtNotNil applies the NotNil predicate on the "removed_at" field.
+func RemovedAtNotNil() predicate.File {
+	return predicate.File(sql.FieldNotNull(FieldRemovedAt))
+}
+
+// RemovedByEQ applies the EQ predicate on the "removed_by" field.
+func RemovedByEQ(v int64) predicate.File {
+	return predicate.File(sql.FieldEQ(FieldRemovedBy, v))
+}
+
+// RemovedByNEQ applies the NEQ predicate on the "removed_by" field.
+func RemovedByNEQ(v int64) predicate.File {
+	return predicate.File(sql.FieldNEQ(FieldRemovedBy, v))
+}
+
+// RemovedByIn applies the In predicate on the "removed_by" field.
+func RemovedByIn(vs ...int64) predicate.File {
+	return predicate.File(sql.FieldIn(FieldRemovedBy, vs...))
+}
+
+// RemovedByNotIn applies the NotIn predicate on the "removed_by" field.
+func RemovedByNotIn(vs ...int64) predicate.File {
+	return predicate.File(sql.FieldNotIn(FieldRemovedBy, vs...))
+}
+
+// RemovedByGT applies the GT predicate on the "removed_by" field.
+func RemovedByGT(v int64) predicate.File {
+	return predicate.File(sql.FieldGT(FieldRemovedBy, v))
+}
+
+// RemovedByGTE applies the GTE predicate on the "removed_by" field.
+func RemovedByGTE(v int64) predicate.File {
+	return predicate.File(sql.FieldGTE(FieldRemovedBy, v))
+}
+
+// RemovedByLT applies the LT predicate on the "removed_by" field.
+func RemovedByLT(v int64) predicate.File {
+	return predicate.File(sql.FieldLT(FieldRemovedBy, v))
+}
+
+// RemovedByLTE applies the LTE predicate on the "removed_by" field.
+func RemovedByLTE(v int64) predicate.File {
+	return predicate.File(sql.FieldLTE(FieldRemovedBy, v))
+}
+
+// RemovedByIsNil applies the IsNil predicate on the "removed_by" field.
+func RemovedByIsNil() predicate.File {
+	return predicate.File(sql.FieldIsNull(FieldRemovedBy))
+}
+
+// RemovedByNotNil applies the NotNil predicate on the "removed_by" field.
+func RemovedByNotNil() predicate.File {
+	return predicate.File(sql.FieldNotNull(FieldRemovedBy))
+}
+
+// Sha256EQ applies the EQ predicate on the "sha256" field.
+func Sha256EQ(v string) predicate.File {
+	return predicate.File(sql.FieldEQ(FieldSha256, v))
+}
+
+// Sha256NEQ applies the NEQ predicate on the "sha256" field.
+func Sha256NEQ(v string) predicate.File {
+	return predicate.File(sql.FieldNEQ(FieldSha256, v))
+}
+
+// Sha256In applies the In predicate on the "sha256" field.
+func Sha256In(vs ...string) predicate.File {
+	return predicate.File(sql.FieldIn(FieldSha256, vs...))
+}
+
+// Sha256NotIn applies the NotIn predicate on the "sha256" field.
+func Sha256NotIn(vs ...string) predicate.File {
+	return predicate.File(sql.FieldNotIn(FieldSha256, vs...))
+}
+
+// Sha256GT applies the GT predicate on the "sha256" field.
+func Sha256GT(v string) predicate.File {
+	return predicate.File(sql.FieldGT(FieldSha256, v))
+}
+
+// Sha256GTE applies the GTE predicate on the "sha256" field.
+func Sha256GTE(v string) predicate.File {
+	return predicate.File(sql.FieldGTE(FieldSha256, v))
+}
+
+// Sha256LT applies the LT predicate on the "sha256" field.
+func Sha256LT(v string) predicate.File {
+	return predicate.File(sql.FieldLT(FieldSha256, v))
+}
+
+// Sha256LTE applies the LTE predicate on the "sha256" field.
+func Sha256LTE(v string) predicate.File {
+	return predicate.File(sql.FieldLTE(FieldSha256, v))
+}
+
+// Sha256Contains applies the Contains predicate on the "sha256" field.
+func Sha256Contains(v string) predicate.File {
+	return predicate.File(sql.FieldContains(FieldSha256, v))
+}
+
+// Sha256HasPrefix applies the HasPrefix predicate on the "sha256" field.
+func Sha256HasPrefix(v string) predicate.File {
+	return predicate.File(sql.FieldHasPrefix(FieldSha256, v))
+}
+
+// Sha256HasSuffix applies the HasSuffix predicate on the "sha256" field.
+func Sha256HasSuffix(v string) predicate.File {
+	return predicate.File(sql.FieldHasSuffix(FieldSha256, v))
+}
+
+// Sha256IsNil applies the IsNil predicate on the "sha256" field.
+func Sha256IsNil() predicate.File {
+	return predicate.File(sql.FieldIsNull(FieldSha256))
+}
+
+// Sha256NotNil applies the NotNil predicate on the "sha256" field.
+func Sha256NotNil() predicate.File {
+	return predicate.File(sql.FieldNotNull(FieldSha256))
+}
+
+// Sha256EqualFold applies the EqualFold predicate on the "sha256" field.
+func Sha256EqualFold(v string) predicate.File {
+	return predicate.File(sql.FieldEqualFold(FieldSha256, v))
+}
+
+// Sha256ContainsFold applies the ContainsFold predicate on the "sha256" field.
+func Sha256ContainsFold(v string) predicate.File {
+	return predicate.File(sql.FieldContainsFold(FieldSha256, v))
 }
 
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.

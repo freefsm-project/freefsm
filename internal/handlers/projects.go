@@ -18,6 +18,7 @@ import (
 )
 
 type ProjectHandler struct {
+	fileSvc     *services.FileService
 	svc         *services.ProjectService
 	custSvc     *services.CustomerService
 	statusSvc   *services.StatusService
@@ -145,7 +146,12 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "project")
 	ctx := middleware.WithPageHeaderTitle(r.Context(), p.Name)
+	var files []*ent.File
+	if h.fileSvc != nil {
+		files, _ = h.fileSvc.List(ctx, u.CompanyID, objectref.New(objectref.TypeProject, id))
+	}
 	templates.ProjectShow(templates.ProjectShowPageData{
+		FileList:     templates.FileListPageData{Files: filesToRows(ctx, files), ObjectID: id, ObjectType: "project"},
 		Project:      d,
 		Statuses:     statusOptions(statuses),
 		Jobs:         jobRows,

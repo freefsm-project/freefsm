@@ -67,6 +67,7 @@ type policyService interface {
 }
 
 type Dependencies struct {
+	Files         *services.FileService
 	Authorization *authorization.Service
 	Sessions      SessionService
 	Users         userService
@@ -80,10 +81,15 @@ type Dependencies struct {
 
 // NewRouter constructs a router from existing FreeFSM services. Mount the returned
 // handler with http.StripPrefix("/api/v1", ...) or chi.Mount("/api/v1", ...).
-func NewRouter(db *pgxpool.Pool, client *ent.Client, sessions SessionService) http.Handler {
+func NewRouter(db *pgxpool.Pool, client *ent.Client, sessions SessionService, files ...*services.FileService) http.Handler {
 	authorization.InstallCustomerBoundary(client)
 	objects := objectref.NewEntDirectory(client)
+	var fileService *services.FileService
+	if len(files) > 0 {
+		fileService = files[0]
+	}
 	return New(Dependencies{
+		Files:         fileService,
 		Authorization: authorization.New(db),
 		Sessions:      sessions,
 		Users:         services.NewUserService(client),
@@ -113,6 +119,17 @@ func New(deps Dependencies) http.Handler {
 		r.Use(h.bearerAuth)
 		r.Delete("/session", h.logout)
 		r.Get("/me", h.me)
+		if deps.Files != nil {
+			r.Get("/files/limits", h.fileLimits)
+			r.Post("/file-transfers", h.startFileTransfer)
+			r.Get("/file-transfers/{transfer}", h.getFileTransfer)
+			r.Put("/file-transfers/{transfer}/chunks", h.putFileChunk)
+			r.Post("/file-transfers/{transfer}/publish", h.publishFileTransfer)
+			r.Get("/files/{id}", h.downloadFile)
+			r.Get("/files/{id}/metadata", h.fileMetadata)
+			r.Post("/files/{id}/rename", h.renameFile)
+			r.Post("/files/{id}/remove", h.removeFile)
+		}
 		r.Get("/jobs", h.listJobs)
 		r.Get("/jobs/{id}", h.getJob)
 		r.Get("/jobs/{id}/customer-context", h.customerContext)

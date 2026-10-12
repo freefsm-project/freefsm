@@ -79,6 +79,10 @@ templ ProjectShow(p ProjectShowPageData) {
 				</tbody>
 			</table>
 		}
+		if p.Project.ArchivedAt == "" {
+			@FileUploadWidget("project", p.Project.ID, fmt.Sprintf("/projects/%d", p.Project.ID))
+		}
+		@FileList(p.FileList)
 		if p.Project.ArchivedAt != "" {
 			<div hx-get={ templ.URL(fmt.Sprintf("/projects/%d/comments?read_only=1", p.Project.ID)) } hx-trigger="load" hx-swap="innerHTML">
 				<p>Loading comments...</p>

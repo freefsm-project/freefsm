@@ -567,8 +567,12 @@ func init() {
 	fileDescFilePath := fileFields[8].Descriptor()
 	// file.FilePathValidator is a validator for the "file_path" field. It is called by the builders before save.
 	file.FilePathValidator = fileDescFilePath.Validators[0].(func(string) error)
+	// fileDescRevision is the schema descriptor for revision field.
+	fileDescRevision := fileFields[10].Descriptor()
+	// file.DefaultRevision holds the default value on creation for the revision field.
+	file.DefaultRevision = fileDescRevision.Default.(int64)
 	// fileDescCreatedAt is the schema descriptor for created_at field.
-	fileDescCreatedAt := fileFields[10].Descriptor()
+	fileDescCreatedAt := fileFields[14].Descriptor()
 	// file.DefaultCreatedAt holds the default value on creation for the created_at field.
 	file.DefaultCreatedAt = fileDescCreatedAt.Default.(func() time.Time)
 	invitationtokenFields := schema.InvitationToken{}.Fields()

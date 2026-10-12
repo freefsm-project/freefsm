@@ -467,6 +467,10 @@ var (
 		{Name: "file_size", Type: field.TypeInt64},
 		{Name: "file_path", Type: field.TypeString},
 		{Name: "uploaded_by", Type: field.TypeInt64},
+		{Name: "revision", Type: field.TypeInt64, Default: 1},
+		{Name: "removed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "removed_by", Type: field.TypeInt64, Nullable: true},
+		{Name: "sha256", Type: field.TypeString, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 	}
 	// FilesTable holds the schema information for the "files" table.

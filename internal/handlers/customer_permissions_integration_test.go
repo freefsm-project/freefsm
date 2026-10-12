@@ -108,7 +108,7 @@ func permissionHTTPFixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *ent.Cl
 		}
 	}
 	sessions := services.NewSessionService(pool)
-	return pool, client, New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()}), sessions, company, admin
+	return pool, client, New(pool, client, sessions, &config.Config{UploadDir: t.TempDir(), MaxUploadSize: 25 << 20}), sessions, company, admin
 }
 
 func TestAdministratorReviewedCutoverThroughProductionHTTP(t *testing.T) {

@@ -112,6 +112,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, assetTypeSvc, assetStatusSvc, fileSvc, activitySvc, userService, policySvc, timeEntrySvc)
 	jobHandler.statusflow = statusflowService
 	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc, policySvc)
+	projectHandler.fileSvc = fileSvc
 	projectHandler.statusflow = statusflowService
 	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService, userService, locationSvc, invoiceService, activitySvc, cfg)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
@@ -386,6 +387,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 
 		// File uploads
 		r.Post("/files", fileHandler.Upload)
+		r.Get("/files/limits", fileHandler.Limits)
+		r.Get("/files/storage-review", fileHandler.StorageReview)
 		r.Get("/files/{id}", fileHandler.Download)
 		r.Post("/files/{id}/rename", fileHandler.Rename)
 		r.Post("/files/{id}/delete", fileHandler.Delete)

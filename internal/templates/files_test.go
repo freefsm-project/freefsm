@@ -61,7 +61,7 @@ func TestFileWidgetScriptDefinesBoundedIdempotentUploadOrchestration(t *testing.
 		"filesQueueUploads(form, files);",
 		"const body = new FormData(form);",
 		"body.set('file', item.file);",
-		"headers: { 'HX-Request': 'true' }",
+		"xhr.setRequestHeader('HX-Request', 'true');",
 		"Math.min(2, files.length)",
 		"await Promise.all(workers);",
 		"window.location.assign(filesSafeRedirect(queue.redirect));",

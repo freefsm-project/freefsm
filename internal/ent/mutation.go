@@ -13515,6 +13515,12 @@ type FileMutation struct {
 	file_path      *string
 	uploaded_by    *int64
 	adduploaded_by *int64
+	revision       *int64
+	addrevision    *int64
+	removed_at     *time.Time
+	removed_by     *int64
+	addremoved_by  *int64
+	sha256         *string
 	created_at     *time.Time
 	clearedFields  map[string]struct{}
 	done           bool
@@ -14030,6 +14036,230 @@ func (m *FileMutation) ResetUploadedBy() {
 	m.adduploaded_by = nil
 }
 
+// SetRevision sets the "revision" field.
+func (m *FileMutation) SetRevision(i int64) {
+	m.revision = &i
+	m.addrevision = nil
+}
+
+// Revision returns the value of the "revision" field in the mutation.
+func (m *FileMutation) Revision() (r int64, exists bool) {
+	v := m.revision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRevision returns the old "revision" field's value of the File entity.
+// If the File object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FileMutation) OldRevision(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRevision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRevision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRevision: %w", err)
+	}
+	return oldValue.Revision, nil
+}
+
+// AddRevision adds i to the "revision" field.
+func (m *FileMutation) AddRevision(i int64) {
+	if m.addrevision != nil {
+		*m.addrevision += i
+	} else {
+		m.addrevision = &i
+	}
+}
+
+// AddedRevision returns the value that was added to the "revision" field in this mutation.
+func (m *FileMutation) AddedRevision() (r int64, exists bool) {
+	v := m.addrevision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRevision resets all changes to the "revision" field.
+func (m *FileMutation) ResetRevision() {
+	m.revision = nil
+	m.addrevision = nil
+}
+
+// SetRemovedAt sets the "removed_at" field.
+func (m *FileMutation) SetRemovedAt(t time.Time) {
+	m.removed_at = &t
+}
+
+// RemovedAt returns the value of the "removed_at" field in the mutation.
+func (m *FileMutation) RemovedAt() (r time.Time, exists bool) {
+	v := m.removed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRemovedAt returns the old "removed_at" field's value of the File entity.
+// If the File object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FileMutation) OldRemovedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRemovedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRemovedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRemovedAt: %w", err)
+	}
+	return oldValue.RemovedAt, nil
+}
+
+// ClearRemovedAt clears the value of the "removed_at" field.
+func (m *FileMutation) ClearRemovedAt() {
+	m.removed_at = nil
+	m.clearedFields[file.FieldRemovedAt] = struct{}{}
+}
+
+// RemovedAtCleared returns if the "removed_at" field was cleared in this mutation.
+func (m *FileMutation) RemovedAtCleared() bool {
+	_, ok := m.clearedFields[file.FieldRemovedAt]
+	return ok
+}
+
+// ResetRemovedAt resets all changes to the "removed_at" field.
+func (m *FileMutation) ResetRemovedAt() {
+	m.removed_at = nil
+	delete(m.clearedFields, file.FieldRemovedAt)
+}
+
+// SetRemovedBy sets the "removed_by" field.
+func (m *FileMutation) SetRemovedBy(i int64) {
+	m.removed_by = &i
+	m.addremoved_by = nil
+}
+
+// RemovedBy returns the value of the "removed_by" field in the mutation.
+func (m *FileMutation) RemovedBy() (r int64, exists bool) {
+	v := m.removed_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRemovedBy returns the old "removed_by" field's value of the File entity.
+// If the File object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FileMutation) OldRemovedBy(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRemovedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRemovedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRemovedBy: %w", err)
+	}
+	return oldValue.RemovedBy, nil
+}
+
+// AddRemovedBy adds i to the "removed_by" field.
+func (m *FileMutation) AddRemovedBy(i int64) {
+	if m.addremoved_by != nil {
+		*m.addremoved_by += i
+	} else {
+		m.addremoved_by = &i
+	}
+}
+
+// AddedRemovedBy returns the value that was added to the "removed_by" field in this mutation.
+func (m *FileMutation) AddedRemovedBy() (r int64, exists bool) {
+	v := m.addremoved_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearRemovedBy clears the value of the "removed_by" field.
+func (m *FileMutation) ClearRemovedBy() {
+	m.removed_by = nil
+	m.addremoved_by = nil
+	m.clearedFields[file.FieldRemovedBy] = struct{}{}
+}
+
+// RemovedByCleared returns if the "removed_by" field was cleared in this mutation.
+func (m *FileMutation) RemovedByCleared() bool {
+	_, ok := m.clearedFields[file.FieldRemovedBy]
+	return ok
+}
+
+// ResetRemovedBy resets all changes to the "removed_by" field.
+func (m *FileMutation) ResetRemovedBy() {
+	m.removed_by = nil
+	m.addremoved_by = nil
+	delete(m.clearedFields, file.FieldRemovedBy)
+}
+
+// SetSha256 sets the "sha256" field.
+func (m *FileMutation) SetSha256(s string) {
+	m.sha256 = &s
+}
+
+// Sha256 returns the value of the "sha256" field in the mutation.
+func (m *FileMutation) Sha256() (r string, exists bool) {
+	v := m.sha256
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSha256 returns the old "sha256" field's value of the File entity.
+// If the File object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *FileMutation) OldSha256(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSha256 is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSha256 requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSha256: %w", err)
+	}
+	return oldValue.Sha256, nil
+}
+
+// ClearSha256 clears the value of the "sha256" field.
+func (m *FileMutation) ClearSha256() {
+	m.sha256 = nil
+	m.clearedFields[file.FieldSha256] = struct{}{}
+}
+
+// Sha256Cleared returns if the "sha256" field was cleared in this mutation.
+func (m *FileMutation) Sha256Cleared() bool {
+	_, ok := m.clearedFields[file.FieldSha256]
+	return ok
+}
+
+// ResetSha256 resets all changes to the "sha256" field.
+func (m *FileMutation) ResetSha256() {
+	m.sha256 = nil
+	delete(m.clearedFields, file.FieldSha256)
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *FileMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -14100,7 +14330,7 @@ func (m *FileMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *FileMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 14)
 	if m.company_id != nil {
 		fields = append(fields, file.FieldCompanyID)
 	}
@@ -14127,6 +14357,18 @@ func (m *FileMutation) Fields() []string {
 	}
 	if m.uploaded_by != nil {
 		fields = append(fields, file.FieldUploadedBy)
+	}
+	if m.revision != nil {
+		fields = append(fields, file.FieldRevision)
+	}
+	if m.removed_at != nil {
+		fields = append(fields, file.FieldRemovedAt)
+	}
+	if m.removed_by != nil {
+		fields = append(fields, file.FieldRemovedBy)
+	}
+	if m.sha256 != nil {
+		fields = append(fields, file.FieldSha256)
 	}
 	if m.created_at != nil {
 		fields = append(fields, file.FieldCreatedAt)
@@ -14157,6 +14399,14 @@ func (m *FileMutation) Field(name string) (ent.Value, bool) {
 		return m.FilePath()
 	case file.FieldUploadedBy:
 		return m.UploadedBy()
+	case file.FieldRevision:
+		return m.Revision()
+	case file.FieldRemovedAt:
+		return m.RemovedAt()
+	case file.FieldRemovedBy:
+		return m.RemovedBy()
+	case file.FieldSha256:
+		return m.Sha256()
 	case file.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -14186,6 +14436,14 @@ func (m *FileMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldFilePath(ctx)
 	case file.FieldUploadedBy:
 		return m.OldUploadedBy(ctx)
+	case file.FieldRevision:
+		return m.OldRevision(ctx)
+	case file.FieldRemovedAt:
+		return m.OldRemovedAt(ctx)
+	case file.FieldRemovedBy:
+		return m.OldRemovedBy(ctx)
+	case file.FieldSha256:
+		return m.OldSha256(ctx)
 	case file.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -14260,6 +14518,34 @@ func (m *FileMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetUploadedBy(v)
 		return nil
+	case file.FieldRevision:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRevision(v)
+		return nil
+	case file.FieldRemovedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRemovedAt(v)
+		return nil
+	case file.FieldRemovedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRemovedBy(v)
+		return nil
+	case file.FieldSha256:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSha256(v)
+		return nil
 	case file.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -14287,6 +14573,12 @@ func (m *FileMutation) AddedFields() []string {
 	if m.adduploaded_by != nil {
 		fields = append(fields, file.FieldUploadedBy)
 	}
+	if m.addrevision != nil {
+		fields = append(fields, file.FieldRevision)
+	}
+	if m.addremoved_by != nil {
+		fields = append(fields, file.FieldRemovedBy)
+	}
 	return fields
 }
 
@@ -14303,6 +14595,10 @@ func (m *FileMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedFileSize()
 	case file.FieldUploadedBy:
 		return m.AddedUploadedBy()
+	case file.FieldRevision:
+		return m.AddedRevision()
+	case file.FieldRemovedBy:
+		return m.AddedRemovedBy()
 	}
 	return nil, false
 }
@@ -14340,6 +14636,20 @@ func (m *FileMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddUploadedBy(v)
 		return nil
+	case file.FieldRevision:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRevision(v)
+		return nil
+	case file.FieldRemovedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRemovedBy(v)
+		return nil
 	}
 	return fmt.Errorf("unknown File numeric field %s", name)
 }
@@ -14347,7 +14657,17 @@ func (m *FileMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *FileMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(file.FieldRemovedAt) {
+		fields = append(fields, file.FieldRemovedAt)
+	}
+	if m.FieldCleared(file.FieldRemovedBy) {
+		fields = append(fields, file.FieldRemovedBy)
+	}
+	if m.FieldCleared(file.FieldSha256) {
+		fields = append(fields, file.FieldSha256)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -14360,6 +14680,17 @@ func (m *FileMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *FileMutation) ClearField(name string) error {
+	switch name {
+	case file.FieldRemovedAt:
+		m.ClearRemovedAt()
+		return nil
+	case file.FieldRemovedBy:
+		m.ClearRemovedBy()
+		return nil
+	case file.FieldSha256:
+		m.ClearSha256()
+		return nil
+	}
 	return fmt.Errorf("unknown File nullable field %s", name)
 }
 
@@ -14393,6 +14724,18 @@ func (m *FileMutation) ResetField(name string) error {
 		return nil
 	case file.FieldUploadedBy:
 		m.ResetUploadedBy()
+		return nil
+	case file.FieldRevision:
+		m.ResetRevision()
+		return nil
+	case file.FieldRemovedAt:
+		m.ResetRemovedAt()
+		return nil
+	case file.FieldRemovedBy:
+		m.ResetRemovedBy()
+		return nil
+	case file.FieldSha256:
+		m.ResetSha256()
 		return nil
 	case file.FieldCreatedAt:
 		m.ResetCreatedAt()

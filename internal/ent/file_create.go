@@ -74,6 +74,62 @@ func (_c *FileCreate) SetUploadedBy(v int64) *FileCreate {
 	return _c
 }
 
+// SetRevision sets the "revision" field.
+func (_c *FileCreate) SetRevision(v int64) *FileCreate {
+	_c.mutation.SetRevision(v)
+	return _c
+}
+
+// SetNillableRevision sets the "revision" field if the given value is not nil.
+func (_c *FileCreate) SetNillableRevision(v *int64) *FileCreate {
+	if v != nil {
+		_c.SetRevision(*v)
+	}
+	return _c
+}
+
+// SetRemovedAt sets the "removed_at" field.
+func (_c *FileCreate) SetRemovedAt(v time.Time) *FileCreate {
+	_c.mutation.SetRemovedAt(v)
+	return _c
+}
+
+// SetNillableRemovedAt sets the "removed_at" field if the given value is not nil.
+func (_c *FileCreate) SetNillableRemovedAt(v *time.Time) *FileCreate {
+	if v != nil {
+		_c.SetRemovedAt(*v)
+	}
+	return _c
+}
+
+// SetRemovedBy sets the "removed_by" field.
+func (_c *FileCreate) SetRemovedBy(v int64) *FileCreate {
+	_c.mutation.SetRemovedBy(v)
+	return _c
+}
+
+// SetNillableRemovedBy sets the "removed_by" field if the given value is not nil.
+func (_c *FileCreate) SetNillableRemovedBy(v *int64) *FileCreate {
+	if v != nil {
+		_c.SetRemovedBy(*v)
+	}
+	return _c
+}
+
+// SetSha256 sets the "sha256" field.
+func (_c *FileCreate) SetSha256(v string) *FileCreate {
+	_c.mutation.SetSha256(v)
+	return _c
+}
+
+// SetNillableSha256 sets the "sha256" field if the given value is not nil.
+func (_c *FileCreate) SetNillableSha256(v *string) *FileCreate {
+	if v != nil {
+		_c.SetSha256(*v)
+	}
+	return _c
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (_c *FileCreate) SetCreatedAt(v time.Time) *FileCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -129,6 +185,10 @@ func (_c *FileCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *FileCreate) defaults() {
+	if _, ok := _c.mutation.Revision(); !ok {
+		v := file.DefaultRevision
+		_c.mutation.SetRevision(v)
+	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := file.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -188,6 +248,9 @@ func (_c *FileCreate) check() error {
 	}
 	if _, ok := _c.mutation.UploadedBy(); !ok {
 		return &ValidationError{Name: "uploaded_by", err: errors.New(`ent: missing required field "File.uploaded_by"`)}
+	}
+	if _, ok := _c.mutation.Revision(); !ok {
+		return &ValidationError{Name: "revision", err: errors.New(`ent: missing required field "File.revision"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "File.created_at"`)}
@@ -259,6 +322,22 @@ func (_c *FileCreate) createSpec() (*File, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.UploadedBy(); ok {
 		_spec.SetField(file.FieldUploadedBy, field.TypeInt64, value)
 		_node.UploadedBy = value
+	}
+	if value, ok := _c.mutation.Revision(); ok {
+		_spec.SetField(file.FieldRevision, field.TypeInt64, value)
+		_node.Revision = value
+	}
+	if value, ok := _c.mutation.RemovedAt(); ok {
+		_spec.SetField(file.FieldRemovedAt, field.TypeTime, value)
+		_node.RemovedAt = &value
+	}
+	if value, ok := _c.mutation.RemovedBy(); ok {
+		_spec.SetField(file.FieldRemovedBy, field.TypeInt64, value)
+		_node.RemovedBy = &value
+	}
+	if value, ok := _c.mutation.Sha256(); ok {
+		_spec.SetField(file.FieldSha256, field.TypeString, value)
+		_node.Sha256 = &value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(file.FieldCreatedAt, field.TypeTime, value)

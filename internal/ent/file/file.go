@@ -31,6 +31,14 @@ const (
 	FieldFilePath = "file_path"
 	// FieldUploadedBy holds the string denoting the uploaded_by field in the database.
 	FieldUploadedBy = "uploaded_by"
+	// FieldRevision holds the string denoting the revision field in the database.
+	FieldRevision = "revision"
+	// FieldRemovedAt holds the string denoting the removed_at field in the database.
+	FieldRemovedAt = "removed_at"
+	// FieldRemovedBy holds the string denoting the removed_by field in the database.
+	FieldRemovedBy = "removed_by"
+	// FieldSha256 holds the string denoting the sha256 field in the database.
+	FieldSha256 = "sha256"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
 	// Table holds the table name of the file in the database.
@@ -49,6 +57,10 @@ var Columns = []string{
 	FieldFileSize,
 	FieldFilePath,
 	FieldUploadedBy,
+	FieldRevision,
+	FieldRemovedAt,
+	FieldRemovedBy,
+	FieldSha256,
 	FieldCreatedAt,
 }
 
@@ -73,6 +85,8 @@ var (
 	MimeTypeValidator func(string) error
 	// FilePathValidator is a validator for the "file_path" field. It is called by the builders before save.
 	FilePathValidator func(string) error
+	// DefaultRevision holds the default value on creation for the "revision" field.
+	DefaultRevision int64
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
 	DefaultCreatedAt func() time.Time
 )
@@ -128,6 +142,26 @@ func ByFilePath(opts ...sql.OrderTermOption) OrderOption {
 // ByUploadedBy orders the results by the uploaded_by field.
 func ByUploadedBy(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUploadedBy, opts...).ToFunc()
+}
+
+// ByRevision orders the results by the revision field.
+func ByRevision(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRevision, opts...).ToFunc()
+}
+
+// ByRemovedAt orders the results by the removed_at field.
+func ByRemovedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRemovedAt, opts...).ToFunc()
+}
+
+// ByRemovedBy orders the results by the removed_by field.
+func ByRemovedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldRemovedBy, opts...).ToFunc()
+}
+
+// BySha256 orders the results by the sha256 field.
+func BySha256(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSha256, opts...).ToFunc()
 }
 
 // ByCreatedAt orders the results by the created_at field.

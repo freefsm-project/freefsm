@@ -35,6 +35,14 @@ type File struct {
 	FilePath string `json:"file_path,omitempty"`
 	// UploadedBy holds the value of the "uploaded_by" field.
 	UploadedBy int64 `json:"uploaded_by,omitempty"`
+	// Revision holds the value of the "revision" field.
+	Revision int64 `json:"revision,omitempty"`
+	// RemovedAt holds the value of the "removed_at" field.
+	RemovedAt *time.Time `json:"removed_at,omitempty"`
+	// RemovedBy holds the value of the "removed_by" field.
+	RemovedBy *int64 `json:"removed_by,omitempty"`
+	// Sha256 holds the value of the "sha256" field.
+	Sha256 *string `json:"sha256,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt    time.Time `json:"created_at,omitempty"`
 	selectValues sql.SelectValues
@@ -45,11 +53,11 @@ func (*File) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case file.FieldID, file.FieldCompanyID, file.FieldObjectID, file.FieldFileSize, file.FieldUploadedBy:
+		case file.FieldID, file.FieldCompanyID, file.FieldObjectID, file.FieldFileSize, file.FieldUploadedBy, file.FieldRevision, file.FieldRemovedBy:
 			values[i] = new(sql.NullInt64)
-		case file.FieldObjectType, file.FieldOriginalName, file.FieldStoredName, file.FieldMimeType, file.FieldFilePath:
+		case file.FieldObjectType, file.FieldOriginalName, file.FieldStoredName, file.FieldMimeType, file.FieldFilePath, file.FieldSha256:
 			values[i] = new(sql.NullString)
-		case file.FieldCreatedAt:
+		case file.FieldRemovedAt, file.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -126,6 +134,33 @@ func (_m *File) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.UploadedBy = value.Int64
 			}
+		case file.FieldRevision:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field revision", values[i])
+			} else if value.Valid {
+				_m.Revision = value.Int64
+			}
+		case file.FieldRemovedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field removed_at", values[i])
+			} else if value.Valid {
+				_m.RemovedAt = new(time.Time)
+				*_m.RemovedAt = value.Time
+			}
+		case file.FieldRemovedBy:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field removed_by", values[i])
+			} else if value.Valid {
+				_m.RemovedBy = new(int64)
+				*_m.RemovedBy = value.Int64
+			}
+		case file.FieldSha256:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field sha256", values[i])
+			} else if value.Valid {
+				_m.Sha256 = new(string)
+				*_m.Sha256 = value.String
+			}
 		case file.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -194,6 +229,24 @@ func (_m *File) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("uploaded_by=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UploadedBy))
+	builder.WriteString(", ")
+	builder.WriteString("revision=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Revision))
+	builder.WriteString(", ")
+	if v := _m.RemovedAt; v != nil {
+		builder.WriteString("removed_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.RemovedBy; v != nil {
+		builder.WriteString("removed_by=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.Sha256; v != nil {
+		builder.WriteString("sha256=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

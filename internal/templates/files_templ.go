@@ -9,10 +9,23 @@ import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 )
+
+func canUploadFile(ctx context.Context, typ string, id int64) bool {
+	r, ok := authorization.FromContext(ctx)
+	if !ok {
+		return true
+	}
+	ref, err := objectref.Parse(typ, id)
+	return err == nil && r.Service.FileAccess(ctx, r.Actor, ref, "file.upload", r.Actor.UserID) == nil
+}
 
 func fileUploadURL(objectType string, objectID int64) string {
 	return fmt.Sprintf("/files?object_type=%s&object_id=%d", url.QueryEscape(objectType), objectID)
@@ -68,110 +81,112 @@ func FileUploadWidgetWithTitle(objectType string, objectID int64, redirect strin
 			templ_7745c5c3_Var2 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"files-widget\">")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		if showTitle {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<h3>Files</h3>")
+		if canUploadFile(ctx, objectType, objectID) {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"files-widget\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<form action=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var3 templ.SafeURL
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fileUploadURL(objectType, objectID)))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 22, Col: 63}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" method=\"post\" enctype=\"multipart/form-data\" hx-post=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var4 string
-		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fileUploadURL(objectType, objectID)))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 22, Col: 166}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" hx-swap=\"none\" class=\"files-drop-form\" ondragover=\"filesDragOver(event, this)\" ondragleave=\"filesDragLeave(event, this)\" ondrop=\"filesHandleDrop(event, this)\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var5 string
-		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 23, Col: 64}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\"> <input type=\"hidden\" name=\"object_type\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var6 string
-		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(objectType)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 24, Col: 61}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\"> <input type=\"hidden\" name=\"object_id\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var7 string
-		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", objectID))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 25, Col: 76}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"> <input type=\"hidden\" name=\"redirect\" value=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var8 string
-		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(redirect)
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 26, Col: 56}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\"><div class=\"files-drop-zone\"><div><strong>Drop files here</strong> <small data-files-prompt>or choose a file to attach</small></div><div class=\"files-upload-row\"><input type=\"file\" name=\"file\" required> <button type=\"submit\" class=\"small customer-add-button\">Upload files</button></div></div><div class=\"files-upload-status\" aria-live=\"polite\" aria-atomic=\"false\" hidden><p class=\"files-upload-error\" hidden></p><p class=\"files-upload-summary\"></p><ol class=\"files-upload-list\"></ol><a href=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var9 templ.SafeURL
-		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(redirect))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 41, Col: 33}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" class=\"files-upload-refresh\" hidden>Refresh attachments</a></div></form></div>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
+			if showTitle {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<h3>Files</h3>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<form action=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var3 templ.SafeURL
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fileUploadURL(objectType, objectID)))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 36, Col: 64}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "\" method=\"post\" enctype=\"multipart/form-data\" hx-post=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var4 string
+			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fileUploadURL(objectType, objectID)))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 36, Col: 167}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\" hx-swap=\"none\" class=\"files-drop-form\" ondragover=\"filesDragOver(event, this)\" ondragleave=\"filesDragLeave(event, this)\" ondrop=\"filesHandleDrop(event, this)\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var5 string
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 37, Col: 65}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "\"> <input type=\"hidden\" name=\"object_type\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var6 string
+			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(objectType)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 38, Col: 62}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\"> <input type=\"hidden\" name=\"object_id\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var7 string
+			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", objectID))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 39, Col: 77}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"> <input type=\"hidden\" name=\"redirect\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var8 string
+			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(redirect)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 40, Col: 57}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "\"><div class=\"files-drop-zone\"><div><strong>Drop files here</strong> <small data-files-prompt>or choose a file to attach</small></div><div class=\"files-upload-row\"><input type=\"file\" name=\"file\" required> <button type=\"submit\" class=\"small customer-add-button\">Upload files</button></div></div><small data-files-limit></small><div class=\"files-upload-status\" aria-live=\"polite\" aria-atomic=\"false\" hidden><p class=\"files-upload-error\" hidden></p><p class=\"files-upload-summary\"></p><ol class=\"files-upload-list\"></ol><button type=\"button\" class=\"files-upload-retry\" hidden>Retry failed files</button> <a href=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var9 templ.SafeURL
+			templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(redirect))
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 57, Col: 34}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\" class=\"files-upload-refresh\" hidden>Refresh attachments</a></div></form></div>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 		}
 		return nil
 	})
@@ -179,6 +194,10 @@ func FileUploadWidgetWithTitle(objectType string, objectID int64, redirect strin
 
 type FileRow struct {
 	ID           int64
+	Revision     int64
+	CanDownload  bool
+	CanRename    bool
+	CanRemove    bool
 	OriginalName string
 	MimeType     string
 	FileSize     string
@@ -306,194 +325,246 @@ func FileList(p FileListPageData) templ.Component {
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(f.OriginalName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 129, Col: 38}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 150, Col: 38}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" data-file-url=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "\" data-file-revision=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var14 string
-				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/files/%d", f.ID))
+				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(f.Revision))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 130, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 151, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" data-file-download-url=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "\" data-file-download=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var15 string
-				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/files/%d?download=1", f.ID))
+				templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(f.CanDownload))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 131, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 152, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" data-file-rename-url=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" data-file-rename=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var16 string
-				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/files/%d/rename", f.ID))
+				templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(f.CanRename))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 132, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 153, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" data-file-delete-url=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" data-file-remove=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var17 string
-				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/files/%d/delete", f.ID))
+				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(f.CanRemove))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 133, Col: 67}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 154, Col: 49}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" data-file-kind=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" data-file-url=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var18 string
-				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(filePreviewKind(f.MimeType))
+				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/files/%d", f.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 134, Col: 51}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 155, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" onclick=\"filesOpenModal(this)\" aria-label=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" data-file-download-url=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var19 string
-				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Open %s", f.OriginalName))
+				templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/files/%d?download=1", f.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 136, Col: 58}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 156, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" data-file-rename-url=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				if strings.HasPrefix(f.MimeType, "image/") {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<img src=\"")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var20 string
-					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fmt.Sprintf("/files/%d", f.ID)))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 139, Col: 60}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" alt=\"\" loading=\"lazy\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<span class=\"files-thumb-icon\">")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					var templ_7745c5c3_Var21 string
-					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(fileIconLabel(f.MimeType))
-					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 141, Col: 66}
-					}
-					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "</span>")
-					if templ_7745c5c3_Err != nil {
-						return templ_7745c5c3_Err
-					}
+				var templ_7745c5c3_Var20 string
+				templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/files/%d/rename", f.ID))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 157, Col: 67}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</button><div class=\"files-tile-body\"><strong title=\"")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var20)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" data-file-delete-url=\"")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var21 string
+				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/files/%d/delete", f.ID))
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 158, Col: 67}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var21)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" data-file-kind=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var22 string
-				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(f.OriginalName)
+				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(filePreviewKind(f.MimeType))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 145, Col: 37}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 159, Col: 51}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\" onclick=\"filesOpenModal(this)\" aria-label=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var23 string
-				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(f.OriginalName)
+				templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Open %s", f.OriginalName))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 145, Col: 56}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 161, Col: 58}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
-				if templ_7745c5c3_Err != nil {
-					return templ_7745c5c3_Err
-				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</strong> <small>")
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var24 string
-				templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(f.FileSize)
-				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 146, Col: 26}
-				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, " · ")
+				if strings.HasPrefix(f.MimeType, "image/") && f.CanDownload {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<img src=\"")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var24 string
+					templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fmt.Sprintf("/files/%d", f.ID)))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 164, Col: 60}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "\" alt=\"\" loading=\"lazy\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				} else {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<span class=\"files-thumb-icon\">")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					var templ_7745c5c3_Var25 string
+					templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(fileIconLabel(f.MimeType))
+					if templ_7745c5c3_Err != nil {
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 166, Col: 66}
+					}
+					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</span>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</button><div class=\"files-tile-body\"><strong title=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				var templ_7745c5c3_Var25 string
-				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(f.CreatedAt)
+				var templ_7745c5c3_Var26 string
+				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(f.OriginalName)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 146, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 170, Col: 37}
 				}
-				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</small></div></article>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "\">")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var27 string
+				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(f.OriginalName)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 170, Col: 56}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</strong> <small>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var28 string
+				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(f.FileSize)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 171, Col: 26}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, " · ")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				var templ_7745c5c3_Var29 string
+				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(f.CreatedAt)
+				if templ_7745c5c3_Err != nil {
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 171, Col: 45}
+				}
+				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "</small></div></article>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		} else {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<p class=\"files-empty\"><small>No files attached. Drop files into the card above to attach them.</small></p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<p class=\"files-empty\"><small>No files attached. Drop files into the card above to attach them.</small></p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -506,7 +577,7 @@ func FileList(p FileListPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -530,58 +601,38 @@ func FilePreviewDialog() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var26 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var26 == nil {
-			templ_7745c5c3_Var26 = templ.NopComponent
+		templ_7745c5c3_Var30 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var30 == nil {
+			templ_7745c5c3_Var30 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<dialog class=\"files-preview-dialog\" id=\"files-preview-dialog\" onclick=\"filesDialogBackdropClose(event, this)\"><header class=\"files-preview-header\"><strong id=\"files-preview-title\">File preview</strong><div class=\"files-preview-actions\"><a id=\"files-preview-download\" href=\"#\" class=\"files-preview-action\" download>Download</a> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<dialog class=\"files-preview-dialog\" id=\"files-preview-dialog\" onclick=\"filesDialogBackdropClose(event, this)\"><header class=\"files-preview-header\"><strong id=\"files-preview-title\">File preview</strong><div class=\"files-preview-actions\"><a id=\"files-preview-download\" href=\"#\" class=\"files-preview-action\" download>Download</a> <button type=\"button\" id=\"files-preview-rename\" class=\"files-preview-action\" onclick=\"filesToggleModalRename()\">Rename</button> <input type=\"hidden\" id=\"files-preview-csrf\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if canManageOperational(ctx) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<button type=\"button\" class=\"files-preview-action\" onclick=\"filesToggleModalRename()\">Rename</button> <input type=\"hidden\" id=\"files-preview-csrf\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var27 string
-			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 167, Col: 72}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\"> <button type=\"button\" class=\"files-preview-action files-preview-action-danger\" onclick=\"filesDeleteCurrentFile()\">Delete</button> ")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
+		var templ_7745c5c3_Var31 string
+		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 191, Col: 71}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<button type=\"button\" class=\"files-preview-action\" onclick=\"filesCloseModal()\" aria-label=\"Close file preview\">Close</button></div>")
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var31)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if canManageOperational(ctx) {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "<form id=\"files-preview-rename-form\" class=\"files-modal-rename-form\" onsubmit=\"return filesRenameCurrentFile(this)\" hidden><input type=\"hidden\" name=\"csrf_token\" value=\"")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			var templ_7745c5c3_Var28 string
-			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
-			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 174, Col: 66}
-			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\"> <input type=\"text\" name=\"original_name\" required maxlength=\"255\"> <button type=\"submit\" class=\"small customer-add-button\">Save</button> <button type=\"button\" class=\"outline small customer-add-button\" onclick=\"filesCancelModalRename()\">Cancel</button></form>")
-			if templ_7745c5c3_Err != nil {
-				return templ_7745c5c3_Err
-			}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "\"> <button type=\"button\" id=\"files-preview-remove\" class=\"files-preview-action files-preview-action-danger\" onclick=\"filesDeleteCurrentFile()\">Remove</button> <button type=\"button\" class=\"files-preview-action\" onclick=\"filesCloseModal()\" aria-label=\"Close file preview\">Close</button></div><form id=\"files-preview-rename-form\" class=\"files-modal-rename-form\" onsubmit=\"return filesRenameCurrentFile(this)\" hidden><input type=\"hidden\" name=\"csrf_token\" value=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</header><div class=\"files-preview-body\" id=\"files-preview-body\"></div></dialog>")
+		var templ_7745c5c3_Var32 string
+		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/files.templ`, Line: 196, Col: 65}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "\"> <input type=\"text\" name=\"original_name\" required maxlength=\"255\"> <button type=\"submit\" class=\"small customer-add-button\">Save</button> <button type=\"button\" class=\"outline small customer-add-button\" onclick=\"filesCancelModalRename()\">Cancel</button></form></header><div class=\"files-preview-body\" id=\"files-preview-body\"></div></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -605,12 +656,12 @@ func FileWidgetScript() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var29 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var29 == nil {
-			templ_7745c5c3_Var29 = templ.NopComponent
+		templ_7745c5c3_Var33 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var33 == nil {
+			templ_7745c5c3_Var33 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<script>\n\t\tfunction filesDragOver(event, form) {\n\t\t\tevent.preventDefault();\n\t\t\tform.classList.add('files-drop-active');\n\t\t}\n\n\t\tfunction filesDragLeave(event, form) {\n\t\t\tif (!form.contains(event.relatedTarget)) form.classList.remove('files-drop-active');\n\t\t}\n\n\t\tfunction filesUploadLimit() {\n\t\t\treturn 10;\n\t\t}\n\n\t\tfunction filesSetUploadError(form, message) {\n\t\t\tconst status = form.querySelector('.files-upload-status');\n\t\t\tconst error = form.querySelector('.files-upload-error');\n\t\t\tif (!status || !error) return;\n\t\t\tstatus.hidden = false;\n\t\t\terror.hidden = false;\n\t\t\terror.textContent = message;\n\t\t}\n\n\t\tfunction filesValidateSelection(form, files) {\n\t\t\tif (files.length <= filesUploadLimit()) return true;\n\t\t\tfilesSetUploadError(form, 'You can upload up to 10 files at a time. No files were uploaded.');\n\t\t\tconst input = form.querySelector('input[type=\"file\"][name=\"file\"]');\n\t\t\tif (input) input.value = '';\n\t\t\treturn false;\n\t\t}\n\n\t\tfunction filesHandleDrop(event, form) {\n\t\t\tevent.preventDefault();\n\t\t\tform.classList.remove('files-drop-active');\n\t\t\tconst files = Array.from(event.dataTransfer.files || []);\n\t\t\tif (!files.length) return;\n\t\t\tfilesQueueUploads(form, files);\n\t\t}\n\n\t\tfunction filesHandleSubmit(event) {\n\t\t\tevent.preventDefault();\n\t\t\tevent.stopPropagation();\n\t\t\tconst form = event.currentTarget;\n\t\t\tconst input = form.querySelector('input[type=\"file\"][name=\"file\"]');\n\t\t\tconst files = Array.from(input?.files || []);\n\t\t\tif (!files.length) {\n\t\t\t\tfilesSetUploadError(form, 'Choose at least one file to upload.');\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tfilesQueueUploads(form, files);\n\t\t}\n\n\t\tfunction filesSafeRedirect(value) {\n\t\t\ttry {\n\t\t\t\tconst target = new URL(value || window.location.pathname, window.location.href);\n\t\t\t\tif (target.origin !== window.location.origin || !['http:', 'https:'].includes(target.protocol)) {\n\t\t\t\t\treturn window.location.pathname + window.location.search;\n\t\t\t\t}\n\t\t\t\treturn target.pathname + target.search + target.hash;\n\t\t\t} catch (_) {\n\t\t\t\treturn window.location.pathname + window.location.search;\n\t\t\t}\n\t\t}\n\n\t\tfunction filesQueueRow(file) {\n\t\t\tconst row = document.createElement('li');\n\t\t\trow.className = 'files-upload-item files-upload-queued';\n\t\t\tconst name = document.createElement('span');\n\t\t\tname.className = 'files-upload-name';\n\t\t\tname.textContent = file.name;\n\t\t\tconst state = document.createElement('span');\n\t\t\tstate.className = 'files-upload-state';\n\t\t\tstate.textContent = 'Queued';\n\t\t\trow.append(name, state);\n\t\t\treturn { file, row, state };\n\t\t}\n\n\t\tfunction filesSetQueueState(item, state, detail) {\n\t\t\titem.row.className = 'files-upload-item files-upload-' + state;\n\t\t\titem.state.textContent = detail ? state[0].toUpperCase() + state.slice(1) + ': ' + detail : state[0].toUpperCase() + state.slice(1);\n\t\t}\n\n\t\tasync function filesUploadQueueItem(form, item, queue) {\n\t\t\tfilesSetQueueState(item, 'uploading');\n\t\t\ttry {\n\t\t\t\tconst body = new FormData(form);\n\t\t\t\tbody.set('file', item.file);\n\t\t\t\tconst response = await fetch(form.action, {\n\t\t\t\t\tmethod: 'POST',\n\t\t\t\t\tbody,\n\t\t\t\t\theaders: { 'HX-Request': 'true' }\n\t\t\t\t});\n\t\t\t\tif (!response.ok) {\n\t\t\t\t\tconst serverError = (await response.text()).trim();\n\t\t\t\t\tthrow new Error(serverError || 'The server rejected this file.');\n\t\t\t\t}\n\t\t\t\tqueue.redirect = response.headers.get('HX-Redirect') || queue.redirect;\n\t\t\t\tqueue.uploaded++;\n\t\t\t\tfilesSetQueueState(item, 'uploaded');\n\t\t\t} catch (error) {\n\t\t\t\tqueue.failed++;\n\t\t\t\tfilesSetQueueState(item, 'failed', error instanceof Error ? error.message : 'Upload failed.');\n\t\t\t}\n\t\t}\n\n\t\tasync function filesQueueUploads(form, files) {\n\t\t\tif (form.dataset.filesUploading === 'true' || !filesValidateSelection(form, files)) return;\n\n\t\t\tconst input = form.querySelector('input[type=\"file\"][name=\"file\"]');\n\t\t\tconst button = form.querySelector('button[type=\"submit\"]');\n\t\t\tconst status = form.querySelector('.files-upload-status');\n\t\t\tconst error = form.querySelector('.files-upload-error');\n\t\t\tconst summary = form.querySelector('.files-upload-summary');\n\t\t\tconst list = form.querySelector('.files-upload-list');\n\t\t\tconst refresh = form.querySelector('.files-upload-refresh');\n\t\t\tif (!input || !button || !status || !error || !summary || !list || !refresh) return;\n\n\t\t\tform.dataset.filesUploading = 'true';\n\t\t\tbutton.disabled = true;\n\t\t\tinput.disabled = true;\n\t\t\tstatus.hidden = false;\n\t\t\terror.hidden = true;\n\t\t\terror.textContent = '';\n\t\t\trefresh.hidden = true;\n\t\t\tsummary.className = 'files-upload-summary';\n\t\t\tsummary.textContent = files.length === 1 ? 'Uploading 1 file...' : 'Uploading ' + files.length + ' files...';\n\t\t\tlist.replaceChildren();\n\n\t\t\tconst items = files.map(filesQueueRow);\n\t\t\titems.forEach(item => list.appendChild(item.row));\n\t\t\tconst queue = {\n\t\t\t\tnext: 0,\n\t\t\t\tuploaded: 0,\n\t\t\t\tfailed: 0,\n\t\t\t\tredirect: form.querySelector('[name=\"redirect\"]')?.value || window.location.pathname\n\t\t\t};\n\t\t\tconst worker = async () => {\n\t\t\t\twhile (queue.next < items.length) {\n\t\t\t\t\tconst item = items[queue.next++];\n\t\t\t\t\tawait filesUploadQueueItem(form, item, queue);\n\t\t\t\t}\n\t\t\t};\n\t\t\tconst workers = Array.from({ length: Math.min(2, files.length) }, () => worker());\n\t\t\tawait Promise.all(workers);\n\n\t\t\tdelete form.dataset.filesUploading;\n\t\t\tbutton.disabled = false;\n\t\t\tinput.disabled = false;\n\t\t\tinput.value = '';\n\t\t\tif (queue.failed === 0) {\n\t\t\t\tsummary.textContent = queue.uploaded === 1 ? '1 file uploaded.' : queue.uploaded + ' files uploaded.';\n\t\t\t\twindow.location.assign(filesSafeRedirect(queue.redirect));\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tsummary.className = 'files-upload-summary files-upload-summary-failed';\n\t\t\tsummary.textContent = queue.uploaded + ' uploaded; ' + queue.failed + ' failed. You can choose files again to retry.';\n\t\t\trefresh.hidden = false;\n\t\t}\n\n\t\tfunction filesEnhanceForms(root) {\n\t\t\tconst forms = root.matches?.('.files-drop-form') ? [root] : Array.from(root.querySelectorAll?.('.files-drop-form') || []);\n\t\t\tforms.forEach(form => {\n\t\t\t\tif (form.dataset.filesEnhanced === 'true') return;\n\t\t\t\tconst input = form.querySelector('input[type=\"file\"][name=\"file\"]');\n\t\t\t\tif (!input) return;\n\t\t\t\tform.dataset.filesEnhanced = 'true';\n\t\t\t\tinput.multiple = true;\n\t\t\t\tform.querySelector('[data-files-prompt]')?.replaceChildren('or choose up to 10 files to attach');\n\t\t\t\tinput.addEventListener('change', () => filesValidateSelection(form, Array.from(input.files || [])));\n\t\t\t\tform.addEventListener('submit', filesHandleSubmit);\n\t\t\t});\n\t\t}\n\n\t\tfunction filesOpenModal(button) {\n\t\t\tconst dialog = document.getElementById('files-preview-dialog');\n\t\t\tconst title = document.getElementById('files-preview-title');\n\t\t\tconst body = document.getElementById('files-preview-body');\n\t\t\tconst download = document.getElementById('files-preview-download');\n\t\t\tif (!dialog || !title || !body || !download) return;\n\t\t\tconst name = button.dataset.fileName || 'File preview';\n\t\t\tconst url = button.dataset.fileUrl;\n\t\t\tconst kind = button.dataset.fileKind;\n\t\t\ttitle.textContent = name;\n\t\t\tdownload.href = button.dataset.fileDownloadUrl || url;\n\t\t\tconst redirect = window.location.pathname + window.location.search;\n\t\t\tdialog.dataset.fileRenameUrl = button.dataset.fileRenameUrl || '';\n\t\t\tdialog.dataset.fileDeleteUrl = button.dataset.fileDeleteUrl || '';\n\t\t\tdialog.dataset.redirect = redirect;\n\t\t\tconst renameForm = document.getElementById('files-preview-rename-form');\n\t\t\tif (renameForm) {\n\t\t\t\trenameForm.hidden = true;\n\t\t\t\trenameForm.querySelector('[name=\"original_name\"]').value = name;\n\t\t\t}\n\t\t\tbody.replaceChildren();\n\t\t\tbody.classList.toggle('files-preview-body-pdf', kind === 'pdf');\n\t\t\tif (kind === 'image') {\n\t\t\t\tconst img = document.createElement('img');\n\t\t\t\timg.src = url;\n\t\t\t\timg.alt = name;\n\t\t\t\tbody.appendChild(img);\n\t\t\t} else if (kind === 'pdf') {\n\t\t\t\tconst frame = document.createElement('iframe');\n\t\t\t\tframe.src = url + '#zoom=100&navpanes=0';\n\t\t\t\tframe.title = name;\n\t\t\t\tbody.appendChild(frame);\n\t\t\t} else {\n\t\t\t\tconst fallback = document.createElement('div');\n\t\t\t\tfallback.className = 'files-preview-fallback';\n\t\t\t\tfallback.textContent = 'Preview is not available for this file type. Use Download to open it.';\n\t\t\t\tbody.appendChild(fallback);\n\t\t\t}\n\t\t\tif (typeof dialog.showModal === 'function') dialog.showModal();\n\t\t}\n\n\t\tfunction filesCloseModal() {\n\t\t\tconst dialog = document.getElementById('files-preview-dialog');\n\t\t\tif (dialog) dialog.close();\n\t\t}\n\n\t\tfunction filesDialogBackdropClose(event, dialog) {\n\t\t\tif (event.target === dialog) dialog.close();\n\t\t}\n\n\t\tfunction filesToggleModalRename() {\n\t\t\tconst form = document.getElementById('files-preview-rename-form');\n\t\t\tif (!form) return;\n\t\t\tform.hidden = !form.hidden;\n\t\t\tif (!form.hidden) form.querySelector('input[name=\"original_name\"]')?.focus();\n\t\t}\n\n\t\tfunction filesCancelModalRename() {\n\t\t\tconst form = document.getElementById('files-preview-rename-form');\n\t\t\tif (form) form.hidden = true;\n\t\t}\n\n\t\tfunction filesSelectedAction(action, pattern) {\n\t\t\tif (!pattern.test(action || '')) {\n\t\t\t\talert('File action was not ready. Please close and reopen this file.');\n\t\t\t\treturn '';\n\t\t\t}\n\t\t\treturn action;\n\t\t}\n\n\t\tasync function filesPostModalAction(action, values) {\n\t\t\tconst csrf = document.getElementById('files-preview-csrf')?.value || document.querySelector('#files-preview-rename-form [name=\"csrf_token\"]')?.value || '';\n\t\t\tconst dialog = document.getElementById('files-preview-dialog');\n\t\t\tconst redirect = dialog?.dataset.redirect || window.location.pathname;\n\t\t\tconst body = new URLSearchParams({ csrf_token: csrf, redirect });\n\t\t\tObject.entries(values || {}).forEach(([key, value]) => body.set(key, value));\n\t\t\tconst response = await fetch(action, {\n\t\t\t\tmethod: 'POST',\n\t\t\t\theaders: {\n\t\t\t\t\t'Content-Type': 'application/x-www-form-urlencoded',\n\t\t\t\t\t'HX-Request': 'true'\n\t\t\t\t},\n\t\t\t\tbody\n\t\t\t});\n\t\t\tif (!response.ok) {\n\t\t\t\talert(await response.text() || 'File action failed');\n\t\t\t\treturn;\n\t\t\t}\n\t\t\twindow.location.href = response.headers.get('HX-Redirect') || redirect;\n\t\t}\n\n\t\tfunction filesRenameCurrentFile(form) {\n\t\t\tconst dialog = document.getElementById('files-preview-dialog');\n\t\t\tconst action = filesSelectedAction(dialog?.dataset.fileRenameUrl, /^\\/files\\/\\d+\\/rename$/);\n\t\t\tif (!action) return false;\n\t\t\tfilesPostModalAction(action, { original_name: form.querySelector('[name=\"original_name\"]').value });\n\t\t\treturn false;\n\t\t}\n\n\t\tfunction filesDeleteCurrentFile() {\n\t\t\tconst dialog = document.getElementById('files-preview-dialog');\n\t\t\tconst action = filesSelectedAction(dialog?.dataset.fileDeleteUrl, /^\\/files\\/\\d+\\/delete$/);\n\t\t\tif (!action || !confirm('Delete this file?')) return;\n\t\t\tfilesPostModalAction(action);\n\t\t}\n\n\t\tfilesEnhanceForms(document);\n\t\tif (!window.filesWidgetAfterSwapInstalled) {\n\t\t\twindow.filesWidgetAfterSwapInstalled = true;\n\t\t\tdocument.body.addEventListener('htmx:afterSwap', event => filesEnhanceForms(event.target));\n\t\t}\n\t</script>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<script>\n\t\tfunction filesDragOver(event, form) {\n\t\t\tevent.preventDefault();\n\t\t\tform.classList.add('files-drop-active');\n\t\t}\n\n\t\tfunction filesDragLeave(event, form) {\n\t\t\tif (!form.contains(event.relatedTarget)) form.classList.remove('files-drop-active');\n\t\t}\n\n\t\tfunction filesUploadLimit() {\n\t\t\treturn 10;\n\t\t}\n\n\t\tfunction filesSetUploadError(form, message) {\n\t\t\tconst status = form.querySelector('.files-upload-status');\n\t\t\tconst error = form.querySelector('.files-upload-error');\n\t\t\tif (!status || !error) return;\n\t\t\tstatus.hidden = false;\n\t\t\terror.hidden = false;\n\t\t\terror.textContent = message;\n\t\t}\n\n\t\tfunction filesValidateSelection(form, files) {\n\t\t\tif (files.length <= filesUploadLimit()) return true;\n\t\t\tfilesSetUploadError(form, 'You can upload up to 10 files at a time. No files were uploaded.');\n\t\t\tconst input = form.querySelector('input[type=\"file\"][name=\"file\"]');\n\t\t\tif (input) input.value = '';\n\t\t\treturn false;\n\t\t}\n\n\t\tfunction filesHandleDrop(event, form) {\n\t\t\tevent.preventDefault();\n\t\t\tform.classList.remove('files-drop-active');\n\t\t\tconst files = Array.from(event.dataTransfer.files || []);\n\t\t\tif (!files.length) return;\n\t\t\tfilesQueueUploads(form, files);\n\t\t}\n\n\t\tfunction filesHandleSubmit(event) {\n\t\t\tevent.preventDefault();\n\t\t\tevent.stopPropagation();\n\t\t\tconst form = event.currentTarget;\n\t\t\tconst input = form.querySelector('input[type=\"file\"][name=\"file\"]');\n\t\t\tconst files = Array.from(input?.files || []);\n\t\t\tif (!files.length) {\n\t\t\t\tfilesSetUploadError(form, 'Choose at least one file to upload.');\n\t\t\t\treturn;\n\t\t\t}\n\t\t\tfilesQueueUploads(form, files);\n\t\t}\n\n\t\tfunction filesSafeRedirect(value) {\n\t\t\ttry {\n\t\t\t\tconst target = new URL(value || window.location.pathname, window.location.href);\n\t\t\t\tif (target.origin !== window.location.origin || !['http:', 'https:'].includes(target.protocol)) {\n\t\t\t\t\treturn window.location.pathname + window.location.search;\n\t\t\t\t}\n\t\t\t\treturn target.pathname + target.search + target.hash;\n\t\t\t} catch (_) {\n\t\t\t\treturn window.location.pathname + window.location.search;\n\t\t\t}\n\t\t}\n\n\t\tfunction filesQueueRow(file) {\n\t\t\tconst row = document.createElement('li');\n\t\t\trow.className = 'files-upload-item files-upload-queued';\n\t\t\tconst name = document.createElement('span');\n\t\t\tname.className = 'files-upload-name';\n\t\t\tname.textContent = file.name;\n\t\t\tconst state = document.createElement('span');\n\t\t\tstate.className = 'files-upload-state';\n\t\t\tstate.textContent = 'Queued';\n\t\t\trow.append(name, state);\n\t\t\treturn { file, row, state, publicationID: crypto.randomUUID(), failed: false };\n\t\t}\n\n\t\tfunction filesSetQueueState(item, state, detail) {\n\t\t\titem.row.className = 'files-upload-item files-upload-' + state;\n\t\t\titem.state.textContent = detail ? state[0].toUpperCase() + state.slice(1) + ': ' + detail : state[0].toUpperCase() + state.slice(1);\n\t\t}\n\n\t\tfunction filesSendUpload(form, item, body) {\n\t\t\treturn new Promise((resolve, reject) => {\n\t\t\t\tconst xhr = new XMLHttpRequest();\n\t\t\t\txhr.open('POST', form.action);\n\t\t\t\txhr.setRequestHeader('HX-Request', 'true');\n\t\t\t\txhr.upload.onprogress = event => {\n\t\t\t\t\tif (event.lengthComputable) filesSetQueueState(item, 'uploading', Math.floor(event.loaded * 100 / event.total) + '% transferred; awaiting publication');\n\t\t\t\t};\n\t\t\t\txhr.onerror = () => reject(new Error('Connection lost. Retry this file to reconcile its publication.'));\n\t\t\t\txhr.onabort = () => reject(new Error('Transfer interrupted.'));\n\t\t\t\txhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300 && !!xhr.getResponseHeader('File-ID'), text: async () => xhr.responseText, headers: { get: name => xhr.getResponseHeader(name) } });\n\t\t\t\txhr.send(body);\n\t\t\t});\n\t\t}\n\n\t\tasync function filesUploadQueueItem(form, item, queue) {\n\t\t\tfilesSetQueueState(item, 'uploading');\n\t\t\titem.failed = false;\n\t\t\ttry {\n\t\t\t\tconst body = new FormData(form);\n\t\t\t\tbody.set('file', item.file);\n\t\t\t\tbody.set('publication_id', item.publicationID);\n\t\t\t\tconst response = await filesSendUpload(form, item, body);\n\t\t\t\tif (!response.ok) {\n\t\t\t\t\tconst serverError = (await response.text()).trim();\n\t\t\t\t\tthrow new Error(serverError || 'The server rejected this file.');\n\t\t\t\t}\n\t\t\t\tqueue.redirect = response.headers.get('HX-Redirect') || queue.redirect;\n\t\t\t\tqueue.uploaded++;\n\t\t\t\tfilesSetQueueState(item, 'uploaded');\n\t\t\t} catch (error) {\n\t\t\t\titem.failed = true;\n\t\t\t\tqueue.failed++;\n\t\t\t\tfilesSetQueueState(item, 'failed', error instanceof Error ? error.message : 'Upload failed.');\n\t\t\t}\n\t\t}\n\n\t\tasync function filesQueueUploads(form, files) {\n\t\t\tif (form.dataset.filesUploading === 'true' || !filesValidateSelection(form, files)) return;\n\n\t\t\tconst input = form.querySelector('input[type=\"file\"][name=\"file\"]');\n\t\t\tconst button = form.querySelector('button[type=\"submit\"]');\n\t\t\tconst status = form.querySelector('.files-upload-status');\n\t\t\tconst error = form.querySelector('.files-upload-error');\n\t\t\tconst summary = form.querySelector('.files-upload-summary');\n\t\t\tconst list = form.querySelector('.files-upload-list');\n\t\t\tconst refresh = form.querySelector('.files-upload-refresh');\n\t\t\tconst retry = form.querySelector('.files-upload-retry');\n\t\t\tif (!input || !button || !status || !error || !summary || !list || !refresh) return;\n\n\t\t\tform.dataset.filesUploading = 'true';\n\t\t\tbutton.disabled = true;\n\t\t\tinput.disabled = true;\n\t\t\tstatus.hidden = false;\n\t\t\terror.hidden = true;\n\t\t\terror.textContent = '';\n\t\t\trefresh.hidden = true;\n\t\t\tretry.hidden = true;\n\t\t\tsummary.className = 'files-upload-summary';\n\t\t\tsummary.textContent = files.length === 1 ? 'Uploading 1 file...' : 'Uploading ' + files.length + ' files...';\n\t\t\tlist.replaceChildren();\n\n\t\t\tconst items = files.map(filesQueueRow);\n\t\t\titems.forEach(item => list.appendChild(item.row));\n\t\t\tconst queue = {\n\t\t\t\tnext: 0,\n\t\t\t\tuploaded: 0,\n\t\t\t\tfailed: 0,\n\t\t\t\tredirect: form.querySelector('[name=\"redirect\"]')?.value || window.location.pathname\n\t\t\t};\n\t\t\tconst worker = async () => {\n\t\t\t\twhile (queue.next < items.length) {\n\t\t\t\t\tconst item = items[queue.next++];\n\t\t\t\t\tawait filesUploadQueueItem(form, item, queue);\n\t\t\t\t}\n\t\t\t};\n\t\t\tconst workers = Array.from({ length: Math.min(2, files.length) }, () => worker());\n\t\t\tawait Promise.all(workers);\n\n\t\t\tdelete form.dataset.filesUploading;\n\t\t\tbutton.disabled = false;\n\t\t\tinput.disabled = false;\n\t\t\tinput.value = '';\n\t\t\tif (queue.failed === 0) {\n\t\t\t\tsummary.textContent = queue.uploaded === 1 ? '1 file uploaded.' : queue.uploaded + ' files uploaded.';\n\t\t\t\twindow.location.assign(filesSafeRedirect(queue.redirect));\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tsummary.className = 'files-upload-summary files-upload-summary-failed';\n\t\t\tsummary.textContent = queue.uploaded + ' uploaded; ' + queue.failed + ' failed. Retry failed files to reconcile uncertain outcomes without duplicates.';\n\t\t\trefresh.hidden = false;\n\t\t\tretry.hidden = false;\n\t\t\tretry.onclick = async () => {\n\t\t\t\tif (form.dataset.filesUploading === 'true') return;\n\t\t\t\tform.dataset.filesUploading = 'true';\n\t\t\t\tretry.disabled = true;\n\t\t\t\tbutton.disabled = true;\n\t\t\t\tqueue.failed = 0;\n\t\t\t\tfor (const item of items.filter(item => item.failed)) await filesUploadQueueItem(form, item, queue);\n\t\t\t\tdelete form.dataset.filesUploading;\n\t\t\t\tretry.disabled = false;\n\t\t\t\tbutton.disabled = false;\n\t\t\t\tsummary.textContent = queue.uploaded + ' uploaded; ' + queue.failed + ' failed.';\n\t\t\t\tif (!queue.failed) window.location.assign(filesSafeRedirect(queue.redirect));\n\t\t\t};\n\t\t}\n\n\t\tfunction filesEnhanceForms(root) {\n\t\t\tconst forms = root.matches?.('.files-drop-form') ? [root] : Array.from(root.querySelectorAll?.('.files-drop-form') || []);\n\t\t\tforms.forEach(form => {\n\t\t\t\tif (form.dataset.filesEnhanced === 'true') return;\n\t\t\t\tconst input = form.querySelector('input[type=\"file\"][name=\"file\"]');\n\t\t\t\tif (!input) return;\n\t\t\t\tform.dataset.filesEnhanced = 'true';\n\t\t\t\tinput.multiple = true;\n\t\t\t\tfetch('/files/limits').then(r => r.ok ? r.json() : Promise.reject()).then(limits => {\n\t\t\t\t\tform.querySelector('[data-files-limit]').textContent = 'Up to ' + (limits.max_file_bytes / 1048576) + ' MiB per file; 10 files per batch.';\n\t\t\t\t}).catch(() => { form.querySelector('[data-files-limit]').textContent = 'Upload limits currently unavailable.'; });\n\t\t\t\tform.querySelector('[data-files-prompt]')?.replaceChildren('or choose up to 10 files to attach');\n\t\t\t\tinput.addEventListener('change', () => filesValidateSelection(form, Array.from(input.files || [])));\n\t\t\t\tform.addEventListener('submit', filesHandleSubmit);\n\t\t\t});\n\t\t}\n\n\t\tfunction filesOpenModal(button) {\n\t\t\tconst dialog = document.getElementById('files-preview-dialog');\n\t\t\tconst title = document.getElementById('files-preview-title');\n\t\t\tconst body = document.getElementById('files-preview-body');\n\t\t\tconst download = document.getElementById('files-preview-download');\n\t\t\tif (!dialog || !title || !body || !download) return;\n\t\t\tconst name = button.dataset.fileName || 'File preview';\n\t\t\tconst url = button.dataset.fileUrl;\n\t\t\tconst kind = button.dataset.fileDownload === 'true' ? button.dataset.fileKind : 'file';\n\t\t\tdownload.hidden = button.dataset.fileDownload !== 'true';\n\t\t\tdocument.getElementById('files-preview-rename').hidden = button.dataset.fileRename !== 'true';\n\t\t\tdocument.getElementById('files-preview-remove').hidden = button.dataset.fileRemove !== 'true';\n\t\t\ttitle.textContent = name;\n\t\t\tdownload.href = button.dataset.fileDownloadUrl || url;\n\t\t\tconst redirect = window.location.pathname + window.location.search;\n\t\t\tdialog.dataset.fileRenameUrl = button.dataset.fileRenameUrl || '';\n\t\t\tdialog.dataset.fileRevision = button.dataset.fileRevision || '';\n\t\t\tdialog.dataset.fileDeleteUrl = button.dataset.fileDeleteUrl || '';\n\t\t\tdialog.dataset.redirect = redirect;\n\t\t\tconst renameForm = document.getElementById('files-preview-rename-form');\n\t\t\tif (renameForm) {\n\t\t\t\trenameForm.hidden = true;\n\t\t\t\trenameForm.querySelector('[name=\"original_name\"]').value = name;\n\t\t\t}\n\t\t\tbody.replaceChildren();\n\t\t\tbody.classList.toggle('files-preview-body-pdf', kind === 'pdf');\n\t\t\tif (kind === 'image') {\n\t\t\t\tconst img = document.createElement('img');\n\t\t\t\timg.src = url;\n\t\t\t\timg.alt = name;\n\t\t\t\tbody.appendChild(img);\n\t\t\t} else if (kind === 'pdf') {\n\t\t\t\tconst frame = document.createElement('iframe');\n\t\t\t\tframe.src = url + '#zoom=100&navpanes=0';\n\t\t\t\tframe.title = name;\n\t\t\t\tbody.appendChild(frame);\n\t\t\t} else {\n\t\t\t\tconst fallback = document.createElement('div');\n\t\t\t\tfallback.className = 'files-preview-fallback';\n\t\t\t\tfallback.textContent = 'Preview is not available for this file type. Use Download to open it.';\n\t\t\t\tbody.appendChild(fallback);\n\t\t\t}\n\t\t\tif (typeof dialog.showModal === 'function') dialog.showModal();\n\t\t}\n\n\t\tfunction filesCloseModal() {\n\t\t\tconst dialog = document.getElementById('files-preview-dialog');\n\t\t\tif (dialog) dialog.close();\n\t\t}\n\n\t\tfunction filesDialogBackdropClose(event, dialog) {\n\t\t\tif (event.target === dialog) dialog.close();\n\t\t}\n\n\t\tfunction filesToggleModalRename() {\n\t\t\tconst form = document.getElementById('files-preview-rename-form');\n\t\t\tif (!form) return;\n\t\t\tform.hidden = !form.hidden;\n\t\t\tif (!form.hidden) form.querySelector('input[name=\"original_name\"]')?.focus();\n\t\t}\n\n\t\tfunction filesCancelModalRename() {\n\t\t\tconst form = document.getElementById('files-preview-rename-form');\n\t\t\tif (form) form.hidden = true;\n\t\t}\n\n\t\tfunction filesSelectedAction(action, pattern) {\n\t\t\tif (!pattern.test(action || '')) {\n\t\t\t\talert('File action was not ready. Please close and reopen this file.');\n\t\t\t\treturn '';\n\t\t\t}\n\t\t\treturn action;\n\t\t}\n\n\t\tasync function filesPostModalAction(action, values) {\n\t\t\tconst csrf = document.getElementById('files-preview-csrf')?.value || document.querySelector('#files-preview-rename-form [name=\"csrf_token\"]')?.value || '';\n\t\t\tconst dialog = document.getElementById('files-preview-dialog');\n\t\t\tconst redirect = dialog?.dataset.redirect || window.location.pathname;\n\t\t\tconst body = new URLSearchParams({ csrf_token: csrf, redirect, revision: dialog?.dataset.fileRevision || '' });\n\t\t\tObject.entries(values || {}).forEach(([key, value]) => body.set(key, value));\n\t\t\tconst response = await fetch(action, {\n\t\t\t\tmethod: 'POST',\n\t\t\t\theaders: {\n\t\t\t\t\t'Content-Type': 'application/x-www-form-urlencoded',\n\t\t\t\t\t'HX-Request': 'true'\n\t\t\t\t},\n\t\t\t\tbody\n\t\t\t});\n\t\t\tif (!response.ok) {\n\t\t\t\talert(await response.text() || 'File action failed');\n\t\t\t\treturn;\n\t\t\t}\n\t\t\twindow.location.href = response.headers.get('HX-Redirect') || redirect;\n\t\t}\n\n\t\tfunction filesRenameCurrentFile(form) {\n\t\t\tconst dialog = document.getElementById('files-preview-dialog');\n\t\t\tconst action = filesSelectedAction(dialog?.dataset.fileRenameUrl, /^\\/files\\/\\d+\\/rename$/);\n\t\t\tif (!action) return false;\n\t\t\tfilesPostModalAction(action, { original_name: form.querySelector('[name=\"original_name\"]').value });\n\t\t\treturn false;\n\t\t}\n\n\t\tfunction filesDeleteCurrentFile() {\n\t\t\tconst dialog = document.getElementById('files-preview-dialog');\n\t\t\tconst action = filesSelectedAction(dialog?.dataset.fileDeleteUrl, /^\\/files\\/\\d+\\/delete$/);\n\t\t\tif (!action || !confirm('Remove this file? Ordinary access will end. Retained history and Delivery snapshots are preserved.')) return;\n\t\t\tfilesPostModalAction(action);\n\t\t}\n\n\t\tfilesEnhanceForms(document);\n\t\tif (!window.filesWidgetAfterSwapInstalled) {\n\t\t\twindow.filesWidgetAfterSwapInstalled = true;\n\t\t\tdocument.body.addEventListener('htmx:afterSwap', event => filesEnhanceForms(event.target));\n\t\t}\n\t</script>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
