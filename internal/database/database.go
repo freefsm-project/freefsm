@@ -121,18 +121,21 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 			return fmt.Errorf("begin tx: %w", err)
 		}
 
-		if f == "042_normalized_invoice_settlement.up.sql" {
-			if reviewed != nil {
-				mapping, err := json.Marshal(reviewed.Mappings)
-				if err != nil {
-					tx.Rollback(ctx)
-					return err
-				}
-				if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.workflow_review',$1,true)`, string(mapping)); err != nil {
-					tx.Rollback(ctx)
-					return err
-				}
+		// Carry the reviewed-cutover marker through legacy seed migrations too.
+		// Missing canonical slots are created by 044, not as unreviewed legacy
+		// definitions between inventory and cutover.
+		if reviewed != nil && f <= "044_category_status_workflows.up.sql" {
+			mapping, err := json.Marshal(reviewed.Mappings)
+			if err != nil {
+				tx.Rollback(ctx)
+				return err
 			}
+			if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.workflow_review',$1,true)`, string(mapping)); err != nil {
+				tx.Rollback(ctx)
+				return err
+			}
+		}
+		if f == "042_normalized_invoice_settlement.up.sql" {
 			// Maintenance cutover: materialize legacy tenancy before reading settlement data.
 			if err := db.materializeLegacyTenancy(ctx, tx); err != nil {
 				tx.Rollback(ctx)

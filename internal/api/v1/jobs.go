@@ -3,7 +3,6 @@ package v1
 import (
 	"errors"
 	"net/http"
-	"slices"
 	"strconv"
 	"time"
 
@@ -90,58 +89,27 @@ func (h *handler) getJob(w http.ResponseWriter, r *http.Request) {
 type statusRequest = statusflow.Intent
 
 func (h *handler) jobStatusIntents(w http.ResponseWriter, r *http.Request) {
-	job, actor, ok := h.authorizedJob(w, r)
-	if !ok {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, 404, "not_found", "job not found")
 		return
 	}
-	statuses, err := h.jobStatuses(r, *actor.CompanyID)
+	actor := actorFromContext(r.Context())
+	choices, err := h.deps.StatusFlow.DiscoverIntents(r.Context(), statusflow.Actor{ID: actor.ID, CompanyID: *actor.CompanyID}, statusflow.Job, id)
 	if err != nil {
-		writeError(w, 500, "internal_error", "could not load statuses")
+		writeStatusFlowError(w, err)
 		return
 	}
-	type choice struct {
-		Status statusDTO         `json:"status"`
-		Intent statusflow.Intent `json:"intent"`
-	}
-	choices := []choice{}
-	for id, status := range statuses {
-		intent, err := h.deps.StatusFlow.ObserveIntent(r.Context(), *actor.CompanyID, statusflow.Job, job.ID, id)
-		if err != nil {
-			writeStatusFlowError(w, err)
-			return
-		}
-		choices = append(choices, choice{status, intent})
-	}
-	categoryOrder := map[statusflow.CategoryKey]int{}
-	for index, category := range statusflow.Categories {
-		categoryOrder[category.Key] = index
-	}
-	slices.SortFunc(choices, func(a, b choice) int {
-		if n := categoryOrder[a.Status.Category] - categoryOrder[b.Status.Category]; n != 0 {
-			return n
-		}
-		if n := a.Status.Order - b.Status.Order; n != 0 {
-			return n
-		}
-		if a.Status.ID < b.Status.ID {
-			return -1
-		}
-		if a.Status.ID > b.Status.ID {
-			return 1
-		}
-		return 0
-	})
-	writeJSON(w, 200, choices)
+	writeJSON(w, http.StatusOK, choices)
 }
 
 func (h *handler) updateJobStatus(w http.ResponseWriter, r *http.Request) {
-	job, actor, ok := h.authorizedJob(w, r)
-	if !ok {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, 404, "not_found", "job not found")
 		return
 	}
-	if isTech(actor.Role) && !h.requireOpenJob(w, r, job, *actor.CompanyID) {
-		return
-	}
+	actor := actorFromContext(r.Context())
 	var request statusRequest
 	if !decodeJSON(w, r, &request) {
 		return
@@ -150,22 +118,12 @@ func (h *handler) updateJobStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "status_id must be positive")
 		return
 	}
-	err := h.deps.StatusFlow.ApplyIntent(r.Context(), statusflow.Actor{ID: actor.ID, CompanyID: *actor.CompanyID}, statusflow.Job, job.ID, request)
+	err = h.deps.StatusFlow.ApplyIntent(r.Context(), statusflow.Actor{ID: actor.ID, CompanyID: *actor.CompanyID}, statusflow.Job, id, request)
 	if err != nil {
 		writeStatusFlowError(w, err)
 		return
 	}
-	updated, err := h.deps.Jobs.GetByIDForCompany(r.Context(), *actor.CompanyID, job.ID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "status changed but job could not be reloaded")
-		return
-	}
-	statuses, err := h.jobStatuses(r, *actor.CompanyID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "status changed but statuses could not be loaded")
-		return
-	}
-	writeJSON(w, http.StatusOK, h.visibleJobDTO(r, updated, statuses, actor.Role))
+	writeJSON(w, http.StatusOK, map[string]any{"id": id, "status_id": request.StatusID})
 }
 
 type subtaskRequest struct {

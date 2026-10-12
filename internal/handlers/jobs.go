@@ -228,15 +228,6 @@ func (h *JobHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, id), policyUpdate) {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
-	}
-	j, err := h.svc.GetByID(r.Context(), id)
-	if err != nil || j.DeletedAt != nil {
-		http.NotFound(w, r)
-		return
-	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return

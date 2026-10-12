@@ -521,6 +521,10 @@ func (f *fakeStatusFlow) ObserveIntent(_ context.Context, _ int64, _ statusflow.
 	return statusflow.Intent{StatusID: id, Revision: "record", MeaningRevision: "meaning"}, nil
 }
 
+func (f *fakeStatusFlow) DiscoverIntents(_ context.Context, _ statusflow.Actor, _ statusflow.ObjectType, _ int64) ([]statusflow.IntentChoice, error) {
+	return []statusflow.IntentChoice{}, f.err
+}
+
 func (f *fakeStatusFlow) TransitionJob(_ context.Context, actor statusflow.Actor, jobID, statusID int64) error {
 	f.calls++
 	f.actor = actor
