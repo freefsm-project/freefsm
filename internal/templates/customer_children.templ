@@ -6,6 +6,7 @@ import "net/url"
 import "github.com/freefsm-project/freefsm/internal/authorization"
 
 type CustomerChildrenData struct {
+	CanViewCustomer bool
 	Search string
 	Page, PerPage, Total int
 	Kind string
@@ -17,8 +18,14 @@ type CustomerChildrenData struct {
 }
 
 templ CustomerChildrenPage(p CustomerChildrenData) {
-	@Layout("Customer " + p.Kind + "s") {
-		<a href={ templ.URL(fmt.Sprintf("/customers/%d",p.CustomerID)) }>Back to Customer</a>
+	@Layout(capitalize(p.Kind) + "s") {
+		if p.CanViewCustomer {
+			<a href={ templ.URL(fmt.Sprintf("/customers/%d",p.CustomerID)) }>Back to Customer</a>
+		}
+		<a href={ templ.URL("/"+p.Kind+"s") }>All { capitalize(p.Kind) }s</a>
+		if p.CustomerID==0 && canMaster(ctx,"customer.view") && canMaster(ctx,p.Kind+".create") {
+			<a href="/customers">Choose a Customer to create a { capitalize(p.Kind) }</a>
+		}
 		if p.Selected == nil {
 			<h2>{ capitalize(p.Kind) }s</h2>
 			<form method="get" action={ templ.URL(p.BaseURL) }>

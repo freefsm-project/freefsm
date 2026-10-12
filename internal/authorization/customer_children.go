@@ -13,7 +13,8 @@ import (
 // CustomerChild is a master representation, never a Job Context projection.
 type CustomerChild struct {
 	ID           int64      `json:"id"`
-	CustomerID   int64      `json:"customer_id"`
+	CustomerID   int64      `json:"customer_id,omitempty"`
+	CanMutate    bool       `json:"-"`
 	FirstName    string     `json:"first_name"`
 	LastName     string     `json:"last_name"`
 	Email        string     `json:"email"`
@@ -54,6 +55,19 @@ func childCustomer(ctx context.Context, q queryer, p Principal, customerID int64
 	if !p.Allows("customer.view", All) {
 		return false, ErrNotFound
 	}
+	active, err := customerLifecycleState(ctx, q, p, customerID, lock)
+	if err != nil {
+		return false, err
+	}
+	if !active && !p.Allows("customer.archived.view", All) {
+		return false, ErrNotFound
+	}
+	return active, nil
+}
+
+// A lifecycle invariant is not permission to disclose a Customer master. Only
+// use this after authorizing the child or an independently selected Customer.
+func customerLifecycleState(ctx context.Context, q queryer, p Principal, customerID int64, lock bool) (bool, error) {
 	suffix := ""
 	if lock {
 		suffix = " FOR UPDATE"
@@ -66,10 +80,34 @@ func childCustomer(ctx context.Context, q queryer, p Principal, customerID int64
 	if err != nil {
 		return false, err
 	}
-	if !active && !p.Allows("customer.archived.view", All) {
-		return false, ErrNotFound
-	}
 	return active, nil
+}
+
+func childCommandOwner(ctx context.Context, q queryer, p Principal, kind string, customerID, id int64) (int64, error) {
+	table, owner, _, err := childTable(kind)
+	if err != nil {
+		return 0, err
+	}
+	if !p.Allows(kind+".view", All) {
+		return 0, ErrNotFound
+	}
+	var actual int64
+	var archived bool
+	where := "id=$1 AND company_id=$2"
+	if kind == "location" {
+		where += " AND object_type='customer'"
+	}
+	err = q.QueryRow(ctx, `SELECT `+owner+`,deleted_at IS NOT NULL FROM `+table+` WHERE `+where, id, p.CompanyID).Scan(&actual, &archived)
+	if err == pgx.ErrNoRows {
+		return 0, ErrNotFound
+	}
+	if err != nil {
+		return 0, err
+	}
+	if customerID != 0 && customerID != actual || archived && !p.Allows(kind+".archived.view", All) {
+		return 0, ErrNotFound
+	}
+	return actual, nil
 }
 
 func childWhere(kind, owner string) string {
@@ -89,6 +127,21 @@ func (s *Service) CustomerActive(ctx context.Context, a Actor, id int64) (bool, 
 }
 
 func (s *Service) CustomerChildren(ctx context.Context, a Actor, customerID int64, kind string, archived bool) ([]CustomerChild, error) {
+	return s.customerChildren(ctx, a, customerID, kind, archived, 0)
+}
+
+func (s *Service) CustomerChild(ctx context.Context, a Actor, customerID, id int64, kind string) (CustomerChild, error) {
+	rows, err := s.customerChildren(ctx, a, customerID, kind, false, id)
+	if err != nil {
+		return CustomerChild{}, err
+	}
+	if len(rows) != 1 {
+		return CustomerChild{}, ErrNotFound
+	}
+	return rows[0], nil
+}
+
+func (s *Service) customerChildren(ctx context.Context, a Actor, customerID int64, kind string, archived bool, id int64) ([]CustomerChild, error) {
 	table, owner, order, err := childTable(kind)
 	if err != nil {
 		return nil, err
@@ -100,10 +153,14 @@ func (s *Service) CustomerChildren(ctx context.Context, a Actor, customerID int6
 	if !p.Allows(kind+".view", All) {
 		return nil, ErrNotFound
 	}
-	if _, err = childCustomer(ctx, s.Pool, p, customerID, false); err != nil {
-		return nil, err
+	where := "($1::bigint=0 OR " + owner + "=$1) AND company_id=$2"
+	if kind == "location" {
+		where += " AND object_type='customer'"
 	}
-	where := childWhere(kind, owner)
+	if id != 0 {
+		where += " AND id=$3"
+		archived = p.Allows(kind+".archived.view", All)
+	}
 	if archived {
 		if !p.Allows(kind+".archived.view", All) {
 			return nil, ErrForbidden
@@ -111,7 +168,11 @@ func (s *Service) CustomerChildren(ctx context.Context, a Actor, customerID int6
 	} else {
 		where += " AND deleted_at IS NULL"
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT to_jsonb(c)||jsonb_build_object('customer_id',`+owner+`) FROM `+table+` c WHERE `+where+` ORDER BY `+order, customerID, p.CompanyID)
+	args := []any{customerID, p.CompanyID}
+	if id != 0 {
+		args = append(args, id)
+	}
+	rows, err := s.Pool.Query(ctx, `SELECT to_jsonb(c)||jsonb_build_object('customer_id',`+owner+`),EXISTS(SELECT 1 FROM customers p WHERE p.id=c.`+owner+` AND p.company_id=c.company_id AND p.deleted_at IS NULL) FROM `+table+` c WHERE `+where+` ORDER BY `+order, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -120,11 +181,16 @@ func (s *Service) CustomerChildren(ctx context.Context, a Actor, customerID int6
 	for rows.Next() {
 		var b []byte
 		var c CustomerChild
-		if err = rows.Scan(&b); err != nil {
+		var active bool
+		if err = rows.Scan(&b, &active); err != nil {
 			return nil, err
 		}
 		if err = json.Unmarshal(b, &c); err != nil {
 			return nil, err
+		}
+		c.CanMutate = active
+		if !p.Allows("customer.view", All) || !active && !p.Allows("customer.archived.view", All) {
+			c.CustomerID = 0
 		}
 		result = append(result, c)
 	}
@@ -143,7 +209,15 @@ func (s *Service) SaveCustomerChild(ctx context.Context, a Actor, customerID, id
 		if !p.Allows(kind+".view", All) {
 			return ErrNotFound
 		}
-		active, err := childCustomer(ctx, tx, p, customerID, true)
+		var active bool
+		if id == 0 {
+			active, err = childCustomer(ctx, tx, p, customerID, true)
+		} else {
+			customerID, err = childCommandOwner(ctx, tx, p, kind, customerID, id)
+			if err == nil {
+				active, err = customerLifecycleState(ctx, tx, p, customerID, true)
+			}
+		}
 		if err != nil {
 			return err
 		}
@@ -248,7 +322,11 @@ func (s *Service) CustomerChildLifecycle(ctx context.Context, a Actor, customerI
 		if !p.Allows(kind+".view", All) {
 			return ErrNotFound
 		}
-		active, err := childCustomer(ctx, tx, p, customerID, true)
+		customerID, err = childCommandOwner(ctx, tx, p, kind, customerID, id)
+		if err != nil {
+			return err
+		}
+		active, err := customerLifecycleState(ctx, tx, p, customerID, true)
 		if err != nil {
 			return err
 		}

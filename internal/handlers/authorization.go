@@ -77,6 +77,13 @@ func bindAuthorization(s *authorization.Service) func(http.Handler) http.Handler
 					return
 				}
 				parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+				// Contacts and Locations are independently authorized resources.
+				// Their handlers authorize child visibility and selected inputs;
+				// a nested URL does not require or grant Customer master access.
+				if len(parts) >= 3 && (parts[2] == "contacts" || parts[2] == "locations") {
+					next.ServeHTTP(w, r)
+					return
+				}
 				permission := "customer.view"
 				if len(parts) == 1 && r.Method == http.MethodPost || len(parts) == 2 && parts[1] == "new" {
 					permission = "customer.create"

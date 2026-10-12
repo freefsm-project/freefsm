@@ -14,6 +14,33 @@ the record's address. To move a person or place, create a new record. Contact na
 may use either or both name fields. Location title is required. Service Notes are
 separate from internal notes; Location Access Notes are separately recorded.
 
+### Independent child access (integration finding correction)
+
+Contacts and Locations are also discoverable at `/contacts` and `/locations`,
+with canonical details/edit/lifecycle routes addressed by the child's ID. Their
+All Records View and action grants do not require Customer View. Existing nested
+Customer URLs enforce the same child policy, including the supplied ownership
+partition, rather than adding a Customer master permission prerequisite.
+
+Customer references in JSON and Customer navigation links appear only when the
+Customer itself is visible (including separate archived View when applicable).
+Child-only responses contain neither the Customer ID nor Customer fields; mutation
+redirects use canonical child URLs. A filtered child lookup returns only authorized
+children and does not distinguish missing Customers from empty child collections.
+Selection options exclude archived children and children of inactive Customers,
+even if `archived=1` was requested. Context View never unlocks these master lists,
+lookups, forms or commands.
+
+Creating a child still requires an independently authorized **active Customer
+selection**: Customer View A plus the child's own View/Create grants, not Customer
+Edit or Customer Create. Knowing an ID is not input authorization. Existing child
+edits and lifecycle actions resolve immutable ownership internally, authorize the
+child, and lock/recheck the parent lifecycle without disclosing the Customer.
+Losing Customer View while an existing child edit waits does not invalidate that
+edit; losing Customer View while creating a child does invalidate its selected
+input. Child grant revocation, archived parents and audit failures still reject
+or roll back the whole command.
+
 Each Customer may have zero or one active Primary Contact and Primary Location.
 Selecting a new primary clears the previous designation in the same transaction.
 These are office defaults, never implicit Job links or context grants. Archiving
@@ -96,3 +123,10 @@ duplicate Contacts, primary Locations, reviewed cascade and selective restore.
 `internal/database/customer_master_preflight_integration_test.go` checks the
 read-only preflight, rejected ambiguous-primary upgrade, explicit repair,
 identity/link/duplicate preservation and immutable ownership after migration.
+
+The integration correction is covered by
+`internal/handlers/independent_children_integration_test.go` and the persisted
+`testdata/browser/independent-children.cjs` journey. Both resource types are tested
+with child-only grants, View-only and Context-only grants, hidden Customer
+references, creation denial, lookup exclusions, ownership mismatches, authority
+changes while waiting, parent archive and immutable-audit rollback.

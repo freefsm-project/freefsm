@@ -19,7 +19,15 @@ func customerChildren(kind string) http.HandlerFunc {
 			http.Error(w, "Forbidden", 403)
 			return
 		}
-		customerID, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		var customerID int64
+		if raw := chi.URLParam(r, "id"); raw != "" {
+			var err error
+			customerID, err = strconv.ParseInt(raw, 10, 64)
+			if err != nil || customerID <= 0 {
+				http.NotFound(w, r)
+				return
+			}
+		}
 		var id int64
 		if raw := chi.URLParam(r, "childID"); raw != "" {
 			var err error
@@ -34,6 +42,9 @@ func customerChildren(kind string) http.HandlerFunc {
 		if err != nil {
 			authorizationError(w, r, err)
 			return
+		}
+		if customerID == 0 || !p.Allows("customer.view", authorization.All) {
+			base = "/" + kind + "s"
 		}
 		if r.Method == http.MethodPost {
 			if err = r.ParseForm(); err != nil {
@@ -65,43 +76,56 @@ func customerChildren(kind string) http.HandlerFunc {
 				return
 			}
 			if strings.HasSuffix(r.URL.Path, "/inline") {
-				rows, err := req.Service.CustomerChildren(r.Context(), req.Actor, customerID, kind, false)
+				c, err := req.Service.CustomerChild(r.Context(), req.Actor, customerID, id, kind)
 				if err != nil {
 					authorizationError(w, r, err)
 					return
 				}
-				for _, c := range rows {
-					if c.ID == id {
-						writeInlineOptionJSON(w, id, c.Name())
-						return
-					}
-				}
+				writeInlineOptionJSON(w, id, c.Name())
+				return
 			}
-			http.Redirect(w, r, fmt.Sprintf("%s/%d", base, id), 303)
+			http.Redirect(w, r, fmt.Sprintf("/%ss/%d", kind, id), 303)
 			return
 		}
 		archived := r.URL.Query().Get("archived") == "1"
+		optionsOnly := strings.HasSuffix(r.URL.Path, "/options")
+		if optionsOnly {
+			archived = false
+		}
 		if id != 0 && p.Allows(kind+".archived.view", authorization.All) {
 			archived = true
 		}
-		rows, err := req.Service.CustomerChildren(r.Context(), req.Actor, customerID, kind, archived)
+		var rows []authorization.CustomerChild
+		if id != 0 {
+			var c authorization.CustomerChild
+			c, err = req.Service.CustomerChild(r.Context(), req.Actor, customerID, id, kind)
+			rows = []authorization.CustomerChild{c}
+		} else {
+			rows, err = req.Service.CustomerChildren(r.Context(), req.Actor, customerID, kind, archived)
+		}
 		if err != nil {
 			authorizationError(w, r, err)
 			return
 		}
 		data := templates.CustomerChildrenData{Kind: kind, CustomerID: customerID, BaseURL: base, Rows: rows, Archived: archived, CanCreate: p.Allows(kind+".create", authorization.All), CanEdit: p.Allows(kind+".edit", authorization.All), CanArchive: p.Allows(kind+".archive", authorization.All), CanRestore: p.Allows(kind+".restore", authorization.All), CanViewArchived: p.Allows(kind+".archived.view", authorization.All)}
-		active, err := req.Service.CustomerActive(r.Context(), req.Actor, customerID)
-		if err != nil {
-			authorizationError(w, r, err)
-			return
+		data.CanViewCustomer = p.Allows("customer.view", authorization.All) && req.Service.CustomerAccess(r.Context(), req.Actor, customerID, "customer.view") == nil
+		if !data.CanViewCustomer {
+			data.BaseURL = "/" + kind + "s"
 		}
-		if !active {
+		data.CanCreate = data.CanCreate && data.CanViewCustomer
+		if customerID == 0 {
 			data.CanCreate = false
-			data.CanEdit = false
-			data.CanArchive = false
-			data.CanRestore = false
 		}
 		if strings.HasSuffix(r.URL.Path, "/new") {
+			active, err := req.Service.CustomerActive(r.Context(), req.Actor, customerID)
+			if err != nil {
+				authorizationError(w, r, err)
+				return
+			}
+			if !active {
+				authorizationError(w, r, authorization.ErrForbidden)
+				return
+			}
 			if !data.CanCreate {
 				authorizationError(w, r, authorization.ErrForbidden)
 				return
@@ -119,6 +143,13 @@ func customerChildren(kind string) http.HandlerFunc {
 			if data.Selected == nil {
 				http.NotFound(w, r)
 				return
+			}
+			data.CustomerID = data.Selected.CustomerID
+			data.CanViewCustomer = data.CustomerID != 0
+			if !data.Selected.CanMutate {
+				data.CanEdit = false
+				data.CanArchive = false
+				data.CanRestore = false
 			}
 			if strings.HasSuffix(r.URL.Path, "/edit") {
 				if !data.CanEdit || data.Selected.DeletedAt != nil {
@@ -148,6 +179,15 @@ func customerChildren(kind string) http.HandlerFunc {
 			start := min((data.Page-1)*data.PerPage, data.Total)
 			rows = filtered[start:min(start+data.PerPage, data.Total)]
 			data.Rows = rows
+		}
+		if optionsOnly {
+			active := rows[:0]
+			for _, c := range rows {
+				if c.CanMutate {
+					active = append(active, c)
+				}
+			}
+			rows = active
 		}
 		if strings.Contains(r.Header.Get("Accept"), "application/json") {
 			w.Header().Set("Content-Type", "application/json")
@@ -179,8 +219,14 @@ func registerCustomerChildren(r chi.Router) {
 	r.Get("/customers/{id}/archive", customerArchivePreview)
 	r.Get("/customers/{id}/work", customerRelatedWork)
 	for _, kind := range []string{"contact", "location"} {
-		base := "/customers/{id}/" + kind + "s"
 		h := customerChildren(kind)
+		for _, suffix := range []string{"", "/options", "/{childID}", "/{childID}/edit"} {
+			r.Get("/"+kind+"s"+suffix, h)
+		}
+		for _, suffix := range []string{"/{childID}", "/{childID}/delete", "/{childID}/restore"} {
+			r.Post("/"+kind+"s"+suffix, h)
+		}
+		base := "/customers/{id}/" + kind + "s"
 		for _, suffix := range []string{"", "/new", "/options", "/{childID}", "/{childID}/edit"} {
 			r.Get(base+suffix, h)
 		}

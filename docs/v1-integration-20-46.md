@@ -118,3 +118,24 @@ The coordinator additionally ran `go test -race ./internal/handlers -run
 settings, and independently provisioned UTF8 database `freefsm_v1_merger_review_18`
 on port 55419. All three selected tests passed, including the embedded persisted
 workflow browser journey (4.623s package total).
+
+## #31 follow-up: independent Contact/Location authority
+
+The child-only Customer View defect recorded above is repaired by the #31
+follow-up based on integration `521de47`. Existing child reads/edits/lifecycle
+commands authorize the child independently; private parent lifecycle locking is
+retained. Canonical child lists/details/navigation are discoverable without
+Customer View, and hidden Customer references are omitted from responses and
+links. Creation still independently authorizes its selected active Customer.
+See `docs/customer-masters.md` for the exact authority and lookup contract.
+
+Production HTTP tests cover both types, narrowed scopes, no-Customer-view
+responses, queued grant changes and parent archive, creation input revocation,
+and atomic audit failure. Persisted Chromium proves navigation/edit/reload and
+archive/restore with child-only grants. `make lint` and the full explicit-UTF8-DB
+race suite pass, including backup integration; relevant Customer browsers pass
+separately. An earlier full-suite shell timeout is not counted as a pass.
+
+**Follow-up assessment:** the bounded #31 independent-child-access finding is
+resolved and ready for coordinator acceptance. Asset ownership/cascade and Lease
+blockers retain their explicit owning-slice handoffs. No tracker issue was closed.
