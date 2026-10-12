@@ -177,6 +177,13 @@ func run() error {
 		return err
 	}
 
+	integrationWarnings, err := db.IntegrationPreflight(startupCtx)
+	if err != nil {
+		return err
+	}
+	for _, warning := range integrationWarnings {
+		slog.Warn("integration preflight", "review", warning)
+	}
 	if err := db.Migrate(startupCtx, database.MigrationFS()); err != nil {
 		slog.Error("database migrate", "error", err)
 		return err

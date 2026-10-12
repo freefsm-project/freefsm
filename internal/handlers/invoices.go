@@ -1100,6 +1100,11 @@ func (h *InvoiceHandler) Email(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Subject, data.Body = documentEmailDefaults("invoice", doc, cs)
 	if r.Method == http.MethodGet {
+		data.HTMLBody, err = composeHTMLDefault(h.deliverySvc, r, "invoice", doc, cs)
+		if err != nil {
+			writeDeliveryError(w, r, err, data)
+			return
+		}
 		templates.DocumentEmailCompose(data).Render(r.Context(), w)
 		return
 	}
@@ -1112,6 +1117,7 @@ func (h *InvoiceHandler) Email(w http.ResponseWriter, r *http.Request) {
 	data.BCC = r.FormValue("bcc")
 	data.Subject = r.FormValue("subject")
 	data.Body = r.FormValue("body")
+	data.HTMLBody = r.FormValue("html_body")
 	data.IdempotencyKey = r.FormValue("idempotency_key")
 	recipients, err := services.ParseEmailRecipients(data.To, data.CC, data.BCC)
 	if err != nil {
@@ -1130,7 +1136,7 @@ func (h *InvoiceHandler) Email(w http.ResponseWriter, r *http.Request) {
 		templates.DocumentEmailCompose(data).Render(r.Context(), w)
 		return
 	}
-	_, err = h.deliverySvc.Queue(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, delivery.QueueRequest{Key: key, Document: delivery.DocumentRef{Type: "invoice", ID: id}, Snapshot: delivery.Snapshot{To: recipients.To, CC: recipients.CC, BCC: recipients.BCC, Subject: data.Subject, TextBody: data.Body, HTMLBody: safeEmailHTML(data.Body), PDF: doc.Data, PDFFilename: doc.Filename}})
+	_, err = h.deliverySvc.Queue(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, delivery.QueueRequest{Key: key, Document: delivery.DocumentRef{Type: "invoice", ID: id}, Snapshot: delivery.Snapshot{To: recipients.To, CC: recipients.CC, BCC: recipients.BCC, Subject: data.Subject, TextBody: data.Body, HTMLBody: selectedEmailHTML(data.Body, data.HTMLBody), PDF: doc.Data, PDFFilename: doc.Filename}})
 	if err != nil {
 		writeDeliveryError(w, r, err, data)
 		return

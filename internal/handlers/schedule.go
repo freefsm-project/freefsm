@@ -940,23 +940,8 @@ func (h *ScheduleHandler) mapJobs(r *http.Request, jobs []*ent.Job, calJobs []te
 	}
 	locations, _ := h.locSvc.ListByIDs(r.Context(), locationIDs)
 	locByID := make(map[int64]*ent.Location, len(locations))
-	geocodeAttempted := false
-	geocoderURL := h.geocoderURL(r)
-	geocodeFailed := false
 	needsGeocoding := false
 	for _, l := range locations {
-		if geocoderURL != "" && !geocodeAttempted && (l.Latitude == nil || l.Longitude == nil) {
-			geocodeAttempted = true
-			if geocoded, err := h.locSvc.Geocode(r.Context(), l, geocoderURL); err == nil {
-				l = geocoded
-				if l.Latitude == nil || l.Longitude == nil {
-					slog.Info("schedule map geocode returned no result", "location_id", l.ID, "geocoder_url", geocoderURL)
-				}
-			} else {
-				geocodeFailed = true
-				slog.Warn("schedule map geocode failed", "location_id", l.ID, "geocoder_url", geocoderURL, "error", err)
-			}
-		}
 		if l.Latitude == nil || l.Longitude == nil {
 			needsGeocoding = true
 		}
@@ -986,23 +971,17 @@ func (h *ScheduleHandler) mapJobs(r *http.Request, jobs []*ent.Job, calJobs []te
 	if len(mapJobs) > 0 {
 		return mapJobs, ""
 	}
-	if geocodeFailed {
-		return nil, "Scheduled job locations could not be geocoded. Check the configured geocoder URL and server logs."
-	}
-	if geocoderURL == "" && needsGeocoding {
-		return nil, "Scheduled job locations need coordinates. Configure a geocoder URL in Settings > Map, or enter coordinates manually."
-	}
-	if geocoderURL != "" && needsGeocoding {
-		return nil, "Scheduled job locations are waiting for geocoding. Refresh the map to geocode the next location."
+	if needsGeocoding {
+		return nil, "Scheduled job locations need reviewed coordinates. Open the location coordinate editor to look up or manually enter coordinates."
 	}
 	return nil, "No geocoded scheduled jobs are available yet."
 }
 
 func (h *ScheduleHandler) mapTileURL(r *http.Request) string {
 	if cs := middleware.CompanyFromContext(r.Context()); cs != nil && cs.MapTileURL != "" {
-		return cs.MapTileURL
+		return safeMapTileURL(cs.MapTileURL)
 	}
-	return h.cfg.TileURL
+	return safeMapTileURL(h.cfg.TileURL)
 }
 
 func (h *ScheduleHandler) geocoderURL(r *http.Request) string {

@@ -594,6 +594,10 @@ func (m *Manager) StartBackupFor(actor ActivityActor, source, password string) (
 func (m *Manager) capture(ctx context.Context, dir, source string) (manifest, error) {
 	man := manifest{Format: 1, Source: source, BuildKind: m.cfg.BuildKind, Version: m.cfg.Version, Commit: m.cfg.Commit, Captured: time.Now().UTC()}
 	var e error
+	man.ProviderCredentials, e = m.providerCredentials(ctx)
+	if e != nil {
+		return man, e
+	}
 	man.Paths, e = m.mappings(ctx)
 	if e != nil {
 		return man, e
@@ -687,6 +691,9 @@ func (m *Manager) StageUploadFor(ctx context.Context, actor ActivityActor, r io.
 		man, e := unseal(j.dir, password)
 		password = ""
 		if e != nil {
+			return e
+		}
+		if e = verifyProviderKeys(man.ProviderCredentials); e != nil {
 			return e
 		}
 		if man.BuildKind == BuildRelease && m.cfg.BuildKind == BuildRelease && (man.Version != m.cfg.Version || man.Commit != m.cfg.Commit) {
@@ -827,6 +834,9 @@ func (m *Manager) restore(ctx context.Context, j *job) error {
 			return engineFailure(FailureArchiveIntegrity, "staged archive changed")
 		}
 		m.phase(j, "recovery-copy")
+		if e = verifyProviderKeys(j.manifest.ProviderCredentials); e != nil {
+			return e
+		}
 		if e := privateDir(dir); e != nil {
 			return e
 		}
@@ -873,6 +883,13 @@ func (m *Manager) restore(ctx context.Context, j *job) error {
 			return e
 		}
 		m.phase(j, "protecting-instance")
+		storedCredentials, e := m.providerCredentials(ctx)
+		if e != nil {
+			return e
+		}
+		if e = verifyProviderKeys(storedCredentials); e != nil {
+			return e
+		}
 		if e = m.protect(ctx, j.manifest.Paths); e != nil {
 			return e
 		}

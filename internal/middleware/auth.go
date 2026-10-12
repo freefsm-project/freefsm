@@ -18,6 +18,8 @@ const (
 
 type UserInfo struct {
 	ConfigurationView      bool
+	MailSettingsView       bool
+	MapSettingsView        bool
 	ID                     int64
 	Name                   string
 	Email                  string

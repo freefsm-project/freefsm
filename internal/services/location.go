@@ -197,16 +197,11 @@ func (s *LocationService) Geocode(ctx context.Context, l *ent.Location, geocoder
 		return l, fmt.Errorf("parse geocode longitude: %w", err)
 	}
 
-	updated, err := s.client.Location.UpdateOneID(l.ID).
-		SetLatitude(lat).
-		SetLongitude(lng).
-		SetGeocodedAt(time.Now()).
-		SetGeocodeSource(geocoderURL).
-		Save(ctx)
-	if err != nil {
-		return l, fmt.Errorf("save geocode result: %w", err)
-	}
-	return updated, nil
+	// A lookup is only a proposal. Persistence belongs to the reviewed,
+	// authorization-checked coordinate command, never a schedule read.
+	proposal := *l
+	proposal.Latitude, proposal.Longitude = &lat, &lng
+	return &proposal, nil
 }
 
 func geocodeSearchURL(geocoderURL, address string) (*url.URL, error) {

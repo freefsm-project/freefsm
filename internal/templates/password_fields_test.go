@@ -135,7 +135,7 @@ func TestPasswordRevealScriptIsGlobalVersionedAndDelegated(t *testing.T) {
 }
 
 func TestSMTPPasswordRemainsUnenhanced(t *testing.T) {
-	settings := readTemplateContractFile(t, "settings.templ")
+	settings := readTemplateContractFile(t, "integrations.templ")
 	if !strings.Contains(settings, `type="password" name="smtp_password"`) {
 		t.Fatal("SMTP password input is missing")
 	}

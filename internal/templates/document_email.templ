@@ -40,6 +40,7 @@ templ DocumentEmailCompose(p DocumentEmailData) {
 				Body
 				<textarea name="body" rows="10" required>{ p.Body }</textarea>
 			</label>
+			<label>HTML body (optional; blank uses plain text)<textarea name="html_body" rows="10">{ p.HTMLBody }</textarea></label>
 			<button type="submit">Queue Email</button>
 		</form>
 	}

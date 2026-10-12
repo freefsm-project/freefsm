@@ -6,14 +6,17 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"mime"
 	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/credentials"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 )
@@ -36,6 +39,22 @@ func (s *EmailService) CheckAvailability(ctx context.Context) error {
 
 func (s *EmailService) EmailDisabled() bool {
 	return s != nil && s.control != nil && s.control.EmailDisabled()
+}
+
+// ValidateConfiguration performs no network I/O and discloses no provider data.
+func (s *EmailService) ValidateConfiguration(ctx context.Context) error {
+	cs, err := s.svc.Get(ctx)
+	if err != nil {
+		return fmt.Errorf("mail configuration unavailable; retry after database recovery")
+	}
+	if cs.SMTPHost == "" || cs.SMTPPort < 1 || cs.SMTPPort > 65535 {
+		return fmt.Errorf("mail transport is not configured; save SMTP host, port and sender in Mail settings")
+	}
+	if _, err := mail.ParseAddress(cs.SMTPFrom); err != nil {
+		return fmt.Errorf("mail sender is not configured; save a valid sender in Mail settings")
+	}
+	_, err = credentials.Open(cs.SMTPPassword)
+	return err
 }
 
 type EmailAttachment struct {
@@ -171,7 +190,7 @@ func (s *EmailService) SendDocumentSnapshot(ctx context.Context, recipients Emai
 	return s.sendBuilt(ctx, cs, from, recipients.EnvelopeRecipients(), msg)
 }
 
-func (s *EmailService) SendCompanyDocumentSnapshot(ctx context.Context, companyID int64, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachment EmailAttachment) error {
+func (s *EmailService) SendCompanyDocumentSnapshot(ctx context.Context, companyID int64, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachment EmailAttachment, frozenSender ...string) error {
 	ctx, release, err := s.control.EnterEmail(ctx)
 	if err != nil {
 		return err
@@ -182,6 +201,12 @@ func (s *EmailService) SendCompanyDocumentSnapshot(ctx context.Context, companyI
 		return fmt.Errorf("SMTP not configured for company %d", companyID)
 	}
 	from := sanitizeHeader(cs.SMTPFrom)
+	if len(frozenSender) > 0 {
+		from = frozenSender[0]
+		if _, err := mail.ParseAddress(from); err != nil {
+			return fmt.Errorf("saved delivery sender is unavailable; explicit historical review required")
+		}
+	}
 	msg, err := buildDocumentEmailMessage(from, recipients, subject, textBody, htmlBody, messageID, attachment)
 	if err != nil {
 		return err
@@ -196,13 +221,30 @@ func (s *EmailService) sendBuilt(ctx context.Context, cs *ent.CompanySettings, f
 	}
 	defer release()
 	addr := fmt.Sprintf("%s:%d", cs.SMTPHost, cs.SMTPPort)
+	password, err := credentials.Open(cs.SMTPPassword)
+	if err != nil {
+		return err
+	}
 	if cs.SMTPPort == 465 {
-		return s.sendTLS(ctx, addr, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
+		err = s.sendTLS(ctx, addr, cs.SMTPUser, password, from, envelopeRecipients, msg)
+	} else if cs.SMTPPort == 587 {
+		err = s.sendWithSTARTTLS(ctx, addr, cs.SMTPUser, password, from, envelopeRecipients, msg)
+	} else {
+		err = s.sendPlain(ctx, addr, cs.SMTPHost, cs.SMTPUser, password, from, envelopeRecipients, msg)
 	}
-	if cs.SMTPPort == 587 {
-		return s.sendWithSTARTTLS(ctx, addr, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
+	// Provider responses can echo AUTH material or arbitrary secrets. Keep the
+	// transport's raw diagnostic outside all persisted/public error paths.
+	if err != nil {
+		var protocol *textproto.Error
+		if errors.As(err, &protocol) {
+			return &textproto.Error{Code: protocol.Code, Msg: "SMTP provider rejected submission"}
+		}
+		if strings.Contains(err.Error(), "final DATA acceptance") {
+			return fmt.Errorf("final DATA acceptance is uncertain; verify provider evidence before retrying")
+		}
+		return fmt.Errorf("SMTP submission failed; verify saved transport and provider availability")
 	}
-	return s.sendPlain(ctx, addr, cs.SMTPHost, cs.SMTPUser, cs.SMTPPassword, from, envelopeRecipients, msg)
+	return nil
 }
 
 func buildDocumentEmailMessage(from string, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachment EmailAttachment) (string, error) {

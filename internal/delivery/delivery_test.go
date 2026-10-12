@@ -382,7 +382,7 @@ func newDeliveryFixture(t *testing.T) *deliveryFixture {
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO companies(name,slug) VALUES('Other','other') RETURNING id`).Scan(&f.otherCompany); err != nil {
 		t.Fatal(err)
 	}
-	_, err = db.Pool.Exec(ctx, `INSERT INTO company_settings(company_id,business_name,email_tracking_enabled) VALUES($1,'Delivery',true),($2,'Other',false)`, f.company, f.otherCompany)
+	_, err = db.Pool.Exec(ctx, `INSERT INTO company_settings(company_id,business_name,email_tracking_enabled,smtp_host,smtp_from) VALUES($1,'Delivery',true,'localhost','sender@example.com'),($2,'Other',false,'localhost','sender@example.com')`, f.company, f.otherCompany)
 	if err != nil {
 		t.Fatal(err)
 	}

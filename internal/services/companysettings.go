@@ -105,30 +105,14 @@ func (s *CompanySettingsService) SaveAdministrativeSettings(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	if p.SmtpPassword == "" {
-		p.SmtpPassword = cs.SMTPPassword
-	}
-	// This legacy sealed editor owns mail/maps/security only. Company and
-	// document writes use the independent, revision-guarded authority boundary.
+	// This legacy sealed editor owns security only. Configuration and
+	// integration writes use their independent, revision-guarded boundaries.
 	_, err = s.client.CompanySettings.UpdateOne(cs).
-		SetSMTPHost(p.SmtpHost).
-		SetSMTPPort(p.SmtpPort).
-		SetSMTPUser(p.SmtpUser).
-		SetSMTPPassword(p.SmtpPassword).
-		SetSMTPFrom(p.SmtpFrom).
-		SetEmailAutoCc(p.EmailAutoCC).
-		SetInvoiceEmailSubject(p.InvoiceEmailSubject).
-		SetInvoiceEmailBody(p.InvoiceEmailBody).
-		SetEstimateEmailSubject(p.EstimateEmailSubject).
-		SetEstimateEmailBody(p.EstimateEmailBody).
 		SetPasswordMinLength(p.PasswordMinLength).
 		SetPasswordRequireUppercase(p.PasswordRequireUppercase).
 		SetPasswordRequireLowercase(p.PasswordRequireLowercase).
 		SetPasswordRequireDigit(p.PasswordRequireDigit).
 		SetPasswordRequireSpecial(p.PasswordRequireSpecial).
-		SetMapTileURL(p.MapTileURL).
-		SetGeocoderURL(p.GeocoderURL).
-		SetEmailTrackingEnabled(p.EmailTrackingEnabled).
 		Save(ctx)
 	return err
 }
