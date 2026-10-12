@@ -67,16 +67,21 @@ the optional intercepted backup browser were not established by these checks.
 - **#24:** complete permission-aware navigation, existing-workflow receipts and
   failure UX, measured accessibility/contrast/native zoom, and desktop/mobile
   browser matrix remain incomplete.
-- **#25 / Delivery:** ordinary creation's legacy route mismatch is resolved and
+- **Delivery handoff:** ordinary creation's legacy route mismatch is resolved and
   equal-grant `tech` users are tested. Manual Delivery retry still uses inherited
   legacy authority and lacks the independent current-grant/protected-audit
   boundary of initial queueing; it remains unresolved.
 - **#27:** new intent discovery still uses legacy Job access and separate reads
   can pair presentation with a newer meaning token. The pre-032 inventory gap
   above also remains. Acceptance's separate revision/fence defects are repaired.
-- **#28:** the #29 Asset adapter provides effective authority and atomic protected
-  details audit, but Type/Status before/after audit and ordinary activity atomicity
-  are not complete. Do not claim the reference-effect audit criterion satisfied.
+- **#28:** selecting "No Status" on an existing Asset does not clear its Status.
+  `internal/handlers/assets.go` maps the submitted zero to a nil pointer, while
+  `internal/services/asset.go` treats nil as unchanged and requires a nonnil zero
+  to clear. The #29 adapter does provide effective authority and atomic protected
+  `asset.edit` audit, including the required actor/Role/action/scope/target/time/
+  channel/outcome. The earlier claim that this audit boundary was incomplete is
+  withdrawn: a complete Type/Status diff or atomic ordinary feed entry is not an
+  additional AUTH-04 acceptance requirement for this command.
 - **#31:** existing child-only Contact/Location grants still additionally require
   Customer View. Customer-owned Asset cascade and Lease blockers remain owning
   slice handoffs; the conservative Asset blocker is not canonical cascade proof.
@@ -84,6 +89,32 @@ the optional intercepted backup browser were not established by these checks.
   legacy DOC/XLS/PPT corpus journeys and Lease wiring remain unproven/unimplemented.
   Authenticated generated PDFs do not have the standalone File Upload coupling.
 
-No additional concrete defect was identified in the exercised scoped #20, #26,
-#29, #43 or available-parent #45 boundaries. Their full downstream domains and
-unexecuted release/platform gates are not accepted by this integration report.
+## Coordinator closure assessment
+
+No tickets were closed. The following recommendations combine checkpoint evidence,
+the merged production/database/browser checks and independent source review:
+
+| Ticket | Recommendation | Evidence or blocking gap |
+|---|---|---|
+| #20 | Eligible for scoped closure | Role/account/directory HTTP, concurrency, audit and persisted browser checks pass. |
+| #24 | Keep open | Existing-workflow interaction/navigation and accessibility/browser matrix gaps above. |
+| #25 | Eligible for scoped closure | Equal-grant creation, atomic numbering/fields/Item selection, hidden-number review, future defaults and independent immutable PDF checks pass. Manual Delivery retry remains a separate unresolved Delivery handoff. |
+| #26 | Eligible for scoped closure | Encrypted settings, independent grants, selected HTML/PDF/sender, current transport, coordinates and persisted browser checks pass. |
+| #27 | Keep open | Intent-discovery authorization/coherent snapshot and pre-032 reviewed-upgrade gaps above. |
+| #28 | Keep open pending bounded correction | Atomic authorization/audit is supported; the offered No Status selection silently retains an existing Status. |
+| #29 | Eligible for scoped closure | Typed-field validation, whole-command rollback, composed creation and browser correction/default journeys pass. |
+| #31 | Keep open | Existing child-only grants still require unrelated Customer View. |
+| #43 | Eligible for scoped closure | Facets, shared Item selection, captures, current authority, atomic audit, upgrade and persisted browser checks pass. |
+| #45 | Eligible for available-parent closure | Thread/removal/receipts, denial, concurrency, conversion and persisted browser checks pass. |
+| #46 | Keep open | API device/operation attribution and representative legacy Office format evidence remain outstanding. |
+
+Lease, Asset ownership/cascade, broader Delivery/offline domains and unexecuted
+release/platform gates retain their explicit owning-ticket handoffs. No closure
+recommendation asserts completion of those domains or certifies every historical
+checkpoint database upgrade.
+
+The coordinator additionally ran `go test -race ./internal/handlers -run
+'^TestWorkflow' -count=1 -v` with `BROWSER_TESTS=1`, the same Chromium/dependency
+settings, and independently provisioned UTF8 database `freefsm_v1_merger_review_18`
+on port 55419. All three selected tests passed, including the embedded persisted
+workflow browser journey (4.623s package total).
