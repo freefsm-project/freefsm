@@ -36,6 +36,8 @@ const { chromium } = require('playwright-core');
     let last = op;
     let failNextStatus = '';
     let failNextCreate = false;
+    let initiation;
+    let holdInitiation = initial.backup === 'encrypting';
     await page.route('**/*', async route => {
       const request = route.request();
       const url = new URL(request.url());
@@ -52,6 +54,9 @@ const { chromium } = require('playwright-core');
       const body = new URLSearchParams(request.postData());
       switch (url.pathname) {
         case '/settings/backup/create':
+          initiation=request.headers()['x-backup-action'];
+          assert.match(initiation || '',/^[0-9a-f]{64}$/,'backup identity exists before dispatch');
+          assert.equal(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('freefsm.backup.status')).action),initiation,'capability persists before dispatch');
           assert.equal(body.get('archive_password'), 'archive-secret');
           if (failNextCreate) {
             failNextCreate = false;
@@ -61,7 +66,11 @@ const { chromium } = require('playwright-core');
           }
           pending = initial.backup === 'queued' ? [{ ...op, Phase: 'encrypting' }, op] : [op];
           last = { ...op, Phase: initial.backup };
-          return route.fulfill({ json: { ...op, Phase: initial.backup } });
+          return initial.backup === 'encrypting' ? route.abort('failed') : route.fulfill({ json: { ...op, Phase: initial.backup } });
+        case '/settings/backup/action-status':
+          assert.equal(request.headers()['x-backup-action'],initiation,'lost initial response checks original capability');
+          if(holdInitiation)return route.fulfill({status:503,body:'receipt unavailable'});
+          return route.fulfill({json:{action_id:initiation,operation_id:op.ID,kind:last.Kind,disposition:'accepted',phase:last.Phase,available:true}});
         case '/settings/backup/status':
           assert.equal(request.headers()['x-backup-operation'], op.ID);
           statusCalls++;
@@ -76,6 +85,7 @@ const { chromium } = require('playwright-core');
           assert.equal(body.get('operation'), op.ID);
           return route.fulfill({ headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="freefsm-backup.age"' }, body: 'encrypted-archive' });
         case '/settings/backup/upload':
+          assert.match(request.headers()['x-backup-action'] || '',/^[0-9a-f]{64}$/,'upload identity exists before transfer');
           assert.equal(request.headers()['content-type'], 'application/octet-stream');
           assert.equal(JSON.parse(request.headers()['x-archive-password']), ' päss密 ');
           assert.equal(request.postData(), 'encrypted-archive');
@@ -98,12 +108,14 @@ const { chromium } = require('playwright-core');
     await page.goto(process.argv[2] + '/setup/company');
     assert.equal(await page.locator('.settings-tabs [data-tab=backup]').count(), 0);
     await page.goto(process.argv[2] + '/settings');
-    for (const tab of ['company', 'email', 'pdf', 'map', 'security']) {
+    for (const tab of ['company', 'pdf', 'security']) {
       await page.locator('.settings-tabs [data-tab=' + tab + ']').click();
       assert.equal(await page.locator('#tab-' + tab).isVisible(), true);
       assert.equal(await page.locator('.settings-tabs .active').getAttribute('data-tab'), tab);
       assert.equal(await page.locator('.settings-tabs [aria-current=true]').getAttribute('data-tab'), tab);
     }
+    assert.equal(await page.locator('.settings-tabs a[href="/settings/mail"]').count(),1,'mail uses independent settings route');
+    assert.equal(await page.locator('.settings-tabs a[href="/settings/maps"]').count(),1,'maps use independent settings route');
     assert.equal(await page.locator('form[action="/settings"] form').count(), 0);
     assert.equal(await page.locator('form[action="/settings/enable-email"]').count(), 1);
     await page.locator('.settings-tabs [data-tab=backup]').click();
@@ -113,9 +125,9 @@ const { chromium } = require('playwright-core');
     assert.equal(await page.locator('.settings-tabs [aria-current=true]').getAttribute('data-tab'), 'backup');
     assert.equal(await page.locator('#backup-create').evaluate(form => form.parentElement.closest('form')), null);
     await activityText();
-    await page.locator('.settings-tabs [data-tab=email]').click();
-    await page.waitForURL('**/settings#tab-email');
-    assert.equal(await page.locator('#tab-email').isVisible(), true);
+    await page.locator('.settings-tabs [data-tab=company]').click();
+    await page.waitForURL('**/settings#tab-company');
+    assert.equal(await page.locator('#tab-company').isVisible(), true);
     await page.locator('.settings-tabs [data-tab=backup]').click();
     await page.waitForURL('**/settings/backup');
     await activityText();
@@ -128,7 +140,16 @@ const { chromium } = require('playwright-core');
     assert.equal(await page.locator('#backup-ui').getAttribute('hx-history'), 'false', 'HTMX must not persist the administrator DOM in its history cache');
     await page.locator('#backup-create input').fill('archive-secret');
     await page.locator('#backup-create button').click();
-    await page.waitForFunction(() => sessionStorage.getItem('freefsm.backup.status'));
+    if(holdInitiation) {
+      await page.getByRole('button',{name:'Check initiation status',exact:true}).waitFor();
+      assert.equal(await page.locator('#backup-create button').isDisabled(),true);
+      assert.doesNotMatch(await page.evaluate(()=>sessionStorage.getItem('freefsm.backup.status')),/archive-secret|Source|password/);
+      await page.locator('#backup-dismiss').click();
+      assert.equal(await page.locator('#backup-create button').isDisabled(),true,'dismissing unknown initiation does not enable replay');
+      holdInitiation=false;
+      await page.getByRole('button',{name:'Check initiation status',exact:true}).click();
+    }
+    await page.waitForFunction(id => JSON.parse(sessionStorage.getItem('freefsm.backup.status') || '{}').id===id,op.ID);
     assert.deepEqual(await page.evaluate(() => JSON.parse(sessionStorage.getItem('freefsm.backup.status'))), { id: op.ID, kind: 'backup' });
     if (initial.backup === 'encrypting') {
       failNextStatus = 'network';
@@ -225,7 +246,8 @@ const { chromium } = require('playwright-core');
       await page.waitForFunction(() => document.getElementById('backup-progress').textContent.includes('Operation failed'));
       await page.reload();
       await page.waitForFunction(() => document.getElementById('backup-progress').textContent.includes('Operation failed'));
-      assert.deepEqual(await page.evaluate(() => Object.keys(sessionStorage)), ['freefsm.backup.status']);
+      assert.deepEqual(await page.evaluate(() => Object.keys(sessionStorage).filter(key=>!key.startsWith('freefsm-scroll:'))), ['freefsm.backup.status']);
+      assert.equal(await page.evaluate(()=>Object.entries(sessionStorage).filter(([key])=>key.startsWith('freefsm-scroll:')).every(([,value])=>{const position=JSON.parse(value);return Object.keys(position).sort().join(',')==='x,y' && typeof position.x==='number' && typeof position.y==='number';})),true,'shared navigation stores coordinates only');
       await page.locator('#backup-dismiss').click();
       assert.equal(await page.evaluate(() => sessionStorage.getItem('freefsm.backup.status')), null);
       await page.reload();

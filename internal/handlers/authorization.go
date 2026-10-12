@@ -14,6 +14,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/credentials"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
@@ -34,6 +35,11 @@ func authorizationError(w http.ResponseWriter, r *http.Request, err error) {
 	code := http.StatusConflict
 	message := "Request rejected; review the current state and supplied grants"
 	switch {
+	case errors.Is(err, authorization.ErrUnavailable):
+		middleware.ServiceUnavailable(w, r)
+		return
+	case errors.Is(err, saveaction.ErrStale):
+		message = err.Error()
 	case errors.Is(err, authorization.ErrGeocoder):
 		code = 503
 		message = err.Error()
@@ -52,6 +58,12 @@ func authorizationError(w http.ResponseWriter, r *http.Request, err error) {
 	case errors.Is(err, authorization.ErrConfigurationUnavailable):
 		code = 503
 		message = "Company configuration is unavailable"
+	default:
+		if r.Method == http.MethodGet && !errors.Is(err, authorization.ErrConflict) {
+			slog.Error("authorized read unavailable", "path", r.URL.Path, "error", err)
+			middleware.ServiceUnavailable(w, r)
+			return
+		}
 	}
 	slog.Warn("authorization request rejected", "actor_id", authorizationActor(r).UserID, "path", r.URL.Path, "channel", "web", "status", code)
 	http.Error(w, message, code)

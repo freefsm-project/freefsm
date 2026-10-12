@@ -44,7 +44,7 @@ templ FileUploadWidgetWithTitle(objectType string, objectID int64, redirect stri
 						<small data-files-prompt>or choose a file to attach</small>
 					</div>
 					<div class="files-upload-row">
-						<input type="file" name="file" required/>
+						<input type="file" name="file" required aria-label="Files to upload"/>
 						<button type="submit" class="small customer-add-button">Upload files</button>
 					</div>
 				</div>
@@ -245,7 +245,7 @@ templ FileWidgetScript() {
 
 		function filesHandleSubmit(event) {
 			event.preventDefault();
-			event.stopPropagation();
+			event.stopImmediatePropagation();
 			const form = event.currentTarget;
 			const input = form.querySelector('input[type="file"][name="file"]');
 			const files = Array.from(input?.files || []);
@@ -271,6 +271,7 @@ templ FileWidgetScript() {
 		function filesQueueRow(file) {
 			const row = document.createElement('li');
 			row.className = 'files-upload-item files-upload-queued';
+			row.dataset.actionScope = '';
 			const name = document.createElement('span');
 			name.className = 'files-upload-name';
 			name.textContent = file.name;
@@ -287,18 +288,19 @@ templ FileWidgetScript() {
 		}
 
 		function filesSendUpload(form, item, body) {
-			return new Promise((resolve, reject) => {
+			return window.freefsmActions.fetch(form.action, {method: 'POST', body, transport: (url, init) => new Promise((resolve, reject) => {
 				const xhr = new XMLHttpRequest();
-				xhr.open('POST', form.action);
+				xhr.open('POST', url);
+				init.headers.forEach((value, name) => xhr.setRequestHeader(name, value));
 				xhr.setRequestHeader('HX-Request', 'true');
 				xhr.upload.onprogress = event => {
 					if (event.lengthComputable) filesSetQueueState(item, 'uploading', Math.floor(event.loaded * 100 / event.total) + '% transferred; awaiting publication');
 				};
-				xhr.onerror = () => reject(new Error('Connection lost. Retry this file to reconcile its publication.'));
+				xhr.onerror = () => reject(new Error('Save status unknown—checking publication.'));
 				xhr.onabort = () => reject(new Error('Transfer interrupted.'));
-				xhr.onload = () => resolve({ ok: xhr.status >= 200 && xhr.status < 300 && !!xhr.getResponseHeader('File-ID'), text: async () => xhr.responseText, headers: { get: name => xhr.getResponseHeader(name) } });
+				xhr.onload = () => resolve({ status: xhr.status, ok: xhr.status >= 200 && xhr.status < 300 && !!xhr.getResponseHeader('File-ID'), text: async () => xhr.responseText, headers: { get: name => xhr.getResponseHeader(name) } });
 				xhr.send(body);
-			});
+			})}, item.row);
 		}
 
 		async function filesUploadQueueItem(form, item, queue) {
@@ -317,14 +319,23 @@ templ FileWidgetScript() {
 				queue.uploaded++;
 				filesSetQueueState(item, 'uploaded');
 			} catch (error) {
+				if (window.freefsmActions.state(item.row) === 'saved') {
+					queue.uploaded++;
+					filesSetQueueState(item, 'uploaded', 'confirmed by server receipt');
+					return;
+				}
 				item.failed = true;
 				queue.failed++;
-				filesSetQueueState(item, 'failed', error instanceof Error ? error.message : 'Upload failed.');
+				filesSetQueueState(item, ['unknown','review','pending'].includes(window.freefsmActions.state(item.row)) ? 'unknown' : 'failed', error instanceof Error ? error.message : 'Upload failed.');
 			}
 		}
 
 		async function filesQueueUploads(form, files) {
 			if (form.dataset.filesUploading === 'true' || !filesValidateSelection(form, files)) return;
+			if (form.dataset.filesUnresolved === 'true') {
+				filesSetUploadError(form, 'Check the existing unknown uploads before starting another batch. No new upload was sent.');
+				return;
+			}
 
 			const input = form.querySelector('input[type="file"][name="file"]');
 			const button = form.querySelector('button[type="submit"]');
@@ -366,31 +377,44 @@ templ FileWidgetScript() {
 			await Promise.all(workers);
 
 			delete form.dataset.filesUploading;
-			button.disabled = false;
-			input.disabled = false;
-			input.value = '';
+			const updateUnresolved = () => {
+				const unresolved = items.some(item => ['unknown','review','pending'].includes(window.freefsmActions.state(item.row)));
+				form.dataset.filesUnresolved = String(unresolved);
+				button.disabled = unresolved;
+				input.disabled = unresolved;
+			};
+			updateUnresolved();
 			if (queue.failed === 0) {
+				input.value = '';
+				window.freefsmActions.confirmed(form);
 				summary.textContent = queue.uploaded === 1 ? '1 file uploaded.' : queue.uploaded + ' files uploaded.';
 				window.location.assign(filesSafeRedirect(queue.redirect));
 				return;
 			}
 
 			summary.className = 'files-upload-summary files-upload-summary-failed';
-			summary.textContent = queue.uploaded + ' uploaded; ' + queue.failed + ' failed. Retry failed files to reconcile uncertain outcomes without duplicates.';
+			summary.textContent = queue.uploaded + ' uploaded; ' + queue.failed + ' need attention. Check unknown outcomes before any retry. Selected files are retained.';
 			refresh.hidden = false;
 			retry.hidden = false;
+			retry.textContent = 'Check status / retry rejected files';
 			retry.onclick = async () => {
 				if (form.dataset.filesUploading === 'true') return;
 				form.dataset.filesUploading = 'true';
 				retry.disabled = true;
 				button.disabled = true;
 				queue.failed = 0;
-				for (const item of items.filter(item => item.failed)) await filesUploadQueueItem(form, item, queue);
+				for (const item of items.filter(item => item.failed)) {
+					if (['unknown','review','pending'].includes(window.freefsmActions.state(item.row))) {
+						const state = await window.freefsmActions.check(item.row);
+						if (state === 'saved') { item.failed = false; queue.uploaded++; filesSetQueueState(item, 'uploaded', 'confirmed by server receipt'); }
+						else queue.failed++;
+					} else await filesUploadQueueItem(form, item, queue);
+				}
 				delete form.dataset.filesUploading;
 				retry.disabled = false;
-				button.disabled = false;
+				updateUnresolved();
 				summary.textContent = queue.uploaded + ' uploaded; ' + queue.failed + ' failed.';
-				if (!queue.failed) window.location.assign(filesSafeRedirect(queue.redirect));
+				if (!queue.failed) { input.value = ''; window.freefsmActions.confirmed(form); window.location.assign(filesSafeRedirect(queue.redirect)); }
 			};
 		}
 
@@ -407,7 +431,9 @@ templ FileWidgetScript() {
 				}).catch(() => { form.querySelector('[data-files-limit]').textContent = 'Upload limits currently unavailable.'; });
 				form.querySelector('[data-files-prompt]')?.replaceChildren('or choose up to 10 files to attach');
 				input.addEventListener('change', () => filesValidateSelection(form, Array.from(input.files || [])));
-				form.addEventListener('submit', filesHandleSubmit);
+				// Run before HTMX's target listener; otherwise a boosted form and
+				// the upload queue can dispatch two different requests for one click.
+				form.addEventListener('submit', filesHandleSubmit, true);
 			});
 		}
 
@@ -491,16 +517,15 @@ templ FileWidgetScript() {
 			const redirect = dialog?.dataset.redirect || window.location.pathname;
 			const body = new URLSearchParams({ csrf_token: csrf, redirect, revision: dialog?.dataset.fileRevision || '' });
 			Object.entries(values || {}).forEach(([key, value]) => body.set(key, value));
-			const response = await fetch(action, {
+			const response = await window.freefsmActions.fetch(action, {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/x-www-form-urlencoded',
 					'HX-Request': 'true'
 				},
 				body
-			});
+			}, dialog);
 			if (!response.ok) {
-				alert(await response.text() || 'File action failed');
 				return;
 			}
 			window.location.href = response.headers.get('HX-Redirect') || redirect;
@@ -510,15 +535,15 @@ templ FileWidgetScript() {
 			const dialog = document.getElementById('files-preview-dialog');
 			const action = filesSelectedAction(dialog?.dataset.fileRenameUrl, /^\/files\/\d+\/rename$/);
 			if (!action) return false;
-			filesPostModalAction(action, { original_name: form.querySelector('[name="original_name"]').value });
+			filesPostModalAction(action, { original_name: form.querySelector('[name="original_name"]').value }).catch(() => {});
 			return false;
 		}
 
 		function filesDeleteCurrentFile() {
 			const dialog = document.getElementById('files-preview-dialog');
 			const action = filesSelectedAction(dialog?.dataset.fileDeleteUrl, /^\/files\/\d+\/delete$/);
-			if (!action || !confirm('Remove this file? Ordinary access will end. Retained history and Delivery snapshots are preserved.')) return;
-			filesPostModalAction(action);
+			if (!action || !confirm('Remove file “' + document.getElementById('files-preview-title').textContent + '”? Ordinary access will end. Retained history and Delivery snapshots are preserved.')) return;
+			filesPostModalAction(action).catch(() => {});
 		}
 
 		filesEnhanceForms(document);

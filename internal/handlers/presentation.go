@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/templates"
 )
 
@@ -18,7 +20,8 @@ func presentationContext(s *authorization.Service) func(http.Handler) http.Handl
 			}
 			theme, err := s.Presentation(r.Context(), authorizationActor(r), legacy)
 			if err != nil {
-				internalServerError(w, r, "load presentation", err)
+				slog.Error("load presentation", "path", r.URL.Path, "error", err)
+				http.Error(w, "Presentation settings are unavailable. Retry this page.", http.StatusServiceUnavailable)
 				return
 			}
 			u.Theme = theme
@@ -45,6 +48,7 @@ func presentationPreferences(s *authorization.Service) http.HandlerFunc {
 				data.FontSize = u.FontSize
 			}
 			if (data.Theme != "system" && data.Theme != "light" && data.Theme != "dark") || (data.FontSize != "small" && data.FontSize != "medium" && data.FontSize != "large") {
+				saveaction.RolledBack(r.Context()) // rejected before any domain write
 				data.Error = "Choose a listed theme and font size. Your preferences were not saved."
 				w.WriteHeader(http.StatusUnprocessableEntity)
 			} else {

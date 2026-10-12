@@ -230,7 +230,7 @@ func DeliveryHistory(objectType string, objectID int64, rows []DeliveryHistoryRo
 						return templ_7745c5c3_Err
 					}
 				}
-				if row.CanRetry && !archived {
+				if row.CanRetry && !archived && detailCan(ctx, "delivery-retry") {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<form action=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err

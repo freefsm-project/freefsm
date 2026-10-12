@@ -350,8 +350,10 @@ func listFilterSearchID(target string) string {
 }
 
 func operationalNewURL(ctx context.Context, target string) string {
-	if canManageOperational(ctx) {
-		return target
+	for _, link := range creationLinks(ctx) {
+		if link.URL == target {
+			return target
+		}
 	}
 	return ""
 }
@@ -1049,6 +1051,10 @@ func companyFromCtx(ctx context.Context) *ent.CompanySettings {
 	return cs
 }
 
+func companyTimeZone(ctx context.Context) string {
+	return middleware.CompanyLocation(ctx).String()
+}
+
 func invoicePrefix(ctx context.Context) string {
 	cs := middleware.CompanyFromContext(ctx)
 	if cs == nil {
@@ -1275,7 +1281,7 @@ func hexToRGBA(hex string, alpha float64) string {
 }
 
 func badgeStyle(color string) string {
-	return "background:" + hexToRGBA(color, 0.10) + ";color:" + color + ";border-color:" + color
+	return "background:" + hexToRGBA(color, 0.10) + ";color:var(--interaction-text);border-color:" + color
 }
 
 func scheduleJobAccentStyle(color string) string {
@@ -1583,16 +1589,17 @@ type ClockWidgetData struct {
 }
 
 type TimeEntryRow struct {
-	ID       int64
-	UserName string
-	IsManual bool
-	ClockIn  string
-	ClockOut string
-	JobID    int64
-	JobName  string
-	Duration string
-	Notes    string
-	CanEdit  bool
+	CanDelete bool
+	ID        int64
+	UserName  string
+	IsManual  bool
+	ClockIn   string
+	ClockOut  string
+	JobID     int64
+	JobName   string
+	Duration  string
+	Notes     string
+	CanEdit   bool
 }
 
 type TimeEntryListPageData struct {
@@ -1618,23 +1625,25 @@ type TimeEntryFormEntry struct {
 }
 
 type TimeEntryFormPageData struct {
-	Entry  *TimeEntryFormEntry
-	Jobs   []SelectOption
-	Errors map[string]string
+	PreserveJob bool
+	Entry       *TimeEntryFormEntry
+	Jobs        []SelectOption
+	Errors      map[string]string
 }
 
 type TimeEntryShowPageData struct {
-	ID       int64
-	UserName string
-	ClockIn  string
-	ClockOut string
-	JobID    int64
-	JobName  string
-	Duration string
-	IsManual bool
-	Notes    string
-	GPSLat   string
-	GPSLon   string
+	CanEdit, CanDelete bool
+	ID                 int64
+	UserName           string
+	ClockIn            string
+	ClockOut           string
+	JobID              int64
+	JobName            string
+	Duration           string
+	IsManual           bool
+	Notes              string
+	GPSLat             string
+	GPSLon             string
 }
 
 func timeEntryFormTitle() string {

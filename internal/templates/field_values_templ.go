@@ -144,7 +144,7 @@ func FieldValuesLink(typ string, id int64, active bool) templ.Component {
 			templ_7745c5c3_Var7 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		if active && canEditFields(ctx, typ) {
+		if active && canEditFields(ctx, typ, id) {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<a href=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err

@@ -15,7 +15,7 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
-	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	commentent "github.com/freefsm-project/freefsm/internal/ent/comment"
@@ -27,38 +27,62 @@ import (
 )
 
 func TestHTTPAuthorizationBoundaries(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
-	defer client.Close()
-	defer pool.Close()
-
+	pool, client, router, sessions, companyID, adminID := permissionHTTPFixture(t)
 	ctx := context.Background()
-	sessions := services.NewSessionService(pool)
-	router := New(pool, client, sessions, &config.Config{UploadDir: t.TempDir(), MaxUploadSize: 1024 * 1024})
-
-	const companyID int64 = 1
-	client.CompanySettings.Create().SetCompanyID(companyID).SetBusinessName("Route Company").SaveX(ctx)
 	tech := client.User.Create().SetCompanyID(companyID).SetEmail("tech@example.test").SetPasswordHash("hash").SetName("Tech").SetRole("tech").SaveX(ctx)
-	admin := client.User.Create().SetCompanyID(companyID).SetEmail("admin@example.test").SetPasswordHash("hash").SetName("Admin").SetRole("admin").SaveX(ctx)
+	admin := client.User.GetX(ctx, adminID)
 	dispatcher := client.User.Create().SetCompanyID(companyID).SetEmail("dispatcher@example.test").SetPasswordHash("hash").SetName("Dispatcher").SetRole("dispatcher").SaveX(ctx)
+	svc := authorization.New(pool)
+	var office []authorization.Grant
+	for _, permission := range []string{"customer.view", "customer.create", "customer.edit", "customer.financial.view", "customer.archived.view", "customer.archive", "customer.restore", "job.view", "job.archived.view", "project.view", "asset.view", "estimate.view", "invoice.view", "comment.add", "comment.remove"} {
+		office = append(office, authorization.Grant{Permission: permission, Scope: authorization.All})
+	}
+	for _, fixture := range []struct {
+		id     int64
+		name   string
+		grants []authorization.Grant
+	}{
+		{dispatcher.ID, "Explicit office reader", office},
+		{tech.ID, "Explicit assigned reader", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "estimate.view", Scope: authorization.Assigned}, {Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "customer.view", Scope: authorization.Context}, {Permission: "comment.add", Scope: authorization.Assigned}, {Permission: "comment.remove", Scope: authorization.Own}}},
+	} {
+		role, err := svc.SaveRole(ctx, authorization.Actor{UserID: adminID}, 0, fixture.name, fixture.grants)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := svc.AssignUser(ctx, authorization.Actor{UserID: adminID}, fixture.id, role); err != nil {
+			t.Fatal(err)
+		}
+	}
 	customer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Route Customer").SaveX(ctx)
 	assignedJob := client.Job.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetJobType("Assigned Route Job").SetBillingType("hourly").SetLineItems(`[{"title":"Billable","quantity":1,"unit_price":100}]`).SaveX(ctx)
 	archivedJob := client.Job.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetJobType("Archived Route Job").SetDeletedAt(time.Now()).SaveX(ctx)
 	unassignedJob := client.Job.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetJobType("Unassigned Route Job").SaveX(ctx)
-	workflow := client.StatusWorkflow.Create().SetObjectType("job").SetName("Job Workflow").SaveX(ctx)
-	status := client.Status.Create().SetWorkflowID(workflow.ID).SetName("Scheduled").SetColor("#336699").SetSortOrder(1).SetCategoryKey("job:pending").SetCategoryOrder(1).SetIsCategoryDefault(true).SaveX(ctx)
+	var statusID int64
+	if err := pool.QueryRow(ctx, `SELECT id FROM statuses WHERE company_id=$1 AND category_key='job:pending' LIMIT 1`, companyID).Scan(&statusID); err != nil {
+		t.Fatal(err)
+	}
 	estimate := client.Estimate.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetTitle("Protected Estimate").SaveX(ctx)
 	invoice := client.Invoice.Create().
 		SetCompanyID(companyID).
 		SetCustomerID(customer.ID).
 		SetTitle("Protected Invoice").
+		SetInvoiceNumber(1).
 		SetInvoiceDate(time.Now()).
 		SetDueDate(time.Now()).
 		SaveX(ctx)
-	const otherCompanyID int64 = 2
+	var otherCompanyID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO companies(name,slug) VALUES('Other company','http-boundary-other') RETURNING id`).Scan(&otherCompanyID); err != nil {
+		t.Fatal(err)
+	}
 	otherCustomer := client.Customer.Create().SetCompanyID(otherCompanyID).SetDisplayName("Other Customer").SaveX(ctx)
-	client.Invoice.Create().SetCompanyID(otherCompanyID).SetCustomerID(otherCustomer.ID).SetTitle("Other Invoice").SetInvoiceDate(time.Now()).SetDueDate(time.Now()).SaveX(ctx)
-	contact := client.CustomerContact.Create().SetCustomerID(customer.ID).SetFirstName("Protected").SetLastName("Contact").SaveX(ctx)
-	location := client.Location.Create().SetObjectType("customer").SetObjectID(customer.ID).SetTitle("Protected Location").SaveX(ctx)
+	client.CompanySettings.Create().SetCompanyID(otherCompanyID).SetBusinessName("Other company").SaveX(ctx)
+	client.Invoice.Create().SetCompanyID(otherCompanyID).SetCustomerID(otherCustomer.ID).SetTitle("Other Invoice").SetInvoiceNumber(1).SetInvoiceDate(time.Now()).SetDueDate(time.Now()).SaveX(ctx)
+	contact := client.CustomerContact.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetFirstName("Protected").SetLastName("Contact").SaveX(ctx)
+	location := client.Location.Create().SetCompanyID(companyID).SetObjectType("customer").SetObjectID(customer.ID).SetTitle("Protected Location").SaveX(ctx)
+	client.Invoice.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetJobID(assignedJob.ID).SetTitle("Assigned Invoice").SetInvoiceNumber(2).SetInvoiceDate(time.Now()).SetDueDate(time.Now()).SaveX(ctx)
+	for _, job := range []*ent.Job{assignedJob, unassignedJob} {
+		client.ActivityLog.Create().SetCompanyID(companyID).SetActorID(adminID).SetAction("created").SetObjectType("job").SetObjectID(job.ID).SetMetadata(`{}`).SaveX(ctx)
+	}
 	client.JobAssignment.Create().SetJobID(assignedJob.ID).SetUserID(tech.ID).SaveX(ctx)
 	client.JobAssignment.Create().SetJobID(archivedJob.ID).SetUserID(tech.ID).SaveX(ctx)
 
@@ -70,9 +94,14 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 		expectStatus(t, router, techCookie, http.MethodGet, "/customers", http.StatusForbidden)
 		expectStatus(t, router, techCookie, http.MethodGet, "/assets", http.StatusForbidden)
 		expectStatus(t, router, techCookie, http.MethodGet, "/projects", http.StatusForbidden)
-		expectStatus(t, router, techCookie, http.MethodGet, "/invoices", http.StatusForbidden)
+		invoiceList := requestBody(t, router, techCookie, http.MethodGet, "/invoices", http.StatusOK)
+		assertContains(t, invoiceList, "Assigned Invoice")
+		assertNotContains(t, invoiceList, "Protected Invoice")
+		assertNotContains(t, invoiceList, "Other Invoice")
 		expectStatus(t, router, techCookie, http.MethodGet, "/items", http.StatusForbidden)
-		expectStatus(t, router, techCookie, http.MethodGet, "/jobs/activity", http.StatusForbidden)
+		activity := requestBody(t, router, techCookie, http.MethodGet, "/jobs/activity", http.StatusOK)
+		assertContains(t, activity, "Assigned Route Job")
+		assertNotContains(t, activity, "Unassigned Route Job")
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d", assignedJob.ID), http.StatusOK)
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d", unassignedJob.ID), http.StatusForbidden)
 		expectStatus(t, router, techCookie, http.MethodGet, fmt.Sprintf("/jobs/%d", archivedJob.ID), http.StatusForbidden)
@@ -101,7 +130,7 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 	// production fixture in vocabulary_integration_test.go.
 
 	t.Run("tech cannot mutate assigned jobs", func(t *testing.T) {
-		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/status?status_id=%d", assignedJob.ID, status.ID), http.StatusForbidden)
+		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/status?status_id=%d", assignedJob.ID, statusID), http.StatusForbidden)
 		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/create-next-occurrence", assignedJob.ID), http.StatusForbidden)
 		expectStatus(t, router, techCookie, http.MethodPost, fmt.Sprintf("/jobs/%d/cancel-next-occurrence", assignedJob.ID), http.StatusForbidden)
 	})
@@ -192,8 +221,8 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 		assertContains(t, body, "Assigned Route Job")
 		assertNotContains(t, body, "Unassigned Route Job")
 		assertNotContains(t, body, "Archived Route Job")
-		assertNotContains(t, body, "Invoices")
-		assertNotContains(t, body, "Estimates")
+		assertNotContains(t, body, "Protected Invoice")
+		assertNotContains(t, body, "Protected Estimate")
 	})
 }
 

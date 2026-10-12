@@ -45,7 +45,7 @@ func TestBackupActivityHTTPVisibilityIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer manager.Shutdown()
-	backupRouter := NewBackupRouter(manager, control, services.NewUserService(client), services.NewCompanySettingsService(client), sessions, "", backupTestActivityHandler(client))
+	backupRouter := NewBackupRouter(pool, manager, control, services.NewUserService(client), services.NewCompanySettingsService(client), sessions, "", backupTestActivityHandler(client))
 	globalRouter := New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()})
 	for _, surface := range []struct {
 		router http.Handler
@@ -80,7 +80,12 @@ func TestBackupActivityHTTPVisibilityIntegration(t *testing.T) {
 	assertNotContains(t, body, "Historical backup administrator")
 	body = requestBody(t, globalRouter, cookies["dispatcher"], http.MethodGet, "/activity?action=backup_created", http.StatusOK)
 	assertNotContains(t, body, "Historical backup administrator")
-	expectStatus(t, globalRouter, cookies["tech"], http.MethodGet, "/activity", http.StatusForbidden)
+	// This explicit fixture grants Assigned Job/document View. The current
+	// Activity surface is usable but must disclose neither sealed backup events
+	// nor unrelated Customer activity.
+	body = requestBody(t, globalRouter, cookies["tech"], http.MethodGet, "/activity", http.StatusOK)
+	assertNotContains(t, body, "Historical backup administrator")
+	assertNotContains(t, body, "Ordinary customer activity")
 
 	// Prove the maintenance/status shell renders with both database clients
 	// closed, while the activity boundary is rejected before authentication.

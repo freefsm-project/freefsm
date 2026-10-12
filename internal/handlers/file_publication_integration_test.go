@@ -369,7 +369,7 @@ func TestFilePublicationPersistedBrowser(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Browser files").SaveX(ctx)
 	cookie := sessionCookie(t, ctx, sessions, admin)
-	server := httptest.NewServer(router)
+	server := newInteractionBrowserServer(t, router)
 	defer server.Close()
 	output, err := exec.CommandContext(ctx, "node", "testdata/browser/file-publication.cjs", server.URL, cookie.Value, fmt.Sprint(c.ID)).CombinedOutput()
 	t.Logf("browser: %s", output)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 )
@@ -40,7 +42,19 @@ func writeInlineOptionJSON(w http.ResponseWriter, id int64, label string) {
 }
 
 func internalServerError(w http.ResponseWriter, r *http.Request, msg string, err error) {
+	if errors.Is(err, authorization.ErrUnavailable) {
+		middleware.ServiceUnavailable(w, r)
+		return
+	}
+	if errors.Is(err, saveaction.ErrStale) || errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) {
+		authorizationError(w, r, err)
+		return
+	}
 	slog.Error(msg, "path", r.URL.Path, "error", err)
+	if r.Method == http.MethodGet {
+		middleware.ServiceUnavailable(w, r)
+		return
+	}
 	http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 }
 

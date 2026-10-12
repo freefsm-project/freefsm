@@ -103,7 +103,7 @@ templ CustomerShow(p CustomerShowPageData) {
 		<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/activity", p.Customer.ID)) } hx-trigger="load" hx-swap="innerHTML">
 			<p>Loading activity...</p>
 		</div>
-		if canManageOperational(ctx) {
+		if canCustomer(ctx, "view") {
 			<p class="work-item-detail-back"><a href="/customers">&larr; Back to Customers</a></p>
 		}
 		</div>

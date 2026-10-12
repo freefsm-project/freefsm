@@ -64,9 +64,19 @@ the optional intercepted backup browser were not established by these checks.
 
 ## Remaining acceptance defects and gaps
 
-- **#24:** complete permission-aware navigation, existing-workflow receipts and
-  failure UX, measured accessibility/contrast/native zoom, and desktop/mobile
-  browser matrix remain incomplete.
+This section records the original integration checkpoint. The subsequent #24
+implementation supersedes its navigation, guarded-save and available-engine
+accessibility gaps; see `permission-aware-navigation.md`, `guarded-online-saves.md`
+and `accessible-interaction.md` for current behavior and final verification.
+The unavailable branded desktop/version and physical mobile release matrix
+remains the #114 release gate. Other tickets' checkpoint findings below retain
+their original scope and are not reassessed by the #24 follow-through.
+
+- **#24 (historical checkpoint):** navigation, existing-workflow receipts/failure
+  UX and measured accessibility/native zoom were incomplete at this checkpoint.
+  Subsequent implementation and available Chromium/Firefox verification are
+  recorded in the three current documents above; the full release matrix remains
+  unverified.
 - **Delivery handoff:** ordinary creation's legacy route mismatch is resolved and
   equal-grant `tech` users are tested. Manual Delivery retry still uses inherited
   legacy authority and lacks the independent current-grant/protected-audit
@@ -97,7 +107,7 @@ the merged production/database/browser checks and independent source review:
 | Ticket | Recommendation | Evidence or blocking gap |
 |---|---|---|
 | #20 | Eligible for scoped closure | Role/account/directory HTTP, concurrency, audit and persisted browser checks pass. |
-| #24 | Keep open | Existing-workflow interaction/navigation and accessibility/browser matrix gaps above. |
+| #24 | Historical keep-open assessment; see subsequent evidence | Installed navigation/save/accessibility follow-through is documented separately; full release matrix remains #114. |
 | #25 | Eligible for scoped closure | Equal-grant creation, atomic numbering/fields/Item selection, hidden-number review, future defaults and independent immutable PDF checks pass. Manual Delivery retry remains a separate unresolved Delivery handoff. |
 | #26 | Eligible for scoped closure | Encrypted settings, independent grants, selected HTML/PDF/sender, current transport, coordinates and persisted browser checks pass. |
 | #27 | Keep open | Intent-discovery authorization/coherent snapshot and pre-032 reviewed-upgrade gaps above. |

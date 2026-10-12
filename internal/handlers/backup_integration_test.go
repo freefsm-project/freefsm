@@ -41,6 +41,10 @@ func TestBackupHTTPRoundTrip(t *testing.T) {
 	}
 }
 
+func TestBackupInitialResponseLossReconcilesRealEngineHTTP(t *testing.T) {
+	backupHTTPRoundTrip(t, "guarded-initiation")
+}
+
 func backupHTTPRoundTrip(t *testing.T, scenario string) {
 	dsn := os.Getenv("FREEFSM_BACKUP_TEST_ADMIN_URL")
 	if dsn == "" {
@@ -101,7 +105,14 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 		if scenario == "development-different-identity" && i == 1 {
 			version, commit = "v1.2.3-42-gabcdef-dirty", "abcdef1234567"
 		}
-		f.manager, err = backup.New(backup.Config{DSN: u.String(), UploadDir: f.uploads, StateDir: f.control.StateDir(), BuildKind: kind, Version: version, Commit: commit, Control: f.control, ResetConnections: db.Pool.Reset})
+		managerConfig := backup.Config{DSN: u.String(), UploadDir: f.uploads, StateDir: f.control.StateDir(), BuildKind: kind, Version: version, Commit: commit, Control: f.control, ResetConnections: db.Pool.Reset}
+		if scenario == "guarded-initiation" {
+			destinationDSN := u.String()
+			managerConfig.ActivitySink = func(ctx context.Context, event backup.ActivityEvent) error {
+				return services.WriteBackupActivity(ctx, destinationDSN, event)
+			}
+		}
+		f.manager, err = backup.New(managerConfig)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -147,7 +158,7 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		f.router = NewBackupRouter(f.manager, f.control, services.NewUserService(f.client), services.NewCompanySettingsService(f.client), f.sessions, "", backupTestActivityHandler(f.client))
+		f.router = NewBackupRouter(f.pool, f.manager, f.control, services.NewUserService(f.client), services.NewCompanySettingsService(f.client), f.sessions, "", backupTestActivityHandler(f.client))
 		r := httptest.NewRequest("GET", "/settings/backup", nil)
 		r.AddCookie(&http.Cookie{Name: "session", Value: f.web})
 		w := httptest.NewRecorder()
@@ -167,11 +178,24 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 		f.csrf = html.UnescapeString(match[1])
 		instances = append(instances, f)
 	}
+	if scenario == "guarded-initiation-browser" {
+		runBackupInitiationBrowser(t, instances[0].router, instances[0].web)
+		return
+	}
+	lostInitial := map[*fixture]map[string]bool{}
 	request := func(f *fixture, action string, body io.Reader, raw bool, authenticated bool) *httptest.ResponseRecorder {
 		r := httptest.NewRequest("POST", "/settings/backup/"+action, body)
 		r.Header.Set("Sec-Fetch-Site", "same-origin")
 		r.AddCookie(f.cookie)
 		r.Header.Set("X-CSRF-Token", f.csrf)
+		if scenario == "guarded-initiation" {
+			if action == "create" {
+				r.Header.Set("X-Backup-Action", strings.Repeat("a", 64))
+			}
+			if action == "upload" {
+				r.Header.Set("X-Backup-Action", strings.Repeat("b", 64))
+			}
+		}
 		if authenticated {
 			r.AddCookie(&http.Cookie{Name: "session", Value: f.web})
 		}
@@ -180,6 +204,40 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 			r.Header.Set("X-Archive-Password", `"archive-secret"`)
 		} else {
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+		if scenario == "guarded-initiation" && (action == "create" || action == "upload") {
+			if lostInitial[f] == nil {
+				lostInitial[f] = map[string]bool{}
+			}
+			if !lostInitial[f][action] {
+				lostInitial[f][action] = true
+				finished := make(chan *httptest.ResponseRecorder, 1)
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+					observed := httptest.NewRecorder()
+					f.router.ServeHTTP(observed, request)
+					finished <- observed
+					conn, _, err := w.(http.Hijacker).Hijack()
+					if err == nil {
+						_ = conn.Close()
+					}
+				}))
+				defer server.Close()
+				online, err := http.NewRequest("POST", server.URL+r.URL.Path, r.Body)
+				if err != nil {
+					t.Fatal(err)
+				}
+				online.Header = r.Header.Clone()
+				response, err := server.Client().Do(online)
+				if err == nil {
+					response.Body.Close()
+					t.Fatal("initial response was not lost")
+				}
+				observed := <-finished
+				if observed.Code != 200 {
+					t.Fatalf("lost response did not follow real accepted initiation: %d %s", observed.Code, observed.Body.String())
+				}
+				return httptest.NewRecorder() // deliberately no response capability/body
+			}
 		}
 		w := httptest.NewRecorder()
 		f.router.ServeHTTP(w, r)
@@ -229,7 +287,39 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 			t.Fatalf("missing CSRF %s: %d", action, w.Code)
 		}
 	}
-	op := poll(src, decode(request(src, "create", strings.NewReader("archive_password=archive-secret"), false, true)))
+	queryInitiation := func(f *fixture, id string) backup.InitiationReceipt {
+		r := httptest.NewRequest("POST", "/settings/backup/action-status", nil)
+		r.Header.Set("Sec-Fetch-Site", "same-origin")
+		r.AddCookie(f.cookie)
+		r.Header.Set("X-CSRF-Token", f.csrf)
+		r.Header.Set("X-Backup-Action", id)
+		w := httptest.NewRecorder()
+		f.router.ServeHTTP(w, r)
+		if w.Code != 200 {
+			t.Fatalf("initiation query %d %s", w.Code, w.Body.String())
+		}
+		var receipt backup.InitiationReceipt
+		if err := json.Unmarshal(w.Body.Bytes(), &receipt); err != nil {
+			t.Fatal(err)
+		}
+		return receipt
+	}
+	created := request(src, "create", strings.NewReader("archive_password=archive-secret"), false, true)
+	var op backup.Operation
+	if scenario == "guarded-initiation" {
+		// Discard the initial result entirely; the client only knows its pre-send
+		// capability. Query the real manager, then use the existing status protocol.
+		receipt := queryInitiation(src, strings.Repeat("a", 64))
+		if !receipt.Available {
+			t.Fatalf("lost create response %+v", receipt)
+		}
+		op = poll(src, backup.Operation{ID: receipt.OperationID, Phase: "queued"})
+		if duplicate := request(src, "create", strings.NewReader("archive_password=archive-secret"), false, true); duplicate.Code != 409 {
+			t.Fatalf("create duplicate %d %s", duplicate.Code, duplicate.Body.String())
+		}
+	} else {
+		op = poll(src, decode(created))
+	}
 	values := url.Values{"operation": {op.ID}, "current_password": {"wrong"}}
 	if w := request(src, "download", strings.NewReader(values.Encode()), false, true); w.Code != 403 {
 		t.Fatalf("wrong password: %d", w.Code)
@@ -244,7 +334,19 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 			t.Fatal(err)
 		}
 	}
-	op = poll(dst, decode(request(dst, "upload", strings.NewReader(archive.Body.String()), true, true)))
+	uploaded := request(dst, "upload", strings.NewReader(archive.Body.String()), true, true)
+	if scenario == "guarded-initiation" {
+		receipt := queryInitiation(dst, strings.Repeat("b", 64))
+		if !receipt.Available {
+			t.Fatalf("lost upload response %+v", receipt)
+		}
+		op = poll(dst, backup.Operation{ID: receipt.OperationID, Phase: "queued"})
+		if duplicate := request(dst, "upload", strings.NewReader("must not validate twice"), true, true); duplicate.Code != 409 {
+			t.Fatalf("upload duplicate %d %s", duplicate.Code, duplicate.Body.String())
+		}
+	} else {
+		op = poll(dst, decode(uploaded))
+	}
 	if scenario == "development-schema-mismatch" || scenario == "release-mismatch" {
 		want := backup.FailureSchemaMismatch
 		if scenario == "release-mismatch" {

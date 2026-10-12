@@ -16,7 +16,7 @@ templ AssetListContent(p AssetListPageData) {
 	<div id="asset-list-content" class="focused-list-content">
 		@ListToolbar(ListToolbarData{
 			Action: "/assets", Target: "#asset-list-content", Search: p.Search,
-			SearchPlaceholder: "Search assets...", NewURL: "/assets/new", NewLabel: "New Asset",
+			SearchPlaceholder: "Search assets...", NewURL: operationalNewURL(ctx, "/assets/new"), NewLabel: "New Asset",
 			ShowFilter: true,
 			Filters: filterValues("asset_type_id", fmt.Sprintf("%d", p.AssetTypeID), "asset_status_id", fmt.Sprintf("%d", p.AssetStatusID)),
 			Scope: customerScope(p.CustomerID),
@@ -62,7 +62,9 @@ templ AssetTable(p AssetListPageData) {
 				if len(p.Assets) == 0 {
 					<tr><td colspan="7" class="work-queue-empty">
 						<p>No assets found.</p>
-						<a href="/assets/new" role="button" class="outline">Create your first asset</a>
+						if navigationPermission(ctx, "asset.create", "A") {
+							<a href="/assets/new" role="button" class="outline">Create your first asset</a>
+						}
 					</td></tr>
 				}
 				for _, a := range p.Assets {
@@ -90,11 +92,7 @@ templ AssetTable(p AssetListPageData) {
 							}
 						</td>
 						<td class="work-queue-actions">
-							<a href={ templ.URL(fmt.Sprintf("/assets/%d/edit", a.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", a.Name) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/assets/%d/delete", a.ID)) } method="post" hx-confirm="Delete this asset?">
-								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", a.Name) }>Del</button>
-							</form>
+							@CollectionActions("asset", a.ID, a.Name)
 						</td>
 					</tr>
 				}

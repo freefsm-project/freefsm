@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -274,7 +275,7 @@ func (s *Service) CustomerChildLifecycle(ctx context.Context, a Actor, customerI
 			return ErrForbidden
 		}
 		if archived == !restore {
-			return nil
+			return saveaction.ConfirmNoChange(ctx, tx)
 		}
 		if !restore {
 			column := "customer_contact_id"

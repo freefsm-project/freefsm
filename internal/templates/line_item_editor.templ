@@ -101,7 +101,7 @@ templ LineItemEditor(p LineItemEditorData) {
 						body.set('taxable', this.newItem.taxable ? 'true' : 'false');
 						body.set('track_inventory', this.newItem.track_inventory ? 'true' : 'false');
 						const csrf = document.querySelector('meta[name="csrf-token"]');
-						const response = await fetch('/items/inline', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrf ? csrf.content : '' }, body });
+						const response = await window.freefsmActions.fetch('/items/inline', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrf ? csrf.content : '' }, body }, this.$refs.createItemDialog);
 						if (!response.ok) throw new Error((await response.text()) || 'Unable to create item.');
 						const created = await response.json();
 						this.catalog.push(created);
@@ -127,14 +127,14 @@ templ LineItemEditor(p LineItemEditorData) {
 		@templ.Raw(`<script type="application/json" data-line-item-json="existing">` + p.ExistingItemsJSON + `</script>`)
 		@templ.Raw(`<script type="application/json" data-line-item-json="customers">` + p.CustomersJSON + `</script>`)
 		<legend>Line Items</legend>
-		<table>
+		<div class="table-scroll line-items-scroll" role="region" aria-label="Line items, scroll for more columns" tabindex="0"><table>
 			<thead><tr><th>Catalog</th><th>Title</th><th>Description</th><th>Qty</th><th>Price</th><th>Discount</th><th>Surcharge</th><th>Taxable</th><th>Total</th><th></th></tr></thead>
 			<tbody x-ref="lineRows" @keydown.enter="addOnEnter($event)">
 				<template x-for="(item, index) in items" :key="index">
 					<tr>
-						<td><select x-model.number="item.item_id" x-init="$nextTick(() => { $el.value = String(item.item_id || 0) })" @change="selectItem(index, $el.value)"><option value="0">Free-text line</option><template x-for="catalogItem in catalog" :key="catalogItem.id"><option :value="catalogItem.id" :selected="Number(catalogItem.id) === Number(item.item_id)" x-text="catalogItem.name"></option></template></select></td>
+						<td><select aria-label="Catalog item" x-model.number="item.item_id" x-init="$nextTick(() => { $el.value = String(item.item_id || 0) })" @change="selectItem(index, $el.value)"><option value="0">Free-text line</option><template x-for="catalogItem in catalog" :key="catalogItem.id"><option :value="catalogItem.id" :selected="Number(catalogItem.id) === Number(item.item_id)" x-text="catalogItem.name"></option></template></select></td>
 						<td><input type="text" x-model="item.title" placeholder="Line title" aria-label="Line item title"/></td>
-						<td><textarea x-model="item.description" rows="2" placeholder="Line item description"></textarea></td>
+						<td><textarea x-model="item.description" rows="2" placeholder="Line item description" aria-label="Line item description"></textarea></td>
 						<td><input type="number" x-model="item.quantity" step="any" min="0.000001" class="input-width-70" aria-label="Quantity"/></td>
 						<td><input type="number" x-model="item.unit_price" step="0.01" class="input-width-100" aria-label="Unit price"/></td>
 						<td><input type="number" x-model="item.discount" step="0.01" min="0" class="input-width-100" aria-label="Discount"/></td>
@@ -145,7 +145,7 @@ templ LineItemEditor(p LineItemEditorData) {
 					</tr>
 				</template>
 			</tbody>
-		</table>
+		</table></div>
 		<div class="line-item-actions">
 			<button type="button" @click.prevent="add()" class="outline">Add Line</button>
 			if itemPermission(ctx, "item.create") && itemPermission(ctx, "pricebook.create") {

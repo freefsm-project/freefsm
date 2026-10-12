@@ -64,7 +64,7 @@ templ ProjectForm(p ProjectFormPageData) {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
 		</fieldset>
 			<div class="entity-form-actions entity-form-actions-end">
-				<a href="/projects" role="button" class="outline">Cancel</a>
+				<a href={ templ.URL(navigationReturnURL(ctx, "/projects")) } role="button" class="outline">Cancel</a>
 				<button type="submit">Save</button>
 			</div>
 		</form>

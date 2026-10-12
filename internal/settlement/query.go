@@ -72,6 +72,28 @@ func (s *Service) InvoiceSettlement(ctx context.Context, actor Actor, invoiceID 
 	if err := authorize(actor); err != nil {
 		return InvoiceSettlement{}, err
 	}
+	return s.invoiceSettlement(ctx, actor, invoiceID)
+}
+
+// GrantedInvoiceSettlement is the installed detail-page read projection. It
+// intersects independent settlement View with current parent/archived access;
+// it does not alter the legacy settlement command policy.
+func (s *Service) GrantedInvoiceSettlement(ctx context.Context, actor Actor, invoiceID int64) (InvoiceSettlement, error) {
+	req, ok := authorization.FromContext(ctx)
+	if !ok {
+		return InvoiceSettlement{}, ErrForbidden
+	}
+	p, err := req.Service.Principal(ctx, req.Actor)
+	if err != nil || actor.ID != p.UserID || actor.CompanyID != p.CompanyID {
+		return InvoiceSettlement{}, ErrForbidden
+	}
+	if err := req.Service.ParentFacet(ctx, req.Actor, "invoice", invoiceID, "settlement.view"); err != nil {
+		return InvoiceSettlement{}, err
+	}
+	return s.invoiceSettlement(ctx, actor, invoiceID)
+}
+
+func (s *Service) invoiceSettlement(ctx context.Context, actor Actor, invoiceID int64) (InvoiceSettlement, error) {
 	var out InvoiceSettlement
 	var encoded, tax string
 	err := s.db.QueryRow(ctx, `SELECT id,customer_id,settlement_state,line_items::text,tax_rate::text FROM invoices WHERE company_id=$1 AND id=$2 AND conversion_hidden_at IS NULL`, actor.CompanyID, invoiceID).Scan(&out.InvoiceID, &out.CustomerID, &out.State, &encoded, &tax)

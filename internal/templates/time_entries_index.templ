@@ -69,7 +69,7 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 								<span class="work-queue-muted">-</span>
 							}
 						</td>
-						<td><small class="work-queue-muted">{ e.ClockIn }</small></td>
+						<td><a href={ templ.URL(fmt.Sprintf("/time-entries/%d",e.ID)) } aria-label={ "View time entry at " + e.ClockIn }><small>{ e.ClockIn }</small></a></td>
 						<td>
 							if e.ClockOut != "" {
 								<small class="work-queue-muted">{ e.ClockOut }</small>
@@ -87,6 +87,8 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 						<td class="work-queue-actions">
 							if e.CanEdit {
 								<a href={ templ.URL(fmt.Sprintf("/time-entries/%d/edit", e.ID)) } role="button" class="outline small" aria-label="Edit time entry">Edit</a>
+							}
+							if e.CanDelete {
 								<form action={ templ.URL(fmt.Sprintf("/time-entries/%d/delete", e.ID)) } method="post" hx-confirm="Delete this time entry?">
 									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 									<button class="outline contrast small" aria-label="Delete time entry">Del</button>

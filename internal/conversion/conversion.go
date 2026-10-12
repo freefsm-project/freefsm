@@ -145,6 +145,17 @@ func (s *Service) RevertEligibility(ctx context.Context, actor Actor, invoiceID 
 
 // ActivityEstimateID resolves and authorizes the root estimate for a conversion activity request.
 func (s *Service) ActivityEstimateID(ctx context.Context, actor Actor, document objectref.Ref) (int64, error) {
+	current := false
+	if req, ok := authorization.FromContext(ctx); ok {
+		current = true
+		p, err := req.Service.Principal(ctx, req.Actor)
+		if err != nil || p.UserID != actor.ID || p.CompanyID != actor.CompanyID {
+			return 0, ErrForbidden
+		}
+		if err := req.Service.ParentFacet(ctx, req.Actor, string(document.Type), document.ID, string(document.Type)+".provenance.view"); err != nil {
+			return 0, ErrForbidden
+		}
+	}
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return 0, err
@@ -167,8 +178,10 @@ func (s *Service) ActivityEstimateID(ctx context.Context, actor Actor, document 
 	if err != nil {
 		return 0, err
 	}
-	if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
-		return 0, err
+	if !current {
+		if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
+			return 0, err
+		}
 	}
 	return estimateID, nil
 }

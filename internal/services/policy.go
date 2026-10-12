@@ -35,6 +35,9 @@ func NewPolicyService(client *ent.Client, objects objectref.Directory) *PolicySe
 func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role string, ref objectref.Ref, action PolicyAction) bool {
 	if request, ok := authorization.FromContext(ctx); ok && action == PolicyRead {
 		switch ref.Type {
+		case objectref.TypeTimeEntry:
+			_, err := request.Service.TimeEntryAccess(ctx, request.Actor, ref.ID, "")
+			return err == nil
 		case objectref.TypeJob, objectref.TypeProject, objectref.TypeAsset, objectref.TypeEstimate, objectref.TypeInvoice:
 			err := request.Service.ParentAccess(ctx, request.Actor, string(ref.Type), ref.ID, "")
 			return err == nil
@@ -152,17 +155,15 @@ func (s *PolicyService) IsUserAssignedToJob(ctx context.Context, jobID, userID i
 	return err == nil && active
 }
 
-// CanCreateDocumentForJob is the handler seam for technician document creation.
-// Company ownership remains the caller/module's responsibility because the legacy
-// policy service does not carry an actor company scope.
-func (s *PolicyService) CanCreateDocumentForJob(ctx context.Context, userID int64, role string, jobID int64) bool {
-	if userID <= 0 || jobID <= 0 {
+// CanCreateDocumentForJob presents the already-migrated creation command's
+// specific permission on its current Job parent. Preparation is not authority to
+// save: CreateDocument/DetailsTransaction recheck the same grants at commit.
+func (s *PolicyService) CanCreateDocumentForJob(ctx context.Context, jobID int64, documentType objectref.Type) bool {
+	if jobID <= 0 || (documentType != objectref.TypeInvoice && documentType != objectref.TypeEstimate) {
 		return false
 	}
-	if role == "admin" || role == "dispatcher" {
-		return true
-	}
-	return isTechnicianRole(role) && s.IsUserAssignedToJob(ctx, jobID, userID)
+	request, ok := authorization.FromContext(ctx)
+	return ok && request.Service != nil && request.Service.ParentAccess(ctx, request.Actor, "job", jobID, string(documentType)+".create") == nil
 }
 
 func (s *PolicyService) canAccessCustomer(ctx context.Context, customerID, userID int64) bool {

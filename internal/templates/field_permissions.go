@@ -5,29 +5,28 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 )
 
-func canEditJobFields(ctx context.Context) bool {
+func canEditJobFields(ctx context.Context, id int64) bool {
 	r, ok := authorization.FromContext(ctx)
 	if !ok {
 		return false
 	}
-	p, err := r.Service.Principal(ctx, r.Actor)
-	return err == nil && p.Allows("job.fields.edit", authorization.Assigned)
+	if id == 0 {
+		p, err := r.Service.Principal(ctx, r.Actor)
+		return err == nil && p.Allows("job.fields.edit", authorization.All)
+	}
+	return r.Service.ParentAccess(ctx, r.Actor, "job", id, "job.fields.edit") == nil
 }
 
-func canEditFields(ctx context.Context, typ string) bool {
+func canEditFields(ctx context.Context, typ string, id int64) bool {
 	r, ok := authorization.FromContext(ctx)
 	if !ok {
-		return false
-	}
-	p, err := r.Service.Principal(ctx, r.Actor)
-	if err != nil {
 		return false
 	}
 	permission := typ + ".edit"
 	if typ == "job" {
 		permission = "job.fields.edit"
 	}
-	return p.Allows(permission, authorization.All) || p.Allows(permission, authorization.Assigned)
+	return r.Service.ParentAccess(ctx, r.Actor, typ, id, permission) == nil
 }
 
 func canManageFieldDefinitions(ctx context.Context) bool {

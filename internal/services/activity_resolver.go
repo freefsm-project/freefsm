@@ -99,7 +99,8 @@ func (r *ActivityResolver) Resolve(ctx context.Context, companyID int64, viewer 
 
 	var scope activityTechnicianScope
 	var scopeErr error
-	if isTechnicianRole(viewer.Role) && technicianScopeNeeded(targetIDs) {
+	_, navigationRead := authorization.NavigationPrincipal(ctx)
+	if !navigationRead && isTechnicianRole(viewer.Role) && technicianScopeNeeded(targetIDs) {
 		scope, scopeErr = r.store.technicianScope(ctx, companyID, viewer.ID, targetIDs)
 	}
 
@@ -156,6 +157,13 @@ func (r *ActivityResolver) Resolve(ctx context.Context, companyID int64, viewer 
 			resolution := ActivityTargetResolution{
 				DisplayName: record.name,
 				Exists:      true,
+			}
+			if navigationRead {
+				// SQL traversal filtered every record using current parent scope.
+				resolution.Readable = true
+				resolution.URL, _ = objectref.URL(record.ref)
+				result.Targets[record.ref] = resolution
+				continue
 			}
 			if record.ref.Type == objectref.TypeTag || record.ref.Type == objectref.TypeAssetType || record.ref.Type == objectref.TypeAssetStatus {
 				if request, ok := authorization.FromContext(ctx); ok {

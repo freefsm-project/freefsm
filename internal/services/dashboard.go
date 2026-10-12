@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/customer"
 	"github.com/freefsm-project/freefsm/internal/ent/dashboardlayout"
@@ -154,7 +155,7 @@ func (s *DashboardService) Widgets(ctx context.Context, u DashboardUser) ([]Dash
 		return nil, err
 	}
 
-	defs := s.defaultWidgetDefinitions(u.Role)
+	defs := s.defaultWidgetDefinitions(ctx, u.Role)
 	views := make([]DashboardWidgetView, 0, len(defs))
 	for i, def := range defs {
 		views = append(views, DashboardWidgetView{
@@ -193,7 +194,7 @@ func (s *DashboardService) AvailableWidgets(ctx context.Context, u DashboardUser
 		}
 	}
 	var available []DashboardWidgetDefinition
-	for _, def := range s.allowedWidgetDefinitions(u.Role) {
+	for _, def := range s.allowedWidgetDefinitions(ctx, u.Role) {
 		if !visible[def.Type] {
 			available = append(available, def)
 		}
@@ -203,7 +204,7 @@ func (s *DashboardService) AvailableWidgets(ctx context.Context, u DashboardUser
 
 func (s *DashboardService) AddWidget(ctx context.Context, u DashboardUser, widgetType string) error {
 	def, ok := s.widgetDefinition(widgetType)
-	if !ok || !s.widgetAllowed(def, u.Role) {
+	if !ok || !s.widgetAllowed(ctx, def, u.Role) {
 		return nil
 	}
 	l, err := s.ensureUserLayout(ctx, u)
@@ -417,7 +418,7 @@ func (s *DashboardService) widgetsForLayout(ctx context.Context, layoutID int64,
 	views := make([]DashboardWidgetView, 0, len(widgets))
 	for _, w := range widgets {
 		def, ok := s.widgetDefinition(w.WidgetType)
-		if !ok || !s.widgetAllowed(def, role) {
+		if !ok || !s.widgetAllowed(ctx, def, role) {
 			continue
 		}
 		title := w.Title
@@ -437,7 +438,10 @@ func (s *DashboardService) widgetsForLayout(ctx context.Context, layoutID int64,
 	return views, nil
 }
 
-func (s *DashboardService) defaultWidgetDefinitions(role string) []DashboardWidgetDefinition {
+func (s *DashboardService) defaultWidgetDefinitions(ctx context.Context, role string) []DashboardWidgetDefinition {
+	if _, current := authorization.FromContext(ctx); current {
+		return s.allowedWidgetDefinitions(ctx, role)
+	}
 	if role != "admin" && role != "dispatcher" {
 		return []DashboardWidgetDefinition{s.mustWidgetDefinition(WidgetClock), s.mustWidgetDefinition(WidgetAssignedWork)}
 	}
@@ -453,18 +457,52 @@ func (s *DashboardService) defaultWidgetDefinitions(role string) []DashboardWidg
 	}
 }
 
-func (s *DashboardService) allowedWidgetDefinitions(role string) []DashboardWidgetDefinition {
+func (s *DashboardService) allowedWidgetDefinitions(ctx context.Context, role string) []DashboardWidgetDefinition {
 	defs := s.allWidgetDefinitions()
 	allowed := make([]DashboardWidgetDefinition, 0, len(defs))
 	for _, def := range defs {
-		if s.widgetAllowed(def, role) {
+		if s.widgetAllowed(ctx, def, role) {
 			allowed = append(allowed, def)
 		}
 	}
 	return allowed
 }
 
-func (s *DashboardService) widgetAllowed(def DashboardWidgetDefinition, role string) bool {
+func (s *DashboardService) widgetAllowed(ctx context.Context, def DashboardWidgetDefinition, role string) bool {
+	if req, current := authorization.FromContext(ctx); current {
+		p, cached := authorization.NavigationPrincipal(ctx)
+		if !cached {
+			var err error
+			p, err = req.Service.Principal(ctx, req.Actor)
+			if err != nil {
+				return false
+			}
+		}
+		records := p.Allows("job.view", authorization.All) && p.Allows("estimate.view", authorization.All) && p.Allows("invoice.view", authorization.All) && p.Allows("pricing.view", authorization.All)
+		financial := p.Allows("customer.financial.view", authorization.All) && p.Allows("invoice.view", authorization.All) && p.Allows("pricing.view", authorization.All) && p.Allows("settlement.view", authorization.All)
+		switch def.Type {
+		case WidgetClock:
+			return p.Allows("time.clock_in", authorization.Own) || p.Allows("time.clock_out", authorization.Own)
+		case WidgetAssignedWork:
+			return p.Allows("job.view", authorization.Assigned) && !p.Allows("job.view", authorization.All)
+		case WidgetCustomers:
+			return p.Allows("customer.view", authorization.All)
+		case WidgetJobs:
+			return p.Allows("job.view", authorization.All)
+		case WidgetInvoices:
+			return p.Allows("invoice.view", authorization.All)
+		case WidgetProjects:
+			return p.Allows("project.view", authorization.All)
+		case WidgetTodayOverview:
+			return records && financial && p.Allows("customer.view", authorization.All)
+		case WidgetRecentActivity:
+			return records
+		case WidgetFinancialSummary:
+			return financial
+		default:
+			return false
+		}
+	}
 	return !def.AdminOnly || role == "admin" || role == "dispatcher"
 }
 
@@ -556,7 +594,13 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 	// Invoices
 	invoicesPaid := 0
 	if s.db != nil {
-		_ = s.db.QueryRow(ctx, `SELECT count(*) FROM invoice_effective_status e JOIN invoices i ON i.id=e.invoice_id JOIN statuses st ON st.id=e.status_id WHERE e.company_id=$1 AND i.deleted_at IS NULL AND i.conversion_hidden_at IS NULL AND st.category_key='invoice:paid'`, companyID).Scan(&invoicesPaid)
+		ids, err := s.client.Invoice.Query().Where(invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil()).IDs(ctx)
+		if err != nil {
+			return DashboardStats{}, err
+		}
+		if err := s.db.QueryRow(ctx, `SELECT count(*) FROM invoice_effective_status e JOIN invoices i ON i.id=e.invoice_id JOIN statuses st ON st.id=e.status_id WHERE e.company_id=$1 AND i.id=ANY($2) AND i.deleted_at IS NULL AND i.conversion_hidden_at IS NULL AND st.category_key='invoice:paid'`, companyID, ids).Scan(&invoicesPaid); err != nil {
+			return DashboardStats{}, err
+		}
 	}
 
 	unpaidInvoicePredicates := []predicate.Invoice{invoice.DeletedAtIsNil(), invoice.ConversionHiddenAtIsNil()}
@@ -588,7 +632,11 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 
 	// Revenue this month (payments received)
 	var revenue, paymentsCollectedToday float64
-	if s.db != nil {
+	financial := true
+	if p, current := authorization.NavigationPrincipal(ctx); current {
+		financial = p.Allows("customer.financial.view", authorization.All) && p.Allows("invoice.view", authorization.All) && p.Allows("pricing.view", authorization.All) && p.Allows("settlement.view", authorization.All)
+	}
+	if s.db != nil && financial {
 		monthCents, todayCents, err := s.paymentTotals(ctx, companyID, dashboardPeriod{monthStart: startOfMonth, todayStart: startOfToday, tomorrowStart: startOfTomorrow})
 		if err != nil {
 			return DashboardStats{}, err

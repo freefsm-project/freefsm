@@ -27,7 +27,7 @@ func (h *DashboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 	clockWidget := templates.ClockWidgetData{}
 	user, _ := middleware.UserFromContext(r.Context())
 	stats := services.DashboardStats{}
-	if isAdminOrDispatcher(user) {
+	if user != nil {
 		var err error
 		stats, err = h.dashboardSvc.Stats(r.Context(), user.CompanyID, loc, middleware.CompanyFromContext(r.Context()))
 		if err != nil {

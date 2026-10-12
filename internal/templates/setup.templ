@@ -10,7 +10,7 @@ templ SetupPage(p SetupPageData) {
 			if p.Error != "" {
 				<div class="error-msg">{ p.Error }</div>
 			}
-			<form action="/setup" method="post">
+			<form action="/setup" method="post" hx-boost="false">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				@PasswordField(PasswordFieldOptions{
 					ID: "setup-token", Name: "token", Label: "Setup Token",

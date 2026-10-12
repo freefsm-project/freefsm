@@ -45,7 +45,8 @@ func TestAssetListContentSynchronizesToolbarAndResults(t *testing.T) {
 	}
 
 	var out strings.Builder
-	if err := AssetListContent(p).Render(context.Background(), &out); err != nil {
+	ctx := context.WithValue(context.Background(), middleware.UserKey, &middleware.UserInfo{NavigationGrants: map[string]bool{"asset.create/A": true}})
+	if err := AssetListContent(p).Render(ctx, &out); err != nil {
 		t.Fatalf("render asset list content: %v", err)
 	}
 	html := out.String()

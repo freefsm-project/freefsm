@@ -56,7 +56,7 @@ func TestLineItemHelpersUseVisibleZeroFallbackForCorruptValues(t *testing.T) {
 		t.Errorf("grandTotal() = %v, want 0", got)
 	}
 
-	html := renderComponent(t, EstimateShow(EstimateDetail{TaxRate: "8.25", LineItems: items}))
+	html := renderPricingComponent(t, EstimateShow(EstimateDetail{TaxRate: "8.25", LineItems: items}))
 	if !strings.Contains(html, "$0.00") {
 		t.Error("rendered corrupt line item does not show the $0.00 fallback")
 	}
@@ -79,7 +79,7 @@ func TestShowPagesRenderCompactQuantitiesAndCanonicalTotals(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			html := renderComponent(t, tt.component)
+			html := renderPricingComponent(t, tt.component)
 			for _, want := range append([]string{">1<", ">1.5<"}, tt.amounts...) {
 				if !strings.Contains(html, want) {
 					t.Errorf("rendered page does not contain %q", want)
@@ -91,7 +91,7 @@ func TestShowPagesRenderCompactQuantitiesAndCanonicalTotals(t *testing.T) {
 
 func TestShowPagesKeepTaxableLabelWhenTaxRoundsToZero(t *testing.T) {
 	items := []services.LineItem{{Title: "Small taxable item", UnitPrice: 0.01, Quantity: 1, Taxable: true}}
-	html := renderComponent(t, EstimateShow(EstimateDetail{TaxRate: "0.5", LineItems: items}))
+	html := renderPricingComponent(t, EstimateShow(EstimateDetail{TaxRate: "0.5", LineItems: items}))
 	if !strings.Contains(html, "0.5") || strings.Contains(html, ">No<") {
 		t.Fatalf("taxable line lost its tax rate label: %s", html)
 	}
@@ -107,8 +107,8 @@ func TestDocumentFormsRenderSharedLineItemEditorContract(t *testing.T) {
 		name      string
 		component templ.Component
 	}{
-		{"estimate", EstimateForm(EstimateFormPageData{Estimate: &EstimateDetail{}, ItemsJSON: data.ItemsJSON, ExistingItemsJSON: data.ExistingItemsJSON, CustomersJSON: data.CustomersJSON})},
-		{"invoice", InvoiceForm(InvoiceFormPageData{Invoice: &InvoiceDetail{}, ItemsJSON: data.ItemsJSON, ExistingItemsJSON: data.ExistingItemsJSON, CustomersJSON: data.CustomersJSON})},
+		{"estimate", EstimateForm(EstimateFormPageData{IsNew: true, Estimate: &EstimateDetail{}, ItemsJSON: data.ItemsJSON, ExistingItemsJSON: data.ExistingItemsJSON, CustomersJSON: data.CustomersJSON})},
+		{"invoice", InvoiceForm(InvoiceFormPageData{IsNew: true, Invoice: &InvoiceDetail{}, ItemsJSON: data.ItemsJSON, ExistingItemsJSON: data.ExistingItemsJSON, CustomersJSON: data.CustomersJSON})},
 	}
 
 	for _, tt := range tests {
@@ -151,6 +151,15 @@ func TestLineItemEditorCreateItemPermission(t *testing.T) {
 func renderComponent(t *testing.T, component templ.Component) string {
 	t.Helper()
 	return renderComponentForUser(t, component, &middleware.UserInfo{Role: "admin", ItemPermissions: map[string]bool{"item.create": true, "pricebook.create": true}})
+}
+
+func renderPricingComponent(t *testing.T, component templ.Component) string {
+	t.Helper()
+	var output bytes.Buffer
+	if err := component.Render(WithDetailAccess(context.Background(), DetailAccess{"pricing": true}), &output); err != nil {
+		t.Fatal(err)
+	}
+	return output.String()
 }
 
 func renderComponentForRole(t *testing.T, component templ.Component, role string) string {

@@ -53,7 +53,7 @@ templ CustomFieldDefIndex(p CustomFieldDefListPageData) {
 			</tbody>
 		</table>
 		</div>
-		<p class="work-item-detail-back"><a href="/settings">&larr; Back to Settings</a></p>
+		<p class="work-item-detail-back"><a href="/">&larr; Back to Dashboard</a></p>
 		if canAdmin(ctx) {
 			<div hx-get="/settings/custom-fields/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 				<p>Loading recent activity...</p>

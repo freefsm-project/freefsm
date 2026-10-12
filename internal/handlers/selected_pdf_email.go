@@ -11,6 +11,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/google/uuid"
@@ -34,16 +35,19 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 		var err error
 		version, err = strconv.ParseInt(text, 10, 64)
 		if err != nil || version < 1 {
+			saveaction.RejectBeforeWrite(r.Context())
 			http.Error(w, "Invalid PDF selection", 422)
 			return true
 		}
 	}
 	if r.Method == http.MethodPost && version == 0 {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Select a saved PDF version before sending", 409)
 		return true
 	}
 	selected, err := request.Service.DeliveryPDF(r.Context(), request.Actor, kind, id, version)
 	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context()) // only selection was read; Queue has not run
 		if errors.Is(err, authorization.ErrConflict) {
 			http.Error(w, "Select a reviewed saved PDF version, or generate a new version before composing email", 409)
 		} else {
@@ -93,6 +97,7 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 	recipients, err := services.ParseEmailRecipients(data.To, data.CC, data.BCC)
 	key, keyErr := uuid.Parse(data.IdempotencyKey)
 	if err != nil || keyErr != nil || data.Subject == "" || data.Body == "" {
+		saveaction.RejectBeforeWrite(r.Context())
 		data.Error = "Valid recipients, subject, body and operation ID are required"
 		w.WriteHeader(422)
 		render(w, r, templates.DocumentEmailCompose(data))

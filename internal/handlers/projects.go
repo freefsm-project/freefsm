@@ -99,9 +99,7 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 	customers, _ := h.custSvc.ListAll(r.Context())
 	custMap := customerMap(customers)
 	jobs, _ := h.jobSvc.ListByProject(r.Context(), id)
-	if !isAdminOrDispatcher(u) {
-		jobs = filterReadableJobs(r.Context(), h.policySvc, u, jobs)
-	}
+	jobs = filterReadableJobs(r.Context(), h.policySvc, u, jobs)
 
 	jobRows := make([]templates.JobRow, len(jobs))
 	for i, j := range jobs {

@@ -12,7 +12,18 @@ templ IntegrationSettingsPage(section string, v authorization.IntegrationSetting
     <p role="alert">Outbound email is disabled after restore. An Administrator must explicitly enable it.</p>
    }
   }
-  <nav aria-label="Integration settings"><a href="/settings/mail">Mail</a> <a href="/settings/maps">Maps</a> <a href="/settings/open-tracking">Open tracking</a></nav>
+  <nav aria-label="Integration settings">
+   if navigationPermission(ctx, "configuration.mail.view", "U") {
+    @NavigationLink("/settings/mail", "Mail")
+   }
+   if navigationPermission(ctx, "configuration.maps.view", "U") {
+    @NavigationLink("/settings/maps", "Maps")
+   }
+   if navigationPermission(ctx, "security.open_tracking.view", "S") {
+    @NavigationLink("/settings/open-tracking", "Open tracking")
+   }
+   <a href="/">Back to Dashboard</a>
+  </nav>
   <h1>{ section } settings</h1>
   if v.Review != "" {
    <p role="alert">{ v.Review }</p>

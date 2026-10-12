@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -39,14 +40,10 @@ func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	isAdmin := user.Role == "admin"
-	isDispatcher := user.Role == "dispatcher"
-	canViewAll := isAdmin || isDispatcher
-
-	var filterUserID int64
-	if canViewAll {
-		filterUserID, _ = strconv.ParseInt(r.URL.Query().Get("user_id"), 10, 64)
-	} else {
+	p, _ := authorization.NavigationPrincipal(r.Context())
+	canViewAll := p.Allows("directory.view", authorization.All) && (p.Allows("time.view", authorization.All) || p.Allows("time.view", authorization.Assigned))
+	filterUserID, _ := strconv.ParseInt(r.URL.Query().Get("user_id"), 10, 64)
+	if !p.Allows("time.view", authorization.All) && !p.Allows("time.view", authorization.Assigned) {
 		filterUserID = user.ID
 	}
 
@@ -147,6 +144,10 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	view, ok := timeEntryAuthority(w, r, id, "")
+	if !ok {
+		return
+	}
 	entry, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
@@ -157,15 +158,7 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", 401)
 		return
 	}
-	if !isAdminOrDispatcher(currentUser) && entry.UserID != currentUser.ID {
-		http.Error(w, "forbidden", 403)
-		return
-	}
-
-	userName := "Unknown"
-	if u, err := h.userSvc.GetByID(r.Context(), entry.UserID); err == nil {
-		userName = u.Name
-	}
+	userName := view.SubjectName
 	jobID, jobName := h.timeEntryJob(r.Context(), entry)
 
 	clockInStr := displayDateTime(r.Context(), entry.ClockIn)
@@ -177,25 +170,27 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 	gpsLat := ""
 	gpsLon := ""
-	if entry.Latitude != nil {
+	if view.CanGPS && entry.Latitude != nil {
 		gpsLat = fmt.Sprintf("%.6f", *entry.Latitude)
 	}
-	if entry.Longitude != nil {
+	if view.CanGPS && entry.Longitude != nil {
 		gpsLon = fmt.Sprintf("%.6f", *entry.Longitude)
 	}
 
 	data := templates.TimeEntryShowPageData{
-		ID:       entry.ID,
-		UserName: userName,
-		JobID:    jobID,
-		JobName:  jobName,
-		ClockIn:  clockInStr,
-		ClockOut: clockOutStr,
-		Duration: duration,
-		IsManual: entry.IsManual,
-		Notes:    entry.Notes,
-		GPSLat:   gpsLat,
-		GPSLon:   gpsLon,
+		CanEdit:   view.CanCorrect,
+		CanDelete: view.CanVoid && (isAdminOrDispatcher(currentUser) || entry.UserID == currentUser.ID),
+		ID:        entry.ID,
+		UserName:  userName,
+		JobID:     jobID,
+		JobName:   jobName,
+		ClockIn:   clockInStr,
+		ClockOut:  clockOutStr,
+		Duration:  duration,
+		IsManual:  entry.IsManual,
+		Notes:     entry.Notes,
+		GPSLat:    gpsLat,
+		GPSLon:    gpsLon,
 	}
 	render(w, r, templates.TimeEntryShow(data))
 }
@@ -296,16 +291,14 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", 401)
 		return
 	}
+	view, ok := timeEntryAuthority(w, r, id, "time.correct")
+	if !ok {
+		return
+	}
 
 	entry, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
 		http.NotFound(w, r)
-		return
-	}
-
-	canEdit := isAdminOrDispatcher(user) || entry.UserID == user.ID
-	if !canEdit {
-		http.Error(w, "forbidden", 403)
 		return
 	}
 
@@ -322,6 +315,7 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		data := templates.TimeEntryFormPageData{
+			PreserveJob: view.JobID > 0 && !jobAllowed(jobs, view.JobID),
 			Entry: &templates.TimeEntryFormEntry{
 				ID:       entry.ID,
 				JobID:    valueInt64(entry.JobID),
@@ -355,29 +349,28 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	params.Notes = formPtr(r.FormValue("notes"))
-	jobs, err := h.allowedJobsForUser(r.Context(), user)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	jobID, err := parseOptionalID(r.FormValue("job_id"))
-	if err != nil {
-		http.Error(w, "invalid job", 400)
-		return
-	}
-	if jobID > 0 {
-		if !jobAllowed(jobs, jobID) {
-			http.Error(w, "job not allowed", 400)
+	if r.Form.Has("job_id") {
+		jobID, err := parseOptionalID(r.FormValue("job_id"))
+		if err != nil {
+			http.Error(w, "invalid job", 400)
 			return
 		}
-		params.JobID = &jobID
-	} else {
-		params.ClearJob = true
+		if jobID != view.JobID {
+			if jobID > 0 {
+				params.JobID = &jobID
+			} else {
+				params.ClearJob = true
+			}
+		}
 	}
-
-	result, err := h.svc.Update(r.Context(), id, params)
+	req, _ := authorization.FromContext(r.Context())
+	if err := req.Service.CorrectTimeEntry(r.Context(), req.Actor, id, authorization.TimeEntryCorrection{ClockIn: params.ClockIn, ClockOut: params.ClockOut, Notes: params.Notes, JobID: params.JobID, ClearJob: params.ClearJob}); err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	result, err := h.svc.GetByID(r.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		internalServerError(w, r, "reload corrected time entry", err)
 		return
 	}
 	clockInStr := displayDateTime(r.Context(), result.ClockIn)
@@ -455,6 +448,11 @@ func (h *TimeEntryHandler) timeEntryJob(ctx context.Context, e *ent.TimeEntry) (
 	if e.JobID == nil || *e.JobID == 0 {
 		return 0, ""
 	}
+	if req, ok := authorization.FromContext(ctx); ok {
+		if req.Service.ParentAccess(ctx, req.Actor, "job", *e.JobID, "") != nil {
+			return 0, ""
+		}
+	}
 	if j, err := h.jobSvc.GetByID(ctx, *e.JobID); err == nil && j != nil {
 		return *e.JobID, jobDisplayName(j)
 	}
@@ -462,10 +460,15 @@ func (h *TimeEntryHandler) timeEntryJob(ctx context.Context, e *ent.TimeEntry) (
 }
 
 func (h *TimeEntryHandler) allowedJobsForUser(ctx context.Context, user *middleware.UserInfo) ([]*ent.Job, error) {
-	if isAdminOrDispatcher(user) {
-		return h.jobSvc.ListAll(ctx)
+	req, ok := authorization.FromContext(ctx)
+	if !ok {
+		return nil, authorization.ErrForbidden
 	}
-	return h.jobSvc.ListAssignedAll(ctx, user.ID)
+	p, err := req.Service.Principal(ctx, req.Actor)
+	if err != nil {
+		return nil, err
+	}
+	return h.jobSvc.ListAll(authorization.WithNavigationReads(ctx, p))
 }
 
 func timeEntryToRow(ctx context.Context, e *ent.TimeEntry, userNames map[int64]string, jobNames map[int64]string, currentUser *middleware.UserInfo) templates.TimeEntryRow {
@@ -479,25 +482,52 @@ func timeEntryToRow(ctx context.Context, e *ent.TimeEntry, userNames map[int64]s
 
 	userName := userNames[e.UserID]
 
-	canEdit := isAdminOrDispatcher(currentUser) || (currentUser != nil && currentUser.ID == e.UserID)
+	canEdit, canDelete := false, false
 	jobID := valueInt64(e.JobID)
 	jobName := jobNames[jobID]
 	if jobID > 0 && jobName == "" {
 		jobName = fmt.Sprintf("Job #%d", jobID)
 	}
+	if _, current := authorization.NavigationPrincipal(ctx); current {
+		if req, ok := authorization.FromContext(ctx); ok {
+			if view, err := req.Service.TimeEntryAccess(ctx, req.Actor, e.ID, ""); err == nil {
+				canEdit = view.CanCorrect
+				canDelete = view.CanVoid && (isAdminOrDispatcher(currentUser) || currentUser != nil && currentUser.ID == e.UserID)
+				userName = view.SubjectName
+			}
+		}
+		if jobNames[jobID] == "" {
+			jobID, jobName = 0, ""
+		}
+	}
 
 	return templates.TimeEntryRow{
-		ID:       e.ID,
-		UserName: userName,
-		IsManual: e.IsManual,
-		ClockIn:  clockIn,
-		ClockOut: clockOut,
-		JobID:    jobID,
-		JobName:  jobName,
-		Duration: duration,
-		Notes:    e.Notes,
-		CanEdit:  canEdit,
+		ID:        e.ID,
+		UserName:  userName,
+		IsManual:  e.IsManual,
+		ClockIn:   clockIn,
+		ClockOut:  clockOut,
+		JobID:     jobID,
+		JobName:   jobName,
+		Duration:  duration,
+		Notes:     e.Notes,
+		CanEdit:   canEdit,
+		CanDelete: canDelete,
 	}
+}
+
+func timeEntryAuthority(w http.ResponseWriter, r *http.Request, id int64, permission string) (authorization.TimeEntryView, bool) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return authorization.TimeEntryView{}, false
+	}
+	view, err := req.Service.TimeEntryAccess(r.Context(), req.Actor, id, permission)
+	if err != nil {
+		authorizationError(w, r, err)
+		return authorization.TimeEntryView{}, false
+	}
+	return view, true
 }
 
 func jobAllowed(jobs []*ent.Job, jobID int64) bool {

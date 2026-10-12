@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
@@ -36,7 +37,7 @@ func NewScheduleHandler(jobSvc *services.JobService, custSvc *services.CustomerS
 func (h *ScheduleHandler) Index(w http.ResponseWriter, r *http.Request) {
 	tab, period, explicit := h.resolveScheduleTabPeriod(r)
 	if explicit {
-		if u, _ := middleware.UserFromContext(r.Context()); u != nil && (tab != "dispatch" || isAdminOrDispatcher(u)) {
+		if u, _ := middleware.UserFromContext(r.Context()); u != nil && (tab != "dispatch" || scheduleDispatchVisible(r)) {
 			if err := h.userSvc.UpdateSchedulePreferences(r.Context(), u.ID, tab, period); err != nil {
 				slog.Error("update schedule preferences", "error", err, "user_id", u.ID)
 			}
@@ -74,7 +75,7 @@ func (h *ScheduleHandler) resolveScheduleTabPeriod(r *http.Request) (string, str
 
 	if u, _ := middleware.UserFromContext(r.Context()); u != nil {
 		tab, period := normalizeScheduleTabPeriod(u.LastScheduleTab, u.LastSchedulePeriod)
-		if tab == "dispatch" && !isAdminOrDispatcher(u) {
+		if tab == "dispatch" && !scheduleDispatchVisible(r) {
 			tab = "calendar"
 			period = normalizeSchedulePeriod(period, tab)
 		}
@@ -454,8 +455,7 @@ func (h *ScheduleHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScheduleHandler) Dispatch(w http.ResponseWriter, r *http.Request) {
-	u, _ := middleware.UserFromContext(r.Context())
-	if !isAdminOrDispatcher(u) {
+	if !scheduleDispatchVisible(r) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
@@ -546,6 +546,9 @@ func (h *ScheduleHandler) Day(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ScheduleHandler) jobsByDateRange(r *http.Request, start, end time.Time) ([]*ent.Job, error) {
+	if _, current := authorization.NavigationPrincipal(r.Context()); current {
+		return h.jobSvc.ListByDateRange(r.Context(), start, end)
+	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if isAdminOrDispatcher(u) {
 		return h.jobSvc.ListByDateRange(r.Context(), start, end)
@@ -557,6 +560,9 @@ func (h *ScheduleHandler) jobsByDateRange(r *http.Request, start, end time.Time)
 }
 
 func (h *ScheduleHandler) unscheduledJobs(r *http.Request) ([]*ent.Job, error) {
+	if _, current := authorization.NavigationPrincipal(r.Context()); current {
+		return h.jobSvc.ListUnscheduled(r.Context())
+	}
 	u, _ := middleware.UserFromContext(r.Context())
 	if isAdminOrDispatcher(u) {
 		return h.jobSvc.ListUnscheduled(r.Context())

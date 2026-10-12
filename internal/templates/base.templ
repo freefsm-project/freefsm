@@ -69,6 +69,7 @@ templ Layout(title string, children ...templ.Component) {
 						mapEl.dataset.initialized = 'true';
 						var motion = !matchMedia('(prefers-reduced-motion: reduce)').matches;
 						var map = L.map(mapEl, {zoomAnimation: motion, fadeAnimation: motion, markerZoomAnimation: motion}).setView([39.8283, -98.5795], 4);
+						if (window.freefsmReduceMapMotion) window.freefsmReduceMapMotion(map);
 						L.tileLayer(mapEl.dataset.tileUrl, {
 							maxZoom: 19,
 							attribution: '&copy; OpenStreetMap contributors'
@@ -96,7 +97,7 @@ templ Layout(title string, children ...templ.Component) {
 							popup.appendChild(link);
 							popup.appendChild(document.createElement('br'));
 							popup.appendChild(document.createTextNode(el.dataset.customer || ''));
-							L.marker([lat, lng], { icon: icon }).addTo(map).bindPopup(popup);
+							L.marker([lat, lng], { icon: icon, title: el.dataset.title || 'Job location', alt: el.dataset.title || 'Job location' }).addTo(map).bindPopup(popup);
 						});
 						if (bounds.length) map.fitBounds(bounds, { padding: [24, 24], animate: motion });
 					});
@@ -127,70 +128,23 @@ templ Layout(title string, children ...templ.Component) {
 					<img src={ templ.URL(staticAsset("/static/img/gear.png")) } alt=""/>
 					<strong>{ companyBrandName(companyFromCtx(ctx)) }</strong>
 				</div>
+				if navigationSearch(ctx) {
 				<form class="sidebar-search" action="/search" method="get">
 					<input type="search" name="q" placeholder="Search..." aria-label="Search all records" required/>
 				</form>
+				}
 				<hr class="sidebar-divider"/>
 				<nav aria-label="Main navigation">
-					<a href="/" class={ templ.KV("active", isActivePath(ctx, "/")) }>Dashboard</a>
-					<a href="/schedule" class={ templ.KV("active", isActivePath(ctx, "/schedule")) }>Schedule</a>
-				if canCustomer(ctx,"view") {
-					<a href="/customers" class={ templ.KV("active", isActivePath(ctx, "/customers")) }>Customers</a>
-				}
-				if canManageOperational(ctx) {
-					<a href="/assets" class={ templ.KV("active", isActivePath(ctx, "/assets")) }>Assets</a>
-				}
-				<a href="/jobs" class={ templ.KV("active", isActivePath(ctx, "/jobs")) }>Jobs</a>
-				if canManageOperational(ctx) {
-					<a href="/projects" class={ templ.KV("active", isActivePath(ctx, "/projects")) }>Projects</a>
-				}
-					if canManageOperational(ctx) {
-						<a href="/estimates" class={ templ.KV("active", isActivePath(ctx, "/estimates")) }>Estimates</a>
-						<a href="/invoices" class={ templ.KV("active", isActivePath(ctx, "/invoices")) }>Invoices</a>
+					@NavigationLink("/", "Dashboard")
+					for _, link := range operationalLinks(ctx) {
+						@NavigationLink(link.URL, link.Label)
 					}
-				if itemPermission(ctx, "item.view") {
-					<a href="/items" class={ templ.KV("active", isActivePath(ctx, "/items")) }>Items</a>
-				}
-			<a href="/time-entries" class={ templ.KV("active", isActivePath(ctx, "/time-entries")) }>Timesheets</a>
-			if canManageOperational(ctx) {
-				<a href="/activity" class={ templ.KV("active", isActivePath(ctx, "/activity")) }>Activity</a>
-			}
 			</nav>
+			@CreationNavigation()
 			if canViewDirectory(ctx) {
-				<a href="/directory">Operational directory</a>
+				@NavigationLink("/directory", "Operational directory")
 			}
-			if canViewIntegration(ctx,"mail") {
-				<a href="/settings/mail">Mail settings</a>
-			}
-			if canViewIntegration(ctx,"maps") {
-				<a href="/settings/maps">Map settings</a>
-			}
-			if canReviewAuthorization(ctx) {
-				<a href="/settings/authorization">Authorization review</a>
-			}
-			if canConfiguration(ctx) && !canAdmin(ctx) {
-				<a href="/settings">Company and document settings</a>
-			}
-			if vocabularyPermission(ctx, "tags", "view") {
-				<a href="/tags">Tags</a>
-			}
-			if vocabularyPermission(ctx, "assets", "view") {
-				<a href="/settings/assets">Asset vocabulary</a>
-			}
-			if !canAdmin(ctx) && canViewFieldDefinitions(ctx) {
-				<a href="/settings/custom-fields">Custom Fields</a>
-			}
-			if canAdmin(ctx) {
-					<hr class="sidebar-divider"/>
-					<details class="dropdown">
-						<summary>Administration</summary>
-						<ul>
-							<li><a href="/settings">Settings</a></li>
-							<li><a href="/settings/custom-fields">Custom Fields</a></li>
-							<li><a href="/users">Users</a></li>
-						</ul>
-					</details>
-				}
+			@ConfigurationNavigation()
 				<div class="sidebar-footer">FreeFSM { appVersion() }</div>
 			</aside>
 			<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>

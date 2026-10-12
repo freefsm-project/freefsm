@@ -6,7 +6,7 @@ templ JobsIndex(p JobListPageData) {
 	@Layout("Jobs") {
 		@JobsListContent(p)
 
-		if canManageOperational(ctx) {
+		if navigationPermission(ctx, "job.view", "A", "J") {
 			<div hx-get="/jobs/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 				<p>Loading recent activity...</p>
 			</div>
@@ -45,22 +45,22 @@ templ JobsTable(p JobListPageData) {
 					<th>Customer</th>
 					<th>Status</th>
 					<th>Scheduled</th>
-					if canManageOperational(ctx) {
+					if navigationPermission(ctx, "pricing.view", "A", "J") {
 						<th>Billing</th>
-						<th></th>
 					}
+					<th></th>
 				</tr>
 			</thead>
 			<tbody>
 				if len(p.Jobs) == 0 {
-					if canManageOperational(ctx) {
+					if navigationPermission(ctx, "job.create", "A") {
 						<tr><td colspan="6" class="work-queue-empty">
 							<p>No jobs found.</p>
 							<a href="/jobs/new" role="button" class="outline">Create your first job</a>
 						</td></tr>
 					} else {
 						<tr><td colspan="4" class="work-queue-empty">
-							<p>No assigned jobs found.</p>
+							<p>No jobs found.</p>
 						</td></tr>
 					}
 				}
@@ -72,16 +72,10 @@ templ JobsTable(p JobListPageData) {
 						<td>{ j.Customer }</td>
 						<td class="work-queue-status"><span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span></td>
 						<td>{ j.StartTime }</td>
-						if canManageOperational(ctx) {
+						if navigationPermission(ctx, "pricing.view", "A", "J") {
 							<td>{ j.BillingType }</td>
-							<td class="work-queue-actions">
-								<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", j.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", j.DisplayName) }>Edit</a>
-								<form action={ templ.URL(fmt.Sprintf("/jobs/%d/delete", j.ID)) } method="post" hx-confirm="Delete this job?">
-									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-									<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", j.DisplayName) }>Del</button>
-								</form>
-							</td>
 						}
+						<td class="work-queue-actions">@CollectionActions("job", j.ID, j.DisplayName)</td>
 					</tr>
 				}
 			</tbody>

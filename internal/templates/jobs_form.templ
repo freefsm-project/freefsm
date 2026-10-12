@@ -9,6 +9,7 @@ templ JobForm(p JobFormPageData) {
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<input type="hidden" name="form_mode" value={ jobFormMode(p.Job.ID) }/>
 			<input type="hidden" name="job_id" value={ fmt.Sprintf("%d", p.Job.ID) }/>
+			<p>Dates and times use { companyTimeZone(ctx) }.</p>
 			<label>
 				Customer <small class="required-marker">*</small>
 				<select name="customer_id" id="job-customer-select" required>
@@ -115,7 +116,7 @@ templ JobForm(p JobFormPageData) {
 				Tech Notes
 				<textarea name="tech_notes" rows="3">{ p.Job.TechNotes }</textarea>
 			</label>
-			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: canEditJobFields(ctx)})
+			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: canEditJobFields(ctx,p.Job.ID)})
 			<fieldset x-data="visitsEditor()" data-existing={ p.ExistingVisitsJSON }>
 				<legend>Visits</legend>
 				<table>
@@ -123,11 +124,11 @@ templ JobForm(p JobFormPageData) {
 					<tbody>
 						<template x-for="(v, idx) in items" :key="idx">
 							<tr>
-								<td><input type="date" x-model="v.date"></td>
-								<td><input type="time" step="900" x-model="v.start_time"></td>
-								<td><input type="time" step="900" x-model="v.end_time"></td>
-								<td><input type="text" x-model="v.notes"></td>
-								<td><button @click.prevent="remove(idx)" class="outline contrast small">X</button></td>
+								<td><input type="date" x-model="v.date" aria-label="Visit date"></td>
+								<td><input type="time" step="900" x-model="v.start_time" aria-label="Visit start time"></td>
+								<td><input type="time" step="900" x-model="v.end_time" aria-label="Visit end time"></td>
+								<td><input type="text" x-model="v.notes" aria-label="Visit notes"></td>
+								<td><button @click.prevent="remove(idx)" class="outline contrast small" aria-label="Remove visit">X</button></td>
 							</tr>
 						</template>
 					</tbody>
@@ -143,7 +144,7 @@ templ JobForm(p JobFormPageData) {
 						<template x-for="(a, idx) in items" :key="idx">
 							<tr>
 								<td>
-									<select x-model.number="a.user_id">
+									<select x-model.number="a.user_id" aria-label="Assigned user">
 										<option value="0">Select user...</option>
 										<option :value="a.preserved_user_id || 0" :hidden="!a.preserved_user_id" :disabled="!a.preserved_user_id" x-text="a.preserved_user_id ? a.name + ' (inactive)' : ''"></option>
 										for _, u := range p.Users {
@@ -152,8 +153,8 @@ templ JobForm(p JobFormPageData) {
 									</select>
 									<small x-show="!a.user_id && a.name" x-text="'Legacy assignment: ' + a.name"></small>
 								</td>
-								<td><input type="text" x-model="a.role"></td>
-								<td><button @click.prevent="remove(idx)" class="outline contrast small">X</button></td>
+								<td><input type="text" x-model="a.role" aria-label="Assignment role"></td>
+								<td><button @click.prevent="remove(idx)" class="outline contrast small" aria-label="Remove assignment">X</button></td>
 							</tr>
 						</template>
 					</tbody>
@@ -168,10 +169,10 @@ templ JobForm(p JobFormPageData) {
 					<tbody>
 						<template x-for="(st, idx) in items" :key="idx">
 							<tr>
-								<td><input type="text" x-model="st.title" placeholder="e.g. Pre-site survey"></td>
-								<td><input type="checkbox" x-model="st.completed"></td>
-								<td><input type="number" x-model="st.sort_order" min="0" class="input-width-70"></td>
-								<td><button @click.prevent="remove(idx)" class="outline contrast small">X</button></td>
+								<td><input type="text" x-model="st.title" placeholder="e.g. Pre-site survey" aria-label="Subtask title"></td>
+								<td><input type="checkbox" x-model="st.completed" aria-label="Subtask completed"></td>
+								<td><input type="number" x-model="st.sort_order" min="0" class="input-width-70" aria-label="Subtask display order"></td>
+								<td><button @click.prevent="remove(idx)" class="outline contrast small" aria-label="Remove subtask">X</button></td>
 							</tr>
 						</template>
 					</tbody>
@@ -184,7 +185,7 @@ templ JobForm(p JobFormPageData) {
 				if p.PendingNextOccurrence {
 					<button type="submit" class="outline" formaction={ templ.URL(fmt.Sprintf("/jobs/%d/cancel-next-occurrence", p.Job.ID)) } formmethod="post" formnovalidate>Cancel</button>
 				} else {
-					<a href="/jobs" role="button" class="outline">Cancel</a>
+					<a href={ templ.URL(navigationReturnURL(ctx, "/jobs")) } role="button" class="outline">Cancel</a>
 				}
 			</div>
 		</form>
@@ -198,22 +199,120 @@ templ JobForm(p JobFormPageData) {
 			function csrfToken() {
 				return document.querySelector('meta[name="csrf-token"]')?.content || '';
 			}
+			const jobLookupControllers = new WeakMap();
+			const jobLookupValues = new WeakMap();
+			const jobLookupLabels = { 'contact-select': 'Contact', 'job-project-select': 'Project', 'job-location-select': 'Location', 'job-asset-select': 'Asset' };
+			function unresolvedJobChoices(scope) {
+				return [...scope.querySelectorAll('select[data-lookup-state]')].filter(select => !['ready', 'empty'].includes(select.dataset.lookupState));
+			}
+			function syncJobLookupGuard(scope) {
+				if (!scope) return;
+				const blocked = unresolvedJobChoices(scope).length > 0 || !!scope.dataset.creationFieldsLoading || (scope.matches('#job-project-dialog, #job-asset-dialog') && !scope.dataset.creationFieldsReady);
+				scope.querySelectorAll('button[type="submit"], button[id$="-create-button"]').forEach(button => {
+					if (blocked && !button.disabled) { button.disabled = true; button.dataset.lookupDisabled = 'true'; }
+					else if (!blocked && button.dataset.lookupDisabled) { button.disabled = false; delete button.dataset.lookupDisabled; }
+				});
+			}
+			function holdJobChoice(select, hold) {
+				// Disabled selects are omitted from FormData. Retain only their exact
+				// value in the same position; submission is separately blocked until
+				// lookup succeeds, so a failed refresh never silently means Clear.
+				let value = jobLookupValues.get(select);
+				if (hold && select.name) {
+					if (!value) { value = document.createElement('input'); value.type = 'hidden'; value.name = select.name; select.after(value); jobLookupValues.set(select, value); }
+					value.value = select.value;
+				} else if (value) { value.remove(); jobLookupValues.delete(select); }
+				select.disabled = hold;
+			}
+			function jobChoiceNotice(select, state, message, retry) {
+				let notice = document.getElementById(select.id + '-lookup-status');
+				if (!notice) {
+					notice = document.createElement('p'); notice.id = select.id + '-lookup-status'; notice.tabIndex = -1;
+					(select.closest('label') || select).after(notice);
+					select.setAttribute('aria-describedby', ((select.getAttribute('aria-describedby') || '') + ' ' + notice.id).trim());
+				}
+				select.dataset.lookupState = state; select.setAttribute('aria-busy', String(state === 'loading'));
+				notice.setAttribute('role', ['failed', 'denied', 'needs-selection'].includes(state) ? 'alert' : 'status');
+				notice.textContent = message; notice.hidden = !message;
+				if (retry) {
+					const button = document.createElement('button'); button.type = 'button'; button.className = 'outline small';
+					button.textContent = 'Retry ' + (jobLookupLabels[select.id] || 'Location') + ' choices'; button.onclick = retry; notice.append(button);
+				}
+				syncJobLookupGuard(select.closest('form, dialog'));
+			}
+			[jobProjectSelect, contactSelect, jobLocationSelect, jobAssetSelect].filter(Boolean).forEach(select => { select.dataset.lookupCustomer = selectedJobCustomerID(); });
+			if (jobCustomer?.form) jobCustomer.form.addEventListener('submit', event => {
+				const blocked = unresolvedJobChoices(jobCustomer.form);
+				if (!blocked.length) return;
+				event.preventDefault(); event.stopImmediatePropagation();
+				document.getElementById(blocked[0].id + '-lookup-status')?.focus();
+			}, true);
 			function refreshOptions(select, emptyHTML, url, selectedID) {
 				if (!select) return Promise.resolve();
 				const requestID = String((Number(select.dataset.refreshRequest || '0') || 0) + 1);
 				select.dataset.refreshRequest = requestID;
-				if (!url) { select.innerHTML = emptyHTML; return Promise.resolve(); }
-				select.dataset.selected = selectedID || 0;
-				return fetch(url + '?selected=' + (selectedID || 0))
-					.then(r => r.text())
-					.then(html => {
-						if (select.dataset.refreshRequest !== requestID) return;
-						select.innerHTML = html;
-						select.value = String(selectedID || 0);
+				jobLookupControllers.get(select)?.abort();
+				const customerID = selectedJobCustomerID();
+				const changedCustomer = select.dataset.lookupCustomer !== customerID;
+				select.dataset.lookupCustomer = customerID;
+				const desired = String(changedCustomer ? 0 : (selectedID || 0));
+				select.dataset.selected = desired;
+				if (changedCustomer || !url) select.innerHTML = emptyHTML;
+				if (!url) { holdJobChoice(select, false); jobChoiceNotice(select, 'empty', ''); return Promise.resolve(true); }
+				if (desired !== '0' && ![...select.options].some(option => option.value === desired)) select.add(new Option('Current selection (checking availability)', desired));
+				select.value = desired;
+				if (!select.dataset.lookupManaged) {
+					select.dataset.lookupManaged = 'true';
+					select.addEventListener('change', () => {
+						select.dataset.selected = select.value;
+						if (select.dataset.lookupState === 'needs-selection' && select.value !== '') { select.setCustomValidity(''); jobChoiceNotice(select, 'ready', 'Selection reviewed. Save explicitly to apply it.'); }
 					});
+				}
+				select.setCustomValidity(''); holdJobChoice(select, true);
+				jobChoiceNotice(select, 'loading', 'Loading ' + (jobLookupLabels[select.id] || 'Location') + ' choices; Save waits for confirmation.');
+				const controller = new AbortController(); jobLookupControllers.set(select, controller);
+				const timeout = setTimeout(() => controller.abort(), 15000);
+				return fetch(url + '?selected=' + encodeURIComponent(desired), {cache: 'no-store', signal: controller.signal})
+					.then(async response => {
+						if (!response.ok || response.redirected) { const error = new Error('lookup unavailable'); error.status = response.redirected ? 401 : response.status; throw error; }
+						const html = await response.text();
+						if (select.dataset.refreshRequest !== requestID) return;
+						if (!select.isConnected) return;
+						const fragment = document.createElement('template'); fragment.innerHTML = html;
+						const options = [...fragment.content.children];
+						if (!options.length || options.some(option => option.tagName !== 'OPTION') || !options.some(option => option.value === '0')) throw new Error('invalid option response');
+						select.replaceChildren(...options.map(option => new Option(option.textContent, option.value)));
+						holdJobChoice(select, false);
+						if (!options.some(option => option.value === desired)) {
+							const missing = new Option('Previous selection unavailable — choose a permitted replacement', '', true, true); missing.disabled = true; select.prepend(missing); select.value = '';
+							select.setCustomValidity('Review this unavailable selection before saving.');
+							jobChoiceNotice(select, 'needs-selection', 'The previous selection is no longer available. Choose an authorized replacement or explicitly choose No selection.');
+							return false;
+						}
+						select.value = desired;
+						jobChoiceNotice(select, 'ready', options.length === 1 ? 'No available choices for this Customer.' : '');
+						return true;
+					}).catch(error => {
+						if (select.dataset.refreshRequest !== requestID || !select.isConnected) return false;
+						if (error.status === 401) {
+							if (window.freefsmActions) window.freefsmActions.accessUnavailable(401);
+							else location.assign('/login');
+							return false;
+						}
+						const denied = [403, 404].includes(error.status);
+						if (denied) {
+							select.innerHTML = emptyHTML;
+							if (desired !== '0') select.add(new Option('Current selection unavailable', desired));
+							select.value = desired;
+						}
+						holdJobChoice(select, true);
+						jobChoiceNotice(select, denied ? 'denied' : 'failed', denied ? 'Choices are not accessible. Labels have been removed. Review access and retry before saving.' : 'Choices unavailable. Previous selection is retained, not refreshed. Retry before saving.', () => refreshOptions(select, emptyHTML, url, desired));
+						return false;
+					}).finally(() => clearTimeout(timeout));
 			}
 			function selectInlineOption(select, created) {
 				if (!select || !created || !created.id) return;
+				if (select.dataset.lookupState && !['ready', 'empty'].includes(select.dataset.lookupState)) return;
 				const value = String(created.id);
 				if (![...select.options].some(option => option.value === value)) {
 					const option = document.createElement('option');
@@ -275,6 +374,7 @@ templ JobForm(p JobFormPageData) {
 					} finally {
 						delete dialog.dataset.creationFieldsLoading;
 						button.disabled = !dialog.dataset.creationFieldsReady;
+						syncJobLookupGuard(dialog);
 					}
 				}
 				if (!dialog.open) dialog.showModal();
@@ -302,13 +402,14 @@ templ JobForm(p JobFormPageData) {
 			function postInline(url, fields) {
 				const body = new URLSearchParams();
 				fields.forEach(([name, value]) => body.set(name, value || ''));
-				const type = url === '/assets/inline' ? 'asset' : url === '/projects/inline' ? 'project' : null;
+				const type = url === '/assets/inline' ? 'asset' : url === '/projects/inline' ? 'project' : url.includes('/locations/') ? 'location' : url.includes('/contacts/') ? 'contact' : null;
 				const dialog = type && document.getElementById('job-' + type + '-dialog');
+				if (dialog && (unresolvedJobChoices(dialog).length || dialog.dataset.creationFieldsLoading)) return Promise.reject(new Error('Retry the unavailable choices before creating this record.'));
 				if (dialog) dialog.querySelectorAll('[name^="custom_field_"]').forEach(el => {
 					if (el.multiple) [...el.selectedOptions].forEach(option => body.append(el.name, option.value));
 					else body.append(el.name, el.value);
 				});
-				return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrfToken() }, body })
+				return window.freefsmActions.fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrfToken() }, body }, dialog)
 					.then(async r => {
 						if (!r.ok) {
 							const text = await r.text();

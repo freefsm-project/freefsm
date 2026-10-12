@@ -8,18 +8,20 @@ templ EstimateShow(p EstimateDetail) {
 		if p.ArchivedAt == "" {
 			<div class="work-item-detail-actions">
 			<div class="work-item-detail-action-group">
+			if detailCan(ctx,"pdf") {
 				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
-			if p.CanManage {
+			}
+			if detailCan(ctx,"edit") {
 				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Title) }>Edit</a>
 			}
-			if p.CanConvert {
-				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/convert", p.ID)) } method="post" hx-confirm="Convert permanently to a new invoice? This estimate will disappear. Revert is available only after all financial activity is fully unwound.">
+			if p.CanConvert && detailCan(ctx,"convert") {
+				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/convert", p.ID)) } method="post" hx-confirm={ fmt.Sprintf("Convert Estimate %q (record %d) to a new Invoice? This Estimate will disappear. Revert is available only after all financial activity is fully unwound.", p.Title, p.ID) }>
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<input type="hidden" name="idempotency_key" value={ p.ConvertKey }/>
 					<button>Convert to Invoice</button>
 				</form>
 			}
-			if p.CanManage {
+			if detailCan(ctx,"archive") {
 				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", p.ID)) } method="post" hx-confirm="Delete this estimate?">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Title) }>Delete</button>
@@ -28,15 +30,17 @@ templ EstimateShow(p EstimateDetail) {
 			</div>
 			</div>
 		}
-		if p.ConvertBlocker != "" {
+		if p.ConvertBlocker != "" && detailCan(ctx,"convert") {
 			<p class="secondary">{ p.ConvertBlocker }</p>
 		}
 		if p.ArchivedAt != "" {
 			<div class="work-item-detail-archive-banner">
 				<span>Archived on { p.ArchivedAt }</span>
 				<div class="work-item-detail-action-group">
-				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
-				if canAdmin(ctx) {
+				if detailCan(ctx,"pdf") {
+					<a href={ templ.URL(fmt.Sprintf("/estimates/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
+				}
+				if detailCan(ctx,"restore") {
 					<form action={ templ.URL(fmt.Sprintf("/estimates/%d/restore", p.ID)) } method="post">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 						<button type="submit" class="outline">Restore</button>
@@ -54,16 +58,18 @@ templ EstimateShow(p EstimateDetail) {
 		}
 		<table class="work-item-detail-meta">
 			<tbody>
-				if canCustomer(ctx,"view") {
+				if canCustomer(ctx,"view") && p.Customer != "" {
 					<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
-				} else if p.JobID > 0 && canCustomer(ctx,"context") {
+				} else if p.JobID > 0 && canCustomer(ctx,"context") && visibleCustomerContext(ctx,p.JobID) {
 					<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/jobs/%d/customer-context",p.JobID)) }>{ p.Customer }</a></td></tr>
 				}
-				<tr><th>Status</th><td>@StatusControl("estimate", p.ID, p.StatusID, p.StatusName, p.StatusColor, p.Statuses, p.ArchivedAt == "" && p.CanManage)</td></tr>
-				<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
+				<tr><th>Status</th><td>@StatusControl("estimate", p.ID, p.StatusID, p.StatusName, p.StatusColor, p.Statuses, p.ArchivedAt == "" && detailCan(ctx,"status"))</td></tr>
+				if detailCan(ctx,"pricing") {
+					<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
+				}
 			</tbody>
 		</table>
-		if len(p.LineItems) > 0 {
+		if detailCan(ctx,"pricing") && len(p.LineItems) > 0 {
 			<h3>Line Items</h3>
 			<table>
 				<thead>
