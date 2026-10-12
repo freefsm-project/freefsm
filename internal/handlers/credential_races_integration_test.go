@@ -225,7 +225,7 @@ func TestAdministratorResetRechecksRevokedAuthority(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := <-done
-	if response.Code != http.StatusInternalServerError || response.Header().Get("Location") != "" {
+	if response.Code != http.StatusForbidden || response.Header().Get("Location") != "" {
 		t.Fatalf("revoked authority falsely acknowledged: status=%d location=%q body=%s", response.Code, response.Header().Get("Location"), response.Body.String())
 	}
 	if client.User.GetX(ctx, target.ID).PasswordHash != "old" {
