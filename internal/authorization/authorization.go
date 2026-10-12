@@ -137,7 +137,7 @@ func (s *Service) transaction(ctx context.Context, a Actor, transition bool, fn 
 	return s.transact(ctx, a, transition, false, fn)
 }
 
-func (s *Service) transact(ctx context.Context, a Actor, transition, disablingSelf bool, fn func(pgx.Tx, Principal) error) error {
+func (s *Service) transact(ctx context.Context, a Actor, transition, consumingSelf bool, fn func(pgx.Tx, Principal) error) error {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -156,14 +156,14 @@ func (s *Service) transact(ctx context.Context, a Actor, transition, disablingSe
 	// A fresh read on the same transaction verifies identity and session before
 	// commit. All authority-changing writers share the transaction mutex.
 	if _, err = principal(ctx, tx, a, transition); err != nil {
-		// A sealed self-disable deliberately consumes its own identity and
+		// A sealed self-security action deliberately consumes its own identity and
 		// sessions. External revocations cannot commit under our mutex; the
 		// deferred last-Administrator constraint still validates replacement.
-		if !disablingSelf || !p.Protected || !errors.Is(err, ErrForbidden) {
+		if !consumingSelf || !p.Protected || !errors.Is(err, ErrForbidden) {
 			return err
 		}
 		var disabled bool
-		if e := tx.QueryRow(ctx, `SELECT NOT is_active FROM users WHERE id=$1`, a.UserID).Scan(&disabled); e != nil || !disabled {
+		if e := tx.QueryRow(ctx, `SELECT NOT is_active OR force_password_change OR ($2<>'' AND NOT EXISTS(SELECT 1 FROM sessions WHERE user_id=$1 AND token_hash=$2 AND revoked_at IS NULL)) FROM users WHERE id=$1`, a.UserID, a.SessionHash).Scan(&disabled); e != nil || !disabled {
 			return err
 		}
 	}

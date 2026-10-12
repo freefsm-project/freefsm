@@ -44,6 +44,19 @@ func (s *UserService) ListAll(ctx context.Context) ([]*ent.User, error) {
 }
 
 func (s *UserService) ListActiveForCompany(ctx context.Context, companyID int64) ([]*ent.User, error) {
+	if request, ok := authorization.FromContext(ctx); ok {
+		people, err := request.Service.Directory(ctx, request.Actor)
+		if err != nil {
+			return nil, err
+		}
+		users := []*ent.User{}
+		for _, person := range people {
+			if person.Available {
+				users = append(users, &ent.User{ID: person.ID, Name: person.Name, Email: person.Email, IsActive: true})
+			}
+		}
+		return users, nil
+	}
 	return s.client.User.Query().
 		Where(user.CompanyIDEQ(companyID), user.IsActive(true)).
 		Order(ent.Asc(user.FieldName)).
@@ -65,6 +78,7 @@ type UserCreateParams struct {
 	Email            string
 	Password         string
 	Role             string
+	RoleID           int64
 	SendWelcomeEmail bool
 }
 
@@ -87,6 +101,13 @@ func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("hash password: %w", err)
+	}
+	if request, ok := authorization.FromContext(ctx); ok {
+		id, err := request.Service.CreateAccount(ctx, request.Actor, authorization.NewAccount{Name: p.Name, Email: p.Email, PasswordHash: string(hash), RoleID: p.RoleID, Invited: p.SendWelcomeEmail})
+		if err != nil {
+			return nil, err
+		}
+		return s.GetByID(ctx, id)
 	}
 
 	create := s.client.User.Create().
@@ -158,6 +179,17 @@ func (s *UserService) CompleteOnboarding(ctx context.Context, id int64) error {
 		return fmt.Errorf("complete onboarding: %w", err)
 	}
 	return nil
+}
+
+func (s *UserService) ResetPasswordAsAdministrator(ctx context.Context, id int64, password string) error {
+	if request, ok := authorization.FromContext(ctx); ok {
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return err
+		}
+		return request.Service.ResetAccountPassword(ctx, request.Actor, id, string(hash))
+	}
+	return s.SetPassword(ctx, id, password)
 }
 
 func (s *UserService) SetPassword(ctx context.Context, id int64, password string) error {

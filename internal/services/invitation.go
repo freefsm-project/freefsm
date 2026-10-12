@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/invitationtoken"
 	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 	"github.com/freefsm-project/freefsm/internal/ent/user"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -37,6 +39,9 @@ func NewInvitationService(client *ent.Client) *InvitationService {
 }
 
 func (s *InvitationService) CreateInvite(ctx context.Context, companyID, userID int64) (string, error) {
+	if request, ok := authorization.FromContext(ctx); ok {
+		return s.sealedInvite(ctx, request, companyID, userID, "user.invite")
+	}
 	if companyID <= 0 {
 		return "", ErrWelcomeResendIneligible
 	}
@@ -77,6 +82,14 @@ func (s *InvitationService) CanResendWelcome(ctx context.Context, companyID, use
 }
 
 func (s *InvitationService) RenewPendingInvite(ctx context.Context, companyID, userID int64) (*ent.User, string, error) {
+	if request, ok := authorization.FromContext(ctx); ok {
+		token, err := s.sealedInvite(ctx, request, companyID, userID, "user.welcome.resend")
+		if err != nil {
+			return nil, "", err
+		}
+		u, err := s.client.User.Get(ctx, userID)
+		return u, token, err
+	}
 	if companyID <= 0 {
 		return nil, "", ErrWelcomeResendIneligible
 	}
@@ -115,6 +128,35 @@ func (s *InvitationService) RenewPendingInvite(ctx context.Context, companyID, u
 	}
 	u.WelcomeEmailSentAt = &now
 	return u, token, nil
+}
+
+func (s *InvitationService) sealedInvite(ctx context.Context, request authorization.Request, companyID, userID int64, action string) (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	token := hex.EncodeToString(b)
+	err := request.Service.MutateAccountLink(ctx, request.Actor, companyID, userID, action, func(tx pgx.Tx) error {
+		var eligible bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND company_id=$2 AND NOT is_active AND onboarding_completed_at IS NULL AND welcome_email_sent_at IS NOT NULL)`, userID, companyID).Scan(&eligible); err != nil {
+			return err
+		}
+		if !eligible {
+			return ErrWelcomeResendIneligible
+		}
+		if _, err := tx.Exec(ctx, `UPDATE invitation_tokens SET consumed_at=clock_timestamp() WHERE user_id=$1 AND company_id=$2 AND consumed_at IS NULL`, userID, companyID); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO invitation_tokens(company_id,user_id,token_hash,expires_at) VALUES($1,$2,$3,clock_timestamp()+interval '72 hours')`, companyID, userID, tokenHash(token)); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE users SET welcome_email_sent_at=clock_timestamp() WHERE id=$1`, userID)
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
 func (s *InvitationService) ValidateInvite(ctx context.Context, token string) (InvitationTarget, error) {

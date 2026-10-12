@@ -1029,9 +1029,6 @@ func userOptions(users []*ent.User) []templates.SelectOption {
 			continue
 		}
 		label := u.Name
-		if u.Role != "" {
-			label = fmt.Sprintf("%s (%s)", u.Name, u.Role)
-		}
 		opts = append(opts, templates.SelectOption{Value: u.ID, Label: label})
 	}
 	return opts

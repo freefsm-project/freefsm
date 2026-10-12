@@ -1,5 +1,7 @@
 package templates
 
+import "fmt"
+
 templ UserForm(p UserFormData) {
 	@Layout(userFormTitle(p.IsNew)) {
 
@@ -14,6 +16,14 @@ templ UserForm(p UserFormData) {
 				<input type="email" name="email" value={ p.User.User.Email } required/>
 			</label>
 			if p.IsNew {
+				<label>Role
+					<select name="role_id" required>
+						<option value="">Choose explicitly</option>
+						for _, role := range p.RoleOptions {
+								<option value={ fmt.Sprint(role.Value) }>{ role.Label }</option>
+						}
+					</select>
+				</label>
 				@NewPasswordFields(NewPasswordFieldsOptions{
 					ID: "user-password", Name: "password", Label: "Password", Placeholder: "Password",
 					ConfirmID: "user-confirm-password", ConfirmLabel: "Confirm Password", ConfirmPlaceholder: "Confirm password",
@@ -22,11 +32,10 @@ templ UserForm(p UserFormData) {
 				})
 				<label>
 					<input type="checkbox" name="send_welcome_email" id="send_welcome_email" checked/>
-					Send welcome email with temporary password
+					Send welcome invitation
 				</label>
 			}
-			<input type="hidden" name="role" value={ p.User.User.Role }/>
-			<p>Role authority is managed through <a href="/settings/authorization">Authorization</a>. New users start in an empty-grant Role (initially No permissions).</p>
+			<p>Role authority is managed through <a href="/settings/authorization">Authorization</a>. Choose No permissions for an empty-grant Role. Administrator-set passwords must be replaced before normal access.</p>
 			<div class="entity-form-actions">
 				<button type="submit">Save</button>
 				<a href="/users" role="button" class="outline">Cancel</a>

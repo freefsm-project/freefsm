@@ -568,7 +568,11 @@ func (h *ScheduleHandler) unscheduledJobs(r *http.Request) ([]*ent.Job, error) {
 }
 
 func (h *ScheduleHandler) scheduleTechs(r *http.Request) []templates.ScheduleTech {
-	users, _ := h.userSvc.ListAll(r.Context())
+	u, ok := middleware.UserFromContext(r.Context())
+	if !ok || u == nil {
+		return nil
+	}
+	users, _ := h.userSvc.ListActiveForCompany(r.Context(), u.CompanyID)
 	techs := make([]templates.ScheduleTech, 0, len(users))
 	for _, u := range users {
 		if !u.IsActive {

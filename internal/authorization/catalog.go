@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 )
 
 type viewRule struct {
@@ -11,6 +12,45 @@ type viewRule struct {
 	groups map[string][]Grant
 }
 type catalog map[Grant]viewRule
+
+type GrantOption struct {
+	Grant
+	Requires string `json:"requires"`
+}
+
+func grantOptions(ctx context.Context, q queryer) ([]GrantOption, error) {
+	c, err := loadCatalog(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	options := []GrantOption{}
+	for g, rule := range c {
+		if g.Scope == Sealed {
+			continue
+		}
+		requirements := []string{}
+		if rule.base != nil {
+			requirements = append(requirements, rule.base.Permission+"/"+string(rule.base.Scope))
+		}
+		for _, alternatives := range rule.groups {
+			group := []string{}
+			for _, v := range alternatives {
+				group = append(group, v.Permission+"/"+string(v.Scope))
+			}
+			sort.Strings(group)
+			requirements = append(requirements, "("+strings.Join(group, " or ")+")")
+		}
+		sort.Strings(requirements)
+		options = append(options, GrantOption{Grant: g, Requires: strings.Join(requirements, " and ")})
+	}
+	sort.Slice(options, func(i, j int) bool {
+		if options[i].Permission == options[j].Permission {
+			return options[i].Scope < options[j].Scope
+		}
+		return options[i].Permission < options[j].Permission
+	})
+	return options, nil
+}
 
 func loadCatalog(ctx context.Context, q queryer) (catalog, error) {
 	result := catalog{}

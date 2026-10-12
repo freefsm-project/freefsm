@@ -52,6 +52,12 @@ func bindAuthorization(s *authorization.Service) func(http.Handler) http.Handler
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			a := authorizationActor(r)
 			r = r.WithContext(authorization.WithActor(r.Context(), s, a))
+			if strings.HasPrefix(r.URL.Path, "/settings/authorization") {
+				if _, err := s.Administrator(r.Context(), a); err != nil {
+					authorizationError(w, r, err)
+					return
+				}
+			}
 			// All Customer routes, including legacy child editors and activity endpoints,
 			// pass through the migrated View boundary before any resource details load.
 			if r.URL.Path == "/customers" || strings.HasPrefix(r.URL.Path, "/customers/") {
@@ -100,6 +106,33 @@ func bindAuthorization(s *authorization.Service) func(http.Handler) http.Handler
 
 type authorizationHandler struct{ svc *authorization.Service }
 
+func (h authorizationHandler) AccountSecurity(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	action := "user.sessions.revoke"
+	if strings.HasSuffix(r.URL.Path, "/require-change") {
+		action = "user.password.require_change"
+	}
+	if err := h.svc.AccountSecurity(r.Context(), authorizationActor(r), id, action); err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, "/users/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+}
+
+func (h authorizationHandler) Directory(w http.ResponseWriter, r *http.Request) {
+	people, err := h.svc.Directory(r.Context(), authorizationActor(r))
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(people)
+		return
+	}
+	templates.Directory(people).Render(r.Context(), w)
+}
+
 func (h authorizationHandler) Show(w http.ResponseWriter, r *http.Request) {
 	review, err := h.svc.Review(r.Context(), authorizationActor(r))
 	if err != nil {
@@ -119,19 +152,30 @@ func (h authorizationHandler) SaveRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var grants []authorization.Grant
-	if !strings.HasPrefix(strings.TrimSpace(r.FormValue("grants")), "[") {
-		http.Error(w, "Grants must be an explicit JSON array", 400)
-		return
-	}
-	decoder := json.NewDecoder(strings.NewReader(r.FormValue("grants")))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&grants); err != nil {
-		http.Error(w, "Grants must be an explicit JSON array", 400)
-		return
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		http.Error(w, "Unexpected trailing JSON", 400)
-		return
+	if r.FormValue("catalog_form") == "true" {
+		for _, value := range r.Form["grant"] {
+			permission, scope, ok := strings.Cut(value, ":")
+			if !ok {
+				http.Error(w, "Invalid grant", 400)
+				return
+			}
+			grants = append(grants, authorization.Grant{Permission: permission, Scope: authorization.Scope(scope)})
+		}
+	} else {
+		if !strings.HasPrefix(strings.TrimSpace(r.FormValue("grants")), "[") {
+			http.Error(w, "Grants must be an explicit JSON array", 400)
+			return
+		}
+		decoder := json.NewDecoder(strings.NewReader(r.FormValue("grants")))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&grants); err != nil {
+			http.Error(w, "Grants must be an explicit JSON array", 400)
+			return
+		}
+		if err := decoder.Decode(new(any)); err != io.EOF {
+			http.Error(w, "Unexpected trailing JSON", 400)
+			return
+		}
 	}
 	var id int64
 	if raw := r.FormValue("role_id"); raw != "" {
