@@ -7,7 +7,7 @@ templ CustomerForm(p CustomerFormPageData) {
 
 		if !p.IsNew {
 			<div class="customer-edit-layout">
-				<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form customer-edit-form">
+				<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form customer-edit-form" data-save-status-url={ "/web-actions/"+p.OperationID }>
 					@CustomerFormFields(p)
 				</form>
 				<aside class="customer-edit-side-rail">
@@ -26,7 +26,7 @@ templ CustomerForm(p CustomerFormPageData) {
 				</aside>
 			</div>
 		} else {
-			<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form">
+			<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form" data-save-status-url={ "/web-actions/"+p.OperationID }>
 				@CustomerFormFields(p)
 			</form>
 		}
@@ -35,6 +35,32 @@ templ CustomerForm(p CustomerFormPageData) {
 
 templ CustomerFormFields(p CustomerFormPageData) {
 	<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+	<input type="hidden" name="operation_id" value={ p.OperationID }/>
+	<input type="hidden" name="revision" value={ p.Revision }/>
+	if p.Conflict != nil {
+		<section class="error-summary" aria-label="Current saved Customer">
+			<h2>Conflict: compare with the current saved Customer</h2>
+			<p>Your proposed values remain in the form below. Review the current record before saving a revised action.</p>
+			<dl>
+				<dt>Display name</dt><dd>{ p.Conflict.DisplayName }</dd>
+				<dt>Name</dt><dd>{ p.Conflict.FirstName + " " + p.Conflict.LastName }</dd>
+				<dt>Company</dt><dd>{ p.Conflict.CompanyName }</dd>
+				<dt>Email</dt><dd>{ p.Conflict.Email }</dd>
+				<dt>Phone</dt><dd>{ p.Conflict.Phone }</dd>
+				<dt>Notes</dt><dd>{ p.Conflict.Notes }</dd>
+				<dt>Service notes</dt><dd>{ p.Conflict.ServiceNotes }</dd>
+				<dt>Status</dt><dd>{ p.Conflict.Status }</dd>
+				<dt>Account type</dt><dd>{ p.Conflict.AccountType }</dd>
+				if canCustomer(ctx,"financial") {
+					<dt>Billing address</dt><dd>{ p.Conflict.BillingAddress1 }<br/>{ p.Conflict.BillingAddress2 }<br/>{ p.Conflict.BillingCity + " " + p.Conflict.BillingState + " " + p.Conflict.BillingZipCode }</dd>
+					<dt>Tax exempt</dt><dd>{ fmt.Sprint(p.Conflict.TaxExempt) }</dd>
+				}
+			</dl>
+			@CustomFieldsWidget(CustomFieldsWidgetData{Fields:p.ConflictFields,EditMode:false})
+			<label><input type="checkbox" name="conflict_review" required/>I have compared the current record and reviewed my proposed changes.</label>
+			<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit",p.Customer.ID)) }>Discard changes and load current Customer</a>
+		</section>
+	}
 	if p.IsNew {
 		<p><small>Locations and contacts can be added after saving.</small></p>
 	}

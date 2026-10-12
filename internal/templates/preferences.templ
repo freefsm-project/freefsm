@@ -4,22 +4,26 @@ templ PreferencesPage(p PreferencesData) {
 	@Layout("Preferences") {
 		<article class="auth-card-padded">
 			<header><h2>Preferences</h2></header>
-			<form action="/preferences" method="post">
+			<form action="/preferences" method="post" class="entity-form" hx-boost="false">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				if p.Error != "" {
+					<p class="error-msg" role="alert">{ p.Error }</p>
+				}
+				<label for="preference-theme">Theme</label>
+					<select name="theme" id="preference-theme">
+						<option value="system" selected?={ p.Theme == "system" }>System</option>
+						<option value="light" selected?={ p.Theme == "light" }>Light</option>
+						<option value="dark" selected?={ p.Theme == "dark" }>Dark</option>
+					</select>
 				<label>
 					Font Size
-					<select name="font_size"
-						hx-post="/preferences"
-						hx-trigger="change"
-						hx-include="[name='csrf_token'], this"
-						hx-swap="none"
-						onchange="document.documentElement.dataset.fontSize = this.value">
+					<select name="font_size">
 						<option value="small" selected?={ p.FontSize == "small" }>Small</option>
 						<option value="medium" selected?={ p.FontSize == "medium" }>Medium</option>
 						<option value="large" selected?={ p.FontSize == "large" }>Large</option>
 					</select>
 				</label>
-				<noscript><button type="submit">Save Preferences</button></noscript>
+				<div class="entity-form-actions"><button type="submit">Save Preferences</button></div>
 			</form>
 		</article>
 	}

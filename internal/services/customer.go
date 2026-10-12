@@ -74,7 +74,7 @@ func (s *CustomerService) ListByIDs(ctx context.Context, ids []int64) ([]*ent.Cu
 	return s.client.Customer.Query().Where(customer.DeletedAtIsNil(), customer.IDIn(ids...)).All(ctx)
 }
 
-func (s *CustomerService) List(ctx context.Context, search, status string, page, perPage int) ([]*ent.Customer, int, error) {
+func (s *CustomerService) List(ctx context.Context, search, status string, page, perPage int, sorting ...string) ([]*ent.Customer, int, error) {
 	q := s.client.Customer.Query().Where(customer.DeletedAtIsNil())
 
 	if search != "" {
@@ -100,8 +100,17 @@ func (s *CustomerService) List(ctx context.Context, search, status string, page,
 	}
 
 	offset := PaginationOffset(page, perPage)
+	order := ent.Asc(customer.FieldDisplayName, customer.FieldID)
+	if len(sorting) > 0 {
+		switch sorting[0] {
+		case "name_desc":
+			order = ent.Desc(customer.FieldDisplayName, customer.FieldID)
+		case "updated":
+			order = ent.Desc(customer.FieldUpdatedAt, customer.FieldID)
+		}
+	}
 	customers, err := q.
-		Order(ent.Desc(customer.FieldUpdatedAt)).
+		Order(order).
 		Limit(perPage).
 		Offset(offset).
 		All(ctx)

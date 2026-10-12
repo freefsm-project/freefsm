@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -48,10 +50,17 @@ func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 		page = 1
 	}
 	perPage := 25
+	if size, _ := strconv.Atoi(r.URL.Query().Get("per_page")); size == 50 || size == 100 {
+		perPage = size
+	}
+	sort := r.URL.Query().Get("sort")
+	if sort != "name_desc" && sort != "updated" {
+		sort = "name"
+	}
 	search := r.URL.Query().Get("search")
 	status := r.URL.Query().Get("status")
 
-	customers, total, err := h.svc.List(r.Context(), search, status, page, perPage)
+	customers, total, err := h.svc.List(r.Context(), search, status, page, perPage, sort)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -63,6 +72,7 @@ func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := templates.CustomerListPageData{
+		Sort:         sort,
 		Customers:    rows,
 		Page:         page,
 		PerPage:      perPage,
@@ -165,6 +175,7 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.Method == http.MethodGet {
 		data := newFormData()
+		data.OperationID = newOperationKey()
 		defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
 		data.CustomFields = buildCustomFieldDisplay(defs, "[]")
 		templates.CustomerForm(data).Render(r.Context(), w)
@@ -175,9 +186,9 @@ func (h *CustomerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if request, ok := authorization.FromContext(r.Context()); ok {
-		result, err := request.Service.SaveCustomer(r.Context(), request.Actor, 0, customerInput(r))
+		result, err := request.Service.SaveCustomer(r.Context(), request.Actor, 0, customerInput(r), authorization.WebAction{ID: r.FormValue("operation_id")})
 		if err != nil {
-			authorizationError(w, r, err)
+			h.customerSaveError(w, r, 0, err)
 			return
 		}
 		http.Redirect(w, r, fmt.Sprintf("/customers/%d/edit", result.ID), http.StatusSeeOther)
@@ -236,6 +247,8 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data := formDataFromCustomer(r.Context(), c)
+		data.OperationID = newOperationKey()
+		data.Revision = authorization.CustomerRevision(c)
 		defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
 		data.CustomFields = buildCustomFieldDisplay(defs, c.CustomFields)
 		locations, _ := h.locationSvc.ListByCustomer(r.Context(), c.ID)
@@ -254,9 +267,9 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if request, ok := authorization.FromContext(r.Context()); ok {
-		_, err := request.Service.SaveCustomer(r.Context(), request.Actor, id, customerInput(r))
+		_, err := request.Service.SaveCustomer(r.Context(), request.Actor, id, customerInput(r), authorization.WebAction{ID: r.FormValue("operation_id"), Revision: r.FormValue("revision")})
 		if err != nil {
-			authorizationError(w, r, err)
+			h.customerSaveError(w, r, id, err)
 			return
 		}
 		http.Redirect(w, r, fmt.Sprintf("/customers/%d", id), http.StatusSeeOther)
@@ -292,6 +305,58 @@ func (h *CustomerHandler) Update(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	http.Redirect(w, r, "/customers/"+strconv.FormatInt(id, 10)+"?flash=Customer+updated", http.StatusSeeOther)
+}
+
+func (h *CustomerHandler) customerSaveError(w http.ResponseWriter, r *http.Request, id int64, err error) {
+	var validation *authorization.CustomerValidationError
+	if !errors.As(err, &validation) && !errors.Is(err, authorization.ErrConflict) {
+		if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrPending) {
+			authorizationError(w, r, err)
+		} else {
+			internalServerError(w, r, "save Customer", err)
+		}
+		return
+	}
+	// The failed command may have waited behind a revocation. Reload current
+	// authority before retaining inputs or presenting an authorized comparison.
+	if !customerPermission(r, "customer.view") || (id != 0 && !customerPermission(r, "customer.edit")) {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
+	c := &ent.Customer{ID: id}
+	encoded, _ := json.Marshal(customerInput(r))
+	if err := json.Unmarshal(encoded, c); err != nil {
+		internalServerError(w, r, "retain Customer input", err)
+		return
+	}
+	data := formDataFromCustomer(r.Context(), c)
+	data.IsNew = id == 0
+	data.OperationID = newOperationKey()
+	data.Revision = r.FormValue("revision")
+	data.Errors = map[string]string{}
+	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
+	data.CustomFields = buildCustomFieldDisplay(defs, parseCustomFieldValues(r))
+	code := http.StatusUnprocessableEntity
+	if validation != nil {
+		data.Errors[validation.Field] = validation.Message
+	} else {
+		code = http.StatusConflict
+		data.Errors["display_name"] = "This save conflicts with the current record or an earlier action. Compare, revise and save, or discard your changes."
+		if id != 0 {
+			current, loadErr := h.svc.GetByID(r.Context(), id)
+			if loadErr != nil {
+				authorizationError(w, r, authorization.ErrNotFound)
+				return
+			}
+			d := customerToDetail(r.Context(), current)
+			data.Conflict = &d
+			data.ConflictFields = buildCustomFieldDisplay(defs, current.CustomFields)
+			data.Revision = authorization.CustomerRevision(current)
+		}
+	}
+	w.Header().Set("X-FreeFSM-Form", "review")
+	w.WriteHeader(code)
+	templates.CustomerForm(data).Render(r.Context(), w)
 }
 
 func (h *CustomerHandler) Delete(w http.ResponseWriter, r *http.Request) {

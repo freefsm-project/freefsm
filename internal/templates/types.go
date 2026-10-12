@@ -78,6 +78,8 @@ func canCustomer(ctx context.Context, action string) bool {
 		return u.CustomerCreate
 	case "edit":
 		return u.CustomerEdit
+	case "archive":
+		return u.CustomerArchive
 	case "financial":
 		return u.CustomerFinancial
 	case "context":
@@ -153,6 +155,7 @@ type RecentEstimate struct {
 }
 
 type CustomerListPageData struct {
+	Sort         string
 	Customers    []CustomerRow
 	Page         int
 	PerPage      int
@@ -238,16 +241,20 @@ type LocationRow struct {
 }
 
 type CustomerFormPageData struct {
-	Customer     *CustomerDetail
-	Errors       map[string]string
-	IsNew        bool
-	Statuses     []string
-	AccountTypes []string
-	CustomFields []CustomFieldDisplay
-	Locations    []LocationRow
-	Contacts     []ContactRow
-	Tags         []TagRow
-	AllTags      []TagRow
+	OperationID    string
+	Revision       string
+	Conflict       *CustomerDetail
+	ConflictFields []CustomFieldDisplay
+	Customer       *CustomerDetail
+	Errors         map[string]string
+	IsNew          bool
+	Statuses       []string
+	AccountTypes   []string
+	CustomFields   []CustomFieldDisplay
+	Locations      []LocationRow
+	Contacts       []ContactRow
+	Tags           []TagRow
+	AllTags        []TagRow
 }
 
 type PaginationData struct {
@@ -748,6 +755,8 @@ type ChangePasswordData struct {
 
 type PreferencesData struct {
 	FontSize string
+	Theme    string
+	Error    string
 }
 
 type ForgotPasswordData struct {
@@ -1045,6 +1054,9 @@ func isActivePath(ctx context.Context, prefix string) bool {
 }
 
 func themeFromCtx(ctx context.Context) string {
+	if u, ok := middleware.UserFromContext(ctx); ok && u.Theme != "" {
+		return u.Theme
+	}
 	return middleware.ThemeFromContext(ctx)
 }
 

@@ -131,6 +131,17 @@ func (h authorizationHandler) Directory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	templates.Directory(people).Render(r.Context(), w)
+
+}
+
+func (h authorizationHandler) WebReceipt(w http.ResponseWriter, r *http.Request) {
+	receipt, err := h.svc.WebReceipt(r.Context(), authorizationActor(r), chi.URLParam(r, "operation"))
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(receipt)
 }
 
 func (h authorizationHandler) Show(w http.ResponseWriter, r *http.Request) {

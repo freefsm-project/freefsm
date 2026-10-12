@@ -53,6 +53,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			DirectoryView:          principal.Allows("directory.view", authorization.All),
 			CustomerCreate:         principal.Allows("customer.create", authorization.All),
 			CustomerEdit:           principal.Allows("customer.edit", authorization.All),
+			CustomerArchive:        principal.Allows("customer.archive", authorization.All),
 			CustomerFinancial:      principal.Allows("customer.financial.view", authorization.All),
 			CustomerContext:        principal.Allows("customer.view", authorization.Context),
 			CanReviewAuthorization: authErr == nil && principal.Protected,
@@ -164,12 +165,14 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	// Authenticated routes
 	r.Group(func(r chi.Router) {
 		r.Use(authMW)
+		r.Use(presentationContext(authority))
 		r.Use(middleware.ForcePasswordChange(userService))
 		r.Use(bindAuthorization(authority))
 		r.Get("/change-password", passwordHandler.ChangePassword)
 		r.Post("/change-password", passwordHandler.ChangePassword)
-		r.Get("/preferences", userHandler.Preferences)
-		r.Post("/preferences", userHandler.Preferences)
+		r.Get("/preferences", presentationPreferences(authority))
+		r.Post("/preferences", presentationPreferences(authority))
+		r.Get("/web-actions/{operation}", authorityHandler.WebReceipt)
 		r.Get("/settings/invoice-logo", settingsHandler.InvoiceLogo)
 		r.Get("/", dashboardHandler.Index)
 		r.Get("/dashboard/widgets/new", dashboardHandler.NewWidget)
