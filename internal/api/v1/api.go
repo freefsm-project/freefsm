@@ -60,6 +60,8 @@ type apiMutationService interface {
 
 type statusFlowService interface {
 	TransitionJob(context.Context, statusflow.Actor, int64, int64) error
+	ApplyIntent(context.Context, statusflow.Actor, statusflow.ObjectType, int64, statusflow.Intent) error
+	ObserveIntent(context.Context, int64, statusflow.ObjectType, int64, int64) (statusflow.Intent, error)
 }
 
 type policyService interface {
@@ -117,6 +119,7 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/jobs/{id}", h.getJob)
 		r.Get("/jobs/{id}/customer-context", h.customerContext)
 		r.Post("/jobs/{id}/status", h.updateJobStatus)
+		r.Get("/jobs/{id}/status-intents", h.jobStatusIntents)
 		r.Get("/time-entries/active", h.activeTimeEntry)
 		r.Post("/jobs/{id}/clock-in", h.clockIn)
 		r.Post("/time-entries/clock-out", h.clockOut)

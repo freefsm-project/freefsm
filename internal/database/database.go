@@ -54,6 +54,39 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 	if err := db.ensureMigrationsTable(ctx); err != nil {
 		return fmt.Errorf("ensure migrations table: %w", err)
 	}
+	var fresh bool
+	if err := db.Pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM schema_migrations)`).Scan(&fresh); err != nil {
+		return err
+	}
+	var reviewed *WorkflowPreflight
+	if !fresh {
+		for _, file := range files {
+			if file != "044_category_status_workflows.up.sql" {
+				continue
+			}
+			var pending bool
+			if err := db.Pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM schema_migrations WHERE name='044_category_status_workflows')`).Scan(&pending); err != nil {
+				return err
+			}
+			if pending {
+				inventory, err := db.WorkflowPreflight(ctx)
+				if err != nil {
+					return err
+				}
+				var count int
+				if err = db.Pool.QueryRow(ctx, `SELECT count(*) FROM statuses`).Scan(&count); err != nil {
+					return err
+				}
+				if count > 0 {
+					review, err := loadWorkflowReview(inventory, count)
+					if err != nil {
+						return err
+					}
+					reviewed = &review
+				}
+			}
+		}
+	}
 
 	for _, f := range files {
 		name := strings.TrimSuffix(f, ".up.sql")
@@ -76,6 +109,17 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 		}
 
 		if f == "042_normalized_invoice_settlement.up.sql" {
+			if reviewed != nil {
+				mapping, err := json.Marshal(reviewed.Mappings)
+				if err != nil {
+					tx.Rollback(ctx)
+					return err
+				}
+				if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.workflow_review',$1,true)`, string(mapping)); err != nil {
+					tx.Rollback(ctx)
+					return err
+				}
+			}
 			// Maintenance cutover: materialize legacy tenancy before reading settlement data.
 			if err := db.materializeLegacyTenancy(ctx, tx); err != nil {
 				tx.Rollback(ctx)
@@ -84,6 +128,12 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 			if err := db.preflightSettlement(ctx, tx); err != nil {
 				tx.Rollback(ctx)
 				return fmt.Errorf("settlement migration preflight: %w", err)
+			}
+		}
+		if f == "044_category_status_workflows.up.sql" {
+			if err := preflightWorkflow(ctx, tx, fresh, reviewed); err != nil {
+				tx.Rollback(ctx)
+				return fmt.Errorf("workflow migration preflight: %w", err)
 			}
 		}
 

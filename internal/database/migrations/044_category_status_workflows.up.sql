@@ -14,37 +14,16 @@ ALTER TABLE statuses ADD COLUMN category_key TEXT;
 ALTER TABLE statuses ADD COLUMN category_order INT;
 ALTER TABLE statuses ADD COLUMN is_category_default BOOLEAN NOT NULL DEFAULT false;
 
--- Known labels retain their rows. Unknown labels intentionally enter the fallback category.
-UPDATE statuses s SET category_key = CASE w.object_type
-  WHEN 'job' THEN 'job:' || CASE
-    WHEN lower(btrim(s.name))='new' THEN 'new'
-    WHEN lower(btrim(s.name))='travel time' THEN 'travel_time'
-    WHEN lower(btrim(s.name))='in progress' THEN 'in_progress'
-    WHEN lower(btrim(s.name)) IN ('completed') THEN 'completed'
-    WHEN lower(btrim(s.name)) IN ('canceled','cancelled') THEN 'canceled'
-    ELSE 'pending' END
-  WHEN 'project' THEN 'project:' || CASE
-    WHEN lower(btrim(s.name)) IN ('opportunity','accepted','new') THEN 'new'
-    WHEN lower(btrim(s.name)) IN ('planning','in progress') THEN 'in_progress'
-    WHEN lower(btrim(s.name))='completed' THEN 'completed'
-    WHEN lower(btrim(s.name)) IN ('canceled','cancelled') THEN 'canceled'
-    ELSE 'pending' END
-  WHEN 'estimate' THEN 'estimate:' || CASE
-    WHEN lower(btrim(s.name))='draft' THEN 'draft'
-    WHEN lower(btrim(s.name))='sent' THEN 'sent'
-    WHEN lower(btrim(s.name)) IN ('accepted','approved') THEN 'accepted'
-    WHEN lower(btrim(s.name)) IN ('rejected','declined') THEN 'rejected'
-    WHEN lower(btrim(s.name))='completed' THEN 'completed'
-    ELSE 'estimate' END
-  WHEN 'invoice' THEN 'invoice:' || CASE
-    WHEN lower(btrim(s.name))='draft' THEN 'draft'
-    WHEN lower(btrim(s.name))='sent' THEN 'sent'
-    WHEN lower(btrim(s.name))='void' THEN 'void'
-    WHEN lower(btrim(s.name))='partially paid' THEN 'partially_paid'
-    WHEN lower(btrim(s.name))='paid' THEN 'paid'
-    ELSE 'invoiced' END
-  END
-FROM status_workflows w WHERE w.id=s.workflow_id;
+-- The migration runner requires an explicit, snapshot-bound review. Labels are
+-- presentation only, including labels that happen to match canonical names.
+UPDATE statuses s SET category_key = nullif(current_setting('freefsm.workflow_review',true),'')::jsonb->>s.id::text;
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id
+   WHERE s.category_key IS NULL OR split_part(s.category_key,':',1)<>w.object_type
+     OR s.category_key IN ('invoice:paid','invoice:partially_paid')) THEN
+  RAISE EXCEPTION 'workflow review must explicitly map every legacy status to its object category; Invoice requires a reviewed manual slot';
+ END IF;
+END $$;
 
 CREATE TEMP TABLE status_category_seed(object_type text, key text, label text, color text, ordinal int, creation_default boolean) ON COMMIT DROP;
 INSERT INTO status_category_seed VALUES
@@ -62,12 +41,16 @@ INSERT INTO status_category_seed VALUES
  ('invoice','invoice:paid','Paid','#10B981',5,false),('invoice','invoice:void','Void','#EF4444',6,false);
 
 INSERT INTO statuses(company_id,workflow_id,name,color,sort_order,category_key,category_order,is_category_default)
-SELECT w.company_id,w.id,c.label,c.color,c.ordinal,c.key,1,true
+SELECT w.company_id,w.id,CASE WHEN EXISTS(SELECT 1 FROM statuses s WHERE s.workflow_id=w.id AND lower(btrim(s.name))=lower(c.label)) THEN c.label||' ['||c.key||']' ELSE c.label END,c.color,c.ordinal,c.key,1,true
 FROM status_workflows w JOIN status_category_seed c ON c.object_type=w.object_type
 WHERE NOT EXISTS(SELECT 1 FROM statuses s WHERE s.workflow_id=w.id AND s.category_key=c.key);
 
 -- Invoice payment labels are projections, not manual state. Fixed slots must exist
 -- before references are reassigned because historical workflows may have no Sent row.
+-- The migration holds exclusive table locks. Reviewed identity consolidation
+-- also covers conversion-hidden invoices; content and historical snapshots stay
+-- untouched. Transaction rollback restores both data and trigger state.
+ALTER TABLE invoices DISABLE TRIGGER invoice_conversion_tombstone_guard;
 UPDATE invoices i SET status_id=sent.id
 FROM statuses old
 JOIN status_workflows w ON w.id=old.workflow_id AND w.object_type='invoice'
@@ -99,6 +82,7 @@ JOIN LATERAL (SELECT x.id FROM statuses x WHERE x.workflow_id=s.workflow_id AND 
 WHERE s.id<>keep.id;
 UPDATE invoices i SET status_id=r.new_id FROM invoice_status_replacements r WHERE i.status_id=r.old_id;
 DELETE FROM statuses s USING invoice_status_replacements r WHERE s.id=r.old_id;
+ALTER TABLE invoices ENABLE TRIGGER invoice_conversion_tombstone_guard;
 
 ALTER TABLE statuses ALTER COLUMN category_key SET NOT NULL;
 ALTER TABLE statuses ALTER COLUMN category_order SET NOT NULL;

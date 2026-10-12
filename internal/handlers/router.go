@@ -390,6 +390,12 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/files/{id}/rename", fileHandler.Rename)
 		r.Post("/files/{id}/delete", fileHandler.Delete)
 
+		r.Get("/settings/statuses/{type}", statusSettingsHandler.List)
+		r.Post("/settings/statuses/{type}", statusSettingsHandler.Create)
+		r.Post("/settings/statuses/{type}/{id}", statusSettingsHandler.Update)
+		r.Post("/settings/statuses/{type}/{id}/default", statusSettingsHandler.Default)
+		r.Post("/settings/statuses/{type}/{id}/move", statusSettingsHandler.Move)
+		r.Post("/settings/statuses/{type}/{id}/delete", statusSettingsHandler.Delete)
 		// Admin-only routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AdminOnly)
@@ -433,12 +439,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/settings/asset-statuses", assetStatusHandler.Create)
 			r.Post("/settings/asset-statuses/{id}", assetStatusHandler.Update)
 			r.Post("/settings/asset-statuses/{id}/delete", assetStatusHandler.Delete)
-			r.Get("/settings/statuses/{type}", statusSettingsHandler.List)
-			r.Post("/settings/statuses/{type}", statusSettingsHandler.Create)
-			r.Post("/settings/statuses/{type}/{id}", statusSettingsHandler.Update)
-			r.Post("/settings/statuses/{type}/{id}/default", statusSettingsHandler.Default)
-			r.Post("/settings/statuses/{type}/{id}/move", statusSettingsHandler.Move)
-			r.Post("/settings/statuses/{type}/{id}/delete", statusSettingsHandler.Delete)
 			r.Get("/users", userHandler.List)
 			r.Get("/users/new", userHandler.Create)
 			r.Post("/users", userHandler.Create)

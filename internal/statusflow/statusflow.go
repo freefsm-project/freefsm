@@ -14,8 +14,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/protectedaudit"
+
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -81,6 +83,8 @@ var (
 type Actor struct {
 	ID, CompanyID int64
 	Role          string
+	principal     *authorization.Principal
+	permission    string
 }
 type Status struct {
 	ID, WorkflowID int64
@@ -182,12 +186,9 @@ func (s *Service) TransitionInvoice(ctx context.Context, a Actor, id, statusID i
 }
 
 func (s *Service) FinalizeInvoice(ctx context.Context, a Actor, id int64, invoiceDate time.Time, dueDays int) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
-		verified, err := authenticate(ctx, tx, a)
-		if err != nil {
-			return ErrForbidden
-		}
+	return s.command(ctx, a, Invoice, "invoice.finalize", func(tx pgx.Tx, verified Actor) error {
 		a = verified
+		var err error
 		var current CategoryKey
 		if err = tx.QueryRow(ctx, `SELECT s.category_key FROM invoices i JOIN statuses s ON s.id=i.status_id WHERE i.id=$1 AND i.company_id=$2 AND i.deleted_at IS NULL FOR UPDATE`, id, a.CompanyID).Scan(&current); err != nil {
 			return mapNoRows(err)
@@ -207,22 +208,21 @@ func (s *Service) FinalizeInvoice(ctx context.Context, a Actor, id int64, invoic
 }
 
 func (s *Service) transition(ctx context.Context, a Actor, typ ObjectType, id, statusID int64) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
+	return s.command(ctx, a, typ, string(typ)+".status", func(tx pgx.Tx, a Actor) error {
 		return s.transitionTx(ctx, tx, a, typ, id, statusID)
 	})
 }
 
 func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, a Actor, typ ObjectType, id, statusID int64) error {
-	verified, err := authenticate(ctx, tx, a)
-	if err != nil {
+	if a.principal == nil {
 		return ErrForbidden
 	}
-	a = verified
 	table := string(typ) + "s"
 	var oldID *int64
 	var jobID *int64
 	query := fmt.Sprintf(`SELECT status_id%s FROM %s WHERE id=$1 AND company_id=$2 AND deleted_at IS NULL FOR UPDATE`, map[ObjectType]string{Job: "", Project: "", Estimate: ",job_id", Invoice: ",job_id"}[typ], table)
 	if typ == Estimate || typ == Invoice {
+		query = strings.Replace(query, " AND deleted_at IS NULL", " AND deleted_at IS NULL AND conversion_hidden_at IS NULL", 1)
 		if err := tx.QueryRow(ctx, query, id, a.CompanyID).Scan(&oldID, &jobID); err != nil {
 			return mapNoRows(err)
 		}
@@ -233,6 +233,9 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, a Actor, typ Obje
 	}
 	if !authorizedRecord(ctx, tx, a, typ, id, jobID) {
 		return ErrForbidden
+	}
+	if oldID != nil && *oldID == statusID {
+		return nil
 	}
 	var key CategoryKey
 	if err := tx.QueryRow(ctx, `SELECT s.category_key FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id
@@ -270,19 +273,19 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, a Actor, typ Obje
 }
 
 func authorizedRecord(ctx context.Context, tx pgx.Tx, a Actor, typ ObjectType, id int64, jobID *int64) bool {
-	if a.Role == "admin" || a.Role == "dispatcher" {
+	if a.principal != nil && a.principal.Allows(a.permission, authorization.All) {
 		return true
 	}
-	if a.Role != "tech" && a.Role != "technician" {
+	if a.principal == nil || !a.principal.Allows(a.permission, authorization.Assigned) {
 		return false
 	}
 	var ok bool
 	switch typ {
 	case Job:
-		_ = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM job_assignments WHERE job_id=$1 AND user_id=$2)`, id, a.ID).Scan(&ok)
+		_ = tx.QueryRow(ctx, `SELECT true FROM job_assignments a JOIN jobs j ON j.id=a.job_id WHERE a.job_id=$1 AND a.user_id=$2 AND j.deleted_at IS NULL FOR SHARE OF a,j`, id, a.ID).Scan(&ok)
 	case Estimate, Invoice:
 		if jobID != nil {
-			_ = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM job_assignments WHERE job_id=$1 AND user_id=$2)`, *jobID, a.ID).Scan(&ok)
+			_ = tx.QueryRow(ctx, `SELECT true FROM job_assignments a JOIN jobs j ON j.id=a.job_id WHERE a.job_id=$1 AND a.user_id=$2 AND j.deleted_at IS NULL FOR SHARE OF a,j`, *jobID, a.ID).Scan(&ok)
 		}
 	case Project:
 		_ = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs j JOIN job_assignments a ON a.job_id=j.id WHERE j.project_id=$1 AND a.user_id=$2 AND j.deleted_at IS NULL)`, id, a.ID).Scan(&ok)
@@ -304,11 +307,7 @@ func (s *Service) Create(ctx context.Context, a Actor, r CreateRequest) (Status,
 		return Status{}, ErrInvalidInput
 	}
 	var out Status
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
-		verified, err := authenticateAdmin(ctx, tx, a)
-		if err != nil {
-			return err
-		}
+	err := s.configure(ctx, a, func(tx pgx.Tx, verified Actor) error {
 		a = verified
 		var workflow int64
 		if err := tx.QueryRow(ctx, `SELECT id FROM status_workflows WHERE company_id=$1 AND object_type=$2 FOR UPDATE`, a.CompanyID, r.Type).Scan(&workflow); err != nil {
@@ -319,7 +318,7 @@ func (s *Service) Create(ctx context.Context, a Actor, r CreateRequest) (Status,
 		if color == "" {
 			color = "#6B7280"
 		}
-		err = tx.QueryRow(ctx, `INSERT INTO statuses(company_id,workflow_id,name,color,category_key,category_order,is_category_default)
+		err := tx.QueryRow(ctx, `INSERT INTO statuses(company_id,workflow_id,name,color,category_key,category_order,is_category_default)
 		 VALUES($1,$2,$3,$4,$5,(SELECT coalesce(max(category_order),0)+1 FROM statuses WHERE workflow_id=$2 AND category_key=$5),false)
 		 RETURNING id,workflow_id,name,color,category_key,category_order,is_category_default`, a.CompanyID, workflow, name, color, r.Category).
 			Scan(&out.ID, &out.WorkflowID, &out.Name, &out.Color, &out.Category, &out.Order, &out.Default)
@@ -336,12 +335,9 @@ func (s *Service) Update(ctx context.Context, a Actor, id int64, name, color str
 		return Status{}, ErrInvalidInput
 	}
 	var out Status
-	err := s.inTx(ctx, func(tx pgx.Tx) error {
-		verified, err := authenticateAdmin(ctx, tx, a)
-		if err != nil {
-			return err
-		}
+	err := s.configure(ctx, a, func(tx pgx.Tx, verified Actor) error {
 		a = verified
+		var err error
 		var before Status
 		if err = tx.QueryRow(ctx, `SELECT s.id,s.workflow_id,s.name,s.color,s.category_key,s.category_order,s.is_category_default FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.id=$1 AND w.company_id=$2 FOR UPDATE`, id, a.CompanyID).Scan(&before.ID, &before.WorkflowID, &before.Name, &before.Color, &before.Category, &before.Order, &before.Default); err != nil {
 			return mapNoRows(err)
@@ -366,12 +362,9 @@ type MoveRequest struct {
 }
 
 func (s *Service) Move(ctx context.Context, a Actor, r MoveRequest) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
-		verified, err := authenticateAdmin(ctx, tx, a)
-		if err != nil {
-			return err
-		}
+	return s.configure(ctx, a, func(tx pgx.Tx, verified Actor) error {
 		a = verified
+		var err error
 		var workflow int64
 		var old CategoryKey
 		var def bool
@@ -454,11 +447,7 @@ func (s *Service) Move(ctx context.Context, a Actor, r MoveRequest) error {
 }
 
 func (s *Service) SetDefault(ctx context.Context, a Actor, statusID int64) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
-		verified, err := authenticateAdmin(ctx, tx, a)
-		if err != nil {
-			return err
-		}
+	return s.configure(ctx, a, func(tx pgx.Tx, verified Actor) error {
 		a = verified
 		var workflow int64
 		var key CategoryKey
@@ -469,7 +458,10 @@ func (s *Service) SetDefault(ctx context.Context, a Actor, statusID int64) error
 		if typ == Invoice {
 			return ErrWrongType
 		}
-		if _, err := tx.Exec(ctx, `UPDATE statuses SET is_category_default=(id=$1) WHERE workflow_id=$2 AND category_key=$3`, statusID, workflow, key); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE statuses SET is_category_default=false WHERE workflow_id=$1 AND category_key=$2 AND is_category_default`, workflow, key); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `UPDATE statuses SET is_category_default=true WHERE id=$1`, statusID); err != nil {
 			return err
 		}
 		return configActivity(ctx, tx, a, "status_default_changed", statusID, workflow, nil, map[string]any{"category_key": key, "default_status_id": statusID})
@@ -477,19 +469,21 @@ func (s *Service) SetDefault(ctx context.Context, a Actor, statusID int64) error
 }
 
 func (s *Service) Delete(ctx context.Context, a Actor, statusID, replacementID int64) error {
-	return s.inTx(ctx, func(tx pgx.Tx) error {
-		verified, err := authenticateAdmin(ctx, tx, a)
-		if err != nil {
-			return err
-		}
+	return s.configure(ctx, a, func(tx pgx.Tx, verified Actor) error {
 		a = verified
+		var err error
 		var workflow int64
 		var key CategoryKey
 		var def bool
 		var typ ObjectType
-		if err := tx.QueryRow(ctx, `SELECT s.workflow_id,s.category_key,s.is_category_default,w.object_type FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.id=$1 AND w.company_id=$2 FOR UPDATE`, statusID, a.CompanyID).Scan(&workflow, &key, &def, &typ); err != nil {
+		var before Status
+		if err := tx.QueryRow(ctx, `SELECT s.workflow_id,s.category_key,s.is_category_default,w.object_type,s.name,s.color,s.category_order FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.id=$1 AND w.company_id=$2 FOR UPDATE`, statusID, a.CompanyID).Scan(&workflow, &key, &def, &typ, &before.Name, &before.Color, &before.Order); err != nil {
 			return mapNoRows(err)
 		}
+		before.ID = statusID
+		before.WorkflowID = workflow
+		before.Category = key
+		before.Default = def
 		if typ == Invoice {
 			return ErrWrongType
 		}
@@ -520,6 +514,9 @@ func (s *Service) Delete(ctx context.Context, a Actor, statusID, replacementID i
 		}
 		table := string(typ) + "s"
 		if count > 0 {
+			if _, err := tx.Exec(ctx, `SELECT set_config('freefsm.status_replacement','allowed',true)`); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx, fmt.Sprintf(`UPDATE %s SET status_id=$1 WHERE status_id=$2`, table), replacementID, statusID); err != nil {
 				return err
 			}
@@ -535,7 +532,7 @@ func (s *Service) Delete(ctx context.Context, a Actor, statusID, replacementID i
 		if _, err := tx.Exec(ctx, `DELETE FROM statuses WHERE id=$1`, statusID); err != nil {
 			return err
 		}
-		return configActivity(ctx, tx, a, "status_deleted", statusID, workflow, map[string]any{"status_id": statusID, "category_key": key, "was_default": def, "usage": count}, map[string]any{"replacement_status_id": replacementID})
+		return configActivity(ctx, tx, a, "status_deleted", statusID, workflow, map[string]any{"status": statusSnapshot(before), "status_id": statusID, "category_key": key, "was_default": def, "usage": count}, map[string]any{"replacement_status_id": replacementID})
 	})
 }
 
@@ -549,6 +546,9 @@ func (s *Service) EffectiveInvoiceStatus(ctx context.Context, companyID, invoice
 }
 
 func (s *Service) CurrentCategory(ctx context.Context, companyID int64, typ ObjectType, id int64) (CategoryKey, error) {
+	if !validObjectType(typ) {
+		return "", ErrWrongType
+	}
 	var key CategoryKey
 	err := s.db.QueryRow(ctx, fmt.Sprintf(`SELECT s.category_key FROM %ss o JOIN statuses s ON s.id=o.status_id WHERE o.id=$1 AND o.company_id=$2`, typ), id, companyID).Scan(&key)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -565,12 +565,29 @@ func usage(ctx context.Context, tx pgx.Tx, typ ObjectType, statusID int64) (int,
 func activity(ctx context.Context, tx pgx.Tx, a Actor, action string, typ ObjectType, id int64, metadata map[string]any) error {
 	b, _ := json.Marshal(metadata)
 	_, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,$3,$4,$5,$6)`, a.CompanyID, a.ID, action, typ, id, b)
-	return err
+	if err != nil {
+		return err
+	}
+	if a.principal == nil {
+		return nil
+	} // Delivery acceptance owns system attribution.
+	scope := "A"
+	if !a.principal.Allows(a.permission, authorization.All) {
+		scope = "J"
+	}
+	channel := "web"
+	if request, ok := authorization.FromContext(ctx); ok && request.Actor.Channel != "" {
+		channel = request.Actor.Channel
+	}
+	return protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.ID, RoleID: a.principal.RoleID, Action: a.permission, Scope: scope, TargetType: string(typ), TargetID: id, Channel: channel, Detail: metadata})
 }
 func configActivity(ctx context.Context, tx pgx.Tx, a Actor, action string, statusID, workflowID int64, before, after any) error {
 	b, _ := json.Marshal(map[string]any{"workflow_id": workflowID, "status_id": statusID, "before": before, "after": after})
 	_, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,$3,'status',$4,$5)`, a.CompanyID, a.ID, action, statusID, b)
-	return err
+	if err != nil {
+		return err
+	}
+	return protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.ID, RoleID: a.principal.RoleID, Action: "configuration.workflow.manage", Scope: "U", TargetType: "status", TargetID: statusID, Channel: "web", Detail: map[string]any{"action": action, "workflow_id": workflowID, "before": before, "after": after}})
 }
 func statusSnapshot(s Status) map[string]any {
 	return map[string]any{"id": s.ID, "workflow_id": s.WorkflowID, "name": s.Name, "color": s.Color, "category_key": s.Category, "category_order": s.Order, "is_category_default": s.Default}
@@ -593,23 +610,56 @@ func validColor(color string) bool {
 	_, err := strconv.ParseUint(color[1:], 16, 24)
 	return err == nil
 }
-func authenticate(ctx context.Context, tx pgx.Tx, a Actor) (Actor, error) {
-	if a.ID <= 0 || a.CompanyID <= 0 {
-		return Actor{}, ErrForbidden
+func (s *Service) command(ctx context.Context, a Actor, typ ObjectType, permission string, fn func(pgx.Tx, Actor) error) error {
+	actor := authorization.Actor{UserID: a.ID, Channel: "web"}
+	if request, ok := authorization.FromContext(ctx); ok {
+		actor = request.Actor
 	}
-	var role string
-	if err := tx.QueryRow(ctx, `SELECT role FROM users WHERE id=$1 AND company_id=$2 FOR SHARE`, a.ID, a.CompanyID).Scan(&role); err != nil {
-		return Actor{}, ErrForbidden
+	if actor.UserID != a.ID {
+		return ErrForbidden
 	}
-	a.Role = role
-	return a, nil
+	scope := authorization.Assigned
+	if typ == Project {
+		scope = authorization.All
+	}
+	err := authorization.New(s.db).WithinPermission(ctx, actor, permission, scope, func(tx pgx.Tx, p authorization.Principal) error {
+		if p.CompanyID != a.CompanyID {
+			return ErrForbidden
+		}
+		a.principal = &p
+		a.permission = permission
+		if err := allowStatusUpdates(ctx, tx); err != nil {
+			return err
+		}
+		return fn(tx, a)
+	})
+	if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrPending) {
+		return ErrForbidden
+	}
+	return err
 }
-func authenticateAdmin(ctx context.Context, tx pgx.Tx, a Actor) (Actor, error) {
-	verified, err := authenticate(ctx, tx, a)
-	if err != nil || verified.Role != "admin" {
-		return Actor{}, ErrForbidden
+func (s *Service) configure(ctx context.Context, a Actor, fn func(pgx.Tx, Actor) error) error {
+	actor := authorization.Actor{UserID: a.ID, Channel: "web"}
+	if request, ok := authorization.FromContext(ctx); ok {
+		actor = request.Actor
 	}
-	return verified, nil
+	if actor.UserID != a.ID || actor.Channel == "api" {
+		return ErrForbidden
+	}
+	err := authorization.New(s.db).WithinPermission(ctx, actor, "configuration.workflow.manage", authorization.Configuration, func(tx pgx.Tx, p authorization.Principal) error {
+		if p.CompanyID != a.CompanyID {
+			return ErrForbidden
+		}
+		a.principal = &p
+		if err := allowStatusUpdates(ctx, tx); err != nil {
+			return err
+		}
+		return fn(tx, a)
+	})
+	if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrPending) {
+		return ErrForbidden
+	}
+	return err
 }
 func mapNoRows(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -617,33 +667,7 @@ func mapNoRows(err error) error {
 	}
 	return err
 }
-func (s *Service) inTx(ctx context.Context, fn func(pgx.Tx) error) error {
-	for attempt := 0; attempt < 3; attempt++ {
-		tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
-		if err != nil {
-			return err
-		}
-		err = allowStatusUpdates(ctx, tx)
-		if err == nil {
-			err = fn(tx)
-		}
-		if err == nil {
-			err = tx.Commit(ctx)
-		} else {
-			_ = tx.Rollback(ctx)
-		}
-		if !retryable(err) || attempt == 2 {
-			return err
-		}
-	}
-	return nil
-}
-
 func allowStatusUpdates(ctx context.Context, tx pgx.Tx) error {
 	_, err := tx.Exec(ctx, `SELECT set_config('freefsm.status_transition','allowed',true)`)
 	return err
-}
-func retryable(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && (pgErr.Code == "40001" || pgErr.Code == "40P01")
 }

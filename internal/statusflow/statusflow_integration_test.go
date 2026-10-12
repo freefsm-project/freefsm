@@ -110,6 +110,50 @@ func TestMoveAndDeleteReassignHistoricalRecordsIntegration(t *testing.T) {
 	}
 }
 
+func TestReplacementIncludesHiddenEstimateWithoutInventingTransitions(t *testing.T) {
+	db, company, admin, _, customer := statusDB(t)
+	ctx := context.Background()
+	var workflow, old, hidden int64
+	mustScan(t, db.QueryRow(ctx, `INSERT INTO status_workflows(company_id,name,object_type) VALUES($1,'Estimates','estimate') RETURNING id`, company), &workflow)
+	if _, err := db.Exec(ctx, `INSERT INTO statuses(company_id,workflow_id,name,category_key,category_order,is_category_default) SELECT $1,$2,label,'estimate:'||key,1,true FROM (VALUES ('draft','Draft'),('estimate','Estimate'),('sent','Sent'),('accepted','Accepted'),('rejected','Rejected'),('completed','Completed')) v(key,label)`, company, workflow); err != nil {
+		t.Fatal(err)
+	}
+	mustScan(t, db.QueryRow(ctx, `SELECT id FROM statuses WHERE workflow_id=$1 AND category_key='estimate:draft'`, workflow), &old)
+	mustScan(t, db.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,title,status_id,conversion_hidden_at) VALUES($1,$2,'Hidden source',$3,now()) RETURNING id`, company, customer, old), &hidden)
+	svc := New(db)
+	actor := Actor{ID: admin, CompanyID: company}
+	replacement, err := svc.Create(ctx, actor, CreateRequest{Type: Estimate, Name: "Working copy", Category: EstimateDraft})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.Delete(ctx, actor, old, replacement.ID); err != nil {
+		t.Fatal(err)
+	}
+	key, err := svc.CurrentCategory(ctx, company, Estimate, hidden)
+	if err != nil || key != EstimateDraft {
+		t.Fatalf("hidden reference: %s %v", key, err)
+	}
+	items, err := svc.Configuration(ctx, company, Estimate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.ID == replacement.ID && (!item.Default || item.Usage != 1) {
+			t.Fatalf("replacement: %+v", item)
+		}
+	}
+	var transitions int
+	mustScan(t, db.QueryRow(ctx, `SELECT count(*) FROM activity_logs WHERE object_type='estimate' AND object_id=$1`, hidden), &transitions)
+	if transitions != 0 {
+		t.Fatalf("invented %d transitions", transitions)
+	}
+	var originalLabel string
+	mustScan(t, db.QueryRow(ctx, `SELECT coalesce(detail->'before'->'status'->>'name','') FROM authorization_audit WHERE target_type='status' AND target_id=$1 AND detail->>'action'='status_deleted'`, old), &originalLabel)
+	if originalLabel != "Draft" {
+		t.Fatalf("deleted identity lost its original label: %q", originalLabel)
+	}
+}
+
 func TestEffectiveInvoiceStatusDecisionTableIntegration(t *testing.T) {
 	db, company, admin, _, customer := statusDB(t)
 	ctx := context.Background()

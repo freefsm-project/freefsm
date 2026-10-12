@@ -87,6 +87,8 @@ func TestStatusflowMigration044MapsHistoricalReferencesAndConstraintsIntegration
 	_, _ = db.Pool.Exec(ctx, `UPDATE estimates SET conversion_hidden_at=now() WHERE id=$1`, tombstoneEstimate)
 	_, _ = db.Pool.Exec(ctx, `ALTER TABLE estimates ENABLE TRIGGER estimate_conversion_tombstone_guard`)
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,status_id,invoice_number,title) VALUES($1,$2,$3,42,'Legacy paid') RETURNING id`, a.company, a.customer, a.invoicePaid), &invoice)
+	var hiddenInvoice int64
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,status_id,invoice_number,title,conversion_hidden_at) VALUES($1,$2,$3,45,'Hidden invoice',now()) RETURNING id`, a.company, a.customer, a.invoicePaid), &hiddenInvoice)
 	var sparseUnpaidInvoice, sparsePaidInvoice int64
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,status_id,invoice_number,title,settlement_state) VALUES($1,$2,$3,43,'Sparse unpaid','unpaid') RETURNING id`, sparseCompany, sparseCustomer, sparsePaid), &sparseUnpaidInvoice)
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,status_id,invoice_number,title,settlement_state) VALUES($1,$2,$3,44,'Sparse paid','paid') RETURNING id`, sparseCompany, sparseCustomer, sparsePaid), &sparsePaidInvoice)
@@ -95,8 +97,22 @@ func TestStatusflowMigration044MapsHistoricalReferencesAndConstraintsIntegration
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = db.Pool.Exec(ctx, string(sql)); err != nil {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	// Explicit fixture review; this table describes this test's known meanings.
+	if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.workflow_review',(SELECT jsonb_object_agg(s.id::text,w.object_type||':'||CASE lower(s.name)
+	 WHEN 'new' THEN 'new' WHEN 'travel time' THEN 'travel_time' WHEN 'in progress' THEN 'in_progress' WHEN 'completed' THEN 'completed' WHEN 'cancelled' THEN 'canceled' WHEN 'canceled' THEN 'canceled' WHEN 'draft' THEN 'draft' WHEN 'sent' THEN 'sent' WHEN 'approved' THEN 'accepted' WHEN 'accepted' THEN 'accepted' WHEN 'declined' THEN 'rejected' WHEN 'void' THEN 'void' WHEN 'paid' THEN 'sent' WHEN 'partially paid' THEN 'sent' WHEN 'planning' THEN 'in_progress'
+	 ELSE CASE w.object_type WHEN 'job' THEN 'pending' WHEN 'project' THEN 'pending' WHEN 'estimate' THEN 'estimate' ELSE 'invoiced' END END)::text FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id),true)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = tx.Exec(ctx, string(sql)); err != nil {
 		t.Fatalf("apply 044: %v", err)
+	}
+	if err = tx.Commit(ctx); err != nil {
+		t.Fatal(err)
 	}
 	for _, id := range []int64{activeJob, archivedJob} {
 		var key string

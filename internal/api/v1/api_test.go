@@ -514,6 +514,13 @@ type fakeStatusFlow struct {
 	statusID int64
 }
 
+func (f *fakeStatusFlow) ApplyIntent(ctx context.Context, a statusflow.Actor, _ statusflow.ObjectType, id int64, intent statusflow.Intent) error {
+	return f.TransitionJob(ctx, a, id, intent.StatusID)
+}
+func (f *fakeStatusFlow) ObserveIntent(_ context.Context, _ int64, _ statusflow.ObjectType, _ int64, id int64) (statusflow.Intent, error) {
+	return statusflow.Intent{StatusID: id, Revision: "record", MeaningRevision: "meaning"}, nil
+}
+
 func (f *fakeStatusFlow) TransitionJob(_ context.Context, actor statusflow.Actor, jobID, statusID int64) error {
 	f.calls++
 	f.actor = actor

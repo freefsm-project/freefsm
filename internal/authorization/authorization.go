@@ -114,6 +114,17 @@ func principal(ctx context.Context, q queryer, a Actor, transitional bool) (Prin
 func (s *Service) Principal(ctx context.Context, a Actor) (Principal, error) {
 	return principal(ctx, s.Pool, a, false)
 }
+
+// WithinPermission holds the shared authority lock through effects and commit.
+// Domain services retain ownership of invariants and transaction-bound audit.
+func (s *Service) WithinPermission(ctx context.Context, a Actor, permission string, scope Scope, fn func(pgx.Tx, Principal) error) error {
+	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if !p.Allows(permission, scope) {
+			return ErrForbidden
+		}
+		return fn(tx, p)
+	})
+}
 func (s *Service) Administrator(ctx context.Context, a Actor) (Principal, error) {
 	p, e := principal(ctx, s.Pool, a, true)
 	if e == nil && !p.Protected {
