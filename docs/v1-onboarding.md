@@ -69,7 +69,17 @@ Production API login rejects temporary credentials without issuing a mobile
 session, then accepts the chosen credential after browser replacement. Chromium
 checks that resource requests do not carry token-bearing referrers.
 
-The shared policy/UI/manual commit-validation and unknown legacy recovery-token
-classification are coordinated with #22. Until that work is merged, configured
-onboarding form limits and manual creation's transaction-time policy validation
-remain integration acceptance items; this document does not claim those passed.
+The composed #21/#22 implementation uses `passwordpolicy.Load` and `Validate`
+inside the invitation and manual-account transactions. All credential forms use
+the configured minimum, including validation-error re-renders. The default is
+eight characters with uppercase, lowercase, digit and special-character checks
+enabled; the shared validator also enforces bcrypt's 72-byte limit without
+truncation. Policy changes are prospective for existing credentials.
+
+Composition tests cover configured minima across all six password-setting forms,
+exact 72-byte acceptance and 73-byte rejection, a policy change while redemption
+waits (without consuming the link), and manual creation's commit-time policy
+check. Both SMTP-backed onboarding and recovery browser journeys use production
+CSRF and a configured minimum of 16. Legacy recovery tokens are quarantined for
+review by the separate recovery migration; they are never promoted to invitation
+credentials. See `password-recovery.md` for that review procedure.
