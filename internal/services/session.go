@@ -18,7 +18,13 @@ type SessionService struct {
 	db *pgxpool.Pool
 }
 
-var ErrInvalidCredentials = errors.New("invalid credentials")
+var (
+	ErrInvalidCredentials = errors.New("invalid credentials")
+
+	// ErrInvalidSession is conclusive credential/account invalidity, never a failed
+	// dependency lookup. Callers may discard credentials only for this error.
+	ErrInvalidSession = errors.New("invalid session")
+)
 
 const (
 	webSessionLifetime       = 7 * 24 * time.Hour
@@ -105,15 +111,18 @@ func newSessionToken() (string, string, error) {
 
 func (s *SessionService) Validate(ctx context.Context, token string) (int64, error) {
 	if token == "" {
-		return 0, fmt.Errorf("empty token")
+		return 0, ErrInvalidSession
 	}
 	var userID int64
 	err := s.db.QueryRow(ctx,
 		`SELECT user_id FROM sessions WHERE token_hash = $1 AND kind = 'web' AND revoked_at IS NULL AND expires_at > NOW()`,
 		hashSessionToken(token),
 	).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrInvalidSession
+	}
 	if err != nil {
-		return 0, fmt.Errorf("invalid session")
+		return 0, fmt.Errorf("validate web session: %w", err)
 	}
 	return userID, nil
 }

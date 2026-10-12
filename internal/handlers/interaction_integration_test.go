@@ -15,7 +15,6 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/middleware"
-	"github.com/justinas/nosurf"
 )
 
 func TestPresentationPreferencesAcrossSessions(t *testing.T) {
@@ -230,12 +229,14 @@ func TestAccessibleInteractionPersistedBrowser(t *testing.T) {
 	cookie := sessionCookie(t, context.Background(), sessions, admin)
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
-	web := nosurf.New(middleware.CSRFToken(middleware.CurrentPath(middleware.Flash(router))))
+	web := middleware.BrowserCSRF(middleware.CSRFToken(middleware.CurrentPath(middleware.Flash(router))))
 	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" && r.Header.Get("X-Test-Lose-Response") == "true" {
 			buffer := httptest.NewRecorder()
 			web.ServeHTTP(buffer, r)
-			if buffer.Code != 303 {
+			// Chromium may retransmit internally after an abruptly closed socket.
+			// The shared journal suppresses that transport retry with a receipt.
+			if buffer.Code != 303 && !(buffer.Code == 409 && strings.Contains(buffer.Body.String(), `"disposition":"saved"`)) {
 				t.Errorf("lost response requires committed save, got %d: %s", buffer.Code, buffer.Body.String())
 			}
 			conn, _, err := w.(http.Hijacker).Hijack()

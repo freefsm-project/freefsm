@@ -41,7 +41,7 @@ func AssetSettingsPage(types AssetTypeListPageData, statuses AssetStatusListPage
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"work-queue-toolbar list-toolbar\"><h2>Asset Settings</h2><a href=\"/settings\" role=\"button\" class=\"outline\">Back to Settings</a></div><div hx-get=\"/settings/assets/history\" hx-trigger=\"load\" hx-swap=\"innerHTML\"><p>Loading definition history...</p></div><div class=\"settings-grid\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"work-queue-toolbar list-toolbar\"><h2>Asset Settings</h2><a href=\"/\" role=\"button\" class=\"outline\">Back to Dashboard</a></div><div hx-get=\"/settings/assets/history\" hx-trigger=\"load\" hx-swap=\"innerHTML\"><p>Loading definition history...</p></div><div class=\"settings-grid\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

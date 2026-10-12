@@ -15,6 +15,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/protectedaudit"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -233,7 +234,7 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, a Actor, typ Obje
 		return ErrForbidden
 	}
 	if oldID != nil && *oldID == statusID {
-		return nil
+		return saveaction.ConfirmNoChange(ctx, tx)
 	}
 	var key CategoryKey
 	if err := tx.QueryRow(ctx, `SELECT s.category_key FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id

@@ -13,7 +13,8 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/jung-kurt/gofpdf v1.16.2
 	github.com/justinas/nosurf v1.2.0
-	golang.org/x/crypto v0.24.0
+	golang.org/x/crypto v0.48.0
+	golang.org/x/net v0.51.0
 	golang.org/x/text v0.38.0
 )
 

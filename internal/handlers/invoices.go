@@ -16,6 +16,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
@@ -90,6 +91,9 @@ func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows := make([]templates.InvoiceRow, len(invoices))
 	for i, inv := range invoices {
 		rows[i] = invoiceRow(r.Context(), h.effectiveInvoice(r.Context(), inv), statuses, custMap)
+		if p, current := authorization.NavigationPrincipal(r.Context()); current && !p.Allows("settlement.view", authorization.All) {
+			rows[i].SettlementState = ""
+		}
 	}
 
 	data := templates.InvoiceListPageData{
@@ -129,8 +133,8 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d := invoiceToDetail(r.Context(), h.effectiveInvoice(r.Context(), i), statuses)
 	d.Statuses = statusOptions(statuses)
 	u, _ := middleware.UserFromContext(r.Context())
-	d.CanManage = u != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeInvoice, id), policyUpdate)
-	d.CanSettle = u != nil && (u.Role == "admin" || u.Role == "dispatcher")
+	d.CanManage = templates.DetailCan(r.Context(), "edit")
+	d.CanSettle = templates.DetailCan(r.Context(), "payment")
 	if actor, ok := conversionActor(r); ok && i.EstimateID != nil {
 		eligibility, eligibilityErr := h.conversion.RevertEligibility(r.Context(), actor, id)
 		if eligibilityErr == nil {
@@ -149,36 +153,42 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 			d.Customer = customer.DisplayName
 		}
 	}
-	if i.JobID != nil && *i.JobID > 0 {
+	if i.JobID != nil && *i.JobID > 0 && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, *i.JobID), policyRead) {
 		job, _ := h.jobSvc.GetByID(r.Context(), *i.JobID)
 		if job != nil && job.AssetID != nil && *job.AssetID > 0 {
 			asset, _ := h.assetSvc.GetByID(r.Context(), *job.AssetID)
-			if asset != nil {
+			if asset != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeAsset, asset.ID), policyRead) {
 				d.AssetID = asset.ID
 				d.AssetName = assetLabel(asset)
 			}
 		}
 	}
 	d.LineItems = h.svc.LineItems(i)
-	if d.CanSettle {
+	if !templates.DetailCan(r.Context(), "pricing") {
+		d.LineItems = nil
+		d.TaxRate = ""
+	}
+	if templates.DetailCan(r.Context(), "settlement") {
 		actor, ok := settlementActor(r.Context())
 		if !ok {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		d.Settlement, err = h.settlement.InvoiceSettlement(r.Context(), actor, id)
+		d.Settlement, err = h.settlement.GrantedInvoiceSettlement(r.Context(), actor, id)
 		if err != nil {
 			writeSettlementError(w, r, err)
 			return
 		}
-		credit, err := h.settlement.CustomerSettlement(r.Context(), actor, d.Settlement.CustomerID)
-		if err != nil {
-			writeSettlementError(w, r, err)
-			return
-		}
-		for _, source := range credit.Sources {
-			if source.AvailableCents > 0 {
-				d.CreditSources = append(d.CreditSources, source)
+		if templates.DetailCan(r.Context(), "apply-credit") {
+			credit, err := h.settlement.CustomerMasterSettlement(r.Context(), actor, d.Settlement.CustomerID)
+			if err != nil {
+				writeSettlementError(w, r, err)
+				return
+			}
+			for _, source := range credit.Sources {
+				if source.AvailableCents > 0 {
+					d.CreditSources = append(d.CreditSources, source)
+				}
 			}
 		}
 	}
@@ -398,7 +408,14 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
-	if !h.authorizeDestinationJob(w, r, custID, jobID) {
+	current, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	pricingSubmitted := r.Form.Has("tax_rate") || r.Form.Has("line_items")
+	contextChanged := custID != current.CustomerID || jobID != valueInt64(current.JobID)
+	if (pricingSubmitted || contextChanged) && !h.authorizeDestinationJob(w, r, custID, jobID) {
 		return
 	}
 	invoiceNumber, err := parseRequiredPositiveInt64(r.FormValue("invoice_number"), "invoice number")
@@ -412,7 +429,7 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		t := "0"
 		taxRatePtr = &t
 	}
-	if taxRatePtr != nil {
+	if taxRatePtr != nil && pricingSubmitted {
 		t, err := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr, jobID)
 		if err != nil {
 			authorizationError(w, r, err)
@@ -448,6 +465,14 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.DueDate = &t
 	}
 	params.LineItems = &lineItems
+	if !pricingSubmitted {
+		params.TaxRate = nil
+		params.LineItems = nil
+	}
+	if !contextChanged {
+		params.CustomerID = nil
+		params.JobID = nil
+	}
 	params.CustomFields = parseCustomFieldPatch(r)
 	result, err := h.svc.SaveDetails(r.Context(), id, params)
 	if err != nil {
@@ -629,6 +654,7 @@ func (h *InvoiceHandler) newInvoiceForm(ctx context.Context, customerIDs ...int6
 }
 
 func (h *InvoiceHandler) invalidInvoiceForm(w http.ResponseWriter, r *http.Request, message string) {
+	saveaction.RejectBeforeWrite(r.Context())
 	data, err := h.newInvoiceForm(r.Context())
 	if err != nil {
 		internalServerError(w, r, "build invoice editor", err)
@@ -791,6 +817,9 @@ func (h *InvoiceHandler) defaultInvoiceStatusID(ctx context.Context, category st
 }
 
 func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
+	// This installed POST prepares an editor; only CreateForJob persists it.
+	saveaction.ReadOnly(r.Context())
+	w.Header().Set("X-FreeFSM-Result", r.URL.Path)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
@@ -802,7 +831,7 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), u.ID, u.Role, id) {
+	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), id, objectref.TypeInvoice) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -888,6 +917,13 @@ func (h *InvoiceHandler) CreateForJob(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *InvoiceHandler) jobsForEditor(ctx context.Context) ([]*ent.Job, error) {
+	if req, ok := authorization.FromContext(ctx); ok {
+		p, err := req.Service.Principal(ctx, req.Actor)
+		if err != nil {
+			return nil, err
+		}
+		return h.jobSvc.ListAll(authorization.WithNavigationReads(ctx, p))
+	}
 	u, _ := middleware.UserFromContext(ctx)
 	if u != nil && (u.Role == "tech" || u.Role == "technician") {
 		return h.jobSvc.ListAssignedAll(ctx, u.ID)
@@ -913,7 +949,7 @@ func (h *InvoiceHandler) authorizeDestinationJob(w http.ResponseWriter, r *http.
 		return false
 	}
 	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), u.ID, u.Role, jobID) {
+	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), jobID, objectref.TypeInvoice) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return false
 	}

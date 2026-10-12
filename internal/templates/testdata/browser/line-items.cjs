@@ -97,7 +97,9 @@ async function main() {
           }
           // Blank appended lines are omitted; filled Add Line rows are serialized.
           const submitted = page.waitForRequest(request => request.method() === 'POST');
-          await page.getByRole('button', { name: 'Save', exact: true }).click();
+          // This serialization-only fixture intentionally returns HTTP 204 and
+          // keeps the document. Wait for its POST, not a nonexistent navigation.
+          await page.getByRole('button', { name: 'Save', exact: true }).click({ noWaitAfter: true });
           const request = await submitted;
           const expectedAction = `/${form.startsWith('invoice') ? 'invoices' : 'estimates'}${form.endsWith('edit') ? '/7' : ''}`;
           assert.equal(new URL(request.url()).pathname, expectedAction);

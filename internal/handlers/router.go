@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"time"
 
@@ -24,9 +24,11 @@ import (
 
 func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionService, cfg *config.Config, controls ...*instancecontrol.Control) http.Handler {
 	r := chi.NewRouter()
+	r.Use(middleware.SafeReadFailures)
 	authority := authorization.New(db)
 	authorization.InstallCustomerBoundary(entClient)
 	authorization.InstallItemBoundary(entClient)
+	authorization.InstallNavigationReadBoundary(entClient)
 	authorityHandler := authorizationHandler{svc: authority}
 	var control *instancecontrol.Control
 	if len(controls) > 0 {
@@ -37,12 +39,20 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	userFn := func(ctx context.Context, userID int64) (*middleware.UserInfo, error) {
 		u, err := userService.GetByID(ctx, userID)
 		if err != nil {
+			if ent.IsNotFound(err) {
+				return nil, services.ErrInvalidSession
+			}
 			return nil, err
 		}
 		if !u.IsActive {
-			return nil, fmt.Errorf("disabled user")
+			return nil, services.ErrInvalidSession
 		}
 		principal, authErr := authority.Administrator(ctx, authorization.Actor{UserID: userID})
+		// A non-administrator still has a valid Principal. Dependency failures
+		// must not turn its grants into an empty, apparently authoritative set.
+		if authErr != nil && !errors.Is(authErr, authorization.ErrForbidden) && !errors.Is(authErr, authorization.ErrPending) {
+			return nil, authErr
+		}
 		info := &middleware.UserInfo{
 			ConfigurationView:      principal.Allows("configuration.company.view", authorization.Configuration) || principal.Allows("configuration.documents.view", authorization.Configuration),
 			MailSettingsView:       principal.Allows("configuration.mail.view", authorization.Configuration),
@@ -70,6 +80,12 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			info.CompanyID = *u.CompanyID
 		}
 		info.ItemPermissions = make(map[string]bool)
+		info.NavigationGrants = make(map[string]bool)
+		if principal.Ready {
+			for _, grant := range principal.Grants {
+				info.NavigationGrants[grant.Permission+"/"+string(grant.Scope)] = true
+			}
+		}
 		for _, permission := range []string{"item.view", "item.create", "item.edit", "item.archive", "item.restore", "pricebook.view", "pricebook.create", "pricebook.edit", "cost.view", "cost.edit"} {
 			info.ItemPermissions[permission] = principal.Allows(permission, authorization.All)
 		}
@@ -173,11 +189,16 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	searchHandler := NewSearchHandler(services.NewSearchService(entClient, db))
 
 	// Authenticated routes
+	rootRouter := r
 	r.Group(func(r chi.Router) {
 		r.Use(authMW)
 		r.Use(presentationContext(authority))
 		r.Use(middleware.ForcePasswordChange(userService))
 		r.Use(bindAuthorization(authority))
+		r.Use(guardedOnlineActions(authority, cfg, rootRouter))
+		r.Get("/save-actions/{operation}", saveReceiptHandler(authority, false))
+		r.Get("/save-actions/{operation}/review", saveReceiptHandler(authority, true))
+		r.Get("/save-actions/{operation}/input-access", saveInputAccessHandler(authority, rootRouter))
 		r.Get("/change-password", passwordHandler.ChangePassword)
 		r.Post("/change-password", passwordHandler.ChangePassword)
 		r.Get("/preferences", presentationPreferences(authority))
@@ -188,22 +209,22 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/settings", settingsHandler.Save)
 		r.Post("/settings/numbering-review", settingsHandler.ReviewNumber)
 		r.Post("/settings/invoice-logo", settingsHandler.UploadInvoiceLogo)
-		r.Get("/", dashboardHandler.Index)
+		r.With(collectionRead("")).Get("/", dashboardHandler.Index)
 		r.Get("/dashboard/widgets/new", dashboardHandler.NewWidget)
 		r.Post("/dashboard/widgets/add", dashboardHandler.AddWidget)
 		r.Post("/dashboard/widgets/{id}/remove", dashboardHandler.RemoveWidget)
 		r.Post("/dashboard/widgets/reorder", dashboardHandler.ReorderWidget)
 		r.Post("/dashboard/widgets/reset", dashboardHandler.ResetWidgets)
 		r.Post("/dashboard/widgets/company-default", dashboardHandler.SaveCompanyDefaultWidgets)
-		r.Get("/search", searchHandler.Search)
-		r.Get("/schedule", scheduleHandler.Index)
-		r.Get("/schedule/activity", activityHandler.ListSchedule)
+		r.With(collectionRead("activity")).Get("/search", searchHandler.Search)
+		r.With(collectionRead("job")).Get("/schedule", scheduleHandler.Index)
+		r.With(collectionRead("job")).Get("/schedule/activity", activityHandler.ListSchedule)
 		r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {
 			handleLogout(w, r, sessions, activitySvc)
 		})
-		r.With(middleware.DispatcherOrAdmin).Get("/projects", projectHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/projects/activity", activityHandler.ListByType(objectref.TypeProject))
-		r.Get("/projects/{id}", projectHandler.Show)
+		r.With(collectionRead("project")).Get("/projects", projectHandler.List)
+		r.With(collectionRead("project")).Get("/projects/activity", activityHandler.ListByType(objectref.TypeProject))
+		r.With(detailPresentation("project", policySvc)).Get("/projects/{id}", projectHandler.Show)
 		r.Get("/customers", customerHandler.List)
 		r.Get("/customers/activity", activityHandler.ListByType(objectref.TypeCustomer))
 		r.Get("/customers/new", customerHandler.Create)
@@ -253,37 +274,37 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(activeObjectGuard(objectref.TypeItem)).Post("/{id}/delete", itemHandler.Delete)
 			r.Post("/{id}/restore", itemHandler.Restore)
 		})
-		r.Get("/time-entries", timeEntryHandler.List)
+		r.With(collectionRead("time")).Get("/time-entries", timeEntryHandler.List)
 		r.Post("/time-entries/clock-in", timeEntryHandler.ClockIn)
 		r.Post("/time-entries/clock-out", timeEntryHandler.ClockOut)
-		r.With(middleware.DispatcherOrAdmin).Get("/time-entries/activity", activityHandler.ListByType(objectref.TypeTimeEntry))
+		r.With(collectionRead("time")).Get("/time-entries/activity", activityHandler.ListByType(objectref.TypeTimeEntry))
 		r.Get("/time-entries/{id}/edit", timeEntryHandler.Update)
 		r.Post("/time-entries/{id}", timeEntryHandler.Update)
 		r.Get("/time-entries/{id}", timeEntryHandler.Show)
 		r.Post("/time-entries/{id}/delete", timeEntryHandler.Delete)
-		r.Get("/jobs", jobHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/jobs/activity", activityHandler.ListByType(objectref.TypeJob))
+		r.With(collectionRead("job")).Get("/jobs", jobHandler.List)
+		r.With(collectionRead("job")).Get("/jobs/activity", activityHandler.ListByType(objectref.TypeJob))
 		r.Post("/jobs/{id}/status", jobHandler.UpdateStatus)
 		r.Post("/projects/{id}/status", transitionStatus(statusflowService, statusflow.Project))
 		r.Post("/estimates/{id}/status", transitionStatus(statusflowService, statusflow.Estimate))
 		r.Post("/invoices/{id}/status", transitionStatus(statusflowService, statusflow.Invoice))
 		r.Post("/jobs/{id}/clock-in", jobHandler.ClockIn)
 		r.Post("/jobs/{id}/clock-out", jobHandler.ClockOut)
-		r.Get("/jobs/{id}", jobHandler.Show)
+		r.With(detailPresentation("job", policySvc)).Get("/jobs/{id}", jobHandler.Show)
 		for _, parent := range customfields.ExistingParents() {
 			typ := parent.Type
 			r.Get("/"+typ+"s/{id}/custom-fields", cfHandler.Values(typ))
 			r.Post("/"+typ+"s/{id}/custom-fields", cfHandler.Values(typ))
 		}
-		r.With(middleware.DispatcherOrAdmin).Get("/assets", assetHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/assets/activity", activityHandler.ListByType(objectref.TypeAsset))
-		r.Get("/assets/{id}", assetHandler.Show)
-		r.With(middleware.DispatcherOrAdmin).Get("/estimates", estimateHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/estimates/activity", activityHandler.ListByType(objectref.TypeEstimate))
-		r.Get("/estimates/{id}", estimateHandler.Show)
-		r.With(middleware.DispatcherOrAdmin).Get("/invoices", invoiceHandler.List)
-		r.With(middleware.DispatcherOrAdmin).Get("/invoices/activity", activityHandler.ListByType(objectref.TypeInvoice))
-		r.Get("/invoices/{id}", invoiceHandler.Show)
+		r.With(collectionRead("asset")).Get("/assets", assetHandler.List)
+		r.With(collectionRead("asset")).Get("/assets/activity", activityHandler.ListByType(objectref.TypeAsset))
+		r.With(detailPresentation("asset", policySvc)).Get("/assets/{id}", assetHandler.Show)
+		r.With(collectionRead("estimate")).Get("/estimates", estimateHandler.List)
+		r.With(collectionRead("estimate")).Get("/estimates/activity", activityHandler.ListByType(objectref.TypeEstimate))
+		r.With(detailPresentation("estimate", policySvc)).Get("/estimates/{id}", estimateHandler.Show)
+		r.With(collectionRead("invoice")).Get("/invoices", invoiceHandler.List)
+		r.With(collectionRead("invoice")).Get("/invoices/activity", activityHandler.ListByType(objectref.TypeInvoice))
+		r.With(detailPresentation("invoice", policySvc)).Get("/invoices/{id}", invoiceHandler.Show)
 
 		// Core operational mutations
 		r.With(detailsAccess("project")).Get("/projects/new", projectHandler.Create)
@@ -322,6 +343,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 
 		// Assigned technicians may create documents from their Jobs and manage them.
 		r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/create-invoice", invoiceHandler.CreateFromJob)
+		r.With(activeObjectGuard(objectref.TypeJob)).Get("/jobs/{id}/create-invoice", invoiceHandler.CreateFromJob)
 		r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/invoices", invoiceHandler.CreateForJob)
 		r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/create-estimate", estimateHandler.CreateFromJob)
 		r.With(activeObjectGuard(objectref.TypeEstimate)).Get("/estimates/{id}/edit", estimateHandler.Update)
@@ -396,7 +418,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		}
 
 		// Activity
-		r.With(middleware.DispatcherOrAdmin).Get("/activity", activityHandler.ListAll)
+		r.With(collectionRead("activity")).Get("/activity", activityHandler.ListAll)
 		for _, e := range []struct {
 			prefix  string
 			objType objectref.Type

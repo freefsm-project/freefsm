@@ -124,9 +124,7 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 	// Get service history
 	serviceHistory, _ := h.svc.GetServiceHistory(r.Context(), id)
-	if !isAdminOrDispatcher(u) {
-		serviceHistory = filterReadableJobs(r.Context(), h.policySvc, u, serviceHistory)
-	}
+	serviceHistory = filterReadableJobs(r.Context(), h.policySvc, u, serviceHistory)
 	jobRows := make([]templates.JobRow, len(serviceHistory))
 	for i, j := range serviceHistory {
 		jobRows[i] = jobRowForAsset(j)

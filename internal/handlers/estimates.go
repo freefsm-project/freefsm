@@ -16,6 +16,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/freefsm-project/freefsm/internal/templates"
@@ -143,7 +144,7 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d := estimateToDetail(r.Context(), e, statuses)
 	d.Statuses = statusOptions(statuses)
 	u, _ := middleware.UserFromContext(r.Context())
-	d.CanManage = u != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeEstimate, id), policyUpdate)
+	d.CanManage = templates.DetailCan(r.Context(), "edit")
 	convertibleStatus := false
 	for _, status := range statuses {
 		if e.StatusID != nil && status.ID == *e.StatusID {
@@ -171,6 +172,10 @@ func (h *EstimateHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.LineItems = h.svc.LineItems(e)
+	if !templates.DetailCan(r.Context(), "pricing") {
+		d.LineItems = nil
+		d.TaxRate = ""
+	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeEstimate, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	d.Tags = tagsToRows(tags)
@@ -330,6 +335,7 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *EstimateHandler) invalidEstimateForm(w http.ResponseWriter, r *http.Request, message string) {
+	saveaction.RejectBeforeWrite(r.Context())
 	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	data, err := h.newEstimateForm(r.Context(), customerID)
 	if err != nil {
@@ -392,7 +398,14 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
-	if !h.authorizeDestinationJob(w, r, custID, jobID) {
+	current, err := h.svc.GetByID(r.Context(), id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	pricingSubmitted := r.Form.Has("tax_rate") || r.Form.Has("line_items")
+	contextChanged := custID != valueInt64(current.CustomerID) || jobID != valueInt64(current.JobID)
+	if (pricingSubmitted || contextChanged) && !h.authorizeDestinationJob(w, r, custID, jobID) {
 		return
 	}
 	taxRate := r.FormValue("tax_rate")
@@ -401,7 +414,7 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		t := "0"
 		taxRatePtr = &t
 	}
-	if taxRatePtr != nil {
+	if taxRatePtr != nil && pricingSubmitted {
 		t, err := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr, jobID)
 		if err != nil {
 			authorizationError(w, r, err)
@@ -434,6 +447,14 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params.LineItems = &lineItems
+	if !pricingSubmitted {
+		params.TaxRate = nil
+		params.LineItems = nil
+	}
+	if !contextChanged {
+		params.CustomerID = nil
+		params.JobID = nil
+	}
 	result, err := h.svc.SaveDetails(r.Context(), id, params)
 	if err != nil {
 		if renderFieldSaveError(w, r, h.defSvc, "estimate", err) {
@@ -515,7 +536,7 @@ func (h *EstimateHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), u.ID, u.Role, id) {
+	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), id, objectref.TypeEstimate) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -903,6 +924,13 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 }
 
 func (h *EstimateHandler) jobsForEditor(ctx context.Context) ([]*ent.Job, error) {
+	if req, ok := authorization.FromContext(ctx); ok {
+		p, err := req.Service.Principal(ctx, req.Actor)
+		if err != nil {
+			return nil, err
+		}
+		return h.jobSvc.ListAll(authorization.WithNavigationReads(ctx, p))
+	}
 	u, _ := middleware.UserFromContext(ctx)
 	if u != nil && (u.Role == "tech" || u.Role == "technician") {
 		return h.jobSvc.ListAssignedAll(ctx, u.ID)
@@ -928,7 +956,7 @@ func (h *EstimateHandler) authorizeDestinationJob(w http.ResponseWriter, r *http
 		return false
 	}
 	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), u.ID, u.Role, jobID) {
+	if !ok || u == nil || !h.policySvc.CanCreateDocumentForJob(r.Context(), jobID, objectref.TypeEstimate) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return false
 	}

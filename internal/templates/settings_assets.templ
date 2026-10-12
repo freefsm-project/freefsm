@@ -22,11 +22,11 @@ templ AssetTypeList(p AssetTypeListPageData) {
 							}
 							<form id={ fmt.Sprintf("asset-type-update-%d", t.ID) } action={ templ.URL(fmt.Sprintf("/settings/asset-types/%d", t.ID)) } method="post">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<input type="text" name="name" value={ t.Name } required/>
+								<input type="text" name="name" value={ t.Name } aria-label={ "Asset Type name: " + t.Name } required/>
 							</form>
 						</td>
 						<td>
-							<input form={ fmt.Sprintf("asset-type-update-%d", t.ID) } type="number" name="sort_order" value={ fmt.Sprintf("%d", t.SortOrder) } class="input-width-70"/>
+							<input form={ fmt.Sprintf("asset-type-update-%d", t.ID) } type="number" name="sort_order" value={ fmt.Sprintf("%d", t.SortOrder) } class="input-width-70" aria-label={ "Display order: " + t.Name }/>
 						</td>
 						<td class="work-queue-actions">
 							if vocabularyPermission(ctx, "assets", "manage") {
@@ -49,8 +49,8 @@ templ AssetTypeList(p AssetTypeListPageData) {
 		<form action="/settings/asset-types" method="post" class="inline-add-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<div class="grid asset-type-add-grid">
-				<input type="text" name="name" placeholder="New type name" required/>
-				<input type="number" name="sort_order" placeholder="Order" value="0"/>
+				<input type="text" name="name" placeholder="New type name" aria-label="New Asset Type name" required/>
+				<input type="number" name="sort_order" placeholder="Order" value="0" aria-label="New Asset Type display order"/>
 				<button type="submit">Add</button>
 			</div>
 		</form>
@@ -79,14 +79,14 @@ templ AssetStatusList(p AssetStatusListPageData) {
 							}
 							<form id={ fmt.Sprintf("asset-status-update-%d", s.ID) } action={ templ.URL(fmt.Sprintf("/settings/asset-statuses/%d", s.ID)) } method="post">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<input type="text" name="name" value={ s.Name } required/>
+								<input type="text" name="name" value={ s.Name } aria-label={ "Asset Status name: " + s.Name } required/>
 							</form>
 						</td>
 						<td>
-							<input form={ fmt.Sprintf("asset-status-update-%d", s.ID) } type="color" name="color" value={ s.Color }/>
+							<input form={ fmt.Sprintf("asset-status-update-%d", s.ID) } type="color" name="color" value={ s.Color } aria-label={ "Display color: " + s.Name }/>
 						</td>
 						<td>
-							<input form={ fmt.Sprintf("asset-status-update-%d", s.ID) } type="number" name="sort_order" value={ fmt.Sprintf("%d", s.SortOrder) } class="input-width-70"/>
+							<input form={ fmt.Sprintf("asset-status-update-%d", s.ID) } type="number" name="sort_order" value={ fmt.Sprintf("%d", s.SortOrder) } class="input-width-70" aria-label={ "Display order: " + s.Name }/>
 						</td>
 						<td class="work-queue-actions">
 							if vocabularyPermission(ctx, "assets", "manage") {
@@ -109,9 +109,9 @@ templ AssetStatusList(p AssetStatusListPageData) {
 		<form action="/settings/asset-statuses" method="post" class="inline-add-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<div class="grid asset-status-add-grid">
-				<input type="text" name="name" placeholder="New status name" required/>
-				<input type="color" name="color" value="#6B7280"/>
-				<input type="number" name="sort_order" placeholder="Order" value="0"/>
+				<input type="text" name="name" placeholder="New status name" aria-label="New Asset Status name" required/>
+				<input type="color" name="color" value="#6B7280" aria-label="New Asset Status display color"/>
+				<input type="number" name="sort_order" placeholder="Order" value="0" aria-label="New Asset Status display order"/>
 				<button type="submit">Add</button>
 			</div>
 		</form>

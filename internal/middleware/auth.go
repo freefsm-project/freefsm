@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/freefsm-project/freefsm/internal/services"
@@ -17,6 +18,9 @@ const (
 )
 
 type UserInfo struct {
+	// NavigationGrants is a request-local snapshot of effective permission/scope
+	// pairs. It controls discovery only; endpoints recheck their own authority.
+	NavigationGrants       map[string]bool
 	ConfigurationView      bool
 	MailSettingsView       bool
 	MapSettingsView        bool
@@ -62,6 +66,10 @@ func Auth(sessions *services.SessionService, userFn UserProvider) func(http.Hand
 
 			userID, err := sessions.Validate(r.Context(), cookie.Value)
 			if err != nil {
+				if !errors.Is(err, services.ErrInvalidSession) {
+					ServiceUnavailable(w, r)
+					return
+				}
 				http.SetCookie(w, &http.Cookie{
 					Name: "session", Value: "", Path: "/", MaxAge: -1,
 				})
@@ -74,6 +82,10 @@ func Auth(sessions *services.SessionService, userFn UserProvider) func(http.Hand
 			}
 
 			user, err := userFn(r.Context(), userID)
+			if err != nil && !errors.Is(err, services.ErrInvalidSession) {
+				ServiceUnavailable(w, r)
+				return
+			}
 			if err == nil && user != nil {
 				ctx := context.WithValue(r.Context(), UserKey, user)
 				r = r.WithContext(ctx)
@@ -170,7 +182,7 @@ func ForcePasswordChange(checker ForcePasswordChecker) func(http.Handler) http.H
 
 			mustChange, err := checker.MustChangePassword(r.Context(), u.ID)
 			if err != nil {
-				http.Error(w, "Credential state unavailable; please try again", http.StatusServiceUnavailable)
+				ServiceUnavailable(w, r)
 				return
 			}
 			if mustChange {

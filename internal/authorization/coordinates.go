@@ -104,6 +104,13 @@ func (s *Service) LookupCoordinates(ctx context.Context, a Actor, id int64, revi
 	if err != nil {
 		return v, err
 	}
+	p, err = s.Principal(ctx, a)
+	if err != nil {
+		return v, err
+	}
+	if !p.Allows("location.edit", All) {
+		return v, ErrForbidden
+	}
 	if current.Revision != revision {
 		return v, ErrConflict
 	}

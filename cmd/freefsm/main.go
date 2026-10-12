@@ -251,7 +251,7 @@ func run() error {
 	webRouter.Get("/delivery/open/{token}", deliveryService.OpenHandler)
 	webRouter.Mount("/", handlers.New(db.Pool, entClient, sessions, cfg, control))
 	backupActivity := handlers.NewActivityHandler(services.NewActivityService(entClient, objectref.NewEntDirectory(entClient)), services.NewActivityResolver(entClient), nil, nil)
-	backupRouter := handlers.NewBackupRouter(manager, control, services.NewUserService(entClient), services.NewCompanySettingsService(entClient), sessions, disabledReason, backupActivity)
+	backupRouter := handlers.NewBackupRouter(db.Pool, manager, control, services.NewUserService(entClient), services.NewCompanySettingsService(entClient), sessions, disabledReason, backupActivity)
 	applicationHandler := newApplicationHandler(
 		apiv1.NewRouter(db.Pool, entClient, sessions, services.NewFileService(entClient, objectref.NewEntDirectory(entClient), cfg.UploadDir, cfg.MaxUploadSize)),
 		webRouter,

@@ -17,6 +17,7 @@ templ JobSubtasks(p JobDetail) {
 					<input
 						type="checkbox"
 						checked?={ st.Completed }
+						disabled?={ p.ArchivedAt != "" || (st.Completed && !detailCan(ctx,"subtask-reopen")) || (!st.Completed && !detailCan(ctx,"subtask-complete")) }
 						hx-post={ fmt.Sprintf("/jobs/%d/subtasks/%d/toggle", p.ID, idx) }
 						hx-target="#job-subtasks"
 						hx-swap="outerHTML"

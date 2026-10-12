@@ -28,12 +28,12 @@ templ DashboardPage(p DashboardData) {
 		</div>
 		<div class="dashboard-overview">
 			for _, w := range p.Widgets {
-				if w.Type == "clock" {
+				if w.Type == "clock" && navigationPermission(ctx, "time.view", "A", "O") {
 					<article class="dashboard-stat dashboard-widget-shell">
 						@DashboardCardTop("Time Clock", w, p.EditMode)
 						@ClockWidget(p.ClockWidget)
 					</article>
-				} else if w.Type == "customers" && canManageOperational(ctx) {
+				} else if w.Type == "customers" && navigationPermission(ctx, "customer.view", "A") {
 					<article class="dashboard-stat">
 						@DashboardCardTop("Customers", w, p.EditMode)
 						<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalCustomers) }</p>
@@ -41,7 +41,7 @@ templ DashboardPage(p DashboardData) {
 						@DashboardMonthlyBars(p.Stats.CustomerMonths)
 						<footer><a href="/customers" role="button" class="outline">View Customers</a></footer>
 					</article>
-				} else if w.Type == "jobs" && canManageOperational(ctx) {
+				} else if w.Type == "jobs" && navigationPermission(ctx, "job.view", "A") {
 					<article class="dashboard-stat">
 						@DashboardCardTop("Jobs", w, p.EditMode)
 						<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalJobs) }</p>
@@ -55,7 +55,7 @@ templ DashboardPage(p DashboardData) {
 						@DashboardMonthlyBars(p.Stats.JobMonths)
 						<footer><a href="/jobs" role="button" class="outline">View Jobs</a></footer>
 					</article>
-				} else if w.Type == "invoices" && canManageOperational(ctx) {
+				} else if w.Type == "invoices" && navigationPermission(ctx, "invoice.view", "A") {
 					<article class="dashboard-stat">
 						@DashboardCardTop("Invoices", w, p.EditMode)
 						<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalInvoices) }</p>
@@ -68,7 +68,7 @@ templ DashboardPage(p DashboardData) {
 						@DashboardMonthlyBars(p.Stats.InvoiceMonths)
 						<footer><a href="/invoices" role="button" class="outline">View Invoices</a></footer>
 					</article>
-				} else if w.Type == "projects" && canManageOperational(ctx) {
+				} else if w.Type == "projects" && navigationPermission(ctx, "project.view", "A") {
 					<article class="dashboard-stat">
 						@DashboardCardTop("Projects", w, p.EditMode)
 						<p class="dashboard-metric">{ fmt.Sprintf("%d", p.Stats.TotalProjects) }</p>
@@ -76,7 +76,7 @@ templ DashboardPage(p DashboardData) {
 						@DashboardMonthlyBars(p.Stats.ProjectMonths)
 						<footer><a href="/projects" role="button" class="outline">View Projects</a></footer>
 					</article>
-				} else if w.Type == "today_overview" && canManageOperational(ctx) {
+				} else if w.Type == "today_overview" && navigationOverview(ctx) {
 					<article class="dashboard-stat dashboard-today">
 						@DashboardCardTop("Overview - Today", w, p.EditMode)
 						<div class="dashboard-today-body">
@@ -97,7 +97,7 @@ templ DashboardPage(p DashboardData) {
 							</div>
 						</div>
 					</article>
-				} else if w.Type == "assigned_work" && !canManageOperational(ctx) {
+				} else if w.Type == "assigned_work" && navigationPermission(ctx, "job.view", "J") {
 					<article class="dashboard-panel">
 						@DashboardCardTop("Assigned Work", w, p.EditMode)
 						<p>Use Jobs or Schedule to view work assigned to you.</p>
@@ -110,7 +110,7 @@ templ DashboardPage(p DashboardData) {
 			}
 		</div>
 		for _, w := range p.Widgets {
-			if w.Type == "recent_activity" && canManageOperational(ctx) {
+			if w.Type == "recent_activity" && navigationDocuments(ctx) {
 				<section class="dashboard-widget-panel">
 					@DashboardCardTop("Recent Activity", w, p.EditMode)
 					<div class="dashboard-work-queues">
@@ -158,7 +158,7 @@ templ DashboardPage(p DashboardData) {
 						</article>
 					</div>
 				</section>
-			} else if w.Type == "financial_summary" && canManageOperational(ctx) {
+			} else if w.Type == "financial_summary" && navigationPermission(ctx, "customer.financial.view", "A") && navigationPermission(ctx, "invoice.view", "A") {
 				<section class="dashboard-widget-panel">
 					@DashboardCardTop("Financial Summary", w, p.EditMode)
 					<div class="dashboard-financials">

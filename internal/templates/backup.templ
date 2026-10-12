@@ -89,6 +89,10 @@ templ BackupStatusPage(token string) {
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<meta name="referrer" content="no-referrer"/>
 			<title>Instance operation status</title>
+			<link rel="stylesheet" href={ templ.URL(staticAsset("/static/css/pico.min.css")) }/>
+			<link rel="stylesheet" href={ templ.URL(staticAsset("/static/css/interaction.css")) }/>
+			<style>body { width: auto; margin: 1rem; max-width: 60rem; overflow-wrap: anywhere; } #backup-progress button { display: block; width: auto; margin-block: .5rem; }</style>
+			<script>document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';</script>
 		</head>
 		<body>
 			<h1>Instance operation status</h1>
@@ -112,6 +116,23 @@ templ BackupProgressScript() {
 				const storageKey = 'freefsm.backup.status';
 				let generation = 0;
 				let busy = false;
+				let initiation = null;
+				function setBusy(value) {
+					busy = value; root.setAttribute('aria-busy', String(value));
+					root.querySelectorAll('#backup-create button, #backup-upload button, #backup-restore button').forEach(button => { button.disabled = value; });
+				}
+				function statusButton(label, action) {
+					const button = document.createElement('button'); button.type = 'button'; button.textContent = label; button.onclick = action; progress.append(button);
+				}
+				function rememberInitiation(kind) {
+					if (initiation && initiation.kind === kind) return initiation;
+					const action = Array.from(crypto.getRandomValues(new Uint8Array(32)), byte => byte.toString(16).padStart(2, '0')).join('');
+					initiation = { action, kind };
+					try { sessionStorage.setItem(storageKey, JSON.stringify(initiation)); }
+					catch (_) { progress.textContent = 'Browser status storage is unavailable. Keep this page open to check the operation.'; }
+					dismiss.hidden = false;
+					return initiation;
+				}
 				function refreshActivity() {
 					if (!root.dataset.statusOnly) document.body.dispatchEvent(new CustomEvent('backupActivityChanged'));
 				}
@@ -134,22 +155,55 @@ templ BackupProgressScript() {
 					}
 				}
 				dismiss.addEventListener('click', () => {
-					generation++; busy = false; sessionStorage.removeItem(storageKey);
+					if (initiation) {
+						progress.textContent = 'Notice dismissed. The initiation remains unresolved; it has not been cancelled. Check before starting another operation.';
+						statusButton('Check initiation status', () => recoverInitiation(initiation));
+						return;
+					}
+					generation++; setBusy(false); sessionStorage.removeItem(storageKey);
 					dismiss.hidden = true; hideControls();
 					progress.textContent = 'Saved status dismissed. This does not cancel a running operation.';
 				});
 				async function post(path, body, headers = {}) {
-					const response = await fetch('/settings/backup/' + path, {method: 'POST', body, headers: {'X-CSRF-Token': root.dataset.csrf, ...headers}, cache: 'no-store', referrerPolicy: 'no-referrer', signal: path === 'status' ? AbortSignal.timeout(15000) : undefined});
+					const response = await fetch('/settings/backup/' + path, {method: 'POST', body, headers: {'X-CSRF-Token': root.dataset.csrf, ...headers}, cache: 'no-store', referrerPolicy: 'no-referrer', signal: path === 'status' || path === 'action-status' ? AbortSignal.timeout(15000) : undefined});
 					if (!response.ok) { const error = new Error(await response.text()); error.status = response.status; throw error; }
 					return response.json();
 				}
+				async function recoverInitiation(saved, retry) {
+					if (!saved || !root.isConnected) return;
+					initiation = saved; setBusy(true); dismiss.hidden = false;
+					progress.textContent = 'Save status unknown—checking backup initiation';
+					try {
+						const receipt = await post('action-status', null, {'X-Backup-Action': saved.action});
+						if (receipt.available && receipt.operation_id) {
+							const op = await post('status', null, {'X-Backup-Operation': receipt.operation_id});
+							initiation = null;
+							if (remember(op)) history.replaceState(null, '', '/settings/backup/status-page');
+							hideControls(); await follow(op); return;
+						}
+						if (['rejected','failed','complete','ready'].includes(receipt.disposition)) {
+							initiation = null; setBusy(false); sessionStorage.removeItem(storageKey);
+							progress.textContent = 'Previous initiation: ' + receipt.disposition + '. Its operation is no longer available. Review this result before explicitly starting a new operation.';
+							return;
+						}
+						progress.textContent = receipt.disposition === 'not_received' ? 'The server has not received this initiation. No replacement action has been sent.' : 'Save status unknown. The initiation may have effects; it will not be repeated.';
+						if (receipt.disposition === 'not_received' && retry) statusButton('Submit same initiation', async () => {
+							const check = await post('action-status', null, {'X-Backup-Action': saved.action}).catch(() => null);
+							if (check?.disposition === 'not_received') await retry(); else await recoverInitiation(saved, retry);
+						});
+						if (receipt.disposition === 'not_received' && !retry && !root.dataset.statusOnly) statusButton('Re-enter input for this same initiation', () => {
+							setBusy(false); progress.textContent = 'Re-enter the original ' + saved.kind + ' input. The same action identity will be submitted and checked; no input was stored.';
+						});
+					} catch (_) { progress.textContent = 'Save status unknown. Initiation status could not be reached; do not start another operation.'; }
+					statusButton('Check initiation status', () => recoverInitiation(saved, retry));
+				}
 				async function follow(op) {
 					const current = ++generation;
-					busy = true;
+					setBusy(true);
 					dismiss.hidden = false;
 					for (; current === generation && root.isConnected;) {
 						progress.textContent = op.Kind + ': ' + op.Phase;
-						if (op.Phase === 'failed') { progress.textContent = op.Error; busy = false; refreshActivity(); return; }
+						if (op.Phase === 'failed') { progress.textContent = op.Error; setBusy(false); refreshActivity(); return; }
 						if (op.Kind === 'restore' && op.Phase === 'complete') {
 							// Replace any pre-restore administrator DOM with the status-only shell.
 							if (!root.dataset.statusOnly) {
@@ -165,24 +219,24 @@ templ BackupProgressScript() {
 								progress.textContent = 'Restore committed, but the instance is unavailable pending recovery. Ask the deployment operator to restart the server and complete recovery before signing in.';
 								const message = op.Failure?.Message || op.Error;
 								if (message) progress.append(document.createTextNode(' ' + message));
-								busy = false; return;
+								setBusy(false); return;
 							}
 							progress.textContent = 'Restore complete. Email is disabled. Log in again with a restored account.';
 							const a = document.createElement('a'); a.href = '/login'; a.textContent = ' Log in';
 							a.addEventListener('click', () => sessionStorage.removeItem(storageKey));
-							progress.append(a); busy = false; return;
+							progress.append(a); setBusy(false); return;
 						}
 						if (op.Kind === 'backup' && op.Phase === 'complete') {
 							refreshActivity();
 							const download = document.getElementById('backup-download');
 							if (download) { download.hidden = false; download.querySelector('[name=operation]').value = op.ID; }
 							else progress.textContent = 'Backup complete. Return to administrator controls to authenticate and download.';
-							busy = false;
+							setBusy(false);
 							return;
 						}
 						if (op.Kind === 'upload' && op.Phase === 'ready') {
 							refreshActivity();
-							busy = false;
+							setBusy(false);
 							const review = document.getElementById('backup-review');
 							if (!review) { progress.textContent = 'Upload validated. Return to administrator controls to review and confirm restore.'; return; }
 							review.hidden = false;
@@ -200,7 +254,7 @@ templ BackupProgressScript() {
 								if (current !== generation || !root.isConnected) return;
 								if (error.status && error.status < 500 && error.status !== 429) {
 									progress.textContent = error.status === 404 ? 'Operation not found or expired. The saved status can be dismissed.' : 'Status unavailable. Reload to refresh browser authorization, or dismiss this saved status.';
-									busy = false; return;
+										setBusy(false); return;
 								}
 								progress.textContent = 'Connection interrupted. Retrying operation status; the server operation continues.';
 								await new Promise(resolve => setTimeout(resolve, 3000));
@@ -212,30 +266,58 @@ templ BackupProgressScript() {
 					const actionForm = document.getElementById('backup-' + action);
 					if (!actionForm) continue;
 					actionForm.addEventListener('submit', async event => {
-						event.preventDefault(); if (busy) return; busy = true;
+						event.preventDefault(); if (busy) return; setBusy(true);
 						const form = event.target;
+						if (initiation && initiation.kind !== (action === 'create' ? 'backup' : action)) { await recoverInitiation(initiation); return; }
+						const saved = action === 'restore' ? null : rememberInitiation(action === 'create' ? 'backup' : 'upload');
+						const restoreID = action === 'restore' ? form.elements.operation.value : '';
+						let send;
 						try {
 							progress.textContent = action === 'upload' ? 'Uploading encrypted archive…' : 'Starting operation…';
 							let op;
 							if (action === 'upload') {
 								const password = JSON.stringify(form.elements.archive_password.value); form.elements.archive_password.value = '';
-								op = await post(action, form.elements.archive.files[0], {'Content-Type': 'application/octet-stream', 'X-Archive-Password': password.replace(/[\u007f-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))});
+								const file = form.elements.archive.files[0];
+								const headers = {'Content-Type': 'application/octet-stream', 'X-Backup-Action': saved.action, 'X-Archive-Password': password.replace(/[\u007f-\uffff]/g, c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'))};
+								send = () => post(action, file, headers);
 							} else {
 								const body = new URLSearchParams(new FormData(form));
 								form.querySelectorAll('input[type=password]').forEach(input => input.value = '');
-								op = await post(action, body);
+								send = () => post(action, body, saved ? {'X-Backup-Action': saved.action} : {});
 							}
+							const accepted = async () => {
+								try { op = await send(); }
+								catch (error) {
+									if (error.status >= 400 && error.status < 500 && error.status !== 409) {
+										initiation = null; sessionStorage.removeItem(storageKey); setBusy(false); progress.textContent = error.message; return;
+									}
+									await recoverInitiation(saved, accepted); return;
+								}
+								initiation = null; window.freefsmActions?.confirmed(form);
+								if (remember(op)) history.replaceState(null, '', '/settings/backup/status-page');
+								hideControls(); await follow(op);
+							};
+							if (saved) { await accepted(); return; }
+							op = await send();
+							window.freefsmActions?.confirmed(form);
 							// Reload/back lands on a DB-free shell even after sessions expire.
 							if (remember(op)) history.replaceState(null, '', '/settings/backup/status-page');
 							hideControls();
 							await follow(op);
-						} catch (error) { progress.textContent = error.message; busy = false; }
+						} catch (error) {
+							if (restoreID && (!error.status || error.status >= 500)) {
+								// Restore consumes the already persisted upload capability;
+								// check that same operation, never resend Replace.
+								await follow({ID: restoreID, Kind: 'restore', Phase: 'Save status unknown—checking'});
+							} else { progress.textContent = error.message; setBusy(false); }
+						}
 					});
 				}
 				function resume() {
 					if (!root.isConnected) return;
 					try {
 						const saved = JSON.parse(sessionStorage.getItem(storageKey));
+						if (saved && /^[0-9a-f]{64}$/.test(saved.action || '') && ['backup','upload'].includes(saved.kind)) { hideControls(); recoverInitiation(saved); return; }
 						if (saved && typeof saved.id === 'string' && ['backup', 'upload', 'restore'].includes(saved.kind)) {
 							hideControls(); follow({ID: saved.id, Kind: saved.kind, Phase: 'resuming'});
 						}

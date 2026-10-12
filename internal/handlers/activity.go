@@ -88,6 +88,15 @@ func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerF
 
 		var scope services.ActivityScope = services.ObjectActivityScope{Refs: []objectref.Ref{ref}}
 		conversionMode := objectType == objectref.TypeEstimate || objectType == objectref.TypeInvoice
+		if req, current := authorization.FromContext(r.Context()); current {
+			p, err := req.Service.Principal(r.Context(), req.Actor)
+			if err != nil {
+				authorizationError(w, r, err)
+				return
+			}
+			r = r.WithContext(authorization.WithNavigationReads(r.Context(), p))
+			conversionMode = conversionMode && req.Service.ParentFacet(r.Context(), req.Actor, string(objectType), objectID, string(objectType)+".provenance.view") == nil
+		}
 		if conversionMode {
 			if h.conversion == nil {
 				http.Error(w, "activity conversion service is required", http.StatusInternalServerError)
@@ -103,6 +112,9 @@ func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerF
 				}
 			} else {
 				scope = services.ConversionActivityScope{EstimateID: estimateID, ViewerID: u.ID, ViewerRole: u.Role}
+				if _, current := authorization.NavigationPrincipal(r.Context()); current {
+					r = r.WithContext(authorization.WithActivityProvenance(r.Context(), estimateID))
+				}
 			}
 		}
 
@@ -115,11 +127,12 @@ func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerF
 		if conversionMode {
 			filters.Set("conversion", "1")
 		}
+		_, currentRead := authorization.NavigationPrincipal(r.Context())
 		render(w, r, templates.ActivityWidget(templates.ActivityWidgetData{
 			DOMID:      fmt.Sprintf("activity-%s-%d", ref.Type, ref.ID),
 			Entries:    rows,
 			HasMore:    page.HasOlder,
-			ViewAllURL: viewAllActivityURL(page.HasOlder, filters, u.ProtectedAdministrator || u.Role == "admin" || u.Role == "dispatcher"),
+			ViewAllURL: viewAllActivityURL(page.HasOlder, filters, currentRead || u.ProtectedAdministrator || u.Role == "admin" || u.Role == "dispatcher"),
 		}))
 	}
 }
@@ -190,7 +203,10 @@ func (h *ActivityHandler) ListSchedule(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	scope := services.ScheduleActivityScope{ViewerID: u.ID, ViewerRole: u.Role}
+	var scope services.ActivityScope = services.ScheduleActivityScope{ViewerID: u.ID, ViewerRole: u.Role}
+	if _, current := authorization.NavigationPrincipal(r.Context()); current {
+		scope = services.TypeActivityScope{Types: []objectref.Type{objectref.TypeJob}, Actions: []string{"scheduled", "rescheduled", "dispatched"}}
+	}
 	page, rows, err := h.listAndResolve(r.Context(), u, scope, embeddedActivityLimit, nil, "")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -201,7 +217,7 @@ func (h *ActivityHandler) ListSchedule(w http.ResponseWriter, r *http.Request) {
 		"action": {"scheduled", "rescheduled", "dispatched"},
 	}
 	viewAll := ""
-	if u.ProtectedAdministrator || u.Role == "admin" || u.Role == "dispatcher" {
+	if _, current := authorization.NavigationPrincipal(r.Context()); current || u.ProtectedAdministrator || u.Role == "admin" || u.Role == "dispatcher" {
 		viewAll = viewAllActivityURL(page.HasOlder, filters, true)
 	}
 	templates.ActivityRecentList(templates.ActivityPageData{Entries: rows, HasMore: page.HasOlder, ViewAllURL: viewAll}).Render(r.Context(), w)
@@ -212,7 +228,7 @@ func (h *ActivityHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !u.ProtectedAdministrator && u.Role != "admin" && u.Role != "dispatcher" {
+	if _, current := authorization.NavigationPrincipal(r.Context()); !current && !u.ProtectedAdministrator && u.Role != "admin" && u.Role != "dispatcher" {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

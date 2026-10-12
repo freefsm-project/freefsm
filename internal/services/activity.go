@@ -8,6 +8,7 @@ import (
 	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/activitylog"
 	"github.com/freefsm-project/freefsm/internal/ent/predicate"
@@ -70,9 +71,10 @@ type ScheduleActivityScope struct {
 func (ScheduleActivityScope) activityScope() {}
 
 type ConversionActivityScope struct {
-	EstimateID int64
-	ViewerID   int64
-	ViewerRole string
+	CurrentAuthority bool
+	EstimateID       int64
+	ViewerID         int64
+	ViewerRole       string
 }
 
 func (ConversionActivityScope) activityScope() {}
@@ -114,6 +116,13 @@ func NewActivityService(client *ent.Client, objects objectref.Directory) *Activi
 // List returns a keyset-paginated activity page for one explicitly scoped company.
 func (s *ActivityService) List(ctx context.Context, request ActivityListRequest) (ActivityPage, error) {
 	var empty ActivityPage
+	if scope, ok := request.Scope.(ConversionActivityScope); ok {
+		_, scope.CurrentAuthority = authorization.NavigationPrincipal(ctx)
+		request.Scope = scope
+		if scope.CurrentAuthority {
+			ctx = authorization.WithActivityProvenance(ctx, scope.EstimateID)
+		}
+	}
 	limit, direction, err := s.validateListRequest(request)
 	if err != nil {
 		return empty, err
@@ -229,7 +238,7 @@ func (s *ActivityService) validateListRequest(request ActivityListRequest) (int,
 		if scope.ViewerID <= 0 {
 			return 0, "", fmt.Errorf("conversion activity viewer id must be positive")
 		}
-		if !validActivityViewerRole(scope.ViewerRole) {
+		if !scope.CurrentAuthority && !validActivityViewerRole(scope.ViewerRole) {
 			return 0, "", fmt.Errorf("invalid conversion activity viewer role: %q", scope.ViewerRole)
 		}
 	default:
@@ -319,7 +328,7 @@ func conversionActivityPredicate(scope ConversionActivityScope) predicate.Activi
 			conversionInvoiceExists(companyID, objectID, scope.EstimateID, 0),
 		)
 		role := strings.ToLower(strings.TrimSpace(scope.ViewerRole))
-		if role == "tech" || role == "technician" {
+		if !scope.CurrentAuthority && (role == "tech" || role == "technician") {
 			estimateTarget = entsql.And(estimateTarget, conversionDocumentReadableExists(
 				"estimates", companyID, objectID, scope.ViewerID,
 			))

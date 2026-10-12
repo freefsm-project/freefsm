@@ -17,7 +17,7 @@ templ ParentFieldsForm(typ string,id int64,fields []CustomFieldDisplay,message s
 }
 
 templ FieldValuesLink(typ string,id int64,active bool) {
- if active && canEditFields(ctx,typ) {
+ if active && canEditFields(ctx,typ,id) {
   <a href={ templ.URL(fmt.Sprintf("/%ss/%d/custom-fields",typ,id)) }>Edit Custom Field Values</a>
  }
 }

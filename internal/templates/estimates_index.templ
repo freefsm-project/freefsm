@@ -16,7 +16,7 @@ templ EstimatesListContent(p EstimateListPageData) {
 	<div id="estimate-list-content" class="focused-list-content">
 		@ListToolbar(ListToolbarData{
 			Action: "/estimates", Target: "#estimate-list-content", Search: p.Search,
-			SearchPlaceholder: "Search by title...", NewURL: "/estimates/new", NewLabel: "New Estimate",
+			SearchPlaceholder: "Search by title...", NewURL: operationalNewURL(ctx, "/estimates/new"), NewLabel: "New Estimate",
 			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), Scope: customerScope(p.CustomerID),
 			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
 		}) {
@@ -50,7 +50,9 @@ templ EstimatesTable(p EstimateListPageData) {
 				if len(p.Estimates) == 0 {
 					<tr><td colspan="5" class="work-queue-empty">
 						<p>No estimates found.</p>
-						<a href="/estimates/new" role="button" class="outline">Create your first estimate</a>
+						if navigationPermission(ctx, "estimate.create", "A") {
+							<a href="/estimates/new" role="button" class="outline">Create your first estimate</a>
+						}
 					</td></tr>
 				}
 				for _, e := range p.Estimates {
@@ -60,11 +62,7 @@ templ EstimatesTable(p EstimateListPageData) {
 						<td class="work-queue-status"><span class="status-badge" style={ badgeStyle(e.StatusColor) }>{ e.StatusName }</span></td>
 						<td>{ e.CreatedAt }</td>
 						<td class="work-queue-actions">
-							<a href={ templ.URL(fmt.Sprintf("/estimates/%d/edit", e.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", e.Title) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", e.ID)) } method="post" hx-confirm="Delete this estimate?">
-								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", e.Title) }>Del</button>
-							</form>
+							@CollectionActions("estimate", e.ID, e.Title)
 						</td>
 					</tr>
 				}

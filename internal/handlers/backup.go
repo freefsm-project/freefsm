@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
@@ -17,6 +18,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/justinas/nosurf"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -37,6 +39,12 @@ type backupSettings interface {
 	Get(context.Context) (*ent.CompanySettings, error)
 }
 
+type backupInitiations interface {
+	StartBackupAction(backup.ActivityActor, string, string, string) (backup.Operation, error)
+	StageUploadAction(context.Context, backup.ActivityActor, string, io.Reader, string) (backup.Operation, error)
+	InitiationStatus(string) (backup.InitiationReceipt, error)
+}
+
 type BackupHandler struct {
 	manager        backupEngine
 	control        *instancecontrol.Control
@@ -47,18 +55,39 @@ type BackupHandler struct {
 	disabledReason string
 }
 
-func NewBackupRouter(manager *backup.Manager, control *instancecontrol.Control, users *services.UserService, settings *services.CompanySettingsService, sessions *services.SessionService, disabledReason string, activity *ActivityHandler) http.Handler {
+func NewBackupRouter(db *pgxpool.Pool, manager *backup.Manager, control *instancecontrol.Control, users *services.UserService, settings *services.CompanySettingsService, sessions *services.SessionService, disabledReason string, activity *ActivityHandler) http.Handler {
 	h := &BackupHandler{manager: manager, control: control, refresh: manager.RefreshConnections, users: users, settings: settings, disabledReason: disabledReason, activity: activity}
-	auth := middleware.Auth(sessions, func(ctx context.Context, id int64) (*middleware.UserInfo, error) {
+	authority := authorization.New(db)
+	authenticate := middleware.Auth(sessions, func(ctx context.Context, id int64) (*middleware.UserInfo, error) {
 		u, err := users.GetByID(ctx, id)
 		if err != nil {
+			if ent.IsNotFound(err) {
+				return nil, services.ErrInvalidSession
+			}
 			return nil, err
 		}
 		if u == nil || !u.IsActive || u.ForcePasswordChange || u.CompanyID == nil || *u.CompanyID <= 0 {
-			return nil, errors.New("account unavailable")
+			return nil, services.ErrInvalidSession
 		}
-		return &middleware.UserInfo{ID: u.ID, CompanyID: *u.CompanyID, Name: u.Name, Email: u.Email, Role: u.Role, AuthorizationLoaded: true, ProtectedAdministrator: u.IsActive && u.AuthorizationRoleID != nil && *u.AuthorizationRoleID == 1}, nil
+		p, authErr := authority.Administrator(ctx, authorization.Actor{UserID: id})
+		if authErr != nil && !errors.Is(authErr, authorization.ErrForbidden) && !errors.Is(authErr, authorization.ErrPending) {
+			return nil, authErr
+		}
+		info := &middleware.UserInfo{ID: u.ID, CompanyID: *u.CompanyID, Name: u.Name, Email: u.Email, Role: u.Role, FontSize: u.FontSize, AuthorizationLoaded: true, AuthorizationReady: p.Ready, ProtectedAdministrator: authErr == nil && p.Protected && p.Ready, CanReviewAuthorization: authErr == nil && p.Protected, NavigationGrants: map[string]bool{}}
+		info.DirectoryView = p.Allows("directory.view", authorization.All)
+		info.ConfigurationView = p.Allows("configuration.company.view", authorization.Configuration) || p.Allows("configuration.documents.view", authorization.Configuration)
+		info.MailSettingsView = p.Allows("configuration.mail.view", authorization.Configuration)
+		info.MapSettingsView = p.Allows("configuration.maps.view", authorization.Configuration)
+		if p.Ready {
+			for _, grant := range p.Grants {
+				info.NavigationGrants[grant.Permission+"/"+string(grant.Scope)] = true
+			}
+		}
+		return info, nil
 	})
+	// Only authenticated controls load presentation. The capability/status shell
+	// bypasses this provider entirely, including when the database is unavailable.
+	auth := func(next http.Handler) http.Handler { return authenticate(presentationContext(authority)(next)) }
 	csrf := nosurf.New(h.controlRoutes(auth))
 	csrf.SetIsTLSFunc(middleware.IsHTTPS)
 	// Require the header for uploads: nosurf must never parse a large form.
@@ -133,6 +162,29 @@ func (h *BackupHandler) routeDispatch(routes http.Handler, auth func(http.Handle
 		auth(middleware.AdminOnly(routes)).ServeHTTP(w, r)
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/settings/backup/action-status" {
+			if r.Method != http.MethodPost {
+				http.Error(w, "POST required", 405)
+				return
+			}
+			m, ok := h.manager.(backupInitiations)
+			if !ok {
+				http.Error(w, "Initiation status unavailable", 503)
+				return
+			}
+			receipt, err := m.InitiationStatus(r.Header.Get("X-Backup-Action"))
+			if err != nil {
+				code := http.StatusServiceUnavailable
+				if errors.Is(err, backup.ErrInvalid) {
+					code = http.StatusBadRequest
+				}
+				http.Error(w, "Initiation status could not be checked. Retain this capability and check again; do not initiate a replacement.", code)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(receipt)
+			return
+		}
 		if r.URL.Path == "/settings/backup/status-page" {
 			if r.Method != http.MethodGet {
 				http.Error(w, "GET required", 405)
@@ -213,7 +265,21 @@ func (h *BackupHandler) create(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	op, err := h.manager.StartBackupFor(backupActorSnapshot(u, name), name, r.PostFormValue("archive_password"))
+	var op backup.Operation
+	var err error
+	if id := r.Header.Get("X-Backup-Action"); id != "" {
+		m, ok := h.manager.(backupInitiations)
+		if !ok {
+			http.Error(w, "Initiation boundary unavailable", 503)
+			return
+		}
+		op, err = m.StartBackupAction(backupActorSnapshot(u, name), id, name, r.PostFormValue("archive_password"))
+		if h.initiationDuplicate(w, m, id, err) {
+			return
+		}
+	} else {
+		op, err = h.manager.StartBackupFor(backupActorSnapshot(u, name), name, r.PostFormValue("archive_password"))
+	}
 	h.result(w, op, err)
 }
 func (h *BackupHandler) upload(w http.ResponseWriter, r *http.Request) {
@@ -231,8 +297,37 @@ func (h *BackupHandler) upload(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	op, err := h.manager.StageUploadFor(r.Context(), backupActorSnapshot(u, name), r.Body, password)
+	var op backup.Operation
+	var err error
+	if id := r.Header.Get("X-Backup-Action"); id != "" {
+		m, ok := h.manager.(backupInitiations)
+		if !ok {
+			http.Error(w, "Initiation boundary unavailable", 503)
+			return
+		}
+		op, err = m.StageUploadAction(r.Context(), backupActorSnapshot(u, name), id, r.Body, password)
+		if h.initiationDuplicate(w, m, id, err) {
+			return
+		}
+	} else {
+		op, err = h.manager.StageUploadFor(r.Context(), backupActorSnapshot(u, name), r.Body, password)
+	}
 	h.result(w, op, err)
+}
+
+func (h *BackupHandler) initiationDuplicate(w http.ResponseWriter, m backupInitiations, id string, err error) bool {
+	if !errors.Is(err, backup.ErrInitiated) {
+		return false
+	}
+	receipt, lookupErr := m.InitiationStatus(id)
+	if lookupErr != nil {
+		http.Error(w, "The action was already admitted. Check its same capability again; do not initiate a replacement.", 503)
+		return true
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	_ = json.NewEncoder(w).Encode(receipt)
+	return true
 }
 func (h *BackupHandler) restore(w http.ResponseWriter, r *http.Request) {
 	u, ok := h.actor(w, r, true)

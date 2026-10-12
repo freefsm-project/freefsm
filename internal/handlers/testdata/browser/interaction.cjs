@@ -99,12 +99,6 @@ const { chromium } = require('playwright-core');
     assert.ok(await page.locator('#job-project-dialog').getAttribute('aria-labelledby'), 'dialog has a semantic name');
     await page.keyboard.press('Escape');
     assert.equal(await opener.evaluate(el => el === document.activeElement), true, 'dialog restores focus');
-    for (const size of [{width:640,height:960},{width:960,height:640}]) {
-      await page.setViewportSize(size);
-      await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
-      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'Job form reflows under 200% CSS zoom');
-    }
-    await page.evaluate(() => { document.documentElement.style.zoom = ''; });
     await page.goto(base + '/preferences');
     await page.getByLabel('Theme', { exact: true }).selectOption('light');
     await page.getByRole('button', { name: 'Save Preferences', exact: true }).click();
@@ -114,6 +108,6 @@ const { chromium } = require('playwright-core');
     const second = await device.newPage();
     await second.goto(base + '/preferences');
     assert.equal(await second.locator('html').getAttribute('data-theme'), 'light');
-    console.log('Chromium', browser.version(), ': persisted Customer creation/reload/lost-response receipt; keyboard drawer/current section and Job dialog focus; link/Back Stay/Discard; linked validation; 320px orientations and 200% CSS-zoom Job reflow; retained search retry; filter/sort/page/scroll Back; cross-device theme.');
+    console.log('Chromium', browser.version(), ': persisted Customer creation/reload/lost-response receipt; keyboard drawer/current section and Job dialog focus; link/Back Stay/Discard; linked validation; 320px orientations; retained search retry; filter/sort/page/scroll Back; cross-device theme. Native zoom is separately measured in accessibility.cjs.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

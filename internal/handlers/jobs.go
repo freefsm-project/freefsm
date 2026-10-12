@@ -74,19 +74,13 @@ func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
 	statusID, _ := strconv.ParseInt(r.URL.Query().Get("status_id"), 10, 64)
 	customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
 
-	u, _ := middleware.UserFromContext(r.Context())
 	var jobs []*ent.Job
 	var total int
 	var err error
-	if isAdminOrDispatcher(u) && customerID > 0 {
+	if customerID > 0 {
 		jobs, total, err = h.svc.ListForCustomer(r.Context(), customerID, search, statusID, page, perPage)
-	} else if isAdminOrDispatcher(u) {
-		jobs, total, err = h.svc.List(r.Context(), search, statusID, page, perPage)
-	} else if u != nil {
-		jobs, total, err = h.svc.ListAssigned(r.Context(), u.ID, search, statusID, page, perPage)
 	} else {
-		http.Error(w, "unauthorized", http.StatusUnauthorized)
-		return
+		jobs, total, err = h.svc.List(r.Context(), search, statusID, page, perPage)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -151,6 +145,10 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.LineItems = h.svc.LineItems(j)
+	if !templates.DetailCan(r.Context(), "pricing") {
+		d.LineItems = nil
+		d.BillingType = ""
+	}
 	d.Visits = services.ParseVisits(j.Visits)
 	assignments, _ := h.svc.Assignments(r.Context(), j.ID)
 	if len(assignments) == 0 {
@@ -167,7 +165,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	d.AllTags = tagsToRows(allTags)
 	if j.ProjectID != nil && *j.ProjectID > 0 {
 		project, _ := h.projectSvc.GetByID(r.Context(), *j.ProjectID)
-		if project != nil && project.DeletedAt == nil {
+		if project != nil && project.DeletedAt == nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeProject, project.ID), policyRead) {
 			d.ProjectName = project.Name
 		}
 	}
@@ -186,7 +184,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	if j.AssetID != nil && *j.AssetID > 0 {
 		asset, _ := h.assetSvc.GetByID(r.Context(), *j.AssetID)
-		if asset != nil {
+		if asset != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeAsset, asset.ID), policyRead) {
 			d.AssetName = assetLabel(asset)
 		}
 	}
@@ -200,7 +198,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 			d.ActiveTimeEntryElsewhere = true
 			if activeEntry.JobID != nil {
 				activeJob, _ := h.svc.GetByID(r.Context(), *activeEntry.JobID)
-				if activeJob != nil {
+				if activeJob != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, activeJob.ID), policyRead) {
 					d.ActiveTimeEntryMessage = "You are already clocked in to " + jobDisplayName(activeJob) + ". Clock out before clocking in to this job."
 				}
 			}
@@ -260,6 +258,7 @@ func (h *JobHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 	if r.Header.Get("HX-Request") == "true" {
 		d := jobToDetail(r.Context(), result, statuses)
+		r = withDetailPresentation(r, "job", id, h.policySvc)
 		render(w, r, templates.JobStatusControl(d))
 		return
 	}
@@ -827,6 +826,7 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 	statuses := h.statusesForSelect(r.Context())
 	d := jobToDetail(r.Context(), j, statuses)
 	d.Subtasks = subtasks
+	r = withDetailPresentation(r, "job", id, h.policySvc)
 	templates.JobSubtasks(d).Render(r.Context(), w)
 }
 

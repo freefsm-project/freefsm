@@ -1,117 +1,182 @@
-# Accessible online interaction — ticket #24 evidence
+# Accessible online interaction — #24
 
-This is a **partial implementation of #24**, not ticket acceptance or a WCAG
-claim. The canonical UX-01–04/AUTH-03 requirements remain unchanged. Remaining
-implementation and release-verification gaps are listed below.
+This documents the shared frontend, its installed-parent integrations and the
+available-browser evidence. The external current/previous branded desktop and
+mobile release matrix remains #114; this is not a WCAG certification.
 
-## Implemented interfaces
+## Installed behavior
 
-- `static/js/interaction.js` supplies the keyboard/mobile Menu, current-section
-  announcements, dialog names, dirty-form Stay/Discard (links and same-document
-  Back), closure warnings, linked validation summaries, pending/error states,
-  and refreshed history navigation. Browser history stores only positions and
-  query URLs, not record or draft snapshots. Old HTMX snapshots are cleared;
-  authenticated responses are `no-store`. BFCache returns reload under current
-  authority. Unknown/error messages have no automatic fade timer.
-- `static/css/interaction.css` supplies shared text/control colors, focus rings,
-  coarse-pointer target sizing (including hybrid devices), contained tables,
-  responsive forms/dialogs and safe-area-aware sticky form actions. Leaflet
-  animations respect reduced motion. Existing click-through Job editors and
-  dashboard reorder buttons retain non-drag alternatives.
-- Presentation is an intrinsic Own action. Migration 058 creates a separate
-  `user_presentation` table without assigning any Role grants or rewriting user
-  data. No row means unknown legacy choice, presented as System. An explicit
-  Light/Dark browser cookie can be imported once, atomically and audited; later
-  device cookies cannot replace a saved choice. During authorization cutover or
-  forced credential replacement, cookie presentation is retained and durable
-  import waits. Explicit theme/font saves commit together with immutable audit.
-- Customer forms carry a UUID action identity and an opaque revision of the
-  displayed record. A submitted browser action must supply its identity; edits
-  compare revisions while holding the existing authorization/record locks.
-  Validation retains values. Conflict pages present currently authorized saved
-  values alongside proposed input, require review and issue a new action ID.
-- Migration 059 stores immutable, user-bound browser save receipts in the same
-  transaction as the Customer effect and audit. Equal-intent replay has one
-  effect; changed intent rejects. `GET /web-actions/{operation}` returns only
-  operation ID, saved/unknown disposition, stable effect ID and its route, including after
-  Customer grant loss. It contains no submitted values or cached representation.
-  The browser queries this seam after a lost response before offering same-ID
-  retry. A successful receipt navigates through current resource authorization.
-- Customer lists expose sort, 25/50/100 page sizes and filters on phones, retain
-  them in URLs, distinguish no records/no matches, and hide unauthorized
-  Create/Edit/Archive controls. Failed enhanced list requests retain labelled
-  previous results with Retry. Archive confirmation names the Customer and action.
+- `cmd/freefsm/static/js/interaction.js` manages keyboard/mobile navigation,
+  longest-matching current destinations, dirty forms, Stay/Discard, closure
+  warnings, focus restoration and linked validation summaries. Back reloads
+  under current authority while restoring URL filters/sort/page and scroll.
+  HTMX snapshots are disabled and old cached snapshots are removed. Failed
+  refreshes hide unvalidated previous results and retain an exact-URL Retry.
+- Boosted forms, enhanced `hx-boost="false"` product forms, standalone HTMX
+  controls, inline fetch editors and XHR file queues share action identities and
+  distinct pending, confirmed, rejected, conflict, unknown and review states.
+  Native credential/onboarding forms retain their purpose-specific server flow.
+- Followed redirects are reconciled through the original receipt; a final GET
+  200 is not evidence of a mutation. Existing Customer operation receipts and
+  File publication identities remain intact. Unknown actions are query-only.
+  Only a same-context `not_received` result permits explicit submission of the
+  same captured body and identity after another check. Newer local edits do not
+  become the confirmed baseline of an older request.
+- The original noncredential `save_history` tag travels with a pre-send identity
+  and survives navigation. It is never replaced after a different sign-in.
+  Missing historical receipts then require review, never blind replay. Browser
+  storage contains only opaque identities/tags and navigation URL/scroll state, not
+  record input, credentials, file names, files or response bodies.
+  A session/permission failure removes input and replay bodies while retaining
+  only unresolved opaque receipt/history metadata for later review.
+- Receipt ownership does not authorize retained input. The frontend consumes
+  the backend's current input-access projection and rechecks the current page,
+  removing revoked facets and whole structured widgets. Explicit denial removes
+  inaccessible input. A known successful transition that removes its old form
+  instead navigates through its currently authorized result.
+- Conflicts retain authorized proposals and current-value comparisons, including
+  document lines and Job structured widgets. Backend-marked retained widgets are
+  respected; legacy renderers have a bounded widget adapter. Reviewed submitters
+  retain their names/values. Ordinary Save cannot advance a stale revision, and
+  rejected boosted submissions keep the editor URL. Job/document status controls
+  require explicit Save rather than submitting on selection.
+- File upload intercepts submission before HTMX, preventing two transports from
+  one click. Each file has its own action and publication identity. Unknown files
+  retain their selection and cannot start a replacement batch. Reconciliation
+  does not publish a premature attachment or reupload confirmed bytes.
+- Job relationship lookups are15s-bounded, cancel superseded requests and reject
+  non-option/error responses. Loading/failure retains an existing relationship
+  and blocks incomplete Save, with a field-specific Retry.403/404 mask labels;
+  401 uses shared input purging. Changing Customer immediately removes old-Customer
+  choices. An existing linked Job's unrelated Save/reload is regression-tested.
+- Backup create/upload persist a 32-byte capability before dispatch and recover
+  lost initial responses through the engine's `action-status` protocol. Existing
+  accepted/running/ready/failed/restore-complete semantics remain separate from
+  application save receipts. Dismissing an unknown initiation does not unlock a
+  new operation. Restore checks its existing upload/operation capability; it is
+  never automatically repeated. The isolated recovery shell retains no old
+  privileged form DOM.
 
-## Persisted tests and observed red/green defects
+See `docs/guarded-online-saves.md` for backend journal, transactional confirmation,
+revision, authority and quarantine boundaries. Per-user System/Light/Dark and
+font preferences retain the existing cross-device migration contract.
 
-`internal/handlers/interaction_integration_test.go` exercises the production
-router with sessions, authorization, migrated PostgreSQL and real services.
-`testdata/browser/interaction.cjs` adds real CSRF/static assets and Chromium.
-There is no mocked save endpoint. Lost-response injection closes the connection
-only **after** production handling commits a successful redirect.
+## Accessibility measurements
 
-Observed failures before fixes included default Light instead of System, missing
-Menu semantics, absent operation IDs, missing no-match state, Back losing edits,
-empty file inputs falsely becoming dirty, scroll restoration overwriting its
-saved value, a missing Job dialog name, missing presentation tables in an older
-hand-built regression fixture, unidentified writes bypassing replay protection,
-and legacy cookies blocking authorization review. These have passing regressions.
+`internal/handlers/interaction_accessibility_test.go` serves real migrated,
+authenticated routes and the independently mounted Backup router. Its browser
+harness creates persisted Job/Estimate/Invoice records and white/black/yellow
+workflow definitions before measuring them.
 
-Verified behaviors include cross-session preferences/invalid-choice atomicity,
-legacy choice preservation, Customer replay/changed intent, stale-editor
-comparison, validation input retention, concurrent same-ID saves, audit-failure
-rollback and same-ID retry, immutable receipt protection, user-bound receipt
-lookup and nondisclosure after grant loss. Persisted Chromium checks cover Menu
-Escape/focus, link and Back Stay/Discard, Customer creation/reload, linked error
-focus, committed response loss/reconciliation, list failure/retry, filter/sort/
-page/scroll restoration, Job dialog focus, 320px form reflow in both orientations,
-200% **CSS-zoom** Job reflow, and cross-device theme preference.
+Measured on Chromium **154.0.8037.97** and Firefox **157.0.1**:
 
-## Reproduction
+- **35 installed routes, 510 rendered measurements**, both themes; ordinary and
+  populated forms, list/detail/collaboration/financial surfaces, configuration,
+  workflow, vocabulary, authorization, directory, activity, schedule variants,
+  Timesheets, Backup controls and the recovery shell.
+- **140 deterministic interaction/validation states** include real hover, focus
+  and active states for primary controls, ordinary links and current navigation,
+  plus client-required and server422 error summaries in both engines/themes.
+  Primary text and filled-background tokens are distinct; mouse position cannot
+  silently omit these states.
+- **5,481 text-node assessments**: minimum normal text **4.65:1**, large text
+  **9.32:1**. Minimum measured control boundary **4.1428:1**. Configured extreme
+  status colors and white-status hover are covered in both engines.
+- Minimum actual target dimension **24 CSS px** for fine pointers and **44 CSS
+  px** for coarse pointers. Coarse layouts include 320×640, 640×320 and a
+  1280×800 touch-capable desktop; inline prose links are exempt.
+- Native browser zoom **2**, DPR **2**, CSS zoom **1**, visual viewport scale
+  **1**, with portrait/landscape windows. Chromium uses a test-only extension's
+  `chrome.tabs.setZoom`; Firefox uses its browser `FullZoom` controller. Neither
+  CSS zoom nor device-scale/viewport emulation is counted as native zoom.
+- Chromium native-zoom screenshots use unclipped CDP surface capture: the normal
+  Playwright screenshot clip otherwise crops physical pixels at native zoom.
+- Creation/workflow dialogs are named, contained and restore focus on Escape.
+  Shared tables have keyboard-contained horizontal scrolling. Short landscape
+  viewports keep Save in normal flow so a sticky footer cannot cover input/errors.
+- Actual Leaflet keyboard panning moves immediately under reduced motion in both
+  engines: the map transform remains stable over eight animation frames after
+  the key event. Map zoom/pan/fly methods and live preference changes respect the
+  same preference. Dates/times identify the backend's company timezone.
 
-Use a unique disposable database on the coordination PostgreSQL cluster:
+These are rendered checks at the exercised states, not an assertion about every
+possible data value, provider image, assistive technology or unavailable release.
+
+## Persisted regression coverage
+
+`TestSharedGuardedSavePersistedBrowser` covers native preference/configuration
+validation and lost response, fetch Item creation, Item and structured Estimate
+conflicts/reviewed correction, standalone Comment removal, exact-byte XHR upload,
+opaque recovery across reload, exact same-session retry, a different real session
+requiring history review, denial, and actual Role/Cost-facet revocation while an
+unknown receipt is displayed. The transport fault seam discards responses only
+after production handling; other cases deliberately abort before dispatch or
+interrupt receipt responses.
+
+`TestBackupInitiationPersistedBrowser` creates, downloads and validates a real
+encrypted archive, drops both initial responses after acceptance, reconciles
+their original capabilities, resumes the recovery shell and verifies no second
+initiation or automatic Restore. The independent intercepted Backup-template
+browser covers phase transitions, status failures, unknown dismissal and
+restore recovery. The 32-case keyboard/serialization harness exercises the real
+shared line editor; full authorized document forms are exercised separately by
+the persisted handler browsers.
+
+## Reproduction and evidence
+
+Use an isolated UTF8 database. Final integration verification used
+`postgresql://adam@127.0.0.1:55419/freefsm_v1_ticket_24_cont?sslmode=disable` and the
+explicit disposable-cluster backup-admin URL. Runtime application dependencies
+remain Go/static assets; browser tooling is opt-in and isolated under
+`/tmp/opencode/freefsm-ui-tools` (`axe-core`, Selenium WebDriver, geckodriver0.36.0).
+The original checkout's Playwright installation is consumed read-only.
 
 ```sh
 export GOMAXPROCS=2 GOFLAGS=-p=2
-export FREEFSM_TEST_DATABASE_URL='postgresql://adam@127.0.0.1:55419/freefsm_v1_ticket_24?sslmode=disable'
+export GOTMPDIR=/home/adam/.cache/freefsm-v1-ticket-24-buildtmp
+export TMPDIR="$GOTMPDIR"
+export FREEFSM_TEST_DATABASE_URL='postgresql://adam@127.0.0.1:55419/freefsm_v1_ticket_24_cont?sslmode=disable'
 export FREEFSM_BACKUP_TEST_ADMIN_URL='postgresql://adam@127.0.0.1:55419/postgres?sslmode=disable'
+make templ
 make lint
 make test
+make compile
 
-NODE_PATH=/home/adam/repos/freefsm/internal/templates/testdata/browser/node_modules \
-BROWSER_TESTS=1 BROWSER_EXECUTABLE=/usr/bin/chromium-browser \
-go test -race ./internal/handlers ./cmd/freefsm ./internal/templates \
-  -run '^(TestAccessibleInteractionPersistedBrowser|TestCustomerPermissionsPersistedBrowser|TestInstallationBrowserRecoveryAndCoreWorkflows|TestDocumentLineEnterBrowser)$' \
-  -count=1 -v
+export NODE_PATH='/tmp/opencode/freefsm-ui-tools/node_modules:/home/adam/repos/freefsm/internal/templates/testdata/browser/node_modules'
+export BROWSER_EXECUTABLE=/usr/bin/chromium-browser
+export GECKODRIVER_PATH=/tmp/opencode/freefsm-ui-tools/geckodriver-0.36.0
+export ACCESSIBILITY_OUTPUT=/tmp/opencode/freefsm-v1-context/ticket-024-final-accessibility
+BROWSER_TESTS=1 ACCESSIBILITY_TESTS=1 go test -race \
+  ./internal/handlers ./cmd/freefsm ./internal/templates \
+  -run 'PersistedBrowser$|^TestNavigation|^TestWorkflow|^TestInstallationBrowserRecoveryAndCoreWorkflows$|^TestDocumentLineEnterBrowser$|^TestHostRecoveryAfterReviewedCutover$|^TestBackupBrowserWorkflow$|^TestInteractionRecoveryNoticeBrowser$' \
+  -count=1 -timeout=600s -v
 ```
 
-The full race suite passed with the explicit database and backup-admin URL.
-The four opt-in browser regressions above passed separately. Browser evidence is
-Chromium **154.0.8037.97**, not branded Chrome/Edge or a release browser matrix.
-The installation test includes persisted Customer/Job creation after recovery;
-the line-editor test is a separate, template-level keyboard regression.
+Final composed verification passed after all workers handed off:
 
-## Remaining acceptance gaps
+- `make templ` (zero regenerated changes), `make lint`, explicit DB/backup-enabled
+  `make test` and static `make compile`. All 17 tested packages passed; handlers
+  ran in 235.168s and templates in 1.056s. Unchanged packages used Go's cache,
+  including the previously executed real backup suite.
+- The race-enabled browser/navigation/workflow command above passed with no
+  selected skips: handlers 388.702s, executable 10.929s, templates 64.791s. This
+  includes real encrypted Backup initiation, installation/host recovery, the
+  linked-Job failure regression, authority-loss recovery and all 32 line-editor
+  cases. The final accessibility run reproduced the measurements above with zero
+  violations.
+- Logs: `/tmp/opencode/freefsm-v1-context/ticket-024-integration-{templ,lint,full-test,compile,browser}.log`.
+  Earlier failed/outage logs remain historical failures, not passes. Scoped TDD
+  evidence is retained in `ticket-024-ui-result.md` and the other worker reports.
 
-1. Browser action receipts, revision conflicts and authorized comparison are
-   integrated with Customer detail saves only. Existing Job, document, settings,
-   presentation and other legacy commands do **not** yet all provide queryable
-   browser receipts/guarded revisions. Their generic lost-response message
-   explicitly says checking is unavailable; this is not UX-03 completion.
-2. Shared infrastructure is exercised on Customer, Preferences, Job dialogs and
-   the existing installation/line-editor journeys. Complete retained-input,
-   phone-card sorting, keyboard, long-form and failure coverage across **every**
-   existing workflow remains unproven; existing domain-specific handlers may
-   need integration changes. Legacy domain authorization boundaries documented
-   by #19 remain in their owning tickets.
-3. Shared contrast/target CSS is implemented, but exhaustive measured contrast
-   (including customizable status colors) and all-target audits in both themes
-   remain open. Native 200% browser zoom is not proved by CSS zoom.
-4. Current and previous desktop Chrome, Edge, Firefox and Safari plus real iOS
-   Safari/Android Chrome were not available/executed. No all-browser, screen-reader
-   or all-workflow accessibility claim is made.
-5. The full suite skips its opt-in browser tests (the relevant four were then
-   executed explicitly), nginx-scale test, PostgreSQL <16 negative case on this
-   PostgreSQL 18 host, and child-process entry points invoked by parent tests.
-   The intercepted backup browser test and native release/OS/reboot matrix were
-   not rerun for this UI ticket. Skips are not passes.
+Final measured JSON and screenshots are under
+`/tmp/opencode/freefsm-v1-context/ticket-024-final-accessibility/`.
+
+The full suite's opt-in browsers were executed separately above. The PostgreSQL
+<16 negative-startup environment and nginx/1-GiB scale gate were not enabled;
+standalone restart/crash helper entrypoints are invoked by their parent tests.
+Native release/OS/reboot gates are not asserted by these application checks.
+
+Unavailable #114 release entries: current/previous branded desktop Chrome and
+Edge; previous desktop Firefox; current/previous desktop Safari/macOS; real iOS
+Safari and Android Chrome device/release entries. Installed Chromium and Firefox
+were actually tested as recorded above. No unavailable entry is counted as a pass.

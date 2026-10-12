@@ -41,6 +41,10 @@ func (*fakeSettlement) ReverseCreditApplication(context.Context, settlement.Acto
 func (*fakeSettlement) ReverseRefund(context.Context, settlement.Actor, settlement.ReverseRequest) (settlement.Result, error) {
 	return settlement.Result{}, nil
 }
+func (f *fakeSettlement) GrantedInvoiceSettlement(ctx context.Context, actor settlement.Actor, id int64) (settlement.InvoiceSettlement, error) {
+	return f.InvoiceSettlement(ctx, actor, id)
+}
+
 func (f *fakeSettlement) InvoiceSettlement(context.Context, settlement.Actor, int64) (settlement.InvoiceSettlement, error) {
 	return settlement.InvoiceSettlement{}, f.invoiceErr
 }

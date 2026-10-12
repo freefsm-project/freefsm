@@ -42,6 +42,10 @@ func NewSearchService(client *ent.Client, db ...*pgxpool.Pool) *SearchService {
 
 func (s *SearchService) Search(ctx context.Context, q string, limit int, userID int64, role string) ([]SearchResult, []SearchResult, []SearchResult, []SearchResult, []SearchResult, error) {
 	canReadBilling := role == "admin" || role == "dispatcher"
+	if _, current := authorization.NavigationPrincipal(ctx); current {
+		// The shared read boundary independently filters each queried domain.
+		canReadBilling = true
+	}
 	if !canReadBilling {
 		customers, jobs, projects, err := s.searchTech(ctx, q, limit, userID)
 		return customers, jobs, projects, nil, nil, err

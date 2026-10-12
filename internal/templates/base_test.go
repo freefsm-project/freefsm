@@ -8,11 +8,12 @@ import (
 	"github.com/freefsm-project/freefsm/internal/middleware"
 )
 
-func TestAdministrationMenuOmitsStatusSettingsShortcut(t *testing.T) {
+func TestConfigurationNavigationIncludesIndependentWorkflowDestinations(t *testing.T) {
 	ctx := context.WithValue(context.Background(), middleware.UserKey, &middleware.UserInfo{
 		Name:                   "Admin",
 		Role:                   "admin",
 		ProtectedAdministrator: true,
+		NavigationGrants:       map[string]bool{"configuration.company.view/U": true, "configuration.workflow.view/U": true},
 	})
 
 	var out strings.Builder
@@ -21,10 +22,12 @@ func TestAdministrationMenuOmitsStatusSettingsShortcut(t *testing.T) {
 	}
 
 	html := out.String()
-	if !strings.Contains(html, "Administration") || !strings.Contains(html, `href="/settings"`) {
+	if !strings.Contains(html, `aria-label="Configuration"`) || !strings.Contains(html, `href="/settings"`) {
 		t.Fatal("administrator navigation was not rendered")
 	}
-	if strings.Contains(html, `href="/settings/statuses/job"`) || strings.Contains(html, ">Status Settings<") {
-		t.Fatal("administrator navigation contains duplicate status settings shortcut")
+	for _, typ := range []string{"job", "project", "estimate", "invoice"} {
+		if strings.Count(html, `href="/settings/statuses/`+typ+`"`) != 1 {
+			t.Fatalf("workflow %s must have one discoverable destination", typ)
+		}
 	}
 }

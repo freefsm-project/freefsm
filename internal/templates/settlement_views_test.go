@@ -17,6 +17,7 @@ func TestInvoiceShowRendersSeparateSettlementAndReversedHistory(t *testing.T) {
 	data := InvoiceDetail{ID: 7, Number: 7, CustomerID: 2, StatusName: "Sent", Settlement: settlement.InvoiceSettlement{State: settlement.PartiallyPaid, TotalCents: 10000, SettledCents: 2500, AmountDueCents: 7500, Payments: []settlement.PaymentEntry{{ID: uuid.New(), AmountCents: 2500, AppliedCents: 2500, ReceivedDate: now, Reversal: &settlement.ReversalEntry{Reason: "duplicate", EffectiveDate: now}}}}}
 	var out bytes.Buffer
 	ctx := context.WithValue(context.Background(), middleware.UserKey, &middleware.UserInfo{Role: "dispatcher"})
+	ctx = WithDetailAccess(ctx, DetailAccess{"settlement": true, "pricing": true})
 	if err := InvoiceShow(data).Render(ctx, &out); err != nil {
 		t.Fatal(err)
 	}
@@ -57,6 +58,7 @@ func TestSettlementReversalFormsUseViewDataIdempotencyKeys(t *testing.T) {
 	data := InvoiceDetail{ID: 7, CustomerID: 2, Settlement: settlement.InvoiceSettlement{Payments: []settlement.PaymentEntry{{ID: uuid.New(), ReversalKey: key, ReceivedDate: time.Now()}}}}
 	var first, second bytes.Buffer
 	ctx := context.WithValue(context.Background(), middleware.UserKey, &middleware.UserInfo{Role: "dispatcher"})
+	ctx = WithDetailAccess(ctx, DetailAccess{"settlement": true, "reverse-payment": true})
 	if err := InvoiceShow(data).Render(ctx, &first); err != nil {
 		t.Fatal(err)
 	}

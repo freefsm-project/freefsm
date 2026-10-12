@@ -103,7 +103,7 @@ func DashboardPage(p DashboardData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			for _, w := range p.Widgets {
-				if w.Type == "clock" {
+				if w.Type == "clock" && navigationPermission(ctx, "time.view", "A", "O") {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<article class=\"dashboard-stat dashboard-widget-shell\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -120,7 +120,7 @@ func DashboardPage(p DashboardData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else if w.Type == "customers" && canManageOperational(ctx) {
+				} else if w.Type == "customers" && navigationPermission(ctx, "customer.view", "A") {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<article class=\"dashboard-stat\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -167,7 +167,7 @@ func DashboardPage(p DashboardData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else if w.Type == "jobs" && canManageOperational(ctx) {
+				} else if w.Type == "jobs" && navigationPermission(ctx, "job.view", "A") {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<article class=\"dashboard-stat\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -229,7 +229,7 @@ func DashboardPage(p DashboardData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else if w.Type == "invoices" && canManageOperational(ctx) {
+				} else if w.Type == "invoices" && navigationPermission(ctx, "invoice.view", "A") {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<article class=\"dashboard-stat\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -299,7 +299,7 @@ func DashboardPage(p DashboardData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else if w.Type == "projects" && canManageOperational(ctx) {
+				} else if w.Type == "projects" && navigationPermission(ctx, "project.view", "A") {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<article class=\"dashboard-stat\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -346,7 +346,7 @@ func DashboardPage(p DashboardData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else if w.Type == "today_overview" && canManageOperational(ctx) {
+				} else if w.Type == "today_overview" && navigationOverview(ctx) {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<article class=\"dashboard-stat dashboard-today\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -450,7 +450,7 @@ func DashboardPage(p DashboardData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else if w.Type == "assigned_work" && !canManageOperational(ctx) {
+				} else if w.Type == "assigned_work" && navigationPermission(ctx, "job.view", "J") {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "<article class=\"dashboard-panel\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -470,7 +470,7 @@ func DashboardPage(p DashboardData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			for _, w := range p.Widgets {
-				if w.Type == "recent_activity" && canManageOperational(ctx) {
+				if w.Type == "recent_activity" && navigationDocuments(ctx) {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "<section class=\"dashboard-widget-panel\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
@@ -711,7 +711,7 @@ func DashboardPage(p DashboardData) templ.Component {
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-				} else if w.Type == "financial_summary" && canManageOperational(ctx) {
+				} else if w.Type == "financial_summary" && navigationPermission(ctx, "customer.financial.view", "A") && navigationPermission(ctx, "invoice.view", "A") {
 					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "<section class=\"dashboard-widget-panel\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err

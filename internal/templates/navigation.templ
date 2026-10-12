@@ -1,0 +1,44 @@
+package templates
+
+import "fmt"
+
+templ NavigationLink(path, label string) {
+	<a href={ templ.URL(path) } class={ templ.KV("active", navigationCurrent(ctx, path) == "page") } aria-current={ navigationCurrent(ctx, path) }>{ label }</a>
+}
+
+templ ConfigurationNavigation() {
+	if links := configurationLinks(ctx); len(links) > 0 {
+		<hr class="sidebar-divider"/>
+		<nav aria-label="Configuration">
+			<strong>Configuration</strong>
+			for _, link := range links {
+				@NavigationLink(link.URL, link.Label)
+			}
+		</nav>
+	}
+}
+
+templ CreationNavigation() {
+	if links := creationLinks(ctx); len(links) > 0 {
+		<details open?={ creationNavigationActive(ctx) }>
+			<summary>Create</summary>
+			<nav aria-label="Create records">
+				for _, link := range links {
+					@NavigationLink(link.URL, link.Label)
+				}
+			</nav>
+		</details>
+	}
+}
+
+templ CollectionActions(typ string, id int64, label string) {
+	if navigationRecordPermission(ctx, typ, id, "edit") {
+		<a href={ templ.URL(fmt.Sprintf("/%ss/%d/edit", typ, id)) } role="button" class="outline small" aria-label={ "Edit " + label }>Edit</a>
+	}
+	if navigationRecordPermission(ctx, typ, id, "archive") && canManageOperational(ctx) {
+		<form action={ templ.URL(fmt.Sprintf("/%ss/%d/delete", typ, id)) } method="post" hx-confirm={ "Archive " + label + "? This removes it from active work." }>
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<button class="outline contrast small" aria-label={ "Archive " + label }>Archive</button>
+		</form>
+	}
+}

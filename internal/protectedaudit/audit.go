@@ -8,6 +8,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -35,7 +36,10 @@ func RecordProduct(ctx context.Context, tx Executor, event ProductAction) error 
 	}
 	_, err = tx.Exec(ctx, `INSERT INTO authorization_audit(actor_kind,actor_id,role_id,action,scope,target_type,target_id,channel,detail)
  VALUES('product-user',$1,nullif($2,0),$3,$4,$5,$6,$7,$8)`, event.ActorID, event.RoleID, event.Action, event.Scope, event.TargetType, event.TargetID, event.Channel, data)
-	return err
+	if err != nil {
+		return err
+	}
+	return saveaction.RecordEffect(ctx, tx, event.ActorID, event.Action, event.TargetType, event.TargetID)
 }
 
 type HostRecovery struct {

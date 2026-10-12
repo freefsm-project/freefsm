@@ -16,7 +16,7 @@ templ ProjectListContent(p ProjectListPageData) {
 	<div id="project-list-content" class="focused-list-content">
 		@ListToolbar(ListToolbarData{
 			Action: "/projects", Target: "#project-list-content", Search: p.Search,
-			SearchPlaceholder: "Search projects...", NewURL: "/projects/new", NewLabel: "New Project",
+			SearchPlaceholder: "Search projects...", NewURL: operationalNewURL(ctx, "/projects/new"), NewLabel: "New Project",
 			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)),
 			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
 		}) {
@@ -50,7 +50,9 @@ templ ProjectTable(p ProjectListPageData) {
 				if len(p.Projects) == 0 {
 					<tr><td colspan="5" class="work-queue-empty">
 						<p>No projects found.</p>
-						<a href="/projects/new" role="button" class="outline">Create your first project</a>
+						if navigationPermission(ctx, "project.create", "A") {
+							<a href="/projects/new" role="button" class="outline">Create your first project</a>
+						}
 					</td></tr>
 				}
 				for _, pr := range p.Projects {
@@ -70,11 +72,7 @@ templ ProjectTable(p ProjectListPageData) {
 							<small>{ fmt.Sprintf("%.0f%%", pr.CompletionPercentage) }</small>
 						</td>
 						<td class="work-queue-actions">
-							<a href={ templ.URL(fmt.Sprintf("/projects/%d/edit", pr.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", pr.Name) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/projects/%d/delete", pr.ID)) } method="post" hx-confirm="Delete this project?">
-								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", pr.Name) }>Del</button>
-							</form>
+							@CollectionActions("project", pr.ID, pr.Name)
 						</td>
 					</tr>
 				}

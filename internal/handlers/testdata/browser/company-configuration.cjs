@@ -55,7 +55,7 @@ const {chromium} = require('playwright-core');
     await page.locator('[name=invoice_footer]').fill('Concurrent reviewed footer');
     await Promise.all([page.waitForNavigation(),page.getByRole('button',{name:'Save Company',exact:true}).click()]);
     await stale.locator('[name=business_name]').fill('Stale overwrite');
-    const response=await Promise.all([stale.waitForNavigation(),stale.getByRole('button',{name:'Save Company',exact:true}).click()]);
+    const response=await Promise.all([stale.waitForResponse(response=>response.request().method()==='POST' && new URL(response.url()).pathname==='/settings'),stale.getByRole('button',{name:'Save Company',exact:true}).click()]);
     assert.equal(response[0].status(),409);
     await page.goto(base+'/settings');
     assert.equal(await page.locator('[name=business_name]').inputValue(),'Browser persisted company');

@@ -22,6 +22,7 @@ type settlementService interface {
 	ReverseCreditApplication(context.Context, settlement.Actor, settlement.ReverseRequest) (settlement.Result, error)
 	ReverseRefund(context.Context, settlement.Actor, settlement.ReverseRequest) (settlement.Result, error)
 	InvoiceSettlement(context.Context, settlement.Actor, int64) (settlement.InvoiceSettlement, error)
+	GrantedInvoiceSettlement(context.Context, settlement.Actor, int64) (settlement.InvoiceSettlement, error)
 	CustomerSettlement(context.Context, settlement.Actor, int64) (settlement.CustomerSettlement, error)
 	CustomerMasterSettlement(context.Context, settlement.Actor, int64) (settlement.CustomerSettlement, error)
 }

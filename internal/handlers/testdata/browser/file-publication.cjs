@@ -11,17 +11,15 @@ const { chromium } = require('playwright-core');
     await page.route('**/files?**', async route => {
       if (!loseResponse) return route.continue();
       loseResponse = false;
-      const response = await route.fetch();
-      if (response.status() !== 200) throw new Error(`publication failed: ${await response.text()}`);
-      await route.abort('failed');
+      // The production fixture commits File-ID first, then closes the socket.
+      await route.continue({headers:{...route.request().headers(),'X-Test-Lose-Response':'true'}});
     });
     await page.locator('input[type=file][name=file]').setInputFiles({name:'browser.txt',mimeType:'text/plain',buffer:Buffer.from('durable browser bytes')});
     await page.locator('.files-drop-form button[type=submit]').click();
-    await page.getByRole('button', {name:'Retry failed files',exact:true}).click({timeout:10000});
     await page.waitForURL(`${base}/customers/${parent}`);
     await page.locator('.files-thumb[data-file-name="browser.txt"]').waitFor();
     const bytes = await page.request.get(base + await page.locator('.files-thumb').getAttribute('data-file-url'));
     if (await bytes.text() !== 'durable browser bytes') throw new Error('download changed exact bytes');
-    console.log('Lost publication response retried once; persisted exact-byte download verified.');
+    console.log('Lost publication response reconciled by its original receipt without reupload; persisted exact-byte download verified.');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -16,7 +16,7 @@ templ InvoicesListContent(p InvoiceListPageData) {
 	<div id="invoice-list-content" class="focused-list-content">
 		@ListToolbar(ListToolbarData{
 			Action: "/invoices", Target: "#invoice-list-content", Search: p.Search,
-			SearchPlaceholder: "Search by title...", NewURL: "/invoices/new", NewLabel: "New Invoice",
+			SearchPlaceholder: "Search by title...", NewURL: operationalNewURL(ctx, "/invoices/new"), NewLabel: "New Invoice",
 			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), Scope: customerScope(p.CustomerID),
 			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
 		}) {
@@ -52,7 +52,9 @@ templ InvoicesTable(p InvoiceListPageData) {
 				if len(p.Invoices) == 0 {
 					<tr><td colspan="7" class="work-queue-empty">
 						<p>No invoices found.</p>
-						<a href="/invoices/new" role="button" class="outline">Create your first invoice</a>
+						if navigationPermission(ctx, "invoice.create", "A") {
+							<a href="/invoices/new" role="button" class="outline">Create your first invoice</a>
+						}
 					</td></tr>
 				}
 				for _, i := range p.Invoices {
@@ -64,11 +66,7 @@ templ InvoicesTable(p InvoiceListPageData) {
 						<td>{ i.InvoiceDate }</td>
 						<td>{ i.DueDate }</td>
 						<td class="work-queue-actions">
-							<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", i.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", i.Title) }>Edit</a>
-							<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", i.ID)) } method="post" hx-confirm="Delete this invoice?">
-								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", i.Title) }>Del</button>
-							</form>
+							@CollectionActions("invoice", i.ID, i.Title)
 						</td>
 					</tr>
 				}

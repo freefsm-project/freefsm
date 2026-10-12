@@ -10,6 +10,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -139,6 +140,7 @@ func (h *ItemHandler) save(w http.ResponseWriter, r *http.Request, id int64, inl
 		if r.PostForm.Has(f.key) {
 			v, err := strconv.ParseFloat(r.PostForm.Get(f.key), 64)
 			if err != nil {
+				saveaction.RolledBack(r.Context()) // parsing precedes the command
 				authorizationError(w, r, err)
 				return
 			}

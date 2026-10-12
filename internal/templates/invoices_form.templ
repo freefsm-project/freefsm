@@ -52,10 +52,9 @@ templ InvoiceForm(p InvoiceFormPageData) {
 					<input type="date" name="due_date" value={ p.Invoice.DueDate }/>
 				</label>
 			</div>
-			<label>
-				Tax Rate
-				<input type="text" name="tax_rate" value={ p.Invoice.TaxRate } placeholder="e.g. 8.25%"/>
-			</label>
+			if capturedPricingVisible(ctx,"invoice",p.Invoice.ID,p.IsNew) {
+				<label>Tax Rate<input type="text" name="tax_rate" value={ p.Invoice.TaxRate } placeholder="e.g. 8.25%"/></label>
+			}
 			<label>
 				Notes
 				<textarea name="notes" rows="3">{ p.Invoice.Notes }</textarea>
@@ -65,13 +64,17 @@ templ InvoiceForm(p InvoiceFormPageData) {
 			if p.Invoice.TermsUnknown {
 				<p>Legacy terms were not recorded. Review and enter this document's terms before generating a new PDF. Blank explicitly records no terms.</p>
 			}
-			@LineItemEditor(LineItemEditorData{ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON})
+			if capturedPricingVisible(ctx,"invoice",p.Invoice.ID,p.IsNew) {
+				@LineItemEditor(LineItemEditorData{ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON})
+			} else {
+				<p>Captured pricing is not available with your current permissions. Saving other details retains it.</p>
+			}
 			if p.IsNew {
 				@DocumentDefaultPicker(p.DefaultsJSON,p.PreserveEntered)
 			}
 			<div class="entity-form-actions">
 				<button type="submit">Save</button>
-				<a href={ templ.URL(invoiceFormCancelURL(p)) } role="button" class="outline">Cancel</a>
+				<a href={ templ.URL(navigationReturnURL(ctx, invoiceFormCancelURL(p))) } role="button" class="outline">Cancel</a>
 			</div>
 		</form>
 	}

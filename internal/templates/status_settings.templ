@@ -13,7 +13,7 @@ templ StatusSettingsPage(p StatusSettingsPageData) {
 		<div data-status-settings>
 		<header class="status-settings-header">
 			<div>
-				<a class="status-settings-back" href="/settings">&larr; Back to Settings</a>
+				<a class="status-settings-back" href="/">&larr; Back to Dashboard</a>
 				<h2>{ statusSettingsTitle(p.ObjectType) }</h2>
 				if p.ObjectType == "invoice" {
 					<p>Customize the label and color of each fixed invoice state. Payment states update automatically.</p>
@@ -212,7 +212,7 @@ templ statusEditDialog(p StatusSettingsPageData, category StatusCategoryColumn, 
 			</section>
 			if p.ObjectType != "invoice" {
 				<section class="status-dialog-section"><h4>Move or reorder</h4><p class="status-section-help">Use Up and Down for an accessible same-category reorder, or choose a destination and position.</p>
-					<form class="status-move-form" method="post" action={ templ.URL(fmt.Sprintf("/settings/statuses/%s/%d/move", p.ObjectType, status.ID)) } hx-confirm="Move this status and update its workflow category?" data-original-category={ category.Key } data-original-order={ fmt.Sprintf("%d", status.Order) } data-default={ fmt.Sprintf("%t", status.Default) } data-usage={ fmt.Sprintf("%d", status.Usage) }>
+					<form class="status-move-form" method="post" action={ templ.URL(fmt.Sprintf("/settings/statuses/%s/%d/move", p.ObjectType, status.ID)) } hx-confirm={ fmt.Sprintf("Move %s Status %q and update its workflow category?", p.ObjectType, status.Name) } data-original-category={ category.Key } data-original-order={ fmt.Sprintf("%d", status.Order) } data-default={ fmt.Sprintf("%t", status.Default) } data-usage={ fmt.Sprintf("%d", status.Usage) }>
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 						<div class="status-move-fields"><label>Destination category<select name="category">
 							for _, destination := range p.Categories {
@@ -232,7 +232,7 @@ templ statusEditDialog(p StatusSettingsPageData, category StatusCategoryColumn, 
 					</form>
 				</section>
 				<section class="status-dialog-section status-danger"><h4>Delete status</h4><p>Records using this status must be reassigned within the same category.</p>
-					<form method="post" action={ templ.URL(fmt.Sprintf("/settings/statuses/%s/%d/delete", p.ObjectType, status.ID)) } hx-confirm="Delete this status and reassign every record using it?">
+					<form method="post" action={ templ.URL(fmt.Sprintf("/settings/statuses/%s/%d/delete", p.ObjectType, status.ID)) } hx-confirm={ fmt.Sprintf("Delete %s Status %q and reassign every record using it to the selected replacement?", p.ObjectType, status.Name) }>
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><label>Replacement status<select name="replacement_status_id"><option value="">Select replacement</option>
 							for _, replacement := range category.Statuses {
 								if replacement.ID != status.ID {

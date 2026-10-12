@@ -8,24 +8,26 @@ templ InvoiceShow(p InvoiceDetail) {
 		if p.ArchivedAt == "" {
 			<div class="work-item-detail-actions">
 			<div class="work-item-detail-action-group">
-			if p.CanFinalize && p.CanManage {
-				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/finalize", p.ID)) } method="post" hx-confirm="Finalize this invoice? This will set the invoice and due dates from current settings.">
+			if p.CanFinalize && detailCan(ctx,"finalize") {
+				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/finalize", p.ID)) } method="post" hx-confirm={ fmt.Sprintf("Finalize Invoice %q (record %d)? This will set its invoice and due dates from current settings.", p.Title, p.ID) }>
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button type="submit">Finalize Invoice</button>
 				</form>
 			}
+			if detailCan(ctx,"pdf") {
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
-			if p.CanManage {
+			}
+			if detailCan(ctx,"edit") {
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Title) }>Edit</a>
 			}
-			if p.CanRevert {
-				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/revert-to-estimate", p.ID)) } method="post" hx-confirm="Revert this invoice? The invoice will disappear and its number remains consumed. Current values and relations return to the original Draft Estimate.">
+			if p.CanRevert && detailCan(ctx,"revert") {
+				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/revert-to-estimate", p.ID)) } method="post" hx-confirm={ fmt.Sprintf("Revert Invoice %q (record %d) to its original Estimate? The Invoice will disappear and its number remains consumed. Current values and relations return to the original Draft Estimate.", p.Title, p.ID) }>
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<input type="hidden" name="idempotency_key" value={ p.RevertKey }/>
 					<button type="submit" class="outline">Revert to Estimate</button>
 				</form>
 			}
-			if p.CanManage {
+			if detailCan(ctx,"archive") {
 				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", p.ID)) } method="post" hx-confirm="Delete this invoice?">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Title) }>Delete</button>
@@ -34,7 +36,7 @@ templ InvoiceShow(p InvoiceDetail) {
 			</div>
 			</div>
 		}
-		if p.Converted && !p.CanRevert && len(p.RevertBlockers) > 0 {
+		if p.Converted && !p.CanRevert && len(p.RevertBlockers) > 0 && detailCan(ctx,"revert") {
 			<aside>
 				<strong>Cannot revert to Estimate yet</strong>
 				<ul>
@@ -48,8 +50,10 @@ templ InvoiceShow(p InvoiceDetail) {
 			<div class="work-item-detail-archive-banner">
 				<span>Archived on { p.ArchivedAt }</span>
 				<div class="work-item-detail-action-group">
-				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
-				if canAdmin(ctx) {
+				if detailCan(ctx,"pdf") {
+					<a href={ templ.URL(fmt.Sprintf("/invoices/%d/pdf/preview", p.ID)) } role="button" class="outline">PDF</a>
+				}
+				if detailCan(ctx,"restore") {
 					<form action={ templ.URL(fmt.Sprintf("/invoices/%d/restore", p.ID)) } method="post">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 						<button type="submit" class="outline">Restore</button>
@@ -67,25 +71,27 @@ templ InvoiceShow(p InvoiceDetail) {
 		}
 		<table class="work-item-detail-meta">
 			<tbody>
-				if canCustomer(ctx,"view") {
+				if canCustomer(ctx,"view") && p.Customer != "" {
 					<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/customers/%d", p.CustomerID)) }>{ p.Customer }</a></td></tr>
-				} else if p.JobID > 0 && canCustomer(ctx,"context") {
+				} else if p.JobID > 0 && canCustomer(ctx,"context") && visibleCustomerContext(ctx,p.JobID) {
 					<tr><th>Customer</th><td><a href={ templ.URL(fmt.Sprintf("/jobs/%d/customer-context",p.JobID)) }>{ p.Customer }</a></td></tr>
 				}
 				<tr><th>Invoice Number</th><td>{ recordedNumber(p.NumberLabel,fmt.Sprintf("Invoice record %d — identity requires review",p.ID)) }</td></tr>
 				if p.AssetID > 0 {
 					<tr><th>Asset</th><td><a href={ templ.URL(fmt.Sprintf("/assets/%d", p.AssetID)) }>{ p.AssetName }</a></td></tr>
 				}
-				<tr><th>Status</th><td>@StatusControl("invoice", p.ID, p.StatusID, p.StatusName, p.StatusColor, p.Statuses, p.ArchivedAt == "" && p.CanManage)</td></tr>
-				if p.CanSettle || p.Settlement.State != "" {
+				<tr><th>Status</th><td>@StatusControl("invoice", p.ID, p.StatusID, p.StatusName, p.StatusColor, p.Statuses, p.ArchivedAt == "" && detailCan(ctx,"status"))</td></tr>
+				if detailCan(ctx,"settlement") {
 					<tr><th>Settlement State</th><td><span class="status-badge">{ string(p.Settlement.State) }</span></td></tr>
 				}
 				<tr><th>Invoice Date</th><td>{ p.InvoiceDateDisplay }</td></tr>
 				<tr><th>Due Date</th><td>{ p.DueDateDisplay }</td></tr>
-				<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
+				if detailCan(ctx,"pricing") {
+					<tr><th>Tax Rate</th><td>{ p.TaxRate }</td></tr>
+				}
 			</tbody>
 		</table>
-		if len(p.LineItems) > 0 {
+		if detailCan(ctx,"pricing") && len(p.LineItems) > 0 {
 			<h3>Line Items</h3>
 			<table>
 				<thead>
@@ -125,14 +131,14 @@ templ InvoiceShow(p InvoiceDetail) {
 				<p><strong>Grand Total: { fmt.Sprintf("$%.2f", grandTotal(p.LineItems, p.TaxRate)) }</strong></p>
 			</div>
 		}
-		if p.CanSettle || p.Settlement.State != "" {
+		if detailCan(ctx,"settlement") && detailCan(ctx,"pricing") {
 		<div class="work-item-detail-totals">
 			<p><strong>Total: { cents(p.Settlement.TotalCents) }</strong></p>
 			<p><strong>Settled: { cents(p.Settlement.SettledCents) }</strong></p>
 			<p><strong>Amount Due: { cents(p.Settlement.AmountDueCents) }</strong></p>
 		</div>
 		}
-		if len(p.Settlement.Payments) > 0 {
+		if detailCan(ctx,"settlement") && len(p.Settlement.Payments) > 0 {
 			<h3>Payments</h3>
 			<div style="overflow-x: auto;">
 			<table>
@@ -155,7 +161,7 @@ templ InvoiceShow(p InvoiceDetail) {
 							<td>
 							if pmt.Reversal != nil {
 								Reversed { pmt.Reversal.EffectiveDate.Format("2006-01-02") }: { pmt.Reversal.Reason }
-							} else if p.ArchivedAt == "" {
+							} else if p.ArchivedAt == "" && detailCan(ctx,"reverse-payment") {
 									<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments/%s/reverse", p.ID, pmt.ID)) } method="post">
 										<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 										<input type="hidden" name="idempotency_key" value={ pmt.ReversalKey }/>
@@ -171,7 +177,7 @@ templ InvoiceShow(p InvoiceDetail) {
 			</table>
 			</div>
 		}
-		if len(p.Settlement.Applications) > 0 {
+		if detailCan(ctx,"settlement") && len(p.Settlement.Applications) > 0 {
 			<h3>Credit Applications</h3>
 			<div style="overflow-x: auto;">
 			<table><tbody>
@@ -179,7 +185,7 @@ templ InvoiceShow(p InvoiceDetail) {
 				<tr><td>{ a.EffectiveDate.Format("2006-01-02") }</td><td>{ cents(a.AmountCents) }</td><td>
 				if a.Reversal != nil {
 					Reversed: { a.Reversal.Reason }
-				} else if p.ArchivedAt == "" {
+				} else if p.ArchivedAt == "" && detailCan(ctx,"reverse-application") {
 					<form action={ templ.URL(fmt.Sprintf("/invoices/%d/credit-applications/%s/reverse",p.ID,a.ID)) } method="post"><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ a.ReversalKey }/><input type="date" name="effective_date" value={ today(ctx) } required/><input name="reason" placeholder="Reason" required/><button class="outline contrast">Reverse</button></form>
 				}
 				</td></tr>
@@ -187,7 +193,7 @@ templ InvoiceShow(p InvoiceDetail) {
 			</tbody></table>
 			</div>
 		}
-		if p.ArchivedAt == "" && p.CanSettle {
+		if p.ArchivedAt == "" && detailCan(ctx,"payment") {
 		<details open>
 			<summary>Record Payment</summary>
 			<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments", p.ID)) } method="post" class="inline-add-form">
@@ -226,7 +232,7 @@ templ InvoiceShow(p InvoiceDetail) {
 				<button type="submit">Record Payment</button>
 			</form>
 		</details>
-		if len(p.CreditSources) > 0 && p.Settlement.AmountDueCents > 0 {
+		if detailCan(ctx,"apply-credit") && len(p.CreditSources) > 0 && p.Settlement.AmountDueCents > 0 {
 		<details><summary>Apply Customer Credit</summary><form action={ templ.URL(fmt.Sprintf("/invoices/%d/credit-applications",p.ID)) } method="post">
 		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ p.ApplyCreditKey }/>
 		<label>Source<select name="credit_id" required>

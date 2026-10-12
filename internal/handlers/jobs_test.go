@@ -187,11 +187,11 @@ func TestJobEditGETDoesNotRenderFormWhenEditFormDataFails(t *testing.T) {
 	rr := httptest.NewRecorder()
 	jobMutationTestRouter(h).ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusInternalServerError {
-		t.Fatalf("status = %d, want %d; body=%q", rr.Code, http.StatusInternalServerError, rr.Body.String())
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want %d; body=%q", rr.Code, http.StatusServiceUnavailable, rr.Body.String())
 	}
-	if rr.Body.String() != "Internal Server Error\n" {
-		t.Fatalf("body = %q, want generic internal server error", rr.Body.String())
+	if !strings.Contains(rr.Body.String(), "Service temporarily unavailable") || !strings.Contains(rr.Body.String(), `href="/jobs/41/edit"`) || strings.Contains(rr.Body.String(), "list existing assignment users") {
+		t.Fatalf("body = %q, want sanitized availability error with exact Retry route", rr.Body.String())
 	}
 	if strings.Contains(rr.Body.String(), "<form") {
 		t.Fatalf("response rendered a destructive edit form: %q", rr.Body.String())

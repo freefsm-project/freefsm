@@ -4,17 +4,18 @@ import "fmt"
 
 templ SchedulePage(p SchedulePageData) {
 	@Layout("Schedule") {
+		<p>Schedule times use { companyTimeZone(ctx) }.</p>
 
 		<div class="schedule-toolbar">
 			<div class="schedule-toolbar-main">
 				<div class="schedule-primary-tabs">
 					<a href={ templ.URL("/schedule?tab=list&period="+func() string { if p.Period != "" { return p.Period } else { return "month" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "list") }>List</a>
 					<a href={ templ.URL("/schedule?tab=calendar&period="+func() string { if p.Period != "" && p.Period != "month" { return p.Period } else { return "month" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "calendar") }>Calendar</a>
-					if canManageOperational(ctx) {
+					if navigationPermission(ctx, "job.view", "A") && navigationPermission(ctx, "directory.view", "A") {
 						<a href={ templ.URL("/schedule?tab=dispatch&period="+func() string { if p.Period != "" { return p.Period } else { return "day" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "dispatch") }>Dispatch</a>
 					}
 					<a href={ templ.URL("/schedule?tab=map&period=day&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "map") }>Map</a>
-					if canManageOperational(ctx) {
+					if navigationPermission(ctx, "job.create", "A") {
 						<a href="/jobs/new" role="button">New Job</a>
 					}
 				</div>
@@ -145,20 +146,20 @@ templ SchedulePage(p SchedulePageData) {
 					if (!jobID || !target.dataset.date) return;
 					var body = new URLSearchParams({ job_id: jobID, date: target.dataset.date, duration: duration });
 					if (hour !== '') body.set('hour', hour);
-					fetch('/schedule/calendar/move', {
+					window.freefsmActions.fetch('/schedule/calendar/move', {
 						method: 'POST',
 						headers: {
 							'Content-Type': 'application/x-www-form-urlencoded',
 							'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
 						},
 						body: body
-					}).then(function(response) {
+					}, document.querySelector('.page-body')).then(function(response) {
 						if (response.ok) {
 							window.location.reload();
 						} else {
 							console.warn('Calendar move not saved:', response.status);
 						}
-					});
+					}).catch(function() { /* Shared persistent notice retains the unknown action. */ });
 				}
 			</script>
 		}
@@ -377,20 +378,20 @@ templ dispatchView(p SchedulePageData) {
 			var hour = target.dataset.hour || '';
 			var board = document.getElementById('dispatch-board');
 			if (!jobID || !board || !target.dataset.userId) return;
-			fetch('/schedule/dispatch', {
+			window.freefsmActions.fetch('/schedule/dispatch', {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/x-www-form-urlencoded',
 					'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
 				},
 				body: function() { var body = new URLSearchParams({ job_id: jobID, user_id: target.dataset.userId, date: target.dataset.date || board.dataset.date, duration: duration }); if (hour !== '') body.set('hour', hour); return body; }()
-			}).then(function(response) {
+			}, document.querySelector('.page-body')).then(function(response) {
 				if (response.ok) {
 					window.location.reload();
 				} else {
 					console.warn('Dispatch update not saved:', response.status);
 				}
-			});
+			}).catch(function() { /* Shared persistent notice retains the unknown action. */ });
 		}
 	</script>
 }

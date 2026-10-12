@@ -65,6 +65,7 @@ type job struct {
 	readers       int
 	active        bool
 	lease         *os.File
+	initiation    bool
 }
 type Manager struct {
 	cfg        Config
@@ -397,7 +398,7 @@ func (m *Manager) replaceFiles(src string) error {
 	}
 	return syncDir(m.cfg.UploadDir)
 }
-func (m *Manager) newJob(actor int64, kind string) (*job, func(), error) {
+func (m *Manager) newJob(actor int64, kind string, action ...string) (*job, func(), error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed || m.cfg.RecoveryOnly || actor <= 0 {
@@ -422,6 +423,9 @@ func (m *Manager) newJob(actor int64, kind string) (*job, func(), error) {
 		return nil, nil, e
 	}
 	id := hex.EncodeToString(b[:])
+	if len(action) > 0 && action[0] != "" {
+		id = action[0]
+	}
 	dir := filepath.Join(m.root, id)
 	if e = os.Mkdir(dir, 0700); e != nil {
 		unlock()
@@ -440,6 +444,7 @@ func (m *Manager) newJob(actor int64, kind string) (*job, func(), error) {
 		return nil, nil, e
 	}
 	j := &job{Operation: Operation{ID: id, Kind: kind, Phase: "queued", ExpiresAt: time.Now().Add(7 * time.Hour)}, actor: actor, dir: dir, active: true, lease: lease}
+	j.initiation = len(action) > 0 && action[0] != ""
 	m.jobs[id] = j
 	m.wg.Add(1)
 	return j, unlock, nil
@@ -478,7 +483,13 @@ func (m *Manager) run(j *job, unlock func(), fn func(context.Context) error) {
 			}
 		}
 		m.mu.Lock()
-		defer m.mu.Unlock()
+		var initiationErr error
+		defer func() {
+			m.mu.Unlock()
+			if initiationErr != nil {
+				m.reportFailure(initiationErr, "recording-initiation-result")
+			}
+		}()
 		j.active = false
 		if e != nil {
 			j.Phase = "failed"
@@ -493,6 +504,7 @@ func (m *Manager) run(j *job, unlock func(), fn func(context.Context) error) {
 			j.Phase = "complete"
 		}
 		j.ExpiresAt = time.Now().Add(time.Hour)
+		initiationErr = m.finishInitiation(j)
 		time.AfterFunc(time.Hour, func() { m.mu.Lock(); defer m.mu.Unlock(); m.expireLocked() })
 		if j.Phase == "failed" || j.Kind == "restore" {
 			_ = os.RemoveAll(j.dir)
@@ -530,13 +542,16 @@ func (m *Manager) StartBackup(actor int64, source, password string) (Operation, 
 	return m.StartBackupFor(ActivityActor{ID: actor}, source, password)
 }
 func (m *Manager) StartBackupFor(actor ActivityActor, source, password string) (Operation, error) {
+	return m.startBackupFor(actor, source, password, "")
+}
+func (m *Manager) startBackupFor(actor ActivityActor, source, password, action string) (Operation, error) {
 	if !m.validActor(actor) {
 		return Operation{}, ErrInvalid
 	}
 	if password == "" || len(password) > 1024 || source == "" || len(source) > 256 {
 		return Operation{}, ErrInvalid
 	}
-	j, unlock, e := m.newJob(actor.ID, "backup")
+	j, unlock, e := m.newJob(actor.ID, "backup", action)
 	if e != nil {
 		return Operation{}, e
 	}
@@ -630,6 +645,9 @@ func (m *Manager) StageUpload(ctx context.Context, actor int64, r io.Reader, pas
 	return m.StageUploadFor(ctx, ActivityActor{ID: actor}, r, password)
 }
 func (m *Manager) StageUploadFor(ctx context.Context, actor ActivityActor, r io.Reader, password string) (Operation, error) {
+	return m.stageUploadFor(ctx, actor, r, password, "")
+}
+func (m *Manager) stageUploadFor(ctx context.Context, actor ActivityActor, r io.Reader, password, action string) (Operation, error) {
 	if !m.validActor(actor) {
 		return Operation{}, ErrInvalid
 	}
@@ -642,7 +660,7 @@ func (m *Manager) StageUploadFor(ctx context.Context, actor ActivityActor, r io.
 	if e := space(m.root, 256<<20); e != nil {
 		return Operation{}, e
 	}
-	j, unlock, e := m.newJob(actor.ID, "upload")
+	j, unlock, e := m.newJob(actor.ID, "upload", action)
 	if e != nil {
 		return Operation{}, e
 	}
@@ -787,6 +805,7 @@ func (m *Manager) StartRestoreFor(ctx context.Context, actor ActivityActor, id, 
 	j.active = true
 	j.activityActor = actor
 	j.Kind = "restore"
+	j.initiation = false // initial upload receipt remains an immutable completed validation fact
 	j.Phase = "queued"
 	m.wg.Add(1)
 	m.mu.Unlock()

@@ -57,7 +57,7 @@ func TestFileWidgetScriptDefinesBoundedIdempotentUploadOrchestration(t *testing.
 		"if (files.length <= filesUploadLimit()) return true;",
 		"input.multiple = true;",
 		"if (form.dataset.filesEnhanced === 'true') return;",
-		"form.addEventListener('submit', filesHandleSubmit);",
+		"form.addEventListener('submit', filesHandleSubmit, true);",
 		"filesQueueUploads(form, files);",
 		"const body = new FormData(form);",
 		"body.set('file', item.file);",
