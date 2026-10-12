@@ -14,17 +14,16 @@ templ CustomerShow(p CustomerShowPageData) {
 					<a href={ templ.URL(fmt.Sprintf("/jobs/new?customer_id=%d", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create job for %s", p.Customer.DisplayName) }>Create Job</a>
 					<a href={ templ.URL(fmt.Sprintf("/estimates/new?customer_id=%d", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create estimate for %s", p.Customer.DisplayName) }>Create Estimate</a>
 					<a href={ templ.URL(fmt.Sprintf("/customers/%d/create-invoice", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create invoice for %s", p.Customer.DisplayName) }>Create Invoice</a>
-					<form action={ templ.URL(fmt.Sprintf("/customers/%d/delete", p.Customer.ID)) } method="post" hx-confirm="Delete this customer?">
-						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-						<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Customer.DisplayName) }>Delete</button>
-					</form>
 				</div>
 			</div>
+		}
+		if canMaster(ctx,"customer.archive") && p.Customer.ArchivedAt=="" {
+			<a href={ templ.URL(fmt.Sprintf("/customers/%d/archive",p.Customer.ID)) }>Review archive</a>
 		}
 		if p.Customer.ArchivedAt != "" {
 			<div class="work-item-detail-archive-banner">
 				<span>Archived on { p.Customer.ArchivedAt }</span>
-				if canAdmin(ctx) {
+				if canMaster(ctx,"customer.restore") {
 					<form action={ templ.URL(fmt.Sprintf("/customers/%d/restore", p.Customer.ID)) } method="post">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 						<button type="submit" class="outline">Restore</button>
@@ -52,9 +51,8 @@ templ CustomerShow(p CustomerShowPageData) {
 								<tr><th>Last Name</th><td>{ p.Customer.LastName }</td></tr>
 								<tr><th>Email</th><td>{ p.Customer.Email }</td></tr>
 								<tr><th>Phone</th><td>{ p.Customer.Phone }</td></tr>
-								<tr><th>Account Type</th><td>{ p.Customer.AccountType }</td></tr>
+								<tr><th>Kind</th><td>{ customerKindLabel(p.Customer.AccountType) }</td></tr>
 								if canCustomer(ctx,"financial") {
-									<tr><th>Status</th><td><span class="status-badge" style={ badgeStyle(customerStatusColor(p.Customer.Status)) }>{ p.Customer.Status }</span></td></tr>
 									<tr><th>Billing Address</th><td>
 										{ p.Customer.BillingAddress1 }<br/>
 										if p.Customer.BillingAddress2 != "" {
@@ -74,24 +72,19 @@ templ CustomerShow(p CustomerShowPageData) {
 						</table>
 					</div>
 					<div class="customer-details-related">
-						@customerLocationsTable(p.Locations)
-						@customerContactsTable(p.Contacts)
+						if canMaster(ctx,"location.view") {
+							<a href={ templ.URL(fmt.Sprintf("/customers/%d/locations",p.Customer.ID)) }>Manage Locations</a>
+							@customerLocationsTable(p.Locations)
+						}
+						if canMaster(ctx,"contact.view") {
+							<a href={ templ.URL(fmt.Sprintf("/customers/%d/contacts",p.Customer.ID)) }>Manage Contacts</a>
+							@customerContactsTable(p.Contacts)
+						}
 					</div>
 				</div>
 			</article>
 			if p.ShowFinancial {
-				<article class="dashboard-panel customer-dashboard-financial">
-					@DashboardSubcardTop("Financial Summary")
-					<div class="dashboard-financials customer-financials">
-						<div><small>Total Invoiced</small><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Financial.TotalInvoiced) }</p></div>
-						<div><small>Total Paid</small><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Financial.TotalPaid) }</p></div>
-						<div><small>Total Balance</small><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Financial.TotalBalance) }</p></div>
-						<div><small>Overdue Balance</small><p class="dashboard-metric dashboard-metric-sm dashboard-danger">{ fmt.Sprintf("$%.2f", p.Financial.OverdueBalance) }</p></div>
-						<div><small>Open Invoices</small><p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("%d", p.Financial.OpenInvoiceCount) }</p></div>
-						<div><small>Overdue Invoices</small><p class="dashboard-metric dashboard-metric-sm dashboard-danger">{ fmt.Sprintf("%d", p.Financial.OverdueInvoiceCount) }</p></div>
-					</div>
-					@customerFinancialGraph(p.Financial)
-				</article>
+				@CustomerReceivablesCard(p.Receivables)
 			}
 		</div>
 		<div class="customer-dashboard-supporting">
@@ -99,16 +92,12 @@ templ CustomerShow(p CustomerShowPageData) {
 			@customerCommentsCard(p)
 			@customerFilesCard(p)
 		</div>
-		if p.ShowFinancial {
+		if p.ShowSettlement {
 			@customerCredit(p)
+		} else if p.ShowCredit {
+			<article class="dashboard-panel"><h3>Customer Credit</h3><p>Available: { cents(p.CreditCents) }</p></article>
 		}
-		if canManageOperational(ctx) {
-			<div class="dashboard-work-queues">
-				@customerJobsCard(p)
-				@customerEstimatesCard(p)
-				@customerInvoicesCard(p)
-			</div>
-		}
+		@CustomerWorkCards(p.Customer.ID,p.RelatedWork)
 		<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/activity", p.Customer.ID)) } hx-trigger="load" hx-swap="innerHTML">
 			<p>Loading activity...</p>
 		</div>
@@ -139,7 +128,7 @@ templ customerCredit(p CustomerShowPageData) {
 		}
 		</tbody></table></div>
 	}
-	if p.Customer.ArchivedAt == "" && p.Settlement.AvailableCreditCents > 0 {
+	if p.CanRefund && p.Customer.ArchivedAt == "" && p.Settlement.AvailableCreditCents > 0 {
 		<details><summary>Refund Available Credit</summary><form action={ templ.URL(fmt.Sprintf("/customers/%d/credit/refunds",p.Customer.ID)) } method="post"><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ p.RefundKey }/><label>Amount<input name="amount" inputmode="decimal" required/></label><label>Method<select name="method"><option value="cash">Cash</option><option value="check">Check</option><option value="credit_card">Credit Card</option><option value="transfer">Transfer</option><option value="other">Other</option></select></label><label>Date<input type="date" name="effective_date" value={ today(ctx) } required/></label><label>Reason<input name="reason" required/></label><label>Reference<input name="reference"/></label><label>Notes<input name="notes"/></label><button>Refund Credit</button></form></details>
 	}
 	if len(p.Settlement.Refunds) > 0 {
@@ -148,7 +137,7 @@ templ customerCredit(p CustomerShowPageData) {
 			<tr><td>{ f.EffectiveDate.Format("2006-01-02") }</td><td>{ string(f.Method) }</td><td>{ cents(f.AmountCents) }</td><td>{ f.Reason }</td><td>
 			if f.Reversal != nil {
 				<span>Reversed: { f.Reversal.Reason }</span>
-			} else if p.Customer.ArchivedAt == "" {
+			} else if p.CanReverseRefund && p.Customer.ArchivedAt == "" {
 				<form action={ templ.URL(fmt.Sprintf("/customers/%d/credit/refunds/%s/reverse",p.Customer.ID,f.ID)) } method="post"><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ f.ReversalKey }/><input type="date" name="effective_date" value={ today(ctx) } required/><input name="reason" placeholder="Reason" required/><button class="outline contrast">Reverse</button></form>
 			}
 			</td></tr>

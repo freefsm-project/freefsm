@@ -95,19 +95,11 @@ func (s *Service) SaveCustomer(ctx context.Context, a Actor, id int64, in Custom
 		if !p.Allows(permission, All) {
 			return ErrForbidden
 		}
-		if id == 0 && (in.DisplayName == nil || strings.TrimSpace(*in.DisplayName) == "") {
-			name := ""
-			if in.FirstName != nil {
-				name = *in.FirstName
-			}
-			if in.LastName != nil {
-				name += " " + *in.LastName
-			}
-			name = strings.TrimSpace(name)
-			if name == "" && in.CompanyName != nil {
-				name = strings.TrimSpace(*in.CompanyName)
-			}
-			in.DisplayName = &name
+		if in.Status != nil {
+			return fmt.Errorf("Customers have no CRM lifecycle")
+		}
+		if id == 0 && in.DisplayName == nil {
+			return fmt.Errorf("display name is required")
 		}
 		if in.DisplayName != nil && strings.TrimSpace(*in.DisplayName) == "" {
 			return fmt.Errorf("display name is required")
@@ -188,10 +180,17 @@ func (s *Service) CustomerAccess(ctx context.Context, a Actor, id int64, permiss
 	if !p.Allows(permission, All) {
 		return ErrForbidden
 	}
+	if !active && permission == "customer.edit" {
+		return ErrForbidden
+	}
 	return nil
 }
 
 func (s *Service) CustomerLifecycle(ctx context.Context, a Actor, id int64, restore bool) error {
+	// Archive is a reviewed cascade; callers must submit its exact preview.
+	if !restore {
+		return ErrConflict
+	}
 	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		permission := "customer.archive"
 		if restore {
@@ -202,6 +201,9 @@ func (s *Service) CustomerLifecycle(ctx context.Context, a Actor, id int64, rest
 		}
 		if !p.Allows(permission, All) {
 			return ErrForbidden
+		}
+		if !p.Allows("customer.archived.view", All) {
+			return ErrNotFound
 		}
 		tag, err := tx.Exec(ctx, `UPDATE customers SET deleted_at=CASE WHEN $3 THEN NULL ELSE clock_timestamp() END,updated_at=clock_timestamp() WHERE id=$1 AND company_id=$2`, id, p.CompanyID, restore)
 		if err != nil {

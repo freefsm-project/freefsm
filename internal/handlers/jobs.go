@@ -22,6 +22,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type JobHandler struct {
@@ -409,6 +410,11 @@ func boundedJobLogValue(value string) string {
 }
 
 func handleInvalidJobInput(w http.ResponseWriter, r *http.Request, operation string, err error) bool {
+	var constraint *pgconn.PgError
+	if errors.As(err, &constraint) && strings.HasPrefix(constraint.ConstraintName, "master_") {
+		http.Error(w, "Work context changed; reload and select active records belonging to the Customer", http.StatusConflict)
+		return true
+	}
 	var inputErr *services.JobInputError
 	if !errors.As(err, &inputErr) {
 		return false

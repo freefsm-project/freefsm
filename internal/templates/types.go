@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
@@ -148,6 +149,7 @@ type RecentEstimate struct {
 }
 
 type CustomerListPageData struct {
+	Archived     bool
 	Customers    []CustomerRow
 	Page         int
 	PerPage      int
@@ -158,6 +160,8 @@ type CustomerListPageData struct {
 }
 
 type CustomerRow struct {
+	Match       string
+	Archived    bool
 	ID          int64
 	DisplayName string
 	FirstName   string
@@ -170,20 +174,27 @@ type CustomerRow struct {
 }
 
 type CustomerShowPageData struct {
-	ShowFinancial bool
-	Customer      CustomerDetail
-	Locations     []LocationRow
-	Contacts      []ContactRow
-	Jobs          []JobRow
-	Estimates     []EstimateRow
-	Invoices      []InvoiceRow
-	Financial     CustomerFinancialSummary
-	Tags          []TagRow
-	AllTags       []TagRow
-	CustomFields  []CustomFieldDisplay
-	FileList      FileListPageData
-	Settlement    settlement.CustomerSettlement
-	RefundKey     string
+	ShowSettlement   bool
+	CanRefund        bool
+	CanReverseRefund bool
+	Receivables      CustomerReceivables
+	ShowCredit       bool
+	CreditCents      int64
+	RelatedWork      []authorization.CustomerWork
+	ShowFinancial    bool
+	Customer         CustomerDetail
+	Locations        []LocationRow
+	Contacts         []ContactRow
+	Jobs             []JobRow
+	Estimates        []EstimateRow
+	Invoices         []InvoiceRow
+	Financial        CustomerFinancialSummary
+	Tags             []TagRow
+	AllTags          []TagRow
+	CustomFields     []CustomFieldDisplay
+	FileList         FileListPageData
+	Settlement       settlement.CustomerSettlement
+	RefundKey        string
 }
 
 type CustomerFinancialSummary struct {

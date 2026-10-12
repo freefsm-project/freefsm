@@ -1,0 +1,13 @@
+package templates
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ JobMasterContext(p authorization.JobMasterContext) {
+	<section aria-label="Linked Job context">
+		if p.Contact != nil {
+			<h3>Linked Contact</h3><p>{ p.Contact.Name } { p.Contact.RoleTitle }</p><p>{ p.Contact.Phone } { p.Contact.Email }</p><p>{ p.Contact.ServiceNotes }</p>
+		}
+		if p.Location != nil {
+			<h3>Linked Location</h3><p>{ p.Location.Title }</p><p>{ p.Location.Address1 } { p.Location.Address2 } { p.Location.City } { p.Location.State } { p.Location.ZipCode }</p><p>{ p.Location.AccessNotes }</p><p>{ p.Location.ServiceNotes }</p>
+		}
+	</section>
+}

@@ -109,6 +109,33 @@ func InstallCustomerBoundary(client *ent.Client) {
 			return next.Mutate(ctx, m)
 		})
 	})
+	// Ordinary Ent reads are active master reads. Closed Job context must use a
+	// purpose-built allowlist, never deserialize an unrestricted child master.
+	childFilter := func(kind string) ent.Interceptor {
+		return ent.TraverseFunc(func(ctx context.Context, q ent.Query) error {
+			r, ok := FromContext(ctx)
+			if !ok {
+				return nil
+			}
+			p, err := r.Service.Principal(ctx, r.Actor)
+			filter := func(s *sql.Selector) {
+				if err != nil || !p.Allows(kind+".view", All) {
+					s.Where(sql.EQ(s.C("id"), -1))
+					return
+				}
+				s.Where(sql.And(sql.EQ(s.C("company_id"), p.CompanyID), sql.IsNull(s.C("deleted_at"))))
+			}
+			switch query := q.(type) {
+			case *ent.CustomerContactQuery:
+				query.Where(filter)
+			case *ent.LocationQuery:
+				query.Where(filter)
+			}
+			return nil
+		})
+	}
+	client.CustomerContact.Intercept(childFilter("contact"))
+	client.Location.Intercept(childFilter("location"))
 	client.ActivityLog.Intercept(ent.TraverseFunc(func(ctx context.Context, q ent.Query) error {
 		r, ok := FromContext(ctx)
 		if !ok {

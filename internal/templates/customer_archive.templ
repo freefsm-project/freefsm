@@ -1,0 +1,21 @@
+package templates
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ CustomerArchiveReview(p authorization.CustomerArchivePreview) {
+	@Layout("Review Customer archive") {
+		<h2>Archive { p.Name }</h2>
+		<p>This archives the Customer and exactly the active Contacts and Locations below. Identity and historical links remain. Restoring the Customer will not restore these records or their primary designations.</p>
+		<ul>
+		for _,child := range p.Children {
+			<li>{ capitalize(child.Kind) }: { child.Name } (#{ fmt.Sprint(child.ID) })</li>
+		}
+		</ul>
+		<form method="post" action={ templ.URL(fmt.Sprintf("/customers/%d/delete",p.CustomerID)) }>
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="archive_snapshot" value={ p.Snapshot }/>
+			<button>Confirm archive</button>
+		</form>
+		<a href={ templ.URL(fmt.Sprintf("/customers/%d",p.CustomerID)) }>Cancel</a>
+	}
+}

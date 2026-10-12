@@ -1,0 +1,128 @@
+package templates
+
+import "fmt"
+import "strings"
+import "net/url"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+type CustomerChildrenData struct {
+	Search string
+	Page, PerPage, Total int
+	Kind string
+	CustomerID int64
+	BaseURL string
+	Rows []authorization.CustomerChild
+	Selected *authorization.CustomerChild
+	Archived, Editing, CanCreate, CanEdit, CanArchive, CanRestore, CanViewArchived bool
+}
+
+templ CustomerChildrenPage(p CustomerChildrenData) {
+	@Layout("Customer " + p.Kind + "s") {
+		<a href={ templ.URL(fmt.Sprintf("/customers/%d",p.CustomerID)) }>Back to Customer</a>
+		if p.Selected == nil {
+			<h2>{ capitalize(p.Kind) }s</h2>
+			<form method="get" action={ templ.URL(p.BaseURL) }>
+				<label>Search<input name="search" value={ p.Search }/></label>
+				<label>Page size<select name="per_page">
+					for _,n := range []int{25,50,100} {
+						<option value={ fmt.Sprint(n) } selected?={ p.PerPage==n }>{ fmt.Sprint(n) }</option>
+					}
+				</select></label>
+				if p.CanViewArchived {
+					<label><input type="checkbox" name="archived" value="1" checked?={ p.Archived }/>Include archived</label>
+				}
+				<button>Apply filters</button>
+			</form>
+			if p.CanCreate {
+				<a href={ templ.URL(p.BaseURL+"/new") }>New { capitalize(p.Kind) }</a>
+			}
+			if p.CanViewArchived {
+				<a href={ templ.URL(p.BaseURL+"?archived=1") }>Include archived</a>
+			}
+			<ul>
+			for _, c := range p.Rows {
+				<li><a href={ templ.URL(fmt.Sprintf("%s/%d",p.BaseURL,c.ID)) }>{ c.Name() }</a>
+				if c.IsPrimary {
+					<strong>Primary { capitalize(p.Kind) }</strong>
+				}
+				if c.DeletedAt != nil {
+					<span>Archived</span>
+				}
+				</li>
+			}
+			</ul>
+			@Pagination(PaginationData{CurrentPage:p.Page,TotalPages:(p.Total+p.PerPage-1)/p.PerPage,BaseURL:p.BaseURL,Query:childListQuery(p)})
+		} else if p.Editing {
+			@CustomerChildForm(p, *p.Selected)
+		} else {
+			<h2>{ p.Selected.Name() }</h2>
+			if p.Selected.IsPrimary {
+				<strong>Primary { capitalize(p.Kind) }</strong>
+			}
+			<p>{ p.Selected.Email } { p.Selected.Phone } { p.Selected.RoleTitle }</p>
+			<p>{ p.Selected.Address1 } { p.Selected.Address2 } { p.Selected.City } { p.Selected.State } { p.Selected.ZipCode }</p>
+			<p>Service Notes: { p.Selected.ServiceNotes }</p><p>Access Notes: { p.Selected.AccessNotes }</p><p>Internal Notes: { p.Selected.Notes }</p>
+			if p.Selected.DeletedAt != nil {
+				<p>Archived</p>
+				if p.CanRestore {
+					@CustomerChildAction(p,"restore","Restore")
+				}
+			} else {
+				if p.CanEdit {
+					<a href={ templ.URL(fmt.Sprintf("%s/%d/edit",p.BaseURL,p.Selected.ID)) }>Edit { capitalize(p.Kind) }</a>
+				}
+				if p.CanArchive {
+					@CustomerChildAction(p,"delete","Archive")
+				}
+			}
+		}
+	}
+}
+
+templ CustomerChildAction(p CustomerChildrenData, action, label string) {
+	<form method="post" action={ templ.URL(fmt.Sprintf("%s/%d/%s",p.BaseURL,p.Selected.ID,action)) }>
+		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><button>{ label }</button>
+	</form>
+}
+
+templ CustomerChildForm(p CustomerChildrenData, c authorization.CustomerChild) {
+	<form method="post" action={ templ.URL(childFormAction(p.BaseURL,c.ID)) }>
+		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+		if p.Kind == "contact" {
+			<label>First name<input name="first_name" value={ c.FirstName }/></label>
+			<label>Last name<input name="last_name" value={ c.LastName }/></label>
+			<label>Email<input name="email" type="email" value={ c.Email }/></label>
+			<label>Phone<input name="phone" value={ c.Phone }/></label>
+			<label>Role / title<input name="role_title" value={ c.RoleTitle }/></label>
+		} else {
+			<label>Title<input name="title" value={ c.Title } required/></label>
+			<label>Address line 1<input name="address_1" value={ c.Address1 }/></label>
+			<label>Address line 2<input name="address_2" value={ c.Address2 }/></label>
+			<label>City<input name="city" value={ c.City }/></label>
+			<label>State<input name="state" value={ c.State }/></label>
+			<label>ZIP<input name="zip_code" value={ c.ZipCode }/></label>
+			<label>Access Notes<textarea name="access_notes">{ c.AccessNotes }</textarea></label>
+		}
+		<label>Service Notes<textarea name="service_notes">{ c.ServiceNotes }</textarea></label>
+		<label>Internal Notes<textarea name="notes">{ c.Notes }</textarea></label>
+		<input type="hidden" name="primary_present" value="1"/>
+		<label><input type="checkbox" name="is_primary" value="true" checked?={ c.IsPrimary }/>Primary { capitalize(p.Kind) } (office default only)</label>
+		<button>Save</button>
+	</form>
+}
+
+func childFormAction(base string,id int64) string {
+	if id==0{return base}
+	return fmt.Sprintf("%s/%d",base,id)
+}
+
+func capitalize(s string) string {
+	if s=="" {return s}
+	return strings.ToUpper(s[:1])+s[1:]
+}
+
+func childListQuery(p CustomerChildrenData) url.Values {
+	q:=filterValues("search",p.Search,"per_page",fmt.Sprint(p.PerPage))
+	if p.Archived{q.Set("archived","1")}
+	return q
+}

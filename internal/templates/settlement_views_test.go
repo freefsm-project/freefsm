@@ -28,10 +28,12 @@ func TestInvoiceShowRendersSeparateSettlementAndReversedHistory(t *testing.T) {
 	}
 }
 
-func TestCustomerShowCreditRequiresFinancialGrantAndIncludesRefundHistory(t *testing.T) {
+func TestCustomerShowCreditRequiresIndependentCreditAndHistoryFacets(t *testing.T) {
 	data := CustomerShowPageData{Customer: CustomerDetail{ID: 2, DisplayName: "Acme"}, Settlement: settlement.CustomerSettlement{AvailableCreditCents: 500, Sources: []settlement.CreditSource{{ID: uuid.New(), SourcePaymentID: uuid.New(), InvoiceID: 7, OriginalCents: 1000, AvailableCents: 500}}, Refunds: []settlement.RefundEntry{{ID: uuid.New(), AmountCents: 500, Reason: "requested", Reversal: &settlement.ReversalEntry{Reason: "returned"}}}}}
 	render := func(financial bool) string {
-		data.ShowFinancial = financial
+		data.ShowFinancial = false
+		data.ShowCredit = financial
+		data.ShowSettlement = financial
 		var out bytes.Buffer
 		ctx := context.WithValue(context.Background(), middleware.UserKey, &middleware.UserInfo{Role: "custom", CustomerView: true, CustomerFinancial: financial, AuthorizationLoaded: true})
 		if err := CustomerShow(data).Render(ctx, &out); err != nil {

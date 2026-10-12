@@ -107,7 +107,7 @@ func TestListContentRendersFilterControls(t *testing.T) {
 				`<input type="date" name="date_to"`,
 			},
 		},
-		{name: "customers", component: CustomerListContent(CustomerListPageData{}), controls: []string{`<select name="status">`}},
+		{name: "customers", component: CustomerListContent(CustomerListPageData{}), controls: []string{`<select name="per_page">`}},
 		{name: "jobs", component: JobsListContent(JobListPageData{}), controls: []string{`<select name="status_id">`}},
 		{name: "projects", component: ProjectListContent(ProjectListPageData{}), controls: []string{`<select name="status_id">`}},
 		{name: "estimates", component: EstimatesListContent(EstimateListPageData{}), controls: []string{`<select name="status_id">`}},
