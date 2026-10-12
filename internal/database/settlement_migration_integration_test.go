@@ -40,7 +40,7 @@ func TestSettlementMigration042Integration(t *testing.T) {
 		if err := db.Pool.QueryRow(ctx, `INSERT INTO invoices(customer_id,status_id,invoice_number,title,invoice_date,due_date,line_items,tax_rate,payments) VALUES($1,$2,1,'Legacy',CURRENT_DATE,CURRENT_DATE,'[]','0','[]') RETURNING id`, customerID, statusID).Scan(&invoiceID); err != nil {
 			t.Fatal(err)
 		}
-		if err := db.Migrate(ctx, MigrationFS()); err != nil {
+		if err := db.Migrate(ctx, settlementMigrationFS(t)); err != nil {
 			t.Fatalf("migrate 042: %v", err)
 		}
 		var companyID, actorCompanyID int64
@@ -82,7 +82,7 @@ func TestSettlementMigration042Integration(t *testing.T) {
 		if _, err := db.Pool.Exec(ctx, `INSERT INTO customers(display_name) VALUES('Unowned')`); err != nil {
 			t.Fatal(err)
 		}
-		if err := db.Migrate(ctx, MigrationFS()); err != nil {
+		if err := db.Migrate(ctx, settlementMigrationFS(t)); err != nil {
 			t.Fatalf("migrate 042: %v", err)
 		}
 		var owner int64
@@ -103,7 +103,7 @@ func TestSettlementMigration042Integration(t *testing.T) {
 		if _, err := db.Pool.Exec(ctx, `INSERT INTO companies(name,slug) VALUES('One','one'),('Two','two')`); err != nil {
 			t.Fatal(err)
 		}
-		err := db.Migrate(ctx, MigrationFS())
+		err := db.Migrate(ctx, settlementMigrationFS(t))
 		if err == nil || !strings.Contains(err.Error(), "ambiguous tenant ownership with 2 companies") || !strings.Contains(err.Error(), "company_settings=1") {
 			t.Fatalf("migration error = %v", err)
 		}
@@ -123,22 +123,22 @@ func TestSettlementMigration042Integration(t *testing.T) {
 	t.Run("converts valid legacy settlement history", func(t *testing.T) {
 		db, ctx := migrationDatabaseThrough041(t, dsn)
 		invoiceID := seedLegacySettlement(t, ctx, db, `[{"id":"p1","amount":70,"method":"cash","date":"2026-01-01"},{"id":"p2","amount":50,"method":"check","date":"2026-01-02"}]`, `[{"title":"Work","quantity":1,"unit_price":100}]`, "Paid")
-		if err := db.Migrate(ctx, MigrationFS()); err != nil {
+		if err := db.Migrate(ctx, settlementMigrationFS(t)); err != nil {
 			t.Fatalf("migrate 042: %v", err)
 		}
 		var allocated, credit int64
 		var state, status string
-		if err := db.Pool.QueryRow(ctx, `SELECT coalesce(sum(a.amount_cents),0),coalesce((SELECT sum(original_amount_cents) FROM customer_credits),0),i.settlement_state,s.category_key FROM invoices i JOIN statuses s ON s.id=i.status_id LEFT JOIN payment_invoice_allocations a ON a.invoice_id=i.id WHERE i.id=$1 GROUP BY i.settlement_state,s.category_key`, invoiceID).Scan(&allocated, &credit, &state, &status); err != nil {
+		if err := db.Pool.QueryRow(ctx, `SELECT coalesce(sum(a.amount_cents),0),coalesce((SELECT sum(original_amount_cents) FROM customer_credits),0),i.settlement_state,s.name FROM invoices i JOIN statuses s ON s.id=i.status_id LEFT JOIN payment_invoice_allocations a ON a.invoice_id=i.id WHERE i.id=$1 GROUP BY i.settlement_state,s.name`, invoiceID).Scan(&allocated, &credit, &state, &status); err != nil {
 			t.Fatal(err)
 		}
-		if allocated != 10000 || credit != 2000 || state != "paid" || status != "invoice:sent" {
+		if allocated != 10000 || credit != 2000 || state != "paid" || status != "Sent" {
 			t.Fatalf("allocated=%d credit=%d state=%s status=%s", allocated, credit, state, status)
 		}
 		var paymentsColumn, staging, removedStatuses bool
 		_ = db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='invoices' AND column_name='payments')`).Scan(&paymentsColumn)
 		_ = db.Pool.QueryRow(ctx, `SELECT to_regclass('settlement_migration_payments') IS NOT NULL`).Scan(&staging)
-		_ = db.Pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE w.object_type='invoice' AND s.category_key IN ('invoice:paid','invoice:partially_paid'))`).Scan(&removedStatuses)
-		if paymentsColumn || staging || removedStatuses {
+		_ = db.Pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE w.object_type='invoice' AND s.name IN ('Paid','Partially Paid'))`).Scan(&removedStatuses)
+		if paymentsColumn || staging || !removedStatuses {
 			t.Fatalf("paymentsColumn=%v staging=%v removedStatuses=%v", paymentsColumn, staging, removedStatuses)
 		}
 		if _, err := db.Pool.Exec(ctx, `UPDATE invoice_payments SET notes='changed'`); err == nil || !strings.Contains(err.Error(), "immutable") {
@@ -161,7 +161,7 @@ func TestSettlementMigration042Integration(t *testing.T) {
 		t.Run("rejects "+tc.name, func(t *testing.T) {
 			db, ctx := migrationDatabaseThrough041(t, dsn)
 			seedLegacySettlement(t, ctx, db, tc.payments, tc.items, tc.status)
-			if err := db.Migrate(ctx, MigrationFS()); err == nil {
+			if err := db.Migrate(ctx, settlementMigrationFS(t)); err == nil {
 				t.Fatal("migration unexpectedly succeeded")
 			}
 		})
@@ -192,7 +192,7 @@ func TestSettlementMigration042Integration(t *testing.T) {
 			if err := tc.mutate(ctx, db, invoiceID); err != nil {
 				t.Fatal(err)
 			}
-			if err := db.Migrate(ctx, MigrationFS()); err == nil {
+			if err := db.Migrate(ctx, settlementMigrationFS(t)); err == nil {
 				t.Fatal("migration unexpectedly succeeded")
 			}
 		})
@@ -265,7 +265,7 @@ func TestConversionMigration043BackfillsLegacyRelationOwnershipIntegration(t *te
 	if _, err = db.Pool.Exec(ctx, `INSERT INTO tag_links(company_id,tag_id,object_type,object_id) VALUES(NULL,$1,'estimate',$2)`, tagID, estimateID); err != nil {
 		t.Fatal(err)
 	}
-	if err = db.Migrate(ctx, MigrationFS()); err != nil {
+	if err = db.Migrate(ctx, settlementMigrationFS(t)); err != nil {
 		t.Fatalf("migrate 043: %v", err)
 	}
 	for _, table := range []string{"files", "comments", "activity_logs", "tag_links"} {

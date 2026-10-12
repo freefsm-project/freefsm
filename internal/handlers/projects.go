@@ -117,7 +117,7 @@ func (h *ProjectHandler) Show(w http.ResponseWriter, r *http.Request) {
 		StatusID:             projectStatusID(p),
 		StatusName:           statusesMap[projectStatusID(p)],
 		StatusColor:          statusColor(statuses, p.StatusID),
-		CompletionPercentage: p.CompletionPercentage,
+		CompletionPercentage: projectProgress(p, statuses),
 		Notes:                p.Notes,
 	}
 	if p.LocationID != nil {
@@ -576,6 +576,15 @@ func (h *ProjectHandler) formDataFromProject(ctx context.Context, p *ent.Project
 	}
 }
 
+func projectProgress(p *ent.Project, statuses []*ent.Status) float64 {
+	for _, status := range statuses {
+		if p.StatusID != nil && status.ID == *p.StatusID && status.CategoryKey == "project:completed" {
+			return 100
+		}
+	}
+	return p.CompletionPercentage
+}
+
 func projectRow(ctx context.Context, p *ent.Project, statuses []*ent.Status, custMap map[int64]string) templates.ProjectRow {
 	return templates.ProjectRow{
 		ID:                   p.ID,
@@ -586,7 +595,7 @@ func projectRow(ctx context.Context, p *ent.Project, statuses []*ent.Status, cus
 		StatusID:             projectStatusID(p),
 		StatusName:           statusName(statuses, p.StatusID),
 		StatusColor:          statusColor(statuses, p.StatusID),
-		CompletionPercentage: p.CompletionPercentage,
+		CompletionPercentage: projectProgress(p, statuses),
 		StartTime:            formatProjectDisplayDate(ctx, p.StartTime),
 		EndTime:              formatProjectDisplayDate(ctx, p.EndTime),
 	}

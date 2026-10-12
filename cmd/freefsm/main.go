@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"flag"
 	"io"
@@ -47,6 +48,7 @@ func run() error {
 	configFile := flag.String("config", "", "path to config file (optional)")
 	seedFlag := flag.Bool("seed", false, "seed demo data and exit")
 	recoverAdmin := flag.String("recover-admin", "", "reset an existing enabled Admin by email; read password and confirmation from stdin, then exit")
+	workflowPreflight := flag.String("workflow-preflight", "", "write pre-044 workflow evidence to a new restricted JSON file and exit")
 	flag.Parse()
 	if *recoverAdmin != "" && *seedFlag {
 		return errors.New("-recover-admin cannot be combined with -seed")
@@ -168,6 +170,23 @@ func run() error {
 		return err
 	}
 	defer db.Close()
+	if *workflowPreflight != "" {
+		inventory, err := db.WorkflowPreflight(startupCtx)
+		if err != nil {
+			return err
+		}
+		file, err := os.OpenFile(*workflowPreflight, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+		if err != nil {
+			return err
+		}
+		encoder := json.NewEncoder(file)
+		encoder.SetIndent("", "  ")
+		if err = encoder.Encode(inventory); err != nil {
+			file.Close()
+			return err
+		}
+		return file.Close()
+	}
 	pool = db.Pool
 	slog.Info("database connected")
 	preflightCtx, preflightCancel := context.WithTimeout(startupCtx, 15*time.Second)

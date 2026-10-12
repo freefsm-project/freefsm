@@ -48,336 +48,346 @@ func StatusSettingsPage(p StatusSettingsPageData) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div data-status-settings><header class=\"status-settings-header\"><div><a class=\"status-settings-back\" href=\"/settings\">&larr; Back to Settings</a><h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<fieldset")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			if p.ReadOnly {
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " disabled")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "><div data-status-settings><header class=\"status-settings-header\"><div><a class=\"status-settings-back\" href=\"/settings\">&larr; Back to Settings</a><h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(statusSettingsTitle(p.ObjectType))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 16, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 17, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</h2>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</h2>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.ObjectType == "invoice" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<p>Customize the label and color of each fixed invoice state. Payment states update automatically.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<p>Customize the label and color of each fixed invoice state. Payment states update automatically.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<p>Keep each workflow easy to scan. Drag statuses to reorder or move them between fixed categories.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<p>Keep each workflow easy to scan. Drag statuses to reorder or move them between fixed categories.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.ObjectType != "invoice" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<button type=\"button\" class=\"status-create-button\" data-open-dialog=\"status-create-dialog\">Create Custom Status</button>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<button type=\"button\" class=\"status-create-button\" data-open-dialog=\"status-create-dialog\">Create Custom Status</button>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</header><div class=\"status-category-scroll\" data-status-board data-object-type=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</header><div class=\"status-category-scroll\" data-status-board data-object-type=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(p.ObjectType)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 27, Col: 87}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 28, Col: 87}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"><div class=\"status-category-board\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\"><div class=\"status-category-board\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, category := range p.Categories {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<section class=\"status-category\" data-category=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<section class=\"status-category\" data-category=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var5 string
 				templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(category.Key)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 30, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 31, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "\"><header><h3>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\"><header><h3>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var6 string
 				templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(category.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 32, Col: 27}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 33, Col: 27}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "</h3>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "</h3>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if category.Automatic {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "<span class=\"status-automatic\">Automatic</span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<span class=\"status-automatic\">Automatic</span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				} else {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<small>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<small>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(statusCount(len(category.Statuses)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 36, Col: 52}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 37, Col: 52}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "</small>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</small>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "</header><div class=\"status-category-list\" data-status-list>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "</header><div class=\"status-category-list\" data-status-list>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, status := range category.Statuses {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "<button type=\"button\" class=\"status-chip\" style=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<button type=\"button\" class=\"status-chip\" style=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var8 string
 					templ_7745c5c3_Var8, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(statusAccent(status.Color))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 41, Col: 84}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 42, Col: 84}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" data-open-dialog=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" data-open-dialog=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var9 string
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("status-edit-%d", status.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 41, Col: 146}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 42, Col: 146}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" aria-label=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" aria-label=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var10 string
 					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Edit %s status", status.Name))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 41, Col: 204}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 42, Col: 204}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var10)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\" data-status-id=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" data-status-id=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", status.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 41, Col: 252}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 42, Col: 252}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "\" data-category=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" data-category=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var12 string
 					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(category.Key)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 41, Col: 283}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 42, Col: 283}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "\" data-usage=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\" data-usage=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", status.Usage))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 41, Col: 330}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 42, Col: 330}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "\" data-default=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "\" data-default=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var14 string
 					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%t", status.Default))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 41, Col: 381}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 42, Col: 381}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					if p.ObjectType != "invoice" {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, " draggable=\"true\"")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, " draggable=\"true\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "><span class=\"status-chip-label\"><span class=\"status-chip-name\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "><span class=\"status-chip-label\"><span class=\"status-chip-name\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var15 string
 					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(status.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 42, Col: 85}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 43, Col: 85}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "</span></span> <span class=\"status-chip-facts\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "</span></span> <span class=\"status-chip-facts\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					if status.Default {
-						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 27, "<span class=\"status-default-marker\">Default</span> ")
+						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<span class=\"status-default-marker\">Default</span> ")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 28, "<span>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "<span>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var16 string
 					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(usageCount(status.Usage))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 47, Col: 42}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 48, Col: 42}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "</span></span> <span class=\"status-edit-button\" aria-hidden=\"true\">Edit</span></button>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</span></span> <span class=\"status-edit-button\" aria-hidden=\"true\">Edit</span></button>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 30, "</div></section>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "</div></section>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 31, "</div></div><div class=\"status-dialog-container\" data-status-dialogs>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</div></div><div class=\"status-dialog-container\" data-status-dialogs>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if p.ObjectType != "invoice" {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 32, "<dialog id=\"status-create-dialog\" class=\"status-dialog\" aria-labelledby=\"status-create-title\"><form method=\"post\" action=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<dialog id=\"status-create-dialog\" class=\"status-dialog\" aria-labelledby=\"status-create-title\"><form method=\"post\" action=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var17 templ.SafeURL
 				templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL("/settings/statuses/" + p.ObjectType))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 60, Col: 80}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 61, Col: 80}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "\" class=\"status-dialog-form status-create-form\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "\" class=\"status-dialog-form status-create-form\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var18 string
 				templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 61, Col: 66}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 62, Col: 66}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "\"><header><h3 id=\"status-create-title\">Create Custom Status</h3><button type=\"button\" class=\"status-dialog-close\" data-close-dialog aria-label=\"Close create status dialog\">&times;</button></header><label>Category<select name=\"category\" required>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\"><header><h3 id=\"status-create-title\">Create Custom Status</h3><button type=\"button\" class=\"status-dialog-close\" data-close-dialog aria-label=\"Close create status dialog\">&times;</button></header><label>Category<select name=\"category\" required>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				for _, category := range p.Categories {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 35, "<option value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "<option value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var19 string
 					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.ResolveAttributeValue(category.Key)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 65, Col: 35}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 66, Col: 35}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var19)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var20 string
 					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(category.Label)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 65, Col: 54}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 66, Col: 54}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 37, "</option>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "</option>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 38, "</select></label> <label>Status label<input name=\"name\" required autocomplete=\"off\" autofocus></label> <label>Color<input type=\"color\" name=\"color\" value=\"#6B7280\"></label><footer><button type=\"button\" class=\"secondary outline\" data-close-dialog>Cancel</button><button type=\"submit\">Create status</button></footer></form></dialog> ")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "</select></label> <label>Status label<input name=\"name\" required autocomplete=\"off\" autofocus></label> <label>Color<input type=\"color\" name=\"color\" value=\"#6B7280\"></label><footer><button type=\"button\" class=\"secondary outline\" data-close-dialog>Cancel</button><button type=\"submit\">Create status</button></footer></form></dialog> ")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -390,7 +400,7 @@ func StatusSettingsPage(p StatusSettingsPageData) templ.Component {
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 39, "<p class=\"status-noscript-note\"><strong>JavaScript is unavailable.</strong> Status forms are expanded below so you can still manage this workflow.</p></div><script>\n\t\t\t(function () {\n\t\t\t\tconst root = document.currentScript.closest('[data-status-settings]');\n\t\t\t\tif (!root || root.dataset.statusSettingsInitialized === 'true') return;\n\t\t\t\troot.dataset.statusSettingsInitialized = 'true';\n\t\t\t\tconst board = root.querySelector('[data-status-board]');\n\t\t\t\tfunction dialogById(id) { return root.querySelector('#' + CSS.escape(id)); }\n\t\t\t\tfunction moveForm(dialog) { return dialog.querySelector('.status-move-form'); }\n\t\t\t\tfunction syncMoveState(form) {\n\t\t\t\t\tif (!form) return;\n\t\t\t\t\tconst crossCategory = form.elements.category.value !== form.dataset.originalCategory;\n\t\t\t\t\tconst needsConfirmation = crossCategory && Number(form.dataset.usage) > 0;\n\t\t\t\t\tconst needsReplacement = crossCategory && form.dataset.default === 'true';\n\t\t\t\t\tconst warning = form.querySelector('.status-cross-category-note');\n\t\t\t\t\tconst confirmGroup = form.querySelector('.status-confirm');\n\t\t\t\t\tconst replacementGroup = form.querySelector('.status-source-replacement');\n\t\t\t\t\twarning.hidden = !crossCategory;\n\t\t\t\t\tconfirmGroup.hidden = !needsConfirmation;\n\t\t\t\t\treplacementGroup.hidden = !needsReplacement;\n\t\t\t\t\tform.elements.confirm_in_use.required = needsConfirmation;\n\t\t\t\t\tform.elements.source_replacement_id.required = needsReplacement;\n\t\t\t\t\tif (!needsConfirmation) form.elements.confirm_in_use.checked = false;\n\t\t\t\t\tif (!needsReplacement) form.elements.source_replacement_id.value = '';\n\t\t\t\t}\n\t\t\t\tfunction resetDialog(dialog) {\n\t\t\t\t\tconst form = moveForm(dialog);\n\t\t\t\t\tif (!form) return;\n\t\t\t\t\tform.elements.category.value = form.dataset.originalCategory;\n\t\t\t\t\tform.elements.order.value = form.dataset.originalOrder;\n\t\t\t\t\tform.elements.confirm_in_use.checked = false;\n\t\t\t\t\tform.elements.source_replacement_id.value = '';\n\t\t\t\t\tsyncMoveState(form);\n\t\t\t\t}\n\t\t\t\tfunction openDialog(dialog) {\n\t\t\t\t\tresetDialog(dialog);\n\t\t\t\t\tdialog.showModal();\n\t\t\t\t\tconst field = dialog.querySelector('[autofocus]');\n\t\t\t\t\tif (field) field.focus();\n\t\t\t\t}\n\t\t\t\tlet suppressUntil = 0;\n\t\t\t\troot.addEventListener('click', function (event) {\n\t\t\t\t\tconst opener = event.target.closest('[data-open-dialog]');\n\t\t\t\t\tif (opener) {\n\t\t\t\t\t\tif (opener.matches('.status-chip') && Date.now() < suppressUntil) { suppressUntil = 0; return; }\n\t\t\t\t\t\tconst dialog = dialogById(opener.dataset.openDialog);\n\t\t\t\t\t\tif (dialog && !dialog.open) openDialog(dialog);\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst closer = event.target.closest('[data-close-dialog]');\n\t\t\t\t\tif (closer) { closer.closest('dialog').close(); return; }\n\t\t\t\t});\n\t\t\t\troot.querySelectorAll('.status-dialog').forEach(function (dialog) {\n\t\t\t\t\tdialog.addEventListener('click', function (event) { if (event.target === dialog) dialog.close(); });\n\t\t\t\t\tdialog.addEventListener('close', function () { resetDialog(dialog); });\n\t\t\t\t});\n\t\t\t\troot.addEventListener('change', function (event) {\n\t\t\t\t\tif (event.target.matches('.status-move-form [name=\"category\"]')) syncMoveState(event.target.form);\n\t\t\t\t});\n\t\t\t\tif (!board || board.dataset.objectType === 'invoice') return;\n\t\t\t\tlet dragged = null;\n\t\t\t\tboard.addEventListener('dragstart', function (event) {\n\t\t\t\t\tdragged = event.target.closest('[data-status-id]');\n\t\t\t\t\tif (dragged) { dragged.classList.add('is-dragging'); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', dragged.dataset.statusId); }\n\t\t\t\t});\n\t\t\t\tboard.addEventListener('dragend', function () { suppressUntil = Date.now() + 200; clearDragState(); });\n\t\t\t\tboard.addEventListener('dragover', function (event) {\n\t\t\t\t\tconst list = event.target.closest('[data-status-list]');\n\t\t\t\t\tif (!list || !dragged) return;\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\tevent.dataTransfer.dropEffect = 'move';\n\t\t\t\t\tboard.querySelectorAll('.is-drop-target').forEach(function (el) { el.classList.remove('is-drop-target'); });\n\t\t\t\t\tboard.querySelectorAll('.drop-before,.drop-after').forEach(function (el) { el.classList.remove('drop-before','drop-after'); });\n\t\t\t\t\tlist.classList.add('is-drop-target');\n\t\t\t\t\tconst target = event.target.closest('[data-status-id]');\n\t\t\t\t\tif (target && target !== dragged) target.classList.add(event.clientY < target.getBoundingClientRect().top + target.offsetHeight / 2 ? 'drop-before' : 'drop-after');\n\t\t\t\t});\n\t\t\t\tboard.addEventListener('drop', function (event) {\n\t\t\t\t\tconst list = event.target.closest('[data-status-list]');\n\t\t\t\t\tif (!list || !dragged) return;\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\tconst target = event.target.closest('[data-status-id]');\n\t\t\t\t\tif (target === dragged) { suppressUntil = Date.now() + 200; clearDragState(); return; }\n\t\t\t\t\tconst destination = list.closest('[data-category]').dataset.category;\n\t\t\t\t\tconst rows = Array.from(list.querySelectorAll('[data-status-id]')).filter(function (row) { return row !== dragged; });\n\t\t\t\t\tlet position = rows.length + 1;\n\t\t\t\t\tif (target && target !== dragged) {\n\t\t\t\t\t\tconst targetIndex = rows.indexOf(target);\n\t\t\t\t\t\tposition = targetIndex + (event.clientY >= target.getBoundingClientRect().top + target.offsetHeight / 2 ? 2 : 1);\n\t\t\t\t\t}\n\t\t\t\t\tconst dialog = dialogById('status-edit-' + dragged.dataset.statusId);\n\t\t\t\t\tconst form = moveForm(dialog);\n\t\t\t\t\tresetDialog(dialog);\n\t\t\t\t\tform.elements.category.value = destination;\n\t\t\t\t\tform.elements.order.value = position;\n\t\t\t\t\tconst crossCategory = destination !== dragged.dataset.category;\n\t\t\t\t\tsyncMoveState(form);\n\t\t\t\t\tif (crossCategory) {\n\t\t\t\t\t\tdialog.showModal();\n\t\t\t\t\t\tconst field = dialog.querySelector('[autofocus]');\n\t\t\t\t\t\tif (field) field.focus();\n\t\t\t\t\t} else {\n\t\t\t\t\t\tform.requestSubmit();\n\t\t\t\t\t}\n\t\t\t\t\tsuppressUntil = Date.now() + 200;\n\t\t\t\t\tclearDragState();\n\t\t\t\t});\n\t\t\t\tfunction clearDragState() {\n\t\t\t\t\tboard.querySelectorAll('.is-dragging,.is-drop-target,.drop-before,.drop-after').forEach(function (el) { el.classList.remove('is-dragging','is-drop-target','drop-before','drop-after'); });\n\t\t\t\t\tdragged = null;\n\t\t\t\t}\n\t\t\t})();\n\t\t</script></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "<p class=\"status-noscript-note\"><strong>JavaScript is unavailable.</strong> Status forms are expanded below so you can still manage this workflow.</p></div><script>\n\t\t\t(function () {\n\t\t\t\tconst root = document.currentScript.closest('[data-status-settings]');\n\t\t\t\tif (!root || root.dataset.statusSettingsInitialized === 'true') return;\n\t\t\t\troot.dataset.statusSettingsInitialized = 'true';\n\t\t\t\tconst board = root.querySelector('[data-status-board]');\n\t\t\t\tfunction dialogById(id) { return root.querySelector('#' + CSS.escape(id)); }\n\t\t\t\tfunction moveForm(dialog) { return dialog.querySelector('.status-move-form'); }\n\t\t\t\tfunction syncMoveState(form) {\n\t\t\t\t\tif (!form) return;\n\t\t\t\t\tconst crossCategory = form.elements.category.value !== form.dataset.originalCategory;\n\t\t\t\t\tconst needsConfirmation = crossCategory && Number(form.dataset.usage) > 0;\n\t\t\t\t\tconst needsReplacement = crossCategory && form.dataset.default === 'true';\n\t\t\t\t\tconst warning = form.querySelector('.status-cross-category-note');\n\t\t\t\t\tconst confirmGroup = form.querySelector('.status-confirm');\n\t\t\t\t\tconst replacementGroup = form.querySelector('.status-source-replacement');\n\t\t\t\t\twarning.hidden = !crossCategory;\n\t\t\t\t\tconfirmGroup.hidden = !needsConfirmation;\n\t\t\t\t\treplacementGroup.hidden = !needsReplacement;\n\t\t\t\t\tform.elements.confirm_in_use.required = needsConfirmation;\n\t\t\t\t\tform.elements.source_replacement_id.required = needsReplacement;\n\t\t\t\t\tif (!needsConfirmation) form.elements.confirm_in_use.checked = false;\n\t\t\t\t\tif (!needsReplacement) form.elements.source_replacement_id.value = '';\n\t\t\t\t}\n\t\t\t\tfunction resetDialog(dialog) {\n\t\t\t\t\tconst form = moveForm(dialog);\n\t\t\t\t\tif (!form) return;\n\t\t\t\t\tform.elements.category.value = form.dataset.originalCategory;\n\t\t\t\t\tform.elements.order.value = form.dataset.originalOrder;\n\t\t\t\t\tform.elements.confirm_in_use.checked = false;\n\t\t\t\t\tform.elements.source_replacement_id.value = '';\n\t\t\t\t\tsyncMoveState(form);\n\t\t\t\t}\n\t\t\t\tfunction openDialog(dialog) {\n\t\t\t\t\tresetDialog(dialog);\n\t\t\t\t\tdialog.showModal();\n\t\t\t\t\tconst field = dialog.querySelector('[autofocus]');\n\t\t\t\t\tif (field) field.focus();\n\t\t\t\t}\n\t\t\t\tlet suppressUntil = 0;\n\t\t\t\troot.addEventListener('click', function (event) {\n\t\t\t\t\tconst opener = event.target.closest('[data-open-dialog]');\n\t\t\t\t\tif (opener) {\n\t\t\t\t\t\tif (opener.matches('.status-chip') && Date.now() < suppressUntil) { suppressUntil = 0; return; }\n\t\t\t\t\t\tconst dialog = dialogById(opener.dataset.openDialog);\n\t\t\t\t\t\tif (dialog && !dialog.open) openDialog(dialog);\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tconst closer = event.target.closest('[data-close-dialog]');\n\t\t\t\t\tif (closer) { closer.closest('dialog').close(); return; }\n\t\t\t\t});\n\t\t\t\troot.querySelectorAll('.status-dialog').forEach(function (dialog) {\n\t\t\t\t\tdialog.addEventListener('click', function (event) { if (event.target === dialog) dialog.close(); });\n\t\t\t\t\tdialog.addEventListener('close', function () { resetDialog(dialog); });\n\t\t\t\t});\n\t\t\t\troot.addEventListener('change', function (event) {\n\t\t\t\t\tif (event.target.matches('.status-move-form [name=\"category\"]')) syncMoveState(event.target.form);\n\t\t\t\t});\n\t\t\t\tif (!board || board.dataset.objectType === 'invoice') return;\n\t\t\t\tlet dragged = null;\n\t\t\t\tboard.addEventListener('dragstart', function (event) {\n\t\t\t\t\tdragged = event.target.closest('[data-status-id]');\n\t\t\t\t\tif (dragged) { dragged.classList.add('is-dragging'); event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', dragged.dataset.statusId); }\n\t\t\t\t});\n\t\t\t\tboard.addEventListener('dragend', function () { suppressUntil = Date.now() + 200; clearDragState(); });\n\t\t\t\tboard.addEventListener('dragover', function (event) {\n\t\t\t\t\tconst list = event.target.closest('[data-status-list]');\n\t\t\t\t\tif (!list || !dragged) return;\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\tevent.dataTransfer.dropEffect = 'move';\n\t\t\t\t\tboard.querySelectorAll('.is-drop-target').forEach(function (el) { el.classList.remove('is-drop-target'); });\n\t\t\t\t\tboard.querySelectorAll('.drop-before,.drop-after').forEach(function (el) { el.classList.remove('drop-before','drop-after'); });\n\t\t\t\t\tlist.classList.add('is-drop-target');\n\t\t\t\t\tconst target = event.target.closest('[data-status-id]');\n\t\t\t\t\tif (target && target !== dragged) target.classList.add(event.clientY < target.getBoundingClientRect().top + target.offsetHeight / 2 ? 'drop-before' : 'drop-after');\n\t\t\t\t});\n\t\t\t\tboard.addEventListener('drop', function (event) {\n\t\t\t\t\tconst list = event.target.closest('[data-status-list]');\n\t\t\t\t\tif (!list || !dragged) return;\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\tconst target = event.target.closest('[data-status-id]');\n\t\t\t\t\tif (target === dragged) { suppressUntil = Date.now() + 200; clearDragState(); return; }\n\t\t\t\t\tconst destination = list.closest('[data-category]').dataset.category;\n\t\t\t\t\tconst rows = Array.from(list.querySelectorAll('[data-status-id]')).filter(function (row) { return row !== dragged; });\n\t\t\t\t\tlet position = rows.length + 1;\n\t\t\t\t\tif (target && target !== dragged) {\n\t\t\t\t\t\tconst targetIndex = rows.indexOf(target);\n\t\t\t\t\t\tposition = targetIndex + (event.clientY >= target.getBoundingClientRect().top + target.offsetHeight / 2 ? 2 : 1);\n\t\t\t\t\t}\n\t\t\t\t\tconst dialog = dialogById('status-edit-' + dragged.dataset.statusId);\n\t\t\t\t\tconst form = moveForm(dialog);\n\t\t\t\t\tresetDialog(dialog);\n\t\t\t\t\tform.elements.category.value = destination;\n\t\t\t\t\tform.elements.order.value = position;\n\t\t\t\t\tconst crossCategory = destination !== dragged.dataset.category;\n\t\t\t\t\tsyncMoveState(form);\n\t\t\t\t\tif (crossCategory) {\n\t\t\t\t\t\tdialog.showModal();\n\t\t\t\t\t\tconst field = dialog.querySelector('[autofocus]');\n\t\t\t\t\t\tif (field) field.focus();\n\t\t\t\t\t} else {\n\t\t\t\t\t\tform.requestSubmit();\n\t\t\t\t\t}\n\t\t\t\t\tsuppressUntil = Date.now() + 200;\n\t\t\t\t\tclearDragState();\n\t\t\t\t});\n\t\t\t\tfunction clearDragState() {\n\t\t\t\t\tboard.querySelectorAll('.is-dragging,.is-drop-target,.drop-before,.drop-after').forEach(function (el) { el.classList.remove('is-dragging','is-drop-target','drop-before','drop-after'); });\n\t\t\t\t\tdragged = null;\n\t\t\t\t}\n\t\t\t})();\n\t\t</script></div></fieldset>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -425,520 +435,520 @@ func statusEditDialog(p StatusSettingsPageData, category StatusCategoryColumn, s
 			templ_7745c5c3_Var21 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 40, "<dialog id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "<dialog id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("status-edit-%d", status.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 198, Col: 54}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 200, Col: 54}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 41, "\" class=\"status-dialog\" aria-labelledby=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\" class=\"status-dialog\" aria-labelledby=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var23 string
 		templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("status-edit-title-%d", status.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 198, Col: 143}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 200, Col: 143}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var23)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "\"><div class=\"status-dialog-content\"><header><div><small>Edit status</small><h3 id=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "\"><div class=\"status-dialog-content\"><header><div><small>Edit status</small><h3 id=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var24 string
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("status-edit-title-%d", status.ID))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 200, Col: 97}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 202, Col: 97}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 43, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var25 string
 		templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(status.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 200, Col: 113}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 202, Col: 113}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</h3></div><button type=\"button\" class=\"status-dialog-close\" data-close-dialog aria-label=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "</h3></div><button type=\"button\" class=\"status-dialog-close\" data-close-dialog aria-label=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var26 string
 		templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Close edit %s dialog", status.Name))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 200, Col: 255}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 202, Col: 255}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 45, "\">&times;</button></header><form method=\"post\" action=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\">&times;</button></header><form method=\"post\" action=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var27 templ.SafeURL
 		templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/settings/statuses/%s/%d", p.ObjectType, status.ID)))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 201, Col: 107}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 203, Col: 107}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 46, "\" class=\"status-dialog-section\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\" class=\"status-dialog-section\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var28 string
 		templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 202, Col: 65}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 204, Col: 65}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 47, "\"><div class=\"status-edit-fields\"><label>Status label<input name=\"name\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\"><div class=\"status-edit-fields\"><label>Status label<input name=\"name\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(status.Name)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 203, Col: 93}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 205, Col: 93}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 48, "\" required autofocus></label><label>Color<input type=\"color\" name=\"color\" value=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "\" required autofocus></label><label>Color<input type=\"color\" name=\"color\" value=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(statusColor(status.Color))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 203, Col: 202}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 205, Col: 202}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 49, "\"></label></div><button type=\"submit\">Save appearance</button></form><section class=\"status-dialog-section status-facts\" aria-label=\"Status facts\"><h4>Status facts</h4><p><span>Category <strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "\"></label></div><button type=\"submit\">Save appearance</button></form><section class=\"status-dialog-section status-facts\" aria-label=\"Status facts\"><h4>Status facts</h4><p><span>Category <strong>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var31 string
 		templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(category.Label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 206, Col: 144}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 208, Col: 144}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 50, "</strong></span><span>Usage <strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</strong></span><span>Usage <strong>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(usageCount(status.Usage))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 206, Col: 208}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 208, Col: 208}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 51, "</strong></span><span>Default <strong>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "</strong></span><span>Default <strong>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(defaultLabel(status.Default))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 206, Col: 278}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 208, Col: 278}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 52, "</strong></span></p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "</strong></span></p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if p.ObjectType != "invoice" && !status.Default {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 53, "<form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "<form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var34 templ.SafeURL
 			templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/settings/statuses/%s/%d/default", p.ObjectType, status.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 208, Col: 117}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 210, Col: 117}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 54, "\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var35 string
 			templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 208, Col: 181}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 210, Col: 181}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var35)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 55, "\"><button type=\"submit\" class=\"outline\">Make category default</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "\"><button type=\"submit\" class=\"outline\">Make category default</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 56, "</section>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "</section>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if p.ObjectType != "invoice" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 57, "<section class=\"status-dialog-section\"><h4>Move or reorder</h4><p class=\"status-section-help\">Use Up and Down for an accessible same-category reorder, or choose a destination and position.</p><form class=\"status-move-form\" method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "<section class=\"status-dialog-section\"><h4>Move or reorder</h4><p class=\"status-section-help\">Use Up and Down for an accessible same-category reorder, or choose a destination and position.</p><form class=\"status-move-form\" method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var36 templ.SafeURL
 			templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/settings/statuses/%s/%d/move", p.ObjectType, status.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 213, Col: 139}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 215, Col: 139}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 58, "\" hx-confirm=\"Move this status and update its workflow category?\" data-original-category=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "\" hx-confirm=\"Move this status and update its workflow category?\" data-original-category=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(category.Key)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 213, Col: 243}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 215, Col: 243}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 59, "\" data-original-order=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "\" data-original-order=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", status.Order))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 213, Col: 299}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 215, Col: 299}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 60, "\" data-default=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "\" data-default=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var39 string
 			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%t", status.Default))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 213, Col: 350}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 215, Col: 350}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 61, "\" data-usage=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "\" data-usage=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var40 string
 			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", status.Usage))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 213, Col: 397}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 215, Col: 397}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 62, "\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var41 string
 			templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 214, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 216, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 63, "\"><div class=\"status-move-fields\"><label>Destination category<select name=\"category\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "\"><div class=\"status-move-fields\"><label>Destination category<select name=\"category\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, destination := range p.Categories {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 64, "<option value=\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, "<option value=\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var42 string
 				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(destination.Key)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 217, Col: 39}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 219, Col: 39}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 65, "\"")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, "\"")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				if destination.Key == category.Key {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 66, " selected")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, " selected")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 67, ">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, ">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var43 string
 				templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.JoinStringErrs(destination.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 217, Col: 107}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 219, Col: 107}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var43))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 68, "</option>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "</option>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 69, "</select></label><label>Position<input type=\"number\" min=\"1\" name=\"order\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "</select></label><label>Position<input type=\"number\" min=\"1\" name=\"order\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var44 string
 			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", status.Order))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 219, Col: 119}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 221, Col: 119}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 70, "\"></label></div><div class=\"status-cross-category-note\" hidden><strong>Cross-category move</strong><p>This changes what the status means in the workflow. Review the safeguards below before moving it.</p></div><label class=\"status-source-replacement\" hidden>Source default replacement<select name=\"source_replacement_id\"><option value=\"\">Select replacement</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "\"></label></div><div class=\"status-cross-category-note\" hidden><strong>Cross-category move</strong><p>This changes what the status means in the workflow. Review the safeguards below before moving it.</p></div><label class=\"status-source-replacement\" hidden>Source default replacement<select name=\"source_replacement_id\"><option value=\"\">Select replacement</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, replacement := range category.Statuses {
 				if replacement.ID != status.ID {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 71, "<option value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "<option value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var45 string
 					templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", replacement.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 224, Col: 58}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 226, Col: 58}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 72, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var46 string
 					templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinStringErrs(replacement.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 224, Col: 79}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 226, Col: 79}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 73, "</option>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "</option>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 74, "</select></label> <label class=\"status-confirm\" hidden><input type=\"checkbox\" name=\"confirm_in_use\" value=\"true\"> Confirm category change for records using this status</label><div class=\"status-order-actions\"><button type=\"submit\" class=\"outline\" name=\"requested_order\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, "</select></label> <label class=\"status-confirm\" hidden><input type=\"checkbox\" name=\"confirm_in_use\" value=\"true\"> Confirm category change for records using this status</label><div class=\"status-order-actions\"><button type=\"submit\" class=\"outline\" name=\"requested_order\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var47 string
 			templ_7745c5c3_Var47, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", index))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 229, Col: 133}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 231, Col: 133}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var47)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 75, "\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, "\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if index == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 76, " disabled")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, " disabled")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 77, " aria-label=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, " aria-label=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var48 string
 			templ_7745c5c3_Var48, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Move %s up", status.Name))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 229, Col: 212}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 231, Col: 212}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var48)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 78, "\">Up</button><button type=\"submit\" class=\"outline\" name=\"requested_order\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, "\">Up</button><button type=\"submit\" class=\"outline\" name=\"requested_order\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", index+2))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 229, Col: 321}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 231, Col: 321}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var49)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 79, "\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, "\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if index == len(category.Statuses)-1 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 80, " disabled")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, " disabled")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 81, " aria-label=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, " aria-label=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var50 string
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Move %s down", status.Name))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 229, Col: 425}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 231, Col: 425}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var50)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 82, "\">Down</button><button type=\"submit\">Move status</button></div></form></section><section class=\"status-dialog-section status-danger\"><h4>Delete status</h4><p>Records using this status must be reassigned within the same category.</p><form method=\"post\" action=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "\">Down</button><button type=\"submit\">Move status</button></div></form></section><section class=\"status-dialog-section status-danger\"><h4>Delete status</h4><p>Records using this status must be reassigned within the same category.</p><form method=\"post\" action=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var51 templ.SafeURL
 			templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/settings/statuses/%s/%d/delete", p.ObjectType, status.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 233, Col: 116}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 235, Col: 116}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 83, "\" hx-confirm=\"Delete this status and reassign every record using it?\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "\" hx-confirm=\"Delete this status and reassign every record using it?\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var52 string
 			templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 234, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 236, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var52)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 84, "\"><label>Replacement status<select name=\"replacement_status_id\"><option value=\"\">Select replacement</option> ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "\"><label>Replacement status<select name=\"replacement_status_id\"><option value=\"\">Select replacement</option> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			for _, replacement := range category.Statuses {
 				if replacement.ID != status.ID {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 85, "<option value=\"")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "<option value=\"")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var53 string
 					templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", replacement.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 237, Col: 58}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 239, Col: 58}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var53)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 86, "\">")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "\">")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var54 string
 					templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(replacement.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 237, Col: 79}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/status_settings.templ`, Line: 239, Col: 79}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 87, "</option>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "</option>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 88, "</select></label><button type=\"submit\" class=\"contrast outline\">Delete status</button></form></section>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 90, "</select></label><button type=\"submit\" class=\"contrast outline\">Delete status</button></form></section>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 89, "</div></dialog>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, "</div></dialog>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

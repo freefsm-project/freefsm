@@ -9,6 +9,7 @@ import (
 
 templ StatusSettingsPage(p StatusSettingsPageData) {
 	@Layout(statusSettingsTitle(p.ObjectType)) {
+		<fieldset disabled?={ p.ReadOnly }>
 		<div data-status-settings>
 		<header class="status-settings-header">
 			<div>
@@ -191,6 +192,7 @@ templ StatusSettingsPage(p StatusSettingsPageData) {
 			})();
 		</script>
 		</div>
+		</fieldset>
 	}
 }
 

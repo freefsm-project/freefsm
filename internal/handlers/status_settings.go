@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/freefsm-project/freefsm/internal/templates"
@@ -34,12 +35,22 @@ func (h *StatusSettingsHandler) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Administrator authentication is required.", http.StatusForbidden)
 		return
 	}
+	request, present := authorization.FromContext(r.Context())
+	if !present {
+		http.Error(w, "Permission denied", 403)
+		return
+	}
+	p, err := request.Service.Principal(r.Context(), request.Actor)
+	if err != nil || !p.Allows("configuration.workflow.view", authorization.Configuration) {
+		http.Error(w, "Permission denied", 403)
+		return
+	}
 	statuses, err := h.svc.Configuration(r.Context(), u.CompanyID, typ)
 	if err != nil {
 		statusflowHTTPError(w, err)
 		return
 	}
-	data := templates.StatusSettingsPageData{ObjectType: string(typ)}
+	data := templates.StatusSettingsPageData{ObjectType: string(typ), ReadOnly: !p.Allows("configuration.workflow.manage", authorization.Configuration)}
 	for _, category := range statusflow.Categories {
 		if category.ObjectType != typ {
 			continue
@@ -186,6 +197,14 @@ func settingsActor(r *http.Request) (statusflow.Actor, bool) {
 	if !ok || u == nil {
 		return statusflow.Actor{}, false
 	}
+	request, present := authorization.FromContext(r.Context())
+	if !present {
+		return statusflow.Actor{}, false
+	}
+	p, err := request.Service.Principal(r.Context(), request.Actor)
+	if err != nil || !p.Allows("configuration.workflow.manage", authorization.Configuration) {
+		return statusflow.Actor{}, false
+	}
 	return statusflow.Actor{ID: u.ID, CompanyID: u.CompanyID}, true
 }
 func (h *StatusSettingsHandler) ownsStatus(r *http.Request, companyID int64, typ statusflow.ObjectType, id int64) bool {
@@ -210,7 +229,7 @@ func (h *StatusSettingsHandler) finish(w http.ResponseWriter, r *http.Request, t
 func categoryLabel(key statusflow.CategoryKey) string {
 	labels := map[statusflow.CategoryKey]string{
 		statusflow.JobNew: "New", statusflow.JobTravelTime: "Travel Time", statusflow.JobInProgress: "In Progress", statusflow.JobPending: "Pending", statusflow.JobCompleted: "Completed", statusflow.JobCanceled: "Canceled",
-		statusflow.ProjectNew: "Opportunity", statusflow.ProjectInProgress: "In Progress", statusflow.ProjectPending: "Pending", statusflow.ProjectCompleted: "Completed", statusflow.ProjectCanceled: "Canceled",
+		statusflow.ProjectNew: "New", statusflow.ProjectInProgress: "In Progress", statusflow.ProjectPending: "Pending", statusflow.ProjectCompleted: "Completed", statusflow.ProjectCanceled: "Canceled",
 		statusflow.EstimateDraft: "Draft", statusflow.EstimateEstimate: "Estimate", statusflow.EstimateSent: "Sent", statusflow.EstimateAccepted: "Accepted", statusflow.EstimateRejected: "Rejected", statusflow.EstimateCompleted: "Completed",
 		statusflow.InvoiceDraft: "Draft", statusflow.InvoiceInvoiced: "Invoiced", statusflow.InvoiceSent: "Sent", statusflow.InvoicePartiallyPaid: "Partially Paid", statusflow.InvoicePaid: "Paid", statusflow.InvoiceVoid: "Void",
 	}

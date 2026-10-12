@@ -3,6 +3,7 @@ package v1
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 	"time"
 
@@ -18,6 +19,7 @@ type statusDTO struct {
 	Name     string                 `json:"name"`
 	Color    string                 `json:"color"`
 	Category statusflow.CategoryKey `json:"category"`
+	Order    int                    `json:"order"`
 }
 
 type jobDTO struct {
@@ -85,8 +87,51 @@ func (h *handler) getJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.visibleJobDTO(r, job, statuses, actor.Role))
 }
 
-type statusRequest struct {
-	StatusID int64 `json:"status_id"`
+type statusRequest = statusflow.Intent
+
+func (h *handler) jobStatusIntents(w http.ResponseWriter, r *http.Request) {
+	job, actor, ok := h.authorizedJob(w, r)
+	if !ok {
+		return
+	}
+	statuses, err := h.jobStatuses(r, *actor.CompanyID)
+	if err != nil {
+		writeError(w, 500, "internal_error", "could not load statuses")
+		return
+	}
+	type choice struct {
+		Status statusDTO         `json:"status"`
+		Intent statusflow.Intent `json:"intent"`
+	}
+	choices := []choice{}
+	for id, status := range statuses {
+		intent, err := h.deps.StatusFlow.ObserveIntent(r.Context(), *actor.CompanyID, statusflow.Job, job.ID, id)
+		if err != nil {
+			writeStatusFlowError(w, err)
+			return
+		}
+		choices = append(choices, choice{status, intent})
+	}
+	categoryOrder := map[statusflow.CategoryKey]int{}
+	for index, category := range statusflow.Categories {
+		categoryOrder[category.Key] = index
+	}
+	slices.SortFunc(choices, func(a, b choice) int {
+		if n := categoryOrder[a.Status.Category] - categoryOrder[b.Status.Category]; n != 0 {
+			return n
+		}
+		if n := a.Status.Order - b.Status.Order; n != 0 {
+			return n
+		}
+		if a.Status.ID < b.Status.ID {
+			return -1
+		}
+		if a.Status.ID > b.Status.ID {
+			return 1
+		}
+		return 0
+	})
+	writeJSON(w, 200, choices)
 }
 
 func (h *handler) updateJobStatus(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +150,7 @@ func (h *handler) updateJobStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "status_id must be positive")
 		return
 	}
-	err := h.deps.StatusFlow.TransitionJob(r.Context(), statusflow.Actor{ID: actor.ID, CompanyID: *actor.CompanyID}, job.ID, request.StatusID)
+	err := h.deps.StatusFlow.ApplyIntent(r.Context(), statusflow.Actor{ID: actor.ID, CompanyID: *actor.CompanyID}, statusflow.Job, job.ID, request)
 	if err != nil {
 		writeStatusFlowError(w, err)
 		return
@@ -199,7 +244,7 @@ func (h *handler) jobStatuses(r *http.Request, companyID int64) (map[int64]statu
 	}
 	result := make(map[int64]statusDTO, len(items))
 	for _, status := range items {
-		result[status.ID] = statusDTO{ID: status.ID, Name: status.Name, Color: status.Color, Category: statusflow.CategoryKey(status.CategoryKey)}
+		result[status.ID] = statusDTO{ID: status.ID, Name: status.Name, Color: status.Color, Category: statusflow.CategoryKey(status.CategoryKey), Order: status.CategoryOrder}
 	}
 	return result, nil
 }
@@ -265,6 +310,10 @@ func makeJobDTO(job *ent.Job, statuses map[int64]statusDTO, role string) jobDTO 
 }
 
 func writeStatusFlowError(w http.ResponseWriter, err error) {
+	if errors.Is(err, statusflow.ErrStaleIntent) {
+		writeError(w, 409, "status_reselection_required", "Status identity or meaning changed; explicitly reselect the target.")
+		return
+	}
 	switch {
 	case errors.Is(err, statusflow.ErrForbidden):
 		writeError(w, http.StatusForbidden, "forbidden", "status change is not allowed")

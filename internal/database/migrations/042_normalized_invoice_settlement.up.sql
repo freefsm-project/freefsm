@@ -190,8 +190,8 @@ FROM statuses old, LATERAL (
   SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id
   WHERE w.object_type='invoice' AND lower(s.name)='sent' AND s.company_id IS NOT DISTINCT FROM old.company_id LIMIT 1
 ) sent
-WHERE i.status_id=old.id AND lower(old.name) IN ('paid','partially paid');
-DELETE FROM statuses s USING status_workflows w WHERE s.workflow_id=w.id AND w.object_type='invoice' AND lower(s.name) IN ('paid','partially paid');
+WHERE i.status_id=old.id AND lower(old.name) IN ('paid','partially paid') AND current_setting('freefsm.workflow_review',true) IS NULL;
+DELETE FROM statuses s USING status_workflows w WHERE s.workflow_id=w.id AND w.object_type='invoice' AND lower(s.name) IN ('paid','partially paid') AND current_setting('freefsm.workflow_review',true) IS NULL;
 
 ALTER TABLE invoices ALTER COLUMN customer_id SET NOT NULL;
 ALTER TABLE invoices DROP COLUMN payments;

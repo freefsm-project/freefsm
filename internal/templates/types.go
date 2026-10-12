@@ -1792,6 +1792,7 @@ type AssetStatusRow struct {
 }
 
 type StatusSettingsPageData struct {
+	ReadOnly   bool
 	ObjectType string
 	Categories []StatusCategoryColumn
 }
