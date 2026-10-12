@@ -40,7 +40,7 @@ func newApplicationHandler(apiHandler, webHandler http.Handler, instances ...ins
 			normal.ServeHTTP(w, r)
 		}))
 	}
-	logged := chimw.Logger(admitted)
+	logged := queryRedactedRequestLogger(admitted)
 	r.Mount("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if len(instances) > 0 && (r.URL.Path == "/settings/backup" || strings.HasPrefix(r.URL.Path, "/settings/backup/")) {
 			// No URL/body/header logging on the capability-bearing control surface.
@@ -50,6 +50,20 @@ func newApplicationHandler(apiHandler, webHandler http.Handler, instances ...ins
 		logged.ServeHTTP(w, r)
 	}))
 	return r
+}
+
+// Request queries can contain invitation/recovery capabilities. Give the logger
+// a redacted snapshot while preserving the original URL for request handling.
+func queryRedactedRequestLogger(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logged := r.Clone(r.Context())
+		logged.URL.RawQuery = ""
+		logged.URL.ForceQuery = false
+		logged.RequestURI = logged.URL.EscapedPath()
+		chimw.Logger(http.HandlerFunc(func(w http.ResponseWriter, logRequest *http.Request) {
+			next.ServeHTTP(w, r.WithContext(logRequest.Context()))
+		})).ServeHTTP(w, logged)
+	})
 }
 
 func newHTTPServer(addr string, handler http.Handler) *http.Server {

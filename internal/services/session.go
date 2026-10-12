@@ -7,11 +7,11 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/jackc/pgx/v5"
-	"golang.org/x/crypto/bcrypt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type SessionService struct {

@@ -5,8 +5,9 @@ package passwordpolicy
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5"
 	"unicode/utf16"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type Policy struct {

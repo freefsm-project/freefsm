@@ -128,7 +128,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
 	emailSvc.SetInstanceControl(control)
-	inviteSvc := services.NewInvitationService(entClient)
+	inviteSvc := services.NewInvitationService(entClient, db)
 	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, deliveryService, activitySvc, policySvc, conversionService)
 	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, deliveryService, activitySvc, policySvc, settlementService, conversionService)
 	estimateHandler.statusflow = statusflowService

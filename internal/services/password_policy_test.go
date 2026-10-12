@@ -1,9 +1,10 @@
 package services
 
 import (
-	"github.com/freefsm-project/freefsm/internal/ent"
 	"strings"
 	"testing"
+
+	"github.com/freefsm-project/freefsm/internal/ent"
 )
 
 func TestPasswordPolicyMatchesJavaScript(t *testing.T) {

@@ -41,7 +41,7 @@ func TestRecoveryPersistedChromium(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	client.CompanySettings.Update().SetSMTPHost("127.0.0.1").SetSMTPPort(listener.Addr().(*net.TCPAddr).Port).SetSMTPFrom("sender@example.test").SaveX(ctx)
+	client.CompanySettings.Update().SetPasswordMinLength(16).SetSMTPHost("127.0.0.1").SetSMTPPort(listener.Addr().(*net.TCPAddr).Port).SetSMTPFrom("sender@example.test").SaveX(ctx)
 	mailed := make(chan string, 1)
 	evidenceToken := make(chan string, 1)
 	go func() {

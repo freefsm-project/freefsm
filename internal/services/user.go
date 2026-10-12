@@ -124,9 +124,7 @@ func (s *UserService) Create(ctx context.Context, p UserCreateParams) (*ent.User
 		SetRole(p.Role).
 		SetIsActive(active).
 		SetForcePasswordChange(false)
-	if p.SendWelcomeEmail {
-		create.SetWelcomeEmailSentAt(now)
-	} else {
+	if !p.SendWelcomeEmail {
 		create.SetOnboardingCompletedAt(now)
 	}
 	u, err := create.Save(ctx)

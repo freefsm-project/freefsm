@@ -26,6 +26,10 @@ type EmailService struct {
 	control *instancecontrol.Control
 }
 
+// ErrEmailAcceptanceUncertain means the message may have been accepted although
+// the final DATA acknowledgement was lost. It contains no provider diagnostics.
+var ErrEmailAcceptanceUncertain = errors.New("final DATA acceptance is uncertain; verify provider evidence before retrying")
+
 // SetInstanceControl must be called during startup before serving requests.
 func (s *EmailService) SetInstanceControl(control *instancecontrol.Control) { s.control = control }
 
@@ -239,8 +243,8 @@ func (s *EmailService) sendBuilt(ctx context.Context, cs *ent.CompanySettings, f
 		if errors.As(err, &protocol) {
 			return &textproto.Error{Code: protocol.Code, Msg: "SMTP provider rejected submission"}
 		}
-		if strings.Contains(err.Error(), "final DATA acceptance") {
-			return fmt.Errorf("final DATA acceptance is uncertain; verify provider evidence before retrying")
+		if errors.Is(err, ErrEmailAcceptanceUncertain) {
+			return ErrEmailAcceptanceUncertain
 		}
 		return fmt.Errorf("SMTP submission failed; verify saved transport and provider availability")
 	}
@@ -511,7 +515,7 @@ func sendSMTPMessage(client *smtp.Client, host, user, password, from string, rec
 		return fmt.Errorf("write: %w", err)
 	}
 	if err := w.Close(); err != nil {
-		return fmt.Errorf("final DATA acceptance: %w", err)
+		return fmt.Errorf("%w: %w", ErrEmailAcceptanceUncertain, err)
 	}
 	return nil
 }

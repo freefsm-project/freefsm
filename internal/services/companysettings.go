@@ -2,13 +2,13 @@ package services
 
 import (
 	"context"
-	"github.com/freefsm-project/freefsm/internal/authorization"
-	"github.com/freefsm-project/freefsm/internal/passwordpolicy"
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/companysettings"
+	"github.com/freefsm-project/freefsm/internal/passwordpolicy"
 )
 
 type CompanySettingsService struct {

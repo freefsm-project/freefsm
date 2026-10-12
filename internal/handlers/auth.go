@@ -201,6 +201,8 @@ func (h *AuthHandler) renderRecovery(w http.ResponseWriter, r *http.Request, tok
 }
 
 func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Referrer-Policy", "no-referrer")
+	w.Header().Set("Cache-Control", "no-store")
 	if r.Method == http.MethodGet {
 		token := r.URL.Query().Get("token")
 		target, err := h.inviteSvc.ValidateInvite(r.Context(), token)
@@ -239,6 +241,15 @@ func (h *AuthHandler) AcceptInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := h.inviteSvc.AcceptInvite(r.Context(), token, password)
+	if errors.Is(err, services.ErrInvitationPassword) {
+		policy, loadErr := h.csSvc.GetForCompany(r.Context(), target.CompanyID)
+		if loadErr != nil {
+			internalServerError(w, r, "reload invitation password policy", loadErr)
+			return
+		}
+		render(w, r, templates.AcceptInvitePage(templates.ResetPasswordData{Token: token, Valid: true, Error: err.Error(), Policy: policy}))
+		return
+	}
 	if errors.Is(err, services.ErrInvalidInvitation) {
 		http.Error(w, "invalid invitation", http.StatusBadRequest)
 		return

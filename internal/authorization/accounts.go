@@ -2,12 +2,12 @@ package authorization
 
 import (
 	"context"
-	"github.com/freefsm-project/freefsm/internal/passwordpolicy"
-	"golang.org/x/crypto/bcrypt"
 	"net/mail"
 	"strings"
 
+	"github.com/freefsm-project/freefsm/internal/passwordpolicy"
 	"github.com/jackc/pgx/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type NewAccount struct {
@@ -26,7 +26,7 @@ func (s *Service) MutateAccountLink(ctx context.Context, a Actor, companyID, use
 			return ErrForbidden
 		}
 		switch action {
-		case "user.invite", "user.welcome.resend", "user.recovery.resend":
+		case "user.invite", "user.welcome.resend", "user.recovery.resend", "user.invitation.mail.accepted":
 		default:
 			return ErrForbidden
 		}
@@ -45,6 +45,20 @@ func (s *Service) MutateAccountLink(ctx context.Context, a Actor, companyID, use
 }
 
 func (s *Service) CreateAccount(ctx context.Context, a Actor, in NewAccount) (int64, error) {
+	return s.createAccount(ctx, a, in, "")
+}
+
+// CreateInvitedAccount binds the first invitation to the account and recipient
+// decision in one sealed transaction. Only explicit resend may issue a later link.
+func (s *Service) CreateInvitedAccount(ctx context.Context, a Actor, in NewAccount, invitationHash string) (int64, error) {
+	if len(invitationHash) != 64 {
+		return 0, ErrConflict
+	}
+	in.Invited = true
+	return s.createAccount(ctx, a, in, invitationHash)
+}
+
+func (s *Service) createAccount(ctx context.Context, a Actor, in NewAccount, invitationHash string) (int64, error) {
 	var id int64
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		if !p.Protected {
@@ -70,9 +84,14 @@ func (s *Service) CreateAccount(ctx context.Context, a Actor, in NewAccount) (in
 		}
 		// The retained legacy discriminator is not authority. New accounts always
 		// carry an explicit Role identity and never acquire grants from that label.
-		err = tx.QueryRow(ctx, `INSERT INTO users(company_id,name,email,password_hash,role,authorization_role_id,is_active,force_password_change,onboarding_completed_at,welcome_email_sent_at) VALUES($1,$2,$3,$4,'tech',$5,$6,$6,CASE WHEN $6 THEN clock_timestamp() END,CASE WHEN NOT $6 THEN clock_timestamp() END) RETURNING id`, p.CompanyID, strings.TrimSpace(in.Name), in.Email, in.PasswordHash, in.RoleID, !in.Invited).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO users(company_id,name,email,password_hash,role,authorization_role_id,is_active,force_password_change,onboarding_completed_at) VALUES($1,$2,$3,$4,'tech',$5,$6,$6,CASE WHEN $6 THEN clock_timestamp() END) RETURNING id`, p.CompanyID, strings.TrimSpace(in.Name), in.Email, in.PasswordHash, in.RoleID, !in.Invited).Scan(&id)
 		if err != nil {
 			return err
+		}
+		if invitationHash != "" {
+			if _, err := tx.Exec(ctx, `INSERT INTO invitation_tokens(company_id,user_id,token_hash,created_at,expires_at) VALUES($1,$2,$3,statement_timestamp(),statement_timestamp()+interval '72 hours')`, p.CompanyID, id, invitationHash); err != nil {
+				return err
+			}
 		}
 		action := "user.create"
 		if in.Invited {
