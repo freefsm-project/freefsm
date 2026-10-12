@@ -19,6 +19,8 @@ type Invoice struct {
 	ID int64 `json:"id,omitempty"`
 	// InvoiceNumber holds the value of the "invoice_number" field.
 	InvoiceNumber int64 `json:"invoice_number,omitempty"`
+	// NumberLabel holds the value of the "number_label" field.
+	NumberLabel string `json:"number_label,omitempty"`
 	// CompanyID holds the value of the "company_id" field.
 	CompanyID *int64 `json:"company_id,omitempty"`
 	// CustomerID holds the value of the "customer_id" field.
@@ -33,6 +35,8 @@ type Invoice struct {
 	Title string `json:"title,omitempty"`
 	// Notes holds the value of the "notes" field.
 	Notes string `json:"notes,omitempty"`
+	// Terms holds the value of the "terms" field.
+	Terms *string `json:"terms,omitempty"`
 	// InvoiceDate holds the value of the "invoice_date" field.
 	InvoiceDate time.Time `json:"invoice_date,omitempty"`
 	// DueDate holds the value of the "due_date" field.
@@ -65,7 +69,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoice.FieldID, invoice.FieldInvoiceNumber, invoice.FieldCompanyID, invoice.FieldCustomerID, invoice.FieldJobID, invoice.FieldEstimateID, invoice.FieldStatusID:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldTitle, invoice.FieldNotes, invoice.FieldTaxRate, invoice.FieldLineItems, invoice.FieldSettlementState, invoice.FieldDisplaySettings, invoice.FieldCustomFields:
+		case invoice.FieldNumberLabel, invoice.FieldTitle, invoice.FieldNotes, invoice.FieldTerms, invoice.FieldTaxRate, invoice.FieldLineItems, invoice.FieldSettlementState, invoice.FieldDisplaySettings, invoice.FieldCustomFields:
 			values[i] = new(sql.NullString)
 		case invoice.FieldInvoiceDate, invoice.FieldDueDate, invoice.FieldDeletedAt, invoice.FieldConversionHiddenAt, invoice.FieldCreatedAt, invoice.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -95,6 +99,12 @@ func (_m *Invoice) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field invoice_number", values[i])
 			} else if value.Valid {
 				_m.InvoiceNumber = value.Int64
+			}
+		case invoice.FieldNumberLabel:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field number_label", values[i])
+			} else if value.Valid {
+				_m.NumberLabel = value.String
 			}
 		case invoice.FieldCompanyID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -141,6 +151,13 @@ func (_m *Invoice) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field notes", values[i])
 			} else if value.Valid {
 				_m.Notes = value.String
+			}
+		case invoice.FieldTerms:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field terms", values[i])
+			} else if value.Valid {
+				_m.Terms = new(string)
+				*_m.Terms = value.String
 			}
 		case invoice.FieldInvoiceDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -249,6 +266,9 @@ func (_m *Invoice) String() string {
 	builder.WriteString("invoice_number=")
 	builder.WriteString(fmt.Sprintf("%v", _m.InvoiceNumber))
 	builder.WriteString(", ")
+	builder.WriteString("number_label=")
+	builder.WriteString(_m.NumberLabel)
+	builder.WriteString(", ")
 	if v := _m.CompanyID; v != nil {
 		builder.WriteString("company_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))
@@ -277,6 +297,11 @@ func (_m *Invoice) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("notes=")
 	builder.WriteString(_m.Notes)
+	builder.WriteString(", ")
+	if v := _m.Terms; v != nil {
+		builder.WriteString("terms=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("invoice_date=")
 	builder.WriteString(_m.InvoiceDate.Format(time.ANSIC))

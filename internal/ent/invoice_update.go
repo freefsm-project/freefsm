@@ -55,6 +55,20 @@ func (_u *InvoiceUpdate) ClearInvoiceNumber() *InvoiceUpdate {
 	return _u
 }
 
+// SetNumberLabel sets the "number_label" field.
+func (_u *InvoiceUpdate) SetNumberLabel(v string) *InvoiceUpdate {
+	_u.mutation.SetNumberLabel(v)
+	return _u
+}
+
+// SetNillableNumberLabel sets the "number_label" field if the given value is not nil.
+func (_u *InvoiceUpdate) SetNillableNumberLabel(v *string) *InvoiceUpdate {
+	if v != nil {
+		_u.SetNumberLabel(*v)
+	}
+	return _u
+}
+
 // SetCompanyID sets the "company_id" field.
 func (_u *InvoiceUpdate) SetCompanyID(v int64) *InvoiceUpdate {
 	_u.mutation.ResetCompanyID()
@@ -209,6 +223,26 @@ func (_u *InvoiceUpdate) SetNillableNotes(v *string) *InvoiceUpdate {
 	if v != nil {
 		_u.SetNotes(*v)
 	}
+	return _u
+}
+
+// SetTerms sets the "terms" field.
+func (_u *InvoiceUpdate) SetTerms(v string) *InvoiceUpdate {
+	_u.mutation.SetTerms(v)
+	return _u
+}
+
+// SetNillableTerms sets the "terms" field if the given value is not nil.
+func (_u *InvoiceUpdate) SetNillableTerms(v *string) *InvoiceUpdate {
+	if v != nil {
+		_u.SetTerms(*v)
+	}
+	return _u
+}
+
+// ClearTerms clears the value of the "terms" field.
+func (_u *InvoiceUpdate) ClearTerms() *InvoiceUpdate {
+	_u.mutation.ClearTerms()
 	return _u
 }
 
@@ -415,6 +449,9 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.InvoiceNumberCleared() {
 		_spec.ClearField(invoice.FieldInvoiceNumber, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.NumberLabel(); ok {
+		_spec.SetField(invoice.FieldNumberLabel, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.CompanyID(); ok {
 		_spec.SetField(invoice.FieldCompanyID, field.TypeInt64, value)
 	}
@@ -462,6 +499,12 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(invoice.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Terms(); ok {
+		_spec.SetField(invoice.FieldTerms, field.TypeString, value)
+	}
+	if _u.mutation.TermsCleared() {
+		_spec.ClearField(invoice.FieldTerms, field.TypeString)
 	}
 	if value, ok := _u.mutation.InvoiceDate(); ok {
 		_spec.SetField(invoice.FieldInvoiceDate, field.TypeTime, value)
@@ -543,6 +586,20 @@ func (_u *InvoiceUpdateOne) AddInvoiceNumber(v int64) *InvoiceUpdateOne {
 // ClearInvoiceNumber clears the value of the "invoice_number" field.
 func (_u *InvoiceUpdateOne) ClearInvoiceNumber() *InvoiceUpdateOne {
 	_u.mutation.ClearInvoiceNumber()
+	return _u
+}
+
+// SetNumberLabel sets the "number_label" field.
+func (_u *InvoiceUpdateOne) SetNumberLabel(v string) *InvoiceUpdateOne {
+	_u.mutation.SetNumberLabel(v)
+	return _u
+}
+
+// SetNillableNumberLabel sets the "number_label" field if the given value is not nil.
+func (_u *InvoiceUpdateOne) SetNillableNumberLabel(v *string) *InvoiceUpdateOne {
+	if v != nil {
+		_u.SetNumberLabel(*v)
+	}
 	return _u
 }
 
@@ -700,6 +757,26 @@ func (_u *InvoiceUpdateOne) SetNillableNotes(v *string) *InvoiceUpdateOne {
 	if v != nil {
 		_u.SetNotes(*v)
 	}
+	return _u
+}
+
+// SetTerms sets the "terms" field.
+func (_u *InvoiceUpdateOne) SetTerms(v string) *InvoiceUpdateOne {
+	_u.mutation.SetTerms(v)
+	return _u
+}
+
+// SetNillableTerms sets the "terms" field if the given value is not nil.
+func (_u *InvoiceUpdateOne) SetNillableTerms(v *string) *InvoiceUpdateOne {
+	if v != nil {
+		_u.SetTerms(*v)
+	}
+	return _u
+}
+
+// ClearTerms clears the value of the "terms" field.
+func (_u *InvoiceUpdateOne) ClearTerms() *InvoiceUpdateOne {
+	_u.mutation.ClearTerms()
 	return _u
 }
 
@@ -936,6 +1013,9 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	if _u.mutation.InvoiceNumberCleared() {
 		_spec.ClearField(invoice.FieldInvoiceNumber, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.NumberLabel(); ok {
+		_spec.SetField(invoice.FieldNumberLabel, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.CompanyID(); ok {
 		_spec.SetField(invoice.FieldCompanyID, field.TypeInt64, value)
 	}
@@ -983,6 +1063,12 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(invoice.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Terms(); ok {
+		_spec.SetField(invoice.FieldTerms, field.TypeString, value)
+	}
+	if _u.mutation.TermsCleared() {
+		_spec.ClearField(invoice.FieldTerms, field.TypeString)
 	}
 	if value, ok := _u.mutation.InvoiceDate(); ok {
 		_spec.SetField(invoice.FieldInvoiceDate, field.TypeTime, value)

@@ -50,6 +50,22 @@ func FormatCompanyDate(t time.Time, loc *time.Location, cs *ent.CompanySettings)
 	return t.In(loc).Format(NormalizeDateFormat(companyDateFormat(cs)))
 }
 
+// FormatLocalDate formats a calendar date without converting it to an instant
+// in the current company timezone.
+func FormatLocalDate(t time.Time, cs *ent.CompanySettings) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(NormalizeDateFormat(companyDateFormat(cs)))
+}
+
+// IsCompanyDateOverdue compares a stored calendar date with the company's
+// current calendar day. It must not timezone-shift the stored date or treat a
+// missing due date as an ancient overdue instant.
+func IsCompanyDateOverdue(date, now time.Time, loc *time.Location) bool {
+	return !date.IsZero() && date.Format("2006-01-02") < now.In(loc).Format("2006-01-02")
+}
+
 func FormatCompanyDateTime(t time.Time, loc *time.Location, cs *ent.CompanySettings) string {
 	if t.IsZero() {
 		return ""

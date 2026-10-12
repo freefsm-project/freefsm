@@ -42,6 +42,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		}
 		principal, authErr := authority.Administrator(ctx, authorization.Actor{UserID: userID})
 		info := &middleware.UserInfo{
+			ConfigurationView:      principal.Allows("configuration.company.view", authorization.Configuration) || principal.Allows("configuration.documents.view", authorization.Configuration),
 			ID:                     u.ID,
 			Name:                   u.Name,
 			Email:                  u.Email,
@@ -125,6 +126,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	tagHandler := NewTagHandler(tagSvc, tagLinkSvc, activitySvc, depSvc)
 	settingsHandler := NewSettingsHandler(companySettingsSvc, emailSvc, activitySvc, cfg.UploadDir)
 	settingsHandler.control = control
+	settingsHandler.authority = authority
 	settingsHandler.users = userService
 	statusSettingsHandler := NewStatusSettingsHandler(statusflowService)
 	userHandler := NewUserHandler(userService, emailSvc, inviteSvc, companySettingsSvc, activitySvc, cfg)
@@ -169,6 +171,10 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/preferences", userHandler.Preferences)
 		r.Post("/preferences", userHandler.Preferences)
 		r.Get("/settings/invoice-logo", settingsHandler.InvoiceLogo)
+		r.Get("/settings", settingsHandler.Show)
+		r.Post("/settings", settingsHandler.Save)
+		r.Post("/settings/numbering-review", settingsHandler.ReviewNumber)
+		r.Post("/settings/invoice-logo", settingsHandler.UploadInvoiceLogo)
 		r.Get("/", dashboardHandler.Index)
 		r.Get("/dashboard/widgets/new", dashboardHandler.NewWidget)
 		r.Post("/dashboard/widgets/add", dashboardHandler.AddWidget)
@@ -191,6 +197,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/customers", customerHandler.Create)
 		r.Get("/customers/{id}/edit", customerHandler.Update)
 		r.Post("/customers/{id}", customerHandler.Update)
+		r.Get("/customers/{id}/document-defaults", settingsHandler.CustomerDefaults)
+		r.Post("/customers/{id}/document-defaults", settingsHandler.CustomerDefaults)
 		r.Get("/jobs/{id}/customer-context", authorityHandler.Context)
 		r.Get("/settings/authorization", authorityHandler.Show)
 		r.Post("/settings/authorization/roles", authorityHandler.SaveRole)
@@ -311,6 +319,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/deliveries/{delivery_id}/retry", invoiceHandler.RetryDelivery)
 		r.Get("/invoices/{id}/pdf", invoiceHandler.PDF)
 		r.Get("/invoices/{id}/pdf/preview", invoiceHandler.PreviewPDF)
+		r.Post("/invoices/{id}/pdf/save", invoiceHandler.SavePDF)
+		r.Post("/estimates/{id}/pdf/save", estimateHandler.SavePDF)
 
 		// Office-only billing and general document mutations.
 		r.Group(func(r chi.Router) {
@@ -319,7 +329,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Get("/estimates/new", estimateHandler.Create)
 			r.Post("/estimates", estimateHandler.Create)
 			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/delete", estimateHandler.Delete)
-			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/pdf/save", estimateHandler.SavePDF)
 			r.Get("/invoices/new", invoiceHandler.Create)
 			r.Post("/invoices", invoiceHandler.Create)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/delete", invoiceHandler.Delete)
@@ -328,7 +337,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/payments/{payment_id}/reverse", invoiceHandler.ReversePayment)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications", invoiceHandler.ApplyCredit)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications/{application_id}/reverse", invoiceHandler.ReverseCreditApplication)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/pdf/save", invoiceHandler.SavePDF)
 		})
 
 		// Entity tagging
@@ -413,11 +421,10 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Get("/tags/{id}/edit", tagHandler.Update)
 			r.Post("/tags/{id}", tagHandler.Update)
 			r.Post("/tags/{id}/delete", tagHandler.Delete)
-			r.Get("/settings", settingsHandler.Show)
-			r.Post("/settings", settingsHandler.Save)
+			r.Get("/settings/advanced", settingsHandler.Show)
+			r.Post("/settings/advanced", settingsHandler.Save)
 			r.Get("/setup/company", settingsHandler.Show)
 			r.Post("/setup/company", settingsHandler.Save)
-			r.Post("/settings/invoice-logo", settingsHandler.UploadInvoiceLogo)
 			r.Post("/settings/test-email", settingsHandler.TestEmail)
 			r.Post("/settings/enable-email", settingsHandler.EnableEmail)
 			r.Get("/settings/custom-fields", cfHandler.List)

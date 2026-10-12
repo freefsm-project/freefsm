@@ -41,6 +41,16 @@ const (
 	FieldEstimatePrefix = "estimate_prefix"
 	// FieldDefaultDueDays holds the string denoting the default_due_days field in the database.
 	FieldDefaultDueDays = "default_due_days"
+	// FieldDefaultInvoiceNotes holds the string denoting the default_invoice_notes field in the database.
+	FieldDefaultInvoiceNotes = "default_invoice_notes"
+	// FieldDefaultEstimateNotes holds the string denoting the default_estimate_notes field in the database.
+	FieldDefaultEstimateNotes = "default_estimate_notes"
+	// FieldEstimateTerms holds the string denoting the estimate_terms field in the database.
+	FieldEstimateTerms = "estimate_terms"
+	// FieldDefaultLineDescription holds the string denoting the default_line_description field in the database.
+	FieldDefaultLineDescription = "default_line_description"
+	// FieldEstimateValidDays holds the string denoting the estimate_valid_days field in the database.
+	FieldEstimateValidDays = "estimate_valid_days"
 	// FieldSMTPHost holds the string denoting the smtp_host field in the database.
 	FieldSMTPHost = "smtp_host"
 	// FieldSMTPPort holds the string denoting the smtp_port field in the database.
@@ -116,6 +126,11 @@ var Columns = []string{
 	FieldNextInvoiceNumber,
 	FieldEstimatePrefix,
 	FieldDefaultDueDays,
+	FieldDefaultInvoiceNotes,
+	FieldDefaultEstimateNotes,
+	FieldEstimateTerms,
+	FieldDefaultLineDescription,
+	FieldEstimateValidDays,
 	FieldSMTPHost,
 	FieldSMTPPort,
 	FieldSMTPUser,
@@ -180,8 +195,14 @@ var (
 	DefaultNextInvoiceNumber int64
 	// DefaultEstimatePrefix holds the default value on creation for the "estimate_prefix" field.
 	DefaultEstimatePrefix string
-	// DefaultDefaultDueDays holds the default value on creation for the "default_due_days" field.
-	DefaultDefaultDueDays int
+	// DefaultDefaultInvoiceNotes holds the default value on creation for the "default_invoice_notes" field.
+	DefaultDefaultInvoiceNotes string
+	// DefaultDefaultEstimateNotes holds the default value on creation for the "default_estimate_notes" field.
+	DefaultDefaultEstimateNotes string
+	// DefaultEstimateTerms holds the default value on creation for the "estimate_terms" field.
+	DefaultEstimateTerms string
+	// DefaultDefaultLineDescription holds the default value on creation for the "default_line_description" field.
+	DefaultDefaultLineDescription string
 	// DefaultSMTPHost holds the default value on creation for the "smtp_host" field.
 	DefaultSMTPHost string
 	// DefaultSMTPPort holds the default value on creation for the "smtp_port" field.
@@ -316,6 +337,31 @@ func ByEstimatePrefix(opts ...sql.OrderTermOption) OrderOption {
 // ByDefaultDueDays orders the results by the default_due_days field.
 func ByDefaultDueDays(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDefaultDueDays, opts...).ToFunc()
+}
+
+// ByDefaultInvoiceNotes orders the results by the default_invoice_notes field.
+func ByDefaultInvoiceNotes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultInvoiceNotes, opts...).ToFunc()
+}
+
+// ByDefaultEstimateNotes orders the results by the default_estimate_notes field.
+func ByDefaultEstimateNotes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultEstimateNotes, opts...).ToFunc()
+}
+
+// ByEstimateTerms orders the results by the estimate_terms field.
+func ByEstimateTerms(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEstimateTerms, opts...).ToFunc()
+}
+
+// ByDefaultLineDescription orders the results by the default_line_description field.
+func ByDefaultLineDescription(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultLineDescription, opts...).ToFunc()
+}
+
+// ByEstimateValidDays orders the results by the estimate_valid_days field.
+func ByEstimateValidDays(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldEstimateValidDays, opts...).ToFunc()
 }
 
 // BySMTPHost orders the results by the smtp_host field.

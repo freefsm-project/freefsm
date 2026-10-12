@@ -1,14 +1,24 @@
 package templates
 
+import "fmt"
+
 templ DocumentEmailCompose(p DocumentEmailData) {
 	@Layout("Email "+p.Title) {
 		<p><a href={ templ.URL(p.BackURL) }>&larr; Back to Preview</a></p>
 		if p.Error != "" {
 			<article class="document-error">{ p.Error }</article>
 		}
-		<form action={ templ.URL(p.ActionURL) } method="post">
+		<form action={ templ.URL(p.ActionURL) } method="post" hx-boost="false">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<input type="hidden" name="idempotency_key" value={ p.IdempotencyKey }/>
+			if p.PDFVersion > 0 {
+				<input type="hidden" name="pdf_version" value={ fmt.Sprint(p.PDFVersion) }/>
+				<p>Selected PDF version { fmt.Sprint(p.PDFVersion) }. Sending retains these exact saved bytes.</p>
+				if p.PDFStale {
+					<p role="alert">This selected PDF is stale.</p>
+					<label><input type="checkbox" name="confirm_stale_pdf" value="1" checked?={ p.ConfirmStalePDF } required/> I confirm sending this stale PDF version</label>
+				}
+			}
 			<label>
 				To
 				<input type="text" name="to" value={ p.To } required/>

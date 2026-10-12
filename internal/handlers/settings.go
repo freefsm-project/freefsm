@@ -2,24 +2,28 @@ package handlers
 
 import (
 	"errors"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
+	"github.com/go-chi/chi/v5"
 )
 
 type SettingsHandler struct {
+	authority   *authorization.Service
 	control     *instancecontrol.Control
 	users       *services.UserService
 	svc         *services.CompanySettingsService
@@ -33,7 +37,30 @@ func NewSettingsHandler(svc *services.CompanySettingsService, emailSvc *services
 }
 
 func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
-	cs, _ := h.svc.Get(r.Context())
+	if r.URL.Path == "/settings" || r.URL.Path == "/setup/company" {
+		view, err := h.authority.Configuration(r.Context(), authorizationActor(r))
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		view.EmailDisabled = h.control != nil && h.control.EmailDisabled()
+		if r.URL.Path == "/setup/company" {
+			view.FormAction = "/setup/company"
+			for _, section := range view.Sections {
+				if section.Name == "company" {
+					view.Sections = []authorization.ConfigurationSection{section}
+					break
+				}
+			}
+		}
+		render(w, r, templates.CompanyConfiguration(view, ""))
+		return
+	}
+	cs, err := h.svc.Get(r.Context())
+	if err != nil {
+		http.Error(w, "Settings unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	render(w, r, templates.SettingsPage(templates.SettingsPageData{
 		Settings:      cs,
 		IsSetup:       r.URL.Path == "/setup/company",
@@ -42,13 +69,45 @@ func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	dueDays, _ := strconv.Atoi(r.FormValue("default_due_days"))
-	nextInvoiceNumber, _ := strconv.ParseInt(strings.TrimSpace(r.FormValue("next_invoice_number")), 10, 64)
-	if nextInvoiceNumber < 1 {
-		http.Redirect(w, r, "/settings?flash=Next+invoice+number+must+be+at+least+1", http.StatusSeeOther)
+	if r.URL.Path == "/settings" || r.URL.Path == "/setup/company" {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form", 400)
+			return
+		}
+		revision, _ := strconv.ParseInt(r.FormValue("revision"), 10, 64)
+		err := h.authority.SaveConfiguration(r.Context(), authorizationActor(r), r.FormValue("section"), revision, r.PostForm)
+		if errors.Is(err, authorization.ErrConfigurationInput) {
+			view, loadErr := h.authority.Configuration(r.Context(), authorizationActor(r))
+			if loadErr != nil {
+				authorizationError(w, r, loadErr)
+				return
+			}
+			for i := range view.Sections {
+				if view.Sections[i].Name == r.FormValue("section") {
+					for _, f := range view.Sections[i].Fields {
+						if r.PostForm.Has(f.Name) {
+							view.Sections[i].Values[f.Name] = r.PostForm.Get(f.Name)
+						}
+					}
+				}
+			}
+			view.Revision = revision
+			w.WriteHeader(422)
+			render(w, r, templates.CompanyConfiguration(view, err.Error()))
+			return
+		}
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		if r.URL.Path == "/setup/company" {
+			http.Redirect(w, r, "/?flash=Setup+complete", http.StatusSeeOther)
+			return
+		}
+		http.Redirect(w, r, "/settings?flash=Settings+saved", http.StatusSeeOther)
 		return
 	}
+	r.ParseForm()
 	smtpPort, _ := strconv.Atoi(r.FormValue("smtp_port"))
 	pwMinLen, _ := strconv.Atoi(r.FormValue("password_min_length"))
 	if pwMinLen < 6 {
@@ -57,7 +116,6 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	oldSettings, _ := h.svc.Get(r.Context())
-	dateFormat := services.NormalizeDateFormat(r.FormValue("date_format"))
 	mapTileURL := strings.TrimSpace(r.FormValue("map_tile_url"))
 	geocoderURL := strings.TrimRight(strings.TrimSpace(r.FormValue("geocoder_url")), "/")
 	if r.URL.Path == "/setup/company" && oldSettings != nil {
@@ -77,47 +135,28 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	err := h.svc.Save(r.Context(), services.CompanySettingsParams{
-		BusinessName:                r.FormValue("business_name"),
-		Address:                     r.FormValue("address"),
-		City:                        r.FormValue("city"),
-		State:                       r.FormValue("state"),
-		Zip:                         r.FormValue("zip"),
-		Phone:                       r.FormValue("phone"),
-		Email:                       r.FormValue("email"),
-		TaxID:                       r.FormValue("tax_id"),
-		DefaultTaxRate:              r.FormValue("default_tax_rate"),
-		InvoicePrefix:               r.FormValue("invoice_prefix"),
-		NextInvoiceNumber:           nextInvoiceNumber,
-		EstimatePrefix:              r.FormValue("estimate_prefix"),
-		DefaultDueDays:              dueDays,
-		SmtpHost:                    r.FormValue("smtp_host"),
-		SmtpPort:                    smtpPort,
-		SmtpUser:                    r.FormValue("smtp_user"),
-		SmtpPassword:                r.FormValue("smtp_password"),
-		SmtpFrom:                    r.FormValue("smtp_from"),
-		EmailAutoCC:                 r.FormValue("email_auto_cc"),
-		InvoiceEmailSubject:         r.FormValue("invoice_email_subject"),
-		InvoiceEmailBody:            r.FormValue("invoice_email_body"),
-		EstimateEmailSubject:        r.FormValue("estimate_email_subject"),
-		EstimateEmailBody:           r.FormValue("estimate_email_body"),
-		Timezone:                    r.FormValue("timezone"),
-		DateFormat:                  dateFormat,
-		PasswordMinLength:           pwMinLen,
-		PasswordRequireUppercase:    r.FormValue("password_require_uppercase") == "on",
-		PasswordRequireLowercase:    r.FormValue("password_require_lowercase") == "on",
-		PasswordRequireDigit:        r.FormValue("password_require_digit") == "on",
-		PasswordRequireSpecial:      r.FormValue("password_require_special") == "on",
-		InvoiceColor:                r.FormValue("invoice_color"),
-		InvoiceFooter:               r.FormValue("invoice_footer"),
-		InvoicePaymentTerms:         r.FormValue("invoice_payment_terms"),
-		PDFShowLineItemDescriptions: r.FormValue("pdf_show_line_item_descriptions") == "on",
-		MapTileURL:                  mapTileURL,
-		GeocoderURL:                 geocoderURL,
-		EmailTrackingEnabled:        r.FormValue("email_tracking_enabled") == "on",
+	err := h.svc.SaveAdministrativeSettings(r.Context(), services.AdministrativeSettingsParams{
+		SmtpHost:                 r.FormValue("smtp_host"),
+		SmtpPort:                 smtpPort,
+		SmtpUser:                 r.FormValue("smtp_user"),
+		SmtpPassword:             r.FormValue("smtp_password"),
+		SmtpFrom:                 r.FormValue("smtp_from"),
+		EmailAutoCC:              r.FormValue("email_auto_cc"),
+		InvoiceEmailSubject:      r.FormValue("invoice_email_subject"),
+		InvoiceEmailBody:         r.FormValue("invoice_email_body"),
+		EstimateEmailSubject:     r.FormValue("estimate_email_subject"),
+		EstimateEmailBody:        r.FormValue("estimate_email_body"),
+		PasswordMinLength:        pwMinLen,
+		PasswordRequireUppercase: r.FormValue("password_require_uppercase") == "on",
+		PasswordRequireLowercase: r.FormValue("password_require_lowercase") == "on",
+		PasswordRequireDigit:     r.FormValue("password_require_digit") == "on",
+		PasswordRequireSpecial:   r.FormValue("password_require_special") == "on",
+		MapTileURL:               mapTileURL,
+		GeocoderURL:              geocoderURL,
+		EmailTrackingEnabled:     r.FormValue("email_tracking_enabled") == "on",
 	})
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		internalServerError(w, r, "save administrative settings", err)
 		return
 	}
 
@@ -126,45 +165,6 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		changed := []string{}
 		newSettings, _ := h.svc.Get(r.Context())
 		if newSettings != nil {
-			if oldSettings.BusinessName != newSettings.BusinessName {
-				changed = append(changed, "business_name")
-			}
-			if oldSettings.Address != newSettings.Address {
-				changed = append(changed, "address")
-			}
-			if oldSettings.City != newSettings.City {
-				changed = append(changed, "city")
-			}
-			if oldSettings.State != newSettings.State {
-				changed = append(changed, "state")
-			}
-			if oldSettings.Zip != newSettings.Zip {
-				changed = append(changed, "zip")
-			}
-			if oldSettings.Phone != newSettings.Phone {
-				changed = append(changed, "phone")
-			}
-			if oldSettings.Email != newSettings.Email {
-				changed = append(changed, "email")
-			}
-			if oldSettings.TaxID != newSettings.TaxID {
-				changed = append(changed, "tax_id")
-			}
-			if oldSettings.DefaultTaxRate != newSettings.DefaultTaxRate {
-				changed = append(changed, "default_tax_rate")
-			}
-			if oldSettings.InvoicePrefix != newSettings.InvoicePrefix {
-				changed = append(changed, "invoice_prefix")
-			}
-			if oldSettings.NextInvoiceNumber != newSettings.NextInvoiceNumber {
-				changed = append(changed, "next_invoice_number")
-			}
-			if oldSettings.EstimatePrefix != newSettings.EstimatePrefix {
-				changed = append(changed, "estimate_prefix")
-			}
-			if oldSettings.DefaultDueDays != newSettings.DefaultDueDays {
-				changed = append(changed, "default_due_days")
-			}
 			if oldSettings.SMTPHost != newSettings.SMTPHost {
 				changed = append(changed, "smtp_host")
 			}
@@ -195,12 +195,6 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 			if oldSettings.EstimateEmailBody != newSettings.EstimateEmailBody {
 				changed = append(changed, "estimate_email_body")
 			}
-			if oldSettings.Timezone != newSettings.Timezone {
-				changed = append(changed, "timezone")
-			}
-			if oldSettings.DateFormat != newSettings.DateFormat {
-				changed = append(changed, "date_format")
-			}
 			if oldSettings.PasswordMinLength != newSettings.PasswordMinLength {
 				changed = append(changed, "password_min_length")
 			}
@@ -215,21 +209,6 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 			}
 			if oldSettings.PasswordRequireSpecial != newSettings.PasswordRequireSpecial {
 				changed = append(changed, "password_require_special")
-			}
-			if oldSettings.InvoiceColor != newSettings.InvoiceColor {
-				changed = append(changed, "invoice_color")
-			}
-			if oldSettings.InvoiceFooter != newSettings.InvoiceFooter {
-				changed = append(changed, "invoice_footer")
-			}
-			if oldSettings.InvoiceLogoPath != newSettings.InvoiceLogoPath {
-				changed = append(changed, "invoice_logo_path")
-			}
-			if oldSettings.InvoicePaymentTerms != newSettings.InvoicePaymentTerms {
-				changed = append(changed, "invoice_payment_terms")
-			}
-			if oldSettings.PdfShowLineItemDescriptions != newSettings.PdfShowLineItemDescriptions {
-				changed = append(changed, "pdf_show_line_item_descriptions")
 			}
 			if oldSettings.MapTileURL != newSettings.MapTileURL {
 				changed = append(changed, "map_tile_url")
@@ -255,6 +234,53 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/settings?flash=Settings+saved", http.StatusSeeOther)
+}
+
+func (h *SettingsHandler) ReviewNumber(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Invalid form", 400)
+		return
+	}
+	revision, _ := strconv.ParseInt(r.FormValue("revision"), 10, 64)
+	id, _ := strconv.ParseInt(r.FormValue("id"), 10, 64)
+	number, _ := strconv.ParseInt(r.FormValue("number"), 10, 64)
+	next, _ := strconv.ParseInt(r.FormValue("next_number"), 10, 64)
+	if r.FormValue("confirmation") != "REVIEWED IDENTITY" {
+		http.Error(w, "Explicit review required", 422)
+		return
+	}
+	if err := h.authority.ReviewLegacyNumber(r.Context(), authorizationActor(r), revision, r.FormValue("type"), id, number, next, r.FormValue("label")); err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, "/settings?flash=Number+reviewed", 303)
+}
+
+func (h *SettingsHandler) CustomerDefaults(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if r.Method == http.MethodPost {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Invalid form", 400)
+			return
+		}
+		revision, _ := strconv.ParseInt(r.FormValue("revision"), 10, 64)
+		if err := h.authority.SaveCustomerDefaults(r.Context(), authorizationActor(r), id, revision, r.PostForm); err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		http.Redirect(w, r, r.URL.Path+"?flash=Defaults+saved", 303)
+		return
+	}
+	view, err := h.authority.CustomerDefaults(r.Context(), authorizationActor(r), id)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	render(w, r, templates.CustomerDocumentDefaults(view))
 }
 
 func mapTileURLSample(tileURL string) string {
@@ -303,15 +329,35 @@ func (h *SettingsHandler) EnableEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SettingsHandler) UploadInvoiceLogo(w http.ResponseWriter, r *http.Request) {
+	p, err := h.authority.Principal(r.Context(), authorizationActor(r))
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	if !p.Allows("configuration.company.manage", authorization.Configuration) {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 25<<20)
 	if err := r.ParseMultipartForm(25 << 20); err != nil {
 		http.Error(w, "File too large", 413)
 		return
 	}
 	defer r.MultipartForm.RemoveAll()
+	for name, values := range r.MultipartForm.Value {
+		if (name != "revision" && name != "csrf_token") || len(values) != 1 {
+			http.Error(w, "Invalid logo form", 400)
+			return
+		}
+	}
 
 	files := r.MultipartForm.File["file"]
-	if len(files) == 0 {
-		http.Error(w, "No file", 400)
+	if len(files) != 1 || len(r.MultipartForm.File) != 1 {
+		http.Error(w, "Choose exactly one logo", 400)
+		return
+	}
+	if files[0].Size > 25<<20 {
+		http.Error(w, "Logo is too large", 413)
 		return
 	}
 
@@ -327,35 +373,65 @@ func (h *SettingsHandler) UploadInvoiceLogo(w http.ResponseWriter, r *http.Reque
 		http.Error(w, err.Error(), 400)
 		return
 	}
-	logoPath := filepath.Join(h.uploadDir, "invoice-logo"+ext)
-
-	dst, err := os.Create(logoPath)
-	if err != nil {
-		http.Error(w, "Cannot save file: "+err.Error(), 500)
+	config, _, err := image.DecodeConfig(f)
+	if err != nil || config.Width < 1 || config.Height < 1 || int64(config.Width)*int64(config.Height) > 25000000 {
+		http.Error(w, "Invalid or oversized image", 400)
 		return
 	}
-	defer dst.Close()
+	if _, err = f.Seek(0, io.SeekStart); err != nil {
+		http.Error(w, "Cannot read image", 500)
+		return
+	}
+	if _, _, err = image.Decode(f); err != nil {
+		http.Error(w, "Invalid image data", 400)
+		return
+	}
+	if _, err = f.Seek(0, io.SeekStart); err != nil {
+		http.Error(w, "Cannot read image", 500)
+		return
+	}
+	dst, err := os.CreateTemp(h.uploadDir, "invoice-logo-*"+ext)
+	if err != nil {
+		internalServerError(w, r, "persist company logo", err)
+		return
+	}
+	logoPath := dst.Name()
+	published := false
+	defer func() {
+		dst.Close()
+		if !published {
+			os.Remove(logoPath)
+		}
+	}()
 
 	if _, err := io.Copy(dst, f); err != nil {
 		http.Error(w, "Cannot write file", 500)
 		return
 	}
 
-	cs, err := h.svc.UpdateInvoiceLogoPath(r.Context(), logoPath)
+	if err = dst.Sync(); err == nil {
+		err = dst.Close()
+	}
 	if err != nil {
-		http.Error(w, "Cannot update settings: "+err.Error(), 500)
+		http.Error(w, "Cannot persist image", 500)
 		return
 	}
-
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "logo_uploaded", objectref.New(objectref.TypeCompanySettings, cs.ID), map[string]interface{}{
-			"entity_name": "Company Settings",
-			"actor_name":  u.Name,
-		})
+	dir, err := os.Open(h.uploadDir)
+	if err == nil {
+		err = dir.Sync()
+		dir.Close()
 	}
-
-	render(w, r, templates.InvoiceLogoPreview(logoPath, strconv.FormatInt(time.Now().UnixMilli(), 10)))
+	if err != nil {
+		http.Error(w, "Cannot persist image directory", 500)
+		return
+	}
+	revision, _ := strconv.ParseInt(r.FormValue("revision"), 10, 64)
+	if err = h.authority.SaveCompanyLogo(r.Context(), authorizationActor(r), revision, logoPath); err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	published = true
+	http.Redirect(w, r, "/settings?flash=Logo+saved", http.StatusSeeOther)
 }
 
 func detectInvoiceLogoExt(f io.ReadSeeker) (string, error) {
@@ -378,6 +454,15 @@ func detectInvoiceLogoExt(f io.ReadSeeker) (string, error) {
 }
 
 func (h *SettingsHandler) InvoiceLogo(w http.ResponseWriter, r *http.Request) {
+	p, err := h.authority.Principal(r.Context(), authorizationActor(r))
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	if !p.Allows("configuration.company.view", authorization.Configuration) {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
 	cs, err := h.svc.Get(r.Context())
 	if err != nil || cs.InvoiceLogoPath == "" {
 		http.NotFound(w, r)

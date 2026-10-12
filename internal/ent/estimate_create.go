@@ -20,6 +20,34 @@ type EstimateCreate struct {
 	hooks    []Hook
 }
 
+// SetNumberLabel sets the "number_label" field.
+func (_c *EstimateCreate) SetNumberLabel(v string) *EstimateCreate {
+	_c.mutation.SetNumberLabel(v)
+	return _c
+}
+
+// SetNillableNumberLabel sets the "number_label" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableNumberLabel(v *string) *EstimateCreate {
+	if v != nil {
+		_c.SetNumberLabel(*v)
+	}
+	return _c
+}
+
+// SetDocumentNumber sets the "document_number" field.
+func (_c *EstimateCreate) SetDocumentNumber(v int64) *EstimateCreate {
+	_c.mutation.SetDocumentNumber(v)
+	return _c
+}
+
+// SetNillableDocumentNumber sets the "document_number" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableDocumentNumber(v *int64) *EstimateCreate {
+	if v != nil {
+		_c.SetDocumentNumber(*v)
+	}
+	return _c
+}
+
 // SetCompanyID sets the "company_id" field.
 func (_c *EstimateCreate) SetCompanyID(v int64) *EstimateCreate {
 	_c.mutation.SetCompanyID(v)
@@ -100,6 +128,34 @@ func (_c *EstimateCreate) SetNotes(v string) *EstimateCreate {
 func (_c *EstimateCreate) SetNillableNotes(v *string) *EstimateCreate {
 	if v != nil {
 		_c.SetNotes(*v)
+	}
+	return _c
+}
+
+// SetTerms sets the "terms" field.
+func (_c *EstimateCreate) SetTerms(v string) *EstimateCreate {
+	_c.mutation.SetTerms(v)
+	return _c
+}
+
+// SetNillableTerms sets the "terms" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableTerms(v *string) *EstimateCreate {
+	if v != nil {
+		_c.SetTerms(*v)
+	}
+	return _c
+}
+
+// SetValidThrough sets the "valid_through" field.
+func (_c *EstimateCreate) SetValidThrough(v time.Time) *EstimateCreate {
+	_c.mutation.SetValidThrough(v)
+	return _c
+}
+
+// SetNillableValidThrough sets the "valid_through" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableValidThrough(v *time.Time) *EstimateCreate {
+	if v != nil {
+		_c.SetValidThrough(*v)
 	}
 	return _c
 }
@@ -243,6 +299,10 @@ func (_c *EstimateCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *EstimateCreate) defaults() {
+	if _, ok := _c.mutation.NumberLabel(); !ok {
+		v := estimate.DefaultNumberLabel
+		_c.mutation.SetNumberLabel(v)
+	}
 	if _, ok := _c.mutation.Title(); !ok {
 		v := estimate.DefaultTitle
 		_c.mutation.SetTitle(v)
@@ -275,6 +335,9 @@ func (_c *EstimateCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *EstimateCreate) check() error {
+	if _, ok := _c.mutation.NumberLabel(); !ok {
+		return &ValidationError{Name: "number_label", err: errors.New(`ent: missing required field "Estimate.number_label"`)}
+	}
 	if _, ok := _c.mutation.Title(); !ok {
 		return &ValidationError{Name: "title", err: errors.New(`ent: missing required field "Estimate.title"`)}
 	}
@@ -328,6 +391,14 @@ func (_c *EstimateCreate) createSpec() (*Estimate, *sqlgraph.CreateSpec) {
 		_node.ID = id
 		_spec.ID.Value = id
 	}
+	if value, ok := _c.mutation.NumberLabel(); ok {
+		_spec.SetField(estimate.FieldNumberLabel, field.TypeString, value)
+		_node.NumberLabel = value
+	}
+	if value, ok := _c.mutation.DocumentNumber(); ok {
+		_spec.SetField(estimate.FieldDocumentNumber, field.TypeInt64, value)
+		_node.DocumentNumber = &value
+	}
 	if value, ok := _c.mutation.CompanyID(); ok {
 		_spec.SetField(estimate.FieldCompanyID, field.TypeInt64, value)
 		_node.CompanyID = &value
@@ -351,6 +422,14 @@ func (_c *EstimateCreate) createSpec() (*Estimate, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Notes(); ok {
 		_spec.SetField(estimate.FieldNotes, field.TypeString, value)
 		_node.Notes = value
+	}
+	if value, ok := _c.mutation.Terms(); ok {
+		_spec.SetField(estimate.FieldTerms, field.TypeString, value)
+		_node.Terms = &value
+	}
+	if value, ok := _c.mutation.ValidThrough(); ok {
+		_spec.SetField(estimate.FieldValidThrough, field.TypeTime, value)
+		_node.ValidThrough = &value
 	}
 	if value, ok := _c.mutation.TaxRate(); ok {
 		_spec.SetField(estimate.FieldTaxRate, field.TypeString, value)

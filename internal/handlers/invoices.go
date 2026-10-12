@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -265,7 +266,8 @@ func (h *InvoiceHandler) DetachTag(w http.ResponseWriter, r *http.Request) {
 
 func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		data, err := h.newInvoiceForm(r.Context())
+		customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
+		data, err := h.newInvoiceForm(r.Context(), customerID)
 		if err != nil {
 			internalServerError(w, r, "build invoice editor", err)
 			return
@@ -277,15 +279,27 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid form", 400)
 		return
 	}
+	if strings.TrimSpace(r.FormValue("title")) == "" {
+		h.invalidInvoiceForm(w, r, "Title is required")
+		return
+	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	if custID <= 0 {
 		http.Error(w, "customer is required", http.StatusBadRequest)
 		return
 	}
 	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
+	if err := initializeMissingDocumentFields(r, "invoice", custID, jobID); err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	if !validDocumentDate(r.FormValue("invoice_date"), true) || !validDocumentDate(r.FormValue("due_date"), false) {
+		h.invalidInvoiceForm(w, r, "Enter a valid invoice date and an optional valid due date")
+		return
+	}
 	invoiceNumber, err := parseOptionalPositiveInt64(r.FormValue("invoice_number"), "invoice number")
 	if err != nil {
-		http.Error(w, err.Error(), 400)
+		h.invalidInvoiceForm(w, r, err.Error())
 		return
 	}
 	taxRate := r.FormValue("tax_rate")
@@ -299,7 +313,7 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), taxRate)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		h.invalidInvoiceForm(w, r, err.Error())
 		return
 	}
 
@@ -311,6 +325,7 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		StatusID:      0,
 		Title:         r.FormValue("title"),
 		Notes:         r.FormValue("notes"),
+		Terms:         r.FormValue("terms"),
 		InvoiceDate:   parseDate(r.FormValue("invoice_date"), loc),
 		DueDate:       parseDate(r.FormValue("due_date"), loc),
 		TaxRate:       taxRate,
@@ -319,8 +334,12 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrPending) || errors.Is(err, authorization.ErrConflict) {
+			authorizationError(w, r, err)
+			return
+		}
 		if errors.Is(err, services.ErrNegativeInvoiceTotal) {
-			http.Error(w, "invoice total must not be negative", http.StatusBadRequest)
+			h.invalidInvoiceForm(w, r, "Invoice total must not be negative")
 			return
 		}
 		http.Error(w, err.Error(), 500)
@@ -404,7 +423,11 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		JobID:         &jobID,
 		Title:         formPtr(r.FormValue("title")),
 		Notes:         formPtr(r.FormValue("notes")),
+		Terms:         strPtr(r.FormValue("terms")),
 		TaxRate:       taxRatePtr,
+	}
+	if !r.Form.Has("terms") {
+		params.Terms = nil
 	}
 	loc := middleware.CompanyLocation(r.Context())
 	if d := r.FormValue("invoice_date"); d != "" {
@@ -516,13 +539,7 @@ func (h *InvoiceHandler) Finalize(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "only draft invoices can be finalized", http.StatusConflict)
 		return
 	}
-	defaultDueDays := 30
-	if cs := middleware.CompanyFromContext(r.Context()); cs != nil {
-		defaultDueDays = cs.DefaultDueDays
-	}
-	now := time.Now().In(middleware.CompanyLocation(r.Context()))
-	invoiceDate := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	err = h.statusflow.FinalizeInvoice(r.Context(), statusflow.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, id, invoiceDate, defaultDueDays)
+	err = h.statusflow.FinalizeInvoice(r.Context(), statusflow.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, id)
 	if err != nil {
 		statusflowHTTPError(w, err)
 		return
@@ -548,27 +565,100 @@ func (h *InvoiceHandler) effectiveInvoice(ctx context.Context, invoice *ent.Invo
 	return &copy
 }
 
-func (h *InvoiceHandler) newInvoiceForm(ctx context.Context) (templates.InvoiceFormPageData, error) {
+func (h *InvoiceHandler) newInvoiceForm(ctx context.Context, customerIDs ...int64) (templates.InvoiceFormPageData, error) {
+	if middleware.CompanyFromContext(ctx) == nil {
+		return templates.InvoiceFormPageData{}, authorization.ErrConfigurationUnavailable
+	}
 	statuses := h.statusesForSelect(ctx)
 	customers, _ := h.custSvc.ListAll(ctx)
-	jobs, _ := h.jobSvc.ListAll(ctx)
+	jobs, _ := h.jobsForEditor(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
+	detail := &templates.InvoiceDetail{TaxRate: defaultTaxRate, StatusID: h.defaultInvoiceStatusID(ctx, statusflow.InvoiceDraft)}
+	var customerDefaults map[string]*string
+	if len(customerIDs) > 0 && customerIDs[0] > 0 {
+		detail.CustomerID = customerIDs[0]
+		if request, ok := authorization.FromContext(ctx); ok {
+			var err error
+			customerDefaults, err = request.Service.DocumentDefaultInputs(ctx, request.Actor, "invoice", detail.CustomerID, 0)
+			if err != nil {
+				return templates.InvoiceFormPageData{}, err
+			}
+		}
+	}
+	defaults := services.ResolveDocumentDefaults(middleware.CompanyFromContext(ctx), "invoice", customerDefaults)
+	today := time.Now().In(middleware.CompanyLocation(ctx))
+	detail.Notes = defaults.Notes
+	detail.Terms = defaults.Terms
+	detail.InvoiceDate = today.Format("2006-01-02")
+	detail.DueDate = defaults.DateFrom(today)
+	lineDescription := defaults.LineDescription
 	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, "[]", defaultTaxRate)
 	if err != nil {
 		return templates.InvoiceFormPageData{}, err
 	}
+	choices, err := documentDefaultChoices(ctx, "invoice", customers)
+	if err != nil {
+		return templates.InvoiceFormPageData{}, err
+	}
 	return templates.InvoiceFormPageData{
-		Invoice:           &templates.InvoiceDetail{TaxRate: defaultTaxRate, StatusID: h.defaultInvoiceStatusID(ctx, statusflow.InvoiceDraft)},
-		IsNew:             true,
-		Customers:         customerOptions(customers),
-		Jobs:              jobOptions(jobs),
-		Statuses:          statusOptions(statuses),
-		ItemsJSON:         bootstrap.ItemsJSON,
-		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
-		CustomersJSON:     bootstrap.CustomersJSON,
-		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
+		DefaultsJSON:           choices,
+		Invoice:                detail,
+		DefaultLineDescription: lineDescription,
+		IsNew:                  true,
+		Customers:              customerOptions(customers),
+		Jobs:                   jobOptions(jobs),
+		Statuses:               statusOptions(statuses),
+		ItemsJSON:              bootstrap.ItemsJSON,
+		ExistingItemsJSON:      bootstrap.ExistingItemsJSON,
+		CustomersJSON:          bootstrap.CustomersJSON,
+		CustomFields:           buildCustomFieldDisplay(defs, "[]"),
 	}, nil
+}
+
+func (h *InvoiceHandler) invalidInvoiceForm(w http.ResponseWriter, r *http.Request, message string) {
+	data, err := h.newInvoiceForm(r.Context())
+	if err != nil {
+		internalServerError(w, r, "build invoice editor", err)
+		return
+	}
+	data.Invoice.Title = r.FormValue("title")
+	data.Invoice.Notes = r.FormValue("notes")
+	data.Invoice.Terms = r.FormValue("terms")
+	data.Invoice.InvoiceDate = r.FormValue("invoice_date")
+	data.Invoice.DueDate = r.FormValue("due_date")
+	data.Invoice.TaxRate = r.FormValue("tax_rate")
+	data.Invoice.CustomerID, _ = strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
+	data.Invoice.JobID, _ = strconv.ParseInt(r.FormValue("job_id"), 10, 64)
+	data.Invoice.Number, _ = strconv.ParseInt(r.FormValue("invoice_number"), 10, 64)
+	data.EnteredInvoiceNumber = r.FormValue("invoice_number")
+	data.DefaultLineDescription = r.FormValue("default_line_description")
+	data.ExistingItemsJSON = submittedLineItems(r.FormValue("line_items"))
+	data.PreserveEntered = true
+	defs, err := h.defSvc.ListForObjectType(r.Context(), "invoice")
+	if err != nil {
+		internalServerError(w, r, "load invoice fields", err)
+		return
+	}
+	data.CustomFields = buildCustomFieldDisplay(defs, parseCustomFieldValues(r))
+	customers, err := h.custSvc.ListAll(r.Context())
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	options, err := documentCustomerOptions(r.Context(), customers, data.Invoice.CustomerID, data.Invoice.JobID)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	data.Customers = options
+	if strings.HasPrefix(r.URL.Path, "/jobs/") {
+		data.FormAction = r.URL.Path
+		data.CancelURL = fmt.Sprintf("/jobs/%d", data.Invoice.JobID)
+	}
+	data.Errors = map[string]string{"title": message}
+	w.WriteHeader(422)
+	render(w, r, templates.InvoiceForm(data))
 }
 
 func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice, statuses []*ent.Status) (templates.InvoiceFormPageData, error) {
@@ -610,6 +700,7 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 func invoiceToDetail(ctx context.Context, i *ent.Invoice, statuses []*ent.Status) templates.InvoiceDetail {
 	statusName := statusName(statuses, i.StatusID)
 	d := templates.InvoiceDetail{
+		NumberLabel: services.RecordedInvoiceNumber(i, middleware.CompanyFromContext(ctx)),
 		ID:          i.ID,
 		Number:      i.InvoiceNumber,
 		CustomerID:  invCustID(i),
@@ -621,16 +712,20 @@ func invoiceToDetail(ctx context.Context, i *ent.Invoice, statuses []*ent.Status
 		Notes:       i.Notes,
 		TaxRate:     i.TaxRate,
 	}
+	if i.Terms != nil {
+		d.Terms = *i.Terms
+	}
+	d.TermsUnknown = i.Terms == nil
 	if i.JobID != nil {
 		d.JobID = *i.JobID
 	}
 	if !i.InvoiceDate.IsZero() {
 		d.InvoiceDate = i.InvoiceDate.Format("2006-01-02")
-		d.InvoiceDateDisplay = displayDate(ctx, i.InvoiceDate)
+		d.InvoiceDateDisplay = services.FormatLocalDate(i.InvoiceDate, middleware.CompanyFromContext(ctx))
 	}
 	if !i.DueDate.IsZero() {
 		d.DueDate = i.DueDate.Format("2006-01-02")
-		d.DueDateDisplay = displayDate(ctx, i.DueDate)
+		d.DueDateDisplay = services.FormatLocalDate(i.DueDate, middleware.CompanyFromContext(ctx))
 	}
 	if i.DeletedAt != nil && !i.DeletedAt.IsZero() {
 		d.ArchivedAt = displayDate(ctx, *i.DeletedAt)
@@ -640,6 +735,7 @@ func invoiceToDetail(ctx context.Context, i *ent.Invoice, statuses []*ent.Status
 
 func invoiceRow(ctx context.Context, i *ent.Invoice, statuses []*ent.Status, custMap map[int64]string) templates.InvoiceRow {
 	r := templates.InvoiceRow{
+		NumberLabel:     services.RecordedInvoiceNumber(i, middleware.CompanyFromContext(ctx)),
 		ID:              i.ID,
 		Number:          i.InvoiceNumber,
 		Title:           i.Title,
@@ -651,10 +747,10 @@ func invoiceRow(ctx context.Context, i *ent.Invoice, statuses []*ent.Status, cus
 		SettlementState: i.SettlementState,
 	}
 	if !i.InvoiceDate.IsZero() {
-		r.InvoiceDate = displayDate(ctx, i.InvoiceDate)
+		r.InvoiceDate = services.FormatLocalDate(i.InvoiceDate, middleware.CompanyFromContext(ctx))
 	}
 	if !i.DueDate.IsZero() {
-		r.DueDate = displayDate(ctx, i.DueDate)
+		r.DueDate = services.FormatLocalDate(i.DueDate, middleware.CompanyFromContext(ctx))
 	}
 	return r
 }
@@ -738,6 +834,23 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 		CancelURL:         fmt.Sprintf("/jobs/%d", id),
 		FormAction:        fmt.Sprintf("/jobs/%d/invoices", id),
 	}
+	var customerDefaults map[string]*string
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		customerDefaults, err = request.Service.DocumentDefaultInputs(r.Context(), request.Actor, "invoice", j.CustomerID, j.ID)
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+	}
+	defaults := services.ResolveDocumentDefaults(middleware.CompanyFromContext(r.Context()), "invoice", customerDefaults)
+	data.Invoice.Terms = defaults.Terms
+	if data.Invoice.Notes == "" {
+		data.Invoice.Notes = defaults.Notes
+	}
+	data.DefaultLineDescription = defaults.LineDescription
+	today := time.Now().In(middleware.CompanyLocation(r.Context()))
+	data.Invoice.InvoiceDate = today.Format("2006-01-02")
+	data.Invoice.DueDate = defaults.DateFrom(today)
 	templates.InvoiceForm(data).Render(r.Context(), w)
 }
 
@@ -807,32 +920,13 @@ func (h *InvoiceHandler) CreateFromCustomer(w http.ResponseWriter, r *http.Reque
 		authorizationError(w, r, err)
 		return
 	}
-	statuses := h.statusesForSelect(r.Context())
-	statusID := h.defaultInvoiceStatusID(r.Context(), statusflow.InvoiceDraft)
-	customers, _ := h.custSvc.ListAll(r.Context())
-	jobs, _ := h.jobSvc.ListAll(r.Context())
-	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
-	bootstrap, err := lineItemEditorBootstrap(r.Context(), h.itemSvc, customers, "[]", companyDefaultTaxRate(r.Context()))
+	data, err := h.newInvoiceForm(r.Context(), id)
 	if err != nil {
 		internalServerError(w, r, "build invoice editor", err)
 		return
 	}
-	data := templates.InvoiceFormPageData{
-		Invoice: &templates.InvoiceDetail{
-			CustomerID: id,
-			StatusID:   statusID,
-			TaxRate:    defaultTaxRate,
-		},
-		IsNew:             true,
-		Customers:         customerOptions(customers),
-		Jobs:              jobOptions(jobs),
-		Statuses:          statusOptions(statuses),
-		ItemsJSON:         bootstrap.ItemsJSON,
-		ExistingItemsJSON: bootstrap.ExistingItemsJSON,
-		CustomersJSON:     bootstrap.CustomersJSON,
-		CustomFields:      buildCustomFieldDisplay(defs, "[]"),
-		CancelURL:         fmt.Sprintf("/customers/%d", id),
-	}
+	data.Invoice.TaxRate = defaultTaxRate
+	data.CancelURL = fmt.Sprintf("/customers/%d", id)
 	templates.InvoiceForm(data).Render(r.Context(), w)
 }
 
@@ -885,10 +979,15 @@ func (h *InvoiceHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if documentPDFVersions(w, r, "invoice", id, "download", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
+		return h.invoicePDFDocument(ctx, id, input)
+	}) {
+		return
+	}
 	if !h.authorizeInvoice(w, r, id, policyRead) {
 		return
 	}
-	doc, err := h.invoicePDFDocument(r.Context(), id)
+	doc, err := h.invoicePDFDocument(r.Context(), id, PDFRenderInput{})
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -903,6 +1002,11 @@ func (h *InvoiceHandler) PreviewPDF(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, "invalid id", 400)
+		return
+	}
+	if documentPDFVersions(w, r, "invoice", id, "preview", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
+		return h.invoicePDFDocument(ctx, id, input)
+	}) {
 		return
 	}
 	if !h.authorizeInvoice(w, r, id, policyRead) {
@@ -932,10 +1036,15 @@ func (h *InvoiceHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if documentPDFVersions(w, r, "invoice", id, "save", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
+		return h.invoicePDFDocument(ctx, id, input)
+	}) {
+		return
+	}
 	if !h.authorizeInvoice(w, r, id, policyUpdate) {
 		return
 	}
-	doc, err := h.invoicePDFDocument(r.Context(), id)
+	doc, err := h.invoicePDFDocument(r.Context(), id, PDFRenderInput{})
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -964,10 +1073,13 @@ func (h *InvoiceHandler) Email(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
+	if selectedPDFEmail(w, r, "invoice", id, h.deliverySvc) {
+		return
+	}
 	if !h.authorizeInvoice(w, r, id, policyUpdate) {
 		return
 	}
-	doc, err := h.invoicePDFDocument(r.Context(), id)
+	doc, err := h.invoicePDFDocument(r.Context(), id, PDFRenderInput{})
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -1030,20 +1142,42 @@ func (h *InvoiceHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) {
 	retryDocumentDelivery(h.deliverySvc, "invoice", w, r)
 }
 
-func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (documentPDF, error) {
+func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64, input PDFRenderInput) (documentPDF, error) {
+	cs := input.Presentation
+	if cs == nil {
+		cs = middleware.CompanyFromContext(ctx)
+	}
 	i, err := h.svc.GetByID(ctx, id)
 	if err != nil {
 		return documentPDF{}, err
 	}
 	i = h.effectiveInvoice(ctx, i)
 	statuses, _ := h.statusSvc.ByObjectType(ctx, "invoice")
-	actor, ok := settlementActor(ctx)
-	if !ok {
-		return documentPDF{}, errors.New("settlement actor is required")
-	}
-	settlementView, err := h.settlement.InvoiceSettlement(ctx, actor, id)
-	if err != nil {
-		return documentPDF{}, fmt.Errorf("load invoice settlement: %w", err)
+	var settlementView settlement.InvoiceSettlement
+	if input.SettledCents != nil {
+		settled := *input.SettledCents
+		items, err := services.DecodeLineItems(i.LineItems)
+		if err != nil {
+			return documentPDF{}, err
+		}
+		totals, err := services.CalculateTotals(items, i.TaxRate)
+		if err != nil {
+			return documentPDF{}, err
+		}
+		if settled > totals.Total.MinorUnits() {
+			return documentPDF{}, errors.New("invalid invoice settlement snapshot")
+		}
+		settlementView.SettledCents = settled
+		settlementView.AmountDueCents = totals.Total.MinorUnits() - settled
+	} else {
+		actor, ok := settlementActor(ctx)
+		if !ok {
+			return documentPDF{}, errors.New("settlement actor is required")
+		}
+		settlementView, err = h.settlement.InvoiceSettlement(ctx, actor, id)
+		if err != nil {
+			return documentPDF{}, fmt.Errorf("load invoice settlement: %w", err)
+		}
 	}
 	var customer *ent.Customer
 	if i.CustomerID > 0 {
@@ -1059,7 +1193,7 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (docu
 		}
 	}
 	data, err := generatePDFBytes(func(w io.Writer) error {
-		return services.GenerateInvoicePDF(w, i, customer, job, asset, statuses, middleware.CompanyFromContext(ctx), services.InvoicePDFSettlement{
+		return services.GenerateInvoicePDF(w, i, customer, job, asset, statuses, cs, services.InvoicePDFSettlement{
 			AmountPaidCents: settlementView.SettledCents,
 			AmountDueCents:  settlementView.AmountDueCents,
 		})
@@ -1074,7 +1208,7 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64) (docu
 		customerName = customer.DisplayName
 	}
 	jobName, jobType, jobSubtitle := documentJobFields(job)
-	number := services.FormatInvoiceNumber(i.InvoiceNumber, middleware.CompanyFromContext(ctx))
+	number := services.RecordedInvoiceNumber(i, cs)
 	date := displayDate(ctx, time.Now())
 	return documentPDF{Filename: number + ".pdf", Data: data, Title: i.Title, Number: number, CustomerEmail: to, CustomerName: customerName, JobName: jobName, JobType: jobType, JobSubtitle: jobSubtitle, Date: date, Archived: i.DeletedAt != nil}, nil
 }

@@ -124,6 +124,31 @@ func DefaultDueDays(v int) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldDefaultDueDays, v))
 }
 
+// DefaultInvoiceNotes applies equality check predicate on the "default_invoice_notes" field. It's identical to DefaultInvoiceNotesEQ.
+func DefaultInvoiceNotes(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultEstimateNotes applies equality check predicate on the "default_estimate_notes" field. It's identical to DefaultEstimateNotesEQ.
+func DefaultEstimateNotes(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldDefaultEstimateNotes, v))
+}
+
+// EstimateTerms applies equality check predicate on the "estimate_terms" field. It's identical to EstimateTermsEQ.
+func EstimateTerms(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldEstimateTerms, v))
+}
+
+// DefaultLineDescription applies equality check predicate on the "default_line_description" field. It's identical to DefaultLineDescriptionEQ.
+func DefaultLineDescription(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldDefaultLineDescription, v))
+}
+
+// EstimateValidDays applies equality check predicate on the "estimate_valid_days" field. It's identical to EstimateValidDaysEQ.
+func EstimateValidDays(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldEstimateValidDays, v))
+}
+
 // SMTPHost applies equality check predicate on the "smtp_host" field. It's identical to SMTPHostEQ.
 func SMTPHost(v string) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldEQ(FieldSMTPHost, v))
@@ -1102,6 +1127,326 @@ func DefaultDueDaysLT(v int) predicate.CompanySettings {
 // DefaultDueDaysLTE applies the LTE predicate on the "default_due_days" field.
 func DefaultDueDaysLTE(v int) predicate.CompanySettings {
 	return predicate.CompanySettings(sql.FieldLTE(FieldDefaultDueDays, v))
+}
+
+// DefaultDueDaysIsNil applies the IsNil predicate on the "default_due_days" field.
+func DefaultDueDaysIsNil() predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIsNull(FieldDefaultDueDays))
+}
+
+// DefaultDueDaysNotNil applies the NotNil predicate on the "default_due_days" field.
+func DefaultDueDaysNotNil() predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotNull(FieldDefaultDueDays))
+}
+
+// DefaultInvoiceNotesEQ applies the EQ predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultInvoiceNotesNEQ applies the NEQ predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultInvoiceNotesIn applies the In predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldDefaultInvoiceNotes, vs...))
+}
+
+// DefaultInvoiceNotesNotIn applies the NotIn predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldDefaultInvoiceNotes, vs...))
+}
+
+// DefaultInvoiceNotesGT applies the GT predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultInvoiceNotesGTE applies the GTE predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultInvoiceNotesLT applies the LT predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultInvoiceNotesLTE applies the LTE predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultInvoiceNotesContains applies the Contains predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultInvoiceNotesHasPrefix applies the HasPrefix predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultInvoiceNotesHasSuffix applies the HasSuffix predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultInvoiceNotesEqualFold applies the EqualFold predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultInvoiceNotesContainsFold applies the ContainsFold predicate on the "default_invoice_notes" field.
+func DefaultInvoiceNotesContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldDefaultInvoiceNotes, v))
+}
+
+// DefaultEstimateNotesEQ applies the EQ predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldDefaultEstimateNotes, v))
+}
+
+// DefaultEstimateNotesNEQ applies the NEQ predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldDefaultEstimateNotes, v))
+}
+
+// DefaultEstimateNotesIn applies the In predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldDefaultEstimateNotes, vs...))
+}
+
+// DefaultEstimateNotesNotIn applies the NotIn predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldDefaultEstimateNotes, vs...))
+}
+
+// DefaultEstimateNotesGT applies the GT predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldDefaultEstimateNotes, v))
+}
+
+// DefaultEstimateNotesGTE applies the GTE predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldDefaultEstimateNotes, v))
+}
+
+// DefaultEstimateNotesLT applies the LT predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldDefaultEstimateNotes, v))
+}
+
+// DefaultEstimateNotesLTE applies the LTE predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldDefaultEstimateNotes, v))
+}
+
+// DefaultEstimateNotesContains applies the Contains predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldDefaultEstimateNotes, v))
+}
+
+// DefaultEstimateNotesHasPrefix applies the HasPrefix predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldDefaultEstimateNotes, v))
+}
+
+// DefaultEstimateNotesHasSuffix applies the HasSuffix predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldDefaultEstimateNotes, v))
+}
+
+// DefaultEstimateNotesEqualFold applies the EqualFold predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldDefaultEstimateNotes, v))
+}
+
+// DefaultEstimateNotesContainsFold applies the ContainsFold predicate on the "default_estimate_notes" field.
+func DefaultEstimateNotesContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldDefaultEstimateNotes, v))
+}
+
+// EstimateTermsEQ applies the EQ predicate on the "estimate_terms" field.
+func EstimateTermsEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldEstimateTerms, v))
+}
+
+// EstimateTermsNEQ applies the NEQ predicate on the "estimate_terms" field.
+func EstimateTermsNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldEstimateTerms, v))
+}
+
+// EstimateTermsIn applies the In predicate on the "estimate_terms" field.
+func EstimateTermsIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldEstimateTerms, vs...))
+}
+
+// EstimateTermsNotIn applies the NotIn predicate on the "estimate_terms" field.
+func EstimateTermsNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldEstimateTerms, vs...))
+}
+
+// EstimateTermsGT applies the GT predicate on the "estimate_terms" field.
+func EstimateTermsGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldEstimateTerms, v))
+}
+
+// EstimateTermsGTE applies the GTE predicate on the "estimate_terms" field.
+func EstimateTermsGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldEstimateTerms, v))
+}
+
+// EstimateTermsLT applies the LT predicate on the "estimate_terms" field.
+func EstimateTermsLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldEstimateTerms, v))
+}
+
+// EstimateTermsLTE applies the LTE predicate on the "estimate_terms" field.
+func EstimateTermsLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldEstimateTerms, v))
+}
+
+// EstimateTermsContains applies the Contains predicate on the "estimate_terms" field.
+func EstimateTermsContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldEstimateTerms, v))
+}
+
+// EstimateTermsHasPrefix applies the HasPrefix predicate on the "estimate_terms" field.
+func EstimateTermsHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldEstimateTerms, v))
+}
+
+// EstimateTermsHasSuffix applies the HasSuffix predicate on the "estimate_terms" field.
+func EstimateTermsHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldEstimateTerms, v))
+}
+
+// EstimateTermsEqualFold applies the EqualFold predicate on the "estimate_terms" field.
+func EstimateTermsEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldEstimateTerms, v))
+}
+
+// EstimateTermsContainsFold applies the ContainsFold predicate on the "estimate_terms" field.
+func EstimateTermsContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldEstimateTerms, v))
+}
+
+// DefaultLineDescriptionEQ applies the EQ predicate on the "default_line_description" field.
+func DefaultLineDescriptionEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldDefaultLineDescription, v))
+}
+
+// DefaultLineDescriptionNEQ applies the NEQ predicate on the "default_line_description" field.
+func DefaultLineDescriptionNEQ(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldDefaultLineDescription, v))
+}
+
+// DefaultLineDescriptionIn applies the In predicate on the "default_line_description" field.
+func DefaultLineDescriptionIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldDefaultLineDescription, vs...))
+}
+
+// DefaultLineDescriptionNotIn applies the NotIn predicate on the "default_line_description" field.
+func DefaultLineDescriptionNotIn(vs ...string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldDefaultLineDescription, vs...))
+}
+
+// DefaultLineDescriptionGT applies the GT predicate on the "default_line_description" field.
+func DefaultLineDescriptionGT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldDefaultLineDescription, v))
+}
+
+// DefaultLineDescriptionGTE applies the GTE predicate on the "default_line_description" field.
+func DefaultLineDescriptionGTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldDefaultLineDescription, v))
+}
+
+// DefaultLineDescriptionLT applies the LT predicate on the "default_line_description" field.
+func DefaultLineDescriptionLT(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldDefaultLineDescription, v))
+}
+
+// DefaultLineDescriptionLTE applies the LTE predicate on the "default_line_description" field.
+func DefaultLineDescriptionLTE(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldDefaultLineDescription, v))
+}
+
+// DefaultLineDescriptionContains applies the Contains predicate on the "default_line_description" field.
+func DefaultLineDescriptionContains(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContains(FieldDefaultLineDescription, v))
+}
+
+// DefaultLineDescriptionHasPrefix applies the HasPrefix predicate on the "default_line_description" field.
+func DefaultLineDescriptionHasPrefix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasPrefix(FieldDefaultLineDescription, v))
+}
+
+// DefaultLineDescriptionHasSuffix applies the HasSuffix predicate on the "default_line_description" field.
+func DefaultLineDescriptionHasSuffix(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldHasSuffix(FieldDefaultLineDescription, v))
+}
+
+// DefaultLineDescriptionEqualFold applies the EqualFold predicate on the "default_line_description" field.
+func DefaultLineDescriptionEqualFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEqualFold(FieldDefaultLineDescription, v))
+}
+
+// DefaultLineDescriptionContainsFold applies the ContainsFold predicate on the "default_line_description" field.
+func DefaultLineDescriptionContainsFold(v string) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldContainsFold(FieldDefaultLineDescription, v))
+}
+
+// EstimateValidDaysEQ applies the EQ predicate on the "estimate_valid_days" field.
+func EstimateValidDaysEQ(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldEQ(FieldEstimateValidDays, v))
+}
+
+// EstimateValidDaysNEQ applies the NEQ predicate on the "estimate_valid_days" field.
+func EstimateValidDaysNEQ(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNEQ(FieldEstimateValidDays, v))
+}
+
+// EstimateValidDaysIn applies the In predicate on the "estimate_valid_days" field.
+func EstimateValidDaysIn(vs ...int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIn(FieldEstimateValidDays, vs...))
+}
+
+// EstimateValidDaysNotIn applies the NotIn predicate on the "estimate_valid_days" field.
+func EstimateValidDaysNotIn(vs ...int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotIn(FieldEstimateValidDays, vs...))
+}
+
+// EstimateValidDaysGT applies the GT predicate on the "estimate_valid_days" field.
+func EstimateValidDaysGT(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGT(FieldEstimateValidDays, v))
+}
+
+// EstimateValidDaysGTE applies the GTE predicate on the "estimate_valid_days" field.
+func EstimateValidDaysGTE(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldGTE(FieldEstimateValidDays, v))
+}
+
+// EstimateValidDaysLT applies the LT predicate on the "estimate_valid_days" field.
+func EstimateValidDaysLT(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLT(FieldEstimateValidDays, v))
+}
+
+// EstimateValidDaysLTE applies the LTE predicate on the "estimate_valid_days" field.
+func EstimateValidDaysLTE(v int) predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldLTE(FieldEstimateValidDays, v))
+}
+
+// EstimateValidDaysIsNil applies the IsNil predicate on the "estimate_valid_days" field.
+func EstimateValidDaysIsNil() predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldIsNull(FieldEstimateValidDays))
+}
+
+// EstimateValidDaysNotNil applies the NotNil predicate on the "estimate_valid_days" field.
+func EstimateValidDaysNotNil() predicate.CompanySettings {
+	return predicate.CompanySettings(sql.FieldNotNull(FieldEstimateValidDays))
 }
 
 // SMTPHostEQ applies the EQ predicate on the "smtp_host" field.

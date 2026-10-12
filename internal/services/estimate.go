@@ -19,6 +19,8 @@ func NewEstimateService(client *ent.Client) *EstimateService {
 }
 
 type EstimateCreateParams struct {
+	ValidThrough *time.Time
+	Terms        string
 	CustomerID   int64
 	JobID        int64
 	StatusID     int64
@@ -30,13 +32,16 @@ type EstimateCreateParams struct {
 }
 
 type EstimateUpdateParams struct {
-	CustomerID   *int64
-	JobID        *int64
-	Title        *string
-	Notes        *string
-	TaxRate      *string
-	LineItems    *[]LineItem
-	CustomFields *string
+	ValidThrough      *time.Time
+	ClearValidThrough bool
+	Terms             *string
+	CustomerID        *int64
+	JobID             *int64
+	Title             *string
+	Notes             *string
+	TaxRate           *string
+	LineItems         *[]LineItem
+	CustomFields      *string
 }
 
 func (s *EstimateService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Estimate, int, error) {
@@ -147,11 +152,20 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 	if customFields == "" {
 		customFields = "[]"
 	}
+	if request, ok := authorization.FromContext(ctx); ok {
+		id, err := request.Service.CreateDocument(ctx, request.Actor, "estimate", authorization.DocumentCreation{CustomerID: params.CustomerID, JobID: params.JobID, Title: params.Title, Notes: params.Notes, Terms: params.Terms, TaxRate: taxRate, LineItems: lineItems, CustomFields: customFields, ValidThrough: params.ValidThrough}, func(rate string) (string, error) { _, err := CalculateTotals(params.LineItems, rate); return "", err })
+		if err != nil {
+			return nil, err
+		}
+		return s.GetByID(ctx, id)
+	}
 	b := s.client.Estimate.Create().
 		SetNillableCompanyID(customerCompanyID).
 		SetCustomerID(params.CustomerID).
 		SetTitle(params.Title).
 		SetNotes(params.Notes).
+		SetTerms(params.Terms).
+		SetNillableValidThrough(params.ValidThrough).
 		SetTaxRate(taxRate).
 		SetLineItems(lineItems).
 		SetCustomFields(customFields)
@@ -212,6 +226,14 @@ func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateU
 	}
 
 	u := s.client.Estimate.UpdateOneID(id)
+	if params.ValidThrough != nil {
+		u.SetValidThrough(*params.ValidThrough)
+	} else if params.ClearValidThrough {
+		u.ClearValidThrough()
+	}
+	if params.Terms != nil {
+		u.SetTerms(*params.Terms)
+	}
 
 	if params.CustomerID != nil {
 		u.SetCustomerID(*params.CustomerID)
@@ -285,12 +307,36 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 		return nil, fmt.Errorf("parse job %d line items: %w", jobID, err)
 	}
 
+	cs, err := s.client.CompanySettings.Query().First(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var customerDefaults map[string]*string
+	if request, ok := authorization.FromContext(ctx); ok {
+		customerDefaults, err = request.Service.DocumentDefaultInputs(ctx, request.Actor, "estimate", j.CustomerID, j.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	defaults := ResolveDocumentDefaults(cs, "estimate", customerDefaults)
+	notes := j.Notes
+	if notes == "" {
+		notes = defaults.Notes
+	}
+	var validThrough *time.Time
+	if defaults.Days != nil {
+		day := time.Now().In(companySettingsLocation(cs)).AddDate(0, 0, *defaults.Days)
+		date, _ := time.Parse("2006-01-02", day.Format("2006-01-02"))
+		validThrough = &date
+	}
 	return s.Create(ctx, EstimateCreateParams{
 		CustomerID:   j.CustomerID,
 		JobID:        j.ID,
 		StatusID:     0,
 		Title:        j.JobType,
-		Notes:        j.Notes,
+		Notes:        notes,
+		Terms:        defaults.Terms,
+		ValidThrough: validThrough,
 		TaxRate:      defaultTaxRate,
 		CustomFields: "[]",
 		LineItems:    items,

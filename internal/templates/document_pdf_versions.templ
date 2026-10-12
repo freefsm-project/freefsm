@@ -1,0 +1,33 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ DocumentPDFVersions(kind string,id int64,versions []authorization.PDFVersion,canGenerate,canDownload,canDeliver bool) {
+	@Layout("PDF versions") {
+		<h1>PDF versions</h1>
+		<p>Generating uses current presentation and keeps all existing PDF bytes. Previously saved file attachments remain available in the document's Files section.</p>
+		if canGenerate {
+			<form method="post" hx-boost="false" action={ templ.URL(fmt.Sprintf("/%ss/%d/pdf/save",kind,id)) }>
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<button type="submit">Generate new PDF version</button>
+			</form>
+		}
+		for _, version := range versions {
+			<form method="get" hx-boost="false" action={ templ.URL(fmt.Sprintf("/%ss/%d/pdf",kind,id)) }>
+				<input type="hidden" name="version" value={ fmt.Sprint(version.ID) }/>
+				<p>Version { fmt.Sprint(version.ID) } · { displayDateTime(ctx,version.GeneratedAt) }</p>
+				if version.Stale {
+					<p>This PDF is stale. It reflects earlier content or presentation.</p>
+					<label><input type="checkbox" name="confirm_stale" value="1" required/> I confirm downloading this stale version</label>
+				}
+				if canDownload {
+					<button type="submit">Download selected PDF</button>
+				}
+			</form>
+			if canDeliver {
+				<a href={ templ.URL(fmt.Sprintf("/%ss/%d/email?pdf_version=%d",kind,id,version.ID)) }>Email this saved version</a>
+			}
+		}
+	}
+}

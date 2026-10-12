@@ -157,6 +157,9 @@ templ Layout(title string, children ...templ.Component) {
 			if canReviewAuthorization(ctx) {
 				<a href="/settings/authorization">Authorization review</a>
 			}
+			if canConfiguration(ctx) && !canAdmin(ctx) {
+				<a href="/settings">Company and document settings</a>
+			}
 			if canAdmin(ctx) {
 					<hr class="sidebar-divider"/>
 					<details class="dropdown">

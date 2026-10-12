@@ -957,7 +957,7 @@ func (h *CustomerHandler) effectiveInvoice(ctx context.Context, invoice *ent.Inv
 }
 
 func addInvoiceFinancial(summary *templates.CustomerFinancialSummary, inv *ent.Invoice, view settlement.InvoiceSettlement, invoiceStatuses []*ent.Status, loc *time.Location) {
-	today := time.Now().In(loc).Truncate(24 * time.Hour)
+	today := time.Now()
 	category := statusCategory(invoiceStatuses, inv.StatusID)
 	if category != "invoice:void" {
 		summary.TotalInvoiced += float64(view.TotalCents) / 100
@@ -969,7 +969,7 @@ func addInvoiceFinancial(summary *templates.CustomerFinancialSummary, inv *ent.I
 	balance := float64(view.AmountDueCents) / 100
 	summary.TotalBalance += balance
 	summary.OpenInvoiceCount++
-	if !inv.DueDate.IsZero() && inv.DueDate.In(loc).Before(today) {
+	if services.IsCompanyDateOverdue(inv.DueDate, today, loc) {
 		summary.OverdueBalance += balance
 		summary.OverdueInvoiceCount++
 	}

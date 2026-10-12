@@ -13,6 +13,10 @@ const (
 	Label = "estimate"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldNumberLabel holds the string denoting the number_label field in the database.
+	FieldNumberLabel = "number_label"
+	// FieldDocumentNumber holds the string denoting the document_number field in the database.
+	FieldDocumentNumber = "document_number"
 	// FieldCompanyID holds the string denoting the company_id field in the database.
 	FieldCompanyID = "company_id"
 	// FieldCustomerID holds the string denoting the customer_id field in the database.
@@ -25,6 +29,10 @@ const (
 	FieldTitle = "title"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// FieldTerms holds the string denoting the terms field in the database.
+	FieldTerms = "terms"
+	// FieldValidThrough holds the string denoting the valid_through field in the database.
+	FieldValidThrough = "valid_through"
 	// FieldTaxRate holds the string denoting the tax_rate field in the database.
 	FieldTaxRate = "tax_rate"
 	// FieldLineItems holds the string denoting the line_items field in the database.
@@ -46,12 +54,16 @@ const (
 // Columns holds all SQL columns for estimate fields.
 var Columns = []string{
 	FieldID,
+	FieldNumberLabel,
+	FieldDocumentNumber,
 	FieldCompanyID,
 	FieldCustomerID,
 	FieldJobID,
 	FieldStatusID,
 	FieldTitle,
 	FieldNotes,
+	FieldTerms,
+	FieldValidThrough,
 	FieldTaxRate,
 	FieldLineItems,
 	FieldCustomFields,
@@ -72,6 +84,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultNumberLabel holds the default value on creation for the "number_label" field.
+	DefaultNumberLabel string
 	// DefaultTitle holds the default value on creation for the "title" field.
 	DefaultTitle string
 	// DefaultNotes holds the default value on creation for the "notes" field.
@@ -96,6 +110,16 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByNumberLabel orders the results by the number_label field.
+func ByNumberLabel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNumberLabel, opts...).ToFunc()
+}
+
+// ByDocumentNumber orders the results by the document_number field.
+func ByDocumentNumber(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDocumentNumber, opts...).ToFunc()
 }
 
 // ByCompanyID orders the results by the company_id field.
@@ -126,6 +150,16 @@ func ByTitle(opts ...sql.OrderTermOption) OrderOption {
 // ByNotes orders the results by the notes field.
 func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNotes, opts...).ToFunc()
+}
+
+// ByTerms orders the results by the terms field.
+func ByTerms(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTerms, opts...).ToFunc()
+}
+
+// ByValidThrough orders the results by the valid_through field.
+func ByValidThrough(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldValidThrough, opts...).ToFunc()
 }
 
 // ByTaxRate orders the results by the tax_rate field.

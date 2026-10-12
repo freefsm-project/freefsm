@@ -57,7 +57,7 @@ templ InvoicesTable(p InvoiceListPageData) {
 				}
 				for _, i := range p.Invoices {
 					<tr>
-						<td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) }>{ invoiceNumber(ctx, i.Number) }</a></td>
+						<td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) }>{ recordedNumber(i.NumberLabel,fmt.Sprintf("Invoice record %d — identity requires review",i.ID)) }</a></td>
 						<td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) } class="work-queue-title">{ i.Title }</a></td>
 						<td>{ i.Customer }</td>
 						<td class="work-queue-status"><span class="status-badge" style={ badgeStyle(i.StatusColor) }>{ i.StatusName }</span> <span class="status-badge">{ i.SettlementState }</span></td>

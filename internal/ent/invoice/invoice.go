@@ -15,6 +15,8 @@ const (
 	FieldID = "id"
 	// FieldInvoiceNumber holds the string denoting the invoice_number field in the database.
 	FieldInvoiceNumber = "invoice_number"
+	// FieldNumberLabel holds the string denoting the number_label field in the database.
+	FieldNumberLabel = "number_label"
 	// FieldCompanyID holds the string denoting the company_id field in the database.
 	FieldCompanyID = "company_id"
 	// FieldCustomerID holds the string denoting the customer_id field in the database.
@@ -29,6 +31,8 @@ const (
 	FieldTitle = "title"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// FieldTerms holds the string denoting the terms field in the database.
+	FieldTerms = "terms"
 	// FieldInvoiceDate holds the string denoting the invoice_date field in the database.
 	FieldInvoiceDate = "invoice_date"
 	// FieldDueDate holds the string denoting the due_date field in the database.
@@ -59,6 +63,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldInvoiceNumber,
+	FieldNumberLabel,
 	FieldCompanyID,
 	FieldCustomerID,
 	FieldJobID,
@@ -66,6 +71,7 @@ var Columns = []string{
 	FieldStatusID,
 	FieldTitle,
 	FieldNotes,
+	FieldTerms,
 	FieldInvoiceDate,
 	FieldDueDate,
 	FieldTaxRate,
@@ -90,6 +96,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultNumberLabel holds the default value on creation for the "number_label" field.
+	DefaultNumberLabel string
 	// DefaultTitle holds the default value on creation for the "title" field.
 	DefaultTitle string
 	// DefaultNotes holds the default value on creation for the "notes" field.
@@ -125,6 +133,11 @@ func ByInvoiceNumber(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldInvoiceNumber, opts...).ToFunc()
 }
 
+// ByNumberLabel orders the results by the number_label field.
+func ByNumberLabel(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNumberLabel, opts...).ToFunc()
+}
+
 // ByCompanyID orders the results by the company_id field.
 func ByCompanyID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCompanyID, opts...).ToFunc()
@@ -158,6 +171,11 @@ func ByTitle(opts ...sql.OrderTermOption) OrderOption {
 // ByNotes orders the results by the notes field.
 func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNotes, opts...).ToFunc()
+}
+
+// ByTerms orders the results by the terms field.
+func ByTerms(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTerms, opts...).ToFunc()
 }
 
 // ByInvoiceDate orders the results by the invoice_date field.

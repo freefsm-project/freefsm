@@ -18,6 +18,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -80,9 +81,11 @@ type Snapshot struct {
 	PDFFilename                 string
 }
 type QueueRequest struct {
-	Key      uuid.UUID
-	Document DocumentRef
-	Snapshot Snapshot
+	PDFVersionID    int64
+	ConfirmStalePDF bool
+	Key             uuid.UUID
+	Document        DocumentRef
+	Snapshot        Snapshot
 }
 type Delivery struct {
 	ID, CompanyID, DocumentID, ActorID                                           int64
@@ -170,6 +173,19 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 		return Delivery{}, err
 	}
 	defer tx.Rollback(ctx)
+	request, migrated := authorization.FromContext(ctx)
+	var selected authorization.PDFDeliverySelection
+	if migrated {
+		if a.ID != request.Actor.UserID {
+			return Delivery{}, ErrForbidden
+		}
+		selected, err = request.Service.BindDeliveryPDF(ctx, tx, request.Actor, a.CompanyID, r.Document.Type, r.Document.ID, r.PDFVersionID)
+		if err != nil {
+			return Delivery{}, err
+		}
+		r.Snapshot.PDF = selected.Version.Content
+		r.Snapshot.PDFFilename = selected.Version.Filename
+	}
 	var jobID, statusID *int64
 	q := fmt.Sprintf(`SELECT job_id,status_id FROM %ss WHERE id=$1 AND company_id=$2 AND deleted_at IS NULL AND conversion_hidden_at IS NULL FOR SHARE`, r.Document.Type)
 	if err = tx.QueryRow(ctx, q, r.Document.ID, a.CompanyID).Scan(&jobID, &statusID); errors.Is(err, pgx.ErrNoRows) {
@@ -177,8 +193,10 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 	} else if err != nil {
 		return Delivery{}, err
 	}
-	if err = authorize(ctx, tx, a, jobID); err != nil {
-		return Delivery{}, err
+	if !migrated {
+		if err = authorize(ctx, tx, a, jobID); err != nil {
+			return Delivery{}, err
+		}
 	}
 	var tracking bool
 	if err = tx.QueryRow(ctx, `SELECT email_tracking_enabled FROM company_settings WHERE company_id=$1`, a.CompanyID).Scan(&tracking); errors.Is(err, pgx.ErrNoRows) {
@@ -206,6 +224,9 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return Delivery{}, err
 	}
+	if migrated && selected.Version.Stale && !r.ConfirmStalePDF {
+		return Delivery{}, authorization.ErrConflict
+	}
 	messageID := fmt.Sprintf("<delivery-%d-%s@freefsm.local>", a.CompanyID, r.Key)
 	var tokenHash []byte
 	html := r.Snapshot.HTMLBody
@@ -226,8 +247,8 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 		invoiceID = r.Document.ID
 	}
 	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO document_deliveries(company_id,document_type,document_id,estimate_id,invoice_id,actor_id,idempotency_key,request_fingerprint,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,tracking_enabled,tracking_token_hash)
-	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) ON CONFLICT(company_id,idempotency_key) DO NOTHING RETURNING id`, a.CompanyID, r.Document.Type, r.Document.ID, estimateID, invoiceID, a.ID, r.Key, fingerprint, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, html, r.Snapshot.PDF, r.Snapshot.PDFFilename, messageID, statusID, tracking, tokenHash).Scan(&id)
+	err = tx.QueryRow(ctx, `INSERT INTO document_deliveries(company_id,document_type,document_id,estimate_id,invoice_id,actor_id,idempotency_key,request_fingerprint,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,tracking_enabled,tracking_token_hash,pdf_version_id)
+	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NULLIF($21,0)) ON CONFLICT(company_id,idempotency_key) DO NOTHING RETURNING id`, a.CompanyID, r.Document.Type, r.Document.ID, estimateID, invoiceID, a.ID, r.Key, fingerprint, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, html, r.Snapshot.PDF, r.Snapshot.PDFFilename, messageID, statusID, tracking, tokenHash, r.PDFVersionID).Scan(&id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		if err = tx.QueryRow(ctx, `SELECT id,request_fingerprint FROM document_deliveries WHERE company_id=$1 AND idempotency_key=$2`, a.CompanyID, r.Key).Scan(&id, &existingFingerprint); err != nil {
 			return Delivery{}, err
@@ -254,6 +275,11 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 	if err != nil {
 		return Delivery{}, err
 	}
+	if migrated {
+		if err := request.Service.AuditPDFDelivery(ctx, tx, request.Actor, r.Document.Type, r.Document.ID, r.PDFVersionID, id, selected.Version.Stale); err != nil {
+			return Delivery{}, err
+		}
+	}
 	return d, tx.Commit(ctx)
 }
 
@@ -271,6 +297,10 @@ func canonicalAddresses(v []string) []string {
 	return out
 }
 func requestFingerprint(r QueueRequest, status *int64, tracking bool) ([]byte, error) {
+	if r.PDFVersionID > 0 {
+		status = nil
+		tracking = false
+	}
 	pdf := sha256.Sum256(r.Snapshot.PDF)
 	v := struct {
 		Document                               DocumentRef `json:"document"`
@@ -278,7 +308,8 @@ func requestFingerprint(r QueueRequest, status *int64, tracking bool) ([]byte, e
 		Subject, Text, HTML, Filename, PDFHash string
 		Status                                 *int64
 		Tracking                               bool
-	}{r.Document, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, r.Snapshot.HTMLBody, r.Snapshot.PDFFilename, hex.EncodeToString(pdf[:]), status, tracking}
+		PDFVersion                             int64 `json:"pdf_version,omitempty"`
+	}{r.Document, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, r.Snapshot.HTMLBody, r.Snapshot.PDFFilename, hex.EncodeToString(pdf[:]), status, tracking, r.PDFVersionID}
 	b, err := json.Marshal(v)
 	if err != nil {
 		return nil, err

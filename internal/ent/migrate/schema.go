@@ -211,7 +211,12 @@ var (
 		{Name: "invoice_prefix", Type: field.TypeString, Default: "INV-"},
 		{Name: "next_invoice_number", Type: field.TypeInt64, Default: 1},
 		{Name: "estimate_prefix", Type: field.TypeString, Default: "EST-"},
-		{Name: "default_due_days", Type: field.TypeInt, Default: 30},
+		{Name: "default_due_days", Type: field.TypeInt, Nullable: true},
+		{Name: "default_invoice_notes", Type: field.TypeString, Default: ""},
+		{Name: "default_estimate_notes", Type: field.TypeString, Default: ""},
+		{Name: "estimate_terms", Type: field.TypeString, Default: ""},
+		{Name: "default_line_description", Type: field.TypeString, Default: ""},
+		{Name: "estimate_valid_days", Type: field.TypeInt, Nullable: true},
 		{Name: "smtp_host", Type: field.TypeString, Default: ""},
 		{Name: "smtp_port", Type: field.TypeInt, Default: 587},
 		{Name: "smtp_user", Type: field.TypeString, Default: ""},
@@ -423,12 +428,16 @@ var (
 	// EstimatesColumns holds the columns for the "estimates" table.
 	EstimatesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "number_label", Type: field.TypeString, Default: ""},
+		{Name: "document_number", Type: field.TypeInt64, Nullable: true},
 		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "customer_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "job_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "status_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "title", Type: field.TypeString, Default: ""},
 		{Name: "notes", Type: field.TypeString, Default: ""},
+		{Name: "terms", Type: field.TypeString, Nullable: true},
+		{Name: "valid_through", Type: field.TypeTime, Nullable: true},
 		{Name: "tax_rate", Type: field.TypeString, Default: "0"},
 		{Name: "line_items", Type: field.TypeString, Default: "[]"},
 		{Name: "custom_fields", Type: field.TypeString, Default: "[]"},
@@ -446,12 +455,12 @@ var (
 			{
 				Name:    "estimate_customer_id",
 				Unique:  false,
-				Columns: []*schema.Column{EstimatesColumns[2]},
+				Columns: []*schema.Column{EstimatesColumns[4]},
 			},
 			{
 				Name:    "estimate_job_id",
 				Unique:  false,
-				Columns: []*schema.Column{EstimatesColumns[3]},
+				Columns: []*schema.Column{EstimatesColumns[5]},
 			},
 		},
 	}
@@ -519,6 +528,7 @@ var (
 	InvoicesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "invoice_number", Type: field.TypeInt64, Nullable: true},
+		{Name: "number_label", Type: field.TypeString, Default: ""},
 		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "customer_id", Type: field.TypeInt64},
 		{Name: "job_id", Type: field.TypeInt64, Nullable: true},
@@ -526,6 +536,7 @@ var (
 		{Name: "status_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "title", Type: field.TypeString, Default: ""},
 		{Name: "notes", Type: field.TypeString, Default: ""},
+		{Name: "terms", Type: field.TypeString, Nullable: true},
 		{Name: "invoice_date", Type: field.TypeTime},
 		{Name: "due_date", Type: field.TypeTime},
 		{Name: "tax_rate", Type: field.TypeString, Default: "0"},
@@ -547,22 +558,22 @@ var (
 			{
 				Name:    "invoice_customer_id",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[3]},
+				Columns: []*schema.Column{InvoicesColumns[4]},
 			},
 			{
 				Name:    "invoice_job_id",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[4]},
+				Columns: []*schema.Column{InvoicesColumns[5]},
 			},
 			{
 				Name:    "invoice_status_id",
 				Unique:  false,
-				Columns: []*schema.Column{InvoicesColumns[6]},
+				Columns: []*schema.Column{InvoicesColumns[7]},
 			},
 			{
 				Name:    "invoice_company_id_invoice_number",
 				Unique:  true,
-				Columns: []*schema.Column{InvoicesColumns[2], InvoicesColumns[1]},
+				Columns: []*schema.Column{InvoicesColumns[3], InvoicesColumns[1]},
 			},
 		},
 	}

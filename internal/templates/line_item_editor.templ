@@ -14,7 +14,7 @@ templ LineItemEditor(p LineItemEditorData) {
 			const existing = readJSON('existing', '[]');
 			const taxContext = readJSON('customers', '{"default_tax_rate":"0","customers":{}}');
 			const form = root.closest('form');
-			const makeItem = () => ({ item_id: 0, title: '', description: '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: 0, surcharge: 0 });
+			const makeItem = () => ({ item_id: 0, title: '', description: form.querySelector('[name="default_line_description"]')?.value || '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: 0, surcharge: 0 });
 			const makeNewItem = () => ({ name: '', type: 'product', sku: '', description: '', unit_price: 0, unit_cost: 0, taxable: true, tax_rate: '', track_inventory: false });
 			const parseRate = (value) => (parseFloat(String(value || '').replace('%', '').trim()) || 0) / 100;
 			const roundMoney = (value) => Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * 100) / 100;

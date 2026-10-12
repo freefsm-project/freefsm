@@ -115,6 +115,9 @@ func TestTagOwnershipMigration046BackfillsAndEnforcesOwnershipIntegration(t *tes
 			t.Fatalf("strict columns=%d functions=%d legacy FK=%d", strictColumns, functions, legacyTagFK)
 		}
 
+		if _, err := db.Pool.Exec(ctx, `INSERT INTO company_settings(company_id) SELECT $1 WHERE NOT EXISTS(SELECT 1 FROM company_settings WHERE company_id=$1)`, a); err != nil {
+			t.Fatal(err)
+		}
 		mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,title,conversion_hidden_at) VALUES($1,$2,'hidden',now()) RETURNING id`, a, customerA), &estimate)
 		mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,invoice_number,title,conversion_hidden_at) VALUES($1,$2,9001,'hidden',now()) RETURNING id`, a, customerA), &invoice)
 		if _, err := db.Pool.Exec(ctx, `INSERT INTO tag_links(company_id,tag_id,object_type,object_id) VALUES($1,$2,'estimate',$3)`, a, tag, estimate); err != nil {

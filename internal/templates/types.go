@@ -66,6 +66,11 @@ func canAdmin(ctx context.Context) bool {
 	return ok && u != nil && u.ProtectedAdministrator
 }
 
+func canConfiguration(ctx context.Context) bool {
+	u, ok := middleware.UserFromContext(ctx)
+	return ok && u != nil && u.ConfigurationView
+}
+
 func canCustomer(ctx context.Context, action string) bool {
 	u, ok := middleware.UserFromContext(ctx)
 	if !ok || u == nil {
@@ -590,6 +595,10 @@ type EstimateRow struct {
 }
 
 type EstimateDetail struct {
+	TermsUnknown   bool
+	ValidThrough   string
+	Terms          string
+	NumberLabel    string
 	ID             int64
 	CustomerID     int64
 	Customer       string
@@ -627,19 +636,23 @@ type EstimateListPageData struct {
 }
 
 type EstimateFormPageData struct {
-	Estimate          *EstimateDetail
-	Errors            map[string]string
-	IsNew             bool
-	Customers         []SelectOption
-	Jobs              []SelectOption
-	Statuses          []SelectOption
-	ItemsJSON         string
-	ExistingItemsJSON string
-	CustomersJSON     string
-	CustomFields      []CustomFieldDisplay
+	DefaultsJSON           string
+	PreserveEntered        bool
+	DefaultLineDescription string
+	Estimate               *EstimateDetail
+	Errors                 map[string]string
+	IsNew                  bool
+	Customers              []SelectOption
+	Jobs                   []SelectOption
+	Statuses               []SelectOption
+	ItemsJSON              string
+	ExistingItemsJSON      string
+	CustomersJSON          string
+	CustomFields           []CustomFieldDisplay
 }
 
 type InvoiceRow struct {
+	NumberLabel     string
 	ID              int64
 	Number          int64
 	Title           string
@@ -654,6 +667,9 @@ type InvoiceRow struct {
 }
 
 type InvoiceDetail struct {
+	TermsUnknown       bool
+	NumberLabel        string
+	Terms              string
 	ID                 int64
 	Number             int64
 	CustomerID         int64
@@ -764,18 +780,22 @@ type SettingsPageData struct {
 }
 
 type InvoiceFormPageData struct {
-	Invoice           *InvoiceDetail
-	Errors            map[string]string
-	IsNew             bool
-	Customers         []SelectOption
-	Jobs              []SelectOption
-	Statuses          []SelectOption
-	ItemsJSON         string
-	ExistingItemsJSON string
-	CustomersJSON     string
-	CustomFields      []CustomFieldDisplay
-	CancelURL         string
-	FormAction        string
+	EnteredInvoiceNumber   string
+	DefaultsJSON           string
+	PreserveEntered        bool
+	DefaultLineDescription string
+	Invoice                *InvoiceDetail
+	Errors                 map[string]string
+	IsNew                  bool
+	Customers              []SelectOption
+	Jobs                   []SelectOption
+	Statuses               []SelectOption
+	ItemsJSON              string
+	ExistingItemsJSON      string
+	CustomersJSON          string
+	CustomFields           []CustomFieldDisplay
+	CancelURL              string
+	FormAction             string
 }
 
 type DocumentPreviewData struct {
@@ -791,18 +811,20 @@ type DocumentPreviewData struct {
 }
 
 type DocumentEmailData struct {
-	ObjectType     string
-	ObjectID       int64
-	Title          string
-	BackURL        string
-	ActionURL      string
-	To             string
-	CC             string
-	BCC            string
-	Subject        string
-	Body           string
-	Error          string
-	IdempotencyKey string
+	PDFVersion                int64
+	PDFStale, ConfirmStalePDF bool
+	ObjectType                string
+	ObjectID                  int64
+	Title                     string
+	BackURL                   string
+	ActionURL                 string
+	To                        string
+	CC                        string
+	BCC                       string
+	Subject                   string
+	Body                      string
+	Error                     string
+	IdempotencyKey            string
 }
 
 type DeliveryHistoryRow struct {
@@ -955,6 +977,9 @@ func invoiceFormCancelURL(p InvoiceFormPageData) string {
 }
 
 func invoiceFormNumberValue(p InvoiceFormPageData) string {
+	if p.PreserveEntered {
+		return p.EnteredInvoiceNumber
+	}
 	if p.Invoice == nil || p.Invoice.Number == 0 {
 		return ""
 	}
@@ -989,6 +1014,20 @@ func invoicePrefix(ctx context.Context) string {
 
 func invoiceNumber(ctx context.Context, number int64) string {
 	return services.FormatInvoiceNumber(number, middleware.CompanyFromContext(ctx))
+}
+
+func recordedNumber(label, fallback string) string {
+	if label != "" {
+		return label
+	}
+	return fallback
+}
+
+func optionalDefaultDays(days *int) string {
+	if days == nil {
+		return ""
+	}
+	return fmt.Sprint(*days)
 }
 
 func estimatePrefix(ctx context.Context) string {
@@ -1166,7 +1205,7 @@ func settingsFormAction(isSetup bool) string {
 	if isSetup {
 		return "/setup/company"
 	}
-	return "/settings"
+	return "/settings/advanced"
 }
 
 func invoiceLogoURL(cacheBust string) string {

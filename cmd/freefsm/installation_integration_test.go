@@ -453,7 +453,7 @@ func TestInstallationBootstrapAndCoreWorkflowsWithoutProviders(t *testing.T) {
 	if res.StatusCode != 303 || res.Header.Get("Location") != "/setup/company" {
 		t.Fatalf("bootstrap: %d %s", res.StatusCode, res.Header.Get("Location"))
 	}
-	res = postInstallationForm(t, client, base, "/setup/company", url.Values{"business_name": {"Installation 107"}, "next_invoice_number": {"1"}, "password_min_length": {"8"}, "timezone": {"UTC"}, "default_tax_rate": {"0"}, "password_require_uppercase": {"on"}, "password_require_lowercase": {"on"}, "password_require_digit": {"on"}, "password_require_special": {"on"}})
+	res = postInstallationForm(t, client, base, "/setup/company", url.Values{"business_name": {"Installation 107"}, "timezone": {"UTC"}})
 	res.Body.Close()
 	if res.StatusCode != 303 || !strings.HasPrefix(res.Header.Get("Location"), "/?flash=") {
 		t.Fatalf("company setup: %d %s", res.StatusCode, res.Header.Get("Location"))

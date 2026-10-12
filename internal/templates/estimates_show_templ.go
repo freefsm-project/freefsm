@@ -626,7 +626,7 @@ func EstimateShow(p EstimateDetail) templ.Component {
 			}
 			return nil
 		})
-		templ_7745c5c3_Err = Layout(estimateNumber(ctx, p.ID)+": "+p.Title).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = Layout(recordedNumber(p.NumberLabel, fmt.Sprintf("Estimate record %d — identity requires review", p.ID))+": "+p.Title).Render(templ.WithChildren(ctx, templ_7745c5c3_Var2), templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

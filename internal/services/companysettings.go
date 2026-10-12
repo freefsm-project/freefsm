@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"strconv"
+	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/companysettings"
@@ -9,6 +11,59 @@ import (
 
 type CompanySettingsService struct {
 	client *ent.Client
+}
+
+type DocumentDefaults struct {
+	Notes, Terms, LineDescription string
+	Days                          *int
+}
+
+// DateFrom projects a nullable calendar-day offset from an explicit base. The
+// caller names the result Invoice Due Date or Estimate Valid Through.
+func (d DocumentDefaults) DateFrom(base time.Time) string {
+	if d.Days == nil {
+		return ""
+	}
+	return base.AddDate(0, 0, *d.Days).Format("2006-01-02")
+}
+
+func ResolveDocumentDefaults(cs *ent.CompanySettings, kind string, customer map[string]*string) DocumentDefaults {
+	d := DocumentDefaults{}
+	if cs != nil {
+		d.LineDescription = cs.DefaultLineDescription
+		if kind == "invoice" {
+			d.Days = cs.DefaultDueDays
+			d.Notes = cs.DefaultInvoiceNotes
+			d.Terms = cs.InvoicePaymentTerms
+		} else {
+			d.Days = cs.EstimateValidDays
+			d.Notes = cs.DefaultEstimateNotes
+			d.Terms = cs.EstimateTerms
+		}
+	}
+	if value := customer[kind+"_notes"]; value != nil {
+		d.Notes = *value
+	}
+	if value := customer[kind+"_terms"]; value != nil {
+		d.Terms = *value
+	}
+	if value := customer["line_description"]; value != nil {
+		d.LineDescription = *value
+	}
+	daysKey := "invoice_due_days"
+	if kind == "estimate" {
+		daysKey = "estimate_valid_days"
+	}
+	if value := customer[daysKey]; value != nil {
+		d.Days = nil
+		if *value != "" {
+			days, err := strconv.Atoi(*value)
+			if err == nil {
+				d.Days = &days
+			}
+		}
+	}
+	return d
 }
 
 func NewCompanySettingsService(client *ent.Client) *CompanySettingsService {
@@ -24,65 +79,38 @@ func (s *CompanySettingsService) GetForCompany(ctx context.Context, companyID in
 	return s.client.CompanySettings.Query().Where(companysettings.CompanyIDEQ(companyID)).Only(ctx)
 }
 
-type CompanySettingsParams struct {
-	BusinessName                string
-	Address                     string
-	City                        string
-	State                       string
-	Zip                         string
-	Phone                       string
-	Email                       string
-	TaxID                       string
-	DefaultTaxRate              string
-	InvoicePrefix               string
-	NextInvoiceNumber           int64
-	EstimatePrefix              string
-	DefaultDueDays              int
-	SmtpHost                    string
-	SmtpPort                    int
-	SmtpUser                    string
-	SmtpPassword                string
-	SmtpFrom                    string
-	EmailAutoCC                 string
-	InvoiceEmailSubject         string
-	InvoiceEmailBody            string
-	EstimateEmailSubject        string
-	EstimateEmailBody           string
-	Timezone                    string
-	DateFormat                  string
-	PasswordMinLength           int
-	PasswordRequireUppercase    bool
-	PasswordRequireLowercase    bool
-	PasswordRequireDigit        bool
-	PasswordRequireSpecial      bool
-	InvoiceColor                string
-	InvoiceFooter               string
-	InvoicePaymentTerms         string
-	PDFShowLineItemDescriptions bool
-	MapTileURL                  string
-	GeocoderURL                 string
-	EmailTrackingEnabled        bool
+type AdministrativeSettingsParams struct {
+	SmtpHost                 string
+	SmtpPort                 int
+	SmtpUser                 string
+	SmtpPassword             string
+	SmtpFrom                 string
+	EmailAutoCC              string
+	InvoiceEmailSubject      string
+	InvoiceEmailBody         string
+	EstimateEmailSubject     string
+	EstimateEmailBody        string
+	PasswordMinLength        int
+	PasswordRequireUppercase bool
+	PasswordRequireLowercase bool
+	PasswordRequireDigit     bool
+	PasswordRequireSpecial   bool
+	MapTileURL               string
+	GeocoderURL              string
+	EmailTrackingEnabled     bool
 }
 
-func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsParams) error {
+func (s *CompanySettingsService) SaveAdministrativeSettings(ctx context.Context, p AdministrativeSettingsParams) error {
 	cs, err := s.Get(ctx)
 	if err != nil {
 		return err
 	}
+	if p.SmtpPassword == "" {
+		p.SmtpPassword = cs.SMTPPassword
+	}
+	// This legacy sealed editor owns mail/maps/security only. Company and
+	// document writes use the independent, revision-guarded authority boundary.
 	_, err = s.client.CompanySettings.UpdateOne(cs).
-		SetBusinessName(p.BusinessName).
-		SetAddress(p.Address).
-		SetCity(p.City).
-		SetState(p.State).
-		SetZip(p.Zip).
-		SetPhone(p.Phone).
-		SetEmail(p.Email).
-		SetTaxID(p.TaxID).
-		SetDefaultTaxRate(p.DefaultTaxRate).
-		SetInvoicePrefix(p.InvoicePrefix).
-		SetNextInvoiceNumber(p.NextInvoiceNumber).
-		SetEstimatePrefix(p.EstimatePrefix).
-		SetDefaultDueDays(p.DefaultDueDays).
 		SetSMTPHost(p.SmtpHost).
 		SetSMTPPort(p.SmtpPort).
 		SetSMTPUser(p.SmtpUser).
@@ -93,28 +121,14 @@ func (s *CompanySettingsService) Save(ctx context.Context, p CompanySettingsPara
 		SetInvoiceEmailBody(p.InvoiceEmailBody).
 		SetEstimateEmailSubject(p.EstimateEmailSubject).
 		SetEstimateEmailBody(p.EstimateEmailBody).
-		SetTimezone(p.Timezone).
-		SetDateFormat(NormalizeDateFormat(p.DateFormat)).
 		SetPasswordMinLength(p.PasswordMinLength).
 		SetPasswordRequireUppercase(p.PasswordRequireUppercase).
 		SetPasswordRequireLowercase(p.PasswordRequireLowercase).
 		SetPasswordRequireDigit(p.PasswordRequireDigit).
 		SetPasswordRequireSpecial(p.PasswordRequireSpecial).
-		SetInvoiceColor(p.InvoiceColor).
-		SetInvoiceFooter(p.InvoiceFooter).
-		SetInvoicePaymentTerms(p.InvoicePaymentTerms).
-		SetPdfShowLineItemDescriptions(p.PDFShowLineItemDescriptions).
 		SetMapTileURL(p.MapTileURL).
 		SetGeocoderURL(p.GeocoderURL).
 		SetEmailTrackingEnabled(p.EmailTrackingEnabled).
 		Save(ctx)
 	return err
-}
-
-func (s *CompanySettingsService) UpdateInvoiceLogoPath(ctx context.Context, path string) (*ent.CompanySettings, error) {
-	cs, err := s.Get(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return s.client.CompanySettings.UpdateOneID(cs.ID).SetInvoiceLogoPath(path).Save(ctx)
 }
