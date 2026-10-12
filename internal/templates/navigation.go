@@ -40,7 +40,8 @@ func operationalLinks(ctx context.Context) []navigationLink {
 		name, label string
 		scopes      []string
 	}{
-		{"customer", "Customers", []string{"A"}}, {"asset", "Assets", []string{"A"}},
+		{"customer", "Customers", []string{"A"}}, {"contact", "Contacts", []string{"A"}},
+		{"location", "Locations", []string{"A"}}, {"asset", "Assets", []string{"A"}},
 		{"job", "Jobs", []string{"A", "J"}}, {"project", "Projects", []string{"A"}},
 		{"estimate", "Estimates", []string{"A", "J"}}, {"invoice", "Invoices", []string{"A", "J"}},
 		{"item", "Items", []string{"A"}},
