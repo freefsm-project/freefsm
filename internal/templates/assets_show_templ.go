@@ -482,6 +482,10 @@ func AssetShow(p AssetShowPageData) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
+			templ_7745c5c3_Err = FieldValuesLink("asset", p.Asset.ID, p.Asset.ArchivedAt == "").Render(ctx, templ_7745c5c3_Buffer)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
 			templ_7745c5c3_Err = CustomFieldsWidget(CustomFieldsWidgetData{
 				Fields:   p.CustomFields,
 				EditMode: false,
@@ -497,7 +501,7 @@ func AssetShow(p AssetShowPageData) templ.Component {
 				var templ_7745c5c3_Var26 string
 				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/assets/%d/comments?read_only=1", p.Asset.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_show.templ`, Line: 124, Col: 75}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_show.templ`, Line: 125, Col: 75}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var26)
 				if templ_7745c5c3_Err != nil {
@@ -515,7 +519,7 @@ func AssetShow(p AssetShowPageData) templ.Component {
 				var templ_7745c5c3_Var27 string
 				templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("/assets/%d/comments", p.Asset.ID))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_show.templ`, Line: 126, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_show.templ`, Line: 127, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var27)
 				if templ_7745c5c3_Err != nil {
@@ -547,7 +551,7 @@ func AssetShow(p AssetShowPageData) templ.Component {
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.ResolveAttributeValue(templ.URL(fmt.Sprintf("/assets/%d/activity", p.Asset.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_show.templ`, Line: 135, Col: 72}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/assets_show.templ`, Line: 136, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var28)
 			if templ_7745c5c3_Err != nil {

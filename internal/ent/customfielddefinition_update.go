@@ -117,6 +117,53 @@ func (_u *CustomFieldDefinitionUpdate) SetNillableFieldType(v *string) *CustomFi
 	return _u
 }
 
+// SetPrecision sets the "precision" field.
+func (_u *CustomFieldDefinitionUpdate) SetPrecision(v int) *CustomFieldDefinitionUpdate {
+	_u.mutation.ResetPrecision()
+	_u.mutation.SetPrecision(v)
+	return _u
+}
+
+// SetNillablePrecision sets the "precision" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdate) SetNillablePrecision(v *int) *CustomFieldDefinitionUpdate {
+	if v != nil {
+		_u.SetPrecision(*v)
+	}
+	return _u
+}
+
+// AddPrecision adds value to the "precision" field.
+func (_u *CustomFieldDefinitionUpdate) AddPrecision(v int) *CustomFieldDefinitionUpdate {
+	_u.mutation.AddPrecision(v)
+	return _u
+}
+
+// ClearPrecision clears the value of the "precision" field.
+func (_u *CustomFieldDefinitionUpdate) ClearPrecision() *CustomFieldDefinitionUpdate {
+	_u.mutation.ClearPrecision()
+	return _u
+}
+
+// SetDefaultValue sets the "default_value" field.
+func (_u *CustomFieldDefinitionUpdate) SetDefaultValue(v string) *CustomFieldDefinitionUpdate {
+	_u.mutation.SetDefaultValue(v)
+	return _u
+}
+
+// SetNillableDefaultValue sets the "default_value" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdate) SetNillableDefaultValue(v *string) *CustomFieldDefinitionUpdate {
+	if v != nil {
+		_u.SetDefaultValue(*v)
+	}
+	return _u
+}
+
+// ClearDefaultValue clears the value of the "default_value" field.
+func (_u *CustomFieldDefinitionUpdate) ClearDefaultValue() *CustomFieldDefinitionUpdate {
+	_u.mutation.ClearDefaultValue()
+	return _u
+}
+
 // SetRequired sets the "required" field.
 func (_u *CustomFieldDefinitionUpdate) SetRequired(v bool) *CustomFieldDefinitionUpdate {
 	_u.mutation.SetRequired(v)
@@ -269,6 +316,21 @@ func (_u *CustomFieldDefinitionUpdate) sqlSave(ctx context.Context) (_node int, 
 	if value, ok := _u.mutation.FieldType(); ok {
 		_spec.SetField(customfielddefinition.FieldFieldType, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.Precision(); ok {
+		_spec.SetField(customfielddefinition.FieldPrecision, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedPrecision(); ok {
+		_spec.AddField(customfielddefinition.FieldPrecision, field.TypeInt, value)
+	}
+	if _u.mutation.PrecisionCleared() {
+		_spec.ClearField(customfielddefinition.FieldPrecision, field.TypeInt)
+	}
+	if value, ok := _u.mutation.DefaultValue(); ok {
+		_spec.SetField(customfielddefinition.FieldDefaultValue, field.TypeString, value)
+	}
+	if _u.mutation.DefaultValueCleared() {
+		_spec.ClearField(customfielddefinition.FieldDefaultValue, field.TypeString)
+	}
 	if value, ok := _u.mutation.Required(); ok {
 		_spec.SetField(customfielddefinition.FieldRequired, field.TypeBool, value)
 	}
@@ -390,6 +452,53 @@ func (_u *CustomFieldDefinitionUpdateOne) SetNillableFieldType(v *string) *Custo
 	if v != nil {
 		_u.SetFieldType(*v)
 	}
+	return _u
+}
+
+// SetPrecision sets the "precision" field.
+func (_u *CustomFieldDefinitionUpdateOne) SetPrecision(v int) *CustomFieldDefinitionUpdateOne {
+	_u.mutation.ResetPrecision()
+	_u.mutation.SetPrecision(v)
+	return _u
+}
+
+// SetNillablePrecision sets the "precision" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdateOne) SetNillablePrecision(v *int) *CustomFieldDefinitionUpdateOne {
+	if v != nil {
+		_u.SetPrecision(*v)
+	}
+	return _u
+}
+
+// AddPrecision adds value to the "precision" field.
+func (_u *CustomFieldDefinitionUpdateOne) AddPrecision(v int) *CustomFieldDefinitionUpdateOne {
+	_u.mutation.AddPrecision(v)
+	return _u
+}
+
+// ClearPrecision clears the value of the "precision" field.
+func (_u *CustomFieldDefinitionUpdateOne) ClearPrecision() *CustomFieldDefinitionUpdateOne {
+	_u.mutation.ClearPrecision()
+	return _u
+}
+
+// SetDefaultValue sets the "default_value" field.
+func (_u *CustomFieldDefinitionUpdateOne) SetDefaultValue(v string) *CustomFieldDefinitionUpdateOne {
+	_u.mutation.SetDefaultValue(v)
+	return _u
+}
+
+// SetNillableDefaultValue sets the "default_value" field if the given value is not nil.
+func (_u *CustomFieldDefinitionUpdateOne) SetNillableDefaultValue(v *string) *CustomFieldDefinitionUpdateOne {
+	if v != nil {
+		_u.SetDefaultValue(*v)
+	}
+	return _u
+}
+
+// ClearDefaultValue clears the value of the "default_value" field.
+func (_u *CustomFieldDefinitionUpdateOne) ClearDefaultValue() *CustomFieldDefinitionUpdateOne {
+	_u.mutation.ClearDefaultValue()
 	return _u
 }
 
@@ -574,6 +683,21 @@ func (_u *CustomFieldDefinitionUpdateOne) sqlSave(ctx context.Context) (_node *C
 	}
 	if value, ok := _u.mutation.FieldType(); ok {
 		_spec.SetField(customfielddefinition.FieldFieldType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Precision(); ok {
+		_spec.SetField(customfielddefinition.FieldPrecision, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedPrecision(); ok {
+		_spec.AddField(customfielddefinition.FieldPrecision, field.TypeInt, value)
+	}
+	if _u.mutation.PrecisionCleared() {
+		_spec.ClearField(customfielddefinition.FieldPrecision, field.TypeInt)
+	}
+	if value, ok := _u.mutation.DefaultValue(); ok {
+		_spec.SetField(customfielddefinition.FieldDefaultValue, field.TypeString, value)
+	}
+	if _u.mutation.DefaultValueCleared() {
+		_spec.ClearField(customfielddefinition.FieldDefaultValue, field.TypeString)
 	}
 	if value, ok := _u.mutation.Required(); ok {
 		_spec.SetField(customfielddefinition.FieldRequired, field.TypeBool, value)

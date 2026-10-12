@@ -325,6 +325,16 @@ func (s *JobService) activeCustomerForCompany(ctx context.Context, companyID, cu
 }
 
 func (s *JobService) Create(ctx context.Context, companyID int64, params JobCreateParams) (*ent.Job, error) {
+	if needsDetailsTransaction(ctx) {
+		return saveDetails(ctx, "job", 0, 0, &params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Job, int64, error) {
+			params.CustomFields = fields
+			v, err := NewJobService(c).Create(ctx, companyID, params)
+			if err != nil {
+				return nil, 0, err
+			}
+			return v, v.ID, nil
+		})
+	}
 	if companyID <= 0 {
 		return nil, fmt.Errorf("create job: company is required")
 	}
@@ -516,6 +526,28 @@ func daysBetween(from, to time.Time) int {
 }
 
 func (s *JobService) Update(ctx context.Context, companyID, id int64, params JobUpdateParams) (*ent.Job, error) {
+	if _, ok := authorization.FromContext(ctx); ok {
+		return s.SaveDetails(ctx, companyID, id, params)
+	}
+	return s.update(ctx, companyID, id, params)
+}
+
+// SaveDetails is the online details action, even when CustomFields is omitted.
+func (s *JobService) SaveDetails(ctx context.Context, companyID, id int64, params JobUpdateParams) (*ent.Job, error) {
+	return saveDetails(ctx, "job", id, 0, params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Job, int64, error) {
+		params.CustomFields = &fields
+		v, err := NewJobService(c).update(ctx, companyID, id, params)
+		return v, id, err
+	})
+}
+
+// UpdateSubtasks is the existing independent subtask action. It intentionally
+// does not apply details requiredness or creation defaults.
+func (s *JobService) UpdateSubtasks(ctx context.Context, companyID, id int64, subtasks []JobSubtask) (*ent.Job, error) {
+	return s.update(ctx, companyID, id, JobUpdateParams{Subtasks: &subtasks})
+}
+
+func (s *JobService) update(ctx context.Context, companyID, id int64, params JobUpdateParams) (*ent.Job, error) {
 	if companyID <= 0 {
 		return nil, fmt.Errorf("update job: company is required")
 	}

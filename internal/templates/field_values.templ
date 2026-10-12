@@ -1,0 +1,23 @@
+package templates
+
+import "fmt"
+
+templ ParentFieldsForm(typ string,id int64,fields []CustomFieldDisplay,message string) {
+ @Layout("Custom Fields") {
+  <form method="post" hx-boost="false" action={ templ.URL(fmt.Sprintf("/%ss/%d/custom-fields",typ,id)) }>
+   <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+   if message != "" {
+    <p role="alert" class="error-msg">{ message }</p>
+   }
+   @CustomFieldsWidget(CustomFieldsWidgetData{Fields:fields,EditMode:true})
+   <button type="submit">Save Custom Fields</button>
+   <a href={ templ.URL(fmt.Sprintf("/%ss/%d",typ,id)) }>Back to record</a>
+  </form>
+ }
+}
+
+templ FieldValuesLink(typ string,id int64,active bool) {
+ if active && canEditFields(ctx,typ) {
+  <a href={ templ.URL(fmt.Sprintf("/%ss/%d/custom-fields",typ,id)) }>Edit Custom Field Values</a>
+ }
+}

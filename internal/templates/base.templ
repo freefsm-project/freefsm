@@ -177,6 +177,9 @@ templ Layout(title string, children ...templ.Component) {
 			if vocabularyPermission(ctx, "assets", "view") {
 				<a href="/settings/assets">Asset vocabulary</a>
 			}
+			if !canAdmin(ctx) && canViewFieldDefinitions(ctx) {
+				<a href="/settings/custom-fields">Custom Fields</a>
+			}
 			if canAdmin(ctx) {
 					<hr class="sidebar-divider"/>
 					<details class="dropdown">

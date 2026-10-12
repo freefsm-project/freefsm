@@ -7493,6 +7493,9 @@ type CustomFieldDefinitionMutation struct {
 	name           *string
 	conversion_key *string
 	field_type     *string
+	precision      *int
+	addprecision   *int
+	default_value  *string
 	required       *bool
 	options        *string
 	sort_order     *int
@@ -7836,6 +7839,125 @@ func (m *CustomFieldDefinitionMutation) ResetFieldType() {
 	m.field_type = nil
 }
 
+// SetPrecision sets the "precision" field.
+func (m *CustomFieldDefinitionMutation) SetPrecision(i int) {
+	m.precision = &i
+	m.addprecision = nil
+}
+
+// Precision returns the value of the "precision" field in the mutation.
+func (m *CustomFieldDefinitionMutation) Precision() (r int, exists bool) {
+	v := m.precision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPrecision returns the old "precision" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldPrecision(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPrecision is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPrecision requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPrecision: %w", err)
+	}
+	return oldValue.Precision, nil
+}
+
+// AddPrecision adds i to the "precision" field.
+func (m *CustomFieldDefinitionMutation) AddPrecision(i int) {
+	if m.addprecision != nil {
+		*m.addprecision += i
+	} else {
+		m.addprecision = &i
+	}
+}
+
+// AddedPrecision returns the value that was added to the "precision" field in this mutation.
+func (m *CustomFieldDefinitionMutation) AddedPrecision() (r int, exists bool) {
+	v := m.addprecision
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearPrecision clears the value of the "precision" field.
+func (m *CustomFieldDefinitionMutation) ClearPrecision() {
+	m.precision = nil
+	m.addprecision = nil
+	m.clearedFields[customfielddefinition.FieldPrecision] = struct{}{}
+}
+
+// PrecisionCleared returns if the "precision" field was cleared in this mutation.
+func (m *CustomFieldDefinitionMutation) PrecisionCleared() bool {
+	_, ok := m.clearedFields[customfielddefinition.FieldPrecision]
+	return ok
+}
+
+// ResetPrecision resets all changes to the "precision" field.
+func (m *CustomFieldDefinitionMutation) ResetPrecision() {
+	m.precision = nil
+	m.addprecision = nil
+	delete(m.clearedFields, customfielddefinition.FieldPrecision)
+}
+
+// SetDefaultValue sets the "default_value" field.
+func (m *CustomFieldDefinitionMutation) SetDefaultValue(s string) {
+	m.default_value = &s
+}
+
+// DefaultValue returns the value of the "default_value" field in the mutation.
+func (m *CustomFieldDefinitionMutation) DefaultValue() (r string, exists bool) {
+	v := m.default_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDefaultValue returns the old "default_value" field's value of the CustomFieldDefinition entity.
+// If the CustomFieldDefinition object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CustomFieldDefinitionMutation) OldDefaultValue(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDefaultValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDefaultValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDefaultValue: %w", err)
+	}
+	return oldValue.DefaultValue, nil
+}
+
+// ClearDefaultValue clears the value of the "default_value" field.
+func (m *CustomFieldDefinitionMutation) ClearDefaultValue() {
+	m.default_value = nil
+	m.clearedFields[customfielddefinition.FieldDefaultValue] = struct{}{}
+}
+
+// DefaultValueCleared returns if the "default_value" field was cleared in this mutation.
+func (m *CustomFieldDefinitionMutation) DefaultValueCleared() bool {
+	_, ok := m.clearedFields[customfielddefinition.FieldDefaultValue]
+	return ok
+}
+
+// ResetDefaultValue resets all changes to the "default_value" field.
+func (m *CustomFieldDefinitionMutation) ResetDefaultValue() {
+	m.default_value = nil
+	delete(m.clearedFields, customfielddefinition.FieldDefaultValue)
+}
+
 // SetRequired sets the "required" field.
 func (m *CustomFieldDefinitionMutation) SetRequired(b bool) {
 	m.required = &b
@@ -8070,7 +8192,7 @@ func (m *CustomFieldDefinitionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *CustomFieldDefinitionMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 12)
 	if m.company_id != nil {
 		fields = append(fields, customfielddefinition.FieldCompanyID)
 	}
@@ -8085,6 +8207,12 @@ func (m *CustomFieldDefinitionMutation) Fields() []string {
 	}
 	if m.field_type != nil {
 		fields = append(fields, customfielddefinition.FieldFieldType)
+	}
+	if m.precision != nil {
+		fields = append(fields, customfielddefinition.FieldPrecision)
+	}
+	if m.default_value != nil {
+		fields = append(fields, customfielddefinition.FieldDefaultValue)
 	}
 	if m.required != nil {
 		fields = append(fields, customfielddefinition.FieldRequired)
@@ -8119,6 +8247,10 @@ func (m *CustomFieldDefinitionMutation) Field(name string) (ent.Value, bool) {
 		return m.ConversionKey()
 	case customfielddefinition.FieldFieldType:
 		return m.FieldType()
+	case customfielddefinition.FieldPrecision:
+		return m.Precision()
+	case customfielddefinition.FieldDefaultValue:
+		return m.DefaultValue()
 	case customfielddefinition.FieldRequired:
 		return m.Required()
 	case customfielddefinition.FieldOptions:
@@ -8148,6 +8280,10 @@ func (m *CustomFieldDefinitionMutation) OldField(ctx context.Context, name strin
 		return m.OldConversionKey(ctx)
 	case customfielddefinition.FieldFieldType:
 		return m.OldFieldType(ctx)
+	case customfielddefinition.FieldPrecision:
+		return m.OldPrecision(ctx)
+	case customfielddefinition.FieldDefaultValue:
+		return m.OldDefaultValue(ctx)
 	case customfielddefinition.FieldRequired:
 		return m.OldRequired(ctx)
 	case customfielddefinition.FieldOptions:
@@ -8202,6 +8338,20 @@ func (m *CustomFieldDefinitionMutation) SetField(name string, value ent.Value) e
 		}
 		m.SetFieldType(v)
 		return nil
+	case customfielddefinition.FieldPrecision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPrecision(v)
+		return nil
+	case customfielddefinition.FieldDefaultValue:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDefaultValue(v)
+		return nil
 	case customfielddefinition.FieldRequired:
 		v, ok := value.(bool)
 		if !ok {
@@ -8248,6 +8398,9 @@ func (m *CustomFieldDefinitionMutation) AddedFields() []string {
 	if m.addcompany_id != nil {
 		fields = append(fields, customfielddefinition.FieldCompanyID)
 	}
+	if m.addprecision != nil {
+		fields = append(fields, customfielddefinition.FieldPrecision)
+	}
 	if m.addsort_order != nil {
 		fields = append(fields, customfielddefinition.FieldSortOrder)
 	}
@@ -8261,6 +8414,8 @@ func (m *CustomFieldDefinitionMutation) AddedField(name string) (ent.Value, bool
 	switch name {
 	case customfielddefinition.FieldCompanyID:
 		return m.AddedCompanyID()
+	case customfielddefinition.FieldPrecision:
+		return m.AddedPrecision()
 	case customfielddefinition.FieldSortOrder:
 		return m.AddedSortOrder()
 	}
@@ -8278,6 +8433,13 @@ func (m *CustomFieldDefinitionMutation) AddField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddCompanyID(v)
+		return nil
+	case customfielddefinition.FieldPrecision:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPrecision(v)
 		return nil
 	case customfielddefinition.FieldSortOrder:
 		v, ok := value.(int)
@@ -8300,6 +8462,12 @@ func (m *CustomFieldDefinitionMutation) ClearedFields() []string {
 	if m.FieldCleared(customfielddefinition.FieldConversionKey) {
 		fields = append(fields, customfielddefinition.FieldConversionKey)
 	}
+	if m.FieldCleared(customfielddefinition.FieldPrecision) {
+		fields = append(fields, customfielddefinition.FieldPrecision)
+	}
+	if m.FieldCleared(customfielddefinition.FieldDefaultValue) {
+		fields = append(fields, customfielddefinition.FieldDefaultValue)
+	}
 	return fields
 }
 
@@ -8319,6 +8487,12 @@ func (m *CustomFieldDefinitionMutation) ClearField(name string) error {
 		return nil
 	case customfielddefinition.FieldConversionKey:
 		m.ClearConversionKey()
+		return nil
+	case customfielddefinition.FieldPrecision:
+		m.ClearPrecision()
+		return nil
+	case customfielddefinition.FieldDefaultValue:
+		m.ClearDefaultValue()
 		return nil
 	}
 	return fmt.Errorf("unknown CustomFieldDefinition nullable field %s", name)
@@ -8342,6 +8516,12 @@ func (m *CustomFieldDefinitionMutation) ResetField(name string) error {
 		return nil
 	case customfielddefinition.FieldFieldType:
 		m.ResetFieldType()
+		return nil
+	case customfielddefinition.FieldPrecision:
+		m.ResetPrecision()
+		return nil
+	case customfielddefinition.FieldDefaultValue:
+		m.ResetDefaultValue()
 		return nil
 	case customfielddefinition.FieldRequired:
 		m.ResetRequired()

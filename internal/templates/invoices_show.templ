@@ -63,6 +63,7 @@ templ InvoiceShow(p InvoiceDetail) {
 		}
 		if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
+			@FieldValuesLink("invoice",p.ID,p.ArchivedAt=="")
 		}
 		<table class="work-item-detail-meta">
 			<tbody>

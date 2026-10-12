@@ -28,6 +28,8 @@ func (CustomFieldDefinition) Fields() []ent.Field {
 		field.String("name").NotEmpty(),
 		field.String("conversion_key").Optional().Nillable(),
 		field.String("field_type").NotEmpty(),
+		field.Int("precision").Optional().Nillable(),
+		field.String("default_value").Optional().Nillable(),
 		field.Bool("required").Default(false),
 		field.String("options").Default("[]"),
 		field.Int("sort_order").Default(0),

@@ -39,6 +39,14 @@ func permissionHTTPFixture(t *testing.T, legacy ...bool) (*pgxpool.Pool, *ent.Cl
 // A seed callback installs recorded pre-configuration facts after migration 057
 // and before forward migrations, while retaining the production HTTP fixture.
 func permissionHTTPFixtureSeeded(t *testing.T, seed func(*pgxpool.Pool), legacy ...bool) (*pgxpool.Pool, *ent.Client, http.Handler, *services.SessionService, int64, int64) {
+	return permissionHTTPFixtureConfigured(t, database.MigrationFS(), seed, legacy...)
+}
+
+func permissionHTTPFixtureMigrations(t *testing.T, migrations fs.FS, legacy ...bool) (*pgxpool.Pool, *ent.Client, http.Handler, *services.SessionService, int64, int64) {
+	return permissionHTTPFixtureConfigured(t, migrations, nil, legacy...)
+}
+
+func permissionHTTPFixtureConfigured(t *testing.T, migrations fs.FS, seed func(*pgxpool.Pool), legacy ...bool) (*pgxpool.Pool, *ent.Client, http.Handler, *services.SessionService, int64, int64) {
 	t.Helper()
 	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -66,7 +74,6 @@ func permissionHTTPFixtureSeeded(t *testing.T, seed func(*pgxpool.Pool), legacy 
 	if err != nil {
 		t.Fatal(err)
 	}
-	migrations := database.MigrationFS()
 	if (len(legacy) > 0 && legacy[0]) || seed != nil {
 		through := "054_backup_activity.up.sql"
 		if seed != nil {

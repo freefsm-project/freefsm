@@ -563,6 +563,8 @@ type SelectOption struct {
 	Label   string
 }
 
+type FormInput struct{ Name, Value string }
+
 type JobListPageData struct {
 	Jobs       []JobRow
 	Page       int
@@ -576,6 +578,8 @@ type JobListPageData struct {
 }
 
 type JobFormPageData struct {
+	AssetCustomFields       []CustomFieldDisplay
+	ProjectCustomFields     []CustomFieldDisplay
 	Job                     *JobDetail
 	Errors                  map[string]string
 	Customers               []SelectOption
@@ -1507,6 +1511,8 @@ type CommentsWidgetData struct {
 }
 
 type CustomFieldDefRow struct {
+	Precision     *int
+	DefaultValue  string
 	ID            int64
 	ObjectType    string
 	Name          string
@@ -1531,6 +1537,8 @@ type CustomFieldDefListPageData struct {
 }
 
 type CustomFieldDisplay struct {
+	Precision    *int
+	Selected     []string
 	DefinitionID int64
 	Name         string
 	FieldType    string
@@ -1763,6 +1771,7 @@ type AssetDetail struct {
 }
 
 type AssetFormPageData struct {
+	CustomFields  []CustomFieldDisplay
 	IsNew         bool
 	Asset         *AssetDetail
 	Customers     []SelectOption

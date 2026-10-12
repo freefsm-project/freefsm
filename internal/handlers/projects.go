@@ -300,6 +300,9 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := h.svc.Create(r.Context(), u.CompanyID, params)
 	if err != nil {
+		if renderFieldSaveError(w, r, h.defSvc, "project", err) {
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -389,10 +392,13 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		StartTime:            parseDatePtr(r.FormValue("start_time"), loc),
 		EndTime:              parseDatePtr(r.FormValue("end_time"), loc),
 		Notes:                formPtr(r.FormValue("notes")),
-		CustomFields:         strPtr(parseCustomFieldValues(r)),
+		CustomFields:         parseCustomFieldPatch(r),
 	}
-	result, err := h.svc.Update(r.Context(), u.CompanyID, id, params)
+	result, err := h.svc.SaveDetails(r.Context(), u.CompanyID, id, params)
 	if err != nil {
+		if renderFieldSaveError(w, r, h.defSvc, "project", err) {
+			return
+		}
 		http.Error(w, err.Error(), 500)
 		return
 	}
@@ -443,9 +449,12 @@ func (h *ProjectHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		StartTime:            parseDatePtr(r.FormValue("start_time"), loc),
 		EndTime:              parseDatePtr(r.FormValue("end_time"), loc),
 		Notes:                r.FormValue("notes"),
-		CustomFields:         "[]",
+		CustomFields:         parseCustomFieldValues(r),
 	})
 	if err != nil {
+		if renderFieldSaveError(w, r, h.defSvc, "project", err) {
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -537,7 +546,7 @@ func (h *ProjectHandler) newProjectForm(ctx context.Context) templates.ProjectFo
 		Customers:    customerOptions(customers),
 		Statuses:     statusOptions(statuses),
 		Locations:    nil,
-		CustomFields: buildCustomFieldDisplay(defs, "[]"),
+		CustomFields: buildCustomFieldInitialDisplay(defs),
 	}
 }
 

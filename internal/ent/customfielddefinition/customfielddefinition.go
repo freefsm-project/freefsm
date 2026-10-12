@@ -23,6 +23,10 @@ const (
 	FieldConversionKey = "conversion_key"
 	// FieldFieldType holds the string denoting the field_type field in the database.
 	FieldFieldType = "field_type"
+	// FieldPrecision holds the string denoting the precision field in the database.
+	FieldPrecision = "precision"
+	// FieldDefaultValue holds the string denoting the default_value field in the database.
+	FieldDefaultValue = "default_value"
 	// FieldRequired holds the string denoting the required field in the database.
 	FieldRequired = "required"
 	// FieldOptions holds the string denoting the options field in the database.
@@ -45,6 +49,8 @@ var Columns = []string{
 	FieldName,
 	FieldConversionKey,
 	FieldFieldType,
+	FieldPrecision,
+	FieldDefaultValue,
 	FieldRequired,
 	FieldOptions,
 	FieldSortOrder,
@@ -114,6 +120,16 @@ func ByConversionKey(opts ...sql.OrderTermOption) OrderOption {
 // ByFieldType orders the results by the field_type field.
 func ByFieldType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldFieldType, opts...).ToFunc()
+}
+
+// ByPrecision orders the results by the precision field.
+func ByPrecision(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPrecision, opts...).ToFunc()
+}
+
+// ByDefaultValue orders the results by the default_value field.
+func ByDefaultValue(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDefaultValue, opts...).ToFunc()
 }
 
 // ByRequired orders the results by the required field.

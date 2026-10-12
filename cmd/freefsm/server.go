@@ -10,7 +10,6 @@ import (
 	appmw "github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
-	"github.com/justinas/nosurf"
 )
 
 type instanceRoutes struct {
@@ -20,10 +19,7 @@ type instanceRoutes struct {
 }
 
 func newApplicationHandler(apiHandler, webHandler http.Handler, instances ...instanceRoutes) http.Handler {
-	webCSRF := nosurf.New(webHandler)
-	webCSRF.SetIsTLSFunc(func(r *http.Request) bool {
-		return appmw.IsHTTPS(r)
-	})
+	webCSRF := appmw.BrowserCSRF(webHandler)
 
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)

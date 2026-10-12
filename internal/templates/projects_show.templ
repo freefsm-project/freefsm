@@ -35,6 +35,7 @@ templ ProjectShow(p ProjectShowPageData) {
 		}
 		if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
+			@FieldValuesLink("project",p.Project.ID,p.Project.ArchivedAt=="")
 		}
 		<table class="work-item-detail-meta">
 			<tbody>

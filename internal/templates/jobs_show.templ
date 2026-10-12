@@ -70,6 +70,9 @@ templ JobShow(p JobDetail) {
 		}
 		if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
+			if p.ArchivedAt == "" && canEditJobFields(ctx) {
+				<a href={ templ.URL(fmt.Sprintf("/jobs/%d/custom-fields",p.ID)) }>Edit Job Custom Field Values</a>
+			}
 		}
 		<table class="work-item-detail-meta">
 			<tbody>

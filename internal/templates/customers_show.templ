@@ -38,6 +38,7 @@ templ CustomerShow(p CustomerShowPageData) {
 		@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: p.Customer.ArchivedAt != ""})
 		if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
+			@FieldValuesLink("customer",p.Customer.ID,p.Customer.ArchivedAt=="")
 		}
 		<div class="customer-dashboard-top">
 			<article class="dashboard-panel customer-dashboard-details">

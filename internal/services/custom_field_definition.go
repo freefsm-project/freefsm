@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/customfields"
 	"regexp"
 	"strings"
 
@@ -24,10 +26,15 @@ func NewCustomFieldDefinitionService(client *ent.Client) *CustomFieldDefinitionS
 }
 
 func (s *CustomFieldDefinitionService) ListForObjectType(ctx context.Context, objectType string) ([]*ent.CustomFieldDefinition, error) {
-	defs, err := s.client.CustomFieldDefinition.Query().
-		Where(customfielddefinition.ObjectTypeEQ(objectType)).
-		Order(ent.Asc(customfielddefinition.FieldSortOrder)).
-		All(ctx)
+	q := s.client.CustomFieldDefinition.Query().Where(customfielddefinition.ObjectTypeEQ(objectType))
+	if r, ok := authorization.FromContext(ctx); ok {
+		p, err := r.Service.Principal(ctx, r.Actor)
+		if err != nil {
+			return nil, err
+		}
+		q.Where(customfielddefinition.Or(customfielddefinition.CompanyIDEQ(p.CompanyID), customfielddefinition.CompanyIDIsNil()))
+	}
+	defs, err := q.Order(ent.Asc(customfielddefinition.FieldSortOrder), ent.Asc(customfielddefinition.FieldID)).All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list custom field definitions for %s: %w", objectType, err)
 	}
@@ -35,9 +42,15 @@ func (s *CustomFieldDefinitionService) ListForObjectType(ctx context.Context, ob
 }
 
 func (s *CustomFieldDefinitionService) ListAll(ctx context.Context) ([]*ent.CustomFieldDefinition, error) {
-	defs, err := s.client.CustomFieldDefinition.Query().
-		Order(ent.Asc(customfielddefinition.FieldObjectType), ent.Asc(customfielddefinition.FieldSortOrder)).
-		All(ctx)
+	q := s.client.CustomFieldDefinition.Query()
+	if r, ok := authorization.FromContext(ctx); ok {
+		p, err := r.Service.Principal(ctx, r.Actor)
+		if err != nil {
+			return nil, err
+		}
+		q.Where(customfielddefinition.Or(customfielddefinition.CompanyIDEQ(p.CompanyID), customfielddefinition.CompanyIDIsNil()))
+	}
+	defs, err := q.Order(ent.Asc(customfielddefinition.FieldObjectType), ent.Asc(customfielddefinition.FieldSortOrder)).All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list all custom field definitions: %w", err)
 	}
@@ -213,8 +226,8 @@ func (s *CustomFieldDefinitionService) Delete(ctx context.Context, id int64) err
 	return nil
 }
 
-var CustomFieldObjectTypes = []string{"customer", "job", "project", "estimate", "invoice", "asset"}
-var CustomFieldTypes = []string{"text", "number", "date", "textarea", "select", "checkbox"}
+var CustomFieldObjectTypes = customfields.ParentTypes()
+var CustomFieldTypes = customfields.Types()
 var conversionKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
 
 func validateConversionKey(objectType, raw string) (string, error) {

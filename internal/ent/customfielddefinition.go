@@ -27,6 +27,10 @@ type CustomFieldDefinition struct {
 	ConversionKey *string `json:"conversion_key,omitempty"`
 	// FieldType holds the value of the "field_type" field.
 	FieldType string `json:"field_type,omitempty"`
+	// Precision holds the value of the "precision" field.
+	Precision *int `json:"precision,omitempty"`
+	// DefaultValue holds the value of the "default_value" field.
+	DefaultValue *string `json:"default_value,omitempty"`
 	// Required holds the value of the "required" field.
 	Required bool `json:"required,omitempty"`
 	// Options holds the value of the "options" field.
@@ -47,9 +51,9 @@ func (*CustomFieldDefinition) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case customfielddefinition.FieldRequired:
 			values[i] = new(sql.NullBool)
-		case customfielddefinition.FieldID, customfielddefinition.FieldCompanyID, customfielddefinition.FieldSortOrder:
+		case customfielddefinition.FieldID, customfielddefinition.FieldCompanyID, customfielddefinition.FieldPrecision, customfielddefinition.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
-		case customfielddefinition.FieldObjectType, customfielddefinition.FieldName, customfielddefinition.FieldConversionKey, customfielddefinition.FieldFieldType, customfielddefinition.FieldOptions:
+		case customfielddefinition.FieldObjectType, customfielddefinition.FieldName, customfielddefinition.FieldConversionKey, customfielddefinition.FieldFieldType, customfielddefinition.FieldDefaultValue, customfielddefinition.FieldOptions:
 			values[i] = new(sql.NullString)
 		case customfielddefinition.FieldCreatedAt, customfielddefinition.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -105,6 +109,20 @@ func (_m *CustomFieldDefinition) assignValues(columns []string, values []any) er
 				return fmt.Errorf("unexpected type %T for field field_type", values[i])
 			} else if value.Valid {
 				_m.FieldType = value.String
+			}
+		case customfielddefinition.FieldPrecision:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field precision", values[i])
+			} else if value.Valid {
+				_m.Precision = new(int)
+				*_m.Precision = int(value.Int64)
+			}
+		case customfielddefinition.FieldDefaultValue:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field default_value", values[i])
+			} else if value.Valid {
+				_m.DefaultValue = new(string)
+				*_m.DefaultValue = value.String
 			}
 		case customfielddefinition.FieldRequired:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -190,6 +208,16 @@ func (_m *CustomFieldDefinition) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("field_type=")
 	builder.WriteString(_m.FieldType)
+	builder.WriteString(", ")
+	if v := _m.Precision; v != nil {
+		builder.WriteString("precision=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.DefaultValue; v != nil {
+		builder.WriteString("default_value=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("required=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Required))

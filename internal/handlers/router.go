@@ -9,6 +9,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/conversion"
+	"github.com/freefsm-project/freefsm/internal/customfields"
 	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
@@ -98,7 +99,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	deliveryService.SetInstanceControl(control)
 	commentHandler := NewCommentHandler(commentSvc, userService, activitySvc, policySvc, objects)
 	defSvc := services.NewCustomFieldDefinitionService(entClient)
-	cfHandler := NewCustomFieldHandler(defSvc, activitySvc, depSvc)
+	cfHandler := NewCustomFieldHandler(defSvc)
 	timeEntrySvc := services.NewTimeEntryService(entClient)
 	dashboardHandler := NewDashboardHandler(services.NewDashboardService(entClient, db), timeEntrySvc)
 	// File service
@@ -263,6 +264,11 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/jobs/{id}/clock-in", jobHandler.ClockIn)
 		r.Post("/jobs/{id}/clock-out", jobHandler.ClockOut)
 		r.Get("/jobs/{id}", jobHandler.Show)
+		for _, parent := range customfields.ExistingParents() {
+			typ := parent.Type
+			r.Get("/"+typ+"s/{id}/custom-fields", cfHandler.Values(typ))
+			r.Post("/"+typ+"s/{id}/custom-fields", cfHandler.Values(typ))
+		}
 		r.With(middleware.DispatcherOrAdmin).Get("/assets", assetHandler.List)
 		r.With(middleware.DispatcherOrAdmin).Get("/assets/activity", activityHandler.ListByType(objectref.TypeAsset))
 		r.Get("/assets/{id}", assetHandler.Show)
@@ -274,13 +280,26 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/invoices/{id}", invoiceHandler.Show)
 
 		// Core operational mutations
+		r.With(detailsAccess("project")).Get("/projects/new", projectHandler.Create)
+		r.With(detailsAccess("project")).Post("/projects", projectHandler.Create)
+		r.With(detailsAccess("project")).Post("/projects/inline", projectHandler.CreateInline)
+		r.With(detailsAccess("project")).Get("/projects/{id}/edit", projectHandler.Update)
+		r.With(detailsAccess("project")).Post("/projects/{id}", projectHandler.Update)
+		r.With(detailsAccess("job")).Get("/jobs/new", jobHandler.Create)
+		r.With(detailsAccess("job")).Post("/jobs", jobHandler.Create)
+		r.With(detailsAccess("job")).Get("/jobs/{id}/edit", jobHandler.Update)
+		r.With(detailsAccess("job")).Post("/jobs/{id}", jobHandler.Update)
+		r.With(detailsAccess("asset")).Get("/assets/new", assetHandler.Create)
+		r.With(detailsAccess("asset")).Post("/assets", assetHandler.Create)
+		r.With(detailsAccess("asset")).Post("/assets/inline", assetHandler.CreateInline)
+		r.With(detailsAccess("asset")).Get("/assets/{id}/edit", assetHandler.Update)
+		r.With(detailsAccess("asset")).Post("/assets/{id}", assetHandler.Update)
+		r.With(detailsAccess("estimate")).Get("/estimates/new", estimateHandler.Create)
+		r.With(detailsAccess("estimate")).Post("/estimates", estimateHandler.Create)
+		r.With(detailsAccess("invoice")).Get("/invoices/new", invoiceHandler.Create)
+		r.With(detailsAccess("invoice")).Post("/invoices", invoiceHandler.Create)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.DispatcherOrAdmin)
-			r.Get("/projects/new", projectHandler.Create)
-			r.Post("/projects", projectHandler.Create)
-			r.Post("/projects/inline", projectHandler.CreateInline)
-			r.With(activeObjectGuard(objectref.TypeProject)).Get("/projects/{id}/edit", projectHandler.Update)
-			r.With(activeObjectGuard(objectref.TypeProject)).Post("/projects/{id}", projectHandler.Update)
 			r.With(activeObjectGuard(objectref.TypeProject)).Post("/projects/{id}/delete", projectHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/delete", customerHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/credit/refunds", customerHandler.RefundCredit)
@@ -297,10 +316,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Get("/customers/{id}/locations/{lid}/edit", customerHandler.EditLocationForm)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/locations/{lid}", customerHandler.UpdateLocation)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/locations/{lid}/delete", customerHandler.DeleteLocation)
-			r.Get("/jobs/new", jobHandler.Create)
-			r.Post("/jobs", jobHandler.Create)
-			r.With(activeObjectGuard(objectref.TypeJob)).Get("/jobs/{id}/edit", jobHandler.Update)
-			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}", jobHandler.Update)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/create-next-occurrence", jobHandler.CreateNextOccurrence)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/cancel-next-occurrence", jobHandler.CancelNextOccurrence)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/delete", jobHandler.Delete)
@@ -308,11 +323,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/schedule/dispatch", scheduleHandler.DispatchUpdate)
 			r.Post("/schedule/move", scheduleHandler.CalendarMove)
 			r.Post("/schedule/calendar/move", scheduleHandler.CalendarMove)
-			r.Get("/assets/new", assetHandler.Create)
-			r.Post("/assets", assetHandler.Create)
-			r.Post("/assets/inline", assetHandler.CreateInline)
-			r.With(activeObjectGuard(objectref.TypeAsset)).Get("/assets/{id}/edit", assetHandler.Update)
-			r.With(activeObjectGuard(objectref.TypeAsset)).Post("/assets/{id}", assetHandler.Update)
 			r.With(activeObjectGuard(objectref.TypeAsset)).Post("/assets/{id}/delete", assetHandler.Delete)
 			r.Get("/assets/locations", assetHandler.GetLocations)
 		})
@@ -344,11 +354,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.DispatcherOrAdmin)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Get("/customers/{id}/create-invoice", invoiceHandler.CreateFromCustomer)
-			r.Get("/estimates/new", estimateHandler.Create)
-			r.Post("/estimates", estimateHandler.Create)
 			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/delete", estimateHandler.Delete)
-			r.Get("/invoices/new", invoiceHandler.Create)
-			r.Post("/invoices", invoiceHandler.Create)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/delete", invoiceHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/finalize", invoiceHandler.Finalize)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/payments", invoiceHandler.RecordPayment)
@@ -427,6 +433,12 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/settings/statuses/{type}/{id}/move", statusSettingsHandler.Move)
 		r.Post("/settings/statuses/{type}/{id}/delete", statusSettingsHandler.Delete)
 		// Admin-only routes
+		r.Get("/settings/custom-fields", cfHandler.List)
+		r.Get("/settings/custom-fields/new", cfHandler.Create)
+		r.Post("/settings/custom-fields", cfHandler.Create)
+		r.Get("/settings/custom-fields/{id}/edit", cfHandler.Update)
+		r.Post("/settings/custom-fields/{id}", cfHandler.Update)
+		r.Post("/settings/custom-fields/{id}/delete", cfHandler.Delete)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AdminOnly)
 			// Restore archived entities
@@ -446,12 +458,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Get("/setup/company", settingsHandler.Show)
 			r.Post("/setup/company", settingsHandler.Save)
 			r.Post("/settings/enable-email", integrations.enableEmail)
-			r.Get("/settings/custom-fields", cfHandler.List)
-			r.Get("/settings/custom-fields/new", cfHandler.Create)
-			r.Post("/settings/custom-fields", cfHandler.Create)
-			r.Get("/settings/custom-fields/{id}/edit", cfHandler.Update)
-			r.Post("/settings/custom-fields/{id}", cfHandler.Update)
-			r.Post("/settings/custom-fields/{id}/delete", cfHandler.Delete)
 			r.Get("/users", userHandler.List)
 			r.Get("/users/new", userHandler.Create)
 			r.Post("/users", userHandler.Create)

@@ -7,7 +7,7 @@ templ CustomerForm(p CustomerFormPageData) {
 
 		if !p.IsNew {
 			<div class="customer-edit-layout">
-				<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form customer-edit-form" data-save-status-url={ "/web-actions/"+p.OperationID }>
+				<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" hx-boost="false" autocomplete="off" class="entity-form compact-form customer-edit-form" data-save-status-url={ "/web-actions/"+p.OperationID }>
 					@CustomerFormFields(p)
 				</form>
 				<aside class="customer-edit-side-rail">
@@ -26,7 +26,7 @@ templ CustomerForm(p CustomerFormPageData) {
 				</aside>
 			</div>
 		} else {
-			<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" autocomplete="off" class="entity-form compact-form" data-save-status-url={ "/web-actions/"+p.OperationID }>
+			<form action={ templ.URL(customerFormAction(p.IsNew, p.Customer.ID)) } method="post" hx-boost="false" autocomplete="off" class="entity-form compact-form" data-save-status-url={ "/web-actions/"+p.OperationID }>
 				@CustomerFormFields(p)
 			</form>
 		}
@@ -60,6 +60,9 @@ templ CustomerFormFields(p CustomerFormPageData) {
 			<label><input type="checkbox" name="conflict_review" required/>I have compared the current record and reviewed my proposed changes.</label>
 			<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit",p.Customer.ID)) }>Discard changes and load current Customer</a>
 		</section>
+	}
+	if p.Errors["custom_fields"] != "" {
+		<p role="alert" class="error-msg">{ p.Errors["custom_fields"] }</p>
 	}
 	if p.IsNew {
 		<p><small>Locations and contacts can be added after saving.</small></p>

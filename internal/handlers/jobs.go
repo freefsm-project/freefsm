@@ -510,6 +510,9 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := createJob(r.Context(), u.CompanyID, params)
 	if err != nil {
+		if renderFieldSaveError(w, r, h.defSvc, "job", err) {
+			return
+		}
 		if handleJobStatusConfigurationError(w, r, "create", custID, u.CompanyID, err) {
 			return
 		}
@@ -668,7 +671,7 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		BillingType:       formPtr(r.FormValue("billing_type")),
 		Notes:             formPtr(r.FormValue("notes")),
 		TechNotes:         formPtr(r.FormValue("tech_notes")),
-		CustomFields:      strPtr(parseCustomFieldValues(r)),
+		CustomFields:      parseCustomFieldPatch(r),
 	}
 	if v := r.FormValue("visits"); v != "" {
 		visits := services.ParseVisits(v)
@@ -697,10 +700,13 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	updateJob := h.updateJob
 	if updateJob == nil {
-		updateJob = h.svc.Update
+		updateJob = h.svc.SaveDetails
 	}
 	result, err := updateJob(r.Context(), u.CompanyID, id, params)
 	if err != nil {
+		if renderFieldSaveError(w, r, h.defSvc, "job", err) {
+			return
+		}
 		if handleInvalidJobInput(w, r, "update", err) {
 			return
 		}
@@ -798,10 +804,7 @@ func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	subtasks[idx].Completed = !subtasks[idx].Completed
-	params := services.JobUpdateParams{
-		Subtasks: &subtasks,
-	}
-	if _, err := h.svc.Update(r.Context(), u.CompanyID, id, params); err != nil {
+	if _, err := h.svc.UpdateSubtasks(r.Context(), u.CompanyID, id, subtasks); err != nil {
 		internalServerError(w, r, "toggle job subtask", err)
 		return
 	}
@@ -905,6 +908,7 @@ func (h *JobHandler) newJobForm(ctx context.Context, companyID, customerID int64
 	users, _ := h.userSvc.ListActiveForCompany(ctx, companyID)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	return templates.JobFormPageData{
+		AssetCustomFields: h.relatedCreationFields(ctx, "asset"), ProjectCustomFields: h.relatedCreationFields(ctx, "project"),
 		Job: &templates.JobDetail{
 			CustomerID:  customerID,
 			BillingType: "flat_rate",
@@ -923,7 +927,7 @@ func (h *JobHandler) newJobForm(ctx context.Context, companyID, customerID int64
 		ExistingVisitsJSON:      "[]",
 		ExistingAssignmentsJSON: "[]",
 		ExistingSubtasksJSON:    "[]",
-		CustomFields:            buildCustomFieldDisplay(defs, "[]"),
+		CustomFields:            buildCustomFieldInitialDisplay(defs),
 		Errors:                  map[string]string{},
 	}
 }
@@ -948,7 +952,8 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *en
 		return templates.JobFormPageData{}, fmt.Errorf("list existing assignment users: %w", err)
 	}
 	return templates.JobFormPageData{
-		Job:                     &d,
+		Job:               &d,
+		AssetCustomFields: h.relatedCreationFields(ctx, "asset"), ProjectCustomFields: h.relatedCreationFields(ctx, "project"),
 		Customers:               customerOptions(customers),
 		Projects:                projectOptions(projects),
 		Locations:               locationOptions(locations),
@@ -1102,15 +1107,15 @@ func jobToDetail(ctx context.Context, j *ent.Job, statuses []*ent.Status) templa
 		d.AssetID = *j.AssetID
 	}
 	if j.StartTime != nil && !j.StartTime.IsZero() {
-		d.StartTime = j.StartTime.Format("2006-01-02T15:04")
+		d.StartTime = j.StartTime.In(middleware.CompanyLocation(ctx)).Format("2006-01-02T15:04")
 		d.StartTimeDisplay = displayDateTime(ctx, *j.StartTime)
 	}
 	if j.EndTime != nil && !j.EndTime.IsZero() {
-		d.EndTime = j.EndTime.Format("2006-01-02T15:04")
+		d.EndTime = j.EndTime.In(middleware.CompanyLocation(ctx)).Format("2006-01-02T15:04")
 		d.EndTimeDisplay = displayDateTime(ctx, *j.EndTime)
 	}
 	if j.DueDate != nil && !j.DueDate.IsZero() {
-		d.DueDate = j.DueDate.Format("2006-01-02")
+		d.DueDate = j.DueDate.In(middleware.CompanyLocation(ctx)).Format("2006-01-02")
 		d.DueDateDisplay = displayDate(ctx, *j.DueDate)
 	}
 	if j.DeletedAt != nil && !j.DeletedAt.IsZero() {

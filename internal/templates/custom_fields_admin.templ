@@ -6,7 +6,9 @@ templ CustomFieldDefIndex(p CustomFieldDefListPageData) {
 	@Layout("Custom Fields") {
 		<div class="work-queue-toolbar list-toolbar">
 			<h2>Custom Fields</h2>
-			<a href="/settings/custom-fields/new" role="button">New Field</a>
+			if canManageFieldDefinitions(ctx) {
+				<a href="/settings/custom-fields/new" role="button">New Field</a>
+			}
 		</div>
 		<div class="work-queue-wrap">
 		<table class="work-queue-table">
@@ -37,11 +39,13 @@ templ CustomFieldDefIndex(p CustomFieldDefListPageData) {
 							</td>
 							<td>{ fmt.Sprintf("%d", d.SortOrder) }</td>
 							<td class="work-queue-actions">
+								if canManageFieldDefinitions(ctx) {
 								<a href={ templ.URL(fmt.Sprintf("/settings/custom-fields/%d/edit", d.ID)) } role="button" class="outline compact-action-button">Edit</a>
 								<form action={ templ.URL(fmt.Sprintf("/settings/custom-fields/%d/delete", d.ID)) } method="post" hx-confirm="Delete this custom field? This cannot be undone.">
 									<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 									<button class="outline contrast compact-action-button">Delete</button>
 								</form>
+								}
 							</td>
 						</tr>
 					}
@@ -50,18 +54,24 @@ templ CustomFieldDefIndex(p CustomFieldDefListPageData) {
 		</table>
 		</div>
 		<p class="work-item-detail-back"><a href="/settings">&larr; Back to Settings</a></p>
-		<div hx-get="/settings/custom-fields/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
-			<p>Loading recent activity...</p>
-		</div>
+		if canAdmin(ctx) {
+			<div hx-get="/settings/custom-fields/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
+				<p>Loading recent activity...</p>
+			</div>
+		}
 	}
 }
 
 templ CustomFieldDefForm(p CustomFieldDefFormData) {
 	@Layout("Custom Field - " + formTitle(p)) {
-		<form action={ templ.URL(customFieldDefFormAction(p)) } method="post" autocomplete="off" class="entity-form compact-form">
+		<form action={ templ.URL(customFieldDefFormAction(p)) } method="post" hx-boost="false" autocomplete="off" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			if p.Errors["definition"] != "" {
+				<p role="alert" class="error-msg">{ p.Errors["definition"] }</p>
+			}
 			if !p.IsNew {
 				<input type="hidden" name="id" value={ fmt.Sprintf("%d", p.Def.ID) }/>
+				<input type="hidden" name="object_type" value={ p.Def.ObjectType }/>
 			}
 			<label>
 				Name
@@ -73,7 +83,7 @@ templ CustomFieldDefForm(p CustomFieldDefFormData) {
 			<div class="grid">
 				<label>
 					Entity Type
-					<select name="object_type">
+					<select name="object_type" disabled?={ !p.IsNew }>
 						for _, ot := range p.ObjectTypes {
 							<option value={ ot } selected?={ p.Def.ObjectType == ot }>{ ot }</option>
 						}
@@ -102,9 +112,18 @@ templ CustomFieldDefForm(p CustomFieldDefFormData) {
 				</label>
 			</div>
 			<label>
-				Options (JSON array, for select type)
+				Options (JSON array, for single-select and multiselect)
 				<input type="text" name="options" value={ p.Def.Options } placeholder='["Option 1","Option 2"]'/>
-				<small>JSON array of strings. Only used for select/checkbox field types.</small>
+				<small>Unique option text identifies each choice within this field. Referenced choices cannot be removed.</small>
+			</label>
+			<label>
+				Number decimal precision (0–18)
+				<input type="number" name="precision" min="0" max="18" value={ fieldPrecision(p.Def.Precision) }/>
+			</label>
+			<label>
+				Creation default (optional)
+				<textarea name="default_value" rows="2">{ p.Def.DefaultValue }</textarea>
+				<small>Used only for new records when input is omitted. Existing records are never backfilled. Checkbox: true or false. Multiselect: a JSON array of option texts.</small>
 			</label>
 			if p.Def.ObjectType == "estimate" || p.Def.ObjectType == "invoice" || p.IsNew {
 				<label>
@@ -130,6 +149,8 @@ func formTitle(p CustomFieldDefFormData) string {
 	}
 	return "Edit " + p.Def.Name
 }
+
+func fieldPrecision(v *int) string {if v==nil{return ""};return fmt.Sprint(*v)}
 
 func customFieldDefFormAction(p CustomFieldDefFormData) string {
 	if p.IsNew { return "/settings/custom-fields" }

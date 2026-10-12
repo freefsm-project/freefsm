@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/project"
 )
@@ -85,6 +86,16 @@ type ProjectCreateParams struct {
 }
 
 func (s *ProjectService) Create(ctx context.Context, companyID int64, params ProjectCreateParams) (*ent.Project, error) {
+	if needsDetailsTransaction(ctx) {
+		return saveDetails(ctx, "project", 0, 0, &params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Project, int64, error) {
+			params.CustomFields = fields
+			v, err := NewProjectService(c).Create(ctx, companyID, params)
+			if err != nil {
+				return nil, 0, err
+			}
+			return v, v.ID, nil
+		})
+	}
 	projectCustomer, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, params.CustomerID)
 	if err != nil {
 		return nil, err
@@ -137,6 +148,21 @@ type ProjectUpdateParams struct {
 }
 
 func (s *ProjectService) Update(ctx context.Context, companyID, id int64, params ProjectUpdateParams) (*ent.Project, error) {
+	if _, ok := authorization.FromContext(ctx); ok {
+		return s.SaveDetails(ctx, companyID, id, params)
+	}
+	return s.update(ctx, companyID, id, params)
+}
+
+func (s *ProjectService) SaveDetails(ctx context.Context, companyID, id int64, params ProjectUpdateParams) (*ent.Project, error) {
+	return saveDetails(ctx, "project", id, 0, params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Project, int64, error) {
+		params.CustomFields = &fields
+		v, err := NewProjectService(c).update(ctx, companyID, id, params)
+		return v, id, err
+	})
+}
+
+func (s *ProjectService) update(ctx context.Context, companyID, id int64, params ProjectUpdateParams) (*ent.Project, error) {
 	current, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
