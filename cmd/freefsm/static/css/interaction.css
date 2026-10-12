@@ -1,0 +1,54 @@
+/* Shared interaction tokens: text and meaningful control boundaries. */
+:root, [data-theme=light] {
+  --pico-color: #263341;
+  --pico-muted-color: #52606d;
+  --pico-primary: #075e8a;
+  --pico-primary-background: #075e8a;
+  --pico-primary-inverse: #fff;
+  --pico-form-element-border-color: #77828e;
+}
+[data-theme=dark] {
+  --pico-color: #e4eaf0;
+  --pico-muted-color: #abb8c5;
+  --pico-primary: #82cfff;
+  --pico-primary-background: #075e8a;
+  --pico-primary-inverse: #fff;
+  --pico-form-element-border-color: #8394a5;
+}
+.page-header { background: #075e8a; color: #fff; }
+.page-header button, .header-right .dropdown summary { color: #fff; }
+button, [role=button], select, summary, input:not([type=hidden]):not([type=checkbox]):not([type=radio]), .sidebar a { min-height: 24px; }
+button, [role=button], summary { min-width: 24px; }
+:focus-visible { outline: 3px solid var(--pico-primary); outline-offset: 3px; }
+.page-header :focus-visible { outline-color: #fff; }
+.skip-link { position: fixed; top: -10rem; left: 1rem; z-index: 10000; padding: 1rem; background: var(--pico-background-color); }
+.skip-link:focus { top: 0; }
+.sidebar a[aria-current=page] { font-weight: bold; text-decoration: underline; text-underline-offset: .25em; }
+.error-summary { border: 2px solid var(--pico-color); padding: 1rem; margin-bottom: 1rem; scroll-margin-top: 1rem; }
+.error-summary h2 { font-size: 1.1rem; }
+[data-form-status] { font-weight: 600; }
+.main-content, .page-body, .grid > *, form, fieldset { min-width: 0; }
+.page-body { overflow-wrap: anywhere; }
+.work-queue-wrap, .table-scroll { max-width: 100%; overflow-x: auto; }
+.entity-form-actions { gap: .5rem; flex-wrap: wrap; }
+input, textarea, select { scroll-margin-block: 5rem; }
+@media (max-width: 768px) {
+  .page-header { flex-wrap: wrap; padding: .4rem; gap: .3rem; }
+  .header-left, .header-right { min-width: 0; flex-wrap: wrap; }
+  .page-title { overflow-wrap: anywhere; }
+  .sidebar.open { z-index: 1002; max-width: calc(100vw - 2rem); }
+  .sidebar-overlay { z-index: 1001; }
+  .customer-edit-layout, .grid, .form-grid-address { grid-template-columns: minmax(0, 1fr); }
+  .entity-form-actions { position: sticky; bottom: 0; z-index: 2; padding: .75rem .25rem calc(.75rem + env(safe-area-inset-bottom)); background: var(--pico-background-color); border-top: 1px solid var(--pico-form-element-border-color); }
+  dialog > article { width: calc(100vw - 1rem); max-width: none; max-height: calc(100dvh - 1rem); margin: .5rem; overflow-y: auto; }
+  dialog footer { display: flex; flex-wrap: wrap; gap: .5rem; }
+  .focused-list-filter-panel { max-width: calc(100vw - 2rem); }
+}
+@media (any-pointer: coarse) {
+  button, [role=button], summary, select, .sidebar a, input:not([type=hidden]):not([type=checkbox]):not([type=radio]) { min-height: 44px; }
+  button, [role=button], summary { min-width: 44px; }
+  label:has(input[type=checkbox]), label:has(input[type=radio]) { min-height: 44px; display: flex; align-items: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}

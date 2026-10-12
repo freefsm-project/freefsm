@@ -252,7 +252,7 @@ func TestCustomerPermissionHTTPScopesAndAtomicMutation(t *testing.T) {
 		t.Fatal(err)
 	}
 	cookie := sessionCookie(t, ctx, sessions, user.ID)
-	req := httptest.NewRequest("POST", "/customers", strings.NewReader(url.Values{"display_name": {"Operational customer"}, "service_notes": {"Gate code"}}.Encode()))
+	req := httptest.NewRequest("POST", "/customers", strings.NewReader(url.Values{"operation_id": {newOperationKey()}, "display_name": {"Operational customer"}, "service_notes": {"Gate code"}}.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(cookie)
 	rr := httptest.NewRecorder()

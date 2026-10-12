@@ -8,6 +8,8 @@ templ Layout(title string, children ...templ.Component) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<meta name="csrf-token" content={ csrfToken(ctx) }/>
+			<meta name="htmx-config" content='{"historyCacheSize":0,"refreshOnHistoryMiss":true}'/>
+			<script>if (document.documentElement.dataset.theme === 'system') document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';</script>
 			<script>if (history.scrollRestoration) { history.scrollRestoration = 'manual'; }</script>
 			<title>{ title } - { companyBrandName(companyFromCtx(ctx)) }</title>
 			<link rel="icon" type="image/png" sizes="32x32" href={ templ.URL(staticAsset("/static/img/favicon-32x32.png")) }/>
@@ -17,6 +19,7 @@ templ Layout(title string, children ...templ.Component) {
 			<link rel="stylesheet" href={ templ.URL(staticAsset("/static/css/pico.min.css")) }/>
 			<link rel="stylesheet" href={ templ.URL(staticAsset("/static/third_party/leaflet/leaflet.css")) }/>
 			<link rel="stylesheet" href={ templ.URL(staticAsset("/static/css/app.css")) }/>
+			<link rel="stylesheet" href={ templ.URL(staticAsset("/static/css/interaction.css")) }/>
 			<script src={ templ.URL(staticAsset("/static/js/htmx.min.js")) }></script>
 			<script>
 				document.addEventListener('htmx:configRequest', function(evt) {
@@ -28,6 +31,7 @@ templ Layout(title string, children ...templ.Component) {
 			</script>
 			<script src={ templ.URL(staticAsset("/static/js/alpine.min.js")) } defer></script>
 			<script src={ templ.URL(staticAsset("/static/js/password-fields.js")) } defer></script>
+			<script src={ templ.URL(staticAsset("/static/js/interaction.js")) } defer></script>
 			<script>
 				document.addEventListener('htmx:afterSettle', function(evt) {
 					if (window.Alpine && evt.detail && evt.detail.elt) {
@@ -63,7 +67,8 @@ templ Layout(title string, children ...templ.Component) {
 					loadLeaflet(function() {
 						if (!window.L || !document.body.contains(mapEl) || mapEl.dataset.initialized === 'true') return;
 						mapEl.dataset.initialized = 'true';
-						var map = L.map(mapEl).setView([39.8283, -98.5795], 4);
+						var motion = !matchMedia('(prefers-reduced-motion: reduce)').matches;
+						var map = L.map(mapEl, {zoomAnimation: motion, fadeAnimation: motion, markerZoomAnimation: motion}).setView([39.8283, -98.5795], 4);
 						L.tileLayer(mapEl.dataset.tileUrl, {
 							maxZoom: 19,
 							attribution: '&copy; OpenStreetMap contributors'
@@ -93,18 +98,14 @@ templ Layout(title string, children ...templ.Component) {
 							popup.appendChild(document.createTextNode(el.dataset.customer || ''));
 							L.marker([lat, lng], { icon: icon }).addTo(map).bindPopup(popup);
 						});
-						if (bounds.length) map.fitBounds(bounds, { padding: [24, 24] });
+						if (bounds.length) map.fitBounds(bounds, { padding: [24, 24], animate: motion });
 					});
 				}
 				function toggleTheme() {
-					var html = document.documentElement;
-					var current = html.getAttribute('data-theme');
-					var next = current === 'dark' ? 'light' : 'dark';
-					html.setAttribute('data-theme', next);
-					document.cookie = 'theme=' + next + ';path=/;max-age=31536000';
+					location.href = '/preferences';
 				}
 				function closeSidebar() {
-					document.getElementById('sidebar').classList.remove('open');
+					if (window.freefsmMenu) window.freefsmMenu(false);
 				}
 				// Close sidebar when clicking a link inside it (mobile)
 				document.addEventListener('click', function(e) {
@@ -119,17 +120,18 @@ templ Layout(title string, children ...templ.Component) {
 				document.addEventListener('DOMContentLoaded', initScheduleMap);
 			</script>
 		</head>
-		<body hx-boost="true">
+		<body hx-boost="true" hx-history="false">
+			<a class="skip-link" href="#main-content">Skip to content</a>
 			<aside class="sidebar" id="sidebar">
 				<div class="sidebar-brand">
 					<img src={ templ.URL(staticAsset("/static/img/gear.png")) } alt=""/>
 					<strong>{ companyBrandName(companyFromCtx(ctx)) }</strong>
 				</div>
 				<form class="sidebar-search" action="/search" method="get">
-					<input type="search" name="q" placeholder="Search..." required/>
+					<input type="search" name="q" placeholder="Search..." aria-label="Search all records" required/>
 				</form>
 				<hr class="sidebar-divider"/>
-				<nav>
+				<nav aria-label="Main navigation">
 					<a href="/" class={ templ.KV("active", isActivePath(ctx, "/")) }>Dashboard</a>
 					<a href="/schedule" class={ templ.KV("active", isActivePath(ctx, "/schedule")) }>Schedule</a>
 				if canCustomer(ctx,"view") {
@@ -172,15 +174,15 @@ templ Layout(title string, children ...templ.Component) {
 				}
 				<div class="sidebar-footer">FreeFSM { appVersion() }</div>
 			</aside>
-			<div class="sidebar-overlay" id="sidebar-overlay" onclick="document.getElementById('sidebar').classList.remove('open')"></div>
-			<div class="main-content">
+			<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+			<div class="main-content" data-theme-preference={ themeFromCtx(ctx) }>
 			<header class="page-header">
 			<div class="header-left">
-				<button class="hamburger" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Toggle menu">&#9776;</button>
+				<button class="hamburger" onclick="window.freefsmMenu()" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">&#9776; Menu</button>
 				<span class="page-title">{ pageTitleFromPath(ctx) }</span>
 			</div>
 				<div class="header-right">
-					<button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode">
+					<button class="theme-toggle" onclick="toggleTheme()" aria-label="Theme preferences">
 						<svg class="theme-icon-sun" width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
 							<path d="M12 2.25C12.4142 2.25 12.75 2.58579 12.75 3V5.25C12.75 5.66421 12.4142 6 12 6C11.5858 6 11.25 5.66421 11.25 5.25V3C11.25 2.58579 11.5858 2.25 12 2.25Z" fill="currentColor"/>
 							<path d="M7.5 12C7.5 9.51472 9.51472 7.5 12 7.5C14.4853 7.5 16.5 9.51472 16.5 12C16.5 14.4853 14.4853 16.5 12 16.5C9.51472 16.5 7.5 14.4853 7.5 12Z" fill="currentColor"/>
@@ -218,13 +220,10 @@ templ Layout(title string, children ...templ.Component) {
 						<span>{ getFlash(ctx) }</span>
 						<button class="flash-close" onclick="this.parentElement.remove()" aria-label="Dismiss">&times;</button>
 					</div>
-					<script>
-						setTimeout(function(){ var f=document.getElementById('flash-banner'); if(f){ f.style.opacity='0'; f.style.transition='opacity 0.5s'; setTimeout(function(){ if(f) f.remove(); },500); } }, 4000);
-					</script>
 				}
-				<div class="page-body">
+				<main class="page-body" id="main-content" tabindex="-1">
 					{ children... }
-				</div>
+				</main>
 			</div>
 		</body>
 	</html>

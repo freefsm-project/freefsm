@@ -100,6 +100,16 @@ func bindAuthorization(s *authorization.Service) func(http.Handler) http.Handler
 
 type authorizationHandler struct{ svc *authorization.Service }
 
+func (h authorizationHandler) WebReceipt(w http.ResponseWriter, r *http.Request) {
+	receipt, err := h.svc.WebReceipt(r.Context(), authorizationActor(r), chi.URLParam(r, "operation"))
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(receipt)
+}
+
 func (h authorizationHandler) Show(w http.ResponseWriter, r *http.Request) {
 	review, err := h.svc.Review(r.Context(), authorizationActor(r))
 	if err != nil {

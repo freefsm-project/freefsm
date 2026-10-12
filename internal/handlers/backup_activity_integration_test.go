@@ -58,7 +58,7 @@ func TestBackupActivityHTTPVisibilityIntegration(t *testing.T) {
 		r.Header.Set("HX-Request", "true")
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, r)
-		if w.Code != http.StatusSeeOther || w.Header().Get("Location") != "/login" || strings.Contains(w.Body.String(), "Historical backup administrator") {
+		if w.Code != http.StatusUnauthorized || !strings.Contains(w.Body.String(), "Session expired—sign in again") || strings.Contains(w.Body.String(), "Historical backup administrator") {
 			t.Fatalf("anonymous HTMX activity: %d %s", w.Code, w.Body)
 		}
 		for _, role := range []string{"dispatcher", "tech"} {

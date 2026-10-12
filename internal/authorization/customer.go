@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -69,9 +71,37 @@ type CustomerInput struct {
 	CustomFields    *string `json:"custom_fields,omitempty"`
 }
 
-func (s *Service) SaveCustomer(ctx context.Context, a Actor, id int64, in CustomerInput) (*ent.Customer, error) {
+func (s *Service) SaveCustomer(ctx context.Context, a Actor, id int64, in CustomerInput, actions ...WebAction) (*ent.Customer, error) {
 	var result *ent.Customer
+	var action WebAction
+	if len(actions) > 0 {
+		action = actions[0]
+		if action.ID == "" {
+			return nil, ErrConflict
+		}
+	}
+	intent := customerIntent(id, in, action)
+	if action.ID != "" {
+		if _, err := uuid.Parse(action.ID); err != nil {
+			return nil, ErrConflict
+		}
+	}
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if action.ID != "" {
+			var savedIntent string
+			var effect int64
+			err := tx.QueryRow(ctx, `SELECT intent_hash,effect_id FROM web_action_receipts WHERE user_id=$1 AND operation_id=$2`, a.UserID, action.ID).Scan(&savedIntent, &effect)
+			if err == nil {
+				if savedIntent != intent {
+					return ErrConflict
+				}
+				result = &ent.Customer{ID: effect}
+				return nil
+			}
+			if err != pgx.ErrNoRows {
+				return err
+			}
+		}
 		permission := "customer.edit"
 		if id == 0 {
 			permission = "customer.create"
@@ -84,12 +114,16 @@ func (s *Service) SaveCustomer(ctx context.Context, a Actor, id int64, in Custom
 		}
 		if id != 0 {
 			var active bool
-			if err := tx.QueryRow(ctx, `SELECT deleted_at IS NULL FROM customers WHERE id=$1 AND company_id=$2 FOR UPDATE`, id, p.CompanyID).Scan(&active); err == pgx.ErrNoRows {
+			var updated time.Time
+			if err := tx.QueryRow(ctx, `SELECT deleted_at IS NULL,updated_at FROM customers WHERE id=$1 AND company_id=$2 FOR UPDATE`, id, p.CompanyID).Scan(&active, &updated); err == pgx.ErrNoRows {
 				return ErrNotFound
 			} else if err != nil {
 				return err
 			} else if !active {
 				return ErrForbidden
+			}
+			if action.ID != "" && action.Revision != CustomerRevision(&ent.Customer{ID: id, UpdatedAt: updated}) {
+				return ErrConflict
 			}
 		}
 		if !p.Allows(permission, All) {
@@ -110,10 +144,10 @@ func (s *Service) SaveCustomer(ctx context.Context, a Actor, id int64, in Custom
 			in.DisplayName = &name
 		}
 		if in.DisplayName != nil && strings.TrimSpace(*in.DisplayName) == "" {
-			return fmt.Errorf("display name is required")
+			return &CustomerValidationError{Field: "display_name", Message: "Enter a display name, person name or company name."}
 		}
 		if in.AccountType != nil && *in.AccountType != "individual" && *in.AccountType != "company" {
-			return fmt.Errorf("invalid Customer kind")
+			return &CustomerValidationError{Field: "account_type", Message: "Choose Individual or Company."}
 		}
 		if in.CustomFields != nil && !json.Valid([]byte(*in.CustomFields)) {
 			return fmt.Errorf("invalid custom fields")
@@ -133,14 +167,18 @@ func (s *Service) SaveCustomer(ctx context.Context, a Actor, id int64, in Custom
 		if err != nil {
 			return err
 		}
-		if err := audit(ctx, tx, a, p, permission, All, "customer", id, in); err != nil {
+		var auditDetail any = in
+		if action.ID != "" {
+			auditDetail = map[string]any{"input": in, "operation_id": action.ID}
+		}
+		if err := audit(ctx, tx, a, p, permission, All, "customer", id, auditDetail); err != nil {
 			return err
 		}
-		action := "updated"
+		activityAction := "updated"
 		if permission == "customer.create" {
-			action = "created"
+			activityAction = "created"
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) SELECT $1,$2,$3,'customer',id,jsonb_build_object('entity_name',display_name,'permission',$4::text,'scope','A') FROM customers WHERE id=$5`, p.CompanyID, a.UserID, action, permission, id); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) SELECT $1,$2,$3,'customer',id,jsonb_build_object('entity_name',display_name,'permission',$4::text,'scope','A') FROM customers WHERE id=$5`, p.CompanyID, a.UserID, activityAction, permission, id); err != nil {
 			return err
 		}
 		var encoded []byte
@@ -153,6 +191,11 @@ func (s *Service) SaveCustomer(ctx context.Context, a Actor, id int64, in Custom
 		}
 		if !p.Allows("customer.financial.view", All) {
 			redactCustomerFinancial(result)
+		}
+		if action.ID != "" {
+			if _, err := tx.Exec(ctx, `INSERT INTO web_action_receipts(user_id,operation_id,intent_hash,action,effect_id,disposition) VALUES($1,$2,$3,'customer.save',$4,'saved')`, a.UserID, action.ID, intent, id); err != nil {
+				return err
+			}
 		}
 		return nil
 	})

@@ -322,7 +322,8 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
 	// This older Ent regression fixture declares its three actors' grants
 	// explicitly. Production migration/HTTP/invariant tests use the complete
 	// migrated fixture in customer_permissions_integration_test.go instead.
-	if _, err := pool.Exec(context.Background(), `CREATE TABLE authorization_state(ready boolean,fresh_install boolean);INSERT INTO authorization_state VALUES(true,false);
+	if _, err := pool.Exec(context.Background(), `CREATE TABLE user_presentation(user_id bigint PRIMARY KEY REFERENCES users(id),theme text NOT NULL CHECK(theme IN ('system','light','dark')));
+ CREATE TABLE authorization_state(ready boolean,fresh_install boolean);INSERT INTO authorization_state VALUES(true,false);
  CREATE TABLE authorization_roles(id bigint PRIMARY KEY,name text,protected boolean,revision bigint);INSERT INTO authorization_roles VALUES(1,'Administrator',true,1),(2,'Dispatcher',false,1),(3,'Technician',false,1);
  CREATE TABLE authorization_legacy_approvers(user_id bigint);
  CREATE TABLE authorization_grants(role_id bigint,permission text,scope text);

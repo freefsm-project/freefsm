@@ -27,10 +27,12 @@ type UserInfo struct {
 	CustomerView           bool
 	CustomerCreate         bool
 	CustomerEdit           bool
+	CustomerArchive        bool
 	CustomerFinancial      bool
 	CustomerContext        bool
 	CanReviewAuthorization bool
 	FontSize               string
+	Theme                  string
 	LastScheduleTab        string
 	LastSchedulePeriod     string
 	CompanyID              int64 // future multi-tenant: populated from user.company_id
@@ -43,8 +45,8 @@ func Auth(sessions *services.SessionService, userFn UserProvider) func(http.Hand
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie("session")
 			if err != nil {
-				if r.Method != http.MethodGet {
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				if r.Method != http.MethodGet || r.Header.Get("HX-Request") == "true" {
+					http.Error(w, "Session expired—sign in again", http.StatusUnauthorized)
 					return
 				}
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
@@ -56,8 +58,8 @@ func Auth(sessions *services.SessionService, userFn UserProvider) func(http.Hand
 				http.SetCookie(w, &http.Cookie{
 					Name: "session", Value: "", Path: "/", MaxAge: -1,
 				})
-				if r.Method != http.MethodGet {
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				if r.Method != http.MethodGet || r.Header.Get("HX-Request") == "true" {
+					http.Error(w, "Session expired—sign in again", http.StatusUnauthorized)
 					return
 				}
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
