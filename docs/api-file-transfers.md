@@ -16,6 +16,10 @@ The website remains online-only. Transfer is not File publication.
    distinct publication-operation UUID `publication_id`, original `object_type`
    and `object_id`, `name`, exact positive `size` and lowercase hex `sha256`.
    Optional `occurred_at` is an offset-bearing RFC3339 instant, never in the future.
+   Omit optional values rather than sending `null`. If supplied, initial
+   `transferred` must be `0` and `verified` must be `false`. Unknown parent types
+   and nonpositive parent IDs are nonretryable 400 input errors; a well-formed
+   inaccessible Job or document remains a nondisclosing 404.
 3. Send consecutive `PUT /file-transfers/{id}/chunks?offset=N` requests with raw
    bytes. The returned `transferred` is durable transport progress, **not**
    verified completion or publication. Retry an uncertain chunk at its original
@@ -54,6 +58,16 @@ in another caller's namespace creates an independent transfer instead of
 revealing a collision. Migration `075_file_transfer_scope` preserves existing
 UUIDs, parent links and bytes, copying each chunk's recorded transfer owner into
 its composite key; it grants no permissions and fabricates no historical facts.
+Within a caller's namespace, the stored original parent's current authority is
+checked before reporting changed-intent conflicts, even when the request names
+another authorized parent. Lost original-parent visibility returns 404, not a
+collision signal or permission to retarget the transfer.
+
+Migration identities are full names, not numeric prefixes. The independent
+`075_file_transfer_scope` and `075_job_title_whitespace` retain their installed
+names and run in full-name lexical order after `074_job_planning`. An installation
+that already applied either source branch runs only its missing migrations;
+renaming either 075 would incorrectly replay an already-applied schema change.
 
 `POST /file-transfers/lookup` accepts `object_type`, `object_id` and `sha256`.
 Only a complete transfer belonging to the caller's paired session and exact
@@ -97,4 +111,5 @@ routing. Browser tests pair through the hosted approval flow and exercise the
 API reference harness; they do not add offline behavior to the website.
 
 Changelog: additive v1 transfer verification and scoped lookup, exact-byte
-download digest/ETag, strict transfer query validation and reference queue.
+download digest/ETag, strict transfer query validation and reference queue;
+original-parent collision nondisclosure and non-null request conformance repairs.

@@ -116,6 +116,24 @@ func (s *Service) FileAccess(ctx context.Context, a Actor, ref objectref.Ref, pe
 // no-op and therefore creates neither bytes nor another immutable audit event.
 func (s *Service) FileTransferAction(ctx context.Context, a Actor, ref objectref.Ref, transferID string, fn func(pgx.Tx) (bool, map[string]any, error)) error {
 	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		// Resolve a caller-scoped collision under the same authority fence as
+		// the write. A newly requested parent cannot authorize disclosure of
+		// an existing transfer's inaccessible original intent.
+		var originalType string
+		var originalID int64
+		err := tx.QueryRow(ctx, `SELECT object_type,object_id FROM file_transfers WHERE user_id=$1 AND session_hash=$2 AND id=$3 FOR UPDATE`, a.UserID, a.SessionHash, transferID).Scan(&originalType, &originalID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if err == nil {
+			original, err := objectref.Parse(originalType, originalID)
+			if err != nil {
+				return ErrNotFound
+			}
+			if _, err := fileAccess(ctx, tx, p, a, original, "file.upload", a.UserID, true); err != nil {
+				return err
+			}
+		}
 		scope, err := fileAccess(ctx, tx, p, a, ref, "file.upload", a.UserID, true)
 		if err != nil {
 			return err

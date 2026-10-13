@@ -56,8 +56,13 @@ func (h *handler) fileLimits(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"max_file_bytes": h.deps.Files.MaxSize(), "max_batch_files": 10, "max_chunk_bytes": services.FileChunkLimit, "digest": "sha256"})
 }
 func (h *handler) startFileTransfer(w http.ResponseWriter, r *http.Request) {
-	var in services.FileTransfer
-	if !decodeFileJSON(w, r, &in) {
+	var request fileTransferRequest
+	if !decodeFileJSON(w, r, &request) {
+		return
+	}
+	in, err := request.transfer()
+	if err != nil {
+		writeError(w, 400, "invalid_file", "Invalid transfer request")
 		return
 	}
 	out, err := h.deps.Files.StartTransfer(r.Context(), in)
@@ -86,6 +91,10 @@ func (h *handler) verifyFileTransfer(w http.ResponseWriter, r *http.Request) {
 func (h *handler) lookupFileTransfer(w http.ResponseWriter, r *http.Request) {
 	var in services.TransferLookup
 	if !decodeFileJSON(w, r, &in) {
+		return
+	}
+	if !validTransferParent(in.ObjectType, in.ObjectID) {
+		writeError(w, 400, "invalid_file", "Invalid transfer parent")
 		return
 	}
 	out, err := h.deps.Files.LookupTransfer(r.Context(), in)
