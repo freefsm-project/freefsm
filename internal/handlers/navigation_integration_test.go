@@ -86,7 +86,7 @@ func TestNavigationCollectionsFilterBeforePaginationHTTP(t *testing.T) {
 	invoice := client.Invoice.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetJobID(job.ID).SetTitle("Visible navigation Invoice").SetInvoiceNumber(1).SetInvoiceDate(now).SetDueDate(now).SaveX(ctx)
 	project := client.Project.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetName("Visible navigation Project").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Machine").SaveX(ctx)
-	client.Asset.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetAssetTypeID(typ.ID).SetName("Visible navigation Asset").SaveX(ctx)
+	client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(company).SetCustomerID(customer.ID).SetAssetTypeID(typ.ID).SetName("Visible navigation Asset").SaveX(ctx)
 	for i := range 27 {
 		j := client.Job.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetJobType(fmt.Sprintf("HIDDEN navigation Job %d", i)).SetStartTime(now).SaveX(ctx)
 		client.Estimate.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetJobID(j.ID).SetTitle("HIDDEN navigation Estimate").SaveX(ctx)

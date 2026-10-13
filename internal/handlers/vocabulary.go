@@ -40,6 +40,10 @@ func vocabularyGuard(domain string, manage bool) func(http.Handler) http.Handler
 }
 
 func writeAssetVocabularyError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) {
+		authorizationError(w, r, err)
+		return
+	}
 	if errors.Is(authorization.VocabularyError(err), authorization.ErrConflict) {
 		authorizationError(w, r, authorization.ErrConflict)
 		return

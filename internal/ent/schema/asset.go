@@ -24,7 +24,9 @@ func (Asset) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int64("id"),
 		field.Int64("company_id").Optional().Nillable(),
-		field.Int64("customer_id"),
+		field.Int64("customer_id").Optional(),
+		field.String("number").Optional().Immutable(),
+		field.String("ownership_class").Immutable(),
 		field.Int64("location_id").Optional().Nillable(),
 		field.Int64("asset_type_id"),
 		field.Int64("asset_status_id").Optional().Nillable(),

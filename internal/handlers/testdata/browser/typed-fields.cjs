@@ -83,6 +83,7 @@ const { chromium } = require('playwright-core');
     await page.locator('#job-asset-select').locator('..').getByRole('button',{name:'Create',exact:true}).click();
     await page.locator('#job-asset-name').fill('Browser inline asset');
     await page.locator('#job-asset-type-id').selectOption({label:'Browser equipment'});
+    await page.locator('#job-asset-ownership-class').selectOption('customer_owned');
     const missingAssetField = page.waitForResponse(r => r.request().method()==='POST' && r.url()===base+'/assets/inline');
     await page.locator('#job-asset-create-button').click();
     const missingAssetResponse = await missingAssetField;
@@ -159,7 +160,10 @@ const { chromium } = require('playwright-core');
       };
       const nameRecord = async ordinal => {
         await page.locator(`#job-${parent}-name`).fill(`Reuse ${ordinal} ${parent}`);
-        if (parent==='asset') await page.locator('#job-asset-type-id').selectOption({label:'Browser equipment'});
+        if (parent==='asset') {
+          await page.locator('#job-asset-type-id').selectOption({label:'Browser equipment'});
+          await page.locator('#job-asset-ownership-class').selectOption('customer_owned');
+        }
         else await field('10').fill(`${ordinal} project reference`);
       };
       await page.goto(base + `/jobs/${jobID}/edit`);

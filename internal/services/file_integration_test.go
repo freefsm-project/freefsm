@@ -106,13 +106,13 @@ func TestFileServiceTargetExistsRejectsArchivedTargets(t *testing.T) {
 		{
 			name:       "asset",
 			objectType: objectref.TypeAsset,
-			activeID: client.Asset.Create().
+			activeID: client.Asset.Create().SetOwnershipClass("customer_owned").
 				SetCompanyID(companyID).
 				SetCustomerID(activeCustomer.ID).
 				SetAssetTypeID(assetType.ID).
 				SetName("Active Asset").
 				SaveX(ctx).ID,
-			archivedID: client.Asset.Create().
+			archivedID: client.Asset.Create().SetOwnershipClass("customer_owned").
 				SetCompanyID(companyID).
 				SetCustomerID(activeCustomer.ID).
 				SetAssetTypeID(assetType.ID).

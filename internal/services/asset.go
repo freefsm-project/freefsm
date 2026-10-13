@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -10,6 +11,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/asset"
 	"github.com/freefsm-project/freefsm/internal/ent/assetstatus"
 	"github.com/freefsm-project/freefsm/internal/ent/assettype"
+	"github.com/freefsm-project/freefsm/internal/ent/customer"
 	"github.com/freefsm-project/freefsm/internal/ent/job"
 )
 
@@ -22,6 +24,8 @@ func NewAssetService(client *ent.Client) *AssetService {
 }
 
 type AssetCreateParams struct {
+	Number          string
+	OwnershipClass  string
 	CustomerID      int64
 	LocationID      *int64
 	AssetTypeID     int64
@@ -37,18 +41,22 @@ type AssetCreateParams struct {
 }
 
 type AssetUpdateParams struct {
-	CustomerID      *int64
-	LocationID      *int64
-	AssetTypeID     *int64
-	AssetStatusID   *int64
-	Name            *string
-	SerialNumber    *string
-	Model           *string
-	Manufacturer    *string
-	Notes           *string
-	InstalledAt     *time.Time
-	WarrantyExpires *time.Time
-	CustomFields    *string
+	ClearInstalledAt     bool
+	ClearWarrantyExpires bool
+	Number               *string
+	OwnershipClass       *string
+	CustomerID           *int64
+	LocationID           *int64
+	AssetTypeID          *int64
+	AssetStatusID        *int64
+	Name                 *string
+	SerialNumber         *string
+	Model                *string
+	Manufacturer         *string
+	Notes                *string
+	InstalledAt          *time.Time
+	WarrantyExpires      *time.Time
+	CustomFields         *string
 }
 
 func (s *AssetService) List(ctx context.Context, search string, customerID, assetTypeID, assetStatusID int64, page, perPage int) ([]*ent.Asset, int, error) {
@@ -57,6 +65,7 @@ func (s *AssetService) List(ctx context.Context, search string, customerID, asse
 	if search != "" {
 		q = q.Where(
 			asset.Or(
+				asset.NumberContainsFold(search),
 				asset.NameContainsFold(search),
 				asset.SerialNumberContainsFold(search),
 				asset.ModelContainsFold(search),
@@ -126,8 +135,31 @@ func (s *AssetService) Create(ctx context.Context, companyID int64, params Asset
 			return v, v.ID, nil
 		})
 	}
-	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, params.CustomerID); err != nil {
-		return nil, err
+	if params.OwnershipClass != "customer_owned" && params.OwnershipClass != "company_owned" {
+		return nil, fmt.Errorf("%w: choose an Asset ownership class", authorization.ErrConflict)
+	}
+	if strings.TrimSpace(params.Name) == "" {
+		return nil, fmt.Errorf("%w: Asset name is required", authorization.ErrConflict)
+	}
+	if params.CustomerID == 0 && params.OwnershipClass == "customer_owned" {
+		return nil, fmt.Errorf("%w: Customer-owned Assets require a Customer", authorization.ErrConflict)
+	}
+	if params.CustomerID == 0 && params.LocationID != nil && *params.LocationID > 0 {
+		return nil, fmt.Errorf("%w: unplaced Assets cannot have a Customer Location", authorization.ErrConflict)
+	}
+	if params.CustomerID > 0 {
+		if req, ok := authorization.FromContext(ctx); ok {
+			if err := req.Service.ParentAccess(ctx, req.Actor, "customer", params.CustomerID, ""); err != nil {
+				return nil, err
+			}
+		}
+		active, err := s.client.Customer.Query().Where(customer.IDEQ(params.CustomerID), customer.CompanyIDEQ(companyID), customer.DeletedAtIsNil()).Exist(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !active {
+			return nil, fmt.Errorf("%w: select an active Customer", authorization.ErrConflict)
+		}
 	}
 	if err := validateAssetTypeForCompany(ctx, s.client, companyID, params.AssetTypeID); err != nil {
 		return nil, err
@@ -138,6 +170,11 @@ func (s *AssetService) Create(ctx context.Context, companyID int64, params Asset
 		}
 	}
 	if params.LocationID != nil {
+		if req, ok := authorization.FromContext(ctx); ok && *params.LocationID > 0 {
+			if _, err := req.Service.CustomerChild(ctx, req.Actor, params.CustomerID, *params.LocationID, "location"); err != nil {
+				return nil, err
+			}
+		}
 		if err := validateCustomerLocationForCompany(ctx, s.client, companyID, params.CustomerID, *params.LocationID); err != nil {
 			return nil, err
 		}
@@ -145,7 +182,7 @@ func (s *AssetService) Create(ctx context.Context, companyID int64, params Asset
 
 	b := s.client.Asset.Create().
 		SetCompanyID(companyID).
-		SetCustomerID(params.CustomerID).
+		SetOwnershipClass(params.OwnershipClass).
 		SetAssetTypeID(params.AssetTypeID).
 		SetName(params.Name).
 		SetSerialNumber(params.SerialNumber).
@@ -153,6 +190,12 @@ func (s *AssetService) Create(ctx context.Context, companyID int64, params Asset
 		SetManufacturer(params.Manufacturer).
 		SetNotes(params.Notes).
 		SetCustomFields(params.CustomFields)
+	if params.CustomerID > 0 {
+		b.SetCustomerID(params.CustomerID)
+	}
+	if strings.TrimSpace(params.Number) != "" {
+		b.SetNumber(strings.TrimSpace(params.Number))
+	}
 
 	if params.LocationID != nil && *params.LocationID > 0 {
 		b.SetLocationID(*params.LocationID)
@@ -171,7 +214,8 @@ func (s *AssetService) Create(ctx context.Context, companyID int64, params Asset
 	if err != nil {
 		return nil, fmt.Errorf("create asset: %w", err)
 	}
-	return a, nil
+	// Read server-generated Number in the same committing transaction.
+	return s.client.Asset.Get(ctx, a.ID)
 }
 
 func (s *AssetService) Update(ctx context.Context, companyID, id int64, params AssetUpdateParams) (*ent.Asset, error) {
@@ -190,6 +234,9 @@ func (s *AssetService) SaveDetails(ctx context.Context, companyID, id int64, par
 }
 
 func (s *AssetService) update(ctx context.Context, companyID, id int64, params AssetUpdateParams) (*ent.Asset, error) {
+	if params.Name != nil && strings.TrimSpace(*params.Name) == "" {
+		return nil, fmt.Errorf("%w: Asset name is required", authorization.ErrConflict)
+	}
 	current, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -197,8 +244,8 @@ func (s *AssetService) update(ctx context.Context, companyID, id int64, params A
 	if current.CompanyID != nil && *current.CompanyID != companyID {
 		return nil, fmt.Errorf("asset does not belong to company")
 	}
-	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, current.CustomerID); err != nil {
-		return nil, err
+	if (params.Number != nil && *params.Number != current.Number) || (params.OwnershipClass != nil && *params.OwnershipClass != current.OwnershipClass) || (params.CustomerID != nil && *params.CustomerID != current.CustomerID) {
+		return nil, fmt.Errorf("%w: Number, class and Customer association cannot change through Edit", authorization.ErrConflict)
 	}
 	customerID := current.CustomerID
 	locationID := int64Value(current.LocationID)
@@ -216,9 +263,6 @@ func (s *AssetService) update(ctx context.Context, companyID, id int64, params A
 	if params.AssetStatusID != nil {
 		assetStatusID = *params.AssetStatusID
 	}
-	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, customerID); err != nil {
-		return nil, err
-	}
 	if err := validateAssetTypeForCompany(ctx, s.client, companyID, assetTypeID); err != nil {
 		return nil, err
 	}
@@ -227,15 +271,22 @@ func (s *AssetService) update(ctx context.Context, companyID, id int64, params A
 			return nil, err
 		}
 	}
-	if err := validateCustomerLocationForCompany(ctx, s.client, companyID, customerID, locationID); err != nil {
-		return nil, err
+	if locationID != int64Value(current.LocationID) {
+		if customerID == 0 && locationID > 0 {
+			return nil, fmt.Errorf("%w: unplaced Assets cannot have a Customer Location", authorization.ErrConflict)
+		}
+		if req, ok := authorization.FromContext(ctx); ok && locationID > 0 {
+			if _, err := req.Service.CustomerChild(ctx, req.Actor, customerID, locationID, "location"); err != nil {
+				return nil, err
+			}
+		}
+		if err := validateCustomerLocationForCompany(ctx, s.client, companyID, customerID, locationID); err != nil {
+			return nil, err
+		}
 	}
 
 	u := s.client.Asset.UpdateOneID(id).SetCompanyID(companyID)
 
-	if params.CustomerID != nil {
-		u.SetCustomerID(*params.CustomerID)
-	}
 	if params.LocationID != nil {
 		if *params.LocationID > 0 {
 			u.SetLocationID(*params.LocationID)
@@ -270,9 +321,13 @@ func (s *AssetService) update(ctx context.Context, companyID, id int64, params A
 	}
 	if params.InstalledAt != nil {
 		u.SetInstalledAt(*params.InstalledAt)
+	} else if params.ClearInstalledAt {
+		u.ClearInstalledAt()
 	}
 	if params.WarrantyExpires != nil {
 		u.SetWarrantyExpires(*params.WarrantyExpires)
+	} else if params.ClearWarrantyExpires {
+		u.ClearWarrantyExpires()
 	}
 	if params.CustomFields != nil {
 		u.SetCustomFields(*params.CustomFields)
@@ -287,7 +342,7 @@ func (s *AssetService) update(ctx context.Context, companyID, id int64, params A
 
 func validateAssetTypeForCompany(ctx context.Context, client *ent.Client, companyID, assetTypeID int64) error {
 	if assetTypeID <= 0 {
-		return fmt.Errorf("asset type is required")
+		return fmt.Errorf("%w: asset type is required", authorization.ErrConflict)
 	}
 	exists, err := client.AssetType.Query().Where(
 		assettype.IDEQ(assetTypeID),
@@ -297,7 +352,7 @@ func validateAssetTypeForCompany(ctx context.Context, client *ent.Client, compan
 		return fmt.Errorf("validate asset type ownership: %w", err)
 	}
 	if !exists {
-		return fmt.Errorf("asset type does not belong to company")
+		return fmt.Errorf("%w: asset type does not belong to company", authorization.ErrConflict)
 	}
 	return nil
 }
@@ -311,7 +366,7 @@ func validateAssetStatusForCompany(ctx context.Context, client *ent.Client, comp
 		return fmt.Errorf("validate asset status ownership: %w", err)
 	}
 	if !exists {
-		return fmt.Errorf("asset status does not belong to company")
+		return fmt.Errorf("%w: asset status does not belong to company", authorization.ErrConflict)
 	}
 	return nil
 }
@@ -324,6 +379,9 @@ func (s *AssetService) Delete(ctx context.Context, id int64) error {
 }
 
 func (s *AssetService) Archive(ctx context.Context, id int64) error {
+	if req, ok := authorization.FromContext(ctx); ok {
+		return req.Service.AssetLifecycle(ctx, req.Actor, id, false)
+	}
 	now := time.Now()
 	_, err := s.client.Asset.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
 	if err != nil {
@@ -333,6 +391,9 @@ func (s *AssetService) Archive(ctx context.Context, id int64) error {
 }
 
 func (s *AssetService) Restore(ctx context.Context, id int64) error {
+	if req, ok := authorization.FromContext(ctx); ok {
+		return req.Service.AssetLifecycle(ctx, req.Actor, id, true)
+	}
 	_, err := s.client.Asset.UpdateOneID(id).ClearDeletedAt().Save(ctx)
 	if err != nil {
 		return fmt.Errorf("restore asset %d: %w", id, err)

@@ -25,7 +25,7 @@ func TestNavigationDetailAffordancesAndFacetsHTTP(t *testing.T) {
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("DETAIL PRIVATE CUSTOMER").SaveX(ctx)
 	project := client.Project.Create().SetCompanyID(company).SetCustomerID(c.ID).SetName("Navigation Project").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Equipment").SaveX(ctx)
-	asset := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetName("Navigation Asset").SaveX(ctx)
+	asset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetName("Navigation Asset").SaveX(ctx)
 	lines := `[{"title":"DETAIL PRIVATE PRICING","quantity":1,"unit_price":123.45}]`
 	job := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetProjectID(project.ID).SetAssetID(asset.ID).SetJobType("Navigation Job").SetLineItems(lines).SaveX(ctx)
 	estimate := client.Estimate.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobID(job.ID).SetTitle("Navigation Estimate").SetLineItems(lines).SetTaxRate("7.25").SaveX(ctx)

@@ -466,6 +466,8 @@ templ JobForm(p JobFormPageData) {
 				if (!customerID) { setJobModalError('asset', 'Select a customer before creating an asset.'); return; }
 				try {
 					const created = await postInline('/assets/inline', [
+						['number', document.getElementById('job-asset-number').value],
+						['ownership_class', document.getElementById('job-asset-ownership-class').value],
 						['customer_id', customerID],
 						['name', document.getElementById('job-asset-name').value],
 						['asset_type_id', document.getElementById('job-asset-type-id').value],
@@ -640,6 +642,14 @@ templ JobQuickCreateDialogs(p JobFormPageData) {
 			</header>
 			<div class="item-create-dialog-body">
 				<small class="error-msg" id="job-asset-error" hidden></small>
+				<label>Asset Number <input id="job-asset-number" placeholder="Automatically assigned if blank"/></label>
+				<label>Ownership class
+					<select id="job-asset-ownership-class" required>
+						<option value="0">Choose ownership class</option>
+						<option value="customer_owned">Customer-owned</option>
+						<option value="company_owned">Company-owned</option>
+					</select>
+				</label>
 				<label>Name <small class="required-marker">*</small><input type="text" id="job-asset-name" required/></label>
 				<div class="grid">
 					<label>Asset Type <small class="required-marker">*</small>

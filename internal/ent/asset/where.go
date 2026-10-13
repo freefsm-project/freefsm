@@ -64,6 +64,16 @@ func CustomerID(v int64) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldCustomerID, v))
 }
 
+// Number applies equality check predicate on the "number" field. It's identical to NumberEQ.
+func Number(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldNumber, v))
+}
+
+// OwnershipClass applies equality check predicate on the "ownership_class" field. It's identical to OwnershipClassEQ.
+func OwnershipClass(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldOwnershipClass, v))
+}
+
 // LocationID applies equality check predicate on the "location_id" field. It's identical to LocationIDEQ.
 func LocationID(v int64) predicate.Asset {
 	return predicate.Asset(sql.FieldEQ(FieldLocationID, v))
@@ -222,6 +232,156 @@ func CustomerIDLT(v int64) predicate.Asset {
 // CustomerIDLTE applies the LTE predicate on the "customer_id" field.
 func CustomerIDLTE(v int64) predicate.Asset {
 	return predicate.Asset(sql.FieldLTE(FieldCustomerID, v))
+}
+
+// CustomerIDIsNil applies the IsNil predicate on the "customer_id" field.
+func CustomerIDIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldCustomerID))
+}
+
+// CustomerIDNotNil applies the NotNil predicate on the "customer_id" field.
+func CustomerIDNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldCustomerID))
+}
+
+// NumberEQ applies the EQ predicate on the "number" field.
+func NumberEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldNumber, v))
+}
+
+// NumberNEQ applies the NEQ predicate on the "number" field.
+func NumberNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldNumber, v))
+}
+
+// NumberIn applies the In predicate on the "number" field.
+func NumberIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldNumber, vs...))
+}
+
+// NumberNotIn applies the NotIn predicate on the "number" field.
+func NumberNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldNumber, vs...))
+}
+
+// NumberGT applies the GT predicate on the "number" field.
+func NumberGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldNumber, v))
+}
+
+// NumberGTE applies the GTE predicate on the "number" field.
+func NumberGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldNumber, v))
+}
+
+// NumberLT applies the LT predicate on the "number" field.
+func NumberLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldNumber, v))
+}
+
+// NumberLTE applies the LTE predicate on the "number" field.
+func NumberLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldNumber, v))
+}
+
+// NumberContains applies the Contains predicate on the "number" field.
+func NumberContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldNumber, v))
+}
+
+// NumberHasPrefix applies the HasPrefix predicate on the "number" field.
+func NumberHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldNumber, v))
+}
+
+// NumberHasSuffix applies the HasSuffix predicate on the "number" field.
+func NumberHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldNumber, v))
+}
+
+// NumberIsNil applies the IsNil predicate on the "number" field.
+func NumberIsNil() predicate.Asset {
+	return predicate.Asset(sql.FieldIsNull(FieldNumber))
+}
+
+// NumberNotNil applies the NotNil predicate on the "number" field.
+func NumberNotNil() predicate.Asset {
+	return predicate.Asset(sql.FieldNotNull(FieldNumber))
+}
+
+// NumberEqualFold applies the EqualFold predicate on the "number" field.
+func NumberEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldNumber, v))
+}
+
+// NumberContainsFold applies the ContainsFold predicate on the "number" field.
+func NumberContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldNumber, v))
+}
+
+// OwnershipClassEQ applies the EQ predicate on the "ownership_class" field.
+func OwnershipClassEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEQ(FieldOwnershipClass, v))
+}
+
+// OwnershipClassNEQ applies the NEQ predicate on the "ownership_class" field.
+func OwnershipClassNEQ(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldNEQ(FieldOwnershipClass, v))
+}
+
+// OwnershipClassIn applies the In predicate on the "ownership_class" field.
+func OwnershipClassIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldIn(FieldOwnershipClass, vs...))
+}
+
+// OwnershipClassNotIn applies the NotIn predicate on the "ownership_class" field.
+func OwnershipClassNotIn(vs ...string) predicate.Asset {
+	return predicate.Asset(sql.FieldNotIn(FieldOwnershipClass, vs...))
+}
+
+// OwnershipClassGT applies the GT predicate on the "ownership_class" field.
+func OwnershipClassGT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGT(FieldOwnershipClass, v))
+}
+
+// OwnershipClassGTE applies the GTE predicate on the "ownership_class" field.
+func OwnershipClassGTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldGTE(FieldOwnershipClass, v))
+}
+
+// OwnershipClassLT applies the LT predicate on the "ownership_class" field.
+func OwnershipClassLT(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLT(FieldOwnershipClass, v))
+}
+
+// OwnershipClassLTE applies the LTE predicate on the "ownership_class" field.
+func OwnershipClassLTE(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldLTE(FieldOwnershipClass, v))
+}
+
+// OwnershipClassContains applies the Contains predicate on the "ownership_class" field.
+func OwnershipClassContains(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContains(FieldOwnershipClass, v))
+}
+
+// OwnershipClassHasPrefix applies the HasPrefix predicate on the "ownership_class" field.
+func OwnershipClassHasPrefix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasPrefix(FieldOwnershipClass, v))
+}
+
+// OwnershipClassHasSuffix applies the HasSuffix predicate on the "ownership_class" field.
+func OwnershipClassHasSuffix(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldHasSuffix(FieldOwnershipClass, v))
+}
+
+// OwnershipClassEqualFold applies the EqualFold predicate on the "ownership_class" field.
+func OwnershipClassEqualFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldEqualFold(FieldOwnershipClass, v))
+}
+
+// OwnershipClassContainsFold applies the ContainsFold predicate on the "ownership_class" field.
+func OwnershipClassContainsFold(v string) predicate.Asset {
+	return predicate.Asset(sql.FieldContainsFold(FieldOwnershipClass, v))
 }
 
 // LocationIDEQ applies the EQ predicate on the "location_id" field.

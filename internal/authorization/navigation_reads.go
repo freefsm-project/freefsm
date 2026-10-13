@@ -119,6 +119,23 @@ func InstallNavigationReadBoundary(client *ent.Client) {
 	if _, loaded := installedNavigationReads.LoadOrStore(client, true); loaded {
 		return
 	}
+	// Master reads, including relationship pickers on other domains, never use
+	// Context authority to deserialize Asset entities. Field context uses its SQL
+	// allowlist instead. The transaction adapter has its own authorized client.
+	client.Asset.Intercept(ent.TraverseFunc(func(ctx context.Context, q ent.Query) error {
+		req, ok := FromContext(ctx)
+		if !ok {
+			return nil
+		}
+		p, err := req.Service.Principal(ctx, req.Actor)
+		if err != nil {
+			return err
+		}
+		if query, ok := q.(*ent.AssetQuery); ok {
+			query.Where(func(s *sql.Selector) { s.Where(recordReadPredicate(p, "asset", s)) })
+		}
+		return nil
+	}))
 	filter := ent.TraverseFunc(func(ctx context.Context, q ent.Query) error {
 		p, ok := NavigationPrincipal(ctx)
 		if !ok {
@@ -128,6 +145,9 @@ func InstallNavigationReadBoundary(client *ent.Client) {
 			return func(s *sql.Selector) { s.Where(recordReadPredicate(p, typ, s)) }
 		}
 		tenant := func(s *sql.Selector) { s.Where(sql.EQ(s.C("company_id"), p.CompanyID)) }
+		vocabularyTenant := func(s *sql.Selector) {
+			s.Where(sql.Or(sql.EQ(s.C("company_id"), p.CompanyID), sql.IsNull(s.C("company_id"))))
+		}
 		switch query := q.(type) {
 		case *ent.JobQuery:
 			query.Where(where("job"))
@@ -146,9 +166,9 @@ func InstallNavigationReadBoundary(client *ent.Client) {
 		case *ent.StatusWorkflowQuery:
 			query.Where(tenant)
 		case *ent.AssetTypeQuery:
-			query.Where(tenant)
+			query.Where(vocabularyTenant)
 		case *ent.AssetStatusQuery:
-			query.Where(tenant)
+			query.Where(vocabularyTenant)
 		case *ent.UserQuery:
 			query.Where(tenant)
 			if !p.Allows("directory.view", All) {

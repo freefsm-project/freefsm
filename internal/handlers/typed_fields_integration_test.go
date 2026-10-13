@@ -517,7 +517,7 @@ func TestTypedFieldsExistingParentDetailsAtomicHTTP(t *testing.T) {
 		fields url.Values
 		key    string
 	}{
-		{"/assets", url.Values{"name": {"Saved asset"}, "customer_id": {fmt.Sprint(customer.ID)}, "asset_type_id": {fmt.Sprint(assetType.ID)}}, "custom_field_3"},
+		{"/assets", url.Values{"ownership_class": {"customer_owned"}, "name": {"Saved asset"}, "customer_id": {fmt.Sprint(customer.ID)}, "asset_type_id": {fmt.Sprint(assetType.ID)}}, "custom_field_3"},
 		{"/estimates", url.Values{"title": {"Saved estimate"}, "customer_id": {fmt.Sprint(customer.ID)}, "line_items": {"[]"}, "tax_rate": {"0"}}, "custom_field_4"},
 		{"/invoices", url.Values{"title": {"Saved invoice"}, "customer_id": {fmt.Sprint(customer.ID)}, "line_items": {"[]"}, "tax_rate": {"0"}, "invoice_date": {"2026-10-11"}, "due_date": {"2026-11-11"}}, "custom_field_5"},
 	} {
@@ -549,6 +549,7 @@ func TestTypedFieldsExistingParentDetailsAtomicHTTP(t *testing.T) {
 	inlineProject.Set("custom_field_1", "2024-02-29")
 	fieldPost(t, router, cookie, "/projects/inline", inlineProject, 200)
 	inlineAsset := url.Values{"name": {"Inline asset"}, "customer_id": {fmt.Sprint(customer.ID)}, "asset_type_id": {fmt.Sprint(assetType.ID)}}
+	inlineAsset.Set("ownership_class", "customer_owned")
 	fieldPost(t, router, cookie, "/assets/inline", inlineAsset, 422)
 	inlineAsset.Set("custom_field_3", "2024-02-29")
 	fieldPost(t, router, cookie, "/assets/inline", inlineAsset, 200)

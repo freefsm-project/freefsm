@@ -40,6 +40,34 @@ func (_c *AssetCreate) SetCustomerID(v int64) *AssetCreate {
 	return _c
 }
 
+// SetNillableCustomerID sets the "customer_id" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableCustomerID(v *int64) *AssetCreate {
+	if v != nil {
+		_c.SetCustomerID(*v)
+	}
+	return _c
+}
+
+// SetNumber sets the "number" field.
+func (_c *AssetCreate) SetNumber(v string) *AssetCreate {
+	_c.mutation.SetNumber(v)
+	return _c
+}
+
+// SetNillableNumber sets the "number" field if the given value is not nil.
+func (_c *AssetCreate) SetNillableNumber(v *string) *AssetCreate {
+	if v != nil {
+		_c.SetNumber(*v)
+	}
+	return _c
+}
+
+// SetOwnershipClass sets the "ownership_class" field.
+func (_c *AssetCreate) SetOwnershipClass(v string) *AssetCreate {
+	_c.mutation.SetOwnershipClass(v)
+	return _c
+}
+
 // SetLocationID sets the "location_id" field.
 func (_c *AssetCreate) SetLocationID(v int64) *AssetCreate {
 	_c.mutation.SetLocationID(v)
@@ -293,8 +321,8 @@ func (_c *AssetCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *AssetCreate) check() error {
-	if _, ok := _c.mutation.CustomerID(); !ok {
-		return &ValidationError{Name: "customer_id", err: errors.New(`ent: missing required field "Asset.customer_id"`)}
+	if _, ok := _c.mutation.OwnershipClass(); !ok {
+		return &ValidationError{Name: "ownership_class", err: errors.New(`ent: missing required field "Asset.ownership_class"`)}
 	}
 	if _, ok := _c.mutation.AssetTypeID(); !ok {
 		return &ValidationError{Name: "asset_type_id", err: errors.New(`ent: missing required field "Asset.asset_type_id"`)}
@@ -367,6 +395,14 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CustomerID(); ok {
 		_spec.SetField(asset.FieldCustomerID, field.TypeInt64, value)
 		_node.CustomerID = value
+	}
+	if value, ok := _c.mutation.Number(); ok {
+		_spec.SetField(asset.FieldNumber, field.TypeString, value)
+		_node.Number = value
+	}
+	if value, ok := _c.mutation.OwnershipClass(); ok {
+		_spec.SetField(asset.FieldOwnershipClass, field.TypeString, value)
+		_node.OwnershipClass = value
 	}
 	if value, ok := _c.mutation.LocationID(); ok {
 		_spec.SetField(asset.FieldLocationID, field.TypeInt64, value)

@@ -112,6 +112,7 @@ func TestVocabularyUpgradePreservesFacts(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO tag_links(company_id,tag_id,object_type,object_id) VALUES($1,$2,'asset',$3)`, company, tag, asset); err != nil {
 		t.Fatal(err)
 	}
+	reviewFixtureAssetIdentities(t, ctx, db, AssetIdentityResolution{ID: asset, Number: "LEGACY-VOCABULARY", OwnershipClass: "customer_owned"})
 	for range 2 {
 		if err := db.Migrate(ctx, MigrationFS()); err != nil {
 			t.Fatal(err)

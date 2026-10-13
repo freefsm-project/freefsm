@@ -17,6 +17,10 @@ const (
 	FieldCompanyID = "company_id"
 	// FieldCustomerID holds the string denoting the customer_id field in the database.
 	FieldCustomerID = "customer_id"
+	// FieldNumber holds the string denoting the number field in the database.
+	FieldNumber = "number"
+	// FieldOwnershipClass holds the string denoting the ownership_class field in the database.
+	FieldOwnershipClass = "ownership_class"
 	// FieldLocationID holds the string denoting the location_id field in the database.
 	FieldLocationID = "location_id"
 	// FieldAssetTypeID holds the string denoting the asset_type_id field in the database.
@@ -54,6 +58,8 @@ var Columns = []string{
 	FieldID,
 	FieldCompanyID,
 	FieldCustomerID,
+	FieldNumber,
+	FieldOwnershipClass,
 	FieldLocationID,
 	FieldAssetTypeID,
 	FieldAssetStatusID,
@@ -117,6 +123,16 @@ func ByCompanyID(opts ...sql.OrderTermOption) OrderOption {
 // ByCustomerID orders the results by the customer_id field.
 func ByCustomerID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCustomerID, opts...).ToFunc()
+}
+
+// ByNumber orders the results by the number field.
+func ByNumber(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldNumber, opts...).ToFunc()
+}
+
+// ByOwnershipClass orders the results by the ownership_class field.
+func ByOwnershipClass(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOwnershipClass, opts...).ToFunc()
 }
 
 // ByLocationID orders the results by the location_id field.

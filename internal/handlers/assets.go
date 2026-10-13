@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
@@ -208,6 +209,9 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !assetSelectionInput(w, r) {
+		return
+	}
 	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	assetTypeID, _ := strconv.ParseInt(r.FormValue("asset_type_id"), 10, 64)
@@ -222,16 +226,21 @@ func (h *AssetHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := services.AssetCreateParams{
-		CustomerID:    customerID,
-		LocationID:    locID,
-		AssetTypeID:   assetTypeID,
-		AssetStatusID: statusID,
-		Name:          r.FormValue("name"),
-		SerialNumber:  r.FormValue("serial_number"),
-		Model:         r.FormValue("model"),
-		Manufacturer:  r.FormValue("manufacturer"),
-		Notes:         r.FormValue("notes"),
-		CustomFields:  parseCustomFieldValues(r),
+		Number:         r.FormValue("number"),
+		OwnershipClass: r.FormValue("ownership_class"),
+		CustomerID:     customerID,
+		LocationID:     locID,
+		AssetTypeID:    assetTypeID,
+		AssetStatusID:  statusID,
+		Name:           r.FormValue("name"),
+		SerialNumber:   r.FormValue("serial_number"),
+		Model:          r.FormValue("model"),
+		Manufacturer:   r.FormValue("manufacturer"),
+		Notes:          r.FormValue("notes"),
+		CustomFields:   parseCustomFieldValues(r),
+	}
+	if !assetDates(w, r, &params.InstalledAt, &params.WarrantyExpires) {
+		return
 	}
 
 	result, err := h.svc.Create(r.Context(), u.CompanyID, params)
@@ -261,11 +270,10 @@ func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
 	}
-	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
-	if customerID <= 0 {
-		http.Error(w, "customer is required", http.StatusBadRequest)
+	if !assetSelectionInput(w, r) {
 		return
 	}
+	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	name := r.FormValue("name")
 	if name == "" {
 		http.Error(w, "asset name is required", http.StatusBadRequest)
@@ -293,8 +301,13 @@ func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		}
 		statusID = &assetStatusID
 	}
-	loc := middleware.CompanyLocation(r.Context())
+	var installed, warranty *time.Time
+	if !assetDates(w, r, &installed, &warranty) {
+		return
+	}
 	result, err := h.svc.Create(r.Context(), u.CompanyID, services.AssetCreateParams{
+		Number:          r.FormValue("number"),
+		OwnershipClass:  r.FormValue("ownership_class"),
 		CustomerID:      customerID,
 		LocationID:      locID,
 		AssetTypeID:     assetTypeID,
@@ -304,8 +317,8 @@ func (h *AssetHandler) CreateInline(w http.ResponseWriter, r *http.Request) {
 		Model:           r.FormValue("model"),
 		Manufacturer:    r.FormValue("manufacturer"),
 		Notes:           r.FormValue("notes"),
-		InstalledAt:     parseDatePtr(r.FormValue("installed_at"), loc),
-		WarrantyExpires: parseDatePtr(r.FormValue("warranty_expires"), loc),
+		InstalledAt:     installed,
+		WarrantyExpires: warranty,
 		CustomFields:    parseCustomFieldValues(r),
 	})
 	if err != nil {
@@ -346,13 +359,25 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		assetTypes, _ := h.assetTypeSvc.List(r.Context())
 		assetStatuses, _ := h.assetStatusSvc.List(r.Context())
 		locations, _ := h.locationSvc.ListByCustomer(r.Context(), asset.CustomerID)
+		locationOptions := locationsToOptions(locations)
+		if asset.LocationID != nil {
+			found := false
+			for _, option := range locationOptions {
+				if option.Value == *asset.LocationID {
+					found = true
+				}
+			}
+			if !found {
+				locationOptions = append(locationOptions, templates.SelectOption{Value: *asset.LocationID, Label: "Current Location (unavailable for new selection)", Retired: true})
+			}
+		}
 		defs, _ := h.cfSvc.ListForObjectType(r.Context(), "asset")
 		templates.AssetForm(templates.AssetFormPageData{
 			CustomFields:  buildCustomFieldDisplay(defs, asset.CustomFields),
 			IsNew:         false,
 			Asset:         assetToDetail(r.Context(), asset, assetTypes, assetStatuses),
 			Customers:     customersToOptions(customers),
-			Locations:     locationsToOptions(locations),
+			Locations:     locationOptions,
 			AssetTypes:    assetTypesToOptions(assetTypes),
 			AssetStatuses: assetStatusesToOptions(assetStatuses),
 		}).Render(r.Context(), w)
@@ -364,6 +389,9 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !assetSelectionInput(w, r) {
+		return
+	}
 	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
 	assetTypeID, _ := strconv.ParseInt(r.FormValue("asset_type_id"), 10, 64)
@@ -379,16 +407,36 @@ func (h *AssetHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := services.AssetUpdateParams{
-		CustomerID:    &customerID,
-		LocationID:    &locationID,
-		AssetTypeID:   &assetTypeID,
-		AssetStatusID: statusID,
-		Name:          strPtr(r.FormValue("name")),
-		SerialNumber:  strPtr(r.FormValue("serial_number")),
-		Model:         strPtr(r.FormValue("model")),
-		Manufacturer:  strPtr(r.FormValue("manufacturer")),
-		Notes:         strPtr(r.FormValue("notes")),
-		CustomFields:  parseCustomFieldPatch(r),
+		ClearInstalledAt:     r.Form.Has("installed_at") && r.FormValue("installed_at") == "",
+		ClearWarrantyExpires: r.Form.Has("warranty_expires") && r.FormValue("warranty_expires") == "",
+		CustomerID:           &customerID,
+		LocationID:           &locationID,
+		AssetTypeID:          &assetTypeID,
+		AssetStatusID:        statusID,
+		Name:                 assetTextPatch(r, "name"),
+		SerialNumber:         assetTextPatch(r, "serial_number"),
+		Model:                assetTextPatch(r, "model"),
+		Manufacturer:         assetTextPatch(r, "manufacturer"),
+		Notes:                assetTextPatch(r, "notes"),
+		CustomFields:         parseCustomFieldPatch(r),
+	}
+	if !r.Form.Has("customer_id") {
+		params.CustomerID = nil
+	}
+	if !r.Form.Has("location_id") {
+		params.LocationID = nil
+	}
+	if !r.Form.Has("asset_type_id") {
+		params.AssetTypeID = nil
+	}
+	if r.Form.Has("number") {
+		params.Number = strPtr(r.FormValue("number"))
+	}
+	if r.Form.Has("ownership_class") {
+		params.OwnershipClass = strPtr(r.FormValue("ownership_class"))
+	}
+	if !assetDates(w, r, &params.InstalledAt, &params.WarrantyExpires) {
+		return
 	}
 
 	result, err := h.svc.SaveDetails(r.Context(), u.CompanyID, id, params)
@@ -421,7 +469,7 @@ func (h *AssetHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	entityName := asset.Name
 	if err := h.svc.Archive(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+		writeAssetVocabularyError(w, r, err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -446,7 +494,7 @@ func (h *AssetHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Restore(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+		writeAssetVocabularyError(w, r, err)
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -517,15 +565,17 @@ func (h *AssetHandler) GetLocations(w http.ResponseWriter, r *http.Request) {
 
 func assetRow(a *ent.Asset) templates.AssetRow {
 	return templates.AssetRow{
-		ID:            a.ID,
-		Name:          a.Name,
-		SerialNumber:  a.SerialNumber,
-		Model:         a.Model,
-		Manufacturer:  a.Manufacturer,
-		CustomerID:    a.CustomerID,
-		LocationID:    a.LocationID,
-		AssetTypeID:   a.AssetTypeID,
-		AssetStatusID: a.AssetStatusID,
+		Number:         a.Number,
+		OwnershipClass: a.OwnershipClass,
+		ID:             a.ID,
+		Name:           a.Name,
+		SerialNumber:   a.SerialNumber,
+		Model:          a.Model,
+		Manufacturer:   a.Manufacturer,
+		CustomerID:     a.CustomerID,
+		LocationID:     a.LocationID,
+		AssetTypeID:    a.AssetTypeID,
+		AssetStatusID:  a.AssetStatusID,
 	}
 }
 
@@ -546,6 +596,8 @@ func assetToDetail(ctx context.Context, a *ent.Asset, assetTypes []*ent.AssetTyp
 	}
 
 	d := &templates.AssetDetail{
+		Number:           a.Number,
+		OwnershipClass:   a.OwnershipClass,
 		ID:               a.ID,
 		CustomerID:       a.CustomerID,
 		LocationID:       a.LocationID,
@@ -569,6 +621,41 @@ func assetToDetail(ctx context.Context, a *ent.Asset, assetTypes []*ent.AssetTyp
 		d.ArchivedAt = displayDate(ctx, *a.DeletedAt)
 	}
 	return d
+}
+
+func assetDates(w http.ResponseWriter, r *http.Request, installed, warranty **time.Time) bool {
+	for key, dest := range map[string]**time.Time{"installed_at": installed, "warranty_expires": warranty} {
+		if value := r.FormValue(key); value != "" {
+			date, err := time.ParseInLocation("2006-01-02", value, middleware.CompanyLocation(r.Context()))
+			if err != nil {
+				http.Error(w, "Invalid Asset date", 400)
+				return false
+			}
+			*dest = &date
+		}
+	}
+	return true
+}
+
+func assetSelectionInput(w http.ResponseWriter, r *http.Request) bool {
+	for _, key := range []string{"customer_id", "location_id", "asset_type_id", "asset_status_id"} {
+		if !r.Form.Has(key) {
+			continue
+		}
+		n, err := strconv.ParseInt(r.FormValue(key), 10, 64)
+		if err != nil || n < 0 {
+			http.Error(w, "Invalid Asset selection", 400)
+			return false
+		}
+	}
+	return true
+}
+
+func assetTextPatch(r *http.Request, key string) *string {
+	if !r.Form.Has(key) {
+		return nil
+	}
+	return strPtr(r.FormValue(key))
 }
 
 func jobRowForAsset(j *ent.Job) templates.JobRow {

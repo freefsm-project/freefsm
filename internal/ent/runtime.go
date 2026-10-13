@@ -60,35 +60,35 @@ func init() {
 	assetFields := schema.Asset{}.Fields()
 	_ = assetFields
 	// assetDescName is the schema descriptor for name field.
-	assetDescName := assetFields[6].Descriptor()
+	assetDescName := assetFields[8].Descriptor()
 	// asset.NameValidator is a validator for the "name" field. It is called by the builders before save.
 	asset.NameValidator = assetDescName.Validators[0].(func(string) error)
 	// assetDescSerialNumber is the schema descriptor for serial_number field.
-	assetDescSerialNumber := assetFields[7].Descriptor()
+	assetDescSerialNumber := assetFields[9].Descriptor()
 	// asset.DefaultSerialNumber holds the default value on creation for the serial_number field.
 	asset.DefaultSerialNumber = assetDescSerialNumber.Default.(string)
 	// assetDescModel is the schema descriptor for model field.
-	assetDescModel := assetFields[8].Descriptor()
+	assetDescModel := assetFields[10].Descriptor()
 	// asset.DefaultModel holds the default value on creation for the model field.
 	asset.DefaultModel = assetDescModel.Default.(string)
 	// assetDescManufacturer is the schema descriptor for manufacturer field.
-	assetDescManufacturer := assetFields[9].Descriptor()
+	assetDescManufacturer := assetFields[11].Descriptor()
 	// asset.DefaultManufacturer holds the default value on creation for the manufacturer field.
 	asset.DefaultManufacturer = assetDescManufacturer.Default.(string)
 	// assetDescNotes is the schema descriptor for notes field.
-	assetDescNotes := assetFields[10].Descriptor()
+	assetDescNotes := assetFields[12].Descriptor()
 	// asset.DefaultNotes holds the default value on creation for the notes field.
 	asset.DefaultNotes = assetDescNotes.Default.(string)
 	// assetDescCustomFields is the schema descriptor for custom_fields field.
-	assetDescCustomFields := assetFields[13].Descriptor()
+	assetDescCustomFields := assetFields[15].Descriptor()
 	// asset.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	asset.DefaultCustomFields = assetDescCustomFields.Default.(string)
 	// assetDescCreatedAt is the schema descriptor for created_at field.
-	assetDescCreatedAt := assetFields[15].Descriptor()
+	assetDescCreatedAt := assetFields[17].Descriptor()
 	// asset.DefaultCreatedAt holds the default value on creation for the created_at field.
 	asset.DefaultCreatedAt = assetDescCreatedAt.Default.(func() time.Time)
 	// assetDescUpdatedAt is the schema descriptor for updated_at field.
-	assetDescUpdatedAt := assetFields[16].Descriptor()
+	assetDescUpdatedAt := assetFields[18].Descriptor()
 	// asset.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	asset.DefaultUpdatedAt = assetDescUpdatedAt.Default.(func() time.Time)
 	// asset.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

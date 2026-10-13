@@ -943,6 +943,8 @@ type AssetMutation struct {
 	addcompany_id      *int64
 	customer_id        *int64
 	addcustomer_id     *int64
+	number             *string
+	ownership_class    *string
 	location_id        *int64
 	addlocation_id     *int64
 	asset_type_id      *int64
@@ -1190,10 +1192,109 @@ func (m *AssetMutation) AddedCustomerID() (r int64, exists bool) {
 	return *v, true
 }
 
+// ClearCustomerID clears the value of the "customer_id" field.
+func (m *AssetMutation) ClearCustomerID() {
+	m.customer_id = nil
+	m.addcustomer_id = nil
+	m.clearedFields[asset.FieldCustomerID] = struct{}{}
+}
+
+// CustomerIDCleared returns if the "customer_id" field was cleared in this mutation.
+func (m *AssetMutation) CustomerIDCleared() bool {
+	_, ok := m.clearedFields[asset.FieldCustomerID]
+	return ok
+}
+
 // ResetCustomerID resets all changes to the "customer_id" field.
 func (m *AssetMutation) ResetCustomerID() {
 	m.customer_id = nil
 	m.addcustomer_id = nil
+	delete(m.clearedFields, asset.FieldCustomerID)
+}
+
+// SetNumber sets the "number" field.
+func (m *AssetMutation) SetNumber(s string) {
+	m.number = &s
+}
+
+// Number returns the value of the "number" field in the mutation.
+func (m *AssetMutation) Number() (r string, exists bool) {
+	v := m.number
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNumber returns the old "number" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldNumber(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNumber is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNumber requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNumber: %w", err)
+	}
+	return oldValue.Number, nil
+}
+
+// ClearNumber clears the value of the "number" field.
+func (m *AssetMutation) ClearNumber() {
+	m.number = nil
+	m.clearedFields[asset.FieldNumber] = struct{}{}
+}
+
+// NumberCleared returns if the "number" field was cleared in this mutation.
+func (m *AssetMutation) NumberCleared() bool {
+	_, ok := m.clearedFields[asset.FieldNumber]
+	return ok
+}
+
+// ResetNumber resets all changes to the "number" field.
+func (m *AssetMutation) ResetNumber() {
+	m.number = nil
+	delete(m.clearedFields, asset.FieldNumber)
+}
+
+// SetOwnershipClass sets the "ownership_class" field.
+func (m *AssetMutation) SetOwnershipClass(s string) {
+	m.ownership_class = &s
+}
+
+// OwnershipClass returns the value of the "ownership_class" field in the mutation.
+func (m *AssetMutation) OwnershipClass() (r string, exists bool) {
+	v := m.ownership_class
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOwnershipClass returns the old "ownership_class" field's value of the Asset entity.
+// If the Asset object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AssetMutation) OldOwnershipClass(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOwnershipClass is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOwnershipClass requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOwnershipClass: %w", err)
+	}
+	return oldValue.OwnershipClass, nil
+}
+
+// ResetOwnershipClass resets all changes to the "ownership_class" field.
+func (m *AssetMutation) ResetOwnershipClass() {
+	m.ownership_class = nil
 }
 
 // SetLocationID sets the "location_id" field.
@@ -1861,12 +1962,18 @@ func (m *AssetMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AssetMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 18)
 	if m.company_id != nil {
 		fields = append(fields, asset.FieldCompanyID)
 	}
 	if m.customer_id != nil {
 		fields = append(fields, asset.FieldCustomerID)
+	}
+	if m.number != nil {
+		fields = append(fields, asset.FieldNumber)
+	}
+	if m.ownership_class != nil {
+		fields = append(fields, asset.FieldOwnershipClass)
 	}
 	if m.location_id != nil {
 		fields = append(fields, asset.FieldLocationID)
@@ -1922,6 +2029,10 @@ func (m *AssetMutation) Field(name string) (ent.Value, bool) {
 		return m.CompanyID()
 	case asset.FieldCustomerID:
 		return m.CustomerID()
+	case asset.FieldNumber:
+		return m.Number()
+	case asset.FieldOwnershipClass:
+		return m.OwnershipClass()
 	case asset.FieldLocationID:
 		return m.LocationID()
 	case asset.FieldAssetTypeID:
@@ -1963,6 +2074,10 @@ func (m *AssetMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldCompanyID(ctx)
 	case asset.FieldCustomerID:
 		return m.OldCustomerID(ctx)
+	case asset.FieldNumber:
+		return m.OldNumber(ctx)
+	case asset.FieldOwnershipClass:
+		return m.OldOwnershipClass(ctx)
 	case asset.FieldLocationID:
 		return m.OldLocationID(ctx)
 	case asset.FieldAssetTypeID:
@@ -2013,6 +2128,20 @@ func (m *AssetMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCustomerID(v)
+		return nil
+	case asset.FieldNumber:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNumber(v)
+		return nil
+	case asset.FieldOwnershipClass:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOwnershipClass(v)
 		return nil
 	case asset.FieldLocationID:
 		v, ok := value.(int64)
@@ -2208,6 +2337,12 @@ func (m *AssetMutation) ClearedFields() []string {
 	if m.FieldCleared(asset.FieldCompanyID) {
 		fields = append(fields, asset.FieldCompanyID)
 	}
+	if m.FieldCleared(asset.FieldCustomerID) {
+		fields = append(fields, asset.FieldCustomerID)
+	}
+	if m.FieldCleared(asset.FieldNumber) {
+		fields = append(fields, asset.FieldNumber)
+	}
 	if m.FieldCleared(asset.FieldLocationID) {
 		fields = append(fields, asset.FieldLocationID)
 	}
@@ -2240,6 +2375,12 @@ func (m *AssetMutation) ClearField(name string) error {
 	case asset.FieldCompanyID:
 		m.ClearCompanyID()
 		return nil
+	case asset.FieldCustomerID:
+		m.ClearCustomerID()
+		return nil
+	case asset.FieldNumber:
+		m.ClearNumber()
+		return nil
 	case asset.FieldLocationID:
 		m.ClearLocationID()
 		return nil
@@ -2268,6 +2409,12 @@ func (m *AssetMutation) ResetField(name string) error {
 		return nil
 	case asset.FieldCustomerID:
 		m.ResetCustomerID()
+		return nil
+	case asset.FieldNumber:
+		m.ResetNumber()
+		return nil
+	case asset.FieldOwnershipClass:
+		m.ResetOwnershipClass()
 		return nil
 	case asset.FieldLocationID:
 		m.ResetLocationID()
