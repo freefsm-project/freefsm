@@ -13,6 +13,30 @@ import (
 
 var ErrStale = errors.New("This form has changed since it was opened. Review the current authorized values before revising or discarding your input.")
 
+var ErrRevisionRequired = errors.New("A current form revision and save identity are required. Reload the authorized form and review before submitting.")
+
+// RequireRevision is the existing-record command contract, not an optional
+// transport hint. Call after current authority checks, under the command's
+// transaction fence. The target path is chosen by the domain, never the client.
+// Omission must not turn an optimistic update into an unconditional overwrite.
+func RequireRevision(ctx context.Context, tx pgx.Tx, userID int64, path string) error {
+	a, ok := ctx.Value(key{}).(Action)
+	if !ok || a.ID == "" || a.UserID != userID || len(a.Revision) != sha256.Size*2 {
+		return ErrRevisionRequired
+	}
+	if _, err := hex.DecodeString(a.Revision); err != nil {
+		return ErrRevisionRequired
+	}
+	current, err := revision(ctx, tx, userID, path, true)
+	if err != nil {
+		return err
+	}
+	if current == "" || current != a.Revision {
+		return ErrStale
+	}
+	return nil
+}
+
 type Querier interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
 }

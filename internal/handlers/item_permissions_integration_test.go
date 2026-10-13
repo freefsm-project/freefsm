@@ -78,6 +78,7 @@ func TestItemFacetsThroughProductionHTTP(t *testing.T) {
 
 func itemPost(t *testing.T, router http.Handler, cookie *http.Cookie, path string, values url.Values, want int) string {
 	t.Helper()
+	values = currentJobFormValues(t, router, cookie, path, values)
 	r := httptest.NewRequest("POST", path, strings.NewReader(values.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.AddCookie(cookie)
@@ -462,7 +463,7 @@ func TestItemJobSelectionWritersUseTransactionAndPreserveSnapshots(t *testing.T)
 	if err := svc.SetItemArchived(ctx, actor, i.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := jobs.Update(acting, company, j.ID, services.JobUpdateParams{LineItems: &lines}); err != nil {
+	if _, err := jobs.Update(admitCurrentJobRevision(t, acting, pool, j.ID), company, j.ID, services.JobUpdateParams{LineItems: &lines}); err != nil {
 		t.Fatalf("existing capture rejected: %v", err)
 	}
 	if _, err := jobs.Create(acting, company, services.JobCreateParams{CustomerID: c.ID, JobType: "Invalid", LineItems: lines, CustomFields: "[]"}); !errors.Is(err, authorization.ErrConflict) {
@@ -470,7 +471,7 @@ func TestItemJobSelectionWritersUseTransactionAndPreserveSnapshots(t *testing.T)
 	}
 	lines = append(lines, lines[0])
 	title := "Must not commit"
-	if _, err := jobs.Update(acting, company, j.ID, services.JobUpdateParams{JobType: &title, LineItems: &lines}); !errors.Is(err, authorization.ErrConflict) {
+	if _, err := jobs.Update(admitCurrentJobRevision(t, acting, pool, j.ID), company, j.ID, services.JobUpdateParams{JobType: &title, LineItems: &lines}); !errors.Is(err, authorization.ErrConflict) {
 		t.Fatalf("appended archived selection: %v", err)
 	}
 	got, err := jobs.GetByID(ctx, j.ID)

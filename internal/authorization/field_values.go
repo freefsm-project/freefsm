@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/freefsm-project/freefsm/internal/customfields"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -133,6 +134,11 @@ func (s *Service) DetailsTransaction(ctx context.Context, a Actor, typ string, i
 			old, scope, err = fieldParent(ctx, tx, p, typ, id, permission, true)
 			if err != nil {
 				return err
+			}
+			if typ == "job" {
+				if err := saveaction.RequireRevision(ctx, tx, p.UserID, fmt.Sprintf("/jobs/%d", id)); err != nil {
+					return err
+				}
 			}
 		}
 		var fieldScope Scope

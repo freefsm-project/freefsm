@@ -126,6 +126,13 @@ func TestJobPlanningWaiterRechecksAuthorityAndDependenciesHTTP(t *testing.T) {
 				}
 				cookie = sessionCookie(t, ctx, sessions, u.ID)
 			}
+			input := url.Values{"form_mode": {"edit"}, "job_id": {fmt.Sprint(j.ID)}, "job_type": {"Must roll back"}, "customer_id": {fmt.Sprint(n.ID)}, "replace_customer": {"true"}}
+			path := fmt.Sprintf("/jobs/%d", j.ID)
+			if race == "grant" || race == "link_archive" {
+				path += "/links"
+				input = url.Values{"project_id": {"0"}, "asset_id": {"0"}, "location_id": {fmt.Sprint(l.ID)}}
+			}
+			input = currentJobFormValues(t, router, cookie, path, input)
 			tx, err := pool.Begin(ctx)
 			if err != nil {
 				t.Fatal(err)
@@ -137,12 +144,6 @@ func TestJobPlanningWaiterRechecksAuthorityAndDependenciesHTTP(t *testing.T) {
 			}
 			done := make(chan int, 1)
 			go func() {
-				input := url.Values{"form_mode": {"edit"}, "job_id": {fmt.Sprint(j.ID)}, "job_type": {"Must roll back"}, "customer_id": {fmt.Sprint(n.ID)}, "replace_customer": {"true"}}
-				path := fmt.Sprintf("/jobs/%d", j.ID)
-				if race == "grant" || race == "link_archive" {
-					path += "/links"
-					input = url.Values{"project_id": {"0"}, "asset_id": {"0"}, "location_id": {fmt.Sprint(l.ID)}}
-				}
 				r := httptest.NewRequest("POST", path, strings.NewReader(input.Encode()))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				r.AddCookie(cookie)

@@ -543,6 +543,7 @@ type JobDetail struct {
 	LocationAddress          string
 	ContactID                int64
 	ContactName              string
+	ContactReferences        []authorization.JobContactReference
 	AssetID                  int64
 	AssetName                string
 	LineItems                []services.LineItem

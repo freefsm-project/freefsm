@@ -185,10 +185,11 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 			d.LocationAddress = services.LocationAddress(location)
 		}
 	}
-	if j.CustomerContactID != nil && *j.CustomerContactID > 0 && masterView("contact") {
-		contact, _ := h.contactSvc.GetByID(r.Context(), *j.CustomerContactID)
-		if contact != nil && contact.CustomerID == j.CustomerID {
-			d.ContactName = contact.FirstName + " " + contact.LastName
+	if req, ok := authorization.FromContext(r.Context()); ok {
+		d.ContactReferences, err = req.Service.LinkedJobContacts(r.Context(), req.Actor, j.ID)
+		if err != nil {
+			jobRelationshipError(w, r, err)
+			return
 		}
 	}
 	if j.AssetID != nil && *j.AssetID > 0 {

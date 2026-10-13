@@ -17,6 +17,7 @@ import (
 
 func fieldPost(t *testing.T, router http.Handler, cookie *http.Cookie, path string, values url.Values, want int) *httptest.ResponseRecorder {
 	t.Helper()
+	values = currentJobFormValues(t, router, cookie, path, values)
 	if want != http.StatusForbidden && want != http.StatusNotFound && (path == "/customers" || regexp.MustCompile(`^/customers/\d+$`).MatchString(path)) {
 		values = typedCustomerFormValues(t, router, cookie, path, values)
 	}

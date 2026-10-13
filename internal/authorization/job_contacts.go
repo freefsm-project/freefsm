@@ -2,6 +2,8 @@ package authorization
 
 import (
 	"context"
+	"fmt"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/jackc/pgx/v5"
 	"slices"
 )
@@ -10,6 +12,42 @@ type JobContactChoice struct {
 	ID                 int64
 	Name               string
 	Selected, Archived bool
+}
+
+// JobContactReference is bounded source-record metadata. An archived target
+// exposes only its name/badge, not ordinary detail or an implicit archive grant.
+type JobContactReference struct {
+	ID       int64
+	Name     string
+	Archived bool
+}
+
+// LinkedJobContacts is an office read, independent of Edit and assignment. The
+// assigned field projection remains JobMasters; C grants do not widen here.
+func (s *Service) LinkedJobContacts(ctx context.Context, a Actor, id int64) ([]JobContactReference, error) {
+	var out []JobContactReference
+	err := s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
+		if _, err := parentAccess(ctx, tx, p, "job", id, "", true); err != nil {
+			return err
+		}
+		if !p.Allows("contact.view", All) {
+			return nil
+		}
+		rows, err := tx.Query(ctx, `SELECT c.id,trim(c.first_name||' '||c.last_name),c.deleted_at IS NOT NULL FROM jobs j JOIN job_contacts jc ON jc.job_id=j.id JOIN customer_contacts c ON c.id=jc.contact_id AND c.company_id=j.company_id AND c.customer_id=j.customer_id WHERE j.id=$1 AND j.company_id=$2 ORDER BY c.id`, id, p.CompanyID)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c JobContactReference
+			if err := rows.Scan(&c.ID, &c.Name, &c.Archived); err != nil {
+				return err
+			}
+			out = append(out, c)
+		}
+		return rows.Err()
+	})
+	return out, err
 }
 
 func (s *Service) JobContacts(ctx context.Context, a Actor, id int64) ([]JobContactChoice, error) {
@@ -49,6 +87,9 @@ func (s *Service) SetJobContacts(ctx context.Context, a Actor, id int64, ids []i
 			return ErrForbidden
 		}
 		if _, err := parentAccess(ctx, tx, p, "job", id, "job.relations.edit", true); err != nil {
+			return err
+		}
+		if err := saveaction.RequireRevision(ctx, tx, p.UserID, fmt.Sprintf("/jobs/%d", id)); err != nil {
 			return err
 		}
 		var customerID int64

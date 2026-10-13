@@ -1,8 +1,13 @@
 -- Stop before changing any recorded fact when the legacy contract is ambiguous.
 -- Administrators must review/correct these source records explicitly first.
+-- Match Go strings.TrimSpace / Unicode White_Space independently of database
+-- locale. This is a predicate only: recorded titles are never normalized.
+CREATE FUNCTION job_title_is_blank(value text) RETURNS boolean LANGUAGE sql IMMUTABLE AS $$
+ SELECT octet_length(btrim(coalesce(value,''),U&'\0009\000A\000B\000C\000D\0020\0085\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000'))=0;
+$$;
 DO $$ BEGIN
  IF EXISTS(SELECT 1 FROM jobs j LEFT JOIN customers c ON c.id=j.customer_id
- WHERE btrim(j.job_type)='' OR c.id IS NULL OR j.company_id IS DISTINCT FROM c.company_id
+ WHERE job_title_is_blank(j.job_type) OR c.id IS NULL OR j.company_id IS DISTINCT FROM c.company_id
  OR (j.project_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM projects p WHERE p.id=j.project_id AND p.customer_id=j.customer_id AND p.company_id=j.company_id))
  OR (j.location_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM locations l WHERE l.id=j.location_id AND l.object_type='customer' AND l.object_id=j.customer_id AND l.company_id=j.company_id))
  OR (j.customer_contact_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM customer_contacts c WHERE c.id=j.customer_contact_id AND c.customer_id=j.customer_id AND c.company_id=j.company_id))
@@ -52,7 +57,7 @@ BEGIN
 	IF TG_OP='UPDATE' AND current_setting('freefsm.status_replacement',true)='allowed'
 	AND (to_jsonb(NEW)-'status_id')=(to_jsonb(OLD)-'status_id')
 	AND EXISTS(SELECT 1 FROM statuses a JOIN statuses b ON b.workflow_id=a.workflow_id AND b.category_key=a.category_key WHERE a.id=OLD.status_id AND b.id=NEW.status_id) THEN RETURN NEW; END IF;
- IF btrim(NEW.job_type)='' THEN RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='Job Title is required'; END IF;
+ IF job_title_is_blank(NEW.job_type) THEN RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='Job Title is required'; END IF;
  IF TG_OP='UPDATE' AND NEW.customer_id IS DISTINCT FROM OLD.customer_id THEN
   IF EXISTS(SELECT 1 FROM estimates WHERE job_id=NEW.id) OR EXISTS(SELECT 1 FROM invoices WHERE job_id=NEW.id) OR EXISTS(SELECT 1 FROM job_customer_blockers WHERE job_id=NEW.id) THEN
    RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='Job Customer replacement is blocked by document dependencies';

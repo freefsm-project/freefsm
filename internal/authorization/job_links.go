@@ -2,6 +2,8 @@ package authorization
 
 import (
 	"context"
+	"fmt"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -69,6 +71,9 @@ func (s *Service) JobLinks(ctx context.Context, a Actor, id int64) (JobLinks, er
 func (s *Service) SetJobLinks(ctx context.Context, a Actor, id int64, in JobLinks) error {
 	return s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
 		if _, err := parentAccess(ctx, tx, p, "job", id, "job.relations.edit", true); err != nil {
+			return err
+		}
+		if err := saveaction.RequireRevision(ctx, tx, p.UserID, fmt.Sprintf("/jobs/%d", id)); err != nil {
 			return err
 		}
 		var customer, contact int64

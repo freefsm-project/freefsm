@@ -6,6 +6,10 @@ A new Job needs an authorized active Customer and nonblank Job Title only. The e
 
 Planning details require `job.edit` (All Records). Relationship changes additionally require `job.relations.edit` (All Records), with independent All Records View of each newly selected master. `/jobs/{id}/links` and `/jobs/{id}/contacts` are relationship-only actions: neither planning Edit nor details-requiredness is implied. The public field API does not expose these actions. Assigned context includes the explicitly linked Contacts through its closed field allowlist, never Customer primaries or unlinked siblings.
 
+Existing-record planning (including Customer replacement) and relationship submissions require a save identity and current server-issued form revision. Missing/malformed guards reject with 428; stale revisions reject with 409 under the committing authority/domain fence. The server never substitutes a freshly read revision for omitted metadata. Minimal creation remains exempt from an existing-record revision.
+
+Job Show independently reads all explicit Contact membership under Job View and Contact View (All Records), without requiring assignment or either Edit grant. It excludes unlinked Customer siblings. Retained archived Contacts expose only their name and archived badge. The separate Assigned Job Context projection remains closed and assignment-bound.
+
 Existing archived Project links may remain through planning edits and reopen. New archived Project selection rejects. Project Location never replaces Job Location. Archived Contact, Location and Asset dependencies must be repaired before reopening. Finished active Jobs remain actionable; relationship/planning commands do not change Status.
 
 Customer replacement requires explicit confirmation and clears operational Location, Project, Contact and Asset links atomically. Any linked Estimate or Invoice currently blocks it, including archived/hidden records. The document owning integration must replace this conservative blocker with its full reassignment contract before enabling document-aware replacement.
@@ -19,6 +23,8 @@ Customer replacement is authorized by planning Edit and the new Customer's View.
 ## Upgrade preflight and explicit review
 
 Migration `074_job_planning.up.sql` stops its transaction before making changes if an existing Job has a missing/blank Title, missing Customer/company ownership, or an ambiguous cross-Customer Project, Location, Contact or Asset link. It does not insert a placeholder Customer, manufacture a title/status/history, choose a primary, or infer authority from Role names.
+
+Blank-title preflight and database invariants use the Unicode White_Space set recognized by Go `strings.TrimSpace`, including tabs/newlines, NBSP and Unicode spaces. This is a predicate, not title normalization. Migration `075_job_title_whitespace.up.sql` applies the same non-destructive review gate and invariant to installations that already applied the earlier ordinary-space-only 074 guard. Unresolved titles remain exactly recorded and stop cutover for review.
 
 Before retrying a stopped upgrade:
 
