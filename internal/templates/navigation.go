@@ -115,6 +115,7 @@ func configurationLinks(ctx context.Context) []navigationLink {
 	add(navigationPermission(ctx, "security.password.view", "S"), "/settings/advanced", "Security settings")
 	add(navigationPermission(ctx, "security.open_tracking.view", "S"), "/settings/open-tracking", "Open tracking policy")
 	add(navigationPermission(ctx, "backup.create", "S") || navigationPermission(ctx, "backup.restore", "S"), "/settings/backup", "Backup")
+	add(navigationPermission(ctx, "audit.view", "S"), "/settings/audit", "Protected audit")
 	add(canAdmin(ctx), "/users", "Users")
 	return links
 }
