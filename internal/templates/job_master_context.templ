@@ -1,8 +1,21 @@
 package templates
 import "github.com/freefsm-project/freefsm/internal/authorization"
+import "fmt"
 
 templ JobMasterContext(p authorization.JobMasterContext) {
 	<section aria-label="Linked Job context">
+		if p.Project != nil {
+			<h3>Linked Project</h3>
+			<p>{ p.Project.Name }</p><p>{ p.Project.Description }</p>
+			<p>{ p.Project.Status } — { fmt.Sprintf("%.0f%%",p.Project.Progress) }</p>
+			if p.Project.PlannedStartDate != nil {
+				<p>Planned start: { *p.Project.PlannedStartDate }</p>
+			}
+			if p.Project.PlannedEndDate != nil {
+				<p>Planned end: { *p.Project.PlannedEndDate }</p>
+			}
+			<p>{ p.Project.Location }</p><p>{ p.Project.ServiceNotes }</p>
+		}
 		if p.Contact != nil {
 			<h3>Linked Contact</h3><p>{ p.Contact.Name } { p.Contact.RoleTitle }</p><p>{ p.Contact.Phone } { p.Contact.Email }</p><p>{ p.Contact.ServiceNotes }</p>
 		}

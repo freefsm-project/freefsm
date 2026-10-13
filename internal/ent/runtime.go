@@ -853,20 +853,24 @@ func init() {
 	projectDescCompletionPercentage := projectFields[7].Descriptor()
 	// project.DefaultCompletionPercentage holds the default value on creation for the completion_percentage field.
 	project.DefaultCompletionPercentage = projectDescCompletionPercentage.Default.(float64)
+	// projectDescServiceNotes is the schema descriptor for service_notes field.
+	projectDescServiceNotes := projectFields[12].Descriptor()
+	// project.DefaultServiceNotes holds the default value on creation for the service_notes field.
+	project.DefaultServiceNotes = projectDescServiceNotes.Default.(string)
 	// projectDescNotes is the schema descriptor for notes field.
-	projectDescNotes := projectFields[10].Descriptor()
+	projectDescNotes := projectFields[13].Descriptor()
 	// project.DefaultNotes holds the default value on creation for the notes field.
 	project.DefaultNotes = projectDescNotes.Default.(string)
 	// projectDescCustomFields is the schema descriptor for custom_fields field.
-	projectDescCustomFields := projectFields[11].Descriptor()
+	projectDescCustomFields := projectFields[14].Descriptor()
 	// project.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	project.DefaultCustomFields = projectDescCustomFields.Default.(string)
 	// projectDescCreatedAt is the schema descriptor for created_at field.
-	projectDescCreatedAt := projectFields[13].Descriptor()
+	projectDescCreatedAt := projectFields[16].Descriptor()
 	// project.DefaultCreatedAt holds the default value on creation for the created_at field.
 	project.DefaultCreatedAt = projectDescCreatedAt.Default.(func() time.Time)
 	// projectDescUpdatedAt is the schema descriptor for updated_at field.
-	projectDescUpdatedAt := projectFields[14].Descriptor()
+	projectDescUpdatedAt := projectFields[17].Descriptor()
 	// project.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	project.DefaultUpdatedAt = projectDescUpdatedAt.Default.(func() time.Time)
 	// project.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

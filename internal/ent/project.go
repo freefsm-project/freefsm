@@ -35,6 +35,12 @@ type Project struct {
 	StartTime *time.Time `json:"start_time,omitempty"`
 	// EndTime holds the value of the "end_time" field.
 	EndTime *time.Time `json:"end_time,omitempty"`
+	// PlannedStartDate holds the value of the "planned_start_date" field.
+	PlannedStartDate *time.Time `json:"planned_start_date,omitempty"`
+	// PlannedEndDate holds the value of the "planned_end_date" field.
+	PlannedEndDate *time.Time `json:"planned_end_date,omitempty"`
+	// ServiceNotes holds the value of the "service_notes" field.
+	ServiceNotes string `json:"service_notes,omitempty"`
 	// Notes holds the value of the "notes" field.
 	Notes string `json:"notes,omitempty"`
 	// CustomFields holds the value of the "custom_fields" field.
@@ -57,9 +63,9 @@ func (*Project) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case project.FieldID, project.FieldCompanyID, project.FieldCustomerID, project.FieldStatusID, project.FieldLocationID:
 			values[i] = new(sql.NullInt64)
-		case project.FieldName, project.FieldDescription, project.FieldNotes, project.FieldCustomFields:
+		case project.FieldName, project.FieldDescription, project.FieldServiceNotes, project.FieldNotes, project.FieldCustomFields:
 			values[i] = new(sql.NullString)
-		case project.FieldStartTime, project.FieldEndTime, project.FieldDeletedAt, project.FieldCreatedAt, project.FieldUpdatedAt:
+		case project.FieldStartTime, project.FieldEndTime, project.FieldPlannedStartDate, project.FieldPlannedEndDate, project.FieldDeletedAt, project.FieldCreatedAt, project.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -140,6 +146,26 @@ func (_m *Project) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.EndTime = new(time.Time)
 				*_m.EndTime = value.Time
+			}
+		case project.FieldPlannedStartDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field planned_start_date", values[i])
+			} else if value.Valid {
+				_m.PlannedStartDate = new(time.Time)
+				*_m.PlannedStartDate = value.Time
+			}
+		case project.FieldPlannedEndDate:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field planned_end_date", values[i])
+			} else if value.Valid {
+				_m.PlannedEndDate = new(time.Time)
+				*_m.PlannedEndDate = value.Time
+			}
+		case project.FieldServiceNotes:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field service_notes", values[i])
+			} else if value.Valid {
+				_m.ServiceNotes = value.String
 			}
 		case project.FieldNotes:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -244,6 +270,19 @@ func (_m *Project) String() string {
 		builder.WriteString("end_time=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
+	if v := _m.PlannedStartDate; v != nil {
+		builder.WriteString("planned_start_date=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.PlannedEndDate; v != nil {
+		builder.WriteString("planned_end_date=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("service_notes=")
+	builder.WriteString(_m.ServiceNotes)
 	builder.WriteString(", ")
 	builder.WriteString("notes=")
 	builder.WriteString(_m.Notes)

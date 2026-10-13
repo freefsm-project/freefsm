@@ -422,23 +422,26 @@ type ProjectRow struct {
 }
 
 type ProjectDetail struct {
-	ID                   int64
-	Name                 string
-	Description          string
-	CustomerID           int64
-	CustomerName         string
-	StatusID             int64
-	StatusName           string
-	StatusColor          string
-	LocationID           int64
-	LocationName         string
-	CompletionPercentage float64
-	StartTime            string
-	EndTime              string
-	StartTimeDisplay     string
-	EndTimeDisplay       string
-	Notes                string
-	ArchivedAt           string
+	LegacyReview                   []string
+	ServiceNotes                   string
+	Completed, Archivable, Overdue bool
+	ID                             int64
+	Name                           string
+	Description                    string
+	CustomerID                     int64
+	CustomerName                   string
+	StatusID                       int64
+	StatusName                     string
+	StatusColor                    string
+	LocationID                     int64
+	LocationName                   string
+	CompletionPercentage           float64
+	StartTime                      string
+	EndTime                        string
+	StartTimeDisplay               string
+	EndTimeDisplay                 string
+	Notes                          string
+	ArchivedAt                     string
 }
 
 type ProjectListPageData struct {
@@ -453,13 +456,14 @@ type ProjectListPageData struct {
 }
 
 type ProjectShowPageData struct {
-	Project      ProjectDetail
-	Statuses     []SelectOption
-	Jobs         []JobRow
-	Tags         []TagRow
-	AllTags      []TagRow
-	CustomFields []CustomFieldDisplay
-	FileList     FileListPageData
+	JobsPage, JobsPerPage, JobsTotalPages int
+	Project                               ProjectDetail
+	Statuses                              []SelectOption
+	Jobs                                  []JobRow
+	Tags                                  []TagRow
+	AllTags                               []TagRow
+	CustomFields                          []CustomFieldDisplay
+	FileList                              FileListPageData
 }
 
 type ProjectFormPageData struct {

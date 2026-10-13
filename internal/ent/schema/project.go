@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
@@ -32,6 +33,9 @@ func (Project) Fields() []ent.Field {
 		field.Float("completion_percentage").Default(0),
 		field.Time("start_time").Optional().Nillable(),
 		field.Time("end_time").Optional().Nillable(),
+		field.Time("planned_start_date").SchemaType(map[string]string{dialect.Postgres: "date"}).Optional().Nillable(),
+		field.Time("planned_end_date").SchemaType(map[string]string{dialect.Postgres: "date"}).Optional().Nillable(),
+		field.String("service_notes").Default(""),
 		field.String("notes").Default(""),
 		field.String("custom_fields").Default("[]"),
 		field.Time("deleted_at").Optional().Nillable(),

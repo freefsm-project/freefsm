@@ -130,6 +130,48 @@ func (_c *ProjectCreate) SetNillableEndTime(v *time.Time) *ProjectCreate {
 	return _c
 }
 
+// SetPlannedStartDate sets the "planned_start_date" field.
+func (_c *ProjectCreate) SetPlannedStartDate(v time.Time) *ProjectCreate {
+	_c.mutation.SetPlannedStartDate(v)
+	return _c
+}
+
+// SetNillablePlannedStartDate sets the "planned_start_date" field if the given value is not nil.
+func (_c *ProjectCreate) SetNillablePlannedStartDate(v *time.Time) *ProjectCreate {
+	if v != nil {
+		_c.SetPlannedStartDate(*v)
+	}
+	return _c
+}
+
+// SetPlannedEndDate sets the "planned_end_date" field.
+func (_c *ProjectCreate) SetPlannedEndDate(v time.Time) *ProjectCreate {
+	_c.mutation.SetPlannedEndDate(v)
+	return _c
+}
+
+// SetNillablePlannedEndDate sets the "planned_end_date" field if the given value is not nil.
+func (_c *ProjectCreate) SetNillablePlannedEndDate(v *time.Time) *ProjectCreate {
+	if v != nil {
+		_c.SetPlannedEndDate(*v)
+	}
+	return _c
+}
+
+// SetServiceNotes sets the "service_notes" field.
+func (_c *ProjectCreate) SetServiceNotes(v string) *ProjectCreate {
+	_c.mutation.SetServiceNotes(v)
+	return _c
+}
+
+// SetNillableServiceNotes sets the "service_notes" field if the given value is not nil.
+func (_c *ProjectCreate) SetNillableServiceNotes(v *string) *ProjectCreate {
+	if v != nil {
+		_c.SetServiceNotes(*v)
+	}
+	return _c
+}
+
 // SetNotes sets the "notes" field.
 func (_c *ProjectCreate) SetNotes(v string) *ProjectCreate {
 	_c.mutation.SetNotes(v)
@@ -249,6 +291,10 @@ func (_c *ProjectCreate) defaults() {
 		v := project.DefaultCompletionPercentage
 		_c.mutation.SetCompletionPercentage(v)
 	}
+	if _, ok := _c.mutation.ServiceNotes(); !ok {
+		v := project.DefaultServiceNotes
+		_c.mutation.SetServiceNotes(v)
+	}
 	if _, ok := _c.mutation.Notes(); !ok {
 		v := project.DefaultNotes
 		_c.mutation.SetNotes(v)
@@ -285,6 +331,9 @@ func (_c *ProjectCreate) check() error {
 	}
 	if _, ok := _c.mutation.CompletionPercentage(); !ok {
 		return &ValidationError{Name: "completion_percentage", err: errors.New(`ent: missing required field "Project.completion_percentage"`)}
+	}
+	if _, ok := _c.mutation.ServiceNotes(); !ok {
+		return &ValidationError{Name: "service_notes", err: errors.New(`ent: missing required field "Project.service_notes"`)}
 	}
 	if _, ok := _c.mutation.Notes(); !ok {
 		return &ValidationError{Name: "notes", err: errors.New(`ent: missing required field "Project.notes"`)}
@@ -365,6 +414,18 @@ func (_c *ProjectCreate) createSpec() (*Project, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.EndTime(); ok {
 		_spec.SetField(project.FieldEndTime, field.TypeTime, value)
 		_node.EndTime = &value
+	}
+	if value, ok := _c.mutation.PlannedStartDate(); ok {
+		_spec.SetField(project.FieldPlannedStartDate, field.TypeTime, value)
+		_node.PlannedStartDate = &value
+	}
+	if value, ok := _c.mutation.PlannedEndDate(); ok {
+		_spec.SetField(project.FieldPlannedEndDate, field.TypeTime, value)
+		_node.PlannedEndDate = &value
+	}
+	if value, ok := _c.mutation.ServiceNotes(); ok {
+		_spec.SetField(project.FieldServiceNotes, field.TypeString, value)
+		_node.ServiceNotes = value
 	}
 	if value, ok := _c.mutation.Notes(); ok {
 		_spec.SetField(project.FieldNotes, field.TypeString, value)

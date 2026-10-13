@@ -3,16 +3,23 @@ package services
 import (
 	"context"
 	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/project"
+	"github.com/jackc/pgx/v5"
 )
 
 type ProjectService struct {
 	client *ent.Client
 }
+
+type ProjectValidationError struct{ Field, Message string }
+
+func (e *ProjectValidationError) Error() string { return e.Message }
 
 func NewProjectService(client *ent.Client) *ProjectService {
 	return &ProjectService{client: client}
@@ -82,10 +89,17 @@ type ProjectCreateParams struct {
 	StartTime            *time.Time
 	EndTime              *time.Time
 	Notes                string
+	ServiceNotes         string
 	CustomFields         string
 }
 
 func (s *ProjectService) Create(ctx context.Context, companyID int64, params ProjectCreateParams) (*ent.Project, error) {
+	if strings.TrimSpace(params.Name) == "" {
+		return nil, &ProjectValidationError{Field: "name", Message: "Project name is required"}
+	}
+	if err := validateProjectDates(params.StartTime, params.EndTime); err != nil {
+		return nil, err
+	}
 	if needsDetailsTransaction(ctx) {
 		return saveDetails(ctx, "project", 0, 0, &params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Project, int64, error) {
 			params.CustomFields = fields
@@ -95,6 +109,12 @@ func (s *ProjectService) Create(ctx context.Context, companyID int64, params Pro
 			}
 			return v, v.ID, nil
 		})
+	}
+	if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+		r, _ := authorization.FromContext(ctx)
+		if err := r.Service.ProjectInputs(ctx, tx, r.Actor, 0, params.CustomerID, params.LocationID, true); err != nil {
+			return nil, err
+		}
 	}
 	projectCustomer, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, params.CustomerID)
 	if err != nil {
@@ -113,8 +133,9 @@ func (s *ProjectService) Create(ctx context.Context, companyID int64, params Pro
 		SetCustomerID(params.CustomerID).
 		SetName(params.Name).
 		SetDescription(params.Description).
-		SetCompletionPercentage(params.CompletionPercentage).
+		SetCompletionPercentage(0).
 		SetNotes(params.Notes).
+		SetServiceNotes(params.ServiceNotes).
 		SetCustomFields(params.CustomFields)
 
 	b.SetStatusID(statusID)
@@ -122,10 +143,10 @@ func (s *ProjectService) Create(ctx context.Context, companyID int64, params Pro
 		b.SetLocationID(params.LocationID)
 	}
 	if params.StartTime != nil && !params.StartTime.IsZero() {
-		b.SetStartTime(*params.StartTime)
+		b.SetPlannedStartDate(*params.StartTime)
 	}
 	if params.EndTime != nil && !params.EndTime.IsZero() {
-		b.SetEndTime(*params.EndTime)
+		b.SetPlannedEndDate(*params.EndTime)
 	}
 
 	p, err := b.Save(ctx)
@@ -144,6 +165,7 @@ type ProjectUpdateParams struct {
 	StartTime            *time.Time
 	EndTime              *time.Time
 	Notes                *string
+	ServiceNotes         *string
 	CustomFields         *string
 }
 
@@ -170,21 +192,53 @@ func (s *ProjectService) update(ctx context.Context, companyID, id int64, params
 	if current.CompanyID != nil && *current.CompanyID != companyID {
 		return nil, fmt.Errorf("project does not belong to company")
 	}
-	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, current.CustomerID); err != nil {
+	if params.Name != nil && strings.TrimSpace(*params.Name) == "" {
+		return nil, &ProjectValidationError{Field: "name", Message: "Project name is required"}
+	}
+	if params.CompletionPercentage != nil {
+		v := *params.CompletionPercentage
+		if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > 100 || math.Trunc(v) != v {
+			return nil, &ProjectValidationError{Field: "completion_percentage", Message: "Progress must be an integer from 0 through 100"}
+		}
+		if current.StatusID != nil {
+			status, err := s.client.Status.Get(ctx, *current.StatusID)
+			if err != nil {
+				return nil, err
+			}
+			if status.CategoryKey == "project:completed" && v != current.CompletionPercentage {
+				return nil, authorization.ErrConflict
+			}
+		}
+	}
+	start, end := current.PlannedStartDate, current.PlannedEndDate
+	if params.StartTime != nil {
+		start = params.StartTime
+	}
+	if params.EndTime != nil {
+		end = params.EndTime
+	}
+	if err := validateProjectDates(start, end); err != nil {
 		return nil, err
 	}
 	customerID := current.CustomerID
 	locationID := int64Value(current.LocationID)
 	if params.CustomerID != nil {
-		customerID = *params.CustomerID
+		if *params.CustomerID != customerID {
+			return nil, &ProjectValidationError{Field: "customer_id", Message: "Project Customer cannot be changed"}
+		}
 	}
 	if params.LocationID != nil {
 		locationID = *params.LocationID
 	}
-	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, customerID); err != nil {
+	if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+		r, _ := authorization.FromContext(ctx)
+		if err := r.Service.ProjectInputs(ctx, tx, r.Actor, id, customerID, locationID, locationID != int64Value(current.LocationID)); err != nil {
+			return nil, err
+		}
+	} else if err := validateCustomerLocationForCompany(ctx, s.client, companyID, customerID, locationID); err != nil {
 		return nil, err
 	}
-	if err := validateCustomerLocationForCompany(ctx, s.client, companyID, customerID, locationID); err != nil {
+	if _, err := activeCustomerOwnedByCompany(ctx, s.client, companyID, customerID); err != nil {
 		return nil, err
 	}
 
@@ -211,20 +265,26 @@ func (s *ProjectService) update(ctx context.Context, companyID, id int64, params
 	}
 	if params.StartTime != nil {
 		if !params.StartTime.IsZero() {
-			b.SetStartTime(*params.StartTime)
+			b.SetPlannedStartDate(*params.StartTime)
 		} else {
-			b.ClearStartTime()
+			b.ClearPlannedStartDate()
 		}
 	}
 	if params.EndTime != nil {
 		if !params.EndTime.IsZero() {
-			b.SetEndTime(*params.EndTime)
+			b.SetPlannedEndDate(*params.EndTime)
 		} else {
-			b.ClearEndTime()
+			b.ClearPlannedEndDate()
 		}
 	}
 	if params.Notes != nil {
 		b.SetNotes(*params.Notes)
+	}
+	if params.ServiceNotes != nil {
+		b.SetServiceNotes(*params.ServiceNotes)
+	}
+	if params.CustomFields != nil {
+		b.SetCustomFields(*params.CustomFields)
 	}
 
 	p, err := b.Save(ctx)
@@ -232,6 +292,13 @@ func (s *ProjectService) update(ctx context.Context, companyID, id int64, params
 		return nil, fmt.Errorf("update project %d: %w", id, err)
 	}
 	return p, nil
+}
+
+func validateProjectDates(start, end *time.Time) error {
+	if start != nil && end != nil && !start.IsZero() && !end.IsZero() && start.UTC().Format("2006-01-02") > end.UTC().Format("2006-01-02") {
+		return &ProjectValidationError{Field: "end_time", Message: "Planned end date must not precede planned start date"}
+	}
+	return nil
 }
 
 func (s *ProjectService) Delete(ctx context.Context, id int64) error {
@@ -242,6 +309,9 @@ func (s *ProjectService) Delete(ctx context.Context, id int64) error {
 }
 
 func (s *ProjectService) Archive(ctx context.Context, id int64) error {
+	if r, ok := authorization.FromContext(ctx); ok {
+		return r.Service.ProjectLifecycle(ctx, r.Actor, id, false)
+	}
 	now := time.Now()
 	_, err := s.client.Project.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
 	if err != nil {
@@ -251,6 +321,9 @@ func (s *ProjectService) Archive(ctx context.Context, id int64) error {
 }
 
 func (s *ProjectService) Restore(ctx context.Context, id int64) error {
+	if r, ok := authorization.FromContext(ctx); ok {
+		return r.Service.ProjectLifecycle(ctx, r.Actor, id, true)
+	}
 	_, err := s.client.Project.UpdateOneID(id).ClearDeletedAt().Save(ctx)
 	if err != nil {
 		return fmt.Errorf("restore project %d: %w", id, err)

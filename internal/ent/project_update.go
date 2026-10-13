@@ -219,6 +219,60 @@ func (_u *ProjectUpdate) ClearEndTime() *ProjectUpdate {
 	return _u
 }
 
+// SetPlannedStartDate sets the "planned_start_date" field.
+func (_u *ProjectUpdate) SetPlannedStartDate(v time.Time) *ProjectUpdate {
+	_u.mutation.SetPlannedStartDate(v)
+	return _u
+}
+
+// SetNillablePlannedStartDate sets the "planned_start_date" field if the given value is not nil.
+func (_u *ProjectUpdate) SetNillablePlannedStartDate(v *time.Time) *ProjectUpdate {
+	if v != nil {
+		_u.SetPlannedStartDate(*v)
+	}
+	return _u
+}
+
+// ClearPlannedStartDate clears the value of the "planned_start_date" field.
+func (_u *ProjectUpdate) ClearPlannedStartDate() *ProjectUpdate {
+	_u.mutation.ClearPlannedStartDate()
+	return _u
+}
+
+// SetPlannedEndDate sets the "planned_end_date" field.
+func (_u *ProjectUpdate) SetPlannedEndDate(v time.Time) *ProjectUpdate {
+	_u.mutation.SetPlannedEndDate(v)
+	return _u
+}
+
+// SetNillablePlannedEndDate sets the "planned_end_date" field if the given value is not nil.
+func (_u *ProjectUpdate) SetNillablePlannedEndDate(v *time.Time) *ProjectUpdate {
+	if v != nil {
+		_u.SetPlannedEndDate(*v)
+	}
+	return _u
+}
+
+// ClearPlannedEndDate clears the value of the "planned_end_date" field.
+func (_u *ProjectUpdate) ClearPlannedEndDate() *ProjectUpdate {
+	_u.mutation.ClearPlannedEndDate()
+	return _u
+}
+
+// SetServiceNotes sets the "service_notes" field.
+func (_u *ProjectUpdate) SetServiceNotes(v string) *ProjectUpdate {
+	_u.mutation.SetServiceNotes(v)
+	return _u
+}
+
+// SetNillableServiceNotes sets the "service_notes" field if the given value is not nil.
+func (_u *ProjectUpdate) SetNillableServiceNotes(v *string) *ProjectUpdate {
+	if v != nil {
+		_u.SetServiceNotes(*v)
+	}
+	return _u
+}
+
 // SetNotes sets the "notes" field.
 func (_u *ProjectUpdate) SetNotes(v string) *ProjectUpdate {
 	_u.mutation.SetNotes(v)
@@ -392,6 +446,21 @@ func (_u *ProjectUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.EndTimeCleared() {
 		_spec.ClearField(project.FieldEndTime, field.TypeTime)
+	}
+	if value, ok := _u.mutation.PlannedStartDate(); ok {
+		_spec.SetField(project.FieldPlannedStartDate, field.TypeTime, value)
+	}
+	if _u.mutation.PlannedStartDateCleared() {
+		_spec.ClearField(project.FieldPlannedStartDate, field.TypeTime)
+	}
+	if value, ok := _u.mutation.PlannedEndDate(); ok {
+		_spec.SetField(project.FieldPlannedEndDate, field.TypeTime, value)
+	}
+	if _u.mutation.PlannedEndDateCleared() {
+		_spec.ClearField(project.FieldPlannedEndDate, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ServiceNotes(); ok {
+		_spec.SetField(project.FieldServiceNotes, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(project.FieldNotes, field.TypeString, value)
@@ -619,6 +688,60 @@ func (_u *ProjectUpdateOne) ClearEndTime() *ProjectUpdateOne {
 	return _u
 }
 
+// SetPlannedStartDate sets the "planned_start_date" field.
+func (_u *ProjectUpdateOne) SetPlannedStartDate(v time.Time) *ProjectUpdateOne {
+	_u.mutation.SetPlannedStartDate(v)
+	return _u
+}
+
+// SetNillablePlannedStartDate sets the "planned_start_date" field if the given value is not nil.
+func (_u *ProjectUpdateOne) SetNillablePlannedStartDate(v *time.Time) *ProjectUpdateOne {
+	if v != nil {
+		_u.SetPlannedStartDate(*v)
+	}
+	return _u
+}
+
+// ClearPlannedStartDate clears the value of the "planned_start_date" field.
+func (_u *ProjectUpdateOne) ClearPlannedStartDate() *ProjectUpdateOne {
+	_u.mutation.ClearPlannedStartDate()
+	return _u
+}
+
+// SetPlannedEndDate sets the "planned_end_date" field.
+func (_u *ProjectUpdateOne) SetPlannedEndDate(v time.Time) *ProjectUpdateOne {
+	_u.mutation.SetPlannedEndDate(v)
+	return _u
+}
+
+// SetNillablePlannedEndDate sets the "planned_end_date" field if the given value is not nil.
+func (_u *ProjectUpdateOne) SetNillablePlannedEndDate(v *time.Time) *ProjectUpdateOne {
+	if v != nil {
+		_u.SetPlannedEndDate(*v)
+	}
+	return _u
+}
+
+// ClearPlannedEndDate clears the value of the "planned_end_date" field.
+func (_u *ProjectUpdateOne) ClearPlannedEndDate() *ProjectUpdateOne {
+	_u.mutation.ClearPlannedEndDate()
+	return _u
+}
+
+// SetServiceNotes sets the "service_notes" field.
+func (_u *ProjectUpdateOne) SetServiceNotes(v string) *ProjectUpdateOne {
+	_u.mutation.SetServiceNotes(v)
+	return _u
+}
+
+// SetNillableServiceNotes sets the "service_notes" field if the given value is not nil.
+func (_u *ProjectUpdateOne) SetNillableServiceNotes(v *string) *ProjectUpdateOne {
+	if v != nil {
+		_u.SetServiceNotes(*v)
+	}
+	return _u
+}
+
 // SetNotes sets the "notes" field.
 func (_u *ProjectUpdateOne) SetNotes(v string) *ProjectUpdateOne {
 	_u.mutation.SetNotes(v)
@@ -822,6 +945,21 @@ func (_u *ProjectUpdateOne) sqlSave(ctx context.Context) (_node *Project, err er
 	}
 	if _u.mutation.EndTimeCleared() {
 		_spec.ClearField(project.FieldEndTime, field.TypeTime)
+	}
+	if value, ok := _u.mutation.PlannedStartDate(); ok {
+		_spec.SetField(project.FieldPlannedStartDate, field.TypeTime, value)
+	}
+	if _u.mutation.PlannedStartDateCleared() {
+		_spec.ClearField(project.FieldPlannedStartDate, field.TypeTime)
+	}
+	if value, ok := _u.mutation.PlannedEndDate(); ok {
+		_spec.SetField(project.FieldPlannedEndDate, field.TypeTime, value)
+	}
+	if _u.mutation.PlannedEndDateCleared() {
+		_spec.ClearField(project.FieldPlannedEndDate, field.TypeTime)
+	}
+	if value, ok := _u.mutation.ServiceNotes(); ok {
+		_spec.SetField(project.FieldServiceNotes, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(project.FieldNotes, field.TypeString, value)
