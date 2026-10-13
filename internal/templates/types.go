@@ -80,6 +80,8 @@ func canCustomer(ctx context.Context, action string) bool {
 	switch action {
 	case "view":
 		return u.CustomerView
+	case "export":
+		return u.CustomerView && u.NavigationGrants["customer.export/A"]
 	case "create":
 		return u.CustomerCreate
 	case "edit":

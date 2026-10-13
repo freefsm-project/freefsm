@@ -255,6 +255,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/settings/authorization/cutover", authorityHandler.Cutover)
 		r.Get("/customers/{id}", customerHandler.Show)
 		registerCustomerChildren(r)
+		registerExports(r, db)
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/projects/options", projectHandler.ProjectOptions)
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/assets/options", jobHandler.AssetOptions)
 		r.Route("/items", func(r chi.Router) {
