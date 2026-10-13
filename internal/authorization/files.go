@@ -110,6 +110,32 @@ func (s *Service) FileAccess(ctx context.Context, a Actor, ref objectref.Ref, pe
 	return err
 }
 
+// FileTransferAction records transport facts against their original parent,
+// never a fabricated File identity. The transfer UUID is the transport operation
+// identity; publication has its own independent operation. Chunk replay is a
+// no-op and therefore creates neither bytes nor another immutable audit event.
+func (s *Service) FileTransferAction(ctx context.Context, a Actor, ref objectref.Ref, transferID string, fn func(pgx.Tx) (bool, map[string]any, error)) error {
+	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		scope, err := fileAccess(ctx, tx, p, a, ref, "file.upload", a.UserID, true)
+		if err != nil {
+			return err
+		}
+		changed, detail, err := fn(tx)
+		if err != nil || !changed {
+			return err
+		}
+		detail["transfer_id"] = transferID
+		var attributed any = detail
+		if a.Channel == "api" {
+			attributed, err = fileAPIAuditDetail(ctx, tx, a, FileOperation{OperationID: transferID}, detail)
+			if err != nil {
+				return err
+			}
+		}
+		return audit(ctx, tx, a, p, "file.upload", scope, ref.ObjectType(), ref.ID, attributed)
+	})
+}
+
 // FileAction serializes with grant/session changes and locks the exact parent
 // and assignment until the File mutation and immutable audit commit together.
 // A zero returned effect ID represents a desired-state no-op (no new audit).
