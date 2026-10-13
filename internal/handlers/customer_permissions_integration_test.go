@@ -371,8 +371,8 @@ func TestCustomerContextHTTPIsClosedAndAssignmentBound(t *testing.T) {
 	projectionRequest.Header.Set("Authorization", "Bearer "+officeToken)
 	projectionResponse := httptest.NewRecorder()
 	api.ServeHTTP(projectionResponse, projectionRequest)
-	if projectionResponse.Code != 200 || strings.Contains(projectionResponse.Body.String(), "customer_id") {
-		t.Fatalf("legacy Job projection bypassed Customer scope: %d %s", projectionResponse.Code, projectionResponse.Body.String())
+	if projectionResponse.Code != 404 || strings.Contains(projectionResponse.Body.String(), "customer_id") || strings.Contains(projectionResponse.Body.String(), "Explicit Job") {
+		t.Fatalf("legacy office label must not supply canonical Job View: %d %s", projectionResponse.Code, projectionResponse.Body.String())
 	}
 	search := requestBody(t, router, cookie, "GET", "/search?q=Allowed", 200)
 	assertNotContains(t, search, "Allowed name")

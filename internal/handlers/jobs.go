@@ -27,6 +27,7 @@ import (
 )
 
 type JobHandler struct {
+	itemSvc          *services.ItemService
 	svc              *services.JobService
 	custSvc          *services.CustomerService
 	statusSvc        *services.StatusService
@@ -410,6 +411,10 @@ func boundedJobLogValue(value string) string {
 }
 
 func handleInvalidJobInput(w http.ResponseWriter, r *http.Request, operation string, err error) bool {
+	if errors.Is(err, services.ErrInvalidLineItem) || errors.Is(err, services.ErrInvalidTaxRate) || errors.Is(err, services.ErrMalformedLineItems) {
+		http.Error(w, "Invalid Job pricing: check the description, quantity, price and tax rate", http.StatusUnprocessableEntity)
+		return true
+	}
 	var constraint *pgconn.PgError
 	if errors.As(err, &constraint) && strings.HasPrefix(constraint.ConstraintName, "master_") {
 		http.Error(w, "Work context changed; reload and select active records belonging to the Customer", http.StatusConflict)
@@ -512,6 +517,14 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if params.BillingType == "" {
 		params.BillingType = "flat_rate"
+	}
+	if r.Form.Has("line_items") {
+		lines, err := services.DecodeJobPricing(r.FormValue("line_items"))
+		if err != nil || services.ValidateLineItems(lines) != nil {
+			http.Error(w, "Invalid Job pricing", http.StatusUnprocessableEntity)
+			return
+		}
+		params.LineItems = lines
 	}
 	createJob := h.createJob
 	if createJob == nil {
@@ -685,6 +698,14 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Notes:             formPtr(r.FormValue("notes")),
 		TechNotes:         formPtr(r.FormValue("tech_notes")),
 		CustomFields:      parseCustomFieldPatch(r),
+	}
+	if r.Form.Has("line_items") {
+		lines, err := services.DecodeJobPricing(r.FormValue("line_items"))
+		if err != nil || services.ValidateLineItems(lines) != nil {
+			http.Error(w, "Invalid Job pricing", http.StatusUnprocessableEntity)
+			return
+		}
+		params.LineItems = &lines
 	}
 	// Omitted relationship inputs are not unlink requests. Independent planning
 	// editors and partial submissions preserve the existing operational context.
@@ -988,7 +1009,24 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *en
 			retainedProjectID = p.ID
 		}
 	}
+	var pricing *templates.LineItemEditorData
+	if request, ok := authorization.FromContext(ctx); ok && request.Service.ParentFacet(ctx, request.Actor, "job", j.ID, "pricing.view") == nil {
+		lines, err := services.JobPricingLines(j.ID, j.LineItems)
+		if err != nil {
+			return templates.JobFormPageData{}, err
+		}
+		raw, err := services.EncodeLineItems(lines)
+		if err != nil {
+			return templates.JobFormPageData{}, err
+		}
+		bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, nil, raw, "0")
+		if err != nil {
+			return templates.JobFormPageData{}, err
+		}
+		pricing = &templates.LineItemEditorData{ItemsJSON: bootstrap.ItemsJSON, ExistingItemsJSON: bootstrap.ExistingItemsJSON, CustomersJSON: bootstrap.CustomersJSON, JobPricing: true}
+	}
 	return filterJobFormChoices(ctx, templates.JobFormPageData{
+		Pricing:           pricing,
 		RetainedProjectID: retainedProjectID,
 		Job:               &d,
 		AssetCustomFields: h.relatedCreationFields(ctx, "asset"), ProjectCustomFields: h.relatedCreationFields(ctx, "project"),

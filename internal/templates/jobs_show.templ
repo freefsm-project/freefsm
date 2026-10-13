@@ -176,21 +176,35 @@ templ JobShow(p JobDetail) {
 		}
 		if detailCan(ctx,"pricing") && len(p.LineItems) > 0 {
 			<h3>Line Items</h3>
+			<div class="table-scroll line-items-scroll" role="region" aria-label="Captured Job pricing, scroll for more columns" tabindex="0">
 			<table>
 				<thead>
-					<tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+					<tr><th>Item</th><th>Description</th><th>Qty</th><th>Price</th><th>Captured tax rate (%)</th><th>Subtotal</th></tr>
 				</thead>
 				<tbody>
 					for _, li := range p.LineItems {
 						<tr>
 							<td>{ li.Title }</td>
+							<td>{ li.Description }</td>
 							<td>{ fmt.Sprintf("%g", li.Quantity) }</td>
 							<td>{ fmt.Sprintf("$%.2f", li.UnitPrice) }</td>
+							<td>
+								if li.Taxable {
+									if li.TaxRate != "" {
+										{ li.TaxRate }
+									} else {
+										Not recorded
+									}
+								} else {
+									Not taxable
+								}
+							</td>
 							<td>{ fmt.Sprintf("$%.2f", lineItemTotal(li)) }</td>
 						</tr>
 					}
 				</tbody>
 			</table>
+			</div>
 		}
 		if p.ArchivedAt != "" {
 			<div hx-get={ templ.URL(fmt.Sprintf("/jobs/%d/comments?read_only=1", p.ID)) } hx-trigger="load" hx-swap="innerHTML">

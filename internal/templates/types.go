@@ -599,6 +599,7 @@ type JobListPageData struct {
 }
 
 type JobFormPageData struct {
+	Pricing                 *LineItemEditorData
 	RetainedProjectID       int64
 	AssetCustomFields       []CustomFieldDisplay
 	ProjectCustomFields     []CustomFieldDisplay

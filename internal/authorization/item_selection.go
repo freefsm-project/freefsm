@@ -22,6 +22,10 @@ type capturedItemSource struct {
 	id   int64
 }
 
+func LegacyJobPricingLineID(jobID int64, index int) string {
+	return fmt.Sprintf("legacy-job-%d-line-%d", jobID, index)
+}
+
 // WithCapturedItemSource is for server-owned copy commands, never request input.
 // Copying an already-authorized commercial snapshot is not catalog selection.
 func WithCapturedItemSource(ctx context.Context, kind string, id int64) context.Context {
@@ -49,6 +53,9 @@ func (s *Service) CheckItemSelections(ctx context.Context, a Actor, tx Selection
 		sourceTable := map[string]string{"job": "jobs", "estimate": "estimates", "invoice": "invoices"}[source.kind]
 		if sourceTable == "" || source.id <= 0 {
 			return ErrConflict
+		}
+		if err := s.ParentFacet(ctx, a, source.kind, source.id, "pricing.view"); err != nil {
+			return err
 		}
 		if err := tx.QueryRow(ctx, `SELECT line_items::text FROM `+sourceTable+` WHERE id=$1 FOR SHARE`, source.id).Scan(&previous); err != nil {
 			return err
@@ -80,6 +87,35 @@ func (s *Service) CheckItemSelections(ctx context.Context, a Actor, tx Selection
 	old, err := counts(previous)
 	if err != nil {
 		return err
+	}
+	if kind == "job" && id > 0 {
+		// A retained Job capture is identified by its stable line, not by a
+		// coincidental count of Item references. Removing a capture and adding
+		// another one is a new selection even when both use the same Item.
+		type source struct {
+			SnapshotID string `json:"snapshot_id"`
+			ItemID     int64  `json:"item_id"`
+		}
+		var before, after []source
+		if err := json.Unmarshal([]byte(previous), &before); err != nil {
+			return err
+		}
+		if err := json.Unmarshal([]byte(next), &after); err != nil {
+			return err
+		}
+		retained := map[string]int64{}
+		for _, line := range after {
+			retained[line.SnapshotID] = line.ItemID
+		}
+		old = map[int64]int{}
+		for n, line := range before {
+			if line.SnapshotID == "" {
+				line.SnapshotID = LegacyJobPricingLineID(id, n)
+			}
+			if itemID, ok := retained[line.SnapshotID]; ok && itemID == line.ItemID {
+				old[itemID]++
+			}
+		}
 	}
 	current, err := counts(next)
 	if err != nil {
