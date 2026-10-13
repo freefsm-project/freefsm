@@ -26,6 +26,10 @@ func TestCredentialLoginRacesThroughBrowserAndAPIHTTP(t *testing.T) {
 				}
 				u := client.User.Create().SetCompanyID(company).SetEmail("login-race@test").SetName("Login race").SetRole("tech").SetPasswordHash(string(hash)).SaveX(ctx)
 				api := apiv1.NewRouter(pool, client, sessions)
+				var pairingBody string
+				if channel == "api" {
+					pairingBody = approvedPairing(t, api, router, sessionCookie(t, ctx, sessions, u.ID))
+				}
 				tx, err := pool.Begin(ctx)
 				if err != nil {
 					t.Fatal(err)
@@ -42,7 +46,7 @@ func TestCredentialLoginRacesThroughBrowserAndAPIHTTP(t *testing.T) {
 				go func() {
 					var r *http.Request
 					if channel == "api" {
-						r = httptest.NewRequest("POST", "/session", strings.NewReader(`{"email":"login-race@test","password":"BeforeRace1!"}`))
+						r = httptest.NewRequest("POST", "/pairings/redeem", strings.NewReader(pairingBody))
 						r.Header.Set("Content-Type", "application/json")
 					} else {
 						r = httptest.NewRequest("POST", "/login", strings.NewReader(url.Values{"email": {"login-race@test"}, "password": {"BeforeRace1!"}}.Encode()))
@@ -77,7 +81,11 @@ func TestCredentialLoginRacesThroughBrowserAndAPIHTTP(t *testing.T) {
 				}
 				w := <-done
 				var n int
-				if err = pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id=$1`, u.ID).Scan(&n); err != nil {
+				kind := "web"
+				if channel == "api" {
+					kind = "mobile"
+				}
+				if err = pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id=$1 AND kind=$2`, u.ID, kind).Scan(&n); err != nil {
 					t.Fatal(err)
 				}
 				if channel == "web" && change == "force" {
@@ -96,7 +104,7 @@ func TestCredentialLoginRacesThroughBrowserAndAPIHTTP(t *testing.T) {
 						t.Fatal("no replacement browser")
 					}
 					expectStatus(t, router, cookie, "GET", "/jobs", 303)
-				} else if n != 0 || channel == "api" && w.Code != 401 {
+				} else if n != 0 || channel == "api" && w.Code != 409 {
 					t.Fatalf("stale login status=%d sessions=%d body=%s", w.Code, n, w.Body.String())
 				}
 			})
@@ -113,22 +121,24 @@ func TestAPILoginThenAdministratorResetRevokesActualBearer(t *testing.T) {
 	}
 	u := client.User.Create().SetCompanyID(company).SetEmail("mobile-real@test").SetName("Mobile").SetRole("tech").SetPasswordHash(string(hash)).SaveX(ctx)
 	api := apiv1.NewRouter(pool, client, sessions)
-	r := httptest.NewRequest("POST", "/session", strings.NewReader(`{"email":"mobile-real@test","password":"MobileBefore1!","device_name":"real API race"}`))
-	r.Header.Set("Content-Type", "application/json")
-	w := httptest.NewRecorder()
-	api.ServeHTTP(w, r)
+	w := pairingCall(api, "/pairings/redeem", approvedPairing(t, api, router, sessionCookie(t, ctx, sessions, u.ID)))
 	if w.Code != 201 {
 		t.Fatalf("login: %d %s", w.Code, w.Body.String())
 	}
 	var result struct {
-		Token string `json:"token"`
+		Data struct {
+			Token string `json:"token"`
+		} `json:"data"`
 	}
 	if err = json.Unmarshal(w.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
 	accountPost(t, router, sessionCookie(t, ctx, sessions, admin), fmt.Sprintf("/users/%d/reset-password", u.ID), url.Values{"password": {"TemporaryMobile1!"}, "confirm_password": {"TemporaryMobile1!"}}, 303)
 	req := httptest.NewRequest("GET", "/me", nil)
-	req.Header.Set("Authorization", "Bearer "+result.Token)
+	if result.Data.Token == "" {
+		t.Fatal("missing actual bearer")
+	}
+	req.Header.Set("Authorization", "Bearer "+result.Data.Token)
 	response := httptest.NewRecorder()
 	api.ServeHTTP(response, req)
 	if response.Code != 401 {

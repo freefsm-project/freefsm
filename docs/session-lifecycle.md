@@ -33,8 +33,9 @@ so deliberate self-revocation is not mistaken for an interrupted product save.
 
 ## API and restore protocol
 
-The existing account login and current-session logout routes remain available.
-Additional bearer-authenticated own-scoped routes are:
+Browser login remains hosted. API password login is retired with
+`410 pairing_required`; use [browser-approved pairing](device-pairing.md).
+Bearer-authenticated own-scoped routes are:
 
 | Method | Relative `/api/v1` path | Effect |
 |---|---|---|
@@ -46,8 +47,10 @@ Other-user session administration is browser-only. Revocation is terminal;
 repeated single-session revocation does not duplicate audit. Repeating logout
 with an already-revoked bearer returns the ordinary 401/purge disposition.
 
-Every API response includes `X-FreeFSM-Session-Epoch`. Clients persist the epoch
-received at login alongside pending intent and send it on subsequent requests.
+Authenticated private API responses include `X-FreeFSM-Session-Epoch`. Clients
+fetch an authenticated identity/session response after pairing, persist the epoch
+alongside pending intent and send it on subsequent private requests. Public
+discovery, pairing, docs and unauthenticated denials do not expose the epoch.
 The epoch is a nonsensitive recovery-generation identifier, not an authorization
 credential. Dependency failures return unavailable responses, not instructions
 to discard credentials.

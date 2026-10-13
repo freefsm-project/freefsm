@@ -448,7 +448,7 @@ func TestManualOnboardingRequiresCredentialReplacementAcrossRoleAndAPIHTTP(t *te
 	if err := auth.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, 1); err != nil {
 		t.Fatal(err)
 	}
-	for _, path := range []string{"/customers", "/users/new", "/settings/authorization", "/preferences"} {
+	for _, path := range []string{"/customers", "/users/new", "/settings/authorization", "/preferences", "/pair"} {
 		r := httptest.NewRequest("GET", path, nil)
 		r.AddCookie(cookie)
 		response := httptest.NewRecorder()
@@ -481,7 +481,7 @@ func TestManualOnboardingRequiresCredentialReplacementAcrossRoleAndAPIHTTP(t *te
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id=$1 AND kind='mobile'`, u.ID).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	if w := apiLogin("TemporaryPassword1!"); w.Code != 403 || strings.Contains(w.Body.String(), `"token":`) {
+	if w := apiLogin("TemporaryPassword1!"); w.Code != 410 || strings.Contains(w.Body.String(), `"token":`) {
 		t.Fatalf("temporary API login issued access: %d %s", w.Code, w.Body.String())
 	}
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id=$1 AND kind='mobile'`, u.ID).Scan(&after); err != nil || after != before {
@@ -491,8 +491,11 @@ func TestManualOnboardingRequiresCredentialReplacementAcrossRoleAndAPIHTTP(t *te
 	if change.Code != 303 {
 		t.Fatalf("temporary replacement: %d %s", change.Code, change.Body.String())
 	}
-	if w := apiLogin("ChosenPassword1!"); w.Code != 201 || !strings.Contains(w.Body.String(), `"token":`) {
-		t.Fatalf("chosen API login failed: %d %s", w.Code, w.Body.String())
+	if w := apiLogin("ChosenPassword1!"); w.Code != 410 {
+		t.Fatalf("password API login revived: %d %s", w.Code, w.Body.String())
+	}
+	if w := pairingCall(api, "/pairings/redeem", approvedPairing(t, api, router, cookie)); w.Code != 201 {
+		t.Fatalf("chosen credential pairing: %d %s", w.Code, w.Body.String())
 	}
 }
 

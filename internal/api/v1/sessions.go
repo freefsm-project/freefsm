@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"errors"
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/go-chi/chi/v5"
@@ -8,19 +9,22 @@ import (
 	"strconv"
 )
 
+type sessionEpochKey struct{}
+
 func (h *handler) sessionEpoch(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if h.deps.Authorization != nil {
+		_, hasBearer := bearerToken(r.Header.Get("Authorization"))
+		if h.deps.Authorization != nil && hasBearer {
 			var epoch string
 			if err := h.deps.Authorization.Pool.QueryRow(r.Context(), `SELECT epoch::text FROM session_instance WHERE singleton`).Scan(&epoch); err != nil {
 				writeError(w, 503, "unavailable", "session recovery state unavailable")
 				return
 			}
-			w.Header().Set("X-FreeFSM-Session-Epoch", epoch)
 			if previous := r.Header.Get("X-FreeFSM-Session-Epoch"); previous != "" && previous != epoch {
 				writeError(w, 401, "instance_restored", "sign in again and synchronize current authority before reviewing pending work")
 				return
 			}
+			r = r.WithContext(context.WithValue(r.Context(), sessionEpochKey{}, epoch))
 		}
 		next.ServeHTTP(w, r)
 	})

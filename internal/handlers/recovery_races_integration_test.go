@@ -68,7 +68,10 @@ func waitCredentialBlock(t *testing.T, pool *pgxpool.Pool, pid int) {
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		var blocked bool
-		if err := pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)) AND wait_event='advisory')`, pid).Scan(&blocked); err != nil {
+		// Other test packages use the same database and authority lock, but a
+		// different fixture application_name. Their waiter is not evidence that
+		// this HTTP request has reached credential issuance.
+		if err := pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)) AND wait_event='advisory' AND application_name=$2)`, pid, pool.Config().ConnConfig.RuntimeParams["application_name"]).Scan(&blocked); err != nil {
 			t.Fatal(err)
 		}
 		if blocked {

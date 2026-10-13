@@ -28,55 +28,8 @@ type userDTO struct {
 	Role      string `json:"role"`
 }
 
-type loginRequest struct {
-	Email      string `json:"email"`
-	Password   string `json:"password"`
-	DeviceName string `json:"device_name"`
-}
-
-type sessionDTO struct {
-	Token string  `json:"token"`
-	User  userDTO `json:"user"`
-}
-
 func (h *handler) login(w http.ResponseWriter, r *http.Request) {
-	var request loginRequest
-	if !decodeJSON(w, r, &request) {
-		return
-	}
-	request.Email = strings.TrimSpace(request.Email)
-	if request.Email == "" || request.Password == "" {
-		writeError(w, http.StatusBadRequest, "invalid_request", "email and password are required")
-		return
-	}
-	if err := h.deps.Users.Authenticate(r.Context(), request.Email, request.Password); err != nil {
-		writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid email or password")
-		return
-	}
-	user, err := h.deps.Users.GetByEmail(r.Context(), request.Email)
-	if err != nil || !validUser(user) {
-		writeError(w, http.StatusUnauthorized, "invalid_credentials", "invalid email or password")
-		return
-	}
-	if user.ForcePasswordChange {
-		passwordChangeRequired(w)
-		return
-	}
-	token, err := h.deps.Sessions.CreateAuthenticated(r.Context(), user.ID, request.Password, "mobile", strings.TrimSpace(request.DeviceName))
-	if errors.Is(err, services.ErrInvalidCredentials) {
-		writeError(w, http.StatusUnauthorized, "invalid_credentials", "credentials changed; sign in again")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "could not create session")
-		return
-	}
-	if err := h.deps.Users.CompleteOnboarding(r.Context(), user.ID); err != nil {
-		_ = h.deps.Sessions.RevokeMobile(context.WithoutCancel(r.Context()), token)
-		writeError(w, http.StatusInternalServerError, "internal_error", "could not complete login")
-		return
-	}
-	writeJSON(w, http.StatusCreated, sessionDTO{Token: token, User: makeUserDTO(user)})
+	writeError(w, http.StatusGone, "pairing_required", "approve this device in the hosted browser; API password login is retired")
 }
 
 func (h *handler) bearerAuth(next http.Handler) http.Handler {
@@ -110,6 +63,9 @@ func (h *handler) bearerAuth(next http.Handler) http.Handler {
 			return
 		}
 		ctx := context.WithValue(r.Context(), actorContextKey{}, user)
+		if epoch, ok := r.Context().Value(sessionEpochKey{}).(string); ok {
+			w.Header().Set("X-FreeFSM-Session-Epoch", epoch)
+		}
 		ctx = context.WithValue(ctx, tokenContextKey{}, token)
 		if h.deps.Authorization != nil {
 			sum := sha256.Sum256([]byte(token))
