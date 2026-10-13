@@ -96,7 +96,7 @@ func (s *Service) ReviewHistoricalFields(ctx context.Context, a Actor, cycle, re
 				return &customfields.FieldError{Name: "Historical review", Message: "paired precision and ordered option texts must be identical"}
 			}
 			var valid bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM custom_field_definitions e,custom_field_definitions i WHERE e.id=$1 AND i.id=$2 AND e.object_type='estimate' AND i.object_type='invoice' AND e.company_id=$3 AND i.company_id=$3)`, source, target, p.CompanyID).Scan(&valid); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM custom_field_definitions e,custom_field_definitions i WHERE e.id=$1 AND i.id=$2 AND e.object_type='estimate' AND i.object_type='invoice' AND custom_field_applies_to_company(e.company_id,$3) AND custom_field_applies_to_company(i.company_id,$3))`, source, target, p.CompanyID).Scan(&valid); err != nil {
 				return err
 			}
 			if !valid {

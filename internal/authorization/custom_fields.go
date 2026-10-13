@@ -90,7 +90,7 @@ func (s *Service) SaveField(ctx context.Context, a Actor, id int64, in FieldInpu
 				return err
 			}
 			var unsafeLegacy bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM custom_field_definitions d JOIN estimate_invoice_conversion_cycles c ON c.company_id=d.company_id WHERE d.id=$1 AND d.object_type IN ('estimate','invoice') AND conversion_field_snapshot(c.id)->'field_pairs' IS NULL AND (d.field_type IS DISTINCT FROM $2 OR d.precision IS DISTINCT FROM $3 OR d.options::jsonb IS DISTINCT FROM $4::jsonb OR d.conversion_key IS DISTINCT FROM nullif($5,'')))`, id, in.Type, in.Precision, in.Options, in.ConversionKey).Scan(&unsafeLegacy); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM custom_field_definitions d JOIN estimate_invoice_conversion_cycles c ON custom_field_applies_to_company(d.company_id,c.company_id) WHERE d.id=$1 AND d.object_type IN ('estimate','invoice') AND conversion_field_snapshot(c.id)->'field_pairs' IS NULL AND (d.field_type IS DISTINCT FROM $2 OR d.precision IS DISTINCT FROM $3 OR d.options::jsonb IS DISTINCT FROM $4::jsonb OR d.conversion_key IS DISTINCT FROM nullif($5,'')))`, id, in.Type, in.Precision, in.Options, in.ConversionKey).Scan(&unsafeLegacy); err != nil {
 				return err
 			}
 			if unsafeLegacy {
@@ -183,7 +183,7 @@ func (s *Service) DeleteField(ctx context.Context, a Actor, id int64) error {
 			return &customfields.FieldError{ID: id, Name: name, Message: "paired definitions cannot be deleted"}
 		}
 		var legacy bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM custom_field_definitions d JOIN estimate_invoice_conversion_cycles c ON c.company_id=d.company_id WHERE d.id=$1 AND d.object_type IN ('estimate','invoice') AND conversion_field_snapshot(c.id)->'field_pairs' IS NULL)`, id).Scan(&legacy); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM custom_field_definitions d JOIN estimate_invoice_conversion_cycles c ON custom_field_applies_to_company(d.company_id,c.company_id) WHERE d.id=$1 AND d.object_type IN ('estimate','invoice') AND conversion_field_snapshot(c.id)->'field_pairs' IS NULL)`, id).Scan(&legacy); err != nil {
 			return err
 		}
 		if legacy {
