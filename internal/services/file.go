@@ -250,6 +250,10 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 	replayed := false
 	if request, ok := authorization.FromContext(ctx); ok {
 		err = request.Service.FileAction(ctx, request.Actor, ref, "file.upload", uploadedBy, func(tx pgx.Tx) (int64, any, error) {
+			clientKey, err := publicationClientKey(ctx, tx, request.Actor)
+			if err != nil {
+				return 0, nil, err
+			}
 			var encoded []byte
 			var mutated bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM file_mutation_operations WHERE user_id=$1 AND operation_id=$2)`, request.Actor.UserID, identity.ID).Scan(&mutated); err != nil {
@@ -265,9 +269,10 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 			intentBytes, _ := json.Marshal(intentFields)
 			intent := string(intentBytes)
 			var prior string
-			err := tx.QueryRow(ctx, `SELECT p.intent,to_jsonb(f) FROM file_publications p JOIN files f ON f.id=p.file_id WHERE p.user_id=$1 AND p.operation_id=$2`, request.Actor.UserID, identity.ID).Scan(&prior, &encoded)
+			var priorClient *string
+			err = tx.QueryRow(ctx, `SELECT p.intent,p.client_key,to_jsonb(f) FROM file_publications p JOIN files f ON f.id=p.file_id WHERE p.user_id=$1 AND p.operation_id=$2`, request.Actor.UserID, identity.ID).Scan(&prior, &priorClient, &encoded)
 			if err == nil {
-				if prior != intent {
+				if prior != intent || priorClient == nil || *priorClient != clientKey {
 					return 0, nil, authorization.ErrConflict
 				}
 				entFile = &ent.File{}
@@ -285,7 +290,7 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 			if err := json.Unmarshal(encoded, entFile); err != nil {
 				return 0, nil, err
 			}
-			if _, err := tx.Exec(ctx, `INSERT INTO file_publications(user_id,operation_id,intent,file_id) VALUES($1,$2,$3,$4)`, request.Actor.UserID, identity.ID, intent, entFile.ID); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO file_publications(user_id,operation_id,intent,file_id,client_key) VALUES($1,$2,$3,$4,$5)`, request.Actor.UserID, identity.ID, intent, entFile.ID, clientKey); err != nil {
 				return 0, nil, err
 			}
 			return entFile.ID, map[string]any{"parent_type": ref.ObjectType(), "parent_id": ref.ID, "name": originalName, "size": actualSize, "publication_id": identity.ID}, nil
