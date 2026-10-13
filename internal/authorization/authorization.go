@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/freefsm-project/freefsm/internal/protectedaudit"
 	"github.com/freefsm-project/freefsm/internal/saveaction"
@@ -136,6 +137,57 @@ func (s *Service) WithinPermission(ctx context.Context, a Actor, permission stri
 		}
 		return fn(tx, p)
 	})
+}
+
+// WithinActor fences identity/session and current grants through commit. The
+// caller must authorize each domain action inside fn. This supports durable
+// receipts that remain queryable after losing the original action permission.
+func (s *Service) WithinActor(ctx context.Context, a Actor, fn func(pgx.Tx, Principal) error) error {
+	return s.transaction(ctx, a, false, fn)
+}
+
+// WithinSnapshotPermission acquires the authority fence BEFORE establishing a
+// repeatable-read snapshot. Acquiring it inside a repeatable-read transaction
+// would allow a waiter to authorize against grants revoked while it waited.
+// Domain exporters can issue multiple row/total queries with one snapshot.
+func (s *Service) WithinSnapshotPermission(ctx context.Context, a Actor, permission string, scope Scope, fn func(pgx.Tx, Principal) error) error {
+	conn, err := s.Pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+	// If cancellation leaves session-lock acquisition uncertain, discard the
+	// connection rather than returning a possibly locked backend to the pool.
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock(190019)`); err != nil {
+		_ = conn.Conn().Close(context.Background())
+		return err
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := conn.Exec(cleanup, `SELECT pg_advisory_unlock(190019)`); err != nil {
+			_ = conn.Conn().Close(cleanup)
+		}
+	}()
+	tx, err := conn.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx))
+	p, err := principal(ctx, tx, a, false)
+	if err != nil {
+		return err
+	}
+	if !p.Allows(permission, scope) {
+		return ErrForbidden
+	}
+	if err := fn(tx, p); err != nil {
+		return err
+	}
+	if _, err := principal(ctx, tx, a, false); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 func (s *Service) Administrator(ctx context.Context, a Actor) (Principal, error) {
 	p, e := principal(ctx, s.Pool, a, true)

@@ -23,6 +23,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/exports"
 	"github.com/freefsm-project/freefsm/internal/handlers"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
@@ -271,6 +272,13 @@ func run() error {
 	startupUnlock()
 	workerDone := make(chan struct{})
 	recoveryDone := make(chan struct{})
+	exportDone := make(chan struct{})
+	go func() {
+		defer close(exportDone)
+		if err := exports.Product(db.Pool).Run(ctx, control, manager.RefreshConnections); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("export worker stopped")
+		}
+	}()
 	go func() {
 		defer close(recoveryDone)
 		if err := services.NewPasswordResetService(entClient, db.Pool).RunDispatch(ctx, workerEmail, manager.RefreshConnections); err != nil && !errors.Is(err, context.Canceled) {
@@ -314,6 +322,11 @@ func run() error {
 		slog.Warn("document delivery worker drain timed out")
 	}
 	manager.Shutdown()
+	select {
+	case <-exportDone:
+	case <-shutdownCtx.Done():
+		slog.Warn("export worker drain timed out")
+	}
 	select {
 	case <-recoveryDone:
 	case <-shutdownCtx.Done():

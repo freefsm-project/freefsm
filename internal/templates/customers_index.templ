@@ -15,6 +15,10 @@ templ CustomerIndex(p CustomerListPageData) {
 
 templ CustomerListContent(p CustomerListPageData) {
 	<div id="customer-list-content" class="focused-list-content">
+		if canCustomer(ctx,"export") {
+			<a href={ templ.URL("/customers/export?"+listQuery(p.Search,customerListFilters(p),nil).Encode()) }>Export Customer CSV</a>
+		}
+		<a href="/exports">My CSV exports</a>
 		@ListToolbar(ListToolbarData{
 			Action: "/customers", Target: "#customer-list-content", Search: p.Search,
 			SearchPlaceholder: "Search customers...", NewURL: customerNewURL(ctx), NewLabel: "New Customer",

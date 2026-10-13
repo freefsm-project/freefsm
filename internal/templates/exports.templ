@@ -1,0 +1,97 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/exports"
+
+templ ExportUnavailable() {
+ @Layout("Export unavailable") {
+  <h1>Export unavailable</h1>
+  <p>This result cannot be downloaded. Generate a new export with your current access.</p>
+  <a href="/customers/export">Generate a new export</a>
+  <a href="/exports">My CSV exports</a>
+ }
+}
+
+templ ExportReview(options exports.CustomerOptions, operation string) {
+ @Layout("Export Customers") {
+  <h1>Export Customer operations</h1>
+  <p>All matching rows, not only the current page. Scope: All Records.</p>
+  <p>Search: { options.Search } · Sorting: { options.Sort }</p>
+  if options.Archived {
+   <p>Include archived Customers.</p>
+  } else {
+   <p>Active Customers only.</p>
+  }
+  <p>Financial, settlement and Credit fields are excluded. Ready files expire after 24 hours. Every download rechecks access to the entire snapshot. Downloaded copies are outside subsequent access control.</p>
+   <p>Fixed columns: customer_id, display_name, kind, first_name, last_name, organization_name, email, phone, service_notes, archived.</p>
+   <p>Spreadsheet safety: formula-leading text (including after whitespace) and text starting with an apostrophe receive one leading apostrophe. Remove exactly that added apostrophe to recover the original value. CSV quotes preserve commas, quotes and line breaks.</p>
+   <p>A click alone is not acceptance. If the response is interrupted, check My CSV exports before creating another request.</p>
+   <a href="/exports">My CSV exports</a>
+   <form method="post" action="/customers/export" hx-boost="false">
+   <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+   <input type="hidden" name="operation_id" value={ operation }/>
+   <input type="hidden" name="search" value={ options.Search }/>
+   <input type="hidden" name="sort" value={ options.Sort }/>
+   if options.Archived {
+    <input type="hidden" name="archived" value="1"/>
+   }
+   <button type="submit" class="btn btn-primary">Confirm export</button>
+  </form>
+  <a href="/customers">Cancel</a>
+ }
+}
+
+templ ExportStatus(status exports.Status) {
+  @Layout("CSV export") {
+   <h1>CSV export</h1>
+  <p role="status">{ status.State }</p>
+  <p>The server has durably accepted this export. Bookmark this page and return after navigation or restart.</p>
+  if status.Expired || status.Blocked {
+   <p>This result is unavailable. Generate a new export.</p>
+		} else if status.State == "Ready" {
+			if status.RowCount != nil {
+				if *status.RowCount == 0 {
+					<p>No matching rows. The completed CSV contains the documented header.</p>
+				} else {
+					<p>Completed: { fmt.Sprint(*status.RowCount) } rows.</p>
+				}
+			}
+			if status.AsOf != nil {
+				<p>Snapshot as of { status.AsOf.UTC().Format("2006-01-02 15:04:05 UTC") }.</p>
+			}
+			if status.ReadyAt != nil {
+				<p>Available for 24 hours from { status.ReadyAt.UTC().Format("2006-01-02 15:04:05 UTC") }.</p>
+			}
+    <a class="btn btn-primary" hx-boost="false" href={ templ.URL(fmt.Sprintf("/exports/%d/download",status.ID)) }>Download CSV</a>
+  } else if status.State == "Failed" {
+   <p>{ status.Failure }</p>
+  } else {
+   <p>Preparation is pending or running. Refresh to check its durable status.</p>
+  }
+  <p>Downloaded copies are outside subsequent access control.</p>
+  <a href={ templ.URL(fmt.Sprintf("/exports/%d",status.ID)) }>Refresh status</a>
+  <a href="/customers/export">Generate a new export</a>
+   <a href="/customers">Customers</a>
+   <a href="/exports">My CSV exports</a>
+ }
+}
+
+templ ExportList(statuses []exports.Status) {
+ @Layout("My CSV exports") {
+  <h1>My CSV exports</h1>
+  <p>Only committed requests appear here. Refresh after an interrupted request to check acceptance; a click alone is not acceptance.</p>
+  if len(statuses)==0 {
+   <p>No accepted exports.</p>
+  }
+  <ul>
+   for _,status:=range statuses {
+    <li><a href={ templ.URL(fmt.Sprintf("/exports/%d",status.ID)) }>Export #{ fmt.Sprint(status.ID) } — { status.State } — { status.AcceptedAt.UTC().Format("2006-01-02 15:04:05 UTC") }</a></li>
+   }
+  </ul>
+  if len(statuses)==50 {
+   <a href={ templ.URL(fmt.Sprintf("/exports?before=%d",statuses[len(statuses)-1].ID)) }>Older exports</a>
+  }
+  <a href="/exports">Refresh exports</a>
+  <a href="/customers">Customers</a>
+ }
+}
