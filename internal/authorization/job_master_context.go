@@ -30,6 +30,7 @@ type JobLocationContext struct {
 	ServiceNotes string   `json:"service_notes"`
 }
 type JobMasterContext struct {
+	Contacts []JobContactContext `json:"contacts,omitempty"`
 	Asset    *JobAssetContext    `json:"asset,omitempty"`
 	Contact  *JobContactContext  `json:"contact,omitempty"`
 	Location *JobLocationContext `json:"location,omitempty"`
@@ -124,6 +125,23 @@ func (s *Service) JobMasters(ctx context.Context, a Actor, jobID int64) (JobMast
 	if len(asset) > 0 {
 		out.Asset = &JobAssetContext{}
 		if err = json.Unmarshal(asset, out.Asset); err != nil {
+			return out, err
+		}
+	}
+	if p.Allows("contact.view", Context) {
+		rows, err := s.Pool.Query(ctx, `SELECT c.id,trim(c.first_name||' '||c.last_name),c.role_title,c.phone,c.email,c.service_notes FROM job_contacts jc JOIN jobs j ON j.id=jc.job_id JOIN customer_contacts c ON c.id=jc.contact_id AND c.customer_id=j.customer_id AND c.company_id=j.company_id WHERE j.id=$1 AND j.company_id=$2 AND j.deleted_at IS NULL AND c.deleted_at IS NULL AND EXISTS(SELECT 1 FROM job_assignments WHERE job_id=j.id AND user_id=$3) ORDER BY c.id`, jobID, p.CompanyID, a.UserID)
+		if err != nil {
+			return out, err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var c JobContactContext
+			if err := rows.Scan(&c.ID, &c.Name, &c.RoleTitle, &c.Phone, &c.Email, &c.ServiceNotes); err != nil {
+				return out, err
+			}
+			out.Contacts = append(out.Contacts, c)
+		}
+		if err := rows.Err(); err != nil {
 			return out, err
 		}
 	}

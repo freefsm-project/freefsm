@@ -358,15 +358,15 @@ func JobMasterContext(p authorization.JobMasterContext) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		if p.Contact != nil {
+		for _, contact := range p.Contacts {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 34, "<h3>Linked Contact</h3><p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var22 string
-			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(p.Contact.Name)
+			templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(contact.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/job_master_context.templ`, Line: 36, Col: 45}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/job_master_context.templ`, Line: 36, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 			if templ_7745c5c3_Err != nil {
@@ -377,9 +377,9 @@ func JobMasterContext(p authorization.JobMasterContext) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var23 string
-			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(p.Contact.RoleTitle)
+			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(contact.RoleTitle)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/job_master_context.templ`, Line: 36, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/job_master_context.templ`, Line: 36, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 			if templ_7745c5c3_Err != nil {
@@ -390,9 +390,9 @@ func JobMasterContext(p authorization.JobMasterContext) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var24 string
-			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(p.Contact.Phone)
+			templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(contact.Phone)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/job_master_context.templ`, Line: 36, Col: 95}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/job_master_context.templ`, Line: 36, Col: 89}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 			if templ_7745c5c3_Err != nil {
@@ -403,9 +403,9 @@ func JobMasterContext(p authorization.JobMasterContext) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var25 string
-			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(p.Contact.Email)
+			templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(contact.Email)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/job_master_context.templ`, Line: 36, Col: 115}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/job_master_context.templ`, Line: 36, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 			if templ_7745c5c3_Err != nil {
@@ -416,9 +416,9 @@ func JobMasterContext(p authorization.JobMasterContext) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var26 string
-			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(p.Contact.ServiceNotes)
+			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(contact.ServiceNotes)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/job_master_context.templ`, Line: 36, Col: 148}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/job_master_context.templ`, Line: 36, Col: 138}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {

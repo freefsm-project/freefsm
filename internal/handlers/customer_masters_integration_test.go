@@ -44,6 +44,7 @@ func TestCustomerMastersPersistedBrowser(t *testing.T) {
 
 func masterPost(t *testing.T, router http.Handler, cookie *http.Cookie, path string, values url.Values, want int) string {
 	t.Helper()
+	values = currentJobFormValues(t, router, cookie, path, values)
 	r := httptest.NewRequest("POST", path, strings.NewReader(values.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.AddCookie(cookie)

@@ -35,6 +35,9 @@ func authorizationError(w http.ResponseWriter, r *http.Request, err error) {
 	code := http.StatusConflict
 	message := "Request rejected; review the current state and supplied grants"
 	switch {
+	case errors.Is(err, saveaction.ErrRevisionRequired):
+		code = http.StatusPreconditionRequired
+		message = err.Error()
 	case errors.Is(err, authorization.ErrUnavailable):
 		middleware.ServiceUnavailable(w, r)
 		return

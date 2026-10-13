@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/status"
 	"github.com/freefsm-project/freefsm/internal/ent/statusworkflow"
 	"github.com/freefsm-project/freefsm/internal/ent/user"
+	"github.com/jackc/pgx/v5"
 )
 
 type JobService struct {
@@ -49,6 +51,7 @@ type JobCreateParams struct {
 }
 
 type JobUpdateParams struct {
+	ReplaceCustomer   bool
 	CustomerID        *int64
 	ProjectID         *int64
 	LocationID        *int64
@@ -335,6 +338,9 @@ func (s *JobService) activeCustomerForCompany(ctx context.Context, companyID, cu
 }
 
 func (s *JobService) Create(ctx context.Context, companyID int64, params JobCreateParams) (*ent.Job, error) {
+	if strings.TrimSpace(params.JobType) == "" {
+		return nil, invalidJobInput(JobInputReasonRequired, "title")
+	}
 	if needsDetailsTransaction(ctx) {
 		return saveDetails(ctx, "job", 0, 0, &params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Job, int64, error) {
 			params.CustomFields = fields
@@ -348,6 +354,20 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 	if companyID <= 0 {
 		return nil, fmt.Errorf("create job: company is required")
 	}
+	if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+		r, _ := authorization.FromContext(ctx)
+		if err := r.Service.JobInputs(ctx, tx, r.Actor, 0, params.CustomerID, false, map[string]int64{"project": params.ProjectID, "location": params.LocationID, "contact": params.CustomerContactID, "asset": params.AssetID}); err != nil {
+			return nil, err
+		}
+		if err := r.Service.JobPlanningFacets(ctx, tx, r.Actor, 0, map[string]bool{
+			"job.schedule":         !params.StartTime.IsZero() || !params.EndTime.IsZero() || len(params.Visits) > 0,
+			"job.assign":           len(params.Assignments) > 0,
+			"job.subtask.manage":   len(params.Subtasks) > 0,
+			"job.field_notes.edit": params.TechNotes != "",
+		}); err != nil {
+			return nil, err
+		}
+	}
 	lineItems, err := EncodeLineItems(params.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("encode job line items: %w", err)
@@ -359,7 +379,7 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 	if err := validateJobCustomerLinks(ctx, s.client, companyID, params.CustomerID, params.ProjectID, params.LocationID, params.CustomerContactID, params.AssetID); err != nil {
 		return nil, err
 	}
-	statusID, err := creationStatus(ctx, s.client, params.StatusID, jobCustomer.CompanyID, "job", "job:new")
+	statusID, err := creationStatus(ctx, s.client, 0, jobCustomer.CompanyID, "job", "job:new")
 	if err != nil {
 		return nil, err
 	}
@@ -565,6 +585,9 @@ func (s *JobService) UpdateSubtasks(ctx context.Context, companyID, id int64, su
 }
 
 func (s *JobService) update(ctx context.Context, companyID, id int64, params JobUpdateParams) (*ent.Job, error) {
+	if params.JobType != nil && strings.TrimSpace(*params.JobType) == "" {
+		return nil, invalidJobInput(JobInputReasonRequired, "title")
+	}
 	if companyID <= 0 {
 		return nil, fmt.Errorf("update job: company is required")
 	}
@@ -576,6 +599,18 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 		return nil, err
 	}
 	var encodedLineItems string
+	if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+		r, _ := authorization.FromContext(ctx)
+		changedTime := func(next *time.Time, old *time.Time) bool { return next != nil && (old == nil || !next.Equal(*old)) }
+		if err := r.Service.JobPlanningFacets(ctx, tx, r.Actor, id, map[string]bool{
+			"job.schedule":         changedTime(params.StartTime, current.StartTime) || changedTime(params.EndTime, current.EndTime) || changedTime(params.ArrivalStart, current.ArrivalWindowStart) || changedTime(params.ArrivalEnd, current.ArrivalWindowEnd) || (params.Visits != nil && !reflect.DeepEqual(*params.Visits, ParseVisits(current.Visits))),
+			"job.assign":           params.Assignments != nil && !reflect.DeepEqual(*params.Assignments, ParseAssignments(current.Assignments)),
+			"job.subtask.manage":   params.Subtasks != nil && !reflect.DeepEqual(*params.Subtasks, ParseSubtasks(current.Subtasks)),
+			"job.field_notes.edit": params.TechNotes != nil && *params.TechNotes != current.TechNotes,
+		}); err != nil {
+			return nil, err
+		}
+	}
 	if params.LineItems != nil {
 		var err error
 		encodedLineItems, err = EncodeLineItems(*params.LineItems)
@@ -604,6 +639,25 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 		assetID = *params.AssetID
 	}
 	customerChanged := params.CustomerID != nil && *params.CustomerID != current.CustomerID
+	if customerChanged {
+		if !params.ReplaceCustomer {
+			return nil, invalidJobInput(JobInputReasonRequired, JobInputRelationCustomer)
+		}
+		if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+			r, _ := authorization.FromContext(ctx)
+			if err := r.Service.JobInputs(ctx, tx, r.Actor, id, customerID, params.ReplaceCustomer, nil); err != nil {
+				return nil, err
+			}
+		}
+		zero := int64(0)
+		params.ProjectID, params.LocationID, params.CustomerContactID, params.AssetID = &zero, &zero, &zero, &zero
+		projectID, locationID, contactID, assetID = 0, 0, 0, 0
+	} else if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+		r, _ := authorization.FromContext(ctx)
+		if err := r.Service.JobInputs(ctx, tx, r.Actor, id, customerID, false, map[string]int64{"project": projectID, "location": locationID, "contact": contactID, "asset": assetID}); err != nil {
+			return nil, err
+		}
+	}
 	projectChanged := params.ProjectID != nil && *params.ProjectID != int64Value(current.ProjectID)
 	locationChanged := params.LocationID != nil && *params.LocationID != int64Value(current.LocationID)
 	contactChanged := params.CustomerContactID != nil && *params.CustomerContactID != int64Value(current.CustomerContactID)

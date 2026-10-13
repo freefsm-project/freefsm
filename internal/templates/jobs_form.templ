@@ -12,7 +12,7 @@ templ JobForm(p JobFormPageData) {
 			<p>Dates and times use { companyTimeZone(ctx) }.</p>
 			<label>
 				Customer <small class="required-marker">*</small>
-				<select name="customer_id" id="job-customer-select" required>
+				<select name="customer_id" id="job-customer-select" required disabled?={ p.Job.ID>0 && !canMaster(ctx,"customer.view") }>
 					<option value="">Select a customer...</option>
 					for _, c := range p.Customers {
 						<option value={ fmt.Sprintf("%d", c.Value) } selected?={ p.Job.CustomerID == c.Value }>{ c.Label }</option>
@@ -22,11 +22,17 @@ templ JobForm(p JobFormPageData) {
 					<small class="error-msg">{ p.Errors["customer_id"] }</small>
 				}
 			</label>
+			if p.Job.ID > 0 {
+				if canMaster(ctx,"customer.view") {
+					<label><input type="checkbox" name="replace_customer" value="true"/> Replace Customer deliberately and clear all operational Location, Project, Contact and Asset links. Linked documents or Service Entries block replacement.</label>
+				}
+				<a href={ templ.URL(fmt.Sprintf("/jobs/%d/contacts",p.Job.ID)) }>Manage explicit Job Contacts</a>
+			}
 			<div class="grid">
 				<label>
 					Project (optional)
 					<span class="select-with-action">
-						<select name="project_id" id="job-project-select" data-selected={ fmt.Sprintf("%d", p.Job.ProjectID) }>
+						<select name="project_id" id="job-project-select" disabled?={ !canMaster(ctx,"job.relations.edit") || !canMaster(ctx,"project.view") } data-retained-project={ fmt.Sprint(p.RetainedProjectID) } data-selected={ fmt.Sprintf("%d", p.Job.ProjectID) }>
 							<option value="0">No project</option>
 							for _, pr := range p.Projects {
 								<option value={ fmt.Sprintf("%d", pr.Value) } selected?={ p.Job.ProjectID == pr.Value }>{ pr.Label }</option>
@@ -38,7 +44,7 @@ templ JobForm(p JobFormPageData) {
 				<label>
 					Location (optional)
 					<span class="select-with-action">
-						<select name="location_id" id="job-location-select" data-selected={ fmt.Sprintf("%d", p.Job.LocationID) }>
+						<select name="location_id" id="job-location-select" disabled?={ !canMaster(ctx,"job.relations.edit") || !canMaster(ctx,"location.view") } data-selected={ fmt.Sprintf("%d", p.Job.LocationID) }>
 							<option value="0">No location</option>
 							for _, l := range p.Locations {
 								<option value={ fmt.Sprintf("%d", l.Value) } selected?={ p.Job.LocationID == l.Value }>{ l.Label }</option>
@@ -52,7 +58,7 @@ templ JobForm(p JobFormPageData) {
 		<label>
 			Asset (optional)
 			<span class="select-with-action">
-				<select name="asset_id" id="job-asset-select" data-selected={ fmt.Sprintf("%d", p.Job.AssetID) }>
+				<select name="asset_id" id="job-asset-select" disabled?={ !canMaster(ctx,"job.relations.edit") || !canMaster(ctx,"asset.view") } data-selected={ fmt.Sprintf("%d", p.Job.AssetID) }>
 					<option value="0">No asset</option>
 					for _, a := range p.Assets {
 						<option value={ fmt.Sprintf("%d", a.Value) } selected?={ p.Job.AssetID == a.Value }>{ a.Label }</option>
@@ -64,7 +70,7 @@ templ JobForm(p JobFormPageData) {
 		<label>
 			Contact (optional)
 			<span class="select-with-action">
-				<select name="customer_contact_id" id="contact-select" data-selected={ fmt.Sprintf("%d", p.Job.ContactID) }>
+				<select name="customer_contact_id" id="contact-select" disabled?={ !canMaster(ctx,"job.relations.edit") || !canMaster(ctx,"contact.view") } data-selected={ fmt.Sprintf("%d", p.Job.ContactID) }>
 					<option value="0">No contact</option>
 				</select>
 				<button type="button" class="outline select-action-button" onclick="openJobCreateModal('contact')">Create</button>
@@ -73,7 +79,7 @@ templ JobForm(p JobFormPageData) {
 	</div>
 	<div class="grid">
 		<label>
-			Job Type <small class="required-marker">*</small>
+			Job Title <small class="required-marker">*</small>
 			<input type="text" name="job_type" value={ p.Job.JobType } placeholder="e.g. Installation, Repair" required/>
 			if p.Errors["job_type"] != "" {
 				<small class="error-msg">{ p.Errors["job_type"] }</small>
@@ -240,7 +246,7 @@ templ JobForm(p JobFormPageData) {
 				}
 				syncJobLookupGuard(select.closest('form, dialog'));
 			}
-			[jobProjectSelect, contactSelect, jobLocationSelect, jobAssetSelect].filter(Boolean).forEach(select => { select.dataset.lookupCustomer = selectedJobCustomerID(); });
+			[jobProjectSelect, contactSelect, jobLocationSelect, jobAssetSelect].filter(Boolean).forEach(select => { select.dataset.planningLocked = String(select.disabled); select.dataset.lookupCustomer = selectedJobCustomerID(); });
 			if (jobCustomer?.form) jobCustomer.form.addEventListener('submit', event => {
 				const blocked = unresolvedJobChoices(jobCustomer.form);
 				if (!blocked.length) return;
@@ -249,6 +255,7 @@ templ JobForm(p JobFormPageData) {
 			}, true);
 			function refreshOptions(select, emptyHTML, url, selectedID) {
 				if (!select) return Promise.resolve();
+				if (select.dataset.planningLocked === 'true') return Promise.resolve(true);
 				const requestID = String((Number(select.dataset.refreshRequest || '0') || 0) + 1);
 				select.dataset.refreshRequest = requestID;
 				jobLookupControllers.get(select)?.abort();
@@ -279,7 +286,8 @@ templ JobForm(p JobFormPageData) {
 						if (select.dataset.refreshRequest !== requestID) return;
 						if (!select.isConnected) return;
 						const fragment = document.createElement('template'); fragment.innerHTML = html;
-						const options = [...fragment.content.children];
+							const options = [...fragment.content.children];
+							if (!changedCustomer && desired !== '0' && select.dataset.retainedProject === desired && !options.some(option => option.value === desired)) options.push(new Option('Retain historical Project',desired));
 						if (!options.length || options.some(option => option.tagName !== 'OPTION') || !options.some(option => option.value === '0')) throw new Error('invalid option response');
 						select.replaceChildren(...options.map(option => new Option(option.textContent, option.value)));
 						holdJobChoice(select, false);
