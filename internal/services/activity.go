@@ -43,6 +43,18 @@ type ActivityScope interface {
 	activityScope()
 }
 
+// FilteredActivityScope intersects a record scope with event facts. Until is
+// exclusive, so adjacent date ranges do not duplicate boundary events.
+type FilteredActivityScope struct {
+	Operational bool
+	Scope       ActivityScope
+	ActorID     int64
+	From, Until time.Time
+	Actions     []string
+}
+
+func (FilteredActivityScope) activityScope() {}
+
 type TenantActivityScope struct {
 	IncludeAdminOnly bool
 	Actions          []string
@@ -116,6 +128,14 @@ func NewActivityService(client *ent.Client, objects objectref.Directory) *Activi
 // List returns a keyset-paginated activity page for one explicitly scoped company.
 func (s *ActivityService) List(ctx context.Context, request ActivityListRequest) (ActivityPage, error) {
 	var empty ActivityPage
+	var filters FilteredActivityScope
+	if filtered, ok := request.Scope.(FilteredActivityScope); ok {
+		filters = filtered
+		request.Scope = filtered.Scope
+		if filters.ActorID < 0 || (!filters.From.IsZero() && !filters.Until.IsZero() && !filters.From.Before(filters.Until)) {
+			return empty, fmt.Errorf("invalid activity filters")
+		}
+	}
 	if scope, ok := request.Scope.(ConversionActivityScope); ok {
 		_, scope.CurrentAuthority = authorization.NavigationPrincipal(ctx)
 		request.Scope = scope
@@ -133,6 +153,21 @@ func (s *ActivityService) List(ctx context.Context, request ActivityListRequest)
 
 	q := s.client.ActivityLog.Query().Where(activitylog.CompanyIDEQ(request.CompanyID))
 	q = q.Where(s.scopePredicates(request.Scope)...)
+	if filters.Operational {
+		q = q.Where(activitylog.ObjectTypeIn("customer", "contact", "location", "asset", "project", "job", "estimate", "invoice", "item", "time_entry", "lease"))
+	}
+	if filters.ActorID > 0 {
+		q = q.Where(activitylog.ActorIDEQ(filters.ActorID))
+	}
+	if !filters.From.IsZero() {
+		q = q.Where(activitylog.CreatedAtGTE(filters.From))
+	}
+	if !filters.Until.IsZero() {
+		q = q.Where(activitylog.CreatedAtLT(filters.Until))
+	}
+	if len(filters.Actions) > 0 {
+		q = q.Where(activitylog.ActionIn(filters.Actions...))
+	}
 	if request.Page.Cursor != nil {
 		q = q.Where(activityCursorPredicate(*request.Page.Cursor, direction))
 	}

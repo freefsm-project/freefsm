@@ -1,6 +1,7 @@
 package templates
 
 import (
+	"net/url"
 	"strings"
 )
 
@@ -55,6 +56,10 @@ type ActivityWidgetData struct {
 }
 
 type ActivityPageData struct {
+	Filters    url.Values
+	UpdatedAt  string
+	RefreshURL string
+	Failed     bool
 	Entries    []ActivityEntry
 	HasMore    bool
 	ViewAllURL string
