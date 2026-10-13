@@ -5,6 +5,7 @@ import (
 	"fmt"
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/google/uuid"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -101,8 +102,9 @@ func TestSessionRevocationFencesInflightAPIAction(t *testing.T) {
 	}
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
-		r := httptest.NewRequest("POST", "/time-entries/clock-out", nil)
+		r := httptest.NewRequest("POST", "/time-entries/clock-out", strings.NewReader(fmt.Sprintf(`{"entry_id":%d,"operation_id":%q}`, entry.ID, uuid.NewString())))
 		r.Header.Set("Authorization", "Bearer "+token)
+		r.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		done <- w

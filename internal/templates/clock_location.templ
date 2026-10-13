@@ -1,0 +1,16 @@
+package templates
+
+import "github.com/freefsm-project/freefsm/internal/authorization"
+import "context"
+
+func clockCan(ctx context.Context,action string) bool {
+ p,ok:=authorization.NavigationPrincipal(ctx)
+ return ok&&p.Allows(action,authorization.Own)
+}
+
+templ ClockLocationControls() {
+ if p,ok:=authorization.NavigationPrincipal(ctx);ok && p.Allows("time.gps.capture",authorization.Own) {
+  <button type="button" class="outline" data-clock-gps>Clock with location</button>
+  <small data-clock-location-status role="status">Location is optional. The main clock button submits without location. GPS is a point-in-time clock record, not attendance proof.</small>
+ }
+}

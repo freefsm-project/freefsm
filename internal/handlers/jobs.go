@@ -202,6 +202,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	if err == nil && activeEntry != nil {
 		if activeEntry.JobID != nil && *activeEntry.JobID == j.ID {
 			d.ActiveTimeEntryOnJob = true
+			d.ActiveTimeEntryID = activeEntry.ID
 			d.ActiveTimeEntryClockIn = displayDateTime(r.Context(), activeEntry.ClockIn)
 			d.ActiveTimeEntryDuration = services.TimeEntryDuration(activeEntry.ClockIn, safeTime(activeEntry.ClockOut))
 		} else {
@@ -272,7 +273,7 @@ func (h *JobHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		http.NotFound(w, r)
 		return
 	}
@@ -281,38 +282,25 @@ func (h *JobHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, id), policyRead) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+	in, ok := clockForm(w, r)
+	if !ok {
 		return
 	}
-	j, err := h.svc.GetByID(r.Context(), id)
+	if in.JobID != 0 && in.JobID != id {
+		http.Error(w, "Conflicting Job clock target", http.StatusBadRequest)
+		return
+	}
+	in.JobID = id
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
+	_, err = req.Service.Clock(r.Context(), req.Actor, false, in)
 	if err != nil {
-		http.NotFound(w, r)
+		clockError(w, r, err)
 		return
 	}
-	result, err := h.timeEntrySvc.ClockIn(r.Context(), services.TimeEntryCreateParams{UserID: u.ID, JobID: id})
-	if err != nil {
-		if errors.Is(err, services.ErrActiveTimeEntry) {
-			redirectToJob(w, r, id, "You are already clocked in. Clock out before clocking in to this job.")
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	clockInStr := displayDateTime(r.Context(), result.ClockIn)
-	jobName := jobDisplayName(j)
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_in", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
-		"entity_name":   fmt.Sprintf("%s — %s — %s", u.Name, jobName, clockInStr),
-		"actor_name":    u.Name,
-		"time_entry_id": result.ID,
-		"clock_in":      clockInStr,
-	})
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_in", objectref.New(objectref.TypeJob, id), map[string]interface{}{
-		"entity_name":   fmt.Sprintf("%s — %s", jobName, clockInStr),
-		"actor_name":    u.Name,
-		"time_entry_id": result.ID,
-		"clock_in":      clockInStr,
-	})
 	redirectToJob(w, r, id, "Clocked in to job")
 }
 
@@ -322,7 +310,7 @@ func (h *JobHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		http.NotFound(w, r)
 		return
 	}
@@ -331,51 +319,31 @@ func (h *JobHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, id), policyRead) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+	in, ok := clockForm(w, r)
+	if !ok {
 		return
 	}
-	j, err := h.svc.GetByID(r.Context(), id)
+	if in.JobID != 0 && in.JobID != id {
+		http.Error(w, "Conflicting Job clock target", http.StatusBadRequest)
+		return
+	}
+	in.JobID = id
+	in.EntryID, err = strconv.ParseInt(r.FormValue("entry_id"), 10, 64)
+	if err != nil || in.EntryID <= 0 {
+		http.Error(w, "An exact entry_id is required", 400)
+		return
+	}
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
+	_, err = req.Service.Clock(r.Context(), req.Actor, true, in)
 	if err != nil {
-		http.NotFound(w, r)
+		clockError(w, r, err)
 		return
 	}
-	activeEntry, err := h.timeEntrySvc.GetActiveByUser(r.Context(), u.ID)
-	if err != nil {
-		redirectToJob(w, r, id, "No active clock-in found for this job")
-		return
-	}
-	if activeEntry.JobID == nil {
-		redirectToJob(w, r, id, "Your active clock-in is not linked to this job")
-		return
-	}
-	if *activeEntry.JobID != id {
-		redirectToJob(w, r, id, "You are clocked in to another job")
-		return
-	}
-	result, err := h.timeEntrySvc.ClockOut(r.Context(), activeEntry.ID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
-	clockInStr := displayDateTime(r.Context(), result.ClockIn)
-	jobName := jobDisplayName(j)
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_out", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
-		"entity_name":   fmt.Sprintf("%s — %s — %s (%s)", u.Name, jobName, clockInStr, duration),
-		"actor_name":    u.Name,
-		"time_entry_id": result.ID,
-		"clock_in":      clockInStr,
-		"duration":      duration,
-	})
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_out", objectref.New(objectref.TypeJob, id), map[string]interface{}{
-		"entity_name":   fmt.Sprintf("%s — %s (%s)", jobName, clockInStr, duration),
-		"actor_name":    u.Name,
-		"time_entry_id": result.ID,
-		"clock_in":      clockInStr,
-		"duration":      duration,
-	})
-	redirectToJob(w, r, id, "Clocked out of job")
+	http.Redirect(w, r, "/?flash=Clocked+out", http.StatusSeeOther)
 }
 
 func redirectToJob(w http.ResponseWriter, r *http.Request, id int64, flash string) {

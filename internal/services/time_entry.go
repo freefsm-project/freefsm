@@ -4,14 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
-	"github.com/freefsm-project/freefsm/internal/ent/job"
 	"github.com/freefsm-project/freefsm/internal/ent/timeentry"
-	"github.com/freefsm-project/freefsm/internal/ent/user"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -31,12 +29,13 @@ func NewTimeEntryService(client *ent.Client) *TimeEntryService {
 }
 
 type TimeEntryCreateParams struct {
-	UserID    int64
-	JobID     int64
-	IsManual  bool
-	Notes     string
-	Latitude  *float64
-	Longitude *float64
+	ClockIn, ClockOut *time.Time
+	UserID            int64
+	JobID             int64
+	IsManual          bool
+	Notes             string
+	Latitude          *float64
+	Longitude         *float64
 }
 
 type TimeEntryUpdateParams struct {
@@ -149,55 +148,30 @@ func (s *TimeEntryService) ensureNoActiveEntry(ctx context.Context, userID int64
 }
 
 func (s *TimeEntryService) ClockIn(ctx context.Context, params TimeEntryCreateParams) (*ent.TimeEntry, error) {
-	companyID, err := s.creationCompanyID(ctx, params)
-	if err != nil {
-		return nil, fmt.Errorf("clock in: %w", err)
+	req, ok := authorization.FromContext(ctx)
+	if !ok || params.UserID != req.Actor.UserID {
+		return nil, authorization.ErrForbidden
 	}
-	if err := s.ensureNoActiveEntry(ctx, params.UserID); err != nil {
+	if params.Latitude != nil || params.Longitude != nil {
+		return nil, &authorization.ClockConflict{Code: "invalid_gps"}
+	}
+	entry, err := req.Service.Clock(ctx, req.Actor, false, authorization.ClockCommand{JobID: params.JobID, Notes: params.Notes})
+	if err != nil {
 		return nil, err
 	}
-	c := s.client.TimeEntry.
-		Create().
-		SetCompanyID(companyID).
-		SetUserID(params.UserID).
-		SetIsManual(false).
-		SetClockIn(time.Now()).
-		SetNotes(params.Notes).
-		SetNillableLatitude(params.Latitude).
-		SetNillableLongitude(params.Longitude)
-	if params.JobID > 0 {
-		c.SetJobID(params.JobID)
-	}
-	te, err := c.Save(ctx)
-	if err != nil {
-		if isActiveTimeEntryConflict(err) {
-			return nil, ErrActiveTimeEntry
-		}
-		return nil, fmt.Errorf("clock in: %w", err)
-	}
-	return te, nil
+	return s.GetByID(ctx, entry.ID)
 }
 
 func (s *TimeEntryService) ClockOut(ctx context.Context, entryID int64) (*ent.TimeEntry, error) {
-	updated, err := s.client.TimeEntry.Update().
-		Where(timeentry.IDEQ(entryID), timeentry.ClockOutIsNil()).
-		SetClockOut(time.Now()).
-		Save(ctx)
+	req, ok := authorization.FromContext(ctx)
+	if !ok {
+		return nil, authorization.ErrForbidden
+	}
+	entry, err := req.Service.Clock(ctx, req.Actor, true, authorization.ClockCommand{EntryID: entryID})
 	if err != nil {
-		return nil, fmt.Errorf("clock out: %w", err)
+		return nil, err
 	}
-	if updated == 0 {
-		_, err := s.client.TimeEntry.Get(ctx, entryID)
-		if err != nil {
-			return nil, fmt.Errorf("clock out: get time entry %d: %w", entryID, err)
-		}
-		return nil, ErrTimeEntryNotActive
-	}
-	te, err := s.client.TimeEntry.Get(ctx, entryID)
-	if err != nil {
-		return nil, fmt.Errorf("clock out: reload time entry: %w", err)
-	}
-	return te, nil
+	return s.GetByID(ctx, entry.ID)
 }
 
 func isActiveTimeEntryConflict(err error) bool {
@@ -209,106 +183,52 @@ func isActiveTimeEntryConflict(err error) bool {
 }
 
 func (s *TimeEntryService) Create(ctx context.Context, params TimeEntryCreateParams) (*ent.TimeEntry, error) {
-	companyID, err := s.creationCompanyID(ctx, params)
+	req, ok := authorization.FromContext(ctx)
+	if !ok {
+		return nil, authorization.ErrForbidden
+	}
+	if params.Latitude != nil || params.Longitude != nil {
+		return nil, &authorization.ClockConflict{Code: "invalid_gps"}
+	}
+	id, err := req.Service.CreateManualTimeEntry(ctx, req.Actor, authorization.ManualTimeEntry{UserID: params.UserID, JobID: params.JobID, ClockIn: params.ClockIn, ClockOut: params.ClockOut, Notes: params.Notes})
 	if err != nil {
-		return nil, fmt.Errorf("create time entry: %w", err)
+		return nil, err
 	}
-	c := s.client.TimeEntry.
-		Create().
-		SetCompanyID(companyID).
-		SetUserID(params.UserID).
-		SetIsManual(true).
-		SetClockIn(time.Now()).
-		SetNotes(params.Notes).
-		SetNillableLatitude(params.Latitude).
-		SetNillableLongitude(params.Longitude)
-	if params.JobID > 0 {
-		c.SetJobID(params.JobID)
-	}
-	te, err := c.Save(ctx)
-	if err != nil {
-		if isActiveTimeEntryConflict(err) {
-			return nil, ErrActiveTimeEntry
-		}
-		return nil, fmt.Errorf("create time entry: %w", err)
-	}
-	return te, nil
-}
-
-func (s *TimeEntryService) creationCompanyID(ctx context.Context, params TimeEntryCreateParams) (int64, error) {
-	u, err := s.client.User.Query().
-		Where(user.IDEQ(params.UserID), user.CompanyIDNotNil(), user.IsActive(true)).
-		Only(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("get active company-owned user: %w", err)
-	}
-	companyID := *u.CompanyID
-	if params.JobID == 0 {
-		return companyID, nil
-	}
-
-	exists, err := s.client.Job.Query().
-		Where(job.IDEQ(params.JobID), job.CompanyIDEQ(companyID), job.DeletedAtIsNil()).
-		Exist(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("validate job ownership: %w", err)
-	}
-	if !exists {
-		return 0, fmt.Errorf("job does not belong to user's company or is archived")
-	}
-	return companyID, nil
+	return s.GetByID(ctx, id)
 }
 
 func (s *TimeEntryService) Update(ctx context.Context, id int64, params TimeEntryUpdateParams) (*ent.TimeEntry, error) {
-	u := s.client.TimeEntry.UpdateOneID(id)
-
 	if params.IsManual != nil {
-		u.SetIsManual(*params.IsManual)
+		return nil, authorization.ErrForbidden
 	}
-	if params.ClockIn != nil {
-		u.SetClockIn(*params.ClockIn)
+	req, ok := authorization.FromContext(ctx)
+	if !ok {
+		return nil, authorization.ErrForbidden
 	}
-	if params.ClockOut != nil {
-		u.SetClockOut(*params.ClockOut)
-	}
-	if params.ClearJob {
-		u.ClearJobID()
-	} else if params.JobID != nil {
-		u.SetJobID(*params.JobID)
-	}
-	if params.Notes != nil {
-		u.SetNotes(*params.Notes)
-	}
-
-	te, err := u.Save(ctx)
+	err := req.Service.CorrectTimeEntry(ctx, req.Actor, id, authorization.TimeEntryCorrection{ClockIn: params.ClockIn, ClockOut: params.ClockOut, JobID: params.JobID, ClearJob: params.ClearJob, Notes: params.Notes})
 	if err != nil {
-		return nil, fmt.Errorf("update time entry %d: %w", id, err)
+		return nil, err
 	}
-	return te, nil
+	return s.GetByID(ctx, id)
 }
 
 func (s *TimeEntryService) Delete(ctx context.Context, id int64) error {
-	if err := s.client.TimeEntry.DeleteOneID(id).Exec(ctx); err != nil {
-		return fmt.Errorf("delete time entry %d: %w", id, err)
-	}
-	return nil
+	// Time is retained history. The reasoned terminal Void workflow replaces
+	// this obsolete destructive contract; an ID alone never authorizes erasure.
+	return authorization.ErrForbidden
 }
 
 func TimeEntryDuration(clockIn, clockOut time.Time) string {
 	var d time.Duration
-	if clockOut.IsZero() || clockOut.Before(clockIn) {
+	if clockOut.IsZero() {
 		d = time.Since(clockIn)
 	} else {
 		d = clockOut.Sub(clockIn)
 	}
-
-	hours := int(math.Floor(d.Hours()))
-	minutes := int(math.Ceil(d.Minutes())) % 60
-
-	if hours > 0 {
-		return fmt.Sprintf("%dh %dm", hours, minutes)
+	if d < 0 {
+		return "Invalid recorded interval"
 	}
-	return fmt.Sprintf("%dm", minutes)
+	return d.String()
 }
 
 func TimeEntryPaginationTotalPages(total, perPage int) int {

@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-func TestActiveTimeEntryMigration053ReconcilesDuplicatesAndEnforcesInvariant(t *testing.T) {
+func TestActiveTimeEntryMigration053PreservesAmbiguousHistory(t *testing.T) {
 	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("set FREEFSM_TEST_DATABASE_URL to run PostgreSQL migration tests")
@@ -32,11 +32,11 @@ func TestActiveTimeEntryMigration053ReconcilesDuplicatesAndEnforcesInvariant(t *
 		mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO time_entries(company_id,user_id,clock_in,notes) VALUES($1,$2,$3,$4) RETURNING id`, companyID, userID, clockIn, fmt.Sprintf("entry-%d", i)), &entryIDs[i])
 	}
 
-	if err := db.Migrate(ctx, MigrationFS()); err != nil {
-		t.Fatalf("migrate 053: %v", err)
+	if err := db.Migrate(ctx, MigrationFS()); err == nil {
+		t.Fatal("migration must stop for explicit historical repair instead of inventing clock-outs")
 	}
 
-	wantClockOuts := []*time.Time{&clockIns[1], &clockIns[2], &clockIns[3], nil}
+	wantClockOuts := []*time.Time{nil, nil, nil, nil}
 	for i, entryID := range entryIDs {
 		var clockIn time.Time
 		var clockOut *time.Time
@@ -56,20 +56,6 @@ func TestActiveTimeEntryMigration053ReconcilesDuplicatesAndEnforcesInvariant(t *
 		}
 	}
 
-	if _, err := db.Pool.Exec(ctx, `INSERT INTO time_entries(company_id,user_id,clock_in) VALUES($1,$2,$3)`, companyID, userID, clockIns[3].Add(time.Hour)); err == nil {
-		t.Fatal("unique index accepted a second active time entry")
-	}
-
-	down, err := fs.ReadFile(MigrationFS(), "053_active_time_entry_invariant.down.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = db.Pool.Exec(ctx, string(down)); err != nil {
-		t.Fatalf("down 053: %v", err)
-	}
-	if _, err = db.Pool.Exec(ctx, `INSERT INTO time_entries(company_id,user_id,clock_in) VALUES($1,$2,$3)`, companyID, userID, clockIns[3].Add(time.Hour)); err != nil {
-		t.Fatalf("second active time entry after down migration: %v", err)
-	}
 }
 
 func activeTimeEntryMigrationDatabaseThrough052(t *testing.T, dsn string) (*DB, context.Context) {

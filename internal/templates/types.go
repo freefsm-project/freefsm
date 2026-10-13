@@ -575,6 +575,7 @@ type JobDetail struct {
 	ActiveTimeEntryElsewhere bool
 	ActiveTimeEntryMessage   string
 	ActiveTimeEntryClockIn   string
+	ActiveTimeEntryID        int64
 	ActiveTimeEntryDuration  string
 }
 
@@ -1609,6 +1610,7 @@ type SearchPageData struct {
 }
 
 type ClockWidgetData struct {
+	EntryID     int64
 	IsClockedIn bool
 	Duration    string
 	ClockInTime string
@@ -1658,6 +1660,7 @@ type TimeEntryFormPageData struct {
 }
 
 type TimeEntryShowPageData struct {
+	GPSIn, GPSOut      string
 	CanEdit, CanDelete bool
 	ID                 int64
 	UserName           string

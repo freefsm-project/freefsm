@@ -45,8 +45,6 @@ type timeEntryService interface {
 
 type apiMutationService interface {
 	SetSubtaskCompletion(context.Context, services.MutationActor, int64, int, bool) (services.APISubtaskResult, error)
-	ClockIn(context.Context, services.MutationActor, int64, services.APIClockInParams) (services.APITimeEntryResult, error)
-	ClockOut(context.Context, services.MutationActor) (services.APITimeEntryResult, error)
 }
 
 type statusFlowService interface {
@@ -133,6 +131,7 @@ func New(deps Dependencies) http.Handler {
 	r.Get("/docs", referenceFile("docs.html", "text/html; charset=utf-8"))
 	r.Get("/reference", referenceFile("reference.html", "text/html; charset=utf-8"))
 	r.Get("/reference.js", referenceFile("reference.js", "text/javascript; charset=utf-8"))
+	r.Get("/clock-reference.mjs", referenceFile("clock-reference.mjs", "text/javascript; charset=utf-8"))
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 200, map[string]any{"api_major": 1, "server_time": time.Now().UTC(), "pairing": "/api/v1/pairings", "recovery": "/forgot-password", "documentation": "/api/v1/docs"})
 	})
@@ -182,6 +181,9 @@ func New(deps Dependencies) http.Handler {
 		r.Post("/jobs/{id}/status", h.updateJobStatus)
 		r.Get("/jobs/{id}/status-intents", h.jobStatusIntents)
 		r.Get("/time-entries/active", h.activeTimeEntry)
+		r.Post("/time-entries/clock-in", h.clockIn)
+		r.Post("/time-entries/lease", h.clockLease)
+		r.Get("/time-operations/{operation}", h.clockReceipt)
 		r.Post("/jobs/{id}/clock-in", h.clockIn)
 		r.Post("/time-entries/clock-out", h.clockOut)
 		r.Patch("/jobs/{id}/subtasks/{index}", h.updateSubtask)

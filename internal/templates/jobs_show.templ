@@ -41,7 +41,8 @@ templ JobShow(p JobDetail) {
 					if detailCan(ctx,"clock-in") && !p.ActiveTimeEntryOnJob && !p.ActiveTimeEntryElsewhere {
 						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/clock-in", p.ID)) } method="post">
 							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-							<button type="submit">Clock In to Job</button>
+							<button type="submit" data-clock-free>Clock In to Job</button>
+							@ClockLocationControls()
 						</form>
 					}
 				</div>
@@ -64,8 +65,10 @@ templ JobShow(p JobDetail) {
 				<p>Clocked in at <strong>{ p.ActiveTimeEntryClockIn }</strong>. Current duration: <strong>{ p.ActiveTimeEntryDuration }</strong>.</p>
 				if detailCan(ctx,"clock-out") {
 				<form action={ templ.URL(fmt.Sprintf("/jobs/%d/clock-out", p.ID)) } method="post">
+					<input type="hidden" name="entry_id" value={ fmt.Sprint(p.ActiveTimeEntryID) }/>
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button type="submit">Clock Out</button>
+					<button type="submit" data-clock-free>Clock Out</button>
+					@ClockLocationControls()
 				</form>
 				}
 			</article>

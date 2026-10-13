@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"mime"
 	"net/http"
 	"strconv"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
-	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -179,7 +179,7 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 
 	data := templates.TimeEntryShowPageData{
 		CanEdit:   view.CanCorrect,
-		CanDelete: view.CanVoid && (isAdminOrDispatcher(currentUser) || entry.UserID == currentUser.ID),
+		CanDelete: false,
 		ID:        entry.ID,
 		UserName:  userName,
 		JobID:     jobID,
@@ -191,6 +191,27 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 		Notes:     entry.Notes,
 		GPSLat:    gpsLat,
 		GPSLon:    gpsLon,
+	}
+	// Deletion is not Void: never advertise the retired erasure action.
+	data.CanDelete = false
+	if view.CanGPS {
+		req, _ := authorization.FromContext(r.Context())
+		facts, err := req.Service.ClockGPS(r.Context(), req.Actor, id)
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		for _, fact := range facts {
+			text := fmt.Sprintf("%.7f, %.7f; captured %s", fact.Latitude, fact.Longitude, displayDateTime(r.Context(), fact.CapturedAt))
+			if fact.Accuracy != nil {
+				text += fmt.Sprintf("; accuracy %g m", *fact.Accuracy)
+			}
+			if fact.Event == "in" {
+				data.GPSIn = text
+			} else {
+				data.GPSOut = text
+			}
+		}
 	}
 	render(w, r, templates.TimeEntryShow(data))
 }
@@ -211,23 +232,24 @@ func (h *TimeEntryHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.ClockIn(r.Context(), services.TimeEntryCreateParams{
-		UserID: user.ID,
-	})
+	in, ok := clockForm(w, r)
+	if !ok {
+		return
+	}
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
+	_, err := req.Service.Clock(r.Context(), req.Actor, false, in)
 	if err != nil {
 		if errors.Is(err, services.ErrActiveTimeEntry) {
 			http.Redirect(w, r, "/?flash=You+are+already+clocked+in", http.StatusSeeOther)
 			return
 		}
-		http.Error(w, err.Error(), 500)
+		clockError(w, r, err)
 		return
 	}
-	clockInStr := displayDateTime(r.Context(), result.ClockIn)
-	h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "clocked_in", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
-		"entity_name": fmt.Sprintf("%s — %s", user.Name, clockInStr),
-		"actor_name":  user.Name,
-	})
-
 	http.Redirect(w, r, "/?flash=Clocked+in", http.StatusSeeOther)
 }
 
@@ -242,40 +264,26 @@ func (h *TimeEntryHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	activeEntry, err := h.svc.GetActiveByUser(r.Context(), user.ID)
-	if err != nil {
-		http.Redirect(w, r, "/?flash=No+active+clock+in+found", http.StatusSeeOther)
+	entryID, err := strconv.ParseInt(r.FormValue("entry_id"), 10, 64)
+	if err != nil || entryID <= 0 {
+		http.Error(w, "An exact entry_id is required", http.StatusBadRequest)
 		return
 	}
-
-	result, err := h.svc.ClockOut(r.Context(), activeEntry.ID)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
-	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
-	clockInStr := displayDateTime(r.Context(), result.ClockIn)
-	entityName := fmt.Sprintf("%s — %s (%s)", user.Name, clockInStr, duration)
-	if result.JobID != nil && *result.JobID > 0 {
-		if jobID, jobName := h.timeEntryJob(r.Context(), result); jobID > 0 && jobName != "" {
-			entityName = fmt.Sprintf("%s — %s — %s (%s)", user.Name, jobName, clockInStr, duration)
-			h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "clocked_out", objectref.New(objectref.TypeJob, jobID), map[string]interface{}{
-				"entity_name":   fmt.Sprintf("%s — %s (%s)", jobName, clockInStr, duration),
-				"actor_name":    user.Name,
-				"time_entry_id": result.ID,
-				"clock_in":      clockInStr,
-				"duration":      duration,
-			})
-		}
+	in, ok := clockForm(w, r)
+	if !ok {
+		return
 	}
-	h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "clocked_out", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
-		"entity_name":   entityName,
-		"actor_name":    user.Name,
-		"time_entry_id": result.ID,
-		"clock_in":      clockInStr,
-		"duration":      duration,
-	})
-
+	in.EntryID = entryID
+	_, err = req.Service.Clock(r.Context(), req.Actor, true, in)
+	if err != nil {
+		clockError(w, r, err)
+		return
+	}
 	http.Redirect(w, r, "/?flash=Clocked+out", http.StatusSeeOther)
 }
 
@@ -311,7 +319,7 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		loc := middleware.CompanyLocation(r.Context())
 		clockOutStr := ""
 		if entry.ClockOut != nil {
-			clockOutStr = entry.ClockOut.In(loc).Format("2006-01-02T15:04:05")
+			clockOutStr = entry.ClockOut.In(loc).Format(time.RFC3339Nano)
 		}
 
 		data := templates.TimeEntryFormPageData{
@@ -319,7 +327,7 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Entry: &templates.TimeEntryFormEntry{
 				ID:       entry.ID,
 				JobID:    valueInt64(entry.JobID),
-				ClockIn:  entry.ClockIn.In(loc).Format("2006-01-02T15:04:05"),
+				ClockIn:  entry.ClockIn.In(loc).Format(time.RFC3339Nano),
 				ClockOut: clockOutStr,
 				Notes:    entry.Notes,
 			},
@@ -334,24 +342,36 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := services.TimeEntryUpdateParams{
-		IsManual: boolPtr(true),
+	if r.Form.Has("latitude") || r.Form.Has("longitude") || r.Form.Has("captured_at") || r.Form.Has("accuracy") || r.Form.Has("gps") {
+		http.Error(w, "GPS is immutable clock-only data", 400)
+		return
 	}
+	params := services.TimeEntryUpdateParams{}
 	loc := middleware.CompanyLocation(r.Context())
 	if clockIn := r.FormValue("clock_in"); clockIn != "" {
-		if t, err := time.ParseInLocation("2006-01-02T15:04:05", clockIn, loc); err == nil {
+		t, err := parseTimeEntryEdit(clockIn, loc)
+		if err != nil {
+			http.Error(w, "Invalid or ambiguous clock-in timestamp; include UTC offset", 400)
+			return
+		}
+		if !t.Equal(entry.ClockIn) {
 			params.ClockIn = &t
 		}
 	}
 	if clockOut := r.FormValue("clock_out"); clockOut != "" {
-		if t, err := time.ParseInLocation("2006-01-02T15:04:05", clockOut, loc); err == nil {
+		t, err := parseTimeEntryEdit(clockOut, loc)
+		if err != nil {
+			http.Error(w, "Invalid or ambiguous clock-out timestamp; include UTC offset", 400)
+			return
+		}
+		if entry.ClockOut == nil || !t.Equal(*entry.ClockOut) {
 			params.ClockOut = &t
 		}
 	}
 	params.Notes = formPtr(r.FormValue("notes"))
 	if r.Form.Has("job_id") {
 		jobID, err := parseOptionalID(r.FormValue("job_id"))
-		if err != nil {
+		if err != nil || jobID < 0 {
 			http.Error(w, "invalid job", 400)
 			return
 		}
@@ -368,64 +388,12 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		authorizationError(w, r, err)
 		return
 	}
-	result, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
-		internalServerError(w, r, "reload corrected time entry", err)
-		return
-	}
-	clockInStr := displayDateTime(r.Context(), result.ClockIn)
-	entityName := fmt.Sprintf("%s — %s", user.Name, clockInStr)
-	if result.ClockOut != nil {
-		entityName += fmt.Sprintf(" — %s", displayTime(r.Context(), *result.ClockOut))
-	}
-	h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "updated", objectref.New(objectref.TypeTimeEntry, id), map[string]interface{}{
-		"entity_name": entityName,
-		"actor_name":  user.Name,
-	})
-
 	http.Redirect(w, r, "/time-entries?flash=Time+entry+updated", http.StatusSeeOther)
 }
 
 func (h *TimeEntryHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		http.Error(w, "invalid id", 400)
-		return
-	}
-
-	user, _ := middleware.UserFromContext(r.Context())
-	if user == nil {
-		http.Error(w, "unauthorized", 401)
-		return
-	}
-
-	entry, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	canDelete := isAdminOrDispatcher(user) || entry.UserID == user.ID
-	if !canDelete {
-		http.Error(w, "forbidden", 403)
-		return
-	}
-
-	clockInStr := displayDateTime(r.Context(), entry.ClockIn)
-	entityName := clockInStr
-	if entry.ClockOut != nil {
-		entityName += " — " + displayTime(r.Context(), *entry.ClockOut)
-	}
-	if err := h.svc.Delete(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-	h.activitySvc.Record(r.Context(), user.CompanyID, user.ID, "deleted", objectref.New(objectref.TypeTimeEntry, id), map[string]interface{}{
-		"entity_name": entityName,
-		"actor_name":  user.Name,
-	})
-
-	http.Redirect(w, r, "/time-entries?flash=Time+entry+deleted", http.StatusSeeOther)
+	// Deletion cannot stand in for a reasoned terminal Void. Retain facts.
+	authorizationError(w, r, authorization.ErrForbidden)
 }
 
 func (h *TimeEntryHandler) jobNames(ctx context.Context, entries []*ent.TimeEntry) map[int64]string {
@@ -492,7 +460,7 @@ func timeEntryToRow(ctx context.Context, e *ent.TimeEntry, userNames map[int64]s
 		if req, ok := authorization.FromContext(ctx); ok {
 			if view, err := req.Service.TimeEntryAccess(ctx, req.Actor, e.ID, ""); err == nil {
 				canEdit = view.CanCorrect
-				canDelete = view.CanVoid && (isAdminOrDispatcher(currentUser) || currentUser != nil && currentUser.ID == e.UserID)
+				canDelete = false // reasoned Void replaces destructive deletion (#59)
 				userName = view.SubjectName
 			}
 		}
@@ -558,4 +526,102 @@ func safeTime(t *time.Time) time.Time {
 		return time.Time{}
 	}
 	return *t
+}
+
+func clockError(w http.ResponseWriter, r *http.Request, err error) {
+	var conflict *authorization.ClockConflict
+	if errors.As(err, &conflict) {
+		status := http.StatusConflict
+		if conflict.Code == "invalid_gps" || conflict.Code == "invalid_occurrence" {
+			status = http.StatusBadRequest
+		}
+		http.Error(w, conflict.Code+": review this clock; submit explicitly without location if GPS is invalid", status)
+		return
+	}
+	authorizationError(w, r, err)
+}
+
+// Explicit offsets preserve exact instants, including a daylight-saving fold.
+// Legacy offset-free submissions are accepted only for a unique local instant.
+func parseTimeEntryEdit(value string, loc *time.Location) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return t, nil
+	}
+	civil, err := time.Parse("2006-01-02T15:04:05", value)
+	if err != nil {
+		civil, err = time.Parse("2006-01-02T15:04", value)
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	offsets := map[int]bool{}
+	for h := -48; h <= 48; h += 6 {
+		_, offset := civil.Add(time.Duration(h) * time.Hour).In(loc).Zone()
+		offsets[offset] = true
+	}
+	matches := []time.Time{}
+	for offset := range offsets {
+		candidate := civil.Add(-time.Duration(offset) * time.Second)
+		if candidate.In(loc).Format("2006-01-02T15:04:05.999999999") == civil.Format("2006-01-02T15:04:05.999999999") {
+			matches = append(matches, candidate)
+		}
+	}
+	if len(matches) != 1 {
+		return time.Time{}, fmt.Errorf("ambiguous or nonexistent local time")
+	}
+	return matches[0], nil
+}
+
+func clockForm(w http.ResponseWriter, r *http.Request) (authorization.ClockCommand, bool) {
+	in := authorization.ClockCommand{}
+	if r.Header.Get("Content-Type") != "" || r.ContentLength != 0 {
+		mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+		if err != nil || mediaType != "application/x-www-form-urlencoded" {
+			http.Error(w, "Clock forms require application/x-www-form-urlencoded", http.StatusUnsupportedMediaType)
+			return in, false
+		}
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid clock", 400)
+		return in, false
+	}
+	if r.Form.Has("gps") {
+		http.Error(w, "invalid_gps: use the clock location fields or explicitly submit without location", 400)
+		return in, false
+	}
+	if r.Form.Has("occurred_at") || r.Form.Has("lease_id") {
+		http.Error(w, "Web clocks use server time", 400)
+		return in, false
+	}
+	if r.Form.Has("job_id") {
+		id, err := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
+		if err != nil || id <= 0 {
+			http.Error(w, "invalid_job", 400)
+			return in, false
+		}
+		in.JobID = id
+	}
+	if r.Form.Has("latitude") || r.Form.Has("longitude") || r.Form.Has("captured_at") || r.Form.Has("accuracy") {
+		g := &authorization.ClockGPS{}
+		lat, e1 := strconv.ParseFloat(r.FormValue("latitude"), 64)
+		lon, e2 := strconv.ParseFloat(r.FormValue("longitude"), 64)
+		captured, e3 := time.Parse(time.RFC3339Nano, r.FormValue("captured_at"))
+		if e1 != nil || e2 != nil || e3 != nil {
+			http.Error(w, "invalid_gps: submit explicitly without location", 400)
+			return in, false
+		}
+		g.Latitude = &lat
+		g.Longitude = &lon
+		g.CapturedAt = captured
+		if r.Form.Has("accuracy") {
+			accuracy, err := strconv.ParseFloat(r.FormValue("accuracy"), 64)
+			if err != nil {
+				http.Error(w, "invalid_gps", 400)
+				return in, false
+			}
+			g.Accuracy = &accuracy
+		}
+		in.GPS = g
+	}
+	return in, true
 }

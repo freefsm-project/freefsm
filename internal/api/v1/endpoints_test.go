@@ -84,7 +84,6 @@ func TestUnassignedTechnicianCannotAccessOrMutateJob(t *testing.T) {
 
 	for _, request := range []struct{ method, path string }{
 		{http.MethodGet, "/jobs/4"},
-		{http.MethodPost, "/jobs/4/clock-in"},
 		{http.MethodPatch, "/jobs/4/subtasks/0"},
 	} {
 		res := performAuthorized(api, request.method, request.path, []byte(`{}`))
@@ -123,7 +122,7 @@ func TestLogoutRevokesBearerSession(t *testing.T) {
 	}
 }
 
-func TestActiveTimeEntryReturnsCurrentEntry(t *testing.T) {
+func TestActiveTimeEntryRequiresCanonicalAuthority(t *testing.T) {
 	companyID, jobID := int64(12), int64(4)
 	clockIn := time.Date(2026, 7, 18, 10, 0, 0, 0, time.UTC)
 	users := &fakeUsers{byID: &ent.User{ID: 7, CompanyID: &companyID, Role: "tech", IsActive: true}}
@@ -133,15 +132,13 @@ func TestActiveTimeEntryReturnsCurrentEntry(t *testing.T) {
 
 	res := performAuthorized(New(deps), http.MethodGet, "/time-entries/active", nil)
 
-	if res.Code != http.StatusOK || !strings.Contains(res.Body.String(), `"id":8`) || !strings.Contains(res.Body.String(), `"notes":"On site"`) {
-		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
-	}
-	if times.activeCompanyID != companyID || times.activeUserID != 7 {
-		t.Fatalf("active company/user = %d/%d, want %d/7", times.activeCompanyID, times.activeUserID, companyID)
+	assertAPIError(t, res, http.StatusServiceUnavailable, "retryable_failure")
+	if times.activeCompanyID != 0 || times.activeUserID != 0 {
+		t.Fatal("legacy time projection used without canonical authority")
 	}
 }
 
-func TestClockInAndOutUseServiceBehavior(t *testing.T) {
+func TestClocksNeverFallbackToLegacyService(t *testing.T) {
 	companyID, jobID := int64(12), int64(4)
 	clockIn := time.Date(2026, 7, 18, 10, 0, 0, 0, time.UTC)
 	users := &fakeUsers{byID: &ent.User{ID: 7, CompanyID: &companyID, Role: "tech", IsActive: true}}
@@ -153,20 +150,16 @@ func TestClockInAndOutUseServiceBehavior(t *testing.T) {
 	api := New(deps)
 
 	clockInRes := performAuthorized(api, http.MethodPost, "/jobs/4/clock-in", []byte(`{"notes":"Arrived","latitude":51.5,"longitude":-0.1}`))
-	if clockInRes.Code != http.StatusCreated {
-		t.Fatalf("clock-in status = %d, body = %s", clockInRes.Code, clockInRes.Body.String())
-	}
-	if mutations.clockInActor != (services.MutationActor{CompanyID: 12, UserID: 7, Role: "tech"}) || mutations.clockInJobID != 4 || mutations.clockInParams.Notes != "Arrived" || mutations.clockInParams.Latitude == nil {
-		t.Fatalf("clock-in actor = %+v, job = %d, params = %+v", mutations.clockInActor, mutations.clockInJobID, mutations.clockInParams)
-	}
+	assertAPIError(t, clockInRes, http.StatusServiceUnavailable, "retryable_failure")
 
 	clockOutRes := performAuthorized(api, http.MethodPost, "/time-entries/clock-out", nil)
-	if clockOutRes.Code != http.StatusOK || mutations.clockOutCalls != 1 || mutations.clockOutActor.UserID != 7 {
-		t.Fatalf("clock-out status = %d, calls = %d, actor = %+v, body = %s", clockOutRes.Code, mutations.clockOutCalls, mutations.clockOutActor, clockOutRes.Body.String())
+	assertAPIError(t, clockOutRes, http.StatusServiceUnavailable, "retryable_failure")
+	if mutations.clockOutCalls != 0 || mutations.clockInCalls != 0 {
+		t.Fatal("clock used legacy mutation service")
 	}
 }
 
-func TestClockOutMapsEntryNoLongerActive(t *testing.T) {
+func TestClockOutNeverInfersActiveTarget(t *testing.T) {
 	companyID := int64(12)
 	users := &fakeUsers{byID: &ent.User{ID: 7, CompanyID: &companyID, Role: "tech", IsActive: true}}
 	mutations := &fakeMutations{clockOutErr: services.ErrTimeEntryNotActive}
@@ -175,7 +168,7 @@ func TestClockOutMapsEntryNoLongerActive(t *testing.T) {
 
 	res := performAuthorized(New(deps), http.MethodPost, "/time-entries/clock-out", nil)
 
-	assertAPIError(t, res, http.StatusConflict, "not_clocked_in")
+	assertAPIError(t, res, http.StatusServiceUnavailable, "retryable_failure")
 }
 
 func TestMutationErrorsKeepStructuredAPIMappings(t *testing.T) {
@@ -189,7 +182,7 @@ func TestMutationErrorsKeepStructuredAPIMappings(t *testing.T) {
 	api := New(deps)
 
 	clockIn := performAuthorized(api, http.MethodPost, "/jobs/4/clock-in", []byte(`{}`))
-	assertAPIError(t, clockIn, http.StatusConflict, "already_clocked_in")
+	assertAPIError(t, clockIn, http.StatusServiceUnavailable, "retryable_failure")
 	subtask := performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{"completed":true}`))
 	assertAPIError(t, subtask, http.StatusNotFound, "subtask_not_found")
 }
@@ -216,7 +209,7 @@ func TestTransactionMutationErrorsKeepStructuredAPIMappings(t *testing.T) {
 			deps.Mutations = mutations
 			api := New(deps)
 
-			assertAPIError(t, performAuthorized(api, http.MethodPost, "/jobs/4/clock-in", []byte(`{}`)), test.wantStatus, test.wantCode)
+			assertAPIError(t, performAuthorized(api, http.MethodPost, "/jobs/4/clock-in", []byte(`{}`)), http.StatusServiceUnavailable, "retryable_failure")
 			assertAPIError(t, performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{"completed":true}`)), test.wantStatus, test.wantCode)
 		})
 	}
@@ -243,7 +236,7 @@ func TestClosedJobStatusUsesWorkflowBoundaryWhileOtherActionsRetainLegacyRules(t
 				t.Fatalf("workflow command blocked by legacy closed-state rule: %d %s", transition.Code, transition.Body.String())
 			}
 			clockIn := performAuthorized(api, http.MethodPost, "/jobs/4/clock-in", []byte(`{}`))
-			assertAPIError(t, clockIn, http.StatusConflict, "job_closed")
+			assertAPIError(t, clockIn, http.StatusServiceUnavailable, "retryable_failure")
 			subtask := performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{"completed":true}`))
 			assertAPIError(t, subtask, http.StatusConflict, "job_closed")
 			if flow.calls != 1 || mutations.clockInCalls != 0 || mutations.subtaskCalls != 0 {
