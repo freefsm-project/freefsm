@@ -86,7 +86,7 @@
   window.addEventListener('pagehide', () => { document.querySelector('.main-content')?.replaceChildren(); });
   document.addEventListener('htmx:historyRestore', restoreScroll);
   const editable = form => (form.method.toLowerCase() === 'post' || form.hasAttribute('hx-post')) && form.querySelector('input:not([type=hidden]),textarea,select');
-  const credentialAction = path => /^\/(login|logout|change-password|forgot-password|reset-password|accept-invite|setup|sessions|users\/\d+\/sessions)(\/|$)/.test(new URL(path,location.href).pathname);
+  const credentialAction = path => /^\/(login|logout|change-password|forgot-password|reset-password|accept-invite|setup|sessions|pair|users\/\d+\/sessions)(\/|$)/.test(new URL(path,location.href).pathname);
   const snapshot = form => JSON.stringify([...new FormData(form)].filter(([key]) => !['csrf_token', 'operation_id', 'save_action_id', 'save_history'].includes(key)).map(([k,v]) => [k, v instanceof File ? (v.name ? `${v.name}:${v.size}:${v.lastModified}` : '') : v]));
   const dirty = () => [...document.forms].some(form => forms.has(form) && forms.get(form) !== snapshot(form)) || [...actions.values()].some(a => a.owner?.isConnected && ['pending','unknown','review'].includes(a.state));
   const status = (form, text) => {

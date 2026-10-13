@@ -28,6 +28,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/requestlimits"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/go-chi/chi/v5"
@@ -250,11 +251,12 @@ func run() error {
 	deliveryService.SetInstanceControl(control)
 	deliveryService.SetBeforeWork(manager.RefreshConnections)
 	webRouter.Get("/delivery/open/{token}", deliveryService.OpenHandler)
-	webRouter.Mount("/", handlers.New(db.Pool, entClient, sessions, cfg, control))
+	requestBudgets := requestlimits.New()
+	webRouter.Mount("/", handlers.NewWithRequestLimits(db.Pool, entClient, sessions, cfg, requestBudgets, control))
 	backupActivity := handlers.NewActivityHandler(services.NewActivityService(entClient, objectref.NewEntDirectory(entClient)), services.NewActivityResolver(entClient), nil, nil)
 	backupRouter := handlers.NewBackupRouter(db.Pool, manager, control, services.NewUserService(entClient), services.NewCompanySettingsService(entClient), sessions, disabledReason, backupActivity)
 	applicationHandler := newApplicationHandler(
-		apiv1.NewRouter(db.Pool, entClient, sessions, services.NewFileService(entClient, objectref.NewEntDirectory(entClient), cfg.UploadDir, cfg.MaxUploadSize)),
+		apiv1.NewRouterWithLimits(db.Pool, entClient, sessions, cfg.API, requestBudgets, services.NewFileService(entClient, objectref.NewEntDirectory(entClient), cfg.UploadDir, cfg.MaxUploadSize)),
 		webRouter,
 		instanceRoutes{control: control, refresh: manager.RefreshConnections, backup: backupRouter},
 	)

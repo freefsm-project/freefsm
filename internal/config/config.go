@@ -37,6 +37,7 @@ func init() {
 }
 
 type Config struct {
+	API        APIConfig
 	DBHost     string
 	DBPort     int
 	DBName     string
@@ -87,6 +88,11 @@ func Load() (*Config, error) {
 		GeocoderURL:   strings.TrimRight(getEnv("FREEFSM_GEOCODER_URL", ""), "/"),
 	}
 	cfg.StateDir = getEnv("FREEFSM_STATE_DIR", filepath.Join(filepath.Dir(filepath.Clean(cfg.UploadDir)), "state"))
+	var err error
+	cfg.API, err = loadAPIConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	if cfg.SessionSecret == "" {
 		return nil, fmt.Errorf("FREEFSM_SESSION_SECRET is required")

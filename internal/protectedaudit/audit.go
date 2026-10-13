@@ -47,6 +47,20 @@ type HostRecovery struct {
 	TargetUserID, TargetRoleID, CompanyID int64
 }
 
+// RecordPairingRequest never treats knowledge of a protocol secret as product
+// authentication. Approval and issuance use RecordProduct with current authority.
+func RecordPairingRequest(ctx context.Context, tx Executor, id int64, action, operation string) error {
+	if id <= 0 || (action != "user.pairing.start" && action != "user.pairing.cancel") {
+		return errors.New("invalid pairing audit attribution")
+	}
+	detail, err := json.Marshal(map[string]string{"operation_id": operation})
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO authorization_audit(actor_kind,actor_id,role_id,action,scope,target_type,target_id,channel,detail) VALUES('anonymous-request',NULL,NULL,$1,NULL,'device_pairing',$2,'pairing',$3)`, action, id, detail)
+	return err
+}
+
 // RecordRecoveryRequest attributes public link issuance honestly: knowing an
 // email address is not authentication as the target Product User.
 func RecordRecoveryRequest(ctx context.Context, tx Executor, userID int64) error {
