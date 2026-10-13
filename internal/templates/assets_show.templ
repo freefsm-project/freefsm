@@ -13,9 +13,9 @@ templ AssetShow(p AssetShowPageData) {
 						<a href={ templ.URL(fmt.Sprintf("/assets/%d/edit", p.Asset.ID)) } role="button" class="outline">Edit</a>
 					}
 					if detailCan(ctx,"archive") {
-					<form action={ templ.URL(fmt.Sprintf("/assets/%d/delete", p.Asset.ID)) } method="post" hx-confirm="Delete this asset?">
+					<form action={ templ.URL(fmt.Sprintf("/assets/%d/delete", p.Asset.ID)) } method="post" hx-confirm="Archive this asset?">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-						<button class="outline contrast">Delete</button>
+						<button class="outline contrast">Archive</button>
 					</form>
 					}
 				</div>
@@ -37,6 +37,11 @@ templ AssetShow(p AssetShowPageData) {
 		<div class="grid">
 			<article>
 				<h3>Details</h3>
+				<p><strong>Asset Number:</strong> { p.Asset.Number }</p>
+				<p><strong>Ownership class:</strong> { assetOwnershipLabel(p.Asset.OwnershipClass) }</p>
+				if p.Asset.CustomerID == 0 {
+					<p>Unplaced</p>
+				}
 				<p><strong>Type:</strong> { p.Asset.AssetTypeName }</p>
 				<p><strong>Status:</strong>
 					if p.Asset.AssetStatusName != "" {

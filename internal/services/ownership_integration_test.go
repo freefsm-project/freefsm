@@ -38,10 +38,11 @@ func TestServicesRejectCrossCustomerLinksIntegration(t *testing.T) {
 			name: "asset rejects foreign location",
 			run: func() error {
 				_, err := NewAssetService(client).Create(ctx, 1, AssetCreateParams{
-					CustomerID:  data.customerB.ID,
-					LocationID:  &data.locationA.ID,
-					AssetTypeID: data.assetType.ID,
-					Name:        "Bad Asset",
+					OwnershipClass: "customer_owned",
+					CustomerID:     data.customerB.ID,
+					LocationID:     &data.locationA.ID,
+					AssetTypeID:    data.assetType.ID,
+					Name:           "Bad Asset",
 				})
 				return err
 			},
@@ -278,7 +279,7 @@ func TestCustomerOwnedServiceWritesUseAuthenticatedCompanyIntegration(t *testing
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	asset, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{CustomerID: customer.ID, LocationID: &location.ID, AssetTypeID: assetType.ID, Name: "Asset"})
+	asset, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{OwnershipClass: "customer_owned", CustomerID: customer.ID, LocationID: &location.ID, AssetTypeID: assetType.ID, Name: "Asset"})
 	if err != nil {
 		t.Fatalf("create asset: %v", err)
 	}
@@ -297,7 +298,7 @@ func TestCustomerOwnedServiceWritesUseAuthenticatedCompanyIntegration(t *testing
 	if _, err := NewProjectService(client).Create(ctx, companyID, ProjectCreateParams{CustomerID: foreign.ID, Name: "Rejected"}); err == nil {
 		t.Fatal("project create accepted foreign customer")
 	}
-	if _, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{CustomerID: foreign.ID, AssetTypeID: assetType.ID, Name: "Rejected"}); err == nil {
+	if _, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{OwnershipClass: "customer_owned", CustomerID: foreign.ID, AssetTypeID: assetType.ID, Name: "Rejected"}); err == nil {
 		t.Fatal("asset create accepted foreign customer")
 	}
 
@@ -306,11 +307,11 @@ func TestCustomerOwnedServiceWritesUseAuthenticatedCompanyIntegration(t *testing
 	if err != nil {
 		t.Fatalf("reassign project: %v", err)
 	}
-	updatedAsset, err := NewAssetService(client).Update(ctx, companyID, asset.ID, AssetUpdateParams{CustomerID: &projectReplacement, LocationID: int64PtrForServiceTest(0)})
-	if err != nil {
-		t.Fatalf("reassign asset: %v", err)
+	if _, err := NewAssetService(client).Update(ctx, companyID, asset.ID, AssetUpdateParams{CustomerID: &projectReplacement, LocationID: int64PtrForServiceTest(0)}); err == nil {
+		t.Fatal("ordinary Edit reassigned Asset ownership")
 	}
-	if updatedProject.CustomerID != replacement.ID || updatedAsset.CustomerID != replacement.ID {
+	updatedAsset := client.Asset.GetX(ctx, asset.ID)
+	if updatedProject.CustomerID != replacement.ID || updatedAsset.CustomerID != customer.ID || int64Value(updatedAsset.LocationID) != location.ID {
 		t.Fatalf("reassignment failed: project=%d asset=%d", updatedProject.CustomerID, updatedAsset.CustomerID)
 	}
 	for name, got := range map[string]*int64{"returned project": updatedProject.CompanyID, "returned asset": updatedAsset.CompanyID} {
@@ -344,7 +345,7 @@ func TestProjectAndAssetUpdateCannotClaimCompanylessForeignCustomerRowsIntegrati
 	foreignCustomer := client.Customer.Create().SetCompanyID(foreignCompanyID).SetDisplayName("Foreign").SaveX(ctx)
 	localAssetType := client.AssetType.Create().SetCompanyID(companyID).SetName("Equipment").SaveX(ctx)
 	project := client.Project.Create().SetCustomerID(foreignCustomer.ID).SetName("Foreign project").SaveX(ctx)
-	asset := client.Asset.Create().SetCustomerID(foreignCustomer.ID).SetAssetTypeID(localAssetType.ID).SetName("Foreign asset").SaveX(ctx)
+	asset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCustomerID(foreignCustomer.ID).SetAssetTypeID(localAssetType.ID).SetName("Foreign asset").SaveX(ctx)
 
 	if _, err := NewProjectService(client).Update(ctx, companyID, project.ID, ProjectUpdateParams{CustomerID: &localCustomer.ID}); err == nil {
 		t.Fatal("project update claimed companyless foreign-customer row")
@@ -378,8 +379,8 @@ func TestAssetWritesRejectForeignTypeAndStatusIntegration(t *testing.T) {
 		name   string
 		params AssetCreateParams
 	}{
-		{name: "foreign type", params: AssetCreateParams{CustomerID: customer.ID, AssetTypeID: foreignType.ID, Name: "Rejected"}},
-		{name: "foreign status", params: AssetCreateParams{CustomerID: customer.ID, AssetTypeID: localType.ID, AssetStatusID: &foreignStatus.ID, Name: "Rejected"}},
+		{name: "foreign type", params: AssetCreateParams{OwnershipClass: "customer_owned", CustomerID: customer.ID, AssetTypeID: foreignType.ID, Name: "Rejected"}},
+		{name: "foreign status", params: AssetCreateParams{OwnershipClass: "customer_owned", CustomerID: customer.ID, AssetTypeID: localType.ID, AssetStatusID: &foreignStatus.ID, Name: "Rejected"}},
 	} {
 		t.Run("create "+tc.name, func(t *testing.T) {
 			before := client.Asset.Query().CountX(ctx)
@@ -392,7 +393,7 @@ func TestAssetWritesRejectForeignTypeAndStatusIntegration(t *testing.T) {
 		})
 	}
 	zeroStatus := int64(0)
-	withoutStatus, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{CustomerID: customer.ID, AssetTypeID: localType.ID, AssetStatusID: &zeroStatus, Name: "No status"})
+	withoutStatus, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{OwnershipClass: "customer_owned", CustomerID: customer.ID, AssetTypeID: localType.ID, AssetStatusID: &zeroStatus, Name: "No status"})
 	if err != nil {
 		t.Fatalf("create with zero status: %v", err)
 	}
@@ -400,7 +401,7 @@ func TestAssetWritesRejectForeignTypeAndStatusIntegration(t *testing.T) {
 		t.Fatalf("zero create status persisted as %v, want nil", *withoutStatus.AssetStatusID)
 	}
 
-	asset := client.Asset.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetAssetTypeID(localType.ID).SetAssetStatusID(localStatus.ID).SetName("Original").SaveX(ctx)
+	asset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(companyID).SetCustomerID(customer.ID).SetAssetTypeID(localType.ID).SetAssetStatusID(localStatus.ID).SetName("Original").SaveX(ctx)
 	for _, tc := range []struct {
 		name   string
 		params AssetUpdateParams
@@ -427,14 +428,14 @@ func TestAssetWritesRejectForeignTypeAndStatusIntegration(t *testing.T) {
 	}
 
 	newName := "Rejected unrelated update"
-	foreignTypeAsset := client.Asset.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetAssetTypeID(foreignType.ID).SetName("Foreign type asset").SaveX(ctx)
+	foreignTypeAsset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(companyID).SetCustomerID(customer.ID).SetAssetTypeID(foreignType.ID).SetName("Foreign type asset").SaveX(ctx)
 	if _, err := NewAssetService(client).Update(ctx, companyID, foreignTypeAsset.ID, AssetUpdateParams{Name: &newName}); err == nil {
 		t.Fatal("asset update accepted effective foreign type")
 	}
 	if got := client.Asset.GetX(ctx, foreignTypeAsset.ID).Name; got != foreignTypeAsset.Name {
 		t.Fatalf("foreign-type asset name = %q, want %q", got, foreignTypeAsset.Name)
 	}
-	foreignStatusAsset := client.Asset.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetAssetTypeID(localType.ID).SetAssetStatusID(foreignStatus.ID).SetName("Foreign status asset").SaveX(ctx)
+	foreignStatusAsset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(companyID).SetCustomerID(customer.ID).SetAssetTypeID(localType.ID).SetAssetStatusID(foreignStatus.ID).SetName("Foreign status asset").SaveX(ctx)
 	if _, err := NewAssetService(client).Update(ctx, companyID, foreignStatusAsset.ID, AssetUpdateParams{Name: &newName}); err == nil {
 		t.Fatal("asset update accepted effective foreign status")
 	}
@@ -466,7 +467,7 @@ func createOwnershipFixture(ctx context.Context, t *testing.T, client *ent.Clien
 	customerB := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Customer B").SaveX(ctx)
 	locationA := client.Location.Create().SetCompanyID(companyID).SetObjectType("customer").SetObjectID(customerA.ID).SetTitle("Customer A Location").SaveX(ctx)
 	assetType := client.AssetType.Create().SetCompanyID(companyID).SetName("Equipment").SaveX(ctx)
-	assetA := client.Asset.Create().SetCompanyID(companyID).SetCustomerID(customerA.ID).SetLocationID(locationA.ID).SetAssetTypeID(assetType.ID).SetName("Asset A").SaveX(ctx)
+	assetA := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(companyID).SetCustomerID(customerA.ID).SetLocationID(locationA.ID).SetAssetTypeID(assetType.ID).SetName("Asset A").SaveX(ctx)
 	contactA := client.CustomerContact.Create().SetCompanyID(companyID).SetCustomerID(customerA.ID).SetFirstName("Contact A").SaveX(ctx)
 	projectA := client.Project.Create().SetCompanyID(companyID).SetCustomerID(customerA.ID).SetLocationID(locationA.ID).SetName("Project A").SaveX(ctx)
 	jobA := client.Job.Create().

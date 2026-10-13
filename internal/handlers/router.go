@@ -256,7 +256,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/customers/{id}", customerHandler.Show)
 		registerCustomerChildren(r)
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/projects/options", projectHandler.ProjectOptions)
-		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/assets/options", jobHandler.AssetOptions)
+		r.With(collectionRead("asset")).Get("/customers/{id}/assets/options", jobHandler.AssetOptions)
 		r.Route("/items", func(r chi.Router) {
 			r.Get("/", itemHandler.List)
 			r.Get("/activity", activityHandler.ListByType(objectref.TypeItem))
@@ -321,6 +321,9 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.With(detailsAccess("asset")).Post("/assets/inline", assetHandler.CreateInline)
 		r.With(detailsAccess("asset")).Get("/assets/{id}/edit", assetHandler.Update)
 		r.With(detailsAccess("asset")).Post("/assets/{id}", assetHandler.Update)
+		r.Post("/assets/{id}/delete", assetHandler.Delete)
+		r.Post("/assets/{id}/restore", assetHandler.Restore)
+		r.Get("/assets/locations", assetHandler.GetLocations)
 		r.With(detailsAccess("estimate")).Get("/estimates/new", estimateHandler.Create)
 		r.With(detailsAccess("estimate")).Post("/estimates", estimateHandler.Create)
 		r.With(detailsAccess("invoice")).Get("/invoices/new", invoiceHandler.Create)
@@ -337,8 +340,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/schedule/dispatch", scheduleHandler.DispatchUpdate)
 			r.Post("/schedule/move", scheduleHandler.CalendarMove)
 			r.Post("/schedule/calendar/move", scheduleHandler.CalendarMove)
-			r.With(activeObjectGuard(objectref.TypeAsset)).Post("/assets/{id}/delete", assetHandler.Delete)
-			r.Get("/assets/locations", assetHandler.GetLocations)
 		})
 
 		// Assigned technicians may create documents from their Jobs and manage them.
@@ -467,7 +468,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Post("/projects/{id}/restore", projectHandler.Restore)
 			r.Post("/estimates/{id}/restore", estimateHandler.Restore)
 			r.Post("/invoices/{id}/restore", invoiceHandler.Restore)
-			r.Post("/assets/{id}/restore", assetHandler.Restore)
 			// Admin activity feeds
 			r.Get("/settings/activity", activityHandler.ListByType(objectref.TypeCompanySettings))
 			r.Get("/settings/custom-fields/activity", activityHandler.ListByType(objectref.TypeCustomField))

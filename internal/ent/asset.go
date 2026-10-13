@@ -21,6 +21,10 @@ type Asset struct {
 	CompanyID *int64 `json:"company_id,omitempty"`
 	// CustomerID holds the value of the "customer_id" field.
 	CustomerID int64 `json:"customer_id,omitempty"`
+	// Number holds the value of the "number" field.
+	Number string `json:"number,omitempty"`
+	// OwnershipClass holds the value of the "ownership_class" field.
+	OwnershipClass string `json:"ownership_class,omitempty"`
 	// LocationID holds the value of the "location_id" field.
 	LocationID *int64 `json:"location_id,omitempty"`
 	// AssetTypeID holds the value of the "asset_type_id" field.
@@ -59,7 +63,7 @@ func (*Asset) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case asset.FieldID, asset.FieldCompanyID, asset.FieldCustomerID, asset.FieldLocationID, asset.FieldAssetTypeID, asset.FieldAssetStatusID:
 			values[i] = new(sql.NullInt64)
-		case asset.FieldName, asset.FieldSerialNumber, asset.FieldModel, asset.FieldManufacturer, asset.FieldNotes, asset.FieldCustomFields:
+		case asset.FieldNumber, asset.FieldOwnershipClass, asset.FieldName, asset.FieldSerialNumber, asset.FieldModel, asset.FieldManufacturer, asset.FieldNotes, asset.FieldCustomFields:
 			values[i] = new(sql.NullString)
 		case asset.FieldInstalledAt, asset.FieldWarrantyExpires, asset.FieldDeletedAt, asset.FieldCreatedAt, asset.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -96,6 +100,18 @@ func (_m *Asset) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field customer_id", values[i])
 			} else if value.Valid {
 				_m.CustomerID = value.Int64
+			}
+		case asset.FieldNumber:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field number", values[i])
+			} else if value.Valid {
+				_m.Number = value.String
+			}
+		case asset.FieldOwnershipClass:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field ownership_class", values[i])
+			} else if value.Valid {
+				_m.OwnershipClass = value.String
 			}
 		case asset.FieldLocationID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -229,6 +245,12 @@ func (_m *Asset) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("customer_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CustomerID))
+	builder.WriteString(", ")
+	builder.WriteString("number=")
+	builder.WriteString(_m.Number)
+	builder.WriteString(", ")
+	builder.WriteString("ownership_class=")
+	builder.WriteString(_m.OwnershipClass)
 	builder.WriteString(", ")
 	if v := _m.LocationID; v != nil {
 		builder.WriteString("location_id=")

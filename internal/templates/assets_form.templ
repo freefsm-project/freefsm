@@ -1,8 +1,10 @@
 package templates
 
 import (
+	"context"
 	"fmt"
 	"time"
+	"github.com/freefsm-project/freefsm/internal/middleware"
 )
 
 templ AssetForm(p AssetFormPageData) {
@@ -11,6 +13,19 @@ templ AssetForm(p AssetFormPageData) {
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<fieldset>
 				<legend>Asset Details</legend>
+				if p.IsNew {
+					<label>Asset Number <input name="number" placeholder="Automatically assigned if blank"/></label>
+					<label>Ownership class
+						<select name="ownership_class" required>
+							<option value="">Choose ownership class</option>
+							<option value="customer_owned">Customer-owned</option>
+							<option value="company_owned">Company-owned</option>
+						</select>
+					</label>
+				} else {
+					<p>Asset Number: { p.Asset.Number } · { assetOwnershipLabel(p.Asset.OwnershipClass) }</p>
+					<p>Number, ownership class and Customer association are preserved by Edit.</p>
+				}
 				<div class="grid">
 					<label>
 						Name
@@ -56,7 +71,8 @@ templ AssetForm(p AssetFormPageData) {
 				<div class="grid">
 					<label>
 						Customer
-						<select name="customer_id" id="asset-customer-select" required>
+						<select name="customer_id" id="asset-customer-select" disabled?={ !p.IsNew }>
+							<option value="0">Unplaced (Company-owned only)</option>
 							for _, c := range p.Customers {
 								<option value={ fmt.Sprintf("%d", c.Value) } selected?={ assetCustomerSelected(p.Asset, c.Value) }>{ c.Label }</option>
 							}
@@ -78,11 +94,11 @@ templ AssetForm(p AssetFormPageData) {
 				<div class="grid">
 					<label>
 						Installed At
-						<input type="date" name="installed_at" value={ assetDateValue(p.Asset, "InstalledAt") }/>
+						<input type="date" name="installed_at" value={ assetDateValue(ctx,p.Asset, "InstalledAt") }/>
 					</label>
 					<label>
 						Warranty Expires
-						<input type="date" name="warranty_expires" value={ assetDateValue(p.Asset, "WarrantyExpires") }/>
+						<input type="date" name="warranty_expires" value={ assetDateValue(ctx,p.Asset, "WarrantyExpires") }/>
 					</label>
 				</div>
 			</fieldset>
@@ -116,6 +132,12 @@ templ AssetForm(p AssetFormPageData) {
 			}
 		</script>`)
 	}
+}
+
+func assetOwnershipLabel(class string) string {
+	if class == "company_owned" { return "Company-owned" }
+	if class == "customer_owned" { return "Customer-owned" }
+	return "Ownership review required"
 }
 
 templ AssetLocationOptions(options []SelectOption, selectedID int64) {
@@ -179,7 +201,7 @@ func assetLocationSelected(asset *AssetDetail, value int64) bool {
 	return *asset.LocationID == value
 }
 
-func assetDateValue(asset *AssetDetail, field string) string {
+func assetDateValue(ctx context.Context,asset *AssetDetail, field string) string {
 	if asset == nil {
 		return ""
 	}
@@ -192,7 +214,7 @@ func assetDateValue(asset *AssetDetail, field string) string {
 	if t == nil {
 		return ""
 	}
-	return t.Format("2006-01-02")
+	return t.In(middleware.CompanyLocation(ctx)).Format("2006-01-02")
 }
 
 func assetFormTitle(isNew bool) string {

@@ -76,6 +76,12 @@ func (_u *AssetUpdate) AddCustomerID(v int64) *AssetUpdate {
 	return _u
 }
 
+// ClearCustomerID clears the value of the "customer_id" field.
+func (_u *AssetUpdate) ClearCustomerID() *AssetUpdate {
+	_u.mutation.ClearCustomerID()
+	return _u
+}
+
 // SetLocationID sets the "location_id" field.
 func (_u *AssetUpdate) SetLocationID(v int64) *AssetUpdate {
 	_u.mutation.ResetLocationID()
@@ -379,6 +385,12 @@ func (_u *AssetUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedCustomerID(); ok {
 		_spec.AddField(asset.FieldCustomerID, field.TypeInt64, value)
 	}
+	if _u.mutation.CustomerIDCleared() {
+		_spec.ClearField(asset.FieldCustomerID, field.TypeInt64)
+	}
+	if _u.mutation.NumberCleared() {
+		_spec.ClearField(asset.FieldNumber, field.TypeString)
+	}
 	if value, ok := _u.mutation.LocationID(); ok {
 		_spec.SetField(asset.FieldLocationID, field.TypeInt64, value)
 	}
@@ -507,6 +519,12 @@ func (_u *AssetUpdateOne) SetNillableCustomerID(v *int64) *AssetUpdateOne {
 // AddCustomerID adds value to the "customer_id" field.
 func (_u *AssetUpdateOne) AddCustomerID(v int64) *AssetUpdateOne {
 	_u.mutation.AddCustomerID(v)
+	return _u
+}
+
+// ClearCustomerID clears the value of the "customer_id" field.
+func (_u *AssetUpdateOne) ClearCustomerID() *AssetUpdateOne {
+	_u.mutation.ClearCustomerID()
 	return _u
 }
 
@@ -842,6 +860,12 @@ func (_u *AssetUpdateOne) sqlSave(ctx context.Context) (_node *Asset, err error)
 	}
 	if value, ok := _u.mutation.AddedCustomerID(); ok {
 		_spec.AddField(asset.FieldCustomerID, field.TypeInt64, value)
+	}
+	if _u.mutation.CustomerIDCleared() {
+		_spec.ClearField(asset.FieldCustomerID, field.TypeInt64)
+	}
+	if _u.mutation.NumberCleared() {
+		_spec.ClearField(asset.FieldNumber, field.TypeString)
 	}
 	if value, ok := _u.mutation.LocationID(); ok {
 		_spec.SetField(asset.FieldLocationID, field.TypeInt64, value)

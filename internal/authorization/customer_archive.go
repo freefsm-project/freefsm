@@ -44,7 +44,7 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
  OR EXISTS(SELECT 1 FROM projects WHERE customer_id=$1 AND deleted_at IS NULL)
  OR EXISTS(SELECT 1 FROM estimates WHERE customer_id=$1 AND deleted_at IS NULL AND conversion_hidden_at IS NULL)
  OR EXISTS(SELECT 1 FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.customer_id=$1 AND i.deleted_at IS NULL AND i.conversion_hidden_at IS NULL AND (coalesce(s.category_key,'invoice:draft')='invoice:draft' OR (coalesce(s.category_key,'')<>'invoice:void' AND i.settlement_state<>'paid')))
- OR EXISTS(SELECT 1 FROM assets WHERE customer_id=$1 AND deleted_at IS NULL)
+ OR EXISTS(SELECT 1 FROM assets WHERE customer_id=$1 AND ownership_class='company_owned')
  OR EXISTS(SELECT 1 FROM customer_credits c WHERE c.customer_id=$1 AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='payment' AND r.operation_id=c.source_payment_id) AND c.original_amount_cents
  -coalesce((SELECT sum(a.amount_cents) FROM credit_applications a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=a.id)),0)
  -coalesce((SELECT sum(a.amount_cents) FROM credit_refund_allocations a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_refund' AND r.operation_id=a.refund_id)),0)>0)`, id).Scan(&blocked); err != nil {
@@ -85,6 +85,30 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
 			return preview, err
 		}
 	}
+	rows, err := q.Query(ctx, `SELECT id,name,updated_at::text FROM assets WHERE customer_id=$1 AND company_id=$2 AND ownership_class='customer_owned' AND deleted_at IS NULL ORDER BY id`, id, p.CompanyID)
+	if err != nil {
+		return preview, err
+	}
+	for rows.Next() {
+		var child ArchiveChild
+		var version string
+		child.Kind = "asset"
+		if err = rows.Scan(&child.ID, &child.Name, &version); err != nil {
+			rows.Close()
+			return preview, err
+		}
+		if !p.Allows("asset.view", All) || !p.Allows("asset.archive", All) {
+			rows.Close()
+			return preview, ErrForbidden
+		}
+		preview.Children = append(preview.Children, child)
+		versions = append(versions, version)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return preview, err
+	}
 	b, err := json.Marshal([]any{preview, versions})
 	if err != nil {
 		return preview, err
@@ -118,10 +142,15 @@ func (s *Service) ArchiveCustomer(ctx context.Context, a Actor, id int64, snapsh
 		}
 		for _, child := range preview.Children {
 			table, _, _, _ := childTable(child.Kind)
-			if _, err = tx.Exec(ctx, `UPDATE `+table+` SET deleted_at=clock_timestamp(),is_primary=false,updated_at=clock_timestamp() WHERE id=$1`, child.ID); err != nil {
+			primary := ",is_primary=false"
+			if child.Kind == "asset" {
+				table = "assets"
+				primary = ""
+			}
+			if _, err = tx.Exec(ctx, `UPDATE `+table+` SET deleted_at=clock_timestamp()`+primary+`,updated_at=clock_timestamp() WHERE id=$1`, child.ID); err != nil {
 				return err
 			}
-			if err = audit(ctx, tx, a, p, child.Kind+".archive", All, child.Kind, child.ID, map[string]any{"customer_cascade": id, "primary_cleared": true}); err != nil {
+			if err = audit(ctx, tx, a, p, child.Kind+".archive", All, child.Kind, child.ID, map[string]any{"customer_cascade": id, "primary_cleared": child.Kind != "asset"}); err != nil {
 				return err
 			}
 		}

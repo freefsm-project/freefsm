@@ -1072,9 +1072,13 @@ func assetLabel(a *ent.Asset) string {
 		}
 	}
 	if len(parts) == 0 {
-		return a.Name
+		parts = append(parts, a.Name)
 	}
-	return strings.Join(parts, ", ")
+	label := strings.Join(parts, ", ")
+	if a.Number != "" {
+		return a.Number + " · " + label
+	}
+	return label
 }
 
 func jobToDetail(ctx context.Context, j *ent.Job, statuses []*ent.Status) templates.JobDetail {

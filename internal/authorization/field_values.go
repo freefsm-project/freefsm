@@ -2,6 +2,7 @@ package authorization
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/freefsm-project/freefsm/internal/customfields"
 	"github.com/jackc/pgx/v5"
@@ -159,6 +160,12 @@ func (s *Service) DetailsTransaction(ctx context.Context, a Actor, typ string, i
 		if err = customfields.CheckCycleValues(ctx, tx, typ, id, fields); err != nil {
 			return err
 		}
+		var assetBefore, assetAfter json.RawMessage
+		if typ == "asset" && id > 0 {
+			if err := tx.QueryRow(ctx, `SELECT to_jsonb(a) FROM assets a WHERE id=$1`, id).Scan(&assetBefore); err != nil {
+				return err
+			}
+		}
 		result, err := write(tx, fields)
 		if err != nil {
 			return err
@@ -181,6 +188,12 @@ func (s *Service) DetailsTransaction(ctx context.Context, a Actor, typ string, i
 			if err := audit(ctx, tx, a, p, "job.fields.edit", fieldScope, typ, result, map[string]any{"before": old, "after": fields}); err != nil {
 				return err
 			}
+		}
+		if typ == "asset" {
+			if err := tx.QueryRow(ctx, `SELECT to_jsonb(a) FROM assets a WHERE id=$1`, result).Scan(&assetAfter); err != nil {
+				return err
+			}
+			return audit(ctx, tx, a, p, permission, scope, typ, result, map[string]any{"before": assetBefore, "after": assetAfter})
 		}
 		return audit(ctx, tx, a, p, permission, scope, typ, result, map[string]any{"custom_fields_before": old, "custom_fields_after": fields})
 	})

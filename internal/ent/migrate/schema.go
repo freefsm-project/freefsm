@@ -79,7 +79,9 @@ var (
 	AssetsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
 		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
-		{Name: "customer_id", Type: field.TypeInt64},
+		{Name: "customer_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "number", Type: field.TypeString, Nullable: true},
+		{Name: "ownership_class", Type: field.TypeString},
 		{Name: "location_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "asset_type_id", Type: field.TypeInt64},
 		{Name: "asset_status_id", Type: field.TypeInt64, Nullable: true},
@@ -109,17 +111,17 @@ var (
 			{
 				Name:    "asset_location_id",
 				Unique:  false,
-				Columns: []*schema.Column{AssetsColumns[3]},
+				Columns: []*schema.Column{AssetsColumns[5]},
 			},
 			{
 				Name:    "asset_asset_type_id",
 				Unique:  false,
-				Columns: []*schema.Column{AssetsColumns[4]},
+				Columns: []*schema.Column{AssetsColumns[6]},
 			},
 			{
 				Name:    "asset_asset_status_id",
 				Unique:  false,
-				Columns: []*schema.Column{AssetsColumns[5]},
+				Columns: []*schema.Column{AssetsColumns[7]},
 			},
 			{
 				Name:    "asset_company_id",

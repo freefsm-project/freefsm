@@ -1769,15 +1769,17 @@ type AssetListPageData struct {
 }
 
 type AssetRow struct {
-	ID            int64
-	Name          string
-	SerialNumber  string
-	Model         string
-	Manufacturer  string
-	CustomerID    int64
-	LocationID    *int64
-	AssetTypeID   int64
-	AssetStatusID *int64
+	Number         string
+	OwnershipClass string
+	ID             int64
+	Name           string
+	SerialNumber   string
+	Model          string
+	Manufacturer   string
+	CustomerID     int64
+	LocationID     *int64
+	AssetTypeID    int64
+	AssetStatusID  *int64
 }
 
 type AssetShowPageData struct {
@@ -1790,6 +1792,8 @@ type AssetShowPageData struct {
 }
 
 type AssetDetail struct {
+	Number           string
+	OwnershipClass   string
 	ID               int64
 	CustomerID       int64
 	LocationID       *int64

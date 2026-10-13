@@ -221,7 +221,7 @@ func TestJobCreateRejectsForeignCompanyLinksAndAssignmentsIntegration(t *testing
 	foreignLocation := client.Location.Create().SetCompanyID(52).SetObjectType("customer").SetObjectID(customer.ID).SetTitle("Foreign location").SaveX(ctx)
 	foreignContact := client.CustomerContact.Create().SetCompanyID(52).SetCustomerID(customer.ID).SetFirstName("Foreign contact").SaveX(ctx)
 	assetType := client.AssetType.Create().SetCompanyID(52).SetName("Foreign equipment").SaveX(ctx)
-	foreignAsset := client.Asset.Create().SetCompanyID(52).SetCustomerID(customer.ID).SetAssetTypeID(assetType.ID).SetName("Foreign asset").SaveX(ctx)
+	foreignAsset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(52).SetAssetTypeID(assetType.ID).SetName("Foreign asset").SetCustomerID(client.Customer.Create().SetCompanyID(52).SetDisplayName("Foreign owner").SaveX(ctx).ID).SaveX(ctx)
 	foreignUser := client.User.Create().SetCompanyID(52).SetEmail("foreign-job-user@example.test").SetPasswordHash("hash").SetName("Foreign user").SaveX(ctx)
 
 	for _, tc := range []struct {
@@ -272,7 +272,7 @@ func TestJobCreateAcceptsCanonicalLegacyCompanylessChildLinksIntegration(t *test
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	asset, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{CustomerID: customer.ID, LocationID: &location.ID, AssetTypeID: assetType.ID, Name: "Asset"})
+	asset, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{OwnershipClass: "customer_owned", CustomerID: customer.ID, LocationID: &location.ID, AssetTypeID: assetType.ID, Name: "Asset"})
 	if err != nil {
 		t.Fatalf("create asset: %v", err)
 	}
@@ -312,7 +312,7 @@ func TestJobCreateAcceptsCanonicalLegacyCompanylessChildLinksIntegration(t *test
 	if err != nil {
 		t.Fatalf("create other project: %v", err)
 	}
-	otherAsset, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{CustomerID: otherCustomer.ID, AssetTypeID: assetType.ID, Name: "Other"})
+	otherAsset, err := NewAssetService(client).Create(ctx, companyID, AssetCreateParams{OwnershipClass: "customer_owned", CustomerID: otherCustomer.ID, AssetTypeID: assetType.ID, Name: "Other"})
 	if err != nil {
 		t.Fatalf("create other asset: %v", err)
 	}
@@ -382,7 +382,7 @@ func TestJobUpdateEnforcesTenantAndReplacementOwnershipIntegration(t *testing.T)
 	foreignLocation := client.Location.Create().SetCompanyID(72).SetObjectType("customer").SetObjectID(localCustomer.ID).SetTitle("Foreign location").SaveX(ctx)
 	foreignContact := client.CustomerContact.Create().SetCompanyID(72).SetCustomerID(localCustomer.ID).SetFirstName("Foreign contact").SaveX(ctx)
 	assetType := client.AssetType.Create().SetCompanyID(72).SetName("Equipment").SaveX(ctx)
-	foreignAsset := client.Asset.Create().SetCompanyID(72).SetCustomerID(localCustomer.ID).SetAssetTypeID(assetType.ID).SetName("Foreign asset").SaveX(ctx)
+	foreignAsset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(72).SetAssetTypeID(assetType.ID).SetName("Foreign asset").SetCustomerID(client.Customer.Create().SetCompanyID(72).SetDisplayName("Foreign owner").SaveX(ctx).ID).SaveX(ctx)
 	foreignUser := client.User.Create().SetCompanyID(72).SetEmail("foreign-update-user@example.test").SetPasswordHash("hash").SetName("Foreign user").SaveX(ctx)
 
 	notes := "attempted mutation"
@@ -422,7 +422,7 @@ func TestJobUpdateEnforcesTenantAndReplacementOwnershipIntegration(t *testing.T)
 	localLocation := client.Location.Create().SetCompanyID(companyID).SetObjectType("customer").SetObjectID(replacementCustomer.ID).SetTitle("Replacement location").SaveX(ctx)
 	localContact := client.CustomerContact.Create().SetCompanyID(companyID).SetCustomerID(replacementCustomer.ID).SetFirstName("Replacement contact").SaveX(ctx)
 	localAssetType := client.AssetType.Create().SetCompanyID(companyID).SetName("Local equipment").SaveX(ctx)
-	localAsset := client.Asset.Create().SetCompanyID(companyID).SetCustomerID(replacementCustomer.ID).SetAssetTypeID(localAssetType.ID).SetName("Replacement asset").SaveX(ctx)
+	localAsset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(companyID).SetCustomerID(replacementCustomer.ID).SetAssetTypeID(localAssetType.ID).SetName("Replacement asset").SaveX(ctx)
 	localUser := client.User.Create().SetCompanyID(companyID).SetEmail("local-update-user@example.test").SetPasswordHash("hash").SetName("Local user").SaveX(ctx)
 	assignments := []JobAssignment{{UserID: localUser.ID, Role: "lead"}}
 	updated, err := NewJobService(client).Update(ctx, companyID, localJob.ID, JobUpdateParams{
@@ -456,7 +456,7 @@ func TestJobUpdateRealFormPreservesUnchangedArchivedRelationshipsIntegration(t *
 	contact := client.CustomerContact.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetFirstName("Contact").SaveX(ctx)
 	project := client.Project.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetLocationID(location.ID).SetName("Project").SaveX(ctx)
 	assetType := client.AssetType.Create().SetCompanyID(companyID).SetName("Equipment").SaveX(ctx)
-	asset := client.Asset.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetLocationID(location.ID).SetAssetTypeID(assetType.ID).SetName("Asset").SaveX(ctx)
+	asset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(companyID).SetCustomerID(customer.ID).SetLocationID(location.ID).SetAssetTypeID(assetType.ID).SetName("Asset").SaveX(ctx)
 	job := client.Job.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetProjectID(project.ID).SetLocationID(location.ID).SetCustomerContactID(contact.ID).SetAssetID(asset.ID).SetJobType("Repair").SaveX(ctx)
 	client.Customer.UpdateOneID(customer.ID).SetDeletedAt(time.Now()).SaveX(ctx)
 	client.Project.UpdateOneID(project.ID).SetDeletedAt(time.Now()).SaveX(ctx)

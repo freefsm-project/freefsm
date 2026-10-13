@@ -51,6 +51,34 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 		}
 	}
 	sort.Strings(files)
+	// Asset review is checked before any older migration can change its evidence.
+	var assetReview *AssetIdentityReview
+	for _, f := range files {
+		if f != "073_asset_identity.up.sql" {
+			continue
+		}
+		var applied bool
+		var migrationsExist bool
+		if err := db.Pool.QueryRow(ctx, `SELECT to_regclass('schema_migrations') IS NOT NULL`).Scan(&migrationsExist); err != nil {
+			return err
+		}
+		if migrationsExist {
+			if err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name='073_asset_identity')`).Scan(&applied); err != nil {
+				return err
+			}
+		}
+		if !applied {
+			inventory, err := db.AssetIdentityPreflight(ctx)
+			if err != nil {
+				return err
+			}
+			review, err := loadAssetIdentityReview(inventory)
+			if err != nil {
+				return err
+			}
+			assetReview = &review
+		}
+	}
 	// Run before any earlier migration can clean up legacy polymorphic links.
 	for _, f := range files {
 		if f == "059_vocabulary.up.sql" {
@@ -155,6 +183,26 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 
 		if f == "058_typed_custom_fields.up.sql" {
 			if err := customfields.Preflight(ctx, tx); err != nil {
+				tx.Rollback(ctx)
+				return err
+			}
+		}
+		if f == "073_asset_identity.up.sql" && assetReview != nil {
+			if _, err := tx.Exec(ctx, `LOCK TABLE assets,jobs IN ACCESS EXCLUSIVE MODE`); err != nil {
+				tx.Rollback(ctx)
+				return err
+			}
+			inventory, err := assetIdentityInventory(ctx, tx)
+			if err != nil || inventory.Snapshot != assetReview.Snapshot {
+				tx.Rollback(ctx)
+				return fmt.Errorf("Asset identity review became stale before cutover: %v", err)
+			}
+			data, err := json.Marshal(assetReview)
+			if err != nil {
+				tx.Rollback(ctx)
+				return err
+			}
+			if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.asset_review',$1,true)`, string(data)); err != nil {
 				tx.Rollback(ctx)
 				return err
 			}

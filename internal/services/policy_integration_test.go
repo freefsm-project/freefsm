@@ -47,8 +47,8 @@ func TestPolicyServiceAssignmentAccessIntegration(t *testing.T) {
 	assetType := client.AssetType.Create().SetName("Equipment").SaveX(ctx)
 	activeProject := client.Project.Create().SetCustomerID(activeCustomer.ID).SetName("Active Project").SaveX(ctx)
 	archivedProject := client.Project.Create().SetCustomerID(activeCustomer.ID).SetName("Archived Project").SetDeletedAt(now).SaveX(ctx)
-	activeAsset := client.Asset.Create().SetCustomerID(activeCustomer.ID).SetAssetTypeID(assetType.ID).SetName("Active Asset").SaveX(ctx)
-	archivedAsset := client.Asset.Create().SetCustomerID(activeCustomer.ID).SetAssetTypeID(assetType.ID).SetName("Archived Asset").SetDeletedAt(now).SaveX(ctx)
+	activeAsset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCustomerID(activeCustomer.ID).SetAssetTypeID(assetType.ID).SetName("Active Asset").SaveX(ctx)
+	archivedAsset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCustomerID(activeCustomer.ID).SetAssetTypeID(assetType.ID).SetName("Archived Asset").SetDeletedAt(now).SaveX(ctx)
 
 	activeJob := client.Job.Create().
 		SetCustomerID(activeCustomer.ID).

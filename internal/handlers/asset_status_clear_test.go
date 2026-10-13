@@ -24,7 +24,7 @@ func TestAssetStatusClearProductionHTTP(t *testing.T) {
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Status owner").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Status type").SaveX(ctx)
 	status := client.AssetStatus.Create().SetCompanyID(company).SetName("Clearable status").SaveX(ctx)
-	a := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Status asset").SaveX(ctx)
+	a := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Status asset").SaveX(ctx)
 	path := fmt.Sprintf("/assets/%d", a.ID)
 	values := url.Values{"name": {"Cleared asset"}, "customer_id": {fmt.Sprint(c.ID)}, "asset_type_id": {fmt.Sprint(typ.ID)}, "asset_status_id": {"0"}}
 	fieldPost(t, router, cookie, path, values, 303)
@@ -45,7 +45,7 @@ func TestAssetStatusRetiredPreservationAndReselectionHTTP(t *testing.T) {
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Retired type").SaveX(ctx)
 	status := client.AssetStatus.Create().SetCompanyID(company).SetName("Historical status").SaveX(ctx)
 	active := client.AssetStatus.Create().SetCompanyID(company).SetName("Active replacement").SaveX(ctx)
-	a := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Original asset").SaveX(ctx)
+	a := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Original asset").SaveX(ctx)
 	path := fmt.Sprintf("/assets/%d", a.ID)
 	for _, route := range []string{fmt.Sprintf("/settings/asset-types/%d/retire", typ.ID), fmt.Sprintf("/settings/asset-statuses/%d/retire", status.ID)} {
 		expectStatus(t, router, cookie, "POST", route, 303)
@@ -105,7 +105,7 @@ func TestAssetStatusClearAuthorizationAndAuditRollbackHTTP(t *testing.T) {
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Atomic owner").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Atomic type").SaveX(ctx)
 	status := client.AssetStatus.Create().SetCompanyID(company).SetName("Atomic status").SaveX(ctx)
-	a := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Atomic asset").SaveX(ctx)
+	a := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Atomic asset").SaveX(ctx)
 	path := fmt.Sprintf("/assets/%d", a.ID)
 	values := url.Values{"name": {"Cleared atomically"}, "customer_id": {fmt.Sprint(c.ID)}, "asset_type_id": {fmt.Sprint(typ.ID)}, "asset_status_id": {"0"}}
 	assertUnchanged := func() {
@@ -199,7 +199,7 @@ func TestAssetStatusClearPersistedBrowser(t *testing.T) {
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Browser status owner").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Browser status type").SaveX(ctx)
 	status := client.AssetStatus.Create().SetCompanyID(company).SetName("Browser clearable status").SaveX(ctx)
-	a := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Browser status asset").SaveX(ctx)
+	a := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Browser status asset").SaveX(ctx)
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
@@ -225,7 +225,7 @@ func TestAssetStatusInvalidIsNotClearHTTP(t *testing.T) {
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Invalid status owner").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Invalid status type").SaveX(ctx)
 	status := client.AssetStatus.Create().SetCompanyID(company).SetName("Retained status").SaveX(ctx)
-	a := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Retained asset").SaveX(ctx)
+	a := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Retained asset").SaveX(ctx)
 	for _, invalid := range []string{"garbage", "", "-1", "9223372036854775808"} {
 		t.Run(fmt.Sprintf("status=%q", invalid), func(t *testing.T) {
 			fieldPost(t, router, cookie, fmt.Sprintf("/assets/%d", a.ID), url.Values{"name": {"Must roll back"}, "customer_id": {fmt.Sprint(c.ID)}, "asset_type_id": {fmt.Sprint(typ.ID)}, "asset_status_id": {invalid}}, 400)

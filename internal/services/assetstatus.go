@@ -18,7 +18,15 @@ func NewAssetStatusService(client *ent.Client) *AssetStatusService {
 }
 
 func (s *AssetStatusService) List(ctx context.Context) ([]*ent.AssetStatus, error) {
-	return s.client.AssetStatus.Query().
+	q := s.client.AssetStatus.Query()
+	if req, ok := authorization.FromContext(ctx); ok {
+		p, err := req.Service.Principal(ctx, req.Actor)
+		if err != nil {
+			return nil, err
+		}
+		q.Where(assetstatus.Or(assetstatus.CompanyIDEQ(p.CompanyID), assetstatus.CompanyIDIsNil()))
+	}
+	return q.
 		Order(ent.Asc(assetstatus.FieldSortOrder)).
 		All(ctx)
 }

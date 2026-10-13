@@ -23,6 +23,7 @@ func TestFileOwnershipMigration047ValidDataAndEnforcementIntegration(t *testing.
 	for objectType, objectID := range targets {
 		insertMigrationFile(t, ctx, db, a.company, a.user, objectType, objectID)
 	}
+	reviewFixtureAssetIdentities(t, ctx, db, AssetIdentityResolution{ID: targets["asset"], Number: "LEGACY-FILE-ASSET", OwnershipClass: "customer_owned"})
 	if err := db.Migrate(ctx, MigrationFS()); err != nil {
 		t.Fatal(err)
 	}

@@ -72,6 +72,7 @@ templ AssetTable(p AssetListPageData) {
 						<td>
 							<a href={ templ.URL(fmt.Sprintf("/assets/%d", a.ID)) } class="work-queue-title">
 								{ a.Name }
+								<small>{ a.Number } · { assetOwnershipLabel(a.OwnershipClass) }</small>
 							</a>
 						</td>
 						<td>{ a.Manufacturer }</td>

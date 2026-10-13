@@ -3,6 +3,22 @@ import "github.com/freefsm-project/freefsm/internal/authorization"
 
 templ JobMasterContext(p authorization.JobMasterContext) {
 	<section aria-label="Linked Job context">
+		if p.Asset != nil {
+			<h3>Operational Asset</h3>
+			<p>{ p.Asset.Number } · { p.Asset.Name } · { assetOwnershipLabel(p.Asset.OwnershipClass) }</p>
+			<p>{ p.Asset.Type } · { p.Asset.Status }</p>
+			<p>{ p.Asset.Manufacturer } { p.Asset.Model } · { p.Asset.SerialNumber }</p>
+			if p.Asset.InstalledAt != nil {
+				<p>Installed: { displayDatePtr(ctx,p.Asset.InstalledAt) }</p>
+			}
+			if p.Asset.WarrantyExpires != nil {
+				<p>Warranty: { displayDatePtr(ctx,p.Asset.WarrantyExpires) }</p>
+			}
+			if p.Asset.Location != nil {
+				<p>Current Location: { p.Asset.Location.Title }</p>
+			}
+			<p>{ p.Asset.ServiceNotes }</p>
+		}
 		if p.Contact != nil {
 			<h3>Linked Contact</h3><p>{ p.Contact.Name } { p.Contact.RoleTitle }</p><p>{ p.Contact.Phone } { p.Contact.Email }</p><p>{ p.Contact.ServiceNotes }</p>
 		}

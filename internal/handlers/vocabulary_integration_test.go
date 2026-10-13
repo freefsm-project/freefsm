@@ -134,7 +134,7 @@ func TestVocabularyReferencesAndAtomicAuditHTTP(t *testing.T) {
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("References").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Referenced Type").SaveX(ctx)
 	status := client.AssetStatus.Create().SetCompanyID(company).SetName("Descriptive").SaveX(ctx)
-	a := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Asset").SaveX(ctx)
+	a := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetAssetStatusID(status.ID).SetName("Asset").SaveX(ctx)
 	tag := client.Tag.Create().SetCompanyID(company).SetName("Attached").SaveX(ctx)
 	job := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Job").SaveX(ctx)
 	project := client.Project.Create().SetCompanyID(company).SetCustomerID(c.ID).SetName("Project").SaveX(ctx)
@@ -299,7 +299,7 @@ func TestAssetVocabularyReferenceRaces(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO assets(company_id,customer_id,asset_type_id,name) VALUES($1,$2,$3,'Concurrent reference')`, company, c.ID, typ.ID); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO assets(ownership_class,company_id,customer_id,asset_type_id,name) VALUES('customer_owned',$1,$2,$3,'Concurrent reference')`, company, c.ID, typ.ID); err != nil {
 			t.Fatal(err)
 		}
 		done := make(chan error, 1)
@@ -315,7 +315,7 @@ func TestAssetVocabularyReferenceRaces(t *testing.T) {
 			t.Fatal(err)
 		}
 		if operation[0] == 'U' {
-			if _, err := pool.Exec(ctx, `INSERT INTO assets(company_id,customer_id,asset_type_id,name) VALUES($1,$2,$3,'New retired selection')`, company, c.ID, typ.ID); err == nil {
+			if _, err := pool.Exec(ctx, `INSERT INTO assets(ownership_class,company_id,customer_id,asset_type_id,name) VALUES('customer_owned',$1,$2,$3,'New retired selection')`, company, c.ID, typ.ID); err == nil {
 				t.Fatal("retirement admitted new selection")
 			}
 		}
@@ -332,7 +332,7 @@ func TestAssetVocabularyReferenceRaces(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := pool.Exec(ctx, `INSERT INTO assets(company_id,customer_id,asset_type_id,name) VALUES($1,$2,$3,'Must reject')`, company, c.ID, typ.ID)
+		_, err := pool.Exec(ctx, `INSERT INTO assets(ownership_class,company_id,customer_id,asset_type_id,name) VALUES('customer_owned',$1,$2,$3,'Must reject')`, company, c.ID, typ.ID)
 		done <- err
 	}()
 	if err := tx.Commit(ctx); err != nil {
@@ -439,7 +439,7 @@ func TestTagMixedViewAndActionScopesHTTP(t *testing.T) {
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Visible customer").SaveX(ctx)
 	project := client.Project.Create().SetCompanyID(company).SetCustomerID(c.ID).SetName("Visible project").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Mixed scope type").SaveX(ctx)
-	asset := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetName("Visible asset").SaveX(ctx)
+	asset := client.Asset.Create().SetOwnershipClass("customer_owned").SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetName("Visible asset").SaveX(ctx)
 	assigned := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Assigned").SaveX(ctx)
 	unassigned := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Unassigned").SaveX(ctx)
 	client.JobAssignment.Create().SetJobID(assigned.ID).SetUserID(user.ID).SaveX(ctx)

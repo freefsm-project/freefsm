@@ -145,6 +145,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		installed := time.Date(d.InstalledYr, 1, 15, 0, 0, 0, 0, time.UTC)
 		warranty := time.Date(d.WarrantyYr, 1, 15, 0, 0, 0, 0, time.UTC)
 		a, err := client.Asset.Create().
+			SetOwnershipClass("customer_owned").
 			SetCompanyID(companyID).
 			SetName(d.Name).
 			SetSerialNumber(d.SerialNumber).

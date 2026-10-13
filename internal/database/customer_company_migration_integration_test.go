@@ -54,6 +54,7 @@ func TestCustomerCompanyMigration051BackfillsLegacySeedOwnershipIntegration(t *t
 	direct["invoices"] = invoiceID
 	direct["items"] = itemID
 	direct["time_entries"] = timeEntryID
+	reviewFixtureAssetIdentities(t, ctx, db, AssetIdentityResolution{ID: assetID, Number: "LEGACY-051", OwnershipClass: "customer_owned"})
 
 	if err := db.Migrate(ctx, MigrationFS()); err != nil {
 		t.Fatalf("migrate 051: %v", err)
