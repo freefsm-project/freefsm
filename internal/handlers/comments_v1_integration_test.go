@@ -462,6 +462,13 @@ func TestCommentsIndependentGrantsAndCharacterBoundaryHTTP(t *testing.T) {
 	if !strings.Contains(feed, "a comment on") || !strings.Contains(feed, "Comment author") {
 		t.Fatal("ordinary attributable Comment activity missing")
 	}
+	if _, err := pool.Exec(ctx, `UPDATE users SET name='Later display name' WHERE id=$1`, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	feed = requestBody(t, router, cookie, "GET", fmt.Sprintf("/customers/%d/activity", c.ID), 200)
+	if !strings.Contains(feed, "<strong>Comment author</strong>") {
+		t.Fatal("Comment event author was relabelled by a later identity edit")
+	}
 }
 
 func TestCommentsRepliesRemovalAndRetainedTextHTTP(t *testing.T) {
