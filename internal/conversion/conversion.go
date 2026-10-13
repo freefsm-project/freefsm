@@ -341,7 +341,7 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 		// Freeze the definitions and explicit pairing inside the immutable source
 		// snapshot. Current configuration must never redefine an earlier cycle.
 		var definitions json.RawMessage
-		if err = tx.QueryRow(ctx, `SELECT coalesce(jsonb_agg(to_jsonb(d) ORDER BY id),'[]') FROM custom_field_definitions d WHERE company_id=$1 AND object_type IN ('estimate','invoice')`, actor.CompanyID).Scan(&definitions); err != nil {
+		if err = tx.QueryRow(ctx, `SELECT coalesce(jsonb_agg(to_jsonb(d) ORDER BY id),'[]') FROM custom_field_definitions d WHERE custom_field_applies_to_company(company_id,$1) AND object_type IN ('estimate','invoice')`, actor.CompanyID).Scan(&definitions); err != nil {
 			return Result{}, err
 		}
 		var captured map[string]json.RawMessage
@@ -585,7 +585,7 @@ func decodeCustomFields(encoded []byte) ([]customFieldValue, error) {
 }
 
 func customFieldPairs(ctx context.Context, tx pgx.Tx, companyID int64) (map[int64]int64, error) {
-	rows, err := tx.Query(ctx, `SELECT e.id,i.id FROM custom_field_definitions e JOIN custom_field_definitions i ON i.company_id=e.company_id AND i.conversion_key=e.conversion_key AND i.object_type='invoice' WHERE e.company_id=$1 AND e.object_type='estimate' AND e.conversion_key IS NOT NULL AND NOT e.retired AND NOT i.retired`, companyID)
+	rows, err := tx.Query(ctx, `SELECT e.id,i.id FROM custom_field_definitions e JOIN custom_field_definitions i ON custom_field_applies_to_company(i.company_id,$1) AND i.conversion_key=e.conversion_key AND i.object_type='invoice' WHERE custom_field_applies_to_company(e.company_id,$1) AND e.object_type='estimate' AND e.conversion_key IS NOT NULL AND NOT e.retired AND NOT i.retired`, companyID)
 	if err != nil {
 		return nil, err
 	}

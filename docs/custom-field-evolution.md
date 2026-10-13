@@ -2,6 +2,15 @@
 
 ## Definitions and retained history
 
+Definitions apply when owned by the authorized company **or retained with NULL
+company ownership**. Released post-042 writers could still create those global
+definitions. They retain their identities and are not reassigned during upgrade.
+Pairing lookup, captured definitions, historical review and destructive-change
+guards use the same rule. A global definition overlaps each company's effective
+definition set: no owned/global key shadowing or duplicate same-side key is
+allowed, and every overlapping counterpart must have compatible type, precision
+and ordered options. Other companies' owned definitions do not enter the set.
+
 Settings → Custom Fields edits availability, retired option identities, help text,
 and PDF inclusion independently of pairing. Retiring a field retains its values,
 removes its ordinary entry controls, suspends requiredness/defaults and rejects
@@ -61,6 +70,13 @@ reason, actor and time are appended separately and are immutable. The original
 snapshot and source values are never replaced. A conflicting/repeated review
 rejects. An authorized recovery is a separate subsequent action.
 
+An earlier cycle can contain `field_pairs` yet still have omitted retained-global
+definitions. Migration 073 classifies those incomplete captures as review-required
+through the effective snapshot reader. Missing definitions for recorded source
+values/pairs, or pre-existing retained globals omitted from the capture, require
+review. This classification never changes the original snapshot. Definitions
+created after a complete cycle do not retroactively join its captured pairing.
+
 PDF inclusion defaults off, including on upgrade. New PDF Versions capture the
 opted-in field labels/values and include them in their source fingerprint. Toggling
 inclusion or changing rendered labels/values makes earlier versions stale without
@@ -72,6 +88,11 @@ changing their bytes. Historic versions remain selectable under existing grants.
 a map from definition IDs to opaque revision strings. Tokens change only when
 that field value changes, including ABA; unrelated fields and cosmetic definition
 edits do not invalidate pending intent. Treat the initial all-zero token as opaque.
+
+Read, successful patch/replay and conflict-comparison revision maps include only
+the authorized company's owned definitions and retained globals. Foreign-company
+IDs receive neither actual nor synthetic revision tokens. Requests for a foreign
+definition and a nonexistent definition have the same nondisclosing outcome.
 
 Offline/reviewed clients submit:
 
@@ -111,6 +132,12 @@ immutable field receipts and retrospective review evidence. They do not change
 existing values, definition IDs, source snapshots, relationships or Role grants.
 Historical revisions are not invented; seeded tokens identify current state only.
 
+Migration 073 adds the shared scope predicate and overlap-safe pairing guard.
+Ambiguous or incompatible existing owned/global keys fail preflight with the
+definition identities requiring review; no winner is selected and no data is
+rewritten. It also makes incomplete earlier captures explicitly reviewable while
+preserving their original evidence.
+
 Executable production HTTP/API cases:
 
 - `field_evolution_integration_test.go`: retirement/reactivation, option retention,
@@ -125,6 +152,14 @@ Executable production HTTP/API cases:
   to run against the same domain transaction boundaries.
 - `TestTypedFieldsPersistedBrowser`: persisted Chromium/CSRF journey, including a
   form opened before retirement and no replay after reactivation.
+- `field_retained_global_integration_test.go`: genuine post-042 nullable-definition
+  upgrade, global/global and mixed pairs, historical review/recovery, incomplete
+  captures, foreign review denial, compatibility, concurrent overlapping key claims
+  and rollback of an ambiguous upgrade.
+- `field_company_scope_integration_test.go`: authenticated two-company revision
+  nondisclosure through read, patch, replay and comparison responses.
+- `TestRetainedGlobalFieldsPersistedBrowser`: upgraded retained-global fields
+  through preview, conversion, Invoice editing, changed pairing and recovery.
 
 Run `make lint`, `FREEFSM_TEST_DATABASE_URL=<disposable PostgreSQL> make test`, and
 the opt-in browser test with `BROWSER_TESTS=1`, `NODE_PATH` pointing to the existing

@@ -48,9 +48,9 @@ func (s *Service) FieldOperationReceipt(ctx context.Context, a Actor, id int64, 
 	return receipt, err
 }
 
-func fieldState(ctx context.Context, tx pgx.Tx, id int64, values string) (FieldState, error) {
+func fieldState(ctx context.Context, tx pgx.Tx, company, id int64, values string) (FieldState, error) {
 	state := FieldState{Values: json.RawMessage(values), Revisions: map[string]string{}}
-	rows, err := tx.Query(ctx, `SELECT d.id,coalesce(r.revision::text,'00000000-0000-0000-0000-000000000000') FROM custom_field_definitions d LEFT JOIN job_field_revisions r ON r.definition_id=d.id AND r.job_id=$1 WHERE d.object_type='job'`, id)
+	rows, err := tx.Query(ctx, `SELECT d.id,coalesce(r.revision::text,'00000000-0000-0000-0000-000000000000') FROM custom_field_definitions d LEFT JOIN job_field_revisions r ON r.definition_id=d.id AND r.job_id=$1 WHERE d.object_type='job' AND custom_field_applies_to_company(d.company_id,$2)`, id, company)
 	if err != nil {
 		return state, err
 	}
@@ -73,7 +73,7 @@ func (s *Service) ReadFieldState(ctx context.Context, a Actor, id int64) (FieldS
 		if err != nil {
 			return err
 		}
-		state, err = fieldState(ctx, tx, id, values)
+		state, err = fieldState(ctx, tx, p.CompanyID, id, values)
 		return err
 	})
 	return state, err
@@ -96,7 +96,7 @@ func (s *Service) PatchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 		if err != nil {
 			return err
 		}
-		state, err = fieldState(ctx, tx, id, old)
+		state, err = fieldState(ctx, tx, p.CompanyID, id, old)
 		if err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ func (s *Service) PatchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 						return err
 					}
 				}
-				state, err = fieldState(ctx, tx, id, next)
+				state, err = fieldState(ctx, tx, p.CompanyID, id, next)
 				if err != nil {
 					return err
 				}

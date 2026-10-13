@@ -29,6 +29,11 @@ type fixture struct {
 func TestConvertRevertAndReconvertIntegration(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
+	// The source-only value has a real definition to capture. An orphan identity
+	// is incomplete historical evidence, not a valid modern conversion fixture.
+	if _, err := f.db.Pool.Exec(ctx, `INSERT INTO custom_field_definitions(id,company_id,object_type,name,field_type) VALUES(1,$1,'estimate','Source-only reference','text')`, f.company); err != nil {
+		t.Fatal(err)
+	}
 	var estimateID int64
 	err := f.db.Pool.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,job_id,status_id,title,notes,tax_rate,line_items,custom_fields) VALUES($1,$2,$3,$4,'Quoted work','source notes','7.5','[{"title":"Work","unit_price":100,"quantity":1}]','[{"definition_id":1,"value":"source"}]') RETURNING id`, f.company, f.customer, f.job, f.estimateAccepted).Scan(&estimateID)
 	if err != nil {
