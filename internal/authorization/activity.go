@@ -37,6 +37,9 @@ type ActivityFact struct {
 
 // ActivityRecord is an authorized projection, never a raw audit payload.
 type ActivityRecord struct {
+	ServiceJobID         int64          `json:"service_job_id,omitempty"`
+	ServiceAssetID       int64          `json:"service_asset_id,omitempty"`
+	SourceKey            string         `json:"-"`
 	ProvenanceEstimateID int64          `json:"provenance_estimate_id,omitempty"`
 	ExportScope          Scope          `json:"export_scope,omitempty"`
 	ID                   int64          `json:"id"`
@@ -232,7 +235,7 @@ func WalkActivity(ctx context.Context, tx pgx.Tx, p Principal, f ActivityFilter,
 			args = append(args, f.ProvenanceEstimateID)
 			lineage = ` AND ((object_type='estimate' AND object_id=$10) OR (object_type='invoice' AND object_id IN(SELECT invoice_id FROM estimate_invoice_conversion_cycles WHERE company_id=$1 AND estimate_id=$10)))`
 		}
-		rows, err := tx.Query(ctx, `SELECT id,coalesce(actor_id,0),object_type,object_id,action,metadata,created_at FROM activity_logs WHERE company_id=$1 AND (cardinality($2::text[])=0 OR object_type=ANY($2)) AND (cardinality($3::text[])=0 OR action=ANY($3)) AND ($4::bigint=0 OR object_id=$4) AND ($5::bigint=0 OR actor_id=$5) AND ($6::timestamptz IS NULL OR created_at >= $6) AND ($7::timestamptz IS NULL OR created_at < $7) AND ($8::timestamptz IS NULL OR (created_at,id)<($8,$9))`+lineage+` ORDER BY created_at DESC,id DESC LIMIT 128`, args...)
+		rows, err := tx.Query(ctx, `SELECT id,coalesce(actor_id,0),object_type,object_id,action,metadata,created_at,coalesce(event_key,'') FROM activity_logs WHERE company_id=$1 AND (cardinality($2::text[])=0 OR object_type=ANY($2)) AND (cardinality($3::text[])=0 OR action=ANY($3)) AND ($4::bigint=0 OR object_id=$4) AND ($5::bigint=0 OR actor_id=$5) AND ($6::timestamptz IS NULL OR created_at >= $6) AND ($7::timestamptz IS NULL OR created_at < $7) AND ($8::timestamptz IS NULL OR (created_at,id)<($8,$9))`+lineage+` ORDER BY created_at DESC,id DESC LIMIT 128`, args...)
 		if err != nil {
 			return err
 		}
@@ -244,7 +247,7 @@ func WalkActivity(ctx context.Context, tx pgx.Tx, p Principal, f ActivityFilter,
 		for rows.Next() {
 			var c candidate
 			e := &c.event
-			if err := rows.Scan(&e.ID, &e.ActorID, &e.Type, &e.RecordID, &e.Action, &c.metadata, &e.Accepted); err != nil {
+			if err := rows.Scan(&e.ID, &e.ActorID, &e.Type, &e.RecordID, &e.Action, &c.metadata, &e.Accepted, &e.SourceKey); err != nil {
 				rows.Close()
 				return err
 			}
@@ -270,16 +273,10 @@ func WalkActivity(ctx context.Context, tx pgx.Tx, p Principal, f ActivityFilter,
 				e.Facets = []string{}
 				e.ProvenanceEstimateID = f.ProvenanceEstimateID
 				e.Name = fmt.Sprintf("Historical %s #%d (provenance only)", e.Type, e.RecordID)
-				e.Actor = "Unknown historical actor"
-				if e.ActorID > 0 {
-					err = tx.QueryRow(ctx, `SELECT name FROM users WHERE id=$1 AND company_id=$2`, e.ActorID, p.CompanyID).Scan(&e.Actor)
-				} else {
-					err = nil
-				}
-				if errors.Is(err, pgx.ErrNoRows) {
-					e.Actor = fmt.Sprintf("User #%d", e.ActorID)
-					err = nil
-				}
+				var metadata map[string]json.RawMessage
+				_ = json.Unmarshal(c.metadata, &metadata)
+				e.Actor = activityActorLabel(e.ActorID, metadata)
+				err = nil
 			}
 			if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) {
 				continue
@@ -359,6 +356,15 @@ func activityProvenanceAccess(ctx context.Context, tx pgx.Tx, p Principal, root 
 }
 
 func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityRecord, raw []byte, export bool) (ActivityRecord, error) {
+	// A legacy event may have been attached to the wrong parent. Parent View
+	// never declassifies a known security, backup or open-tracking event.
+	switch e.Action {
+	case "password_reset", "password_changed", "admin_password_recovered", "logged_in", "logged_out", "user_created", "user_updated", "user_disabled", "user_enabled", "welcome_resent", "welcome_invite_sent", "invite_accepted", "settings_updated", "document_delivery_opened", "document_opened", "email_opened", "delivery.opened", "open_tracking_changed", "restore_started", "restore_completed", "restore_failed":
+		return e, ErrNotFound
+	}
+	if strings.HasPrefix(e.Action, "backup_") {
+		return e, ErrNotFound
+	}
 	e.Facts = []ActivityFact{}
 	e.Facets = []string{}
 	name, job, own, archived, err := ActivityTarget(ctx, tx, p, e.Type, e.RecordID)
@@ -367,6 +373,34 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 	}
 	e.Name = name
 	e.Archived = archived
+	var meta map[string]json.RawMessage
+	if strings.HasPrefix(e.Action, "service_entry_") {
+		if !p.Allows("service_entry.view", All) && !p.Allows("service_entry.view", Assigned) {
+			return e, ErrForbidden
+		}
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			if !p.Allows("service_entry.view", All) {
+				return e, ErrForbidden
+			}
+			return e, err
+		}
+		_ = json.Unmarshal(meta["asset_id"], &e.ServiceAssetID)
+		_ = json.Unmarshal(meta["job_id"], &e.ServiceJobID)
+		if e.Type == "job" {
+			e.ServiceJobID = e.RecordID
+		}
+		if e.Type == "asset" {
+			e.ServiceAssetID = e.RecordID
+		}
+		if !p.Allows("service_entry.view", All) || e.ExportScope == Assigned {
+			if err := currentServiceActivityAsset(ctx, tx, p, e.ServiceJobID, e.ServiceAssetID); err != nil {
+				return e, err
+			}
+		}
+		if e.ServiceJobID > 0 {
+			job = e.ServiceJobID
+		}
+	}
 	if export {
 		if e.ExportScope == Assigned {
 			assigned, err := assignedJobAccess(ctx, tx, p.UserID, job, false)
@@ -385,34 +419,37 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 			return e, ErrForbidden
 		}
 	}
-	e.Actor = "Unknown historical actor"
-	if e.ActorID > 0 {
-		if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id=$1 AND company_id=$2`, e.ActorID, p.CompanyID).Scan(&e.Actor); errors.Is(err, pgx.ErrNoRows) {
-			e.Actor = fmt.Sprintf("User #%d", e.ActorID)
-		} else if err != nil {
+	if meta == nil {
+		if err := json.Unmarshal(raw, &meta); err != nil {
 			return e, err
 		}
 	}
-	var meta map[string]json.RawMessage
-	if err := json.Unmarshal(raw, &meta); err != nil {
-		return e, err
+	e.Actor = activityActorLabel(e.ActorID, meta)
+	var channel string
+	_ = json.Unmarshal(meta["channel"], &channel)
+	if e.Action == "document_delivery_accepted" || strings.HasPrefix(e.SourceKey, "authorization-audit:") && channel == "worker" {
+		e.Actor = "System (initiated by " + e.Actor + ")"
 	}
-	if e.ActorID == 0 {
-		if name, ok := activityScalar(meta["actor_name"]); ok && name != "" {
-			e.Actor = "Recorded author: " + name
+	if strings.HasPrefix(e.SourceKey, "authorization-audit:") {
+		if value, ok := activityScalar(meta["source_occurred_at"]); ok {
+			if stamp, err := time.Parse(time.RFC3339Nano, value); err == nil && !stamp.After(e.Accepted) {
+				e.Occurred = &stamp
+			}
 		}
 	}
 	// Only reviewed action/facet mappings disclose operational data. Unknown
 	// historic actions retain identity/time but never arbitrary metadata.
 	required := ""
 	switch {
+	case (e.Type == "job" || e.Type == "time_entry") && (strings.HasPrefix(e.Action, "gps_") || strings.HasPrefix(e.Action, "time_gps_")):
+		required = "time.gps.view"
 	case strings.HasPrefix(e.Action, "contact_"):
 		required = "contact.view"
 	case strings.HasPrefix(e.Action, "location_"):
 		required = "location.view"
 	case strings.HasPrefix(e.Action, "service_entry_"):
 		required = "service_entry.view"
-	case strings.HasPrefix(e.Action, "payment_") || strings.HasPrefix(e.Action, "credit_") || strings.HasPrefix(e.Action, "refund_"):
+	case strings.HasPrefix(e.Action, "payment_") || strings.HasPrefix(e.Action, "credit_") || strings.HasPrefix(e.Action, "refund_") || strings.HasPrefix(e.Action, "settlement_"):
 		required = "settlement.view"
 	case strings.Contains(e.Action, "conversion") || e.Action == "converted":
 		required = e.Type + ".provenance.view"
@@ -466,6 +503,21 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 			e.Facts = append(e.Facts, ActivityFact{pair[0], before, after, bok, aok})
 		}
 	}
+	if strings.HasPrefix(e.Action, "service_entry_") {
+		before, after := activityObject(meta["before"]), activityObject(meta["after"])
+		for _, key := range []string{"summary", "service_date"} {
+			b, bok := activityScalar(before[key])
+			a, aok := activityScalar(after[key])
+			if bok || aok {
+				e.Facts = append(e.Facts, ActivityFact{key, b, a, bok, aok})
+			}
+		}
+		b, bok := activityRecordedNames(before["responsible_names"])
+		a, aok := activityRecordedNames(after["responsible_names"])
+		if bok || aok {
+			e.Facts = append(e.Facts, ActivityFact{"Responsible participants", b, a, bok, aok})
+		}
+	}
 	if e.Action == "job_fields_changed" {
 		before, after := activityFieldValues(meta["before"]), activityFieldValues(meta["after"])
 		ids := []int64{}
@@ -497,11 +549,12 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 	// Before/after objects are projected by a closed field catalog. A parent
 	// grant is never permission to serialize a mixed-facet historical payload.
 	before, after := activityObject(meta["before"]), activityObject(meta["after"])
-	if !slices.Contains([]string{"created", "updated", "archived", "restored", "status_changed", "status_transitioned", "field_notes_updated", "field_notes_changed", "tech_notes_updated", "subtask_completed", "subtask_uncompleted", "corrected", "voided"}, e.Action) {
+	if !slices.Contains([]string{"created", "updated", "archived", "restored", "status_changed", "status_transitioned", "field_notes_updated", "field_notes_changed", "tech_notes_updated", "subtask_completed", "subtask_uncompleted", "corrected", "voided", "pricebook_created", "pricebook_updated", "cost_updated"}, e.Action) {
 		before = nil
 		after = nil
 	}
 	fields := activityFields(e.Type)
+	hiddenFacts := false
 	keys := make([]string, 0, len(fields))
 	for key := range fields {
 		keys = append(keys, key)
@@ -520,6 +573,7 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 				return e, err
 			}
 			if !allowed {
+				hiddenFacts = true
 				continue
 			}
 			if !slices.Contains(e.Facets, facet) {
@@ -541,6 +595,8 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 				if !slices.Contains(e.Facets, "pricing.view") {
 					e.Facets = append(e.Facets, "pricing.view")
 				}
+			} else {
+				hiddenFacts = true
 			}
 		}
 		if e.Type == "job" {
@@ -573,6 +629,11 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 		}
 	}
 	if required == "settlement.view" {
+		facts, err := activitySettlementFacts(ctx, tx, p, e, meta)
+		if err != nil {
+			return e, err
+		}
+		e.Facts = append(e.Facts, facts...)
 		for _, key := range []string{"amount", "amount_cents", "method", "effective_date", "reason"} {
 			if value, ok := activityScalar(meta[key]); ok {
 				e.Facts = append(e.Facts, ActivityFact{Field: key, After: value, AfterKnown: true})
@@ -599,6 +660,9 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 	}
 	// Removed Comments and Files remain safe summaries. No preview/body/blob,
 	// path, credentials, arbitrary nested maps or historical linked names escape.
+	if hiddenFacts && len(e.Facts) == 0 {
+		return e, ErrForbidden
+	}
 	return e, nil
 }
 
@@ -624,6 +688,33 @@ func activityFieldValues(raw json.RawMessage) map[int64]string {
 		}
 	}
 	return result
+}
+
+func activityActorLabel(id int64, metadata map[string]json.RawMessage) string {
+	var name string
+	_ = json.Unmarshal(metadata["actor_name"], &name)
+	if name != "" {
+		if id == 0 {
+			return "Recorded author: " + name
+		}
+		return name
+	}
+	if id > 0 {
+		return fmt.Sprintf("User #%d (historical name not recorded)", id)
+	}
+	return "Unknown historical actor"
+}
+
+func activityRecordedNames(raw json.RawMessage) (string, bool) {
+	if len(raw) == 0 {
+		return "", false
+	}
+	var names []string
+	if json.Unmarshal(raw, &names) != nil {
+		return "", false
+	}
+	encoded, err := json.Marshal(names)
+	return string(encoded), err == nil
 }
 
 func activityStructuredArray(raw json.RawMessage, fields []string) (string, bool) {
@@ -737,6 +828,16 @@ func RecheckActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 	if err != nil {
 		return err
 	}
+	if strings.HasPrefix(e.Action, "service_entry_") {
+		if !p.Allows("service_entry.view", All) || e.ExportScope == Assigned {
+			if err := currentServiceActivityAsset(ctx, tx, p, e.ServiceJobID, e.ServiceAssetID); err != nil {
+				return err
+			}
+		}
+		if e.ServiceJobID > 0 {
+			job = e.ServiceJobID
+		}
+	}
 	if e.ExportScope == Assigned {
 		assigned, err := assignedJobAccess(ctx, tx, p.UserID, job, false)
 		if err != nil {
@@ -757,6 +858,21 @@ func RecheckActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 		if !ok {
 			return ErrForbidden
 		}
+	}
+	return nil
+}
+
+func currentServiceActivityAsset(ctx context.Context, tx pgx.Tx, p Principal, job, asset int64) error {
+	if job <= 0 || asset <= 0 || !p.Allows("asset.view", Context) {
+		return ErrForbidden
+	}
+	var visible bool
+	err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs j JOIN job_assignments a ON a.job_id=j.id JOIN assets equipment ON equipment.id=j.asset_id AND equipment.company_id=j.company_id AND equipment.customer_id=j.customer_id AND equipment.deleted_at IS NULL WHERE j.id=$1 AND equipment.id=$2 AND j.company_id=$3 AND j.deleted_at IS NULL AND a.user_id=$4)`, job, asset, p.CompanyID, p.UserID).Scan(&visible)
+	if err != nil {
+		return err
+	}
+	if !visible {
+		return ErrForbidden
 	}
 	return nil
 }

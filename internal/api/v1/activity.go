@@ -81,8 +81,12 @@ func (h *handler) activity(typ string) http.HandlerFunc {
 		fingerprint := hex.EncodeToString(sum[:])
 		var cursor activityAPICursor
 		if value := r.URL.Query().Get("cursor"); value != "" {
+			if len(value) > 1024 {
+				writeError(w, 400, "invalid_cursor", "invalid activity cursor")
+				return
+			}
 			b, err := base64.RawURLEncoding.DecodeString(value)
-			if len(value) > 1024 || err != nil || json.Unmarshal(b, &cursor) != nil || cursor.ID <= 0 || cursor.Time.IsZero() || cursor.Filter != fingerprint {
+			if err != nil || json.Unmarshal(b, &cursor) != nil || cursor.ID <= 0 || cursor.Time.IsZero() || cursor.Filter != fingerprint {
 				writeError(w, 400, "invalid_cursor", "invalid activity cursor")
 				return
 			}

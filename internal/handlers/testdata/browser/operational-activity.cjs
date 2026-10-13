@@ -14,6 +14,7 @@ const { chromium } = require('playwright-core');
     await page.getByLabel('Until (company date, exclusive)').fill('2026-03-01');
     await Promise.all([page.waitForURL(/from=2026-02-01/), page.getByRole('button', { name: 'Refresh activity', exact: true }).click()]);
     assert.equal(await page.locator('.activity-item').count(), 1);
+	assert.match(await page.locator('.activity-facts').innerText(), /Multiline observation\nfield_observation_/);
     assert.match(await page.locator('.activity-item').innerText(), /updated.*Browser activity subject/s);
     assert.match(await page.locator('body').innerText(), /Updated at/);
     await page.reload();

@@ -94,6 +94,9 @@ func TestActivityExportSnapshotConcurrencyHTTP(t *testing.T) {
 	if _, err := pool.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,object_type,object_id,action) VALUES($1,$2,'customer',$3,'created')`, company, admin, c.ID); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, `UPDATE customers SET display_name='Changed after snapshot' WHERE id=$1`, c.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := blocker.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +108,7 @@ func TestActivityExportSnapshotConcurrencyHTTP(t *testing.T) {
 		t.Fatalf("snapshot %d %v", len(rows), err)
 	}
 	for _, row := range rows[1:] {
-		if row[8] != "updated" {
+		if row[8] != "updated" || row[7] != "Consistent activity subject" {
 			t.Fatalf("mixed snapshot %v", row)
 		}
 	}
@@ -347,4 +350,169 @@ func TestActivityContactHistoryUsesIndependentViewHTTP(t *testing.T) {
 	assertContains(t, body, "Visible contact")
 	assertNotContains(t, body, "PRIVATE CUSTOMER CONTEXT")
 	requestBody(t, router, cookie, "GET", fmt.Sprintf("/activity?object_type=customer&object_id=%d", c.ID), 403)
+}
+
+func TestActivityFacetOnlyChangesDoNotAffectPaginationHTTP(t *testing.T) {
+	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	auth := authorization.New(pool)
+	role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Operational history", []authorization.Grant{{Permission: "customer.view", Scope: authorization.All}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := client.User.Create().SetCompanyID(company).SetName("Operational reader").SetEmail("facet-history@test").SetRole("tech").SetPasswordHash("hash").SaveX(ctx)
+	if err := auth.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role); err != nil {
+		t.Fatal(err)
+	}
+	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Visible activity customer").SaveX(ctx)
+	if _, err := pool.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,object_type,object_id,action,metadata,created_at) VALUES($1,$2,'customer',$3,'updated','{"before":{"service_notes":"Known operational before"},"after":{"service_notes":"Known operational after"}}','2025-01-01')`, company, admin, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,object_type,object_id,action,metadata) SELECT $1,$2,'customer',$3,'updated','{"before":{"billing_address_1":"Hidden financial before"},"after":{"billing_address_1":"Hidden financial after"}}'::jsonb FROM generate_series(1,30)`, company, admin, c.ID); err != nil {
+		t.Fatal(err)
+	}
+	body := requestBody(t, router, sessionCookie(t, ctx, sessions, u.ID), "GET", "/activity?type=customer", 200)
+	assertContains(t, body, "Known operational after")
+	assertNotContains(t, body, "Hidden financial")
+	assertNotContains(t, body, "Older</a>")
+	if strings.Count(body, `class="activity-item activity-item-compact"`) != 1 {
+		t.Fatal("inaccessible facet affected visible rows")
+	}
+}
+
+func TestActivityRecordedAuthorshipSurvivesRenameHTTP(t *testing.T) {
+	pool, _, router, sessions, _, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	cookie := sessionCookie(t, ctx, sessions, admin)
+	fieldPost(t, router, cookie, "/customers", url.Values{"display_name": {"Authorship subject"}, "account_type": {"individual"}}, 303)
+	if _, err := pool.Exec(ctx, `UPDATE users SET name='Current display name' WHERE id=$1`, admin); err != nil {
+		t.Fatal(err)
+	}
+	path := masterPost(t, router, cookie, "/activity/export", url.Values{"type": {"customer"}, "action": {"created"}, "operation_id": {newOperationKey()}}, 303)
+	if _, err := exports.Product(pool).ProcessOne(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := csv.NewReader(strings.NewReader(requestBody(t, router, cookie, "GET", path+"/download", 200))).ReadAll()
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("history rows: %d %v", len(rows), err)
+	}
+	if rows[1][4] != "Admin" {
+		t.Fatalf("historic author relabelled: %q", rows[1][4])
+	}
+}
+
+func TestActivityItemFacetSnapshotsHTTP(t *testing.T) {
+	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	auth := authorization.New(pool)
+	adminCookie := sessionCookie(t, ctx, sessions, admin)
+	itemPost(t, router, adminCookie, "/items", url.Values{"name": {"Item history subject"}, "type": {"service"}, "unit_price": {"50"}, "unit_cost": {"9876.54"}}, 303)
+	var id int64
+	if err := pool.QueryRow(ctx, `SELECT id FROM items WHERE name='Item history subject'`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	itemPost(t, router, adminCookie, fmt.Sprintf("/items/%d", id), url.Values{"unit_cost": {"12345.67"}}, 303)
+	role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Base Item history", []authorization.Grant{{Permission: "item.view", Scope: authorization.All}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := client.User.Create().SetCompanyID(company).SetName("Item reader").SetEmail("item-history@test").SetRole("tech").SetPasswordHash("hash").SaveX(ctx)
+	if err := auth.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role); err != nil {
+		t.Fatal(err)
+	}
+	cookie := sessionCookie(t, ctx, sessions, u.ID)
+	body := requestBody(t, router, cookie, "GET", "/activity?type=item", 200)
+	assertContains(t, body, "Item history subject")
+	assertNotContains(t, body, "9876.54")
+	assertNotContains(t, body, "12345.67")
+	assertNotContains(t, body, "pricebook_created")
+	if strings.Count(body, `class="activity-item activity-item-compact"`) != 1 {
+		t.Fatal("Item facets leaked event counts")
+	}
+	if _, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, role, "Cost history", []authorization.Grant{{Permission: "item.view", Scope: authorization.All}, {Permission: "cost.view", Scope: authorization.All}}, 1); err != nil {
+		t.Fatal(err)
+	}
+	body = requestBody(t, router, cookie, "GET", "/activity?type=item", 200)
+	assertContains(t, body, "9876.54")
+	assertContains(t, body, "12345.67")
+}
+
+func TestActivityServiceEntryHistoryRequiresCurrentOperationalAssetHTTP(t *testing.T) {
+	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	auth := authorization.New(pool)
+	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Service history customer").SaveX(ctx)
+	typ := client.AssetType.Create().SetCompanyID(company).SetName("Service equipment").SaveX(ctx)
+	a := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetTypeID(typ.ID).SetName("Service asset").SetOwnershipClass("customer_owned").SaveX(ctx)
+	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Service history job").SetAssetID(a.ID).SaveX(ctx)
+	role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Assigned Service history", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "asset.view", Scope: authorization.Context}, {Permission: "service_entry.view", Scope: authorization.Assigned}, {Permission: "activity.export", Scope: authorization.Assigned}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := client.User.Create().SetCompanyID(company).SetName("Service reader").SetEmail("service-history@test").SetRole("tech").SetPasswordHash("hash").SaveX(ctx)
+	if err := auth.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role); err != nil {
+		t.Fatal(err)
+	}
+	client.JobAssignment.Create().SetJobID(j.ID).SetUserID(u.ID).SaveX(ctx)
+	if _, err := pool.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,object_type,object_id,action,metadata) VALUES($1,$2,'job',$3,'service_entry_revised',jsonb_build_object('asset_id',$4::bigint,'before',jsonb_build_object('summary','Original service summary','service_date','2020-01-01'),'after',jsonb_build_object('summary','Revised service summary','service_date','2020-01-02','responsible_names',jsonb_build_array('Responsible technician'))))`, company, admin, j.ID, a.ID); err != nil {
+		t.Fatal(err)
+	}
+	cookie := sessionCookie(t, ctx, sessions, u.ID)
+	body := requestBody(t, router, cookie, "GET", "/activity", 200)
+	assertContains(t, body, "Revised service summary")
+	assertContains(t, body, "Responsible technician")
+	assertContains(t, body, "2020-01-02")
+	path := masterPost(t, router, cookie, "/activity/export", url.Values{"operation_id": {newOperationKey()}}, 303)
+	if _, err := exports.Product(pool).ProcessOne(ctx); err != nil {
+		t.Fatal(err)
+	}
+	client.Job.UpdateOneID(j.ID).ClearAssetID().SaveX(ctx)
+	assertNotContains(t, requestBody(t, router, cookie, "GET", "/activity", 200), "Revised service summary")
+	requestBody(t, router, cookie, "GET", path+"/download", 410)
+}
+
+func TestActivityFinancialFactsAndReversalAuthorityHTTP(t *testing.T) {
+	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	adminCookie := sessionCookie(t, ctx, sessions, admin)
+	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Financial history customer").SaveX(ctx)
+	var issued int64
+	if err := pool.QueryRow(ctx, `SELECT id FROM statuses WHERE company_id=$1 AND category_key='invoice:invoiced' LIMIT 1`, company).Scan(&issued); err != nil {
+		t.Fatal(err)
+	}
+	i := client.Invoice.Create().SetCompanyID(company).SetCustomerID(c.ID).SetInvoiceNumber(102).SetTitle("Financial history invoice").SetInvoiceDate(time.Now()).SetDueDate(time.Now()).SetStatusID(issued).SetLineItems(`[{"title":"Work","quantity":1,"unit_price":100}]`).SaveX(ctx)
+	input := url.Values{"amount": {"25.00"}, "method": {"cash"}, "date": {time.Now().Format("2006-01-02")}, "idempotency_key": {newOperationKey()}}
+	itemPost(t, router, adminCookie, fmt.Sprintf("/invoices/%d/payments", i.ID), input, 303)
+	itemPost(t, router, adminCookie, fmt.Sprintf("/invoices/%d/payments", i.ID), input, 303)
+	var payment string
+	if err := pool.QueryRow(ctx, `SELECT id::text FROM invoice_payments WHERE invoice_id=$1`, i.ID).Scan(&payment); err != nil {
+		t.Fatal(err)
+	}
+	itemPost(t, router, adminCookie, fmt.Sprintf("/invoices/%d/payments/%s/reverse", i.ID, payment), url.Values{"effective_date": {time.Now().Format("2006-01-02")}, "reason": {"Entered twice"}, "idempotency_key": {newOperationKey()}}, 303)
+	auth := authorization.New(pool)
+	base := []authorization.Grant{{Permission: "invoice.view", Scope: authorization.All}}
+	role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Invoice history reader", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := client.User.Create().SetCompanyID(company).SetName("Invoice reader").SetEmail("financial-history@test").SetRole("tech").SetPasswordHash("hash").SaveX(ctx)
+	if err := auth.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role); err != nil {
+		t.Fatal(err)
+	}
+	cookie := sessionCookie(t, ctx, sessions, u.ID)
+	path := fmt.Sprintf("/activity?object_type=invoice&object_id=%d", i.ID)
+	body := requestBody(t, router, cookie, "GET", path, 200)
+	assertContains(t, body, "No activity recorded yet.")
+	grants := append(base, authorization.Grant{Permission: "customer.view", Scope: authorization.All}, authorization.Grant{Permission: "customer.financial.view", Scope: authorization.All}, authorization.Grant{Permission: "settlement.view", Scope: authorization.All})
+	if _, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, role, "Settlement history reader", grants, 1); err != nil {
+		t.Fatal(err)
+	}
+	body = requestBody(t, router, cookie, "GET", path, 200)
+	assertContains(t, body, "amount_cents")
+	assertContains(t, body, "2500")
+	assertContains(t, body, "Entered twice")
+	assertContains(t, body, payment)
+	if strings.Count(body, `class="activity-item activity-item-compact"`) != 2 {
+		t.Fatal("financial replay duplicated history")
+	}
 }

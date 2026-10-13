@@ -16,7 +16,8 @@ func TestActivityExportDurableSnapshotHTTP(t *testing.T) {
 	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
-	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Activity CSV subject").SaveX(ctx)
+	name := "=SUM(A1:A2), quote\" and Unicode 雪\nsecond line"
+	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName(name).SaveX(ctx)
 	if _, err := pool.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,object_type,object_id,action,created_at) SELECT $1,$2,'customer',$3,'updated','2026-02-01T12:00:00Z'::timestamptz+n*interval '1 second' FROM generate_series(1,105) n`, company, admin, customer.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +39,9 @@ func TestActivityExportDurableSnapshotHTTP(t *testing.T) {
 	if rows[0][0] != "activity_id" {
 		t.Fatalf("fixed columns: %v", rows[0])
 	}
-	assertContains(t, strings.Join(rows[1], "|"), "Activity CSV subject")
+	if rows[1][7] != "'"+name {
+		t.Fatalf("CSV escaping changed recorded value: %q", rows[1][7])
+	}
 }
 
 func TestActivityCurrentFacetsFilterBeforePaginationHTTP(t *testing.T) {

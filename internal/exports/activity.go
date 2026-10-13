@@ -30,6 +30,9 @@ func (Activity) Columns() []string {
 	return []string{"activity_id", "accepted_at", "occurred_at", "actor_id", "actor", "record_type", "record_id", "record_name", "action", "before_after"}
 }
 func (a Activity) Validate(raw json.RawMessage) error {
+	if !json.Valid(raw) {
+		return ErrConflict
+	}
 	var f authorization.ActivityFilter
 	d := json.NewDecoder(bytes.NewReader(raw))
 	d.DisallowUnknownFields()

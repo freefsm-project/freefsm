@@ -21,12 +21,18 @@ master-history grant. Contacts and Locations have independent history authority.
 Independent pricing, Pricebook, Cost, financial, settlement, time, GPS and
 Service Entry facets also apply to facts/events that use them. A Role's label
 does not authorize a row. Export uses this same projection.
+An update containing only inaccessible facet changes does not consume a visible
+row or affect paging. Item base, Pricebook and Cost history are captured as
+separately authorized facet events, without duplicating their facts.
 
 Structured facts contain field, before, after, before_known and after_known.
 Absent historic facts are explicitly **Not recorded**, rather than fabricated
 empty values. Nested line items and Subtasks use closed field lists; Item Cost
 and arbitrary nested metadata never enter a document pricing snapshot.
 Historical author IDs remain the event's author, not the current editor.
+Recorded event-time names survive later user renames; missing historic names are
+not filled from today's user row. Known worker events identify the system and
+the recorded initiator separately in their actor label.
 Recorded author-name snapshots without a linked identity are labelled as such;
 missing attribution is **Unknown historical actor**. Acceptance time is always
 shown; occurrence time is shown only when the source recorded it. Unknown
@@ -98,7 +104,8 @@ authority through a cursor.
 ## Persistence and upgrade
 
 Migration `074_operational_activity.up.sql` preserves existing rows, IDs and
-grants and makes operational history append-only. Its single reviewed historic
+grants and makes operational history append-only (UPDATE, DELETE and TRUNCATE
+reject). Its single reviewed historic
 backfill is `job.fields.edit`: that existing immutable audit source already
 contains exact before/after values, author, target and recorded time, and had
 no legacy activity writer. Source audit IDs provide unique provenance. It does

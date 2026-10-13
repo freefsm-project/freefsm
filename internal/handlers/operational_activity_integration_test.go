@@ -47,7 +47,7 @@ func TestOperationalActivityPersistedBrowser(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Browser activity subject").SaveX(ctx)
-	if _, err := pool.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,created_at) VALUES($1,$2,'created','customer',$3,'2026-01-15T12:00:00Z'),($1,$2,'updated','customer',$3,'2026-02-15T12:00:00Z')`, company, admin, customer.ID); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,created_at,metadata) VALUES($1,$2,'created','customer',$3,'2026-01-15T12:00:00Z','{}'),($1,$2,'updated','customer',$3,'2026-02-15T12:00:00Z',jsonb_build_object('before',jsonb_build_object('service_notes','Original observation'),'after',jsonb_build_object('service_notes',$4::text)))`, company, admin, customer.ID, "Multiline observation\n"+strings.Repeat("field_observation_", 24)); err != nil {
 		t.Fatal(err)
 	}
 	cookie := sessionCookie(t, ctx, sessions, admin)
@@ -127,12 +127,14 @@ func TestOperationalActivityExcludesSealedAndRemovedTextHTTP(t *testing.T) {
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Safe activity parent").SaveX(ctx)
 	if _, err := pool.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES
 	($1,$2,'comment_added','customer',$3,'{"comment_preview":"REMOVED_COMMENT_SECRET"}'),
+	($1,$2,'password_reset','customer',$3,'{"entity_name":"SEALED_VISIBLE_PARENT"}'),
 	($1,$2,'password_reset','user',$2,'{"entity_name":"SEALED_ADMIN_EVENT"}')`, company, admin, customer.ID); err != nil {
 		t.Fatal(err)
 	}
 	for _, path := range []string{"/activity", fmt.Sprintf("/activity?object_type=customer&object_id=%d", customer.ID)} {
 		body := requestBody(t, router, cookie, "GET", path, 200)
 		assertContains(t, body, "Safe activity parent")
+		assertNotContains(t,body,"reset password")
 		for _, secret := range []string{"REMOVED_COMMENT_SECRET", "SEALED_ADMIN_EVENT"} {
 			if strings.Contains(body, secret) {
 				t.Fatalf("ordinary history discloses %s", secret)
