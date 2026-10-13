@@ -253,6 +253,9 @@ func atomicSavePath(path string) bool {
 	if len(parts) == 3 && (parts[2] == "custom-fields" || parts[2] == "status") {
 		return true
 	}
+	if len(parts) == 3 && parts[0] == "invoices" && parts[2] == "finalize" {
+		return true
+	}
 	if len(parts) > 2 {
 		return false
 	}

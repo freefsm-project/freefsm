@@ -85,14 +85,23 @@ func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	statusID, _ := strconv.ParseInt(r.URL.Query().Get("status_id"), 10, 64)
 	customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
+	validity := r.URL.Query().Get("valid")
+	var validOn []time.Time
+	if validity == "current" {
+		today, _ := time.Parse("2006-01-02", time.Now().In(middleware.CompanyLocation(r.Context())).Format("2006-01-02"))
+		validOn = []time.Time{today}
+	} else if validity != "" {
+		http.Error(w, "Unknown validity filter", 400)
+		return
+	}
 
 	var estimates []*ent.Estimate
 	var total int
 	var err error
 	if customerID > 0 {
-		estimates, total, err = h.svc.ListForCustomer(r.Context(), customerID, search, statusID, page, perPage)
+		estimates, total, err = h.svc.ListForCustomer(r.Context(), customerID, search, statusID, page, perPage, validOn...)
 	} else {
-		estimates, total, err = h.svc.List(r.Context(), search, statusID, page, perPage)
+		estimates, total, err = h.svc.List(r.Context(), search, statusID, page, perPage, validOn...)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), 500)
@@ -109,6 +118,7 @@ func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := templates.EstimateListPageData{
+		Validity:   validity,
 		Estimates:  rows,
 		Page:       page,
 		PerPage:    perPage,
@@ -397,6 +407,13 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if r.Form.Has("title") && strings.TrimSpace(r.FormValue("title")) == "" {
+		http.Error(w, "Title is required", 422)
+		return
+	}
+	if custID != valueInt64(current.CustomerID) && jobID == valueInt64(current.JobID) {
+		jobID = 0
+	}
 	pricingSubmitted := r.Form.Has("tax_rate") || r.Form.Has("line_items")
 	contextChanged := custID != valueInt64(current.CustomerID) || jobID != valueInt64(current.JobID)
 	if (pricingSubmitted || contextChanged) && !h.authorizeDestinationJob(w, r, custID, jobID) {
@@ -423,18 +440,22 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := services.EstimateUpdateParams{
-		ValidThrough:      parseDatePtr(r.FormValue("valid_through"), time.UTC),
-		ClearValidThrough: r.Form.Has("valid_through") && r.FormValue("valid_through") == "",
-		CustomerID:        int64Ptr(custID),
-		JobID:             &jobID,
-		Title:             formPtr(r.FormValue("title")),
-		Notes:             formPtr(r.FormValue("notes")),
-		Terms:             strPtr(r.FormValue("terms")),
-		TaxRate:           taxRatePtr,
-		CustomFields:      parseCustomFieldPatch(r),
+		CustomerDefaultsReviewed: r.FormValue("customer_defaults_reviewed") == "true",
+		ValidThrough:             parseDatePtr(r.FormValue("valid_through"), time.UTC),
+		ClearValidThrough:        r.Form.Has("valid_through") && r.FormValue("valid_through") == "",
+		CustomerID:               int64Ptr(custID),
+		JobID:                    &jobID,
+		Title:                    formPtr(r.FormValue("title")),
+		Notes:                    strPtr(r.FormValue("notes")),
+		Terms:                    strPtr(r.FormValue("terms")),
+		TaxRate:                  taxRatePtr,
+		CustomFields:             parseCustomFieldPatch(r),
 	}
 	if !r.Form.Has("terms") {
 		params.Terms = nil
+	}
+	if !r.Form.Has("notes") {
+		params.Notes = nil
 	}
 	if r.Form.Has("valid_through") && !validDocumentDate(r.FormValue("valid_through"), false) {
 		http.Error(w, "Invalid Valid Through date", 422)
@@ -888,6 +909,10 @@ func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64)
 
 func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estimate, statuses []*ent.Status) (templates.EstimateFormPageData, error) {
 	customers, _ := h.custSvc.ListAll(ctx)
+	choices, err := documentDefaultChoices(ctx, "estimate", customers, e.ID)
+	if err != nil {
+		return templates.EstimateFormPageData{}, err
+	}
 	jobs, _ := h.jobsForEditor(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
@@ -911,6 +936,7 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 	}
 	return templates.EstimateFormPageData{
 		Estimate:          &d,
+		DefaultsJSON:      choices,
 		IsNew:             false,
 		Customers:         options,
 		Jobs:              jobOptions(jobs),

@@ -70,6 +70,18 @@ func revision(ctx context.Context, q Querier, userID int64, path string, lock bo
 			return "", nil
 		}
 		query = `SELECT to_jsonb(t)::text FROM ` + table + ` t WHERE id=$1`
+		if table == "jobs" {
+			query = `SELECT (to_jsonb(t) || jsonb_build_object('commercial_links',
+			 (SELECT coalesce(jsonb_agg(x ORDER BY kind,id),'[]'::jsonb) FROM (
+			 SELECT 'estimate' AS kind,id,commercial_revision FROM estimates WHERE job_id=t.id AND conversion_hidden_at IS NULL
+			 UNION ALL SELECT 'invoice',id,commercial_revision FROM invoices WHERE job_id=t.id AND conversion_hidden_at IS NULL) x),
+			 'service_entries',(SELECT coalesce(jsonb_agg(service_entry_id ORDER BY service_entry_id),'[]'::jsonb) FROM job_customer_blockers WHERE job_id=t.id)))::text FROM jobs t WHERE id=$1`
+		}
+		if table == "estimates" || table == "invoices" {
+			// One ABA-safe commercial clock shared by every writer. Incidental
+			// updated_at touches and collaboration do not invalidate content.
+			query = `SELECT jsonb_build_array(t.id,t.commercial_revision)::text FROM ` + table + ` t WHERE id=$1`
+		}
 		if table == "time_entries" {
 			// A version token must not fingerprint the hidden Job/GPS values.
 			query = `SELECT jsonb_build_array(t.id,t.xmin::text,t.updated_at)::text FROM time_entries t WHERE id=$1`

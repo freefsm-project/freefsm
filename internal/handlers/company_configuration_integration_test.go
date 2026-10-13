@@ -115,7 +115,7 @@ func TestCompanyConfigurationUpgradePreservesRecordedFactsHTTP(t *testing.T) {
 	expectStatus(t, router, cookie, "POST", path+"/pdf/save", 409)
 	expectStatus(t, router, cookie, "GET", path+"/email", 409)
 	assertContains(t, requestBody(t, router, cookie, "GET", path+"/edit", 200), "Legacy terms were not recorded")
-	r = httptest.NewRequest("POST", path, strings.NewReader(url.Values{"customer_id": {fmt.Sprint(customerID)}, "invoice_number": {"70"}, "title": {"Preserved invoice"}, "notes": {"Recorded note"}, "terms": {"Reviewed legacy terms"}, "invoice_date": {"2025-04-20"}, "due_date": {"2025-05-20"}, "tax_rate": {"0"}, "line_items": {"[]"}}.Encode()))
+	r = httptest.NewRequest("POST", path, strings.NewReader(currentCommercialFormValues(t, router, cookie, path, url.Values{"customer_id": {fmt.Sprint(customerID)}, "invoice_number": {"70"}, "title": {"Preserved invoice"}, "notes": {"Recorded note"}, "terms": {"Reviewed legacy terms"}, "invoice_date": {"2025-04-20"}, "due_date": {"2025-05-20"}, "tax_rate": {"0"}, "line_items": {"[]"}}).Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.AddCookie(cookie)
 	w = httptest.NewRecorder()
@@ -352,7 +352,7 @@ func TestCompanyConfigurationFutureInvoiceDefaultsHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	today := time.Now().In(zone).Format("2006-01-02")
-	r = httptest.NewRequest("POST", initializedPath, strings.NewReader(url.Values{"customer_id": {fmt.Sprint(customer.ID)}, "invoice_number": {"1"}, "due_date": {today}, "tax_rate": {"0"}, "line_items": {`[{"title":"Work","description":"Service performed","quantity":1,"unit_price":1}]`}}.Encode()))
+	r = httptest.NewRequest("POST", initializedPath, strings.NewReader(currentCommercialFormValues(t, router, cookie, initializedPath, url.Values{"customer_id": {fmt.Sprint(customer.ID)}, "invoice_number": {"1"}, "due_date": {today}, "tax_rate": {"0"}, "line_items": {`[{"title":"Work","description":"Service performed","quantity":1,"unit_price":1}]`}}).Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.AddCookie(cookie)
 	w = httptest.NewRecorder()
@@ -414,7 +414,9 @@ func TestCompanyConfigurationInvoiceRetainsExplicitContentHTTP(t *testing.T) {
 	edit := requestBody(t, router, cookie, "GET", location+"/edit", 200)
 	assertContains(t, edit, "Entered note")
 	assertContains(t, edit, "Entered terms")
-	assertNotContains(t, edit, "Changed default")
+	// The Customer-change review may display future defaults, but the existing
+	// document's editable terms must remain the explicit creation snapshot.
+	assertContains(t, edit, `name="terms" rows="3">Entered terms</textarea>`)
 	body = requestBody(t, router, cookie, "GET", "/settings", 200)
 	settingsPost(t, router, cookie, url.Values{"section": {"documents"}, "revision": {configurationRevision(t, body)}, "invoice_prefix": {"NEW-"}}, 303)
 	show := requestBody(t, router, cookie, "GET", location, 200)

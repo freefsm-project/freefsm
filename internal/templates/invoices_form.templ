@@ -10,7 +10,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 			<input type="hidden" name="default_line_description" value={ p.DefaultLineDescription }/>
 			<label>
 				Customer <small class="required-marker">*</small>
-				<select name="customer_id" required>
+				<select name="customer_id" required disabled?={ !commercialAnchorsEditable(ctx,"invoice",p.IsNew) }>
 					<option value="">Select a customer...</option>
 					for _, c := range p.Customers {
 						<option value={ fmt.Sprintf("%d", c.Value) } selected?={ p.Invoice.CustomerID == c.Value }>{ c.Label }</option>
@@ -22,13 +22,17 @@ templ InvoiceForm(p InvoiceFormPageData) {
 			</label>
 			<label>
 				Job (optional)
-				<select name="job_id">
+				<select name="job_id" disabled?={ !commercialAnchorsEditable(ctx,"invoice",p.IsNew) }>
 					<option value="0">No job</option>
 					for _, j := range p.Jobs {
 						<option value={ fmt.Sprintf("%d", j.Value) } selected?={ p.Invoice.JobID == j.Value }>{ j.Label }</option>
 					}
 				</select>
 			</label>
+			if !commercialAnchorsEditable(ctx,"invoice",p.IsNew) {
+				<input type="hidden" name="customer_id" value={ fmt.Sprint(p.Invoice.CustomerID) }/>
+				<input type="hidden" name="job_id" value={ fmt.Sprint(p.Invoice.JobID) }/>
+			}
 			<div class="grid">
 				<label>
 					Invoice Number
@@ -45,10 +49,10 @@ templ InvoiceForm(p InvoiceFormPageData) {
 			<div class="grid">
 				<label>
 					Invoice Date
-					<input type="date" name="invoice_date" value={ p.Invoice.InvoiceDate }/>
+					<input type="date" name="invoice_date" value={ p.Invoice.InvoiceDate } required/>
 				</label>
 				<label>
-					Due Date
+					Due Date (blank means No Due Date)
 					<input type="date" name="due_date" value={ p.Invoice.DueDate }/>
 				</label>
 			</div>
@@ -71,6 +75,8 @@ templ InvoiceForm(p InvoiceFormPageData) {
 			}
 			if p.IsNew {
 				@DocumentDefaultPicker(p.DefaultsJSON,p.PreserveEntered)
+			} else if commercialAnchorsEditable(ctx,"invoice",false) {
+				@CommercialCustomerReview(p.DefaultsJSON,p.Invoice.CustomerID)
 			}
 			<div class="entity-form-actions">
 				<button type="submit">Save</button>

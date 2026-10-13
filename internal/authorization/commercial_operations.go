@@ -1,0 +1,261 @@
+package authorization
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/freefsm-project/freefsm/internal/customfields"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+)
+
+var ErrCommercialInput = errors.New("invalid commercial document")
+
+type CommercialIntent struct {
+	OperationID string     `json:"operation_id"`
+	ClientID    string     `json:"client_id,omitempty"`
+	JobID       int64      `json:"job_id"`
+	Revision    string     `json:"revision,omitempty"`
+	OccurredAt  *time.Time `json:"occurred_at,omitempty"`
+}
+
+// Receipts deliberately contain only effect identity and disposition. Replaying
+// after scope loss does not disclose a previously visible commercial document.
+type CommercialReceipt struct {
+	OperationID string `json:"operation_id"`
+	ID          int64  `json:"id,omitempty"`
+	Number      string `json:"number,omitempty"`
+	Revision    string `json:"revision,omitempty"`
+	Outcome     string `json:"outcome"`
+}
+
+type commercialOperationKey struct{}
+
+func commercialAuditDetail(ctx context.Context, tx interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, detail any) (any, error) {
+	in, ok := ctx.Value(commercialOperationKey{}).(CommercialIntent)
+	if !ok {
+		return detail, nil
+	}
+	raw, err := json.Marshal(detail)
+	if err != nil {
+		return nil, err
+	}
+	values := map[string]any{}
+	if err := json.Unmarshal(raw, &values); err != nil {
+		return nil, err
+	}
+	if values == nil {
+		values = map[string]any{}
+	}
+	var accepted time.Time
+	if err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&accepted); err != nil {
+		return nil, err
+	}
+	values["operation_id"], values["accepted_at"], values["occurred_at"], values["occurrence_source"] = in.OperationID, accepted, accepted, "server"
+	if in.OccurredAt != nil {
+		values["occurred_at"], values["occurrence_source"] = in.OccurredAt, "client"
+	}
+	return values, nil
+}
+
+func commercialReviewed(ctx context.Context) bool {
+	_, ok := ctx.Value(commercialOperationKey{}).(CommercialIntent)
+	return ok
+}
+
+func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id int64) (map[string]any, error) {
+	var state map[string]any
+	if kind != "estimate" && kind != "invoice" {
+		return nil, ErrNotFound
+	}
+	err := s.WithinParent(ctx, a, kind, id, "", func(tx pgx.Tx, p Principal) error {
+		var raw []byte
+		var job int64
+		err := tx.QueryRow(ctx, `SELECT coalesce(job_id,0),jsonb_build_object('id',id,'number',number_label,'job_id',job_id,'title',title,'notes',notes,'terms',terms,'custom_fields',custom_fields,'status_id',status_id) || CASE WHEN $2='invoice' THEN jsonb_build_object('invoice_date',to_jsonb(d)->'invoice_date','due_date',CASE WHEN to_jsonb(d)->>'due_date' LIKE '0001-01-01%' THEN NULL ELSE to_jsonb(d)->'due_date' END) ELSE jsonb_build_object('valid_through',to_jsonb(d)->'valid_through') END FROM `+kind+`s d WHERE id=$1`, id, kind).Scan(&job, &raw)
+		if err != nil {
+			return err
+		}
+		if job == 0 {
+			return ErrNotFound
+		}
+		// The retained anchor grants no Job context, and does not add a Job
+		// View prerequisite to independent All Records document authority.
+		if err := json.Unmarshal(raw, &state); err != nil {
+			return err
+		}
+		assigned, err := assignedJobAccess(ctx, tx, p.UserID, job, true)
+		if err != nil {
+			return err
+		}
+		if p.Allows("pricing.view", All) || assigned && p.Allows("pricing.view", Assigned) {
+			var lines json.RawMessage
+			var tax string
+			if err := tx.QueryRow(ctx, `SELECT line_items,tax_rate FROM `+kind+`s WHERE id=$1`, id).Scan(&lines, &tax); err != nil {
+				return err
+			}
+			state["line_items"], state["tax_rate"] = lines, tax
+		}
+		revision, err := saveaction.Revision(ctx, tx, a.UserID, fmt.Sprintf("/%ss/%d", kind, id))
+		state["revision"] = revision
+		return err
+	})
+	return state, err
+}
+
+func (s *Service) CommercialReceipt(ctx context.Context, a Actor, key string) (CommercialReceipt, error) {
+	var receipt CommercialReceipt
+	if _, err := uuid.Parse(key); err != nil {
+		return receipt, ErrNotFound
+	}
+	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		var raw []byte
+		if err := tx.QueryRow(ctx, `SELECT receipt FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, key).Scan(&raw); err != nil {
+			if err == pgx.ErrNoRows {
+				return ErrNotFound
+			}
+			return err
+		}
+		return json.Unmarshal(raw, &receipt)
+	})
+	return receipt, err
+}
+
+// CommercialOperation owns identity, stale-intent rejection and the receipt.
+// The callback uses this transaction for all existing details/Item/field logic.
+func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string, id int64, in CommercialIntent, intent []byte, write func(context.Context, pgx.Tx, int64) (int64, error)) (CommercialReceipt, error) {
+	r := CommercialReceipt{OperationID: in.OperationID}
+	if kind != "estimate" && kind != "invoice" {
+		return r, ErrNotFound
+	}
+	if key, err := uuid.Parse(in.OperationID); err != nil || key == uuid.Nil {
+		return r, ErrCommercialInput
+	}
+	ctx = context.WithValue(ctx, commercialOperationKey{}, in)
+	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		var prior []byte
+		var same bool
+		err := tx.QueryRow(ctx, `SELECT document_type=$4 AND requested_id=$5 AND intent=$6::jsonb,receipt FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID, kind, id, intent).Scan(&same, &prior)
+		if err == nil {
+			if !same {
+				return ErrConflict
+			}
+			return json.Unmarshal(prior, &r)
+		}
+		if err != pgx.ErrNoRows {
+			return err
+		}
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		effect := func() error {
+			if a.Channel != "api" || in.JobID <= 0 {
+				return ErrCommercialInput
+			}
+			if in.OccurredAt != nil && (in.OccurredAt.IsZero() || in.OccurredAt.After(time.Now())) {
+				return ErrCommercialInput
+			}
+			var customer int64
+			if id == 0 {
+				if _, err := parentAccess(ctx, sp, p, "job", in.JobID, "", true); err != nil {
+					return err
+				}
+				if err := sp.QueryRow(ctx, `SELECT customer_id FROM jobs WHERE id=$1 AND deleted_at IS NULL`, in.JobID).Scan(&customer); err != nil {
+					if err == pgx.ErrNoRows {
+						return ErrNotFound
+					}
+					return err
+				}
+				if key, err := uuid.Parse(in.ClientID); err != nil || key == uuid.Nil {
+					return ErrCommercialInput
+				}
+				var used bool
+				if err := sp.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM commercial_client_identities WHERE client_id=$1)`, in.ClientID).Scan(&used); err != nil {
+					return err
+				}
+				if used {
+					return ErrConflict
+				}
+			} else {
+				if _, err := parentAccess(ctx, sp, p, kind, id, kind+".edit", true); err != nil {
+					return err
+				}
+				var job int64
+				if err := sp.QueryRow(ctx, `SELECT coalesce(job_id,0),customer_id FROM `+kind+`s WHERE id=$1`, id).Scan(&job, &customer); err != nil {
+					return err
+				}
+				if job == 0 {
+					return ErrNotFound
+				}
+				if job != in.JobID {
+					return ErrConflict
+				}
+				current, err := saveaction.Revision(ctx, sp, a.UserID, fmt.Sprintf("/%ss/%d", kind, id))
+				if err != nil {
+					return err
+				}
+				if in.Revision == "" || in.Revision != current {
+					return saveaction.ErrStale
+				}
+			}
+			var err error
+			r.ID, err = write(s.WithTransactionReads(ctx, sp), sp, customer)
+			if err != nil {
+				return err
+			}
+			if id == 0 {
+				if _, err := sp.Exec(ctx, `INSERT INTO commercial_client_identities VALUES($1,$2,$3,$4,$5)`, in.ClientID, kind, r.ID, a.UserID, a.SessionHash); err != nil {
+					return err
+				}
+			}
+			if err := sp.QueryRow(ctx, `SELECT number_label FROM `+kind+`s WHERE id=$1`, r.ID).Scan(&r.Number); err != nil {
+				return err
+			}
+			r.Revision, err = saveaction.Revision(ctx, sp, a.UserID, fmt.Sprintf("/%ss/%d", kind, r.ID))
+			return err
+		}()
+		if effect != nil {
+			_ = sp.Rollback(ctx)
+			r.ID = 0
+			r.Number = ""
+			r.Revision = ""
+			var field *customfields.FieldError
+			var pg *pgconn.PgError
+			switch {
+			case errors.Is(effect, ErrNotFound):
+				r.Outcome = "not_found"
+			case errors.Is(effect, ErrForbidden):
+				r.Outcome = "forbidden"
+			case errors.Is(effect, saveaction.ErrStale):
+				r.Outcome = "stale_commercial_revision"
+			case errors.Is(effect, ErrConflict):
+				r.Outcome = "commercial_conflict"
+			case errors.Is(effect, ErrCommercialInput), errors.As(effect, &field):
+				r.Outcome = "invalid_document"
+			case errors.As(effect, &pg) && (pg.Code == "23514" || pg.Code == "23503"):
+				r.Outcome = "commercial_conflict"
+			default:
+				return effect // dependency/audit failure stays nonterminal
+			}
+		} else {
+			if err := sp.Commit(ctx); err != nil {
+				return err
+			}
+			r.Outcome = "accepted"
+		}
+		raw, err := json.Marshal(r)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO commercial_operations(user_id,client_hash,operation_id,document_type,requested_id,intent,receipt) VALUES($1,$2,$3,$4,$5,$6,$7)`, a.UserID, a.SessionHash, in.OperationID, kind, id, intent, raw)
+		return err
+	})
+	return r, err
+}

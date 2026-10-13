@@ -377,6 +377,13 @@ func expectStatus(t *testing.T, router http.Handler, cookie *http.Cookie, method
 func requestBody(t *testing.T, router http.Handler, cookie *http.Cookie, method, path string, want int) string {
 	t.Helper()
 	req := httptest.NewRequest(method, path, nil)
+	if method == http.MethodPost {
+		values := currentCommercialFormValues(t, router, cookie, path, nil)
+		if len(values) > 0 {
+			req = httptest.NewRequest(method, path, strings.NewReader(values.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		}
+	}
 	if cookie != nil {
 		req.AddCookie(cookie)
 	}

@@ -1,0 +1,37 @@
+package templates
+
+import "fmt"
+
+templ CommercialCustomerReview(choices string,customer int64) {
+	<script>
+		function commercialCustomerReview(root) {
+			return {
+				changed: false, reviewed: false, defaults: {},
+				init() {
+					const form = root.closest('form');
+					const choices = JSON.parse(root.dataset.choices || '{}');
+					form.elements.customer_id.addEventListener('change', event => {
+						this.changed = event.target.value !== root.dataset.customer;
+						this.reviewed = false;
+						this.defaults = choices[event.target.value] || choices[''] || {};
+						if (this.changed) form.elements.job_id.value = '0';
+					});
+				},
+				applyDefaults() {
+					const form = root.closest('form');
+					for (const [name,value] of Object.entries(this.defaults)) {
+						const input = form.elements.namedItem(name);
+						if (input) { input.value = value; input.dispatchEvent(new Event('input',{bubbles:true})); }
+					}
+				}
+			};
+		}
+	</script>
+	<section x-data="commercialCustomerReview($el)" data-choices={ choices } data-customer={ fmt.Sprint(customer) } x-show="changed" x-cloak>
+		<h3>Review Customer defaults</h3>
+		<p>The incompatible Job link is cleared. Existing document values and provenance are retained. Review these defaults before saving; applying them is optional.</p>
+		<dl><template x-for="(value,name) in defaults"><div><dt x-text="name"></dt><dd x-text="value === '' ? 'None' : value"></dd></div></template></dl>
+		<button type="button" class="outline" @click="applyDefaults()">Apply displayed defaults</button>
+		<label><input type="checkbox" name="customer_defaults_reviewed" value="true" x-model="reviewed" x-bind:required="changed"/>I reviewed the defaults and the document values to save</label>
+	</section>
+}

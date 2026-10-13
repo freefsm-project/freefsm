@@ -478,6 +478,11 @@ func (s *Service) transact(ctx context.Context, a Actor, operation string, op Op
 		return Result{}, err
 	}
 	defer tx.Rollback(ctx)
+	// Commercial and Job-anchor writers share this fence before taking any
+	// Customer/Invoice row locks; settlement cannot invert their lock order.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return Result{}, err
+	}
 	// Serialize contenders before checking/inserting the key. Unlike a bare unique
 	// constraint, the loser can replay the committed result instead of surfacing 23505.
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, fmt.Sprintf("%d:%s:%s", a.CompanyID, operation, op.Key)); err != nil {

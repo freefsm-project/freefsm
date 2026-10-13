@@ -162,6 +162,12 @@ func New(deps Dependencies) http.Handler {
 			r.Post(path+"/{id}/comments/{cid}/remove", h.comments(typ, true))
 		}
 		r.Get("/comment-operations/{operation}", h.commentReceipt)
+		for _, kind := range []string{"estimate", "invoice"} {
+			r.Post("/"+kind+"s", h.commercial(kind))
+			r.Get("/"+kind+"s/{id}", h.commercial(kind))
+			r.Patch("/"+kind+"s/{id}", h.commercial(kind))
+		}
+		r.Get("/commercial-operations/{operation}", h.commercialReceipt)
 		if deps.Files != nil {
 			r.Get("/files/limits", h.fileLimits)
 			r.Post("/file-transfers", h.startFileTransfer)

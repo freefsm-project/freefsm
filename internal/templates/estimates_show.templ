@@ -125,6 +125,7 @@ templ EstimateShow(p EstimateDetail) {
 		}
 		@FileList(p.FileList)
 	</div>
+	@CommercialHistoryPanel("estimate",p.ID)
 	<div hx-get={ templ.URL(fmt.Sprintf("/estimates/%d/activity", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
 		<p>Loading activity...</p>
 	</div>

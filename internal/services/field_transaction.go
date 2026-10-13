@@ -33,14 +33,21 @@ func saveDetails[T any](ctx context.Context, typ string, id, jobID int64, input 
 		return nil, authorization.ErrForbidden
 	}
 	var result *T
-	err := request.Service.DetailsTransaction(ctx, request.Actor, typ, id, jobID, input, func(tx pgx.Tx, fields string) (int64, error) {
+	write := func(tx pgx.Tx, fields string) (int64, error) {
 		ctx = context.WithValue(ctx, detailsTxKey{}, tx)
+		ctx = request.Service.WithTransactionReads(ctx, tx)
 		client := ent.NewClient(ent.Driver(&fieldTxDriver{tx: tx}))
 		var resultID int64
 		var err error
 		result, resultID, err = save(ctx, client, fields)
 		return resultID, err
-	})
+	}
+	var err error
+	if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+		err = request.Service.DetailsInTransaction(ctx, tx, request.Actor, typ, id, jobID, input, write)
+	} else {
+		err = request.Service.DetailsTransaction(ctx, request.Actor, typ, id, jobID, input, write)
+	}
 	return result, err
 }
 
