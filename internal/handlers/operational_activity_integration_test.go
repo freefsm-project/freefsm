@@ -98,8 +98,9 @@ func TestOperationalActivityUnknownHistoricalActorHTTP(t *testing.T) {
 }
 
 func TestOperationalActivityFailurePreservesFiltersHTTP(t *testing.T) {
-	pool, _, router, sessions, _, admin := permissionHTTPFixture(t)
+	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
+	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Failure record").SaveX(ctx)
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	if _, err := pool.Exec(ctx, `ALTER TABLE activity_logs RENAME TO unavailable_activity_logs`); err != nil {
 		t.Fatal(err)
@@ -109,6 +110,13 @@ func TestOperationalActivityFailurePreservesFiltersHTTP(t *testing.T) {
 	assertContains(t, body, "2026-01-01")
 	assertContains(t, body, "Refresh activity")
 	assertNotContains(t, body, "No activity recorded")
+	assertNotContains(t, body, "SQLSTATE")
+	if _, err := pool.Exec(ctx, `ALTER TABLE customers RENAME TO unavailable_customers`); err != nil {
+		t.Fatal(err)
+	}
+	body = requestBody(t, router, cookie, "GET", fmt.Sprintf("/activity?object_type=customer&object_id=%d", c.ID), 503)
+	assertContains(t, body, "Activity could not be loaded")
+	assertContains(t, body, `value="customer"`)
 	assertNotContains(t, body, "SQLSTATE")
 }
 

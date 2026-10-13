@@ -1,8 +1,10 @@
 package templates
 
 import (
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"net/url"
 	"strings"
+	"time"
 )
 
 type ActivityEntry struct {
@@ -18,44 +20,48 @@ type ActivityEntry struct {
 }
 
 type ActivityMetadata struct {
-	ActorCompanyName string `json:"actor_company_name,omitempty"`
-	SourceName       string `json:"source_name,omitempty"`
-	BuildKind        string `json:"build_kind,omitempty"`
-	Version          string `json:"version,omitempty"`
-	FailureCategory  string `json:"failure_category,omitempty"`
-	FailurePhase     string `json:"failure_phase,omitempty"`
-	FailureMessage   string `json:"failure_message,omitempty"`
-	DiagnosticID     string `json:"diagnostic_id,omitempty"`
-	EntityName       string `json:"entity_name,omitempty"`
-	ActorName        string `json:"actor_name,omitempty"`
-	TagName          string `json:"tag_name,omitempty"`
-	FileName         string `json:"file_name,omitempty"`
-	CommentPreview   string `json:"comment_preview,omitempty"`
-	OldStatus        string `json:"old_status,omitempty"`
-	NewStatus        string `json:"new_status,omitempty"`
-	Amount           string `json:"amount,omitempty"`
-	Changed          string `json:"changed,omitempty"`
-	OldStart         string `json:"old_start,omitempty"`
-	NewStart         string `json:"new_start,omitempty"`
-	OldEnd           string `json:"old_end,omitempty"`
-	NewEnd           string `json:"new_end,omitempty"`
-	OldStartDisplay  string `json:"old_start_display,omitempty"`
-	NewStartDisplay  string `json:"new_start_display,omitempty"`
-	OldEndDisplay    string `json:"old_end_display,omitempty"`
-	NewEndDisplay    string `json:"new_end_display,omitempty"`
-	OldAssignee      string `json:"old_assignee,omitempty"`
-	NewAssignee      string `json:"new_assignee,omitempty"`
-	Source           string `json:"source,omitempty"`
+	OccurredAt       *time.Time                   `json:"occurred_at,omitempty"`
+	Facts            []authorization.ActivityFact `json:"facts,omitempty"`
+	ActorCompanyName string                       `json:"actor_company_name,omitempty"`
+	SourceName       string                       `json:"source_name,omitempty"`
+	BuildKind        string                       `json:"build_kind,omitempty"`
+	Version          string                       `json:"version,omitempty"`
+	FailureCategory  string                       `json:"failure_category,omitempty"`
+	FailurePhase     string                       `json:"failure_phase,omitempty"`
+	FailureMessage   string                       `json:"failure_message,omitempty"`
+	DiagnosticID     string                       `json:"diagnostic_id,omitempty"`
+	EntityName       string                       `json:"entity_name,omitempty"`
+	ActorName        string                       `json:"actor_name,omitempty"`
+	TagName          string                       `json:"tag_name,omitempty"`
+	FileName         string                       `json:"file_name,omitempty"`
+	CommentPreview   string                       `json:"comment_preview,omitempty"`
+	OldStatus        string                       `json:"old_status,omitempty"`
+	NewStatus        string                       `json:"new_status,omitempty"`
+	Amount           string                       `json:"amount,omitempty"`
+	Changed          string                       `json:"changed,omitempty"`
+	OldStart         string                       `json:"old_start,omitempty"`
+	NewStart         string                       `json:"new_start,omitempty"`
+	OldEnd           string                       `json:"old_end,omitempty"`
+	NewEnd           string                       `json:"new_end,omitempty"`
+	OldStartDisplay  string                       `json:"old_start_display,omitempty"`
+	NewStartDisplay  string                       `json:"new_start_display,omitempty"`
+	OldEndDisplay    string                       `json:"old_end_display,omitempty"`
+	NewEndDisplay    string                       `json:"new_end_display,omitempty"`
+	OldAssignee      string                       `json:"old_assignee,omitempty"`
+	NewAssignee      string                       `json:"new_assignee,omitempty"`
+	Source           string                       `json:"source,omitempty"`
 }
 
 type ActivityWidgetData struct {
-	DOMID      string
-	Entries    []ActivityEntry
-	HasMore    bool
-	ViewAllURL string
+	RefreshURL, UpdatedAt string
+	DOMID                 string
+	Entries               []ActivityEntry
+	HasMore               bool
+	ViewAllURL            string
 }
 
 type ActivityPageData struct {
+	ExportURL  string
 	Filters    url.Values
 	UpdatedAt  string
 	RefreshURL string
@@ -69,6 +75,10 @@ type ActivityPageData struct {
 
 func activityVerb(action string) string {
 	switch action {
+	case "job_fields_changed":
+		return "changed custom fields on"
+	case "field_notes_updated", "field_notes_changed", "tech_notes_updated":
+		return "changed Field Notes on"
 	case "backup_created":
 		return "created an encrypted backup of"
 	case "backup_failed":

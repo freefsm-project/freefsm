@@ -2,6 +2,10 @@ package templates
 
 templ ActivityIndex(p ActivityPageData) {
 	@Layout("Activity") {
+		if p.ExportURL!="" {
+			<a href={ templ.URL(p.ExportURL) }>Export activity CSV</a>
+		}
+		<a href="/exports">My CSV exports</a>
 		<form method="get" action={ templ.URL(p.RefreshURL) }>
 			<label>From (company date, inclusive)<input type="date" name="from" value={ p.Filters.Get("from") }/></label>
 			<label>Until (company date, exclusive)<input type="date" name="until" value={ p.Filters.Get("until") }/></label>
@@ -85,6 +89,7 @@ templ ActivityIndex(p ActivityPageData) {
 								}
 							</span>
 							@BackupActivityPreview(e)
+							@ActivityFacts(e.Metadata)
 							if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
 								<p class="activity-preview activity-preview-compact">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>
 							}
@@ -92,7 +97,7 @@ templ ActivityIndex(p ActivityPageData) {
 								<p class="activity-preview activity-preview-compact">{ ScheduleActivityDetail(e.Metadata) }</p>
 							}
 						</div>
-						<small class="activity-time activity-time-compact">{ e.CreatedAt }</small>
+						<small class="activity-time activity-time-compact">Accepted { e.CreatedAt }</small>
 					</div>
 				}
 			</div>

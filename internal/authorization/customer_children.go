@@ -233,6 +233,7 @@ func (s *Service) SaveCustomerChild(ctx context.Context, a Actor, customerID, id
 			return ErrForbidden
 		}
 		var before CustomerChild
+		var beforeData, afterData json.RawMessage
 		if id != 0 {
 			var b []byte
 			err = tx.QueryRow(ctx, `SELECT to_jsonb(c) FROM `+table+` c WHERE `+childWhere(kind, owner)+` AND id=$3 FOR UPDATE`, customerID, p.CompanyID, id).Scan(&b)
@@ -245,6 +246,7 @@ func (s *Service) SaveCustomerChild(ctx context.Context, a Actor, customerID, id
 			if err = json.Unmarshal(b, &before); err != nil {
 				return err
 			}
+			beforeData = b
 			if before.DeletedAt != nil {
 				if !p.Allows(kind+".archived.view", All) {
 					return ErrNotFound
@@ -309,7 +311,10 @@ func (s *Service) SaveCustomerChild(ctx context.Context, a Actor, customerID, id
 		if _, err = tx.Exec(ctx, `UPDATE `+table+` SET `+strings.Join(sets, ",")+` WHERE id=$1`, args...); err != nil {
 			return err
 		}
-		return audit(ctx, tx, a, p, action, All, kind, id, map[string]any{"before": before, "fields": fields, "primary": primary, "customer_id": customerID})
+		if err := tx.QueryRow(ctx, `SELECT to_jsonb(c) FROM `+table+` c WHERE id=$1`, id).Scan(&afterData); err != nil {
+			return err
+		}
+		return audit(ctx, tx, a, p, action, All, kind, id, map[string]any{"before": beforeData, "after": afterData, "fields": fields, "primary": primary, "customer_id": customerID})
 	})
 	return id, err
 }
@@ -374,9 +379,16 @@ func (s *Service) CustomerChildLifecycle(ctx context.Context, a Actor, customerI
 				return fmt.Errorf("unfinished work blocks archive")
 			}
 		}
+		var beforeData, afterData json.RawMessage
+		if err := tx.QueryRow(ctx, `SELECT to_jsonb(c) FROM `+table+` c WHERE id=$1`, id).Scan(&beforeData); err != nil {
+			return err
+		}
 		if _, err = tx.Exec(ctx, `UPDATE `+table+` SET deleted_at=CASE WHEN $2 THEN NULL ELSE clock_timestamp() END,is_primary=false,updated_at=clock_timestamp() WHERE id=$1`, id, restore); err != nil {
 			return err
 		}
-		return audit(ctx, tx, a, p, action, All, kind, id, map[string]any{"customer_id": customerID})
+		if err := tx.QueryRow(ctx, `SELECT to_jsonb(c) FROM `+table+` c WHERE id=$1`, id).Scan(&afterData); err != nil {
+			return err
+		}
+		return audit(ctx, tx, a, p, action, All, kind, id, map[string]any{"customer_id": customerID, "before": beforeData, "after": afterData})
 	})
 }

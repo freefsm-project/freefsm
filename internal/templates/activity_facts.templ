@@ -1,0 +1,28 @@
+package templates
+
+templ ActivityFacts(meta ActivityMetadata) {
+	if meta.OccurredAt!=nil {
+		<p>Occurred: { meta.OccurredAt.UTC().Format("2006-01-02 15:04:05 UTC") }</p>
+	}
+	if len(meta.Facts)>0 {
+		<dl class="activity-facts">
+			for _, fact := range meta.Facts {
+				<dt>{ fact.Field }</dt>
+				<dd><strong>Before: </strong>
+					if fact.BeforeKnown {
+						{ fact.Before }
+					} else {
+						<span>Not recorded</span>
+					}
+				</dd>
+				<dd><strong>After: </strong>
+					if fact.AfterKnown {
+						{ fact.After }
+					} else {
+						<span>Not recorded</span>
+					}
+				</dd>
+			}
+		</dl>
+	}
+}

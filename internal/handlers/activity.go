@@ -122,7 +122,7 @@ func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerF
 
 		page, rows, err := h.listAndResolve(r.Context(), u, scope, objectActivityLimit, nil, "")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Activity could not be loaded. Refresh this page to retry.", http.StatusServiceUnavailable)
 			return
 		}
 		filters := url.Values{"object_type": {string(ref.Type)}, "object_id": {strconv.FormatInt(ref.ID, 10)}}
@@ -131,6 +131,7 @@ func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerF
 		}
 		_, currentRead := authorization.NavigationPrincipal(r.Context())
 		render(w, r, templates.ActivityWidget(templates.ActivityWidgetData{
+			RefreshURL: activityURL(filters), UpdatedAt: displayDateTime(r.Context(), time.Now()),
 			DOMID:      fmt.Sprintf("activity-%s-%d", ref.Type, ref.ID),
 			Entries:    rows,
 			HasMore:    page.HasOlder,
@@ -171,7 +172,7 @@ func (h *ActivityHandler) ListByType(objectType objectref.Type) http.HandlerFunc
 		}
 		page, rows, err := h.listAndResolve(r.Context(), u, services.TypeActivityScope{Types: []objectref.Type{objectType}}, embeddedActivityLimit, nil, "")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Activity could not be loaded. Refresh this page to retry.", http.StatusServiceUnavailable)
 			return
 		}
 		filters := url.Values{"type": {string(objectType)}}
@@ -190,7 +191,7 @@ func (h *ActivityHandler) ListForAssetSettings(w http.ResponseWriter, r *http.Re
 	types := []objectref.Type{objectref.TypeAssetType, objectref.TypeAssetStatus}
 	page, rows, err := h.listAndResolve(r.Context(), u, services.TypeActivityScope{Types: types}, embeddedActivityLimit, nil, "")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Activity could not be loaded. Refresh this page to retry.", http.StatusServiceUnavailable)
 		return
 	}
 	filters := url.Values{"type": {string(types[0]), string(types[1])}}
@@ -211,7 +212,7 @@ func (h *ActivityHandler) ListSchedule(w http.ResponseWriter, r *http.Request) {
 	}
 	page, rows, err := h.listAndResolve(r.Context(), u, scope, embeddedActivityLimit, nil, "")
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Activity could not be loaded. Refresh this page to retry.", http.StatusServiceUnavailable)
 		return
 	}
 	filters := url.Values{
@@ -238,6 +239,12 @@ func (h *ActivityHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 
 	parsed, err := h.parseIndexRequest(r.Context(), r.URL.Query(), u)
 	if err != nil {
+		if errors.Is(err, authorization.ErrUnavailable) {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			templates.ActivityIndex(templates.ActivityPageData{Filters: cloneValues(r.URL.Query()), RefreshURL: r.URL.Path, Failed: true}).Render(r.Context(), w)
+			return
+		}
 		if errors.Is(err, conversion.ErrNotFound) {
 			http.NotFound(w, r)
 			return
@@ -292,6 +299,13 @@ func (h *ActivityHandler) ListAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := templates.ActivityPageData{Entries: rows, HasMore: page.HasOlder, Filters: parsed.filters, RefreshURL: r.URL.Path, UpdatedAt: displayDateTime(r.Context(), time.Now())}
+	if r.URL.Path == "/activity" {
+		if auth, ok := authorization.FromContext(r.Context()); ok {
+			if p, err := auth.Service.Principal(r.Context(), auth.Actor); err == nil && p.Allows("activity.export", authorization.Assigned) {
+				data.ExportURL = "/activity/export?" + parsed.filters.Encode()
+			}
+		}
+	}
 	if page.HasOlder && page.OlderCursor != nil {
 		filters := cloneValues(parsed.filters)
 		filters.Set("cursor", encodeActivityCursor(*page.OlderCursor, services.ActivityOlder, parsed.fingerprint))
@@ -355,14 +369,29 @@ func (h *ActivityHandler) parseIndexRequest(ctx context.Context, values url.Valu
 	if hasObjectType {
 		id, parseErr := strconv.ParseInt(objectIDValue, 10, 64)
 		ref, refErr := objectref.Parse(objectTypeValue, id)
-		if parseErr != nil || refErr != nil || !ref.Type.Has(objectref.CapActivity) {
+		if auth, ok := authorization.FromContext(ctx); ok && authorization.ValidActivityType(objectTypeValue) && parseErr == nil && id > 0 {
+			ref = objectref.New(objectref.Type(objectTypeValue), id)
+			refErr = nil
+			if err := auth.Service.WithinActor(ctx, auth.Actor, func(tx pgx.Tx, p authorization.Principal) error {
+				_, _, _, _, err := authorization.ActivityTarget(ctx, tx, p, objectTypeValue, id)
+				return err
+			}); err != nil {
+				if !errors.Is(err, authorization.ErrNotFound) && !errors.Is(err, authorization.ErrForbidden) {
+					return out, fmt.Errorf("%w: %w", authorization.ErrUnavailable, err)
+				}
+				out.forbidden = true
+				return out, nil
+			}
+		}
+		if parseErr != nil || refErr != nil || (!ref.Type.Has(objectref.CapActivity) && !authorization.ValidActivityType(objectTypeValue)) {
 			return out, errors.New("invalid activity object")
 		}
 		if ref.Type.AdminOnly() && !u.ProtectedAdministrator {
 			out.forbidden = true
 			return out, nil
 		}
-		if h.policySvc == nil || !h.policySvc.CanAccessObject(ctx, u.ID, u.Role, ref, policyRead) {
+		_, canonical := authorization.FromContext(ctx)
+		if !canonical && (h.policySvc == nil || !h.policySvc.CanAccessObject(ctx, u.ID, u.Role, ref, policyRead)) {
 			out.forbidden = true
 			return out, nil
 		}
@@ -462,6 +491,9 @@ func (h *ActivityHandler) listAndResolve(ctx context.Context, u *middleware.User
 	if err != nil {
 		return services.ActivityPage{}, nil, err
 	}
+	if _, ok := authorization.FromContext(ctx); ok && len(page.Entries) > 0 && page.Entries[0].CurrentURL != "" {
+		return page, activityRows(ctx, page.Entries, services.ActivityResolution{}), nil
+	}
 	resolution, err := h.resolver.Resolve(ctx, u.CompanyID, services.ActivityViewer{ID: u.ID, Role: u.Role, ProtectedAdministrator: u.ProtectedAdministrator}, page.Entries)
 	if err != nil {
 		return services.ActivityPage{}, nil, err
@@ -490,6 +522,9 @@ func activityRows(ctx context.Context, entries []services.ActivityEntry, resolut
 			}
 		}
 		target := resolution.Targets[entry.Target]
+		if entry.CurrentURL != "" {
+			target.URL = entry.CurrentURL
+		}
 		entityName := meta.EntityName
 		if entityName == "" {
 			entityName = target.DisplayName
@@ -552,7 +587,7 @@ func normalizedActivityTypes(values []string) ([]objectref.Type, error) {
 	seen := make(map[objectref.Type]struct{}, len(values))
 	for _, value := range values {
 		typ := objectref.Type(strings.TrimSpace(value))
-		if !objectref.Known(typ) || !typ.Has(objectref.CapActivity) {
+		if (!objectref.Known(typ) || !typ.Has(objectref.CapActivity)) && !authorization.ValidActivityType(string(typ)) {
 			return nil, fmt.Errorf("invalid activity type: %q", value)
 		}
 		seen[typ] = struct{}{}

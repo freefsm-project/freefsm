@@ -58,10 +58,10 @@ func CollectionAllowed(p Principal, typ string) bool {
 		return p.Allows(typ+".view", All) || p.Allows(typ+".view", Assigned)
 	case "time":
 		return p.Allows("time.view", All) || p.Allows("time.view", Assigned) || p.Allows("time.view", Own)
-	case "customer", "asset", "project", "item":
+	case "customer", "contact", "location", "asset", "project", "item":
 		return p.Allows(typ+".view", All)
 	case "activity":
-		for _, parent := range []string{"customer", "asset", "project", "item", "job", "estimate", "invoice", "time"} {
+		for _, parent := range []string{"customer", "contact", "location", "asset", "project", "item", "job", "estimate", "invoice", "time"} {
 			if CollectionAllowed(p, parent) {
 				return true
 			}

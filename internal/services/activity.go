@@ -111,7 +111,8 @@ type ActivityService struct {
 }
 
 type ActivityEntry struct {
-	ID int64
+	CurrentURL string
+	ID         int64
 	// ActorID is zero for historical snapshots without a current-user link.
 	ActorID          int64
 	Action           string
@@ -127,6 +128,11 @@ func NewActivityService(client *ent.Client, objects objectref.Directory) *Activi
 
 // List returns a keyset-paginated activity page for one explicitly scoped company.
 func (s *ActivityService) List(ctx context.Context, request ActivityListRequest) (ActivityPage, error) {
+	if auth, ok := authorization.FromContext(ctx); ok {
+		if filter, operational := canonicalActivityScope(request.Scope); operational {
+			return s.listAuthorized(ctx, auth, request, filter)
+		}
+	}
 	var empty ActivityPage
 	var filters FilteredActivityScope
 	if filtered, ok := request.Scope.(FilteredActivityScope); ok {
@@ -473,6 +479,21 @@ func activityRowCursor(row *ent.ActivityLog) *ActivityCursor {
 }
 
 func (s *ActivityService) Record(ctx context.Context, companyID, actorID int64, action string, target objectref.Ref, metadata map[string]interface{}) error {
+	if _, ok := authorization.FromContext(ctx); ok {
+		switch action {
+		case "contact_created", "contact_updated", "contact_deleted", "location_created", "location_updated", "location_deleted":
+			return nil
+		}
+	}
+	// Canonical details commands publish their immutable before/after activity
+	// inside the effect's audit transaction. Do not append a second, best-effort
+	// legacy summary after that transaction commits.
+	if _, ok := authorization.FromContext(ctx); ok && (action == "created" || action == "updated") {
+		switch target.Type {
+		case objectref.TypeCustomer, objectref.TypeJob, objectref.TypeProject, objectref.TypeAsset, objectref.TypeEstimate, objectref.TypeInvoice:
+			return nil
+		}
+	}
 	if err := validateActivityIDs(companyID, actorID); err != nil {
 		return err
 	}

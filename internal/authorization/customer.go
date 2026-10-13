@@ -168,22 +168,24 @@ func (s *Service) SaveCustomer(ctx context.Context, a Actor, id int64, in Custom
 				return err
 			}
 		}
+		var before, after json.RawMessage
+		if permission == "customer.edit" {
+			if err := tx.QueryRow(ctx, `SELECT to_jsonb(c) FROM customers c WHERE id=$1`, id).Scan(&before); err != nil {
+				return err
+			}
+		}
 		_, err := tx.Exec(ctx, `UPDATE customers SET first_name=coalesce($2,first_name),last_name=coalesce($3,last_name),display_name=coalesce($4,display_name),email=coalesce($5,email),phone=coalesce($6,phone),company_name=coalesce($7,company_name),notes=coalesce($8,notes),service_notes=coalesce($9,service_notes),account_type=coalesce($10,account_type),billing_address_1=coalesce($11,billing_address_1),billing_address_2=coalesce($12,billing_address_2),billing_city=coalesce($13,billing_city),billing_state=coalesce($14,billing_state),billing_zip_code=coalesce($15,billing_zip_code),tax_exempt=coalesce($16,tax_exempt),custom_fields=coalesce($17::jsonb,custom_fields),status=coalesce($18,status),updated_at=clock_timestamp() WHERE id=$1`, id, in.FirstName, in.LastName, in.DisplayName, in.Email, in.Phone, in.CompanyName, in.Notes, in.ServiceNotes, in.AccountType, in.BillingAddress1, in.BillingAddress2, in.BillingCity, in.BillingState, in.BillingZipCode, in.TaxExempt, in.CustomFields, in.Status)
 		if err != nil {
 			return err
 		}
-		var auditDetail any = in
-		if action.ID != "" {
-			auditDetail = map[string]any{"input": in, "operation_id": action.ID}
-		}
-		if err := audit(ctx, tx, a, p, permission, All, "customer", id, auditDetail); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT to_jsonb(c) FROM customers c WHERE id=$1`, id).Scan(&after); err != nil {
 			return err
 		}
-		activityAction := "updated"
-		if permission == "customer.create" {
-			activityAction = "created"
+		auditDetail := map[string]any{"input": in, "before": before, "after": after}
+		if action.ID != "" {
+			auditDetail["operation_id"] = action.ID
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) SELECT $1,$2,$3,'customer',id,jsonb_build_object('entity_name',display_name,'permission',$4::text,'scope','A') FROM customers WHERE id=$5`, p.CompanyID, a.UserID, activityAction, permission, id); err != nil {
+		if err := audit(ctx, tx, a, p, permission, All, "customer", id, auditDetail); err != nil {
 			return err
 		}
 		var encoded []byte
