@@ -12,6 +12,8 @@ Each queued browser File has a stable UUID publication ID. A lost response can
 be retried with the same ID and identical intent without creating another File.
 Different intent with that ID conflicts. Replacement uses a new publication ID
 and therefore a new File identity; duplicate display names are allowed.
+The enhanced browser reconciles the original save receipt before considering a
+repeat upload; an unknown outcome is not automatically reuploaded.
 
 An uncertain database commit must never cause deletion of possibly committed
 bytes. Failed attempts can consequently leave unreferenced durable files. They
@@ -24,8 +26,8 @@ unreferenced files.
 `FREEFSM_MAX_UPLOAD_SIZE` is a byte count, default **26,214,400 (25 MiB)**.
 Authenticated `GET /files/limits` and `GET /api/v1/files/limits` expose bounds.
 Browser batches contain at most ten Files, with independent transfer progress,
-publication outcomes, and an explicit **Retry failed files** action. Successful
-items are retained while failures are retried.
+publication outcomes, and an explicit **Check status / retry rejected files**
+action. Successful items are retained while uncertain outcomes are reconciled.
 
 Accepted extensions: PNG, JPG/JPEG, GIF, WebP, PDF, TXT, CSV, DOC/XLS/PPT,
 DOCX/XLSX/PPTX, ODT/ODS, ZIP, and JSON. Content detection uses the pinned
@@ -105,6 +107,25 @@ JSON responses use the existing `{ "data": ... }` envelope. Invalid content is
 publication conflicts 409. Storage failures do not acknowledge publication.
 After a mutation, refresh metadata before preparing another mutation.
 
+### Originating-client publication replay
+
+Publication evidence now also stores its originating client key. For the field
+API this is the server-resolved mobile session identity, not the device label,
+the transfer ID, or any caller-supplied identity. Two sessions belonging to the
+same user—even with identical device labels—cannot replay one another's
+publication operation. The losing client receives a generic 409 without the
+File representation. Client binding, exact intent, File and audit commit together
+under the existing authorization fence; two racing clients produce one accepted
+publication and one conflict.
+
+The original client can retry the same operation through another transfer attempt
+or after server/router reconstruction. It must still have current parent View
+and File Upload authority; a recorded success is not cached authorization.
+Revoked sessions remain invalid. Browser publication keeps its existing user-bound
+cross-sign-in semantics in a separate `web` namespace, so it cannot claim an API
+publication. Browser receipt reconciliation still retains the non-sensitive
+disposition/effect identity after scope loss without caching file names or bytes.
+
 ## Upgrade and recovery review
 
 Migration `058_file_publication.up.sql` preserves existing File IDs, recorded
@@ -119,6 +140,14 @@ Migration `070_file_api_attribution.up.sql` adds nullable transfer occurrence an
 immutable successful-mutation evidence. It does not rewrite existing audits or
 invent historical device, operation, or occurrence facts. The upgrade regression
 compares pre/post transfer and audit records explicitly.
+
+Migration `073_file_publication_client.up.sql` adds immutable originating-client
+evidence. Where a single matching protected upload audit already records the
+API session or web channel, that recorded fact establishes the binding. Missing
+or conflicting attribution stays NULL and rejects replay for manual review; the
+first retry never claims an unknown legacy origin. Files, publication intent and
+historical audit remain intact, and no grants are added. The binding is retained
+without a foreign key to deletable session rows.
 
 The existing encrypted backup inventory includes removed File bytes; PostgreSQL
 backup includes publication IDs, revisions, removal metadata, transfer chunks,
@@ -138,9 +167,10 @@ Sources, binaries, regeneration instructions and hashes are under
 HTTP tests cover all three valid binaries, every cross-extension pairing, text
 masquerades, truncated containers, media types and exact-byte downloads. The
 persisted browser runs production static scripts and CSRF middleware: an oversized
-batch sends no request; a three-format batch retains two successes while retrying
-one lost successful response; mismatches reject; rename retains exact bytes and
-identity; removal retains attribution and denies subsequent download. This also
+batch sends no request; a three-format batch retains successes while reconciling
+one lost successful response by receipt without another POST; mismatches reject;
+rename retains exact bytes and identity; removal retains attribution and denies
+subsequent download. This also
 exposed and repaired a second, identity-less HTMX form submission alongside the
 enhanced upload queue. Only the queue submits an enhanced File form now.
 
@@ -151,6 +181,12 @@ and retained attribution after revocation. Existing File publication, permission
 concurrency, migration and encrypted backup checks remain acceptance seams.
 
 ## Downstream integration ownership
+
+The originating-client replay defect identified at integration `6fb21df` is
+repaired and covered by production HTTP replay, concurrency, authority-loss and
+receipt-filtering tests plus a real-database upgrade preservation test. This
+supersedes the AC7 defect assessment at that checkpoint; the downstream boundaries
+below remain separate.
 
 - The base integration branch has no Lease schema, object directory support, or
   Lease basic view. Lease File UI acceptance is blocked on that domain landing.
