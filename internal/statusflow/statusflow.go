@@ -616,10 +616,14 @@ func activity(ctx context.Context, tx pgx.Tx, a Actor, action string, typ Object
 		scope = "J"
 	}
 	channel := "web"
+	var sessionHash string
 	if request, ok := authorization.FromContext(ctx); ok && request.Actor.Channel != "" {
 		channel = request.Actor.Channel
+		if request.Actor.UserID == a.ID {
+			sessionHash = request.Actor.SessionHash
+		}
 	}
-	return protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.ID, RoleID: a.principal.RoleID, Action: a.permission, Scope: scope, TargetType: string(typ), TargetID: id, Channel: channel, Detail: metadata})
+	return protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.ID, RoleID: a.principal.RoleID, Action: a.permission, Scope: scope, TargetType: string(typ), TargetID: id, Channel: channel, Detail: metadata, SessionHash: sessionHash})
 }
 func configActivity(ctx context.Context, tx pgx.Tx, a Actor, action string, statusID, workflowID int64, before, after any) error {
 	b, _ := json.Marshal(map[string]any{"workflow_id": workflowID, "status_id": statusID, "before": before, "after": after})

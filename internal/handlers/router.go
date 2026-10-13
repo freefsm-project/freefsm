@@ -262,6 +262,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/customers/{id}", customerHandler.Show)
 		registerCustomerChildren(r)
 		registerExports(r, db)
+		registerAudit(r, db)
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/projects/options", projectHandler.ProjectOptions)
 		r.With(collectionRead("asset")).Get("/customers/{id}/assets/options", jobHandler.AssetOptions)
 		r.Route("/items", func(r chi.Router) {

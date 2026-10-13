@@ -1,0 +1,83 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/auditview"
+
+templ AuditPage(page auditview.Page, filters auditview.Filters, size int) {
+ @Layout("Protected administrative audit") {
+  <h1>Protected administrative audit</h1>
+  <p>Immutable recorded evidence. Empty fields mean not recorded; historical IDs are not links to current users. Event-time Role is independent of current authority. Raw details and removed text are excluded.</p>
+  <p>Updated at { page.AsOf.UTC().Format("2006-01-02 15:04:05 UTC") }. Refresh to retrieve current evidence. Every audit view is accounted for.</p>
+  <form method="get" action="/settings/audit">
+   @AuditFilterFields(filters)
+   <label for="audit-page-size">Rows per page</label>
+   <select id="audit-page-size" name="per_page"><option value="25" selected?={size==25}>25</option><option value="50" selected?={size==50}>50</option><option value="100" selected?={size==100}>100</option></select>
+   <button type="submit">Filter audit</button><a href="/settings/audit">Reset filters</a>
+  </form>
+  if navigationPermission(ctx,"audit.export","S") {
+   <p><a style="display:inline-flex;align-items:center;min-height:44px" href={templ.URL("/settings/audit/export?"+filters.Query())}>Review audit export</a></p>
+  }
+  <p><a style="display:inline-flex;align-items:center;min-height:44px" href="/exports">My CSV exports</a></p>
+  if len(page.Rows)==0 {
+   <p>No matching audit evidence.</p>
+  }
+  <div class="table-scroll" role="region" aria-label="Audit evidence" tabindex="0" style="overflow-x:auto;max-width:100%">
+   <table style="width:max-content;min-width:100%;white-space:nowrap;overflow-wrap:normal"><thead><tr>
+    for _,column:=range auditview.Columns() {
+     <th scope="col">{column}</th>
+    }
+   </tr></thead>
+   <tbody>
+    for _,row:=range page.Rows {
+     <tr>
+      for _,value:=range row.Values {
+       <td>{value}</td>
+      }
+     </tr>
+    }
+   </tbody></table>
+  </div>
+  if page.Next>0 {
+   <a href={templ.URL(fmt.Sprintf("/settings/audit?%s&after=%d&per_page=%d",filters.Query(),page.Next,size))}>Next page</a>
+  }
+ }
+}
+
+templ AuditFilterFields(f auditview.Filters) {
+ <label>Permission<input name="permission" value={f.Permission}/></label>
+ <label>Scope<input name="scope" value={f.Scope}/></label>
+ <label>Channel<input name="channel" value={f.Channel}/></label>
+ <label>Outcome<input name="outcome" value={f.Outcome}/></label>
+ <label>Event-time Role<input name="role" value={f.Role}/></label>
+ <label for="audit-sort">Sorting</label>
+ <select id="audit-sort" name="sort"><option value="newest" selected?={f.Sort=="newest"}>Newest ID first</option><option value="oldest" selected?={f.Sort=="oldest"}>Oldest ID first</option></select>
+}
+
+templ AuditExportReview(f auditview.Filters,operation string) {
+ @Layout("Export protected audit") {
+  <h1>Export protected audit</h1>
+  <p>All matching rows, not only the current page. Scope: sealed Administrator evidence. The worker prepares one consistent as-of snapshot in the confirmed ID order.</p>
+  <p>Confirm filters: Permission {f.Permission}; Scope {f.Scope}; Channel {f.Channel}; Outcome {f.Outcome}; Event-time Role {f.Role}; Sorting {f.Sort}. Blank filters include all recorded values.</p>
+  <p>Only you can download for 24 hours after Ready. Each download rechecks sealed View and Export authority for the entire artifact. Downloaded copies are outside subsequent access control.</p>
+  <p>Fixed columns:</p>
+  <ul>
+   for _,column:=range auditview.Columns() {
+    <li>{column}</li>
+   }
+  </ul>
+  <p>Blank fields mean not recorded. No current identity lookup, raw detail, request body, credential, file bytes or removed text is included. Formula-leading text and existing leading apostrophes receive one added apostrophe for spreadsheet safety.</p>
+  <form method="post" action="/settings/audit/export" hx-boost="false">
+   <input type="hidden" name="csrf_token" value={csrfToken(ctx)}/>
+   <input type="hidden" name="operation_id" value={operation}/>
+   <input type="hidden" name="permission" value={f.Permission}/>
+   <input type="hidden" name="scope" value={f.Scope}/>
+   <input type="hidden" name="channel" value={f.Channel}/>
+   <input type="hidden" name="outcome" value={f.Outcome}/>
+   <input type="hidden" name="role" value={f.Role}/>
+   <input type="hidden" name="sort" value={f.Sort}/>
+   <button type="submit">Confirm export</button>
+  </form>
+  <a href={templ.URL("/settings/audit?"+f.Query())}>Cancel</a>
+  <a href="/exports">My CSV exports</a>
+ }
+}

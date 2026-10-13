@@ -93,11 +93,15 @@ func TestLegacyRecoveryUpgradePreservesIdentityAndQuarantines(t *testing.T) {
 		}
 	})
 	var after string
-	if err := pool.QueryRow(ctx, `SELECT (to_jsonb(u)-'credential_revision')::text FROM users u WHERE email='admin@test'`).Scan(&after); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT (to_jsonb(u)-'credential_revision'-'audit_identity')::text FROM users u WHERE email='admin@test'`).Scan(&after); err != nil {
 		t.Fatal(err)
 	}
 	if before != after {
 		t.Fatal("upgrade rewrote user identity, credential or historical timestamps")
+	}
+	var evidenceIdentity string
+	if err := pool.QueryRow(ctx, `SELECT audit_identity::text FROM users WHERE id=$1`, admin).Scan(&evidenceIdentity); err != nil || evidenceIdentity == "" {
+		t.Fatalf("missing current evidence identity: %v", err)
 	}
 	var n int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM password_recovery_review WHERE user_id=$1 AND review_reason LIKE '%Unknown legacy%'`, admin).Scan(&n); err != nil || n != 1 {
@@ -113,6 +117,10 @@ func TestLegacyRecoveryUpgradePreservesIdentityAndQuarantines(t *testing.T) {
 	}
 	if w := recoveryPost(router, replacement, "RecoveryAfter1!"); w.Code != 303 {
 		t.Fatalf("explicit replacement failed: %d", w.Code)
+	}
+	var sameIdentity bool
+	if err := pool.QueryRow(ctx, `SELECT audit_identity::text=$2 FROM users WHERE id=$1`, admin, evidenceIdentity).Scan(&sameIdentity); err != nil || !sameIdentity {
+		t.Fatalf("credential recovery changed evidence identity: %v", err)
 	}
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM password_reset_tokens WHERE token_hash=$1 AND purpose='legacy-unknown'`, hex.EncodeToString(hash[:])).Scan(&n); err != nil || n != 1 {
 		t.Fatalf("legacy record not preserved: %d %v", n, err)
