@@ -18,8 +18,13 @@ const {SessionReference}=require('../../../../docs/api/session-reference.cjs');
  const lost=await request(restoreToken,'/me','GET',restored.epoch);assert.equal(lost.status,401);restored.contact(lost.body);
  assert.equal(restored.state,'locked_review');assert.equal(restored.pending.length,2);assert.deepEqual(restored.cache,[]);
  assert.throws(()=>restored.review([1]),/fresh authentication/);
- const login=await fetch(base+'/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:'admin@test',password:'PermissionFixture1!',device_name:'Fresh reference'})});
- assert.equal(login.status,201);const token=(await login.json()).data.token;
+  const startPair=await fetch(base+'/pairings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_name:'Fresh reference',operation_id:crypto.randomUUID()})});
+  assert.equal(startPair.status,201);const pairing=(await startPair.json()).data;
+  // Test fixture drives the separate hosted browser's login/review/approval.
+  // The API reference client never receives or submits an account password.
+  const approval=await fetch(base+'/fixture/browser-approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:pairing.user_code})});assert.equal(approval.status,204);
+  const login=await fetch(base+'/pairings/redeem',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({device_code:pairing.device_code,operation_id:crypto.randomUUID()})});
+  assert.equal(login.status,201);const token=(await login.json()).data.token;
  const current=await request(token,'/sessions');assert.equal(current.status,200);
  restored.authorized(current.epoch);
  // The demonstration intent targets own session records only. The synchronized

@@ -137,11 +137,18 @@ Administrators can manage runtime company settings from the Settings screens:
 
 ## JSON API (`/api/v1`)
 
-`POST /session` accepts email, password, and an optional device name. Send the returned token as `Authorization: Bearer <token>` for every other endpoint. Mobile bearer sessions expire after 30 days of inactivity, and login is rate-limited to five attempts per minute.
+Pair a labelled device using `POST /pairings`, authenticated browser review at `/pair`, and once-only `POST /pairings/redeem`. Pairings expire after ten minutes. API clients never receive or submit account passwords; the former `POST /session` returns `410 pairing_required`. Send the opaque bearer as `Authorization: Bearer <token>`. Mobile sessions expire after 30 days without successful online authorization; no refresh-token protocol exists.
+
+The server hosts [OpenAPI 3.1](/api/v1/openapi.json), a [protocol guide](/api/v1/docs), and an [interactive reference harness](/api/v1/reference). See [pairing and API policy](docs/device-pairing.md) for operator settings, recovery and executable conformance. The harness keeps secrets only in memory and is not a production client. The website remains online-only.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| `POST` / `DELETE` | `/session` | Create or revoke the current bearer session |
+| `GET` | `/` | Minimal public discovery |
+| `POST` | `/pairings`, `/pairings/redeem`, `/pairings/cancel` | Start, redeem or cancel browser-approved pairing |
+| `DELETE` | `/session` | Revoke the current bearer session |
+| `GET` / `DELETE` | `/sessions` | Inspect or revoke all own sessions |
+| `DELETE` | `/sessions/{sessionID}` | Revoke one own session |
+| `GET` | `/capabilities` | Effective grants and configured request budgets |
 | `GET` | `/me` | Return the authenticated user |
 | `GET` | `/jobs` | List visible jobs |
 | `GET` | `/jobs/{id}` | Return one visible job |
@@ -151,7 +158,7 @@ Administrators can manage runtime company settings from the Settings screens:
 | `POST` | `/jobs/{id}/clock-in` | Clock in to a job, optionally with notes and coordinates |
 | `POST` | `/time-entries/clock-out` | Clock out the user's active entry |
 
-Admins and dispatchers can access company jobs and receive customer, project, location, asset, billing, and line-item fields. Tech and technician users can access only jobs assigned to them; those office/financial fields are omitted. Subtask updates and clock-in are rejected for closed jobs, and field users cannot change a closed job's status.
+Current Permissions and their scopes authorize API records and facets; Role names never grant access. Pairing and own-session management are intrinsic user actions and add no directory or administrative authority. Capability discovery is informative, not a substitute for authorization at action time.
 
 ## Project Structure
 

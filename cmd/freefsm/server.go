@@ -13,9 +13,10 @@ import (
 )
 
 type instanceRoutes struct {
-	control *instancecontrol.Control
-	refresh func() error
-	backup  http.Handler
+	control    *instancecontrol.Control
+	refresh    func() error
+	backup     http.Handler
+	apiOrigins []string
 }
 
 func newApplicationHandler(apiHandler, webHandler http.Handler, instances ...instanceRoutes) http.Handler {
@@ -32,13 +33,19 @@ func newApplicationHandler(apiHandler, webHandler http.Handler, instances ...ins
 	var admitted http.Handler = normal
 	if len(instances) > 0 {
 		instance := instances[0]
-		admitted = instance.control.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := instance.refresh(); err != nil {
-				http.Error(w, "Instance connections unavailable", 503)
+		admitted = http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx, release, err := instance.control.Enter(r.Context())
+			if err != nil {
+				writeAdmissionFailure(w, r, instancecontrol.ErrMaintenance.Error(), instance.apiOrigins)
 				return
 			}
-			normal.ServeHTTP(w, r)
-		}))
+			defer release()
+			if err := instance.refresh(); err != nil {
+				writeAdmissionFailure(w, r, "Instance connections unavailable", instance.apiOrigins)
+				return
+			}
+			normal.ServeHTTP(w, r.WithContext(ctx))
+		})
 	}
 	logged := queryRedactedRequestLogger(admitted)
 	r.Mount("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +57,17 @@ func newApplicationHandler(apiHandler, webHandler http.Handler, instances ...ins
 		logged.ServeHTTP(w, r)
 	}))
 	return r
+}
+
+func writeAdmissionFailure(w http.ResponseWriter, r *http.Request, browserMessage string, origins []string) {
+	if r.URL.Path == "/api/v1" || strings.HasPrefix(r.URL.Path, "/api/v1/") {
+		apiv1.ResponsePolicy(origins, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			apiv1.WriteUnavailable(w)
+		})).ServeHTTP(w, r)
+		return
+	}
+	w.Header().Set("Retry-After", "5")
+	http.Error(w, browserMessage, http.StatusServiceUnavailable)
 }
 
 // Request queries can contain invitation/recovery capabilities. Give the logger
