@@ -11,7 +11,10 @@ templ ProjectForm(p ProjectFormPageData) {
 				<legend>Project Details</legend>
 				<label>
 					Customer <small class="required-marker">*</small>
-					<select name="customer_id" id="project-customer-select" required>
+					if !p.IsNew {
+						<input type="hidden" name="customer_id" value={ fmt.Sprint(p.Project.CustomerID) }/>
+					}
+					<select name="customer_id" id="project-customer-select" required disabled?={ !p.IsNew }>
 						<option value="">Select customer...</option>
 						for _, c := range p.Customers {
 							<option value={ fmt.Sprintf("%d", c.Value) } selected?={ p.Project.CustomerID == c.Value }>{ c.Label }</option>
@@ -43,10 +46,14 @@ templ ProjectForm(p ProjectFormPageData) {
 						</select>
 					</label>
 				</div>
+				if !p.IsNew && !p.Project.Completed {
 				<label>
 					Completion (%)
 					<input type="number" name="completion_percentage" value={ fmt.Sprintf("%.0f", p.Project.CompletionPercentage) } min="0" max="100" step="1"/>
 				</label>
+				} else if p.Project.Completed {
+					<p>Completed progress is 100%. Reopening restores the retained manual value.</p>
+				}
 				<div class="grid">
 					<label>
 						Start Date
@@ -61,6 +68,7 @@ templ ProjectForm(p ProjectFormPageData) {
 				Notes
 				<textarea name="notes">{ p.Project.Notes }</textarea>
 			</label>
+			<label>Service Notes <textarea name="service_notes">{ p.Project.ServiceNotes }</textarea></label>
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
 		</fieldset>
 			<div class="entity-form-actions entity-form-actions-end">

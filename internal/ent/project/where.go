@@ -99,6 +99,21 @@ func EndTime(v time.Time) predicate.Project {
 	return predicate.Project(sql.FieldEQ(FieldEndTime, v))
 }
 
+// PlannedStartDate applies equality check predicate on the "planned_start_date" field. It's identical to PlannedStartDateEQ.
+func PlannedStartDate(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldEQ(FieldPlannedStartDate, v))
+}
+
+// PlannedEndDate applies equality check predicate on the "planned_end_date" field. It's identical to PlannedEndDateEQ.
+func PlannedEndDate(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldEQ(FieldPlannedEndDate, v))
+}
+
+// ServiceNotes applies equality check predicate on the "service_notes" field. It's identical to ServiceNotesEQ.
+func ServiceNotes(v string) predicate.Project {
+	return predicate.Project(sql.FieldEQ(FieldServiceNotes, v))
+}
+
 // Notes applies equality check predicate on the "notes" field. It's identical to NotesEQ.
 func Notes(v string) predicate.Project {
 	return predicate.Project(sql.FieldEQ(FieldNotes, v))
@@ -582,6 +597,171 @@ func EndTimeIsNil() predicate.Project {
 // EndTimeNotNil applies the NotNil predicate on the "end_time" field.
 func EndTimeNotNil() predicate.Project {
 	return predicate.Project(sql.FieldNotNull(FieldEndTime))
+}
+
+// PlannedStartDateEQ applies the EQ predicate on the "planned_start_date" field.
+func PlannedStartDateEQ(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldEQ(FieldPlannedStartDate, v))
+}
+
+// PlannedStartDateNEQ applies the NEQ predicate on the "planned_start_date" field.
+func PlannedStartDateNEQ(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldNEQ(FieldPlannedStartDate, v))
+}
+
+// PlannedStartDateIn applies the In predicate on the "planned_start_date" field.
+func PlannedStartDateIn(vs ...time.Time) predicate.Project {
+	return predicate.Project(sql.FieldIn(FieldPlannedStartDate, vs...))
+}
+
+// PlannedStartDateNotIn applies the NotIn predicate on the "planned_start_date" field.
+func PlannedStartDateNotIn(vs ...time.Time) predicate.Project {
+	return predicate.Project(sql.FieldNotIn(FieldPlannedStartDate, vs...))
+}
+
+// PlannedStartDateGT applies the GT predicate on the "planned_start_date" field.
+func PlannedStartDateGT(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldGT(FieldPlannedStartDate, v))
+}
+
+// PlannedStartDateGTE applies the GTE predicate on the "planned_start_date" field.
+func PlannedStartDateGTE(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldGTE(FieldPlannedStartDate, v))
+}
+
+// PlannedStartDateLT applies the LT predicate on the "planned_start_date" field.
+func PlannedStartDateLT(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldLT(FieldPlannedStartDate, v))
+}
+
+// PlannedStartDateLTE applies the LTE predicate on the "planned_start_date" field.
+func PlannedStartDateLTE(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldLTE(FieldPlannedStartDate, v))
+}
+
+// PlannedStartDateIsNil applies the IsNil predicate on the "planned_start_date" field.
+func PlannedStartDateIsNil() predicate.Project {
+	return predicate.Project(sql.FieldIsNull(FieldPlannedStartDate))
+}
+
+// PlannedStartDateNotNil applies the NotNil predicate on the "planned_start_date" field.
+func PlannedStartDateNotNil() predicate.Project {
+	return predicate.Project(sql.FieldNotNull(FieldPlannedStartDate))
+}
+
+// PlannedEndDateEQ applies the EQ predicate on the "planned_end_date" field.
+func PlannedEndDateEQ(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldEQ(FieldPlannedEndDate, v))
+}
+
+// PlannedEndDateNEQ applies the NEQ predicate on the "planned_end_date" field.
+func PlannedEndDateNEQ(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldNEQ(FieldPlannedEndDate, v))
+}
+
+// PlannedEndDateIn applies the In predicate on the "planned_end_date" field.
+func PlannedEndDateIn(vs ...time.Time) predicate.Project {
+	return predicate.Project(sql.FieldIn(FieldPlannedEndDate, vs...))
+}
+
+// PlannedEndDateNotIn applies the NotIn predicate on the "planned_end_date" field.
+func PlannedEndDateNotIn(vs ...time.Time) predicate.Project {
+	return predicate.Project(sql.FieldNotIn(FieldPlannedEndDate, vs...))
+}
+
+// PlannedEndDateGT applies the GT predicate on the "planned_end_date" field.
+func PlannedEndDateGT(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldGT(FieldPlannedEndDate, v))
+}
+
+// PlannedEndDateGTE applies the GTE predicate on the "planned_end_date" field.
+func PlannedEndDateGTE(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldGTE(FieldPlannedEndDate, v))
+}
+
+// PlannedEndDateLT applies the LT predicate on the "planned_end_date" field.
+func PlannedEndDateLT(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldLT(FieldPlannedEndDate, v))
+}
+
+// PlannedEndDateLTE applies the LTE predicate on the "planned_end_date" field.
+func PlannedEndDateLTE(v time.Time) predicate.Project {
+	return predicate.Project(sql.FieldLTE(FieldPlannedEndDate, v))
+}
+
+// PlannedEndDateIsNil applies the IsNil predicate on the "planned_end_date" field.
+func PlannedEndDateIsNil() predicate.Project {
+	return predicate.Project(sql.FieldIsNull(FieldPlannedEndDate))
+}
+
+// PlannedEndDateNotNil applies the NotNil predicate on the "planned_end_date" field.
+func PlannedEndDateNotNil() predicate.Project {
+	return predicate.Project(sql.FieldNotNull(FieldPlannedEndDate))
+}
+
+// ServiceNotesEQ applies the EQ predicate on the "service_notes" field.
+func ServiceNotesEQ(v string) predicate.Project {
+	return predicate.Project(sql.FieldEQ(FieldServiceNotes, v))
+}
+
+// ServiceNotesNEQ applies the NEQ predicate on the "service_notes" field.
+func ServiceNotesNEQ(v string) predicate.Project {
+	return predicate.Project(sql.FieldNEQ(FieldServiceNotes, v))
+}
+
+// ServiceNotesIn applies the In predicate on the "service_notes" field.
+func ServiceNotesIn(vs ...string) predicate.Project {
+	return predicate.Project(sql.FieldIn(FieldServiceNotes, vs...))
+}
+
+// ServiceNotesNotIn applies the NotIn predicate on the "service_notes" field.
+func ServiceNotesNotIn(vs ...string) predicate.Project {
+	return predicate.Project(sql.FieldNotIn(FieldServiceNotes, vs...))
+}
+
+// ServiceNotesGT applies the GT predicate on the "service_notes" field.
+func ServiceNotesGT(v string) predicate.Project {
+	return predicate.Project(sql.FieldGT(FieldServiceNotes, v))
+}
+
+// ServiceNotesGTE applies the GTE predicate on the "service_notes" field.
+func ServiceNotesGTE(v string) predicate.Project {
+	return predicate.Project(sql.FieldGTE(FieldServiceNotes, v))
+}
+
+// ServiceNotesLT applies the LT predicate on the "service_notes" field.
+func ServiceNotesLT(v string) predicate.Project {
+	return predicate.Project(sql.FieldLT(FieldServiceNotes, v))
+}
+
+// ServiceNotesLTE applies the LTE predicate on the "service_notes" field.
+func ServiceNotesLTE(v string) predicate.Project {
+	return predicate.Project(sql.FieldLTE(FieldServiceNotes, v))
+}
+
+// ServiceNotesContains applies the Contains predicate on the "service_notes" field.
+func ServiceNotesContains(v string) predicate.Project {
+	return predicate.Project(sql.FieldContains(FieldServiceNotes, v))
+}
+
+// ServiceNotesHasPrefix applies the HasPrefix predicate on the "service_notes" field.
+func ServiceNotesHasPrefix(v string) predicate.Project {
+	return predicate.Project(sql.FieldHasPrefix(FieldServiceNotes, v))
+}
+
+// ServiceNotesHasSuffix applies the HasSuffix predicate on the "service_notes" field.
+func ServiceNotesHasSuffix(v string) predicate.Project {
+	return predicate.Project(sql.FieldHasSuffix(FieldServiceNotes, v))
+}
+
+// ServiceNotesEqualFold applies the EqualFold predicate on the "service_notes" field.
+func ServiceNotesEqualFold(v string) predicate.Project {
+	return predicate.Project(sql.FieldEqualFold(FieldServiceNotes, v))
+}
+
+// ServiceNotesContainsFold applies the ContainsFold predicate on the "service_notes" field.
+func ServiceNotesContainsFold(v string) predicate.Project {
+	return predicate.Project(sql.FieldContainsFold(FieldServiceNotes, v))
 }
 
 // NotesEQ applies the EQ predicate on the "notes" field.

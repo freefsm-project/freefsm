@@ -18,6 +18,15 @@ import (
 // A resubmit returns to the owning action and its ordinary validation. Submitted
 // custom-field identities are rebuilt only from the authorized definitions.
 func renderFieldSaveError(w http.ResponseWriter, r *http.Request, svc *services.CustomFieldDefinitionService, typ string, err error) bool {
+	if typ == "project" && errors.Is(err, authorization.ErrConflict) {
+		http.Error(w, "Project state changed or dependencies need repair; reload and review", http.StatusConflict)
+		return true
+	}
+	var validation *services.ProjectValidationError
+	if errors.As(err, &validation) {
+		http.Error(w, validation.Message, http.StatusBadRequest)
+		return true
+	}
 	if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrPending) {
 		authorizationError(w, r, err)
 		return true

@@ -5,16 +5,26 @@ import "fmt"
 templ ProjectShow(p ProjectShowPageData) {
 	@Layout("Project - "+p.Project.Name) {
 		<div class="work-item-detail">
+		if len(p.Project.LegacyReview)>0 {
+			<section aria-label="Historical Project review"><h3>Historical data requires review</h3>
+				<p>Original recorded facts are retained. These notices describe uncertainty at migration, not a reconstructed history.</p>
+				<ul>
+					for _, reason := range p.Project.LegacyReview {
+						<li>{ reason }</li>
+					}
+				</ul>
+			</section>
+		}
 		if p.Project.ArchivedAt == "" {
 			<div class="work-item-detail-actions">
 				<div class="work-item-detail-action-group">
 					if detailCan(ctx,"edit") {
 						<a href={ templ.URL(fmt.Sprintf("/projects/%d/edit", p.Project.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Project.Name) }>Edit</a>
 					}
-					if detailCan(ctx,"archive") {
-					<form action={ templ.URL(fmt.Sprintf("/projects/%d/delete", p.Project.ID)) } method="post" hx-confirm="Delete this project?">
+					if detailCan(ctx,"archive") && p.Project.Archivable {
+					<form action={ templ.URL(fmt.Sprintf("/projects/%d/delete", p.Project.ID)) } method="post" hx-confirm="Archive this project? Linked Jobs continue independently.">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-						<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Project.Name) }>Delete</button>
+						<button class="outline contrast" aria-label={ fmt.Sprintf("Archive %s", p.Project.Name) }>Archive</button>
 					</form>
 					}
 				</div>
@@ -36,6 +46,12 @@ templ ProjectShow(p ProjectShowPageData) {
 		}
 		if p.Project.Description != "" {
 			<p class="work-item-detail-subtitle"><em>{ p.Project.Description }</em></p>
+		}
+		if p.Project.Overdue {
+			<p role="status">Overdue</p>
+		}
+		if p.Project.ServiceNotes != "" {
+			<h3>Service Notes</h3><p>{ p.Project.ServiceNotes }</p>
 		}
 		if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
@@ -67,6 +83,13 @@ templ ProjectShow(p ProjectShowPageData) {
 			<p>{ p.Project.Notes }</p>
 		}
 		<h3>Jobs</h3>
+		<form method="get">
+			<label>Jobs per page <select name="jobs_per_page">
+				for _, size := range []int{25,50,100} {
+					<option value={ fmt.Sprint(size) } selected?={ p.JobsPerPage == size }>{ fmt.Sprint(size) }</option>
+				}
+			</select></label><button type="submit">Apply</button>
+		</form>
 		if len(p.Jobs) == 0 {
 			<p>No jobs linked to this project.</p>
 		} else {
@@ -86,6 +109,14 @@ templ ProjectShow(p ProjectShowPageData) {
 				</tbody>
 			</table>
 		}
+		<nav aria-label="Project Jobs pages">
+			if p.JobsPage > 1 {
+				<a href={ templ.URL(fmt.Sprintf("/projects/%d?jobs_page=%d&jobs_per_page=%d",p.Project.ID,p.JobsPage-1,p.JobsPerPage)) }>Previous Jobs</a>
+			}
+			if p.JobsPage < p.JobsTotalPages {
+				<a href={ templ.URL(fmt.Sprintf("/projects/%d?jobs_page=%d&jobs_per_page=%d",p.Project.ID,p.JobsPage+1,p.JobsPerPage)) }>Next Jobs</a>
+			}
+		</nav>
 		if p.Project.ArchivedAt == "" {
 			@FileUploadWidget("project", p.Project.ID, fmt.Sprintf("/projects/%d", p.Project.ID))
 		}

@@ -149,8 +149,8 @@ func TestServicesRejectCustomerChangeWithExistingForeignLinkIntegration(t *testi
 	data := createOwnershipFixture(ctx, t, client)
 
 	newCustomerID := data.customerB.ID
-	if _, err := NewProjectService(client).Update(ctx, 1, data.projectA.ID, ProjectUpdateParams{CustomerID: &newCustomerID}); err == nil || !strings.Contains(err.Error(), "location does not belong to customer") {
-		t.Fatalf("project customer change error = %v, want location ownership error", err)
+	if _, err := NewProjectService(client).Update(ctx, 1, data.projectA.ID, ProjectUpdateParams{CustomerID: &newCustomerID}); err == nil || !strings.Contains(err.Error(), "Project Customer cannot be changed") {
+		t.Fatalf("project customer change error = %v, want immutable ownership error", err)
 	}
 	if _, err := NewJobService(client).Update(ctx, 1, data.jobA.ID, JobUpdateParams{CustomerID: &newCustomerID}); !errors.Is(err, ErrInvalidJobInput) {
 		t.Fatalf("job customer change error = %v, want ErrInvalidJobInput", err)
@@ -302,16 +302,20 @@ func TestCustomerOwnedServiceWritesUseAuthenticatedCompanyIntegration(t *testing
 	}
 
 	projectReplacement := replacement.ID
-	updatedProject, err := NewProjectService(client).Update(ctx, companyID, project.ID, ProjectUpdateParams{CustomerID: &projectReplacement, LocationID: int64PtrForServiceTest(0)})
-	if err != nil {
-		t.Fatalf("reassign project: %v", err)
+	_, err = NewProjectService(client).Update(ctx, companyID, project.ID, ProjectUpdateParams{CustomerID: &projectReplacement, LocationID: int64PtrForServiceTest(0)})
+	if err == nil {
+		t.Fatal("Project Customer reassignment must reject even when clearing Location")
+	}
+	updatedProject := client.Project.GetX(ctx, project.ID)
+	if updatedProject.LocationID == nil || *updatedProject.LocationID != location.ID {
+		t.Fatal("rejected Customer change cleared Location")
 	}
 	updatedAsset, err := NewAssetService(client).Update(ctx, companyID, asset.ID, AssetUpdateParams{CustomerID: &projectReplacement, LocationID: int64PtrForServiceTest(0)})
 	if err != nil {
 		t.Fatalf("reassign asset: %v", err)
 	}
-	if updatedProject.CustomerID != replacement.ID || updatedAsset.CustomerID != replacement.ID {
-		t.Fatalf("reassignment failed: project=%d asset=%d", updatedProject.CustomerID, updatedAsset.CustomerID)
+	if updatedProject.CustomerID != customer.ID || updatedAsset.CustomerID != replacement.ID {
+		t.Fatalf("Project ownership or Asset reassignment incorrect: project=%d asset=%d", updatedProject.CustomerID, updatedAsset.CustomerID)
 	}
 	for name, got := range map[string]*int64{"returned project": updatedProject.CompanyID, "returned asset": updatedAsset.CompanyID} {
 		if got == nil || *got != companyID {

@@ -144,6 +144,16 @@ func (s *JobService) ListByCustomer(ctx context.Context, customerID int64, limit
 	return q.All(ctx)
 }
 
+func (s *JobService) ProjectPage(ctx context.Context, projectID int64, page, perPage int) ([]*ent.Job, int, error) {
+	q := s.client.Job.Query().Where(job.DeletedAtIsNil(), job.ProjectIDEQ(projectID))
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	rows, err := q.Order(ent.Asc(job.FieldJobType, job.FieldID)).Offset(PaginationOffset(page, perPage)).Limit(perPage).All(ctx)
+	return rows, total, err
+}
+
 func (s *JobService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Job, int, error) {
 	q := s.client.Job.Query().Where(job.DeletedAtIsNil())
 

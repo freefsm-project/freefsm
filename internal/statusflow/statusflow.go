@@ -262,6 +262,14 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, a Actor, typ Obje
 			return ErrActiveSettlement
 		}
 	}
+	if typ == Project {
+		if err := authorization.ProjectStatusDependencies(ctx, tx, a.CompanyID, id, string(key)); err != nil {
+			if errors.Is(err, authorization.ErrConflict) {
+				return ErrInvalidTransition
+			}
+			return err
+		}
+	}
 	if err := allowStatusUpdates(ctx, tx); err != nil {
 		return err
 	}

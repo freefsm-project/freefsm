@@ -31,6 +31,12 @@ const (
 	FieldStartTime = "start_time"
 	// FieldEndTime holds the string denoting the end_time field in the database.
 	FieldEndTime = "end_time"
+	// FieldPlannedStartDate holds the string denoting the planned_start_date field in the database.
+	FieldPlannedStartDate = "planned_start_date"
+	// FieldPlannedEndDate holds the string denoting the planned_end_date field in the database.
+	FieldPlannedEndDate = "planned_end_date"
+	// FieldServiceNotes holds the string denoting the service_notes field in the database.
+	FieldServiceNotes = "service_notes"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
 	// FieldCustomFields holds the string denoting the custom_fields field in the database.
@@ -57,6 +63,9 @@ var Columns = []string{
 	FieldCompletionPercentage,
 	FieldStartTime,
 	FieldEndTime,
+	FieldPlannedStartDate,
+	FieldPlannedEndDate,
+	FieldServiceNotes,
 	FieldNotes,
 	FieldCustomFields,
 	FieldDeletedAt,
@@ -81,6 +90,8 @@ var (
 	DefaultDescription string
 	// DefaultCompletionPercentage holds the default value on creation for the "completion_percentage" field.
 	DefaultCompletionPercentage float64
+	// DefaultServiceNotes holds the default value on creation for the "service_notes" field.
+	DefaultServiceNotes string
 	// DefaultNotes holds the default value on creation for the "notes" field.
 	DefaultNotes string
 	// DefaultCustomFields holds the default value on creation for the "custom_fields" field.
@@ -144,6 +155,21 @@ func ByStartTime(opts ...sql.OrderTermOption) OrderOption {
 // ByEndTime orders the results by the end_time field.
 func ByEndTime(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldEndTime, opts...).ToFunc()
+}
+
+// ByPlannedStartDate orders the results by the planned_start_date field.
+func ByPlannedStartDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlannedStartDate, opts...).ToFunc()
+}
+
+// ByPlannedEndDate orders the results by the planned_end_date field.
+func ByPlannedEndDate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlannedEndDate, opts...).ToFunc()
+}
+
+// ByServiceNotes orders the results by the service_notes field.
+func ByServiceNotes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldServiceNotes, opts...).ToFunc()
 }
 
 // ByNotes orders the results by the notes field.
