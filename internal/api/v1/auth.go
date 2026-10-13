@@ -14,6 +14,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 type actorContextKey struct{}
@@ -87,10 +88,18 @@ func (h *handler) bearerAuth(next http.Handler) http.Handler {
 		}
 		userID, err := h.deps.Sessions.ValidateMobile(r.Context(), token)
 		if err != nil {
+			if !errors.Is(err, services.ErrInvalidSession) && h.deps.Authorization != nil {
+				writeError(w, 503, "unavailable", "session verification unavailable")
+				return
+			}
 			unauthorized(w)
 			return
 		}
 		user, err := h.deps.Users.GetByID(r.Context(), userID)
+		if err != nil && !ent.IsNotFound(err) && h.deps.Authorization != nil {
+			writeError(w, 503, "unavailable", "account verification unavailable")
+			return
+		}
 		if err != nil || user.ID != userID || !validUser(user) {
 			unauthorized(w)
 			return
@@ -106,7 +115,14 @@ func (h *handler) bearerAuth(next http.Handler) http.Handler {
 			sum := sha256.Sum256([]byte(token))
 			ctx = authorization.WithActor(ctx, h.deps.Authorization, authorization.Actor{UserID: user.ID, SessionHash: hex.EncodeToString(sum[:]), Channel: "api"})
 		}
-		next.ServeHTTP(w, r.WithContext(ctx))
+		response := chimiddleware.NewWrapResponseWriter(w, r.ProtoMajor)
+		next.ServeHTTP(response, r.WithContext(ctx))
+		if response.Status() >= 200 && response.Status() < 300 && h.deps.Authorization != nil {
+			sum := sha256.Sum256([]byte(token))
+			if err := h.deps.Authorization.RenewMobile(context.WithoutCancel(ctx), authorization.Actor{UserID: user.ID, SessionHash: hex.EncodeToString(sum[:]), Channel: "api"}); err != nil && !errors.Is(err, authorization.ErrForbidden) {
+				slog.Error("mobile authorization renewal failed", "user_id", user.ID)
+			}
+		}
 	})
 }
 
@@ -150,7 +166,13 @@ func (h *handler) masterContext(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
-	if err := h.deps.Sessions.RevokeMobile(r.Context(), tokenFromContext(r.Context())); err != nil {
+	var err error
+	if req, ok := authorization.FromContext(r.Context()); ok {
+		err = req.Service.Logout(r.Context(), req.Actor)
+	} else {
+		err = h.deps.Sessions.RevokeMobile(r.Context(), tokenFromContext(r.Context()))
+	}
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal_error", "could not delete session")
 		return
 	}

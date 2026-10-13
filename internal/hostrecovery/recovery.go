@@ -56,7 +56,7 @@ func ResetExistingAdmin(ctx context.Context, pool *pgxpool.Pool, email, password
 	if _, err = tx.Exec(ctx, `UPDATE users SET password_hash=$1,force_password_change=true,updated_at=NOW() WHERE id=$2`, string(hash), id); err != nil {
 		return errors.New("cannot update Admin password")
 	}
-	if _, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, id); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL`, id); err != nil {
 		return errors.New("cannot revoke Admin sessions")
 	}
 	if _, err = tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id=$1 AND purpose='password-recovery-v1'`, id); err != nil {

@@ -147,7 +147,7 @@ func setCredential(ctx context.Context, tx pgx.Tx, id, company int64, password, 
 	if _, err = tx.Exec(ctx, `UPDATE users SET password_hash=$2,force_password_change=false,updated_at=clock_timestamp() WHERE id=$1`, id, string(hash)); err != nil {
 		return err
 	}
-	if _, err = tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1 AND NOT (token_hash=$2 AND kind='web')`, id, keepSession); err != nil {
+	if _, err = tx.Exec(ctx, `UPDATE sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND NOT (token_hash=$2 AND kind='web') AND revoked_at IS NULL`, id, keepSession); err != nil {
 		return err
 	}
 	_, err = tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id=$1 AND purpose='password-recovery-v1'`, id)

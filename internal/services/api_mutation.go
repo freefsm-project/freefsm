@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -194,7 +195,30 @@ func (s *APIMutationService) begin(ctx context.Context) (pgx.Tx, error) {
 	if err != nil {
 		return nil, fmt.Errorf("begin API mutation: %w", err)
 	}
+	if request, ok := authorization.FromContext(ctx); ok {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+			_ = tx.Rollback(ctx)
+			return nil, err
+		}
+		if err := authorization.CheckTransactionIdentity(ctx, tx, request.Actor); err != nil {
+			_ = tx.Rollback(ctx)
+			return nil, ErrMutationForbidden
+		}
+		return sessionBoundMutation{Tx: tx, actor: request.Actor}, nil
+	}
 	return tx, nil
+}
+
+type sessionBoundMutation struct {
+	pgx.Tx
+	actor authorization.Actor
+}
+
+func (t sessionBoundMutation) Commit(ctx context.Context) error {
+	if err := authorization.CheckTransactionIdentity(ctx, t.Tx, t.actor); err != nil {
+		return ErrMutationForbidden
+	}
+	return t.Tx.Commit(ctx)
 }
 
 func validateMutation(actor MutationActor, jobID int64) error {

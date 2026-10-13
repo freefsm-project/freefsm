@@ -108,6 +108,7 @@ func New(deps Dependencies) http.Handler {
 	h := &handler{deps: deps}
 	r := chi.NewRouter()
 	r.Use(apiRecoverer)
+	r.Use(h.sessionEpoch)
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "API endpoint not found")
 	})
@@ -120,6 +121,9 @@ func New(deps Dependencies) http.Handler {
 		r.Use(h.bearerAuth)
 		r.Delete("/session", h.logout)
 		r.Get("/me", h.me)
+		r.Get("/sessions", h.sessions)
+		r.Delete("/sessions", h.sessions)
+		r.Delete("/sessions/{sessionID}", h.sessions)
 		r.Get("/items", h.itemReferences)
 		r.Get("/items/{id}", h.itemReferences)
 		r.Get("/items/{id}/selection", h.itemReferences)

@@ -73,7 +73,7 @@ func TestSetupSessionPublicationRechecksCommittedCredential(t *testing.T) {
 		t.Fatalf("stale setup acknowledged/published cookie: status=%d headers=%v", w.Code, w.Header())
 	}
 	var n int
-	if err = pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id=$1`, u.ID).Scan(&n); err != nil || n != 0 {
+	if err = pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id=$1 AND revoked_at IS NULL`, u.ID).Scan(&n); err != nil || n != 0 {
 		t.Fatalf("post-reset stale setup sessions=%d: %v", n, err)
 	}
 	if err = services.NewUserService(client).Authenticate(ctx, u.Email, "ReplacementPassword1!"); err != nil {

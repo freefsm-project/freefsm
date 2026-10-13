@@ -159,6 +159,18 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 				return err
 			}
 		}
+		if f == "052_mobile_sessions.up.sql" {
+			// Capture absence of classification/activity before 052's defaults and
+			// backfill. Those defaults are not historical authorization evidence.
+			if _, err := tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS session_upgrade_inventory (
+			 session_id bigint PRIMARY KEY,user_id bigint,recorded_kind text,
+			 recorded_issue_time timestamptz,recorded_last_use_time timestamptz,
+			 recorded_expiry timestamptz,recorded_revocation timestamptz,disposition text NOT NULL);
+			 INSERT INTO session_upgrade_inventory SELECT id,user_id,NULL,created_at,NULL,expires_at,NULL,'review-required' FROM sessions ON CONFLICT DO NOTHING`); err != nil {
+				tx.Rollback(ctx)
+				return fmt.Errorf("session classification inventory: %w", err)
+			}
+		}
 		if _, err := tx.Exec(ctx, string(content)); err != nil {
 			tx.Rollback(ctx)
 			return fmt.Errorf("execute migration %s: %w", f, err)

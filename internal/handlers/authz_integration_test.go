@@ -333,6 +333,16 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
 	if _, err := pool.Exec(context.Background(), string(commentsMigration)); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(context.Background(), `CREATE TABLE schema_migrations(name text PRIMARY KEY,applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
+		t.Fatal(err)
+	}
+	sessionMigration, err := fs.ReadFile(database.MigrationFS(), "072_session_lifecycle.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(context.Background(), string(sessionMigration)); err != nil {
+		t.Fatal(err)
+	}
 	return client, pool
 }
 

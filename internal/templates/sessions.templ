@@ -1,0 +1,46 @@
+package templates
+
+import "github.com/freefsm-project/freefsm/internal/authorization"
+import "strconv"
+import "time"
+
+templ SessionsPage(sessions []authorization.SessionSummary, base string) {
+	@Layout("Sessions") {
+		<h1>Sessions</h1>
+		<p>Browsers expire seven days after login. Mobile sessions expire after thirty days without successful online authorization.</p>
+		<form method="post" action={ templ.SafeURL(base + "/revoke-all") } hx-boost="false">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<button type="submit">Revoke all sessions</button>
+		</form>
+		for _, s := range sessions {
+			<article>
+				<h2>{ s.Kind } { s.Device }</h2>
+				if s.ReviewRequired {
+					<p role="status">Legacy timing requires review. This session cannot authorize actions. Review the recorded evidence, revoke this session, and sign in again; no historical activity is inferred.</p>
+				}
+				if s.Current {
+					<strong>Current session</strong>
+				}
+				<p>Issued: { s.IssuedAt.Format(time.RFC3339) }</p>
+				if s.Legacy {
+					<p>Recorded last use: { s.LastAuthorizedAt.Format(time.RFC3339) }. Pre-v1 metadata may include the historical browser issue-time backfill; this does not establish an online authorization.</p>
+					<details>
+						<summary>Recorded pre-v1 evidence</summary>
+						<pre>{ string(s.LegacyEvidence) }</pre>
+					</details>
+				} else {
+					<p>Last online authorization: { s.LastAuthorizedAt.Format(time.RFC3339) }</p>
+				}
+				<p>Expires: { s.ExpiresAt.Format(time.RFC3339) }</p>
+				if s.RevokedAt != nil {
+					<p>Revoked: { s.RevokedAt.Format(time.RFC3339) }</p>
+				} else {
+					<form method="post" action={ templ.SafeURL(base + "/" + strconv.FormatInt(s.ID, 10) + "/revoke") } hx-boost="false">
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<button type="submit">Revoke session</button>
+					</form>
+				}
+			</article>
+		}
+	}
+}

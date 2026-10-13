@@ -1,0 +1,40 @@
+const { chromium } = require('playwright-core');
+const assert = require('node:assert/strict');
+(async () => {
+ const [base, acting, other, email] = process.argv.slice(2);
+ const browser = await chromium.launch({executablePath:process.env.BROWSER_EXECUTABLE || '/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+ try {
+  const context = await browser.newContext();
+  await context.addCookies([{name:'session',value:acting,url:base}]);
+  const page = await context.newPage();
+  await page.goto(base+'/sessions');
+  await page.getByRole('heading',{name:'Sessions',exact:true}).waitFor();
+  assert.equal(await page.getByText('Current session',{exact:true}).count(),1);
+  const tablet=page.locator('article').filter({has:page.getByRole('heading',{name:'mobile Browser field tablet'})});
+  await tablet.getByRole('button',{name:'Revoke session',exact:true}).click();
+  await tablet.getByText('Revoked:',{exact:false}).waitFor();
+  await page.goto(base+'/preferences');
+  const adminContext=await browser.newContext();
+  await adminContext.addCookies([{name:'session',value:other,url:base}]);
+  const adminPage=await adminContext.newPage();
+  adminPage.on('response',async r=>{if(r.status()>=400)console.log('response',r.status(),r.url(),await r.text());});
+  adminPage.on('dialog',d=>d.accept());
+  await adminPage.goto(base+'/sessions');
+  await adminPage.getByRole('button',{name:'Revoke all sessions',exact:true}).click();
+  await adminPage.waitForURL('**/login');
+  let saves=0;
+  page.on('request',r=>{if(r.method()==='POST' && new URL(r.url()).pathname==='/preferences')saves++;});
+  await page.getByRole('button',{name:'Save Preferences'}).click();
+  await page.getByText('Session expired—sign in again',{exact:false}).waitFor();
+  assert.equal(saves,1);
+  await page.goto(base+'/login');
+  await page.locator('[name=email]').fill(email);
+  await page.locator('[name=password]').fill('PermissionFixture1!');
+  await page.locator('button[type=submit]').click();
+  await page.waitForURL(base+'/');
+  await page.goto(base+'/sessions');
+  await page.getByText('Current session',{exact:true}).waitFor();
+  assert.equal(saves,1,'reauthentication replayed interrupted action');
+  console.log('persisted session list, mobile revoke, all revoke, expiry message and no replay passed');
+ } finally {await browser.close();}
+})().catch(e=>{console.error(e);process.exit(1);});

@@ -18,6 +18,7 @@ import (
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
+	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/database"
@@ -380,6 +381,13 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 		t.Fatalf("destination mismatch %d", w.Code)
 	}
 	values.Set("confirmation", "Instance 1")
+	var sourceEpoch, destinationEpoch string
+	if err := src.pool.QueryRow(ctx, `SELECT epoch::text FROM session_instance`).Scan(&sourceEpoch); err != nil {
+		t.Fatal(err)
+	}
+	if err := dst.pool.QueryRow(ctx, `SELECT epoch::text FROM session_instance`).Scan(&destinationEpoch); err != nil {
+		t.Fatal(err)
+	}
 	op = poll(dst, decode(request(dst, "restore", strings.NewReader(values.Encode()), false, true)))
 	if op.Phase != "complete" || !dst.control.EmailDisabled() {
 		t.Fatal("restore protections missing")
@@ -395,6 +403,17 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 	for _, token := range []string{src.mobile, dst.mobile} {
 		if _, err := dst.sessions.ValidateMobile(ctx, token); err == nil {
 			t.Fatal("mobile session survived")
+		}
+	}
+	api := apiv1.NewRouter(dst.pool, dst.client, dst.sessions)
+	for i, token := range []string{src.mobile, dst.mobile} {
+		r := httptest.NewRequest("GET", "/me", nil)
+		r.Header.Set("Authorization", "Bearer "+token)
+		r.Header.Set("X-FreeFSM-Session-Epoch", []string{sourceEpoch, destinationEpoch}[i])
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, r)
+		if w.Code != 401 || !strings.Contains(w.Body.String(), `"recovery_disposition":"locked_review"`) {
+			t.Fatalf("restored API recovery=%d %s", w.Code, w.Body.String())
 		}
 	}
 	settings, err := services.NewCompanySettingsService(dst.client).Get(ctx)
