@@ -103,3 +103,67 @@ func TestCommercialSettlementLocksEveryExistingWriter(t *testing.T) {
 		t.Fatal("settlement-independent collaboration advanced commercial revision")
 	}
 }
+
+func TestCommercialSettlementRaceRejectsWholeCustomerAndContentEditHTTP(t *testing.T) {
+	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cookie := sessionCookie(t, ctx, sessions, admin)
+	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Settlement race Customer").SaveX(ctx)
+	replacement := client.Customer.Create().SetCompanyID(company).SetDisplayName("Reviewed replacement Customer").SaveX(ctx)
+	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Settlement race Job").SaveX(ctx)
+	values := url.Values{"customer_id": {fmt.Sprint(c.ID)}, "job_id": {fmt.Sprint(j.ID)}, "title": {"Original settlement race Invoice"}, "notes": {"Original notes"}, "line_items": {`[{"title":"Work","quantity":1,"unit_price":100}]`}, "tax_rate": {"0"}}
+	documentTransactionRequest(t, router, cookie, "POST", "/invoices", values, 303)
+	i := client.Invoice.Query().OnlyX(ctx)
+	if err := statusflow.New(pool).FinalizeInvoice(ctx, statusflow.Actor{ID: admin, CompanyID: company, Role: "admin"}, i.ID); err != nil {
+		t.Fatal(err)
+	}
+	path := fmt.Sprintf("/invoices/%d", i.ID)
+	values.Set("invoice_number", fmt.Sprint(i.InvoiceNumber))
+	values = commercialReviewedValues(t, router, cookie, path, values)
+	values.Set("customer_id", fmt.Sprint(replacement.ID))
+	values.Set("customer_defaults_reviewed", "true")
+	values.Set("notes", "Must roll back with the anchor change")
+	fence, err := pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fence.Rollback(context.Background())
+	var blocker int
+	if err := fence.QueryRow(ctx, `SELECT pg_backend_pid() FROM (SELECT pg_advisory_xact_lock(190019)) barrier`).Scan(&blocker); err != nil {
+		t.Fatal(err)
+	}
+	paid := make(chan error, 1)
+	go func() {
+		_, err := settlement.New(pool).RecordPayment(ctx, settlement.Actor{ID: admin, CompanyID: company, Role: "admin"}, settlement.RecordPaymentRequest{Operation: settlement.Operation{Key: newOperationKey()}, InvoiceID: i.ID, AmountCents: 2500, Method: settlement.Cash, ReceivedDate: settlement.Date(time.Now().Format("2006-01-02"))})
+		paid <- err
+	}()
+	commercialWaiters(t, ctx, pool, blocker, 1)
+	edited := make(chan *httptest.ResponseRecorder, 1)
+	go func() { edited <- jobRepairRawPost(router, cookie, path, values) }()
+	commercialWaiters(t, ctx, pool, blocker, 2)
+	if err := fence.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-paid; err != nil {
+		t.Fatal(err)
+	}
+	w := <-edited
+	if w.Code != http.StatusUnprocessableEntity && w.Code != http.StatusConflict {
+		t.Fatalf("settlement race edit=%d: %s", w.Code, w.Body.String())
+	}
+	var intact bool
+	if err := pool.QueryRow(ctx, `SELECT customer_id=$2 AND job_id=$3 AND notes='Original notes' AND invoice_has_active_settlement(id) FROM invoices WHERE id=$1`, i.ID, c.ID, j.ID).Scan(&intact); err != nil {
+		t.Fatal(err)
+	}
+	if !intact {
+		t.Fatal("settlement race committed part of the Customer/Job/content edit")
+	}
+	var editedAudits int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM authorization_audit WHERE target_type='invoice' AND target_id=$1 AND action='invoice.edit'`, i.ID).Scan(&editedAudits); err != nil {
+		t.Fatal(err)
+	}
+	if editedAudits != 0 {
+		t.Fatal("rejected raced edit escaped an immutable success audit")
+	}
+}
