@@ -121,7 +121,7 @@ func TestSubtaskPatchRequiresExplicitStateAndUpdatesAssignedJob(t *testing.T) {
 func TestJSONDecoderRejectsUnknownFieldsAndOversizedBodies(t *testing.T) {
 	api := New(testDependencies(&fakeUsers{}, &fakeJobs{}))
 
-	unknown := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(`{"email":"a","password":"b","extra":true}`))
+	unknown := httptest.NewRequest(http.MethodPost, "/pairings", strings.NewReader(`{"device_name":"a","extra":true}`))
 	unknown.Header.Set("Content-Type", "application/json")
 	unknownRes := httptest.NewRecorder()
 	api.ServeHTTP(unknownRes, unknown)
@@ -129,8 +129,8 @@ func TestJSONDecoderRejectsUnknownFieldsAndOversizedBodies(t *testing.T) {
 		t.Fatalf("unknown field response = %d %s", unknownRes.Code, unknownRes.Body.String())
 	}
 
-	largeBody := `{"email":"a","password":"` + strings.Repeat("x", maxRequestBodyBytes) + `"}`
-	large := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(largeBody))
+	largeBody := `{"device_name":"` + strings.Repeat("x", maxRequestBodyBytes) + `"}`
+	large := httptest.NewRequest(http.MethodPost, "/pairings", strings.NewReader(largeBody))
 	large.Header.Set("Content-Type", "application/json")
 	largeRes := httptest.NewRecorder()
 	api.ServeHTTP(largeRes, large)
@@ -139,7 +139,7 @@ func TestJSONDecoderRejectsUnknownFieldsAndOversizedBodies(t *testing.T) {
 	}
 }
 
-func TestLoginCreatesBearerSession(t *testing.T) {
+func TestPasswordLoginCannotCreateBearerSession(t *testing.T) {
 	companyID := int64(12)
 	users := &fakeUsers{byEmail: &ent.User{ID: 7, CompanyID: &companyID, Name: "User", Email: "u@example.test", Role: "dispatcher", IsActive: true}}
 	sessions := &fakeSessions{token: "new-token", userID: 7}
@@ -152,18 +152,13 @@ func TestLoginCreatesBearerSession(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json; charset=utf-8")
 	api.ServeHTTP(res, req)
 
-	if res.Code != http.StatusCreated {
+	if res.Code != http.StatusGone {
 		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
 	}
-	if sessions.createdFor != 7 || sessions.deviceName != "field phone" || users.authEmail != "u@example.test" || users.completedID != 7 {
+	if sessions.createdFor != 0 || sessions.deviceName != "" || users.authEmail != "" || users.completedID != 0 {
 		t.Fatalf("createdFor=%d deviceName=%q authEmail=%q completedID=%d", sessions.createdFor, sessions.deviceName, users.authEmail, users.completedID)
 	}
-	var response struct {
-		Data sessionDTO `json:"data"`
-	}
-	if err := json.Unmarshal(res.Body.Bytes(), &response); err != nil || response.Data.Token != "new-token" {
-		t.Fatalf("response = %s, err = %v", res.Body.String(), err)
-	}
+	assertAPIError(t, res, http.StatusGone, "pairing_required")
 }
 
 func TestLoginRejectsUserWhoMustChangePassword(t *testing.T) {
@@ -179,7 +174,7 @@ func TestLoginRejectsUserWhoMustChangePassword(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	api.ServeHTTP(res, req)
 
-	assertAPIError(t, res, http.StatusForbidden, "password_change_required")
+	assertAPIError(t, res, http.StatusGone, "pairing_required")
 	if sessions.createdFor != 0 || users.completedID != 0 {
 		t.Fatalf("createdFor = %d, completedID = %d", sessions.createdFor, users.completedID)
 	}
@@ -210,24 +205,24 @@ func TestRouterErrorsUseJSONEnvelope(t *testing.T) {
 func TestLoginRateLimitDoesNotAffectAuthenticatedRoutes(t *testing.T) {
 	api := New(testDependencies(&fakeUsers{}, &fakeJobs{}))
 
-	for attempt := 1; attempt <= 6; attempt++ {
+	for attempt := 1; attempt <= 21; attempt++ {
 		res := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(`{}`))
 		req.RemoteAddr = "192.0.2.10:12345"
 		req.Header.Set("Content-Type", "application/json")
 		api.ServeHTTP(res, req)
 
-		want := http.StatusBadRequest
-		if attempt == 6 {
+		want := http.StatusGone
+		if attempt == 21 {
 			want = http.StatusTooManyRequests
 		}
 		if res.Code != want {
 			t.Fatalf("attempt %d status = %d, want %d", attempt, res.Code, want)
 		}
-		if attempt == 6 && res.Header().Get("Retry-After") == "" {
+		if attempt == 21 && res.Header().Get("Retry-After") == "" {
 			t.Fatal("rate-limited response has no Retry-After header")
 		}
-		if attempt == 6 {
+		if attempt == 21 {
 			assertAPIError(t, res, http.StatusTooManyRequests, "rate_limit_exceeded")
 		}
 	}
@@ -244,7 +239,7 @@ func TestLoginRateLimitDoesNotAffectAuthenticatedRoutes(t *testing.T) {
 func TestLoginRateLimitRejectsSpoofedForwardedHeadersFromDirectClient(t *testing.T) {
 	api := CaptureTransportPeer(chimw.RealIP(New(testDependencies(&fakeUsers{}, &fakeJobs{}))))
 
-	for attempt := 1; attempt <= 6; attempt++ {
+	for attempt := 1; attempt <= 21; attempt++ {
 		res := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(`{}`))
 		req.RemoteAddr = "192.0.2.10:12345"
@@ -252,10 +247,10 @@ func TestLoginRateLimitRejectsSpoofedForwardedHeadersFromDirectClient(t *testing
 		req.Header.Set("X-Forwarded-For", "198.51.100."+strconv.Itoa(attempt))
 		api.ServeHTTP(res, req)
 
-		if attempt < 6 && res.Code != http.StatusBadRequest {
-			t.Fatalf("attempt %d status = %d, want %d", attempt, res.Code, http.StatusBadRequest)
+		if attempt < 21 && res.Code != http.StatusGone {
+			t.Fatalf("attempt %d status = %d, want %d", attempt, res.Code, http.StatusGone)
 		}
-		if attempt == 6 {
+		if attempt == 21 {
 			assertAPIError(t, res, http.StatusTooManyRequests, "rate_limit_exceeded")
 		}
 	}
@@ -274,10 +269,10 @@ func TestLoginRateLimitDistinguishesClientsBehindLoopbackProxy(t *testing.T) {
 		return res
 	}
 
-	for attempt := 1; attempt <= 5; attempt++ {
+	for attempt := 1; attempt <= 20; attempt++ {
 		for _, clientIP := range []string{"198.51.100.10", "198.51.100.11"} {
-			if res := request(clientIP); res.Code != http.StatusBadRequest {
-				t.Fatalf("client %s attempt %d status = %d, want %d", clientIP, attempt, res.Code, http.StatusBadRequest)
+			if res := request(clientIP); res.Code != http.StatusGone {
+				t.Fatalf("client %s attempt %d status = %d, want %d", clientIP, attempt, res.Code, http.StatusGone)
 			}
 		}
 	}
@@ -288,8 +283,8 @@ func TestAPIPanicUsesJSONErrorEnvelope(t *testing.T) {
 	deps := testDependencies(&fakeUsers{}, &fakeJobs{})
 	deps.Users = nil
 	res := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/session", strings.NewReader(`{"email":"tech@example.test","password":"secret"}`))
-	req.Header.Set("Content-Type", "application/json")
+	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req.Header.Set("Authorization", "Bearer valid-token")
 
 	New(deps).ServeHTTP(res, req)
 

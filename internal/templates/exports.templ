@@ -7,8 +7,7 @@ templ ExportUnavailable() {
  @Layout("Export unavailable") {
   <h1>Export unavailable</h1>
   <p>This result cannot be downloaded. Generate a new export with your current access.</p>
-   <a href="/customers/export">Generate a new export</a>
-   <a href="/activity/export">Generate a new activity export</a>
+   @ExportOrigins()
   <a href="/exports">My CSV exports</a>
  }
 }
@@ -71,9 +70,21 @@ templ ExportStatus(status exports.Status) {
   }
   <p>Downloaded copies are outside subsequent access control.</p>
   <a href={ templ.URL(fmt.Sprintf("/exports/%d",status.ID)) }>Refresh status</a>
-  <a href="/customers/export">Generate a new export</a>
+   @ExportOrigins()
    <a href="/customers">Customers</a>
    <a href="/exports">My CSV exports</a>
+ }
+}
+
+templ ExportOrigins() {
+ if navigationPermission(ctx,"activity.export","A","J") {
+  <a href="/activity/export">Generate a new activity export</a>
+ }
+ if navigationPermission(ctx,"customer.export","A") {
+  <a href="/customers/export">Generate a new export</a>
+ }
+ if navigationPermission(ctx,"audit.export","S") {
+  <a href="/settings/audit">Generate a new audit export</a>
  }
 }
 

@@ -20,6 +20,9 @@ type ProductAction struct {
 	TargetID                  int64
 	Channel                   string
 	Detail                    any
+	// SessionHash resolves current API session evidence inside the effect
+	// transaction. It is never written to audit or serialized as event content.
+	SessionHash string `json:"-"`
 }
 
 type Executor interface {
@@ -34,10 +37,25 @@ func RecordProduct(ctx context.Context, tx Executor, event ProductAction) error 
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO authorization_audit(actor_kind,actor_id,role_id,action,scope,target_type,target_id,channel,detail)
- VALUES('product-user',$1,nullif($2,0),$3,$4,$5,$6,$7,$8)`, event.ActorID, event.RoleID, event.Action, event.Scope, event.TargetType, event.TargetID, event.Channel, data)
+	query := `INSERT INTO authorization_audit(actor_kind,actor_id,role_id,action,scope,target_type,target_id,channel,detail)
+ VALUES('product-user',$1,nullif($2,0),$3,$4,$5,$6,$7,$8)`
+	args := []any{event.ActorID, event.RoleID, event.Action, event.Scope, event.TargetType, event.TargetID, event.Channel, data}
+	if event.Channel == "api" && event.SessionHash != "" {
+		// Resolve once at the event boundary, never when displaying history. This
+		// also covers domain actions whose own detail records only an operation ID.
+		query = `INSERT INTO authorization_audit(actor_kind,actor_id,role_id,action,scope,target_type,target_id,channel,detail)
+ SELECT 'product-user',$1,nullif($2,0),$3,$4,$5,$6,$7,
+ (CASE WHEN jsonb_typeof($8::jsonb)='object' THEN $8::jsonb ELSE jsonb_build_object('event_detail',$8::jsonb) END)
+ || jsonb_build_object('session_id',s.id,'device_name',s.device_name)
+ FROM sessions s WHERE s.user_id=$1 AND s.token_hash=$9 AND s.kind='mobile'`
+		args = append(args, event.SessionHash)
+	}
+	tag, err := tx.Exec(ctx, query, args...)
 	if err != nil {
 		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return errors.New("audit session attribution unavailable")
 	}
 	return saveaction.RecordEffect(ctx, tx, event.ActorID, event.Action, event.TargetType, event.TargetID)
 }
@@ -45,6 +63,20 @@ func RecordProduct(ctx context.Context, tx Executor, event ProductAction) error 
 type HostRecovery struct {
 	HostUID                               string
 	TargetUserID, TargetRoleID, CompanyID int64
+}
+
+// RecordPairingRequest never treats knowledge of a protocol secret as product
+// authentication. Approval and issuance use RecordProduct with current authority.
+func RecordPairingRequest(ctx context.Context, tx Executor, id int64, action, operation string) error {
+	if id <= 0 || (action != "user.pairing.start" && action != "user.pairing.cancel") {
+		return errors.New("invalid pairing audit attribution")
+	}
+	detail, err := json.Marshal(map[string]string{"operation_id": operation})
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO authorization_audit(actor_kind,actor_id,role_id,action,scope,target_type,target_id,channel,detail) VALUES('anonymous-request',NULL,NULL,$1,NULL,'device_pairing',$2,'pairing',$3)`, action, id, detail)
+	return err
 }
 
 // RecordRecoveryRequest attributes public link issuance honestly: knowing an

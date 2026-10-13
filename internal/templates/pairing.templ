@@ -1,0 +1,33 @@
+package templates
+
+import "github.com/freefsm-project/freefsm/internal/authorization"
+import "time"
+
+templ PairingPage(review *authorization.PairingReview, approved bool) {
+ @Layout("Pair a device") {
+  <h1>Pair a device</h1>
+  if approved {
+   <p role="status">Device approved. Return to your device to finish pairing. Approval cannot be reused.</p>
+   <a href="/sessions">Inspect or revoke your sessions</a>
+  } else if review != nil {
+   <h2>{ review.DeviceName }</h2>
+   <p>Approve only if this is the device you are pairing and its displayed code matches the code you entered. This grants a session with your current authority.</p>
+   <p>Expires: { review.ExpiresAt.Format(time.RFC3339) }</p>
+   <form method="post" action="/pair/approve" hx-boost="false">
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+    <input type="hidden" name="review_token" value={ review.Token }/>
+    <input type="hidden" name="device_name" value={ review.DeviceName }/>
+    <button type="submit">Approve device</button>
+   </form>
+   <a href="/sessions">Leave without approval</a>
+  } else {
+   <p>Enter the code shown on your device. Codes expire ten minutes after creation. Never enter your account password into an API client.</p>
+   <form method="post" action="/pair/review" hx-boost="false">
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+    <label for="pairing-code">Pairing code</label>
+    <input id="pairing-code" name="code" required maxlength="16" autocomplete="off"/>
+    <button type="submit">Review device</button>
+   </form>
+  }
+ }
+}

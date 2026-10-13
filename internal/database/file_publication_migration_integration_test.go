@@ -70,10 +70,12 @@ func TestFileAPIAttributionUpgradeDoesNotInventHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT to_jsonb(t)-'occurred_at' FROM file_transfers t`), &afterTransfer)
-	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT to_jsonb(a) FROM authorization_audit a WHERE target_type='file'`), &afterAudit)
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT to_jsonb(a)-ARRAY['actor_identity','actor_name','role_identity','role_name','device_name','operation_id','occurred_at','session_id'] FROM authorization_audit a WHERE target_type='file'`), &afterAudit)
+	var unknown bool
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT bool_and(actor_identity IS NULL AND actor_name IS NULL AND role_identity IS NULL AND role_name IS NULL AND device_name IS NULL AND operation_id IS NULL AND occurred_at IS NULL AND session_id IS NULL) FROM authorization_audit WHERE target_type='file'`), &unknown)
 	var honest bool
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT occurred_at IS NULL AND NOT EXISTS(SELECT 1 FROM file_mutation_operations) FROM file_transfers`), &honest)
-	if !honest || string(beforeTransfer) != string(afterTransfer) || string(beforeAudit) != string(afterAudit) {
+	if !honest || !unknown || string(beforeTransfer) != string(afterTransfer) || string(beforeAudit) != string(afterAudit) {
 		t.Fatal("upgrade fabricated or rewrote historical API attribution")
 	}
 }

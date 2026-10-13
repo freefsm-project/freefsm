@@ -262,7 +262,7 @@ func audit(ctx context.Context, tx pgx.Tx, a Actor, p Principal, permission stri
 	if channel == "" {
 		channel = "web"
 	}
-	return protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.UserID, RoleID: p.RoleID, Action: permission, Scope: string(scope), TargetType: typ, TargetID: id, Channel: channel, Detail: detail})
+	return protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.UserID, RoleID: p.RoleID, Action: permission, Scope: string(scope), TargetType: typ, TargetID: id, Channel: channel, Detail: detail, SessionHash: a.SessionHash})
 }
 
 // SaveRole creates a Role when id is zero. Updating an existing Role requires

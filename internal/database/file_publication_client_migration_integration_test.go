@@ -65,7 +65,13 @@ func TestFilePublicationClientUpgradeUsesOnlyRecordedOrigin(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(p)-'client_key' ORDER BY operation_id) FROM file_publications p`), &after)
-	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM authorization_audit a`), &auditAfter)
+	// 074 adds nullable evidence columns, never historical identity backfills.
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(a)-ARRAY['actor_identity','actor_name','role_identity','role_name','device_name','operation_id','occurred_at','session_id'] ORDER BY id) FROM authorization_audit a`), &auditAfter)
+	var unknown bool
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT bool_and(actor_identity IS NULL AND actor_name IS NULL AND role_identity IS NULL AND role_name IS NULL AND device_name IS NULL AND operation_id IS NULL AND occurred_at IS NULL AND session_id IS NULL) FROM authorization_audit`), &unknown)
+	if !unknown {
+		t.Fatal("upgrade invented event-time identity or API evidence")
+	}
 	if string(before) != string(after) || string(auditBefore) != string(auditAfter) {
 		t.Fatal("upgrade rewrote recorded publication/audit facts")
 	}

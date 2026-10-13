@@ -3,9 +3,11 @@ package v1
 import (
 	"encoding/json"
 	"errors"
+	"github.com/google/uuid"
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -16,13 +18,23 @@ type errorEnvelope struct {
 }
 
 type apiError struct {
-	Code                string `json:"code"`
-	Message             string `json:"message"`
-	RecoveryDisposition string `json:"recovery_disposition,omitempty"`
+	RequestID           string         `json:"request_id"`
+	Details             map[string]any `json:"details"`
+	RetryAfterSeconds   int            `json:"retry_after_seconds,omitempty"`
+	Code                string         `json:"code"`
+	Message             string         `json:"message"`
+	RecoveryDisposition string         `json:"recovery_disposition,omitempty"`
 }
 
 type responseEnvelope struct {
 	Data any `json:"data"`
+}
+
+// WriteUnavailable preserves the API error contract when outer instance
+// admission or connection recovery rejects a request before this router runs.
+func WriteUnavailable(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", "5")
+	writeError(w, http.StatusServiceUnavailable, "unavailable", "API temporarily unavailable; retry after the indicated delay")
 }
 
 func writeJSON(w http.ResponseWriter, status int, value any) {
@@ -33,17 +45,26 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 }
 
 func writeError(w http.ResponseWriter, status int, code, message string) {
+	id := w.Header().Get("X-Request-ID")
+	if id == "" {
+		id = uuid.NewString()
+		w.Header().Set("X-Request-ID", id)
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	disposition := ""
+	disposition := "review"
+	if status == 429 || status >= 500 {
+		disposition = "retry"
+	}
 	if status == 401 || code == "password_change_required" {
 		disposition = "purge"
 	}
 	if code == "instance_restored" {
 		disposition = "locked_review"
 	}
-	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: apiError{Code: code, Message: message, RecoveryDisposition: disposition}})
+	retry, _ := strconv.Atoi(w.Header().Get("Retry-After"))
+	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: apiError{Code: code, Message: message, RecoveryDisposition: disposition, RequestID: id, Details: map[string]any{}, RetryAfterSeconds: retry}})
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {

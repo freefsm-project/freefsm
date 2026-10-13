@@ -38,6 +38,12 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 	maxUpload := cfg.MaxUploadSize
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Pairing has a browser-bound, once-only protocol of its own. Never
+			// journal its secrets as a generic domain save or offer save replay.
+			if r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") {
+				next.ServeHTTP(w, r)
+				return
+			}
 			history := saveHistoryTag(key, authorizationActor(r))
 			r = r.WithContext(context.WithValue(r.Context(), saveHistoryContextKey{}, history))
 			capture := &saveResponse{ResponseWriter: w, header: w.Header().Clone()}

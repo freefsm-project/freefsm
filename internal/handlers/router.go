@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/config"
@@ -15,6 +14,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/requestlimits"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
@@ -23,6 +23,10 @@ import (
 )
 
 func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionService, cfg *config.Config, controls ...*instancecontrol.Control) http.Handler {
+	return NewWithRequestLimits(db, entClient, sessions, cfg, requestlimits.New(), controls...)
+}
+
+func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionService, cfg *config.Config, limits *requestlimits.Limiter, controls ...*instancecontrol.Control) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.SafeReadFailures)
 	authority := authorization.New(db)
@@ -167,7 +171,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 	assetTypeHandler := NewAssetTypeHandler(assetTypeSvc, assetStatusSvc, activitySvc, depSvc)
 
 	// Public routes
-	authPostLimiter := middleware.NewRateLimiter(5, time.Minute).Handler
+	authPostLimiter := authenticationLimits(cfg.API, limits)
 	r.Get("/login", authHandler.ServeHTTP)
 	r.With(authPostLimiter).Post("/login", authHandler.ServeHTTP)
 	r.Get("/forgot-password", authHandler.ForgotPassword)
@@ -203,6 +207,9 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Post("/change-password", passwordHandler.ChangePassword)
 		r.Get("/preferences", presentationPreferences(authority))
 		r.Get("/sessions", sessionManagement(authority))
+		r.Get("/pair", pairingPage(authority))
+		r.With(authPostLimiter).Post("/pair/review", pairingPage(authority))
+		r.With(authPostLimiter).Post("/pair/approve", pairingPage(authority))
 		r.Post("/sessions/revoke-all", sessionManagement(authority))
 		r.Post("/sessions/{sessionID}/revoke", sessionManagement(authority))
 		r.Get("/users/{userID}/sessions", sessionManagement(authority))
@@ -262,6 +269,7 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.Get("/customers/{id}", customerHandler.Show)
 		registerCustomerChildren(r)
 		registerExports(r, db)
+		registerAudit(r, db)
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/projects/options", projectHandler.ProjectOptions)
 		r.With(collectionRead("asset")).Get("/customers/{id}/assets/options", jobHandler.AssetOptions)
 		r.Route("/items", func(r chi.Router) {
