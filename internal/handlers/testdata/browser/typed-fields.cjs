@@ -126,9 +126,18 @@ const { chromium } = require('playwright-core');
     const projectID = await page.locator('#job-project-select').inputValue();
     assert.notEqual(projectID,'0');
     await page.goto(base + `/projects/${projectID}/edit`);
+    await page.reload();
     assert.equal(await page.locator('[name=custom_field_10]').inputValue(),'Project entered value');
     assert.equal(await page.locator('[name=description]').inputValue(),'Retained project description');
+    // Canonical creation starts at 0 even when the inline form submitted 37.
+    assert.equal(await page.locator('[name=completion_percentage]').inputValue(),'0');
+    await page.locator('[name=completion_percentage]').fill('37');
+    await Promise.all([page.waitForURL(base + `/projects/${projectID}?flash=Project+updated`),page.getByRole('button',{name:'Save',exact:true}).click()]);
+    await page.goto(base + `/projects/${projectID}/edit`);
+    await page.reload();
     assert.equal(await page.locator('[name=completion_percentage]').inputValue(),'37');
+    assert.equal(await page.locator('[name=custom_field_10]').inputValue(),'Project entered value');
+    assert.equal(await page.locator('[name=description]').inputValue(),'Retained project description');
     async function defineInlineField(parent, name, type, fallback = '') {
       await page.goto(base + '/settings/custom-fields/new');
       await page.locator('[name=name]').fill(name);

@@ -319,6 +319,8 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.With(detailsAccess("project")).Post("/projects/inline", projectHandler.CreateInline)
 		r.With(detailsAccess("project")).Get("/projects/{id}/edit", projectHandler.Update)
 		r.With(detailsAccess("project")).Post("/projects/{id}", projectHandler.Update)
+		r.Post("/projects/{id}/delete", projectHandler.Delete)
+		r.Post("/projects/{id}/restore", projectHandler.Restore)
 		r.With(detailsAccess("job")).Get("/jobs/new", jobHandler.Create)
 		r.With(detailsAccess("job")).Post("/jobs", jobHandler.Create)
 		r.With(detailsAccess("job")).Get("/jobs/{id}/edit", jobHandler.Update)
@@ -337,7 +339,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 		r.With(detailsAccess("invoice")).Post("/invoices", invoiceHandler.Create)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.DispatcherOrAdmin)
-			r.With(activeObjectGuard(objectref.TypeProject)).Post("/projects/{id}/delete", projectHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/credit/refunds", customerHandler.RefundCredit)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/credit/refunds/{refund_id}/reverse", customerHandler.ReverseRefund)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/create-next-occurrence", jobHandler.CreateNextOccurrence)
@@ -472,7 +473,6 @@ func New(db *pgxpool.Pool, entClient *ent.Client, sessions *services.SessionServ
 			r.Use(middleware.AdminOnly)
 			// Restore archived entities
 			r.Post("/jobs/{id}/restore", jobHandler.Restore)
-			r.Post("/projects/{id}/restore", projectHandler.Restore)
 			r.Post("/estimates/{id}/restore", estimateHandler.Restore)
 			r.Post("/invoices/{id}/restore", invoiceHandler.Restore)
 			// Admin activity feeds

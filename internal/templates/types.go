@@ -475,6 +475,7 @@ type ProjectFormPageData struct {
 	Customers    []SelectOption
 	Statuses     []SelectOption
 	Locations    []SelectOption
+	KeepLocation bool
 	CustomFields []CustomFieldDisplay
 }
 

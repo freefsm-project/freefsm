@@ -382,9 +382,14 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
-	locationID, valid := projectLocationInput(w, r)
-	if !valid {
-		return
+	keepLocation := r.FormValue("location_id") == "keep"
+	var locationID int64
+	if !keepLocation {
+		var valid bool
+		locationID, valid = projectLocationInput(w, r)
+		if !valid {
+			return
+		}
 	}
 	var completion *float64
 	if raw := r.FormValue("completion_percentage"); raw != "" {
@@ -426,6 +431,9 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 		if current, err := h.svc.GetByID(r.Context(), id); err == nil {
 			applyProjectSemantics(r.Context(), d, current, statuses)
+			if (keepLocation || !r.PostForm.Has("location_id")) && current.LocationID != nil {
+				d.LocationID = *current.LocationID
+			}
 		}
 		if t := r.FormValue("start_time"); t != "" {
 			d.StartTime = t
@@ -437,6 +445,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 			Project:      d,
 			Errors:       errors,
 			IsNew:        false,
+			KeepLocation: projectLocationUnavailable(d.LocationID, locationOptions(locations)),
 			Customers:    customerOptions(customers),
 			Statuses:     statusOptions(statuses),
 			Locations:    locationOptions(locations),
@@ -460,7 +469,7 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ServiceNotes:         formPtr(r.FormValue("service_notes")),
 		CustomFields:         parseCustomFieldPatch(r),
 	}
-	if r.PostForm.Has("location_id") {
+	if r.PostForm.Has("location_id") && !keepLocation {
 		params.LocationID = &locationID
 	}
 	result, err := h.svc.SaveDetails(r.Context(), u.CompanyID, id, params)
@@ -665,11 +674,24 @@ func (h *ProjectHandler) formDataFromProject(ctx context.Context, p *ent.Project
 	return templates.ProjectFormPageData{
 		Project:      &d,
 		IsNew:        false,
+		KeepLocation: projectLocationUnavailable(d.LocationID, locationOptions(locations)),
 		Customers:    customerOptions(customers),
 		Statuses:     statusOptions(statuses),
 		Locations:    locationOptions(locations),
 		CustomFields: buildCustomFieldDisplay(defs, p.CustomFields),
 	}
+}
+
+func projectLocationUnavailable(id int64, options []templates.SelectOption) bool {
+	if id == 0 {
+		return false
+	}
+	for _, option := range options {
+		if option.Value == id {
+			return false
+		}
+	}
+	return true
 }
 
 func projectProgress(p *ent.Project, statuses []*ent.Status) float64 {

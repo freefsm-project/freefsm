@@ -40,6 +40,9 @@ templ ProjectForm(p ProjectFormPageData) {
 						Location
 						<select name="location_id" id="project-location-select" data-selected={ fmt.Sprintf("%d", p.Project.LocationID) }>
 							<option value="0">No Location</option>
+							if p.KeepLocation {
+								<option value="keep" selected>Keep current unavailable Location</option>
+							}
 							for _, l := range p.Locations {
 								<option value={ fmt.Sprintf("%d", l.Value) } selected?={ p.Project.LocationID == l.Value }>{ l.Label }</option>
 							}
@@ -87,7 +90,7 @@ templ ProjectForm(p ProjectFormPageData) {
 					.then(r => r.text())
 					.then(html => projectLocation.innerHTML = html);
 			}
-			if (projectCustomer && projectLocation) {
+			if (projectCustomer && !projectCustomer.disabled && projectLocation) {
 				projectCustomer.addEventListener('change', function() { projectLocation.dataset.selected = 0; loadProjectLocations(this.value); });
 				if (projectCustomer.value && projectLocation.options.length <= 1) loadProjectLocations(projectCustomer.value);
 			}

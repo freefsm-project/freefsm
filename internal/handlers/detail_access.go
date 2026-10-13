@@ -50,6 +50,10 @@ func withDetailPresentation(r *http.Request, typ string, id int64, policy *servi
 	access["edit"] = req.Service.DetailsAccess(ctx, req.Actor, typ, id) == nil
 	access["archive"] = action(typ+".archive") && legacyDelete
 	access["restore"] = p.Protected && p.Allows(typ+".restore", authorization.All)
+	if typ == "project" || typ == "asset" {
+		access["archive"] = action(typ + ".archive")
+		access["restore"] = req.Service.MasterRestoreAccess(ctx, req.Actor, typ, id) == nil
+	}
 	access["status"] = action(typ+".status") && (typ != "job" || legacyUpdate)
 	access["pricing"] = req.Service.ParentFacet(ctx, req.Actor, typ, id, "pricing.view") == nil
 	access["settlement"] = req.Service.ParentFacet(ctx, req.Actor, typ, id, "settlement.view") == nil

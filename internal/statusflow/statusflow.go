@@ -404,6 +404,27 @@ func (s *Service) Move(ctx context.Context, a Actor, r MoveRequest) error {
 		if crossCategory && count > 0 && !r.ConfirmInUse {
 			return ErrConfirmationRequired
 		}
+		if crossCategory && typ == Project && r.Category != ProjectCompleted && r.Category != ProjectCanceled {
+			// Reclassification changes the meaning of every reference, including
+			// archived Projects. Confirmation is not a dependency repair. The
+			// configuration transaction holds the shared authority/master fence.
+			rows, err := tx.Query(ctx, `SELECT id FROM projects WHERE company_id=$1 AND status_id=$2 ORDER BY id FOR UPDATE`, a.CompanyID, r.StatusID)
+			if err != nil {
+				return err
+			}
+			ids, err := pgx.CollectRows(rows, pgx.RowTo[int64])
+			if err != nil {
+				return err
+			}
+			for _, id := range ids {
+				if err := authorization.ProjectStatusDependencies(ctx, tx, a.CompanyID, id, string(r.Category)); err != nil {
+					if errors.Is(err, authorization.ErrConflict) {
+						return ErrInvalidTransition
+					}
+					return err
+				}
+			}
+		}
 		if crossCategory && def {
 			if r.SourceReplacementID <= 0 {
 				return ErrReplacementRequired
