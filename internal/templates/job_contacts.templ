@@ -1,0 +1,23 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ JobContacts(id int64, choices []authorization.JobContactChoice) {
+	@Layout("Job Contacts") {
+		<h1>Explicit Job Contacts</h1>
+		<p>Select the Contacts needed for this Job. Customer primary records are not linked automatically.</p>
+		<form method="post" hx-boost="false" hx-history="false" action={ templ.URL(fmt.Sprintf("/jobs/%d/contacts",id)) }>
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			for _, c := range choices {
+				<label><input type="checkbox" name="contact_ids" value={ fmt.Sprint(c.ID) } checked?={ c.Selected }/> { c.Name }
+					if c.Archived {
+						<span> (archived — unlink before reopening)</span>
+					}
+				</label>
+			}
+			<button type="submit">Save Contacts</button>
+			<a href={ templ.URL(fmt.Sprintf("/jobs/%d",id)) }>Back to Job</a>
+		</form>
+	}
+}

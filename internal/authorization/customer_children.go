@@ -365,8 +365,12 @@ func (s *Service) CustomerChildLifecycle(ctx context.Context, a Actor, customerI
 			if kind == "location" {
 				column = "location_id"
 			}
+			linkCondition := "j." + column + "=$1"
+			if kind == "contact" {
+				linkCondition = "EXISTS(SELECT 1 FROM job_contacts jc WHERE jc.job_id=j.id AND jc.contact_id=$1)"
+			}
 			var blocked bool
-			if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs j LEFT JOIN statuses s ON s.id=j.status_id WHERE j.`+column+`=$1 AND j.deleted_at IS NULL AND coalesce(s.category_key,'') NOT IN ('job:completed','job:canceled'))`, id).Scan(&blocked); err != nil {
+			if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs j LEFT JOIN statuses s ON s.id=j.status_id WHERE `+linkCondition+` AND j.deleted_at IS NULL AND coalesce(s.category_key,'') NOT IN ('job:completed','job:canceled'))`, id).Scan(&blocked); err != nil {
 				return err
 			}
 			if kind == "location" && !blocked {
