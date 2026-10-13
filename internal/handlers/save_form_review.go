@@ -22,6 +22,9 @@ func saveFormPath(path string) string {
 		return path
 	}
 	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 3 && parts[0] == "jobs" && (parts[2] == "links" || parts[2] == "contacts") {
+		return path
+	}
 	if len(parts) == 3 && parts[0] == "locations" && parts[2] == "coordinates" {
 		return path
 	}

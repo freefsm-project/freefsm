@@ -46,7 +46,7 @@ func internalServerError(w http.ResponseWriter, r *http.Request, msg string, err
 		middleware.ServiceUnavailable(w, r)
 		return
 	}
-	if errors.Is(err, saveaction.ErrStale) || errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) {
+	if errors.Is(err, saveaction.ErrStale) || errors.Is(err, saveaction.ErrRevisionRequired) || errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) {
 		authorizationError(w, r, err)
 		return
 	}

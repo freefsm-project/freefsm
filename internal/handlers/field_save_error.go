@@ -22,6 +22,10 @@ func renderFieldSaveError(w http.ResponseWriter, r *http.Request, svc *services.
 		http.Error(w, "Project state changed or dependencies need repair; reload and review", http.StatusConflict)
 		return true
 	}
+	if typ == "job" && errors.Is(err, authorization.ErrConflict) {
+		http.Error(w, "Job state changed or dependencies need repair; reload and review", http.StatusConflict)
+		return true
+	}
 	var validation *services.ProjectValidationError
 	if errors.As(err, &validation) {
 		http.Error(w, validation.Message, http.StatusBadRequest)

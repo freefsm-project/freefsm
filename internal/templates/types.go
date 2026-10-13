@@ -543,6 +543,7 @@ type JobDetail struct {
 	LocationAddress          string
 	ContactID                int64
 	ContactName              string
+	ContactReferences        []authorization.JobContactReference
 	AssetID                  int64
 	AssetName                string
 	LineItems                []services.LineItem
@@ -598,6 +599,7 @@ type JobListPageData struct {
 }
 
 type JobFormPageData struct {
+	RetainedProjectID       int64
 	AssetCustomFields       []CustomFieldDisplay
 	ProjectCustomFields     []CustomFieldDisplay
 	Job                     *JobDetail

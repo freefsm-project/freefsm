@@ -11,6 +11,9 @@ templ JobShow(p JobDetail) {
 					if detailCan(ctx,"edit") {
 						<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.JobType) }>Edit</a>
 					}
+					if detailCan(ctx,"relations") {
+						<a href={ templ.URL(fmt.Sprintf("/jobs/%d/links",p.ID)) }>Manage relationships</a>
+					}
 					if detailCan(ctx,"create-invoice") {
 						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/create-invoice", p.ID)) } method="post">
 							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
@@ -106,8 +109,18 @@ templ JobShow(p JobDetail) {
 						}
 					</td></tr>
 				}
-				if p.ContactName != "" {
-					<tr><th>Contact</th><td>{ p.ContactName }</td></tr>
+				if len(p.ContactReferences)>0 {
+					<tr><th>Contacts</th><td>
+						<ul>
+							for _, contact := range p.ContactReferences {
+								<li><span>{ contact.Name }</span>
+									if contact.Archived {
+										<span> (archived)</span>
+									}
+									</li>
+							}
+						</ul>
+					</td></tr>
 				}
 				if p.StartTimeDisplay != "" {
 					<tr><th>Start Time</th><td>{ p.StartTimeDisplay }</td></tr>

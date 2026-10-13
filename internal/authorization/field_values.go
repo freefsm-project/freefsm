@@ -1,10 +1,12 @@
 package authorization
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/freefsm-project/freefsm/internal/customfields"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -133,6 +135,11 @@ func (s *Service) DetailsTransaction(ctx context.Context, a Actor, typ string, i
 			if err != nil {
 				return err
 			}
+			if typ == "job" {
+				if err := saveaction.RequireRevision(ctx, tx, p.UserID, fmt.Sprintf("/jobs/%d", id)); err != nil {
+					return err
+				}
+			}
 		}
 		var fieldScope Scope
 		if typ == "job" && input != nil && *input != "[]" {
@@ -160,9 +167,13 @@ func (s *Service) DetailsTransaction(ctx context.Context, a Actor, typ string, i
 		if err = customfields.CheckCycleValues(ctx, tx, typ, id, fields); err != nil {
 			return err
 		}
-		var assetBefore, assetAfter json.RawMessage
-		if typ == "asset" && id > 0 {
-			if err := tx.QueryRow(ctx, `SELECT to_jsonb(a) FROM assets a WHERE id=$1`, id).Scan(&assetBefore); err != nil {
+		var parentBefore, parentAfter json.RawMessage
+		snapshot := `to_jsonb(a)`
+		if typ == "job" {
+			snapshot += ` || jsonb_build_object('contact_ids',(SELECT coalesce(jsonb_agg(jc.contact_id ORDER BY jc.contact_id),'[]'::jsonb) FROM job_contacts jc WHERE jc.job_id=a.id))`
+		}
+		if (typ == "asset" || typ == "job") && id > 0 {
+			if err := tx.QueryRow(ctx, `SELECT `+snapshot+` FROM `+typ+`s a WHERE id=$1`, id).Scan(&parentBefore); err != nil {
 				return err
 			}
 		}
@@ -189,11 +200,41 @@ func (s *Service) DetailsTransaction(ctx context.Context, a Actor, typ string, i
 				return err
 			}
 		}
-		if typ == "asset" {
-			if err := tx.QueryRow(ctx, `SELECT to_jsonb(a) FROM assets a WHERE id=$1`, result).Scan(&assetAfter); err != nil {
+		if typ == "asset" || typ == "job" {
+			if err := tx.QueryRow(ctx, `SELECT `+snapshot+` FROM `+typ+`s a WHERE id=$1`, result).Scan(&parentAfter); err != nil {
 				return err
 			}
-			return audit(ctx, tx, a, p, permission, scope, typ, result, map[string]any{"before": assetBefore, "after": assetAfter})
+			if typ == "job" {
+				var before, after map[string]json.RawMessage
+				if len(parentBefore) > 0 {
+					if err := json.Unmarshal(parentBefore, &before); err != nil {
+						return err
+					}
+				}
+				if err := json.Unmarshal(parentAfter, &after); err != nil {
+					return err
+				}
+				changed := false
+				for _, key := range []string{"project_id", "location_id", "customer_contact_id", "asset_id"} {
+					if !bytes.Equal(before[key], after[key]) && string(after[key]) != "null" {
+						changed = true
+					}
+					if id > 0 && !bytes.Equal(before[key], after[key]) {
+						changed = true
+					}
+				}
+				if id > 0 && !bytes.Equal(before["customer_id"], after["customer_id"]) {
+					// Automatic clearing is audited as part of planning's Customer
+					// replacement; do not invent use of a relationship grant.
+					changed = false
+				}
+				if changed {
+					if err := audit(ctx, tx, a, p, "job.relations.edit", All, typ, result, map[string]any{"before": parentBefore, "after": parentAfter}); err != nil {
+						return err
+					}
+				}
+			}
+			return audit(ctx, tx, a, p, permission, scope, typ, result, map[string]any{"before": parentBefore, "after": parentAfter})
 		}
 		return audit(ctx, tx, a, p, permission, scope, typ, result, map[string]any{"custom_fields_before": old, "custom_fields_after": fields})
 	})

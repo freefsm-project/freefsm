@@ -172,21 +172,21 @@ func TestJobCreateReturnsTypedStatusConfigurationErrorIntegration(t *testing.T) 
 	}
 }
 
-func TestJobCreateKeepsInvalidRequestedStatusAsDomainValidationIntegration(t *testing.T) {
+func TestJobCreateAlwaysUsesConfiguredNewDefaultIntegration(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
 	ctx := context.Background()
 	const companyID int64 = 35
 	customer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Status customer").SaveX(ctx)
 	foreignStatusID := createJobDefaultStatus(t, ctx, client, 36, "Foreign", 1)
+	defaultStatusID := createJobDefaultStatus(t, ctx, client, companyID, "New", 1)
 
-	_, err := NewJobService(client).Create(ctx, companyID, JobCreateParams{CustomerID: customer.ID, JobType: "Install", StatusID: foreignStatusID})
-	if !errors.Is(err, ErrInvalidDocumentStatus) {
-		t.Fatalf("Create error = %v, want ErrInvalidDocumentStatus", err)
+	created, err := NewJobService(client).Create(ctx, companyID, JobCreateParams{CustomerID: customer.ID, JobType: "Install", StatusID: foreignStatusID})
+	if err != nil {
+		t.Fatal(err)
 	}
-	var configurationError *StatusConfigurationError
-	if errors.As(err, &configurationError) {
-		t.Fatalf("invalid requested status was converted to configuration error: %v", err)
+	if created.StatusID == nil || *created.StatusID != defaultStatusID {
+		t.Fatalf("creation selected supplied status instead of configured New: %v", created.StatusID)
 	}
 }
 
@@ -426,6 +426,7 @@ func TestJobUpdateEnforcesTenantAndReplacementOwnershipIntegration(t *testing.T)
 	localUser := client.User.Create().SetCompanyID(companyID).SetEmail("local-update-user@example.test").SetPasswordHash("hash").SetName("Local user").SaveX(ctx)
 	assignments := []JobAssignment{{UserID: localUser.ID, Role: "lead"}}
 	updated, err := NewJobService(client).Update(ctx, companyID, localJob.ID, JobUpdateParams{
+		ReplaceCustomer:   true,
 		CustomerID:        &replacementCustomer.ID,
 		ProjectID:         &localProject.ID,
 		LocationID:        &localLocation.ID,
@@ -435,6 +436,14 @@ func TestJobUpdateEnforcesTenantAndReplacementOwnershipIntegration(t *testing.T)
 	})
 	if err != nil {
 		t.Fatalf("matching Update: %v", err)
+	}
+	if updated.CustomerID != replacementCustomer.ID || updated.ProjectID != nil || updated.LocationID != nil || updated.CustomerContactID != nil || updated.AssetID != nil {
+		t.Fatalf("reviewed Customer replacement must clear operational links: %#v", updated)
+	}
+	// New context is a subsequent deliberate action after replacement.
+	updated, err = NewJobService(client).Update(ctx, companyID, localJob.ID, JobUpdateParams{ProjectID: &localProject.ID, LocationID: &localLocation.ID, CustomerContactID: &localContact.ID, AssetID: &localAsset.ID})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if updated.CustomerID != replacementCustomer.ID || int64Value(updated.ProjectID) != localProject.ID || int64Value(updated.LocationID) != localLocation.ID || int64Value(updated.CustomerContactID) != localContact.ID || int64Value(updated.AssetID) != localAsset.ID {
 		t.Fatalf("updated relationships = %#v", updated)
