@@ -10,7 +10,10 @@ const {SessionReference}=require('../../../../docs/api/session-reference.cjs');
  assert.equal((await request(ordinaryToken,'/session','DELETE',ordinary.epoch)).status,204);
  ordinary.contact((await request(ordinaryToken,'/me','GET',ordinary.epoch)).body);
  assert.equal(ordinary.state,'signed_out');assert.deepEqual(ordinary.pending,[]);assert.deepEqual(ordinary.cache,[]);
- const restored=new SessionReference();const prior=await request(restoreToken,'/me');assert.equal(prior.status,200);restored.authorized(prior.epoch);restored.cache=['private'];restored.stage({target:1,intent:'uncertain'});restored.stage({target:2,intent:'inaccessible'});
+ const restored=new SessionReference();const prior=await request(restoreToken,'/sessions');assert.equal(prior.status,200);restored.authorized(prior.epoch);restored.cache=['private'];
+ const retainedID=prior.body.data.find(s=>s.current).id;
+ const lostID=prior.body.data.find(s=>s.device==='Lost history reference').id;
+ restored.stage({target:retainedID,intent:'uncertain'});restored.stage({target:lostID,intent:'inaccessible'});
  await fetch(base+'/fixture/restore',{method:'POST'});
  const lost=await request(restoreToken,'/me','GET',restored.epoch);assert.equal(lost.status,401);restored.contact(lost.body);
  assert.equal(restored.state,'locked_review');assert.equal(restored.pending.length,2);assert.deepEqual(restored.cache,[]);
@@ -21,8 +24,6 @@ const {SessionReference}=require('../../../../docs/api/session-reference.cjs');
  restored.authorized(current.epoch);
  // The demonstration intent targets own session records only. The synchronized
  // own-session projection supplies current authority, not a cached permission.
- const id=current.body.data.find(s=>s.current).id;restored.pending[0].target=id;
- restored.pending[1].target=-1;
- const review=restored.review(current.body.data.map(s=>s.id));assert.equal(review.length,1);assert.equal(review[0].requiresExplicitReconciliation,true);
+ const review=restored.review(current.body.data.map(s=>s.id));assert.equal(review.length,1);assert.equal(review[0].target,retainedID,'restore review retargeted pending intent');assert.equal(review[0].requiresExplicitReconciliation,true);
  assert.equal(restored.state,'locked_review');console.log('ordinary purge and restore locked, fresh-auth/current-authority review; no replay');
 })().catch(e=>{console.error(e);process.exit(1)});

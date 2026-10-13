@@ -62,13 +62,16 @@ func TestSessionReferenceHarnessHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := sessions.CreateMobile(ctx, admin, "Lost history reference"); err != nil {
+		t.Fatal(err)
+	}
 	mux := http.NewServeMux()
 	api := apiv1.NewRouter(pool, client, sessions)
 	mux.Handle("/", api)
 	// Test-only restore transition. Real encrypted HTTP restore coverage separately
 	// verifies that the engine performs this transition for both token populations.
 	mux.HandleFunc("/fixture/restore", func(w http.ResponseWriter, r *http.Request) {
-		if _, err := pool.Exec(r.Context(), `UPDATE session_instance SET epoch=gen_random_uuid(); UPDATE sessions SET revoked_at=clock_timestamp()`); err != nil {
+		if _, err := pool.Exec(r.Context(), `UPDATE session_instance SET epoch=gen_random_uuid(); DELETE FROM sessions WHERE device_name='Lost history reference'; UPDATE sessions SET revoked_at=clock_timestamp()`); err != nil {
 			http.Error(w, "fixture failed", 500)
 			return
 		}
