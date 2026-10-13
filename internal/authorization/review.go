@@ -224,7 +224,7 @@ func (s *Service) SetEnabled(ctx context.Context, a Actor, userID int64, enabled
 			return ErrNotFound
 		}
 		if !enabled {
-			if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, userID); err != nil {
+			if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL`, userID); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id=$1 AND purpose='password-recovery-v1'`, userID); err != nil {

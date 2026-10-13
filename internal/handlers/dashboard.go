@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/middleware"
-	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -173,16 +173,18 @@ func dashboardUser(user *middleware.UserInfo) services.DashboardUser {
 }
 
 func handleLogout(w http.ResponseWriter, r *http.Request, sessions *services.SessionService, activitySvc *services.ActivityService) {
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil && activitySvc != nil {
-		activitySvc.Record(r.Context(), u.CompanyID, u.ID, "logged_out", objectref.New(objectref.TypeUser, u.ID), map[string]interface{}{
-			"entity_name": u.Name,
-			"actor_name":  u.Name,
-		})
-	}
 	cookie, err := r.Cookie("session")
 	if err == nil {
-		sessions.Delete(r.Context(), cookie.Value)
+		var logoutErr error
+		if req, ok := authorization.FromContext(r.Context()); ok {
+			logoutErr = req.Service.Logout(r.Context(), req.Actor)
+		} else {
+			logoutErr = sessions.Delete(r.Context(), cookie.Value)
+		}
+		if logoutErr != nil {
+			internalServerError(w, r, "logout", logoutErr)
+			return
+		}
 	}
 	http.SetCookie(w, &http.Cookie{
 		Name: "session", Value: "", Path: "/", MaxAge: -1,

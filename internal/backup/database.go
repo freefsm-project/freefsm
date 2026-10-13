@@ -462,7 +462,12 @@ func (m *Manager) protect(ctx context.Context, paths []pathMapping) error {
 			return e
 		}
 	}
-	if _, e = tx.Exec(ctx, "UPDATE public.sessions SET expires_at=NOW()-INTERVAL '1 second', revoked_at=NOW()"); e != nil {
+	if _, e = tx.Exec(ctx, "UPDATE public.sessions SET expires_at=LEAST(expires_at,NOW()-INTERVAL '1 second'), revoked_at=COALESCE(revoked_at,NOW())"); e != nil {
+		return e
+	}
+	// Older schema fixtures have no session protocol. Every installed v1 schema
+	// rotates its epoch atomically with restored-token invalidation.
+	if _, e = tx.Exec(ctx, `DO $$ BEGIN IF to_regclass('public.session_instance') IS NOT NULL THEN UPDATE public.session_instance SET epoch=gen_random_uuid(); END IF; END $$`); e != nil {
 		return e
 	}
 	return tx.Commit(ctx)

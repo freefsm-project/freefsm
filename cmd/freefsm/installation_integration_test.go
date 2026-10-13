@@ -219,7 +219,7 @@ func TestHostRecoveryResetsExistingAdminAtomically(t *testing.T) {
 		t.Fatal("password, forced-change or Role invariant failed")
 	}
 	var sessions, tokens, events, users int
-	if err := db.QueryRow(context.Background(), `SELECT (SELECT count(*) FROM sessions WHERE user_id=$1), (SELECT count(*) FROM password_reset_tokens WHERE user_id=$1), (SELECT count(*) FROM activity_logs WHERE object_type='user' AND object_id=$1 AND action='admin_password_recovered' AND actor_id IS NULL AND metadata->>'channel'='host-local'), (SELECT count(*) FROM users)`, id).Scan(&sessions, &tokens, &events, &users); err != nil {
+	if err := db.QueryRow(context.Background(), `SELECT (SELECT count(*) FROM sessions WHERE user_id=$1 AND revoked_at IS NULL), (SELECT count(*) FROM password_reset_tokens WHERE user_id=$1), (SELECT count(*) FROM activity_logs WHERE object_type='user' AND object_id=$1 AND action='admin_password_recovered' AND actor_id IS NULL AND metadata->>'channel'='host-local'), (SELECT count(*) FROM users)`, id).Scan(&sessions, &tokens, &events, &users); err != nil {
 		t.Fatal(err)
 	}
 	if sessions != 0 || tokens != 0 || events != 1 || users != 1 {

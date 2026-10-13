@@ -34,6 +34,7 @@ templ UserShow(p UserDetailPage) {
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button class="outline">Revoke all sessions</button>
 				</form>
+				<a href={ templ.URL(fmt.Sprintf("/users/%d/sessions", p.User.ID)) } role="button" class="outline">Inspect sessions</a>
 				if p.User.IsActive {
 					<form action={ templ.URL(fmt.Sprintf("/users/%d/resend-recovery", p.User.ID)) } method="post">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>

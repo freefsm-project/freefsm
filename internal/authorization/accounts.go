@@ -140,7 +140,7 @@ func (s *Service) ResetAccountPassword(ctx context.Context, a Actor, id int64, p
 		if tag.RowsAffected() != 1 {
 			return ErrNotFound
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, id); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL`, id); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `DELETE FROM password_reset_tokens WHERE user_id=$1 AND purpose='password-recovery-v1'`, id); err != nil {
@@ -216,7 +216,7 @@ func (s *Service) AccountSecurity(ctx context.Context, a Actor, id int64, action
 		default:
 			return ErrConflict
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM sessions WHERE user_id=$1`, id); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at=clock_timestamp() WHERE user_id=$1 AND revoked_at IS NULL`, id); err != nil {
 			return err
 		}
 		return audit(ctx, tx, a, p, action, Sealed, "user", id, nil)

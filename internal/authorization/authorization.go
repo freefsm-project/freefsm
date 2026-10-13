@@ -74,7 +74,7 @@ func principal(ctx context.Context, q queryer, a Actor, transitional bool) (Prin
 	}
 	if a.SessionHash != "" {
 		var valid bool
-		if err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sessions WHERE user_id=$1 AND token_hash=$2 AND expires_at>clock_timestamp() AND revoked_at IS NULL AND kind=CASE WHEN $3='api' THEN 'mobile' ELSE 'web' END)`, a.UserID, a.SessionHash, a.Channel).Scan(&valid); err != nil {
+		if err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sessions s WHERE user_id=$1 AND token_hash=$2 AND expires_at>clock_timestamp() AND revoked_at IS NULL AND kind=CASE WHEN $3='api' THEN 'mobile' ELSE 'web' END AND NOT EXISTS(SELECT 1 FROM session_upgrade_inventory i WHERE i.session_id=s.id AND i.disposition='review-required'))`, a.UserID, a.SessionHash, a.Channel).Scan(&valid); err != nil {
 			return p, fmt.Errorf("%w: check session: %w", ErrUnavailable, err)
 		}
 		if !valid {
@@ -188,10 +188,11 @@ func (s *Service) transact(ctx context.Context, a Actor, transition, consumingSe
 	// A fresh read on the same transaction verifies identity and session before
 	// commit. All authority-changing writers share the transaction mutex.
 	if _, err = principal(ctx, tx, a, transition); err != nil {
-		// A sealed self-security action deliberately consumes its own identity and
-		// sessions. External revocations cannot commit under our mutex; the
-		// deferred last-Administrator constraint still validates replacement.
-		if !consumingSelf || !p.Protected || !errors.Is(err, ErrForbidden) {
+		// Intrinsic own-session revocation and sealed self-security actions
+		// deliberately consume their own identity. The command has checked its
+		// scope; external revocations cannot commit under our mutex. The deferred
+		// last-Administrator constraint still validates sealed replacement.
+		if !consumingSelf || !errors.Is(err, ErrForbidden) {
 			return err
 		}
 		var disabled bool

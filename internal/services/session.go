@@ -27,9 +27,8 @@ var (
 )
 
 const (
-	webSessionLifetime       = 7 * 24 * time.Hour
-	mobileSessionLifetime    = 30 * 24 * time.Hour
-	mobileSessionRefreshRate = 5 * time.Minute
+	webSessionLifetime    = 7 * 24 * time.Hour
+	mobileSessionLifetime = 30 * 24 * time.Hour
 )
 
 func NewSessionService(db *pgxpool.Pool) *SessionService {
@@ -56,7 +55,7 @@ func (s *SessionService) CreateAuthenticated(ctx context.Context, userID int64, 
 		if kind == "mobile" {
 			lifetime = mobileSessionLifetime
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO sessions(token_hash,user_id,kind,expires_at,last_used_at,device_name) VALUES($1,$2,$3,clock_timestamp()+$4*interval '1 second',clock_timestamp(),nullif($5,''))`, hash, userID, kind, int64(lifetime/time.Second), device)
+		_, err := tx.Exec(ctx, `WITH instant AS (SELECT clock_timestamp() AS t) INSERT INTO sessions(token_hash,user_id,kind,created_at,expires_at,last_used_at,device_name) SELECT $1,$2,$3,t,t+$4*interval '1 second',t,nullif($5,'') FROM instant`, hash, userID, kind, int64(lifetime/time.Second), device)
 		return err
 	})
 	if err != nil {
@@ -72,8 +71,8 @@ func (s *SessionService) Create(ctx context.Context, userID int64) (string, erro
 	}
 
 	_, err = s.db.Exec(ctx,
-		`INSERT INTO sessions (token_hash, user_id, expires_at, kind) VALUES ($1, $2, $3, 'web')`,
-		tokenHash, userID, time.Now().Add(webSessionLifetime),
+		`WITH instant AS (SELECT clock_timestamp() AS t) INSERT INTO sessions (token_hash, user_id, created_at, expires_at, last_used_at, kind) SELECT $1,$2,t,t+interval '168 hours',t,'web' FROM instant`,
+		tokenHash, userID,
 	)
 	if err != nil {
 		return "", fmt.Errorf("save session: %w", err)
@@ -87,12 +86,11 @@ func (s *SessionService) CreateMobile(ctx context.Context, userID int64, deviceN
 	if err != nil {
 		return "", err
 	}
-	now := time.Now()
-
 	_, err = s.db.Exec(ctx, `
-		INSERT INTO sessions (token_hash, user_id, expires_at, kind, last_used_at, device_name)
-		VALUES ($1, $2, $3, 'mobile', $4, NULLIF(BTRIM($5), ''))`,
-		tokenHash, userID, now.Add(mobileSessionLifetime), now, deviceName,
+		WITH instant AS (SELECT clock_timestamp() AS t)
+		INSERT INTO sessions (token_hash, user_id, created_at, expires_at, kind, last_used_at, device_name)
+		SELECT $1,$2,t,t+interval '720 hours','mobile',t,NULLIF(BTRIM($3),'') FROM instant`,
+		tokenHash, userID, deviceName,
 	)
 	if err != nil {
 		return "", fmt.Errorf("save mobile session: %w", err)
@@ -115,7 +113,7 @@ func (s *SessionService) Validate(ctx context.Context, token string) (int64, err
 	}
 	var userID int64
 	err := s.db.QueryRow(ctx,
-		`SELECT user_id FROM sessions WHERE token_hash = $1 AND kind = 'web' AND revoked_at IS NULL AND expires_at > NOW()`,
+		`SELECT user_id FROM sessions s WHERE token_hash = $1 AND kind = 'web' AND revoked_at IS NULL AND expires_at > clock_timestamp() AND NOT EXISTS(SELECT 1 FROM session_upgrade_inventory i WHERE i.session_id=s.id AND i.disposition='review-required')`,
 		hashSessionToken(token),
 	).Scan(&userID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -127,40 +125,19 @@ func (s *SessionService) Validate(ctx context.Context, token string) (int64, err
 	return userID, nil
 }
 
-// ValidateMobile validates a non-revoked mobile bearer session and periodically
-// advances its 30-day inactivity deadline. Refresh writes are limited to once
-// per refresh interval per session.
+// ValidateMobile only authenticates. Failed action authorization must never
+// extend validity; the API renews after successful online authorization.
 func (s *SessionService) ValidateMobile(ctx context.Context, token string) (int64, error) {
 	if token == "" {
-		return 0, fmt.Errorf("empty token")
+		return 0, ErrInvalidSession
 	}
 	var userID int64
-	err := s.db.QueryRow(ctx, `
-		WITH refreshed AS (
-			UPDATE sessions
-			SET last_used_at = NOW(), expires_at = NOW() + $2 * INTERVAL '1 second'
-			WHERE token_hash = $1
-			  AND kind = 'mobile'
-			  AND revoked_at IS NULL
-			  AND expires_at > NOW()
-			  AND last_used_at <= NOW() - $3 * INTERVAL '1 second'
-			RETURNING user_id
-		)
-		SELECT user_id FROM refreshed
-		UNION ALL
-		SELECT user_id FROM sessions
-		WHERE token_hash = $1
-		  AND kind = 'mobile'
-		  AND revoked_at IS NULL
-		  AND expires_at > NOW()
-		  AND NOT EXISTS (SELECT 1 FROM refreshed)
-		LIMIT 1`,
-		hashSessionToken(token),
-		int64(mobileSessionLifetime/time.Second),
-		int64(mobileSessionRefreshRate/time.Second),
-	).Scan(&userID)
+	err := s.db.QueryRow(ctx, `SELECT user_id FROM sessions s WHERE token_hash=$1 AND kind='mobile' AND revoked_at IS NULL AND expires_at>clock_timestamp() AND NOT EXISTS(SELECT 1 FROM session_upgrade_inventory i WHERE i.session_id=s.id AND i.disposition='review-required')`, hashSessionToken(token)).Scan(&userID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrInvalidSession
+	}
 	if err != nil {
-		return 0, fmt.Errorf("invalid mobile session")
+		return 0, fmt.Errorf("validate mobile session: %w", err)
 	}
 	return userID, nil
 }
@@ -170,10 +147,13 @@ func (s *SessionService) RevokeMobile(ctx context.Context, token string) error {
 	if token == "" {
 		return nil
 	}
-	_, err := s.db.Exec(ctx, `
+	err := credentialTransaction(ctx, s.db, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `
 		UPDATE sessions
 		SET revoked_at = COALESCE(revoked_at, NOW())
 		WHERE token_hash = $1 AND kind = 'mobile' AND revoked_at IS NULL`, hashSessionToken(token))
+		return err
+	})
 	return err
 }
 
@@ -181,8 +161,10 @@ func (s *SessionService) Delete(ctx context.Context, token string) error {
 	if token == "" {
 		return nil
 	}
-	_, err := s.db.Exec(ctx, `DELETE FROM sessions WHERE token_hash = $1`, hashSessionToken(token))
-	return err
+	return credentialTransaction(ctx, s.db, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at=clock_timestamp() WHERE token_hash=$1 AND revoked_at IS NULL`, hashSessionToken(token))
+		return err
+	})
 }
 
 func hashSessionToken(token string) string {

@@ -16,8 +16,9 @@ type errorEnvelope struct {
 }
 
 type apiError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
+	Code                string `json:"code"`
+	Message             string `json:"message"`
+	RecoveryDisposition string `json:"recovery_disposition,omitempty"`
 }
 
 type responseEnvelope struct {
@@ -35,7 +36,14 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: apiError{Code: code, Message: message}})
+	disposition := ""
+	if status == 401 || code == "password_change_required" {
+		disposition = "purge"
+	}
+	if code == "instance_restored" {
+		disposition = "locked_review"
+	}
+	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: apiError{Code: code, Message: message, RecoveryDisposition: disposition}})
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {

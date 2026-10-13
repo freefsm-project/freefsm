@@ -80,8 +80,8 @@ func TestSessionServiceMobileSlidingExpiryAndRevocation(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT last_used_at, expires_at FROM sessions WHERE token_hash=$1`, hash).Scan(&refreshedUse, &refreshedExpiry); err != nil {
 		t.Fatal(err)
 	}
-	if !refreshedUse.After(oldUse) || time.Until(refreshedExpiry) < mobileSessionLifetime-time.Minute {
-		t.Fatalf("session was not refreshed: last_used=%v expires=%v", refreshedUse, refreshedExpiry)
+	if refreshedUse.Sub(oldUse).Abs() > time.Microsecond || time.Until(refreshedExpiry) > time.Hour {
+		t.Fatalf("authentication alone renewed session: last_used=%v expires=%v", refreshedUse, refreshedExpiry)
 	}
 
 	if _, err := svc.ValidateMobile(ctx, token); err != nil {
@@ -154,6 +154,7 @@ func openSessionTestPool(t *testing.T) (*pgxpool.Pool, int64) {
 	t.Cleanup(pool.Close)
 	if _, err = pool.Exec(ctx, `
 		CREATE TABLE users (id BIGSERIAL PRIMARY KEY);
+		CREATE TABLE session_upgrade_inventory(session_id bigint PRIMARY KEY,disposition text);
 		CREATE TABLE sessions (
 			id BIGSERIAL PRIMARY KEY,
 			token_hash TEXT NOT NULL UNIQUE,
