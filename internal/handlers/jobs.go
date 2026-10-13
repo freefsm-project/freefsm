@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
@@ -137,6 +138,14 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := jobToDetail(r.Context(), j, statuses)
+	masterView := func(kind string) bool {
+		req, ok := authorization.FromContext(r.Context())
+		if !ok {
+			return false
+		}
+		p, err := req.Service.Principal(r.Context(), req.Actor)
+		return err == nil && p.Allows(kind+".view", authorization.All)
+	}
 	d.NextOccurrenceStart = time.Now().In(middleware.CompanyLocation(r.Context())).Format("2006-01-02T15:04")
 	if j.CustomerID > 0 {
 		customer, _ := h.custSvc.GetByID(r.Context(), j.CustomerID)
@@ -169,14 +178,14 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 			d.ProjectName = project.Name
 		}
 	}
-	if j.LocationID != nil && *j.LocationID > 0 {
+	if j.LocationID != nil && *j.LocationID > 0 && masterView("location") {
 		location, _ := h.locSvc.GetByID(r.Context(), *j.LocationID)
 		if location != nil {
 			d.LocationName = location.Title
 			d.LocationAddress = services.LocationAddress(location)
 		}
 	}
-	if j.CustomerContactID != nil && *j.CustomerContactID > 0 {
+	if j.CustomerContactID != nil && *j.CustomerContactID > 0 && masterView("contact") {
 		contact, _ := h.contactSvc.GetByID(r.Context(), *j.CustomerContactID)
 		if contact != nil && contact.CustomerID == j.CustomerID {
 			d.ContactName = contact.FirstName + " " + contact.LastName
@@ -471,6 +480,9 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		staleJobForm(w)
 		return
 	}
+	if !validJobRelationshipInputs(w, r) {
+		return
+	}
 	custID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	projectID, _ := strconv.ParseInt(r.FormValue("project_id"), 10, 64)
 	locationID, _ := strconv.ParseInt(r.FormValue("location_id"), 10, 64)
@@ -643,6 +655,9 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		staleJobForm(w)
 		return
 	}
+	if !validJobRelationshipInputs(w, r) {
+		return
+	}
 	getJobForCompany := h.getJobForCompany
 	if getJobForCompany == nil {
 		getJobForCompany = h.svc.GetByIDForCompany
@@ -657,6 +672,7 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 	contactID, _ := strconv.ParseInt(r.FormValue("customer_contact_id"), 10, 64)
 	assetID, _ := strconv.ParseInt(r.FormValue("asset_id"), 10, 64)
 	params := services.JobUpdateParams{
+		ReplaceCustomer:   r.FormValue("replace_customer") == "true",
 		CustomerID:        int64Ptr(custID),
 		ProjectID:         &projectID,
 		LocationID:        &locationID,
@@ -668,6 +684,20 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Notes:             formPtr(r.FormValue("notes")),
 		TechNotes:         formPtr(r.FormValue("tech_notes")),
 		CustomFields:      parseCustomFieldPatch(r),
+	}
+	// Omitted relationship inputs are not unlink requests. Independent planning
+	// editors and partial submissions preserve the existing operational context.
+	if _, ok := r.PostForm["project_id"]; !ok {
+		params.ProjectID = nil
+	}
+	if _, ok := r.PostForm["location_id"]; !ok {
+		params.LocationID = nil
+	}
+	if _, ok := r.PostForm["customer_contact_id"]; !ok {
+		params.CustomerContactID = nil
+	}
+	if _, ok := r.PostForm["asset_id"]; !ok {
+		params.AssetID = nil
 	}
 	if v := r.FormValue("visits"); v != "" {
 		visits := services.ParseVisits(v)
@@ -904,12 +934,15 @@ func (h *JobHandler) newJobForm(ctx context.Context, companyID, customerID int64
 	assetStatuses, _ := h.assetStatSvc.List(ctx)
 	users, _ := h.userSvc.ListActiveForCompany(ctx, companyID)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
-	return templates.JobFormPageData{
+	creationFields := buildCustomFieldInitialDisplay(defs)
+	for i := range creationFields {
+		creationFields[i].Required = false
+	}
+	return filterJobFormChoices(ctx, templates.JobFormPageData{
 		AssetCustomFields: h.relatedCreationFields(ctx, "asset"), ProjectCustomFields: h.relatedCreationFields(ctx, "project"),
 		Job: &templates.JobDetail{
 			CustomerID:  customerID,
 			BillingType: "flat_rate",
-			StartTime:   time.Now().Format("2006-01-02") + "T08:00",
 		},
 		Customers:               customerOptions(customers),
 		Projects:                projectOptions(projects),
@@ -924,9 +957,9 @@ func (h *JobHandler) newJobForm(ctx context.Context, companyID, customerID int64
 		ExistingVisitsJSON:      "[]",
 		ExistingAssignmentsJSON: "[]",
 		ExistingSubtasksJSON:    "[]",
-		CustomFields:            buildCustomFieldInitialDisplay(defs),
+		CustomFields:            creationFields,
 		Errors:                  map[string]string{},
-	}
+	})
 }
 
 func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *ent.Job, statuses []*ent.Status) (templates.JobFormPageData, error) {
@@ -948,7 +981,14 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *en
 	if err != nil {
 		return templates.JobFormPageData{}, fmt.Errorf("list existing assignment users: %w", err)
 	}
-	return templates.JobFormPageData{
+	var retainedProjectID int64
+	if j.ProjectID != nil {
+		if p, err := h.projectSvc.GetByID(ctx, *j.ProjectID); err == nil && p.DeletedAt != nil {
+			retainedProjectID = p.ID
+		}
+	}
+	return filterJobFormChoices(ctx, templates.JobFormPageData{
+		RetainedProjectID: retainedProjectID,
 		Job:               &d,
 		AssetCustomFields: h.relatedCreationFields(ctx, "asset"), ProjectCustomFields: h.relatedCreationFields(ctx, "project"),
 		Customers:               customerOptions(customers),
@@ -966,7 +1006,7 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *en
 		ExistingSubtasksJSON:    services.SerializeSubtasks(services.ParseSubtasks(j.Subtasks)),
 		CustomFields:            buildCustomFieldDisplay(defs, j.CustomFields),
 		Errors:                  map[string]string{},
-	}, nil
+	}), nil
 }
 
 type jobFormAssignment struct {

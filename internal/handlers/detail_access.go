@@ -58,6 +58,7 @@ func withDetailPresentation(r *http.Request, typ string, id int64, policy *servi
 	access["pricing"] = req.Service.ParentFacet(ctx, req.Actor, typ, id, "pricing.view") == nil
 	access["settlement"] = req.Service.ParentFacet(ctx, req.Actor, typ, id, "settlement.view") == nil
 	if typ == "job" {
+		access["relations"] = action("job.relations.edit")
 		access["time"] = p.Allows("time.view", authorization.Own)
 		access["create-next"] = action("job.create") && legacyUpdate
 		access["create-invoice"] = policy != nil && policy.CanCreateDocumentForJob(ctx, id, objectref.TypeInvoice)

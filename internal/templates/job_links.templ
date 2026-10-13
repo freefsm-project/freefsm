@@ -1,0 +1,31 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ JobLinks(id int64, links authorization.JobLinks) {
+	@Layout("Job relationships") {
+		<h1>Job relationships</h1>
+		<p>These explicit links do not change Job Status. The Project and Job have independent Locations.</p>
+		<form method="post" hx-boost="false" hx-history="false" action={ templ.URL(fmt.Sprintf("/jobs/%d/links",id)) }>
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			@jobLinkSelect("Project","project_id",links.ProjectID,links.Projects)
+			@jobLinkSelect("Location","location_id",links.LocationID,links.Locations)
+			@jobLinkSelect("Asset","asset_id",links.AssetID,links.Assets)
+			<button type="submit">Save relationships</button>
+			<a href={ templ.URL(fmt.Sprintf("/jobs/%d",id)) }>Back to Job</a>
+		</form>
+		<a href={ templ.URL(fmt.Sprintf("/jobs/%d/contacts",id)) }>Manage explicit Job Contacts</a>
+	}
+}
+
+templ jobLinkSelect(label, name string, selected int64, choices []authorization.JobLinkChoice) {
+	<label>{ label }
+		<select name={ name }>
+			<option value="0">No link</option>
+			for _, c := range choices {
+				<option value={ fmt.Sprint(c.ID) } selected?={ c.ID==selected }>{ c.Name }</option>
+			}
+		</select>
+	</label>
+}

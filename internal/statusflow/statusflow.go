@@ -270,6 +270,14 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, a Actor, typ Obje
 			return err
 		}
 	}
+	if typ == Job {
+		if err := authorization.JobStatusDependencies(ctx, tx, a.CompanyID, id, string(key)); err != nil {
+			if errors.Is(err, authorization.ErrConflict) {
+				return ErrInvalidTransition
+			}
+			return err
+		}
+	}
 	if err := allowStatusUpdates(ctx, tx); err != nil {
 		return err
 	}
@@ -404,11 +412,11 @@ func (s *Service) Move(ctx context.Context, a Actor, r MoveRequest) error {
 		if crossCategory && count > 0 && !r.ConfirmInUse {
 			return ErrConfirmationRequired
 		}
-		if crossCategory && typ == Project && r.Category != ProjectCompleted && r.Category != ProjectCanceled {
+		if crossCategory && (typ == Project || typ == Job) && string(r.Category) != string(typ)+":completed" && string(r.Category) != string(typ)+":canceled" {
 			// Reclassification changes the meaning of every reference, including
 			// archived Projects. Confirmation is not a dependency repair. The
 			// configuration transaction holds the shared authority/master fence.
-			rows, err := tx.Query(ctx, `SELECT id FROM projects WHERE company_id=$1 AND status_id=$2 ORDER BY id FOR UPDATE`, a.CompanyID, r.StatusID)
+			rows, err := tx.Query(ctx, `SELECT id FROM `+string(typ)+`s WHERE company_id=$1 AND status_id=$2 ORDER BY id FOR UPDATE`, a.CompanyID, r.StatusID)
 			if err != nil {
 				return err
 			}
@@ -417,7 +425,11 @@ func (s *Service) Move(ctx context.Context, a Actor, r MoveRequest) error {
 				return err
 			}
 			for _, id := range ids {
-				if err := authorization.ProjectStatusDependencies(ctx, tx, a.CompanyID, id, string(r.Category)); err != nil {
+				check := authorization.ProjectStatusDependencies
+				if typ == Job {
+					check = authorization.JobStatusDependencies
+				}
+				if err := check(ctx, tx, a.CompanyID, id, string(r.Category)); err != nil {
 					if errors.Is(err, authorization.ErrConflict) {
 						return ErrInvalidTransition
 					}
