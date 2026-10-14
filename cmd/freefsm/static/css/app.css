@@ -2159,7 +2159,7 @@ html[data-theme="dark"] .theme-icon-moon {
 
 .schedule-title-nav {
   display: grid;
-  grid-template-columns: 3.75rem minmax(0, 1fr) 3.75rem;
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
   justify-self: stretch;
   gap: 0.5rem;
@@ -2183,6 +2183,7 @@ html[data-theme="dark"] .theme-icon-moon {
 .schedule-title-nav h3 {
   grid-column: 2;
   justify-self: center;
+  max-width: 100%;
   margin: 0;
   overflow: hidden;
   font-size: 0.85rem;
@@ -3665,4 +3666,31 @@ table:not(.calendar):not(.week-view):not(.day-view) tbody tr:hover {
   flex-wrap: wrap;
   justify-content: space-between;
   gap: .5rem;
+}
+.schedule-card {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    margin-block: .75rem;
+    padding: .8rem;
+    border: 1px solid currentColor;
+    border-radius: .4rem;
+    overflow-wrap: anywhere;
+}
+.schedule-card > span, .cal-job > span, .dispatch-card > span,
+.schedule-map-list-card > span { display: block; white-space: normal; }
+.schedule-filters { display: flex; flex-wrap: wrap; gap: .7rem; align-items: end; }
+.schedule-filters label { flex: 1 1 10rem; min-width: 0; }
+#schedule-workspace { min-width: 0; }
+#schedule-results { overflow-wrap: anywhere; }
+#schedule-results .calendar { display: block; overflow-x: auto; }
+#schedule-results .cal-job, #schedule-results .dispatch-scheduled-card { overflow: auto; white-space: normal; }
+#schedule-results .dispatch-scheduled-dot { display: flex; flex-direction: column; width: 14rem; height: auto; border-radius: .4rem; }
+#schedule-results .schedule-month-job { flex-direction: column; align-items: stretch; min-width: 12rem; }
+#schedule-results .schedule-month-job strong { white-space: normal; overflow: visible; }
+#schedule-results .schedule-grid { grid-template-rows: auto repeat(24,minmax(3rem,auto)); }
+#schedule-results .schedule-grid.week-view { grid-template-columns: 60px repeat(7,minmax(14rem,1fr)); }
+@media (max-width: 640px) {
+    .schedule-filters { display: block; }
+    #schedule-workspace .schedule-title-nav { flex-wrap: wrap; }
 }

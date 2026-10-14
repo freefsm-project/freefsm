@@ -60,26 +60,53 @@ templ Layout(title string, children ...templ.Component) {
 						window.__freefsmLeafletLoading = false;
 						(window.__freefsmLeafletCallbacks || []).splice(0).forEach(function(fn) { fn(); });
 					};
+					script.onerror = function() {
+						window.__freefsmLeafletLoading = false;
+						(window.__freefsmLeafletCallbacks || []).splice(0).forEach(function(fn) { fn(); });
+					};
 					document.head.appendChild(script);
 				}
 				function initScheduleMap() {
 					var mapEl = document.getElementById('schedule-map');
 					if (!mapEl || mapEl.dataset.initialized === 'true') return;
+					var status = document.getElementById('schedule-map-status');
+					var failure = document.getElementById('schedule-map-provider-failure');
+					var failed = false;
+					function unavailable() {
+						if (!document.body.contains(mapEl)) return;
+						failed = true;
+						if (status) status.textContent = 'Map unavailable';
+						if (failure) failure.hidden = false;
+						mapEl.setAttribute('aria-label', 'Map unavailable');
+						var mapped = document.getElementById('schedule-map-mapped');
+						var unmapped = document.getElementById('schedule-map-unmapped');
+						if (mapped && unmapped) Array.from(mapped.children).forEach(function(card) {
+							var reason = document.createElement('strong');
+							reason.textContent = 'Provider failure — use the saved service address; coordinates retained';
+							card.appendChild(reason); unmapped.appendChild(card);
+						});
+					}
+					var loadingTimeout = setTimeout(unavailable, 8000);
 					loadLeaflet(function() {
-						if (!window.L || !document.body.contains(mapEl) || mapEl.dataset.initialized === 'true') return;
+						if (!document.body.contains(mapEl) || mapEl.dataset.initialized === 'true') { clearTimeout(loadingTimeout); return; }
+						if (!window.L || !mapEl.dataset.tileUrl) { clearTimeout(loadingTimeout); unavailable(); return; }
 						mapEl.dataset.initialized = 'true';
 						var motion = !matchMedia('(prefers-reduced-motion: reduce)').matches;
 						var map = L.map(mapEl, {zoomAnimation: motion, fadeAnimation: motion, markerZoomAnimation: motion}).setView([39.8283, -98.5795], 4);
+						mapEl.freefsmMap = map;
 						if (window.freefsmReduceMapMotion) window.freefsmReduceMapMotion(map);
 						L.tileLayer(mapEl.dataset.tileUrl, {
 							maxZoom: 19,
 							attribution: '&copy; OpenStreetMap contributors'
+						}).on('tileerror', function() { clearTimeout(loadingTimeout); unavailable(); }).on('load', function() {
+							clearTimeout(loadingTimeout);
+							if (!failed && status) status.textContent = 'Map loaded — service Locations only';
 						}).addTo(map);
 						var bounds = [];
 						document.querySelectorAll('#schedule-map-markers [data-lat]').forEach(function(el) {
 							var lat = parseFloat(el.dataset.lat);
 							var lng = parseFloat(el.dataset.lng);
-							if (!isFinite(lat) || !isFinite(lng) || (lat === 0 && lng === 0)) return;
+							if (!isFinite(lat) || !isFinite(lng)) return;
 							bounds.push([lat, lng]);
 							var statusColor = el.dataset.statusColor || '#2563EB';
 							var icon = L.divIcon({

@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
-	"github.com/freefsm-project/freefsm/internal/middleware"
 )
 
 func collectionRead(typ string) func(http.Handler) http.Handler {
@@ -31,8 +30,7 @@ func collectionRead(typ string) func(http.Handler) http.Handler {
 
 func scheduleDispatchVisible(r *http.Request) bool {
 	if p, current := authorization.NavigationPrincipal(r.Context()); current {
-		return p.Allows("job.view", authorization.All) && p.Allows("directory.view", authorization.All)
+		return p.Allows("job.view", authorization.Assigned)
 	}
-	u, _ := middleware.UserFromContext(r.Context())
-	return isAdminOrDispatcher(u)
+	return false
 }
