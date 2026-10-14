@@ -64,44 +64,24 @@ func TestAPIMutationPositionalSubtasksFailClosedIntegration(t *testing.T) {
 	}
 }
 
-func TestAPIMutationClockLifecycleIsAtomicAndAuditedIntegration(t *testing.T) {
+func TestLegacyAPIMutationClockContractDeniedIntegration(t *testing.T) {
 	client, pool := openAPIMutationTestDatabase(t)
 	ctx := context.Background()
 	actor, jobID := createAPIMutationFixtures(t, client, 102, `[]`)
 	svc := NewAPIMutationService(pool)
 
-	entry, err := svc.ClockIn(ctx, actor, jobID, APIClockInParams{Notes: "Arrived"})
-	if err != nil {
-		t.Fatalf("ClockIn: %v", err)
+	if _, err := svc.ClockIn(ctx, actor, jobID, APIClockInParams{Notes: "Arrived"}); !errors.Is(err, ErrMutationForbidden) {
+		t.Fatalf("legacy ClockIn=%v", err)
 	}
-	if entry.UserID != actor.UserID || entry.JobID == nil || *entry.JobID != jobID || entry.Notes != "Arrived" {
-		t.Fatalf("clock-in result = %+v", entry)
+	if _, err := svc.ClockOut(ctx, actor); !errors.Is(err, ErrMutationForbidden) {
+		t.Fatalf("untargeted ClockOut=%v", err)
 	}
-	if _, err = svc.ClockIn(ctx, actor, jobID, APIClockInParams{}); !errors.Is(err, ErrActiveTimeEntry) {
-		t.Fatalf("second ClockIn error = %v, want ErrActiveTimeEntry", err)
-	}
-
-	entry, err = svc.ClockOut(ctx, actor)
-	if err != nil {
-		t.Fatalf("ClockOut: %v", err)
-	}
-	if entry.ClockOut == nil {
-		t.Fatal("ClockOut result has nil clock_out")
-	}
-	if _, err = svc.ClockOut(ctx, actor); !errors.Is(err, ErrTimeEntryNotActive) {
-		t.Fatalf("second ClockOut error = %v, want ErrTimeEntryNotActive", err)
-	}
-
-	var activities int
-	if err = pool.QueryRow(ctx, `SELECT count(*) FROM activity_logs WHERE actor_id=$1 AND action IN ('clocked_in','clocked_out')`, actor.UserID).Scan(&activities); err != nil {
-		t.Fatal(err)
-	}
-	if activities != 4 {
-		t.Fatalf("activity count = %d, want 4 (time entry and job for each mutation)", activities)
+	if client.TimeEntry.Query().CountX(ctx) != 0 {
+		t.Fatal("legacy clock contract mutated time")
 	}
 }
 
-func TestAPIMutationConcurrentClockInAllowsOneActiveEntryIntegration(t *testing.T) {
+func TestLegacyAPIMutationConcurrentClocksDeniedIntegration(t *testing.T) {
 	client, pool := openAPIMutationTestDatabase(t)
 	ctx := context.Background()
 	actor, jobID := createAPIMutationFixtures(t, client, 108, `[]`)
@@ -128,17 +108,17 @@ func TestAPIMutationConcurrentClockInAllowsOneActiveEntryIntegration(t *testing.
 		switch {
 		case err == nil:
 			succeeded++
-		case errors.Is(err, ErrActiveTimeEntry):
+		case errors.Is(err, ErrMutationForbidden):
 			conflicted++
 		default:
 			t.Fatalf("ClockIn error = %v", err)
 		}
 	}
-	if succeeded != 1 || conflicted != 1 {
-		t.Fatalf("clock-in results = %d success, %d conflict; want 1 and 1", succeeded, conflicted)
+	if succeeded != 0 || conflicted != 2 {
+		t.Fatalf("clock-in results = %d success, %d denied; want 0 and 2", succeeded, conflicted)
 	}
-	if got := client.TimeEntry.Query().CountX(ctx); got != 1 {
-		t.Fatalf("time entry count = %d, want 1", got)
+	if got := client.TimeEntry.Query().CountX(ctx); got != 0 {
+		t.Fatalf("time entry count = %d, want 0", got)
 	}
 }
 
@@ -149,8 +129,8 @@ func TestAPIMutationClockInRejectsForeignJobIntegration(t *testing.T) {
 	_, foreignJobID := createAPIMutationFixtures(t, client, 104, `[]`)
 
 	_, err := NewAPIMutationService(pool).ClockIn(ctx, actor, foreignJobID, APIClockInParams{})
-	if !errors.Is(err, ErrMutationJobNotFound) {
-		t.Fatalf("ClockIn error = %v, want ErrMutationJobNotFound", err)
+	if !errors.Is(err, ErrMutationForbidden) {
+		t.Fatalf("ClockIn error = %v, want canonical authority denial", err)
 	}
 	if got := client.TimeEntry.Query().CountX(ctx); got != 0 {
 		t.Fatalf("time entry count = %d, want 0", got)
@@ -195,15 +175,15 @@ func TestAPIMutationRejectsClosedJobIntegration(t *testing.T) {
 	if _, err := svc.SetSubtaskCompletion(ctx, actor, jobID, 0, true); !errors.Is(err, ErrMutationForbidden) {
 		t.Fatalf("positional SetSubtaskCompletion error = %v, want ErrMutationForbidden", err)
 	}
-	if _, err := svc.ClockIn(ctx, actor, jobID, APIClockInParams{}); !errors.Is(err, ErrMutationJobClosed) {
-		t.Fatalf("ClockIn error = %v, want ErrMutationJobClosed", err)
+	if _, err := svc.ClockIn(ctx, actor, jobID, APIClockInParams{}); !errors.Is(err, ErrMutationForbidden) {
+		t.Fatalf("ClockIn error = %v, want canonical authority denial", err)
 	}
 	if ParseSubtasks(client.Job.GetX(ctx, jobID).Subtasks)[0].Completed || client.TimeEntry.Query().CountX(ctx) != 0 {
 		t.Fatal("closed-job mutation changed state")
 	}
 }
 
-func TestAPIMutationActivityFailureRollsBackStateIntegration(t *testing.T) {
+func TestAPIMutationActivityFailureRollsBackSubtaskIntegration(t *testing.T) {
 	t.Run("subtask", func(t *testing.T) {
 		client, pool := openAPIMutationTestDatabase(t)
 		ctx := context.Background()
@@ -218,34 +198,6 @@ func TestAPIMutationActivityFailureRollsBackStateIntegration(t *testing.T) {
 		}
 	})
 
-	t.Run("clock in", func(t *testing.T) {
-		client, pool := openAPIMutationTestDatabase(t)
-		ctx := context.Background()
-		actor, jobID := createAPIMutationFixtures(t, client, 106, `[]`)
-		breakAPIMutationActivityWrites(t, pool)
-
-		if _, err := NewAPIMutationService(pool).ClockIn(ctx, actor, jobID, APIClockInParams{}); err == nil {
-			t.Fatal("ClockIn error = nil")
-		}
-		if got := client.TimeEntry.Query().CountX(ctx); got != 0 {
-			t.Fatalf("time entry count = %d, want 0", got)
-		}
-	})
-
-	t.Run("clock out", func(t *testing.T) {
-		client, pool := openAPIMutationTestDatabase(t)
-		ctx := context.Background()
-		actor, jobID := createAPIMutationFixtures(t, client, 107, `[]`)
-		entry := client.TimeEntry.Create().SetCompanyID(actor.CompanyID).SetUserID(actor.UserID).SetJobID(jobID).SetClockIn(time.Now()).SaveX(ctx)
-		breakAPIMutationActivityWrites(t, pool)
-
-		if _, err := NewAPIMutationService(pool).ClockOut(ctx, actor); err == nil {
-			t.Fatal("ClockOut error = nil")
-		}
-		if got := client.TimeEntry.GetX(ctx, entry.ID).ClockOut; got != nil {
-			t.Fatalf("clock_out = %v, want nil after rollback", got)
-		}
-	})
 }
 
 func createAPIMutationFixtures(t *testing.T, client *ent.Client, companyID int64, subtasks string) (MutationActor, int64) {
