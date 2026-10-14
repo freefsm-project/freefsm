@@ -337,6 +337,11 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/jobs/{id}/contacts", jobHandler.Contacts)
 		r.Get("/jobs/{id}/links", jobHandler.Links)
 		r.Post("/jobs/{id}/links", jobHandler.Links)
+		r.Get("/jobs/{id}/dispatch", jobHandler.Dispatch)
+		r.Post("/jobs/{id}/dispatch", jobHandler.Dispatch)
+		r.Post("/schedule/dispatch", scheduleHandler.ProposeDispatch)
+		r.Post("/schedule/move", scheduleHandler.ProposeDispatch)
+		r.Post("/schedule/calendar/move", scheduleHandler.ProposeDispatch)
 		r.With(detailsAccess("asset")).Get("/assets/new", assetHandler.Create)
 		r.With(detailsAccess("asset")).Post("/assets", assetHandler.Create)
 		r.With(detailsAccess("asset")).Post("/assets/inline", assetHandler.CreateInline)
@@ -362,9 +367,6 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/cancel-next-occurrence", jobHandler.CancelNextOccurrence)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/delete", jobHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/subtasks/{idx}/toggle", jobHandler.ToggleSubtask)
-			r.Post("/schedule/dispatch", scheduleHandler.DispatchUpdate)
-			r.Post("/schedule/move", scheduleHandler.CalendarMove)
-			r.Post("/schedule/calendar/move", scheduleHandler.CalendarMove)
 		})
 
 		// Assigned technicians may create documents from their Jobs and manage them.

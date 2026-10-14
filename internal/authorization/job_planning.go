@@ -21,6 +21,12 @@ func (s *Service) JobPlanningFacets(ctx context.Context, tx pgx.Tx, a Actor, id 
 		} else if _, err := parentAccess(ctx, tx, p, "job", id, permission, true); err != nil {
 			return err
 		}
+		// Schedule and assignment edits belong to the reviewed dispatch command.
+		// Details/create cannot bypass current-overlap review by posting hidden
+		// legacy fields, even when the actor holds both planning permissions.
+		if permission == "job.schedule" || permission == "job.assign" {
+			return ErrConflict
+		}
 	}
 	return nil
 }

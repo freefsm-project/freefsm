@@ -143,124 +143,11 @@ func normalizeSchedulePeriod(period, tab string) string {
 }
 
 func (h *ScheduleHandler) DispatchUpdate(w http.ResponseWriter, r *http.Request) {
-	loc := middleware.CompanyLocation(r.Context())
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", http.StatusBadRequest)
-		return
-	}
-	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
-	userID, _ := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
-	date, err := time.ParseInLocation("2006-01-02", r.FormValue("date"), loc)
-	if err != nil || jobID <= 0 || userID <= 0 {
-		http.Error(w, "invalid schedule move", http.StatusBadRequest)
-		return
-	}
-	j, err := h.jobSvc.GetByID(r.Context(), jobID)
-	if err != nil {
-		http.Error(w, "job not found", http.StatusNotFound)
-		return
-	}
-	oldStart := j.StartTime
-	oldEnd := j.EndTime
-	oldAssignments, _ := h.jobSvc.Assignments(r.Context(), jobID)
-	if len(oldAssignments) == 0 {
-		oldAssignments = services.ParseAssignments(j.Assignments)
-	}
-	hour := 8
-	minute := 0
-	duration := 1
-	if j.StartTime != nil && !j.StartTime.IsZero() {
-		localStart := j.StartTime.In(loc)
-		hour = localStart.Hour()
-		minute = localStart.Minute()
-	}
-	if j.StartTime != nil && j.EndTime != nil && !j.EndTime.IsZero() {
-		if d := int(j.EndTime.Sub(*j.StartTime).Hours()); d > 0 {
-			duration = d
-		}
-	}
-	if formHour := r.FormValue("hour"); formHour != "" {
-		parsedHour, _ := strconv.Atoi(formHour)
-		if parsedHour < 0 || parsedHour > 23 {
-			http.Error(w, "invalid schedule move", http.StatusBadRequest)
-			return
-		}
-		hour = parsedHour
-		minute = 0
-	}
-	if formDuration := r.FormValue("duration"); formDuration != "" {
-		parsedDuration, _ := strconv.Atoi(formDuration)
-		if parsedDuration > 0 {
-			duration = parsedDuration
-		}
-	}
-	start := time.Date(date.Year(), date.Month(), date.Day(), hour, minute, 0, 0, loc)
-	end := start.Add(time.Duration(duration) * time.Hour)
-	result, err := h.jobSvc.Move(r.Context(), jobID, userID, start, end)
-	if err != nil {
-		http.Error(w, "move job", http.StatusInternalServerError)
-		return
-	}
-	h.recordScheduleActivity(r, result, oldStart, oldEnd, &start, &end, firstAssignmentName(oldAssignments), h.userName(r.Context(), userID), "dispatch")
-	w.WriteHeader(http.StatusNoContent)
+	h.ProposeDispatch(w, r)
 }
 
 func (h *ScheduleHandler) CalendarMove(w http.ResponseWriter, r *http.Request) {
-	loc := middleware.CompanyLocation(r.Context())
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "invalid form", http.StatusBadRequest)
-		return
-	}
-	jobID, _ := strconv.ParseInt(r.FormValue("job_id"), 10, 64)
-	date, err := time.ParseInLocation("2006-01-02", r.FormValue("date"), loc)
-	if err != nil || jobID <= 0 {
-		http.Error(w, "invalid calendar move", http.StatusBadRequest)
-		return
-	}
-	j, err := h.jobSvc.GetByID(r.Context(), jobID)
-	if err != nil {
-		http.Error(w, "job not found", http.StatusNotFound)
-		return
-	}
-	oldStart := j.StartTime
-	oldEnd := j.EndTime
-	hour := 8
-	minute := 0
-	duration := 1
-	if j.StartTime != nil && !j.StartTime.IsZero() {
-		hour = j.StartTime.In(loc).Hour()
-		minute = j.StartTime.In(loc).Minute()
-	}
-	if formHour := r.FormValue("hour"); formHour != "" {
-		parsedHour, _ := strconv.Atoi(formHour)
-		if parsedHour < 0 || parsedHour > 23 {
-			http.Error(w, "invalid calendar move", http.StatusBadRequest)
-			return
-		}
-		hour = parsedHour
-		minute = 0
-	}
-	if j.StartTime != nil && j.EndTime != nil && !j.EndTime.IsZero() {
-		d := int(j.EndTime.Sub(*j.StartTime).Hours())
-		if d > 0 {
-			duration = d
-		}
-	}
-	if formDuration := r.FormValue("duration"); formDuration != "" {
-		parsedDuration, _ := strconv.Atoi(formDuration)
-		if parsedDuration > 0 {
-			duration = parsedDuration
-		}
-	}
-	start := time.Date(date.Year(), date.Month(), date.Day(), hour, minute, 0, 0, loc)
-	end := start.Add(time.Duration(duration) * time.Hour)
-	result, err := h.jobSvc.MoveTime(r.Context(), jobID, start, end)
-	if err != nil {
-		http.Error(w, "move job", http.StatusInternalServerError)
-		return
-	}
-	h.recordScheduleActivity(r, result, oldStart, oldEnd, &start, &end, "", "", "calendar")
-	w.WriteHeader(http.StatusNoContent)
+	h.ProposeDispatch(w, r)
 }
 
 func (h *ScheduleHandler) recordScheduleActivity(r *http.Request, j *ent.Job, oldStart, oldEnd, newStart, newEnd *time.Time, oldAssignee, newAssignee, source string) {
@@ -597,8 +484,11 @@ func (h *ScheduleHandler) dispatchColumns(r *http.Request, techs []templates.Sch
 		if len(assignments) == 0 {
 			continue
 		}
-		calJobs[i].TechID = assignments[0].UserID
-		jobsByTech[assignments[0].UserID] = append(jobsByTech[assignments[0].UserID], calJobs[i])
+		for _, a := range assignments {
+			card := calJobs[i]
+			card.TechID = a.UserID
+			jobsByTech[a.UserID] = append(jobsByTech[a.UserID], card)
+		}
 	}
 	columns := make([]templates.DispatchColumn, 0, len(techs))
 	for _, tech := range techs {
@@ -620,16 +510,19 @@ func (h *ScheduleHandler) dispatchMatrix(r *http.Request, period string, start, 
 		if len(assignments) == 0 {
 			continue
 		}
-		techID := assignments[0].UserID
 		columnKey := dispatchMatrixColumnKey(period, *job.StartTime)
 		if columnKey == "" {
 			continue
 		}
-		if jobsByTechColumn[techID] == nil {
-			jobsByTechColumn[techID] = make(map[string][]templates.CalendarJob, len(columns))
+		for _, a := range assignments {
+			techID := a.UserID
+			if jobsByTechColumn[techID] == nil {
+				jobsByTechColumn[techID] = make(map[string][]templates.CalendarJob, len(columns))
+			}
+			card := calJobs[i]
+			card.TechID = techID
+			jobsByTechColumn[techID][columnKey] = append(jobsByTechColumn[techID][columnKey], card)
 		}
-		calJobs[i].TechID = techID
-		jobsByTechColumn[techID][columnKey] = append(jobsByTechColumn[techID][columnKey], calJobs[i])
 	}
 
 	rows := make([]templates.DispatchMatrixRow, 0, len(techs))
@@ -845,9 +738,17 @@ func (h *ScheduleHandler) listDayJobs(r *http.Request, jobs []*ent.Job, loc *tim
 	for _, j := range dayJobs {
 		cj := listWeekCalendarJob(r.Context(), j, custMap, statuses, locations, loc)
 		if assignments, _ := h.jobSvc.Assignments(r.Context(), j.ID); len(assignments) > 0 {
-			cj.Assignee = assignments[0].Name
-			cj.AssigneeInitials = initials(assignments[0].Name)
-			cj.AssigneeColor = assigneeColor(assignments[0].Name)
+			names := []string{}
+			for _, a := range assignments {
+				name := a.Name
+				if a.Unavailable {
+					name += " (unavailable)"
+				}
+				names = append(names, name)
+			}
+			cj.Assignee = strings.Join(names, ", ")
+			cj.AssigneeInitials = cj.Assignee
+			cj.AssigneeColor = assigneeColor(cj.Assignee)
 		}
 		if inv := invoices[j.ID]; inv != nil {
 			cj.InvoiceID = inv.ID

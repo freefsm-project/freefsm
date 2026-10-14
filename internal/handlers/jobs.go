@@ -501,7 +501,7 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		BillingType:       r.FormValue("billing_type"),
 		StartTime:         parseTime(r.FormValue("start_time"), loc),
 		EndTime:           parseTime(r.FormValue("end_time"), loc),
-		DueDate:           parseDate(r.FormValue("due_date"), loc),
+		DueDate:           parseDate(r.FormValue("due_date"), time.UTC),
 		Notes:             r.FormValue("notes"),
 		TechNotes:         r.FormValue("tech_notes"),
 		Visits:            services.ParseVisits(r.FormValue("visits")),
@@ -511,6 +511,10 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if params.BillingType == "" {
 		params.BillingType = "flat_rate"
+	}
+	if r.FormValue("due_date") != "" && params.DueDate.IsZero() {
+		http.Error(w, "Invalid due date", 400)
+		return
 	}
 	createJob := h.createJob
 	if createJob == nil {
@@ -720,8 +724,13 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		t := parseTime(et, loc)
 		params.EndTime = &t
 	}
-	if dd := r.FormValue("due_date"); dd != "" {
-		t := parseDate(dd, loc)
+	if _, present := r.PostForm["due_date"]; present {
+		dd := r.FormValue("due_date")
+		t := parseDate(dd, time.UTC)
+		if dd != "" && t.IsZero() {
+			http.Error(w, "Invalid due date", 400)
+			return
+		}
 		params.DueDate = &t
 	}
 	updateJob := h.updateJob
@@ -1156,8 +1165,21 @@ func jobToDetail(ctx context.Context, j *ent.Job, statuses []*ent.Status) templa
 		d.EndTimeDisplay = displayDateTime(ctx, *j.EndTime)
 	}
 	if j.DueDate != nil && !j.DueDate.IsZero() {
-		d.DueDate = j.DueDate.In(middleware.CompanyLocation(ctx)).Format("2006-01-02")
-		d.DueDateDisplay = displayDate(ctx, *j.DueDate)
+		loc := middleware.CompanyLocation(ctx)
+		d.DueDate = j.DueDate.Format("2006-01-02")
+		d.DueDateDisplay = displayDate(ctx, time.Date(j.DueDate.Year(), j.DueDate.Month(), j.DueDate.Day(), 0, 0, 0, 0, loc))
+		finished := false
+		for _, s := range statuses {
+			if j.StatusID != nil && s.ID == *j.StatusID {
+				finished = s.CategoryKey == "job:completed" || s.CategoryKey == "job:canceled"
+			}
+		}
+		if !finished && time.Now().In(loc).Format("2006-01-02") > d.DueDate {
+			d.DueDateDisplay += " (Overdue)"
+		}
+	}
+	if j.ArrivalWindowStart != nil && j.ArrivalWindowEnd != nil {
+		d.ArrivalWindowDisplay = displayDateTime(ctx, *j.ArrivalWindowStart) + " – " + displayDateTime(ctx, *j.ArrivalWindowEnd)
 	}
 	if j.DeletedAt != nil && !j.DeletedAt.IsZero() {
 		d.ArchivedAt = displayDate(ctx, *j.DeletedAt)

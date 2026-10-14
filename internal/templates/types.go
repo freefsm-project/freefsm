@@ -566,6 +566,7 @@ type JobDetail struct {
 	DueDate                  string
 	StartTimeDisplay         string
 	EndTimeDisplay           string
+	ArrivalWindowDisplay     string
 	DueDateDisplay           string
 	NextOccurrenceStart      string
 	Notes                    string

@@ -8,6 +8,9 @@ templ JobShow(p JobDetail) {
 		if p.ArchivedAt == "" {
 			<div class="work-item-detail-actions">
 				<div class="work-item-detail-action-group">
+					if canDispatchJob(ctx) {
+						<a href={ templ.URL(fmt.Sprintf("/jobs/%d/dispatch",p.ID)) }>Dispatch Job</a>
+					}
 					if detailCan(ctx,"edit") {
 						<a href={ templ.URL(fmt.Sprintf("/jobs/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.JobType) }>Edit</a>
 					}
@@ -132,12 +135,15 @@ templ JobShow(p JobDetail) {
 				if p.DueDateDisplay != "" {
 					<tr><th>Due Date</th><td>{ p.DueDateDisplay }</td></tr>
 				}
+				if p.ArrivalWindowDisplay != "" {
+					<tr><th>Arrival window</th><td>{ p.ArrivalWindowDisplay }</td></tr>
+				}
 			</tbody>
 		</table>
 		<h3>Assets</h3>
 		@JobAssetReferences(p.AssetReferences)
 		if len(p.Visits) > 0 {
-			<h3>Visits</h3>
+			<h3>Legacy visits (historical, not schedules)</h3>
 			<table>
 				<thead><tr><th>Date</th><th>Start</th><th>End</th><th>Notes</th></tr></thead>
 				<tbody>
@@ -155,12 +161,15 @@ templ JobShow(p JobDetail) {
 		if len(p.Assignments) > 0 {
 			<h3>Assignments</h3>
 			<table>
-				<thead><tr><th>Name</th><th>Role</th></tr></thead>
+				<thead><tr><th>Equal assignees</th></tr></thead>
 				<tbody>
 					for _, a := range p.Assignments {
 						<tr>
-							<td>{ a.Name }</td>
-							<td>{ a.Role }</td>
+							<td>{ a.Name }
+								if a.Unavailable {
+									<span> (unavailable)</span>
+								}
+							</td>
 						</tr>
 					}
 				</tbody>

@@ -241,7 +241,7 @@ func atomicSavePath(path string) bool {
 	if len(parts) == 3 && parts[0] == "locations" && parts[2] == "coordinates" {
 		return true
 	}
-	if len(parts) == 3 && parts[0] == "jobs" && (parts[2] == "invoices" || parts[2] == "create-estimate" || parts[2] == "links" || parts[2] == "contacts" || parts[2] == "assets") {
+	if len(parts) == 3 && parts[0] == "jobs" && (parts[2] == "invoices" || parts[2] == "create-estimate" || parts[2] == "links" || parts[2] == "contacts" || parts[2] == "assets" || parts[2] == "dispatch") {
 		return true
 	}
 	if len(parts) >= 3 && parts[0] == "customers" && (parts[2] == "contacts" || parts[2] == "locations") {
@@ -265,6 +265,9 @@ func atomicSavePath(path string) bool {
 
 func noChangeSavePath(path string) bool {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 3 && parts[0] == "jobs" && parts[2] == "dispatch" {
+		return true
+	}
 	if len(parts) == 3 && parts[2] == "status" {
 		switch parts[0] {
 		case "jobs", "projects", "estimates", "invoices":

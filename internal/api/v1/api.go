@@ -33,6 +33,7 @@ type jobService interface {
 	ListAllForCompany(context.Context, int64) ([]*ent.Job, error)
 	ListAssignedAllForCompany(context.Context, int64, int64) ([]*ent.Job, error)
 	GetByIDForCompany(context.Context, int64, int64) (*ent.Job, error)
+	Assignments(context.Context, int64) ([]services.JobAssignment, error)
 }
 
 type statusService interface {
