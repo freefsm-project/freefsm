@@ -4,7 +4,7 @@ import "fmt"
 
 templ SchedulePage(p SchedulePageData) {
 	@Layout("Schedule") {
-		<div id="schedule-workspace" hx-boost="false" data-phone-default={ fmt.Sprint(p.PhoneDefault) }>
+		<div id="schedule-workspace" hx-boost="false" data-phone-default={ fmt.Sprint(p.PhoneDefault) } data-query-url={ scheduleURL(p,p.Tab,p.Period,p.Date) }>
 		<p>Schedule times use { companyTimeZone(ctx) }.</p>
 
 		<div class="schedule-toolbar">
@@ -55,7 +55,13 @@ templ SchedulePage(p SchedulePageData) {
 			<a href={ templ.URL("/schedule?tab="+p.Tab+"&period="+p.Period+"&date="+p.Date) }>Clear filters</a>
 		</form>
 		<button type="button" id="schedule-refresh">Refresh schedule</button>
-		<p id="schedule-load-state" role="status" aria-live="polite">Updated at { p.UpdatedAt }</p>
+		<p id="schedule-load-state" role="status" aria-live="polite">
+			if p.Error!="" {
+				{ p.Error }
+			} else {
+				Updated at { p.UpdatedAt }
+			}
+		</p>
 		<button type="button" id="schedule-retry" hidden>Retry schedule</button>
 		<div id="schedule-results">
 		if p.Error!="" {
@@ -95,42 +101,6 @@ templ SchedulePage(p SchedulePageData) {
 		</div>
 		</div>
 		<script src={ templ.URL(staticAsset("/static/js/schedule.js")) } defer></script>
-		if p.IsMonth || p.IsWeek || p.IsDay || (p.IsList && (p.Period == "month" || p.Period == "week")) {
-			<script>
-				function scheduleOpenMonthDay(event, target) {
-					if (event.defaultPrevented || event.target.closest('a')) return;
-					if (target.dataset.dayHref) window.location.href = target.dataset.dayHref;
-				}
-				function scheduleOpenMonthDayKey(event, target) {
-					if (event.defaultPrevented || event.target.closest('a')) return;
-					if (event.key !== 'Enter' && event.key !== ' ') return;
-					event.preventDefault();
-					if (target.dataset.dayHref) window.location.href = target.dataset.dayHref;
-				}
-				function scheduleCalendarDrag(event) {
-					event.dataTransfer.setData('text/plain', event.currentTarget.dataset.jobId);
-					event.dataTransfer.setData('duration', event.currentTarget.dataset.duration || '1');
-					event.dataTransfer.setData('hour', event.currentTarget.dataset.hour || '');
-				}
-				function scheduleCalendarDragOver(event) {
-					event.preventDefault();
-					event.currentTarget.classList.add('drag-over');
-				}
-				function scheduleCalendarDragLeave(event) {
-					event.currentTarget.classList.remove('drag-over');
-				}
-				function scheduleCalendarDrop(event, target) {
-					event.preventDefault();
-					target.classList.remove('drag-over');
-					var jobID = event.dataTransfer.getData('text/plain');
-					var hour = target.dataset.hour || '';
-					if (!jobID || !target.dataset.date) return;
-					var body = new URLSearchParams({ date: target.dataset.date });
-					if (hour !== '') body.set('hour', hour);
-					window.location.href = '/jobs/' + encodeURIComponent(jobID) + '/dispatch?' + body;
-				}
-			</script>
-		}
 	}
 }
 
@@ -324,31 +294,6 @@ templ dispatchView(p SchedulePageData) {
 			</table>
 		</div>
 	</div>
-	<script>
-		function scheduleDispatchDrag(event) {
-			event.dataTransfer.setData('text/plain', event.currentTarget.dataset.jobId);
-			event.dataTransfer.setData('duration', event.currentTarget.dataset.duration || '1');
-			event.dataTransfer.setData('hour', event.currentTarget.dataset.hour || '8');
-		}
-		function scheduleDispatchDragOver(event) {
-			event.preventDefault();
-			event.currentTarget.classList.add('drag-over');
-		}
-		function scheduleDispatchDragLeave(event) {
-			event.currentTarget.classList.remove('drag-over');
-		}
-		function scheduleDispatchDrop(event, target) {
-			event.preventDefault();
-			target.classList.remove('drag-over');
-			var jobID = event.dataTransfer.getData('text/plain');
-			var hour = target.dataset.hour || '';
-			var board = document.getElementById('dispatch-board');
-			if (!jobID || !board || !target.dataset.userId) return;
-			var proposal = new URLSearchParams({ user_id: target.dataset.userId, date: target.dataset.date || board.dataset.date });
-			if (hour !== '') proposal.set('hour', hour);
-			window.location.href = '/jobs/' + encodeURIComponent(jobID) + '/dispatch?' + proposal;
-		}
-	</script>
 }
 
 templ mapView(p SchedulePageData) {

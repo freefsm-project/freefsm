@@ -46,6 +46,13 @@ func (h *ScheduleHandler) showSchedule(w http.ResponseWriter, r *http.Request, t
 	p.StatusFilter = r.URL.Query().Get("status")
 	p.AssignmentFilter = r.URL.Query().Get("assignment")
 	p.Sort = r.URL.Query().Get("sort")
+	// Navigation describes the validated query even when its data is unavailable.
+	p.IsList = tab == "list"
+	p.IsDispatch = tab == "dispatch"
+	p.IsMap = tab == "map"
+	p.IsMonth = tab == "calendar" && period == "month"
+	p.IsWeek = tab == "calendar" && period == "week"
+	p.IsDay = tab == "calendar" && period == "day"
 	snapshot, err := req.Service.Schedule(r.Context(), req.Actor, start, end)
 	if err != nil {
 		if err == authorization.ErrForbidden || err == authorization.ErrNotFound {
@@ -68,12 +75,6 @@ func (h *ScheduleHandler) showSchedule(w http.ResponseWriter, r *http.Request, t
 	}
 	p.Count = len(records)
 	rememberScheduleState(w, r, tab, period, p.Date)
-	p.IsList = tab == "list"
-	p.IsDispatch = tab == "dispatch"
-	p.IsMap = tab == "map"
-	p.IsMonth = tab == "calendar" && period == "month"
-	p.IsWeek = tab == "calendar" && period == "week"
-	p.IsDay = tab == "calendar" && period == "day"
 	p.PrevYear = prev.Year()
 	p.PrevMonth = int(prev.Month())
 	p.NextYear = next.Year()

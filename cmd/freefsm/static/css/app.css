@@ -2153,7 +2153,7 @@ html[data-theme="dark"] .theme-icon-moon {
 
 .schedule-title-nav {
   display: grid;
-  grid-template-columns: 3.75rem minmax(0, 1fr) 3.75rem;
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
   justify-self: stretch;
   gap: 0.5rem;
@@ -2177,6 +2177,7 @@ html[data-theme="dark"] .theme-icon-moon {
 .schedule-title-nav h3 {
   grid-column: 2;
   justify-self: center;
+  max-width: 100%;
   margin: 0;
   overflow: hidden;
   font-size: 0.85rem;

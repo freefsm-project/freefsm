@@ -18,6 +18,9 @@ defaults to list/day; explicit navigation retains the other views.
 The automatic phone fallback and a remembered return do not rewrite the recorded
 database preference. Back navigation restores contained calendar/dispatch/map
 scroll positions as well as the window position, after reauthorization.
+The cookie only initializes a visit: each rendered workspace binds subsequent
+refreshes to its server-normalized query. Bare visits acquire an explicit history
+URL so another tab's remembered query cannot change their results on reload/Back.
 
 Cards use the same authorized snapshot for title, permitted Customer/Location
 context, full interval, arrival window, semantic Status, every equal assignee,
@@ -46,6 +49,10 @@ unavailable/retry state with filters retained, rather than a successful empty
 result or stale links. Returning from a hidden or back/forward-cached page
 reloads current authorized data. Only presentation/scroll state is retained.
 The website remains online-only; a rendered card is not continuing authority.
+Navigation is built from the validated query even on an initial database error.
+Calendar, month keyboard and dispatch handlers are loaded with the workspace,
+independently of results, so successful Refresh/return restores working controls
+without evaluating scripts from response documents. Drag still only opens review.
 
 ## Upgrade
 
@@ -65,6 +72,11 @@ acknowledgments. Runtime incomplete intervals are labelled for reviewed repair.
 - `internal/handlers/job_dispatch_integration_test.go`: the shared browser/API
   and transactional dispatch boundary, including audit rollback, replay and
   commit-time authority.
+- `internal/handlers/schedule_recovery_browser_test.go`: two-tab remembered-query
+  coherence, assignment loss, and real initial SQL failures followed by working
+  calendar/month/dispatch proposals and period navigation in Chromium. The
+  headless visibility lifecycle is explicitly dispatched; requests and database
+  results are real, and unchanged persisted intervals are checked after proposals.
 - `internal/database/job_dispatch_migration_integration_test.go`: stopped
   ambiguous cutover, explicit review, preserved preferences/coordinates/identity
   and no nonprotected permission grants.

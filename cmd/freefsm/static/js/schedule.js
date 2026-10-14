@@ -12,6 +12,47 @@
         location.replace('/schedule?tab=list&period=day&responsive=1');
         return;
     }
+    // The cookie initializes a new visit only. Bind this document to the server's
+    // normalized query so another tab cannot retarget its results on refresh.
+    const queryURL = new URL(workspace.dataset.queryUrl, location.href);
+    // Refresh/remembered navigation must not change saved display preferences.
+    queryURL.searchParams.set('responsive', '1');
+    if (!location.search) history.replaceState(history.state, '', queryURL);
+    // Handlers belong to the workspace lifecycle, not a successful result
+    // fragment. Initial error documents and refreshed nodes use the same code;
+    // response scripts are never evaluated to restore interactions.
+    window.scheduleOpenMonthDay = function (event, target) {
+        if (event.defaultPrevented || event.target.closest('a')) return;
+        if (target.dataset.dayHref) location.href = target.dataset.dayHref;
+    };
+    window.scheduleOpenMonthDayKey = function (event, target) {
+        if (event.defaultPrevented || event.target.closest('a')) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        if (target.dataset.dayHref) location.href = target.dataset.dayHref;
+    };
+    window.scheduleCalendarDrag = window.scheduleDispatchDrag = function (event) {
+        event.dataTransfer.setData('text/plain', event.currentTarget.dataset.jobId);
+    };
+    window.scheduleCalendarDragOver = window.scheduleDispatchDragOver = function (event) {
+        event.preventDefault();
+        event.currentTarget.classList.add('drag-over');
+    };
+    window.scheduleCalendarDragLeave = window.scheduleDispatchDragLeave = function (event) {
+        event.currentTarget.classList.remove('drag-over');
+    };
+    function proposeDrop(event, target, dispatch) {
+        event.preventDefault();
+        target.classList.remove('drag-over');
+        const jobID = event.dataTransfer.getData('text/plain');
+        if (!jobID || !target.dataset.date || dispatch && !target.dataset.userId) return;
+        const proposal = new URLSearchParams({date: target.dataset.date});
+        if (dispatch) proposal.set('user_id', target.dataset.userId);
+        if (target.dataset.hour) proposal.set('hour', target.dataset.hour);
+        location.href = '/jobs/' + encodeURIComponent(jobID) + '/dispatch?' + proposal;
+    }
+    window.scheduleCalendarDrop = function (event, target) { proposeDrop(event, target, false); };
+    window.scheduleDispatchDrop = function (event, target) { proposeDrop(event, target, true); };
     const results = workspace.querySelector('#schedule-results');
     const state = workspace.querySelector('#schedule-load-state');
     const retry = workspace.querySelector('#schedule-retry');
@@ -54,7 +95,7 @@
         results.setAttribute('aria-busy', 'true');
         retry.hidden = true;
         try {
-            const response = await fetch(location.href, {
+            const response = await fetch(queryURL, {
                 credentials: 'same-origin', cache: 'no-store', signal: controller.signal,
                 headers: {'X-Schedule-Refresh': 'true'}
             });
