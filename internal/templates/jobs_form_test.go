@@ -65,7 +65,7 @@ func TestHXBoostedJobFormKeepsCanonicalAction(t *testing.T) {
 	}
 }
 
-func TestJobFormKeepsInactiveExistingAssignmentRowSpecific(t *testing.T) {
+func TestJobDetailsCannotSubmitUnreviewedDispatch(t *testing.T) {
 	var rendered bytes.Buffer
 	err := JobForm(JobFormPageData{
 		Job:                     &JobDetail{ID: 73},
@@ -79,15 +79,11 @@ func TestJobFormKeepsInactiveExistingAssignmentRowSpecific(t *testing.T) {
 	}
 
 	html := rendered.String()
-	for _, want := range []string{
-		`data-existing="[{&#34;user_id&#34;:22,&#34;name&#34;:&#34;Former Technician&#34;`,
-		`:value="a.preserved_user_id || 0"`,
-		`a.name + ' (inactive)'`,
-		`<option value="21">Active Technician</option>`,
-		`add() { this.items.push({user_id:0,name:'',role:''}); }`,
+	for _, forbidden := range []string{
+		`name="assignments"`, `name="start_time"`, `name="end_time"`, `name="visits"`, `Assignment role`,
 	} {
-		if !strings.Contains(html, want) {
-			t.Errorf("rendered form missing %q", want)
+		if strings.Contains(html, forbidden) {
+			t.Errorf("details form offers unreviewed dispatch: %q", forbidden)
 		}
 	}
 	if strings.Contains(html, `<option value="22">Former Technician`) {

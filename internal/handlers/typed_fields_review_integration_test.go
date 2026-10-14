@@ -155,10 +155,11 @@ func TestTypedReviewCorrectionRetainsCompleteDomainSubmissionHTTP(t *testing.T) 
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Correction customer").SaveX(ctx)
-	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Before correction").SaveX(ctx)
+	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Before correction").SetVisits(`[{"date":"2026-10-20","start_time":"09:00","end_time":"10:00","notes":"Retained visit"}]`).SaveX(ctx)
+	j = client.Job.GetX(ctx, j.ID)
 	fieldPost(t, router, cookie, "/settings/custom-fields", url.Values{"object_type": {"job"}, "name": {"Required safety"}, "field_type": {"checkbox"}, "required": {"true"}}, 303)
 	path := fmt.Sprintf("/jobs/%d", j.ID)
-	input := url.Values{"customer_id": {fmt.Sprint(c.ID)}, "job_id": {fmt.Sprint(j.ID)}, "form_mode": {"edit"}, "job_type": {"Corrected domain details"}, "notes": {"Preserve multi\nline notes"}, "visits": {`[{"date":"2026-10-20","start_time":"09:00","end_time":"10:00","notes":"Retained visit"}]`}, "assignments": {"[]"}, "subtasks": {`[{"title":"Retained task","completed":false}]`}, "start_time": {"2026-10-20T09:00"}, "end_time": {"2026-10-20T10:00"}, "due_date": {"2026-10-21"}, "status_id": {"123"}, "domain_extension": {"first", "second"}}
+	input := url.Values{"customer_id": {fmt.Sprint(c.ID)}, "job_id": {fmt.Sprint(j.ID)}, "form_mode": {"edit"}, "job_type": {"Corrected domain details"}, "notes": {"Preserve multi\nline notes"}, "subtasks": {`[{"title":"Retained task","completed":false}]`}, "due_date": {"2026-10-21"}, "status_id": {"123"}, "domain_extension": {"first", "second"}}
 	failed := fieldPost(t, router, cookie, path, input, 422)
 	// These are the successful controls of the returned correction form, ready
 	// for a browser resubmit; structured domain fields must not become textareas.
@@ -177,7 +178,11 @@ func TestTypedReviewCorrectionRetainsCompleteDomainSubmissionHTTP(t *testing.T) 
 	body := requestBody(t, router, cookie, "GET", path+"/edit", 200)
 	assertContains(t, body, "Corrected domain details")
 	assertContains(t, body, "Retained task")
-	assertContains(t, body, "Retained visit")
+	assertNotContains(t, body, `name="visits"`)
+	if client.Job.GetX(ctx, j.ID).Visits != j.Visits {
+		t.Fatal("details correction rewrote historical visits")
+	}
+	assertContains(t, requestBody(t, router, cookie, "GET", path, 200), "Retained visit")
 	if !strings.Contains(body, "2026-10-21") {
 		t.Fatalf("due date after correction: %s", regexp.MustCompile(`name="due_date"[^>]+`).FindString(body))
 	}

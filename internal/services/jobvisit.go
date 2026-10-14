@@ -13,6 +13,9 @@ type JobAssignment struct {
 	UserID int64  `json:"user_id"`
 	Name   string `json:"name"`
 	Role   string `json:"role"`
+	// Availability is current operational identity, never an assignment label
+	// or a historical value written back into the legacy JSON projection.
+	Unavailable bool `json:"-"`
 }
 
 func ParseVisits(s string) []JobVisit {
