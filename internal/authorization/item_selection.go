@@ -144,7 +144,11 @@ func (s *Service) CheckItemSelections(ctx context.Context, a Actor, tx Selection
 		if channel == "" {
 			channel = "web"
 		}
-		if err := protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.UserID, RoleID: p.RoleID, Action: "pricebook.view", Scope: "A", TargetType: "item", TargetID: itemID, Channel: channel, SessionHash: a.SessionHash, Detail: map[string]any{"selection_target": kind, "existing_target_id": id}}); err != nil {
+		detail, err := commercialAuditDetail(ctx, tx, map[string]any{"selection_target": kind, "existing_target_id": id})
+		if err != nil {
+			return err
+		}
+		if err := protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.UserID, RoleID: p.RoleID, Action: "pricebook.view", Scope: "A", TargetType: "item", TargetID: itemID, Channel: channel, SessionHash: a.SessionHash, Detail: detail}); err != nil {
 			return err
 		}
 	}

@@ -435,6 +435,8 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		}
 
 		// Entity comments (list, create, delete)
+		r.Get("/estimates/{id}/commercial-history", commercialHistoryHandler("estimate"))
+		r.Get("/invoices/{id}/commercial-history", commercialHistoryHandler("invoice"))
 		for _, e := range []struct {
 			prefix  string
 			objType objectref.Type

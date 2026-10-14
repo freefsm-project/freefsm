@@ -413,6 +413,13 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	if r.Form.Has("title") && strings.TrimSpace(r.FormValue("title")) == "" {
+		http.Error(w, "Title is required", 422)
+		return
+	}
+	if custID != current.CustomerID && jobID == valueInt64(current.JobID) {
+		jobID = 0
+	}
 	pricingSubmitted := r.Form.Has("tax_rate") || r.Form.Has("line_items")
 	contextChanged := custID != current.CustomerID || jobID != valueInt64(current.JobID)
 	if (pricingSubmitted || contextChanged) && !h.authorizeDestinationJob(w, r, custID, jobID) {
@@ -444,24 +451,40 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := services.InvoiceUpdateParams{
-		InvoiceNumber: invoiceNumber,
-		CustomerID:    int64Ptr(custID),
-		JobID:         &jobID,
-		Title:         formPtr(r.FormValue("title")),
-		Notes:         formPtr(r.FormValue("notes")),
-		Terms:         strPtr(r.FormValue("terms")),
-		TaxRate:       taxRatePtr,
+		CustomerDefaultsReviewed: r.FormValue("customer_defaults_reviewed") == "true",
+		InvoiceNumber:            invoiceNumber,
+		CustomerID:               int64Ptr(custID),
+		JobID:                    &jobID,
+		Title:                    formPtr(r.FormValue("title")),
+		Notes:                    strPtr(r.FormValue("notes")),
+		Terms:                    strPtr(r.FormValue("terms")),
+		TaxRate:                  taxRatePtr,
 	}
 	if !r.Form.Has("terms") {
 		params.Terms = nil
 	}
+	if !r.Form.Has("notes") {
+		params.Notes = nil
+	}
 	loc := middleware.CompanyLocation(r.Context())
+	if r.Form.Has("invoice_date") && !validDocumentDate(r.FormValue("invoice_date"), true) {
+		http.Error(w, "Invoice Date is required and must be a valid date", 422)
+		return
+	}
 	if d := r.FormValue("invoice_date"); d != "" {
 		t := parseDate(d, loc)
 		params.InvoiceDate = &t
 	}
-	if d := r.FormValue("due_date"); d != "" {
-		t := parseDate(d, loc)
+	if r.Form.Has("due_date") {
+		d := r.FormValue("due_date")
+		if !validDocumentDate(d, false) {
+			http.Error(w, "Enter a valid Due Date or choose No Due Date", 422)
+			return
+		}
+		var t time.Time
+		if d != "" {
+			t = parseDate(d, loc)
+		}
 		params.DueDate = &t
 	}
 	params.LineItems = &lineItems
@@ -701,6 +724,10 @@ func (h *InvoiceHandler) invalidInvoiceForm(w http.ResponseWriter, r *http.Reque
 
 func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice, statuses []*ent.Status) (templates.InvoiceFormPageData, error) {
 	customers, _ := h.custSvc.ListAll(ctx)
+	choices, err := documentDefaultChoices(ctx, "invoice", customers, i.ID)
+	if err != nil {
+		return templates.InvoiceFormPageData{}, err
+	}
 	jobs, _ := h.jobsForEditor(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "invoice")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
@@ -724,6 +751,7 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 	}
 	return templates.InvoiceFormPageData{
 		Invoice:           &d,
+		DefaultsJSON:      choices,
 		IsNew:             false,
 		Customers:         options,
 		Jobs:              jobOptions(jobs),

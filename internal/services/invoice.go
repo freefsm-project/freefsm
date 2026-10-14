@@ -57,18 +57,19 @@ type InvoiceCreateParams struct {
 }
 
 type InvoiceUpdateParams struct {
-	Terms         *string
-	InvoiceNumber *int64
-	CustomerID    *int64
-	JobID         *int64
-	EstimateID    *int64
-	Title         *string
-	Notes         *string
-	InvoiceDate   *time.Time
-	DueDate       *time.Time
-	TaxRate       *string
-	LineItems     *[]LineItem
-	CustomFields  *string
+	CustomerDefaultsReviewed bool
+	Terms                    *string
+	InvoiceNumber            *int64
+	CustomerID               *int64
+	JobID                    *int64
+	EstimateID               *int64
+	Title                    *string
+	Notes                    *string
+	InvoiceDate              *time.Time
+	DueDate                  *time.Time
+	TaxRate                  *string
+	LineItems                *[]LineItem
+	CustomFields             *string
 }
 
 func (s *InvoiceService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Invoice, int, error) {
@@ -339,6 +340,9 @@ func (s *InvoiceService) createTransactionally(ctx context.Context, params Invoi
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return nil, err
+	}
 	if err := checkItemSelections(ctx, tx, "invoice", 0, lineItems); err != nil {
 		return nil, err
 	}
@@ -397,6 +401,12 @@ func (s *InvoiceService) SaveDetails(ctx context.Context, id int64, params Invoi
 }
 
 func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpdateParams) (*ent.Invoice, error) {
+	if params.Title != nil && strings.TrimSpace(*params.Title) == "" {
+		return nil, authorization.ErrCommercialInput
+	}
+	if params.InvoiceDate != nil && params.InvoiceDate.IsZero() {
+		return nil, authorization.ErrCommercialInput
+	}
 	if needsCatalogTransaction(ctx) && params.LineItems != nil {
 		return catalogWrite(ctx, s.client, "invoice", id, *params.LineItems, func(ctx context.Context, c *ent.Client) (*ent.Invoice, error) {
 			return NewInvoiceService(c).update(ctx, id, params)
@@ -455,17 +465,25 @@ func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpd
 	if params.CustomerID != nil {
 		customerID = *params.CustomerID
 	}
+	if customerID != current.CustomerID && !params.CustomerDefaultsReviewed {
+		return nil, authorization.ErrConflict
+	}
 	if params.JobID != nil {
 		jobID = *params.JobID
 	}
 	if params.EstimateID != nil {
 		estimateID = *params.EstimateID
 	}
+	if customerID != current.CustomerID && jobID == int64Value(current.JobID) {
+		jobID = 0
+		params.JobID = &jobID
+	}
 	if err := validateJobCustomer(ctx, s.client, customerID, jobID, params.JobID != nil && jobID != int64Value(current.JobID)); err != nil {
 		return nil, err
 	}
-	if err := validateEstimateCustomer(ctx, s.client, customerID, estimateID, params.EstimateID != nil && estimateID != int64Value(current.EstimateID)); err != nil {
-		return nil, err
+	if params.EstimateID != nil && estimateID != int64Value(current.EstimateID) {
+		// Source provenance is not an editable commercial anchor.
+		return nil, authorization.ErrConflict
 	}
 
 	u := s.client.Invoice.UpdateOneID(id)
@@ -672,16 +690,36 @@ func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusS
 	if err != nil {
 		return nil, fmt.Errorf("parse job %d line items: %w", jobID, err)
 	}
-	now := time.Now()
-
+	cs, err := s.client.CompanySettings.Query().First(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var customerDefaults map[string]*string
+	if request, ok := authorization.FromContext(ctx); ok {
+		customerDefaults, err = request.Service.DocumentDefaultInputs(ctx, request.Actor, "invoice", j.CustomerID, j.ID)
+		if err != nil {
+			return nil, err
+		}
+	}
+	defaults := ResolveDocumentDefaults(cs, "invoice", customerDefaults)
+	now, _ := time.Parse("2006-01-02", time.Now().In(companySettingsLocation(cs)).Format("2006-01-02"))
+	due := time.Time{}
+	if defaults.Days != nil {
+		due = now.AddDate(0, 0, *defaults.Days)
+	}
+	notes := j.Notes
+	if notes == "" {
+		notes = defaults.Notes
+	}
 	return s.Create(ctx, InvoiceCreateParams{
 		CustomerID:   j.CustomerID,
 		JobID:        j.ID,
 		StatusID:     0,
 		Title:        j.JobType,
-		Notes:        j.Notes,
+		Notes:        notes,
+		Terms:        defaults.Terms,
 		InvoiceDate:  now,
-		DueDate:      now.AddDate(0, 0, 30),
+		DueDate:      due,
 		TaxRate:      defaultTaxRate,
 		CustomFields: "[]",
 		LineItems:    items,

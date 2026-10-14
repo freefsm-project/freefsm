@@ -77,11 +77,11 @@ func TestJobIndependentLinksAndCustomerReplacementHTTP(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM authorization_audit WHERE target_type='job' AND target_id=$1 AND actor_id=$2 AND action='job.edit' AND scope='A' AND detail->'before'->'contact_ids'=$3::jsonb AND detail->'after'->'contact_ids'='[]'::jsonb) AND NOT EXISTS(SELECT 1 FROM job_contacts WHERE job_id=$1)`, j.ID, u.ID, fmt.Sprintf("[%d,%d]", first.ID, second.ID)).Scan(&audited); err != nil || !audited {
 		t.Fatalf("replacement history or clearing missing: %v", err)
 	}
-	client.Estimate.Create().SetCompanyID(company).SetCustomerID(other.ID).SetJobID(j.ID).SetTitle("Dependency").SaveX(ctx)
+	linked := client.Estimate.Create().SetCompanyID(company).SetCustomerID(other.ID).SetJobID(j.ID).SetTitle("Dependency").SaveX(ctx)
 	input.Set("customer_id", fmt.Sprint(c.ID))
-	masterPost(t, router, cookie, path, input, 409)
-	if client.Job.GetX(ctx, j.ID).CustomerID != other.ID {
-		t.Fatal("dependency rejection changed Customer")
+	masterPost(t, router, cookie, path, input, 303)
+	if client.Job.GetX(ctx, j.ID).CustomerID != c.ID || *client.Estimate.GetX(ctx, linked.ID).CustomerID != c.ID {
+		t.Fatal("linked Estimate was not reassigned atomically with the Job")
 	}
 }
 

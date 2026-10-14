@@ -17,8 +17,8 @@ templ EstimatesListContent(p EstimateListPageData) {
 		@ListToolbar(ListToolbarData{
 			Action: "/estimates", Target: "#estimate-list-content", Search: p.Search,
 			SearchPlaceholder: "Search by title...", NewURL: operationalNewURL(ctx, "/estimates/new"), NewLabel: "New Estimate",
-			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), Scope: customerScope(p.CustomerID),
-			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
+			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID),"valid",p.Validity), Scope: customerScope(p.CustomerID),
+			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID),"valid",p.Validity)),
 		}) {
 			<label>Estimate status
 				<select name="status_id">
@@ -26,6 +26,12 @@ templ EstimatesListContent(p EstimateListPageData) {
 					for _, s := range p.Statuses {
 						<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
 					}
+				</select>
+			</label>
+			<label>Validity
+				<select name="valid">
+					<option value="" selected?={ p.Validity == "" }>All validity dates</option>
+					<option value="current" selected?={ p.Validity == "current" }>Currently valid</option>
 				</select>
 			</label>
 		}
@@ -73,7 +79,7 @@ templ EstimatesTable(p EstimateListPageData) {
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
 			BaseURL:     "/estimates",
-			Query:       listQuery(p.Search, filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), customerScope(p.CustomerID)),
+			Query:       listQuery(p.Search, filterValues("status_id", fmt.Sprintf("%d", p.StatusID),"valid",p.Validity), customerScope(p.CustomerID)),
 			Target:      "#estimate-list-content",
 		})
 	</div>

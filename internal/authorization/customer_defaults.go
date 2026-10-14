@@ -125,7 +125,7 @@ func (s *Service) DocumentDefaultInputs(ctx context.Context, a Actor, kind strin
 		return nil, err
 	}
 	var data []byte
-	err = s.Pool.QueryRow(ctx, `SELECT defaults FROM customer_document_defaults WHERE customer_id=$1`, customerID).Scan(&data)
+	err = s.reads(ctx).QueryRow(ctx, `SELECT defaults FROM customer_document_defaults WHERE customer_id=$1`, customerID).Scan(&data)
 	if err == pgx.ErrNoRows {
 		return map[string]*string{}, nil
 	}
@@ -149,9 +149,11 @@ func projectDocumentDefaults(data []byte, kind string) (map[string]*string, erro
 	return values, nil
 }
 
-// Batch the already listable active Customer inputs for an All-Records creation
-// form. Job-bound inputs use DocumentDefaultInputs for the exact selected Job.
-func (s *Service) DocumentDefaultChoices(ctx context.Context, a Actor, kind string, ids []int64) (map[int64]map[string]*string, error) {
+// Batch already listable active Customer defaults for creation or an existing
+// document's Customer-change review. An explicit document identity uses Edit,
+// never a lateral Create requirement. Job-bound creation uses the exact Job's
+// purpose-limited DocumentDefaultInputs instead.
+func (s *Service) DocumentDefaultChoices(ctx context.Context, a Actor, kind string, ids []int64, editing ...int64) (map[int64]map[string]*string, error) {
 	out := map[int64]map[string]*string{}
 	if kind != "invoice" && kind != "estimate" {
 		return nil, ErrForbidden
@@ -160,10 +162,17 @@ func (s *Service) DocumentDefaultChoices(ctx context.Context, a Actor, kind stri
 	if err != nil {
 		return nil, err
 	}
-	if len(ids) == 0 || !p.Allows(kind+".create", All) || !p.Allows("customer.view", All) || !p.Allows("pricing.view", All) {
+	permission := kind + ".create"
+	if len(editing) > 0 {
+		permission = kind + ".edit"
+		if _, err := parentAccess(ctx, s.reads(ctx), p, kind, editing[0], permission, false); err != nil {
+			return nil, err
+		}
+	}
+	if len(ids) == 0 || !p.Allows(permission, All) || !p.Allows("customer.view", All) || !p.Allows("pricing.view", All) {
 		return out, nil
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT c.id,coalesce(d.defaults,'{}'::jsonb) FROM customers c LEFT JOIN customer_document_defaults d ON d.customer_id=c.id WHERE c.company_id=$1 AND c.deleted_at IS NULL AND c.id=ANY($2)`, p.CompanyID, ids)
+	rows, err := s.reads(ctx).Query(ctx, `SELECT c.id,coalesce(d.defaults,'{}'::jsonb) FROM customers c LEFT JOIN customer_document_defaults d ON d.customer_id=c.id WHERE c.company_id=$1 AND c.deleted_at IS NULL AND c.id=ANY($2)`, p.CompanyID, ids)
 	if err != nil {
 		return nil, err
 	}

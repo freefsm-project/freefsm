@@ -135,6 +135,7 @@ func currentJobFormValues(t *testing.T, router http.Handler, cookie *http.Cookie
 		}
 		return out
 	}
+	values = currentCommercialFormValues(t, router, cookie, path, values)
 	if !regexp.MustCompile(`^/jobs/[1-9][0-9]*(/(contacts|links))?$`).MatchString(path) || values.Has("save_action_id") || values.Has("save_revision") {
 		return values
 	}

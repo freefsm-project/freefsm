@@ -321,6 +321,8 @@ func TestTypedReviewJobArchiveWaitsForAssignedDocumentSaveHTTP(t *testing.T) {
 	adminCookie := sessionCookie(t, ctx, sessions, admin)
 	cookie := sessionCookie(t, ctx, sessions, u.ID)
 	fieldPost(t, router, adminCookie, "/settings/custom-fields", url.Values{"object_type": {"invoice"}, "name": {"Invoice field"}, "field_type": {"text"}}, 303)
+	path := fmt.Sprintf("/invoices/%d/custom-fields", i.ID)
+	input := currentCommercialFormValues(t, router, cookie, path, url.Values{"custom_field_1": {"Committed before archive"}})
 	if _, err := pool.Exec(ctx, `CREATE FUNCTION hold_document_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='invoice.edit' THEN PERFORM pg_advisory_xact_lock(190129); END IF; RETURN NEW; END $$; CREATE TRIGGER hold_document_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION hold_document_audit()`); err != nil {
 		t.Fatal(err)
 	}
@@ -348,8 +350,7 @@ func TestTypedReviewJobArchiveWaitsForAssignedDocumentSaveHTTP(t *testing.T) {
 		}()
 		return done
 	}
-	path := fmt.Sprintf("/invoices/%d/custom-fields", i.ID)
-	save := async(path, cookie, url.Values{"custom_field_1": {"Committed before archive"}})
+	save := async(path, cookie, input)
 	deadline := time.Now().Add(10 * time.Second)
 	savePID := 0
 	for savePID == 0 {

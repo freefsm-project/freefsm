@@ -682,6 +682,7 @@ type EstimateDetail struct {
 }
 
 type EstimateListPageData struct {
+	Validity   string
 	Estimates  []EstimateRow
 	Page       int
 	PerPage    int

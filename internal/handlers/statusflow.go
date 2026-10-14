@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/go-chi/chi/v5"
 )
@@ -14,6 +15,10 @@ import (
 func statusflowHTTPError(w http.ResponseWriter, err error) {
 	code := http.StatusUnprocessableEntity
 	switch {
+	case errors.Is(err, saveaction.ErrRevisionRequired):
+		code = http.StatusPreconditionRequired
+	case errors.Is(err, saveaction.ErrStale):
+		code = http.StatusConflict
 	case errors.Is(err, statusflow.ErrForbidden):
 		code = http.StatusForbidden
 	case errors.Is(err, statusflow.ErrNotFound):
