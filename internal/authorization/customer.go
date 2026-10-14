@@ -28,17 +28,23 @@ type CustomerContext struct {
 }
 
 func (s *Service) JobCustomer(ctx context.Context, a Actor, jobID int64) (CustomerContext, error) {
-	p, err := s.Principal(ctx, a)
-	if err != nil {
-		return CustomerContext{}, err
-	}
+	var c CustomerContext
+	err := s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
+		var err error
+		c, err = jobCustomer(ctx, tx, p, a, jobID)
+		return err
+	})
+	return c, err
+}
+
+func jobCustomer(ctx context.Context, q queryer, p Principal, a Actor, jobID int64) (CustomerContext, error) {
 	if !p.Allows("customer.view", Context) || !p.Allows("job.view", Assigned) {
 		return CustomerContext{}, ErrNotFound
 	}
 	var c CustomerContext
 	// All Records does not turn this Job-context route into an unrestricted
 	// master route: explicit current assignment and active Job remain required.
-	err = s.Pool.QueryRow(ctx, `SELECT c.id,c.display_name,c.first_name,c.last_name,c.company_name,
+	err := q.QueryRow(ctx, `SELECT c.id,c.display_name,c.first_name,c.last_name,c.company_name,
  CASE c.account_type WHEN 'company' THEN 'Organization' WHEN 'individual' THEN 'Individual' ELSE c.account_type END,c.phone,c.email,c.service_notes
  FROM jobs j JOIN job_assignments a ON a.job_id=j.id JOIN customers c ON c.id=j.customer_id
  JOIN users u ON u.id=a.user_id JOIN authorization_grants g ON g.role_id=u.authorization_role_id
