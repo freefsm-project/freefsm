@@ -2,12 +2,14 @@ const assert=require('node:assert/strict');
 const {SessionReference}=require('../../../../docs/api/session-reference.cjs');
 (async()=>{
  const [base,ordinaryToken,restoreToken]=process.argv.slice(2);
- const request=async(token,path,method='GET',epoch='')=>{
-  const response=await fetch(base+path,{method,headers:{Authorization:'Bearer '+token,'X-FreeFSM-Session-Epoch':epoch}});
+ const request=async(token,path,method='GET',epoch='',operation)=>{
+  const response=await fetch(base+path,{method,headers:{Authorization:'Bearer '+token,'X-FreeFSM-Session-Epoch':epoch,...(operation?{'Operation-ID':operation}:{})}});
   return {status:response.status,epoch:response.headers.get('X-FreeFSM-Session-Epoch'),body:response.status===204?{}:await response.json()};
  };
  const ordinary=new SessionReference();const start=await request(ordinaryToken,'/me');assert.equal(start.status,200);ordinary.authorized(start.epoch);ordinary.cache=['private'];ordinary.stage({target:1,intent:'pending'});
- assert.equal((await request(ordinaryToken,'/session','DELETE',ordinary.epoch)).status,204);
+ // The single-shot logout has one reviewed UUID, never a per-request default.
+ const logoutOperation=require('node:crypto').randomUUID();
+ assert.equal((await request(ordinaryToken,'/session','DELETE',ordinary.epoch,logoutOperation)).status,204);
  ordinary.contact((await request(ordinaryToken,'/me','GET',ordinary.epoch)).body);
  assert.equal(ordinary.state,'signed_out');assert.deepEqual(ordinary.pending,[]);assert.deepEqual(ordinary.cache,[]);
  const restored=new SessionReference();const prior=await request(restoreToken,'/sessions');assert.equal(prior.status,200);restored.authorized(prior.epoch);restored.cache=['private'];

@@ -4,7 +4,7 @@ const { ItemReferenceHarness } = require('./item-reference-harness.cjs');
 (async()=>{
   const [base,token,jobText,itemText] = process.argv.slice(2);
   const job=Number(jobText), item=Number(itemText);
-  const request=(path,method='GET')=>fetch(`${base}${path}`,{method,headers:{Authorization:`Bearer ${token}`}});
+  const request=(path,method='GET',operation)=>fetch(`${base}${path}`,{method,headers:{Authorization:`Bearer ${token}`,...(operation?{'Operation-ID':operation}:{})}});
   const captures=new JobPricingReferenceHarness(id=>request(`/jobs/${id}`));
   const pricing=await captures.refresh(job);
   assert.equal(pricing.line_items[0].unit_price,'31.25');
@@ -32,7 +32,9 @@ const { ItemReferenceHarness } = require('./item-reference-harness.cjs');
     assert.ok([404,405].includes(response.status),'Job planning must remain outside the field API');
   }
   for(const method of ['POST','PATCH','DELETE']) assert.equal((await request(`/items/${item}`,method)).status,405);
-  assert.equal((await request('/session','DELETE')).status,204);
+  // One explicitly reviewed logout intent; transport never generates retry IDs.
+  const logoutOperation=require('node:crypto').randomUUID();
+  assert.equal((await request('/session','DELETE',logoutOperation)).status,204);
   await assert.rejects(()=>captures.refresh(job),/job_pricing_unavailable/);
   assert.equal(captures.current(job),null);
   await assert.rejects(()=>catalog.refresh(item),/selection_requires_review/);
