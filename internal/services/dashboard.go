@@ -569,9 +569,10 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 	jobClosedStatusIDs := append(append([]int64{}, jobCompletedStatusIDs...), s.statusIDsByCategory(ctx, "job:canceled")...)
 	inProgressStatusIDs := s.statusIDsByCategory(ctx, "project:in_progress")
 	completedStatusIDs := s.statusIDsByCategory(ctx, "project:completed")
-	overdueJobPredicates := []predicate.Job{job.DeletedAtIsNil(), job.DueDateNotNil(), job.DueDateLT(now)}
+	jobToday := time.Date(now.In(loc).Year(), now.In(loc).Month(), now.In(loc).Day(), 0, 0, 0, 0, time.UTC)
+	overdueJobPredicates := []predicate.Job{job.DeletedAtIsNil(), job.DueDateNotNil(), job.DueDateLT(jobToday)}
 	if len(jobClosedStatusIDs) > 0 {
-		overdueJobPredicates = append(overdueJobPredicates, job.StatusIDNotIn(jobClosedStatusIDs...))
+		overdueJobPredicates = append(overdueJobPredicates, job.Or(job.StatusIDIsNil(), job.StatusIDNotIn(jobClosedStatusIDs...)))
 	}
 	jobsOverdue, _ := s.client.Job.Query().Where(overdueJobPredicates...).Count(ctx)
 	monthStarts := dashboardMonthStarts(now)
@@ -857,7 +858,7 @@ func (s *DashboardService) jobMonthlyBars(ctx context.Context, loc *time.Locatio
 		if idx < 0 {
 			continue
 		}
-		if j.DueDate != nil && j.DueDate.Before(now) && !dashboardStatusIDIn(j.StatusID, closedStatusIDs) {
+		if j.DueDate != nil && j.DueDate.Format("2006-01-02") < now.In(loc).Format("2006-01-02") && !dashboardStatusIDIn(j.StatusID, closedStatusIDs) {
 			counts[idx].Red++
 		} else {
 			counts[idx].Neutral++

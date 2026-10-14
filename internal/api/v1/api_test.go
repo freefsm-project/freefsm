@@ -415,6 +415,15 @@ func (f *fakeJobs) GetByIDForCompany(_ context.Context, companyID, id int64) (*e
 	return f.byID, nil
 }
 
+func (f *fakeJobs) Assignments(_ context.Context, id int64) ([]services.JobAssignment, error) {
+	for _, j := range append(append([]*ent.Job{f.byID}, f.all...), f.assigned...) {
+		if j != nil && j.ID == id {
+			return services.ParseAssignments(j.Assignments), nil
+		}
+	}
+	return nil, nil
+}
+
 type fakeStatuses struct {
 	items      []*ent.Status
 	err        error

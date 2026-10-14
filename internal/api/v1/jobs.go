@@ -22,27 +22,33 @@ type statusDTO struct {
 }
 
 type jobDTO struct {
-	ID                 int64                    `json:"id"`
-	JobType            string                   `json:"job_type"`
-	Subtitle           string                   `json:"subtitle"`
-	Status             *statusDTO               `json:"status"`
-	StartTime          *time.Time               `json:"start_time"`
-	EndTime            *time.Time               `json:"end_time"`
-	DueDate            *time.Time               `json:"due_date"`
-	ArrivalWindowStart *time.Time               `json:"arrival_window_start"`
-	ArrivalWindowEnd   *time.Time               `json:"arrival_window_end"`
-	Notes              string                   `json:"notes"`
-	TechNotes          string                   `json:"tech_notes"`
-	Visits             []services.JobVisit      `json:"visits"`
-	Assignments        []services.JobAssignment `json:"assignments"`
-	Subtasks           []services.JobSubtask    `json:"subtasks"`
-	CustomerID         *int64                   `json:"customer_id,omitempty"`
-	ProjectID          *int64                   `json:"project_id,omitempty"`
-	LocationID         *int64                   `json:"location_id,omitempty"`
-	CustomerContactID  *int64                   `json:"customer_contact_id,omitempty"`
-	AssetID            *int64                   `json:"asset_id,omitempty"`
-	BillingType        *string                  `json:"billing_type,omitempty"`
-	LineItems          *[]services.LineItem     `json:"line_items,omitempty"`
+	ID                 int64                 `json:"id"`
+	JobType            string                `json:"job_type"`
+	Subtitle           string                `json:"subtitle"`
+	Status             *statusDTO            `json:"status"`
+	StartTime          *time.Time            `json:"start_time"`
+	EndTime            *time.Time            `json:"end_time"`
+	DueDate            *string               `json:"due_date"`
+	ArrivalWindowStart *time.Time            `json:"arrival_window_start"`
+	ArrivalWindowEnd   *time.Time            `json:"arrival_window_end"`
+	Notes              string                `json:"notes"`
+	TechNotes          string                `json:"tech_notes"`
+	Visits             []services.JobVisit   `json:"visits"`
+	Assignments        []jobAssigneeDTO      `json:"assignments"`
+	Subtasks           []services.JobSubtask `json:"subtasks"`
+	CustomerID         *int64                `json:"customer_id,omitempty"`
+	ProjectID          *int64                `json:"project_id,omitempty"`
+	LocationID         *int64                `json:"location_id,omitempty"`
+	CustomerContactID  *int64                `json:"customer_contact_id,omitempty"`
+	AssetID            *int64                `json:"asset_id,omitempty"`
+	BillingType        *string               `json:"billing_type,omitempty"`
+	LineItems          *[]services.LineItem  `json:"line_items,omitempty"`
+}
+
+type jobAssigneeDTO struct {
+	UserID      int64  `json:"user_id"`
+	Name        string `json:"name"`
+	Unavailable bool   `json:"unavailable"`
 }
 
 func (h *handler) listJobs(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +74,12 @@ func (h *handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	result := make([]jobDTO, 0, len(jobs))
 	for _, job := range jobs {
-		result = append(result, h.visibleJobDTO(r, job, statuses, actor.Role))
+		dto, err := h.visibleJobDTO(r, job, statuses, actor.Role)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "internal_error", "could not load Job assignees")
+			return
+		}
+		result = append(result, dto)
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -83,7 +94,12 @@ func (h *handler) getJob(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal_error", "could not load job statuses")
 		return
 	}
-	writeJSON(w, http.StatusOK, h.visibleJobDTO(r, job, statuses, actor.Role))
+	dto, err := h.visibleJobDTO(r, job, statuses, actor.Role)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", "could not load Job assignees")
+		return
+	}
+	writeJSON(w, http.StatusOK, dto)
 }
 
 type statusRequest = statusflow.Intent
@@ -223,8 +239,16 @@ func (h *handler) requireOpenJob(w http.ResponseWriter, r *http.Request, job *en
 	return true
 }
 
-func (h *handler) visibleJobDTO(r *http.Request, job *ent.Job, statuses map[int64]statusDTO, role string) jobDTO {
+func (h *handler) visibleJobDTO(r *http.Request, job *ent.Job, statuses map[int64]statusDTO, role string) (jobDTO, error) {
 	dto := makeJobDTO(job, statuses, role)
+	assignments, err := h.deps.Jobs.Assignments(r.Context(), job.ID)
+	if err != nil {
+		return jobDTO{}, err
+	}
+	dto.Assignments = []jobAssigneeDTO{}
+	for _, a := range assignments {
+		dto.Assignments = append(dto.Assignments, jobAssigneeDTO{UserID: a.UserID, Name: a.Name, Unavailable: a.Unavailable})
+	}
 	if request, ok := authorization.FromContext(r.Context()); ok && dto.CustomerID != nil {
 		if request.Service.CustomerAccess(r.Context(), request.Actor, job.CustomerID, "customer.view") != nil {
 			if _, err := request.Service.JobCustomer(r.Context(), request.Actor, job.ID); err != nil {
@@ -232,16 +256,20 @@ func (h *handler) visibleJobDTO(r *http.Request, job *ent.Job, statuses map[int6
 			}
 		}
 	}
-	return dto
+	return dto, nil
 }
 
 func makeJobDTO(job *ent.Job, statuses map[int64]statusDTO, role string) jobDTO {
-	dto := jobDTO{ID: job.ID, JobType: job.JobType, Subtitle: job.Subtitle, StartTime: job.StartTime, EndTime: job.EndTime, DueDate: job.DueDate, ArrivalWindowStart: job.ArrivalWindowStart, ArrivalWindowEnd: job.ArrivalWindowEnd, Notes: job.Notes, TechNotes: job.TechNotes, Visits: services.ParseVisits(job.Visits), Assignments: services.ParseAssignments(job.Assignments), Subtasks: services.ParseSubtasks(job.Subtasks)}
+	dto := jobDTO{ID: job.ID, JobType: job.JobType, Subtitle: job.Subtitle, StartTime: job.StartTime, EndTime: job.EndTime, ArrivalWindowStart: job.ArrivalWindowStart, ArrivalWindowEnd: job.ArrivalWindowEnd, Notes: job.Notes, TechNotes: job.TechNotes, Visits: []services.JobVisit{}, Assignments: []jobAssigneeDTO{}, Subtasks: services.ParseSubtasks(job.Subtasks)}
+	if job.DueDate != nil {
+		date := job.DueDate.Format("2006-01-02")
+		dto.DueDate = &date
+	}
+	for _, a := range services.ParseAssignments(job.Assignments) {
+		dto.Assignments = append(dto.Assignments, jobAssigneeDTO{UserID: a.UserID, Name: a.Name})
+	}
 	if dto.Visits == nil {
 		dto.Visits = []services.JobVisit{}
-	}
-	if dto.Assignments == nil {
-		dto.Assignments = []services.JobAssignment{}
 	}
 	if dto.Subtasks == nil {
 		dto.Subtasks = []services.JobSubtask{}

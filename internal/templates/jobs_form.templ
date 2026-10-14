@@ -22,7 +22,7 @@ templ JobForm(p JobFormPageData) {
 					<small class="error-msg">{ p.Errors["customer_id"] }</small>
 				}
 			</label>
-			if p.Job.ID > 0 {
+			if p.Job.ID > 0 && canDispatchJob(ctx) {
 				if canMaster(ctx,"customer.view") {
 					<label><input type="checkbox" name="replace_customer" value="true"/> Replace Customer deliberately and clear all operational Location, Project, Contact and Asset links. Linked documents or Service Entries block replacement.</label>
 				}
@@ -100,16 +100,9 @@ templ JobForm(p JobFormPageData) {
 					</select>
 				</label>
 			</div>
-			<div class="grid">
-				<label>
-					Start Time
-					<input type="datetime-local" name="start_time" step="900" value={ p.Job.StartTime }/>
-				</label>
-				<label>
-					End Time
-					<input type="datetime-local" name="end_time" step="900" value={ p.Job.EndTime }/>
-				</label>
-			</div>
+			if p.Job.ID > 0 {
+				<p>Schedule, arrival window and equal assignees are reviewed together in <a href={ templ.URL(fmt.Sprintf("/jobs/%d/dispatch",p.Job.ID)) }>Dispatch Job</a>.</p>
+			}
 			<label>
 				Due Date
 				<input type="date" name="due_date" value={ p.Job.DueDate }/>
@@ -123,51 +116,6 @@ templ JobForm(p JobFormPageData) {
 				<textarea name="tech_notes" rows="3">{ p.Job.TechNotes }</textarea>
 			</label>
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: canEditJobFields(ctx,p.Job.ID)})
-			<fieldset x-data="visitsEditor()" data-existing={ p.ExistingVisitsJSON }>
-				<legend>Visits</legend>
-				<table>
-					<thead><tr><th>Date</th><th>Start</th><th>End</th><th>Notes</th><th></th></tr></thead>
-					<tbody>
-						<template x-for="(v, idx) in items" :key="idx">
-							<tr>
-								<td><input type="date" x-model="v.date" aria-label="Visit date"></td>
-								<td><input type="time" step="900" x-model="v.start_time" aria-label="Visit start time"></td>
-								<td><input type="time" step="900" x-model="v.end_time" aria-label="Visit end time"></td>
-								<td><input type="text" x-model="v.notes" aria-label="Visit notes"></td>
-								<td><button @click.prevent="remove(idx)" class="outline contrast small" aria-label="Remove visit">X</button></td>
-							</tr>
-						</template>
-					</tbody>
-				</table>
-				<button @click.prevent="add()" class="outline">+ Add Visit</button>
-				<input type="hidden" name="visits" :value="json">
-			</fieldset>
-			<fieldset x-data="assignmentsEditor()" data-existing={ p.ExistingAssignmentsJSON }>
-				<legend>Assignments</legend>
-				<table>
-					<thead><tr><th>User</th><th>Role</th><th></th></tr></thead>
-					<tbody>
-						<template x-for="(a, idx) in items" :key="idx">
-							<tr>
-								<td>
-									<select x-model.number="a.user_id" aria-label="Assigned user">
-										<option value="0">Select user...</option>
-										<option :value="a.preserved_user_id || 0" :hidden="!a.preserved_user_id" :disabled="!a.preserved_user_id" x-text="a.preserved_user_id ? a.name + ' (inactive)' : ''"></option>
-										for _, u := range p.Users {
-											<option value={ fmt.Sprintf("%d", u.Value) }>{ u.Label }</option>
-										}
-									</select>
-									<small x-show="!a.user_id && a.name" x-text="'Legacy assignment: ' + a.name"></small>
-								</td>
-								<td><input type="text" x-model="a.role" aria-label="Assignment role"></td>
-								<td><button @click.prevent="remove(idx)" class="outline contrast small" aria-label="Remove assignment">X</button></td>
-							</tr>
-						</template>
-					</tbody>
-				</table>
-				<button @click.prevent="add()" class="outline">+ Add Assignment</button>
-				<input type="hidden" name="assignments" :value="json">
-			</fieldset>
 			<fieldset x-data="subtasksEditor()" data-existing={ p.ExistingSubtasksJSON }>
 				<legend>Subtasks</legend>
 				<table>
@@ -533,32 +481,7 @@ templ JobForm(p JobFormPageData) {
 					if (jobAssetSelect && jobAssetSelect.options.length <= 1) loadJobAssets(jobCustomer.value);
 				}
 			}
-			const startEl = document.querySelector('[name=start_time]');
-			const endEl = document.querySelector('[name=end_time]');
-			const pad = n => String(n).padStart(2, '0');
-			if (startEl && endEl) {
-				startEl.addEventListener('change', function() {
-					if (!this.value) return;
-					const st = new Date(this.value);
-					st.setHours(st.getHours()+1);
-					endEl.value = st.getFullYear() + '-' + pad(st.getMonth()+1) + '-' + pad(st.getDate()) + 'T' + pad(st.getHours()) + ':' + pad(st.getMinutes());
-				});
-			}
 			function registerJobEditors() {
-				Alpine.data('visitsEditor', () => ({
-					items: [],
-					init() { try { this.items = JSON.parse(this.$el.dataset.existing || '[]'); } catch(e) {} },
-					add() { this.items.push({date:'',start_time:'',end_time:'',notes:''}); },
-					remove(idx) { this.items.splice(idx, 1); },
-					get json() { return JSON.stringify(this.items); },
-				}));
-				Alpine.data('assignmentsEditor', () => ({
-					items: [],
-					init() { try { this.items = JSON.parse(this.$el.dataset.existing || '[]'); } catch(e) {} },
-					add() { this.items.push({user_id:0,name:'',role:''}); },
-					remove(idx) { this.items.splice(idx, 1); },
-					get json() { return JSON.stringify(this.items); },
-				}));
 				Alpine.data('subtasksEditor', () => ({
 					items: [],
 					init() { try { this.items = JSON.parse(this.$el.dataset.existing || '[]'); } catch(e) {} },
