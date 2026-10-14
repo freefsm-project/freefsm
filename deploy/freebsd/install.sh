@@ -29,3 +29,14 @@ fi
 install -d -o "$service_user" -g "$service_group" -m 750 "$root/var/db/freefsm"
 install -d -o "$service_user" -g "$service_group" -m 750 "$root/var/log/freefsm" "$root/var/db/freefsm/uploads"
 install -d -o "$service_user" -g "$service_group" -m 700 "$root/var/db/freefsm/state"
+# Older daemon -o installations created this application log as root. Retain its
+# history while restoring the application's ownership; never follow a symlink.
+log="$root/var/log/freefsm/freefsm.log"
+if [ -L "$log" ] || { [ -e "$log" ] && [ ! -f "$log" ]; }; then
+    echo 'FreeFSM log must be a regular file, not a symlink' >&2
+    exit 1
+fi
+if [ -e "$log" ]; then
+    chown "$service_user:$service_group" "$log"
+    chmod 600 "$log"
+fi

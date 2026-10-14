@@ -86,6 +86,29 @@ func TestFreeBSDInstallRejectsConfigSymlink(t *testing.T) {
 	}
 }
 
+func TestFreeBSDInstallPreservesAndRepairsExistingLog(t *testing.T) {
+	root := t.TempDir()
+	log := filepath.Join(root, "var/log/freefsm/freefsm.log")
+	if err := os.MkdirAll(filepath.Dir(log), 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(log, []byte("retained service history\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("sh", "freebsd/install.sh", root, strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid()))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("install: %v: %s", err, out)
+	}
+	data, err := os.ReadFile(log)
+	if err != nil || string(data) != "retained service history\n" {
+		t.Fatal("existing log lost", err)
+	}
+	stat, err := os.Stat(log)
+	if err != nil || stat.Mode().Perm() != 0600 {
+		t.Fatal("existing log permissions not repaired", err)
+	}
+}
+
 func TestLinuxStagedInstallProvidesWritableLogAndRecoveryRoots(t *testing.T) {
 	root := t.TempDir()
 	cmd := exec.Command("sh", "linux/install.sh", root, strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid()))
