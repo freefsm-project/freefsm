@@ -1,0 +1,70 @@
+const {chromium}=require('playwright-core');
+const assert=require('node:assert/strict');
+(async()=>{
+ const [base,session,job]=process.argv.slice(2);
+ const browser=await chromium.launch({executablePath:process.env.BROWSER_EXECUTABLE||'/usr/bin/chromium-browser',args:['--no-sandbox']});
+ try {
+  const context=await browser.newContext({viewport:{width:320,height:800},reducedMotion:'reduce'});
+  await context.addCookies([{name:'session',value:session,url:base}]);
+  const page=await context.newPage();
+  await page.route('https://tiles.example.test/**',route=>route.abort());
+  await page.goto(base+'/schedule');
+  await page.waitForURL(/tab=list.*period=day/);
+  await page.goto(base+'/schedule?tab=list&period=day&date=2026-10-20');
+  await page.getByRole('link',{name:/Browser crossing Job/}).waitFor();
+  assert.equal(await page.locator('.schedule-filters [name=status]').inputValue(),'all');
+  assert.equal(await page.locator('.schedule-filters [name=assignment]').inputValue(),'all');
+  assert.equal(await page.locator('.schedule-filters [name=sort]').inputValue(),'time');
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.getByRole('searchbox',{name:'Find Jobs',exact:true}).fill('crossing');
+  await page.getByRole('button',{name:'Apply filters',exact:true}).click();
+  await page.waitForURL(/q=crossing/);
+  await page.getByRole('link',{name:/Browser crossing Job/}).waitFor();
+  assert.equal(await page.getByRole('link',{name:/Browser unmapped Job/}).count(),0);
+  await page.goto(base+'/jobs/'+job);
+  await page.goBack();
+  await page.getByRole('searchbox',{name:'Find Jobs',exact:true}).waitFor();assert.equal(await page.getByRole('searchbox',{name:'Find Jobs',exact:true}).inputValue(),'crossing');
+  await page.goto(base+'/schedule');
+  assert.equal(await page.getByRole('searchbox',{name:'Find Jobs',exact:true}).inputValue(),'crossing');
+  await page.goto(base+'/schedule?tab=map&period=day&date=2026-10-20&q=');
+  await page.getByText(/Map unavailable/).first().waitFor();
+  await page.getByRole('heading',{name:'Unmapped Jobs',exact:true}).waitFor();
+  assert(await page.getByRole('link',{name:/Browser unmapped Job/}).isVisible());
+  assert(await page.getByText(/Missing Location/).count()>0);
+  assert.equal(await page.locator('#schedule-map-markers [data-lat="0.000000"]').count(),1);
+  assert.equal(await page.locator('#schedule-map').evaluate(el=>el.freefsmMap.options.zoomAnimation),false);
+  await page.goto(base+'/schedule?tab=calendar&period=day&date=2026-10-20');
+  await page.getByRole('link',{name:/Browser crossing Job/}).first().waitFor();
+  const first=await page.getByRole('link',{name:/Browser crossing Job/}).first().boundingBox();
+  const second=await page.getByRole('link',{name:/Browser unmapped Job/}).first().boundingBox();
+  assert(first.y+first.height<=second.y||second.y+second.height<=first.y||first.x+first.width<=second.x||second.x+second.width<=first.x,'simultaneous cards must not cover each other');
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  await page.locator('#schedule-scroll').evaluate(el=>{el.scrollTop=180;});
+  const calendarScroll=await page.locator('#schedule-scroll').evaluate(el=>el.scrollTop);
+  await page.getByRole('link',{name:/Browser unmapped Job/}).first().click();
+  await page.waitForURL(/\/jobs\/\d+$/);
+  await page.goBack();
+  await page.locator('#schedule-scroll').waitFor();
+  await page.waitForFunction(value=>document.getElementById('schedule-scroll')?.scrollTop===value,calendarScroll,{timeout:10000});
+  assert.equal(await page.locator('#schedule-scroll').evaluate(el=>el.scrollTop),calendarScroll,'calendar scroll must survive authorized Back navigation');
+  await page.goto(base+'/schedule?tab=list&period=day&date=2026-10-20');
+  // A return refresh must remove authority-dependent cards immediately while
+  // loading, and leave an actionable error rather than stale links on failure.
+  await page.route('**/schedule?**',async route=>{
+   if(route.request().headers()['x-schedule-refresh']==='true')await route.abort();else await route.continue();
+  });
+  await page.getByRole('button',{name:'Refresh schedule',exact:true}).click();
+  await page.getByText(/Schedule unavailable/).waitFor();
+  assert.equal(await page.getByRole('link',{name:/Browser crossing Job/}).count(),0);
+  await page.unroute('**/schedule?**');
+  await page.getByRole('button',{name:'Retry schedule',exact:true}).click();
+  await page.getByRole('link',{name:/Browser crossing Job/}).waitFor();
+  assert.equal((await context.request.get(base+'/test/reassign')).status(),204);
+  await page.getByRole('button',{name:'Refresh schedule',exact:true}).click();
+  await page.waitForFunction(id=>!document.querySelector('a[href="/jobs/'+id+'"]'),job);
+  await page.getByRole('link',{name:/Browser unmapped Job/}).waitFor();
+  assert.equal(await page.getByRole('link',{name:/Browser crossing Job/}).count(),0);
+  if(process.env.SCHEDULE_SCREENSHOT)await page.screenshot({path:process.env.SCHEDULE_SCREENSHOT,fullPage:true});
+  console.log(JSON.stringify({phoneDefault:true,actualFilterValues:true,filtersPersist:true,backReauthorized:true,calendarBackScroll:true,simultaneousCards:true,providerFailure:true,zeroCoordinates:true,unmappedReasons:true,readFailurePurges:true,reassignmentPurges:true,reducedMotion:true,width:320}));
+ } finally {await browser.close();}
+})().catch(error=>{console.error(error);process.exit(1)});

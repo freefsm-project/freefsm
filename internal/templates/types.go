@@ -1399,30 +1399,35 @@ type ContactRow struct {
 }
 
 type CalendarJob struct {
-	ID                 int64
-	TechID             int64
-	Day                int
-	Hour               int
-	Duration           int
-	JobType            string
-	Customer           string
-	Assignee           string
-	AssigneeInitials   string
-	AssigneeColor      string
-	Address            string
-	Time               string
-	TimeRange          string
-	StartTime          string
-	EndTime            string
-	Date               string
-	DateISO            string
-	InvoiceID          int64
-	InvoiceStatusName  string
-	InvoiceStatusColor string
-	StatusName         string
-	StatusColor        string
-	Lat                float64
-	Lng                float64
+	NeedsRepair                  bool
+	IntervalStart, IntervalEnd   time.Time
+	Arrival, Category, MapReason string
+	AssigneeIDs                  []int64
+	Overdue, Conflict, Mapped    bool
+	ID                           int64
+	TechID                       int64
+	Day                          int
+	Hour                         int
+	Duration                     int
+	JobType                      string
+	Customer                     string
+	Assignee                     string
+	AssigneeInitials             string
+	AssigneeColor                string
+	Address                      string
+	Time                         string
+	TimeRange                    string
+	StartTime                    string
+	EndTime                      string
+	Date                         string
+	DateISO                      string
+	InvoiceID                    int64
+	InvoiceStatusName            string
+	InvoiceStatusColor           string
+	StatusName                   string
+	StatusColor                  string
+	Lat                          float64
+	Lng                          float64
 }
 
 type ScheduleTech struct {
@@ -1479,32 +1484,38 @@ type ScheduleDay struct {
 }
 
 type SchedulePageData struct {
-	Title           string
-	Weeks           []WeekData
-	Days            []ScheduleDay
-	Jobs            []CalendarJob
-	MapJobs         []CalendarJob
-	UnscheduledJobs []CalendarJob
-	DispatchColumns []DispatchColumn
-	DispatchMatrix  DispatchMatrix
-	Techs           []ScheduleTech
-	Tab             string
-	Period          string
-	TileURL         string
-	MapEmptyMessage string
-	PrevYear        int
-	PrevMonth       int
-	NextYear        int
-	NextMonth       int
-	PrevDate        string
-	NextDate        string
-	Date            string
-	IsMonth         bool
-	IsWeek          bool
-	IsDay           bool
-	IsList          bool
-	IsDispatch      bool
-	IsMap           bool
+	RepairJobs                                         []CalendarJob
+	Query, StatusFilter, AssignmentFilter, Sort, Error string
+	Count                                              int
+	PhoneDefault                                       bool
+	UpdatedAt                                          string
+	Title                                              string
+	Weeks                                              []WeekData
+	Days                                               []ScheduleDay
+	Jobs                                               []CalendarJob
+	MapJobs                                            []CalendarJob
+	UnmappedJobs                                       []CalendarJob
+	UnscheduledJobs                                    []CalendarJob
+	DispatchColumns                                    []DispatchColumn
+	DispatchMatrix                                     DispatchMatrix
+	Techs                                              []ScheduleTech
+	Tab                                                string
+	Period                                             string
+	TileURL                                            string
+	MapEmptyMessage                                    string
+	PrevYear                                           int
+	PrevMonth                                          int
+	NextYear                                           int
+	NextMonth                                          int
+	PrevDate                                           string
+	NextDate                                           string
+	Date                                               string
+	IsMonth                                            bool
+	IsWeek                                             bool
+	IsDay                                              bool
+	IsList                                             bool
+	IsDispatch                                         bool
+	IsMap                                              bool
 }
 
 type TagRow struct {
