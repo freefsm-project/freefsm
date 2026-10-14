@@ -56,7 +56,7 @@ func (s *Service) ProcessOne(ctx context.Context) (bool, error) {
 	} else {
 		actor := authorization.Actor{UserID: user, Channel: "worker"}
 		err = authorization.New(s.Pool).WithinSnapshotPermission(ctx, actor, d.Permission(), d.Scope(), func(tx pgx.Tx, p authorization.Principal) error {
-			if err := d.Authorize(p, options); err != nil {
+			if err := authorizeDefinition(ctx, tx, p, d, options); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx, `UPDATE export_jobs SET as_of=transaction_timestamp() WHERE id=$1`, id); err != nil {

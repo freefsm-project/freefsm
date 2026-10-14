@@ -53,11 +53,11 @@ still requires current authentication and the original user/client binding;
 resource/grant loss does not erase nonsensitive receipt evidence. Terminal repair
 requires explicit review and a new operation ID.
 
-**Integration dependency:** the Service Entry domain receipt is not a substitute
-for common cross-family operation admission. The accepted composition owner's
-`authorization.AdmitOperation` must be composed into the same transaction before
-this ticket can satisfy API-05 common-binding acceptance. No competing shared
-operation registry is implemented here. Read synchronization remains ticket #77.
+Service Entry commands use the composition owner's `authorization.AdmitOperation`
+inside the effect/receipt transaction, binding deployment, user, client, operation
+family and exact intent. The domain receipt is not a separate shared registry.
+Read synchronization remains ticket #77. Acceptance of the composed integration
+is recorded separately from this domain's source verification.
 
 ## Preserved evidence
 

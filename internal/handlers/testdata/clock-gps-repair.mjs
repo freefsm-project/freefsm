@@ -1,0 +1,48 @@
+import assert from 'node:assert/strict';
+import {webcrypto} from 'node:crypto';
+import {createInterface} from 'node:readline';
+import {ClockReference} from '../../api/v1/reference/clock-reference.mjs';
+
+globalThis.crypto ??= webcrypto;
+const [base, bearer, mode, kind] = process.argv.slice(2);
+const client = new ClockReference(base, bearer);
+await client.renew();
+let fields = {notes: 'original notes retained'};
+if (kind === 'out') {
+  const result = await client.call('/time-entries/clock-in', 'POST', {operation_id: crypto.randomUUID()});
+  assert.equal(result.status, 200);
+  fields = {entry_id: result.data.entry_id};
+}
+await new Promise(resolve => setTimeout(resolve, 10));
+const occurrence = new Date().toISOString();
+fields.gps = {latitude: 51.5, longitude: -0.12, captured_at: mode === 'invalid-timestamp' ? 'not-a-timestamp' : occurrence};
+const id = client.stage(kind, fields, occurrence);
+const original = structuredClone(client.pending.get(id).command);
+const input = createInterface({input: process.stdin});
+const resumed = new Promise(resolve => input.once('line', resolve));
+console.log(`STAGED ${occurrence}`);
+assert.equal(await resumed, 'continue');
+input.close();
+const rejected = await client.submit(id);
+assert.equal(rejected.status, mode === 'invalid-timestamp' ? 400 : 403);
+assert.equal(client.pending.get(id).state, 'terminal');
+const oldReceipt = await client.receipt(id);
+assert.equal(oldReceipt.status, mode === 'invalid-timestamp' ? 404 : 200);
+if (oldReceipt.status === 200) assert.equal(oldReceipt.data.code, 'forbidden');
+const repairedID = client.withoutLocation(id);
+const expected = structuredClone(original);
+delete expected.gps;
+expected.operation_id = repairedID;
+assert.notEqual(repairedID, id);
+assert.deepEqual(client.pending.get(repairedID).command, expected);
+assert.deepEqual(client.pending.get(id).command, original);
+assert.equal(client.pending.get(repairedID).state, 'pending', 'explicit omission stages, never auto-submits');
+const accepted = await client.submit(repairedID);
+assert.equal(accepted.status, 200, JSON.stringify(accepted));
+const receipt = await client.receipt(repairedID);
+assert.equal(receipt.status, 200);
+assert.equal(receipt.data.code, 'accepted');
+assert.equal(receipt.data.entry_id, accepted.data.entry_id);
+assert.deepEqual(await client.submit(repairedID), accepted);
+assert.throws(() => client.withoutLocation(repairedID), /location_repair_not_available/);
+console.log(JSON.stringify({original, rejected, oldReceipt, repaired: expected, accepted, receipt}));

@@ -176,7 +176,7 @@ func applyServiceEntry(ctx context.Context, tx pgx.Tx, p Principal, a Actor, job
 				return err
 			}
 		}
-		return audit(ctx, tx, a, p, "service_entry."+action, scope, "service_entry", id, map[string]any{"job_id": jobID, "asset_id": assetID, "revision": revision, "content": in, "operation_id": operationID, "client_key": serviceEntryClient(a), "occurred_at": occurred})
+		return audit(ctx, tx, a, p, "service_entry."+action, scope, "service_entry", id, map[string]any{"job_id": jobID, "asset_id": assetID, "revision": revision, "content": in, "operation_id": operationID, "client_key": operationClientKey(a), "occurred_at": occurred})
 	}()
 	return id, err
 }

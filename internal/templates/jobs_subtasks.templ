@@ -1,32 +1,129 @@
 package templates
 
 import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+import "github.com/google/uuid"
 
 templ JobSubtasks(p JobDetail) {
-	<div id="job-subtasks">
-		<h3>Subtasks</h3>
-		<div class="subtasks-progress">
-			if len(p.Subtasks) > 0 {
-				<progress value={ fmt.Sprintf("%d", subtaskCompletedCount(p.Subtasks)) } max={ fmt.Sprintf("%d", len(p.Subtasks)) }></progress>
-				<small>{ fmt.Sprintf("%d of %d completed", subtaskCompletedCount(p.Subtasks), len(p.Subtasks)) }</small>
-			}
-		</div>
-		<ul class="subtasks-list">
-			for idx, st := range p.Subtasks {
+	<section id="job-subtasks" aria-labelledby="subtasks-title">
+		<h3 id="subtasks-title">Subtasks</h3>
+		if len(p.Subtasks)>0 {
+			<progress aria-label="Subtasks completed" value={ fmt.Sprint(subtaskCompletedCount(p.Subtasks)) } max={ fmt.Sprint(len(p.Subtasks)) }></progress>
+			<p>{ fmt.Sprintf("%d of %d completed",subtaskCompletedCount(p.Subtasks),len(p.Subtasks)) }</p>
+		}
+		<ul>
+			for _,st:=range p.Subtasks {
 				<li>
-					<input
-						type="checkbox"
-						checked?={ st.Completed }
-						disabled?={ p.ArchivedAt != "" || (st.Completed && !detailCan(ctx,"subtask-reopen")) || (!st.Completed && !detailCan(ctx,"subtask-complete")) }
-						hx-post={ fmt.Sprintf("/jobs/%d/subtasks/%d/toggle", p.ID, idx) }
-						hx-target="#job-subtasks"
-						hx-swap="outerHTML"
-					/>
-					<span class={ templ.KV("subtask-completed", st.Completed) }>
-						{ st.Title }
-					</span>
+					{ st.Title }
+					if st.Completed {
+						<span>Completed</span>
+					} else {
+						<span>Incomplete</span>
+					}
 				</li>
 			}
 		</ul>
-	</div>
+		<a href={ templ.URL(fmt.Sprintf("/jobs/%d/subtasks",p.ID)) }>View checklist and history</a>
+	</section>
+}
+
+templ SubtaskPage(id int64, checklist authorization.Checklist, review *authorization.SubtaskReview) {
+	@Layout("Job checklist") {
+		<h1>Job checklist</h1>
+		<a href={ templ.URL(fmt.Sprintf("/jobs/%d",id)) }>Back to Job</a>
+		<p>Completing a Subtask does not change Job Status. History retains the actor and acceptance time.</p>
+		<p>Times shown in { companyTimeZone(ctx) }.</p>
+		<p id="subtask-outcome" role="status" aria-live="polite"></p>
+		if user := getUser(ctx); user != nil {
+			<div id="subtask-recovery" data-owner={ fmt.Sprint(user.ID) } data-endpoint={ fmt.Sprintf("/jobs/%d/subtasks",id) } data-csrf={ csrfToken(ctx) }></div>
+		}
+		if checklist.ReviewRequired {
+			<p>Checklist changes are blocked pending explicit Administrator review of recorded legacy rows. Unknown completion actors and times remain unknown.</p>
+			if review!=nil {
+				<pre style="white-space: pre-wrap; overflow-wrap: anywhere;">{ string(review.Recorded) }</pre>
+				<form method="post" action={ templ.URL(fmt.Sprintf("/jobs/%d/subtasks/review",id)) } hx-boost="false">
+					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+					<input type="hidden" name="snapshot" value={ review.Snapshot }/>
+					<label><input type="checkbox" name="acknowledge" value="true" required/>I reviewed these exact recorded rows and approve assigning stable identities by their recorded position, retaining unknown historical attribution.</label>
+					<button>Approve recorded checklist mapping</button>
+				</form>
+			}
+		} else {
+			if len(checklist.Entries)==0 {
+				<p>No Subtasks.</p>
+			}
+			<ol>
+				for index,st:=range checklist.Entries {
+					<li data-subtask-id={ st.ID }>
+						<strong>{ st.Title }</strong>
+						if st.Completed {
+							<p>Completed</p>
+						} else {
+							<p>Incomplete</p>
+						}
+						if st.CompletionAt!=nil {
+							<p>{ fmt.Sprintf("Last completion change: user %d · %s",*st.CompletionActor,displayDateTime(ctx,*st.CompletionAt)) }</p>
+						} else if st.Completed {
+							<p>Historical completion actor/time unknown.</p>
+						}
+						if (st.Completed && detailCan(ctx,"subtask-reopen")) || (!st.Completed && detailCan(ctx,"subtask-complete")) {
+							<form method="post" data-subtask-command action={ templ.URL(fmt.Sprintf("/jobs/%d/subtasks",id)) } hx-boost="false">
+								@subtaskIntent(st.ID)
+								<input type="hidden" name="completion_revision" value={ st.CompletionRevision }/>
+								if st.Completed {
+									<button name="action" value="reopen">Reopen</button>
+								} else {
+									<button name="action" value="complete">Complete</button>
+								}
+							</form>
+						}
+						if detailCan(ctx,"subtask-manage") {
+							<form method="post" data-subtask-command action={ templ.URL(fmt.Sprintf("/jobs/%d/subtasks",id)) } hx-boost="false">
+								@subtaskIntent(st.ID)
+								<label>Subtask title<input name="title" value={ st.Title } required/></label>
+								<button name="action" value="rename">Save title</button>
+							</form>
+							<form method="post" data-subtask-command action={ templ.URL(fmt.Sprintf("/jobs/%d/subtasks",id)) } hx-boost="false" hx-confirm={ "Remove Subtask “"+st.Title+"”? Its history is retained; removal cannot be undone." }>
+								@subtaskIntent(st.ID)
+								<button name="action" value="remove">Remove Subtask</button>
+							</form>
+							if index>0 {
+								<form method="post" data-subtask-command action={ templ.URL(fmt.Sprintf("/jobs/%d/subtasks",id)) } hx-boost="false">
+									@subtaskIntent("")
+									for _,sid:=range subtaskMoveUp(checklist.Entries,index) {
+										<input type="hidden" name="order" value={ sid }/>
+									}
+									<button name="action" value="reorder">Move up</button>
+								</form>
+							}
+						}
+					</li>
+				}
+			</ol>
+			if detailCan(ctx,"subtask-manage") {
+				<form method="post" data-subtask-command action={ templ.URL(fmt.Sprintf("/jobs/%d/subtasks",id)) } hx-boost="false">
+					@subtaskIntent("")
+					<label>New Subtask title<input name="title" required/></label>
+					<button name="action" value="add">Add Subtask</button>
+				</form>
+			}
+		}
+		<h2>Checklist history</h2>
+		<ol>
+			for _,event:=range checklist.History {
+				<li>{ fmt.Sprintf("%s · user %d · %s",event.Action,event.ActorID,displayDateTime(ctx,event.AcceptedAt)) }<pre style="white-space: pre-wrap; overflow-wrap: anywhere;">{ string(event.Before) }</pre><pre style="white-space: pre-wrap; overflow-wrap: anywhere;">{ string(event.After) }</pre></li>
+			}
+		</ol>
+		<script src={ staticAsset("/static/js/subtasks.js") }></script>
+	}
+}
+
+templ subtaskIntent(id string) {
+	<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+	<input type="hidden" name="operation_id" value={ uuid.NewString() }/>
+	<input type="hidden" name="subtask_id" value={ id }/>
+}
+
+func subtaskMoveUp(tasks []authorization.Subtask,index int) []string {
+	ids:=make([]string,len(tasks));for i,t:=range tasks{ids[i]=t.ID};ids[index-1],ids[index]=ids[index],ids[index-1];return ids
 }

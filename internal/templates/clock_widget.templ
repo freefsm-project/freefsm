@@ -1,5 +1,7 @@
 package templates
 
+import "strconv"
+
 templ ClockWidget(p ClockWidgetData) {
 	if p.IsClockedIn {
 		<div class="clock-widget" id="clock-widget">
@@ -8,20 +10,27 @@ templ ClockWidget(p ClockWidgetData) {
 			<p class="clock-note">
 				Since { p.ClockInTime }
 			</p>
+			if clockCan(ctx,"time.clock_out") {
 			<form action="/time-entries/clock-out" method="post" class="clock-form">
+				<input type="hidden" name="entry_id" value={ strconv.FormatInt(p.EntryID,10) }/>
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-				<button type="submit" class="contrast clock-button">Clock Out</button>
+				<button type="submit" class="contrast clock-button" data-clock-free>Clock Out</button>
+				@ClockLocationControls()
 			</form>
+			}
 			<footer><a href="/time-entries" role="button" class="outline small">View Timesheets</a></footer>
 		</div>
 	} else {
 		<div class="clock-widget" id="clock-widget">
 			<p class="clock-duration clock-duration-empty">&ndash;:&ndash;&ndash;</p>
 			<p class="clock-note">Not clocked in</p>
+			if clockCan(ctx,"time.clock_in") {
 			<form action="/time-entries/clock-in" method="post" class="clock-form">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-				<button type="submit" class="clock-button">Clock In</button>
+				<button type="submit" class="clock-button" data-clock-free>Clock In</button>
+				@ClockLocationControls()
 			</form>
+			}
 			<footer><a href="/time-entries" role="button" class="outline small">View Timesheets</a></footer>
 		</div>
 	}

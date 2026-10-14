@@ -140,6 +140,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 	assetSvc := services.NewAssetService(entClient)
 
 	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, assetTypeSvc, assetStatusSvc, fileSvc, activitySvc, userService, policySvc, timeEntrySvc)
+	jobHandler.itemSvc = itemService
 	jobHandler.statusflow = statusflowService
 	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc, policySvc)
 	projectHandler.fileSvc = fileSvc
@@ -300,6 +301,11 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.With(collectionRead("job")).Get("/jobs", jobHandler.List)
 		r.With(collectionRead("job")).Get("/jobs/activity", activityHandler.ListByType(objectref.TypeJob))
 		r.Post("/jobs/{id}/status", jobHandler.UpdateStatus)
+		r.Get("/jobs/{id}/field-notes", jobHandler.FieldNotes)
+		r.Post("/jobs/{id}/field-notes", jobHandler.FieldNotes)
+		r.Get("/jobs/{id}/field-notes/history", jobHandler.FieldNotes)
+		r.Get("/job-execution-operations/{operation}", jobHandler.ExecutionReceipt)
+		r.Post("/jobs/{id}/field-notes/review", jobHandler.FieldNotes)
 		r.Post("/projects/{id}/status", transitionStatus(statusflowService, statusflow.Project))
 		r.Post("/estimates/{id}/status", transitionStatus(statusflowService, statusflow.Estimate))
 		r.Post("/invoices/{id}/status", transitionStatus(statusflowService, statusflow.Invoice))
@@ -342,6 +348,10 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/schedule/dispatch", scheduleHandler.ProposeDispatch)
 		r.Post("/schedule/move", scheduleHandler.ProposeDispatch)
 		r.Post("/schedule/calendar/move", scheduleHandler.ProposeDispatch)
+		r.Get("/jobs/{id}/subtasks", jobHandler.Subtasks)
+		r.Post("/jobs/{id}/subtasks", jobHandler.Subtasks)
+		r.Post("/jobs/{id}/subtasks/review", jobHandler.ReviewSubtasks)
+		r.Get("/subtask-operations/{operation}", jobHandler.SubtaskReceipt)
 		r.With(detailsAccess("asset")).Get("/assets/new", assetHandler.Create)
 		r.With(detailsAccess("asset")).Post("/assets", assetHandler.Create)
 		r.With(detailsAccess("asset")).Post("/assets/inline", assetHandler.CreateInline)
@@ -372,7 +382,6 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/create-next-occurrence", jobHandler.CreateNextOccurrence)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/cancel-next-occurrence", jobHandler.CancelNextOccurrence)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/delete", jobHandler.Delete)
-			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/subtasks/{idx}/toggle", jobHandler.ToggleSubtask)
 		})
 
 		// Assigned technicians may create documents from their Jobs and manage them.
@@ -437,6 +446,8 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		}
 
 		// Entity comments (list, create, delete)
+		r.Get("/estimates/{id}/commercial-history", commercialHistoryHandler("estimate"))
+		r.Get("/invoices/{id}/commercial-history", commercialHistoryHandler("invoice"))
 		for _, e := range []struct {
 			prefix  string
 			objType objectref.Type
@@ -501,6 +512,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.Post("/estimates/{id}/restore", estimateHandler.Restore)
 			r.Post("/invoices/{id}/restore", invoiceHandler.Restore)
 			// Admin activity feeds
+			r.Get("/settings/activity/history", activityHandler.ListAll)
 			r.Get("/settings/activity", activityHandler.ListByType(objectref.TypeCompanySettings))
 			r.Get("/settings/custom-fields/activity", activityHandler.ListByType(objectref.TypeCustomField))
 			r.Get("/users/activity", activityHandler.ListByType(objectref.TypeUser))

@@ -3,6 +3,12 @@ package templates
 templ ActivityWidget(p ActivityWidgetData) {
 	<div id={ p.DOMID } class="shared-widget">
 		<h4>Activity</h4>
+		if p.RefreshURL!="" {
+			<a href={ templ.URL(p.RefreshURL) } hx-boost="false">Refresh activity</a>
+		}
+		if p.UpdatedAt!="" {
+			<p>Updated at { p.UpdatedAt }</p>
+		}
 		if len(p.Entries) == 0 {
 			<p>No activity yet.</p>
 		} else {
@@ -56,6 +62,7 @@ templ ActivityWidget(p ActivityWidgetData) {
 								}
 							</span>
 							@BackupActivityPreview(e)
+							@ActivityFacts(e.Metadata)
 							if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
 								<p class="activity-preview">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>
 							}

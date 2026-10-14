@@ -59,132 +59,28 @@ func NewAPIMutationService(db *pgxpool.Pool) *APIMutationService {
 	return &APIMutationService{db: db}
 }
 
+// Deprecated: positional checklist intent is unsupported. Use
+// authorization.Service.SubmitSubtask with a stable identity and revision.
 func (s *APIMutationService) SetSubtaskCompletion(ctx context.Context, actor MutationActor, jobID int64, index int, completed bool) (APISubtaskResult, error) {
-	if err := validateMutation(actor, jobID); err != nil {
-		return APISubtaskResult{}, err
-	}
-	if index < 0 {
-		return APISubtaskResult{}, ErrSubtaskNotFound
-	}
-
-	tx, err := s.begin(ctx)
-	if err != nil {
-		return APISubtaskResult{}, err
-	}
-	defer tx.Rollback(ctx) // No-op after Commit.
-	if err = authorizeJobMutation(ctx, tx, actor, jobID); err != nil {
-		return APISubtaskResult{}, err
-	}
-
-	var result APISubtaskResult
-	err = tx.QueryRow(ctx, `
-		UPDATE jobs
-		SET subtasks = jsonb_set(subtasks, ARRAY[$3::text, 'completed'], to_jsonb($4::boolean), false),
-		    updated_at = NOW()
-		WHERE company_id = $1 AND id = $2 AND deleted_at IS NULL
-		  AND jsonb_typeof(subtasks) = 'array' AND jsonb_array_length(subtasks) > $3
-		RETURNING subtasks->$3->>'title',
-		          (subtasks->$3->>'completed')::boolean,
-		          COALESCE((subtasks->$3->>'sort_order')::integer, 0)`,
-		actor.CompanyID, jobID, index, completed,
-	).Scan(&result.Title, &result.Completed, &result.SortOrder)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return APISubtaskResult{}, ErrSubtaskNotFound
-	}
-	if err != nil {
-		return APISubtaskResult{}, fmt.Errorf("update subtask: %w", err)
-	}
-
-	action := "subtask_uncompleted"
-	if completed {
-		action = "subtask_completed"
-	}
-	if err = insertMutationActivity(ctx, tx, actor, action, "job", jobID, map[string]any{
-		"actor_name":  actor.Name,
-		"entity_name": result.Title,
-	}); err != nil {
-		return APISubtaskResult{}, err
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return APISubtaskResult{}, fmt.Errorf("commit subtask mutation: %w", err)
-	}
-	return result, nil
+	// Positional intent cannot safely identify an entry after reorder/removal.
+	// Retained only to fail closed for old internal callers; HTTP uses the
+	// canonical authorization.SubmitSubtask identity/revision/receipt boundary.
+	return APISubtaskResult{}, ErrMutationForbidden
 }
 
+// Deprecated: use authorization.Service.SubmitClock with authenticated authority
+// and an operation identity. This obsolete contract always denies.
 func (s *APIMutationService) ClockIn(ctx context.Context, actor MutationActor, jobID int64, params APIClockInParams) (APITimeEntryResult, error) {
-	if err := validateMutation(actor, jobID); err != nil {
-		return APITimeEntryResult{}, err
-	}
-	tx, err := s.begin(ctx)
-	if err != nil {
-		return APITimeEntryResult{}, err
-	}
-	defer tx.Rollback(ctx)
-	if err = authorizeJobMutation(ctx, tx, actor, jobID); err != nil {
-		return APITimeEntryResult{}, err
-	}
-
-	var result APITimeEntryResult
-	err = tx.QueryRow(ctx, `
-		INSERT INTO time_entries(company_id, user_id, job_id, is_manual, clock_in, notes, latitude, longitude, created_at, updated_at)
-		SELECT $1, u.id, j.id, false, NOW(), $4, $5, $6, NOW(), NOW()
-		FROM users u
-		JOIN jobs j ON j.id = $3 AND j.company_id = $1 AND j.deleted_at IS NULL
-		WHERE u.id = $2 AND u.company_id = $1 AND u.is_active
-		RETURNING id, user_id, job_id, clock_in, clock_out, notes, latitude, longitude`,
-		actor.CompanyID, actor.UserID, jobID, params.Notes, params.Latitude, params.Longitude,
-	).Scan(&result.ID, &result.UserID, &result.JobID, &result.ClockIn, &result.ClockOut, &result.Notes, &result.Latitude, &result.Longitude)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return APITimeEntryResult{}, ErrMutationJobNotFound
-	}
-	if err != nil {
-		if isAPIMutationActiveEntryConflict(err) {
-			return APITimeEntryResult{}, ErrActiveTimeEntry
-		}
-		return APITimeEntryResult{}, fmt.Errorf("clock in: %w", err)
-	}
-
-	if err = insertTimeEntryActivities(ctx, tx, actor, result, "clocked_in"); err != nil {
-		return APITimeEntryResult{}, err
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return APITimeEntryResult{}, fmt.Errorf("commit clock in: %w", err)
-	}
-	return result, nil
+	// This obsolete contract has neither authenticated authority nor an
+	// operation identity. Field callers use authorization.SubmitClock.
+	return APITimeEntryResult{}, ErrMutationForbidden
 }
 
+// Deprecated: use authorization.Service.SubmitClock with an exact entry target.
+// This obsolete, untargeted contract always denies.
 func (s *APIMutationService) ClockOut(ctx context.Context, actor MutationActor) (APITimeEntryResult, error) {
-	if actor.CompanyID <= 0 || actor.UserID <= 0 {
-		return APITimeEntryResult{}, fmt.Errorf("invalid mutation actor")
-	}
-	tx, err := s.begin(ctx)
-	if err != nil {
-		return APITimeEntryResult{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	var result APITimeEntryResult
-	err = tx.QueryRow(ctx, `
-		UPDATE time_entries
-		SET clock_out = NOW(), updated_at = NOW()
-		WHERE company_id = $1 AND user_id = $2 AND clock_out IS NULL
-		RETURNING id, user_id, job_id, clock_in, clock_out, notes, latitude, longitude`,
-		actor.CompanyID, actor.UserID,
-	).Scan(&result.ID, &result.UserID, &result.JobID, &result.ClockIn, &result.ClockOut, &result.Notes, &result.Latitude, &result.Longitude)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return APITimeEntryResult{}, ErrTimeEntryNotActive
-	}
-	if err != nil {
-		return APITimeEntryResult{}, fmt.Errorf("clock out: %w", err)
-	}
-
-	if err = insertTimeEntryActivities(ctx, tx, actor, result, "clocked_out"); err != nil {
-		return APITimeEntryResult{}, err
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return APITimeEntryResult{}, fmt.Errorf("commit clock out: %w", err)
-	}
-	return result, nil
+	// Never infer an out target from whichever entry is active now.
+	return APITimeEntryResult{}, ErrMutationForbidden
 }
 
 func (s *APIMutationService) begin(ctx context.Context) (pgx.Tx, error) {

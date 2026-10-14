@@ -72,7 +72,21 @@ func TestFieldRevisionsExposeOnlyOwnedAndRetainedGlobalDefinitionsAPI(t *testing
 	foreign := `{"operation_id":"30000000-0000-4000-8000-000000000303","revisions":{"8001":"00000000-0000-0000-0000-000000000000"},"values":[{"definition_id":8001,"value":"Not authorized"}]}`
 	denied := call("PATCH", foreign, 409)
 	unknown := strings.ReplaceAll(strings.Replace(foreign, "000000000303", "000000000304", 1), "8001", "8999")
-	if missing := call("PATCH", unknown, 409); missing != denied {
+	// Request/operation correlation IDs are intentionally different. Compare all
+	// remaining authorized representation and error fields for nondisclosure.
+	stable := func(raw string) string {
+		var value map[string]any
+		if err := json.Unmarshal([]byte(raw), &value); err != nil {
+			t.Fatal(err)
+		}
+		delete(value["error"].(map[string]any), "request_id")
+		if receipt, ok := value["comparison"].(map[string]any)["receipt"].(map[string]any); ok {
+			delete(receipt, "operation_id")
+		}
+		encoded, _ := json.Marshal(value)
+		return string(encoded)
+	}
+	if missing := call("PATCH", unknown, 409); stable(missing) != stable(denied) {
 		t.Fatalf("foreign field existence leaked: %s != %s", denied, missing)
 	}
 }

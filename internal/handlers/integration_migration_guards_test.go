@@ -154,8 +154,8 @@ func TestIntegrationMigrationGuardsLegacyConversionReview(t *testing.T) {
 		t.Helper()
 		var snapshot string
 		if err := pool.QueryRow(ctx, `SELECT jsonb_build_object(
-		  'estimates',(SELECT jsonb_agg(to_jsonb(e)-ARRAY['number_label','document_number'] ORDER BY id) FROM estimates e),
-		  'invoices',(SELECT jsonb_agg(to_jsonb(i)-'number_label' ORDER BY id) FROM invoices i),
+		  'estimates',(SELECT jsonb_agg(to_jsonb(e)-ARRAY['number_label','document_number','commercial_revision'] ORDER BY id) FROM estimates e),
+		  'invoices',(SELECT jsonb_agg(to_jsonb(i)-ARRAY['number_label','commercial_revision'] ORDER BY id) FROM invoices i),
 		  'cycles',(SELECT jsonb_agg(to_jsonb(c) ORDER BY id) FROM estimate_invoice_conversion_cycles c))::text`).Scan(&snapshot); err != nil {
 			t.Fatal(err)
 		}

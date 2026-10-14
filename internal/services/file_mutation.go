@@ -43,18 +43,12 @@ func (s *FileService) MutateFile(ctx context.Context, company, id int64, in File
 	action := "file.rename"
 	if remove {
 		action = "file.remove"
-		if in.Name != "" {
-			return authorization.ErrFileOperation
-		}
 	}
-	if in.FileOperation.Validate() != nil {
+	if id, err := uuid.Parse(in.OperationID); err != nil || id == uuid.Nil {
 		return authorization.ErrFileOperation
 	}
 	in.OperationID = uuid.MustParse(in.OperationID).String()
-	original, err := objectref.Parse(in.ObjectType, in.ObjectID)
-	if err != nil {
-		return authorization.ErrFileOperation
-	}
+	original, _ := objectref.Parse(in.ObjectType, in.ObjectID)
 	in.Name = strings.TrimSpace(in.Name)
 	if in.OccurredAt != nil {
 		utc := in.OccurredAt.UTC()
@@ -68,19 +62,27 @@ func (s *FileService) mutateFile(ctx context.Context, request authorization.Requ
 }
 
 func (s *FileService) mutateFileCommand(ctx context.Context, request authorization.Request, company, id int64, action, name string, revision []int64, original []objectref.Ref, command *FileMutation) error {
-	f, err := s.client.File.Query().Where(file.IDEQ(id), file.CompanyIDEQ(company)).Only(ctx)
-	if err != nil {
-		return err
-	}
-	ref, err := objectref.Parse(f.ObjectType, f.ObjectID)
-	if err != nil {
-		return authorization.ErrNotFound
-	}
-	if err := request.Service.FileAccess(ctx, request.Actor, ref, "", f.UploadedBy); err != nil {
-		return err
-	}
-	if len(original) > 0 && original[0] != ref {
-		return authorization.ErrConflict
+	var f *ent.File
+	var ref objectref.Ref
+	var err error
+	if command != nil {
+		ref = original[0]
+		f = &ent.File{ObjectType: ref.ObjectType(), ObjectID: ref.ID}
+	} else {
+		f, err = s.client.File.Query().Where(file.IDEQ(id), file.CompanyIDEQ(company)).Only(ctx)
+		if err != nil {
+			return err
+		}
+		ref, err = objectref.Parse(f.ObjectType, f.ObjectID)
+		if err != nil {
+			return authorization.ErrNotFound
+		}
+		if err := request.Service.FileAccess(ctx, request.Actor, ref, "", f.UploadedBy); err != nil {
+			return err
+		}
+		if len(original) > 0 && original[0] != ref {
+			return authorization.ErrConflict
+		}
 	}
 	var operation []authorization.FileOperation
 	var intent string
@@ -92,9 +94,14 @@ func (s *FileService) mutateFileCommand(ctx context.Context, request authorizati
 		}
 		digest := sha256.Sum256(encoded)
 		intent = hex.EncodeToString(digest[:])
+		operation[0].Intent = intent
+		operation[0].TargetID = id
 	}
 	return request.Service.FileAction(ctx, request.Actor, ref, action, f.UploadedBy, func(tx pgx.Tx) (int64, any, error) {
 		if command != nil {
+			if action == "file.remove" && name != "" {
+				return 0, nil, authorization.ErrFileOperation
+			}
 			var published bool
 			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM file_publications WHERE user_id=$1 AND operation_id=$2)`, request.Actor.UserID, command.OperationID).Scan(&published); err != nil {
 				return 0, nil, err
@@ -130,7 +137,7 @@ func (s *FileService) mutateFileCommand(ctx context.Context, request authorizati
 		if err := json.Unmarshal(encoded, current); err != nil {
 			return 0, nil, err
 		}
-		if current.ObjectType != ref.ObjectType() || current.ObjectID != ref.ID || current.UploadedBy != f.UploadedBy {
+		if current.ObjectType != ref.ObjectType() || current.ObjectID != ref.ID || command == nil && current.UploadedBy != f.UploadedBy {
 			return 0, nil, authorization.ErrConflict
 		}
 		if action == "file.remove" && current.RemovedAt != nil {
@@ -141,10 +148,10 @@ func (s *FileService) mutateFileCommand(ctx context.Context, request authorizati
 		}
 		if action == "file.rename" {
 			if name == "" || len(name) > 255 || strings.ContainsAny(name, "/\\") || strings.ContainsFunc(name, unicode.IsControl) {
-				return 0, nil, fmt.Errorf("invalid file name")
+				return 0, nil, invalidFile("invalid file name")
 			}
 			if filepath.Ext(name) != filepath.Ext(current.OriginalName) {
-				return 0, nil, fmt.Errorf("file extension must be preserved")
+				return 0, nil, invalidFile("file extension must be preserved")
 			}
 			if name == current.OriginalName {
 				return finish(0, nil)

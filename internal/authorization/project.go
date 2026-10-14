@@ -110,9 +110,17 @@ func (s *Service) ProjectLifecycle(ctx context.Context, a Actor, id int64, resto
 		if restore {
 			value = "NULL"
 		}
+		before, err := lifecycleSnapshot(ctx, tx, p, "project", id)
+		if err != nil {
+			return err
+		}
 		if _, err := tx.Exec(ctx, `UPDATE projects SET deleted_at=`+value+`,updated_at=clock_timestamp() WHERE id=$1`, id); err != nil {
 			return err
 		}
-		return audit(ctx, tx, a, p, permission, All, "project", id, map[string]any{"category": category})
+		verb := "archive"
+		if restore {
+			verb = "restore"
+		}
+		return auditLifecycle(ctx, tx, a, p, "project", id, verb, before, map[string]any{"category": category})
 	})
 }

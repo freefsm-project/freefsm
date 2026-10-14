@@ -42,7 +42,13 @@ templ TimeEntryShow(p TimeEntryShowPageData) {
 					<tr><th>Notes</th><td class="work-item-detail-prewrap">{ p.Notes }</td></tr>
 				}
 				if p.GPSLat != "" || p.GPSLon != "" {
-					<tr><th>GPS</th><td>{ p.GPSLat }, { p.GPSLon }</td></tr>
+					<tr><th>Recorded legacy GPS</th><td>{ p.GPSLat }, { p.GPSLon } (capture time not recorded)</td></tr>
+				}
+				if p.GPSIn != "" {
+					<tr><th>Clock-in GPS</th><td>{ p.GPSIn }</td></tr>
+				}
+				if p.GPSOut != "" {
+					<tr><th>Clock-out GPS</th><td>{ p.GPSOut }</td></tr>
 				}
 			</tbody>
 		</table>

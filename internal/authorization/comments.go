@@ -228,7 +228,7 @@ func commentAudit(ctx context.Context, tx pgx.Tx, a Actor, p Principal, permissi
 	if permission == "comment.remove" {
 		action = "comment_deleted"
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,$3,$4,$5,jsonb_build_object('comment_id',$6::bigint))`, p.CompanyID, a.UserID, action, string(ref.Type), ref.ID, id)
+	_, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,$3,$4,$5,jsonb_build_object('comment_id',$6::bigint,'actor_name',(SELECT name FROM users WHERE id=$2 AND company_id=$1)))`, p.CompanyID, a.UserID, action, string(ref.Type), ref.ID, id)
 	return err
 }
 

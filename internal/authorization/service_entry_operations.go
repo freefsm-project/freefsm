@@ -26,12 +26,6 @@ type ServiceEntryReceipt struct {
 	AcceptedAt  time.Time `json:"accepted_at"`
 }
 
-func serviceEntryClient(a Actor) string {
-	if a.Channel == "api" {
-		return "api:" + a.SessionHash
-	}
-	return "web"
-}
 func serviceEntryOutcome(code string) error {
 	switch code {
 	case "not_found":
@@ -45,8 +39,7 @@ func serviceEntryOutcome(code string) error {
 }
 
 // SubmitServiceEntry commits a domain effect, audit and immutable domain receipt
-// together. Shared cross-family admission must compose this transaction; this
-// domain receipt does not substitute for the common operation registry.
+// together, admitted by the shared cross-family operation registry.
 func (s *Service) SubmitServiceEntry(ctx context.Context, a Actor, in ServiceEntryCommand) (ServiceEntryReceipt, error) {
 	result := ServiceEntryReceipt{OperationID: in.OperationID}
 	op, err := uuid.Parse(in.OperationID)
@@ -61,8 +54,15 @@ func (s *Service) SubmitServiceEntry(ctx context.Context, a Actor, in ServiceEnt
 	}
 	var outcome error
 	err = s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
+		kind := "service_entry.create"
+		if in.EntryID != 0 {
+			kind = "service_entry.revise"
+		}
+		if err := AdmitOperation(ctx, tx, a, in.OperationID, kind, in); err != nil {
+			return err
+		}
 		var same bool
-		err := tx.QueryRow(ctx, `SELECT user_id=$2 AND client_key=$3 AND intent=$4::jsonb,coalesce(entry_id,0),code,accepted_at FROM service_entry_operation_receipts WHERE operation_id=$1`, in.OperationID, a.UserID, serviceEntryClient(a), raw).Scan(&same, &result.EntryID, &result.Code, &result.AcceptedAt)
+		err := tx.QueryRow(ctx, `SELECT user_id=$2 AND client_key=$3 AND intent=$4::jsonb,coalesce(entry_id,0),code,accepted_at FROM service_entry_operation_receipts WHERE operation_id=$1`, in.OperationID, a.UserID, operationClientKey(a), raw).Scan(&same, &result.EntryID, &result.Code, &result.AcceptedAt)
 		if err == nil {
 			if !same {
 				return ErrConflict
@@ -100,7 +100,7 @@ func (s *Service) SubmitServiceEntry(ctx context.Context, a Actor, in ServiceEnt
 				return outcome
 			}
 		}
-		return tx.QueryRow(ctx, `INSERT INTO service_entry_operation_receipts(operation_id,user_id,client_key,intent,entry_id,code) VALUES($1,$2,$3,$4,nullif($5,0),$6) RETURNING accepted_at`, in.OperationID, a.UserID, serviceEntryClient(a), raw, result.EntryID, result.Code).Scan(&result.AcceptedAt)
+		return tx.QueryRow(ctx, `INSERT INTO service_entry_operation_receipts(operation_id,user_id,client_key,intent,entry_id,code) VALUES($1,$2,$3,$4,nullif($5,0),$6) RETURNING accepted_at`, in.OperationID, a.UserID, operationClientKey(a), raw, result.EntryID, result.Code).Scan(&result.AcceptedAt)
 	})
 	if err != nil {
 		return ServiceEntryReceipt{}, err
@@ -114,7 +114,7 @@ func (s *Service) ServiceEntryReceipt(ctx context.Context, a Actor, operation st
 		return result, ErrNotFound
 	}
 	err := s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
-		err := tx.QueryRow(ctx, `SELECT coalesce(entry_id,0),code,accepted_at FROM service_entry_operation_receipts WHERE operation_id=$1 AND user_id=$2 AND client_key=$3`, operation, a.UserID, serviceEntryClient(a)).Scan(&result.EntryID, &result.Code, &result.AcceptedAt)
+		err := tx.QueryRow(ctx, `SELECT coalesce(entry_id,0),code,accepted_at FROM service_entry_operation_receipts WHERE operation_id=$1 AND user_id=$2 AND client_key=$3`, operation, a.UserID, operationClientKey(a)).Scan(&result.EntryID, &result.Code, &result.AcceptedAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrNotFound
 		}

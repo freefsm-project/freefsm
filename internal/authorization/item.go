@@ -1,7 +1,9 @@
 package authorization
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"math"
 	"strconv"
@@ -70,8 +72,17 @@ func (s *Service) SaveItem(ctx context.Context, a Actor, id int64, in ItemInput)
 				return ErrNotFound
 			}
 		}
+		var before, after json.RawMessage
+		if !creating {
+			if err := tx.QueryRow(ctx, `SELECT to_jsonb(i) FROM items i WHERE id=$1`, id).Scan(&before); err != nil {
+				return err
+			}
+		}
 		_, err := tx.Exec(ctx, `UPDATE items SET name=coalesce($2,name),type=coalesce($3,type),description=coalesce($4,description),sku=coalesce($5,sku),unit_price=coalesce($6,unit_price),unit_cost=coalesce($7,unit_cost),taxable=coalesce($8,taxable),tax_rate=coalesce($9,tax_rate),track_inventory=coalesce($10,track_inventory),is_active=coalesce($11,is_active),updated_at=clock_timestamp() WHERE id=$1`, id, in.Name, in.Type, in.Description, in.Sku, in.UnitPrice, in.UnitCost, in.Taxable, in.TaxRate, in.TrackInventory, in.IsActive)
 		if err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `SELECT to_jsonb(i) FROM items i WHERE id=$1`, id).Scan(&after); err != nil {
 			return err
 		}
 		for _, facet := range []struct {
@@ -79,7 +90,15 @@ func (s *Service) SaveItem(ctx context.Context, a Actor, id int64, in ItemInput)
 			permission string
 		}{{base, "item." + action}, {price, "pricebook." + action}, {in.UnitCost != nil, "cost.edit"}} {
 			if facet.changed {
-				if err := audit(ctx, tx, a, p, facet.permission, All, "item", id, map[string]any{"facet": facet.permission}); err != nil {
+				b, err := itemHistoryFacet(before, facet.permission)
+				if err != nil {
+					return err
+				}
+				next, err := itemHistoryFacet(after, facet.permission)
+				if err != nil {
+					return err
+				}
+				if err := audit(ctx, tx, a, p, facet.permission, All, "item", id, map[string]any{"facet": facet.permission, "company_id": p.CompanyID, "before": b, "after": next, "no_change": bytes.Equal(b, next)}); err != nil {
 					return err
 				}
 			}
@@ -87,6 +106,28 @@ func (s *Service) SaveItem(ctx context.Context, a Actor, id int64, in ItemInput)
 		return nil
 	})
 	return id, err
+}
+
+func itemHistoryFacet(raw json.RawMessage, permission string) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var row map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &row); err != nil {
+		return nil, err
+	}
+	fields := []string{"name", "type", "description", "track_inventory", "is_active"}
+	if strings.HasPrefix(permission, "pricebook.") {
+		fields = []string{"sku", "unit_price", "taxable", "tax_rate"}
+	}
+	if permission == "cost.edit" {
+		fields = []string{"unit_cost"}
+	}
+	result := map[string]json.RawMessage{}
+	for _, field := range fields {
+		result[field] = row[field]
+	}
+	return json.Marshal(result)
 }
 
 func (s *Service) SetItemArchived(ctx context.Context, a Actor, id int64, archived bool) error {
@@ -98,6 +139,18 @@ func (s *Service) SetItemArchived(ctx context.Context, a Actor, id int64, archiv
 		if a.Channel == "api" || !p.Allows(permission, All) {
 			return ErrForbidden
 		}
+		var before, after json.RawMessage
+		if err := tx.QueryRow(ctx, `SELECT to_jsonb(i) FROM items i WHERE id=$1 AND (company_id=$2 OR company_id IS NULL)`, id, p.CompanyID).Scan(&before); err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			}
+			return err
+		}
+		var prior map[string]json.RawMessage
+		if err := json.Unmarshal(before, &prior); err != nil {
+			return err
+		}
+		wasArchived := len(prior["deleted_at"]) > 0 && string(prior["deleted_at"]) != "null"
 		tag, err := tx.Exec(ctx, `UPDATE items SET deleted_at=CASE WHEN $3 THEN clock_timestamp() ELSE NULL END,updated_at=clock_timestamp() WHERE id=$1 AND (company_id=$2 OR company_id IS NULL)`, id, p.CompanyID, archived)
 		if err != nil {
 			return err
@@ -105,6 +158,9 @@ func (s *Service) SetItemArchived(ctx context.Context, a Actor, id int64, archiv
 		if tag.RowsAffected() != 1 {
 			return ErrNotFound
 		}
-		return audit(ctx, tx, a, p, permission, All, "item", id, nil)
+		if err := tx.QueryRow(ctx, `SELECT to_jsonb(i) FROM items i WHERE id=$1`, id).Scan(&after); err != nil {
+			return err
+		}
+		return audit(ctx, tx, a, p, permission, All, "item", id, map[string]any{"before": before, "after": after, "company_id": p.CompanyID, "no_change": wasArchived == archived})
 	})
 }

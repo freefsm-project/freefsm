@@ -119,11 +119,11 @@ user/client's nonsensitive immutable receipt, including after parent scope loss.
 It does not return intent or field values. Current data still requires current
 Job View; mutations independently require Job Custom Field Values Edit.
 
-The earlier immediate-value PATCH shape remains accepted for compatibility; it
-does not provide the reviewed/offline reconciliation guarantees. New offline
-clients must send both operation identity and per-changed-field revisions.
-This is a field-specific reference boundary, not the complete future batch-sync,
-lease, cache-purge or public OpenAPI implementation.
+Every Job-value PATCH now requires an operation identity and the original
+per-changed-field revisions (#41). The earlier unguarded shape is rejected;
+planning Edit is never a substitute. This contract is published in the local
+OpenAPI and exercised by `reference/job-fields.cjs` against real HTTP.
+Batch synchronization and secure offline storage remain with their owning slices.
 
 ## Migrations and verification
 

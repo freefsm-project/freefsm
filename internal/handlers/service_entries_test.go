@@ -106,6 +106,7 @@ func TestServiceEntryCreateOnceReceiptHTTP(t *testing.T) {
 	body := requestBody(t, router, cookie, "GET", "/service-entry-operations/42000000-0000-4000-8000-000000000001", 200)
 	assertContains(t, body, `"code":"accepted"`)
 	assertNotContains(t, body, "Never duplicate")
+	commentPost(t, router, cookie, fmt.Sprintf("/jobs/%d/comments", j.ID), url.Values{"operation_id": {form.Get("operation_id")}, "content": {"Cross-family UUID reuse"}}, 409)
 }
 
 func TestServiceEntryPersistedBrowser(t *testing.T) {
