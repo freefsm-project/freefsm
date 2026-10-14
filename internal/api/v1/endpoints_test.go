@@ -68,7 +68,6 @@ func TestUnassignedTechnicianCannotAccessOrMutateJob(t *testing.T) {
 	for _, request := range []struct{ method, path string }{
 		{http.MethodGet, "/jobs/4"},
 		{http.MethodPost, "/jobs/4/clock-in"},
-		{http.MethodPatch, "/jobs/4/subtasks/0"},
 	} {
 		res := performAuthorized(api, request.method, request.path, []byte(`{}`))
 		assertAPIError(t, res, http.StatusForbidden, "forbidden")
@@ -174,7 +173,7 @@ func TestMutationErrorsKeepStructuredAPIMappings(t *testing.T) {
 	clockIn := performAuthorized(api, http.MethodPost, "/jobs/4/clock-in", []byte(`{}`))
 	assertAPIError(t, clockIn, http.StatusConflict, "already_clocked_in")
 	subtask := performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{"completed":true}`))
-	assertAPIError(t, subtask, http.StatusNotFound, "subtask_not_found")
+	assertAPIError(t, subtask, http.StatusServiceUnavailable, "unavailable")
 }
 
 func TestTransactionMutationErrorsKeepStructuredAPIMappings(t *testing.T) {
@@ -200,12 +199,12 @@ func TestTransactionMutationErrorsKeepStructuredAPIMappings(t *testing.T) {
 			api := New(deps)
 
 			assertAPIError(t, performAuthorized(api, http.MethodPost, "/jobs/4/clock-in", []byte(`{}`)), test.wantStatus, test.wantCode)
-			assertAPIError(t, performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{"completed":true}`)), test.wantStatus, test.wantCode)
+			assertAPIError(t, performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{"completed":true}`)), http.StatusServiceUnavailable, "unavailable")
 		})
 	}
 }
 
-func TestClosedJobStatusRequiresDurableBoundaryWhileOtherActionsRetainLegacyRules(t *testing.T) {
+func TestClosedJobStatusRequiresDurableBoundaryAndSubtasksRequireCanonicalAuthority(t *testing.T) {
 	for _, role := range []string{"tech", "technician"} {
 		t.Run(role, func(t *testing.T) {
 			companyID, statusID := int64(12), int64(3)
@@ -228,7 +227,7 @@ func TestClosedJobStatusRequiresDurableBoundaryWhileOtherActionsRetainLegacyRule
 			clockIn := performAuthorized(api, http.MethodPost, "/jobs/4/clock-in", []byte(`{}`))
 			assertAPIError(t, clockIn, http.StatusConflict, "job_closed")
 			subtask := performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{"completed":true}`))
-			assertAPIError(t, subtask, http.StatusConflict, "job_closed")
+			assertAPIError(t, subtask, http.StatusServiceUnavailable, "unavailable")
 			if flow.calls != 0 || mutations.clockInCalls != 0 || mutations.subtaskCalls != 0 {
 				t.Fatalf("transition calls = %d, clock-in calls = %d, subtask calls = %d", flow.calls, mutations.clockInCalls, mutations.subtaskCalls)
 			}

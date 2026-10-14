@@ -126,7 +126,7 @@ func TestGuardedStructuredJobConflictRetainsSubtasksWithoutLegacyVisitEditingHTT
 	itemPost(t, router, cookie, path, values, 303)
 	values.Set("save_action_id", newOperationKey())
 	values.Set("save_revision", revision[1])
-	values.Set("subtasks", `[{"title":"Proposed task","completed":true,"sort_order":2}]`)
+	values.Set("subtasks", `[{"title":"Proposed task","completed":false,"sort_order":2}]`)
 	values.Set("visits", `[{"date":"2026-11-01","start_time":"09:15","end_time":"11:45","notes":"Proposed visit notes"}]`)
 	body := itemPost(t, router, cookie, path, values, 409)
 	doc, err := html.Parse(strings.NewReader(body))

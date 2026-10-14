@@ -347,6 +347,10 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/schedule/dispatch", scheduleHandler.ProposeDispatch)
 		r.Post("/schedule/move", scheduleHandler.ProposeDispatch)
 		r.Post("/schedule/calendar/move", scheduleHandler.ProposeDispatch)
+		r.Get("/jobs/{id}/subtasks", jobHandler.Subtasks)
+		r.Post("/jobs/{id}/subtasks", jobHandler.Subtasks)
+		r.Post("/jobs/{id}/subtasks/review", jobHandler.ReviewSubtasks)
+		r.Get("/subtask-operations/{operation}", jobHandler.SubtaskReceipt)
 		r.With(detailsAccess("asset")).Get("/assets/new", assetHandler.Create)
 		r.With(detailsAccess("asset")).Post("/assets", assetHandler.Create)
 		r.With(detailsAccess("asset")).Post("/assets/inline", assetHandler.CreateInline)
@@ -366,7 +370,6 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/create-next-occurrence", jobHandler.CreateNextOccurrence)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/cancel-next-occurrence", jobHandler.CancelNextOccurrence)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/delete", jobHandler.Delete)
-			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/subtasks/{idx}/toggle", jobHandler.ToggleSubtask)
 		})
 
 		// Assigned technicians may create documents from their Jobs and manage them.

@@ -38,9 +38,9 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 	maxUpload := cfg.MaxUploadSize
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Pairing has a browser-bound, once-only protocol of its own. Never
-			// journal its secrets as a generic domain save or offer save replay.
-			if r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") || jobExecutionPath(r.URL.Path) {
+			// Pairing, Job execution and checklist commands own their committing
+			// protocols; do not journal secrets or impose whole-Job revisions.
+			if r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") || jobExecutionPath(r.URL.Path) || subtaskProtocolPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}

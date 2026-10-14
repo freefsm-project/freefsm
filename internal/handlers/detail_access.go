@@ -65,8 +65,9 @@ func withDetailPresentation(r *http.Request, typ string, id int64, policy *servi
 		access["create-estimate"] = policy != nil && policy.CanCreateDocumentForJob(ctx, id, objectref.TypeEstimate)
 		access["clock-in"] = p.Allows("time.clock_in", authorization.Own)
 		access["clock-out"] = p.Allows("time.clock_out", authorization.Own)
-		access["subtask-complete"] = action("job.subtask.complete") && legacyUpdate
-		access["subtask-reopen"] = action("job.subtask.reopen") && legacyUpdate
+		access["subtask-complete"] = action("job.subtask.complete")
+		access["subtask-reopen"] = action("job.subtask.reopen")
+		access["subtask-manage"] = action("job.subtask.manage")
 	}
 	if typ == "estimate" || typ == "invoice" {
 		access["pdf"] = req.Service.PDFPermission(ctx, req.Actor, typ, id, "pdf.generate") == nil || req.Service.PDFPermission(ctx, req.Actor, typ, id, "pdf.download") == nil || req.Service.PDFPermission(ctx, req.Actor, typ, id, "delivery.request") == nil

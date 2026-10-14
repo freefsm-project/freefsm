@@ -1,6 +1,9 @@
 package services
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"github.com/freefsm-project/freefsm/internal/authorization"
+)
 
 type JobVisit struct {
 	Date      string `json:"date"`
@@ -52,10 +55,19 @@ func SerializeAssignments(assignments []JobAssignment) string {
 	return string(b)
 }
 
-type JobSubtask struct {
-	Title     string `json:"title"`
-	Completed bool   `json:"completed"`
-	SortOrder int    `json:"sort_order"`
+type JobSubtask = authorization.Subtask
+
+// DecodeSubtasks is the write boundary: malformed input must not become an empty
+// checklist (which would silently remove every existing entry).
+func DecodeSubtasks(s string) ([]JobSubtask, error) {
+	if s == "" {
+		return nil, nil
+	}
+	var tasks []JobSubtask
+	if err := json.Unmarshal([]byte(s), &tasks); err != nil || tasks == nil {
+		return nil, authorization.ErrSubtaskInvalid
+	}
+	return tasks, nil
 }
 
 func ParseSubtasks(s string) []JobSubtask {

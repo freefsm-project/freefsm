@@ -20,7 +20,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
-func TestAPIMutationConcurrentSubtasksPreserveBothUpdatesIntegration(t *testing.T) {
+func TestAPIMutationPositionalSubtasksFailClosedIntegration(t *testing.T) {
 	client, pool := openAPIMutationTestDatabase(t)
 	ctx := context.Background()
 	actor, jobID := createAPIMutationFixtures(t, client, 101, `[
@@ -45,22 +45,22 @@ func TestAPIMutationConcurrentSubtasksPreserveBothUpdatesIntegration(t *testing.
 	wg.Wait()
 	close(errs)
 	for err := range errs {
-		if err != nil {
-			t.Fatalf("SetSubtaskCompletion: %v", err)
+		if !errors.Is(err, ErrMutationForbidden) {
+			t.Fatalf("positional completion must reject: %v", err)
 		}
 	}
 
 	job := client.Job.GetX(ctx, jobID)
 	subtasks := ParseSubtasks(job.Subtasks)
-	if len(subtasks) != 2 || !subtasks[0].Completed || !subtasks[1].Completed {
-		t.Fatalf("subtasks = %#v, want both completed", subtasks)
+	if len(subtasks) != 2 || subtasks[0].Completed || subtasks[1].Completed {
+		t.Fatalf("positional mutation changed checklist = %#v", subtasks)
 	}
 	var activities int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM activity_logs WHERE object_type='job' AND object_id=$1 AND action='subtask_completed'`, jobID).Scan(&activities); err != nil {
 		t.Fatal(err)
 	}
-	if activities != 2 {
-		t.Fatalf("activity count = %d, want 2", activities)
+	if activities != 0 {
+		t.Fatalf("activity count = %d, want 0", activities)
 	}
 }
 
@@ -192,8 +192,8 @@ func TestAPIMutationRejectsClosedJobIntegration(t *testing.T) {
 	client.Job.UpdateOneID(jobID).SetStatusID(status.ID).SaveX(ctx)
 	svc := NewAPIMutationService(pool)
 
-	if _, err := svc.SetSubtaskCompletion(ctx, actor, jobID, 0, true); !errors.Is(err, ErrMutationJobClosed) {
-		t.Fatalf("SetSubtaskCompletion error = %v, want ErrMutationJobClosed", err)
+	if _, err := svc.SetSubtaskCompletion(ctx, actor, jobID, 0, true); !errors.Is(err, ErrMutationForbidden) {
+		t.Fatalf("positional SetSubtaskCompletion error = %v, want ErrMutationForbidden", err)
 	}
 	if _, err := svc.ClockIn(ctx, actor, jobID, APIClockInParams{}); !errors.Is(err, ErrMutationJobClosed) {
 		t.Fatalf("ClockIn error = %v, want ErrMutationJobClosed", err)

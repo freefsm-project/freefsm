@@ -118,13 +118,12 @@ templ JobForm(p JobFormPageData) {
 			<fieldset x-data="subtasksEditor()" data-existing={ p.ExistingSubtasksJSON }>
 				<legend>Subtasks</legend>
 				<table>
-					<thead><tr><th>Title</th><th>Completed</th><th>Order</th><th></th></tr></thead>
+					<thead><tr><th>Title</th><th>Order</th><th></th></tr></thead>
 					<tbody>
-						<template x-for="(st, idx) in items" :key="idx">
+						<template x-for="(st, idx) in items" :key="st.id || st.draftKey">
 							<tr>
 								<td><input type="text" x-model="st.title" placeholder="e.g. Pre-site survey" aria-label="Subtask title"></td>
-								<td><input type="checkbox" x-model="st.completed" aria-label="Subtask completed"></td>
-								<td><input type="number" x-model="st.sort_order" min="0" class="input-width-70" aria-label="Subtask display order"></td>
+								<td><input type="number" x-model.number="st.sort_order" min="0" class="input-width-70" aria-label="Subtask display order"></td>
 								<td><button @click.prevent="remove(idx)" class="outline contrast small" aria-label="Remove subtask">X</button></td>
 							</tr>
 						</template>
@@ -483,10 +482,10 @@ templ JobForm(p JobFormPageData) {
 			function registerJobEditors() {
 				Alpine.data('subtasksEditor', () => ({
 					items: [],
-					init() { try { this.items = JSON.parse(this.$el.dataset.existing || '[]'); } catch(e) {} },
-					add() { this.items.push({title:'',completed:false,sort_order:this.items.length+1}); },
+					init() { try { this.items = JSON.parse(this.$el.dataset.existing || '[]').map(st => ({...st,draftKey:crypto.randomUUID()})); } catch(e) {} },
+					add() { this.items.push({draftKey:crypto.randomUUID(),title:'',completed:false,sort_order:this.items.length+1}); },
 					remove(idx) { this.items.splice(idx, 1); },
-					get json() { return JSON.stringify(this.items); },
+					get json() { return JSON.stringify(this.items.map(({draftKey,...st})=>st)); },
 				}));
 			}
 			if (window.Alpine) { registerJobEditors(); } else { document.addEventListener('alpine:init', registerJobEditors); }

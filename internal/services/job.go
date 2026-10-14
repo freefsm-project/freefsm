@@ -397,6 +397,10 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 		return nil, err
 	}
 	txClient := tx.Client()
+	initialSubtasks := params.Subtasks
+	if _, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+		params.Subtasks = nil
+	}
 	b := txClient.Job.Create().
 		SetCompanyID(companyID).
 		SetCustomerID(params.CustomerID).
@@ -446,6 +450,15 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 	j, err := b.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create job: %w", err)
+	}
+	if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok && len(initialSubtasks) > 0 {
+		r, _ := authorization.FromContext(ctx)
+		if err := r.Service.SaveChecklistPlanning(ctx, tx, r.Actor, j.ID, initialSubtasks); err != nil {
+			return nil, err
+		}
+		if err := tx.QueryRow(ctx, `SELECT subtasks FROM jobs WHERE id=$1`, j.ID).Scan(&j.Subtasks); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.replaceAssignments(ctx, txClient, j.ID, assignments); err != nil {
 		return nil, err
@@ -531,6 +544,11 @@ func shiftedTime(t *time.Time, delta time.Duration) time.Time {
 func resetSubtasks(subtasks []JobSubtask) []JobSubtask {
 	for i := range subtasks {
 		subtasks[i].Completed = false
+		subtasks[i].ID = ""
+		subtasks[i].CompletionRevision = ""
+		subtasks[i].CompletionActor = nil
+		subtasks[i].CompletionAt = nil
+		subtasks[i].RemovedAt = nil
 	}
 	return subtasks
 }
@@ -576,12 +594,6 @@ func (s *JobService) SaveDetails(ctx context.Context, companyID, id int64, param
 		v, err := NewJobService(c).update(ctx, companyID, id, params)
 		return v, id, err
 	})
-}
-
-// UpdateSubtasks is the existing independent subtask action. It intentionally
-// does not apply details requiredness or creation defaults.
-func (s *JobService) UpdateSubtasks(ctx context.Context, companyID, id int64, subtasks []JobSubtask) (*ent.Job, error) {
-	return s.update(ctx, companyID, id, JobUpdateParams{Subtasks: &subtasks})
 }
 
 func (s *JobService) update(ctx context.Context, companyID, id int64, params JobUpdateParams) (*ent.Job, error) {
@@ -786,7 +798,16 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 		u.SetAssignments(SerializeAssignments(s.assignmentsForStorage(*params.Assignments, assignments)))
 	}
 	if params.Subtasks != nil {
-		u.SetSubtasks(SerializeSubtasks(*params.Subtasks))
+		if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+			if !reflect.DeepEqual(*params.Subtasks, ParseSubtasks(current.Subtasks)) {
+				r, _ := authorization.FromContext(ctx)
+				if err := r.Service.SaveChecklistPlanning(ctx, tx, r.Actor, id, *params.Subtasks); err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			return nil, authorization.ErrForbidden
+		}
 	}
 
 	j, err := u.Save(ctx)
