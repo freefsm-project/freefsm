@@ -70,10 +70,17 @@ func TestFilePublicationReplayBelongsToOriginatingClientHTTP(t *testing.T) {
 	publication := uuid.NewString()
 	stage := func(token, filename, content string) string {
 		t.Helper()
+		var before, after int
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM activity_logs WHERE action='file_uploaded'`).Scan(&before); err != nil {
+			t.Fatal(err)
+		}
 		id := uuid.NewString()
 		digest := sha256.Sum256([]byte(content))
 		request(token, "POST", "/file-transfers", map[string]any{"id": id, "publication_id": publication, "object_type": "job", "object_id": j.ID, "name": filename, "size": len(content), "sha256": hex.EncodeToString(digest[:])}, 201)
 		request(token, "PUT", "/file-transfers/"+id+"/chunks?offset=0", content, 200)
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM activity_logs WHERE action='file_uploaded'`).Scan(&after); err != nil || before != after {
+			t.Fatal("transfer staging created collaboration history", err)
+		}
 		return id
 	}
 	original := stage(a, name, data)
@@ -94,6 +101,10 @@ func TestFilePublicationReplayBelongsToOriginatingClientHTTP(t *testing.T) {
 		if replayed.Body.String() != accepted.Body.String() {
 			t.Fatalf("same-client replay changed effect: %s", replayed.Body)
 		}
+	}
+	var historyCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM activity_logs WHERE action='file_uploaded' AND object_type='job' AND object_id=$1`, j.ID).Scan(&historyCount); err != nil || historyCount != 1 {
+		t.Fatal("publication/replay history must occur once", historyCount, err)
 	}
 	request(b, "GET", "/file-transfers/"+original, "", 404)
 	other := stage(b, name, data)

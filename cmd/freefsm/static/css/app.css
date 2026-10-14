@@ -1401,6 +1401,12 @@ html[data-theme="dark"] .theme-icon-moon {
   font-style: italic;
 }
 
+.activity-facts dd {
+  margin-inline-start: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .activity-preview-compact {
   margin-top: 0.1rem;
   font-size: 0.8rem;

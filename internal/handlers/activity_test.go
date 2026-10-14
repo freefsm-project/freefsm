@@ -329,7 +329,8 @@ func TestDedicatedConversionScopeKeepsOriginalFilterFingerprint(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	scope, ok := parsed.scope.(services.ConversionActivityScope)
+	filtered := parsed.scope.(services.FilteredActivityScope)
+	scope, ok := filtered.Scope.(services.ConversionActivityScope)
 	if !ok || scope.EstimateID != 10 || scope.ViewerID != 4 || scope.ViewerRole != "dispatcher" {
 		t.Fatalf("conversion scope = %#v", parsed.scope)
 	}

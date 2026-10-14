@@ -158,6 +158,7 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/items/{id}", h.itemReferences)
 		r.Get("/items/{id}/selection", h.itemReferences)
 		for path, typ := range map[string]objectref.Type{"/jobs": objectref.TypeJob, "/estimates": objectref.TypeEstimate, "/invoices": objectref.TypeInvoice} {
+			r.Get(path+"/{id}/activity", h.activity(string(typ)))
 			r.Get(path+"/{id}/comments", h.comments(typ, false))
 			r.Post(path+"/{id}/comments", h.comments(typ, false))
 			r.Post(path+"/{id}/comments/{cid}/remove", h.comments(typ, true))

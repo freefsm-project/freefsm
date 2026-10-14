@@ -187,12 +187,16 @@ func (s *Service) detailsInTransaction(ctx context.Context, tx pgx.Tx, a Actor, 
 		return err
 	}
 	var parentBefore, parentAfter json.RawMessage
+	table, ok := customfields.ParentTable(typ)
+	if !ok {
+		return ErrNotFound
+	}
 	snapshot := `to_jsonb(a)`
 	if typ == "job" {
 		snapshot += ` || jsonb_build_object('contact_ids',(SELECT coalesce(jsonb_agg(jc.contact_id ORDER BY jc.contact_id),'[]'::jsonb) FROM job_contacts jc WHERE jc.job_id=a.id))`
 	}
-	if (typ == "asset" || typ == "job" || typ == "estimate" || typ == "invoice") && id > 0 {
-		if err := tx.QueryRow(ctx, `SELECT `+snapshot+` FROM `+typ+`s a WHERE id=$1`, id).Scan(&parentBefore); err != nil {
+	if id > 0 {
+		if err := tx.QueryRow(ctx, `SELECT `+snapshot+` FROM `+table+` a WHERE id=$1`, id).Scan(&parentBefore); err != nil {
 			return err
 		}
 	}
@@ -219,66 +223,63 @@ func (s *Service) detailsInTransaction(ctx context.Context, tx pgx.Tx, a Actor, 
 			return err
 		}
 	}
-	if typ == "asset" || typ == "job" || typ == "estimate" || typ == "invoice" {
-		if err := tx.QueryRow(ctx, `SELECT `+snapshot+` FROM `+typ+`s a WHERE id=$1`, result).Scan(&parentAfter); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT `+snapshot+` FROM `+table+` a WHERE id=$1`, result).Scan(&parentAfter); err != nil {
+		return err
+	}
+	if (typ == "estimate" || typ == "invoice") && id > 0 {
+		if err := commercialDetailsCheck(ctx, tx, p, typ, parentBefore, parentAfter); err != nil {
 			return err
 		}
-		if (typ == "estimate" || typ == "invoice") && id > 0 {
-			if err := commercialDetailsCheck(ctx, tx, p, typ, parentBefore, parentAfter); err != nil {
+		parentBefore, parentAfter, err = commercialChanges(parentBefore, parentAfter)
+		if err != nil {
+			return err
+		}
+	}
+	if typ == "job" {
+		var before, after map[string]json.RawMessage
+		if len(parentBefore) > 0 {
+			if err := json.Unmarshal(parentBefore, &before); err != nil {
 				return err
 			}
-			parentBefore, parentAfter, err = commercialChanges(parentBefore, parentAfter)
+		}
+		if err := json.Unmarshal(parentAfter, &after); err != nil {
+			return err
+		}
+		pricingChanged := id > 0 && (!bytes.Equal(before["line_items"], after["line_items"]) || !bytes.Equal(before["billing_type"], after["billing_type"]))
+		if id == 0 && string(after["line_items"]) != "[]" && string(after["line_items"]) != "null" {
+			pricingChanged = true
+		}
+		if pricingChanged {
+			pricingScope, err := parentAccess(ctx, tx, p, "job", result, "pricing.view", true)
 			if err != nil {
 				return err
 			}
-		}
-		if typ == "job" {
-			var before, after map[string]json.RawMessage
-			if len(parentBefore) > 0 {
-				if err := json.Unmarshal(parentBefore, &before); err != nil {
-					return err
-				}
-			}
-			if err := json.Unmarshal(parentAfter, &after); err != nil {
+			if err := audit(ctx, tx, a, p, "pricing.view", pricingScope, "job", result, map[string]any{"used_for": permission, "line_items_before": before["line_items"], "line_items_after": after["line_items"], "billing_type_before": before["billing_type"], "billing_type_after": after["billing_type"]}); err != nil {
 				return err
 			}
-			pricingChanged := id > 0 && (!bytes.Equal(before["line_items"], after["line_items"]) || !bytes.Equal(before["billing_type"], after["billing_type"]))
-			if id == 0 && string(after["line_items"]) != "[]" && string(after["line_items"]) != "null" {
-				pricingChanged = true
+		}
+		changed := false
+		for _, key := range []string{"project_id", "location_id", "customer_contact_id", "asset_id"} {
+			if !bytes.Equal(before[key], after[key]) && string(after[key]) != "null" {
+				changed = true
 			}
-			if pricingChanged {
-				pricingScope, err := parentAccess(ctx, tx, p, "job", result, "pricing.view", true)
-				if err != nil {
-					return err
-				}
-				if err := audit(ctx, tx, a, p, "pricing.view", pricingScope, "job", result, map[string]any{"used_for": permission, "line_items_before": before["line_items"], "line_items_after": after["line_items"], "billing_type_before": before["billing_type"], "billing_type_after": after["billing_type"]}); err != nil {
-					return err
-				}
-			}
-			changed := false
-			for _, key := range []string{"project_id", "location_id", "customer_contact_id", "asset_id"} {
-				if !bytes.Equal(before[key], after[key]) && string(after[key]) != "null" {
-					changed = true
-				}
-				if id > 0 && !bytes.Equal(before[key], after[key]) {
-					changed = true
-				}
-			}
-			if id > 0 && !bytes.Equal(before["customer_id"], after["customer_id"]) {
-				// Automatic clearing is audited as part of planning's Customer
-				// replacement; do not invent use of a relationship grant.
-				changed = false
-				if err := auditJobCommercialReassignment(ctx, tx, a, p, result, before["customer_id"], after["customer_id"]); err != nil {
-					return err
-				}
-			}
-			if changed {
-				if err := audit(ctx, tx, a, p, "job.relations.edit", All, typ, result, map[string]any{"before": parentBefore, "after": parentAfter}); err != nil {
-					return err
-				}
+			if id > 0 && !bytes.Equal(before[key], after[key]) {
+				changed = true
 			}
 		}
-		return audit(ctx, tx, a, p, permission, scope, typ, result, map[string]any{"before": parentBefore, "after": parentAfter, "custom_fields_before": old, "custom_fields_after": fields})
+		if id > 0 && !bytes.Equal(before["customer_id"], after["customer_id"]) {
+			// Automatic clearing is audited as part of planning's Customer
+			// replacement; do not invent use of a relationship grant.
+			changed = false
+			if err := auditJobCommercialReassignment(ctx, tx, a, p, result, before["customer_id"], after["customer_id"]); err != nil {
+				return err
+			}
+		}
+		if changed {
+			if err := audit(ctx, tx, a, p, "job.relations.edit", All, typ, result, map[string]any{"before": parentBefore, "after": parentAfter}); err != nil {
+				return err
+			}
+		}
 	}
-	return audit(ctx, tx, a, p, permission, scope, typ, result, map[string]any{"custom_fields_before": old, "custom_fields_after": fields})
+	return audit(ctx, tx, a, p, permission, scope, typ, result, map[string]any{"before": parentBefore, "after": parentAfter, "custom_fields_before": old, "custom_fields_after": fields})
 }

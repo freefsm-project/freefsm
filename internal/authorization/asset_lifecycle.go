@@ -45,6 +45,10 @@ func (s *Service) AssetLifecycle(ctx context.Context, a Actor, id int64, restore
 		} else {
 			return ErrConflict
 		}
-		return audit(ctx, tx, a, p, action, All, "asset", id, map[string]any{"before": before})
+		verb := "archive"
+		if restore {
+			verb = "restore"
+		}
+		return auditLifecycle(ctx, tx, a, p, "asset", id, verb, before, nil)
 	})
 }

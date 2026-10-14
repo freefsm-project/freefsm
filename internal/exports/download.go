@@ -61,7 +61,7 @@ func (s *Service) PrepareDownload(ctx context.Context, a authorization.Actor, id
 		if !p.Allows(d.Permission(), d.Scope()) {
 			return block()
 		}
-		if err := d.Authorize(p, options); err != nil {
+		if err := authorizeDefinition(ctx, tx, p, d, options); err != nil {
 			if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) {
 				return block()
 			}

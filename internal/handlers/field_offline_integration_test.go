@@ -71,6 +71,13 @@ func TestFieldOfflineTerminalRetirementAndStaleRevisionAPI(t *testing.T) {
 	valid := fmt.Sprintf(`{"operation_id":"30999999-9999-4999-8999-999999999999","revisions":{"1":%q},"values":[{"definition_id":1,"value":"Reviewed value"}]}`, state.Data.Revisions["1"])
 	assertContains(t, call("PATCH", valid, 200), "Reviewed value")
 	assertContains(t, call("PATCH", valid, 200), "Reviewed value")
+	historyRequest := httptest.NewRequest("GET", fmt.Sprintf("/jobs/%d/activity?action=job_fields_changed", job.ID), nil)
+	historyRequest.Header.Set("Authorization", "Bearer "+token)
+	historyResponse := httptest.NewRecorder()
+	api.ServeHTTP(historyResponse, historyRequest)
+	if historyResponse.Code != 200 || strings.Count(historyResponse.Body.String(), "Reviewed value") != 1 {
+		t.Fatalf("replay duplicated or lost operational history: %d %s", historyResponse.Code, historyResponse.Body.String())
+	}
 	path += "?operation_id=30666666-6666-4666-8666-666666666666"
 	assertContains(t, call("GET", "", 200), "invalid_custom_field")
 	assertNotContains(t, call("GET", "", 200), "Pending")

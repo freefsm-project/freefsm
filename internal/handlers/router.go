@@ -501,6 +501,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.Post("/estimates/{id}/restore", estimateHandler.Restore)
 			r.Post("/invoices/{id}/restore", invoiceHandler.Restore)
 			// Admin activity feeds
+			r.Get("/settings/activity/history", activityHandler.ListAll)
 			r.Get("/settings/activity", activityHandler.ListByType(objectref.TypeCompanySettings))
 			r.Get("/settings/custom-fields/activity", activityHandler.ListByType(objectref.TypeCustomField))
 			r.Get("/users/activity", activityHandler.ListByType(objectref.TypeUser))

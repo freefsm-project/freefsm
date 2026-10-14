@@ -20,6 +20,11 @@ func TestBackupActivityHTTPVisibilityIntegration(t *testing.T) {
 	defer client.Close()
 	defer pool.Close()
 	ctx := context.Background()
+	// This legacy Ent fixture explicitly declares the sealed audit capability;
+	// production migration-backed coverage lives in operational_activity_integration_test.go.
+	if _, err := pool.Exec(ctx, `INSERT INTO authorization_permissions(permission,scope) VALUES('audit.view','S'); INSERT INTO authorization_grants(role_id,permission,scope) VALUES(1,'audit.view','S')`); err != nil {
+		t.Fatal(err)
+	}
 	const companyID int64 = 42
 	client.CompanySettings.Create().SetCompanyID(companyID).SetBusinessName("Destination").SaveX(ctx)
 	sessions := services.NewSessionService(pool)
@@ -50,7 +55,7 @@ func TestBackupActivityHTTPVisibilityIntegration(t *testing.T) {
 	for _, surface := range []struct {
 		router http.Handler
 		path   string
-	}{{backupRouter, "/settings/backup/activity"}, {globalRouter, "/activity?type=instance"}} {
+	}{{backupRouter, "/settings/backup/activity"}, {globalRouter, "/settings/activity/history?type=instance"}} {
 		router, path := surface.router, surface.path
 		body := requestBody(t, router, nil, http.MethodGet, path, http.StatusSeeOther)
 		assertNotContains(t, body, "Historical backup administrator")
@@ -71,7 +76,7 @@ func TestBackupActivityHTTPVisibilityIntegration(t *testing.T) {
 	}
 	body := requestBody(t, backupRouter, cookies["admin"], http.MethodGet, "/settings/backup/activity", http.StatusOK)
 	assertContains(t, body, "Recent Activity")
-	assertContains(t, body, "/activity?type=instance")
+	assertContains(t, body, "/settings/activity/history?type=instance")
 	if count := strings.Count(body, "Historical backup administrator"); count != 10 {
 		t.Fatalf("recent panel returned %d entries, want 10", count)
 	}
