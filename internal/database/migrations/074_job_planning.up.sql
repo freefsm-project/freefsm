@@ -11,7 +11,8 @@ DO $$ BEGIN
  OR (j.project_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM projects p WHERE p.id=j.project_id AND p.customer_id=j.customer_id AND p.company_id=j.company_id))
  OR (j.location_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM locations l WHERE l.id=j.location_id AND l.object_type='customer' AND l.object_id=j.customer_id AND l.company_id=j.company_id))
  OR (j.customer_contact_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM customer_contacts c WHERE c.id=j.customer_contact_id AND c.customer_id=j.customer_id AND c.company_id=j.company_id))
- OR (j.asset_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM assets a WHERE a.id=j.asset_id AND a.customer_id=j.customer_id AND a.company_id=j.company_id))) THEN
+ OR (j.asset_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM assets a WHERE a.id=j.asset_id AND a.customer_id=j.customer_id AND a.company_id=j.company_id)
+ AND coalesce(nullif(current_setting('freefsm.asset_association_review',true),'')::jsonb->>'administrator_reviewed','false')<>'true')) THEN
  RAISE EXCEPTION 'Job cutover requires Administrator review: missing title/Customer or ambiguous cross-Customer links; original records have not been changed';
  END IF;
 END $$;

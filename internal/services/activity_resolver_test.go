@@ -154,7 +154,7 @@ func TestActivityResolverOfficePolicyMatchesPolicyServiceTypes(t *testing.T) {
 				target := activityTargetRecord{ref: objectref.New(typ, 1)}
 				got := activityTargetReadable(ActivityViewer{ID: 1, Role: role, ProtectedAdministrator: role == "admin"}, target, activityTechnicianScope{})
 				want := policyRoleAllows(role, typ, PolicyRead)
-				if typ == objectref.TypeCustomer {
+				if typ == objectref.TypeCustomer || typ == objectref.TypeAsset {
 					want = false
 				}
 				if got != want {
@@ -188,8 +188,8 @@ func TestActivityResolverTechnicianPolicySemantics(t *testing.T) {
 		{name: "archived direct customer", target: activityTargetRecord{ref: objectref.New(objectref.TypeCustomer, 21), assignedTo: &viewer.ID, archived: true}},
 		{name: "linked project", target: activityTargetRecord{ref: objectref.New(objectref.TypeProject, 30)}, want: true},
 		{name: "project through direct customer", target: activityTargetRecord{ref: objectref.New(objectref.TypeProject, 31), customerID: 21}, want: true},
-		{name: "linked asset", target: activityTargetRecord{ref: objectref.New(objectref.TypeAsset, 40)}, want: true},
-		{name: "asset through direct customer", target: activityTargetRecord{ref: objectref.New(objectref.TypeAsset, 41), customerID: 21}, want: true},
+		{name: "linked asset requires migrated authority", target: activityTargetRecord{ref: objectref.New(objectref.TypeAsset, 40)}, want: false},
+		{name: "Customer assignment grants no Asset authority", target: activityTargetRecord{ref: objectref.New(objectref.TypeAsset, 41), customerID: 21}, want: false},
 		{name: "estimate for assigned job", target: activityTargetRecord{ref: objectref.New(objectref.TypeEstimate, 50), jobID: &assignedJobID}, want: true},
 		{name: "archived estimate for assigned job", target: activityTargetRecord{ref: objectref.New(objectref.TypeEstimate, 51), jobID: &assignedJobID, archived: true}, want: true},
 		{name: "invoice for other job", target: activityTargetRecord{ref: objectref.New(objectref.TypeInvoice, 60), jobID: &otherJobID}},

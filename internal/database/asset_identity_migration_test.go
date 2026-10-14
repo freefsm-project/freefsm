@@ -27,6 +27,7 @@ func reviewFixtureAssetIdentities(t *testing.T, ctx context.Context, db *DB, res
 		t.Fatal(err)
 	}
 	t.Setenv("FREEFSM_ASSET_REVIEW_FILE", path)
+	reviewFixtureAssetAssociations(t, ctx, db)
 }
 
 func TestAssetIdentityReviewedUpgradePreservesReferences(t *testing.T) {

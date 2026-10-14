@@ -120,7 +120,7 @@ func jobRepairRawPost(router http.Handler, cookie *http.Cookie, path string, val
 // omission/stale tests use jobRepairRawPost (or a direct request), not this helper.
 func currentJobFormValues(t *testing.T, router http.Handler, cookie *http.Cookie, path string, values url.Values) url.Values {
 	t.Helper()
-	if !regexp.MustCompile(`^/jobs/[1-9][0-9]*(/(contacts|links))?$`).MatchString(path) || values.Has("save_action_id") || values.Has("save_revision") {
+	if !regexp.MustCompile(`^/jobs/[1-9][0-9]*(/(contacts|links|assets))?$`).MatchString(path) || values.Has("save_action_id") || values.Has("save_revision") {
 		return values
 	}
 	form := path

@@ -38,6 +38,7 @@ templ AssetShow(p AssetShowPageData) {
 			<article>
 				<h3>Details</h3>
 				<p><strong>Asset Number:</strong> { p.Asset.Number }</p>
+				<a href={ templ.URL(fmt.Sprintf("/assets/%d/associations",p.Asset.ID)) }>Association history</a>
 				<p><strong>Ownership class:</strong> { assetOwnershipLabel(p.Asset.OwnershipClass) }</p>
 				if p.Asset.CustomerID == 0 {
 					<p>Unplaced</p>
