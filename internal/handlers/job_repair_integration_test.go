@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -158,6 +159,9 @@ func currentJobFormValues(t *testing.T, router http.Handler, cookie *http.Cookie
 	}
 	out.Set("save_revision", match[1])
 	out.Set("save_action_id", newOperationKey())
+	if match := regexp.MustCompile(`name="field_baseline" value="([^"]*)"`).FindStringSubmatch(w.Body.String()); len(match) == 2 {
+		out.Set("field_baseline", html.UnescapeString(match[1]))
+	}
 	return out
 }
 

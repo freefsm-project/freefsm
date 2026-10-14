@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -18,6 +19,9 @@ import (
 func fieldPost(t *testing.T, router http.Handler, cookie *http.Cookie, path string, values url.Values, want int) *httptest.ResponseRecorder {
 	t.Helper()
 	values = currentJobFormValues(t, router, cookie, path, values)
+	if regexp.MustCompile(`^/jobs/[1-9][0-9]*/custom-fields$`).MatchString(path) && !values.Has("field_operation_id") && want != 403 && want != 404 {
+		values = reviewedJobFieldsForm(t, router, cookie, path, values)
+	}
 	if want != http.StatusForbidden && want != http.StatusNotFound && (path == "/customers" || regexp.MustCompile(`^/customers/\d+$`).MatchString(path)) {
 		values = typedCustomerFormValues(t, router, cookie, path, values)
 	}
@@ -269,7 +273,7 @@ func TestTypedAssignedJobSaveHoldsAssignmentUntilCommitHTTP(t *testing.T) {
 	api := apiv1.NewRouter(pool, client, sessions)
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
-		r := httptest.NewRequest("PATCH", fmt.Sprintf("/jobs/%d/custom-fields", job.ID), strings.NewReader(`{"values":[{"definition_id":1,"value":"Accepted before removal"}]}`))
+		r := httptest.NewRequest("PATCH", fmt.Sprintf("/jobs/%d/custom-fields", job.ID), strings.NewReader(`{"operation_id":"41000000-0000-4000-8000-000000000099","revisions":{"1":"00000000-0000-0000-0000-000000000000"},"values":[{"definition_id":1,"value":"Accepted before removal"}]}`))
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Authorization", "Bearer "+token)
 		w := httptest.NewRecorder()
@@ -444,6 +448,22 @@ func TestTypedJobFieldsIndependentGrantWebAndAPI(t *testing.T) {
 	}
 	send := func(body string, want int) {
 		t.Helper()
+		read := httptest.NewRequest("GET", path, nil)
+		read.Header.Set("Authorization", "Bearer "+token)
+		current := httptest.NewRecorder()
+		api.ServeHTTP(current, read)
+		var state struct {
+			Data authorization.FieldState `json:"data"`
+		}
+		_ = json.Unmarshal(current.Body.Bytes(), &state)
+		var input authorization.ReviewedFieldPatch
+		if err := json.Unmarshal([]byte(body), &input); err != nil {
+			t.Fatal(err)
+		}
+		input.OperationID = newOperationKey()
+		input.Revisions = state.Data.Revisions
+		encoded, _ := json.Marshal(input)
+		body = string(encoded)
 		r := httptest.NewRequest("PATCH", path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Content-Type", "application/json")
@@ -454,16 +474,16 @@ func TestTypedJobFieldsIndependentGrantWebAndAPI(t *testing.T) {
 		}
 	}
 	send(`{"values":[{"definition_id":1,"value":"true"}]}`, 200)
-	send(`{"values":[{"definition_id":1,"value":"maybe"}]}`, 422)
+	send(`{"values":[{"definition_id":1,"value":"maybe"}]}`, 409)
 	fieldPost(t, router, adminCookie, "/settings/custom-fields", url.Values{"name": {"Later required"}, "object_type": {"job"}, "field_type": {"text"}, "required": {"true"}}, 303)
 	// Atomic field patches validate changed values; a later unrelated required
 	// definition is deferred to the next online main-details save.
 	send(`{"values":[{"definition_id":1,"value":"true"}]}`, 200)
-	send(`{"values":[{"definition_id":2,"value":""}]}`, 422)
+	send(`{"values":[{"definition_id":2,"value":""}]}`, 409)
 	assertContains(t, requestBody(t, router, cookie, "GET", path, 200), `value="true" selected`)
 	client.JobAssignment.Delete().ExecX(ctx)
 	send(`{"values":[{"definition_id":1,"value":"false"}]}`, 404)
-	fieldPost(t, router, cookie, path, url.Values{"custom_field_1": {"false"}}, 404)
+	fieldPost(t, router, cookie, path, url.Values{"custom_field_1": {"false"}, "field_operation_id": {newOperationKey()}}, 404)
 }
 
 func TestTypedFieldDatesOptionsAndShapesHTTP(t *testing.T) {

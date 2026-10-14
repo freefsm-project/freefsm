@@ -603,6 +603,7 @@ type JobListPageData struct {
 }
 
 type JobFormPageData struct {
+	FieldBaseline           string
 	RetainedProjectID       int64
 	AssetCustomFields       []CustomFieldDisplay
 	ProjectCustomFields     []CustomFieldDisplay

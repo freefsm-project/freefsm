@@ -6,6 +6,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/customfields"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"net/http"
 	"strconv"
 )
@@ -42,23 +43,22 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 		if !decodeJSON(w, r, &input) {
 			return
 		}
-		if input.OperationID != "" {
-			state, err = request.Service.PatchFieldsReviewed(r.Context(), request.Actor, id, input)
-		} else {
-			var values string
-			values, err = request.Service.PatchFields(r.Context(), request.Actor, "job", id, string(input.Values))
-			state.Values = json.RawMessage(values)
-		}
+		state, err = request.Service.PatchFieldsReviewed(r.Context(), request.Actor, id, input)
 	}
 	if err != nil {
 		var fieldErr *customfields.FieldError
 		var conflict *authorization.FieldConflict
 		switch {
 		case errors.As(err, &conflict):
+			requestID := w.Header().Get("X-Request-ID")
+			if requestID == "" {
+				requestID = uuid.NewString()
+				w.Header().Set("X-Request-ID", requestID)
+			}
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
 			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": conflict.Code, "recovery": "new_reviewed_operation"}, "comparison": state})
+			json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": conflict.Code, "message": "Review current field values and submit a new operation", "request_id": requestID, "details": map[string]any{}, "recovery_disposition": "review", "recovery": "new_reviewed_operation"}, "comparison": state})
 		case errors.Is(err, authorization.ErrNotFound):
 			writeError(w, 404, "not_found", "Job not found")
 		case errors.Is(err, authorization.ErrForbidden):

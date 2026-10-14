@@ -674,6 +674,10 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		staleJobForm(w)
 		return
 	}
+	if parseCustomFieldPatch(r) != nil {
+		input := reviewedJobFieldInput(r)
+		r = r.WithContext(authorization.WithJobFieldReview(r.Context(), input.Revisions))
+	}
 	if !validJobRelationshipInputs(w, r) {
 		return
 	}
@@ -703,6 +707,11 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Notes:             formPtr(r.FormValue("notes")),
 		TechNotes:         optionalJobNotes(r),
 		CustomFields:      parseCustomFieldPatch(r),
+	}
+	if params.CustomFields != nil {
+		input := reviewedJobFieldInput(r)
+		value := string(input.Values)
+		params.CustomFields = &value
 	}
 	// Omitted relationship inputs are not unlink requests. Independent planning
 	// editors and partial submissions preserve the existing operational context.
@@ -760,6 +769,11 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if errors.Is(err, authorization.ErrSubtaskInvalid) || errors.Is(err, authorization.ErrSubtaskReview) {
 			subtaskHTTPError(w, r, err)
+			return
+		}
+		var conflict *authorization.FieldConflict
+		if errors.As(err, &conflict) {
+			http.Error(w, "Custom Field values changed. Review the current Job fields and submit a new operation.", http.StatusConflict)
 			return
 		}
 		if renderFieldSaveError(w, r, h.defSvc, "job", err) {
@@ -953,6 +967,16 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *en
 	users, _ := h.userSvc.ListActiveForCompany(ctx, companyID)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	d := jobToDetail(ctx, j, statuses)
+	fieldValues, fieldBaseline := j.CustomFields, ""
+	if request, ok := authorization.FromContext(ctx); ok {
+		state, err := request.Service.ReadFieldState(ctx, request.Actor, j.ID)
+		if err != nil {
+			return templates.JobFormPageData{}, err
+		}
+		encoded, _ := json.Marshal(state)
+		fieldBaseline = string(encoded)
+		fieldValues = string(state.Values)
+	}
 	assignments, _ := h.svc.Assignments(ctx, j.ID)
 	if len(assignments) == 0 {
 		assignments = services.ParseAssignments(j.Assignments)
@@ -984,7 +1008,8 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *en
 		ExistingVisitsJSON:      services.SerializeVisits(services.ParseVisits(j.Visits)),
 		ExistingAssignmentsJSON: serializeJobFormAssignments(assignments, assignmentUsers),
 		ExistingSubtasksJSON:    services.SerializeSubtasks(services.ParseSubtasks(j.Subtasks)),
-		CustomFields:            buildCustomFieldDisplay(defs, j.CustomFields),
+		CustomFields:            buildCustomFieldDisplay(defs, fieldValues),
+		FieldBaseline:           fieldBaseline,
 		Errors:                  map[string]string{},
 	}), nil
 }

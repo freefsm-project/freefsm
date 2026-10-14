@@ -2,6 +2,32 @@ package templates
 
 import "fmt"
 
+templ JobFieldsForm(id int64,fields,comparison []CustomFieldDisplay,message,operation,baseline string) {
+ @Layout("Job Custom Field Values") {
+  <h1>Job Custom Field Values</h1>
+  if message != "" {
+   <p role="alert" class="error-msg">{ message }</p>
+   <h2>Current saved values</h2>
+   @CustomFieldsWidget(CustomFieldsWidgetData{Fields:comparison})
+   <h2>Your proposed values</h2>
+   @CustomFieldsWidget(CustomFieldsWidgetData{Fields:fields})
+   <p>Retired fields remain read-only. Review active fields below; rejected work is never retried automatically.</p>
+  }
+  <form method="post" hx-boost="false" action={ templ.URL(fmt.Sprintf("/jobs/%d/custom-fields",id)) }>
+   <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+   <input type="hidden" name="field_operation_id" value={ operation }/>
+   <input type="hidden" name="field_baseline" value={ baseline }/>
+   @CustomFieldsWidget(CustomFieldsWidgetData{Fields:fields,EditMode:true})
+   if message != "" {
+    <button type="submit">Review and save as new operation</button>
+   } else {
+    <button type="submit">Save Custom Fields</button>
+   }
+   <a href={ templ.URL(fmt.Sprintf("/jobs/%d",id)) }>Discard and return to Job</a>
+  </form>
+ }
+}
+
 templ ParentFieldsForm(typ string,id int64,fields []CustomFieldDisplay,message string) {
  @Layout("Custom Fields") {
   <form method="post" hx-boost="false" action={ templ.URL(fmt.Sprintf("/%ss/%d/custom-fields",typ,id)) }>

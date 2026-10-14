@@ -114,6 +114,7 @@ templ JobForm(p JobFormPageData) {
 			if p.Job.ID > 0 {
 			 <p>Field Notes are saved independently. <a href={ templ.URL(fmt.Sprintf("/jobs/%d/field-notes",p.Job.ID)) }>Open Field Notes</a></p>
 			}
+			<input type="hidden" name="field_baseline" value={ p.FieldBaseline }/>
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: canEditJobFields(ctx,p.Job.ID)})
 			<fieldset x-data="subtasksEditor()" data-existing={ p.ExistingSubtasksJSON }>
 				<legend>Subtasks</legend>
