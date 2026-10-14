@@ -110,6 +110,50 @@ func (s *Service) FileAccess(ctx context.Context, a Actor, ref objectref.Ref, pe
 	return err
 }
 
+// FileTransferAction records transport facts against their original parent,
+// never a fabricated File identity. The transfer UUID is the transport operation
+// identity; publication has its own independent operation. Chunk replay is a
+// no-op and therefore creates neither bytes nor another immutable audit event.
+func (s *Service) FileTransferAction(ctx context.Context, a Actor, ref objectref.Ref, transferID string, fn func(pgx.Tx) (bool, map[string]any, error)) error {
+	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		// Resolve a caller-scoped collision under the same authority fence as
+		// the write. A newly requested parent cannot authorize disclosure of
+		// an existing transfer's inaccessible original intent.
+		var originalType string
+		var originalID int64
+		err := tx.QueryRow(ctx, `SELECT object_type,object_id FROM file_transfers WHERE user_id=$1 AND session_hash=$2 AND id=$3 FOR UPDATE`, a.UserID, a.SessionHash, transferID).Scan(&originalType, &originalID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if err == nil {
+			original, err := objectref.Parse(originalType, originalID)
+			if err != nil {
+				return ErrNotFound
+			}
+			if _, err := fileAccess(ctx, tx, p, a, original, "file.upload", a.UserID, true); err != nil {
+				return err
+			}
+		}
+		scope, err := fileAccess(ctx, tx, p, a, ref, "file.upload", a.UserID, true)
+		if err != nil {
+			return err
+		}
+		changed, detail, err := fn(tx)
+		if err != nil || !changed {
+			return err
+		}
+		detail["transfer_id"] = transferID
+		var attributed any = detail
+		if a.Channel == "api" {
+			attributed, err = fileAPIAuditDetail(ctx, tx, a, FileOperation{OperationID: transferID}, detail)
+			if err != nil {
+				return err
+			}
+		}
+		return audit(ctx, tx, a, p, "file.upload", scope, ref.ObjectType(), ref.ID, attributed)
+	})
+}
+
 // FileAction serializes with grant/session changes and locks the exact parent
 // and assignment until the File mutation and immutable audit commit together.
 // A zero returned effect ID represents a desired-state no-op (no new audit).

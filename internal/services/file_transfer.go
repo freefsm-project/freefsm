@@ -3,10 +3,13 @@ package services
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -18,6 +21,42 @@ import (
 
 const FileChunkLimit = 1 << 20
 
+type TransferLookup struct {
+	ObjectType string `json:"object_type"`
+	ObjectID   int64  `json:"object_id"`
+	Digest     string `json:"sha256"`
+}
+
+// LookupTransfer is deliberately not a content-addressed global store. A digest
+// can only find this paired caller's complete transfer at this original parent.
+// The returned original identity is reused, never cloned into another parent.
+func (s *FileService) LookupTransfer(ctx context.Context, in TransferLookup) (FileTransfer, error) {
+	var out FileTransfer
+	r, ok := authorization.FromContext(ctx)
+	if !ok {
+		return out, authorization.ErrForbidden
+	}
+	ref, err := objectref.Parse(in.ObjectType, in.ObjectID)
+	if err != nil {
+		return out, authorization.ErrNotFound
+	}
+	if err := r.Service.FileAccess(ctx, r.Actor, ref, "file.upload", r.Actor.UserID); err != nil {
+		return out, err
+	}
+	if d, err := hex.DecodeString(in.Digest); err != nil || len(d) != 32 || in.Digest != strings.ToLower(in.Digest) {
+		return out, fmt.Errorf("invalid SHA-256")
+	}
+	var id string
+	err = r.Service.Pool.QueryRow(ctx, `SELECT id::text FROM file_transfers WHERE user_id=$1 AND session_hash=$2 AND object_type=$3 AND object_id=$4 AND sha256=$5 AND transferred=size ORDER BY created_at DESC,id LIMIT 1`, r.Actor.UserID, r.Actor.SessionHash, in.ObjectType, in.ObjectID, in.Digest).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return out, authorization.ErrNotFound
+	}
+	if err != nil {
+		return out, err
+	}
+	return s.VerifyTransfer(ctx, id)
+}
+
 type FileTransfer struct {
 	ID            string     `json:"id"`
 	PublicationID string     `json:"publication_id"`
@@ -27,6 +66,7 @@ type FileTransfer struct {
 	Size          int64      `json:"size"`
 	Digest        string     `json:"sha256"`
 	Transferred   int64      `json:"transferred"`
+	Verified      bool       `json:"verified"`
 	OccurredAt    *time.Time `json:"occurred_at,omitempty"`
 }
 
@@ -45,33 +85,36 @@ func (s *FileService) StartTransfer(ctx context.Context, in FileTransfer) (FileT
 		occurred := in.OccurredAt.UTC().Truncate(time.Microsecond)
 		in.OccurredAt = &occurred
 	}
-	if d, err := hex.DecodeString(in.Digest); err != nil || len(d) != 32 {
+	if d, err := hex.DecodeString(in.Digest); err != nil || len(d) != 32 || in.Digest != strings.ToLower(in.Digest) {
 		return in, fmt.Errorf("invalid SHA-256")
 	}
-	if in.Size <= 0 || in.Size > s.maxSize || in.Transferred != 0 {
+	if in.Size <= 0 || in.Size > s.maxSize || in.Transferred != 0 || in.Verified {
 		return in, fmt.Errorf("invalid transfer size")
+	}
+	if strings.TrimSpace(in.Name) == "" {
+		return in, fmt.Errorf("invalid file name")
 	}
 	ref, err := objectref.Parse(in.ObjectType, in.ObjectID)
 	if err != nil {
 		return in, err
 	}
-	err = r.Service.FileAction(ctx, r.Actor, ref, "file.upload", r.Actor.UserID, func(tx pgx.Tx) (int64, any, error) {
-		_, err := tx.Exec(ctx, `INSERT INTO file_transfers(id,user_id,session_hash,publication_id,object_type,object_id,name,size,sha256,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(id) DO NOTHING`, in.ID, r.Actor.UserID, r.Actor.SessionHash, in.PublicationID, in.ObjectType, in.ObjectID, in.Name, in.Size, in.Digest, in.OccurredAt)
+	err = r.Service.FileTransferAction(ctx, r.Actor, ref, in.ID, func(tx pgx.Tx) (bool, map[string]any, error) {
+		tag, err := tx.Exec(ctx, `INSERT INTO file_transfers(id,user_id,session_hash,publication_id,object_type,object_id,name,size,sha256,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(user_id,session_hash,id) DO NOTHING`, in.ID, r.Actor.UserID, r.Actor.SessionHash, in.PublicationID, in.ObjectType, in.ObjectID, in.Name, in.Size, in.Digest, in.OccurredAt)
 		if err != nil {
-			return 0, nil, err
+			return false, nil, err
 		}
 		var same bool
 		err = tx.QueryRow(ctx, `SELECT publication_id=$4 AND object_type=$5 AND object_id=$6 AND name=$7 AND size=$8 AND sha256=$9 AND occurred_at IS NOT DISTINCT FROM $10::timestamptz FROM file_transfers WHERE id=$1 AND user_id=$2 AND session_hash=$3`, in.ID, r.Actor.UserID, r.Actor.SessionHash, in.PublicationID, in.ObjectType, in.ObjectID, in.Name, in.Size, in.Digest, in.OccurredAt).Scan(&same)
 		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, nil, authorization.ErrNotFound
+			return false, nil, authorization.ErrNotFound
 		}
 		if err != nil {
-			return 0, nil, err
+			return false, nil, err
 		}
 		if !same {
-			return 0, nil, authorization.ErrConflict
+			return false, nil, authorization.ErrConflict
 		}
-		return 0, nil, nil
+		return tag.RowsAffected() == 1, map[string]any{"stage": "transfer_started", "size": in.Size}, nil
 	})
 	if err != nil {
 		return in, err
@@ -107,32 +150,32 @@ func (s *FileService) TransferChunk(ctx context.Context, id string, offset int64
 	if err != nil {
 		return in, err
 	}
-	if len(data) == 0 || len(data) > FileChunkLimit || offset < 0 || offset > in.Size-int64(len(data)) {
+	if in.Size > s.maxSize || len(data) == 0 || len(data) > FileChunkLimit || offset < 0 || offset > in.Size-int64(len(data)) {
 		return in, fmt.Errorf("invalid chunk bounds")
 	}
 	r, _ := authorization.FromContext(ctx)
 	ref, _ := objectref.Parse(in.ObjectType, in.ObjectID)
-	err = r.Service.FileAction(ctx, r.Actor, ref, "file.upload", r.Actor.UserID, func(tx pgx.Tx) (int64, any, error) {
+	err = r.Service.FileTransferAction(ctx, r.Actor, ref, in.ID, func(tx pgx.Tx) (bool, map[string]any, error) {
 		var current int64
-		if err := tx.QueryRow(ctx, `SELECT transferred FROM file_transfers WHERE id=$1 FOR UPDATE`, id).Scan(&current); err != nil {
-			return 0, nil, err
+		if err := tx.QueryRow(ctx, `SELECT transferred FROM file_transfers WHERE id=$1 AND user_id=$2 AND session_hash=$3 FOR UPDATE`, id, r.Actor.UserID, r.Actor.SessionHash).Scan(&current); err != nil {
+			return false, nil, err
 		}
 		if offset < current {
 			var prior []byte
-			err := tx.QueryRow(ctx, `SELECT data FROM file_transfer_chunks WHERE transfer_id=$1 AND offset_bytes=$2`, id, offset).Scan(&prior)
+			err := tx.QueryRow(ctx, `SELECT data FROM file_transfer_chunks WHERE transfer_id=$1 AND offset_bytes=$2 AND user_id=$3 AND session_hash=$4`, id, offset, r.Actor.UserID, r.Actor.SessionHash).Scan(&prior)
 			if err != nil || !bytes.Equal(prior, data) {
-				return 0, nil, authorization.ErrConflict
+				return false, nil, authorization.ErrConflict
 			}
-			return 0, nil, nil
+			return false, nil, nil
 		}
 		if offset != current {
-			return 0, nil, authorization.ErrConflict
+			return false, nil, authorization.ErrConflict
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO file_transfer_chunks VALUES($1,$2,$3)`, id, offset, data); err != nil {
-			return 0, nil, err
+		if _, err := tx.Exec(ctx, `INSERT INTO file_transfer_chunks(transfer_id,offset_bytes,data,user_id,session_hash) VALUES($1,$2,$3,$4,$5)`, id, offset, data, r.Actor.UserID, r.Actor.SessionHash); err != nil {
+			return false, nil, err
 		}
-		_, err := tx.Exec(ctx, `UPDATE file_transfers SET transferred=transferred+$2 WHERE id=$1`, id, len(data))
-		return 0, nil, err
+		_, err := tx.Exec(ctx, `UPDATE file_transfers SET transferred=transferred+$2 WHERE id=$1 AND user_id=$3 AND session_hash=$4`, id, len(data), r.Actor.UserID, r.Actor.SessionHash)
+		return true, map[string]any{"stage": "transfer_chunk", "offset": offset, "size": len(data)}, err
 	})
 	if err != nil {
 		return in, err
@@ -140,8 +183,66 @@ func (s *FileService) TransferChunk(ctx context.Context, id string, offset int64
 	return s.Transfer(ctx, id)
 }
 
-func (s *FileService) PublishTransfer(ctx context.Context, id string) (*ent.File, error) {
+// VerifyTransfer validates temporary bytes independently of publication. The
+// result is a fresh observation, never a cached assertion about durable storage.
+// No File, attachment or collaboration event is created here.
+func (s *FileService) VerifyTransfer(ctx context.Context, id string) (FileTransfer, error) {
 	in, err := s.Transfer(ctx, id)
+	if err != nil {
+		return in, err
+	}
+	if in.Transferred != in.Size {
+		return in, authorization.ErrConflict
+	}
+	if in.Size > s.maxSize {
+		return in, fmt.Errorf("invalid transfer size: current limit exceeded")
+	}
+	r, _ := authorization.FromContext(ctx)
+	ref, _ := objectref.Parse(in.ObjectType, in.ObjectID)
+	err = r.Service.FileAction(ctx, r.Actor, ref, "file.upload", r.Actor.UserID, func(tx pgx.Tx) (int64, any, error) {
+		var size int64
+		if err := tx.QueryRow(ctx, `SELECT transferred FROM file_transfers WHERE id=$1 AND user_id=$2 AND session_hash=$3 FOR UPDATE`, id, r.Actor.UserID, r.Actor.SessionHash).Scan(&size); err != nil {
+			return 0, nil, err
+		}
+		if size != in.Size {
+			return 0, nil, authorization.ErrConflict
+		}
+		var durableSize int64
+		if err := tx.QueryRow(ctx, `SELECT coalesce(sum(octet_length(data)),0) FROM file_transfer_chunks WHERE transfer_id=$1 AND user_id=$2 AND session_hash=$3`, id, r.Actor.UserID, r.Actor.SessionHash).Scan(&durableSize); err != nil {
+			return 0, nil, err
+		}
+		if durableSize != in.Size {
+			return 0, nil, fmt.Errorf("inconsistent durable transfer bytes")
+		}
+		// Validation scratch is disposable, not part of the durable File
+		// inventory. In particular, a process interruption must not leave a
+		// phantom attachment payload for backup to inventory.
+		f, err := os.CreateTemp("", "freefsm-transfer-verify-*")
+		if err != nil {
+			return 0, nil, err
+		}
+		defer os.Remove(f.Name())
+		defer f.Close()
+		digest := sha256.New()
+		reader := &transferReader{ctx: ctx, query: tx, id: id, size: in.Size, userID: r.Actor.UserID, sessionHash: r.Actor.SessionHash}
+		n, err := io.Copy(io.MultiWriter(f, digest), io.LimitReader(reader, in.Size+1))
+		if err != nil {
+			return 0, nil, err
+		}
+		if n != in.Size || hex.EncodeToString(digest.Sum(nil)) != in.Digest {
+			return 0, nil, fmt.Errorf("invalid file content: digest mismatch")
+		}
+		if _, err := validateFileContent(f.Name(), in.Name); err != nil {
+			return 0, nil, err
+		}
+		in.Verified = true
+		return 0, nil, nil
+	})
+	return in, err
+}
+
+func (s *FileService) PublishTransfer(ctx context.Context, id string) (*ent.File, error) {
+	in, err := s.VerifyTransfer(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -154,16 +255,20 @@ func (s *FileService) PublishTransfer(ctx context.Context, id string) (*ent.File
 		return nil, err
 	}
 	ref, _ := objectref.Parse(in.ObjectType, in.ObjectID)
-	reader := &transferReader{ctx: ctx, request: r, id: id, size: in.Size}
+	reader := &transferReader{ctx: ctx, query: r.Service.Pool, id: id, size: in.Size, userID: r.Actor.UserID, sessionHash: r.Actor.SessionHash}
 	return s.Create(ctx, p.CompanyID, ref, in.Name, "", in.Size, reader, r.Actor.UserID, FilePublication{ID: in.PublicationID, Digest: in.Digest, OccurredAt: in.OccurredAt})
 }
 
 // Read one immutable bounded chunk at a time, independent of configured total
 // upload size. No filesystem extraction or whole-transfer buffering is needed.
 type transferReader struct {
-	ctx          context.Context
-	request      authorization.Request
+	ctx   context.Context
+	query interface {
+		QueryRow(context.Context, string, ...any) pgx.Row
+	}
 	id           string
+	userID       int64
+	sessionHash  string
 	size, offset int64
 	chunk        *bytes.Reader
 }
@@ -174,8 +279,11 @@ func (r *transferReader) Read(p []byte) (int, error) {
 			return 0, io.EOF
 		}
 		var data []byte
-		if err := r.request.Service.Pool.QueryRow(r.ctx, `SELECT data FROM file_transfer_chunks WHERE transfer_id=$1 AND offset_bytes=$2`, r.id, r.offset).Scan(&data); err != nil {
+		if err := r.query.QueryRow(r.ctx, `SELECT data FROM file_transfer_chunks WHERE transfer_id=$1 AND offset_bytes=$2 AND user_id=$3 AND session_hash=$4`, r.id, r.offset, r.userID, r.sessionHash).Scan(&data); err != nil {
 			return 0, err
+		}
+		if len(data) == 0 || int64(len(data)) > r.size-r.offset {
+			return 0, fmt.Errorf("inconsistent durable transfer bytes")
 		}
 		r.chunk = bytes.NewReader(data)
 	}

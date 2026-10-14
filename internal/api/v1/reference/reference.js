@@ -1,22 +1,25 @@
 (() => {
   'use strict';
   let bearer = '', deviceCode = '', epoch = '', redeemOperation = '', cancelOperation = '', busy = false;
+  let transfers = [];
   const node = id => document.getElementById(id);
   const status = text => { node('status').textContent = text; };
   const update = () => {
     for (const id of ['redeem', 'cancel']) node(id).disabled = busy || !deviceCode;
     for (const id of ['inspect', 'logout', 'all', 'revoke']) node(id).disabled = busy || !bearer;
     node('start').querySelector('button').disabled = busy || !!deviceCode || !!bearer;
+    node('transfer-start').disabled = busy || !bearer;
+    node('transfer-retry').disabled = busy || !bearer || !transfers.some(t => !t.verified);
   };
-  const clear = () => { bearer = ''; deviceCode = ''; epoch = ''; redeemOperation = ''; cancelOperation = ''; node('code').textContent = ''; node('sessions').textContent = ''; update(); };
-  async function call(path, method, body, authenticated = false) {
+  const clear = () => { bearer = ''; deviceCode = ''; epoch = ''; redeemOperation = ''; cancelOperation = ''; transfers = []; node('transfer-files').value = ''; node('transfer-results').textContent = ''; node('code').textContent = ''; node('sessions').textContent = ''; update(); };
+  async function call(path, method, body, authenticated = false, raw = false) {
     const headers = {};
-    if (body) headers['Content-Type'] = 'application/json';
+    if (body) headers['Content-Type'] = raw ? 'application/octet-stream' : 'application/json';
     if (authenticated) {
       headers.Authorization = `Bearer ${bearer}`;
       if (epoch) headers['X-FreeFSM-Session-Epoch'] = epoch;
     }
-    const response = await fetch(`/api/v1${path}`, { method, headers, credentials: 'omit', cache: 'no-store', redirect: 'error', body: body ? JSON.stringify(body) : undefined });
+    const response = await fetch(`/api/v1${path}`, { method, headers, credentials: 'omit', cache: 'no-store', redirect: 'error', body: body ? (raw ? body : JSON.stringify(body)) : undefined });
     const result = response.status === 204 ? null : await response.json();
     if (!response.ok) {
       if (result?.error?.recovery_disposition === 'purge' || result?.error?.recovery_disposition === 'locked_review') clear();
@@ -55,6 +58,49 @@
     if (!/^[1-9][0-9]*$/.test(id)) { status('Enter an own session ID from inspection.'); return; }
     await call(`/sessions/${id}`, 'DELETE', null, true);
   }));
+  const transferResults = () => { node('transfer-results').textContent = transfers.map(t => `${t.file.name}: ${t.state}`).join('\n'); };
+  async function runTransfers() {
+    const limits = await call('/files/limits', 'GET', null, true);
+    if (!limits) return;
+    for (const item of transfers) {
+      if (!bearer) break;
+      if (item.verified) continue;
+      try {
+        if (!item.file.size || item.file.size > limits.max_file_bytes) throw new Error('file_limit');
+        if (!item.intent) {
+          const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', await item.file.arrayBuffer()));
+          item.intent = {id: item.id, publication_id: item.publication, object_type: 'job', object_id: item.parent,
+            name: item.file.name, size: item.file.size, sha256: Array.from(digest, b => b.toString(16).padStart(2, '0')).join('')};
+        }
+        let state = await call('/file-transfers', 'POST', item.intent, true);
+        if (!state) throw new Error('start_failed');
+        if (state.size !== item.file.size || state.sha256 !== item.intent.sha256 || state.object_id !== item.parent) throw new Error('resume_mismatch');
+        while (state.transferred < item.file.size) {
+          const offset = state.transferred;
+          item.state = `${offset}/${item.file.size} transport bytes; unverified`; transferResults();
+          const bytes = await item.file.slice(offset, offset + limits.max_chunk_bytes).arrayBuffer();
+          state = await call(`/file-transfers/${item.id}/chunks?offset=${offset}`, 'PUT', bytes, true, true);
+          if (!state || state.transferred !== offset + bytes.byteLength) throw new Error('chunk_failed');
+        }
+        item.state = 'transport complete; verifying'; transferResults();
+        const verified = await call(`/file-transfers/${item.id}/verify`, 'POST', null, true);
+        if (!verified || verified.verified !== true || verified.sha256 !== item.intent.sha256) throw new Error('verification_failed');
+        item.verified = true; item.state = 'verified; not published';
+      } catch {
+        item.state = 'failed; retry unchanged bytes and original parent';
+      }
+      transferResults();
+    }
+  }
+  node('transfer-start').addEventListener('click', action(async () => {
+    const files = Array.from(node('transfer-files').files);
+    if (!files.length || files.length > 10) { status('Select at most 10 Files per batch.'); return; }
+    const parent = Number(node('transfer-job').value);
+    if (!Number.isSafeInteger(parent) || parent <= 0) { status('Enter a valid original Job ID.'); return; }
+    transfers = files.map(file => ({file, parent, id: crypto.randomUUID(), publication: crypto.randomUUID(), state: 'queued', verified: false}));
+    await runTransfers();
+  }));
+  node('transfer-retry').addEventListener('click', action(runTransfers));
   window.addEventListener('pagehide', clear);
   update();
 })();
