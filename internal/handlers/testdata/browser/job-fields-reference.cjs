@@ -11,7 +11,10 @@ const { JobFieldReference } = require('../../../api/v1/reference/job-fields.cjs'
   assert.equal((await client.submit(second)).status, 200);
   assert.equal((await client.call(job, 'PATCH', first.command)).status, 200, 'same intent replay');
   const changedIntent = structuredClone(first.command); changedIntent.values[0].value = 'must reject';
-  assert.equal((await client.call(job, 'PATCH', changedIntent)).body.error.code, 'operation_intent_changed');
+  const misuse = await client.call(job, 'PATCH', changedIntent);
+  assert.equal(misuse.body.error.code, 'operation_intent_changed');
+  assert.equal(misuse.body.comparison.receipt, undefined, 'ID misuse must not fabricate a different receipt for the original accepted operation');
+  assert.equal((await client.call(job, 'GET', null, first.command.operation_id)).body.data.outcome, 'accepted');
   let current = await client.read(job);
   assert.deepEqual(current.values, [{ definition_id: 1, value: 'A' }, { definition_id: 2, value: 'B' }]);
   const stale = client.stage(job, initial, [{ definition_id: 1, value: 'stale' }], randomUUID());

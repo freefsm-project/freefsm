@@ -229,7 +229,11 @@ func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 	if outcome == "forbidden" {
 		return FieldState{}, ErrForbidden
 	}
-	state.Receipt = &FieldReceipt{OperationID: in.OperationID, JobID: id, Outcome: outcome}
+	// ID misuse is an error about a different attempted intent, not a new
+	// disposition for the original immutable receipt. Lookup retains that fact.
+	if outcome != "operation_intent_changed" {
+		state.Receipt = &FieldReceipt{OperationID: in.OperationID, JobID: id, Outcome: outcome}
+	}
 	if outcome != "accepted" {
 		return state, &FieldConflict{outcome}
 	}
