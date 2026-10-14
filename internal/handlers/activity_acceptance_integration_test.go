@@ -121,7 +121,7 @@ func TestActivityUpgradePreservesFactsAndGrantsHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if e.Name() == "074_operational_activity.up.sql" {
+		if e.Name() == "074_operational_activity.up.sql" || e.Name() == "081_operational_event_contract.up.sql" {
 			continue
 		}
 		b, err := fs.ReadFile(database.MigrationFS(), e.Name())

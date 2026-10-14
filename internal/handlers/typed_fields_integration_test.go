@@ -446,6 +446,7 @@ func TestTypedJobFieldsIndependentGrantWebAndAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	lastReviewed := map[string]string{}
 	send := func(body string, want int) {
 		t.Helper()
 		read := httptest.NewRequest("GET", path, nil)
@@ -456,12 +457,15 @@ func TestTypedJobFieldsIndependentGrantWebAndAPI(t *testing.T) {
 			Data authorization.FieldState `json:"data"`
 		}
 		_ = json.Unmarshal(current.Body.Bytes(), &state)
+		if current.Code == 200 {
+			lastReviewed = state.Data.Revisions
+		}
 		var input authorization.ReviewedFieldPatch
 		if err := json.Unmarshal([]byte(body), &input); err != nil {
 			t.Fatal(err)
 		}
 		input.OperationID = newOperationKey()
-		input.Revisions = state.Data.Revisions
+		input.Revisions = lastReviewed
 		encoded, _ := json.Marshal(input)
 		body = string(encoded)
 		r := httptest.NewRequest("PATCH", path, strings.NewReader(body))

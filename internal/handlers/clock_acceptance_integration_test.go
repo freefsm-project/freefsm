@@ -350,7 +350,7 @@ func TestClockUpgradePreservesRecordedGPSAndGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, file := range files {
-		if strings.HasPrefix(file.Name(), "076_clock_evidence") {
+		if strings.HasPrefix(file.Name(), "076_clock_evidence") || file.Name() == "082_operation_admission.up.sql" {
 			continue
 		}
 		data, err := fs.ReadFile(source, file.Name())

@@ -20,7 +20,9 @@ func TestJobPricingUpgradePreservesSnapshotsAndStopsUnknownLegacy(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if e.Name() < "076" {
+		// Isolate this preserving cutover from other composed migrations that
+		// legitimately add columns/revisions to the surrounding Job schema.
+		if e.Name() != "076_job_pricing.up.sql" {
 			b, err := fs.ReadFile(MigrationFS(), e.Name())
 			if err != nil {
 				t.Fatal(err)

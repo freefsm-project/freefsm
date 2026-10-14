@@ -72,8 +72,8 @@ func decodeExactJSON(w http.ResponseWriter, r *http.Request, out any, properties
 			writeError(w, 400, "invalid_json", "Invalid file request")
 			return false
 		}
-		if name == "occurred_at" && bytes.Equal(bytes.TrimSpace(fields[name]), []byte("null")) {
-			writeError(w, 400, "invalid_json", "Occurrence must be an instant when supplied")
+		if !slices.Contains([]string{"field_notes", "completed", "status_id", "values"}, name) && bytes.Equal(bytes.TrimSpace(fields[name]), []byte("null")) {
+			writeError(w, 400, "invalid_json", "A supplied property must have its declared type")
 			return false
 		}
 	}
@@ -98,7 +98,9 @@ func decodeExactJSON(w http.ResponseWriter, r *http.Request, out any, properties
 			return false
 		}
 	}
-	if err := json.Unmarshal(raw, out); err != nil {
+	typed := json.NewDecoder(bytes.NewReader(raw))
+	typed.DisallowUnknownFields()
+	if err := typed.Decode(out); err != nil {
 		writeError(w, 400, "invalid_json", "Invalid file request")
 		return false
 	}

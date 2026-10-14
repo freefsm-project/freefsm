@@ -137,6 +137,19 @@ func TestOperationCompositionTransferReceiptHTTP(t *testing.T) {
 	chunk := uuid.NewString()
 	call("PUT", "/file-transfers/"+id+"/chunks?offset=0", chunk, "hello", 200)
 	call("PUT", "/file-transfers/"+id+"/chunks?offset=0", chunk, "HELLO", 409)
+	invalid := uuid.NewString()
+	intent["id"] = uuid.NewString()
+	intent["publication_id"] = uuid.NewString()
+	intent["size"] = 0
+	invalidBody, _ := json.Marshal(intent)
+	call("POST", "/file-transfers", invalid, string(invalidBody), 400)
+	if receipt := call("GET", "/file-transfer-operations/"+invalid, "", "", 200); !strings.Contains(receipt, `"code":"invalid_file"`) {
+		t.Fatal(receipt)
+	}
+	intent["size"] = 5
+	repaired, _ := json.Marshal(intent)
+	call("POST", "/file-transfers", invalid, string(repaired), 409)
+	call("POST", "/file-transfers", uuid.NewString(), string(repaired), 201)
 	if _, err := pool.Exec(ctx, `UPDATE jobs SET deleted_at=clock_timestamp() WHERE id=$1`, j.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -151,4 +164,61 @@ func TestOperationCompositionTransferReceiptHTTP(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestOperationCompositionClockTargetRejectionHTTP(t *testing.T) {
+	pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Clock parent").SaveX(ctx)
+	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Exact clock target").SaveX(ctx)
+	token, err := sessions.CreateMobile(ctx, admin, "Clock targets")
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := apiv1.NewRouter(pool, client, sessions)
+	path := fmt.Sprintf("/jobs/%d/clock-in", j.ID)
+	op := uuid.NewString()
+	command := map[string]any{"operation_id": op, "job_id": j.ID + 100}
+	executionAPI(t, api, token, "POST", path, command, 400)
+	executionAPI(t, api, token, "GET", "/time-operations/"+op, nil, 200)
+	command["job_id"] = j.ID
+	executionAPI(t, api, token, "POST", path, command, 409)
+	command["operation_id"] = uuid.NewString()
+	executionAPI(t, api, token, "POST", path, command, 200)
+	// URL routing is not a new command field for a matching target. This is
+	// also the historical receipt shape before URL mismatch rejection existed.
+	executionAPI(t, api, token, "POST", "/time-entries/clock-in", command, 200)
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM time_entries WHERE user_id=$1`, admin).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("clock count=%d err=%v", count, err)
+	}
+}
+
+func TestOperationCompositionExactSchemaAndLargeNotesHTTP(t *testing.T) {
+	pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Wire owner").SaveX(ctx)
+	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Wire target").SaveX(ctx)
+	token, err := sessions.CreateMobile(ctx, admin, "Wire schema")
+	if err != nil {
+		t.Fatal(err)
+	}
+	api := apiv1.NewRouter(pool, client, sessions)
+	path := fmt.Sprintf("/jobs/%d", j.ID)
+	for _, extra := range []string{`"Occurred_At":"2020-01-01T00:00:00Z"`, `"unknown":true`, `"occurred_at":null`, `"field_notes":"first","field_notes":"second"`} {
+		op := uuid.NewString()
+		body := fmt.Sprintf(`{"operation_id":%q,%s}`, op, extra)
+		r := httptest.NewRequest("POST", path+"/field-notes", strings.NewReader(body))
+		r.Header.Set("Authorization", "Bearer "+token)
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		api.ServeHTTP(w, r)
+		if w.Code != 400 {
+			t.Fatalf("wire rejection: %d %s", w.Code, w.Body)
+		}
+		executionAPI(t, api, token, "GET", "/job-execution-operations/"+op, nil, 404)
+	}
+	large := executionNotes(t, api, token, path, strings.Repeat("A", 20<<10))
+	executionAPI(t, api, token, "POST", path+"/field-notes", large, 200)
+	executionAPI(t, api, token, "POST", path+"/field-notes", large, 200)
 }

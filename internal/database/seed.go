@@ -314,7 +314,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		Items   []map[string]interface{}
 	}{
 		{"HVAC Repair Estimate - Acme", 0, 0, estimateSent, "8.25", nil},
-		{"Chiller Service Quote - Regional", 4, 1, estimateSent, "8.25", nil},
+		{"Chiller Service Quote - Warehouse", 2, 1, estimateSent, "8.25", nil},
 		{"Smart Thermostat Proposal - Metro", 1, 2, estimateAccepted, "8.25", nil},
 		{"Duct Cleaning Estimate - Mall", 2, 3, estimateSent, "8.25", nil},
 		{"Compressor Replacement Quote - Tower", 3, 4, estimateDraft, "8.25", nil},
@@ -352,7 +352,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		TaxRate     string
 	}{
 		{"Invoice - Acme Office Repair", 0, 0, -1, invoiceSent, "8.25"},
-		{"Invoice - Regional Hospital Maint", 4, 1, 1, invoiceInvoiced, "8.25"},
+		{"Invoice - Warehouse Chiller Maint", 2, 1, 1, invoiceInvoiced, "8.25"},
 		{"Invoice - Metro Mall Thermostats", 1, 2, 2, invoiceInvoiced, "8.25"},
 		{"Invoice - Downtown Tower Compressor", 3, 4, 4, invoiceInvoiced, "8.25"},
 		{"Invoice - Warehouse Duct Cleaning", 2, 3, 3, invoiceSent, "8.25"},
