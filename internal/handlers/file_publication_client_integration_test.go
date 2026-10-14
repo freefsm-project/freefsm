@@ -58,6 +58,7 @@ func TestFilePublicationReplayBelongsToOriginatingClientHTTP(t *testing.T) {
 		r := httptest.NewRequest(method, path, strings.NewReader(text))
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Content-Type", "application/json")
+		stageTestFileTransport(r, text)
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		if w.Code != want {
@@ -256,6 +257,7 @@ func TestFilePublicationRacingClientsCannotShareOriginHTTP(t *testing.T) {
 			r := httptest.NewRequest(step.method, step.path, strings.NewReader(step.body))
 			r.Header.Set("Content-Type", "application/json")
 			r.Header.Set("Authorization", "Bearer "+tokens[i])
+			stageTestFileTransport(r, step.body)
 			w := httptest.NewRecorder()
 			api.ServeHTTP(w, r)
 			if w.Code != step.want {

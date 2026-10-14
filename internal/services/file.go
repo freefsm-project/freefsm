@@ -144,10 +144,17 @@ type FilePublication struct {
 	OccurredAt *time.Time
 }
 
-func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref.Ref, originalName string, mimeType string, fileSize int64, reader io.Reader, uploadedBy int64, publication ...FilePublication) (*ent.File, error) {
+func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref.Ref, originalName string, mimeType string, fileSize int64, reader io.Reader, uploadedBy int64, publication ...FilePublication) (result *ent.File, resultErr error) {
 	identity := FilePublication{ID: uuid.NewString()}
 	if len(publication) > 0 {
 		identity = publication[0]
+	}
+	if request, ok := authorization.FromContext(ctx); ok && request.Actor.Channel == "api" {
+		defer func() {
+			if resultErr != nil {
+				resultErr = request.Service.RejectFilePublication(ctx, request.Actor, identity.ID, filePublicationIntent(ref, originalName, fileSize, identity.Digest, identity.OccurredAt), resultErr)
+			}
+		}()
 	}
 	if _, err := uuid.Parse(identity.ID); err != nil {
 		return nil, fmt.Errorf("invalid file content: publication ID must be a UUID")
@@ -262,12 +269,15 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 			if mutated {
 				return 0, nil, authorization.ErrConflict
 			}
-			intentFields := []any{ref.ObjectType(), ref.ID, originalName, actualSize, hex.EncodeToString(digest.Sum(nil))}
-			if identity.OccurredAt != nil {
-				intentFields = append(intentFields, identity.OccurredAt.UTC())
-			}
+			intentFields := filePublicationIntent(ref, originalName, actualSize, hex.EncodeToString(digest.Sum(nil)), identity.OccurredAt)
 			intentBytes, _ := json.Marshal(intentFields)
 			intent := string(intentBytes)
+			if err := authorization.AdmitOperation(ctx, tx, request.Actor, identity.ID, "file.publication", json.RawMessage(intentBytes)); err != nil {
+				return 0, nil, err
+			}
+			if err := authorization.FilePublicationRejection(ctx, tx, identity.ID); err != nil {
+				return 0, nil, err
+			}
 			var prior string
 			var priorClient *string
 			err = tx.QueryRow(ctx, `SELECT p.intent,p.client_key,to_jsonb(f) FROM file_publications p JOIN files f ON f.id=p.file_id WHERE p.user_id=$1 AND p.operation_id=$2`, request.Actor.UserID, identity.ID).Scan(&prior, &priorClient, &encoded)

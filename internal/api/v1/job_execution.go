@@ -60,14 +60,13 @@ func (h *handler) jobExecution(w http.ResponseWriter, r *http.Request) {
 		Notes       *string    `json:"field_notes"`
 		OccurredAt  *time.Time `json:"occurred_at,omitempty"`
 	}
-	if !decodeJSON(w, r, &input) {
+	if !decodeExactJSON(w, r, &input, "operation_id", "notes_revision", "field_notes", "occurred_at") {
 		return
 	}
-	if input.Notes == nil {
-		writeError(w, 400, "invalid_intent", "field_notes is required; an explicit empty string clears it")
-		return
+	in := authorization.JobExecutionCommand{OperationID: input.OperationID, NotesRevision: input.Revision, MissingNotes: input.Notes == nil, OccurredAt: input.OccurredAt}
+	if input.Notes != nil {
+		in.Notes = *input.Notes
 	}
-	in := authorization.JobExecutionCommand{OperationID: input.OperationID, NotesRevision: input.Revision, Notes: *input.Notes, OccurredAt: input.OccurredAt}
 	result, err := req.Service.SubmitJobNotes(r.Context(), req.Actor, id, in)
 	if err != nil {
 		jobExecutionAPIError(w, err)

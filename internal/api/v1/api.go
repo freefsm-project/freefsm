@@ -175,6 +175,8 @@ func New(deps Dependencies) http.Handler {
 		if deps.Files != nil {
 			r.Get("/files/limits", h.fileLimits)
 			r.Post("/file-transfers", h.startFileTransfer)
+			r.Get("/file-transfer-operations/{operation}", h.fileTransportReceipt)
+			r.Get("/file-operations/{operation}", h.fileOperationReceipt)
 			r.Post("/file-transfers/lookup", h.lookupFileTransfer)
 			r.Get("/file-transfers/{transfer}", h.getFileTransfer)
 			r.Post("/file-transfers/{transfer}/verify", h.verifyFileTransfer)

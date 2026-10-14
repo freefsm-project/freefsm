@@ -23,6 +23,7 @@ type JobExecutionState struct {
 }
 
 type JobExecutionCommand struct {
+	MissingNotes    bool       `json:"missing_notes,omitempty"`
 	OperationID     string     `json:"operation_id"`
 	NotesRevision   string     `json:"notes_revision,omitempty"`
 	Notes           string     `json:"field_notes,omitempty"`
@@ -126,6 +127,12 @@ func (s *Service) submitJobExecution(ctx context.Context, a Actor, id int64, kin
 	digest := fmt.Sprintf("%x", sha256.Sum256(encoded))
 	var outcome error
 	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if err := admitOperation(ctx, tx, a, in.OperationID, "job.execution", digest); err != nil {
+			if errors.Is(err, ErrConflict) {
+				return &JobExecutionConflict{"operation_intent_changed"}
+			}
+			return err
+		}
 		var saved, client string
 		err := tx.QueryRow(ctx, `SELECT intent_hash,client_key,code,coalesce(effect_id::text,''),accepted_at FROM job_execution_receipts WHERE user_id=$1 AND operation_id=$2`, a.UserID, in.OperationID).Scan(&saved, &client, &out.Code, &out.EffectID, &out.AcceptedAt)
 		if err == nil {
@@ -159,6 +166,9 @@ func (s *Service) submitJobExecution(ctx context.Context, a Actor, id int64, kin
 }
 
 func applyJobNotes(ctx context.Context, tx pgx.Tx, p Principal, a Actor, id int64, in JobExecutionCommand) (string, error) {
+	if in.MissingNotes {
+		return "", &JobExecutionConflict{"invalid_intent"}
+	}
 	scope, err := parentAccess(ctx, tx, p, "job", id, "job.field_notes.edit", true)
 	if err != nil {
 		return "", err
@@ -197,6 +207,9 @@ func applyJobNotes(ctx context.Context, tx pgx.Tx, p Principal, a Actor, id int6
 }
 
 func applyJobStatus(ctx context.Context, tx pgx.Tx, p Principal, a Actor, id int64, in JobExecutionCommand) (string, error) {
+	if in.StatusID <= 0 {
+		return "", &JobExecutionConflict{"invalid_intent"}
+	}
 	scope, err := parentAccess(ctx, tx, p, "job", id, "job.status", true)
 	if err != nil {
 		return "", err

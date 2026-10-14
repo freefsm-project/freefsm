@@ -47,16 +47,19 @@ func (in fileTransferRequest) transfer() (services.FileTransfer, error) {
 		ID: in.ID, PublicationID: in.PublicationID, ObjectType: in.ObjectType,
 		ObjectID: in.ObjectID, Name: in.Name, Size: in.Size, Digest: in.Digest,
 	}
-	if !validTransferParent(in.ObjectType, in.ObjectID) {
-		return out, fmt.Errorf("invalid transfer parent")
-	}
 	transferred, err := optionalFileValue[int64](in.Transferred)
-	if err != nil || transferred != nil && *transferred != 0 {
+	if err != nil {
 		return out, fmt.Errorf("invalid initial transfer progress")
 	}
+	if transferred != nil {
+		out.Transferred = *transferred
+	}
 	verified, err := optionalFileValue[bool](in.Verified)
-	if err != nil || verified != nil && *verified {
+	if err != nil {
 		return out, fmt.Errorf("invalid initial transfer verification")
+	}
+	if verified != nil {
+		out.Verified = *verified
 	}
 	out.OccurredAt, err = optionalFileValue[time.Time](in.OccurredAt)
 	return out, err

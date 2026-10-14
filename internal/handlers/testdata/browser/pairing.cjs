@@ -48,6 +48,13 @@ const assert=require('node:assert/strict');
   assert.equal(await page.evaluate(async()=> (await navigator.serviceWorker.getRegistrations()).length),0);
   if(process.env.TRANSFER_JOB) {
    let dropped=false;
+   const transportRequests=[],receipts=[];
+   page.on('request',request=>{
+    const path=new URL(request.url()).pathname;
+    if((path==='/api/v1/file-transfers'&&request.method()==='POST')||request.method()==='PUT'&&path.endsWith('/chunks'))
+     transportRequests.push({path,operation:request.headers()['operation-id'],body:request.postData()});
+    if(path.startsWith('/api/v1/file-transfer-operations/'))receipts.push(path.split('/').pop());
+   });
    await page.route('**/file-transfers/*/chunks?*',async route=>{
     if(!dropped&&route.request().postData()==='interrupted bytes') {
      dropped=true;const persisted=await route.fetch();assert.equal(persisted.status(),200);await route.abort('failed');
@@ -69,6 +76,14 @@ const assert=require('node:assert/strict');
    await page.locator('#transfer-results').filter({hasText:'lost.txt: verified; not published'}).waitFor();
    assert.ok(dropped,'real committed chunk response was lost');
    assert.equal(writes,0,'retry must not duplicate successful or already durable bytes');
+   const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+   for(const request of transportRequests)assert.match(request.operation||'',uuid,'every transport write has a client operation UUID');
+   const starts=transportRequests.filter(r=>r.path==='/api/v1/file-transfers');
+   const resources=starts.flatMap(r=>{const body=JSON.parse(r.body);return [body.id,body.publication_id];});
+   for(const request of transportRequests)assert.ok(!resources.includes(request.operation),'operation ID is independent of transfer/publication IDs');
+   assert.equal(new Set(transportRequests.map(r=>r.operation)).size,transportRequests.length,'each new start/chunk intent has an independent operation');
+   const lostChunk=transportRequests.find(r=>r.body==='interrupted bytes');
+   assert.ok(receipts.includes(lostChunk.operation),'lost chunk response reconciles the original operation receipt');
    const eleven=Array.from({length:11},(_,i)=>({name:`${i}.txt`,mimeType:'text/plain',buffer:Buffer.from('x')}));
    await page.getByLabel('Files to transfer').setInputFiles(eleven);
    await page.getByRole('button',{name:'Transfer selected Files',exact:true}).click();

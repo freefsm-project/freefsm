@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
@@ -56,9 +57,9 @@ func decodeFileJSON(w http.ResponseWriter, r *http.Request, out any) bool {
 // DisallowUnknownFields still matches struct fields case-insensitively. Check
 // the exact request properties before typed decoding to enforce the published
 // additionalProperties:false contract, including canonical-plus-variant input.
-func decodeTransferJSON(w http.ResponseWriter, r *http.Request, out any, properties ...string) bool {
+func decodeExactJSON(w http.ResponseWriter, r *http.Request, out any, properties ...string) bool {
 	var raw json.RawMessage
-	if !decodeFileJSON(w, r, &raw) {
+	if !decodeJSON(w, r, &raw) {
 		return false
 	}
 	var fields map[string]json.RawMessage
@@ -69,6 +70,31 @@ func decodeTransferJSON(w http.ResponseWriter, r *http.Request, out any, propert
 	for name := range fields {
 		if !slices.Contains(properties, name) {
 			writeError(w, 400, "invalid_json", "Invalid file request")
+			return false
+		}
+		if name == "occurred_at" && bytes.Equal(bytes.TrimSpace(fields[name]), []byte("null")) {
+			writeError(w, 400, "invalid_json", "Occurrence must be an instant when supplied")
+			return false
+		}
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	_, _ = decoder.Token()
+	seen := map[string]bool{}
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			writeError(w, 400, "invalid_json", "Invalid object")
+			return false
+		}
+		name := key.(string)
+		if seen[name] {
+			writeError(w, 400, "invalid_json", "Duplicate property")
+			return false
+		}
+		seen[name] = true
+		var value json.RawMessage
+		if decoder.Decode(&value) != nil {
+			writeError(w, 400, "invalid_json", "Invalid property")
 			return false
 		}
 	}
@@ -84,7 +110,7 @@ func (h *handler) fileLimits(w http.ResponseWriter, r *http.Request) {
 }
 func (h *handler) startFileTransfer(w http.ResponseWriter, r *http.Request) {
 	var request fileTransferRequest
-	if !decodeTransferJSON(w, r, &request, "id", "publication_id", "object_type", "object_id", "name", "size", "sha256", "transferred", "verified", "occurred_at") {
+	if !decodeExactJSON(w, r, &request, "id", "publication_id", "object_type", "object_id", "name", "size", "sha256", "transferred", "verified", "occurred_at") {
 		return
 	}
 	in, err := request.transfer()
@@ -92,7 +118,7 @@ func (h *handler) startFileTransfer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_file", "Invalid transfer request")
 		return
 	}
-	out, err := h.deps.Files.StartTransfer(r.Context(), in)
+	out, err := h.deps.Files.StartTransfer(r.Context(), in, authorization.FileOperation{OperationID: r.Header.Get("Operation-ID")})
 	if err != nil {
 		fileError(w, err)
 		return
@@ -117,7 +143,7 @@ func (h *handler) verifyFileTransfer(w http.ResponseWriter, r *http.Request) {
 }
 func (h *handler) lookupFileTransfer(w http.ResponseWriter, r *http.Request) {
 	var in services.TransferLookup
-	if !decodeTransferJSON(w, r, &in, "object_type", "object_id", "sha256") {
+	if !decodeExactJSON(w, r, &in, "object_type", "object_id", "sha256") {
 		return
 	}
 	if !validTransferParent(in.ObjectType, in.ObjectID) {
@@ -142,7 +168,7 @@ func (h *handler) putFileChunk(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 413, "chunk_too_large", "Chunk limit exceeded")
 		return
 	}
-	out, err := h.deps.Files.TransferChunk(r.Context(), chi.URLParam(r, "transfer"), offset, data)
+	out, err := h.deps.Files.TransferChunk(r.Context(), chi.URLParam(r, "transfer"), offset, data, authorization.FileOperation{OperationID: r.Header.Get("Operation-ID")})
 	if err != nil {
 		fileError(w, err)
 		return
@@ -156,6 +182,36 @@ func (h *handler) publishFileTransfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, map[string]any{"id": out.ID, "revision": services.FileRevision(out)})
+}
+
+func (h *handler) fileTransportReceipt(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		fileError(w, authorization.ErrForbidden)
+		return
+	}
+	out, err := req.Service.FileTransportReceipt(r.Context(), req.Actor, chi.URLParam(r, "operation"))
+	if err != nil {
+		fileError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, out)
+}
+
+func (h *handler) fileOperationReceipt(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		fileError(w, authorization.ErrForbidden)
+		return
+	}
+	out, err := req.Service.FileReceipt(r.Context(), req.Actor, chi.URLParam(r, "operation"))
+	if err != nil {
+		fileError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, out)
 }
 func (h *handler) downloadFile(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -285,15 +341,10 @@ func (h *handler) mutateFile(w http.ResponseWriter, r *http.Request, remove bool
 		return
 	}
 	var in services.FileMutation
-	if !decodeFileJSON(w, r, &in) {
+	if !decodeExactJSON(w, r, &in, "operation_id", "occurred_at", "name", "revision", "object_type", "object_id") {
 		return
 	}
 	u := actorFromContext(r.Context())
-	_, err = objectref.Parse(in.ObjectType, in.ObjectID)
-	if err != nil {
-		writeError(w, 400, "original_parent_required", "The original File parent is required; never retarget pending work")
-		return
-	}
 	err = h.deps.Files.MutateFile(r.Context(), *u.CompanyID, id, in, remove)
 	if err != nil {
 		fileError(w, err)

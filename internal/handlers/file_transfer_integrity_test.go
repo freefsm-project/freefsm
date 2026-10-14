@@ -80,6 +80,7 @@ func TestTransferVerifiedWithoutPublicationHTTP(t *testing.T) {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+bearer.Data.Token)
 		r.Header.Set("Content-Type", "application/json")
+		stageTestFileTransport(r, body)
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		if w.Code != status {
@@ -277,6 +278,7 @@ func TestTransferVerifiedWithoutPublicationHTTP(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			r := httptest.NewRequest("PUT", "/file-transfers/"+id+"/chunks?offset=6", strings.NewReader("world"))
+			r.Header.Set("Operation-ID", uuid.NewString())
 			r.Header.Set("Authorization", "Bearer "+bearer.Data.Token)
 			w := httptest.NewRecorder()
 			api.ServeHTTP(w, r)
@@ -389,6 +391,7 @@ func TestTransferRestartProbe(t *testing.T) {
 	for _, step := range []struct{ method, path, body string }{{"GET", "/file-transfers/" + id, ""}, {"PUT", "/file-transfers/" + id + "/chunks?offset=6", "world"}, {"POST", "/file-transfers/" + id + "/verify", ""}} {
 		r := httptest.NewRequest(step.method, step.path, strings.NewReader(step.body))
 		r.Header.Set("Authorization", "Bearer "+os.Getenv("FREEFSM_TRANSFER_PROBE_TOKEN"))
+		stageTestFileTransport(r, step.body)
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		if w.Code != 200 {
@@ -511,6 +514,7 @@ func TestTransferDefaultLimitHTTP(t *testing.T) {
 		t.Helper()
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+token)
+		stageTestFileTransport(r, body)
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		if w.Code != status {

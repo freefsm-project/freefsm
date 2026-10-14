@@ -70,35 +70,41 @@ type FileTransfer struct {
 	OccurredAt    *time.Time `json:"occurred_at,omitempty"`
 }
 
-func (s *FileService) StartTransfer(ctx context.Context, in FileTransfer) (FileTransfer, error) {
+func (s *FileService) StartTransfer(ctx context.Context, in FileTransfer, operation ...authorization.FileOperation) (FileTransfer, error) {
 	r, ok := authorization.FromContext(ctx)
 	if !ok {
 		return in, authorization.ErrForbidden
 	}
-	if id, err := uuid.Parse(in.ID); err != nil || id == uuid.Nil {
-		return in, fmt.Errorf("invalid transfer ID")
+	if len(operation) != 1 {
+		return in, authorization.ErrFileOperation
 	}
-	if err := (authorization.FileOperation{OperationID: in.PublicationID, OccurredAt: in.OccurredAt}).Validate(); err != nil {
-		return in, err
+	validate := func() error {
+		if in.ObjectID <= 0 || (in.ObjectType != "job" && in.ObjectType != "estimate" && in.ObjectType != "invoice") {
+			return fmt.Errorf("invalid transfer parent")
+		}
+		if id, err := uuid.Parse(in.ID); err != nil || id == uuid.Nil {
+			return fmt.Errorf("invalid transfer ID")
+		}
+		if err := (authorization.FileOperation{OperationID: in.PublicationID, OccurredAt: in.OccurredAt}).Validate(); err != nil {
+			return err
+		}
+		if d, err := hex.DecodeString(in.Digest); err != nil || len(d) != 32 || in.Digest != strings.ToLower(in.Digest) {
+			return fmt.Errorf("invalid SHA-256")
+		}
+		if in.Size <= 0 || in.Size > s.maxSize || in.Transferred != 0 || in.Verified {
+			return fmt.Errorf("invalid transfer size")
+		}
+		if strings.TrimSpace(in.Name) == "" {
+			return fmt.Errorf("invalid file name")
+		}
+		if _, err := objectref.Parse(in.ObjectType, in.ObjectID); err != nil {
+			return fmt.Errorf("invalid transfer parent")
+		}
+		return nil
 	}
-	if in.OccurredAt != nil {
-		occurred := in.OccurredAt.UTC().Truncate(time.Microsecond)
-		in.OccurredAt = &occurred
-	}
-	if d, err := hex.DecodeString(in.Digest); err != nil || len(d) != 32 || in.Digest != strings.ToLower(in.Digest) {
-		return in, fmt.Errorf("invalid SHA-256")
-	}
-	if in.Size <= 0 || in.Size > s.maxSize || in.Transferred != 0 || in.Verified {
-		return in, fmt.Errorf("invalid transfer size")
-	}
-	if strings.TrimSpace(in.Name) == "" {
-		return in, fmt.Errorf("invalid file name")
-	}
-	ref, err := objectref.Parse(in.ObjectType, in.ObjectID)
-	if err != nil {
-		return in, err
-	}
-	err = r.Service.FileTransferAction(ctx, r.Actor, ref, in.ID, func(tx pgx.Tx) (bool, map[string]any, error) {
+	ref, _ := objectref.Parse(in.ObjectType, in.ObjectID)
+	command := authorization.FileTransportCommand{FileOperation: operation[0], TransferID: in.ID, Kind: "start", Intent: in, Validate: validate}
+	err := r.Service.FileTransferAction(ctx, r.Actor, ref, command, func(tx pgx.Tx) (bool, map[string]any, error) {
 		tag, err := tx.Exec(ctx, `INSERT INTO file_transfers(id,user_id,session_hash,publication_id,object_type,object_id,name,size,sha256,occurred_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) ON CONFLICT(user_id,session_hash,id) DO NOTHING`, in.ID, r.Actor.UserID, r.Actor.SessionHash, in.PublicationID, in.ObjectType, in.ObjectID, in.Name, in.Size, in.Digest, in.OccurredAt)
 		if err != nil {
 			return false, nil, err
@@ -145,17 +151,25 @@ func (s *FileService) Transfer(ctx context.Context, id string) (FileTransfer, er
 	return out, r.Service.FileAccess(ctx, r.Actor, ref, "file.upload", r.Actor.UserID)
 }
 
-func (s *FileService) TransferChunk(ctx context.Context, id string, offset int64, data []byte) (FileTransfer, error) {
+func (s *FileService) TransferChunk(ctx context.Context, id string, offset int64, data []byte, operation ...authorization.FileOperation) (FileTransfer, error) {
+	if len(operation) != 1 {
+		return FileTransfer{}, authorization.ErrFileOperation
+	}
 	in, err := s.Transfer(ctx, id)
-	if err != nil {
-		return in, err
-	}
-	if in.Size > s.maxSize || len(data) == 0 || len(data) > FileChunkLimit || offset < 0 || offset > in.Size-int64(len(data)) {
-		return in, fmt.Errorf("invalid chunk bounds")
-	}
+	transferErr := err
 	r, _ := authorization.FromContext(ctx)
 	ref, _ := objectref.Parse(in.ObjectType, in.ObjectID)
-	err = r.Service.FileTransferAction(ctx, r.Actor, ref, in.ID, func(tx pgx.Tx) (bool, map[string]any, error) {
+	digest := sha256.Sum256(data)
+	command := authorization.FileTransportCommand{FileOperation: operation[0], TransferID: id, Kind: "chunk", Intent: map[string]any{"transfer_id": id, "offset": offset, "sha256": hex.EncodeToString(digest[:]), "size": len(data)}, Validate: func() error {
+		if transferErr != nil {
+			return transferErr
+		}
+		if in.Size > s.maxSize || len(data) == 0 || len(data) > FileChunkLimit || offset < 0 || offset > in.Size-int64(len(data)) {
+			return fmt.Errorf("invalid chunk bounds")
+		}
+		return nil
+	}}
+	err = r.Service.FileTransferAction(ctx, r.Actor, ref, command, func(tx pgx.Tx) (bool, map[string]any, error) {
 		var current int64
 		if err := tx.QueryRow(ctx, `SELECT transferred FROM file_transfers WHERE id=$1 AND user_id=$2 AND session_hash=$3 FOR UPDATE`, id, r.Actor.UserID, r.Actor.SessionHash).Scan(&current); err != nil {
 			return false, nil, err
@@ -244,6 +258,10 @@ func (s *FileService) VerifyTransfer(ctx context.Context, id string) (FileTransf
 func (s *FileService) PublishTransfer(ctx context.Context, id string) (*ent.File, error) {
 	in, err := s.VerifyTransfer(ctx, id)
 	if err != nil {
+		if r, ok := authorization.FromContext(ctx); ok && r.Actor.Channel == "api" && in.PublicationID != "" {
+			ref, _ := objectref.Parse(in.ObjectType, in.ObjectID)
+			err = r.Service.RejectFilePublication(ctx, r.Actor, in.PublicationID, filePublicationIntent(ref, in.Name, in.Size, in.Digest, in.OccurredAt), err)
+		}
 		return nil, err
 	}
 	if in.Transferred != in.Size {

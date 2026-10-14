@@ -140,6 +140,9 @@ func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string,
 	ctx = context.WithValue(ctx, commercialOperationKey{}, in)
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		var prior []byte
+		if err := admitOperation(ctx, tx, a, in.OperationID, "commercial."+kind, map[string]any{"id": id, "intent": json.RawMessage(intent)}); err != nil {
+			return err
+		}
 		var same bool
 		err := tx.QueryRow(ctx, `SELECT document_type=$4 AND requested_id=$5 AND intent=$6::jsonb,receipt FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID, kind, id, intent).Scan(&same, &prior)
 		if err == nil {

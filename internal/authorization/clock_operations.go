@@ -76,6 +76,11 @@ func (s *Service) SubmitClock(ctx context.Context, a Actor, out bool, in ClockCo
 	}
 	in.OperationID = op.String()
 	result.OperationID = in.OperationID
+	// A matching URL is transport routing, not new historical intent. Retain
+	// it only for a contradictory target so the rejected command stays bound.
+	if in.URLJobID == in.JobID {
+		in.URLJobID = 0
+	}
 	data, err := json.Marshal(struct {
 		Out     bool
 		Command ClockCommand
@@ -86,6 +91,12 @@ func (s *Service) SubmitClock(ctx context.Context, a Actor, out bool, in ClockCo
 	digest := fmt.Sprintf("%x", sha256.Sum256(data))
 	var outcome error
 	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if err := admitOperation(ctx, tx, a, in.OperationID, "clock", digest); err != nil {
+			if errors.Is(err, ErrConflict) {
+				return &ClockConflict{"operation_intent_changed"}
+			}
+			return err
+		}
 		var saved, client string
 		err := tx.QueryRow(ctx, `SELECT intent_hash,client_key,coalesce(entry_id,0),code,accepted_at FROM time_clock_receipts WHERE user_id=$1 AND operation_id=$2`, p.UserID, in.OperationID).Scan(&saved, &client, &result.EntryID, &result.Code, &result.AcceptedAt)
 		if err == nil {

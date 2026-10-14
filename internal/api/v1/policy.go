@@ -56,7 +56,7 @@ func ResponsePolicy(origins []string, next http.Handler) http.Handler {
 						}
 					}
 					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
-					w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-FreeFSM-Session-Epoch, Range, If-Range, If-None-Match")
+					w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Operation-ID, X-FreeFSM-Session-Epoch, Range, If-Range, If-None-Match")
 					w.WriteHeader(204)
 					return
 				}

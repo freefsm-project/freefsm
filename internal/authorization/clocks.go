@@ -15,6 +15,7 @@ type ClockConflict struct{ Code string }
 func (e *ClockConflict) Error() string { return e.Code }
 
 type ClockCommand struct {
+	URLJobID    int64      `json:"url_job_id,omitempty"`
 	EntryID     int64      `json:"entry_id,omitempty"`
 	JobID       int64      `json:"job_id,omitempty"`
 	Notes       string     `json:"notes,omitempty"`
@@ -57,6 +58,9 @@ func (s *Service) Clock(ctx context.Context, a Actor, out bool, in ClockCommand)
 func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, in ClockCommand) (ClockEntry, error) {
 	var result ClockEntry
 	err := func() error {
+		if in.URLJobID != 0 && in.URLJobID != in.JobID {
+			return &ClockConflict{"invalid_job"}
+		}
 		if out && in.Notes != "" || out && in.EntryID <= 0 || !out && in.EntryID != 0 {
 			return &ClockConflict{"invalid_clock"}
 		}
@@ -190,7 +194,7 @@ func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, 
 			return err
 		}
 		if result.JobID != nil {
-			if _, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata,created_at) VALUES($1,$2,$3,'job',$4,jsonb_build_object('time_entry_id',$5::bigint),$6)`, p.CompanyID, p.UserID, action, *result.JobID, result.ID, now); err != nil {
+			if _, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata,created_at) VALUES($1,$2,$3,'job',$4,jsonb_build_object('time_entry_id',$5::bigint,'clock_in',$6::timestamptz,'clock_out',$7::timestamptz),$8)`, p.CompanyID, p.UserID, action, *result.JobID, result.ID, result.ClockIn, result.ClockOut, now); err != nil {
 				return err
 			}
 		}

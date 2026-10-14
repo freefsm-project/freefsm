@@ -9,6 +9,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"time"
 )
 
 type FieldState struct {
@@ -18,6 +19,7 @@ type FieldState struct {
 }
 
 type ReviewedFieldPatch struct {
+	OccurredAt  *time.Time        `json:"occurred_at,omitempty"`
 	OperationID string            `json:"operation_id"`
 	Revisions   map[string]string `json:"revisions"`
 	Values      json.RawMessage   `json:"values"`
@@ -131,6 +133,12 @@ func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 	}
 	outcome := ""
 	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if err := admitOperation(ctx, tx, a, in.OperationID, "job.fields", map[string]any{"job_id": id, "mode": mode, "intent": json.RawMessage(intent)}); err != nil {
+			if errors.Is(err, ErrConflict) {
+				return &FieldConflict{"operation_intent_changed"}
+			}
+			return err
+		}
 		var same bool
 		err := tx.QueryRow(ctx, `SELECT job_id=$4 AND intent=$5::jsonb,outcome FROM job_field_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID, id, intent).Scan(&same, &outcome)
 		if err == nil {
@@ -157,6 +165,10 @@ func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 		persist := func() error {
 			_, err := tx.Exec(ctx, `INSERT INTO job_field_operations(user_id,client_hash,operation_id,job_id,intent,outcome) VALUES($1,$2,$3,$4,$5,$6)`, a.UserID, a.SessionHash, in.OperationID, id, intent, outcome)
 			return err
+		}
+		if in.OccurredAt != nil && (in.OccurredAt.IsZero() || in.OccurredAt.After(time.Now()) || in.OccurredAt.Nanosecond()%1000 != 0) {
+			outcome = "invalid_occurrence"
+			return persist()
 		}
 		old, scope, err := fieldParent(ctx, tx, p, "job", id, "job.fields.edit", true)
 		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) {
@@ -202,7 +214,7 @@ func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 					if _, err = tx.Exec(ctx, `UPDATE jobs SET custom_fields=$2::jsonb,updated_at=clock_timestamp() WHERE id=$1`, id, next); err != nil {
 						return err
 					}
-					if err = audit(ctx, tx, a, p, "job.fields.edit", scope, "job", id, map[string]any{"before": old, "after": next, "operation_id": in.OperationID}); err != nil {
+					if err = audit(ctx, tx, a, p, "job.fields.edit", scope, "job", id, map[string]any{"before": old, "after": next, "operation_id": in.OperationID, "occurred_at": in.OccurredAt}); err != nil {
 						return err
 					}
 				} else if err := saveaction.ConfirmNoChange(ctx, tx); err != nil {

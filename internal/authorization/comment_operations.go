@@ -77,6 +77,9 @@ func (s *Service) SubmitComment(ctx context.Context, a Actor, ref objectref.Ref,
 	digest := fmt.Sprintf("%x", sha256.Sum256(append(encoded, []byte(fmt.Sprintf(":remove:%d", in.RemoveID))...)))
 	var outcome error
 	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if err := admitOperation(ctx, tx, a, in.OperationID, "comment", digest); err != nil {
+			return err
+		}
 		var savedDigest, client string
 		err := tx.QueryRow(ctx, `SELECT intent_hash,client_key,coalesce(comment_id,0),code,accepted_at FROM comment_operation_receipts WHERE user_id=$1 AND operation_id=$2`, a.UserID, in.OperationID).Scan(&savedDigest, &client, &result.CommentID, &result.Code, &result.AcceptedAt)
 		if err == nil {

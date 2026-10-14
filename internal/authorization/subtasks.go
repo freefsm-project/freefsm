@@ -160,6 +160,9 @@ func (s *Service) SubmitSubtask(ctx context.Context, a Actor, jobID int64, in Su
 	digest := fmt.Sprintf("%x", sha256.Sum256(encoded))
 	var outcome error
 	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if err := admitOperation(ctx, tx, a, in.OperationID, "job.subtask", digest); err != nil {
+			return err
+		}
 		var saved, client string
 		err := tx.QueryRow(ctx, `SELECT intent_hash,client_key,coalesce(subtask_id::text,''),code,accepted_at FROM subtask_operation_receipts WHERE user_id=$1 AND operation_id=$2`, a.UserID, in.OperationID).Scan(&saved, &client, &result.SubtaskID, &result.Code, &result.AcceptedAt)
 		if err == nil {

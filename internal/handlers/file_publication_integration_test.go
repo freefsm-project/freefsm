@@ -300,6 +300,7 @@ func TestFileResumableAPIPublishesOnlyAfterDigestVerification(t *testing.T) {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Content-Type", "application/json")
+		stageTestFileTransport(r, body)
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		if w.Code != want {

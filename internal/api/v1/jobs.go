@@ -154,11 +154,7 @@ func (h *handler) updateJobStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request statusRequest
-	if !decodeJSON(w, r, &request) {
-		return
-	}
-	if request.StatusID <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid_request", "status_id must be positive")
+	if !decodeExactJSON(w, r, &request, "operation_id", "status_id", "status_revision", "meaning_revision", "occurred_at") {
 		return
 	}
 	req, ok := authorization.FromContext(r.Context())
@@ -193,16 +189,15 @@ func (h *handler) updateSubtask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request subtaskRequest
-	if !decodeJSON(w, r, &request) {
+	if !decodeExactJSON(w, r, &request, "operation_id", "completed", "completion_revision", "occurred_at") {
 		return
 	}
-	if request.Completed == nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "completed is required")
-		return
-	}
-	action := "reopen"
-	if *request.Completed {
-		action = "complete"
+	action := ""
+	if request.Completed != nil {
+		action = "reopen"
+		if *request.Completed {
+			action = "complete"
+		}
 	}
 	result, err := req.Service.SubmitSubtask(r.Context(), req.Actor, id, authorization.SubtaskCommand{OperationID: request.OperationID, Action: action, SubtaskID: chi.URLParam(r, "subtask"), CompletionRevision: request.CompletionRevision, OccurredAt: request.OccurredAt})
 	if err != nil {

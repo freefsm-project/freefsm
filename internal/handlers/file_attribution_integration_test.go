@@ -47,6 +47,7 @@ func TestFileAPIAuditAttributionHTTP(t *testing.T) {
 		r := httptest.NewRequest(method, path, strings.NewReader(text))
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Content-Type", "application/json")
+		stageTestFileTransport(r, text)
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		if w.Code != want {
@@ -113,9 +114,16 @@ func TestFileAPIAuditAttributionHTTP(t *testing.T) {
 		request("POST", fmt.Sprintf("/files/%d/rename", effect.Data.ID), command, 400)
 	}
 	command["operation_id"] = rename
+	invalidOccurrenceOperation := newOperationKey()
+	command["operation_id"] = invalidOccurrenceOperation
 	command["occurred_at"] = time.Now().Add(time.Hour)
 	request("POST", fmt.Sprintf("/files/%d/rename", effect.Data.ID), command, 400)
 	command["occurred_at"] = occurred
+	request("POST", fmt.Sprintf("/files/%d/rename", effect.Data.ID), command, 409)
+	if receipt := request("GET", "/file-operations/"+invalidOccurrenceOperation, "", 200); !strings.Contains(receipt, `"code":"invalid_file"`) {
+		t.Fatalf("terminal File rejection lost: %s", receipt)
+	}
+	command["operation_id"] = rename // explicitly reviewed new-ID repair
 	command["device_name"] = "forged device"
 	request("POST", fmt.Sprintf("/files/%d/rename", effect.Data.ID), command, 400)
 	delete(command, "device_name")

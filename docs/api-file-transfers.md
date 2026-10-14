@@ -13,19 +13,35 @@ The website remains online-only. Transfer is not File publication.
    is 1–1,048,576 bytes. A reference-client queue contains at most 10 Files.
 2. Compute SHA-256 over the **exact bytes** without text/newline/image
    normalization. Start `POST /file-transfers` with a new nonzero UUID `id`,
-   distinct publication-operation UUID `publication_id`, original `object_type`
-   and `object_id`, `name`, exact positive `size` and lowercase hex `sha256`.
+    distinct publication-operation UUID `publication_id`, original `object_type`
+    and `object_id`, `name`, exact positive `size` and lowercase hex `sha256`.
+    Supply an independent client-generated UUID in the `Operation-ID` header.
+    This start operation ID is neither the transfer `id` nor `publication_id`.
    Optional `occurred_at` is an offset-bearing RFC3339 instant, never in the future.
    Omit optional values rather than sending `null`. If supplied, initial
    `transferred` must be `0` and `verified` must be `false`. Unknown parent types
    and nonpositive parent IDs are nonretryable 400 input errors; a well-formed
    inaccessible Job or document remains a nondisclosing 404.
 3. Send consecutive `PUT /file-transfers/{id}/chunks?offset=N` requests with raw
-   bytes. The returned `transferred` is durable transport progress, **not**
+    bytes and a new independent `Operation-ID` UUID for each new chunk intent.
+    The returned `transferred` is durable transport progress, **not**
    verified completion or publication. Retry an uncertain chunk at its original
    offset with exactly its original bytes and length. Gaps, overlaps with a
-   different segment, changed bytes and oversize chunks reject.
-4. After interruption/restart, `GET /file-transfers/{id}` discovers the durable
+    different segment, changed bytes and oversize chunks reject. Stage the operation
+    UUID with the exact offset, bytes and length before sending; an unchanged retry
+    retains that same header, even if the response was lost. Repaired intent uses
+    a new operation UUID, never a reused resource or publication identity.
+4. After an uncertain outcome, first reconcile the staged start/chunk operation
+   with `GET /file-transfer-operations/{operation}`. Its envelope is
+   `data: {operation_id, transfer_id, code, accepted_at}` (a rejected operation may
+   omit `transfer_id`). This safe receipt remains available after parent access
+   loss; it is not a transfer representation or permission to resume. An accepted
+   receipt requires no write replay. A terminal rejection requires explicit
+   review and a new operation UUID for repaired intent. An unavailable receipt
+   lookup leaves the outcome unknown: do not blindly retry. A successful lookup
+   reporting no receipt permits an explicit unchanged-intent retry with the same
+   operation header.
+   `GET /file-transfers/{id}` separately discovers the currently authorized durable
    offset. Preserve the original File bytes and segment boundaries. Never reuse
    an ID for changed intent or silently retarget another parent.
 5. Call `POST /file-transfers/{id}/verify`. Incomplete content conflicts. Complete
@@ -49,7 +65,9 @@ limit. Session expiry or revocation grants no recovery exception.
 
 Transfers belong to the authenticated user **and paired session**, and their
 original parent is immutable. Current parent View and independent File Upload
-are required for every start, resume, verification and publication. The API is
+are required for every start, resume, verification and publication, and for the
+transfer representation. Receipt lookup returns only the authenticated caller's
+scoped nonsensitive operation outcome, including after parent loss. The API is
 Job-bound (Job or Job-linked Estimate/Invoice), even for an Administrator.
 Known transfer IDs and digests grant no authority. There is no global digest
 index or cross-user existence endpoint.
@@ -104,7 +122,11 @@ action is 403, stale resume state is 409, invalid bytes/size/format are 400,
 and excessive request chunks are 413. Storage failure is explicit and never an
 empty successful File. Obey 429 and `Retry-After`; discovery is not a throughput
 entitlement. A successful queue item remains successful when another fails;
-retry only failed items with their unchanged transfer identity and bytes.
+retry only failed items after receipt reconciliation, with their unchanged
+transfer identity, operation UUIDs and bytes. The reference queue retains staged
+start/chunk operations in memory, skips terminal rejections pending review, and
+never automatically replays unknown outcomes. Reload discards this queue; it is
+not a durable offline client.
 
 The executable protocol tests use real migrated PostgreSQL and production API
 routing. Browser tests pair through the hosted approval flow and exercise the

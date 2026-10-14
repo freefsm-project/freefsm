@@ -40,7 +40,7 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 		state, err = request.Service.ReadFieldState(r.Context(), request.Actor, id)
 	} else {
 		var input authorization.ReviewedFieldPatch
-		if !decodeJSON(w, r, &input) {
+		if !decodeExactJSON(w, r, &input, "operation_id", "revisions", "values", "occurred_at") {
 			return
 		}
 		state, err = request.Service.PatchFieldsReviewed(r.Context(), request.Actor, id, input)

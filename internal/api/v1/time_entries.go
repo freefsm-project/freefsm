@@ -82,11 +82,10 @@ func (h *handler) submitClock(w http.ResponseWriter, r *http.Request, out bool) 
 			clockAPIError(w, authorization.ErrNotFound)
 			return
 		}
-		if in.JobID != 0 && in.JobID != jobID {
-			clockAPIError(w, &authorization.ClockConflict{Code: "invalid_job"})
-			return
+		in.URLJobID = jobID
+		if in.JobID == 0 {
+			in.JobID = jobID
 		}
-		in.JobID = jobID
 	}
 	result, err := req.Service.SubmitClock(r.Context(), req.Actor, out, in)
 	if err != nil {

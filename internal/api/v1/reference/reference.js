@@ -9,11 +9,12 @@
     for (const id of ['inspect', 'logout', 'all', 'revoke']) node(id).disabled = busy || !bearer;
     node('start').querySelector('button').disabled = busy || !!deviceCode || !!bearer;
     node('transfer-start').disabled = busy || !bearer;
-    node('transfer-retry').disabled = busy || !bearer || !transfers.some(t => !t.verified);
+    node('transfer-retry').disabled = busy || !bearer || !transfers.some(t => !t.verified && !t.review);
   };
   const clear = () => { bearer = ''; deviceCode = ''; epoch = ''; redeemOperation = ''; cancelOperation = ''; transfers = []; node('transfer-files').value = ''; node('transfer-results').textContent = ''; node('code').textContent = ''; node('sessions').textContent = ''; update(); };
-  async function call(path, method, body, authenticated = false, raw = false) {
+  async function call(path, method, body, authenticated = false, raw = false, options = {}) {
     const headers = {};
+    if (options.operation) headers['Operation-ID'] = options.operation;
     if (body) headers['Content-Type'] = raw ? 'application/octet-stream' : 'application/json';
     if (authenticated) {
       headers.Authorization = `Bearer ${bearer}`;
@@ -22,6 +23,7 @@
     const response = await fetch(`/api/v1${path}`, { method, headers, credentials: 'omit', cache: 'no-store', redirect: 'error', body: body ? (raw ? body : JSON.stringify(body)) : undefined });
     const result = response.status === 204 ? null : await response.json();
     if (!response.ok) {
+      if (options.receiptLookup && response.status === 404 && result?.error?.code === 'not_found') return {unreceived: true};
       if (result?.error?.recovery_disposition === 'purge' || result?.error?.recovery_disposition === 'locked_review') clear();
       status(`HTTP ${response.status}: ${result?.error?.code || 'unknown_error'}. ${result?.error?.recovery_disposition || 'review'}; no automatic retry.`);
       return null;
@@ -59,12 +61,31 @@
     await call(`/sessions/${id}`, 'DELETE', null, true);
   }));
   const transferResults = () => { node('transfer-results').textContent = transfers.map(t => `${t.file.name}: ${t.state}`).join('\n'); };
+  async function transport(item, operation, path, body, raw = false) {
+    if (operation.attempted) {
+      const receipt = await call(`/file-transfer-operations/${operation.id}`, 'GET', null, true, false, {receiptLookup: true});
+      if (!receipt) throw new Error('reconciliation_unavailable');
+      if (!receipt.unreceived) {
+        if (receipt.operation_id !== operation.id || !receipt.accepted_at) throw new Error('receipt_mismatch');
+        if (receipt.code !== 'accepted') {
+          item.review = true;
+          throw new Error('terminal_receipt');
+        }
+        if (receipt.transfer_id !== item.id) throw new Error('receipt_mismatch');
+        // A safe receipt is not authority to read the transfer representation.
+        return call(`/file-transfers/${item.id}`, 'GET', null, true);
+      }
+      // Only this explicit retry, after a successful receipt miss, may replay.
+    }
+    operation.attempted = true;
+    return call(path, raw ? 'PUT' : 'POST', body, true, raw, {operation: operation.id});
+  }
   async function runTransfers() {
     const limits = await call('/files/limits', 'GET', null, true);
     if (!limits) return;
     for (const item of transfers) {
       if (!bearer) break;
-      if (item.verified) continue;
+      if (item.verified || item.review) continue;
       try {
         if (!item.file.size || item.file.size > limits.max_file_bytes) throw new Error('file_limit');
         if (!item.intent) {
@@ -72,22 +93,28 @@
           item.intent = {id: item.id, publication_id: item.publication, object_type: 'job', object_id: item.parent,
             name: item.file.name, size: item.file.size, sha256: Array.from(digest, b => b.toString(16).padStart(2, '0')).join('')};
         }
-        let state = await call('/file-transfers', 'POST', item.intent, true);
+        let state = await transport(item, item.start, '/file-transfers', item.intent);
         if (!state) throw new Error('start_failed');
         if (state.size !== item.file.size || state.sha256 !== item.intent.sha256 || state.object_id !== item.parent) throw new Error('resume_mismatch');
-        while (state.transferred < item.file.size) {
-          const offset = state.transferred;
+        while (item.pendingChunk || state.transferred < item.file.size) {
+          if (!item.pendingChunk) {
+            const offset = state.transferred;
+            const bytes = await item.file.slice(offset, offset + limits.max_chunk_bytes).arrayBuffer();
+            item.pendingChunk = {id: crypto.randomUUID(), offset, bytes};
+          }
+          const chunk = item.pendingChunk;
+          const {offset, bytes} = chunk;
           item.state = `${offset}/${item.file.size} transport bytes; unverified`; transferResults();
-          const bytes = await item.file.slice(offset, offset + limits.max_chunk_bytes).arrayBuffer();
-          state = await call(`/file-transfers/${item.id}/chunks?offset=${offset}`, 'PUT', bytes, true, true);
+          state = await transport(item, chunk, `/file-transfers/${item.id}/chunks?offset=${offset}`, bytes, true);
           if (!state || state.transferred !== offset + bytes.byteLength) throw new Error('chunk_failed');
+          item.pendingChunk = null;
         }
         item.state = 'transport complete; verifying'; transferResults();
         const verified = await call(`/file-transfers/${item.id}/verify`, 'POST', null, true);
         if (!verified || verified.verified !== true || verified.sha256 !== item.intent.sha256) throw new Error('verification_failed');
         item.verified = true; item.state = 'verified; not published';
       } catch {
-        item.state = 'failed; retry unchanged bytes and original parent';
+        item.state = item.review ? 'failed; terminal receipt requires reviewed new intent and new operation UUID' : 'failed; retry reconciles original operations before sending unchanged bytes';
       }
       transferResults();
     }
@@ -97,7 +124,7 @@
     if (!files.length || files.length > 10) { status('Select at most 10 Files per batch.'); return; }
     const parent = Number(node('transfer-job').value);
     if (!Number.isSafeInteger(parent) || parent <= 0) { status('Enter a valid original Job ID.'); return; }
-    transfers = files.map(file => ({file, parent, id: crypto.randomUUID(), publication: crypto.randomUUID(), state: 'queued', verified: false}));
+    transfers = files.map(file => ({file, parent, id: crypto.randomUUID(), publication: crypto.randomUUID(), start: {id: crypto.randomUUID()}, state: 'queued', verified: false}));
     await runTransfers();
   }));
   node('transfer-retry').addEventListener('click', action(runTransfers));
