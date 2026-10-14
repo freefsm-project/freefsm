@@ -3,6 +3,7 @@ package authorization
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -62,19 +63,21 @@ type JobProjectContext struct {
 // JobAssetContext is deliberately not an Asset entity. The explicit allowlist
 // excludes master Custom Fields, collaboration, audit and association history.
 type JobAssetContext struct {
-	ID              int64                 `json:"id"`
-	Number          string                `json:"number"`
-	Name            string                `json:"name"`
-	OwnershipClass  string                `json:"ownership_class"`
-	Type            string                `json:"type"`
-	Status          string                `json:"status"`
-	SerialNumber    string                `json:"serial_number"`
-	Manufacturer    string                `json:"manufacturer"`
-	Model           string                `json:"model"`
-	InstalledAt     *time.Time            `json:"installed_at"`
-	WarrantyExpires *time.Time            `json:"warranty_expires"`
-	Location        *AssetLocationContext `json:"location"`
-	ServiceNotes    string                `json:"service_notes"`
+	ServiceEntryPath string                `json:"-"`
+	ServiceEntries   []ServiceEntry        `json:"service_entries,omitempty"`
+	ID               int64                 `json:"id"`
+	Number           string                `json:"number"`
+	Name             string                `json:"name"`
+	OwnershipClass   string                `json:"ownership_class"`
+	Type             string                `json:"type"`
+	Status           string                `json:"status"`
+	SerialNumber     string                `json:"serial_number"`
+	Manufacturer     string                `json:"manufacturer"`
+	Model            string                `json:"model"`
+	InstalledAt      *time.Time            `json:"installed_at"`
+	WarrantyExpires  *time.Time            `json:"warranty_expires"`
+	Location         *AssetLocationContext `json:"location"`
+	ServiceNotes     string                `json:"service_notes"`
 }
 type AssetLocationContext struct {
 	ID    int64  `json:"id"`
@@ -197,6 +200,19 @@ func jobMasters(ctx context.Context, q queryer, p Principal, a Actor, jobID int6
 		}
 		if err = rows.Err(); err != nil {
 			return out, err
+		}
+		if p.Allows("service_entry.view", Assigned) {
+			var customer int64
+			if err = q.QueryRow(ctx, `SELECT customer_id FROM jobs WHERE id=$1`, jobID).Scan(&customer); err != nil {
+				return out, err
+			}
+			for i := range out.Assets {
+				out.Assets[i].ServiceEntryPath = fmt.Sprintf("/jobs/%d/assets/%d/service-entries", jobID, out.Assets[i].ID)
+				out.Assets[i].ServiceEntries, err = serviceEntryHistory(ctx, q, out.Assets[i].ID, customer)
+				if err != nil {
+					return out, err
+				}
+			}
 		}
 		// Retain the pre-v1 singleton representation as an additive compatibility
 		// projection of canonical operational links, never of jobs.asset_id.

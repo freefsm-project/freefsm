@@ -38,6 +38,13 @@ templ JobMasterContext(p authorization.JobMasterContext) {
 				<p>Current Location: { equipment.Location.Title }</p>
 			}
 			<p>{ equipment.ServiceNotes }</p>
+			if equipment.ServiceEntryPath!="" {
+				<a href={templ.URL(equipment.ServiceEntryPath)}>Service Entries</a>
+			}
+			if len(equipment.ServiceEntries)>0 {
+				<h3>Service history for this Customer</h3>
+				@ServiceEntryHistory(equipment.ServiceEntries)
+			}
 		}
 		for _, contact := range p.Contacts {
 			<h3>Linked Contact</h3><p>{ contact.Name } { contact.RoleTitle }</p><p>{ contact.Phone } { contact.Email }</p><p>{ contact.ServiceNotes }</p>

@@ -163,6 +163,10 @@ func New(deps Dependencies) http.Handler {
 			r.Post(path+"/{id}/comments/{cid}/remove", h.comments(typ, true))
 		}
 		r.Get("/comment-operations/{operation}", h.commentReceipt)
+		r.Get("/service-entry-operations/{operation}", h.serviceEntryReceipt)
+		r.Get("/jobs/{id}/assets/{assetID}/service-entries", h.serviceEntries)
+		r.Post("/jobs/{id}/assets/{assetID}/service-entries", h.serviceEntries)
+		r.Post("/jobs/{id}/assets/{assetID}/service-entries/{entryID}", h.serviceEntries)
 		if deps.Files != nil {
 			r.Get("/files/limits", h.fileLimits)
 			r.Post("/file-transfers", h.startFileTransfer)
