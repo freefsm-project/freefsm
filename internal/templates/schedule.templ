@@ -141,25 +141,11 @@ templ SchedulePage(p SchedulePageData) {
 					event.preventDefault();
 					target.classList.remove('drag-over');
 					var jobID = event.dataTransfer.getData('text/plain');
-					var duration = event.dataTransfer.getData('duration') || '1';
 					var hour = target.dataset.hour || '';
 					if (!jobID || !target.dataset.date) return;
-					var body = new URLSearchParams({ job_id: jobID, date: target.dataset.date, duration: duration });
+					var body = new URLSearchParams({ date: target.dataset.date });
 					if (hour !== '') body.set('hour', hour);
-					window.freefsmActions.fetch('/schedule/calendar/move', {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/x-www-form-urlencoded',
-							'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-						},
-						body: body
-					}, document.querySelector('.page-body')).then(function(response) {
-						if (response.ok) {
-							window.location.reload();
-						} else {
-							console.warn('Calendar move not saved:', response.status);
-						}
-					}).catch(function() { /* Shared persistent notice retains the unknown action. */ });
+					window.location.href = '/jobs/' + encodeURIComponent(jobID) + '/dispatch?' + body;
 				}
 			</script>
 		}
@@ -194,7 +180,7 @@ templ scheduleListDayView(p SchedulePageData) {
 					<span>{ j.Address }</span>
 				</span>
 				if j.AssigneeInitials != "" {
-					<span class="schedule-list-day-assignee" title={ j.Assignee } style={ assigneeBadgeStyle(j.AssigneeColor) }>{ j.AssigneeInitials }</span>
+					<span class="schedule-list-day-assignee">{ j.Assignee }</span>
 				}
 				if j.InvoiceID > 0 {
 					<a href={ templ.URL(fmt.Sprintf("/invoices/%d", j.InvoiceID)) } class="schedule-list-day-invoice" style={ badgeStyle(j.InvoiceStatusColor) }>{ j.InvoiceStatusName }</a>
@@ -215,7 +201,7 @@ templ scheduleListWeekView(p SchedulePageData) {
 			for _, day := range p.Days {
 				<div class={ "schedule-list-week-day", "calendar-drop-slot", "today", day.IsToday } data-date={ day.Date } ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)">
 					for _, j := range day.Jobs {
-						<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="schedule-list-week-card" draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)" style={ scheduleJobAccentStyle(j.StatusColor) }>
+						<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="schedule-list-week-card" draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)" style={ scheduleJobAccentStyle(j.StatusColor) }>
 							<span class="schedule-list-week-card-time">{ j.TimeRange }</span>
 							<strong class="schedule-list-week-card-title">{ j.JobType }</strong>
 							<span class="schedule-list-week-card-meta">{ j.Customer }</span>
@@ -245,7 +231,7 @@ templ monthView(p SchedulePageData) {
 							<td class={ "calendar-drop-slot", "schedule-month-day", "today", day.IsToday } data-date={ day.Date } data-day-href={ fmt.Sprintf("/schedule?tab=%s&period=day&date=%s", p.Tab, day.Date) } tabindex="0" ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)" onclick="scheduleOpenMonthDay(event, this)" onkeydown="scheduleOpenMonthDayKey(event, this)">
 								<div class="day-num"><a href={ templ.URL(fmt.Sprintf("/schedule?tab=%s&period=day&date=%s", p.Tab, day.Date)) } class="schedule-month-day-link" aria-label={ fmt.Sprintf("Open %s day view", day.Date) }>{ fmt.Sprintf("%d", day.DayNum) }</a></div>
 								for _, j := range day.Jobs {
-									<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job schedule-month-job" draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)" style={ scheduleJobAccentStyle(j.StatusColor) }>
+									<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job schedule-month-job" draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)" style={ scheduleJobAccentStyle(j.StatusColor) }>
 										<strong>{ j.JobType }</strong>
 										<small>{ j.Customer }</small>
 									</a>
@@ -276,7 +262,7 @@ templ weekView(p SchedulePageData) {
 			}
 			for dayIndex, day := range p.Days {
 				for _, j := range day.Jobs {
-					<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="grid-job cal-job" draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)"
+					<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="grid-job cal-job" draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)"
 						style={ fmt.Sprintf("grid-row: %d / span %d; grid-column: %d;%s", j.Hour + 2, j.Duration, dayIndex + 2, scheduleJobAccentStyle(j.StatusColor)) }>
 						<strong>{ j.JobType }</strong>
 						<small>{ j.Customer }</small>
@@ -298,7 +284,7 @@ templ dayView(p SchedulePageData) {
 				<div class="grid-slot calendar-drop-slot" data-date={ p.Date } data-hour={ fmt.Sprintf("%d", hour) } ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)" style={ fmt.Sprintf("grid-row: %d; grid-column: 2;", hour + 2) }></div>
 			}
 			for _, j := range p.Jobs {
-				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="grid-job cal-job" draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)"
+				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="grid-job cal-job" draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)"
 					style={ fmt.Sprintf("grid-row: %d / span %d; grid-column: 2;%s", j.Hour + 2, j.Duration, scheduleJobAccentStyle(j.StatusColor)) }>
 					<strong>{ j.JobType }</strong> &mdash; { j.Customer }
 					<small>{ j.Time }</small>
@@ -309,7 +295,7 @@ templ dayView(p SchedulePageData) {
 }
 
 templ dispatchView(p SchedulePageData) {
-	<p class="schedule-help">Drag unscheduled jobs or scheduled cards into a user slot. Dropping replaces the job assignment with that user.</p>
+	<p class="schedule-help">Drag a Job into a slot to propose its shared schedule and add an equal assignee. Review the full interval, arrival window and assignee set before confirming. You can also open Dispatch Job from the Job page.</p>
 	<div class="dispatch-layout" id="dispatch-board" data-date={ p.Date }>
 		<aside class="dispatch-unscheduled">
 			<header><strong>Unscheduled</strong></header>
@@ -317,7 +303,7 @@ templ dispatchView(p SchedulePageData) {
 				<p class="dispatch-empty">No unscheduled jobs</p>
 			}
 			for _, j := range p.UnscheduledJobs {
-				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="dispatch-card" draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-duration="1" ondragstart="scheduleDispatchDrag(event)">
+				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="dispatch-card" draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-duration="1" ondragstart="scheduleDispatchDrag(event)">
 					<span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span>
 					<strong>{ j.JobType }</strong>
 					<small>{ j.Customer }</small>
@@ -341,7 +327,7 @@ templ dispatchView(p SchedulePageData) {
 							for _, cell := range row.Cells {
 			<td class="dispatch-slot" data-user-id={ fmt.Sprintf("%d", row.Tech.ID) } data-date={ cell.Column.Date } data-hour={ func() string { if p.Period == "day" { return fmt.Sprintf("%d", cell.Column.Hour) } else { return "" } }() } ondragover="scheduleDispatchDragOver(event)" ondragleave="scheduleDispatchDragLeave(event)" ondrop="scheduleDispatchDrop(event, this)">
 									for _, j := range cell.Jobs {
-										<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class={ dispatchScheduledJobClass(p.Period) } draggable="true" data-job-id={ fmt.Sprintf("%d", j.ID) } data-duration={ fmt.Sprintf("%d", j.Duration) } data-hour={ fmt.Sprintf("%d", j.Hour) } ondragstart="scheduleDispatchDrag(event)" style={ dispatchScheduledJobStyle(j.StatusColor, p.Period) } title={ dispatchScheduledJobLabel(j) } aria-label={ dispatchScheduledJobLabel(j) }>
+										<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class={ dispatchScheduledJobClass(p.Period) } draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-duration={ fmt.Sprintf("%d", j.Duration) } data-hour={ fmt.Sprintf("%d", j.Hour) } ondragstart="scheduleDispatchDrag(event)" style={ dispatchScheduledJobStyle(j.StatusColor, p.Period) } title={ dispatchScheduledJobLabel(j) } aria-label={ dispatchScheduledJobLabel(j) }>
 											if p.Period != "month" {
 												<strong>{ j.JobType }</strong>
 												<small>{ j.Customer }</small>
@@ -374,24 +360,12 @@ templ dispatchView(p SchedulePageData) {
 			event.preventDefault();
 			target.classList.remove('drag-over');
 			var jobID = event.dataTransfer.getData('text/plain');
-			var duration = event.dataTransfer.getData('duration') || '1';
 			var hour = target.dataset.hour || '';
 			var board = document.getElementById('dispatch-board');
 			if (!jobID || !board || !target.dataset.userId) return;
-			window.freefsmActions.fetch('/schedule/dispatch', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/x-www-form-urlencoded',
-					'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-				},
-				body: function() { var body = new URLSearchParams({ job_id: jobID, user_id: target.dataset.userId, date: target.dataset.date || board.dataset.date, duration: duration }); if (hour !== '') body.set('hour', hour); return body; }()
-			}, document.querySelector('.page-body')).then(function(response) {
-				if (response.ok) {
-					window.location.reload();
-				} else {
-					console.warn('Dispatch update not saved:', response.status);
-				}
-			}).catch(function() { /* Shared persistent notice retains the unknown action. */ });
+			var proposal = new URLSearchParams({ user_id: target.dataset.userId, date: target.dataset.date || board.dataset.date });
+			if (hour !== '') proposal.set('hour', hour);
+			window.location.href = '/jobs/' + encodeURIComponent(jobID) + '/dispatch?' + proposal;
 		}
 	</script>
 }

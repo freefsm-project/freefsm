@@ -32,7 +32,13 @@ export class ClockReference {
   async receipt(id) { return this.call(`/time-operations/${id}`,'GET'); }
   withoutLocation(id) {
     const original=this.pending.get(id);
-    if (original?.state!=='terminal'||!['invalid_gps','gps_immutable'].includes(original.result.error?.code)) throw new Error('location_repair_not_available');
+    // Explicitly stage a location-free alternative after validation or Capture
+    // denial, including malformed GPS JSON timestamps. These generic failures
+    // do not prove GPS was the only problem: submission still checks all current
+    // clock authority and lease/order rules. Unknown/retryable/accepted effects
+    // must never acquire a new identity through this recovery action.
+    if (original?.state!=='terminal' || !Object.hasOwn(original.command,'gps') ||
+        !['invalid_gps','gps_immutable','invalid_request','forbidden'].includes(original.result.error?.code)) throw new Error('location_repair_not_available');
     const command=structuredClone(original.command);
     delete command.gps; command.operation_id=crypto.randomUUID();
     this.pending.set(command.operation_id,{kind:original.kind,command:Object.freeze(command),state:'pending'});

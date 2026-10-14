@@ -178,7 +178,7 @@ func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, 
 			if _, err := tx.Exec(ctx, `INSERT INTO time_clock_gps(entry_id,event,latitude,longitude,captured_at,accuracy,accepted_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, result.ID, event, g.Latitude, g.Longitude, g.CapturedAt, g.Accuracy, now); err != nil {
 				return err
 			}
-			if err := audit(ctx, tx, a, p, "time.gps.capture", Own, "time_entry", result.ID, map[string]any{"event": event, "operation_id": in.OperationID, "captured_at": g.CapturedAt, "accepted_at": now}); err != nil {
+			if err := audit(ctx, tx, a, p, "time.gps.capture", Own, "time_entry", result.ID, map[string]any{"event": event, "operation_id": in.OperationID, "occurred_at": occurrence, "captured_at": g.CapturedAt, "accepted_at": now}); err != nil {
 				return err
 			}
 		}

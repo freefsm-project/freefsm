@@ -24,7 +24,7 @@ const assert=require('node:assert/strict');
   await page.goto(base+'/jobs/new');
   await page.locator('[name=customer_id]').selectOption(customer);
   await page.locator('[name=job_type]').fill('Browser minimal Job');
-  assert.equal(await page.locator('[name=start_time]').inputValue(),'');
+   assert.equal(await page.locator('[name=start_time]').count(),0);
   await save('Save','/jobs');
   await page.waitForURL(/\/jobs\?/);
   await page.getByRole('link',{name:'Browser minimal Job',exact:true}).first().click();

@@ -71,21 +71,11 @@ func (h *handler) submitClock(w http.ResponseWriter, r *http.Request, out bool) 
 		clockAPIError(w, authorization.ErrUnavailable)
 		return
 	}
-	var wire struct {
-		authorization.ClockCommand
-		JobID *int64 `json:"job_id"`
-	}
+	var wire clockWire
 	if !decodeJSON(w, r, &wire) {
 		return
 	}
 	in := wire.ClockCommand
-	if wire.JobID != nil {
-		if *wire.JobID <= 0 {
-			clockAPIError(w, &authorization.ClockConflict{Code: "invalid_job"})
-			return
-		}
-		in.JobID = *wire.JobID
-	}
 	if id := chi.URLParam(r, "id"); id != "" {
 		jobID, err := strconv.ParseInt(id, 10, 64)
 		if err != nil || jobID <= 0 {

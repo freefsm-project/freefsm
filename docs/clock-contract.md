@@ -21,6 +21,10 @@ split, rounding, reassignment or standalone fallback is performed.
 - Every clock command requires a UUID `operation_id`. Offline clocks additionally
   provide RFC3339 `occurred_at` and `lease_id`; online clocks use acceptance-time
   server instants. Web clocks always use server time.
+  Optional means omitted: supplied JSON `null` is invalid, including optional
+  GPS accuracy. Property names are exact-case; unknown and duplicate properties
+  reject before any clock effect or accepted receipt. Explicit zero IDs never
+  become omitted targets.
   Stored instants have PostgreSQL microsecond precision: submitted sub-microsecond
   occurrences/captures are explicitly invalid, never silently rounded. Offset
   timestamps retain exact supported precision across correction forms as well.
@@ -43,13 +47,22 @@ Invalid GPS is never discarded on the server. Explicit **Submit without
 location** retains the staged occurrence and target, removes only GPS, and uses
 a new operation identity. Unavailable/denied location permits a separately
 chosen location-free clock. Conflicts remain visible; nothing auto-replays.
+The reference client's explicit recovery also supports malformed GPS timestamps
+and loss of the independent GPS Capture grant. It stages a new pending command,
+retaining occurrence, lease, target and notes. Generic validation/permission
+errors do not prove GPS was the only problem: current clock authority and all
+invariants are checked again when the user submits the repaired command.
+Accepted, unknown and retryable outcomes cannot use this new-ID recovery.
 
 ## Upgrade and ownership
 
 Recorded entries and legacy coordinates are retained. New GPS evidence uses a
 separate clock-event table; unknown historical captures/accuracy are not filled
-in. Protected audit, clock effects and receipts commit atomically. Existing
-nonprotected Roles receive no new permissions; pending legacy authorization
+in. Protected audit, clock effects and receipts commit atomically. New
+GPS audit events record known operation occurrence separately from capture and
+acceptance; protected audit browse and CSV retain that occurrence. Unknown
+historical occurrence is not backfilled. Existing nonprotected Roles receive
+no new permissions; pending legacy authorization
 requires the existing authenticated Administrator review before clocks operate.
 
 The obsolete role-label API mutation contract is denied. The unqualified

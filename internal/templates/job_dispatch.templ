@@ -1,0 +1,133 @@
+package templates
+
+import "fmt"
+import "time"
+import "context"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+func dispatchLocal(t *time.Time, zone string) string {
+	if t==nil {return ""}
+	loc,err:=time.LoadLocation(zone);if err!=nil{return ""}
+	return t.In(loc).Format("2006-01-02T15:04:05.999999999")
+}
+
+func dispatchOffset(t *time.Time, zone string) string {
+	if t==nil {return ""};loc,err:=time.LoadLocation(zone);if err!=nil{return ""};return t.In(loc).Format("-07:00")
+}
+
+func canDispatchJob(ctx context.Context) bool {
+	p,ok:=authorization.NavigationPrincipal(ctx);return ok && (p.Allows("job.schedule",authorization.All) || p.Allows("job.assign",authorization.All))
+}
+
+templ JobDispatch(id int64, p authorization.DispatchReview) {
+	@Layout("Dispatch Job") {
+		<dialog id="dispatch-dialog" aria-labelledby="dispatch-title" open>
+		<article>
+		<h1 id="dispatch-title">Dispatch: { p.Title }</h1>
+		if p.CurrentPlan != nil {
+			<section aria-label="Current persisted dispatch">
+				<h2>Current persisted dispatch</h2>
+				<p>Start: { dispatchDisplay(p.CurrentPlan.Start,p.Zone) }; end: { dispatchDisplay(p.CurrentPlan.End,p.Zone) }</p>
+				<p>Arrival window: { dispatchDisplay(p.CurrentPlan.ArrivalStart,p.Zone) } – { dispatchDisplay(p.CurrentPlan.ArrivalEnd,p.Zone) }</p>
+				<p>Equal assignees:
+					for _, name := range p.CurrentUsers {
+						<span>{ name } </span>
+					}
+				</p>
+			</section>
+			<h2>Your proposed dispatch</h2>
+		}
+		<p>Company timezone: { p.Zone }. One shared interval, with equal assignees. Dispatch does not change Status.</p>
+		<form method="post" hx-boost="false" hx-history="false" action={ templ.URL(fmt.Sprintf("/jobs/%d/dispatch",id)) }
+			if p.Error != "" {
+				data-server-error={ p.Error }
+			}
+		>
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			if p.Error != "" {
+				<div data-error-summary class="error-summary" role="alert" tabindex="-1" id="dispatch-error">
+					<strong>Dispatch needs review</strong>
+					<p>{ p.Error }</p>
+					<a href="#dispatch-start">Review the proposed fields below</a>
+				</div>
+			}
+			if p.ID != "" {
+				<input type="hidden" name="review_id" value={ p.ID }/>
+				<h2>Review full dispatch</h2>
+				<dl>
+					<dt>Start</dt><dd>{ dispatchDisplay(p.Plan.Start,p.Zone) }</dd>
+					<dt>End</dt><dd>{ dispatchDisplay(p.Plan.End,p.Zone) }</dd>
+					<dt>Arrival window start</dt><dd>{ dispatchDisplay(p.Plan.ArrivalStart,p.Zone) }</dd>
+					<dt>Arrival window end</dt><dd>{ dispatchDisplay(p.Plan.ArrivalEnd,p.Zone) }</dd>
+					<dt>Equal assignees</dt><dd>
+						if len(p.Choices) == 0 {
+							<span>Unassigned</span>
+							}
+						for _, u := range p.Choices {
+							<span>{ u.Name } </span>
+						}
+					</dd>
+				</dl>
+				for _, warning := range p.Warnings {
+					<p role="status">{ warning }</p>
+				}
+				if len(p.Overlaps) > 0 {
+					<h3>Current common-assignee overlaps</h3>
+					<ul>
+						for _, o := range p.Overlaps {
+							<li>{ o.Title }: { o.Start.In(mustDispatchZone(p.Zone)).Format(time.RFC3339) } – { o.End.In(mustDispatchZone(p.Zone)).Format(time.RFC3339) }</li>
+						}
+					</ul>
+					<label><input type="checkbox" name="acknowledge_overlaps" value="true" required/>I acknowledge these current overlaps. Record this acknowledgment in the audit.</label>
+				}
+				<button type="submit" name="save_conflict_review" value={ p.FormRevision }>Confirm dispatch</button>
+			} else {
+				<p>Leave both planned times empty to unschedule. For an ambiguous daylight-saving time, enter an explicit UTC offset such as -04:00 or -05:00. Nonexistent local times are rejected.</p>
+				@dispatchTimeInput("Planned start","start",p.Plan.Start,p)
+				@dispatchTimeInput("Planned end","end",p.Plan.End,p)
+				@dispatchTimeInput("Arrival window start","arrival_start",p.Plan.ArrivalStart,p)
+				@dispatchTimeInput("Arrival window end","arrival_end",p.Plan.ArrivalEnd,p)
+				if p.CanSchedule {
+					<button type="button" class="outline" onclick="this.form.querySelectorAll('[name=start],[name=end],[name=arrival_start],[name=arrival_end],[name$=_offset]').forEach(function(input){input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));})">Propose unscheduling</button>
+				}
+				<fieldset><legend>Equal assignees (optional)</legend>
+					for _, u := range p.Choices {
+						<label><input name="assignee_ids" type="checkbox" value={ fmt.Sprint(u.ID) } checked?={ u.Selected } disabled?={ !p.CanAssign }/>{ u.Name }
+							if u.Unavailable {
+								<span> (unavailable)</span>
+							}
+						</label>
+						if !p.CanAssign && u.Selected {
+							<input type="hidden" name="assignee_ids" value={ fmt.Sprint(u.ID) }/>
+						}
+					}
+				</fieldset>
+				<button type="submit">Review dispatch</button>
+			}
+			<a id="dispatch-cancel" href={ templ.URL(fmt.Sprintf("/jobs/%d",id)) }>Cancel</a>
+		</form>
+		</article>
+		</dialog>
+		<script>
+			(function() {
+				var dialog = document.getElementById('dispatch-dialog');
+				dialog.close(); dialog.showModal();
+				dialog.addEventListener('cancel', function(event) {event.preventDefault(); document.getElementById('dispatch-cancel').click();});
+				var error = document.getElementById('dispatch-error'); if (error) error.focus();
+			})();
+		</script>
+	}
+}
+
+func mustDispatchZone(zone string) *time.Location {
+	l,err:=time.LoadLocation(zone);if err!=nil{return time.UTC};return l
+}
+
+templ dispatchTimeInput(label, name string, value *time.Time, p authorization.DispatchReview) {
+	<label>{ label }<input id={ "dispatch-"+name } name={ name } type="datetime-local" step="any" value={ dispatchDraft(p,name,dispatchLocal(value,p.Zone)) } readonly?={ !p.CanSchedule }/></label>
+	<label>{ label } UTC offset<input name={ name+"_offset" } type="text" placeholder="Automatic unless ambiguous" value={ dispatchDraft(p,name+"_offset",dispatchOffset(value,p.Zone)) } readonly?={ !p.CanSchedule }/></label>
+}
+
+func dispatchDraft(p authorization.DispatchReview,name,fallback string) string {if v,ok:=p.Draft[name];ok{return v};return fallback}
+
+func dispatchDisplay(t *time.Time,zone string) string {if t==nil{return "Not set"};return dispatchLocal(t,zone)+" "+dispatchOffset(t,zone)}
