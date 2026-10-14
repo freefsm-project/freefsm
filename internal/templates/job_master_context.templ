@@ -4,9 +4,16 @@ import "fmt"
 
 templ JobMasterContext(p authorization.JobMasterContext) {
 	<section aria-label="Linked Job context">
-		if p.Project != nil {
+		if p.ProjectReference != nil {
 			<h3>Linked Project</h3>
-			<p>{ p.Project.Name }</p><p>{ p.Project.Description }</p>
+			<p>{ p.ProjectReference.Name } <span class="badge">Archived</span></p>
+		}
+		if p.Project != nil {
+			if p.ProjectReference == nil {
+				<h3>Linked Project</h3>
+				<p>{ p.Project.Name }</p>
+			}
+			<p>{ p.Project.Description }</p>
 			<p>{ p.Project.Status } — { fmt.Sprintf("%.0f%%",p.Project.Progress) }</p>
 			if p.Project.PlannedStartDate != nil {
 				<p>Planned start: { *p.Project.PlannedStartDate }</p>
@@ -37,6 +44,10 @@ templ JobMasterContext(p authorization.JobMasterContext) {
 		}
 		if p.Location != nil {
 			<h3>Linked Location</h3><p>{ p.Location.Title }</p><p>{ p.Location.Address1 } { p.Location.Address2 } { p.Location.City } { p.Location.State } { p.Location.ZipCode }</p><p>{ p.Location.AccessNotes }</p><p>{ p.Location.ServiceNotes }</p>
+			if p.Location.Latitude != nil && p.Location.Longitude != nil {
+				<p>Coordinates: { fmt.Sprintf("%g, %g", *p.Location.Latitude, *p.Location.Longitude) }</p>
+				<a href={ templ.URL(fmt.Sprintf("https://www.openstreetmap.org/directions?to=%g%%2C%g", *p.Location.Latitude, *p.Location.Longitude)) } rel="noreferrer">Navigate to service Location</a>
+			}
 		}
 	</section>
 }
