@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -52,12 +53,38 @@ func decodeFileJSON(w http.ResponseWriter, r *http.Request, out any) bool {
 	return true
 }
 
+// DisallowUnknownFields still matches struct fields case-insensitively. Check
+// the exact request properties before typed decoding to enforce the published
+// additionalProperties:false contract, including canonical-plus-variant input.
+func decodeTransferJSON(w http.ResponseWriter, r *http.Request, out any, properties ...string) bool {
+	var raw json.RawMessage
+	if !decodeFileJSON(w, r, &raw) {
+		return false
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+		writeError(w, 400, "invalid_json", "Invalid file request")
+		return false
+	}
+	for name := range fields {
+		if !slices.Contains(properties, name) {
+			writeError(w, 400, "invalid_json", "Invalid file request")
+			return false
+		}
+	}
+	if err := json.Unmarshal(raw, out); err != nil {
+		writeError(w, 400, "invalid_json", "Invalid file request")
+		return false
+	}
+	return true
+}
+
 func (h *handler) fileLimits(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 200, map[string]any{"max_file_bytes": h.deps.Files.MaxSize(), "max_batch_files": 10, "max_chunk_bytes": services.FileChunkLimit, "digest": "sha256"})
 }
 func (h *handler) startFileTransfer(w http.ResponseWriter, r *http.Request) {
 	var request fileTransferRequest
-	if !decodeFileJSON(w, r, &request) {
+	if !decodeTransferJSON(w, r, &request, "id", "publication_id", "object_type", "object_id", "name", "size", "sha256", "transferred", "verified", "occurred_at") {
 		return
 	}
 	in, err := request.transfer()
@@ -90,7 +117,7 @@ func (h *handler) verifyFileTransfer(w http.ResponseWriter, r *http.Request) {
 }
 func (h *handler) lookupFileTransfer(w http.ResponseWriter, r *http.Request) {
 	var in services.TransferLookup
-	if !decodeFileJSON(w, r, &in) {
+	if !decodeTransferJSON(w, r, &in, "object_type", "object_id", "sha256") {
 		return
 	}
 	if !validTransferParent(in.ObjectType, in.ObjectID) {

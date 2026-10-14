@@ -119,10 +119,68 @@ func TestTransferVerifiedWithoutPublicationHTTP(t *testing.T) {
 		}
 		return w.Body.String()
 	}
+	// JSON property names are case-sensitive in the served schema, including
+	// when a canonical property is present alongside an unknown case variant.
+	rejectCaseVariants := func(path, fragment, body string) {
+		t.Helper()
+		schema, err := compiler.Compile("https://transfer.test/openapi.json#" + fragment)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var canonical map[string]any
+		if err := json.Unmarshal([]byte(body), &canonical); err != nil {
+			t.Fatal(err)
+		}
+		if err := schema.Validate(canonical); err != nil {
+			t.Fatalf("canonical request fails schema: %v", err)
+		}
+		snapshot := func() [4]int64 {
+			t.Helper()
+			var counts [4]int64
+			if err := pool.QueryRow(ctx, `SELECT
+				(SELECT count(*) FROM file_transfers),
+				(SELECT count(*) FROM file_transfer_chunks),
+				(SELECT count(*) FROM authorization_audit WHERE detail ? 'transfer_id'),
+				(SELECT count(*) FROM files)`).Scan(&counts[0], &counts[1], &counts[2], &counts[3]); err != nil {
+				t.Fatal(err)
+			}
+			return counts
+		}
+		for key := range canonical {
+			for _, extra := range []bool{false, true} {
+				t.Logf("rejecting %s property %s (extra=%t)", path, key, extra)
+				request := make(map[string]any, len(canonical)+1)
+				for k, v := range canonical {
+					request[k] = v
+				}
+				request[strings.ToUpper(key)] = request[key]
+				if !extra {
+					delete(request, key)
+				}
+				if err := schema.Validate(request); err == nil {
+					t.Fatal("case-variant property unexpectedly satisfies schema")
+				}
+				encoded, err := json.Marshal(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				before := snapshot()
+				response := call("POST", path, string(encoded), 400)
+				if !strings.Contains(response, `"code":"invalid_json"`) {
+					t.Fatalf("expected typed invalid_json: %s", response)
+				}
+				if after := snapshot(); after != before {
+					t.Fatalf("invalid request committed effects: %v -> %v", before, after)
+				}
+			}
+		}
+	}
 	sum := sha256.Sum256([]byte("hello world"))
 	id := uuid.NewString()
 	start := fmt.Sprintf(`{"id":%q,"publication_id":%q,"object_type":"job","object_id":%d,"name":"field.txt","size":11,"sha256":%q}`, id, uuid.NewString(), j.ID, hex.EncodeToString(sum[:]))
 	validate("TransferRequest", []byte(start))
+	withOptionals := strings.TrimSuffix(start, "}") + `,"transferred":0,"verified":false,"occurred_at":"2026-01-01T00:00:00Z"}`
+	rejectCaseVariants("/file-transfers", "/components/schemas/TransferRequest", withOptionals)
 	if limits := call("GET", "/files/limits", "", 200); !strings.Contains(limits, `"max_file_bytes":11`) {
 		t.Fatal("configured limit undiscoverable")
 	}
@@ -168,6 +226,7 @@ func TestTransferVerifiedWithoutPublicationHTTP(t *testing.T) {
 	if found := call("POST", "/file-transfers/lookup", lookup, 200); !strings.Contains(found, id) {
 		t.Fatal("own verified digest not reusable")
 	}
+	rejectCaseVariants("/file-transfers/lookup", "/paths/~1file-transfers~1lookup/post/requestBody/content/application~1json/schema", lookup)
 	other, err := sessions.CreateMobile(ctx, admin, "Another device")
 	if err != nil {
 		t.Fatal(err)
