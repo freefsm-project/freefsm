@@ -11,7 +11,6 @@ import (
 	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var ErrCommercialInput = errors.New("invalid commercial document")
@@ -230,7 +229,9 @@ func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string,
 			r.Number = ""
 			r.Revision = ""
 			var field *customfields.FieldError
-			var pg *pgconn.PgError
+			// Only the originating domain boundary can reject commercial intent.
+			// A CHECK/FK error can also originate in audit, projection or storage;
+			// its SQLSTATE alone must never consume an operation identity.
 			switch {
 			case errors.Is(effect, ErrNotFound):
 				r.Outcome = "not_found"
@@ -242,8 +243,6 @@ func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string,
 				r.Outcome = "commercial_conflict"
 			case errors.Is(effect, ErrCommercialInput), errors.As(effect, &field):
 				r.Outcome = "invalid_document"
-			case errors.As(effect, &pg) && (pg.Code == "23514" || pg.Code == "23503"):
-				r.Outcome = "commercial_conflict"
 			default:
 				return effect // dependency/audit failure stays nonterminal
 			}

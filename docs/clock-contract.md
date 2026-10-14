@@ -13,8 +13,16 @@ split, rounding, reassignment or standalone fallback is performed.
 
 ## Field API
 
-- `POST /api/v1/time-entries/lease` with `{}` obtains the current device's staging
-  window. A lease is evidence of a window, never authority at acceptance.
+- `POST /api/v1/time-entries/lease` with `{}` and a client-generated UUID in
+  `Operation-ID` obtains the current device's staging window. The issuance
+  receipt includes `operation_id`, `code`, `accepted_at` and, when accepted,
+  `id`, `issued_at`, `expires_at`. Query it at
+  `GET /api/v1/clock-lease-operations/{operation}` after a lost response.
+  Unchanged retry retains the exact lease and bounds, including expired bounds;
+  a deliberate new renewal uses a new UUID. Grant loss still permits reading
+  the same client's safe receipt, but blocks new issuance and clock acceptance.
+  The common operation registry rejects reuse across any other mutation family.
+  A lease is evidence of a window, never authority at acceptance.
 - `POST /api/v1/time-entries/clock-in` accepts an optional `job_id`.
   `/api/v1/jobs/{id}/clock-in` binds the same command to that exact Job.
 - `POST /api/v1/time-entries/clock-out` requires `entry_id`.

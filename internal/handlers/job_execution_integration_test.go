@@ -27,7 +27,13 @@ import (
 func executionAPI(t *testing.T, api http.Handler, token, method, path string, input any, want int) string {
 	t.Helper()
 	data, _ := json.Marshal(input)
+	if method == http.MethodDelete && path == "/session" {
+		data = nil
+	}
 	r := httptest.NewRequest(method, path, strings.NewReader(string(data)))
+	if method == http.MethodDelete && path == "/session" {
+		r.Header.Set("Operation-ID", uuid.NewString())
+	}
 	r.Header.Set("Authorization", "Bearer "+token)
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()

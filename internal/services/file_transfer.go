@@ -44,7 +44,7 @@ func (s *FileService) LookupTransfer(ctx context.Context, in TransferLookup) (Fi
 		return out, err
 	}
 	if d, err := hex.DecodeString(in.Digest); err != nil || len(d) != 32 || in.Digest != strings.ToLower(in.Digest) {
-		return out, fmt.Errorf("invalid SHA-256")
+		return out, invalidFile("invalid SHA-256")
 	}
 	var id string
 	err = r.Service.Pool.QueryRow(ctx, `SELECT id::text FROM file_transfers WHERE user_id=$1 AND session_hash=$2 AND object_type=$3 AND object_id=$4 AND sha256=$5 AND transferred=size ORDER BY created_at DESC,id LIMIT 1`, r.Actor.UserID, r.Actor.SessionHash, in.ObjectType, in.ObjectID, in.Digest).Scan(&id)
@@ -80,25 +80,25 @@ func (s *FileService) StartTransfer(ctx context.Context, in FileTransfer, operat
 	}
 	validate := func() error {
 		if in.ObjectID <= 0 || (in.ObjectType != "job" && in.ObjectType != "estimate" && in.ObjectType != "invoice") {
-			return fmt.Errorf("invalid transfer parent")
+			return invalidFile("invalid transfer parent")
 		}
 		if id, err := uuid.Parse(in.ID); err != nil || id == uuid.Nil {
-			return fmt.Errorf("invalid transfer ID")
+			return invalidFile("invalid transfer ID")
 		}
 		if err := (authorization.FileOperation{OperationID: in.PublicationID, OccurredAt: in.OccurredAt}).Validate(); err != nil {
 			return err
 		}
 		if d, err := hex.DecodeString(in.Digest); err != nil || len(d) != 32 || in.Digest != strings.ToLower(in.Digest) {
-			return fmt.Errorf("invalid SHA-256")
+			return invalidFile("invalid SHA-256")
 		}
 		if in.Size <= 0 || in.Size > s.maxSize || in.Transferred != 0 || in.Verified {
-			return fmt.Errorf("invalid transfer size")
+			return invalidFile("invalid transfer size")
 		}
 		if strings.TrimSpace(in.Name) == "" {
-			return fmt.Errorf("invalid file name")
+			return invalidFile("invalid file name")
 		}
 		if _, err := objectref.Parse(in.ObjectType, in.ObjectID); err != nil {
-			return fmt.Errorf("invalid transfer parent")
+			return invalidFile("invalid transfer parent")
 		}
 		return nil
 	}
@@ -165,7 +165,7 @@ func (s *FileService) TransferChunk(ctx context.Context, id string, offset int64
 			return transferErr
 		}
 		if in.Size > s.maxSize || len(data) == 0 || len(data) > FileChunkLimit || offset < 0 || offset > in.Size-int64(len(data)) {
-			return fmt.Errorf("invalid chunk bounds")
+			return invalidFile("invalid chunk bounds")
 		}
 		return nil
 	}}
@@ -209,7 +209,7 @@ func (s *FileService) VerifyTransfer(ctx context.Context, id string) (FileTransf
 		return in, authorization.ErrConflict
 	}
 	if in.Size > s.maxSize {
-		return in, fmt.Errorf("invalid transfer size: current limit exceeded")
+		return in, invalidFile("invalid transfer size: current limit exceeded")
 	}
 	r, _ := authorization.FromContext(ctx)
 	ref, _ := objectref.Parse(in.ObjectType, in.ObjectID)
@@ -244,9 +244,9 @@ func (s *FileService) VerifyTransfer(ctx context.Context, id string) (FileTransf
 			return 0, nil, err
 		}
 		if n != in.Size || hex.EncodeToString(digest.Sum(nil)) != in.Digest {
-			return 0, nil, fmt.Errorf("invalid file content: digest mismatch")
+			return 0, nil, invalidFile("invalid file content: digest mismatch")
 		}
-		if _, err := validateFileContent(f.Name(), in.Name); err != nil {
+		if _, err := s.validateContent(f.Name(), in.Name); err != nil {
 			return 0, nil, err
 		}
 		in.Verified = true

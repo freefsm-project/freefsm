@@ -122,14 +122,17 @@ func (h *handler) masterContext(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
-	var err error
-	if req, ok := authorization.FromContext(r.Context()); ok {
-		err = req.Service.Logout(r.Context(), req.Actor)
-	} else {
-		err = h.deps.Sessions.RevokeMobile(r.Context(), tokenFromContext(r.Context()))
+	operation, ok := securityOperationID(w, r)
+	if !ok {
+		return
 	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "internal_error", "could not delete session")
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		writeError(w, 503, "unavailable", "session management unavailable")
+		return
+	}
+	if _, err := req.Service.SubmitSessionRevocation(r.Context(), req.Actor, operation, "logout", 0); err != nil {
+		sessionError(w, err)
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")

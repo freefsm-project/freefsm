@@ -2,14 +2,28 @@
 // replay engine. A real field client must additionally implement API-03 storage.
 export class ClockReference {
   constructor(base, bearer) { this.base=base; this.bearer=bearer; this.pending=new Map(); }
-  async call(path, method, body) {
-    const response=await fetch(this.base+path,{method,credentials:'omit',cache:'no-store',redirect:'error',headers:{Authorization:`Bearer ${this.bearer}`,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});
+  async call(path, method, body, operation) {
+    const response=await fetch(this.base+path,{method,credentials:'omit',cache:'no-store',redirect:'error',headers:{Authorization:`Bearer ${this.bearer}`,'Content-Type':'application/json',...(operation?{'Operation-ID':operation}:{})},body:body===undefined?undefined:JSON.stringify(body)});
     return {status:response.status,...await response.json()};
   }
   async renew() {
-    const result=await this.call('/time-entries/lease','POST',{});
-    if (result.status!==200) throw new Error(result.error?.code);
-    this.lease=result.data; return this.lease;
+    const op=this.leaseOperation ||= {id:crypto.randomUUID(),attempted:false};
+    if (op.terminal) throw new Error('explicit_repair_required');
+    let result;
+    if (op.attempted) {
+      result=await this.call(`/clock-lease-operations/${op.id}`,'GET');
+      if (result.status!==200 && !(result.status===404 && result.error?.code==='not_found')) throw new Error(result.error?.code);
+    }
+    if (!result || result.status===404) {
+      op.attempted=true;
+      result=await this.call('/time-entries/lease','POST',{},op.id);
+    }
+    if (result.status!==200 || result.data?.code!=='accepted') {
+      op.terminal=result.status===200 || (result.status<500 && result.status!==429);
+      throw new Error(result.error?.code || result.data?.code);
+    }
+    if (result.data.operation_id!==op.id || !result.data.id) throw new Error('receipt_mismatch');
+    this.lease=result.data; this.leaseOperation=undefined; return this.lease;
   }
   stage(kind, fields, occurredAt) {
     if (!['in','out'].includes(kind) || !this.lease || !occurredAt ||

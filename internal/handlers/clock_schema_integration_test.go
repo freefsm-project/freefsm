@@ -25,6 +25,9 @@ func clockReviewCall(t *testing.T, server *httptest.Server, token, method, path 
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
+	if method == "POST" && path == "/time-entries/lease" {
+		req.Header.Set("Operation-ID", uuid.NewString())
+	}
 	res, err := server.Client().Do(req)
 	if err != nil {
 		t.Fatal(err)

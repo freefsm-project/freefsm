@@ -62,7 +62,7 @@ func TestSubtaskLegacyUpgradeRequiresReviewedMappingHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if entry.Name() == "076_subtask_identity.up.sql" || entry.Name() == "082_operation_admission.up.sql" {
+		if entry.Name() == "076_subtask_identity.up.sql" || entry.Name() == "082_operation_admission.up.sql" || entry.Name() == "084_security_operation_receipts.up.sql" {
 			continue
 		}
 		b, err := fs.ReadFile(database.MigrationFS(), entry.Name())

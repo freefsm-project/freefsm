@@ -82,7 +82,7 @@ func (h *handler) transportPolicy(next http.Handler) http.Handler {
 				writeError(w, 400, "invalid_request", "query parameters are not supported for this endpoint")
 				return
 			}
-			if strings.HasPrefix(protocolPath(r), "/sessions/") {
+			if strings.HasPrefix(protocolPath(r), "/sessions/") || strings.HasPrefix(protocolPath(r), "/session-operations/") || strings.HasPrefix(protocolPath(r), "/clock-lease-operations/") {
 				writeError(w, 400, "invalid_request", "query parameters are not supported for this endpoint")
 				return
 			}

@@ -89,22 +89,8 @@ func TestCookieOnlyAuthenticationIsRejected(t *testing.T) {
 	assertAPIError(t, res, http.StatusUnauthorized, "unauthorized")
 }
 
-func TestLogoutRevokesBearerSession(t *testing.T) {
-	companyID := int64(12)
-	users := &fakeUsers{byID: &ent.User{ID: 7, CompanyID: &companyID, Role: "tech", IsActive: true}}
-	sessions := &fakeSessions{token: "valid-token", userID: 7}
-	deps := testDependencies(users, &fakeJobs{})
-	deps.Sessions = sessions
-
-	res := performAuthorized(New(deps), http.MethodDelete, "/session", nil)
-
-	if res.Code != http.StatusNoContent || res.Body.Len() != 0 {
-		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
-	}
-	if sessions.revokedToken != "valid-token" || res.Header().Get("Cache-Control") != "no-store" {
-		t.Fatalf("revoked token = %q, cache control = %q", sessions.revokedToken, res.Header().Get("Cache-Control"))
-	}
-}
+// TestLogoutRevokesBearerSession lives at the real HTTP/DB seam in handlers:
+// revocation now requires atomic canonical authority, audit and receipt storage.
 
 func TestActiveTimeEntryRequiresCanonicalAuthority(t *testing.T) {
 	companyID, jobID := int64(12), int64(4)

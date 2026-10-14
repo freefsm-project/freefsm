@@ -311,11 +311,16 @@ func applySubtask(ctx context.Context, tx pgx.Tx, p Principal, a Actor, jobID in
 			return "", ErrConflict
 		}
 		seen := map[string]bool{}
-		for _, id := range in.Order {
+		changed := false
+		for i, id := range in.Order {
 			if _, ok := active[id]; !ok || seen[id] {
 				return "", ErrSubtaskInvalid
 			}
 			seen[id] = true
+			changed = changed || active[id].SortOrder != i
+		}
+		if !changed {
+			return id, nil
 		}
 		for i, id := range in.Order {
 			if _, err = tx.Exec(ctx, `UPDATE job_subtasks SET sort_order=$2 WHERE id=$1`, id, i); err != nil {

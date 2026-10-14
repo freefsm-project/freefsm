@@ -46,17 +46,18 @@ var allowedMIMETypes = []string{
 }
 
 type FileService struct {
-	client    *ent.Client
-	objects   objectref.Directory
-	uploadDir string
-	maxSize   int64
+	client          *ent.Client
+	objects         objectref.Directory
+	uploadDir       string
+	maxSize         int64
+	validateContent func(string, string) (string, error)
 }
 
 func NewFileService(client *ent.Client, objects objectref.Directory, uploadDir string, maxSize int64) *FileService {
 	if maxSize <= 0 {
 		maxSize = 25 << 20
 	}
-	return &FileService{client: client, objects: objects, uploadDir: uploadDir, maxSize: maxSize}
+	return &FileService{client: client, objects: objects, uploadDir: uploadDir, maxSize: maxSize, validateContent: validateFileContent}
 }
 
 func (s *FileService) ValidateMIMEType(mimeType string) bool {
@@ -157,16 +158,16 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 		}()
 	}
 	if _, err := uuid.Parse(identity.ID); err != nil {
-		return nil, fmt.Errorf("invalid file content: publication ID must be a UUID")
+		return nil, invalidFile("invalid file content: publication ID must be a UUID")
 	}
 	if err := s.validateTarget(ctx, companyID, ref, objectref.ExistsActive); err != nil {
 		return nil, err
 	}
 	if fileSize < 0 {
-		return nil, fmt.Errorf("file size %d cannot be negative", fileSize)
+		return nil, invalidFile("file size %d cannot be negative", fileSize)
 	}
 	if uploadedBy <= 0 {
-		return nil, fmt.Errorf("invalid uploaded by user ID: %d", uploadedBy)
+		return nil, invalidFile("invalid uploaded by user ID: %d", uploadedBy)
 	}
 	uploaderExists, err := s.client.User.Query().Where(user.IDEQ(uploadedBy), user.CompanyIDEQ(companyID)).Exist(ctx)
 	if err != nil {
@@ -176,7 +177,7 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 		return nil, fmt.Errorf("uploaded by user %d not found", uploadedBy)
 	}
 	if fileSize > s.maxSize {
-		return nil, fmt.Errorf("file size %d exceeds maximum %d", fileSize, s.maxSize)
+		return nil, invalidFile("file size %d exceeds maximum %d", fileSize, s.maxSize)
 	}
 
 	ext := strings.ToLower(filepath.Ext(originalName))
@@ -215,15 +216,15 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 		return failWrite(fmt.Errorf("write file to disk: %w", err))
 	}
 	if actualSize > s.maxSize {
-		return failWrite(fmt.Errorf("file size %d exceeds maximum %d", actualSize, s.maxSize))
+		return failWrite(invalidFile("file size %d exceeds maximum %d", actualSize, s.maxSize))
 	}
 	if actualSize != fileSize {
-		return failWrite(fmt.Errorf("file size mismatch: declared %d, read %d", fileSize, actualSize))
+		return failWrite(invalidFile("file size mismatch: declared %d, read %d", fileSize, actualSize))
 	}
 	if identity.Digest != "" && identity.Digest != hex.EncodeToString(digest.Sum(nil)) {
-		return failWrite(fmt.Errorf("invalid file content: digest mismatch"))
+		return failWrite(invalidFile("invalid file content: digest mismatch"))
 	}
-	mimeType, err = validateFileContent(filePath, originalName)
+	mimeType, err = s.validateContent(filePath, originalName)
 	if err != nil {
 		return failWrite(err)
 	}
@@ -343,7 +344,7 @@ func (s *FileService) validateTarget(ctx context.Context, companyID int64, ref o
 		return err
 	}
 	if !s.SupportsFiles(ref) {
-		return fmt.Errorf("invalid object type: %s", ref.ObjectType())
+		return invalidFile("invalid object type: %s", ref.ObjectType())
 	}
 	exists, err := s.objects.Exists(ctx, ref, mode)
 	if err != nil {
@@ -402,7 +403,7 @@ func (s *FileService) Rename(ctx context.Context, companyID, id int64, originalN
 		return fmt.Errorf("rename file %d: %w", id, &ent.NotFoundError{})
 	}
 	if filepath.Ext(originalName) != filepath.Ext(f.OriginalName) {
-		return fmt.Errorf("file extension must be preserved")
+		return invalidFile("file extension must be preserved")
 	}
 	return authorization.ErrForbidden
 }

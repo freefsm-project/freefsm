@@ -2,6 +2,8 @@
   'use strict';
   let bearer = '', deviceCode = '', epoch = '', redeemOperation = '', cancelOperation = '', busy = false;
   let transfers = [];
+  let authenticationGeneration = 0, authenticatedUser = null;
+  const sessionOperations = new Map();
   const node = id => document.getElementById(id);
   const status = text => { node('status').textContent = text; };
   const update = () => {
@@ -11,7 +13,7 @@
     node('transfer-start').disabled = busy || !bearer;
     node('transfer-retry').disabled = busy || !bearer || !transfers.some(t => !t.verified && !t.review);
   };
-  const clear = () => { bearer = ''; deviceCode = ''; epoch = ''; redeemOperation = ''; cancelOperation = ''; transfers = []; node('transfer-files').value = ''; node('transfer-results').textContent = ''; node('code').textContent = ''; node('sessions').textContent = ''; update(); };
+  const clear = () => { bearer = ''; authenticatedUser = null; deviceCode = ''; epoch = ''; redeemOperation = ''; cancelOperation = ''; transfers = []; node('transfer-files').value = ''; node('transfer-results').textContent = ''; node('code').textContent = ''; node('sessions').textContent = ''; update(); };
   async function call(path, method, body, authenticated = false, raw = false, options = {}) {
     const headers = {};
     if (options.operation) headers['Operation-ID'] = options.operation;
@@ -34,7 +36,7 @@
   }
   const action = fn => async event => {
     event.preventDefault(); if (busy) return; busy = true; update();
-    try { await fn(); } catch { status('Response unavailable. Inspect browser sessions before explicitly retrying; no action was replayed.'); }
+    try { await fn(); } catch { status(`Response unavailable. Inspect browser sessions before explicitly retrying; no action was replayed.${sessionOperations.size ? ' Pending session operation IDs: '+Array.from(sessionOperations.values(),op=>op.id).join(', ') : ''}`); }
     finally { busy = false; update(); }
   };
   node('start').addEventListener('submit', action(async () => {
@@ -45,7 +47,11 @@
     const data = await call('/pairings/redeem', 'POST', { device_code: deviceCode, operation_id: redeemOperation });
     if (data) {
       if (data.token_type !== 'Bearer' || typeof data.token !== 'string') { clear(); status('Unsupported protocol response. Inspect and revoke the device in browser sessions.'); return; }
-      bearer = data.token; deviceCode = ''; node('code').textContent = 'Paired. Bearer held privately in memory.';
+      bearer = data.token; authenticationGeneration++; deviceCode = '';
+      const identity = await call('/me', 'GET', null, true);
+      if (!identity || !Number.isSafeInteger(identity.id)) { clear(); status('Fresh identity unavailable. Pair again before reviewing pending actions.'); return; }
+      authenticatedUser = identity.id;
+      node('code').textContent = 'Paired. Bearer held privately in memory.';
     }
   }));
   node('cancel').addEventListener('click', action(async () => { if (await call('/pairings/cancel', 'POST', { device_code: deviceCode, operation_id: cancelOperation })) clear(); }));
@@ -53,12 +59,35 @@
     const data = await call('/sessions', 'GET', null, true);
     if (Array.isArray(data)) node('sessions').textContent = data.map(s => `${s.id}: ${s.kind} ${s.device} ${s.current ? '(current)' : ''} ${s.revoked_at ? '(revoked)' : ''}`).join('\n');
   }));
-  node('logout').addEventListener('click', action(async () => { if (await call('/session', 'DELETE', null, true)) clear(); }));
-  node('all').addEventListener('click', action(async () => { if (await call('/sessions', 'DELETE', null, true)) clear(); }));
+  async function revoke(path) {
+    let operation = sessionOperations.get(path);
+    if (operation) {
+      const receipt = await call(`/session-operations/${operation.id}`, 'GET', null, true, false, {receiptLookup:true});
+      if (!receipt) return null;
+      if (!receipt.unreceived) {
+        status(`Session operation ${operation.id}: ${receipt.code}. No action replayed.`);
+        sessionOperations.delete(path);
+        return receipt.code === 'accepted' ? {...receipt,reconciled:true} : null;
+      }
+      if (operation.generation !== authenticationGeneration || operation.user !== authenticatedUser) {
+        status(`Session operation ${operation.id}: no receipt found. Fresh-authentication reconciliation is read-only; outcome remains unresolved. Reload and review a new security action with a new operation ID if still needed.`);
+        return null;
+      }
+    } else {
+      if (authenticatedUser === null) { status('Fresh identity required before a security action.'); return null; }
+      operation = {id:crypto.randomUUID(),generation:authenticationGeneration,user:authenticatedUser}; sessionOperations.set(path, operation);
+    }
+    status(`Session operation ${operation.id}: awaiting response; retain this ID for reconciliation.`);
+    const result = await call(path, 'DELETE', null, true, false, {operation:operation.id});
+    if (result) sessionOperations.delete(path);
+    return result;
+  }
+  node('logout').addEventListener('click', action(async () => { const result=await revoke('/session'); if (result && !result.reconciled) clear(); }));
+  node('all').addEventListener('click', action(async () => { const result=await revoke('/sessions'); if (result && !result.reconciled) clear(); }));
   node('revoke').addEventListener('click', action(async () => {
     const id = node('session').value;
     if (!/^[1-9][0-9]*$/.test(id)) { status('Enter an own session ID from inspection.'); return; }
-    await call(`/sessions/${id}`, 'DELETE', null, true);
+    await revoke(`/sessions/${id}`);
   }));
   const transferResults = () => { node('transfer-results').textContent = transfers.map(t => `${t.file.name}: ${t.state}`).join('\n'); };
   async function transport(item, operation, path, body, raw = false) {

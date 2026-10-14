@@ -14,6 +14,40 @@ retains its existing same-user browser identity across sign-in. Matching registr
 identity alone never authorizes a new effect: the domain validates its original
 receipt and current authority for sensitive representations.
 
+## Lease issuance and own-session revocation
+
+Clock staging lease issuance and all public API own-session revocations also
+use the registry, with independent immutable receipt stores introduced by
+`084_security_operation_receipts`. No historical operation identities are
+invented for existing leases or revocations.
+
+`POST /time-entries/lease` requires `{}` plus `Operation-ID`; reconcile at
+`GET /clock-lease-operations/{operation}`. Its `clock.lease.issue` identity is
+distinct from clock-in/out and from the lease resource UUID. Retry returns the
+original lease window, never extends it. A forbidden issuance receives a
+terminal receipt without lease fields. Audit/storage failures release admission.
+
+`DELETE /session`, `/sessions`, and `/sessions/{sessionID}` require
+`Operation-ID` and no body. `session.revocation` binds original client, route
+kind and exact target; receipts retain acceptance time and disposition, without
+bearers, device labels or non-owned target IDs. Successful HTTP remains 204;
+`GET /session-operations/{operation}` returns the immutable receipt.
+This closes a preexisting API-05 inventory gap. It does not waive ACC-02:
+self logout/revoke-all invalidate their own bearer immediately, including for
+receipt lookup. Fresh authentication of the original user permits safe
+read-only reconciliation; it never rebinds the original client or authorizes
+replay. After security-required state, disablement, expiry, revocation or restore,
+authentication/current-authority checks still precede receipt access.
+
+Pairing retains its protocol-specific durable identity and one-use bearer
+redemption (ticket76 acceptance criterion2). Automatic successful-request
+session renewal is the ACC-02 authentication lifecycle, not a separately staged
+user command. Browser account/security actions keep their existing protected
+security paths; this inventory concerns the public same-client API mutations.
+Read-only transfer verification/recomputation does not create a receipt merely
+because its transport is POST. General offline cache/batch synchronization is
+downstream under API-03/04 and ticket83, not a waiver of these online identities.
+
 ## Files
 
 `POST /api/v1/file-transfers` and each

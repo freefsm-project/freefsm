@@ -96,16 +96,41 @@ func (h *handler) submitClock(w http.ResponseWriter, r *http.Request, out bool) 
 	writeJSON(w, 200, result)
 }
 func (h *handler) clockLease(w http.ResponseWriter, r *http.Request) {
+	if r.URL.RawQuery != "" {
+		writeError(w, 400, "invalid_request", "query parameters are not supported")
+		return
+	}
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {
 		clockAPIError(w, authorization.ErrUnavailable)
 		return
 	}
-	var in struct{}
+	var in *struct{}
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	result, err := req.Service.ClockLease(r.Context(), req.Actor)
+	if in == nil {
+		writeError(w, 400, "invalid_request", "lease issuance requires an empty JSON object")
+		return
+	}
+	operation, ok := securityOperationID(w, r)
+	if !ok {
+		return
+	}
+	result, err := req.Service.ClockLease(r.Context(), req.Actor, operation)
+	if err != nil {
+		clockAPIError(w, err)
+		return
+	}
+	writeJSON(w, 200, result)
+}
+func (h *handler) clockLeaseReceipt(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		unauthorized(w)
+		return
+	}
+	result, err := req.Service.ClockLeaseReceipt(r.Context(), req.Actor, chi.URLParam(r, "operation"))
 	if err != nil {
 		clockAPIError(w, err)
 		return

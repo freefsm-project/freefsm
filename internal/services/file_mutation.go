@@ -148,10 +148,10 @@ func (s *FileService) mutateFileCommand(ctx context.Context, request authorizati
 		}
 		if action == "file.rename" {
 			if name == "" || len(name) > 255 || strings.ContainsAny(name, "/\\") || strings.ContainsFunc(name, unicode.IsControl) {
-				return 0, nil, fmt.Errorf("invalid file name")
+				return 0, nil, invalidFile("invalid file name")
 			}
 			if filepath.Ext(name) != filepath.Ext(current.OriginalName) {
-				return 0, nil, fmt.Errorf("file extension must be preserved")
+				return 0, nil, invalidFile("file extension must be preserved")
 			}
 			if name == current.OriginalName {
 				return finish(0, nil)

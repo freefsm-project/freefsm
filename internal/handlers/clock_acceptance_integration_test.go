@@ -350,7 +350,7 @@ func TestClockUpgradePreservesRecordedGPSAndGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, file := range files {
-		if strings.HasPrefix(file.Name(), "076_clock_evidence") || file.Name() == "082_operation_admission.up.sql" {
+		if strings.HasPrefix(file.Name(), "076_clock_evidence") || file.Name() == "082_operation_admission.up.sql" || file.Name() == "084_security_operation_receipts.up.sql" {
 			continue
 		}
 		data, err := fs.ReadFile(source, file.Name())
@@ -415,7 +415,7 @@ func TestClockManualRaceDoesNotOverlap(t *testing.T) {
 		t.Fatal(err)
 	}
 	apiActor := authorization.Actor{UserID: admin, Channel: "api", SessionHash: fmt.Sprintf("%x", sha256.Sum256([]byte(token)))}
-	lease, err := svc.ClockLease(ctx, apiActor)
+	lease, err := svc.ClockLease(ctx, apiActor, uuid.NewString())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -717,6 +717,9 @@ func TestClockOfflineReceiptHTTP(t *testing.T) {
 		r := httptest.NewRequest("POST", path, strings.NewReader(string(data)))
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Content-Type", "application/json")
+		if path == "/time-entries/lease" {
+			r.Header.Set("Operation-ID", uuid.NewString())
+		}
 		w := httptest.NewRecorder()
 		api.ServeHTTP(w, r)
 		if w.Code != want {

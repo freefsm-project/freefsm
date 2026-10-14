@@ -24,17 +24,89 @@ type ClockLease struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+// ClockLeaseReceipt is independent of the staging resource and Time Entry
+// command receipts. A rejected issuance has no lease representation.
+type ClockLeaseReceipt struct {
+	OperationID string    `json:"operation_id"`
+	Code        string    `json:"code"`
+	AcceptedAt  time.Time `json:"accepted_at"`
+	*ClockLease
+}
+
 // Leases attest a staging window, never future authority. Current session,
 // grants and Job eligibility are checked again by SubmitClock at acceptance.
-func (s *Service) ClockLease(ctx context.Context, a Actor) (ClockLease, error) {
-	l := ClockLease{ID: uuid.NewString()}
-	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
-		if a.Channel != "api" || a.SessionHash == "" || !p.Allows("time.clock_in", Own) && !p.Allows("time.clock_out", Own) {
-			return ErrForbidden
+func (s *Service) ClockLease(ctx context.Context, a Actor, operation string) (ClockLeaseReceipt, error) {
+	id, err := uuid.Parse(operation)
+	if err != nil || id == uuid.Nil {
+		return ClockLeaseReceipt{}, &ClockConflict{"invalid_operation_id"}
+	}
+	l := ClockLeaseReceipt{OperationID: id.String()}
+	var outcome error
+	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if err := admitOperation(ctx, tx, a, l.OperationID, "clock.lease.issue", struct{}{}); err != nil {
+			if errors.Is(err, ErrConflict) {
+				return &ClockConflict{"operation_intent_changed"}
+			}
+			return err
 		}
-		return tx.QueryRow(ctx, `INSERT INTO time_clock_leases(id,user_id,client_key,issued_at,expires_at) VALUES($1,$2,$3,clock_timestamp(),clock_timestamp()+interval '24 hours') RETURNING issued_at,expires_at`, l.ID, p.UserID, a.Channel+":"+a.SessionHash).Scan(&l.IssuedAt, &l.ExpiresAt)
+		var raw []byte
+		err := tx.QueryRow(ctx, `SELECT receipt FROM clock_lease_receipts WHERE operation_id=$1 AND user_id=$2 AND client_key=$3`, l.OperationID, p.UserID, operationClientKey(a)).Scan(&raw)
+		if err == nil {
+			if err := json.Unmarshal(raw, &l); err != nil {
+				return err
+			}
+			outcome = clockOutcome(l.Code)
+			return nil
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&l.AcceptedAt); err != nil {
+			return err
+		}
+		l.Code = "accepted"
+		if a.Channel != "api" || a.SessionHash == "" || !p.Allows("time.clock_in", Own) && !p.Allows("time.clock_out", Own) {
+			l.Code, outcome = "forbidden", ErrForbidden
+		} else {
+			l.ClockLease = &ClockLease{ID: uuid.NewString()}
+			if err := tx.QueryRow(ctx, `INSERT INTO time_clock_leases(id,user_id,client_key,issued_at,expires_at) VALUES($1,$2,$3,$4,$4::timestamptz+interval '24 hours') RETURNING issued_at,expires_at`, l.ID, p.UserID, operationClientKey(a), l.AcceptedAt).Scan(&l.IssuedAt, &l.ExpiresAt); err != nil {
+				return err
+			}
+			if err := audit(ctx, tx, a, p, "time.clock_lease.issue", Own, "user", p.UserID, map[string]any{"operation_id": l.OperationID, "lease_id": l.ID}); err != nil {
+				return err
+			}
+		}
+		raw, err = json.Marshal(l)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO clock_lease_receipts(operation_id,user_id,client_key,receipt) VALUES($1,$2,$3,$4)`, l.OperationID, p.UserID, operationClientKey(a), raw)
+		return err
 	})
-	return l, err
+	if err != nil {
+		return ClockLeaseReceipt{}, err
+	}
+	return l, outcome
+}
+
+func (s *Service) ClockLeaseReceipt(ctx context.Context, a Actor, operation string) (ClockLeaseReceipt, error) {
+	var result ClockLeaseReceipt
+	id, err := uuid.Parse(operation)
+	if err != nil || id == uuid.Nil {
+		return result, ErrNotFound
+	}
+	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		var raw []byte
+		err := tx.QueryRow(ctx, `SELECT receipt FROM clock_lease_receipts WHERE operation_id=$1 AND user_id=$2 AND client_key=$3`, id.String(), p.UserID, operationClientKey(a)).Scan(&raw)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		return json.Unmarshal(raw, &result)
+	})
+	return result, err
 }
 
 func clockCode(err error) string {

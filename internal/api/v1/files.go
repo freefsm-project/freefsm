@@ -13,7 +13,6 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
@@ -25,6 +24,7 @@ import (
 
 func fileError(w http.ResponseWriter, err error) {
 	status, code, message := 500, "file_unavailable", "File storage is unavailable; retry the same operation"
+	var validation *authorization.FileValidationError
 	switch {
 	case errors.Is(err, authorization.ErrFileOperation):
 		status, code, message = 400, "invalid_operation", "A nonzero operation UUID and a valid nonfuture occurrence time are required"
@@ -34,8 +34,8 @@ func fileError(w http.ResponseWriter, err error) {
 		status, code, message = 403, "forbidden", "File action not permitted"
 	case errors.Is(err, authorization.ErrConflict):
 		status, code, message = 409, "file_conflict", "File state changed; review original operation"
-	case strings.HasPrefix(err.Error(), "invalid") || strings.HasPrefix(err.Error(), "file extension") || strings.HasPrefix(err.Error(), "file size"):
-		status, code, message = 400, "invalid_file", err.Error()
+	case errors.As(err, &validation):
+		status, code, message = 400, "invalid_file", validation.Error()
 	}
 	writeError(w, status, code, message)
 }

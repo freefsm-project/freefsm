@@ -3,7 +3,6 @@ package authorization
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -26,6 +25,7 @@ type FileTransportReceipt struct {
 }
 
 func fileTransportCode(err error) string {
+	var validation *FileValidationError
 	switch {
 	case err == nil:
 		return "accepted"
@@ -37,7 +37,7 @@ func fileTransportCode(err error) string {
 		return "file_conflict"
 	case errors.Is(err, ErrFileOperation):
 		return "invalid_file"
-	case strings.HasPrefix(err.Error(), "invalid"), strings.HasPrefix(err.Error(), "file extension"), strings.HasPrefix(err.Error(), "file size"):
+	case errors.As(err, &validation):
 		return "invalid_file"
 	default:
 		return ""
@@ -54,6 +54,8 @@ func fileTransportError(code string) error {
 		return ErrForbidden
 	case "file_conflict":
 		return ErrConflict
+	case "invalid_file":
+		return &FileValidationError{Message: "Invalid file input"}
 	default:
 		return ErrFileOperation
 	}

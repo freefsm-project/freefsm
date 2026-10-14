@@ -425,6 +425,7 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 		}
 	}
 	e.Actor = activityActorLabel(e.ActorID, meta)
+	executionSubtask := e.Type == "job" && strings.HasPrefix(e.SourceKey, "authorization-audit:") && meta["subtask_id"] != nil
 	var channel string
 	_ = json.Unmarshal(meta["channel"], &channel)
 	if e.Action == "document_delivery_accepted" || strings.HasPrefix(e.SourceKey, "authorization-audit:") && channel == "worker" {
@@ -432,6 +433,16 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 	}
 	if strings.HasPrefix(e.SourceKey, "authorization-audit:") || strings.HasPrefix(e.SourceKey, "file-action:") {
 		if value, ok := activityScalar(meta["source_occurred_at"]); ok {
+			if stamp, err := time.Parse(time.RFC3339Nano, value); err == nil && !stamp.After(e.Accepted) {
+				e.Occurred = &stamp
+			}
+		}
+	}
+	// The receipt-backed Status writer predates keyed source events. Its
+	// supplied occurrence is already recorded on the immutable operational row.
+	// Read that exact contract without rewriting history or consulting an editor.
+	if e.Type == "job" && e.Action == "status_transitioned" {
+		if value, ok := activityScalar(meta["occurred_at"]); ok {
 			if stamp, err := time.Parse(time.RFC3339Nano, value); err == nil && !stamp.After(e.Accepted) {
 				e.Occurred = &stamp
 			}
@@ -480,6 +491,9 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 	case "field_notes_updated", "field_notes_changed", "tech_notes_updated":
 		pairs = append(pairs, [3]string{"Field Notes", "before", "after"})
 	case "subtask_completed", "subtask_uncompleted":
+		if executionSubtask {
+			break // Structured dedicated history is projected below.
+		}
 		pairs = append(pairs, [3]string{"Subtask", "old_title", "title"}, [3]string{"Completed", "before", "after"})
 		if _, ok := meta["title"]; !ok {
 			meta["title"] = meta["subtask_title"]
@@ -501,6 +515,49 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 		after, aok := activityScalar(meta[pair[2]])
 		if bok || aok {
 			e.Facts = append(e.Facts, ActivityFact{pair[0], before, after, bok, aok})
+		}
+	}
+	if executionSubtask {
+		switch e.Action {
+		case "subtask_added", "subtask_renamed", "subtask_completed", "subtask_uncompleted", "subtask_removed":
+			before, after := activityObject(meta["before"]), activityObject(meta["after"])
+			if after != nil {
+				for _, field := range [][2]string{{"Subtask ID", "id"}, {"Subtask title", "title"}, {"Order", "sort_order"}, {"Completed", "completed"}, {"Completion revision", "completion_revision"}, {"Completion actor", "completion_actor"}, {"Completion accepted at", "completion_at"}, {"Removed at", "removed_at"}} {
+					b, bok := activityScalar(before[field[1]])
+					a, aok := activityScalar(after[field[1]])
+					if bok || aok {
+						e.Facts = append(e.Facts, ActivityFact{field[0], b, a, bok, aok})
+					}
+				}
+			}
+		case "subtasks_reordered":
+			// Older reorder history stores full before rows and ordered after
+			// identities. Retain only active identities and their recorded order;
+			// removed rows are not members of the reordered checklist.
+			var rows []struct {
+				ID      string     `json:"id"`
+				Order   int        `json:"sort_order"`
+				Removed *time.Time `json:"removed_at"`
+			}
+			var ids []string
+			if json.Unmarshal(meta["before"], &rows) == nil && json.Unmarshal(meta["after"], &ids) == nil {
+				type position struct {
+					ID    string `json:"id"`
+					Order int    `json:"sort_order"`
+				}
+				before, after := []position{}, []position{}
+				for _, row := range rows {
+					if row.Removed == nil {
+						before = append(before, position{row.ID, row.Order})
+					}
+				}
+				for i, id := range ids {
+					after = append(after, position{id, i})
+				}
+				b, _ := json.Marshal(before)
+				a, _ := json.Marshal(after)
+				e.Facts = append(e.Facts, ActivityFact{"Subtask order", string(b), string(a), true, true})
+			}
 		}
 	}
 	if strings.HasPrefix(e.Action, "service_entry_") {
@@ -549,7 +606,7 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 	// Before/after objects are projected by a closed field catalog. A parent
 	// grant is never permission to serialize a mixed-facet historical payload.
 	before, after := activityObject(meta["before"]), activityObject(meta["after"])
-	if !slices.Contains([]string{"created", "updated", "archived", "restored", "status_changed", "status_transitioned", "field_notes_updated", "field_notes_changed", "tech_notes_updated", "subtask_completed", "subtask_uncompleted", "corrected", "voided", "pricebook_created", "pricebook_updated", "cost_updated"}, e.Action) {
+	if executionSubtask || !slices.Contains([]string{"created", "updated", "archived", "restored", "status_changed", "status_transitioned", "field_notes_updated", "field_notes_changed", "tech_notes_updated", "subtask_completed", "subtask_uncompleted", "corrected", "voided", "pricebook_created", "pricebook_updated", "cost_updated"}, e.Action) {
 		before = nil
 		after = nil
 	}
