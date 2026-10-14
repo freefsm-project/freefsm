@@ -122,6 +122,7 @@ templ JobForm(p JobFormPageData) {
 				Tech Notes
 				<textarea name="tech_notes" rows="3">{ p.Job.TechNotes }</textarea>
 			</label>
+			<input type="hidden" name="field_baseline" value={ p.FieldBaseline }/>
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: canEditJobFields(ctx,p.Job.ID)})
 			<fieldset x-data="visitsEditor()" data-existing={ p.ExistingVisitsJSON }>
 				<legend>Visits</legend>

@@ -69,19 +69,13 @@ func (s *Service) SaveFields(ctx context.Context, a Actor, typ string, id int64,
 	return s.saveFields(ctx, a, typ, id, input, customfields.Details)
 }
 
-// PatchFields is for atomic changed-value reconciliation. Missing unrelated
-// required values defer to a subsequent online details save; no defaults apply.
-func (s *Service) PatchFields(ctx context.Context, a Actor, typ string, id int64, input string) (string, error) {
-	return s.saveFields(ctx, a, typ, id, input, customfields.ChangedValues)
-}
-
 func (s *Service) saveFields(ctx context.Context, a Actor, typ string, id int64, input string, mode customfields.SaveMode) (string, error) {
+	if typ == "job" {
+		return "", &FieldConflict{"field_review_required"}
+	}
 	var fields string
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		permission := typ + ".edit"
-		if typ == "job" {
-			permission = "job.fields.edit"
-		}
 		old, scope, err := fieldParent(ctx, tx, p, typ, id, permission, true)
 		if err != nil {
 			return err
@@ -152,6 +146,9 @@ func (s *Service) DetailsTransaction(ctx context.Context, a Actor, typ string, i
 				var err error
 				_, fieldScope, err = fieldParent(ctx, tx, p, "job", id, "job.fields.edit", true)
 				if err != nil {
+					return err
+				}
+				if err := requireJobFieldRevisions(ctx, tx, p.CompanyID, id, old, *input); err != nil {
 					return err
 				}
 			}

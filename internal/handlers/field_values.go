@@ -26,6 +26,10 @@ func (h *CustomFieldHandler) values(w http.ResponseWriter, r *http.Request, typ 
 		http.NotFound(w, r)
 		return
 	}
+	if typ == "job" {
+		h.jobValues(w, r, id)
+		return
+	}
 	values, err := request.Service.ReadFields(r.Context(), request.Actor, typ, id, true)
 	if err != nil {
 		authorizationError(w, r, err)

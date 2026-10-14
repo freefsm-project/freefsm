@@ -53,6 +53,11 @@ func revision(ctx context.Context, q Querier, userID int64, path string, lock bo
 	var query string
 	var args []any
 	parts := strings.Split(strings.Trim(path, "/"), "/")
+	// This domain validates mandatory per-changed-field revisions atomically.
+	// A whole-Job fingerprint would falsely conflict on disjoint field edits.
+	if len(parts) == 3 && parts[0] == "jobs" && parts[2] == "custom-fields" {
+		return "", nil
+	}
 	if len(parts) >= 4 && parts[0] == "customers" && (parts[2] == "contacts" || parts[2] == "locations") {
 		parts = []string{parts[2], parts[3]}
 	}

@@ -265,6 +265,9 @@ func atomicSavePath(path string) bool {
 
 func noChangeSavePath(path string) bool {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 3 && parts[0] == "jobs" && parts[2] == "custom-fields" {
+		return true
+	}
 	if len(parts) == 3 && parts[2] == "status" {
 		switch parts[0] {
 		case "jobs", "projects", "estimates", "invoices":
