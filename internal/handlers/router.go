@@ -144,7 +144,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc, policySvc)
 	projectHandler.fileSvc = fileSvc
 	projectHandler.statusflow = statusflowService
-	scheduleHandler := NewScheduleHandler(jobService, customerService, statusService, userService, locationSvc, invoiceService, activitySvc, cfg)
+	scheduleHandler := NewScheduleHandler(userService, cfg)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
 	emailSvc := services.NewEmailService(companySettingsSvc)
 	emailSvc.SetInstanceControl(control)

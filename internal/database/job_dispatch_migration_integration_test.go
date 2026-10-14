@@ -43,6 +43,11 @@ func TestJobDispatchUpgradeStopsAmbiguityAndPreservesSource(t *testing.T) {
 		t.Fatal(err)
 	}
 	var before, after string
+	if _, err := db.Pool.Exec(ctx, `UPDATE users SET last_schedule_tab='map',last_schedule_period='week' WHERE id=$1`, a.user); err != nil {
+		t.Fatal(err)
+	}
+	var locationID int64
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO locations(company_id,object_type,object_id,title,latitude,longitude) VALUES($1,'customer',$2,'Recorded schedule site',0,0) RETURNING id`, a.company, a.customer), &locationID)
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT to_jsonb(j)::text FROM jobs j WHERE id=$1`, id), &before)
 	err = db.Migrate(ctx, MigrationFS())
 	if err == nil || !strings.Contains(err.Error(), "dispatch requires Administrator review") {
@@ -96,5 +101,10 @@ func TestJobDispatchUpgradeStopsAmbiguityAndPreservesSource(t *testing.T) {
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM authorization_grants g JOIN authorization_roles r ON r.id=g.role_id WHERE NOT r.protected`), &grantsAfter)
 	if grantsAfter != grantsBefore {
 		t.Fatal("upgrade granted nonprotected permissions")
+	}
+	var presentationPreserved bool
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id=$1 AND last_schedule_tab='map' AND last_schedule_period='week') AND EXISTS(SELECT 1 FROM locations WHERE id=$2 AND title='Recorded schedule site' AND latitude=0 AND longitude=0)`, a.user, locationID), &presentationPreserved)
+	if !presentationPreserved {
+		t.Fatal("upgrade changed saved schedule presentation or provider coordinates")
 	}
 }

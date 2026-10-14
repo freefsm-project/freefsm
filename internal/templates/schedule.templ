@@ -4,72 +4,77 @@ import "fmt"
 
 templ SchedulePage(p SchedulePageData) {
 	@Layout("Schedule") {
+		<div id="schedule-workspace" hx-boost="false" data-phone-default={ fmt.Sprint(p.PhoneDefault) }>
 		<p>Schedule times use { companyTimeZone(ctx) }.</p>
 
 		<div class="schedule-toolbar">
 			<div class="schedule-toolbar-main">
 				<div class="schedule-primary-tabs">
-					<a href={ templ.URL("/schedule?tab=list&period="+func() string { if p.Period != "" { return p.Period } else { return "month" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "list") }>List</a>
-					<a href={ templ.URL("/schedule?tab=calendar&period="+func() string { if p.Period != "" && p.Period != "month" { return p.Period } else { return "month" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "calendar") }>Calendar</a>
-					if navigationPermission(ctx, "job.view", "A") && navigationPermission(ctx, "directory.view", "A") {
-						<a href={ templ.URL("/schedule?tab=dispatch&period="+func() string { if p.Period != "" { return p.Period } else { return "day" } }()+"&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "dispatch") }>Dispatch</a>
+					<a href={ templ.URL(scheduleURL(p,"list",p.Period,p.Date)) } role="button" class={ scheduleTabClass(p.Tab == "list") }>List</a>
+					<a href={ templ.URL(scheduleURL(p,"calendar",p.Period,p.Date)) } role="button" class={ scheduleTabClass(p.Tab == "calendar") }>Calendar</a>
+					if navigationPermission(ctx, "job.view", "J") {
+						<a href={ templ.URL(scheduleURL(p,"dispatch",p.Period,p.Date)) } role="button" class={ scheduleTabClass(p.Tab == "dispatch") }>Dispatch</a>
 					}
-					<a href={ templ.URL("/schedule?tab=map&period=day&date="+p.Date) } role="button" class={ scheduleTabClass(p.Tab == "map") }>Map</a>
+					<a href={ templ.URL(scheduleURL(p,"map","day",p.Date)) } role="button" class={ scheduleTabClass(p.Tab == "map") }>Map</a>
 					if navigationPermission(ctx, "job.create", "A") {
 						<a href="/jobs/new" role="button">New Job</a>
 					}
 				</div>
 			</div>
 			<div class="schedule-toolbar-secondary">
-				if p.IsList || p.IsMonth || p.IsWeek || p.IsDay || p.IsDispatch {
+				if p.IsList || p.IsMonth || p.IsWeek || p.IsDay || p.IsDispatch || p.IsMap {
 					<div class="schedule-toolbar-periods">
 						<nav class="schedule-period-tabs" aria-label="Schedule period">
-							<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=month&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "month") }>Month</a>
-							<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=week&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "week") }>Week</a>
-							<a href={ templ.URL("/schedule?tab="+p.Tab+"&period=day&date="+p.Date) } class={ schedulePeriodTabClass(p.Period == "day") }>Day</a>
+							<a href={ templ.URL(scheduleURL(p,p.Tab,"month",p.Date)) } class={ schedulePeriodTabClass(p.Period == "month") }>Month</a>
+							<a href={ templ.URL(scheduleURL(p,p.Tab,"week",p.Date)) } class={ schedulePeriodTabClass(p.Period == "week") }>Week</a>
+							<a href={ templ.URL(scheduleURL(p,p.Tab,"day",p.Date)) } class={ schedulePeriodTabClass(p.Period == "day") }>Day</a>
 						</nav>
 					</div>
 				} else {
 					<div class="schedule-toolbar-periods" aria-hidden="true"></div>
 				}
 				<div class="schedule-title-nav">
-					if p.IsList {
-						<div class="schedule-date-arrows">
-							<a href={ templ.URL(fmt.Sprintf("/schedule?tab=list&period=%s&date=%s", p.Period, p.PrevDate)) } role="button" class="outline">&larr;</a>
-							<a href={ templ.URL(fmt.Sprintf("/schedule?tab=list&period=%s&date=%s", p.Period, p.NextDate)) } role="button" class="outline">&rarr;</a>
-						</div>
-						<h3>{ p.Title }</h3>
-					} else if p.IsMonth {
-						<div class="schedule-date-arrows">
-							<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=month&year=%d&month=%d", p.PrevYear, p.PrevMonth)) } role="button" class="outline">&larr;</a>
-							<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=month&year=%d&month=%d", p.NextYear, p.NextMonth)) } role="button" class="outline">&rarr;</a>
-						</div>
-						<h3>{ p.Title }</h3>
-					} else if p.IsWeek || p.IsDay {
-						<div class="schedule-date-arrows">
-							<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=%s&date=%s", p.Period, p.PrevDate)) } role="button" class="outline">&larr;</a>
-							<a href={ templ.URL(fmt.Sprintf("/schedule?tab=calendar&period=%s&date=%s", p.Period, p.NextDate)) } role="button" class="outline">&rarr;</a>
-						</div>
-						<h3>{ p.Title }</h3>
-					} else if p.IsDispatch {
-						<div class="schedule-date-arrows">
-							<a href={ templ.URL("/schedule?tab=dispatch&period="+p.Period+"&date="+p.PrevDate) } role="button" class="outline">&larr;</a>
-							<a href={ templ.URL("/schedule?tab=dispatch&period="+p.Period+"&date="+p.NextDate) } role="button" class="outline">&rarr;</a>
-						</div>
-						<h3>{ p.Title }</h3>
-					} else if p.IsMap {
-						<div class="schedule-date-arrows">
-							<a href={ templ.URL("/schedule?tab=map&period=day&date="+p.PrevDate) } role="button" class="outline">&larr;</a>
-							<a href={ templ.URL("/schedule?tab=map&period=day&date="+p.NextDate) } role="button" class="outline">&rarr;</a>
-						</div>
-						<h3>{ p.Title }</h3>
-					} else {
-						<h3>{ p.Title }</h3>
-					}
+					<div class="schedule-date-arrows">
+						<a href={ templ.URL(scheduleURL(p,p.Tab,p.Period,p.PrevDate)) } role="button" class="outline" aria-label="Previous period">&larr;</a>
+						<a href={ templ.URL(scheduleURL(p,p.Tab,p.Period,p.NextDate)) } role="button" class="outline" aria-label="Next period">&rarr;</a>
+					</div>
+					<h3>{ p.Title }</h3>
 				</div>
 				<div class="schedule-toolbar-spacer" aria-hidden="true"></div>
 			</div>
 		</div>
+		<form action="/schedule" method="get" class="schedule-filters">
+			<input type="hidden" name="tab" value={ p.Tab }/>
+			<input type="hidden" name="period" value={ p.Period }/>
+			<label>Date <input type="date" name="date" value={ p.Date }/></label>
+			<label>Find Jobs <input type="search" name="q" value={ p.Query } maxlength="256"/></label>
+			<label>Status <select name="status"><option value="all" selected?={ p.StatusFilter==""||p.StatusFilter=="all" }>All statuses</option><option value="open" selected?={ p.StatusFilter=="open" }>Unfinished</option><option value="finished" selected?={ p.StatusFilter=="finished" }>Completed or Canceled</option></select></label>
+			<label>Assignment <select name="assignment"><option value="all" selected?={ p.AssignmentFilter==""||p.AssignmentFilter=="all" }>All assignments</option><option value="assigned" selected?={ p.AssignmentFilter=="assigned" }>Assigned</option><option value="unassigned" selected?={ p.AssignmentFilter=="unassigned" }>Unassigned</option></select></label>
+			<label>Sort <select name="sort"><option value="time" selected?={ p.Sort==""||p.Sort=="time" }>Schedule time</option><option value="title" selected?={ p.Sort=="title" }>Title</option><option value="due" selected?={ p.Sort=="due" }>Due date</option></select></label>
+			<button type="submit">Apply filters</button>
+			<a href={ templ.URL("/schedule?tab="+p.Tab+"&period="+p.Period+"&date="+p.Date) }>Clear filters</a>
+		</form>
+		<button type="button" id="schedule-refresh">Refresh schedule</button>
+		<p id="schedule-load-state" role="status" aria-live="polite">Updated at { p.UpdatedAt }</p>
+		<button type="button" id="schedule-retry" hidden>Retry schedule</button>
+		<div id="schedule-results">
+		if p.Error!="" {
+			<p role="alert">{ p.Error }</p><a href={ templ.URL(scheduleURL(p,p.Tab,p.Period,p.Date)) }>Retry schedule</a>
+		} else {
+		if len(p.RepairJobs)>0 {
+			<h4>Schedules needing reviewed repair</h4>
+			<p>Recorded values are retained. Open the Job and review its complete dispatch before changing them.</p>
+			for _, j := range p.RepairJobs {
+				<a class="schedule-card" href={ templ.URL(fmt.Sprintf("/jobs/%d",j.ID)) }>@scheduleCardContent(j)</a>
+			}
+		}
+		if p.Count==0 {
+			if p.Query!=""||p.StatusFilter=="open"||p.StatusFilter=="finished"||p.AssignmentFilter=="assigned"||p.AssignmentFilter=="unassigned" {
+				<p>No matching Jobs. Clear filters to see other authorized work.</p>
+			} else {
+				<p>No Jobs in this range or backlog.</p>
+			}
+		}
 		if p.IsMonth {
 			@monthView(p)
 		} else if p.IsWeek {
@@ -86,33 +91,10 @@ templ SchedulePage(p SchedulePageData) {
 		<div hx-get="/schedule/activity" hx-trigger="load" hx-swap="innerHTML" class="shared-widget">
 			<p>Loading recent schedule activity...</p>
 		</div>
-		if p.IsWeek || p.IsDay {
-			<script>
-				function scrollTo8AM() {
-					var scroll = document.getElementById('schedule-scroll');
-					var hour08 = document.getElementById('hour-08');
-					if (!scroll || !hour08) return;
-					var header = scroll.querySelector('.grid-header');
-					var headerHeight = header ? header.offsetHeight : 0;
-					scroll.scrollTop = hour08.offsetTop - headerHeight - 10;
-				}
-					document.addEventListener('DOMContentLoaded', function() {
-					requestAnimationFrame(function() {
-						requestAnimationFrame(scrollTo8AM);
-					});
-				});
-				document.body.addEventListener('htmx:afterSettle', function() {
-					requestAnimationFrame(function() {
-						requestAnimationFrame(scrollTo8AM);
-					});
-				});
-				window.addEventListener('load', function() {
-					requestAnimationFrame(function() {
-						requestAnimationFrame(scrollTo8AM);
-					});
-				});
-			</script>
 		}
+		</div>
+		</div>
+		<script src={ templ.URL(staticAsset("/static/js/schedule.js")) } defer></script>
 		if p.IsMonth || p.IsWeek || p.IsDay || (p.IsList && (p.Period == "month" || p.Period == "week")) {
 			<script>
 				function scheduleOpenMonthDay(event, target) {
@@ -153,12 +135,27 @@ templ SchedulePage(p SchedulePageData) {
 }
 
 templ listView(p SchedulePageData) {
-	if p.Period == "week" {
-		@scheduleListWeekView(p)
-	} else if p.Period == "day" {
-		@scheduleListDayView(p)
-	} else {
-		@monthView(p)
+	<h4>Unscheduled backlog</h4>
+	for _, j := range p.UnscheduledJobs {
+		<a class="schedule-card" href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) }>@scheduleCardContent(j)</a>
+	}
+	<h4>Scheduled Jobs</h4>
+	@scheduleListDayView(p)
+}
+
+templ scheduleCardContent(j CalendarJob) {
+	<strong>{ j.JobType }</strong>
+	<span>{ j.Customer }</span>
+	<span>{ j.Address }</span>
+	<span>{ j.TimeRange }</span>
+	<span>{ j.Arrival }</span>
+	<span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName } { j.Category }</span>
+	<span>{ j.Assignee }</span>
+	if j.Overdue {
+		<strong>Overdue</strong>
+	}
+	if j.Conflict {
+		<strong>Schedule conflict</strong>
 	}
 }
 
@@ -168,24 +165,10 @@ templ scheduleListDayView(p SchedulePageData) {
 			<p class="schedule-empty-cell">No scheduled jobs found.</p>
 		}
 		for _, j := range p.Jobs {
-			<div class="schedule-list-day-card" style={ scheduleJobAccentStyle(j.StatusColor) }>
-				<div class="schedule-list-day-time">
-					<span>{ j.StartTime }</span>
-					<span>{ j.EndTime }</span>
-				</div>
-				<span class="status-badge schedule-list-day-status" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span>
-				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="schedule-list-day-title">{ j.JobType }</a>
-				<span class="schedule-list-day-customer">
-					<strong>{ j.Customer }</strong>
-					<span>{ j.Address }</span>
-				</span>
-				if j.AssigneeInitials != "" {
-					<span class="schedule-list-day-assignee">{ j.Assignee }</span>
-				}
-				if j.InvoiceID > 0 {
-					<a href={ templ.URL(fmt.Sprintf("/invoices/%d", j.InvoiceID)) } class="schedule-list-day-invoice" style={ badgeStyle(j.InvoiceStatusColor) }>{ j.InvoiceStatusName }</a>
-				}
-			</div>
+			<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="schedule-card" style={ scheduleJobAccentStyle(j.StatusColor) }>@scheduleCardContent(j)</a>
+			if p.Period=="day"&&j.InvoiceID>0 {
+				<a href={ templ.URL(fmt.Sprintf("/invoices/%d",j.InvoiceID)) } class="status-badge" style={ badgeStyle(j.InvoiceStatusColor) }>Invoice: { j.InvoiceStatusName }</a>
+			}
 		}
 	</div>
 }
@@ -215,7 +198,7 @@ templ scheduleListWeekView(p SchedulePageData) {
 }
 
 templ monthView(p SchedulePageData) {
-	<table class="calendar">
+	<table class="calendar" data-schedule-scroll="month">
 		<thead>
 			<tr>
 				<th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th>
@@ -228,12 +211,11 @@ templ monthView(p SchedulePageData) {
 						if day.DayNum == 0 {
 							<td class="empty"></td>
 						} else {
-							<td class={ "calendar-drop-slot", "schedule-month-day", "today", day.IsToday } data-date={ day.Date } data-day-href={ fmt.Sprintf("/schedule?tab=%s&period=day&date=%s", p.Tab, day.Date) } tabindex="0" ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)" onclick="scheduleOpenMonthDay(event, this)" onkeydown="scheduleOpenMonthDayKey(event, this)">
-								<div class="day-num"><a href={ templ.URL(fmt.Sprintf("/schedule?tab=%s&period=day&date=%s", p.Tab, day.Date)) } class="schedule-month-day-link" aria-label={ fmt.Sprintf("Open %s day view", day.Date) }>{ fmt.Sprintf("%d", day.DayNum) }</a></div>
+							<td class={ "calendar-drop-slot", "schedule-month-day", "today", day.IsToday } data-date={ day.Date } data-day-href={ scheduleURL(p,p.Tab,"day",day.Date) } tabindex="0" ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)" onclick="scheduleOpenMonthDay(event, this)" onkeydown="scheduleOpenMonthDayKey(event, this)">
+								<div class="day-num"><a href={ templ.URL(scheduleURL(p,p.Tab,"day",day.Date)) } class="schedule-month-day-link" aria-label={ fmt.Sprintf("Open %s day view", day.Date) }>{ fmt.Sprintf("%d", day.DayNum) }</a></div>
 								for _, j := range day.Jobs {
 									<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="cal-job schedule-month-job" draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)" style={ scheduleJobAccentStyle(j.StatusColor) }>
-										<strong>{ j.JobType }</strong>
-										<small>{ j.Customer }</small>
+										@scheduleCardContent(j)
 									</a>
 								}
 							</td>
@@ -246,7 +228,7 @@ templ monthView(p SchedulePageData) {
 }
 
 templ weekView(p SchedulePageData) {
-	<div class="schedule-scroll-wrapper" id="schedule-scroll">
+	<div class="schedule-scroll-wrapper" id="schedule-scroll" data-schedule-scroll="calendar">
 		<div class="schedule-grid week-view">
 			<div class="grid-header grid-header-empty"></div>
 			for _, day := range p.Days {
@@ -257,17 +239,13 @@ templ weekView(p SchedulePageData) {
 			for hour := 0; hour <= 23; hour++ {
 				<div class="grid-hour" id={ fmt.Sprintf("hour-%02d", hour) } style={ fmt.Sprintf("grid-row: %d; grid-column: 1;", hour + 2) }>{ fmt.Sprintf("%02d:00", hour) }</div>
 				for dayIndex, day := range p.Days {
-					<div class={ "grid-slot", "calendar-drop-slot", "today", day.IsToday } data-date={ day.Date } data-hour={ fmt.Sprintf("%d", hour) } ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)" style={ fmt.Sprintf("grid-row: %d; grid-column: %d;", hour + 2, dayIndex + 2) }></div>
-				}
-			}
-			for dayIndex, day := range p.Days {
-				for _, j := range day.Jobs {
-					<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="grid-job cal-job" draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)"
-						style={ fmt.Sprintf("grid-row: %d / span %d; grid-column: %d;%s", j.Hour + 2, j.Duration, dayIndex + 2, scheduleJobAccentStyle(j.StatusColor)) }>
-						<strong>{ j.JobType }</strong>
-						<small>{ j.Customer }</small>
-						<small>{ j.Time }</small>
-					</a>
+					<div class={ "grid-slot", "calendar-drop-slot", "today", day.IsToday } data-date={ day.Date } data-hour={ fmt.Sprintf("%d", hour) } ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)" style={ fmt.Sprintf("grid-row: %d; grid-column: %d;", hour + 2, dayIndex + 2) }>
+						for _, j := range day.Jobs {
+							if j.Hour==hour {
+								@calendarTimeCard(j)
+							}
+						}
+					</div>
 				}
 			}
 		</div>
@@ -275,26 +253,35 @@ templ weekView(p SchedulePageData) {
 }
 
 templ dayView(p SchedulePageData) {
-	<div class="schedule-scroll-wrapper" id="schedule-scroll">
+	<div class="schedule-scroll-wrapper" id="schedule-scroll" data-schedule-scroll="calendar">
 		<div class="schedule-grid day-view">
 			<div class="grid-header grid-header-empty"></div>
 			<div class="grid-header">Jobs</div>
 			for hour := 0; hour <= 23; hour++ {
 				<div class="grid-hour" id={ fmt.Sprintf("hour-%02d", hour) } style={ fmt.Sprintf("grid-row: %d; grid-column: 1;", hour + 2) }>{ fmt.Sprintf("%02d:00", hour) }</div>
-				<div class="grid-slot calendar-drop-slot" data-date={ p.Date } data-hour={ fmt.Sprintf("%d", hour) } ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)" style={ fmt.Sprintf("grid-row: %d; grid-column: 2;", hour + 2) }></div>
-			}
-			for _, j := range p.Jobs {
-				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="grid-job cal-job" draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprintf("%d", j.Hour) } data-duration={ fmt.Sprintf("%d", j.Duration) } ondragstart="scheduleCalendarDrag(event)"
-					style={ fmt.Sprintf("grid-row: %d / span %d; grid-column: 2;%s", j.Hour + 2, j.Duration, scheduleJobAccentStyle(j.StatusColor)) }>
-					<strong>{ j.JobType }</strong> &mdash; { j.Customer }
-					<small>{ j.Time }</small>
-				</a>
+				<div class="grid-slot calendar-drop-slot" data-date={ p.Date } data-hour={ fmt.Sprintf("%d", hour) } ondragover="scheduleCalendarDragOver(event)" ondragleave="scheduleCalendarDragLeave(event)" ondrop="scheduleCalendarDrop(event, this)" style={ fmt.Sprintf("grid-row: %d; grid-column: 2;", hour + 2) }>
+					for _, j := range p.Jobs {
+						if j.Hour==hour {
+							@calendarTimeCard(j)
+						}
+					}
+				</div>
 			}
 		</div>
 	</div>
 }
 
+templ calendarTimeCard(j CalendarJob) {
+	<a href={ templ.URL(fmt.Sprintf("/jobs/%d",j.ID)) } class="grid-job cal-job" draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprint(j.ID) } data-date={ j.DateISO } data-hour={ fmt.Sprint(j.Hour) } ondragstart="scheduleCalendarDrag(event)" style={ scheduleJobAccentStyle(j.StatusColor) }>
+		@scheduleCardContent(j)
+	</a>
+}
+
 templ dispatchView(p SchedulePageData) {
+	<h4>Scheduled Jobs</h4>
+	for _, j := range p.Jobs {
+		<a class="schedule-card" href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) }>@scheduleCardContent(j)</a>
+	}
 	<p class="schedule-help">Drag a Job into a slot to propose its shared schedule and add an equal assignee. Review the full interval, arrival window and assignee set before confirming. You can also open Dispatch Job from the Job page.</p>
 	<div class="dispatch-layout" id="dispatch-board" data-date={ p.Date }>
 		<aside class="dispatch-unscheduled">
@@ -304,13 +291,11 @@ templ dispatchView(p SchedulePageData) {
 			}
 			for _, j := range p.UnscheduledJobs {
 				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="dispatch-card" draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-duration="1" ondragstart="scheduleDispatchDrag(event)">
-					<span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span>
-					<strong>{ j.JobType }</strong>
-					<small>{ j.Customer }</small>
+					@scheduleCardContent(j)
 				</a>
 			}
 		</aside>
-		<div class="dispatch-matrix-wrapper">
+		<div class="dispatch-matrix-wrapper" data-schedule-scroll="dispatch">
 			<table class="dispatch-matrix">
 				<thead>
 					<tr>
@@ -328,11 +313,7 @@ templ dispatchView(p SchedulePageData) {
 			<td class="dispatch-slot" data-user-id={ fmt.Sprintf("%d", row.Tech.ID) } data-date={ cell.Column.Date } data-hour={ func() string { if p.Period == "day" { return fmt.Sprintf("%d", cell.Column.Hour) } else { return "" } }() } ondragover="scheduleDispatchDragOver(event)" ondragleave="scheduleDispatchDragLeave(event)" ondrop="scheduleDispatchDrop(event, this)">
 									for _, j := range cell.Jobs {
 										<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class={ dispatchScheduledJobClass(p.Period) } draggable={ fmt.Sprint(canDispatchJob(ctx)) } data-job-id={ fmt.Sprintf("%d", j.ID) } data-duration={ fmt.Sprintf("%d", j.Duration) } data-hour={ fmt.Sprintf("%d", j.Hour) } ondragstart="scheduleDispatchDrag(event)" style={ dispatchScheduledJobStyle(j.StatusColor, p.Period) } title={ dispatchScheduledJobLabel(j) } aria-label={ dispatchScheduledJobLabel(j) }>
-											if p.Period != "month" {
-												<strong>{ j.JobType }</strong>
-												<small>{ j.Customer }</small>
-												<small>{ j.Time }</small>
-											}
+											@scheduleCardContent(j)
 										</a>
 									}
 								</td>
@@ -372,28 +353,31 @@ templ dispatchView(p SchedulePageData) {
 
 templ mapView(p SchedulePageData) {
 	<div class="schedule-map-layout">
-		<aside class="schedule-map-list" aria-label="Jobs for selected day">
+		<aside class="schedule-map-list" aria-label="Jobs for selected range" data-schedule-scroll="map-list">
 			<header>
 				<strong>Jobs</strong>
 			</header>
 			if len(p.Jobs) == 0 {
-				<p class="schedule-empty-cell">No scheduled jobs found for the selected day.</p>
+				<p class="schedule-empty-cell">No scheduled jobs found for the selected range.</p>
 			}
-			for _, j := range p.Jobs {
+			<h4>Mapped Jobs</h4>
+			<div id="schedule-map-mapped">
+			for _, j := range p.MapJobs {
 				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="schedule-map-list-card" style={ scheduleJobAccentStyle(j.StatusColor) }>
-					<span class="schedule-map-list-time">{ j.TimeRange }</span>
-					<strong>{ j.JobType }</strong>
-					<span>{ j.Customer }</span>
-					if j.Address != "" {
-						<small>{ j.Address }</small>
-					}
-					if j.Lat == 0 && j.Lng == 0 {
-						<small class="schedule-map-list-muted">No map coordinates yet</small>
-					}
+					@scheduleCardContent(j)
 				</a>
 			}
+			</div>
+			<h4>Unmapped Jobs</h4>
+			<div id="schedule-map-unmapped">
+			for _, j := range p.UnmappedJobs {
+				<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) } class="schedule-map-list-card">@scheduleCardContent(j)<strong>{ j.MapReason }</strong></a>
+			}
+			</div>
 		</aside>
 		<div class="schedule-map-panel">
+			<p id="schedule-map-status" role="status" aria-live="polite">Loading map…</p>
+			<p id="schedule-map-provider-failure" role="alert" hidden>Map unavailable — provider failure. Jobs with saved coordinates cannot be plotted reliably. Use the Job lists, manual address, calendar or dispatch; saved coordinates are unchanged.</p>
 			<div id="schedule-map" data-tile-url={ p.TileURL } class="schedule-map"></div>
 			if len(p.MapJobs) == 0 {
 				<p class="schedule-map-empty">{ p.MapEmptyMessage }</p>
