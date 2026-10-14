@@ -121,8 +121,8 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 	if err := db.ensureMigrationsTable(ctx); err != nil {
 		return fmt.Errorf("ensure migrations table: %w", err)
 	}
-	var fresh bool
-	if err := db.Pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM schema_migrations)`).Scan(&fresh); err != nil {
+	fresh, err := db.freshInitialization(ctx, files)
+	if err != nil {
 		return err
 	}
 	var reviewed *WorkflowPreflight
@@ -273,6 +273,17 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 		if _, err := tx.Exec(ctx, "INSERT INTO schema_migrations (name) VALUES ($1)", name); err != nil {
 			tx.Rollback(ctx)
 			return fmt.Errorf("record migration %s: %w", name, err)
+		}
+		if f == "044_category_status_workflows.up.sql" {
+			if _, err := tx.Exec(ctx, `DROP TABLE IF EXISTS schema_initialization`); err != nil {
+				tx.Rollback(ctx)
+				return err
+			}
+		} else if fresh && f < "044_category_status_workflows.up.sql" {
+			if err := checkpointInitialization(ctx, tx); err != nil {
+				tx.Rollback(ctx)
+				return err
+			}
 		}
 
 		if err := tx.Commit(ctx); err != nil {
