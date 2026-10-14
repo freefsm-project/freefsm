@@ -1,0 +1,50 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ JobAssetReferences(links []authorization.JobAssetReference) {
+ for _,link := range links {
+  <p>
+   if link.CanNavigate {
+    <a href={templ.URL(fmt.Sprintf("/assets/%d",link.AssetID))}>{link.Number} — {link.Name}</a>
+   } else {
+    <span>{link.Number} — {link.Name}</span>
+   }
+   if !link.Operational {
+    <span>Historical (non-authorizing)</span>
+   }
+   if link.Unlinked {
+    <span> — explicitly unlinked</span>
+   }
+  </p>
+ }
+}
+
+templ JobAssets(id int64, choices []authorization.JobLinkChoice, links []authorization.JobAssetReference) {
+ @Layout("Job Asset links") {
+  <h1>Job Asset links</h1>
+  <a href={templ.URL(fmt.Sprintf("/jobs/%d",id))}>Back to Job</a>
+  @JobAssetReferences(links)
+  for _,link := range links {
+   if !link.Unlinked {
+    <form method="post" action={templ.URL(fmt.Sprintf("/jobs/%d/assets",id))}>
+     <input type="hidden" name="csrf_token" value={csrfToken(ctx)}/>
+     <input type="hidden" name="action" value="unlink"/>
+     <input type="hidden" name="link_id" value={fmt.Sprint(link.ID)}/>
+     <button>Unlink {link.Number}</button>
+    </form>
+   }
+  }
+  <form method="post" action={templ.URL(fmt.Sprintf("/jobs/%d/assets",id))}>
+   <input type="hidden" name="csrf_token" value={csrfToken(ctx)}/>
+   <input type="hidden" name="action" value="link"/>
+   <label>Operational Asset<select name="asset_id" required>
+    for _,choice := range choices {
+     <option value={fmt.Sprint(choice.ID)}>{choice.Name}</option>
+    }
+   </select></label>
+   <button>Link Asset</button>
+  </form>
+ }
+}

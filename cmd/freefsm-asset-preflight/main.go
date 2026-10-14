@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"os"
@@ -11,6 +12,8 @@ import (
 )
 
 func main() {
+	associations := flag.Bool("associations", false, "Inventory observed Asset associations and Job links for explicit Administrator review")
+	flag.Parse()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	dsn := os.Getenv("FREEFSM_ASSET_PREFLIGHT_DATABASE_URL")
@@ -24,7 +27,12 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
-	review, err := db.AssetIdentityPreflight(ctx)
+	var review any
+	if *associations {
+		review, err = db.AssetAssociationPreflight(ctx)
+	} else {
+		review, err = db.AssetIdentityPreflight(ctx)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Asset inventory unavailable; check schema and read access")
 		os.Exit(1)

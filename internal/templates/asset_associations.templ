@@ -1,0 +1,63 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ CustomerAssetHistory(id int64, periods []authorization.CustomerAssetPeriod) {
+ @Layout("Customer Asset history") {
+  <h1>Customer Asset association periods</h1>
+  <a href={templ.URL(fmt.Sprintf("/customers/%d",id))}>Back to Customer</a>
+  <p>Each recorded visit is a distinct period. Past references grant no current operational access.</p>
+  for _,period := range periods {
+   <article><h2>{period.Number}</h2><p>{period.StartsOn} → {period.EndsBefore}</p></article>
+  }
+ }
+}
+
+templ AssetAssociations(id int64, history authorization.AssetAssociationHistory, actions []string, customers []SelectOption) {
+ @Layout("Asset association history") {
+  <h1>Association history — { history.Number }</h1>
+  <a href={ templ.URL(fmt.Sprintf("/assets/%d",id)) }>Back to Asset</a>
+  <p>Effective periods end before the next period starts. Unknown dates describe observed facts, not invented transfers. Corrections retain the original evidence.</p>
+  <h2>Association periods</h2>
+  for _,period := range history.Periods {
+   <article><h3>{ period.Customer }</h3><p>{ period.Location }</p><p>{ period.StartsOn } → { period.EndsBefore }</p><p>Event { fmt.Sprint(period.EventID) }</p></article>
+  }
+  <h2>Immutable evidence</h2>
+  for _,event := range history.Events {
+   <article><h3>{ event.Action } — { event.EffectiveDate }</h3><p>{ event.Reason }</p><p>Event { fmt.Sprint(event.EventID) }; revision { fmt.Sprint(event.ID) }; recorded { event.RecordedAt }</p></article>
+  }
+  for _,action := range actions {
+   <details><summary>{ action }</summary>
+    <form method="post" action={ templ.URL(fmt.Sprintf("/assets/%d/associations/%s",id,action)) }>
+     <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+     <input type="hidden" name="revision" value={ fmt.Sprint(history.Revision) }/>
+     if action!="return" {
+      <label>Customer<select name="customer_id" hx-get="/assets/locations" hx-trigger="change" hx-target={"#association-location-"+action}>
+       <option value="0">Unplaced (Company-owned only)</option>
+       for _,c := range customers {
+        <option value={fmt.Sprint(c.Value)}>{c.Label}</option>
+       }
+      </select></label>
+      <label>Location (optional)<select name="location_id" id={"association-location-"+action}><option value="0">No Location</option></select></label>
+     }
+     if action=="correct" {
+       <label>Original event<select name="event_id" required>
+        <option value="0">Initial observed association — start date unknown</option>
+       for _,event := range history.Events {
+        if event.Action!="correct" {
+         <option value={fmt.Sprint(event.ID)}>{event.Action} — {event.EffectiveDate} — {event.Reason}</option>
+        }
+       }
+       </select></label>
+       <p>Correcting the initial observation records a factual revision as of the effective date below. It does not assert an acquisition date or a real transfer; the historical start remains unknown.</p>
+     }
+     <label>Effective date<input name="effective_date" type="date" required/></label>
+     <label>Reason<textarea name="reason" required></textarea></label>
+     <p>Leaving a Customer retains historical Job links without access to the new Customer. Invalid dates or links require explicit repair first.</p>
+     <button type="submit">Save { action }</button>
+    </form>
+   </details>
+  }
+ }
+}

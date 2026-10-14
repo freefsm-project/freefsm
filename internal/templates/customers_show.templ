@@ -5,6 +5,10 @@ import "fmt"
 templ CustomerShow(p CustomerShowPageData) {
 	@Layout("Customer - "+p.Customer.DisplayName) {
 		<div class="work-item-detail customer-dashboard">
+		if canMaster(ctx,"asset.view") {
+			<a href={templ.URL(fmt.Sprintf("/assets?customer_id=%d",p.Customer.ID))}>Current Assets</a>
+			<a href={templ.URL(fmt.Sprintf("/customers/%d/asset-history",p.Customer.ID))}>Past and current Asset periods</a>
+		}
 		if canCustomer(ctx,"edit") && p.Customer.ArchivedAt == "" {
 			<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit",p.Customer.ID)) } role="button">Edit Customer</a>
 			if canCustomer(ctx,"financial") {

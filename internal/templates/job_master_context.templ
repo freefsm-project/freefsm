@@ -16,21 +16,21 @@ templ JobMasterContext(p authorization.JobMasterContext) {
 			}
 			<p>{ p.Project.Location }</p><p>{ p.Project.ServiceNotes }</p>
 		}
-		if p.Asset != nil {
+		for _, equipment := range p.Assets {
 			<h3>Operational Asset</h3>
-			<p>{ p.Asset.Number } · { p.Asset.Name } · { assetOwnershipLabel(p.Asset.OwnershipClass) }</p>
-			<p>{ p.Asset.Type } · { p.Asset.Status }</p>
-			<p>{ p.Asset.Manufacturer } { p.Asset.Model } · { p.Asset.SerialNumber }</p>
-			if p.Asset.InstalledAt != nil {
-				<p>Installed: { displayDatePtr(ctx,p.Asset.InstalledAt) }</p>
+			<p>{ equipment.Number } · { equipment.Name } · { assetOwnershipLabel(equipment.OwnershipClass) }</p>
+			<p>{ equipment.Type } · { equipment.Status }</p>
+			<p>{ equipment.Manufacturer } { equipment.Model } · { equipment.SerialNumber }</p>
+			if equipment.InstalledAt != nil {
+				<p>Installed: { displayDatePtr(ctx,equipment.InstalledAt) }</p>
 			}
-			if p.Asset.WarrantyExpires != nil {
-				<p>Warranty: { displayDatePtr(ctx,p.Asset.WarrantyExpires) }</p>
+			if equipment.WarrantyExpires != nil {
+				<p>Warranty: { displayDatePtr(ctx,equipment.WarrantyExpires) }</p>
 			}
-			if p.Asset.Location != nil {
-				<p>Current Location: { p.Asset.Location.Title }</p>
+			if equipment.Location != nil {
+				<p>Current Location: { equipment.Location.Title }</p>
 			}
-			<p>{ p.Asset.ServiceNotes }</p>
+			<p>{ equipment.ServiceNotes }</p>
 		}
 		for _, contact := range p.Contacts {
 			<h3>Linked Contact</h3><p>{ contact.Name } { contact.RoleTitle }</p><p>{ contact.Phone } { contact.Email }</p><p>{ contact.ServiceNotes }</p>

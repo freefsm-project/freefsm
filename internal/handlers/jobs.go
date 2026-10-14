@@ -191,11 +191,10 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 			jobRelationshipError(w, r, err)
 			return
 		}
-	}
-	if j.AssetID != nil && *j.AssetID > 0 {
-		asset, _ := h.assetSvc.GetByID(r.Context(), *j.AssetID)
-		if asset != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeAsset, asset.ID), policyRead) {
-			d.AssetName = assetLabel(asset)
+		d.AssetReferences, err = req.Service.LinkedJobAssets(r.Context(), req.Actor, j.ID)
+		if err != nil {
+			jobRelationshipError(w, r, err)
+			return
 		}
 	}
 	activeEntry, err := h.timeEntrySvc.GetActiveByUser(r.Context(), u.ID)
