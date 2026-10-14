@@ -32,7 +32,7 @@ func (s *Service) AssetLifecycle(ctx context.Context, a Actor, id int64, restore
 				}
 			} else {
 				var linked bool
-				if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs j LEFT JOIN statuses s ON s.id=j.status_id WHERE j.asset_id=$1 AND j.deleted_at IS NULL AND coalesce(s.category_key,'') NOT IN ('job:completed','job:canceled')) OR EXISTS(SELECT 1 FROM assets WHERE id=$1 AND ownership_class='company_owned' AND customer_id IS NOT NULL)`, id).Scan(&linked); err != nil {
+				if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM job_asset_links l JOIN jobs j ON j.id=l.job_id LEFT JOIN statuses s ON s.id=j.status_id WHERE l.asset_id=$1 AND l.operational AND l.unlinked_at IS NULL AND j.deleted_at IS NULL AND coalesce(s.category_key,'') NOT IN ('job:completed','job:canceled')) OR EXISTS(SELECT 1 FROM assets WHERE id=$1 AND ownership_class='company_owned' AND customer_id IS NOT NULL)`, id).Scan(&linked); err != nil {
 					return err
 				}
 				if linked {

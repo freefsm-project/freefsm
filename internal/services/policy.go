@@ -43,6 +43,11 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role 
 			return err == nil
 		}
 	}
+	if ref.Type == objectref.TypeAsset {
+		// Migrated Asset domains never derive authority from a legacy Role label
+		// or a retained Job reference. Commands use their dedicated boundary.
+		return false
+	}
 	if ref.Type == objectref.TypeCustomer {
 		r, ok := authorization.FromContext(ctx)
 		if !ok {

@@ -545,6 +545,7 @@ type JobDetail struct {
 	ContactID                int64
 	ContactName              string
 	ContactReferences        []authorization.JobContactReference
+	AssetReferences          []authorization.JobAssetReference
 	AssetID                  int64
 	AssetName                string
 	LineItems                []services.LineItem

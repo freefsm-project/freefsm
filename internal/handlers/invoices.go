@@ -156,10 +156,18 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	if i.JobID != nil && *i.JobID > 0 && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, *i.JobID), policyRead) {
 		job, _ := h.jobSvc.GetByID(r.Context(), *i.JobID)
 		if job != nil && job.AssetID != nil && *job.AssetID > 0 {
-			asset, _ := h.assetSvc.GetByID(r.Context(), *job.AssetID)
-			if asset != nil && h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeAsset, asset.ID), policyRead) {
-				d.AssetID = asset.ID
-				d.AssetName = assetLabel(asset)
+			if req, ok := authorization.FromContext(r.Context()); ok {
+				links, err := req.Service.LinkedJobAssets(r.Context(), req.Actor, job.ID)
+				if err != nil {
+					authorizationError(w, r, err)
+					return
+				}
+				for _, link := range links {
+					if link.AssetID == *job.AssetID && link.Operational && link.CanNavigate {
+						d.AssetID = link.AssetID
+						d.AssetName = link.Number + " · " + link.Name
+					}
+				}
 			}
 		}
 	}
@@ -1270,12 +1278,11 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64, input
 		customer = c
 	}
 	var job *ent.Job
-	var asset *ent.Asset
+	// Only the reviewed association projection may supply Asset fields. A
+	// retained compatibility pointer is not authority to fetch today's master.
+	asset := input.Asset
 	if i.JobID != nil && *i.JobID > 0 {
 		job, _ = h.jobSvc.GetByID(ctx, *i.JobID)
-		if job != nil && job.AssetID != nil && *job.AssetID > 0 {
-			asset, _ = h.assetSvc.GetByID(ctx, *job.AssetID)
-		}
 	}
 	data, err := generatePDFBytes(func(w io.Writer) error {
 		return services.GenerateInvoicePDF(w, i, customer, job, asset, statuses, cs, services.InvoicePDFSettlement{

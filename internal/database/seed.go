@@ -260,7 +260,7 @@ func Seed(ctx context.Context, client *ent.Client) error {
 		TechNotes string
 	}{
 		{"AC Repair", "Building 2 Unit B3", 0, -1, 0, jobNew, -24 * time.Hour, -2 * time.Hour, "Unit not cooling, low refrigerant suspected", "Found leak at evaporator coil, recharged system"},
-		{"Chiller Maintenance", "Primary chiller Q2 service", 4, 4, 3, jobCompleted, -72 * time.Hour, -48 * time.Hour, "Scheduled quarterly maintenance", "Replaced worn bearings, checked compressor amp draw"},
+		{"Chiller Maintenance", "Primary chiller Q2 service", 2, 2, 3, jobCompleted, -72 * time.Hour, -48 * time.Hour, "Scheduled quarterly maintenance", "Replaced worn bearings, checked compressor amp draw"},
 		{"Thermostat Install", "Admin wing smart thermostats", 1, 0, -1, jobPending, -168 * time.Hour, -144 * time.Hour, "Install 24 smart thermostats with centralized control", "All units online, programming complete"},
 		{"Duct Cleaning", "Main distribution ducts", 2, 2, -1, jobInProgress, -96 * time.Hour, -80 * time.Hour, "Annual duct cleaning per maintenance contract", "Removed 18 lbs of debris, sanitized all runs"},
 		{"Compressor Replacement", "Unit C7 rooftop", 3, 3, -1, jobCompleted, -48 * time.Hour, -24 * time.Hour, "Compressor seized, emergency replacement", "New unit online, pressures nominal, customer approved"},

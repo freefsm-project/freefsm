@@ -95,7 +95,7 @@ func TestPolicyServiceAssignmentAccessIntegration(t *testing.T) {
 		{name: "tech cannot read archived directly assigned customer", ref: objectref.New(objectref.TypeCustomer, archivedDirectCustomer.ID), want: false},
 		{name: "tech can read active linked project", ref: objectref.New(objectref.TypeProject, activeProject.ID), want: true},
 		{name: "tech cannot read archived linked project", ref: objectref.New(objectref.TypeProject, archivedProject.ID), want: false},
-		{name: "tech can read active linked asset", ref: objectref.New(objectref.TypeAsset, activeAsset.ID), want: true},
+		{name: "legacy role and Job link cannot authorize migrated Asset read", ref: objectref.New(objectref.TypeAsset, activeAsset.ID), want: false},
 		{name: "tech cannot read archived linked asset", ref: objectref.New(objectref.TypeAsset, archivedAsset.ID), want: false},
 		{name: "tech cannot read estimates", ref: objectref.New(objectref.TypeEstimate, 1), want: false},
 		{name: "tech cannot read invoices", ref: objectref.New(objectref.TypeInvoice, 1), want: false},

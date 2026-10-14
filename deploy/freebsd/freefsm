@@ -21,22 +21,26 @@ load_rc_config "$name"
 
 pidfile="/var/run/freefsm.pid"
 command="/usr/local/bin/freefsm"
-procname="freefsm"
+# -P records the supervisor, not its application child. rc.subr must check
+# that identity for status (and for the guarded stop below).
+procname="/usr/sbin/daemon"
 
 start_cmd="freefsm_start"
 stop_cmd="freefsm_stop"
 
 freefsm_start() {
     echo "Starting ${name}."
-    /usr/sbin/daemon -P ${pidfile} -u ${freefsm_user} \
-        -o /var/log/freefsm/freefsm.log \
-        ${command} -config ${freefsm_config}
+    # Close inherited SSH/console descriptors in the supervisor. Application
+    # stdout/stderr go to syslog; only the application opens its configured log.
+    /usr/sbin/daemon -f -P "${pidfile}" -u "${freefsm_user}" \
+        -S -T freefsm \
+        "${command}" -config "${freefsm_config}"
 }
 
 freefsm_stop() {
     if [ -f "${pidfile}" ]; then
         read _pid < "${pidfile}"
-        if kill -0 "${_pid}" 2>/dev/null; then
+        if [ -n "$(check_pidfile "${pidfile}" "${procname}")" ]; then
             echo "Stopping ${name}."
             kill "${_pid}" && wait_for_pids "${_pid}"
         fi
