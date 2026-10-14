@@ -42,13 +42,15 @@ templ AssetAssociations(id int64, history authorization.AssetAssociationHistory,
       <label>Location (optional)<select name="location_id" id={"association-location-"+action}><option value="0">No Location</option></select></label>
      }
      if action=="correct" {
-      <label>Original event<select name="event_id" required>
+       <label>Original event<select name="event_id" required>
+        <option value="0">Initial observed association — start date unknown</option>
        for _,event := range history.Events {
         if event.Action!="correct" {
          <option value={fmt.Sprint(event.ID)}>{event.Action} — {event.EffectiveDate} — {event.Reason}</option>
         }
        }
-      </select></label>
+       </select></label>
+       <p>Correcting the initial observation records a factual revision as of the effective date below. It does not assert an acquisition date or a real transfer; the historical start remains unknown.</p>
      }
      <label>Effective date<input name="effective_date" type="date" required/></label>
      <label>Reason<textarea name="reason" required></textarea></label>

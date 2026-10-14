@@ -13,6 +13,7 @@ import (
 )
 
 type PDFSource struct {
+	Asset        *ent.Asset
 	FieldLines   []string
 	Token        string
 	ReviewToken  string
@@ -114,7 +115,7 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 		settlement = `, 'allocations',(SELECT jsonb_agg(to_jsonb(a)||jsonb_build_object('reversed',EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='payment' AND r.operation_id=a.payment_id)) ORDER BY a.payment_id) FROM payment_invoice_allocations a WHERE a.invoice_id=d.id),'credit_applications',(SELECT jsonb_agg(to_jsonb(a)||jsonb_build_object('reversed',EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=a.id)) ORDER BY a.id) FROM credit_applications a WHERE a.invoice_id=d.id)`
 	}
 	query := `SELECT presentation,snapshot,jsonb_build_object('configuration_revision',cs.configuration_revision,'document',to_jsonb(d),'customer',to_jsonb(c),'job',to_jsonb(j),'asset',to_jsonb(asset),'status',to_jsonb(st)) FROM ` + kind + `s d LEFT JOIN customers c ON c.id=d.customer_id LEFT JOIN jobs j ON j.id=d.job_id
- LEFT JOIN assets asset ON asset.id=j.asset_id AND asset.customer_id=j.customer_id AND EXISTS(SELECT 1 FROM job_asset_links al WHERE al.job_id=j.id AND al.asset_id=asset.id AND al.operational AND al.unlinked_at IS NULL)
+ LEFT JOIN assets asset ON asset.id=j.asset_id AND asset.customer_id=j.customer_id AND asset.deleted_at IS NULL AND EXISTS(SELECT 1 FROM job_asset_links al WHERE al.job_id=j.id AND al.asset_id=asset.id AND al.operational AND al.unlinked_at IS NULL)
  LEFT JOIN statuses st ON st.id=d.status_id JOIN company_settings cs ON cs.company_id=d.company_id CROSS JOIN LATERAL (SELECT jsonb_build_object('business_name',cs.business_name,'address',cs.address,'city',cs.city,'state',cs.state,'zip',cs.zip,'phone',cs.phone,'email',cs.email,'tax_id',cs.tax_id,'invoice_color',cs.invoice_color,'invoice_footer',cs.invoice_footer,'invoice_logo_path',cs.invoice_logo_path,'pdf_show_line_item_descriptions',cs.pdf_show_line_item_descriptions,'timezone',cs.timezone,'date_format',cs.date_format,'invoice_payment_terms',CASE WHEN d.terms IS NULL THEN cs.invoice_payment_terms ELSE d.terms END) AS presentation) presentation CROSS JOIN LATERAL (SELECT jsonb_build_object('document',to_jsonb(d)-'updated_at','customer',jsonb_build_object('display_name',c.display_name,'company_name',c.company_name,'email',c.email,'phone',c.phone),'job',jsonb_build_object('job_type',j.job_type,'subtitle',j.subtitle,'start_time',j.start_time,'due_date',j.due_date),'asset',jsonb_build_object('manufacturer',asset.manufacturer,'model',asset.model,'serial_number',asset.serial_number),'status',to_jsonb(st),'presentation',presentation` + settlement + `) AS snapshot) source WHERE d.id=$1 AND d.company_id=$2`
 	if err := q.QueryRow(ctx, query, id, p.CompanyID).Scan(&settings, &snapshot, &review); err != nil {
 		return PDFSource{}, err
@@ -154,6 +155,7 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 		Reversed bool  `json:"reversed"`
 	}
 	var financial struct {
+		Asset        *ent.Asset   `json:"asset"`
 		Allocations  []allocation `json:"allocations"`
 		Applications []allocation `json:"credit_applications"`
 	}
@@ -170,7 +172,7 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 		}
 		settled += entry.Amount
 	}
-	return PDFSource{Token: fmt.Sprintf("%x", sha256.Sum256(snapshot)), ReviewToken: fmt.Sprintf("%x", sha256.Sum256(review)), Settings: cs, Snapshot: snapshot, SettledCents: settled, FieldLines: fieldLines}, nil
+	return PDFSource{Asset: financial.Asset, Token: fmt.Sprintf("%x", sha256.Sum256(snapshot)), ReviewToken: fmt.Sprintf("%x", sha256.Sum256(review)), Settings: cs, Snapshot: snapshot, SettledCents: settled, FieldLines: fieldLines}, nil
 }
 
 func pdfFieldLines(ctx context.Context, q queryer, kind string, id, company int64) ([]string, error) {

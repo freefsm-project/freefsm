@@ -49,6 +49,7 @@ func TestAssetAssociationPersistedBrowser(t *testing.T) {
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Browser historical service").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Equipment").SaveX(ctx)
 	a := client.Asset.Create().SetCompanyID(company).SetOwnershipClass("company_owned").SetNumber("BROWSER-035").SetName("Browser association equipment").SetAssetTypeID(typ.ID).SaveX(ctx)
+	origin := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetOwnershipClass("customer_owned").SetNumber("BROWSER-ORIGIN-035").SetName("Mistaken initial observation").SetAssetTypeID(typ.ID).SaveX(ctx)
 	client.Location.Create().SetCompanyID(company).SetObjectType("customer").SetObjectID(c.ID).SetTitle("Browser placement site").SaveX(ctx)
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
@@ -57,7 +58,7 @@ func TestAssetAssociationPersistedBrowser(t *testing.T) {
 	defer server.Close()
 	browserCtx, cancel := context.WithTimeout(ctx, 180*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(browserCtx, "node", "testdata/browser/asset_associations.cjs", server.URL, cookie.Value, fmt.Sprint(a.ID), fmt.Sprint(c.ID), fmt.Sprint(n.ID), fmt.Sprint(j.ID)).CombinedOutput()
+	output, err := exec.CommandContext(browserCtx, "node", "testdata/browser/asset_associations.cjs", server.URL, cookie.Value, fmt.Sprint(a.ID), fmt.Sprint(c.ID), fmt.Sprint(n.ID), fmt.Sprint(j.ID), fmt.Sprint(origin.ID)).CombinedOutput()
 	t.Logf("browser: %s", output)
 	if err != nil {
 		t.Fatal(err)

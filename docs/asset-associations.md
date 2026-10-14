@@ -17,12 +17,27 @@ moves use new events. Dates order periods; immutable original event IDs order
 multiple real changes on the same day. Such changes remain distinct recorded
 periods rather than being collapsed into a fabricated ownership interval.
 
+Correct also offers **Initial observed association — start date unknown**. This
+explicit target (`event_id=0`) appends a factual origin revision, without asserting
+a transfer or acquisition. Its mandatory effective date is the as-of date of the
+correction, not a newly inferred historical start. The original observation is
+immutable, the derived period keeps its unknown start, and all later events and
+retained Job links are revalidated atomically. A missing target is not origin 0.
+
 Job → **Manage Asset links** supports multiple explicit Assets under
 `job.relations.edit`, independently of planning Edit. New links require active,
 authorized, same-Customer equipment. Leaving a Customer preserves prior link
 labels and marks them permanently historical and non-authorizing. Returning to
 the same Customer never revives those links: a new explicit link is required.
 Unlink is a separate authorized repair and retains its original evidence.
+
+Selecting an already-linked Asset through either editor reuses its canonical
+identity. Switching the compatibility slot between existing links preserves both;
+clearing it or replacing it with a newly selected Asset keeps the prior unlink
+behavior and its evidence. Independent Asset View gates operational labels, while
+historical labels remain bounded, non-authorizing references. Association history
+requires independent Customer/Location View for their labels; archived references
+show only bounded labels and an Archived badge, without navigation.
 
 Backdated changes and corrections reject if an affected retained Job link no
 longer fits its recorded association period. A legacy link with an unknown date
@@ -65,6 +80,10 @@ is auto-granted permissions.
 - `asset_association_events` is append-only. Corrections reference an original
   event and retain its before-fact evidence, actor, acceptance time and reason.
 - `asset_association_facts` selects each original event's latest factual revision.
+- `asset_association_origin_revisions` retains reasoned, attributed origin
+  corrections; `asset_association_origin_facts` projects the latest assertion.
+  Migration `077_asset_association_repairs.up.sql` adds these without rewriting
+  applied `076_*` migrations, observations, events, link identities or grants.
 - `asset_association_periods` provides all periods, including revisits, with
   stable `event_id`, Customer, Location, nullable unknown start, and next boundary.
   Equal-date moves are ordered by original event ID. Day-only Job link evidence
@@ -75,6 +94,11 @@ is auto-granted permissions.
   remains a compatibility slot; its writes validate and mirror into this table,
   and its presence alone grants no authority. Do not join it directly to current
   Asset fields for historical readers.
+- Invoice PDF rendering consumes the exact association-aware Asset projection
+  captured by the reviewed PDF source. Invoice detail uses canonical operational
+  link labels too. Neither reloads current equipment through an old compatibility
+  pointer; retained PDF versions preserve their original bytes and stale-review
+  rules. Estimate rendering has no Asset projection.
 - Assigned Job master context reads the canonical operational collection under
   the authority fence. Web renders every authorized operational Asset; the API
   adds `assets` while retaining `asset` as a compatibility projection of its first

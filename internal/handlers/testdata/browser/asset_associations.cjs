@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const {chromium} = require('playwright-core');
 (async()=>{
- const [base,cookie,asset,customer,destination,job]=process.argv.slice(2);
+ const [base,cookie,asset,customer,destination,job,origin]=process.argv.slice(2);
  const browser=await chromium.launch({executablePath:process.env.BROWSER_EXECUTABLE,headless:true,args:['--no-sandbox']});
  try {
   const context=await browser.newContext({viewport:{width:390,height:844}});
@@ -16,7 +16,7 @@ const {chromium} = require('playwright-core');
     await form.locator('[name=location_id] option').filter({hasText:'Browser placement site'}).waitFor({state:'attached'});
     await form.locator('[name=location_id]').selectOption({label:'Browser placement site'});
    }
-   if(action==='correct')await form.locator('[name=event_id]').selectOption({index:0});
+    if(action==='correct')await form.locator('[name=event_id]').selectOption({label:'place — 2020-01-01 — Browser first placement'});
    await form.locator('[name=effective_date]').fill(date);
    await form.locator('[name=reason]').fill(reason);
    await Promise.all([page.waitForNavigation(),form.getByRole('button',{name:`Save ${action}`}).click()]);
@@ -49,6 +49,19 @@ const {chromium} = require('playwright-core');
   const check=await fresh.newPage();await check.goto(`${base}/assets/${asset}/associations`);
   const persisted=await check.locator('main').innerText();
   for(const value of ['Browser first placement','Browser return','Browser revisit','Browser factual correction','2020-01-01','2020-01-02'])assert.ok(persisted.includes(value),value);
-  console.log('Phone placement, matching Location, return, revisit, correction, explicit Job link, transfer and historical unlink persisted; fresh context retained immutable evidence and distinct Customer periods.');
+   await page.goto(`${base}/assets/${origin}/associations`);
+   const correction=page.locator('form[action$="/correct"]');
+   await correction.locator('..').locator('summary').click();
+   await correction.locator('[name=event_id]').selectOption('0');
+   await correction.locator('[name=customer_id]').selectOption(destination);
+   await correction.locator('[name=effective_date]').fill('2020-01-01');
+   await correction.locator('[name=reason]').fill('Browser initial observation was wrong, no move occurred');
+   await Promise.all([page.waitForNavigation(),correction.getByRole('button',{name:'Save correct'}).click()]);
+   await check.goto(`${base}/assets/${origin}/associations`);
+   const corrected=await check.locator('main').innerText();
+   for(const value of ['Browser initial observation was wrong, no move occurred','Unknown — observed association','Browser destination Customer'])assert.ok(corrected.includes(value),value);
+   assert.equal(await check.locator('article h3').filter({hasText:'transfer —'}).count(),0);
+   if(process.env.ASSET_ASSOCIATION_EVIDENCE)await page.screenshot({path:process.env.ASSET_ASSOCIATION_EVIDENCE+'/origin-correction-phone.png',fullPage:true});
+   console.log('Phone placement, matching Location, return, revisit, event and initial-observation correction, explicit Job link, transfer and historical unlink persisted; fresh context retained immutable evidence, unknown origin date and distinct Customer periods.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

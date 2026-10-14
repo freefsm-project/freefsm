@@ -23,7 +23,9 @@ func (s *Service) LinkedJobAssets(ctx context.Context, a Actor, id int64) ([]Job
 		}
 		rows, err := tx.Query(ctx, `SELECT l.id,l.asset_id,l.number,l.name,l.operational AND l.unlinked_at IS NULL,l.unlinked_at IS NOT NULL,
    l.operational AND l.unlinked_at IS NULL AND a.deleted_at IS NULL AND a.customer_id=j.customer_id AND $2
-   FROM job_asset_links l JOIN jobs j ON j.id=l.job_id JOIN assets a ON a.id=l.asset_id WHERE l.job_id=$1 ORDER BY l.id`, id, p.Allows("asset.view", All))
+   FROM job_asset_links l JOIN jobs j ON j.id=l.job_id JOIN assets a ON a.id=l.asset_id WHERE l.job_id=$1
+   AND (NOT l.operational OR l.unlinked_at IS NOT NULL OR $2 OR ($3 AND j.deleted_at IS NULL AND EXISTS(SELECT 1 FROM job_assignments WHERE job_id=j.id AND user_id=$4)))
+   ORDER BY l.id`, id, p.Allows("asset.view", All), p.Allows("asset.view", Context) && p.Allows("job.view", Assigned), p.UserID)
 		if err != nil {
 			return err
 		}
@@ -80,7 +82,9 @@ func (s *Service) ChangeJobAsset(ctx context.Context, a Actor, jobID, assetID, l
 				return err
 			}
 			if duplicate {
-				return ErrConflict
+				// Both exposed editors select the same canonical relationship. A
+				// repeated selection must not replace its identity or provenance.
+				return audit(ctx, tx, a, p, "job.relations.edit", All, "job", jobID, map[string]any{"asset_id": assetID, "existing_link_retained": true})
 			}
 			if err := tx.QueryRow(ctx, `INSERT INTO job_asset_links(job_id,asset_id,customer_id,number,name,linked_on,association_event_id,operational)
     SELECT $1,a.id,a.customer_id,a.number,a.name,(clock_timestamp() AT TIME ZONE coalesce((SELECT timezone FROM company_settings WHERE company_id=$3),'UTC'))::date,coalesce((SELECT event_id FROM asset_association_facts WHERE asset_id=a.id ORDER BY effective_date DESC,event_id DESC LIMIT 1),0),true FROM assets a WHERE a.id=$2 RETURNING id`, jobID, assetID, p.CompanyID).Scan(&linkID); err != nil {

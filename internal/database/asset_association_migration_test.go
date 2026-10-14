@@ -3,9 +3,11 @@ package database
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/fstest"
 )
 
 func reviewFixtureAssetAssociations(t *testing.T, ctx context.Context, db *DB) {
@@ -55,7 +57,24 @@ func TestAssetAssociationUpgradeRequiresNonDestructiveReview(t *testing.T) {
 		t.Fatal("missing review changed earlier migrations")
 	}
 	reviewFixtureAssetAssociations(t, ctx, db)
-	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+	// First establish the previously applied #35/#36 schema, then prove the
+	// additive repair migration preserves its observation and relationship bytes.
+	old := fstest.MapFS{}
+	entries, err := fs.ReadDir(MigrationFS(), ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.Name() >= "077_" {
+			continue
+		}
+		data, err := fs.ReadFile(MigrationFS(), entry.Name())
+		if err != nil {
+			t.Fatal(err)
+		}
+		old[entry.Name()] = &fstest.MapFile{Data: data}
+	}
+	if err := db.Migrate(ctx, old); err != nil {
 		t.Fatal(err)
 	}
 	var invented int
@@ -72,5 +91,20 @@ func TestAssetAssociationUpgradeRequiresNonDestructiveReview(t *testing.T) {
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT NOT operational AND linked_on IS NULL AND legacy AND review_reason LIKE 'Cross-Customer%' FROM job_asset_links WHERE job_id=$1 AND asset_id=$2`, jobID, id), &retained)
 	if !retained {
 		t.Fatal("cross-Customer evidence not preserved as unknown historical link")
+	}
+	const evidence = `SELECT jsonb_build_object('origins',(SELECT jsonb_agg(to_jsonb(o) ORDER BY asset_id) FROM asset_association_origins o),'links',(SELECT jsonb_agg(to_jsonb(l) ORDER BY id) FROM job_asset_links l),'events',(SELECT jsonb_agg(to_jsonb(e) ORDER BY id) FROM asset_association_events e),'grants',(SELECT jsonb_agg(to_jsonb(g) ORDER BY role_id,permission,scope) FROM authorization_grants g))::text`
+	var original, repaired string
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, evidence), &original)
+	if err := db.Migrate(ctx, MigrationFS()); err != nil {
+		t.Fatal(err)
+	}
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, evidence), &repaired)
+	if original != repaired {
+		t.Fatal("repair migration rewrote previously applied evidence or grants")
+	}
+	var originRevisions int
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT count(*) FROM asset_association_origin_revisions`), &originRevisions)
+	if originRevisions != 0 {
+		t.Fatal("upgrade invented factual corrections")
 	}
 }

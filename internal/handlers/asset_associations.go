@@ -27,6 +27,11 @@ func (h *AssetHandler) Associations(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		in := authorization.AssetAssociationInput{Action: chi.URLParam(r, "action"), EffectiveDate: r.FormValue("effective_date"), Reason: r.FormValue("reason")}
+		if in.Action == "correct" && !r.PostForm.Has("event_id") {
+			// Missing is not the explicit origin target (0). Let the command
+			// check authority before reporting an unavailable correction target.
+			in.EventID = -1
+		}
 		for key, dest := range map[string]*int64{"customer_id": &in.CustomerID, "location_id": &in.LocationID, "event_id": &in.EventID, "revision": &in.Revision} {
 			value := r.FormValue(key)
 			if value == "" && key != "revision" {

@@ -15,6 +15,7 @@ import (
 // PDFRenderInput makes the reviewed presentation and financial snapshot explicit
 // without changing ordinary request configuration or authorization context.
 type PDFRenderInput struct {
+	Asset        *ent.Asset
 	FieldLines   []string
 	Presentation *ent.CompanySettings
 	SettledCents *int64
@@ -42,7 +43,7 @@ func documentPDFVersions(w http.ResponseWriter, r *http.Request, kind string, id
 			authorizationError(w, r, err)
 			return true
 		}
-		doc, err := generate(r.Context(), PDFRenderInput{Presentation: source.Settings, SettledCents: &source.SettledCents, FieldLines: source.FieldLines})
+		doc, err := generate(r.Context(), PDFRenderInput{Asset: source.Asset, Presentation: source.Settings, SettledCents: &source.SettledCents, FieldLines: source.FieldLines})
 		if err != nil {
 			http.Error(w, "PDF generation failed", 500)
 			return true

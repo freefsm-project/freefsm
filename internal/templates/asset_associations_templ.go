@@ -464,7 +464,7 @@ func AssetAssociations(id int64, history authorization.AssetAssociationHistory, 
 					}
 				}
 				if action == "correct" {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<label>Original event<select name=\"event_id\" required>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 36, "<label>Original event<select name=\"event_id\" required><option value=\"0\">Initial observed association — start date unknown</option> ")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -477,7 +477,7 @@ func AssetAssociations(id int64, history authorization.AssetAssociationHistory, 
 							var templ_7745c5c3_Var30 string
 							templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(event.ID))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/asset_associations.templ`, Line: 48, Col: 44}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/asset_associations.templ`, Line: 49, Col: 44}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 							if templ_7745c5c3_Err != nil {
@@ -490,7 +490,7 @@ func AssetAssociations(id int64, history authorization.AssetAssociationHistory, 
 							var templ_7745c5c3_Var31 string
 							templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinStringErrs(event.Action)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/asset_associations.templ`, Line: 48, Col: 59}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/asset_associations.templ`, Line: 49, Col: 59}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 							if templ_7745c5c3_Err != nil {
@@ -503,7 +503,7 @@ func AssetAssociations(id int64, history authorization.AssetAssociationHistory, 
 							var templ_7745c5c3_Var32 string
 							templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.JoinStringErrs(event.EffectiveDate)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/asset_associations.templ`, Line: 48, Col: 85}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/asset_associations.templ`, Line: 49, Col: 85}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var32))
 							if templ_7745c5c3_Err != nil {
@@ -516,7 +516,7 @@ func AssetAssociations(id int64, history authorization.AssetAssociationHistory, 
 							var templ_7745c5c3_Var33 string
 							templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(event.Reason)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/asset_associations.templ`, Line: 48, Col: 104}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/asset_associations.templ`, Line: 49, Col: 104}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 							if templ_7745c5c3_Err != nil {
@@ -528,7 +528,7 @@ func AssetAssociations(id int64, history authorization.AssetAssociationHistory, 
 							}
 						}
 					}
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</select></label> ")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 42, "</select></label><p>Correcting the initial observation records a factual revision as of the effective date below. It does not assert an acquisition date or a real transfer; the historical start remains unknown.</p>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -540,7 +540,7 @@ func AssetAssociations(id int64, history authorization.AssetAssociationHistory, 
 				var templ_7745c5c3_Var34 string
 				templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(action)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/asset_associations.templ`, Line: 56, Col: 40}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/asset_associations.templ`, Line: 58, Col: 40}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 				if templ_7745c5c3_Err != nil {
