@@ -47,7 +47,7 @@ func TestBackupActivityRouteIsCompanyScopedAndAdminOnly(t *testing.T) {
 			}
 			continue
 		}
-		if w.Code != 200 || !strings.Contains(w.Body.String(), "Original administrator") || !strings.Contains(w.Body.String(), "/activity?type=instance") {
+		if w.Code != 200 || !strings.Contains(w.Body.String(), "Original administrator") || !strings.Contains(w.Body.String(), "/settings/activity/history?type=instance") {
 			t.Fatalf("admin activity: %d %s", w.Code, w.Body)
 		}
 	}

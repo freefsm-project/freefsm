@@ -23,10 +23,12 @@ import (
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type JobHandler struct {
+	itemSvc          *services.ItemService
 	svc              *services.JobService
 	custSvc          *services.CustomerService
 	statusSvc        *services.StatusService
@@ -138,6 +140,14 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := jobToDetail(r.Context(), j, statuses)
+	if j.DeletedAt == nil {
+		d.StatusChoices, err = h.statusflow.DiscoverIntents(r.Context(), statusflow.Actor{ID: u.ID, CompanyID: u.CompanyID}, statusflow.Job, id)
+		if err != nil {
+			statusflowHTTPError(w, err)
+			return
+		}
+		d.StatusOperation = uuid.NewString()
+	}
 	masterView := func(kind string) bool {
 		req, ok := authorization.FromContext(r.Context())
 		if !ok {
@@ -201,6 +211,7 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	if err == nil && activeEntry != nil {
 		if activeEntry.JobID != nil && *activeEntry.JobID == j.ID {
 			d.ActiveTimeEntryOnJob = true
+			d.ActiveTimeEntryID = activeEntry.ID
 			d.ActiveTimeEntryClockIn = displayDateTime(r.Context(), activeEntry.ClockIn)
 			d.ActiveTimeEntryDuration = services.TimeEntryDuration(activeEntry.ClockIn, safeTime(activeEntry.ClockOut))
 		} else {
@@ -244,22 +255,14 @@ func (h *JobHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "status workflow unavailable", http.StatusInternalServerError)
 		return
 	}
-	statuses := h.statusesForSelect(r.Context())
-	err = h.statusflow.TransitionJob(r.Context(), statusflow.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, id, statusID)
-	if err != nil {
-		statusflowHTTPError(w, err)
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", 401)
 		return
 	}
-	result, err := h.svc.GetByID(r.Context(), id)
+	_, err = req.Service.SubmitJobStatus(r.Context(), req.Actor, id, authorization.JobExecutionCommand{OperationID: r.FormValue("operation_id"), StatusID: statusID, StatusRevision: r.FormValue("status_revision"), MeaningRevision: r.FormValue(fmt.Sprintf("meaning_%d", statusID))})
 	if err != nil {
-		internalServerError(w, r, "reload job status", err)
-		return
-	}
-
-	if r.Header.Get("HX-Request") == "true" {
-		d := jobToDetail(r.Context(), result, statuses)
-		r = withDetailPresentation(r, "job", id, h.policySvc)
-		render(w, r, templates.JobStatusControl(d))
+		jobExecutionHTTPError(w, r, err)
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/jobs/%d?flash=Status+updated", id), http.StatusSeeOther)
@@ -271,7 +274,7 @@ func (h *JobHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		http.NotFound(w, r)
 		return
 	}
@@ -280,38 +283,25 @@ func (h *JobHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, id), policyRead) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+	in, ok := clockForm(w, r)
+	if !ok {
 		return
 	}
-	j, err := h.svc.GetByID(r.Context(), id)
+	if in.JobID != 0 && in.JobID != id {
+		http.Error(w, "Conflicting Job clock target", http.StatusBadRequest)
+		return
+	}
+	in.JobID = id
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
+	_, err = req.Service.Clock(r.Context(), req.Actor, false, in)
 	if err != nil {
-		http.NotFound(w, r)
+		clockError(w, r, err)
 		return
 	}
-	result, err := h.timeEntrySvc.ClockIn(r.Context(), services.TimeEntryCreateParams{UserID: u.ID, JobID: id})
-	if err != nil {
-		if errors.Is(err, services.ErrActiveTimeEntry) {
-			redirectToJob(w, r, id, "You are already clocked in. Clock out before clocking in to this job.")
-			return
-		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	clockInStr := displayDateTime(r.Context(), result.ClockIn)
-	jobName := jobDisplayName(j)
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_in", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
-		"entity_name":   fmt.Sprintf("%s — %s — %s", u.Name, jobName, clockInStr),
-		"actor_name":    u.Name,
-		"time_entry_id": result.ID,
-		"clock_in":      clockInStr,
-	})
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_in", objectref.New(objectref.TypeJob, id), map[string]interface{}{
-		"entity_name":   fmt.Sprintf("%s — %s", jobName, clockInStr),
-		"actor_name":    u.Name,
-		"time_entry_id": result.ID,
-		"clock_in":      clockInStr,
-	})
 	redirectToJob(w, r, id, "Clocked in to job")
 }
 
@@ -321,7 +311,7 @@ func (h *JobHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
+	if err != nil || id <= 0 {
 		http.NotFound(w, r)
 		return
 	}
@@ -330,51 +320,31 @@ func (h *JobHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, id), policyRead) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+	in, ok := clockForm(w, r)
+	if !ok {
 		return
 	}
-	j, err := h.svc.GetByID(r.Context(), id)
+	if in.JobID != 0 && in.JobID != id {
+		http.Error(w, "Conflicting Job clock target", http.StatusBadRequest)
+		return
+	}
+	in.JobID = id
+	in.EntryID, err = strconv.ParseInt(r.FormValue("entry_id"), 10, 64)
+	if err != nil || in.EntryID <= 0 {
+		http.Error(w, "An exact entry_id is required", 400)
+		return
+	}
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
+	_, err = req.Service.Clock(r.Context(), req.Actor, true, in)
 	if err != nil {
-		http.NotFound(w, r)
+		clockError(w, r, err)
 		return
 	}
-	activeEntry, err := h.timeEntrySvc.GetActiveByUser(r.Context(), u.ID)
-	if err != nil {
-		redirectToJob(w, r, id, "No active clock-in found for this job")
-		return
-	}
-	if activeEntry.JobID == nil {
-		redirectToJob(w, r, id, "Your active clock-in is not linked to this job")
-		return
-	}
-	if *activeEntry.JobID != id {
-		redirectToJob(w, r, id, "You are clocked in to another job")
-		return
-	}
-	result, err := h.timeEntrySvc.ClockOut(r.Context(), activeEntry.ID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	duration := services.TimeEntryDuration(result.ClockIn, safeTime(result.ClockOut))
-	clockInStr := displayDateTime(r.Context(), result.ClockIn)
-	jobName := jobDisplayName(j)
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_out", objectref.New(objectref.TypeTimeEntry, result.ID), map[string]interface{}{
-		"entity_name":   fmt.Sprintf("%s — %s — %s (%s)", u.Name, jobName, clockInStr, duration),
-		"actor_name":    u.Name,
-		"time_entry_id": result.ID,
-		"clock_in":      clockInStr,
-		"duration":      duration,
-	})
-	h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "clocked_out", objectref.New(objectref.TypeJob, id), map[string]interface{}{
-		"entity_name":   fmt.Sprintf("%s — %s (%s)", jobName, clockInStr, duration),
-		"actor_name":    u.Name,
-		"time_entry_id": result.ID,
-		"clock_in":      clockInStr,
-		"duration":      duration,
-	})
-	redirectToJob(w, r, id, "Clocked out of job")
+	http.Redirect(w, r, "/?flash=Clocked+out", http.StatusSeeOther)
 }
 
 func redirectToJob(w http.ResponseWriter, r *http.Request, id int64, flash string) {
@@ -409,6 +379,10 @@ func boundedJobLogValue(value string) string {
 }
 
 func handleInvalidJobInput(w http.ResponseWriter, r *http.Request, operation string, err error) bool {
+	if errors.Is(err, services.ErrInvalidLineItem) || errors.Is(err, services.ErrInvalidTaxRate) || errors.Is(err, services.ErrMalformedLineItems) {
+		http.Error(w, "Invalid Job pricing: check the description, quantity, price and tax rate", http.StatusUnprocessableEntity)
+		return true
+	}
 	var constraint *pgconn.PgError
 	if errors.As(err, &constraint) && strings.HasPrefix(constraint.ConstraintName, "master_") {
 		http.Error(w, "Work context changed; reload and select active records belonging to the Customer", http.StatusConflict)
@@ -480,6 +454,10 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		staleJobForm(w)
 		return
 	}
+	if r.FormValue("tech_notes") != "" || r.FormValue("field_notes") != "" {
+		http.Error(w, "Create the Job first, then use the independent Field Notes editor", http.StatusConflict)
+		return
+	}
 	if !validJobRelationshipInputs(w, r) {
 		return
 	}
@@ -506,9 +484,14 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TechNotes:         r.FormValue("tech_notes"),
 		Visits:            services.ParseVisits(r.FormValue("visits")),
 		Assignments:       services.ParseAssignments(r.FormValue("assignments")),
-		Subtasks:          services.ParseSubtasks(r.FormValue("subtasks")),
 		CustomFields:      parseCustomFieldValues(r),
 	}
+	subtasks, err := services.DecodeSubtasks(r.FormValue("subtasks"))
+	if err != nil {
+		subtaskHTTPError(w, r, err)
+		return
+	}
+	params.Subtasks = subtasks
 	if params.BillingType == "" {
 		params.BillingType = "flat_rate"
 	}
@@ -516,12 +499,24 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid due date", 400)
 		return
 	}
+	if r.Form.Has("line_items") {
+		lines, err := services.DecodeJobPricing(r.FormValue("line_items"))
+		if err != nil || services.ValidateLineItems(lines) != nil {
+			http.Error(w, "Invalid Job pricing", http.StatusUnprocessableEntity)
+			return
+		}
+		params.LineItems = lines
+	}
 	createJob := h.createJob
 	if createJob == nil {
 		createJob = h.svc.Create
 	}
 	result, err := createJob(r.Context(), u.CompanyID, params)
 	if err != nil {
+		if errors.Is(err, authorization.ErrSubtaskInvalid) || errors.Is(err, authorization.ErrSubtaskReview) {
+			subtaskHTTPError(w, r, err)
+			return
+		}
 		if renderFieldSaveError(w, r, h.defSvc, "job", err) {
 			return
 		}
@@ -659,6 +654,10 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		staleJobForm(w)
 		return
 	}
+	if parseCustomFieldPatch(r) != nil {
+		input := reviewedJobFieldInput(r)
+		r = r.WithContext(authorization.WithJobFieldReview(r.Context(), input.Revisions))
+	}
 	if !validJobRelationshipInputs(w, r) {
 		return
 	}
@@ -686,8 +685,21 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Subtitle:          formPtr(r.FormValue("subtitle")),
 		BillingType:       formPtr(r.FormValue("billing_type")),
 		Notes:             formPtr(r.FormValue("notes")),
-		TechNotes:         formPtr(r.FormValue("tech_notes")),
+		TechNotes:         optionalJobNotes(r),
 		CustomFields:      parseCustomFieldPatch(r),
+	}
+	if params.CustomFields != nil {
+		input := reviewedJobFieldInput(r)
+		value := string(input.Values)
+		params.CustomFields = &value
+	}
+	if r.Form.Has("line_items") {
+		lines, err := services.DecodeJobPricing(r.FormValue("line_items"))
+		if err != nil || services.ValidateLineItems(lines) != nil {
+			http.Error(w, "Invalid Job pricing", http.StatusUnprocessableEntity)
+			return
+		}
+		params.LineItems = &lines
 	}
 	// Omitted relationship inputs are not unlink requests. Independent planning
 	// editors and partial submissions preserve the existing operational context.
@@ -712,7 +724,11 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.Assignments = &assignments
 	}
 	if s := r.FormValue("subtasks"); s != "" {
-		subtasks := services.ParseSubtasks(s)
+		subtasks, err := services.DecodeSubtasks(s)
+		if err != nil {
+			subtaskHTTPError(w, r, err)
+			return
+		}
 		params.Subtasks = &subtasks
 	}
 	loc := middleware.CompanyLocation(r.Context())
@@ -739,6 +755,15 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := updateJob(r.Context(), u.CompanyID, id, params)
 	if err != nil {
+		if errors.Is(err, authorization.ErrSubtaskInvalid) || errors.Is(err, authorization.ErrSubtaskReview) {
+			subtaskHTTPError(w, r, err)
+			return
+		}
+		var conflict *authorization.FieldConflict
+		if errors.As(err, &conflict) {
+			http.Error(w, "Custom Field values changed. Review the current Job fields and submit a new operation.", http.StatusConflict)
+			return
+		}
 		if renderFieldSaveError(w, r, h.defSvc, "job", err) {
 			return
 		}
@@ -806,58 +831,6 @@ func (h *JobHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	http.Redirect(w, r, "/jobs/"+strconv.FormatInt(id, 10)+"?flash=Job+restored", http.StatusSeeOther)
-}
-
-func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil || u.CompanyID <= 0 {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, id), policyUpdate) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	idx, err := strconv.Atoi(chi.URLParam(r, "idx"))
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	j, err := h.svc.GetByIDForCompany(r.Context(), u.CompanyID, id)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	subtasks := services.ParseSubtasks(j.Subtasks)
-	if idx < 0 || idx >= len(subtasks) {
-		http.NotFound(w, r)
-		return
-	}
-	subtasks[idx].Completed = !subtasks[idx].Completed
-	if _, err := h.svc.UpdateSubtasks(r.Context(), u.CompanyID, id, subtasks); err != nil {
-		internalServerError(w, r, "toggle job subtask", err)
-		return
-	}
-	if u != nil {
-		action := "subtask_completed"
-		if !subtasks[idx].Completed {
-			action = "subtask_uncompleted"
-		}
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, action, objectref.New(objectref.TypeJob, id), map[string]interface{}{
-			"actor_name":  u.Name,
-			"entity_name": subtasks[idx].Title,
-		})
-	}
-	statuses := h.statusesForSelect(r.Context())
-	d := jobToDetail(r.Context(), j, statuses)
-	d.Subtasks = subtasks
-	r = withDetailPresentation(r, "job", id, h.policySvc)
-	templates.JobSubtasks(d).Render(r.Context(), w)
 }
 
 func (h *JobHandler) AssetOptions(w http.ResponseWriter, r *http.Request) {
@@ -982,6 +955,16 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *en
 	users, _ := h.userSvc.ListActiveForCompany(ctx, companyID)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "job")
 	d := jobToDetail(ctx, j, statuses)
+	fieldValues, fieldBaseline := j.CustomFields, ""
+	if request, ok := authorization.FromContext(ctx); ok {
+		state, err := request.Service.ReadFieldState(ctx, request.Actor, j.ID)
+		if err != nil {
+			return templates.JobFormPageData{}, err
+		}
+		encoded, _ := json.Marshal(state)
+		fieldBaseline = string(encoded)
+		fieldValues = string(state.Values)
+	}
 	assignments, _ := h.svc.Assignments(ctx, j.ID)
 	if len(assignments) == 0 {
 		assignments = services.ParseAssignments(j.Assignments)
@@ -996,7 +979,24 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *en
 			retainedProjectID = p.ID
 		}
 	}
+	var pricing *templates.LineItemEditorData
+	if request, ok := authorization.FromContext(ctx); ok && request.Service.ParentFacet(ctx, request.Actor, "job", j.ID, "pricing.view") == nil {
+		lines, err := services.JobPricingLines(j.ID, j.LineItems)
+		if err != nil {
+			return templates.JobFormPageData{}, err
+		}
+		raw, err := services.EncodeLineItems(lines)
+		if err != nil {
+			return templates.JobFormPageData{}, err
+		}
+		bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, nil, raw, "0")
+		if err != nil {
+			return templates.JobFormPageData{}, err
+		}
+		pricing = &templates.LineItemEditorData{ItemsJSON: bootstrap.ItemsJSON, ExistingItemsJSON: bootstrap.ExistingItemsJSON, CustomersJSON: bootstrap.CustomersJSON, JobPricing: true}
+	}
 	return filterJobFormChoices(ctx, templates.JobFormPageData{
+		Pricing:           pricing,
 		RetainedProjectID: retainedProjectID,
 		Job:               &d,
 		AssetCustomFields: h.relatedCreationFields(ctx, "asset"), ProjectCustomFields: h.relatedCreationFields(ctx, "project"),
@@ -1013,7 +1013,8 @@ func (h *JobHandler) formDataFromJob(ctx context.Context, companyID int64, j *en
 		ExistingVisitsJSON:      services.SerializeVisits(services.ParseVisits(j.Visits)),
 		ExistingAssignmentsJSON: serializeJobFormAssignments(assignments, assignmentUsers),
 		ExistingSubtasksJSON:    services.SerializeSubtasks(services.ParseSubtasks(j.Subtasks)),
-		CustomFields:            buildCustomFieldDisplay(defs, j.CustomFields),
+		CustomFields:            buildCustomFieldDisplay(defs, fieldValues),
+		FieldBaseline:           fieldBaseline,
 		Errors:                  map[string]string{},
 	}), nil
 }

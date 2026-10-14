@@ -125,7 +125,7 @@ func principal(ctx context.Context, q queryer, a Actor, transitional bool) (Prin
 	return p, nil
 }
 func (s *Service) Principal(ctx context.Context, a Actor) (Principal, error) {
-	return principal(ctx, s.Pool, a, false)
+	return principal(ctx, s.reads(ctx), a, false)
 }
 
 // WithinPermission holds the shared authority lock through effects and commit.
@@ -258,11 +258,15 @@ func (s *Service) transact(ctx context.Context, a Actor, transition, consumingSe
 	return tx.Commit(ctx)
 }
 func audit(ctx context.Context, tx pgx.Tx, a Actor, p Principal, permission string, scope Scope, typ string, id int64, detail any) error {
+	enriched, err := commercialAuditDetail(ctx, tx, detail)
+	if err != nil {
+		return err
+	}
 	channel := a.Channel
 	if channel == "" {
 		channel = "web"
 	}
-	return protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.UserID, RoleID: p.RoleID, Action: permission, Scope: string(scope), TargetType: typ, TargetID: id, Channel: channel, Detail: detail, SessionHash: a.SessionHash})
+	return protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: a.UserID, RoleID: p.RoleID, Action: permission, Scope: string(scope), TargetType: typ, TargetID: id, Channel: channel, Detail: enriched, SessionHash: a.SessionHash})
 }
 
 // SaveRole creates a Role when id is zero. Updating an existing Role requires

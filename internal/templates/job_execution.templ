@@ -1,0 +1,68 @@
+package templates
+
+import (
+ "fmt"
+ "github.com/freefsm-project/freefsm/internal/authorization"
+)
+
+templ JobFieldNotes(id int64, state authorization.JobExecutionState, operation string) {
+ @Layout("Field Notes") {
+  <script src={ staticAsset("/static/js/job-execution.js") } defer></script>
+  <h1>Field Notes</h1>
+  if state.ReviewRequired {
+   <p>Legacy Field Notes require Administrator review. Original text is retained; no historical author or revisions have been inferred.</p>
+   <p>Field Notes baseline — historical author and acceptance time unknown</p>
+   if state.CanReview {
+    <form method="post" hx-boost="false" action={ templ.URL(fmt.Sprintf("/jobs/%d/field-notes/review",id)) }>
+     <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+     <input type="hidden" name="baseline_revision" value={ state.NotesRevision }/>
+     <label>Review reason<textarea name="reason" required></textarea></label>
+     <button type="submit">Acknowledge unknown history and retain this baseline</button>
+    </form>
+   }
+  }
+  if state.CanEditNotes {
+   <form method="post" action={ templ.URL(fmt.Sprintf("/jobs/%d/field-notes",id)) } hx-boost="false" data-execution-form="true">
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+    <input type="hidden" name="operation_id" value={ operation }/>
+    <input type="hidden" name="notes_revision" value={ state.NotesRevision }/>
+    <label for="field-notes">Shared Field Notes</label>
+    <textarea id="field-notes" name="field_notes" rows="8">{ state.Notes }</textarea>
+    <button type="submit">Save Field Notes</button>
+   </form>
+  } else {
+   <pre style="white-space:pre-wrap;overflow-wrap:anywhere">{ state.Notes }</pre>
+  }
+   <p><a href={ templ.URL(fmt.Sprintf("/jobs/%d/field-notes/history",id)) }>Field Notes revision history</a></p>
+   <p><a href={ templ.URL(fmt.Sprintf("/jobs/%d",id)) }>Back to Job</a></p>
+ }
+}
+
+templ JobNotesActivityLink(id int64) {
+ <p><a href={ templ.URL(fmt.Sprintf("/jobs/%d/field-notes/history",id)) }>Field Notes revision history (including retained baselines)</a></p>
+}
+
+templ JobNotesHistory(id int64, history []authorization.JobNotesRevision) {
+ @Layout("Job Field Notes activity") {
+  <h1>Job Field Notes activity</h1>
+  for _, revision := range history {
+   <article>
+    if revision.Baseline {
+     if revision.BaselineSource=="migration" {
+      <h2>Migration baseline — historical author and acceptance time unknown</h2>
+     } else {
+      <h2>Initial Field Notes baseline — no attributed edit</h2>
+     }
+     <p>Baseline recorded { revision.RecordedAt.Format("2006-01-02 15:04:05 MST") }. This is not a historical edit time.</p>
+    } else {
+     <h2>{ revision.ActorName }</h2>
+     if revision.AcceptedAt!=nil {
+      <p>{ revision.AcceptedAt.Format("2006-01-02 15:04:05 MST") }</p>
+     }
+    }
+    <pre style="white-space:pre-wrap;overflow-wrap:anywhere">{ revision.Content }</pre>
+   </article>
+  }
+  <a href={ templ.URL(fmt.Sprintf("/jobs/%d",id)) }>Back to Job</a>
+ }
+}

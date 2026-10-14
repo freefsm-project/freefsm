@@ -22,27 +22,28 @@ type statusDTO struct {
 }
 
 type jobDTO struct {
-	ID                 int64                 `json:"id"`
-	JobType            string                `json:"job_type"`
-	Subtitle           string                `json:"subtitle"`
-	Status             *statusDTO            `json:"status"`
-	StartTime          *time.Time            `json:"start_time"`
-	EndTime            *time.Time            `json:"end_time"`
-	DueDate            *string               `json:"due_date"`
-	ArrivalWindowStart *time.Time            `json:"arrival_window_start"`
-	ArrivalWindowEnd   *time.Time            `json:"arrival_window_end"`
-	Notes              string                `json:"notes"`
-	TechNotes          string                `json:"tech_notes"`
-	Visits             []services.JobVisit   `json:"visits"`
-	Assignments        []jobAssigneeDTO      `json:"assignments"`
-	Subtasks           []services.JobSubtask `json:"subtasks"`
-	CustomerID         *int64                `json:"customer_id,omitempty"`
-	ProjectID          *int64                `json:"project_id,omitempty"`
-	LocationID         *int64                `json:"location_id,omitempty"`
-	CustomerContactID  *int64                `json:"customer_contact_id,omitempty"`
-	AssetID            *int64                `json:"asset_id,omitempty"`
-	BillingType        *string               `json:"billing_type,omitempty"`
-	LineItems          *[]services.LineItem  `json:"line_items,omitempty"`
+	ID                     int64                 `json:"id"`
+	JobType                string                `json:"job_type"`
+	Subtitle               string                `json:"subtitle"`
+	Status                 *statusDTO            `json:"status"`
+	StartTime              *time.Time            `json:"start_time"`
+	EndTime                *time.Time            `json:"end_time"`
+	DueDate                *string               `json:"due_date"`
+	ArrivalWindowStart     *time.Time            `json:"arrival_window_start"`
+	ArrivalWindowEnd       *time.Time            `json:"arrival_window_end"`
+	Notes                  string                `json:"notes"`
+	TechNotes              string                `json:"tech_notes"`
+	Visits                 []services.JobVisit   `json:"visits"`
+	Assignments            []jobAssigneeDTO      `json:"assignments"`
+	Subtasks               []services.JobSubtask `json:"subtasks"`
+	SubtasksReviewRequired bool                  `json:"subtasks_review_required"`
+	CustomerID             *int64                `json:"customer_id,omitempty"`
+	ProjectID              *int64                `json:"project_id,omitempty"`
+	LocationID             *int64                `json:"location_id,omitempty"`
+	CustomerContactID      *int64                `json:"customer_contact_id,omitempty"`
+	AssetID                *int64                `json:"asset_id,omitempty"`
+	BillingType            *string               `json:"billing_type,omitempty"`
+	LineItems              *[]jobPricingLineDTO  `json:"line_items,omitempty"`
 }
 
 type jobAssigneeDTO struct {
@@ -55,7 +56,21 @@ func (h *handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	actor := actorFromContext(r.Context())
 	var jobs []*ent.Job
 	var err error
-	if isOffice(actor.Role) {
+	if req, ok := authorization.FromContext(r.Context()); ok {
+		p, e := req.Service.Principal(r.Context(), req.Actor)
+		if e != nil {
+			jobExecutionAPIError(w, e)
+			return
+		}
+		if p.Allows("job.view", authorization.All) {
+			jobs, err = h.deps.Jobs.ListAllForCompany(r.Context(), *actor.CompanyID)
+		} else if p.Allows("job.view", authorization.Assigned) {
+			jobs, err = h.deps.Jobs.ListAssignedAllForCompany(r.Context(), *actor.CompanyID, actor.ID)
+		} else {
+			writeError(w, 403, "forbidden", "Job View required")
+			return
+		}
+	} else if isOffice(actor.Role) {
 		jobs, err = h.deps.Jobs.ListAllForCompany(r.Context(), *actor.CompanyID)
 	} else if isTech(actor.Role) {
 		jobs, err = h.deps.Jobs.ListAssignedAllForCompany(r.Context(), *actor.CompanyID, actor.ID)
@@ -74,6 +89,15 @@ func (h *handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	result := make([]jobDTO, 0, len(jobs))
 	for _, job := range jobs {
+		if req, ok := authorization.FromContext(r.Context()); ok {
+			if err := req.Service.ParentAccess(r.Context(), req.Actor, "job", job.ID, ""); err != nil {
+				if errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrForbidden) {
+					continue
+				}
+				jobExecutionAPIError(w, err)
+				return
+			}
+		}
 		dto, err := h.visibleJobDTO(r, job, statuses, actor.Role)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "internal_error", "could not load Job assignees")
@@ -102,7 +126,11 @@ func (h *handler) getJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dto)
 }
 
-type statusRequest = statusflow.Intent
+type statusRequest struct {
+	statusflow.Intent
+	OperationID string     `json:"operation_id"`
+	OccurredAt  *time.Time `json:"occurred_at,omitempty"`
+}
 
 func (h *handler) jobStatusIntents(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -125,68 +153,58 @@ func (h *handler) updateJobStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "not_found", "job not found")
 		return
 	}
-	actor := actorFromContext(r.Context())
 	var request statusRequest
-	if !decodeJSON(w, r, &request) {
+	if !decodeExactJSON(w, r, &request, "operation_id", "status_id", "status_revision", "meaning_revision", "occurred_at") {
 		return
 	}
-	if request.StatusID <= 0 {
-		writeError(w, http.StatusBadRequest, "invalid_request", "status_id must be positive")
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		writeError(w, 503, "unavailable", "authorization unavailable")
 		return
 	}
-	err = h.deps.StatusFlow.ApplyIntent(r.Context(), statusflow.Actor{ID: actor.ID, CompanyID: *actor.CompanyID}, statusflow.Job, id, request)
+	result, err := req.Service.SubmitJobStatus(r.Context(), req.Actor, id, authorization.JobExecutionCommand{OperationID: request.OperationID, StatusID: request.StatusID, StatusRevision: request.Revision, MeaningRevision: request.MeaningRevision, OccurredAt: request.OccurredAt})
 	if err != nil {
-		writeStatusFlowError(w, err)
+		jobExecutionAPIError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "status_id": request.StatusID})
+	writeJSON(w, http.StatusOK, result)
 }
 
 type subtaskRequest struct {
-	Completed *bool `json:"completed"`
+	Completed          *bool      `json:"completed"`
+	OperationID        string     `json:"operation_id"`
+	CompletionRevision string     `json:"completion_revision"`
+	OccurredAt         *time.Time `json:"occurred_at,omitempty"`
 }
 
 func (h *handler) updateSubtask(w http.ResponseWriter, r *http.Request) {
-	job, actor, ok := h.authorizedJob(w, r)
+	req, ok := authorization.FromContext(r.Context())
 	if !ok {
+		writeError(w, 503, "unavailable", "authorization unavailable")
 		return
 	}
-	if !h.requireOpenJob(w, r, job, *actor.CompanyID) {
-		return
-	}
-	index, err := strconv.Atoi(chi.URLParam(r, "index"))
-	if err != nil || index < 0 {
-		writeError(w, http.StatusBadRequest, "invalid_index", "subtask index must be a non-negative integer")
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil || id <= 0 {
+		writeError(w, 404, "not_found", "not found")
 		return
 	}
 	var request subtaskRequest
-	if !decodeJSON(w, r, &request) {
+	if !decodeExactJSON(w, r, &request, "operation_id", "completed", "completion_revision", "occurred_at") {
 		return
 	}
-	if request.Completed == nil {
-		writeError(w, http.StatusBadRequest, "invalid_request", "completed is required")
-		return
-	}
-	updated, err := h.deps.Mutations.SetSubtaskCompletion(r.Context(), mutationActor(actor), job.ID, index, *request.Completed)
-	if err != nil {
-		switch {
-		case errors.Is(err, services.ErrMutationForbidden):
-			writeError(w, http.StatusForbidden, "forbidden", "job is not assigned to this user")
-			return
-		case errors.Is(err, services.ErrMutationJobClosed):
-			writeError(w, http.StatusConflict, "job_closed", "closed jobs cannot be modified")
-			return
-		case errors.Is(err, services.ErrMutationJobNotFound):
-			writeError(w, http.StatusNotFound, "job_not_found", "job not found")
-			return
-		case errors.Is(err, services.ErrSubtaskNotFound):
-			writeError(w, http.StatusNotFound, "subtask_not_found", "subtask not found")
-			return
+	action := ""
+	if request.Completed != nil {
+		action = "reopen"
+		if *request.Completed {
+			action = "complete"
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", "could not update subtask")
+	}
+	result, err := req.Service.SubmitSubtask(r.Context(), req.Actor, id, authorization.SubtaskCommand{OperationID: request.OperationID, Action: action, SubtaskID: chi.URLParam(r, "subtask"), CompletionRevision: request.CompletionRevision, OccurredAt: request.OccurredAt})
+	if err != nil {
+		subtaskAPIError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, updated)
+	writeJSON(w, 200, result)
 }
 
 func (h *handler) authorizedJob(w http.ResponseWriter, r *http.Request) (*ent.Job, *ent.User, bool) {
@@ -196,10 +214,29 @@ func (h *handler) authorizedJob(w http.ResponseWriter, r *http.Request) (*ent.Jo
 		return nil, nil, false
 	}
 	actor := actorFromContext(r.Context())
+	if req, ok := authorization.FromContext(r.Context()); ok {
+		if err := req.Service.ParentAccess(r.Context(), req.Actor, "job", id, ""); err != nil {
+			jobExecutionAPIError(w, err)
+			return nil, nil, false
+		}
+		job, err := h.deps.Jobs.GetByIDForCompany(r.Context(), *actor.CompanyID, id)
+		if err != nil {
+			writeError(w, 404, "not_found", "Job not found")
+			return nil, nil, false
+		}
+		return job, actor, true
+	}
 	job, err := h.deps.Jobs.GetByIDForCompany(r.Context(), *actor.CompanyID, id)
 	if err != nil || job == nil || job.DeletedAt != nil {
 		writeError(w, http.StatusNotFound, "job_not_found", "job not found")
 		return nil, nil, false
+	}
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		if request.Service.ParentAccess(r.Context(), request.Actor, "job", id, "") != nil {
+			writeError(w, 404, "job_not_found", "job not found")
+			return nil, nil, false
+		}
+		return job, actor, true
 	}
 	if isOffice(actor.Role) {
 		return job, actor, true
@@ -249,6 +286,16 @@ func (h *handler) visibleJobDTO(r *http.Request, job *ent.Job, statuses map[int6
 	for _, a := range assignments {
 		dto.Assignments = append(dto.Assignments, jobAssigneeDTO{UserID: a.UserID, Name: a.Name, Unavailable: a.Unavailable})
 	}
+	// Captured pricing is a separate parent-bounded facet. Neither the legacy
+	// actor discriminator nor catalog access supplies this authority.
+	if request, ok := authorization.FromContext(r.Context()); ok && request.Service.ParentFacet(r.Context(), request.Actor, "job", job.ID, "pricing.view") == nil {
+		dto.BillingType = &job.BillingType
+		lines, err := publicJobPricing(job.ID, job.LineItems)
+		if err != nil {
+			return jobDTO{}, err
+		}
+		dto.LineItems = &lines
+	}
 	if request, ok := authorization.FromContext(r.Context()); ok && dto.CustomerID != nil {
 		if request.Service.CustomerAccess(r.Context(), request.Actor, job.CustomerID, "customer.view") != nil {
 			if _, err := request.Service.JobCustomer(r.Context(), request.Actor, job.ID); err != nil {
@@ -274,6 +321,15 @@ func makeJobDTO(job *ent.Job, statuses map[int64]statusDTO, role string) jobDTO 
 	if dto.Subtasks == nil {
 		dto.Subtasks = []services.JobSubtask{}
 	}
+	// Legacy positional rows are evidence awaiting review, not field targets.
+	// The dedicated checklist endpoint exposes the explicit review disposition.
+	for _, task := range dto.Subtasks {
+		if task.ID == "" || task.CompletionRevision == "" {
+			dto.Subtasks = []services.JobSubtask{}
+			dto.SubtasksReviewRequired = true
+			break
+		}
+	}
 	if job.StatusID != nil {
 		if status, ok := statuses[*job.StatusID]; ok {
 			dto.Status = &status
@@ -285,12 +341,6 @@ func makeJobDTO(job *ent.Job, statuses map[int64]statusDTO, role string) jobDTO 
 		dto.LocationID = job.LocationID
 		dto.CustomerContactID = job.CustomerContactID
 		dto.AssetID = job.AssetID
-		dto.BillingType = &job.BillingType
-		lineItems, _ := services.DecodeLineItems(job.LineItems)
-		if lineItems == nil {
-			lineItems = []services.LineItem{}
-		}
-		dto.LineItems = &lineItems
 	}
 	return dto
 }

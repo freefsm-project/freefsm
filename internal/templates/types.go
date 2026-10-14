@@ -15,6 +15,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/settlement"
+	"github.com/freefsm-project/freefsm/internal/statusflow"
 )
 
 func staticAsset(path string) string {
@@ -560,6 +561,8 @@ type JobDetail struct {
 	StatusName               string
 	StatusColor              string
 	Statuses                 []SelectOption
+	StatusChoices            []statusflow.IntentChoice
+	StatusOperation          string
 	BillingType              string
 	StartTime                string
 	EndTime                  string
@@ -577,6 +580,7 @@ type JobDetail struct {
 	ActiveTimeEntryElsewhere bool
 	ActiveTimeEntryMessage   string
 	ActiveTimeEntryClockIn   string
+	ActiveTimeEntryID        int64
 	ActiveTimeEntryDuration  string
 }
 
@@ -601,6 +605,8 @@ type JobListPageData struct {
 }
 
 type JobFormPageData struct {
+	FieldBaseline           string
+	Pricing                 *LineItemEditorData
 	RetainedProjectID       int64
 	AssetCustomFields       []CustomFieldDisplay
 	ProjectCustomFields     []CustomFieldDisplay
@@ -678,6 +684,7 @@ type EstimateDetail struct {
 }
 
 type EstimateListPageData struct {
+	Validity   string
 	Estimates  []EstimateRow
 	Page       int
 	PerPage    int
@@ -1622,6 +1629,7 @@ type SearchPageData struct {
 }
 
 type ClockWidgetData struct {
+	EntryID     int64
 	IsClockedIn bool
 	Duration    string
 	ClockInTime string
@@ -1671,6 +1679,7 @@ type TimeEntryFormPageData struct {
 }
 
 type TimeEntryShowPageData struct {
+	GPSIn, GPSOut      string
 	CanEdit, CanDelete bool
 	ID                 int64
 	UserName           string

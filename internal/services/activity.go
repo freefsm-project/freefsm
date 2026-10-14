@@ -43,6 +43,18 @@ type ActivityScope interface {
 	activityScope()
 }
 
+// FilteredActivityScope intersects a record scope with event facts. Until is
+// exclusive, so adjacent date ranges do not duplicate boundary events.
+type FilteredActivityScope struct {
+	Operational bool
+	Scope       ActivityScope
+	ActorID     int64
+	From, Until time.Time
+	Actions     []string
+}
+
+func (FilteredActivityScope) activityScope() {}
+
 type TenantActivityScope struct {
 	IncludeAdminOnly bool
 	Actions          []string
@@ -99,7 +111,8 @@ type ActivityService struct {
 }
 
 type ActivityEntry struct {
-	ID int64
+	CurrentURL string
+	ID         int64
 	// ActorID is zero for historical snapshots without a current-user link.
 	ActorID          int64
 	Action           string
@@ -115,7 +128,20 @@ func NewActivityService(client *ent.Client, objects objectref.Directory) *Activi
 
 // List returns a keyset-paginated activity page for one explicitly scoped company.
 func (s *ActivityService) List(ctx context.Context, request ActivityListRequest) (ActivityPage, error) {
+	if auth, ok := authorization.FromContext(ctx); ok {
+		if filter, operational := canonicalActivityScope(request.Scope); operational {
+			return s.listAuthorized(ctx, auth, request, filter)
+		}
+	}
 	var empty ActivityPage
+	var filters FilteredActivityScope
+	if filtered, ok := request.Scope.(FilteredActivityScope); ok {
+		filters = filtered
+		request.Scope = filtered.Scope
+		if filters.ActorID < 0 || (!filters.From.IsZero() && !filters.Until.IsZero() && !filters.From.Before(filters.Until)) {
+			return empty, fmt.Errorf("invalid activity filters")
+		}
+	}
 	if scope, ok := request.Scope.(ConversionActivityScope); ok {
 		_, scope.CurrentAuthority = authorization.NavigationPrincipal(ctx)
 		request.Scope = scope
@@ -133,6 +159,21 @@ func (s *ActivityService) List(ctx context.Context, request ActivityListRequest)
 
 	q := s.client.ActivityLog.Query().Where(activitylog.CompanyIDEQ(request.CompanyID))
 	q = q.Where(s.scopePredicates(request.Scope)...)
+	if filters.Operational {
+		q = q.Where(activitylog.ObjectTypeIn("customer", "contact", "location", "asset", "project", "job", "estimate", "invoice", "item", "time_entry", "lease"))
+	}
+	if filters.ActorID > 0 {
+		q = q.Where(activitylog.ActorIDEQ(filters.ActorID))
+	}
+	if !filters.From.IsZero() {
+		q = q.Where(activitylog.CreatedAtGTE(filters.From))
+	}
+	if !filters.Until.IsZero() {
+		q = q.Where(activitylog.CreatedAtLT(filters.Until))
+	}
+	if len(filters.Actions) > 0 {
+		q = q.Where(activitylog.ActionIn(filters.Actions...))
+	}
 	if request.Page.Cursor != nil {
 		q = q.Where(activityCursorPredicate(*request.Page.Cursor, direction))
 	}
@@ -438,6 +479,27 @@ func activityRowCursor(row *ent.ActivityLog) *ActivityCursor {
 }
 
 func (s *ActivityService) Record(ctx context.Context, companyID, actorID int64, action string, target objectref.Ref, metadata map[string]interface{}) error {
+	if _, ok := authorization.FromContext(ctx); ok && (action == "archived" || action == "restored") {
+		switch target.Type {
+		case objectref.TypeAsset, objectref.TypeCustomer, objectref.TypeProject:
+			return nil
+		}
+	}
+	if _, ok := authorization.FromContext(ctx); ok {
+		switch action {
+		case "contact_created", "contact_updated", "contact_deleted", "location_created", "location_updated", "location_deleted":
+			return nil
+		}
+	}
+	// Canonical details commands publish their immutable before/after activity
+	// inside the effect's audit transaction. Do not append a second, best-effort
+	// legacy summary after that transaction commits.
+	if _, ok := authorization.FromContext(ctx); ok && (action == "created" || action == "updated") {
+		switch target.Type {
+		case objectref.TypeCustomer, objectref.TypeJob, objectref.TypeProject, objectref.TypeAsset, objectref.TypeEstimate, objectref.TypeInvoice:
+			return nil
+		}
+	}
 	if err := validateActivityIDs(companyID, actorID); err != nil {
 		return err
 	}

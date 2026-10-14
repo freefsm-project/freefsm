@@ -37,6 +37,23 @@ type Record struct {
 	Values    []string
 	Reference json.RawMessage
 }
+
+// Domains with selected record inputs authorize those inputs under the same
+// fence at acceptance, generation, status and download, even for empty output.
+type selectionAuthorizer interface {
+	AuthorizeSelection(context.Context, pgx.Tx, authorization.Principal, json.RawMessage) error
+}
+
+func authorizeDefinition(ctx context.Context, tx pgx.Tx, p authorization.Principal, d Definition, options json.RawMessage) error {
+	if err := d.Authorize(p, options); err != nil {
+		return err
+	}
+	if selected, ok := d.(selectionAuthorizer); ok {
+		return selected.AuthorizeSelection(ctx, tx, p, options)
+	}
+	return nil
+}
+
 type Service struct {
 	Pool        *pgxpool.Pool
 	definitions map[string]Definition
@@ -100,7 +117,7 @@ func (s *Service) Accept(ctx context.Context, actor authorization.Actor, operati
 	}
 	var id int64
 	err := authorization.New(s.Pool).WithinPermission(ctx, actor, d.Permission(), d.Scope(), func(tx pgx.Tx, p authorization.Principal) error {
-		if err := d.Authorize(p, options); err != nil {
+		if err := authorizeDefinition(ctx, tx, p, d, options); err != nil {
 			return err
 		}
 		var same bool
@@ -158,7 +175,7 @@ func (s *Service) Status(ctx context.Context, a authorization.Actor, id int64) (
 		if !ok || !p.Allows(d.Permission(), d.Scope()) {
 			return block()
 		}
-		if err := d.Authorize(p, options); err != nil {
+		if err := authorizeDefinition(ctx, tx, p, d, options); err != nil {
 			if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) {
 				return block()
 			}

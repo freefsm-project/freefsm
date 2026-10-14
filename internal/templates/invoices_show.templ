@@ -264,6 +264,7 @@ templ InvoiceShow(p InvoiceDetail) {
 		}
 		@FileList(p.FileList)
 	</div>
+	@CommercialHistoryPanel("invoice",p.ID)
 	<div hx-get={ templ.URL(fmt.Sprintf("/invoices/%d/activity", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
 		<p>Loading activity...</p>
 	</div>

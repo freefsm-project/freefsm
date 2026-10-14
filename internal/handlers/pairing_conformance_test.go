@@ -216,6 +216,9 @@ func TestPairingOpenAPIConformanceHTTP(t *testing.T) {
 	call := func(method, path, bearer string, status int) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(method, path, nil)
 		r.Header.Set("Authorization", "Bearer "+bearer)
+		if method == http.MethodDelete {
+			r.Header.Set("Operation-ID", uuid.NewString())
+		}
 		return expect(r, status)
 	}
 	newBearer := func() string {

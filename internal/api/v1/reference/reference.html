@@ -14,4 +14,9 @@
 <button id="sync-start" disabled>Start fresh snapshot</button><button id="sync-next" disabled>Read next page / retry</button><button id="sync-delta" disabled>Read delta</button><button id="sync-replay" disabled>Replay last applied page</button>
 <label><input id="sync-fail" type="checkbox">Simulate next local application failure</label>
 <p id="sync-state" role="status" aria-live="polite">No synchronized data</p><pre id="sync-records"></pre></section>
+<section><h2>Temporary File transfers</h2><p>At most 10 Files. Exact-byte verification is separate from publication. This exerciser never publishes an attachment. Retrying preserves successful items and the original parent.</p>
+<label for="transfer-job">Original Job ID</label><input id="transfer-job" inputmode="numeric">
+<label for="transfer-files">Files to transfer</label><input id="transfer-files" type="file" multiple>
+<button id="transfer-start" disabled>Transfer selected Files</button><button id="transfer-retry" disabled>Retry failed transfers</button>
+<pre id="transfer-results" aria-live="polite"></pre></section>
 </main><script src="/api/v1/reference.js" defer></script></html>

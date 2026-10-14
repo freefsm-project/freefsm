@@ -2,11 +2,16 @@ package v1
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/go-chi/chi/v5"
 )
 
 type timeEntryDTO struct {
@@ -20,90 +25,134 @@ type timeEntryDTO struct {
 	Longitude *float64   `json:"longitude"`
 }
 
-type clockInRequest struct {
-	Notes     string   `json:"notes"`
-	Latitude  *float64 `json:"latitude"`
-	Longitude *float64 `json:"longitude"`
-}
-
-func (h *handler) activeTimeEntry(w http.ResponseWriter, r *http.Request) {
-	actor := actorFromContext(r.Context())
-	entry, err := h.deps.TimeEntries.GetActiveByUserForCompany(r.Context(), *actor.CompanyID, actor.ID)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			writeJSON(w, http.StatusOK, nil)
-			return
+func clockAPIError(w http.ResponseWriter, err error) {
+	status, code := 503, "retryable_failure"
+	var conflict *authorization.ClockConflict
+	switch {
+	case errors.Is(err, authorization.ErrNotFound):
+		status, code = 404, "not_found"
+	case errors.Is(err, authorization.ErrForbidden):
+		status, code = 403, "forbidden"
+	case errors.As(err, &conflict):
+		status, code = 409, conflict.Code
+		if strings.HasPrefix(code, "invalid_") {
+			status = 400
 		}
-		writeError(w, http.StatusInternalServerError, "internal_error", "could not load active time entry")
+	}
+	slog.Warn("clock request rejected", "status", status, "code", code)
+	if status >= 500 {
+		w.Header().Set("Retry-After", "5")
+	}
+	writeError(w, status, code, code)
+}
+func (h *handler) activeTimeEntry(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		clockAPIError(w, authorization.ErrUnavailable)
 		return
 	}
-	writeJSON(w, http.StatusOK, makeTimeEntryDTO(entry))
+	result, err := req.Service.ActiveClock(r.Context(), req.Actor)
+	if err != nil {
+		clockAPIError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, result)
 }
-
-func (h *handler) clockIn(w http.ResponseWriter, r *http.Request) {
-	job, actor, ok := h.authorizedJob(w, r)
+func (h *handler) clockIn(w http.ResponseWriter, r *http.Request)  { h.submitClock(w, r, false) }
+func (h *handler) clockOut(w http.ResponseWriter, r *http.Request) { h.submitClock(w, r, true) }
+func (h *handler) submitClock(w http.ResponseWriter, r *http.Request, out bool) {
+	if r.URL.RawQuery != "" {
+		writeError(w, 400, "invalid_request", "Clock commands do not accept query parameters")
+		return
+	}
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		clockAPIError(w, authorization.ErrUnavailable)
+		return
+	}
+	var wire clockWire
+	if !decodeJSON(w, r, &wire) {
+		return
+	}
+	in := wire.ClockCommand
+	if id := chi.URLParam(r, "id"); id != "" {
+		jobID, err := strconv.ParseInt(id, 10, 64)
+		if err != nil || jobID <= 0 {
+			clockAPIError(w, authorization.ErrNotFound)
+			return
+		}
+		in.URLJobID = jobID
+		if in.JobID == 0 {
+			in.JobID = jobID
+		}
+	}
+	result, err := req.Service.SubmitClock(r.Context(), req.Actor, out, in)
+	if err != nil {
+		clockAPIError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, result)
+}
+func (h *handler) clockLease(w http.ResponseWriter, r *http.Request) {
+	if r.URL.RawQuery != "" {
+		writeError(w, 400, "invalid_request", "query parameters are not supported")
+		return
+	}
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		clockAPIError(w, authorization.ErrUnavailable)
+		return
+	}
+	var in *struct{}
+	if !decodeJSON(w, r, &in) {
+		return
+	}
+	if in == nil {
+		writeError(w, 400, "invalid_request", "lease issuance requires an empty JSON object")
+		return
+	}
+	operation, ok := securityOperationID(w, r)
 	if !ok {
 		return
 	}
-	if !h.requireOpenJob(w, r, job, *actor.CompanyID) {
-		return
-	}
-	var request clockInRequest
-	if !decodeJSON(w, r, &request) {
-		return
-	}
-	if !validCoordinate(request.Latitude, -90, 90) || !validCoordinate(request.Longitude, -180, 180) {
-		writeError(w, http.StatusBadRequest, "invalid_location", "latitude or longitude is out of range")
-		return
-	}
-	entry, err := h.deps.Mutations.ClockIn(r.Context(), mutationActor(actor), job.ID, services.APIClockInParams{Notes: request.Notes, Latitude: request.Latitude, Longitude: request.Longitude})
+	result, err := req.Service.ClockLease(r.Context(), req.Actor, operation)
 	if err != nil {
-		switch {
-		case errors.Is(err, services.ErrMutationForbidden):
-			writeError(w, http.StatusForbidden, "forbidden", "job is not assigned to this user")
-			return
-		case errors.Is(err, services.ErrMutationJobClosed):
-			writeError(w, http.StatusConflict, "job_closed", "closed jobs cannot be modified")
-			return
-		case errors.Is(err, services.ErrMutationJobNotFound):
-			writeError(w, http.StatusNotFound, "job_not_found", "job not found")
-			return
-		case errors.Is(err, services.ErrActiveTimeEntry):
-			writeError(w, http.StatusConflict, "already_clocked_in", "user already has an active time entry")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "internal_error", "could not clock in")
+		clockAPIError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, makeMutationTimeEntryDTO(entry))
+	writeJSON(w, 200, result)
 }
-
-func (h *handler) clockOut(w http.ResponseWriter, r *http.Request) {
-	actor := actorFromContext(r.Context())
-	entry, err := h.deps.Mutations.ClockOut(r.Context(), mutationActor(actor))
+func (h *handler) clockLeaseReceipt(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		unauthorized(w)
+		return
+	}
+	result, err := req.Service.ClockLeaseReceipt(r.Context(), req.Actor, chi.URLParam(r, "operation"))
 	if err != nil {
-		if errors.Is(err, services.ErrTimeEntryNotActive) {
-			writeError(w, http.StatusConflict, "not_clocked_in", "user has no active time entry")
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "internal_error", "could not clock out")
+		clockAPIError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, makeMutationTimeEntryDTO(entry))
+	writeJSON(w, 200, result)
 }
-
-func makeTimeEntryDTO(entry *ent.TimeEntry) timeEntryDTO {
-	return timeEntryDTO{ID: entry.ID, UserID: entry.UserID, JobID: entry.JobID, ClockIn: entry.ClockIn, ClockOut: entry.ClockOut, Notes: entry.Notes, Latitude: entry.Latitude, Longitude: entry.Longitude}
+func (h *handler) clockReceipt(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		clockAPIError(w, authorization.ErrUnavailable)
+		return
+	}
+	result, err := req.Service.ClockReceipt(r.Context(), req.Actor, chi.URLParam(r, "operation"))
+	if err != nil {
+		clockAPIError(w, err)
+		return
+	}
+	writeJSON(w, 200, result)
 }
-
-func makeMutationTimeEntryDTO(entry services.APITimeEntryResult) timeEntryDTO {
-	return timeEntryDTO{ID: entry.ID, UserID: entry.UserID, JobID: entry.JobID, ClockIn: entry.ClockIn, ClockOut: entry.ClockOut, Notes: entry.Notes, Latitude: entry.Latitude, Longitude: entry.Longitude}
-}
-
 func mutationActor(actor *ent.User) services.MutationActor {
 	return services.MutationActor{CompanyID: *actor.CompanyID, UserID: actor.ID, Name: actor.Name, Role: actor.Role}
 }
-
 func validCoordinate(value *float64, min, max float64) bool {
-	return value == nil || (*value >= min && *value <= max)
+	return value == nil || *value >= min && *value <= max
 }

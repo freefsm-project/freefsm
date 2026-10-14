@@ -460,6 +460,7 @@ func TestItemJobSelectionWritersUseTransactionAndPreserveSnapshots(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
+	lines = jobs.LineItems(j) // Retain the accepted capture identities when editing.
 	if err := svc.SetItemArchived(ctx, actor, i.ID, true); err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +470,9 @@ func TestItemJobSelectionWritersUseTransactionAndPreserveSnapshots(t *testing.T)
 	if _, err := jobs.Create(acting, company, services.JobCreateParams{CustomerID: c.ID, JobType: "Invalid", LineItems: lines, CustomFields: "[]"}); !errors.Is(err, authorization.ErrConflict) {
 		t.Fatalf("new archived selection: %v", err)
 	}
-	lines = append(lines, lines[0])
+	newSelection := lines[0]
+	newSelection.SnapshotID = ""
+	lines = append(lines, newSelection)
 	title := "Must not commit"
 	if _, err := jobs.Update(admitCurrentJobRevision(t, acting, pool, j.ID), company, j.ID, services.JobUpdateParams{JobType: &title, LineItems: &lines}); !errors.Is(err, authorization.ErrConflict) {
 		t.Fatalf("appended archived selection: %v", err)

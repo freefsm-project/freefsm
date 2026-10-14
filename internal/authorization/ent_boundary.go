@@ -109,6 +109,16 @@ func InstallCustomerBoundary(client *ent.Client) {
 			return next.Mutate(ctx, m)
 		})
 	})
+	// All request-bound time writes belong to the clock/manual/correction
+	// transaction boundary, never an unaudited Ent mutation.
+	client.TimeEntry.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if _, ok := FromContext(ctx); ok {
+				return nil, ErrForbidden
+			}
+			return next.Mutate(ctx, m)
+		})
+	})
 	// Ordinary Ent reads are active master reads. Closed Job context must use a
 	// purpose-built allowlist, never deserialize an unrestricted child master.
 	childFilter := func(kind string) ent.Interceptor {

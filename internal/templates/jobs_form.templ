@@ -90,18 +90,24 @@ templ JobForm(p JobFormPageData) {
 			<input type="text" name="subtitle" value={ p.Job.Subtitle } placeholder="Optional"/>
 		</label>
 	</div>
-			<div class="grid">
-				<label>
-					Billing Type
-					<select name="billing_type">
-						for _, b := range p.BillingTypes {
-							<option value={ b } selected?={ p.Job.BillingType == b }>{ b }</option>
-						}
-					</select>
-				</label>
-			</div>
 			if p.Job.ID > 0 {
 				<p>Schedule, arrival window and equal assignees are reviewed together in <a href={ templ.URL(fmt.Sprintf("/jobs/%d/dispatch",p.Job.ID)) }>Dispatch Job</a>.</p>
+			}
+			if p.Pricing != nil {
+				<p>Captured Job pricing is independent of the catalog. Later catalog edits do not change these values.</p>
+				@LineItemEditor(*p.Pricing)
+			}
+			if p.Job.ID == 0 || p.Pricing != nil {
+				<div class="grid">
+					<label>
+						Billing Type
+						<select name="billing_type">
+							for _, b := range p.BillingTypes {
+								<option value={ b } selected?={ p.Job.BillingType == b }>{ b }</option>
+							}
+						</select>
+					</label>
+				</div>
 			}
 			<label>
 				Due Date
@@ -111,21 +117,20 @@ templ JobForm(p JobFormPageData) {
 				Notes
 				<textarea name="notes" rows="3">{ p.Job.Notes }</textarea>
 			</label>
-			<label>
-				Tech Notes
-				<textarea name="tech_notes" rows="3">{ p.Job.TechNotes }</textarea>
-			</label>
+			if p.Job.ID > 0 {
+			 <p>Field Notes are saved independently. <a href={ templ.URL(fmt.Sprintf("/jobs/%d/field-notes",p.Job.ID)) }>Open Field Notes</a></p>
+			}
+			<input type="hidden" name="field_baseline" value={ p.FieldBaseline }/>
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: canEditJobFields(ctx,p.Job.ID)})
 			<fieldset x-data="subtasksEditor()" data-existing={ p.ExistingSubtasksJSON }>
 				<legend>Subtasks</legend>
 				<table>
-					<thead><tr><th>Title</th><th>Completed</th><th>Order</th><th></th></tr></thead>
+					<thead><tr><th>Title</th><th>Order</th><th></th></tr></thead>
 					<tbody>
-						<template x-for="(st, idx) in items" :key="idx">
+						<template x-for="(st, idx) in items" :key="st.id || st.draftKey">
 							<tr>
 								<td><input type="text" x-model="st.title" placeholder="e.g. Pre-site survey" aria-label="Subtask title"></td>
-								<td><input type="checkbox" x-model="st.completed" aria-label="Subtask completed"></td>
-								<td><input type="number" x-model="st.sort_order" min="0" class="input-width-70" aria-label="Subtask display order"></td>
+								<td><input type="number" x-model.number="st.sort_order" min="0" class="input-width-70" aria-label="Subtask display order"></td>
 								<td><button @click.prevent="remove(idx)" class="outline contrast small" aria-label="Remove subtask">X</button></td>
 							</tr>
 						</template>
@@ -484,10 +489,10 @@ templ JobForm(p JobFormPageData) {
 			function registerJobEditors() {
 				Alpine.data('subtasksEditor', () => ({
 					items: [],
-					init() { try { this.items = JSON.parse(this.$el.dataset.existing || '[]'); } catch(e) {} },
-					add() { this.items.push({title:'',completed:false,sort_order:this.items.length+1}); },
+					init() { try { this.items = JSON.parse(this.$el.dataset.existing || '[]').map(st => ({...st,draftKey:crypto.randomUUID()})); } catch(e) {} },
+					add() { this.items.push({draftKey:crypto.randomUUID(),title:'',completed:false,sort_order:this.items.length+1}); },
 					remove(idx) { this.items.splice(idx, 1); },
-					get json() { return JSON.stringify(this.items); },
+					get json() { return JSON.stringify(this.items.map(({draftKey,...st})=>st)); },
 				}));
 			}
 			if (window.Alpine) { registerJobEditors(); } else { document.addEventListener('alpine:init', registerJobEditors); }

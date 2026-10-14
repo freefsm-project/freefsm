@@ -53,7 +53,7 @@ func TestJobRepairWhitespaceUpgrade(t *testing.T) {
 			var contact, id int64
 			mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO customer_contacts(company_id,customer_id,first_name) VALUES($1,$2,'Recorded Contact') RETURNING id`, a.company, a.customer), &contact)
 			mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO jobs(company_id,customer_id,job_type,customer_contact_id) VALUES($1,$2,$3,$4) RETURNING id`, a.company, a.customer, tc.title, contact), &id)
-			const snapshot = `SELECT jsonb_build_object('job',to_jsonb(j),'contact',(SELECT to_jsonb(c) FROM customer_contacts c WHERE c.id=j.customer_contact_id),'customer',(SELECT to_jsonb(c) FROM customers c WHERE c.id=j.customer_id))::text FROM jobs j WHERE id=$1`
+			const snapshot = `SELECT jsonb_build_object('job',to_jsonb(j)-ARRAY['notes_revision','planning_revision'],'contact',(SELECT to_jsonb(c) FROM customer_contacts c WHERE c.id=j.customer_contact_id),'customer',(SELECT to_jsonb(c) FROM customers c WHERE c.id=j.customer_id))::text FROM jobs j WHERE id=$1`
 			var before, after string
 			mustMigrationScan(t, db.Pool.QueryRow(ctx, snapshot, id), &before)
 			migrationErr := db.Migrate(ctx, MigrationFS())
@@ -138,7 +138,7 @@ func TestJobRepairPreviouslyAppliedPlanningUpgrade(t *testing.T) {
 			mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO customer_contacts(company_id,customer_id,first_name) VALUES($1,$2,'Retained Contact') RETURNING id`, a.company, a.customer), &contact)
 			mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO jobs(company_id,customer_id,job_type,customer_contact_id) VALUES($1,$2,$3,$4) RETURNING id`, a.company, a.customer, title, contact), &id)
 			var before, after string
-			mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT to_jsonb(j)::text FROM jobs j WHERE id=$1`, id), &before)
+			mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT (to_jsonb(j)-ARRAY['notes_revision','planning_revision'])::text FROM jobs j WHERE id=$1`, id), &before)
 			err = db.Migrate(ctx, MigrationFS())
 			if strings.TrimSpace(title) == "" {
 				if err == nil || !strings.Contains(err.Error(), "Administrator review") {
@@ -147,7 +147,7 @@ func TestJobRepairPreviouslyAppliedPlanningUpgrade(t *testing.T) {
 			} else if err != nil {
 				t.Fatal(err)
 			}
-			mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT to_jsonb(j)::text FROM jobs j WHERE id=$1`, id), &after)
+			mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT (to_jsonb(j)-ARRAY['notes_revision','planning_revision'])::text FROM jobs j WHERE id=$1`, id), &after)
 			if before != after {
 				t.Fatal("forward migration changed historical facts")
 			}

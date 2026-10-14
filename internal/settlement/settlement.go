@@ -449,7 +449,11 @@ func projectAndLog(ctx context.Context, tx pgx.Tx, a Actor, invoiceID int64, sta
 	return logActivity(ctx, tx, a, "invoice", invoiceID, action, id)
 }
 func logActivity(ctx context.Context, tx pgx.Tx, a Actor, typ string, objectID int64, action string, id uuid.UUID) error {
-	metadata, _ := json.Marshal(map[string]string{"settlement_operation_id": id.String()})
+	var name string
+	if err := tx.QueryRow(ctx, `SELECT name FROM users WHERE id=$1 AND company_id=$2`, a.ID, a.CompanyID).Scan(&name); err != nil {
+		return err
+	}
+	metadata, _ := json.Marshal(map[string]string{"settlement_operation_id": id.String(), "actor_name": name})
 	_, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,$3,$4,$5,$6)`, a.CompanyID, a.ID, action, typ, objectID, metadata)
 	return err
 }
@@ -478,6 +482,11 @@ func (s *Service) transact(ctx context.Context, a Actor, operation string, op Op
 		return Result{}, err
 	}
 	defer tx.Rollback(ctx)
+	// Commercial and Job-anchor writers share this fence before taking any
+	// Customer/Invoice row locks; settlement cannot invert their lock order.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return Result{}, err
+	}
 	// Serialize contenders before checking/inserting the key. Unlike a bare unique
 	// constraint, the loser can replay the committed result instead of surfacing 23505.
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,0))`, fmt.Sprintf("%d:%s:%s", a.CompanyID, operation, op.Key)); err != nil {

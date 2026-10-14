@@ -3,6 +3,7 @@ package services
 import (
 	"archive/zip"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"mime"
 	"os"
@@ -17,7 +18,7 @@ import (
 // Content-Type. Archive inspection does not extract entries onto the filesystem.
 func validateFileContent(path, name string) (string, error) {
 	if strings.TrimSpace(name) == "" || len(name) > 255 || strings.ContainsAny(name, "/\\") || strings.ContainsFunc(name, unicode.IsControl) {
-		return "", fmt.Errorf("invalid file content: invalid display name")
+		return "", invalidFile("invalid file content: invalid display name")
 	}
 	ext := strings.ToLower(filepath.Ext(name))
 	want := map[string]string{
@@ -30,7 +31,7 @@ func validateFileContent(path, name string) (string, error) {
 		".odt":  "application/vnd.oasis.opendocument.text", ".ods": "application/vnd.oasis.opendocument.spreadsheet",
 	}[ext]
 	if want == "" {
-		return "", fmt.Errorf("invalid file content: unsupported extension")
+		return "", invalidFile("invalid file content: unsupported extension")
 	}
 	if ext == ".doc" || ext == ".xls" || ext == ".ppt" {
 		got, err := legacyOfficeType(path)
@@ -38,14 +39,17 @@ func validateFileContent(path, name string) (string, error) {
 			return "", err
 		}
 		if got != want {
-			return "", fmt.Errorf("invalid file content: content does not match extension")
+			return "", invalidFile("invalid file content: content does not match extension")
 		}
 		return got, nil
 	}
 	if ext == ".zip" || ext == ".docx" || ext == ".xlsx" || ext == ".pptx" || ext == ".odt" || ext == ".ods" {
 		archive, err := zip.OpenReader(path)
 		if err != nil {
-			return "", fmt.Errorf("invalid file content: malformed ZIP container")
+			if errors.Is(err, zip.ErrFormat) {
+				return "", invalidFile("invalid file content: malformed ZIP container")
+			}
+			return "", err
 		}
 		defer archive.Close()
 		// The central directory is read only. Never extract ZIP entries, even
@@ -74,7 +78,7 @@ func validateFileContent(path, name string) (string, error) {
 		valid = json.Valid(data)
 	}
 	if !valid {
-		return "", fmt.Errorf("invalid file content: content does not match extension")
+		return "", invalidFile("invalid file content: content does not match extension")
 	}
 	return want, nil
 }

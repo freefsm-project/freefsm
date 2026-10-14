@@ -210,12 +210,15 @@ func TestServicesClearOptionalLinkedIDsIntegration(t *testing.T) {
 		SetInvoiceDate(time.Now()).
 		SetDueDate(time.Now()).
 		SaveX(ctx)
-	invoiceResult, err := NewInvoiceService(client).Update(ctx, invoice.ID, InvoiceUpdateParams{JobID: &zero, EstimateID: &zero})
+	if _, err := NewInvoiceService(client).Update(ctx, invoice.ID, InvoiceUpdateParams{JobID: &zero, EstimateID: &zero}); err == nil {
+		t.Fatal("ordinary edit cleared source provenance")
+	}
+	invoiceResult, err := NewInvoiceService(client).Update(ctx, invoice.ID, InvoiceUpdateParams{JobID: &zero})
 	if err != nil {
 		t.Fatalf("clear invoice links: %v", err)
 	}
-	if invoiceResult.JobID != nil || invoiceResult.EstimateID != nil {
-		t.Fatalf("invoice links were not cleared: %#v", invoiceResult)
+	if invoiceResult.JobID != nil || invoiceResult.EstimateID == nil || *invoiceResult.EstimateID != data.estimateA.ID {
+		t.Fatalf("Job unlink did not retain source provenance: %#v", invoiceResult)
 	}
 }
 

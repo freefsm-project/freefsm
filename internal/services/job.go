@@ -360,6 +360,7 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 			return nil, err
 		}
 		if err := r.Service.JobPlanningFacets(ctx, tx, r.Actor, 0, map[string]bool{
+			"pricing.view":         len(params.LineItems) > 0 || (params.BillingType != "" && params.BillingType != "flat_rate"),
 			"job.schedule":         !params.StartTime.IsZero() || !params.EndTime.IsZero() || len(params.Visits) > 0,
 			"job.assign":           len(params.Assignments) > 0,
 			"job.subtask.manage":   len(params.Subtasks) > 0,
@@ -368,7 +369,7 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 			return nil, err
 		}
 	}
-	lineItems, err := EncodeLineItems(params.LineItems)
+	lineItems, err := encodeJobPricing(0, "[]", params.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("encode job line items: %w", err)
 	}
@@ -397,6 +398,10 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 		return nil, err
 	}
 	txClient := tx.Client()
+	initialSubtasks := params.Subtasks
+	if _, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+		params.Subtasks = nil
+	}
 	b := txClient.Job.Create().
 		SetCompanyID(companyID).
 		SetCustomerID(params.CustomerID).
@@ -446,6 +451,15 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 	j, err := b.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create job: %w", err)
+	}
+	if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok && len(initialSubtasks) > 0 {
+		r, _ := authorization.FromContext(ctx)
+		if err := r.Service.SaveChecklistPlanning(ctx, tx, r.Actor, j.ID, initialSubtasks); err != nil {
+			return nil, err
+		}
+		if err := tx.QueryRow(ctx, `SELECT subtasks FROM jobs WHERE id=$1`, j.ID).Scan(&j.Subtasks); err != nil {
+			return nil, err
+		}
 	}
 	if err := s.replaceAssignments(ctx, txClient, j.ID, assignments); err != nil {
 		return nil, err
@@ -531,6 +545,11 @@ func shiftedTime(t *time.Time, delta time.Duration) time.Time {
 func resetSubtasks(subtasks []JobSubtask) []JobSubtask {
 	for i := range subtasks {
 		subtasks[i].Completed = false
+		subtasks[i].ID = ""
+		subtasks[i].CompletionRevision = ""
+		subtasks[i].CompletionActor = nil
+		subtasks[i].CompletionAt = nil
+		subtasks[i].RemovedAt = nil
 	}
 	return subtasks
 }
@@ -578,12 +597,6 @@ func (s *JobService) SaveDetails(ctx context.Context, companyID, id int64, param
 	})
 }
 
-// UpdateSubtasks is the existing independent subtask action. It intentionally
-// does not apply details requiredness or creation defaults.
-func (s *JobService) UpdateSubtasks(ctx context.Context, companyID, id int64, subtasks []JobSubtask) (*ent.Job, error) {
-	return s.update(ctx, companyID, id, JobUpdateParams{Subtasks: &subtasks})
-}
-
 func (s *JobService) update(ctx context.Context, companyID, id int64, params JobUpdateParams) (*ent.Job, error) {
 	if params.JobType != nil && strings.TrimSpace(*params.JobType) == "" {
 		return nil, invalidJobInput(JobInputReasonRequired, "title")
@@ -603,6 +616,7 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 		r, _ := authorization.FromContext(ctx)
 		changedTime := func(next *time.Time, old *time.Time) bool { return next != nil && (old == nil || !next.Equal(*old)) }
 		if err := r.Service.JobPlanningFacets(ctx, tx, r.Actor, id, map[string]bool{
+			"pricing.view":         params.LineItems != nil || (params.BillingType != nil && *params.BillingType != current.BillingType),
 			"job.schedule":         changedTime(params.StartTime, current.StartTime) || changedTime(params.EndTime, current.EndTime) || changedTime(params.ArrivalStart, current.ArrivalWindowStart) || changedTime(params.ArrivalEnd, current.ArrivalWindowEnd) || (params.Visits != nil && !reflect.DeepEqual(*params.Visits, ParseVisits(current.Visits))),
 			"job.assign":           params.Assignments != nil && !reflect.DeepEqual(*params.Assignments, ParseAssignments(current.Assignments)),
 			"job.subtask.manage":   params.Subtasks != nil && !reflect.DeepEqual(*params.Subtasks, ParseSubtasks(current.Subtasks)),
@@ -610,10 +624,13 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 		}); err != nil {
 			return nil, err
 		}
+		if params.TechNotes != nil && *params.TechNotes != current.TechNotes {
+			return nil, authorization.ErrConflict
+		}
 	}
 	if params.LineItems != nil {
 		var err error
-		encodedLineItems, err = EncodeLineItems(*params.LineItems)
+		encodedLineItems, err = encodeJobPricing(id, current.LineItems, *params.LineItems)
 		if err != nil {
 			return nil, fmt.Errorf("encode job line items: %w", err)
 		}
@@ -783,7 +800,16 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 		u.SetAssignments(SerializeAssignments(s.assignmentsForStorage(*params.Assignments, assignments)))
 	}
 	if params.Subtasks != nil {
-		u.SetSubtasks(SerializeSubtasks(*params.Subtasks))
+		if tx, ok := ctx.Value(detailsTxKey{}).(pgx.Tx); ok {
+			if !reflect.DeepEqual(*params.Subtasks, ParseSubtasks(current.Subtasks)) {
+				r, _ := authorization.FromContext(ctx)
+				if err := r.Service.SaveChecklistPlanning(ctx, tx, r.Actor, id, *params.Subtasks); err != nil {
+					return nil, err
+				}
+			}
+		} else {
+			return nil, authorization.ErrForbidden
+		}
 	}
 
 	j, err := u.Save(ctx)
@@ -1053,7 +1079,7 @@ func JobPaginationTotalPages(total, perPage int) int {
 }
 
 func (s *JobService) LineItems(j *ent.Job) []LineItem {
-	items, _ := DecodeLineItems(j.LineItems)
+	items, _ := JobPricingLines(j.ID, j.LineItems)
 	if items == nil {
 		return []LineItem{}
 	}

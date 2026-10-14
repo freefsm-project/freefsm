@@ -2,7 +2,37 @@ package templates
 
 templ ActivityIndex(p ActivityPageData) {
 	@Layout("Activity") {
-		if len(p.Entries) == 0 {
+		if p.ExportURL!="" {
+			<a href={ templ.URL(p.ExportURL) }>Export activity CSV</a>
+		}
+		<a href="/exports">My CSV exports</a>
+		<form method="get" action={ templ.URL(p.RefreshURL) }>
+			<label>From (company date, inclusive)<input type="date" name="from" value={ p.Filters.Get("from") }/></label>
+			<label>Until (company date, exclusive)<input type="date" name="until" value={ p.Filters.Get("until") }/></label>
+			<label>Actor user ID<input type="number" min="1" name="actor" value={ p.Filters.Get("actor") }/></label>
+			<label>Record type<input type="text" name="type" value={ p.Filters.Get("type") }/></label>
+			<label>Exact record type<input type="text" name="object_type" value={ p.Filters.Get("object_type") }/></label>
+			<label>Exact record ID<input type="number" min="1" name="object_id" value={ p.Filters.Get("object_id") }/></label>
+			<label>Action<input type="text" name="action" value={ p.Filters.Get("action") }/></label>
+			for _, key := range []string{"type", "action"} {
+				if len(p.Filters[key]) > 1 {
+					for _, value := range p.Filters[key][1:] {
+						<input type="hidden" name={ key } value={ value }/>
+					}
+				}
+			}
+			if p.Filters.Get("conversion") != "" {
+				<input type="hidden" name="conversion" value={ p.Filters.Get("conversion") }/>
+			}
+			<button type="submit">Refresh activity</button>
+			<a href={ templ.URL(p.RefreshURL) }>Clear filters</a>
+		</form>
+		if p.UpdatedAt != "" {
+			<p role="status">Updated at { p.UpdatedAt }</p>
+		}
+		if p.Failed {
+			<p role="alert">Activity could not be loaded. Refresh activity to retry. Previous rows are withheld until current access can be checked.</p>
+		} else if len(p.Entries) == 0 {
 			<p>No activity recorded yet.</p>
 		} else {
 			<div class="activity-list activity-list-compact">
@@ -59,6 +89,7 @@ templ ActivityIndex(p ActivityPageData) {
 								}
 							</span>
 							@BackupActivityPreview(e)
+							@ActivityFacts(e.Metadata)
 							if e.Metadata.CommentPreview != "" && e.Action == "comment_added" {
 								<p class="activity-preview activity-preview-compact">{ TruncateText(e.Metadata.CommentPreview, 100) }</p>
 							}
@@ -66,7 +97,7 @@ templ ActivityIndex(p ActivityPageData) {
 								<p class="activity-preview activity-preview-compact">{ ScheduleActivityDetail(e.Metadata) }</p>
 							}
 						</div>
-						<small class="activity-time activity-time-compact">{ e.CreatedAt }</small>
+						<small class="activity-time activity-time-compact">Accepted { e.CreatedAt }</small>
 					</div>
 				}
 			</div>

@@ -31,6 +31,13 @@ type IntentChoice struct {
 	Intent Intent             `json:"intent"`
 }
 
+func intentRevisionColumn(typ ObjectType) string {
+	if typ == Estimate || typ == Invoice {
+		return "commercial_revision"
+	}
+	return "status_revision"
+}
+
 // DiscoverIntents authorizes the actual parent and returns presentation and both
 // intent revisions from one SQL snapshot. The authority fence and parent locks
 // also serialize configuration changes, revocations and assignment loss.
@@ -40,9 +47,9 @@ func (s *Service) DiscoverIntents(ctx context.Context, a Actor, typ ObjectType, 
 	}
 	choices := []IntentChoice{}
 	err := s.command(ctx, a, typ, id, "", func(tx pgx.Tx, _ Actor) error {
-		rows, err := tx.Query(ctx, fmt.Sprintf(`SELECT s.id,s.name,s.color,s.category_key,s.category_order,o.status_revision::text,s.meaning_revision::text
+		rows, err := tx.Query(ctx, fmt.Sprintf(`SELECT s.id,s.name,s.color,s.category_key,s.category_order,o.%s::text,s.meaning_revision::text
 		FROM %ss o JOIN status_workflows w ON w.company_id=o.company_id AND w.object_type=$3 JOIN statuses s ON s.workflow_id=w.id AND s.company_id=o.company_id
-		WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL`, typ), id, a.CompanyID, typ)
+		WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL`, intentRevisionColumn(typ), typ), id, a.CompanyID, typ)
 		if err != nil {
 			return err
 		}
@@ -89,7 +96,7 @@ func (s *Service) ObserveIntent(ctx context.Context, company int64, typ ObjectTy
 	if !validObjectType(typ) {
 		return out, ErrWrongType
 	}
-	err := s.db.QueryRow(ctx, fmt.Sprintf(`SELECT o.status_revision::text,s.meaning_revision::text FROM %ss o JOIN statuses s ON s.id=$3 JOIN status_workflows w ON w.id=s.workflow_id WHERE o.id=$1 AND o.company_id=$2 AND w.company_id=$2 AND w.object_type=$4`, typ), id, company, target, typ).Scan(&out.Revision, &out.MeaningRevision)
+	err := s.db.QueryRow(ctx, fmt.Sprintf(`SELECT o.%s::text,s.meaning_revision::text FROM %ss o JOIN statuses s ON s.id=$3 JOIN status_workflows w ON w.id=s.workflow_id WHERE o.id=$1 AND o.company_id=$2 AND w.company_id=$2 AND w.object_type=$4`, intentRevisionColumn(typ), typ), id, company, target, typ).Scan(&out.Revision, &out.MeaningRevision)
 	return out, mapNoRows(err)
 }
 
@@ -103,7 +110,7 @@ func (s *Service) ApplyIntent(ctx context.Context, a Actor, typ ObjectType, id i
 	return s.command(ctx, a, typ, id, string(typ)+".status", func(tx pgx.Tx, a Actor) error {
 		var current *int64
 		var revision, meaning string
-		err := tx.QueryRow(ctx, fmt.Sprintf(`SELECT o.status_id,o.status_revision::text,s.meaning_revision::text FROM %ss o JOIN statuses s ON s.id=$3 JOIN status_workflows w ON w.id=s.workflow_id WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL AND w.company_id=$2 AND w.object_type=$4 FOR UPDATE OF o,s`, typ), id, a.CompanyID, intent.StatusID, typ).Scan(&current, &revision, &meaning)
+		err := tx.QueryRow(ctx, fmt.Sprintf(`SELECT o.status_id,o.%s::text,s.meaning_revision::text FROM %ss o JOIN statuses s ON s.id=$3 JOIN status_workflows w ON w.id=s.workflow_id WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL AND w.company_id=$2 AND w.object_type=$4 FOR UPDATE OF o,s`, intentRevisionColumn(typ), typ), id, a.CompanyID, intent.StatusID, typ).Scan(&current, &revision, &meaning)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrStaleIntent
 		}
@@ -113,7 +120,7 @@ func (s *Service) ApplyIntent(ctx context.Context, a Actor, typ ObjectType, id i
 		if meaning != intent.MeaningRevision {
 			return ErrStaleIntent
 		}
-		if current == nil || *current != intent.StatusID {
+		if typ == Estimate || typ == Invoice || current == nil || *current != intent.StatusID {
 			if revision != intent.Revision {
 				return ErrStaleIntent
 			}

@@ -149,13 +149,17 @@ is made for disconnected clients or exported copies.
 
 ## Reference exerciser and executable conformance
 
-The reference page pairs through the real browser, then offers snapshot, one-page
-continuation/retry, delta, and replay controls. It uses closure-memory maps and
+The reference page pairs through the real browser, then offers read-only sync
+snapshot, one-page continuation/retry, delta, and replay controls. These use closure-memory maps and
 atomic pointer replacement to demonstrate cache/cursor ordering. A labelled
 local-application failure switch demonstrates retry without false completion.
-It has no persistent storage, encrypted-cache claim, service worker, offline
-authorization lease, background sync, automatic retries, or pending mutations.
-Reload/logout discards data. Production clients require platform-protected
+The sync controls have no persistent storage, encrypted-cache claim, service worker,
+offline authorization lease, background sync, automatic retries, or pending mutations.
+The shared harness also supports transfers and session operations. Clearing
+credentials purges sync context and transfer state, while safely retaining pending
+session receipt-reconciliation metadata for fresh authentication and explicit
+reconciliation without blind replay. A page reload loses all closure memory,
+including that metadata. Production clients require platform-protected
 encrypted credential/cache storage and owning offline lease/recovery protocols.
 
 `TestJobSyncReferenceOpenAPI` validates real paired production HTTP against the
