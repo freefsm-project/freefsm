@@ -239,3 +239,95 @@ func TestAssignedCustomerContextRechecksWaitingAuthority(t *testing.T) {
 		t.Fatal(ctx.Err())
 	}
 }
+
+// Queue a real grant change while the Customer read owns the authority fence.
+// A combined HTML response must not mix that old Customer authorization with
+// masters read after the queued revocation. No handler hooks or mocks are used.
+func TestAssignedCustomerContextCombinedAuthority(t *testing.T) {
+	f := associationRepair(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	c := f.client.Customer.Create().SetCompanyID(f.company).SetDisplayName("INTERLEAVED-CUSTOMER").SaveX(ctx)
+	p := f.client.Project.Create().SetCompanyID(f.company).SetCustomerID(c.ID).SetName("Context Project").SetDescription("BEFORE-REVOCATION").SaveX(ctx)
+	j := f.client.Job.Create().SetCompanyID(f.company).SetCustomerID(c.ID).SetProjectID(p.ID).SetJobType("Assigned work").SaveX(ctx)
+	grants := []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "customer.view", Scope: authorization.Context}, {Permission: "project.view", Scope: authorization.Context}}
+	uid, role, cookie := f.reader(t, grants)
+	f.client.JobAssignment.Create().SetJobID(j.ID).SetUserID(uid).SaveX(ctx)
+	block, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer block.Rollback(context.Background())
+	if _, err = block.Exec(ctx, `LOCK TABLE customers IN ACCESS EXCLUSIVE MODE`); err != nil {
+		t.Fatal(err)
+	}
+	var blocker int
+	if err = block.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blocker); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		r := httptest.NewRequest("GET", fmt.Sprintf("/jobs/%d/customer-context", j.ID), nil).WithContext(ctx)
+		r.AddCookie(cookie)
+		w := httptest.NewRecorder()
+		f.router.ServeHTTP(w, r)
+		done <- w
+	}()
+	waitBehind := func(pid int) int {
+		t.Helper()
+		for {
+			var waiting int
+			if err := f.pool.QueryRow(ctx, `SELECT coalesce((SELECT pid FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)) LIMIT 1),0)`, pid).Scan(&waiting); err != nil {
+				t.Fatal(err)
+			}
+			if waiting != 0 {
+				return waiting
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+	}
+	reader := waitBehind(blocker)
+	revoked := make(chan error, 1)
+	go func() {
+		// Match the production authority fence and atomically mark the new
+		// generation so the HTTP body itself reveals a mixed snapshot.
+		tx, err := f.pool.Begin(ctx)
+		if err != nil {
+			revoked <- err
+			return
+		}
+		defer tx.Rollback(context.Background())
+		if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err == nil {
+			_, err = tx.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='customer.view'`, role)
+		}
+		if err == nil {
+			_, err = tx.Exec(ctx, `UPDATE projects SET description='AFTER-REVOCATION' WHERE id=$1`, p.ID)
+		}
+		if err == nil {
+			err = tx.Commit(ctx)
+		}
+		revoked <- err
+	}()
+	waitBehind(reader)
+	if err = block.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-revoked; err != nil {
+		t.Fatal(err)
+	}
+	w := <-done
+	// A coherent snapshot completed before revocation may be returned. If the
+	// request crossed into a second transaction after revocation, it must deny.
+	// Queue a second request to prove current authority is now gone as well.
+	if w.Code != 200 && w.Code != 404 {
+		t.Fatalf("response: %d %s", w.Code, w.Body.String())
+	}
+	if w.Code == 200 && strings.Contains(w.Body.String(), "AFTER-REVOCATION") {
+		t.Fatalf("mixed authority generations disclosed Customer after revocation: %s", w.Body.String())
+	}
+	expectStatus(t, f.router, cookie, "GET", fmt.Sprintf("/jobs/%d/customer-context", j.ID), 404)
+}

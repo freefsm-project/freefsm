@@ -275,21 +275,22 @@ func (h authorizationHandler) RemoveRole(w http.ResponseWriter, r *http.Request)
 }
 func (h authorizationHandler) Context(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	c, err := h.svc.JobCustomer(r.Context(), authorizationActor(r), id)
-	if err != nil {
-		authorizationError(w, r, err)
-		return
-	}
 	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		c, err := h.svc.JobCustomer(r.Context(), authorizationActor(r), id)
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(c)
 		return
 	}
-	masters, err := h.svc.JobMasters(r.Context(), authorizationActor(r), id)
+	c, masters, err := h.svc.JobCustomerAndMasters(r.Context(), authorizationActor(r), id)
 	if err != nil {
 		authorizationError(w, r, err)
 		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	templates.CustomerJobContext(c, masters).Render(r.Context(), w)
 }
 
@@ -305,6 +306,7 @@ func (h authorizationHandler) MasterContext(w http.ResponseWriter, r *http.Reque
 		json.NewEncoder(w).Encode(c)
 		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	templates.JobMasterContext(c).Render(r.Context(), w)
 }
 

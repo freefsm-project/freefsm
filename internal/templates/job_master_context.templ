@@ -4,9 +4,16 @@ import "fmt"
 
 templ JobMasterContext(p authorization.JobMasterContext) {
 	<section aria-label="Linked Job context">
-		if p.Project != nil {
+		if p.ProjectReference != nil {
 			<h3>Linked Project</h3>
-			<p>{ p.Project.Name }</p><p>{ p.Project.Description }</p>
+			<p>{ p.ProjectReference.Name } <span class="badge">Archived</span></p>
+		}
+		if p.Project != nil {
+			if p.ProjectReference == nil {
+				<h3>Linked Project</h3>
+				<p>{ p.Project.Name }</p>
+			}
+			<p>{ p.Project.Description }</p>
 			<p>{ p.Project.Status } — { fmt.Sprintf("%.0f%%",p.Project.Progress) }</p>
 			if p.Project.PlannedStartDate != nil {
 				<p>Planned start: { *p.Project.PlannedStartDate }</p>
