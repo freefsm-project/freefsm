@@ -32,7 +32,7 @@ func JobStatusDependencies(ctx context.Context, tx pgx.Tx, companyID, id int64, 
 	var valid bool
 	err := tx.QueryRow(ctx, `SELECT c.deleted_at IS NULL
  AND (j.location_id IS NULL OR EXISTS(SELECT 1 FROM locations l WHERE l.id=j.location_id AND l.company_id=j.company_id AND l.object_type='customer' AND l.object_id=j.customer_id AND l.deleted_at IS NULL))
- AND (j.asset_id IS NULL OR EXISTS(SELECT 1 FROM assets a WHERE a.id=j.asset_id AND a.company_id=j.company_id AND a.customer_id=j.customer_id AND a.deleted_at IS NULL))
+ AND NOT EXISTS(SELECT 1 FROM job_asset_links l JOIN assets a ON a.id=l.asset_id WHERE l.job_id=j.id AND l.operational AND l.unlinked_at IS NULL AND (a.company_id<>j.company_id OR a.customer_id IS DISTINCT FROM j.customer_id OR a.deleted_at IS NOT NULL))
  AND NOT EXISTS(SELECT 1 FROM job_contacts jc JOIN customer_contacts cc ON cc.id=jc.contact_id WHERE jc.job_id=j.id AND (cc.deleted_at IS NOT NULL OR cc.customer_id<>j.customer_id OR cc.company_id<>j.company_id))
  FROM jobs j JOIN customers c ON c.id=j.customer_id AND c.company_id=j.company_id WHERE j.id=$1 AND j.company_id=$2 FOR UPDATE OF c`, id, companyID).Scan(&valid)
 	if err == pgx.ErrNoRows {

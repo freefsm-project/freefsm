@@ -51,6 +51,32 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 		}
 	}
 	sort.Strings(files)
+	var associationReview *AssetAssociationReview
+	for _, f := range files {
+		if f != "076_asset_associations.up.sql" {
+			continue
+		}
+		var migrationsExist, applied bool
+		if err := db.Pool.QueryRow(ctx, `SELECT to_regclass('schema_migrations') IS NOT NULL`).Scan(&migrationsExist); err != nil {
+			return err
+		}
+		if migrationsExist {
+			if err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name='076_asset_associations')`).Scan(&applied); err != nil {
+				return err
+			}
+		}
+		if !applied {
+			inventory, err := db.AssetAssociationPreflight(ctx)
+			if err != nil {
+				return err
+			}
+			review, err := loadAssetAssociationReview(inventory)
+			if err != nil {
+				return err
+			}
+			associationReview = &review
+		}
+	}
 	// Asset review is checked before any older migration can change its evidence.
 	var assetReview *AssetIdentityReview
 	for _, f := range files {
@@ -215,6 +241,26 @@ func (db *DB) Migrate(ctx context.Context, migrationsFS fs.FS) error {
 				return err
 			}
 			if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.asset_review',$1,true)`, string(data)); err != nil {
+				tx.Rollback(ctx)
+				return err
+			}
+		}
+		if associationReview != nil && (f == "074_job_planning.up.sql" || f == "076_asset_associations.up.sql") {
+			if _, err := tx.Exec(ctx, `LOCK TABLE assets,jobs IN ACCESS EXCLUSIVE MODE`); err != nil {
+				tx.Rollback(ctx)
+				return err
+			}
+			inventory, err := assetAssociationInventory(ctx, tx)
+			if err != nil || inventory.Snapshot != associationReview.Snapshot {
+				tx.Rollback(ctx)
+				return fmt.Errorf("Asset association review became stale before cutover: %v", err)
+			}
+			data, err := json.Marshal(associationReview)
+			if err != nil {
+				tx.Rollback(ctx)
+				return err
+			}
+			if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.asset_association_review',$1,true)`, string(data)); err != nil {
 				tx.Rollback(ctx)
 				return err
 			}

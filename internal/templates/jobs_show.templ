@@ -13,6 +13,7 @@ templ JobShow(p JobDetail) {
 					}
 					if detailCan(ctx,"relations") {
 						<a href={ templ.URL(fmt.Sprintf("/jobs/%d/links",p.ID)) }>Manage relationships</a>
+						<a href={ templ.URL(fmt.Sprintf("/jobs/%d/assets",p.ID)) }>Manage Asset links</a>
 					}
 					if detailCan(ctx,"create-invoice") {
 						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/create-invoice", p.ID)) } method="post">
@@ -133,6 +134,8 @@ templ JobShow(p JobDetail) {
 				}
 			</tbody>
 		</table>
+		<h3>Assets</h3>
+		@JobAssetReferences(p.AssetReferences)
 		if len(p.Visits) > 0 {
 			<h3>Visits</h3>
 			<table>

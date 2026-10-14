@@ -180,6 +180,22 @@ func (r *ActivityResolver) Resolve(ctx context.Context, companyID int64, viewer 
 					continue
 				}
 			}
+			if record.ref.Type == objectref.TypeAsset {
+				if request, ok := authorization.FromContext(ctx); ok {
+					resolution.Readable = request.Service.ParentAccess(ctx, request.Actor, "asset", record.ref.ID, "") == nil
+					if resolution.Readable {
+						resolution.URL, _ = objectref.URL(record.ref)
+					} else {
+						// A historical reference cannot disclose the Asset's current
+						// name after it moves to an inaccessible Customer context.
+						resolution = ActivityTargetResolution{}
+					}
+					result.Targets[record.ref] = resolution
+				} else {
+					result.Targets[record.ref] = ActivityTargetResolution{}
+				}
+				continue
+			}
 			if record.ref.Type == objectref.TypeCustomer {
 				if request, ok := authorization.FromContext(ctx); ok {
 					resolution.Readable = request.Service.CustomerAccess(ctx, request.Actor, record.ref.ID, "customer.view") == nil
@@ -225,7 +241,7 @@ func technicianTypeNeedsScope(typ objectref.Type) bool {
 }
 
 func activityTargetReadable(viewer ActivityViewer, target activityTargetRecord, scope activityTechnicianScope) bool {
-	if target.ref.Type == objectref.TypeCustomer {
+	if target.ref.Type == objectref.TypeCustomer || target.ref.Type == objectref.TypeAsset {
 		return false
 	}
 	if target.ref.Type.AdminOnly() {

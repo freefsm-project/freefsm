@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"entgo.io/ent/dialect/sql"
 	"fmt"
 	"strings"
 	"time"
@@ -403,7 +404,9 @@ func (s *AssetService) Restore(ctx context.Context, id int64) error {
 
 func (s *AssetService) GetServiceHistory(ctx context.Context, assetID int64) ([]*ent.Job, error) {
 	return s.client.Job.Query().
-		Where(job.DeletedAtIsNil(), job.AssetIDEQ(assetID)).
+		Where(job.DeletedAtIsNil(), func(s *sql.Selector) {
+			s.Where(sql.ExprP("EXISTS (SELECT 1 FROM job_asset_links l WHERE l.job_id="+s.C("id")+" AND l.asset_id=?)", assetID))
+		}).
 		Order(ent.Desc(job.FieldUpdatedAt)).
 		All(ctx)
 }
