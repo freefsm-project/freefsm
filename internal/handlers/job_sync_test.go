@@ -68,24 +68,21 @@ func TestJobSyncScopeLossAndReplay(t *testing.T) {
 	f, api, token, uid, _, ids := syncFixture(t, 3)
 	ctx := context.Background()
 	first := syncGet(t, api, token, "?page_size=1", 200)
-	lost := first.Records[0]["id"].(string)
 	if _, err := f.pool.Exec(ctx, `DELETE FROM job_assignments WHERE job_id=$1 AND user_id=$2`, ids[0], uid); err != nil {
 		t.Fatal(err)
 	}
-	second := syncGet(t, api, token, "?page_size=1&page="+*first.Next, 200)
-	if !reflect.DeepEqual(second.Removed, []string{lost}) {
-		t.Fatalf("previous-page scope loss not purged: %+v", second)
-	}
+	continuityResnapshot(t, continuityRequest(api, token, "?page_size=1&page="+*first.Next))
 	if _, err := f.pool.Exec(ctx, `UPDATE jobs SET deleted_at=clock_timestamp() WHERE id=$1`, ids[2]); err != nil {
 		t.Fatal(err)
 	}
-	last := syncGet(t, api, token, "?page_size=1&page="+*second.Next, 200)
-	if len(last.Records) != 0 || len(last.Removed) != 2 || !last.Complete {
-		t.Fatalf("inaccessible page disclosed: %+v", last)
+	continuityResnapshot(t, continuityRequest(api, token, "?page_size=1&page="+*first.Next))
+	last := syncGet(t, api, token, "?page_size=1", 200)
+	if len(last.Records) != 1 || last.Records[0]["title"] != "Job 1" || !last.Complete {
+		t.Fatalf("fresh snapshot disclosed inaccessible records: %+v", last)
 	}
 	delta := syncGet(t, api, token, "?page_size=1&cursor="+*last.Cursor, 200)
-	if len(delta.Records) != 0 || len(delta.Removed) != 2 || !delta.Complete {
-		t.Fatalf("delta removals missing: %+v", delta)
+	if len(delta.Records) != 0 || len(delta.Removed) != 0 || !delta.Complete {
+		t.Fatalf("fresh continuity diverged: %+v", delta)
 	}
 	replay := syncGet(t, api, token, "?page_size=1&cursor="+*last.Cursor, 200)
 	if !reflect.DeepEqual(delta, replay) {
@@ -263,7 +260,7 @@ func TestJobSyncAdditiveUpgrade(t *testing.T) {
 	}
 	old := fstest.MapFS{}
 	for _, e := range entries {
-		if e.Name() != "078_job_sync.up.sql" {
+		if e.Name() != "078_job_sync.up.sql" && e.Name() != "079_job_sync_continuity.up.sql" {
 			b, err := fs.ReadFile(source, e.Name())
 			if err != nil {
 				t.Fatal(err)

@@ -16,6 +16,8 @@ import (
 
 var ErrSyncResnapshot = errors.New("synchronization requires a new snapshot")
 
+var errSyncAuthorityChanged = errors.New("synchronization authority changed")
+
 type JobSyncRequest struct {
 	Cursor, Page, Scope string
 	PageSize            int
@@ -43,7 +45,14 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 	if in.PageSize < 1 || in.PageSize > 200 || (in.Scope != "assigned" && in.Scope != "all") || a.SessionHash == "" {
 		return out, ErrSyncResnapshot
 	}
+	resnapshot := false
 	err := s.WithinSnapshotPermission(ctx, a, "job.view", Assigned, func(tx pgx.Tx, p Principal) error {
+		invalidate := func() error {
+			resnapshot = true
+			// Return nil on success so the invalidation COMMITS before the typed
+			// recovery response. Returning ErrSyncResnapshot here would roll back.
+			return syncInvalidate(ctx, tx, a)
+		}
 		if in.Scope == "all" && !p.Allows("job.view", All) {
 			return ErrForbidden
 		}
@@ -65,6 +74,9 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 		position := 0
 		if in.Page != "" {
 			snapshot, position, err = syncLoad(ctx, tx, a, in, epoch, fingerprint, in.Page, "page")
+			if errors.Is(err, errSyncAuthorityChanged) {
+				return invalidate()
+			}
 			if err != nil {
 				return err
 			}
@@ -72,6 +84,9 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 			var previous *syncSnapshot
 			if in.Cursor != "" {
 				base, _, err := syncLoad(ctx, tx, a, in, epoch, fingerprint, in.Cursor, "cursor")
+				if errors.Is(err, errSyncAuthorityChanged) {
+					return invalidate()
+				}
 				if err != nil {
 					return err
 				}
@@ -82,6 +97,9 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 				err = tx.QueryRow(ctx, `SELECT t.token FROM job_sync_snapshots s JOIN job_sync_tokens t ON t.snapshot_id=s.id AND t.kind='page' AND t.position=0 WHERE s.previous_cursor=$1`, in.Cursor).Scan(&first)
 				if err == nil {
 					snapshot, position, err = syncLoad(ctx, tx, a, in, epoch, fingerprint, first, "page")
+					if errors.Is(err, errSyncAuthorityChanged) {
+						return invalidate()
+					}
 					if err != nil {
 						return err
 					}
@@ -101,20 +119,15 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 		for _, e := range current {
 			visible[e.ID] = e
 		}
-		removed := map[string]bool{}
-		for _, id := range snapshot.Removed {
-			removed[id] = true
+		if len(snapshot.Removed) != 0 {
+			return invalidate()
 		}
 		// Recheck the entire baseline, including earlier pages. A relationship loss
 		// must not leave already-delivered sensitive facets in a conforming cache.
 		for _, e := range snapshot.Baseline {
 			now, ok := visible[e.ID]
-			if !ok {
-				removed[e.ID] = true
-				continue
-			}
-			if now.Anchor != e.Anchor {
-				return ErrSyncResnapshot
+			if !ok || now.Anchor != e.Anchor {
+				return invalidate()
 			}
 		}
 		end := position + in.PageSize
@@ -129,10 +142,6 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 				out.Records = append(out.Records, e.Data)
 			}
 		}
-		for id := range removed {
-			out.Removed = append(out.Removed, id)
-		}
-		sort.Strings(out.Removed)
 		out.Watermark = snapshot.Watermark
 		out.Complete = end == len(snapshot.Changes)
 		var token string
@@ -152,17 +161,39 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 		}
 		return nil
 	})
+	if errors.Is(err, ErrForbidden) {
+		// Missing Job View (including All narrowed to Assigned) also instructs
+		// cache purge. Recheck current identity/session under the existing fence
+		// before recording that observation; denial grants no domain access.
+		if invalidateErr := s.WithinActor(ctx, a, func(tx pgx.Tx, _ Principal) error {
+			return syncInvalidate(ctx, tx, a)
+		}); invalidateErr != nil {
+			return JobSyncPage{}, invalidateErr
+		}
+	}
 	if err != nil {
 		return JobSyncPage{}, err
 	}
+	if resnapshot {
+		return JobSyncPage{}, ErrSyncResnapshot
+	}
 	return out, nil
+}
+
+// A purge affects the client's cache, not merely this page's baseline. Invalidate
+// every existing snapshot for this client, including already materialized and
+// nested successors, under the shared authority fence. Baselines remain intact.
+// Invalid-token replay never calls this function, so fresh recovery stays valid.
+func syncInvalidate(ctx context.Context, tx pgx.Tx, a Actor) error {
+	_, err := tx.Exec(ctx, `UPDATE job_sync_snapshots SET invalidated=true WHERE user_id=$1 AND session_hash=$2 AND NOT invalidated`, a.UserID, a.SessionHash)
+	return err
 }
 
 func syncLoad(ctx context.Context, tx pgx.Tx, a Actor, in JobSyncRequest, epoch, grants, token, kind string) (syncSnapshot, int, error) {
 	var s syncSnapshot
 	var baseline, changes, removed []byte
 	var position int
-	err := tx.QueryRow(ctx, `SELECT s.id,s.grants_hash,s.baseline,s.changes,s.removed,s.watermark,t.position FROM job_sync_tokens t JOIN job_sync_snapshots s ON s.id=t.snapshot_id WHERE t.token=$1 AND t.kind=$2 AND s.user_id=$3 AND s.session_hash=$4 AND s.epoch=$5 AND s.scope=$6 AND s.page_size=$7 AND s.expires_at>clock_timestamp()`, token, kind, a.UserID, a.SessionHash, epoch, in.Scope, in.PageSize).Scan(&s.ID, &s.Grants, &baseline, &changes, &removed, &s.Watermark, &position)
+	err := tx.QueryRow(ctx, `SELECT s.id,s.grants_hash,s.baseline,s.changes,s.removed,s.watermark,t.position FROM job_sync_tokens t JOIN job_sync_snapshots s ON s.id=t.snapshot_id WHERE t.token=$1 AND t.kind=$2 AND s.user_id=$3 AND s.session_hash=$4 AND s.epoch=$5 AND s.scope=$6 AND s.page_size=$7 AND s.expires_at>clock_timestamp() AND NOT s.invalidated`, token, kind, a.UserID, a.SessionHash, epoch, in.Scope, in.PageSize).Scan(&s.ID, &s.Grants, &baseline, &changes, &removed, &s.Watermark, &position)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return s, 0, ErrSyncResnapshot
 	}
@@ -170,7 +201,7 @@ func syncLoad(ctx context.Context, tx pgx.Tx, a Actor, in JobSyncRequest, epoch,
 		return s, 0, err
 	}
 	if s.Grants != grants {
-		return s, 0, ErrSyncResnapshot
+		return s, 0, errSyncAuthorityChanged
 	}
 	decoder := json.NewDecoder(bytes.NewReader(baseline))
 	decoder.UseNumber()

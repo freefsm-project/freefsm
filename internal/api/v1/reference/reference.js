@@ -123,6 +123,13 @@
   };
   async function readSync(request) {
     const generation = credentialGeneration;
+    const params = new URL(request, window.location.href).searchParams;
+    if (!params.has('page') && !params.has('cursor')) {
+      // Tokenless replay/retry creates a NEW server materialization. Its removals
+      // cannot reconcile an older cache, even when the first page was applied.
+      // Reset before transport so failed requests cannot retain/mix old context.
+      jobs = new Map(); staged = new Map(); lastRequest = ''; nextRequest = request;
+    }
     syncComplete = false;
     renderSync('Synchronizing');
     try {
@@ -174,7 +181,7 @@
     const size = Number(node('sync-size').value);
     if (!Number.isInteger(size) || size < 1 || size > 200) { status('Page size must be an integer from 1 to 200.'); return; }
     purgeSync(); syncSize = size; syncScope = node('sync-scope').value;
-    staged = new Map(); nextRequest = syncQuery(); await readSync(nextRequest);
+    await readSync(syncQuery());
   }));
   node('sync-next').addEventListener('click', action(async () => { await readSync(nextRequest); }));
   node('sync-delta').addEventListener('click', action(async () => {

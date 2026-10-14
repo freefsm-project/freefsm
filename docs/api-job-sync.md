@@ -90,7 +90,10 @@ compares a fresh materialization, catching changes committed during pagination.
 Deltas represent current state differences, **not an event or audit history**.
 
 1. Stage a fresh snapshot separately from the prior selected-scope cache. Do not
-   merge an initial snapshot into stale records. Mark synchronization incomplete.
+   merge an initial snapshot into stale records. **Every tokenless request is a
+   new snapshot**, including replay of its first page and retry after failure.
+   Discard prior staging and cached context before sending it; its `removed` list
+   cannot describe the old snapshot. Mark synchronization incomplete.
 2. Validate the whole response. Ignore unknown response fields; unfamiliar enums
    require safe display/review, never an inferred action or success.
 3. Purge every `removed` identity from both committed and staged state, including
@@ -107,7 +110,9 @@ A network failure, malformed JSON, server/storage failure, or local application
 failure leaves the process incomplete and retryable. Preserve the last completed
 cursor, not a response's uncommitted cursor. Purges for lost authority must not be
 rolled back by a later local application failure. Token replay returns the same
-materialized successor subject to current-authority withholding/removals.
+materialized successor while continuity remains safe; observed scope loss instead
+requires the typed resnapshot recovery below. Tokenless replay is never stable
+page replay.
 
 ## Errors and recovery
 
@@ -119,15 +124,26 @@ and optional retry timing. Branch on status/code/disposition, not message text.
 | 400 `invalid_request` | Correct the documented query; do not promote a cursor. |
 | 401 ordinary authorization loss | Purge credentials and cached context on contact; pair again. |
 | 401 `instance_restored` | Lock recoverable pending intent for fresh authentication/current-authority sync and explicit review; no blind replay. Inaccessible context is still purged. |
-| 403 `forbidden` | Purge Job/context; current grants no longer permit this scope. |
+| 403 `forbidden` | Purge Job/context; current grants do not permit this scope. Existing client continuity is durably invalidated, even if identical grants are later restored. |
 | 409 `resnapshot_required` | `recovery_disposition: purge_and_resnapshot`, `details: {purge: all}`. Discard all Job/context caches and tokens; start without a token. |
 | 429 `rate_limit_exceeded` | Observe `Retry-After` and `retry_after_seconds`; explicitly retry without advancing continuity. |
 | 503 `unavailable` | Retry the same request after indicated delay; no completion acknowledged. |
 
 Continuity lasts at least 30 days. Expired/unknown/cross-client tokens, mismatched
 filters, changed grants, and unsafe relationship changes require resnapshot.
-Assignment/deletion loss can instead withhold inaccessible records and return
-ID-only removals on any page, including removal of already delivered identities.
+Observed assignment/deletion loss durably invalidates existing continuity for the
+authenticated user/session and returns the same typed 409, including on a page
+whose earlier pages delivered the lost Job. Already-created successors are also
+invalidated. Unchanged reassignment does not revive those tokens: retry still
+requires purge and a fresh snapshot, which restores currently authorized Jobs
+with their original opaque identities. Replaying an invalidated token does not
+invalidate snapshots created after the loss was observed. Clients must still
+honor any identity-only `removed` entries without retaining old context.
+This conservative recovery transfers a fresh snapshot rather than a smaller
+removal delta, ensuring unchanged scope restoration cannot be silently omitted.
+The continuity repair also invalidates pre-repair tokens on upgrade, because
+their earlier purge observations cannot be reconstructed safely; installed Job
+identities and domain records are preserved.
 Denials purge even if the error body cannot be parsed. No remote-erasure promise
 is made for disconnected clients or exported copies.
 
@@ -145,8 +161,10 @@ encrypted credential/cache storage and owning offline lease/recovery protocols.
 `TestJobSyncReferenceOpenAPI` validates real paired production HTTP against the
 served OpenAPI 3.1 JSON Schema, query parameters, success/error status and auth,
 exact nested DTOs, resnapshot and retry timing. The browser test reads persisted
-Jobs and covers concurrent edit, previous-page scope removal, local/transport/JSON
-failure, retry/replay, additive fields/unknown enums, grant and session loss.
+Jobs and covers concurrent edit, previous-page scope loss and unchanged return,
+already-created successor invalidation, local/transport/JSON failure, tokenless
+snapshot replacement on replay/retry, additive fields/unknown enums, grant and
+session loss.
 Run with the project's disposable PostgreSQL URL and `BROWSER_TESTS=1`.
 
 ### Changelog

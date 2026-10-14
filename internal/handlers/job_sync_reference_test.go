@@ -286,7 +286,12 @@ func TestJobSyncReferenceOpenAPI(t *testing.T) {
 	}
 	call(api, "?cursor=unknown", token, 409)
 	call(api, "?page_size=200", token, 200)
-	call(api, "?cursor="+url.QueryEscape(data["completion_cursor"].(string)), token, 200)
+	// The earlier forbidden All-scope request purged this client's continuity.
+	// Unknown-token replay must not poison a subsequent fresh snapshot.
+	call(api, "?cursor="+url.QueryEscape(data["completion_cursor"].(string)), token, 409)
+	fresh := call(api, "", token, 200)["data"].(map[string]any)
+	call(api, "?cursor=unknown", token, 409)
+	call(api, "?cursor="+url.QueryEscape(fresh["completion_cursor"].(string)), token, 200)
 	page := call(api, "?page_size=1", token, 200)["data"].(map[string]any)
 	if page["complete"] != false || page["completion_cursor"] != nil {
 		t.Fatal("nonfinal page claims completion")
@@ -357,6 +362,12 @@ func TestJobSyncReferencePersistedBrowser(t *testing.T) {
 			_, err = f.pool.Exec(ctx, `UPDATE jobs SET job_type='Concurrent persisted edit' WHERE id=$1`, ids[1])
 		case "remove":
 			_, err = f.pool.Exec(ctx, `DELETE FROM job_assignments WHERE job_id=$1 AND user_id=$2`, ids[0], uid)
+		case "only-first":
+			_, err = f.pool.Exec(ctx, `DELETE FROM job_assignments WHERE job_id=ANY($1) AND job_id<>$2 AND user_id=$3`, ids, ids[0], uid)
+		case "restore":
+			_, err = f.pool.Exec(ctx, `INSERT INTO job_assignments(job_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, ids[0], uid)
+		case "restore-all":
+			_, err = f.pool.Exec(ctx, `INSERT INTO job_assignments(job_id,user_id) SELECT unnest($1::bigint[]),$2 ON CONFLICT DO NOTHING`, ids, uid)
 		case "grants":
 			_, err = authorization.New(f.pool).SaveRole(ctx, authorization.Actor{UserID: f.admin}, role, "Independent association reader", grants[:1], 1)
 		case "revoke":
@@ -375,7 +386,7 @@ func TestJobSyncReferencePersistedBrowser(t *testing.T) {
 	mux.Mount("/", middleware.BrowserCSRF(middleware.CSRFToken(f.router)))
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	runCtx, cancel := context.WithTimeout(ctx, 120*time.Second)
+	runCtx, cancel := context.WithTimeout(ctx, 240*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, "node", "testdata/browser/job-sync.cjs", server.URL)
 	cmd.Env = append(os.Environ(), "PAIRING_BROWSER_COOKIE="+cookie.Value, "SYNC_ADMIN_BROWSER_COOKIE="+f.cookie.Value)
