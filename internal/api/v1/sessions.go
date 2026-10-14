@@ -11,6 +11,17 @@ import (
 
 type sessionEpochKey struct{}
 
+func jobSyncDiscovery(p authorization.Principal) map[string]any {
+	scopes := []string{}
+	if p.Allows("job.view", authorization.Assigned) {
+		scopes = append(scopes, "assigned")
+	}
+	if p.Allows("job.view", authorization.All) {
+		scopes = append(scopes, "all")
+	}
+	return map[string]any{"endpoint": "/api/v1/sync/jobs", "available": len(scopes) > 0, "scopes": scopes, "default_page_size": 50, "max_page_size": 200, "continuity_days": 30, "filters": []string{"scope"}}
+}
+
 func (h *handler) sessionEpoch(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, hasBearer := bearerToken(r.Header.Get("Authorization"))

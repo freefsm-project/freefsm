@@ -5,4 +5,12 @@
 <button id="redeem" disabled>Redeem approved pairing</button><button id="cancel" disabled>Cancel pairing</button>
 <button id="inspect" disabled>Inspect own sessions</button><button id="logout" disabled>Log out this bearer</button><button id="all" disabled>Revoke all own sessions</button>
 <label for="session">Own session ID to revoke</label><input id="session" inputmode="numeric"><button id="revoke" disabled>Revoke selected session</button>
-<p id="status" role="status" aria-live="polite">Ready</p><pre id="sessions"></pre></main><script src="/api/v1/reference.js" defer></script></html>
+<p id="status" role="status" aria-live="polite">Ready</p><pre id="sessions"></pre>
+<section aria-labelledby="sync-heading"><h2 id="sync-heading">Authorized Job synchronization</h2>
+<p>In-memory protocol exercise only: no offline authorization lease, encrypted storage or persistent cache. The website remains online-only. Each click makes one request; retry explicitly. Reload discards all data. Incomplete pages are provisional, never a completed snapshot.</p>
+<label for="sync-scope">Job scope</label><select id="sync-scope"><option value="assigned">Assigned Jobs</option><option value="all">All Jobs (requires Job View A)</option></select>
+<label for="sync-size">Page size</label><input id="sync-size" type="number" min="1" max="200" value="50">
+<button id="sync-start" disabled>Start fresh snapshot</button><button id="sync-next" disabled>Read next page / retry</button><button id="sync-delta" disabled>Read delta</button><button id="sync-replay" disabled>Replay last applied page</button>
+<label><input id="sync-fail" type="checkbox">Simulate next local application failure</label>
+<p id="sync-state" role="status" aria-live="polite">No synchronized data</p><pre id="sync-records"></pre></section>
+</main><script src="/api/v1/reference.js" defer></script></html>
