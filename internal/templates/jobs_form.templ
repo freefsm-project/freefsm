@@ -90,18 +90,24 @@ templ JobForm(p JobFormPageData) {
 			<input type="text" name="subtitle" value={ p.Job.Subtitle } placeholder="Optional"/>
 		</label>
 	</div>
-			<div class="grid">
-				<label>
-					Billing Type
-					<select name="billing_type">
-						for _, b := range p.BillingTypes {
-							<option value={ b } selected?={ p.Job.BillingType == b }>{ b }</option>
-						}
-					</select>
-				</label>
-			</div>
 			if p.Job.ID > 0 {
 				<p>Schedule, arrival window and equal assignees are reviewed together in <a href={ templ.URL(fmt.Sprintf("/jobs/%d/dispatch",p.Job.ID)) }>Dispatch Job</a>.</p>
+			}
+			if p.Pricing != nil {
+				<p>Captured Job pricing is independent of the catalog. Later catalog edits do not change these values.</p>
+				@LineItemEditor(*p.Pricing)
+			}
+			if p.Job.ID == 0 || p.Pricing != nil {
+				<div class="grid">
+					<label>
+						Billing Type
+						<select name="billing_type">
+							for _, b := range p.BillingTypes {
+								<option value={ b } selected?={ p.Job.BillingType == b }>{ b }</option>
+							}
+						</select>
+					</label>
+				</div>
 			}
 			<label>
 				Due Date

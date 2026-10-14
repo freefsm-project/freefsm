@@ -360,6 +360,7 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 			return nil, err
 		}
 		if err := r.Service.JobPlanningFacets(ctx, tx, r.Actor, 0, map[string]bool{
+			"pricing.view":         len(params.LineItems) > 0 || (params.BillingType != "" && params.BillingType != "flat_rate"),
 			"job.schedule":         !params.StartTime.IsZero() || !params.EndTime.IsZero() || len(params.Visits) > 0,
 			"job.assign":           len(params.Assignments) > 0,
 			"job.subtask.manage":   len(params.Subtasks) > 0,
@@ -368,7 +369,7 @@ func (s *JobService) Create(ctx context.Context, companyID int64, params JobCrea
 			return nil, err
 		}
 	}
-	lineItems, err := EncodeLineItems(params.LineItems)
+	lineItems, err := encodeJobPricing(0, "[]", params.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("encode job line items: %w", err)
 	}
@@ -615,6 +616,7 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 		r, _ := authorization.FromContext(ctx)
 		changedTime := func(next *time.Time, old *time.Time) bool { return next != nil && (old == nil || !next.Equal(*old)) }
 		if err := r.Service.JobPlanningFacets(ctx, tx, r.Actor, id, map[string]bool{
+			"pricing.view":         params.LineItems != nil || (params.BillingType != nil && *params.BillingType != current.BillingType),
 			"job.schedule":         changedTime(params.StartTime, current.StartTime) || changedTime(params.EndTime, current.EndTime) || changedTime(params.ArrivalStart, current.ArrivalWindowStart) || changedTime(params.ArrivalEnd, current.ArrivalWindowEnd) || (params.Visits != nil && !reflect.DeepEqual(*params.Visits, ParseVisits(current.Visits))),
 			"job.assign":           params.Assignments != nil && !reflect.DeepEqual(*params.Assignments, ParseAssignments(current.Assignments)),
 			"job.subtask.manage":   params.Subtasks != nil && !reflect.DeepEqual(*params.Subtasks, ParseSubtasks(current.Subtasks)),
@@ -628,7 +630,7 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 	}
 	if params.LineItems != nil {
 		var err error
-		encodedLineItems, err = EncodeLineItems(*params.LineItems)
+		encodedLineItems, err = encodeJobPricing(id, current.LineItems, *params.LineItems)
 		if err != nil {
 			return nil, fmt.Errorf("encode job line items: %w", err)
 		}
@@ -1077,7 +1079,7 @@ func JobPaginationTotalPages(total, perPage int) int {
 }
 
 func (s *JobService) LineItems(j *ent.Job) []LineItem {
-	items, _ := DecodeLineItems(j.LineItems)
+	items, _ := JobPricingLines(j.ID, j.LineItems)
 	if items == nil {
 		return []LineItem{}
 	}

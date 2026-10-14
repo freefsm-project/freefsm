@@ -72,6 +72,7 @@ type DocumentTotals struct {
 }
 
 type LineItem struct {
+	SnapshotID  string  `json:"snapshot_id,omitempty"`
 	ItemID      int64   `json:"item_id"`
 	Title       string  `json:"title"`
 	Description string  `json:"description"`

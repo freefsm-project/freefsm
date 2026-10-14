@@ -236,6 +236,13 @@ func (h *handler) authorizedJob(w http.ResponseWriter, r *http.Request) (*ent.Jo
 		writeError(w, http.StatusNotFound, "job_not_found", "job not found")
 		return nil, nil, false
 	}
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		if request.Service.ParentAccess(r.Context(), request.Actor, "job", id, "") != nil {
+			writeError(w, 404, "job_not_found", "job not found")
+			return nil, nil, false
+		}
+		return job, actor, true
+	}
 	if isOffice(actor.Role) {
 		return job, actor, true
 	}
@@ -284,11 +291,15 @@ func (h *handler) visibleJobDTO(r *http.Request, job *ent.Job, statuses map[int6
 	for _, a := range assignments {
 		dto.Assignments = append(dto.Assignments, jobAssigneeDTO{UserID: a.UserID, Name: a.Name, Unavailable: a.Unavailable})
 	}
-	if request, ok := authorization.FromContext(r.Context()); ok {
-		if request.Service.ParentFacet(r.Context(), request.Actor, "job", job.ID, "pricing.view") != nil {
-			dto.BillingType = nil
-			dto.LineItems = nil
+	// Captured pricing is a separate parent-bounded facet. Neither the legacy
+	// actor discriminator nor catalog access supplies this authority.
+	if request, ok := authorization.FromContext(r.Context()); ok && request.Service.ParentFacet(r.Context(), request.Actor, "job", job.ID, "pricing.view") == nil {
+		dto.BillingType = &job.BillingType
+		lines, _ := services.JobPricingLines(job.ID, job.LineItems)
+		if lines == nil {
+			lines = []services.LineItem{}
 		}
+		dto.LineItems = &lines
 	}
 	if request, ok := authorization.FromContext(r.Context()); ok && dto.CustomerID != nil {
 		if request.Service.CustomerAccess(r.Context(), request.Actor, job.CustomerID, "customer.view") != nil {
@@ -335,12 +346,6 @@ func makeJobDTO(job *ent.Job, statuses map[int64]statusDTO, role string) jobDTO 
 		dto.LocationID = job.LocationID
 		dto.CustomerContactID = job.CustomerContactID
 		dto.AssetID = job.AssetID
-		dto.BillingType = &job.BillingType
-		lineItems, _ := services.DecodeLineItems(job.LineItems)
-		if lineItems == nil {
-			lineItems = []services.LineItem{}
-		}
-		dto.LineItems = &lineItems
 	}
 	return dto
 }

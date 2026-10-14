@@ -140,6 +140,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 	assetSvc := services.NewAssetService(entClient)
 
 	jobHandler := NewJobHandler(jobService, customerService, statusService, projectSvc, locationSvc, contactSvc, tagSvc, tagLinkSvc, defSvc, assetSvc, assetTypeSvc, assetStatusSvc, fileSvc, activitySvc, userService, policySvc, timeEntrySvc)
+	jobHandler.itemSvc = itemService
 	jobHandler.statusflow = statusflowService
 	projectHandler := NewProjectHandler(projectSvc, customerService, statusService, locationSvc, jobService, tagSvc, tagLinkSvc, defSvc, activitySvc, policySvc)
 	projectHandler.fileSvc = fileSvc

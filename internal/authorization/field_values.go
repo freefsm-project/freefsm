@@ -211,6 +211,19 @@ func (s *Service) DetailsTransaction(ctx context.Context, a Actor, typ string, i
 				if err := json.Unmarshal(parentAfter, &after); err != nil {
 					return err
 				}
+				pricingChanged := id > 0 && (!bytes.Equal(before["line_items"], after["line_items"]) || !bytes.Equal(before["billing_type"], after["billing_type"]))
+				if id == 0 && string(after["line_items"]) != "[]" && string(after["line_items"]) != "null" {
+					pricingChanged = true
+				}
+				if pricingChanged {
+					pricingScope, err := parentAccess(ctx, tx, p, "job", result, "pricing.view", true)
+					if err != nil {
+						return err
+					}
+					if err := audit(ctx, tx, a, p, "pricing.view", pricingScope, "job", result, map[string]any{"used_for": permission, "line_items_before": before["line_items"], "line_items_after": after["line_items"], "billing_type_before": before["billing_type"], "billing_type_after": after["billing_type"]}); err != nil {
+						return err
+					}
+				}
 				changed := false
 				for _, key := range []string{"project_id", "location_id", "customer_contact_id", "asset_id"} {
 					if !bytes.Equal(before[key], after[key]) && string(after[key]) != "null" {

@@ -1,6 +1,9 @@
 package templates
 
+import "fmt"
+
 type LineItemEditorData struct {
+	JobPricing        bool
 	ItemsJSON         string
 	ExistingItemsJSON string
 	CustomersJSON     string
@@ -116,23 +119,32 @@ templ LineItemEditor(p LineItemEditorData) {
 				},
 				lineTotal(item) { return roundMoney((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount || 0) + Number(item.surcharge || 0)); },
 				get subtotal() { return roundMoney(this.items.reduce((sum, item) => sum + this.lineTotal(item), 0)); },
-				get tax() { return roundMoney(this.items.reduce((sum, item) => item.taxable ? sum + this.lineTotal(item) : sum, 0) * this.documentTaxRate()); },
+				get tax() { if (root.dataset.jobPricing === 'true') return roundMoney(this.items.reduce((sum,item) => sum + (item.taxable ? roundMoney(this.lineTotal(item) * parseRate(item.tax_rate)) : 0), 0)); return roundMoney(this.items.reduce((sum, item) => item.taxable ? sum + this.lineTotal(item) : sum, 0) * this.documentTaxRate()); },
 				get total() { return roundMoney(this.subtotal + this.tax); },
-				get json() { return JSON.stringify(this.items.filter((item) => item.item_id > 0 || item.title).map((item) => ({ item_id: Number(item.item_id) || 0, title: item.title, description: item.description, unit_price: Number(item.unit_price) || 0, quantity: Number(item.quantity), taxable: Boolean(item.taxable), tax_rate: item.tax_rate || '', discount: Number(item.discount) || 0, surcharge: Number(item.surcharge) || 0 }))); },
+				get json() { return JSON.stringify(this.items.filter((item) => item.item_id > 0 || item.title).map((item) => ({ ...(item.snapshot_id ? {snapshot_id: item.snapshot_id} : {}), item_id: Number(item.item_id) || 0, title: item.title, description: item.description, unit_price: Number(item.unit_price) || 0, quantity: Number(item.quantity), taxable: Boolean(item.taxable), tax_rate: item.tax_rate || '', discount: Number(item.discount) || 0, surcharge: Number(item.surcharge) || 0 }))); },
 			};
 		}
 	</script>
-	<fieldset x-data="lineItemEditor($el)" data-line-item-editor>
+	<fieldset x-data="lineItemEditor($el)" data-line-item-editor data-job-pricing={ fmt.Sprint(p.JobPricing) }>
 		@templ.Raw(`<script type="application/json" data-line-item-json="catalog">` + p.ItemsJSON + `</script>`)
 		@templ.Raw(`<script type="application/json" data-line-item-json="existing">` + p.ExistingItemsJSON + `</script>`)
 		@templ.Raw(`<script type="application/json" data-line-item-json="customers">` + p.CustomersJSON + `</script>`)
 		<legend>Line Items</legend>
 		<div class="table-scroll line-items-scroll" role="region" aria-label="Line items, scroll for more columns" tabindex="0"><table>
-			<thead><tr><th>Catalog</th><th>Title</th><th>Description</th><th>Qty</th><th>Price</th><th>Discount</th><th>Surcharge</th><th>Taxable</th><th>Total</th><th></th></tr></thead>
+			<thead><tr><th>Catalog</th><th>Title</th><th>Description</th><th>Qty</th><th>Price</th><th>Discount</th><th>Surcharge</th><th>Taxable</th>
+				if p.JobPricing {
+					<th>Captured tax rate (%)</th>
+				}
+				<th>Total</th><th></th></tr></thead>
 			<tbody x-ref="lineRows" @keydown.enter="addOnEnter($event)">
 				<template x-for="(item, index) in items" :key="index">
 					<tr>
-						<td><select aria-label="Catalog item" x-model.number="item.item_id" x-init="$nextTick(() => { $el.value = String(item.item_id || 0) })" @change="selectItem(index, $el.value)"><option value="0">Free-text line</option><template x-for="catalogItem in catalog" :key="catalogItem.id"><option :value="catalogItem.id" :selected="Number(catalogItem.id) === Number(item.item_id)" x-text="catalogItem.name"></option></template></select></td>
+						<td>
+							if p.JobPricing {
+								<template x-if="item.snapshot_id"><span x-text="item.item_id ? 'Captured Item #' + item.item_id : 'Free-text capture'"></span></template>
+							}
+							<select aria-label="Catalog item" x-model.number="item.item_id" x-init="$nextTick(() => { $el.value = String(item.item_id || 0) })" @change="selectItem(index, $el.value)" :disabled={ fmt.Sprintf("%t && !!item.snapshot_id", p.JobPricing) }><option value="0">Free-text line</option><template x-for="catalogItem in catalog" :key="catalogItem.id"><option :value="catalogItem.id" :selected="Number(catalogItem.id) === Number(item.item_id)" x-text="catalogItem.name"></option></template></select>
+						</td>
 						<td><input type="text" x-model="item.title" placeholder="Line title" aria-label="Line item title"/></td>
 						<td><textarea x-model="item.description" rows="2" placeholder="Line item description" aria-label="Line item description"></textarea></td>
 						<td><input type="number" x-model="item.quantity" step="any" min="0.000001" class="input-width-70" aria-label="Quantity"/></td>
@@ -140,6 +152,9 @@ templ LineItemEditor(p LineItemEditorData) {
 						<td><input type="number" x-model="item.discount" step="0.01" min="0" class="input-width-100" aria-label="Discount"/></td>
 						<td><input type="number" x-model="item.surcharge" step="0.01" min="0" class="input-width-100" aria-label="Surcharge"/></td>
 						<td><input type="checkbox" x-model="item.taxable" aria-label="Taxable line item"/></td>
+						if p.JobPricing {
+							<td><input type="text" inputmode="decimal" x-model="item.tax_rate" aria-label="Captured tax rate"/></td>
+						}
 						<td><span x-text="lineTotal(item).toFixed(2)"></span></td>
 						<td><button type="button" @click.prevent="remove(index)" class="outline contrast small" aria-label="Remove line item">X</button></td>
 					</tr>
