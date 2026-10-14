@@ -44,7 +44,6 @@ type timeEntryService interface {
 }
 
 type apiMutationService interface {
-	SetSubtaskCompletion(context.Context, services.MutationActor, int64, int, bool) (services.APISubtaskResult, error)
 	ClockIn(context.Context, services.MutationActor, int64, services.APIClockInParams) (services.APITimeEntryResult, error)
 	ClockOut(context.Context, services.MutationActor) (services.APITimeEntryResult, error)
 }
@@ -184,7 +183,9 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/time-entries/active", h.activeTimeEntry)
 		r.Post("/jobs/{id}/clock-in", h.clockIn)
 		r.Post("/time-entries/clock-out", h.clockOut)
-		r.Patch("/jobs/{id}/subtasks/{index}", h.updateSubtask)
+		r.Get("/jobs/{id}/subtasks", h.subtasks)
+		r.Patch("/jobs/{id}/subtasks/{subtask}", h.updateSubtask)
+		r.Get("/subtask-operations/{operation}", h.subtaskReceipt)
 	})
 	return r
 }

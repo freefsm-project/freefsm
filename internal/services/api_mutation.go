@@ -59,56 +59,13 @@ func NewAPIMutationService(db *pgxpool.Pool) *APIMutationService {
 	return &APIMutationService{db: db}
 }
 
+// Deprecated: positional checklist intent is unsupported. Use
+// authorization.Service.SubmitSubtask with a stable identity and revision.
 func (s *APIMutationService) SetSubtaskCompletion(ctx context.Context, actor MutationActor, jobID int64, index int, completed bool) (APISubtaskResult, error) {
-	if err := validateMutation(actor, jobID); err != nil {
-		return APISubtaskResult{}, err
-	}
-	if index < 0 {
-		return APISubtaskResult{}, ErrSubtaskNotFound
-	}
-
-	tx, err := s.begin(ctx)
-	if err != nil {
-		return APISubtaskResult{}, err
-	}
-	defer tx.Rollback(ctx) // No-op after Commit.
-	if err = authorizeJobMutation(ctx, tx, actor, jobID); err != nil {
-		return APISubtaskResult{}, err
-	}
-
-	var result APISubtaskResult
-	err = tx.QueryRow(ctx, `
-		UPDATE jobs
-		SET subtasks = jsonb_set(subtasks, ARRAY[$3::text, 'completed'], to_jsonb($4::boolean), false),
-		    updated_at = NOW()
-		WHERE company_id = $1 AND id = $2 AND deleted_at IS NULL
-		  AND jsonb_typeof(subtasks) = 'array' AND jsonb_array_length(subtasks) > $3
-		RETURNING subtasks->$3->>'title',
-		          (subtasks->$3->>'completed')::boolean,
-		          COALESCE((subtasks->$3->>'sort_order')::integer, 0)`,
-		actor.CompanyID, jobID, index, completed,
-	).Scan(&result.Title, &result.Completed, &result.SortOrder)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return APISubtaskResult{}, ErrSubtaskNotFound
-	}
-	if err != nil {
-		return APISubtaskResult{}, fmt.Errorf("update subtask: %w", err)
-	}
-
-	action := "subtask_uncompleted"
-	if completed {
-		action = "subtask_completed"
-	}
-	if err = insertMutationActivity(ctx, tx, actor, action, "job", jobID, map[string]any{
-		"actor_name":  actor.Name,
-		"entity_name": result.Title,
-	}); err != nil {
-		return APISubtaskResult{}, err
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return APISubtaskResult{}, fmt.Errorf("commit subtask mutation: %w", err)
-	}
-	return result, nil
+	// Positional intent cannot safely identify an entry after reorder/removal.
+	// Retained only to fail closed for old internal callers; HTTP uses the
+	// canonical authorization.SubmitSubtask identity/revision/receipt boundary.
+	return APISubtaskResult{}, ErrMutationForbidden
 }
 
 func (s *APIMutationService) ClockIn(ctx context.Context, actor MutationActor, jobID int64, params APIClockInParams) (APITimeEntryResult, error) {

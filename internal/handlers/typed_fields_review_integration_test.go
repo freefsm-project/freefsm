@@ -109,18 +109,23 @@ func TestTypedReviewMixedPlanningAndFieldScopesHTTP(t *testing.T) {
 }
 
 func TestTypedReviewOmittedFieldPatchStillValidatesDetailsButNotSubtaskHTTP(t *testing.T) {
-	_, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Details customer").SaveX(ctx)
-	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Original details").SetSubtasks(`[{"title":"Independent task","completed":false}]`).SaveX(ctx)
+	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Original details").SaveX(ctx)
 	fieldPost(t, router, cookie, "/settings/custom-fields", url.Values{"object_type": {"job"}, "name": {"New required details"}, "field_type": {"text"}, "required": {"true"}}, 303)
 	path := fmt.Sprintf("/jobs/%d", j.ID)
 	fieldPost(t, router, cookie, path, url.Values{"customer_id": {fmt.Sprint(c.ID)}, "job_id": {fmt.Sprint(j.ID)}, "form_mode": {"edit"}, "job_type": {"Must not persist"}}, 422)
 	body := requestBody(t, router, cookie, "GET", path, 200)
 	assertContains(t, body, "Original details")
 	assertNotContains(t, body, "Must not persist")
-	fieldPost(t, router, cookie, path+"/subtasks/0/toggle", url.Values{}, 200)
+	fieldPost(t, router, cookie, path+"/subtasks", url.Values{"action": {"add"}, "title": {"Independent task"}, "operation_id": {newOperationKey()}}, 303)
+	check, err := authorization.New(pool).Subtasks(ctx, authorization.Actor{UserID: admin}, j.ID)
+	if err != nil || len(check.Entries) != 1 {
+		t.Fatalf("checklist: %+v %v", check, err)
+	}
+	fieldPost(t, router, cookie, path+"/subtasks", url.Values{"action": {"complete"}, "subtask_id": {check.Entries[0].ID}, "completion_revision": {check.Entries[0].CompletionRevision}, "operation_id": {newOperationKey()}}, 303)
 	assertContains(t, requestBody(t, router, cookie, "GET", path, 200), "Independent task")
 }
 

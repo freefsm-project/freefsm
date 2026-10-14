@@ -373,7 +373,8 @@ func postInstallationForm(t *testing.T, client *http.Client, base, path string, 
 	values.Set("csrf_token", string(match[1]))
 	for _, input := range regexp.MustCompile(`<input[^>]*type="hidden"[^>]*>`).FindAll(body, -1) {
 		name := regexp.MustCompile(`name="([^"]+)"`).FindSubmatch(input)
-		value := regexp.MustCompile(`value="([^"]*)"`).FindSubmatch(input)
+		// A client-side :value="json" binding is not a literal HTML value.
+		value := regexp.MustCompile(`(?:^|\s)value="([^"]*)"`).FindSubmatch(input)
 		if len(name) == 2 && len(value) == 2 && !values.Has(string(name[1])) {
 			values.Set(string(name[1]), html.UnescapeString(string(value[1])))
 		}

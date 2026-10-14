@@ -94,7 +94,7 @@ func TestTechnicianListsAssignedTenantJobsWithoutCommercialFields(t *testing.T) 
 	}
 }
 
-func TestSubtaskPatchRequiresExplicitStateAndUpdatesAssignedJob(t *testing.T) {
+func TestSubtaskPatchFailsClosedWithoutCanonicalAuthority(t *testing.T) {
 	companyID := int64(12)
 	users := &fakeUsers{byID: &ent.User{ID: 7, CompanyID: &companyID, Name: "Tech", Role: "tech", IsActive: true}}
 	jobs := &fakeJobs{byID: &ent.Job{ID: 4, CompanyID: &companyID, JobType: "Repair", Subtasks: `[{"title":"Inspect","completed":false,"sort_order":0}]`}}
@@ -105,15 +105,15 @@ func TestSubtaskPatchRequiresExplicitStateAndUpdatesAssignedJob(t *testing.T) {
 	api := New(deps)
 
 	missing := performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{}`))
-	if missing.Code != http.StatusBadRequest {
+	if missing.Code != http.StatusServiceUnavailable {
 		t.Fatalf("missing completed status = %d, body = %s", missing.Code, missing.Body.String())
 	}
 
 	res := performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{"completed":true}`))
-	if res.Code != http.StatusOK {
+	if res.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
 	}
-	if mutations.subtaskCalls != 1 || mutations.subtaskActor.UserID != 7 || mutations.subtaskJobID != 4 || mutations.subtaskIndex != 0 || !mutations.subtaskCompleted {
+	if mutations.subtaskCalls != 0 {
 		t.Fatalf("subtask mutation = %+v", mutations)
 	}
 }

@@ -507,9 +507,14 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TechNotes:         r.FormValue("tech_notes"),
 		Visits:            services.ParseVisits(r.FormValue("visits")),
 		Assignments:       services.ParseAssignments(r.FormValue("assignments")),
-		Subtasks:          services.ParseSubtasks(r.FormValue("subtasks")),
 		CustomFields:      parseCustomFieldValues(r),
 	}
+	subtasks, err := services.DecodeSubtasks(r.FormValue("subtasks"))
+	if err != nil {
+		subtaskHTTPError(w, r, err)
+		return
+	}
+	params.Subtasks = subtasks
 	if params.BillingType == "" {
 		params.BillingType = "flat_rate"
 	}
@@ -519,6 +524,10 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := createJob(r.Context(), u.CompanyID, params)
 	if err != nil {
+		if errors.Is(err, authorization.ErrSubtaskInvalid) || errors.Is(err, authorization.ErrSubtaskReview) {
+			subtaskHTTPError(w, r, err)
+			return
+		}
 		if renderFieldSaveError(w, r, h.defSvc, "job", err) {
 			return
 		}
@@ -709,7 +718,11 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.Assignments = &assignments
 	}
 	if s := r.FormValue("subtasks"); s != "" {
-		subtasks := services.ParseSubtasks(s)
+		subtasks, err := services.DecodeSubtasks(s)
+		if err != nil {
+			subtaskHTTPError(w, r, err)
+			return
+		}
 		params.Subtasks = &subtasks
 	}
 	loc := middleware.CompanyLocation(r.Context())
@@ -731,6 +744,10 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	result, err := updateJob(r.Context(), u.CompanyID, id, params)
 	if err != nil {
+		if errors.Is(err, authorization.ErrSubtaskInvalid) || errors.Is(err, authorization.ErrSubtaskReview) {
+			subtaskHTTPError(w, r, err)
+			return
+		}
 		if renderFieldSaveError(w, r, h.defSvc, "job", err) {
 			return
 		}
@@ -798,58 +815,6 @@ func (h *JobHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	http.Redirect(w, r, "/jobs/"+strconv.FormatInt(id, 10)+"?flash=Job+restored", http.StatusSeeOther)
-}
-
-func (h *JobHandler) ToggleSubtask(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil || u.CompanyID <= 0 {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	if !h.policySvc.CanAccessObject(r.Context(), u.ID, u.Role, objectref.New(objectref.TypeJob, id), policyUpdate) {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return
-	}
-	idx, err := strconv.Atoi(chi.URLParam(r, "idx"))
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	j, err := h.svc.GetByIDForCompany(r.Context(), u.CompanyID, id)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	subtasks := services.ParseSubtasks(j.Subtasks)
-	if idx < 0 || idx >= len(subtasks) {
-		http.NotFound(w, r)
-		return
-	}
-	subtasks[idx].Completed = !subtasks[idx].Completed
-	if _, err := h.svc.UpdateSubtasks(r.Context(), u.CompanyID, id, subtasks); err != nil {
-		internalServerError(w, r, "toggle job subtask", err)
-		return
-	}
-	if u != nil {
-		action := "subtask_completed"
-		if !subtasks[idx].Completed {
-			action = "subtask_uncompleted"
-		}
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, action, objectref.New(objectref.TypeJob, id), map[string]interface{}{
-			"actor_name":  u.Name,
-			"entity_name": subtasks[idx].Title,
-		})
-	}
-	statuses := h.statusesForSelect(r.Context())
-	d := jobToDetail(r.Context(), j, statuses)
-	d.Subtasks = subtasks
-	r = withDetailPresentation(r, "job", id, h.policySvc)
-	templates.JobSubtasks(d).Render(r.Context(), w)
 }
 
 func (h *JobHandler) AssetOptions(w http.ResponseWriter, r *http.Request) {
