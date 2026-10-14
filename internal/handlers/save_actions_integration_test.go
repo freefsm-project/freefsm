@@ -105,7 +105,7 @@ func TestGuardedStructuredEstimateConflictRetainsProposedLinesHTTP(t *testing.T)
 	assertContains(t, requestBody(t, router, cookie, "GET", path, 200), "Proposed line")
 }
 
-func TestGuardedStructuredJobConflictRetainsVisitsAndSubtasksHTTP(t *testing.T) {
+func TestGuardedStructuredJobConflictRetainsSubtasksWithoutLegacyVisitEditingHTTP(t *testing.T) {
 	_, client, router, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
@@ -139,8 +139,11 @@ func TestGuardedStructuredJobConflictRetainsVisitsAndSubtasksHTTP(t *testing.T) 
 			bootstraps[key] = saveAttr(n, "data-existing")
 		}
 	})
-	if !strings.Contains(bootstraps["visits"], "Proposed visit notes") || !strings.Contains(bootstraps["subtasks"], "Proposed task") {
+	if bootstraps["visits"] != "" || !strings.Contains(bootstraps["subtasks"], "Proposed task") {
 		t.Fatalf("lost Job widgets %v", bootstraps)
+	}
+	if client.Job.GetX(ctx, id).Visits != "[]" {
+		t.Fatal("stale details bypassed reviewed dispatch through legacy visits")
 	}
 	assertContains(t, body, "Current task")
 }

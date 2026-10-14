@@ -723,7 +723,11 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 		u.SetEndTime(*params.EndTime)
 	}
 	if params.DueDate != nil {
-		u.SetDueDate(*params.DueDate)
+		if params.DueDate.IsZero() {
+			u.ClearDueDate()
+		} else {
+			u.SetDueDate(*params.DueDate)
+		}
 	}
 	if params.ProjectID != nil {
 		if *params.ProjectID > 0 {
@@ -803,6 +807,9 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 }
 
 func (s *JobService) Move(ctx context.Context, id, userID int64, startTime, endTime time.Time) (*ent.Job, error) {
+	if _, ok := authorization.FromContext(ctx); ok {
+		return nil, authorization.ErrConflict
+	}
 	current, err := s.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -847,6 +854,9 @@ func (s *JobService) Move(ctx context.Context, id, userID int64, startTime, endT
 }
 
 func (s *JobService) MoveTime(ctx context.Context, id int64, startTime, endTime time.Time) (*ent.Job, error) {
+	if _, ok := authorization.FromContext(ctx); ok {
+		return nil, authorization.ErrConflict
+	}
 	u := s.client.Job.UpdateOneID(id).SetStartTime(startTime)
 	if endTime.IsZero() {
 		u.ClearEndTime()
@@ -877,12 +887,14 @@ func (s *JobService) Assignments(ctx context.Context, jobID int64) ([]JobAssignm
 		return nil, fmt.Errorf("list assigned users: %w", err)
 	}
 	names := make(map[int64]string, len(users))
+	unavailable := make(map[int64]bool, len(users))
 	for _, u := range users {
 		names[u.ID] = u.Name
+		unavailable[u.ID] = !u.IsActive
 	}
 	assignments := make([]JobAssignment, 0, len(rows))
 	for _, row := range rows {
-		assignments = append(assignments, JobAssignment{UserID: row.UserID, Name: names[row.UserID], Role: row.Role})
+		assignments = append(assignments, JobAssignment{UserID: row.UserID, Name: names[row.UserID], Role: row.Role, Unavailable: unavailable[row.UserID]})
 	}
 	return assignments, nil
 }
