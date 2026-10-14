@@ -77,6 +77,9 @@ templ ExportStatus(status exports.Status) {
 }
 
 templ ExportOrigins() {
+ if navigationPermission(ctx,"activity.export","A","J") {
+  <a href="/activity/export">Generate a new activity export</a>
+ }
  if navigationPermission(ctx,"customer.export","A") {
   <a href="/customers/export">Generate a new export</a>
  }

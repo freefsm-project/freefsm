@@ -22,6 +22,18 @@ func detailCan(ctx context.Context, permission string) bool {
 
 func DetailCan(ctx context.Context, permission string) bool { return detailCan(ctx, permission) }
 
+func commercialAnchorsEditable(ctx context.Context, kind string, isNew bool) bool {
+	if isNew {
+		return true
+	}
+	r, ok := authorization.FromContext(ctx)
+	if !ok {
+		return false
+	}
+	p, err := r.Service.Principal(ctx, r.Actor)
+	return err == nil && p.Allows(kind+".edit", authorization.All)
+}
+
 func capturedPricingVisible(ctx context.Context, typ string, id int64, isNew bool) bool {
 	if isNew {
 		return true

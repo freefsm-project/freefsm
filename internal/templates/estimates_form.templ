@@ -15,7 +15,7 @@ templ EstimateForm(p EstimateFormPageData) {
 			<label>Valid through (optional)<input type="date" name="valid_through" value={ p.Estimate.ValidThrough }/></label>
 			<label>
 				Customer <small class="required-marker">*</small>
-				<select name="customer_id" required>
+				<select name="customer_id" required disabled?={ !commercialAnchorsEditable(ctx,"estimate",p.IsNew) }>
 					<option value="">Select a customer...</option>
 					for _, c := range p.Customers {
 						<option value={ fmt.Sprintf("%d", c.Value) } selected?={ p.Estimate.CustomerID == c.Value }>{ c.Label }</option>
@@ -27,13 +27,17 @@ templ EstimateForm(p EstimateFormPageData) {
 			</label>
 			<label>
 				Job (optional)
-				<select name="job_id">
+				<select name="job_id" disabled?={ !commercialAnchorsEditable(ctx,"estimate",p.IsNew) }>
 					<option value="0">No job</option>
 					for _, j := range p.Jobs {
 						<option value={ fmt.Sprintf("%d", j.Value) } selected?={ p.Estimate.JobID == j.Value }>{ j.Label }</option>
 					}
 				</select>
 			</label>
+			if !commercialAnchorsEditable(ctx,"estimate",p.IsNew) {
+				<input type="hidden" name="customer_id" value={ fmt.Sprint(p.Estimate.CustomerID) }/>
+				<input type="hidden" name="job_id" value={ fmt.Sprint(p.Estimate.JobID) }/>
+			}
 			<div class="grid">
 				<label>
 					Title <small class="required-marker">*</small>
@@ -58,6 +62,8 @@ templ EstimateForm(p EstimateFormPageData) {
 			}
 			if p.IsNew {
 				@DocumentDefaultPicker(p.DefaultsJSON,p.PreserveEntered)
+			} else if commercialAnchorsEditable(ctx,"estimate",false) {
+				@CommercialCustomerReview(p.DefaultsJSON,p.Estimate.CustomerID)
 			}
 			<div class="entity-form-actions">
 				<button type="submit">Save</button>

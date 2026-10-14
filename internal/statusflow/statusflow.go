@@ -668,6 +668,11 @@ func (s *Service) command(ctx context.Context, a Actor, typ ObjectType, id int64
 		}
 		a.principal = &p
 		a.permission = permission
+		if _, web := authorization.FromContext(ctx); web && actor.Channel != "api" && permission != "" && (typ == Estimate || typ == Invoice) {
+			if err := saveaction.RequireRevision(ctx, tx, a.ID, fmt.Sprintf("/%ss/%d", typ, id)); err != nil {
+				return err
+			}
+		}
 		if err := allowStatusUpdates(ctx, tx); err != nil {
 			return err
 		}

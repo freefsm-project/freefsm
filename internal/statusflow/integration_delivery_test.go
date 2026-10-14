@@ -191,6 +191,16 @@ func TestIntegrationDeliveryAcceptanceFencePrecedesRows(t *testing.T) {
 	f := integrationDelivery(t, "estimate")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	// Other test schemas share this database-wide fence. Observe this worker,
+	// not an unrelated package waiting while this worker is still claiming a row.
+	config := f.db.Config()
+	workerName := "delivery-fence-" + uuid.NewString()
+	config.ConnConfig.RuntimeParams["application_name"] = workerName
+	workerPool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer workerPool.Close()
 	tx, err := f.db.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -204,12 +214,12 @@ func TestIntegrationDeliveryAcceptanceFencePrecedesRows(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := f.outbox.ProcessOne(ctx, integrationSender(integrationSend), NewAcceptanceHook(f.svc))
+		_, err := delivery.New(workerPool, "").ProcessOne(ctx, integrationSender(integrationSend), NewAcceptanceHook(f.svc))
 		done <- err
 	}()
 	for {
 		var waiting bool
-		mustScan(t, f.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)) AND query LIKE '%pg_advisory_xact_lock(190019)%')`, blocker), &waiting)
+		mustScan(t, f.db.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE application_name=$2 AND $1=ANY(pg_blocking_pids(pid)) AND query LIKE '%pg_advisory_xact_lock(190019)%')`, blocker, workerName), &waiting)
 		if waiting {
 			break
 		}

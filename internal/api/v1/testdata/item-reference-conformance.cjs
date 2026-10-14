@@ -23,8 +23,10 @@ const { ItemReferenceHarness } = require('./item-reference-harness.cjs');
     assert.equal(response.status, 405, `maintenance ${method} must stay outside the field API`);
   }
   await harness.refresh(id);
+  // One explicitly reviewed logout intent; unchanged retries retain this UUID.
+  const logoutOperation = require('node:crypto').randomUUID();
   const revoked = await fetch(`${process.env.ITEM_API_URL}/session`, {
-    method: 'DELETE', headers: { Authorization: `Bearer ${process.env.ITEM_API_TOKEN}` },
+    method: 'DELETE', headers: { Authorization: `Bearer ${process.env.ITEM_API_TOKEN}`, 'Operation-ID': logoutOperation },
   });
   assert.equal(revoked.status, 204);
   await assert.rejects(() => harness.refresh(id), /selection_requires_review/);

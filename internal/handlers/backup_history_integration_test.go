@@ -180,9 +180,13 @@ func TestBackupHistoricalDomainRoundTrip(t *testing.T) {
 	historyAssertMessage(t, sender.sent[1], delivered)
 	evidence := delivery.ProviderEvent{CompanyID: src.company, DeliveryID: delivered.ID, ProviderIdentifier: "history-provider", EventID: "delivered-event-17", State: "delivered", Evidence: map[string]any{"event": "delivered", "recipient": "original@example.test", "receipt": "receipt-17"}}
 	historyCheck(t, outbox.RecordProviderEvidence(ctx, evidence))
-	pending := queue(partial.ID, "Pending original invoice")
+	// Settled commercial content is locked. Keep the queued editable-content
+	// snapshot fixture on its own unsettled Invoice, retaining the financial
+	// history above unchanged for the same restore round trip.
+	pendingInvoice := newInvoice("Pending delivery Invoice", 30)
+	pending := queue(pendingInvoice.ID, "Pending original invoice")
 	editedTitle := "Edited after queue; never rerender this on retry"
-	_, err = invoiceService.Update(ctx, partial.ID, services.InvoiceUpdateParams{Title: &editedTitle})
+	_, err = invoiceService.Update(ctx, pendingInvoice.ID, services.InvoiceUpdateParams{Title: &editedTitle})
 	historyCheck(t, err)
 	editedEmail := "edited-after-queue@example.test"
 	_, err = services.NewCustomerService(src.client).Update(ctx, customer.ID, services.CustomerUpdateParams{Email: &editedEmail})
@@ -292,7 +296,7 @@ func TestBackupHistoricalDomainRoundTrip(t *testing.T) {
 		t.Fatal("explicit enable did not resume pending delivery")
 	}
 	historyAssertMessage(t, restoredSender.sent[0], pending)
-	pendingHistory, err := outbox.History(ctx, src.company, delivery.DocumentRef{Type: "invoice", ID: partial.ID})
+	pendingHistory, err := outbox.History(ctx, src.company, delivery.DocumentRef{Type: "invoice", ID: pendingInvoice.ID})
 	historyCheck(t, err)
 	if len(pendingHistory) != 1 || pendingHistory[0].ID != pending.ID || pendingHistory[0].State != "accepted" || pendingHistory[0].DeliveredAt != nil || pendingHistory[0].LifetimeAttemptCount != 1 {
 		t.Fatalf("SMTP acceptance incorrectly implies delivery: %+v", pendingHistory)

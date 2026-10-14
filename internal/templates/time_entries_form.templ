@@ -7,15 +7,15 @@ templ TimeEntryForm(p TimeEntryFormPageData) {
 
 		<form action={ templ.URL(fmt.Sprintf("/time-entries/%d", p.Entry.ID)) } method="post" autocomplete="off" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-			<p>Dates and times use { companyTimeZone(ctx) }.</p>
+			<p>Dates and times use { companyTimeZone(ctx) }. Timestamps include their UTC offset and exact fractional seconds; retain the offset when correcting a daylight-saving overlap.</p>
 			<div class="grid">
 				<label>
 					Clock In <small class="required-marker">*</small>
-					<input type="datetime-local" name="clock_in" step="1" value={ p.Entry.ClockIn } required/>
+					<input type="text" name="clock_in" value={ p.Entry.ClockIn } required/>
 				</label>
 				<label>
 					Clock Out
-					<input type="datetime-local" name="clock_out" step="1" value={ p.Entry.ClockOut }/>
+					<input type="text" name="clock_out" value={ p.Entry.ClockOut }/>
 				</label>
 			</div>
 			if !p.PreserveJob {

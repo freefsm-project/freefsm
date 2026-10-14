@@ -109,7 +109,7 @@ func initializeMissingDocumentFields(r *http.Request, kind string, customerID, j
 
 // The form receives a fixed authorized default snapshot. No background request
 // can replace an entered value when company or Customer defaults later change.
-func documentDefaultChoices(ctx context.Context, kind string, customers []*ent.Customer) (string, error) {
+func documentDefaultChoices(ctx context.Context, kind string, customers []*ent.Customer, editing ...int64) (string, error) {
 	today := time.Now().In(middleware.CompanyLocation(ctx))
 	cs := middleware.CompanyFromContext(ctx)
 	project := func(overrides map[string]*string) map[string]string {
@@ -128,7 +128,7 @@ func documentDefaultChoices(ctx context.Context, kind string, customers []*ent.C
 		for _, customer := range customers {
 			ids = append(ids, customer.ID)
 		}
-		available, err := request.Service.DocumentDefaultChoices(ctx, request.Actor, kind, ids)
+		available, err := request.Service.DocumentDefaultChoices(ctx, request.Actor, kind, ids, editing...)
 		if err != nil {
 			return "", err
 		}

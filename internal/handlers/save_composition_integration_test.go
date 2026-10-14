@@ -224,8 +224,16 @@ func TestGuardedTimeEntryTwoEditorsPreserveProtectedContextHTTP(t *testing.T) {
 		assertNotContains(t, body, "51.234567")
 	}
 	input := func(form, notes string) url.Values {
-		return url.Values{"save_action_id": {compositionField(t, form, "save_action_id")}, "save_history": {compositionField(t, form, "save_history")}, "save_revision": {compositionField(t, form, "save_revision")}, "notes": {notes}, "user_id": {fmt.Sprint(actor.ID)}, "latitude": {"0"}, "longitude": {"0"}}
+		return url.Values{"save_action_id": {compositionField(t, form, "save_action_id")}, "save_history": {compositionField(t, form, "save_history")}, "save_revision": {compositionField(t, form, "save_revision")}, "notes": {notes}, "user_id": {fmt.Sprint(actor.ID)}}
 	}
+	// GPS is clock-only immutable data. Reject the entire attempted correction
+	// rather than silently dropping supplied coordinates and reporting success.
+	invalidGPS := input(first, "Must not save")
+	invalidGPS.Set("latitude", "0")
+	invalidGPS.Set("longitude", "0")
+	itemPost(t, router, firstCookie, path, invalidGPS, 400)
+	assertContains(t, requestBody(t, router, firstCookie, "GET", path, 200), "Original notes")
+	first = requestBody(t, router, firstCookie, "GET", path+"/edit", 200)
 	one, two := input(first, "First correction"), input(second, "Second proposed correction")
 	if _, err := pool.Exec(ctx, `CREATE FUNCTION fail_time_completion() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.completed_at IS NOT NULL THEN RAISE EXCEPTION 'lost completion'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_time_completion BEFORE UPDATE ON online_save_actions FOR EACH ROW EXECUTE FUNCTION fail_time_completion()`); err != nil {
 		t.Fatal(err)

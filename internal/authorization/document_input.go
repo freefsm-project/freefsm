@@ -28,7 +28,7 @@ func (s *Service) DocumentCustomer(ctx context.Context, a Actor, customerID, job
 		return DocumentCustomer{}, ErrForbidden
 	}
 	var result DocumentCustomer
-	err = s.Pool.QueryRow(ctx, `SELECT c.id,c.company_id,c.display_name,CASE WHEN c.tax_exempt THEN '0' ELSE $4::text END
+	err = s.reads(ctx).QueryRow(ctx, `SELECT c.id,c.company_id,c.display_name,CASE WHEN c.tax_exempt THEN '0' ELSE $4::text END
  FROM customers c JOIN users u ON u.company_id=c.company_id
  JOIN authorization_grants cv ON cv.role_id=u.authorization_role_id AND cv.permission='customer.view'
  JOIN authorization_grants pv ON pv.role_id=u.authorization_role_id AND pv.permission='pricing.view'

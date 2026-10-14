@@ -60,6 +60,9 @@ templ CustomFieldsWidget(p CustomFieldsWidgetData) {
 						} else {
 							<label>
 								<strong>{ f.Name }</strong>
+								if f.Retired {
+									<small> (Retired)</small>
+								}
 							</label>
 							if f.FieldType == "checkbox" && f.Value != "" {
 								<p>

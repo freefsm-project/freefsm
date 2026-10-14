@@ -2,7 +2,7 @@ package services
 
 import (
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"io"
 	"os"
 
@@ -14,7 +14,6 @@ import (
 // entries can legitimately be at the end of the file. Embedded documents do not
 // determine the outer document's media type. Nothing is extracted to disk.
 func legacyOfficeType(path string) (string, error) {
-	invalid := fmt.Errorf("invalid file content: malformed or unsupported legacy Office document")
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -24,6 +23,35 @@ func legacyOfficeType(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return legacyOfficeReader(f, stat.Size())
+}
+
+// mscfb v1.0.6 embeds underlying errors in presentation strings, including in
+// ErrFormat as well as ErrRead, without Unwrap. Preserve the actual storage
+// cause at the ReaderAt boundary instead of interpreting parser error text.
+type officeStorageReader struct {
+	io.ReaderAt
+	readErr error
+}
+
+func (r *officeStorageReader) ReadAt(p []byte, off int64) (int, error) {
+	n, err := r.ReaderAt.ReadAt(p, off)
+	// EOF identifies truncated content. Other read failures do not establish
+	// that the submitted document is malformed and must leave its UUID retryable.
+	if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) && r.readErr == nil {
+		r.readErr = err
+	}
+	return n, err
+}
+
+func legacyOfficeReader(source io.ReaderAt, size int64) (mime string, resultErr error) {
+	f := &officeStorageReader{ReaderAt: source}
+	defer func() {
+		if f.readErr != nil {
+			mime, resultErr = "", f.readErr
+		}
+	}()
+	invalid := invalidFile("invalid file content: malformed or unsupported legacy Office document")
 	var header [512]byte
 	if _, err := f.ReadAt(header[:], 0); err != nil {
 		return "", invalid
@@ -32,7 +60,7 @@ func legacyOfficeType(path string) (string, error) {
 	if !(version == 3 && shift == 9 || version == 4 && shift == 12) {
 		return "", invalid
 	}
-	sectors := uint64(stat.Size() >> shift)
+	sectors := uint64(size >> shift)
 	// Bound parser allocations by physically present sectors, not untrusted
 	// directory/FAT counts. This also rejects truncated allocation structures.
 	for _, offset := range []int{40, 44, 64, 72} {
@@ -51,7 +79,7 @@ func legacyOfficeType(path string) (string, error) {
 		if entry.FileInfo().IsDir() {
 			continue
 		}
-		if entry.Size < 0 || entry.Size > stat.Size()-total {
+		if entry.Size < 0 || entry.Size > size-total {
 			return "", invalid
 		}
 		total += entry.Size

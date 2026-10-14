@@ -1,0 +1,36 @@
+package templates
+
+import "net/url"
+
+templ ActivityExportReview(filters url.Values, scope, operation string) {
+	@Layout("Export operational activity") {
+		<h1>Export operational activity</h1>
+		<p>All matching activity, ordered by acceptance time descending, then stable activity ID descending. Scope: { scope }.</p>
+		<p>One consistent snapshot, including all matching pages. Current record and facet Views still apply. Removed Comment text, File content, secrets and sealed administration events are excluded.</p>
+		<dl>
+			for key, values := range filters {
+				<dt>{ key }</dt>
+				for _, value := range values {
+					<dd>{ value }</dd>
+				}
+			}
+		</dl>
+		<p>Columns: activity_id, accepted_at, occurred_at, actor_id, actor, record_type, record_id, record_name, action, before_after. Unknown historical occurrence is blank. Times use UTC; before_after is structured JSON. Spreadsheet-formula-leading cells are prefixed with an apostrophe.</p>
+		<p>Ready results are requester-only for 24 hours. Every download rechecks every included record and field; access loss blocks the entire artifact. Downloaded copies are outside subsequent access control.</p>
+		<form action="/activity/export" method="post" hx-boost="false">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="operation_id" value={ operation }/>
+			for key, values := range filters {
+				for _, value := range values {
+					if key=="action" {
+						<input type="hidden" name="event_action" value={ value }/>
+					} else {
+						<input type="hidden" name={ key } value={ value }/>
+					}
+				}
+			}
+			<button type="submit">Confirm activity export</button>
+		</form>
+		<a href="/exports">My CSV exports</a>
+	}
+}

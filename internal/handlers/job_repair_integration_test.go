@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -120,6 +121,21 @@ func jobRepairRawPost(router http.Handler, cookie *http.Cookie, path string, val
 // omission/stale tests use jobRepairRawPost (or a direct request), not this helper.
 func currentJobFormValues(t *testing.T, router http.Handler, cookie *http.Cookie, path string, values url.Values) url.Values {
 	t.Helper()
+	if strings.HasSuffix(path, "/status") && strings.HasPrefix(path, "/jobs/") && !values.Has("operation_id") {
+		body := requestBody(t, router, cookie, "GET", strings.TrimSuffix(path, "/status"), 200)
+		out := url.Values{}
+		for k, v := range values {
+			out[k] = append([]string(nil), v...)
+		}
+		for _, key := range []string{"operation_id", "status_revision", "meaning_" + values.Get("status_id")} {
+			match := regexp.MustCompile(`name="` + key + `" value="([^"]+)"`).FindStringSubmatch(body)
+			if len(match) == 2 {
+				out.Set(key, match[1])
+			}
+		}
+		return out
+	}
+	values = currentCommercialFormValues(t, router, cookie, path, values)
 	if !regexp.MustCompile(`^/jobs/[1-9][0-9]*(/(contacts|links|assets))?$`).MatchString(path) || values.Has("save_action_id") || values.Has("save_revision") {
 		return values
 	}
@@ -144,6 +160,9 @@ func currentJobFormValues(t *testing.T, router http.Handler, cookie *http.Cookie
 	}
 	out.Set("save_revision", match[1])
 	out.Set("save_action_id", newOperationKey())
+	if match := regexp.MustCompile(`name="field_baseline" value="([^"]*)"`).FindStringSubmatch(w.Body.String()); len(match) == 2 {
+		out.Set("field_baseline", html.UnescapeString(match[1]))
+	}
 	return out
 }
 

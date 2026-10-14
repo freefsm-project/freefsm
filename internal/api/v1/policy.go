@@ -6,6 +6,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/requestlimits"
 	"github.com/google/uuid"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -37,7 +38,7 @@ func ResponsePolicy(origins []string, next http.Handler) http.Handler {
 			}
 			if allowed {
 				w.Header().Set("Access-Control-Allow-Origin", origin)
-				w.Header().Set("Access-Control-Expose-Headers", "Retry-After, X-Request-ID, X-FreeFSM-Session-Epoch")
+				w.Header().Set("Access-Control-Expose-Headers", "Retry-After, X-Request-ID, X-FreeFSM-Session-Epoch, ETag, Repr-Digest, Content-Range, File-Revision")
 				if r.Method == "OPTIONS" {
 					method := r.Header.Get("Access-Control-Request-Method")
 					switch method {
@@ -48,14 +49,14 @@ func ResponsePolicy(origins []string, next http.Handler) http.Handler {
 					}
 					for _, header := range strings.Split(r.Header.Get("Access-Control-Request-Headers"), ",") {
 						switch strings.ToLower(strings.TrimSpace(header)) {
-						case "", "authorization", "content-type", "x-freefsm-session-epoch":
+						case "", "authorization", "content-type", "x-freefsm-session-epoch", "range", "if-range", "if-none-match":
 						default:
 							writeError(w, 403, "origin_denied", "preflight header is not allowed")
 							return
 						}
 					}
 					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE")
-					w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-FreeFSM-Session-Epoch")
+					w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Operation-ID, X-FreeFSM-Session-Epoch, Range, If-Range, If-None-Match")
 					w.WriteHeader(204)
 					return
 				}
@@ -68,12 +69,20 @@ func ResponsePolicy(origins []string, next http.Handler) http.Handler {
 func (h *handler) transportPolicy(next http.Handler) http.Handler {
 	return ResponsePolicy(h.deps.Config.CORSOrigins, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.RawQuery != "" {
+			path := protocolPath(r)
+			if strings.HasPrefix(path, "/file-transfers") || strings.HasPrefix(path, "/files/") {
+				q, err := url.ParseQuery(r.URL.RawQuery)
+				if err != nil || !strings.HasSuffix(path, "/chunks") || len(q) != 1 || len(q["offset"]) != 1 {
+					writeError(w, 400, "invalid_request", "Only one exact chunk offset is supported; unknown filters are rejected")
+					return
+				}
+			}
 			switch protocolPath(r) {
 			case "/", "/me", "/capabilities", "/sessions", "/session", "/pairings", "/pairings/redeem", "/pairings/cancel":
 				writeError(w, 400, "invalid_request", "query parameters are not supported for this endpoint")
 				return
 			}
-			if strings.HasPrefix(protocolPath(r), "/sessions/") {
+			if strings.HasPrefix(protocolPath(r), "/sessions/") || strings.HasPrefix(protocolPath(r), "/session-operations/") || strings.HasPrefix(protocolPath(r), "/clock-lease-operations/") {
 				writeError(w, 400, "invalid_request", "query parameters are not supported for this endpoint")
 				return
 			}

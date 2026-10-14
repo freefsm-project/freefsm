@@ -47,6 +47,7 @@ func (h *DashboardHandler) Index(w http.ResponseWriter, r *http.Request) {
 		if err == nil && activeEntry != nil {
 			duration := services.TimeEntryDuration(activeEntry.ClockIn, time.Time{})
 			clockWidget = templates.ClockWidgetData{
+				EntryID:     activeEntry.ID,
 				IsClockedIn: true,
 				Duration:    duration,
 				ClockInTime: displayDateTime(r.Context(), activeEntry.ClockIn),

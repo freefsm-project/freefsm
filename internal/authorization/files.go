@@ -2,7 +2,9 @@ package authorization
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -17,6 +19,9 @@ var ErrFileOperation = errors.New("invalid File operation attribution")
 type FileOperation struct {
 	OperationID string     `json:"operation_id"`
 	OccurredAt  *time.Time `json:"occurred_at,omitempty"`
+	// Intent/TargetID are service-supplied command facts, never wire authority.
+	Intent   any   `json:"-"`
+	TargetID int64 `json:"-"`
 }
 
 func (op FileOperation) Validate() error {
@@ -110,38 +115,217 @@ func (s *Service) FileAccess(ctx context.Context, a Actor, ref objectref.Ref, pe
 	return err
 }
 
+// FileTransferAction records transport facts against their original parent.
+func (s *Service) FileTransferAction(ctx context.Context, a Actor, ref objectref.Ref, command FileTransportCommand, fn func(pgx.Tx) (bool, map[string]any, error)) error {
+	if err := command.FileOperation.Validate(); err != nil {
+		return err
+	}
+	transferID := command.TransferID
+	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		return fileTransportOperation(ctx, tx, a, command, func(tx pgx.Tx) error {
+			// Resolve a caller-scoped collision under the same authority fence as
+			// the write. A newly requested parent cannot authorize disclosure of
+			// an existing transfer's inaccessible original intent.
+			var originalType string
+			var originalID int64
+			err := tx.QueryRow(ctx, `SELECT object_type,object_id FROM file_transfers WHERE user_id=$1 AND session_hash=$2 AND id=$3 FOR UPDATE`, a.UserID, a.SessionHash, transferID).Scan(&originalType, &originalID)
+			if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if err == nil {
+				original, err := objectref.Parse(originalType, originalID)
+				if err != nil {
+					return ErrNotFound
+				}
+				if _, err := fileAccess(ctx, tx, p, a, original, "file.upload", a.UserID, true); err != nil {
+					return err
+				}
+			}
+			scope, err := fileAccess(ctx, tx, p, a, ref, "file.upload", a.UserID, true)
+			if err != nil {
+				return err
+			}
+			changed, detail, err := fn(tx)
+			if err != nil || !changed {
+				return err
+			}
+			detail["transfer_id"] = transferID
+			var attributed any = detail
+			if a.Channel == "api" {
+				attributed, err = fileAPIAuditDetail(ctx, tx, a, command.FileOperation, detail)
+				if err != nil {
+					return err
+				}
+			}
+			return audit(ctx, tx, a, p, "file.upload", scope, ref.ObjectType(), ref.ID, attributed)
+		})
+	})
+	if err != nil {
+		return err
+	}
+	receipt, err := s.FileTransportReceipt(ctx, a, command.OperationID)
+	if err != nil {
+		return err
+	}
+	return fileTransportError(receipt.Code)
+}
+
 // FileAction serializes with grant/session changes and locks the exact parent
 // and assignment until the File mutation and immutable audit commit together.
 // A zero returned effect ID represents a desired-state no-op (no new audit).
 func (s *Service) FileAction(ctx context.Context, a Actor, ref objectref.Ref, permission string, uploader int64, fn func(pgx.Tx) (int64, any, error), operation ...FileOperation) error {
 	if a.Channel == "api" && len(operation) > 0 {
-		if err := operation[0].Validate(); err != nil {
-			return err
+		if id, err := uuid.Parse(operation[0].OperationID); err != nil || id == uuid.Nil {
+			return ErrFileOperation
 		}
 	}
-	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
-		scope, err := fileAccess(ctx, tx, p, a, ref, permission, uploader, true)
-		if err != nil {
-			return err
-		}
-		id, detail, err := fn(tx)
-		if err != nil {
-			return err
-		}
-		if id == 0 {
-			return nil
-		}
-		if a.Channel == "api" {
-			if len(operation) != 1 {
-				return ErrFileOperation
+	var outcome error
+	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		run := func(tx pgx.Tx) error {
+			if len(operation) > 0 {
+				if err := operation[0].Validate(); err != nil {
+					return err
+				}
+				if operation[0].TargetID > 0 {
+					if !ref.Valid() {
+						return ErrFileOperation
+					}
+					var kind string
+					var parent int64
+					if err := tx.QueryRow(ctx, `SELECT object_type,object_id,uploaded_by FROM files WHERE id=$1 AND company_id=$2 FOR UPDATE`, operation[0].TargetID, p.CompanyID).Scan(&kind, &parent, &uploader); err != nil {
+						if errors.Is(err, pgx.ErrNoRows) {
+							return ErrNotFound
+						}
+						return err
+					}
+					if kind != ref.ObjectType() || parent != ref.ID {
+						original, parseErr := objectref.Parse(kind, parent)
+						if parseErr != nil {
+							return ErrNotFound
+						}
+						if _, err := fileAccess(ctx, tx, p, a, original, "", uploader, true); err != nil {
+							return err
+						}
+						return ErrConflict
+					}
+				}
 			}
-			detail, err = fileAPIAuditDetail(ctx, tx, a, operation[0], detail)
+			scope, err := fileAccess(ctx, tx, p, a, ref, permission, uploader, true)
 			if err != nil {
 				return err
 			}
+			id, detail, err := fn(tx)
+			if err != nil {
+				return err
+			}
+			if id == 0 {
+				return nil
+			}
+			if a.Channel == "api" {
+				if len(operation) != 1 {
+					return ErrFileOperation
+				}
+				detail, err = fileAPIAuditDetail(ctx, tx, a, operation[0], detail)
+				if err != nil {
+					return err
+				}
+			}
+			if err := audit(ctx, tx, a, p, permission, scope, "file", id, detail); err != nil {
+				return err
+			}
+			return publishFileActivity(ctx, tx, a, p, ref, permission, id, detail)
 		}
-		return audit(ctx, tx, a, p, permission, scope, "file", id, detail)
+		if len(operation) == 1 && operation[0].Intent != nil {
+			op := operation[0]
+			if err := admitOperation(ctx, tx, a, op.OperationID, "file.mutation", op.Intent); err != nil {
+				return err
+			}
+			var code string
+			err := tx.QueryRow(ctx, `SELECT code FROM file_command_receipts WHERE operation_id=$1`, op.OperationID).Scan(&code)
+			if err == nil {
+				outcome = fileTransportError(code)
+				return nil
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			// Installed accepted receipts precede this module. Validate their
+			// original intent before authority/domain checks; never shadow them
+			// with a new rejection after access loss or changed-intent misuse.
+			var legacyIntent, legacyClient string
+			err = tx.QueryRow(ctx, `SELECT intent_hash,client_key FROM file_mutation_operations WHERE operation_id=$1 AND user_id=$2`, op.OperationID, a.UserID).Scan(&legacyIntent, &legacyClient)
+			if err == nil {
+				if intent, ok := op.Intent.(string); !ok || intent != legacyIntent || legacyClient != a.SessionHash {
+					return ErrConflict
+				}
+				return nil
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			sp, err := tx.Begin(ctx)
+			if err != nil {
+				return err
+			}
+			outcome = run(sp)
+			code = fileTransportCode(outcome)
+			if outcome != nil {
+				_ = sp.Rollback(ctx)
+				if code == "" {
+					return outcome
+				}
+			} else if err := sp.Commit(ctx); err != nil {
+				return err
+			}
+			_, err = tx.Exec(ctx, `INSERT INTO file_command_receipts(operation_id,user_id,client_key,file_id,code) VALUES($1,$2,$3,$4,$5)`, op.OperationID, a.UserID, operationClientKey(a), op.TargetID, code)
+			return err
+		}
+		return run(tx)
 	})
+	if err != nil {
+		return err
+	}
+	return outcome
+}
+
+// This boundary runs only after an authoritative File effect. Transport-stage
+// audits do not pass through it. A replay/no-op returned above publishes nothing.
+func publishFileActivity(ctx context.Context, tx pgx.Tx, a Actor, p Principal, ref objectref.Ref, permission string, id int64, detail any) error {
+	action := ""
+	switch permission {
+	case "file.upload":
+		action = "file_uploaded"
+	case "file.rename":
+		action = "file_renamed"
+	case "file.remove":
+		action = "file_deleted"
+	default:
+		return nil
+	}
+	var name, actorName string
+	var size, revision, uploader int64
+	var accepted time.Time
+	if err := tx.QueryRow(ctx, `SELECT f.original_name,f.file_size,f.revision,f.uploaded_by,u.name,clock_timestamp() FROM files f JOIN users u ON u.id=$5 AND u.company_id=f.company_id WHERE f.id=$1 AND f.company_id=$2 AND f.object_type=$3 AND f.object_id=$4`, id, p.CompanyID, ref.ObjectType(), ref.ID, a.UserID).Scan(&name, &size, &revision, &uploader, &actorName, &accepted); err != nil {
+		return err
+	}
+	metadata := map[string]any{"file_id": id, "file_name": name, "size": size, "uploaded_by": uploader, "actor_name": actorName}
+	if facts, ok := detail.(map[string]any); ok {
+		if old, ok := facts["old_name"].(string); ok {
+			metadata["old_file_name"] = old
+		}
+		if stamp, ok := facts["accepted_at"].(time.Time); ok {
+			accepted = stamp
+		}
+		if stamp, ok := facts["occurred_at"].(time.Time); ok {
+			metadata["source_occurred_at"] = stamp
+		}
+	}
+	raw, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata,created_at,event_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, p.CompanyID, a.UserID, action, ref.ObjectType(), ref.ID, raw, accepted, fmt.Sprintf("file-action:%d:%d", id, revision))
+	return err
 }
 
 func fileAPIAuditDetail(ctx context.Context, tx pgx.Tx, a Actor, op FileOperation, detail any) (any, error) {

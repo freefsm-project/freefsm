@@ -4,10 +4,20 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/jackc/pgx/v5"
 )
+
+func filePublicationIntent(ref objectref.Ref, name string, size int64, digest string, occurred *time.Time) []any {
+	intent := []any{ref.ObjectType(), ref.ID, name, size, digest}
+	if occurred != nil {
+		intent = append(intent, occurred.UTC())
+	}
+	return intent
+}
 
 // publicationClientKey snapshots the authenticated origin inside publication's
 // authority transaction. Mobile expiry renewal does not change this identity.

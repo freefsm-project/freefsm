@@ -122,3 +122,22 @@ go test -race ./internal/handlers -run 'TestSessionsPersistedBrowser|TestRecover
 ```
 
 Use disk-backed `TMPDIR`, `GOTMPDIR` and `BUILD_DIR` when `/tmp` is quota-limited.
+# API revocation operation identity
+
+All API own-session revocation routes (`DELETE /api/v1/session`,
+`/api/v1/sessions`, `/api/v1/sessions/{sessionID}`) require one client-generated
+UUID `Operation-ID` header and no request body. Keep the original UUID and route
+for an unchanged retry. HTTP 204 commits revocation, immutable audit, common
+admission and the independent receipt atomically. Storage/audit failures remain
+retryable under that UUID. Changed target, route kind, user or client cannot
+reuse the identity. Unknown/non-owned targets return a terminal nondisclosing
+404 receipt, without recording their target ID in the public representation.
+
+Reconcile using `GET /api/v1/session-operations/{operation}`. The response has
+`operation_id`, `kind` (`logout`, `revoke`, `revoke_all`), `code`, `accepted_at`,
+and an optional own `session_id`. No bearer or device label is returned.
+Revocation never leaves a bearer valid solely for receipt access. Following
+self logout or revoke-all, fresh authentication as the original user is required
+to inspect the nonsensitive receipt. It permits no replay under the fresh
+client's identity and no automatic interrupted-action retry. A restore still
+cannot recover receipts or effects committed after the restored backup.

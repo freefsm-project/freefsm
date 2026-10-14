@@ -45,7 +45,8 @@ templ JobShow(p JobDetail) {
 					if detailCan(ctx,"clock-in") && !p.ActiveTimeEntryOnJob && !p.ActiveTimeEntryElsewhere {
 						<form action={ templ.URL(fmt.Sprintf("/jobs/%d/clock-in", p.ID)) } method="post">
 							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-							<button type="submit">Clock In to Job</button>
+							<button type="submit" data-clock-free>Clock In to Job</button>
+							@ClockLocationControls()
 						</form>
 					}
 				</div>
@@ -68,8 +69,10 @@ templ JobShow(p JobDetail) {
 				<p>Clocked in at <strong>{ p.ActiveTimeEntryClockIn }</strong>. Current duration: <strong>{ p.ActiveTimeEntryDuration }</strong>.</p>
 				if detailCan(ctx,"clock-out") {
 				<form action={ templ.URL(fmt.Sprintf("/jobs/%d/clock-out", p.ID)) } method="post">
+					<input type="hidden" name="entry_id" value={ fmt.Sprint(p.ActiveTimeEntryID) }/>
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button type="submit">Clock Out</button>
+					<button type="submit" data-clock-free>Clock Out</button>
+					@ClockLocationControls()
 				</form>
 				}
 			</article>
@@ -180,29 +183,42 @@ templ JobShow(p JobDetail) {
 			<p>{ p.Notes }</p>
 		}
 		if p.TechNotes != "" {
-			<h3>Tech Notes</h3>
+			<h3>Field Notes</h3>
 			<p>{ p.TechNotes }</p>
 		}
-		if len(p.Subtasks) > 0 {
-			@JobSubtasks(p)
-		}
+		<p><a href={ templ.URL(fmt.Sprintf("/jobs/%d/field-notes",p.ID)) }>Field Notes and revision history</a></p>
+		@JobSubtasks(p)
 		if detailCan(ctx,"pricing") && len(p.LineItems) > 0 {
 			<h3>Line Items</h3>
+			<div class="table-scroll line-items-scroll" role="region" aria-label="Captured Job pricing, scroll for more columns" tabindex="0">
 			<table>
 				<thead>
-					<tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr>
+					<tr><th>Item</th><th>Description</th><th>Qty</th><th>Price</th><th>Captured tax rate (%)</th><th>Subtotal</th></tr>
 				</thead>
 				<tbody>
 					for _, li := range p.LineItems {
 						<tr>
 							<td>{ li.Title }</td>
+							<td>{ li.Description }</td>
 							<td>{ fmt.Sprintf("%g", li.Quantity) }</td>
 							<td>{ fmt.Sprintf("$%.2f", li.UnitPrice) }</td>
+							<td>
+								if li.Taxable {
+									if li.TaxRate != "" {
+										{ li.TaxRate }
+									} else {
+										Not recorded
+									}
+								} else {
+									Not taxable
+								}
+							</td>
 							<td>{ fmt.Sprintf("$%.2f", lineItemTotal(li)) }</td>
 						</tr>
 					}
 				</tbody>
 			</table>
+			</div>
 		}
 		if p.ArchivedAt != "" {
 			<div hx-get={ templ.URL(fmt.Sprintf("/jobs/%d/comments?read_only=1", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
@@ -228,17 +244,25 @@ templ JobShow(p JobDetail) {
 }
 
 templ JobStatusControl(p JobDetail) {
+	<script src={ staticAsset("/static/js/job-execution.js") } defer></script>
 	if p.ArchivedAt == "" && detailCan(ctx,"status") {
-		<form action={ templ.URL(fmt.Sprintf("/jobs/%d/status", p.ID)) } method="post" class="job-status-form" hx-post={ templ.URL(fmt.Sprintf("/jobs/%d/status", p.ID)) } hx-target="closest td" hx-swap="innerHTML">
+		<form action={ templ.URL(fmt.Sprintf("/jobs/%d/status", p.ID)) } method="post" class="job-status-form" hx-boost="false" data-execution-form="true">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="operation_id" value={ p.StatusOperation }/>
+			if len(p.StatusChoices)>0 {
+			 <input type="hidden" name="status_revision" value={ p.StatusChoices[0].Intent.Revision }/>
+			}
+			for _, choice := range p.StatusChoices {
+			 <input type="hidden" name={ fmt.Sprintf("meaning_%d",choice.Status.ID) } value={ choice.Intent.MeaningRevision }/>
+			}
 			<select
 				name="status_id"
 				aria-label="Job Status"
 				class="job-status-select"
 				style={ badgeStyle(p.StatusColor) }
 			>
-				for _, s := range p.Statuses {
-					<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
+				for _, s := range p.StatusChoices {
+					<option value={ fmt.Sprintf("%d", s.Status.ID) } selected?={ p.StatusID == s.Status.ID }>{ s.Status.Name }</option>
 				}
 			</select>
 			<button type="submit" class="outline small">Save status</button>

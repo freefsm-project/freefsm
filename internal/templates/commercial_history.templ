@@ -1,0 +1,34 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/middleware"
+)
+
+templ CommercialHistoryPanel(kind string,id int64) {
+	<section aria-label="Commercial changes" class="shared-widget">
+		<h2>Commercial changes</h2>
+		<div hx-get={ fmt.Sprintf("/%ss/%d/commercial-history",kind,id) } hx-trigger="load" hx-swap="innerHTML">
+			<p>Loading commercial changes...</p>
+		</div>
+	</section>
+}
+
+templ CommercialHistory(changes []authorization.CommercialChange) {
+	if len(changes)==0 {
+		<p>No visible commercial field changes recorded.</p>
+	}
+	for _,change:=range changes {
+		<article>
+			<p><strong>{ change.Actor }</strong>{ " · " + change.RecordedAt.In(middleware.CompanyLocation(ctx)).Format("2006-01-02 15:04:05 MST") }</p>
+			<dl>
+				for _,field:=range change.Fields {
+					<dt>{ field.Field }</dt>
+					<dd><strong>Before:</strong> <span style="white-space:pre-wrap;overflow-wrap:anywhere">{ field.Before }</span></dd>
+					<dd><strong>After:</strong> <span style="white-space:pre-wrap;overflow-wrap:anywhere">{ field.After }</span></dd>
+				}
+			</dl>
+		</article>
+	}
+}

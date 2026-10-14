@@ -46,6 +46,49 @@ const assert=require('node:assert/strict');
   assert.ok(!(await page.content()).includes(deviceSecret),'device secret in DOM');
   assert.deepEqual(await page.evaluate(()=>({local:localStorage.length,session:sessionStorage.length})),{local:0,session:0});
   assert.equal(await page.evaluate(async()=> (await navigator.serviceWorker.getRegistrations()).length),0);
+  if(process.env.TRANSFER_JOB) {
+   let dropped=false;
+   const transportRequests=[],receipts=[];
+   page.on('request',request=>{
+    const path=new URL(request.url()).pathname;
+    if((path==='/api/v1/file-transfers'&&request.method()==='POST')||request.method()==='PUT'&&path.endsWith('/chunks'))
+     transportRequests.push({path,operation:request.headers()['operation-id'],body:request.postData()});
+    if(path.startsWith('/api/v1/file-transfer-operations/'))receipts.push(path.split('/').pop());
+   });
+   await page.route('**/file-transfers/*/chunks?*',async route=>{
+    if(!dropped&&route.request().postData()==='interrupted bytes') {
+     dropped=true;const persisted=await route.fetch();assert.equal(persisted.status(),200);await route.abort('failed');
+    } else await route.continue();
+   });
+   await page.getByLabel('Original Job ID').fill(process.env.TRANSFER_JOB);
+   await page.getByLabel('Files to transfer').setInputFiles([
+    {name:'good.txt',mimeType:'text/plain',buffer:Buffer.from('hello world')},
+    {name:'lost.txt',mimeType:'text/plain',buffer:Buffer.from('interrupted bytes')},
+    {name:'bad.json',mimeType:'application/json',buffer:Buffer.from('{broken')}
+   ]);
+   await page.getByRole('button',{name:'Transfer selected Files',exact:true}).click();
+   await page.locator('#transfer-results').filter({hasText:'good.txt: verified; not published'}).waitFor();
+   await page.locator('#transfer-results').filter({hasText:'bad.json: failed'}).waitFor();
+   await page.locator('#transfer-results').filter({hasText:'lost.txt: failed'}).waitFor();
+   let writes=0;page.on('request',r=>{if(r.method()==='PUT'&&r.url().includes('/chunks'))writes++;});
+   await page.getByRole('button',{name:'Retry failed transfers',exact:true}).click();
+   await page.waitForFunction(()=>!document.getElementById('transfer-retry').disabled);
+   await page.locator('#transfer-results').filter({hasText:'lost.txt: verified; not published'}).waitFor();
+   assert.ok(dropped,'real committed chunk response was lost');
+   assert.equal(writes,0,'retry must not duplicate successful or already durable bytes');
+   const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+   for(const request of transportRequests)assert.match(request.operation||'',uuid,'every transport write has a client operation UUID');
+   const starts=transportRequests.filter(r=>r.path==='/api/v1/file-transfers');
+   const resources=starts.flatMap(r=>{const body=JSON.parse(r.body);return [body.id,body.publication_id];});
+   for(const request of transportRequests)assert.ok(!resources.includes(request.operation),'operation ID is independent of transfer/publication IDs');
+   assert.equal(new Set(transportRequests.map(r=>r.operation)).size,transportRequests.length,'each new start/chunk intent has an independent operation');
+   const lostChunk=transportRequests.find(r=>r.body==='interrupted bytes');
+   assert.ok(receipts.includes(lostChunk.operation),'lost chunk response reconciles the original operation receipt');
+   const eleven=Array.from({length:11},(_,i)=>({name:`${i}.txt`,mimeType:'text/plain',buffer:Buffer.from('x')}));
+   await page.getByLabel('Files to transfer').setInputFiles(eleven);
+   await page.getByRole('button',{name:'Transfer selected Files',exact:true}).click();
+   await page.locator('#status').filter({hasText:'at most 10'}).waitFor();
+  }
   if(process.env.PAIRING_SCREENSHOT)await page.screenshot({path:process.env.PAIRING_SCREENSHOT,fullPage:true});
   await approval.goto(base+'/sessions');
   const card=approval.locator('article').filter({has:approval.getByRole('heading',{name:'mobile Browser protocol tablet',exact:true})});

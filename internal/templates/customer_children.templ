@@ -63,6 +63,7 @@ templ CustomerChildrenPage(p CustomerChildrenData) {
 			@CustomerChildForm(p, *p.Selected)
 		} else {
 			<h2>{ p.Selected.Name() }</h2>
+			<a href={ templ.URL(fmt.Sprintf("/activity?object_type=%s&object_id=%d",p.Kind,p.Selected.ID)) }>View record history</a>
 			if p.Selected.IsPrimary {
 				<strong>Primary { capitalize(p.Kind) }</strong>
 			}

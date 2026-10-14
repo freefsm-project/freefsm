@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-func TestTimeEntryClockInStoresJobAndBlocksActiveEntry(t *testing.T) {
+func TestTimeEntryClockInRequiresCanonicalActor(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
 
@@ -23,24 +24,13 @@ func TestTimeEntryClockInStoresJobAndBlocksActiveEntry(t *testing.T) {
 	customer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Customer").SaveX(ctx)
 	job := client.Job.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetJobType("Repair").SaveX(ctx)
 
-	entry, err := svc.ClockIn(ctx, TimeEntryCreateParams{UserID: user.ID, JobID: job.ID})
-	if err != nil {
-		t.Fatalf("ClockIn: %v", err)
-	}
-	if entry.JobID == nil || *entry.JobID != job.ID {
-		t.Fatalf("JobID = %v, want %d", entry.JobID, job.ID)
-	}
-	if entry.CompanyID == nil || *entry.CompanyID != companyID {
-		t.Fatalf("CompanyID = %v, want %d", entry.CompanyID, companyID)
-	}
-
-	_, err = svc.ClockIn(ctx, TimeEntryCreateParams{UserID: user.ID})
-	if !errors.Is(err, ErrActiveTimeEntry) {
-		t.Fatalf("ClockIn active error = %v, want ErrActiveTimeEntry", err)
+	_, err := svc.ClockIn(ctx, TimeEntryCreateParams{UserID: user.ID, JobID: job.ID})
+	if !errors.Is(err, authorization.ErrForbidden) || client.TimeEntry.Query().CountX(ctx) != 0 {
+		t.Fatalf("unattributed clock accepted: %v", err)
 	}
 }
 
-func TestTimeEntryClockInRejectsForeignJobIntegration(t *testing.T) {
+func TestTimeEntryLegacyForeignJobCallerDeniedIntegration(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
 	ctx := context.Background()
@@ -82,7 +72,7 @@ func TestTimeEntryGetActiveByUserForCompanyScopesCompanyIntegration(t *testing.T
 	}
 }
 
-func TestTimeEntryCreateDerivesCompanyAndStoresJobIntegration(t *testing.T) {
+func TestTimeEntryManualCreateRequiresCanonicalActorIntegration(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
 	ctx := context.Background()
@@ -92,22 +82,13 @@ func TestTimeEntryCreateDerivesCompanyAndStoresJobIntegration(t *testing.T) {
 	customer := client.Customer.Create().SetCompanyID(companyID).SetDisplayName("Customer").SaveX(ctx)
 	job := client.Job.Create().SetCompanyID(companyID).SetCustomerID(customer.ID).SetJobType("Repair").SaveX(ctx)
 
-	entry, err := NewTimeEntryService(client).Create(ctx, TimeEntryCreateParams{UserID: user.ID, JobID: job.ID})
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	if entry.CompanyID == nil || *entry.CompanyID != companyID {
-		t.Fatalf("CompanyID = %v, want %d", entry.CompanyID, companyID)
-	}
-	if entry.JobID == nil || *entry.JobID != job.ID {
-		t.Fatalf("JobID = %v, want %d", entry.JobID, job.ID)
-	}
-	if !entry.IsManual {
-		t.Fatal("IsManual = false, want true")
+	_, err := NewTimeEntryService(client).Create(ctx, TimeEntryCreateParams{UserID: user.ID, JobID: job.ID})
+	if !errors.Is(err, authorization.ErrForbidden) || client.TimeEntry.Query().CountX(ctx) != 0 {
+		t.Fatalf("unattributed manual time accepted: %v", err)
 	}
 }
 
-func TestTimeEntryCreationRejectsInvalidUsersAndJobsIntegration(t *testing.T) {
+func TestTimeEntryUnattributedCreationDeniedForAllLegacySubjectsAndJobs(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
 	ctx := context.Background()
@@ -137,8 +118,8 @@ func TestTimeEntryCreationRejectsInvalidUsersAndJobsIntegration(t *testing.T) {
 			{UserID: active.ID, JobID: archived.ID},
 			{UserID: active.ID, JobID: foreign.ID},
 		} {
-			if _, err := creator.call(params); err == nil {
-				t.Fatalf("%s(%+v) error = nil, want rejection", creator.name, params)
+			if _, err := creator.call(params); !errors.Is(err, authorization.ErrForbidden) {
+				t.Fatalf("%s(%+v) error = %v, want canonical actor denial", creator.name, params, err)
 			}
 		}
 	}
@@ -147,7 +128,7 @@ func TestTimeEntryCreationRejectsInvalidUsersAndJobsIntegration(t *testing.T) {
 	}
 }
 
-func TestTimeEntryConcurrentClockInAllowsOneActiveEntryIntegration(t *testing.T) {
+func TestTimeEntryConcurrentLegacyClockInDeniedIntegration(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
 	ctx := context.Background()
@@ -177,19 +158,19 @@ func TestTimeEntryConcurrentClockInAllowsOneActiveEntryIntegration(t *testing.T)
 			succeeded++
 			continue
 		}
-		if !errors.Is(err, ErrActiveTimeEntry) {
-			t.Fatalf("ClockIn error = %v, want ErrActiveTimeEntry", err)
+		if !errors.Is(err, authorization.ErrForbidden) {
+			t.Fatalf("ClockIn error = %v, want canonical actor denial", err)
 		}
 	}
-	if succeeded != 1 {
-		t.Fatalf("successful clock-ins = %d, want 1", succeeded)
+	if succeeded != 0 {
+		t.Fatalf("unattributed clock-ins = %d, want 0", succeeded)
 	}
-	if got := client.TimeEntry.Query().CountX(ctx); got != 1 {
-		t.Fatalf("time entry count = %d, want 1", got)
+	if got := client.TimeEntry.Query().CountX(ctx); got != 0 {
+		t.Fatalf("time entry count = %d, want 0", got)
 	}
 }
 
-func TestTimeEntryConcurrentClockOutMutatesOnceIntegration(t *testing.T) {
+func TestTimeEntryConcurrentLegacyClockOutDeniedIntegration(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
 	ctx := context.Background()
@@ -218,14 +199,14 @@ func TestTimeEntryConcurrentClockOutMutatesOnceIntegration(t *testing.T) {
 		switch {
 		case err == nil:
 			succeeded++
-		case errors.Is(err, ErrTimeEntryNotActive):
+		case errors.Is(err, authorization.ErrForbidden):
 			inactive++
 		default:
 			t.Fatalf("ClockOut error = %v", err)
 		}
 	}
-	if succeeded != 1 || inactive != 1 {
-		t.Fatalf("clock-out results = %d success, %d inactive; want 1 and 1", succeeded, inactive)
+	if succeeded != 0 || inactive != 2 {
+		t.Fatalf("clock-out results = %d success, %d denied; want 0 and 2", succeeded, inactive)
 	}
 }
 
@@ -240,7 +221,7 @@ func TestActiveTimeEntryConflictMapping(t *testing.T) {
 	}
 }
 
-func TestTimeEntryUpdateSetsAndClearsJob(t *testing.T) {
+func TestTimeEntryUpdateRequiresCanonicalActor(t *testing.T) {
 	client := openPolicyTestClient(t)
 	defer client.Close()
 
@@ -251,20 +232,9 @@ func TestTimeEntryUpdateSetsAndClearsJob(t *testing.T) {
 	job := client.Job.Create().SetCustomerID(customer.ID).SetJobType("Repair").SaveX(ctx)
 	entry := client.TimeEntry.Create().SetUserID(user.ID).SetClockIn(time.Now()).SaveX(ctx)
 
-	updated, err := svc.Update(ctx, entry.ID, TimeEntryUpdateParams{JobID: &job.ID})
-	if err != nil {
-		t.Fatalf("Update set job: %v", err)
-	}
-	if updated.JobID == nil || *updated.JobID != job.ID {
-		t.Fatalf("JobID = %v, want %d", updated.JobID, job.ID)
-	}
-
-	updated, err = svc.Update(ctx, entry.ID, TimeEntryUpdateParams{ClearJob: true})
-	if err != nil {
-		t.Fatalf("Update clear job: %v", err)
-	}
-	if updated.JobID != nil {
-		t.Fatalf("JobID = %v, want nil", updated.JobID)
+	_, err := svc.Update(ctx, entry.ID, TimeEntryUpdateParams{JobID: &job.ID})
+	if !errors.Is(err, authorization.ErrForbidden) || client.TimeEntry.GetX(ctx, entry.ID).JobID != nil {
+		t.Fatalf("unattributed correction accepted: %v", err)
 	}
 }
 

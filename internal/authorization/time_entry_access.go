@@ -86,9 +86,33 @@ type TimeEntryCorrection struct {
 // authority. Subject identity/GPS and lifecycle operations are not changed.
 func (s *Service) CorrectTimeEntry(ctx context.Context, a Actor, id int64, patch TimeEntryCorrection) error {
 	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if a.Channel == "api" {
+			return ErrForbidden
+		}
 		before, err := readTimeEntryAccess(ctx, tx, p, id, "time.correct", true)
 		if err != nil {
 			return err
+		}
+		var oldStart time.Time
+		var oldEnd *time.Time
+		if err := tx.QueryRow(ctx, `SELECT clock_in,clock_out FROM time_entries WHERE id=$1`, id).Scan(&oldStart, &oldEnd); err != nil {
+			return err
+		}
+		start, end := oldStart, oldEnd
+		if patch.ClockIn != nil {
+			start = *patch.ClockIn
+		}
+		if patch.ClockOut != nil {
+			end = patch.ClockOut
+		}
+		if patch.ClockIn != nil || patch.ClockOut != nil {
+			now := time.Now()
+			if start.After(now) || start.Nanosecond()%1000 != 0 || end != nil && (!start.Before(*end) || end.After(now) || end.Nanosecond()%1000 != 0) {
+				return &ClockConflict{"time_order"}
+			}
+			if err := checkTimeInterval(ctx, tx, before.UserID, id, start, end); err != nil {
+				return err
+			}
 		}
 		changeJob := patch.ClearJob || patch.JobID != nil
 		var target *int64
@@ -107,7 +131,7 @@ func (s *Service) CorrectTimeEntry(ctx context.Context, a Actor, id int64, patch
 				return ErrForbidden
 			}
 		}
-		if _, err := tx.Exec(ctx, `UPDATE time_entries SET clock_in=coalesce($2,clock_in),clock_out=coalesce($3,clock_out),notes=coalesce($4,notes),job_id=CASE WHEN $5 THEN $6::bigint ELSE job_id END,is_manual=true,updated_at=clock_timestamp() WHERE id=$1`, id, patch.ClockIn, patch.ClockOut, patch.Notes, changeJob, target); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE time_entries SET clock_in=coalesce($2,clock_in),clock_out=coalesce($3,clock_out),notes=coalesce($4,notes),job_id=CASE WHEN $5 THEN $6::bigint ELSE job_id END,updated_at=clock_timestamp() WHERE id=$1`, id, patch.ClockIn, patch.ClockOut, patch.Notes, changeJob, target); err != nil {
 			return err
 		}
 		if _, err := readTimeEntryAccess(ctx, tx, p, id, "time.correct", true); err != nil {
@@ -116,6 +140,9 @@ func (s *Service) CorrectTimeEntry(ctx context.Context, a Actor, id int64, patch
 			}
 			return err
 		}
-		return audit(ctx, tx, a, p, "time.correct", before.correctionScope, "time_entry", id, map[string]any{"subject_user_id": before.UserID, "job_changed": changeJob})
+		if _, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata,created_at) VALUES($1,$2,'updated','time_entry',$3,jsonb_build_object('time_entry_id',$3::bigint,'before_clock_in',$4::timestamptz,'before_clock_out',$5::timestamptz,'clock_in',$6::timestamptz,'clock_out',$7::timestamptz),clock_timestamp())`, p.CompanyID, p.UserID, id, oldStart, oldEnd, start, end); err != nil {
+			return err
+		}
+		return audit(ctx, tx, a, p, "time.correct", before.correctionScope, "time_entry", id, map[string]any{"subject_user_id": before.UserID, "job_changed": changeJob, "before_clock_in": oldStart, "before_clock_out": oldEnd, "clock_in": start, "clock_out": end})
 	})
 }

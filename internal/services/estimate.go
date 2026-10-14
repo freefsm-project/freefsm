@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -32,20 +33,24 @@ type EstimateCreateParams struct {
 }
 
 type EstimateUpdateParams struct {
-	ValidThrough      *time.Time
-	ClearValidThrough bool
-	Terms             *string
-	CustomerID        *int64
-	JobID             *int64
-	Title             *string
-	Notes             *string
-	TaxRate           *string
-	LineItems         *[]LineItem
-	CustomFields      *string
+	CustomerDefaultsReviewed bool
+	ValidThrough             *time.Time
+	ClearValidThrough        bool
+	Terms                    *string
+	CustomerID               *int64
+	JobID                    *int64
+	Title                    *string
+	Notes                    *string
+	TaxRate                  *string
+	LineItems                *[]LineItem
+	CustomFields             *string
 }
 
-func (s *EstimateService) List(ctx context.Context, search string, statusID int64, page, perPage int) ([]*ent.Estimate, int, error) {
+func (s *EstimateService) List(ctx context.Context, search string, statusID int64, page, perPage int, validOn ...time.Time) ([]*ent.Estimate, int, error) {
 	q := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil())
+	if len(validOn) > 0 {
+		q = q.Where(estimate.Or(estimate.ValidThroughIsNil(), estimate.ValidThroughGTE(validOn[0])))
+	}
 
 	if search != "" {
 		q = q.Where(estimate.TitleContainsFold(search))
@@ -83,8 +88,11 @@ func (s *EstimateService) ListByCustomer(ctx context.Context, customerID int64, 
 	return q.All(ctx)
 }
 
-func (s *EstimateService) ListForCustomer(ctx context.Context, customerID int64, search string, statusID int64, page, perPage int) ([]*ent.Estimate, int, error) {
+func (s *EstimateService) ListForCustomer(ctx context.Context, customerID int64, search string, statusID int64, page, perPage int, validOn ...time.Time) ([]*ent.Estimate, int, error) {
 	q := s.client.Estimate.Query().Where(estimate.DeletedAtIsNil(), estimate.ConversionHiddenAtIsNil(), estimate.CustomerIDEQ(customerID))
+	if len(validOn) > 0 {
+		q = q.Where(estimate.Or(estimate.ValidThroughIsNil(), estimate.ValidThroughGTE(validOn[0])))
+	}
 
 	if search != "" {
 		q = q.Where(estimate.TitleContainsFold(search))
@@ -208,6 +216,9 @@ func (s *EstimateService) SaveDetails(ctx context.Context, id int64, params Esti
 }
 
 func (s *EstimateService) update(ctx context.Context, id int64, params EstimateUpdateParams) (*ent.Estimate, error) {
+	if params.Title != nil && strings.TrimSpace(*params.Title) == "" {
+		return nil, authorization.ErrCommercialInput
+	}
 	if needsCatalogTransaction(ctx) && params.LineItems != nil {
 		return catalogWrite(ctx, s.client, "estimate", id, *params.LineItems, func(ctx context.Context, c *ent.Client) (*ent.Estimate, error) {
 			return NewEstimateService(c).update(ctx, id, params)
@@ -248,8 +259,15 @@ func (s *EstimateService) update(ctx context.Context, id int64, params EstimateU
 	if params.CustomerID != nil {
 		customerID = *params.CustomerID
 	}
+	if customerID != int64Value(current.CustomerID) && !params.CustomerDefaultsReviewed {
+		return nil, authorization.ErrConflict
+	}
 	if params.JobID != nil {
 		jobID = *params.JobID
+	}
+	if customerID != int64Value(current.CustomerID) && jobID == int64Value(current.JobID) {
+		jobID = 0
+		params.JobID = &jobID
 	}
 	if err := validateJobCustomer(ctx, s.client, customerID, jobID, params.JobID != nil && jobID != int64Value(current.JobID)); err != nil {
 		return nil, err
