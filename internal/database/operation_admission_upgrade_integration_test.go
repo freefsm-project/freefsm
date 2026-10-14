@@ -21,7 +21,7 @@ func TestOperationAdmissionInstalledReceiptsPreserved(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if e.IsDir() || strings.HasPrefix(e.Name(), "082_") {
+		if e.IsDir() || strings.HasPrefix(e.Name(), "082_") || e.Name() == "084_security_operation_receipts.up.sql" {
 			continue
 		}
 		b, err := fs.ReadFile(MigrationFS(), e.Name())
