@@ -211,7 +211,8 @@ func TestJobPricingReferenceHarnessThroughProductionAPI(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Reference customer").SaveX(ctx)
 	i := client.Item.Create().SetCompanyID(company).SetName("Reference catalog").SetUnitPrice(47.25).SetUnitCost(987.61).SaveX(ctx)
-	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Reference job").SetLineItems(fmt.Sprintf(`[{"item_id":%d,"title":"Reference captured work","unit_price":31.25,"quantity":1}]`, i.ID)).SaveX(ctx)
+	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Reference job").SetLineItems(fmt.Sprintf(`[{"item_id":%d,"title":"Reference captured work","unit_price":31.25,"quantity":1},{"title":"Whole dollars","unit_price":5,"quantity":2},{"title":"Fractional cents","unit_price":1.005,"quantity":1.2345,"discount":0.005,"surcharge":2.675,"taxable":true,"tax_rate":"8.125%%"}]`, i.ID)).SaveX(ctx)
+	before := client.Job.GetX(ctx, j.ID).LineItems
 	u := client.User.Create().SetCompanyID(company).SetName("Reference user").SetRole("tech").SetEmail("reference44@test").SetPasswordHash("hash").SaveX(ctx)
 	client.JobAssignment.Create().SetJobID(j.ID).SetUserID(u.ID).SaveX(ctx)
 	svc := authorization.New(pool)
@@ -232,6 +233,9 @@ func TestJobPricingReferenceHarnessThroughProductionAPI(t *testing.T) {
 	t.Logf("reference: %s", out)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if after := client.Job.GetX(ctx, j.ID).LineItems; after != before {
+		t.Fatal("reference reads rewrote captured pricing")
 	}
 }
 
@@ -388,7 +392,7 @@ func TestJobPricingIndependentGrantsHTTPAndAPI(t *testing.T) {
 	}
 	body := get(path, 200)
 	assertContains(t, body, "Private captured work")
-	assertContains(t, body, `"unit_price":47.25`)
+	assertContains(t, body, `"unit_price":"47.25"`)
 	body = get(path+"/customer-context", 200)
 	assertContains(t, body, "Pricing context")
 	for _, secret := range []string{"line_items", "unit_price", "Private captured work", "items", "pricing"} {

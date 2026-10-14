@@ -96,7 +96,10 @@ func (s *Service) saveFields(ctx context.Context, a Actor, typ string, id int64,
 		if _, err = tx.Exec(ctx, `UPDATE `+table+` SET custom_fields=$2::jsonb,updated_at=clock_timestamp() WHERE id=$1`, id, fields); err != nil {
 			return err
 		}
-		return audit(ctx, tx, a, p, permission, scope, typ, id, map[string]any{"before": old, "after": fields})
+		return auditOperationalEvent(ctx, tx, a, p, permission, scope, typ, id, "updated", map[string]any{
+			"before": map[string]any{"custom_fields": json.RawMessage(old)},
+			"after":  map[string]any{"custom_fields": json.RawMessage(fields)},
+		})
 	})
 	return fields, err
 }
@@ -281,5 +284,13 @@ func (s *Service) detailsInTransaction(ctx context.Context, tx pgx.Tx, a Actor, 
 			}
 		}
 	}
-	return audit(ctx, tx, a, p, permission, scope, typ, result, map[string]any{"before": parentBefore, "after": parentAfter, "custom_fields_before": old, "custom_fields_after": fields})
+	detail := map[string]any{"before": parentBefore, "after": parentAfter, "custom_fields_before": old, "custom_fields_after": fields}
+	if typ == "estimate" || typ == "invoice" {
+		event := "updated"
+		if id == 0 {
+			event = "created"
+		}
+		return auditOperationalEvent(ctx, tx, a, p, permission, scope, typ, result, event, detail)
+	}
+	return audit(ctx, tx, a, p, permission, scope, typ, result, detail)
 }

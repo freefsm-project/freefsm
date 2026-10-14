@@ -568,7 +568,13 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 		}
 		facet := fields[key]
 		if facet != "" {
-			allowed, err := activityFacet(ctx, tx, p, facet, job, own)
+			facetJob, facetOwn := job, own
+			if activityCommercialAnchor(e.Type, key) != "" {
+				// Current assignment cannot authorize a different historical
+				// anchor. Match CommercialHistory's independent broad Views.
+				facetJob, facetOwn = 0, false
+			}
+			allowed, err := activityFacet(ctx, tx, p, facet, facetJob, facetOwn)
 			if err != nil {
 				return e, err
 			}
@@ -789,7 +795,11 @@ func activityFields(typ string) map[string]string {
 		base = "title job_type subtitle notes tech_notes field_notes status_id start_time end_time due_date arrival_window_start arrival_window_end"
 		fields["billing_type"] = "pricing.view"
 	case "estimate", "invoice":
+		// Anchor IDs are recorded commercial facts, not links or authority to
+		// resolve historical Customer/Job names or other inaccessible details.
 		base = "title notes terms status_id invoice_date due_date valid_through"
+		fields["customer_id"] = "customer.view"
+		fields["job_id"] = "job.view"
 		for _, key := range strings.Fields("tax_rate subtotal total discount surcharge amount_cents") {
 			fields[key] = "pricing.view"
 		}
@@ -885,6 +895,13 @@ func RecheckActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 	if e.Archived && !p.Allows(e.Type+".archived.view", All) {
 		return ErrForbidden
 	}
+	// Stored facts may outlive a broad-to-Assigned grant change. Re-derive
+	// anchor authority from the actual exported fields, including old artifacts.
+	for _, fact := range e.Facts {
+		if permission := activityCommercialAnchor(e.Type, fact.Field); permission != "" && !p.Allows(permission, All) {
+			return ErrForbidden
+		}
+	}
 	facets := append(slices.Clone(e.Facets), "activity.export")
 	// Re-derive action-level authority too: an older artifact may predate a
 	// classification repair and cannot make a missing facet authoritative.
@@ -901,6 +918,18 @@ func RecheckActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 		}
 	}
 	return nil
+}
+
+func activityCommercialAnchor(typ, field string) string {
+	if typ == "estimate" || typ == "invoice" {
+		switch field {
+		case "customer_id":
+			return "customer.view"
+		case "job_id":
+			return "job.view"
+		}
+	}
+	return ""
 }
 
 // Actual conversion writers use these identities; "converted" is the retained

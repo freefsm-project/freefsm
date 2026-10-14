@@ -43,7 +43,7 @@ type jobDTO struct {
 	CustomerContactID      *int64                `json:"customer_contact_id,omitempty"`
 	AssetID                *int64                `json:"asset_id,omitempty"`
 	BillingType            *string               `json:"billing_type,omitempty"`
-	LineItems              *[]services.LineItem  `json:"line_items,omitempty"`
+	LineItems              *[]jobPricingLineDTO  `json:"line_items,omitempty"`
 }
 
 type jobAssigneeDTO struct {
@@ -295,9 +295,9 @@ func (h *handler) visibleJobDTO(r *http.Request, job *ent.Job, statuses map[int6
 	// actor discriminator nor catalog access supplies this authority.
 	if request, ok := authorization.FromContext(r.Context()); ok && request.Service.ParentFacet(r.Context(), request.Actor, "job", job.ID, "pricing.view") == nil {
 		dto.BillingType = &job.BillingType
-		lines, _ := services.JobPricingLines(job.ID, job.LineItems)
-		if lines == nil {
-			lines = []services.LineItem{}
+		lines, err := publicJobPricing(job.ID, job.LineItems)
+		if err != nil {
+			return jobDTO{}, err
 		}
 		dto.LineItems = &lines
 	}

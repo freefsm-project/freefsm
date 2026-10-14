@@ -129,7 +129,7 @@ func auditJobCommercialReassignment(ctx context.Context, tx pgx.Tx, a Actor, p P
 	}
 	for _, v := range targets {
 		// These are inseparable planning effects, not invented document grants.
-		if err := audit(ctx, tx, a, p, "job.edit", All, v.kind, v.id, map[string]any{"job_id": jobID, "before": map[string]any{"customer_id": before}, "after": map[string]any{"customer_id": after}, "reason": "job_customer_reassignment"}); err != nil {
+		if err := auditOperationalEvent(ctx, tx, a, p, "job.edit", All, v.kind, v.id, "updated", map[string]any{"job_id": jobID, "before": map[string]any{"customer_id": before}, "after": map[string]any{"customer_id": after}, "reason": "job_customer_reassignment"}); err != nil {
 			return err
 		}
 	}

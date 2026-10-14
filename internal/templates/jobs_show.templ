@@ -181,9 +181,7 @@ templ JobShow(p JobDetail) {
 			<p>{ p.TechNotes }</p>
 		}
 		<p><a href={ templ.URL(fmt.Sprintf("/jobs/%d/field-notes",p.ID)) }>Field Notes and revision history</a></p>
-		if len(p.Subtasks) > 0 {
-			@JobSubtasks(p)
-		}
+		@JobSubtasks(p)
 		if detailCan(ctx,"pricing") && len(p.LineItems) > 0 {
 			<h3>Line Items</h3>
 			<div class="table-scroll line-items-scroll" role="region" aria-label="Captured Job pricing, scroll for more columns" tabindex="0">

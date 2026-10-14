@@ -47,6 +47,15 @@ means the facet is unavailable, not a zero-priced Job. Job View and pricing scop
 are intersected independently, regardless of recorded legacy Role labels.
 Customer-context responses include neither captured pricing nor catalog Items.
 
+Captured `unit_price`, `discount`, and `surcharge` are USD strings with exactly
+two decimals (`"5.00"`, `"47.25"`, `"0.00"`). Fractional-cent snapshots use the
+existing decimal half-away-from-zero money rounding rule for this public
+projection (`1.005` becomes `"1.01"`). Reads never rewrite the stored snapshot or
+its arithmetic inputs. `quantity` remains a number with its captured precision;
+`tax_rate` remains the captured percentage string, including any `%` suffix.
+Snapshot identity, Item provenance, descriptions and taxable flags are retained;
+the public DTO has no Cost field.
+
 Item lookup/selection remains the bounded Cost-free API established in #43.
 `internal/api/v1/testdata/job-pricing-reference-harness.cjs` reads an allowlisted
 captured-pricing projection; the Item reference harness supports selection for
