@@ -55,7 +55,21 @@ func (h *handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	actor := actorFromContext(r.Context())
 	var jobs []*ent.Job
 	var err error
-	if isOffice(actor.Role) {
+	if req, ok := authorization.FromContext(r.Context()); ok {
+		p, e := req.Service.Principal(r.Context(), req.Actor)
+		if e != nil {
+			jobExecutionAPIError(w, e)
+			return
+		}
+		if p.Allows("job.view", authorization.All) {
+			jobs, err = h.deps.Jobs.ListAllForCompany(r.Context(), *actor.CompanyID)
+		} else if p.Allows("job.view", authorization.Assigned) {
+			jobs, err = h.deps.Jobs.ListAssignedAllForCompany(r.Context(), *actor.CompanyID, actor.ID)
+		} else {
+			writeError(w, 403, "forbidden", "Job View required")
+			return
+		}
+	} else if isOffice(actor.Role) {
 		jobs, err = h.deps.Jobs.ListAllForCompany(r.Context(), *actor.CompanyID)
 	} else if isTech(actor.Role) {
 		jobs, err = h.deps.Jobs.ListAssignedAllForCompany(r.Context(), *actor.CompanyID, actor.ID)
@@ -74,6 +88,15 @@ func (h *handler) listJobs(w http.ResponseWriter, r *http.Request) {
 	}
 	result := make([]jobDTO, 0, len(jobs))
 	for _, job := range jobs {
+		if req, ok := authorization.FromContext(r.Context()); ok {
+			if err := req.Service.ParentAccess(r.Context(), req.Actor, "job", job.ID, ""); err != nil {
+				if errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrForbidden) {
+					continue
+				}
+				jobExecutionAPIError(w, err)
+				return
+			}
+		}
 		dto, err := h.visibleJobDTO(r, job, statuses, actor.Role)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "internal_error", "could not load Job assignees")
@@ -102,7 +125,11 @@ func (h *handler) getJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, dto)
 }
 
-type statusRequest = statusflow.Intent
+type statusRequest struct {
+	statusflow.Intent
+	OperationID string     `json:"operation_id"`
+	OccurredAt  *time.Time `json:"occurred_at,omitempty"`
+}
 
 func (h *handler) jobStatusIntents(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -125,7 +152,6 @@ func (h *handler) updateJobStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "not_found", "job not found")
 		return
 	}
-	actor := actorFromContext(r.Context())
 	var request statusRequest
 	if !decodeJSON(w, r, &request) {
 		return
@@ -134,12 +160,17 @@ func (h *handler) updateJobStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid_request", "status_id must be positive")
 		return
 	}
-	err = h.deps.StatusFlow.ApplyIntent(r.Context(), statusflow.Actor{ID: actor.ID, CompanyID: *actor.CompanyID}, statusflow.Job, id, request)
-	if err != nil {
-		writeStatusFlowError(w, err)
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		writeError(w, 503, "unavailable", "authorization unavailable")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": id, "status_id": request.StatusID})
+	result, err := req.Service.SubmitJobStatus(r.Context(), req.Actor, id, authorization.JobExecutionCommand{OperationID: request.OperationID, StatusID: request.StatusID, StatusRevision: request.Revision, MeaningRevision: request.MeaningRevision, OccurredAt: request.OccurredAt})
+	if err != nil {
+		jobExecutionAPIError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 type subtaskRequest struct {
@@ -196,6 +227,18 @@ func (h *handler) authorizedJob(w http.ResponseWriter, r *http.Request) (*ent.Jo
 		return nil, nil, false
 	}
 	actor := actorFromContext(r.Context())
+	if req, ok := authorization.FromContext(r.Context()); ok {
+		if err := req.Service.ParentAccess(r.Context(), req.Actor, "job", id, ""); err != nil {
+			jobExecutionAPIError(w, err)
+			return nil, nil, false
+		}
+		job, err := h.deps.Jobs.GetByIDForCompany(r.Context(), *actor.CompanyID, id)
+		if err != nil {
+			writeError(w, 404, "not_found", "Job not found")
+			return nil, nil, false
+		}
+		return job, actor, true
+	}
 	job, err := h.deps.Jobs.GetByIDForCompany(r.Context(), *actor.CompanyID, id)
 	if err != nil || job == nil || job.DeletedAt != nil {
 		writeError(w, http.StatusNotFound, "job_not_found", "job not found")
@@ -248,6 +291,12 @@ func (h *handler) visibleJobDTO(r *http.Request, job *ent.Job, statuses map[int6
 	dto.Assignments = []jobAssigneeDTO{}
 	for _, a := range assignments {
 		dto.Assignments = append(dto.Assignments, jobAssigneeDTO{UserID: a.UserID, Name: a.Name, Unavailable: a.Unavailable})
+	}
+	if request, ok := authorization.FromContext(r.Context()); ok {
+		if request.Service.ParentFacet(r.Context(), request.Actor, "job", job.ID, "pricing.view") != nil {
+			dto.BillingType = nil
+			dto.LineItems = nil
+		}
 	}
 	if request, ok := authorization.FromContext(r.Context()); ok && dto.CustomerID != nil {
 		if request.Service.CustomerAccess(r.Context(), request.Actor, job.CustomerID, "customer.view") != nil {

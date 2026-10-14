@@ -610,6 +610,9 @@ func (s *JobService) update(ctx context.Context, companyID, id int64, params Job
 		}); err != nil {
 			return nil, err
 		}
+		if params.TechNotes != nil && *params.TechNotes != current.TechNotes {
+			return nil, authorization.ErrConflict
+		}
 	}
 	if params.LineItems != nil {
 		var err error

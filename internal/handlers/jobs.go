@@ -23,6 +23,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -138,6 +139,14 @@ func (h *JobHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := jobToDetail(r.Context(), j, statuses)
+	if j.DeletedAt == nil {
+		d.StatusChoices, err = h.statusflow.DiscoverIntents(r.Context(), statusflow.Actor{ID: u.ID, CompanyID: u.CompanyID}, statusflow.Job, id)
+		if err != nil {
+			statusflowHTTPError(w, err)
+			return
+		}
+		d.StatusOperation = uuid.NewString()
+	}
 	masterView := func(kind string) bool {
 		req, ok := authorization.FromContext(r.Context())
 		if !ok {
@@ -245,22 +254,14 @@ func (h *JobHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "status workflow unavailable", http.StatusInternalServerError)
 		return
 	}
-	statuses := h.statusesForSelect(r.Context())
-	err = h.statusflow.TransitionJob(r.Context(), statusflow.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, id, statusID)
-	if err != nil {
-		statusflowHTTPError(w, err)
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", 401)
 		return
 	}
-	result, err := h.svc.GetByID(r.Context(), id)
+	_, err = req.Service.SubmitJobStatus(r.Context(), req.Actor, id, authorization.JobExecutionCommand{OperationID: r.FormValue("operation_id"), StatusID: statusID, StatusRevision: r.FormValue("status_revision"), MeaningRevision: r.FormValue(fmt.Sprintf("meaning_%d", statusID))})
 	if err != nil {
-		internalServerError(w, r, "reload job status", err)
-		return
-	}
-
-	if r.Header.Get("HX-Request") == "true" {
-		d := jobToDetail(r.Context(), result, statuses)
-		r = withDetailPresentation(r, "job", id, h.policySvc)
-		render(w, r, templates.JobStatusControl(d))
+		jobExecutionHTTPError(w, r, err)
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/jobs/%d?flash=Status+updated", id), http.StatusSeeOther)
@@ -481,6 +482,10 @@ func (h *JobHandler) Create(w http.ResponseWriter, r *http.Request) {
 		staleJobForm(w)
 		return
 	}
+	if r.FormValue("tech_notes") != "" || r.FormValue("field_notes") != "" {
+		http.Error(w, "Create the Job first, then use the independent Field Notes editor", http.StatusConflict)
+		return
+	}
 	if !validJobRelationshipInputs(w, r) {
 		return
 	}
@@ -687,7 +692,7 @@ func (h *JobHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Subtitle:          formPtr(r.FormValue("subtitle")),
 		BillingType:       formPtr(r.FormValue("billing_type")),
 		Notes:             formPtr(r.FormValue("notes")),
-		TechNotes:         formPtr(r.FormValue("tech_notes")),
+		TechNotes:         optionalJobNotes(r),
 		CustomFields:      parseCustomFieldPatch(r),
 	}
 	// Omitted relationship inputs are not unlink requests. Independent planning

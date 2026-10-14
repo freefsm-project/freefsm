@@ -111,10 +111,9 @@ templ JobForm(p JobFormPageData) {
 				Notes
 				<textarea name="notes" rows="3">{ p.Job.Notes }</textarea>
 			</label>
-			<label>
-				Tech Notes
-				<textarea name="tech_notes" rows="3">{ p.Job.TechNotes }</textarea>
-			</label>
+			if p.Job.ID > 0 {
+			 <p>Field Notes are saved independently. <a href={ templ.URL(fmt.Sprintf("/jobs/%d/field-notes",p.Job.ID)) }>Open Field Notes</a></p>
+			}
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: canEditJobFields(ctx,p.Job.ID)})
 			<fieldset x-data="subtasksEditor()" data-existing={ p.ExistingSubtasksJSON }>
 				<legend>Subtasks</legend>

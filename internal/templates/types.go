@@ -15,6 +15,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/settlement"
+	"github.com/freefsm-project/freefsm/internal/statusflow"
 )
 
 func staticAsset(path string) string {
@@ -559,6 +560,8 @@ type JobDetail struct {
 	StatusName               string
 	StatusColor              string
 	Statuses                 []SelectOption
+	StatusChoices            []statusflow.IntentChoice
+	StatusOperation          string
 	BillingType              string
 	StartTime                string
 	EndTime                  string

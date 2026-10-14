@@ -177,9 +177,10 @@ templ JobShow(p JobDetail) {
 			<p>{ p.Notes }</p>
 		}
 		if p.TechNotes != "" {
-			<h3>Tech Notes</h3>
+			<h3>Field Notes</h3>
 			<p>{ p.TechNotes }</p>
 		}
+		<p><a href={ templ.URL(fmt.Sprintf("/jobs/%d/field-notes",p.ID)) }>Field Notes and revision history</a></p>
 		if len(p.Subtasks) > 0 {
 			@JobSubtasks(p)
 		}
@@ -225,17 +226,25 @@ templ JobShow(p JobDetail) {
 }
 
 templ JobStatusControl(p JobDetail) {
+	<script src={ staticAsset("/static/js/job-execution.js") } defer></script>
 	if p.ArchivedAt == "" && detailCan(ctx,"status") {
-		<form action={ templ.URL(fmt.Sprintf("/jobs/%d/status", p.ID)) } method="post" class="job-status-form" hx-post={ templ.URL(fmt.Sprintf("/jobs/%d/status", p.ID)) } hx-target="closest td" hx-swap="innerHTML">
+		<form action={ templ.URL(fmt.Sprintf("/jobs/%d/status", p.ID)) } method="post" class="job-status-form" hx-boost="false" data-execution-form="true">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="operation_id" value={ p.StatusOperation }/>
+			if len(p.StatusChoices)>0 {
+			 <input type="hidden" name="status_revision" value={ p.StatusChoices[0].Intent.Revision }/>
+			}
+			for _, choice := range p.StatusChoices {
+			 <input type="hidden" name={ fmt.Sprintf("meaning_%d",choice.Status.ID) } value={ choice.Intent.MeaningRevision }/>
+			}
 			<select
 				name="status_id"
 				aria-label="Job Status"
 				class="job-status-select"
 				style={ badgeStyle(p.StatusColor) }
 			>
-				for _, s := range p.Statuses {
-					<option value={ fmt.Sprintf("%d", s.Value) } selected?={ p.StatusID == s.Value }>{ s.Label }</option>
+				for _, s := range p.StatusChoices {
+					<option value={ fmt.Sprintf("%d", s.Status.ID) } selected?={ p.StatusID == s.Status.ID }>{ s.Status.Name }</option>
 				}
 			</select>
 			<button type="submit" class="outline small">Save status</button>

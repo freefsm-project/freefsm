@@ -128,6 +128,9 @@ func (h *ActivityHandler) ListForObject(objectType objectref.Type) http.HandlerF
 			filters.Set("conversion", "1")
 		}
 		_, currentRead := authorization.NavigationPrincipal(r.Context())
+		if objectType == objectref.TypeJob {
+			render(w, r, templates.JobNotesActivityLink(objectID))
+		}
 		render(w, r, templates.ActivityWidget(templates.ActivityWidgetData{
 			DOMID:      fmt.Sprintf("activity-%s-%d", ref.Type, ref.ID),
 			Entries:    rows,

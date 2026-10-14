@@ -36,7 +36,7 @@ func TestJobDetailUsesCompanyStatusSeamAndRedactsTechnicianCommercialFields(t *t
 	assertNoCommercialFields(t, body)
 }
 
-func TestStatusTransitionUsesActorAndRedactsTechnicianMutationResponse(t *testing.T) {
+func TestStatusTransitionCannotBypassDurableAuthorizationBoundary(t *testing.T) {
 	companyID := int64(12)
 	users := &fakeUsers{byID: &ent.User{ID: 7, CompanyID: &companyID, Role: "tech", IsActive: true}}
 	jobs := &fakeJobs{byID: &ent.Job{ID: 4, CompanyID: &companyID, CustomerID: 44, JobType: "Repair", BillingType: "hourly", LineItems: `[]`}}
@@ -47,30 +47,13 @@ func TestStatusTransitionUsesActorAndRedactsTechnicianMutationResponse(t *testin
 
 	res := performAuthorized(New(deps), http.MethodPost, "/jobs/4/status", []byte(`{"status_id":9}`))
 
-	if res.Code != http.StatusOK {
+	if res.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, body = %s", res.Code, res.Body.String())
 	}
-	if flow.calls != 1 || flow.actor != (statusflow.Actor{ID: 7, CompanyID: companyID}) || flow.jobID != 4 || flow.statusID != 9 {
+	if flow.calls != 0 {
 		t.Fatalf("transition calls=%d actor=%+v job=%d status=%d", flow.calls, flow.actor, flow.jobID, flow.statusID)
 	}
 	assertNoCommercialFields(t, res.Body.String())
-}
-
-func TestStatusTransitionMapsServiceError(t *testing.T) {
-	companyID := int64(12)
-	users := &fakeUsers{byID: &ent.User{ID: 7, CompanyID: &companyID, Role: "tech", IsActive: true}}
-	jobs := &fakeJobs{byID: &ent.Job{ID: 4, CompanyID: &companyID}}
-	flow := &fakeStatusFlow{err: statusflow.ErrInvalidTransition}
-	deps := testDependencies(users, jobs)
-	deps.Policy = fakePolicy(true)
-	deps.StatusFlow = flow
-
-	res := performAuthorized(New(deps), http.MethodPost, "/jobs/4/status", []byte(`{"status_id":9}`))
-
-	assertAPIError(t, res, http.StatusConflict, "invalid_transition")
-	if flow.calls != 1 {
-		t.Fatalf("transition calls = %d, want 1", flow.calls)
-	}
 }
 
 func TestUnassignedTechnicianCannotAccessOrMutateJob(t *testing.T) {
@@ -222,7 +205,7 @@ func TestTransactionMutationErrorsKeepStructuredAPIMappings(t *testing.T) {
 	}
 }
 
-func TestClosedJobStatusUsesWorkflowBoundaryWhileOtherActionsRetainLegacyRules(t *testing.T) {
+func TestClosedJobStatusRequiresDurableBoundaryWhileOtherActionsRetainLegacyRules(t *testing.T) {
 	for _, role := range []string{"tech", "technician"} {
 		t.Run(role, func(t *testing.T) {
 			companyID, statusID := int64(12), int64(3)
@@ -239,21 +222,21 @@ func TestClosedJobStatusUsesWorkflowBoundaryWhileOtherActionsRetainLegacyRules(t
 			api := New(deps)
 
 			transition := performAuthorized(api, http.MethodPost, "/jobs/4/status", []byte(`{"status_id":9}`))
-			if transition.Code != http.StatusOK {
-				t.Fatalf("workflow command blocked by legacy closed-state rule: %d %s", transition.Code, transition.Body.String())
+			if transition.Code != http.StatusServiceUnavailable {
+				t.Fatalf("missing durable authorization did not fail closed: %d %s", transition.Code, transition.Body.String())
 			}
 			clockIn := performAuthorized(api, http.MethodPost, "/jobs/4/clock-in", []byte(`{}`))
 			assertAPIError(t, clockIn, http.StatusConflict, "job_closed")
 			subtask := performAuthorized(api, http.MethodPatch, "/jobs/4/subtasks/0", []byte(`{"completed":true}`))
 			assertAPIError(t, subtask, http.StatusConflict, "job_closed")
-			if flow.calls != 1 || mutations.clockInCalls != 0 || mutations.subtaskCalls != 0 {
+			if flow.calls != 0 || mutations.clockInCalls != 0 || mutations.subtaskCalls != 0 {
 				t.Fatalf("transition calls = %d, clock-in calls = %d, subtask calls = %d", flow.calls, mutations.clockInCalls, mutations.subtaskCalls)
 			}
 		})
 	}
 }
 
-func TestOfficeRoleCanReopenClosedJobThroughStatusTransition(t *testing.T) {
+func TestOfficeRoleCannotBypassDurableStatusBoundary(t *testing.T) {
 	companyID, statusID := int64(12), int64(3)
 	users := &fakeUsers{byID: &ent.User{ID: 7, CompanyID: &companyID, Role: "dispatcher", IsActive: true}}
 	jobs := &fakeJobs{byID: &ent.Job{ID: 4, CompanyID: &companyID, StatusID: &statusID}}
@@ -265,7 +248,7 @@ func TestOfficeRoleCanReopenClosedJobThroughStatusTransition(t *testing.T) {
 
 	res := performAuthorized(New(deps), http.MethodPost, "/jobs/4/status", []byte(`{"status_id":9}`))
 
-	if res.Code != http.StatusOK || flow.calls != 1 || flow.statusID != 9 {
+	if res.Code != http.StatusServiceUnavailable || flow.calls != 0 {
 		t.Fatalf("status = %d, calls = %d, target status = %d, body = %s", res.Code, flow.calls, flow.statusID, res.Body.String())
 	}
 }
