@@ -2,7 +2,9 @@ package authorization
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -140,8 +142,51 @@ func (s *Service) FileAction(ctx context.Context, a Actor, ref objectref.Ref, pe
 				return err
 			}
 		}
-		return audit(ctx, tx, a, p, permission, scope, "file", id, detail)
+		if err := audit(ctx, tx, a, p, permission, scope, "file", id, detail); err != nil {
+			return err
+		}
+		return publishFileActivity(ctx, tx, a, p, ref, permission, id, detail)
 	})
+}
+
+// This boundary runs only after an authoritative File effect. Transport-stage
+// audits do not pass through it. A replay/no-op returned above publishes nothing.
+func publishFileActivity(ctx context.Context, tx pgx.Tx, a Actor, p Principal, ref objectref.Ref, permission string, id int64, detail any) error {
+	action := ""
+	switch permission {
+	case "file.upload":
+		action = "file_uploaded"
+	case "file.rename":
+		action = "file_renamed"
+	case "file.remove":
+		action = "file_deleted"
+	default:
+		return nil
+	}
+	var name, actorName string
+	var size, revision, uploader int64
+	var accepted time.Time
+	if err := tx.QueryRow(ctx, `SELECT f.original_name,f.file_size,f.revision,f.uploaded_by,u.name,clock_timestamp() FROM files f JOIN users u ON u.id=$5 AND u.company_id=f.company_id WHERE f.id=$1 AND f.company_id=$2 AND f.object_type=$3 AND f.object_id=$4`, id, p.CompanyID, ref.ObjectType(), ref.ID, a.UserID).Scan(&name, &size, &revision, &uploader, &actorName, &accepted); err != nil {
+		return err
+	}
+	metadata := map[string]any{"file_id": id, "file_name": name, "size": size, "uploaded_by": uploader, "actor_name": actorName}
+	if facts, ok := detail.(map[string]any); ok {
+		if old, ok := facts["old_name"].(string); ok {
+			metadata["old_file_name"] = old
+		}
+		if stamp, ok := facts["accepted_at"].(time.Time); ok {
+			accepted = stamp
+		}
+		if stamp, ok := facts["occurred_at"].(time.Time); ok {
+			metadata["source_occurred_at"] = stamp
+		}
+	}
+	raw, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata,created_at,event_key) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, p.CompanyID, a.UserID, action, ref.ObjectType(), ref.ID, raw, accepted, fmt.Sprintf("file-action:%d:%d", id, revision))
+	return err
 }
 
 func fileAPIAuditDetail(ctx context.Context, tx pgx.Tx, a Actor, op FileOperation, detail any) (any, error) {

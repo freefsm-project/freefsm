@@ -141,6 +141,10 @@ func (s *Service) ArchiveCustomer(ctx context.Context, a Actor, id int64, snapsh
 			return ErrConflict
 		}
 		for _, child := range preview.Children {
+			before, err := lifecycleSnapshot(ctx, tx, p, child.Kind, child.ID)
+			if err != nil {
+				return err
+			}
 			table, _, _, _ := childTable(child.Kind)
 			primary := ",is_primary=false"
 			if child.Kind == "asset" {
@@ -150,13 +154,17 @@ func (s *Service) ArchiveCustomer(ctx context.Context, a Actor, id int64, snapsh
 			if _, err = tx.Exec(ctx, `UPDATE `+table+` SET deleted_at=clock_timestamp()`+primary+`,updated_at=clock_timestamp() WHERE id=$1`, child.ID); err != nil {
 				return err
 			}
-			if err = audit(ctx, tx, a, p, child.Kind+".archive", All, child.Kind, child.ID, map[string]any{"customer_cascade": id, "primary_cleared": child.Kind != "asset"}); err != nil {
+			if err = auditLifecycle(ctx, tx, a, p, child.Kind, child.ID, "archive", before, map[string]any{"customer_cascade": id, "primary_cleared": child.Kind != "asset"}); err != nil {
 				return err
 			}
+		}
+		before, err := lifecycleSnapshot(ctx, tx, p, "customer", id)
+		if err != nil {
+			return err
 		}
 		if _, err = tx.Exec(ctx, `UPDATE customers SET deleted_at=clock_timestamp(),updated_at=clock_timestamp() WHERE id=$1`, id); err != nil {
 			return err
 		}
-		return audit(ctx, tx, a, p, "customer.archive", All, "customer", id, preview)
+		return auditLifecycle(ctx, tx, a, p, "customer", id, "archive", before, map[string]any{"preview": preview})
 	})
 }

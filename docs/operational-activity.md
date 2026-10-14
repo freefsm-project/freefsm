@@ -44,10 +44,21 @@ content. Credentials, tokens, security/configuration events and raw audit
 payloads are excluded from ordinary activity. Administrative history has the
 separate protected `/settings/activity/history` route with audited reads.
 
+File upload, rename and removal summaries are published inside the authoritative
+File effect/audit transaction. Publication replay and desired-state no-ops do
+not add another event. Transfer staging is not File collaboration history.
+Rename retains the recorded before/after names; API occurrence and acceptance
+remain separate when recorded. Asset Type/Status IDs use their actual persisted
+keys; optional name context is explicitly labelled **current vocabulary**,
+not an invented historical label. Warranty facts preserve the recorded instant.
+
 Conversion lineage requires independent provenance View on a currently visible
 source. Hidden conversion/reversion targets may appear as labelled historical
 identities without navigation, never as a new authorization anchor. Ordinary
 history and exports cannot use a historical link to gain unrelated record access.
+The actual `estimate_converted`, `invoice_conversion_reverted` and retained
+`converted` action identities share the same classification at browse time and
+download reauthorization, including artifacts with older incomplete facet lists.
 
 ## Durable activity CSV
 
@@ -116,6 +127,9 @@ authority transaction. The protected audit insertion publishes operational
 history atomically; a history/audit failure rolls back the business edit. The
 former post-commit duplicate summaries are suppressed for those mapped commands.
 Custom Field API replay retains one effect and one corresponding history fact.
+Canonical Asset/Project lifecycle and Customer restore/cascade writers also
+capture before/after in that transaction. A failed member's history rejects the
+whole cascade, including prior child effects, primary changes and success audit.
 
 Acceptance lives in the production-router, migrated PostgreSQL tests named
 `TestActivity*` / `TestOperationalActivity*`, the field replay integration test,

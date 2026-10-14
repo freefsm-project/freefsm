@@ -430,7 +430,7 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 	if e.Action == "document_delivery_accepted" || strings.HasPrefix(e.SourceKey, "authorization-audit:") && channel == "worker" {
 		e.Actor = "System (initiated by " + e.Actor + ")"
 	}
-	if strings.HasPrefix(e.SourceKey, "authorization-audit:") {
+	if strings.HasPrefix(e.SourceKey, "authorization-audit:") || strings.HasPrefix(e.SourceKey, "file-action:") {
 		if value, ok := activityScalar(meta["source_occurred_at"]); ok {
 			if stamp, err := time.Parse(time.RFC3339Nano, value); err == nil && !stamp.After(e.Accepted) {
 				e.Occurred = &stamp
@@ -451,8 +451,8 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 		required = "service_entry.view"
 	case strings.HasPrefix(e.Action, "payment_") || strings.HasPrefix(e.Action, "credit_") || strings.HasPrefix(e.Action, "refund_") || strings.HasPrefix(e.Action, "settlement_"):
 		required = "settlement.view"
-	case strings.Contains(e.Action, "conversion") || e.Action == "converted":
-		required = e.Type + ".provenance.view"
+	case activityProvenanceFacet(e.Type, e.Action) != "":
+		required = activityProvenanceFacet(e.Type, e.Action)
 	case strings.HasPrefix(e.Action, "clocked_") && e.Type == "job":
 		required = "time.view"
 	case strings.HasPrefix(e.Action, "cost_"):
@@ -581,6 +581,19 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 			}
 		}
 		e.Facts = append(e.Facts, ActivityFact{key, b, a, bok, aok})
+		if e.Type == "asset" && (key == "asset_type_id" || key == "asset_status_id") {
+			left, lok, err := activityAssetVocabulary(ctx, tx, p, key, before[key])
+			if err != nil {
+				return e, err
+			}
+			right, rok, err := activityAssetVocabulary(ctx, tx, p, key, after[key])
+			if err != nil {
+				return e, err
+			}
+			if lok || rok {
+				e.Facts = append(e.Facts, ActivityFact{key + " (current vocabulary)", left, right, lok, rok})
+			}
+		}
 	}
 	if e.Type == "job" || e.Type == "estimate" || e.Type == "invoice" {
 		b, bok := activityStructuredArray(before["line_items"], []string{"title", "description", "unit_price", "quantity", "taxable", "tax_rate", "discount", "surcharge"})
@@ -641,6 +654,11 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 		}
 	}
 	if strings.HasPrefix(e.Action, "file_") {
+		if e.Action == "file_renamed" {
+			before, bok := activityScalar(meta["old_file_name"])
+			after, aok := activityScalar(meta["file_name"])
+			e.Facts = append(e.Facts, ActivityFact{"File name", before, after, bok, aok})
+		}
 		for _, key := range []string{"file_name", "size"} {
 			if value, ok := activityScalar(meta[key]); ok {
 				e.Facts = append(e.Facts, ActivityFact{Field: key, After: value, AfterKnown: true})
@@ -778,7 +796,7 @@ func activityFields(typ string) map[string]string {
 	case "project":
 		base = "name description notes service_notes status_id completion_percentage start_time end_time planned_start_date planned_end_date"
 	case "asset":
-		base = "name asset_number ownership_class serial_number manufacturer model notes service_notes type_id status_id installed_at warranty_expires_at"
+		base = "name number ownership_class serial_number manufacturer model notes service_notes asset_type_id asset_status_id installed_at warranty_expires"
 	case "item":
 		base = "name description type"
 		for _, key := range strings.Fields("sku unit_price tax_rate taxable") {
@@ -818,6 +836,23 @@ func activityScalar(raw json.RawMessage) (string, bool) {
 	return "", false
 }
 
+func activityAssetVocabulary(ctx context.Context, tx pgx.Tx, p Principal, key string, raw json.RawMessage) (string, bool, error) {
+	var id int64
+	if len(raw) == 0 || json.Unmarshal(raw, &id) != nil || id <= 0 {
+		return "", false, nil
+	}
+	table := "asset_types"
+	if key == "asset_status_id" {
+		table = "asset_statuses"
+	}
+	var name string
+	err := tx.QueryRow(ctx, `SELECT name FROM `+table+` WHERE id=$1 AND (company_id=$2 OR company_id IS NULL)`, id, p.CompanyID).Scan(&name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	return name, err == nil, err
+}
+
 // RecheckActivity rejects a whole stored artifact on any lost parent/facet or
 // archived snapshot permission. It never substitutes a current subset.
 func RecheckActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityRecord) error {
@@ -850,7 +885,13 @@ func RecheckActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 	if e.Archived && !p.Allows(e.Type+".archived.view", All) {
 		return ErrForbidden
 	}
-	for _, permission := range append(slices.Clone(e.Facets), "activity.export") {
+	facets := append(slices.Clone(e.Facets), "activity.export")
+	// Re-derive action-level authority too: an older artifact may predate a
+	// classification repair and cannot make a missing facet authoritative.
+	if permission := activityProvenanceFacet(e.Type, e.Action); permission != "" {
+		facets = append(facets, permission)
+	}
+	for _, permission := range facets {
 		ok, err := activityFacet(ctx, tx, p, permission, job, own && permission != "activity.export")
 		if err != nil {
 			return err
@@ -860,6 +901,16 @@ func RecheckActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 		}
 	}
 	return nil
+}
+
+// Actual conversion writers use these identities; "converted" is the retained
+// legacy identity. Do not infer provenance classification from text fragments.
+func activityProvenanceFacet(typ, action string) string {
+	switch action {
+	case "estimate_converted", "invoice_conversion_reverted", "converted":
+		return typ + ".provenance.view"
+	}
+	return ""
 }
 
 func currentServiceActivityAsset(ctx context.Context, tx pgx.Tx, p Principal, job, asset int64) error {

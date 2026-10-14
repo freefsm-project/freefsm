@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -263,6 +264,19 @@ func (s *Service) CustomerLifecycle(ctx context.Context, a Actor, id int64, rest
 		if !p.Allows("customer.archived.view", All) {
 			return ErrNotFound
 		}
+		before, err := lifecycleSnapshot(ctx, tx, p, "customer", id)
+		if err != nil {
+			return err
+		}
+		var state struct {
+			DeletedAt *time.Time `json:"deleted_at"`
+		}
+		if err := json.Unmarshal(before, &state); err != nil {
+			return err
+		}
+		if state.DeletedAt == nil {
+			return saveaction.ConfirmNoChange(ctx, tx)
+		}
 		tag, err := tx.Exec(ctx, `UPDATE customers SET deleted_at=CASE WHEN $3 THEN NULL ELSE clock_timestamp() END,updated_at=clock_timestamp() WHERE id=$1 AND company_id=$2`, id, p.CompanyID, restore)
 		if err != nil {
 			return err
@@ -270,6 +284,6 @@ func (s *Service) CustomerLifecycle(ctx context.Context, a Actor, id int64, rest
 		if tag.RowsAffected() != 1 {
 			return ErrNotFound
 		}
-		return audit(ctx, tx, a, p, permission, All, "customer", id, nil)
+		return auditLifecycle(ctx, tx, a, p, "customer", id, "restore", before, nil)
 	})
 }

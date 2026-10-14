@@ -479,6 +479,12 @@ func activityRowCursor(row *ent.ActivityLog) *ActivityCursor {
 }
 
 func (s *ActivityService) Record(ctx context.Context, companyID, actorID int64, action string, target objectref.Ref, metadata map[string]interface{}) error {
+	if _, ok := authorization.FromContext(ctx); ok && (action == "archived" || action == "restored") {
+		switch target.Type {
+		case objectref.TypeAsset, objectref.TypeCustomer, objectref.TypeProject:
+			return nil
+		}
+	}
 	if _, ok := authorization.FromContext(ctx); ok {
 		switch action {
 		case "contact_created", "contact_updated", "contact_deleted", "location_created", "location_updated", "location_deleted":
