@@ -43,7 +43,9 @@ func TestJobPlanningUpgradePreservesOrStopsWithoutInventingFacts(t *testing.T) {
 			}
 			mustMigrationScan(t, db.Pool.QueryRow(ctx, `INSERT INTO jobs(company_id,customer_id,job_type,customer_contact_id) VALUES($1,$2,$3,$4) RETURNING id`, a.company, a.customer, title, contact), &id)
 			var before, after string
-			mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT to_jsonb(j)::text FROM jobs j WHERE id=$1`, id), &before)
+			// Compare every recorded column; execution cutover adds two opaque
+			// baseline tokens without rewriting any pre-existing fact.
+			mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT (to_jsonb(j)-ARRAY['notes_revision','planning_revision'])::text FROM jobs j WHERE id=$1`, id), &before)
 			err = db.Migrate(ctx, MigrationFS())
 			if invalid {
 				if err == nil || !strings.Contains(err.Error(), "Administrator review") {
@@ -52,7 +54,7 @@ func TestJobPlanningUpgradePreservesOrStopsWithoutInventingFacts(t *testing.T) {
 			} else if err != nil {
 				t.Fatal(err)
 			}
-			mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT to_jsonb(j)::text FROM jobs j WHERE id=$1`, id), &after)
+			mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT (to_jsonb(j)-ARRAY['notes_revision','planning_revision'])::text FROM jobs j WHERE id=$1`, id), &after)
 			if before != after {
 				t.Fatal("upgrade altered recorded Job facts")
 			}

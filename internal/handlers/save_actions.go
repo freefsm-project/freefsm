@@ -40,7 +40,7 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Pairing has a browser-bound, once-only protocol of its own. Never
 			// journal its secrets as a generic domain save or offer save replay.
-			if r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") {
+			if r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") || jobExecutionPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -552,6 +552,9 @@ func installSaveForms(body []byte, revision func(string) string, history string)
 		if !strings.EqualFold(method, "post") {
 			continue
 		}
+		if jobExecutionPath(action) {
+			continue
+		}
 		if action != "" {
 			u, err := url.Parse(action)
 			if err != nil || u.IsAbs() || u.Host != "" {
@@ -565,4 +568,11 @@ func installSaveForms(body []byte, revision func(string) string, history string)
 		}
 	}
 	return out.Bytes()
+}
+
+// These facets have independent opaque revisions and atomic domain receipts.
+// A whole-Job generic save revision would introduce cross-facet conflicts.
+func jobExecutionPath(path string) bool {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	return len(parts) == 3 && parts[0] == "jobs" && (parts[2] == "status" || parts[2] == "field-notes")
 }

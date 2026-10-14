@@ -105,6 +105,9 @@ func TestWorkflowIntentProductionAPI(t *testing.T) {
 	}
 	call := func(method, path, body string, want int) string {
 		t.Helper()
+		if method == "POST" && strings.HasSuffix(path, "/status") {
+			body = newExecutionWireIntent(body)
+		}
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Content-Type", "application/json")

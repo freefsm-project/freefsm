@@ -371,6 +371,18 @@ func TestCustomerContextHTTPIsClosedAndAssignmentBound(t *testing.T) {
 	projectionRequest.Header.Set("Authorization", "Bearer "+officeToken)
 	projectionResponse := httptest.NewRecorder()
 	api.ServeHTTP(projectionResponse, projectionRequest)
+	if projectionResponse.Code != 404 || strings.Contains(projectionResponse.Body.String(), "Explicit Job") {
+		t.Fatalf("legacy Role label acquired Job View: %d %s", projectionResponse.Code, projectionResponse.Body.String())
+	}
+	jobViewer, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Job-only office reader", []authorization.Grant{{Permission: "job.view", Scope: authorization.All}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = svc.AssignUser(ctx, authorization.Actor{UserID: admin}, office.ID, jobViewer); err != nil {
+		t.Fatal(err)
+	}
+	projectionResponse = httptest.NewRecorder()
+	api.ServeHTTP(projectionResponse, projectionRequest)
 	if projectionResponse.Code != 200 || strings.Contains(projectionResponse.Body.String(), "customer_id") {
 		t.Fatalf("legacy Job projection bypassed Customer scope: %d %s", projectionResponse.Code, projectionResponse.Body.String())
 	}

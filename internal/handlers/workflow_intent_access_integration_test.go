@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -46,6 +47,9 @@ func TestWorkflowIntentUsesCurrentGrantsWithoutLegacyRoleFallback(t *testing.T) 
 	path := fmt.Sprintf("/jobs/%d/status", job.ID)
 	call := func(method, body string, want int) string {
 		t.Helper()
+		if method == "POST" {
+			body = newExecutionWireIntent(body)
+		}
 		url := path
 		if method == "GET" {
 			url += "-intents"
@@ -120,7 +124,7 @@ func TestWorkflowIntentUsesCurrentGrantsWithoutLegacyRoleFallback(t *testing.T) 
 	}
 	// A completed active Job remains actionable for equal-grant legacy tech.
 	cookie := sessionCookie(t, ctx, sessions, user.ID)
-	expectStatus(t, web, cookie, "POST", fmt.Sprintf("%s?status_id=%d", path, initial), 303)
+	masterPost(t, web, cookie, path, url.Values{"status_id": {fmt.Sprint(initial)}}, 303)
 	grant(authorization.Assigned, true)
 	call("GET", "", 404)
 	call("POST", string(body), 404)

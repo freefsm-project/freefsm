@@ -70,6 +70,9 @@ func revision(ctx context.Context, q Querier, userID int64, path string, lock bo
 			return "", nil
 		}
 		query = `SELECT to_jsonb(t)::text FROM ` + table + ` t WHERE id=$1`
+		if table == "jobs" {
+			query = `SELECT (to_jsonb(t)-ARRAY['updated_at','status_id','status_revision','tech_notes','notes_revision'])::text FROM jobs t WHERE id=$1`
+		}
 		if table == "time_entries" {
 			// A version token must not fingerprint the hidden Job/GPS values.
 			query = `SELECT jsonb_build_array(t.id,t.xmin::text,t.updated_at)::text FROM time_entries t WHERE id=$1`
