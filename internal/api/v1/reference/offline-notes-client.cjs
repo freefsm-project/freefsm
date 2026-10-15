@@ -1,8 +1,9 @@
 'use strict';
-const {randomUUID}=require('node:crypto');
+const {randomUUID,createHash}=require('node:crypto');
 const {ProtectedStore}=require('./protected-store.cjs');
 const clone=x=>JSON.parse(JSON.stringify(x));
-const fresh=()=>({version:1,user:null,token:null,lease:null,leaseLocked:false,cache:{},notes:{},pending:{},synced:false,restore:false,highWater:0});
+const clientIdentity=token=>token?createHash('sha256').update(token).digest('hex'):null;
+const fresh=()=>({version:1,user:null,token:null,lease:null,authority:null,contactEpoch:null,issuance:null,leaseLocked:false,cache:{},notes:{},pending:{},synced:false,restore:false,highWater:0});
 
 // Each action is explicit and serialized, including its network round trips.
 // Nothing in construction/restart, authentication or synchronization submits work.
@@ -18,7 +19,8 @@ class OfflineNotes {
    this.store.quarantined=true;throw Error('protected_store_locked');
   }
  }
- async gate(s){
+ // Durably locks observed expiry/clock rollback and advances the high-water mark.
+ async enforceOfflineAccessWindow(s){
   if(s.restore||!s.synced)throw Error('locked_review');
   const now=this.now();
   if(s.leaseLocked||!s.lease||!Number.isFinite(now)||now<s.highWater||now>=Date.parse(s.lease.expires_at)){
@@ -31,12 +33,18 @@ class OfflineNotes {
   const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt};
   Object.assign(s,fresh(),{pending:safe,user:s.user});await this.persistAuthorityLoss(s);
  }
+ purgeSensitiveTarget(s,job){
+  delete s.cache[job];delete s.notes[job];
+  for(const e of Object.values(s.pending))if(e.job===job){
+   delete e.intent;delete e.job;e.state='purged';
+  }
+ }
  async contact(s,path,method='GET',body,operation){
   if(!s.token)throw Error('authentication_required');
-  const r=await this.transport(path,method,body,{token:s.token,epoch:s.lease?.epoch,operation});
+  const r=await this.transport(path,method,body,{token:s.token,epoch:s.contactEpoch||s.lease?.epoch,operation});
   // Inspect disposition before generic 401 purge. Persist before returning data.
   if(r.error?.code==='instance_restored'&&r.error?.recovery_disposition==='locked_review'){
-   s.token=null;s.lease=null;s.restore=true;s.synced=false;s.cache={};s.notes={};
+   s.token=null;s.lease=null;s.contactEpoch=null;s.restore=true;s.synced=false;s.cache={};s.notes={};
    for(const e of Object.values(s.pending)){if(e.state!=='replaced')e.state='locked_review';}
    await this.persistAuthorityLoss(s);throw Error('locked_review');
   }
@@ -47,18 +55,23 @@ class OfflineNotes {
   }
   return r;
  }
- async policy(s){
+ async policy(s,receiptOnly=false){
   const r=await this.contact(s,'/offline/policy');
   if(r.status!==200)throw Error('reauthorization_unavailable');
-  if(!r.data?.enabled){await this.purge(s);throw Error('authorization_purged');}
+  if(!r.data?.enabled){await this.purge(s);if(!receiptOnly)throw Error('authorization_purged');}
  }
  async authenticate(token){return this.transaction(async s=>{
   if(typeof token!=='string'||!token)throw Error('authentication_required');
   const old=s.lease,oldUser=s.user,oldToken=s.token;
   const retry=oldToken===token&&s.issuance?.state==='unknown';
   const operation=retry?s.issuance.id:randomUUID();
+  // Previous server authority and client binding outlive an interrupted issuance.
+  // The new bearer alone is not evidence that old intent belongs to its epoch.
+  const previous=retry?s.issuance.previous:(s.authority||(old?{epoch:old.epoch,user:oldUser,client:clientIdentity(oldToken)}:null));
+  // Renewal must retain the last server epoch even while its lease is absent.
+  s.contactEpoch=oldToken===token?(s.contactEpoch||old?.epoch):null;
   s.token=token;s.lease=null;s.synced=false;
-  s.issuance={id:operation,state:'unknown'};await this.persist(s);
+  s.issuance={id:operation,state:'unknown',previous};await this.persist(s);
   let r;
   if(retry){
    r=await this.contact(s,'/offline-authorization-operations/'+operation);
@@ -69,8 +82,14 @@ class OfflineNotes {
   const l=r.data,issued=Date.parse(l?.issued_at),expires=Date.parse(l?.expires_at);
   if(l?.code!=='accepted'||l.operation_id!==operation||!l.id||!l.user_id||!l.epoch||!Number.isFinite(issued)||!Number.isFinite(expires)||expires<=issued||expires-issued>72*3600000||this.now()>=expires){s.token=null;await this.persist(s);throw Error('invalid_lease');}
   if(oldUser&&oldUser!==l.user_id){await this.purge(s);s.pending={};s.token=token;}
-  if(old&&old.epoch!==l.epoch||oldUser&&oldToken!==token)s.restore=true;
-  s.issuance={id:operation,state:'accepted'};s.user=l.user_id;s.lease=l;s.leaseLocked=false;s.synced=false;s.cache={};s.notes={};s.highWater=Math.max(this.now(),issued);
+  else if(previous&&previous.epoch!==l.epoch)s.restore=true;
+  else if(previous&&previous.client!==clientIdentity(token)&&!s.restore){
+   // A new session at the same epoch is ordinary reauthorization, not restore.
+   // Old-client intent cannot be rebound; keep only safe receipt identities.
+   await this.purge(s);s.token=token;
+  }
+  s.authority={epoch:l.epoch,user:l.user_id,client:clientIdentity(token)};
+  s.issuance={id:operation,state:'accepted'};s.user=l.user_id;s.lease=l;s.contactEpoch=l.epoch;s.leaseLocked=false;s.synced=false;s.cache={};s.notes={};s.highWater=Math.max(this.now(),issued);
   await this.persist(s);return {expires_at:l.expires_at,state:'synchronization_required'};
  });}
  async synchronize(){return this.transaction(async s=>{
@@ -86,22 +105,22 @@ class OfflineNotes {
    else {page=r.data.next_page;if(!page||seen.has(page))throw Error('synchronization_incomplete');seen.add(page);}
   }while(page);
   for(const e of Object.values(s.pending)){
-   if(e.job&&!records[e.job]){delete e.intent;delete e.job;e.state='purged';}
-   else if(s.restore&&e.state!=='replaced')e.state='restore_uncertain';
+   if(e.job&&!records[e.job])this.purgeSensitiveTarget(s,e.job);
+   else if(s.restore&&!['replaced','purged'].includes(e.state))e.state='restore_uncertain';
   }
   s.cache=records;s.synced=true;s.restore=false;await this.persist(s);
   return {state:'synchronized',count:Object.keys(records).length};
  });}
  async readNotes(job){return this.transaction(async s=>{
-  await this.gate(s);await this.policy(s);
+  await this.enforceOfflineAccessWindow(s);await this.policy(s);
   if(!s.cache[job])throw Error('inaccessible_target');
   const r=await this.contact(s,`/jobs/${encodeURIComponent(job)}/field-notes`);
-  if(r.status===404){delete s.cache[job];delete s.notes[job];for(const e of Object.values(s.pending))if(e.job===job){delete e.intent;delete e.job;e.state='purged';}await this.persistAuthorityLoss(s);throw Error('inaccessible_target');}
+  if(r.status===404){this.purgeSensitiveTarget(s,job);await this.persistAuthorityLoss(s);throw Error('inaccessible_target');}
   if(r.status!==200||typeof r.data?.notes_revision!=='string'||!r.data.notes_revision)throw Error('notes_unavailable');
   s.notes[job]=r.data;await this.persist(s);return clone(r.data);
  });}
  async view(){return this.transaction(async s=>{
-  await this.gate(s);const pending=clone(s.pending);
+  await this.enforceOfflineAccessWindow(s);const pending=clone(s.pending);
   const labels={pending:'Pending — not accepted',unknown:'Save status unknown — check original receipt',accepted:'Accepted by server',terminal:'Needs attention',restore_uncertain:'Needs attention — restore outcome uncertain',purged:'Inaccessible content purged',replaced:'Replaced by explicitly reviewed intent'};
   for(const e of Object.values(pending))e.label=labels[e.state]||'Review required';
   return clone({cache:s.cache,notes:s.notes,pending});
@@ -110,9 +129,9 @@ class OfflineNotes {
   if(!s.cache[job]||!s.notes[job]?.can_edit_notes||typeof text!=='string')throw Error('review_required');
   const id=randomUUID();s.pending[id]={job,state:'pending',intent:{operation_id:id,notes_revision:s.notes[job].notes_revision,field_notes:text,occurred_at:new Date(this.now()).toISOString()}};return id;
  }
- async stage(job,text){return this.transaction(async s=>{await this.gate(s);const id=this.stageIn(s,job,text);await this.persist(s);return id;});}
+ async stage(job,text){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const id=this.stageIn(s,job,text);await this.persist(s);return id;});}
  async submit(id){return this.transaction(async s=>{
-  await this.gate(s);const e=s.pending[id];
+  await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
   if(!e||e.state!=='pending'||!e.intent)throw Error('reconciliation_or_review_required');
   if(e.retryNotBefore&&this.now()<e.retryNotBefore)throw Error('retry_after_required');
   await this.policy(s);
@@ -120,7 +139,7 @@ class OfflineNotes {
   e.state='unknown';await this.persist(s);
   const r=await this.contact(s,`/jobs/${encodeURIComponent(e.job)}/field-notes`,'POST',e.intent);
   if(r.status===200){this.receipt(e,id,r.data);}
-  else if([400,404,409].includes(r.status)){e.state='terminal';e.code=r.error?.code;if(r.status===404){delete e.intent;delete s.cache[e.job];delete s.notes[e.job];delete e.job;e.state='purged';}}
+  else if([400,404,409].includes(r.status)){e.state='terminal';e.code=r.error?.code;if(r.status===404)this.purgeSensitiveTarget(s,e.job);}
   else if(r.status===429||r.status>=500){
    const seconds=r.error?.retry_after_seconds;
    const delay=Number.isSafeInteger(seconds)&&seconds>0&&seconds<Number.MAX_SAFE_INTEGER/1000?seconds:5;
@@ -137,8 +156,12 @@ class OfflineNotes {
  async reconcile(id){return this.transaction(async s=>{
   // Receipt lookup remains possible without resource visibility or a live offline
   // lease. It still requires a currently valid authenticated server session.
-  const e=s.pending[id];if(!e)throw Error('unknown_operation');
+  if(!s.pending[id])throw Error('unknown_operation');
   const r=await this.contact(s,`/job-execution-operations/${encodeURIComponent(id)}`);
+  // Receipt access is independent of offline policy and target visibility. Check
+  // policy on this reconnect, then apply only safe receipt metadata after purge.
+  await this.policy(s,true);
+  const e=s.pending[id];
   if(r.status===200){this.receipt(e,id,r.data);if(['forbidden','not_found'].includes(r.data.code))await this.purge(s);}
   else if(r.status===404&&r.error?.code==='not_found'){
    if(e.state==='unknown')e.state='pending';
@@ -148,13 +171,13 @@ class OfflineNotes {
   await this.persist(s);return clone({state:e.state,receipt:e.receipt});
  });}
  async repair(id,text,reviewedRevision){return this.transaction(async s=>{
-  await this.gate(s);const e=s.pending[id];
+  await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
   if(!e||!['terminal','restore_uncertain'].includes(e.state)||!e.job)throw Error('review_required');
   if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
   if(!reviewedRevision||s.notes[e.job]?.notes_revision!==reviewedRevision)throw Error('review_required');
   const next=this.stageIn(s,e.job,text);e.state='replaced';await this.persist(s);return next;
  });}
- async acknowledgeUncertain(id){return this.transaction(async s=>{await this.gate(s);const e=s.pending[id];if(!e||e.state!=='restore_uncertain'||!e.lookupMissing)throw Error('restore_reconciliation_required');e.reconciled=true;await this.persist(s);});}
+ async acknowledgeUncertain(id){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const e=s.pending[id];if(!e||e.state!=='restore_uncertain'||!e.lookupMissing)throw Error('restore_reconciliation_required');e.reconciled=true;await this.persist(s);});}
  async discard(id){return this.transaction(async s=>{delete s.pending[id];await this.persist(s);});}
  async logout(){return this.store.exclusive(()=>this.store.destroy());}
 }

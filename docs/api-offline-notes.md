@@ -101,7 +101,9 @@ explicit retry after throttle/dependency failure; checking a receipt does not
 erase that delay. It never changes the operation ID or original intent.
 
 Receipt lookup does not require Job access or a live offline lease, but does
-require current server authentication. Sensitive
+require current server authentication. Receipt reconnect also checks offline
+policy: disablement purges sensitive content and locks offline access while the
+original nonsensitive receipt can still be returned. Sensitive
 reads still require current authority. Terminal conflict is **Needs attention**:
 read authorized current Notes and compare, then explicitly repair with the
 reviewed revision and a new UUID, or discard. Target/revision rewriting,
@@ -112,7 +114,9 @@ automatic merge, force overwrite and automatic replay are unavailable.
 401/403 ordinary authorization failure purges credentials/cache/sensitive intent
 on contact. A typed scope resnapshot purges rather than retaining a speculative
 comparison. A successful fresh snapshot removes pending content for absent
-targets. Offline disablement is checked on online contact. No remote erasure of
+targets. A target denial removes **all** pending text and cached Notes/context for
+that target, not just the submitted intent. Offline disablement is checked on
+online contact. No remote erasure of
 a disconnected device or exported copy is promised. Logout deletes the owned
 Secret Service item and ciphertext; an unavailable key service reports deletion
 failure explicitly even though ciphertext is removed.
@@ -128,6 +132,16 @@ must precede any new-ID repair. User identity changes purge old sensitive intent
 Even a locally retained old acceptance receipt is marked uncertain until queried
 against restored history; it is not proof that a post-backup effect survived.
 No automatic action occurs during recovery, including after interruption.
+
+Renewal persists the previous authenticated epoch independently of the lease,
+so renewal as the first post-restore contact cannot erase the restore signal.
+Issuance records retain the prior epoch/user and hashed client provenance inside
+the protected envelope before transport. If issuance commits but its response is
+lost, a restarted process queries that original issuance receipt and compares its
+epoch to the durable prior authority. Old pending work still requires restore
+outcome reconciliation. A token change alone is never evidence of restore:
+fresh authentication at the same epoch purges old-client sensitive content and
+retains only safe operation identities/receipts, without rebinding old intent.
 
 ## Compatibility and evidence
 
