@@ -370,11 +370,13 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "invalid form", 400)
 		return
 	}
 
 	if r.Form.Has("latitude") || r.Form.Has("longitude") || r.Form.Has("captured_at") || r.Form.Has("accuracy") || r.Form.Has("gps") {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "GPS is immutable clock-only data", 400)
 		return
 	}
@@ -383,6 +385,7 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if clockIn := r.FormValue("clock_in"); clockIn != "" {
 		t, err := parseTimeEntryEdit(clockIn, loc)
 		if err != nil {
+			saveaction.RejectBeforeWrite(r.Context())
 			http.Error(w, "Invalid or ambiguous clock-in timestamp; include UTC offset", 400)
 			return
 		}
@@ -393,6 +396,7 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if clockOut := r.FormValue("clock_out"); clockOut != "" {
 		t, err := parseTimeEntryEdit(clockOut, loc)
 		if err != nil {
+			saveaction.RejectBeforeWrite(r.Context())
 			http.Error(w, "Invalid or ambiguous clock-out timestamp; include UTC offset", 400)
 			return
 		}
@@ -408,6 +412,7 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if r.Form.Has("job_id") {
 		jobID, err := parseOptionalID(r.FormValue("job_id"))
 		if err != nil || jobID < 0 {
+			saveaction.RejectBeforeWrite(r.Context())
 			http.Error(w, "invalid job", 400)
 			return
 		}

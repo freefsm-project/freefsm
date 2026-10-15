@@ -59,6 +59,71 @@ func TestTimeManualPreflightRejectedReceiptHTTP(t *testing.T) {
 	}
 }
 
+func TestTimeCorrectionPreflightRejectedReceiptHTTP(t *testing.T) {
+	for _, field := range []string{"clock_in", "clock_out", "job_id", "latitude", "longitude", "captured_at", "accuracy", "gps"} {
+		t.Run(field, func(t *testing.T) {
+			pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+			ctx := context.Background()
+			cookie := sessionCookie(t, ctx, sessions, admin)
+			start := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+			entry := client.TimeEntry.Create().SetCompanyID(company).SetUserID(admin).SetClockIn(start).SetClockOut(start.Add(time.Hour)).SetNotes("original correction facts").SaveX(ctx)
+			path := fmt.Sprintf("/time-entries/%d", entry.ID)
+			values := url.Values{"clock_in": {start.Format(time.RFC3339)}, "clock_out": {start.Add(time.Hour).Format(time.RFC3339)}, "notes": {"retained correction draft"}, "reason": {"reviewed correction reason"}}
+			values.Set(field, "invalid")
+			values = timeFormValues(t, router, cookie, path, values)
+			operation := values.Get("save_action_id")
+			response := timeHTTP(router, cookie, path, values)
+			if response.Code != 400 && response.Code != 409 {
+				t.Fatalf("validation=%d %s", response.Code, response.Body)
+			}
+			var receipt saveaction.Receipt
+			body := requestBody(t, router, cookie, "GET", "/save-actions/"+operation, 200)
+			if err := json.Unmarshal([]byte(body), &receipt); err != nil {
+				t.Fatal(err)
+			}
+			if receipt.Disposition != "rejected" || !receipt.RetrySafe || receipt.RetrySameOperation || receipt.CommittedSteps != 0 {
+				t.Fatalf("correction preflight receipt=%s", body)
+			}
+			assertContains(t, response.Body.String(), "retained correction draft")
+			assertContains(t, response.Body.String(), "reviewed correction reason")
+			assertContains(t, response.Body.String(), `name="clock_in"`)
+			if field == "clock_in" || field == "clock_out" {
+				assertContains(t, response.Body.String(), `value="invalid"`)
+			}
+			current := client.TimeEntry.GetX(ctx, entry.ID)
+			if current.Notes != entry.Notes || !current.ClockIn.Equal(entry.ClockIn) || current.ClockOut == nil || !current.ClockOut.Equal(*entry.ClockOut) || current.UserID != entry.UserID || current.JobID != nil || current.VoidedAt != nil {
+				t.Fatal("preflight changed projection")
+			}
+			var effects int
+			if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM time_entry_history)+(SELECT count(*) FROM authorization_audit WHERE target_type='time_entry')+(SELECT count(*) FROM activity_logs WHERE object_type='time_entry')+(SELECT count(*) FROM online_save_effects WHERE operation_id=$1)`, operation).Scan(&effects); err != nil || effects != 0 {
+				t.Fatalf("preflight leaked history/audit/effects: %d %v", effects, err)
+			}
+			values.Del(field)
+			values.Set("clock_in", start.Format(time.RFC3339))
+			values.Set("clock_out", start.Add(time.Hour).Format(time.RFC3339))
+			// A rejected admission cannot be reused for changed intent.
+			itemPost(t, router, cookie, path, values, 409)
+			values.Set("save_action_id", uuid.NewString())
+			itemPost(t, router, cookie, path, values, 303)
+			itemPost(t, router, cookie, path, values, 409)
+			if client.TimeEntry.GetX(ctx, entry.ID).Notes != "retained correction draft" || client.TimeEntry.Query().CountX(ctx) != 1 {
+				t.Fatal("fresh identity did not correct original entry once")
+			}
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM time_entry_history WHERE entry_id=$1`, entry.ID).Scan(&effects); err != nil || effects != 1 {
+				t.Fatalf("correction history=%d err=%v", effects, err)
+			}
+			body = requestBody(t, router, cookie, "GET", "/save-actions/"+values.Get("save_action_id"), 200)
+			receipt = saveaction.Receipt{}
+			if err := json.Unmarshal([]byte(body), &receipt); err != nil {
+				t.Fatal(err)
+			}
+			if receipt.Disposition != "saved" || receipt.CommittedSteps != 1 {
+				t.Fatalf("corrected receipt=%s", body)
+			}
+		})
+	}
+}
+
 func TestTimeConfirmationFailureOriginalIdentityHTTP(t *testing.T) {
 	for _, action := range []string{"create", "correct", "void"} {
 		t.Run(action, func(t *testing.T) {
