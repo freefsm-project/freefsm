@@ -50,6 +50,10 @@ func TestTimeInstalledHistoryRequiresExplicitReviewHTTP(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	var peerMigrations int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM schema_migrations WHERE name IN ('085_asset_service_entries','085_time_entry_history')`).Scan(&peerMigrations); err != nil || peerMigrations != 2 {
+		t.Fatalf("distinct complete-name migrations must both apply exactly once: count=%d err=%v", peerMigrations, err)
+	}
 	if after := snapshot(); after != before {
 		t.Fatalf("upgrade rewrote installed facts/grants:\n%s\n%s", before, after)
 	}

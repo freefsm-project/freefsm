@@ -4,6 +4,14 @@ Migration `085_time_entry_history` is additive. It preserves identifiers, subjec
 intervals, notes, Job links, creation source, existing audit and all GPS. It grants
 no permissions. Existing nonprotected Roles retain exactly their current grants.
 
+The accepted Service Entry migration is `085_asset_service_entries`; this
+migration is `085_time_entry_history`. The runner sorts complete filenames and
+keys `schema_migrations.name` by the complete filename without `.up.sql`, not by
+the numeric prefix. Both identities are retained: fresh installation runs Asset
+Service Entries first, while an installation that already applied either one
+adds only the missing migration. Their domain tables and history are independent;
+renaming a previously applied identity would incorrectly attempt it again.
+
 Every installed entry receives one immutable `retained_at_upgrade` snapshot at
 the actual migration time, with no invented historical actor. This records the
 projection known at cutover, **not** an assertion about its original creation or

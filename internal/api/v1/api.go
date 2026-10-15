@@ -144,6 +144,7 @@ func New(deps Dependencies) http.Handler {
 		r.Use(h.bearerAuth)
 		r.Use(h.authorizedBudget)
 		r.Get("/capabilities", h.capabilities)
+		r.Get("/sync/jobs", h.syncJobs)
 		// Synchronization routes remain within this authenticated budget boundary.
 		r.HandleFunc("/sync", func(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 404, "not_found", "synchronization endpoint not available")
@@ -167,6 +168,11 @@ func New(deps Dependencies) http.Handler {
 			r.Post(path+"/{id}/comments/{cid}/remove", h.comments(typ, true))
 		}
 		r.Get("/comment-operations/{operation}", h.commentReceipt)
+		r.Get("/service-entry-operations/{operation}", h.serviceEntryReceipt)
+		r.Get("/jobs/{id}/assets/{assetID}/service-entries", h.serviceEntries)
+		r.Post("/jobs/{id}/assets/{assetID}/service-entries", h.serviceEntries)
+		r.Post("/jobs/{id}/assets/{assetID}/service-entries/{entryID}", h.serviceEntries)
+		r.Get("/jobs/{id}/assets/{assetID}/service-entries/{entryID}/revisions", h.serviceEntryRevisions)
 		for _, kind := range []string{"estimate", "invoice"} {
 			r.Post("/"+kind+"s", h.commercial(kind))
 			r.Get("/"+kind+"s/{id}", h.commercial(kind))

@@ -136,6 +136,14 @@ func (s *Service) ChangeAssetAssociation(ctx context.Context, a Actor, id int64,
 		if invalid {
 			return fmt.Errorf("%w: repair affected Job relationships or overlapping association dates first", ErrConflict)
 		}
+		// Unlinking a Job does not erase accepted service provenance. Every
+		// immutable revision must still fit its explicitly recorded period.
+		if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM asset_service_entries e JOIN asset_service_revisions r ON r.entry_id=e.id WHERE e.asset_id=$1 AND NOT EXISTS(SELECT 1 FROM asset_association_periods p WHERE p.asset_id=e.asset_id AND p.event_id=e.association_event_id AND p.customer_id=e.customer_id AND (p.starts_on IS NULL OR p.starts_on<=r.service_date) AND (p.ends_before IS NULL OR p.ends_before>=r.service_date)))`, id).Scan(&invalid); err != nil {
+			return err
+		}
+		if invalid {
+			return fmt.Errorf("%w: association change would invalidate retained Service Entry provenance", ErrConflict)
+		}
 		if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.asset_association','allowed',true)`); err != nil {
 			return err
 		}

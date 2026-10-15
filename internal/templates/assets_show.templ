@@ -71,9 +71,14 @@ templ AssetShow(p AssetShowPageData) {
 			</article>
 		</div>
 
-		<h3>Service History</h3>
-		if len(p.ServiceHistory) == 0 {
-			<p class="shared-widget-muted">No service history yet.</p>
+		if p.CanViewServiceEntries {
+			<h3>Service Entries</h3>
+			<a href={templ.URL(fmt.Sprintf("/assets/%d/service-entries",p.Asset.ID))}>View lifetime service history</a>
+		}
+		<h3>Linked Job history</h3>
+		<p>Job links are retained work provenance, not recorded Service Entries.</p>
+		if len(p.LinkedJobs) == 0 {
+			<p class="shared-widget-muted">No linked Jobs.</p>
 		} else {
 			<table>
 				<thead>
@@ -85,7 +90,7 @@ templ AssetShow(p AssetShowPageData) {
 					</tr>
 				</thead>
 				<tbody>
-					for _, j := range p.ServiceHistory {
+					for _, j := range p.LinkedJobs {
 						<tr>
 							<td>
 								<a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) }>
