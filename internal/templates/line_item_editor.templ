@@ -3,6 +3,9 @@ package templates
 import "fmt"
 
 type LineItemEditorData struct {
+	AdjustmentsJSON string
+	Financial string
+	ExistingDocument bool
 	JobPricing        bool
 	ItemsJSON         string
 	ExistingItemsJSON string
@@ -10,36 +13,62 @@ type LineItemEditorData struct {
 }
 
 templ LineItemEditor(p LineItemEditorData) {
+	<script src="/static/js/commercial-arithmetic.js"></script>
 	<script>
 		function lineItemEditor(root) {
 			const readJSON = (name, fallback) => JSON.parse(root.querySelector(`[data-line-item-json="${name}"]`).textContent || fallback);
 			const catalog = readJSON('catalog', '[]');
 			const existing = readJSON('existing', '[]');
 			const taxContext = readJSON('customers', '{"default_tax_rate":"0","customers":{}}');
+			const financial = readJSON('financial', '{}');
+			const documentAdjustments = readJSON('adjustments', 'null') || financial.input || {};
 			const form = root.closest('form');
-			const makeItem = () => ({ item_id: 0, title: '', description: form.querySelector('[name="default_line_description"]')?.value || '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: 0, surcharge: 0 });
+			const noAdjustment = root.dataset.jobPricing === 'true' ? 0 : '';
+			const makeItem = () => ({ item_id: 0, title: '', description: form.querySelector('[name="default_line_description"]')?.value || '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: noAdjustment, surcharge: noAdjustment });
 			const makeNewItem = () => ({ name: '', type: 'product', sku: '', description: '', unit_price: 0, taxable: true, tax_rate: '', track_inventory: false });
 			const parseRate = (value) => (parseFloat(String(value || '').replace('%', '').trim()) || 0) / 100;
 			const roundMoney = (value) => Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * 100) / 100;
 			existing.forEach((item) => {
 				if (item.quantity === null || item.quantity === undefined || item.quantity === '') item.quantity = 1;
 				item.item_id = Number(item.item_id) || 0;
+				if (root.dataset.jobPricing !== 'true') {
+					item.unit_price = item.unit_price_decimal || String(item.unit_price);
+					item.quantity = item.quantity_decimal || String(item.quantity);
+					for (const name of ['discount','surcharge']) {
+						item[name+'_kind'] = item[name+'_adjustment']?.kind || 'fixed';
+						if (item[name+'_adjustment']) item[name] = item[name+'_adjustment'].value;
+						else if (Number(item[name] || 0) === 0) item[name] = '';
+					}
+				}
 			});
 			return {
 				items: existing.length ? existing : [makeItem()],
+				documentDiscount: documentAdjustments.discount?.value ?? '',
+				documentDiscountKind: documentAdjustments.discount?.kind || 'fixed',
+				documentSurcharge: documentAdjustments.surcharge?.value ?? '',
+				documentSurchargeKind: documentAdjustments.surcharge?.kind || 'fixed',
+				baseline: '',
+				effectiveTaxKey: '',
+				effectiveTaxRate: '',
+				taxRequest: 0,
+				taxPreviewError: '',
 				catalog,
 				newItem: makeNewItem(),
 				creatingItem: false,
 				createItemError: '',
-				wasTaxExempt: false,
+				wasTaxExempt: Boolean(financial.input?.tax_exempt),
 				lastNonExemptTaxRate: taxContext.default_tax_rate || '0',
 				taxVersion: 0,
 				init() {
 					const customerSelect = form.querySelector('select[name="customer_id"]');
 					const taxInput = form.querySelector('input[name="tax_rate"]');
-					if (customerSelect) customerSelect.addEventListener('change', () => this.syncCustomerTax());
-					if (taxInput) taxInput.addEventListener('input', () => { this.taxVersion++; });
-					this.syncCustomerTax();
+					if (customerSelect) customerSelect.addEventListener('change', () => { this.syncCustomerTax(); this.refreshTax(); });
+					if (taxInput) taxInput.addEventListener('input', () => { this.taxVersion++; this.refreshTax(); });
+					const jobSelect=form.querySelector('select[name="job_id"]');
+					if(jobSelect)jobSelect.addEventListener('change',()=>{this.taxVersion++;this.refreshTax();});
+					if (root.dataset.existingDocument !== 'true') this.syncCustomerTax();
+					this.baseline = this.moneySignature();
+					this.refreshTax();
 				},
 				add() { this.items.push(makeItem()); },
 				addOnEnter(event) {
@@ -81,6 +110,7 @@ templ LineItemEditor(p LineItemEditorData) {
 					const customerSelect = form.querySelector('select[name="customer_id"]');
 					const taxInput = form.querySelector('input[name="tax_rate"]');
 					if (!customerSelect || !taxInput) return;
+					this.taxVersion++;
 					const info = taxContext.customers[String(customerSelect.value)] || {};
 					if (info.tax_exempt) {
 						if (!this.wasTaxExempt && parseRate(taxInput.value) > 0) this.lastNonExemptTaxRate = taxInput.value;
@@ -121,15 +151,67 @@ templ LineItemEditor(p LineItemEditorData) {
 				get subtotal() { return roundMoney(this.items.reduce((sum, item) => sum + this.lineTotal(item), 0)); },
 				get tax() { if (root.dataset.jobPricing === 'true') return roundMoney(this.items.reduce((sum,item) => sum + (item.taxable ? roundMoney(this.lineTotal(item) * parseRate(item.tax_rate)) : 0), 0)); return roundMoney(this.items.reduce((sum, item) => item.taxable ? sum + this.lineTotal(item) : sum, 0) * this.documentTaxRate()); },
 				get total() { return roundMoney(this.subtotal + this.tax); },
-				get json() { return JSON.stringify(this.items.filter((item) => item.item_id > 0 || item.title).map((item) => ({ ...(item.snapshot_id ? {snapshot_id: item.snapshot_id} : {}), item_id: Number(item.item_id) || 0, title: item.title, description: item.description, unit_price: Number(item.unit_price) || 0, quantity: Number(item.quantity), taxable: Boolean(item.taxable), tax_rate: item.tax_rate || '', discount: Number(item.discount) || 0, surcharge: Number(item.surcharge) || 0 }))); },
+				adjustment(kind,value) { if (value === '') return undefined; return {kind:kind||'fixed',value:kind==='percentage'?String(value):this.moneyText(value)}; },
+				moneyText(value) { try {return window.freefsmCommercial.moneyText(value);} catch (_) {return String(value);} },
+				taxSelection() {this.taxVersion;return {customer_id:form.querySelector('[name="customer_id"]')?.value||'0',job_id:form.querySelector('[name="job_id"]')?.value||'0',rate:form.querySelector('[name="tax_rate"]')?.value||'0'};},
+				taxKey() {return JSON.stringify(this.taxSelection());},
+				async refreshTax() {
+					if(root.dataset.jobPricing==='true')return;
+					const selection=this.taxSelection(),key=JSON.stringify(selection),request=++this.taxRequest;
+					this.taxPreviewError='';
+					if(!Number(selection.customer_id)){this.effectiveTaxKey=key;this.effectiveTaxRate=selection.rate;return;}
+					try {
+						const response=await fetch('/commercial/tax-preview?'+new URLSearchParams(selection),{cache:'no-store'});
+						if(!response.ok)throw new Error('Tax preview unavailable. Check access and tax rate, then refresh.');
+						const data=await response.json();
+						if(request!==this.taxRequest||key!==this.taxKey())return;
+						this.effectiveTaxRate=data.rate;this.effectiveTaxKey=key;
+					} catch(error) {if(request===this.taxRequest){this.effectiveTaxKey='';this.taxPreviewError='Tax preview unavailable. Check access and tax rate, then refresh.';}}
+				},
+				get adjustmentsJSON() { return JSON.stringify({discount:this.adjustment(this.documentDiscountKind,this.documentDiscount),surcharge:this.adjustment(this.documentSurchargeKind,this.documentSurcharge)}); },
+				included(item) { return Boolean(item.item_id > 0 || item.title); },
+				exactInput() {
+					this.taxVersion;
+					const customer = form.querySelector('[name="customer_id"]');
+					const exempt = taxContext.customers[String(customer?.value)]?.tax_exempt || false;
+					return {...JSON.parse(this.adjustmentsJSON),tax_rate:String(form.querySelector('[name="tax_rate"]')?.value || '0').replace('%','').trim(),tax_exempt:exempt,
+						lines:this.items.filter(item=>this.included(item)).map(item=>({quantity:String(item.quantity),unit_price:this.moneyText(item.unit_price),taxable:Boolean(item.taxable),discount:this.adjustment(item.discount_kind,item.discount),surcharge:this.adjustment(item.surcharge_kind,item.surcharge)}))};
+				},
+				moneySignature() { return JSON.stringify({customer_id:form.querySelector('[name="customer_id"]')?.value || '',input:window.freefsmCommercial.signature(this.exactInput())}); },
+				get preview() {
+					if(root.dataset.jobPricing==='true') return null;
+					if(root.dataset.existingDocument==='true' && this.baseline===this.moneySignature()) return financial.result || {error:'Recorded totals unavailable. Review the financial inputs before saving monetary changes.'};
+					if(this.effectiveTaxKey!==this.taxKey())return {error:this.taxPreviewError||'Checking tax preview…'};
+					try {const input=this.exactInput();input.tax_rate=String(this.effectiveTaxRate).replace('%','').trim();input.tax_exempt=false;return window.freefsmCommercial.calculate(input);} catch(error) {return {error:error.message};}
+				},
+				get previewError() { return this.preview?.error || ''; },
+				lineDisplay(item,index) {
+					if(root.dataset.jobPricing==='true')return this.lineTotal(item).toFixed(2);
+					if(!this.included(item))return '—';
+					const p=this.preview;if(p?.error)return 'Invalid';
+					const resultIndex=this.items.slice(0,index).filter(row=>this.included(row)).length;
+					const line=p?.lines?.[resultIndex];
+					return line ? window.freefsmCommercial.format(line.adjusted_cents) : 'Unavailable';
+				},
+				totalDisplay(part) {
+					if(root.dataset.jobPricing==='true')return (part==='pretax_cents'?this.subtotal:part==='tax_cents'?this.tax:this.total).toFixed(2);
+					const p=this.preview;if(p?.error)return 'Invalid';
+					return p ? window.freefsmCommercial.format(p[part]) : 'Unavailable';
+				},
+				get json() { return JSON.stringify(this.items.filter((item) => this.included(item)).map((item) => ({ ...(item.snapshot_id ? {snapshot_id: item.snapshot_id} : {}), item_id: Number(item.item_id) || 0, title: item.title, description: item.description, unit_price: Number(item.unit_price) || 0, quantity: Number(item.quantity), taxable: Boolean(item.taxable), tax_rate: item.tax_rate || '', ...(root.dataset.jobPricing==='true'?{discount:Number(item.discount)||0,surcharge:Number(item.surcharge)||0}:{unit_price_decimal:this.moneyText(item.unit_price),quantity_decimal:String(item.quantity),discount_adjustment:this.adjustment(item.discount_kind,item.discount),surcharge_adjustment:this.adjustment(item.surcharge_kind,item.surcharge)}) }))); },
 			};
 		}
 	</script>
-	<fieldset x-data="lineItemEditor($el)" data-line-item-editor data-job-pricing={ fmt.Sprint(p.JobPricing) }>
+	<fieldset x-data="lineItemEditor($el)" data-line-item-editor data-job-pricing={ fmt.Sprint(p.JobPricing) } data-existing-document={ fmt.Sprint(p.ExistingDocument) }>
+		@templ.Raw(`<script type="application/json" data-line-item-json="financial">` + p.Financial + `</script>`)
+		@templ.Raw(`<script type="application/json" data-line-item-json="adjustments">` + p.AdjustmentsJSON + `</script>`)
 		@templ.Raw(`<script type="application/json" data-line-item-json="catalog">` + p.ItemsJSON + `</script>`)
 		@templ.Raw(`<script type="application/json" data-line-item-json="existing">` + p.ExistingItemsJSON + `</script>`)
 		@templ.Raw(`<script type="application/json" data-line-item-json="customers">` + p.CustomersJSON + `</script>`)
 		<legend>Line Items</legend>
+		if !p.JobPricing {
+			<small>Leave adjustment fields blank for no adjustment. An entered zero is retained as an explicit adjustment.</small>
+		}
 		<div class="table-scroll line-items-scroll" role="region" aria-label="Line items, scroll for more columns" tabindex="0"><table>
 			<thead><tr><th>Catalog</th><th>Title</th><th>Description</th><th>Qty</th><th>Price</th><th>Discount</th><th>Surcharge</th><th>Taxable</th>
 				if p.JobPricing {
@@ -147,15 +229,23 @@ templ LineItemEditor(p LineItemEditorData) {
 						</td>
 						<td><input type="text" x-model="item.title" placeholder="Line title" aria-label="Line item title"/></td>
 						<td><textarea x-model="item.description" rows="2" placeholder="Line item description" aria-label="Line item description"></textarea></td>
-						<td><input type="number" x-model="item.quantity" step="any" min="0.000001" class="input-width-70" aria-label="Quantity"/></td>
-						<td><input type="number" x-model="item.unit_price" step="0.01" class="input-width-100" aria-label="Unit price"/></td>
-						<td><input type="number" x-model="item.discount" step="0.01" min="0" class="input-width-100" aria-label="Discount"/></td>
-						<td><input type="number" x-model="item.surcharge" step="0.01" min="0" class="input-width-100" aria-label="Surcharge"/></td>
+						<td><input type={ commercialInputType(p.JobPricing) } inputmode="decimal" x-model="item.quantity" step="any" min="0" class="input-width-70" aria-label="Quantity"/></td>
+						<td><input type={ commercialInputType(p.JobPricing) } inputmode="decimal" x-model="item.unit_price" step="0.01" class="input-width-100" aria-label="Unit price"/></td>
+						<td><input type={ commercialInputType(p.JobPricing) } inputmode="decimal" x-model="item.discount" step="any" min="0" class="input-width-100" aria-label="Discount"/>
+							if !p.JobPricing {
+								<select x-model="item.discount_kind" aria-label="Discount kind"><option value="fixed">USD</option><option value="percentage">%</option></select>
+							}
+						</td>
+						<td><input type={ commercialInputType(p.JobPricing) } inputmode="decimal" x-model="item.surcharge" step="any" min="0" class="input-width-100" aria-label="Surcharge"/>
+							if !p.JobPricing {
+								<select x-model="item.surcharge_kind" aria-label="Surcharge kind"><option value="fixed">USD</option><option value="percentage">%</option></select>
+							}
+						</td>
 						<td><input type="checkbox" x-model="item.taxable" aria-label="Taxable line item"/></td>
 						if p.JobPricing {
 							<td><input type="text" inputmode="decimal" x-model="item.tax_rate" aria-label="Captured tax rate"/></td>
 						}
-						<td><span x-text="lineTotal(item).toFixed(2)"></span></td>
+						<td><span x-text="lineDisplay(item,index)"></span></td>
 						<td><button type="button" @click.prevent="remove(index)" class="outline contrast small" aria-label="Remove line item">X</button></td>
 					</tr>
 				</template>
@@ -184,7 +274,16 @@ templ LineItemEditor(p LineItemEditorData) {
 				</article>
 			</dialog>
 		}
-		<div class="line-item-totals"><p>Subtotal: $<span x-text="subtotal.toFixed(2)"></span></p><p>Tax: $<span x-text="tax.toFixed(2)"></span></p><p><strong>Total: $<span x-text="total.toFixed(2)"></span></strong></p></div>
+		if !p.JobPricing {
+			<div class="grid">
+				<label>Document discount<input type="text" inputmode="decimal" x-model="documentDiscount" aria-label="Document discount"/><select x-model="documentDiscountKind" aria-label="Document discount kind"><option value="fixed">USD</option><option value="percentage">%</option></select></label>
+				<label>Document surcharge<input type="text" inputmode="decimal" x-model="documentSurcharge" aria-label="Document surcharge"/><select x-model="documentSurchargeKind" aria-label="Document surcharge kind"><option value="fixed">USD</option><option value="percentage">%</option></select></label>
+			</div>
+			<input type="hidden" name="adjustments" :value="adjustmentsJSON"/>
+			<p role="status" x-text="previewError"></p>
+			<button type="button" class="outline" x-show="taxPreviewError" @click="refreshTax()">Refresh tax preview</button>
+		}
+		<div class="line-item-totals"><p>Subtotal: $<span x-text="totalDisplay('pretax_cents')"></span></p><p>Tax: $<span x-text="totalDisplay('tax_cents')"></span></p><p><strong>Total: $<span x-text="totalDisplay('total_cents')"></span></strong></p></div>
 		<input type="hidden" name="line_items" :value="json"/>
 	</fieldset>
 }

@@ -24,7 +24,7 @@ templ JobForm(p JobFormPageData) {
 			</label>
 			if p.Job.ID > 0 && canDispatchJob(ctx) {
 				if canMaster(ctx,"customer.view") {
-					<label><input type="checkbox" name="replace_customer" value="true"/> Replace Customer deliberately and clear all operational Location, Project, Contact and Asset links. Linked documents or Service Entries block replacement.</label>
+					<label><input type="checkbox" name="replace_customer" value="true"/> Replace Customer deliberately and clear all operational Location, Project, Contact and Asset links. Linked Estimates and editable Draft Invoices move to this Customer and recalculate under current adjustment and tax rules, including exemption. Recorded PDF versions remain unchanged. Finalized or settled Invoices and Service Entries block replacement.</label>
 				}
 				<a href={ templ.URL(fmt.Sprintf("/jobs/%d/contacts",p.Job.ID)) }>Manage explicit Job Contacts</a>
 			}

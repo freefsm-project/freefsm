@@ -193,7 +193,7 @@ func JobForm(p JobFormPageData) templ.Component {
 			}
 			if p.Job.ID > 0 && canDispatchJob(ctx) {
 				if canMaster(ctx, "customer.view") {
-					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<label><input type=\"checkbox\" name=\"replace_customer\" value=\"true\"> Replace Customer deliberately and clear all operational Location, Project, Contact and Asset links. Linked documents or Service Entries block replacement.</label>")
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<label><input type=\"checkbox\" name=\"replace_customer\" value=\"true\"> Replace Customer deliberately and clear all operational Location, Project, Contact and Asset links. Linked Estimates and editable Draft Invoices move to this Customer and recalculate under current adjustment and tax rules, including exemption. Recorded PDF versions remain unchanged. Finalized or settled Invoices and Service Entries block replacement.</label>")
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

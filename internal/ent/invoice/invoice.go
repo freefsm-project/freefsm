@@ -41,6 +41,8 @@ const (
 	FieldTaxRate = "tax_rate"
 	// FieldLineItems holds the string denoting the line_items field in the database.
 	FieldLineItems = "line_items"
+	// FieldFinancial holds the string denoting the financial field in the database.
+	FieldFinancial = "financial"
 	// FieldSettlementState holds the string denoting the settlement_state field in the database.
 	FieldSettlementState = "settlement_state"
 	// FieldDisplaySettings holds the string denoting the display_settings field in the database.
@@ -76,6 +78,7 @@ var Columns = []string{
 	FieldDueDate,
 	FieldTaxRate,
 	FieldLineItems,
+	FieldFinancial,
 	FieldSettlementState,
 	FieldDisplaySettings,
 	FieldCustomFields,
@@ -106,6 +109,8 @@ var (
 	DefaultTaxRate string
 	// DefaultLineItems holds the default value on creation for the "line_items" field.
 	DefaultLineItems string
+	// DefaultFinancial holds the default value on creation for the "financial" field.
+	DefaultFinancial string
 	// DefaultSettlementState holds the default value on creation for the "settlement_state" field.
 	DefaultSettlementState string
 	// DefaultDisplaySettings holds the default value on creation for the "display_settings" field.
@@ -196,6 +201,11 @@ func ByTaxRate(opts ...sql.OrderTermOption) OrderOption {
 // ByLineItems orders the results by the line_items field.
 func ByLineItems(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLineItems, opts...).ToFunc()
+}
+
+// ByFinancial orders the results by the financial field.
+func ByFinancial(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFinancial, opts...).ToFunc()
 }
 
 // BySettlementState orders the results by the settlement_state field.

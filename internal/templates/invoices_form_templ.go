@@ -412,7 +412,7 @@ func InvoiceForm(p InvoiceFormPageData) templ.Component {
 				}
 			}
 			if capturedPricingVisible(ctx, "invoice", p.Invoice.ID, p.IsNew) {
-				templ_7745c5c3_Err = LineItemEditor(LineItemEditorData{ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = LineItemEditor(LineItemEditorData{AdjustmentsJSON: p.AdjustmentsJSON, Financial: invoiceFinancial(p.Invoice, p.ExistingItemsJSON, !p.IsNew), ExistingDocument: !p.IsNew && !p.PreserveEntered, ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

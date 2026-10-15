@@ -20,6 +20,7 @@ func NewEstimateService(client *ent.Client) *EstimateService {
 }
 
 type EstimateCreateParams struct {
+	Adjustments  DocumentAdjustments
 	ValidThrough *time.Time
 	Terms        string
 	CustomerID   int64
@@ -33,6 +34,7 @@ type EstimateCreateParams struct {
 }
 
 type EstimateUpdateParams struct {
+	Adjustments              *DocumentAdjustments
 	CustomerDefaultsReviewed bool
 	ValidThrough             *time.Time
 	ClearValidThrough        bool
@@ -138,16 +140,16 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 			return nil, err
 		}
 		customerCompanyID = &input.CompanyID
-		params.TaxRate = input.TaxRate
 	}
 	taxRate := params.TaxRate
-	if taxRate == "" {
+	if strings.TrimSpace(taxRate) == "" {
 		taxRate = "0"
 	}
-	if _, err := CalculateTotals(params.LineItems, taxRate); err != nil {
-		return nil, fmt.Errorf("calculate estimate totals: %w", err)
+	financial, err := AcceptFinancial(ctx, s.client, params.CustomerID, params.LineItems, taxRate, params.Adjustments)
+	if err != nil {
+		return nil, err
 	}
-	lineItems, err := EncodeLineItems(params.LineItems)
+	lineItems, err := EncodeCommercialLines(params.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("encode estimate line items: %w", err)
 	}
@@ -171,7 +173,7 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 		customFields = "[]"
 	}
 	if request, ok := authorization.FromContext(ctx); ok {
-		id, err := createDocument(ctx, request, "estimate", authorization.DocumentCreation{CustomerID: params.CustomerID, JobID: params.JobID, Title: params.Title, Notes: params.Notes, Terms: params.Terms, TaxRate: taxRate, LineItems: lineItems, CustomFields: customFields, ValidThrough: params.ValidThrough}, func(rate string) (string, error) { _, err := CalculateTotals(params.LineItems, rate); return "", err })
+		id, err := createDocument(ctx, request, "estimate", authorization.DocumentCreation{Financial: financial, CustomerID: params.CustomerID, JobID: params.JobID, Title: params.Title, Notes: params.Notes, Terms: params.Terms, TaxRate: taxRate, LineItems: lineItems, CustomFields: customFields, ValidThrough: params.ValidThrough}, func(rate string) (string, error) { return "", nil })
 		if err != nil {
 			return nil, err
 		}
@@ -186,6 +188,7 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 		SetNillableValidThrough(params.ValidThrough).
 		SetTaxRate(taxRate).
 		SetLineItems(lineItems).
+		SetFinancial(financial).
 		SetCustomFields(customFields)
 
 	if params.JobID > 0 {
@@ -216,6 +219,10 @@ func (s *EstimateService) SaveDetails(ctx context.Context, id int64, params Esti
 }
 
 func (s *EstimateService) update(ctx context.Context, id int64, params EstimateUpdateParams) (*ent.Estimate, error) {
+	if params.TaxRate != nil && strings.TrimSpace(*params.TaxRate) == "" {
+		zero := "0"
+		params.TaxRate = &zero
+	}
 	if params.Title != nil && strings.TrimSpace(*params.Title) == "" {
 		return nil, authorization.ErrCommercialInput
 	}
@@ -227,7 +234,7 @@ func (s *EstimateService) update(ctx context.Context, id int64, params EstimateU
 	var encodedLineItems string
 	if params.LineItems != nil {
 		var err error
-		encodedLineItems, err = EncodeLineItems(*params.LineItems)
+		encodedLineItems, err = EncodeCommercialLines(*params.LineItems)
 		if err != nil {
 			return nil, fmt.Errorf("encode estimate line items: %w", err)
 		}
@@ -236,12 +243,32 @@ func (s *EstimateService) update(ctx context.Context, id int64, params EstimateU
 	if err != nil {
 		return nil, err
 	}
-	if params.LineItems != nil || params.TaxRate != nil {
+	financial := current.Financial
+	monetaryUpdate := MonetaryChanged(current.LineItems, current.TaxRate, current.Financial, params.LineItems, params.TaxRate, params.Adjustments) || params.CustomerID != nil && *params.CustomerID != int64Value(current.CustomerID)
+	if monetaryUpdate {
+		if request, ok := authorization.FromContext(ctx); ok {
+			if err := request.Service.ParentFacet(ctx, request.Actor, "estimate", id, "pricing.view"); err != nil {
+				return nil, err
+			}
+			customer, job := int64Value(current.CustomerID), int64Value(current.JobID)
+			if params.CustomerID != nil {
+				customer = *params.CustomerID
+			}
+			if params.JobID != nil {
+				job = *params.JobID
+			}
+			if customer != int64Value(current.CustomerID) && job == int64Value(current.JobID) {
+				job = 0
+			}
+			if _, err := request.Service.DocumentCustomer(ctx, request.Actor, customer, job, current.TaxRate); err != nil {
+				return nil, err
+			}
+		}
 		items := []LineItem(nil)
 		if params.LineItems != nil {
 			items = *params.LineItems
 		} else {
-			items, err = DecodeLineItems(current.LineItems)
+			items, err = DecodeCommercialLines(current.LineItems)
 			if err != nil {
 				return nil, fmt.Errorf("decode estimate line items: %w", err)
 			}
@@ -250,11 +277,32 @@ func (s *EstimateService) update(ctx context.Context, id int64, params EstimateU
 		if params.TaxRate != nil {
 			taxRate = *params.TaxRate
 		}
-		if _, err := CalculateTotals(items, taxRate); err != nil {
-			return nil, fmt.Errorf("calculate estimate totals: %w", err)
+		adjustments, err := FinancialAdjustments(current.Financial)
+		if err != nil {
+			return nil, err
+		}
+		if params.Adjustments != nil {
+			adjustments = *params.Adjustments
+		}
+		customer := int64Value(current.CustomerID)
+		if params.CustomerID != nil {
+			customer = *params.CustomerID
+		}
+		financial, err = AcceptFinancial(ctx, s.client, customer, items, taxRate, adjustments)
+		if err != nil {
+			return nil, err
 		}
 	}
 	customerID := int64Value(current.CustomerID)
+	if !monetaryUpdate {
+		params.TaxRate = nil
+	}
+	if !monetaryUpdate && params.LineItems != nil {
+		encodedLineItems, err = preserveCapturedLineMoney(current.LineItems, *params.LineItems)
+		if err != nil {
+			return nil, err
+		}
+	}
 	jobID := int64Value(current.JobID)
 	if params.CustomerID != nil {
 		customerID = *params.CustomerID
@@ -274,6 +322,9 @@ func (s *EstimateService) update(ctx context.Context, id int64, params EstimateU
 	}
 
 	u := s.client.Estimate.UpdateOneID(id)
+	if monetaryUpdate {
+		u.SetFinancial(financial)
+	}
 	if params.ValidThrough != nil {
 		u.SetValidThrough(*params.ValidThrough)
 	} else if params.ClearValidThrough {
@@ -351,7 +402,7 @@ func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, status
 		return nil, fmt.Errorf("get job %d: %w", jobID, err)
 	}
 
-	items, err := DecodeLineItems(j.LineItems)
+	items, err := DecodeCommercialLines(j.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("parse job %d line items: %w", jobID, err)
 	}
@@ -404,6 +455,7 @@ func (s *EstimateService) LineItems(e *ent.Estimate) []LineItem {
 	return items
 }
 
+// EstimateTotal is the unversioned legacy helper; document reads use FinancialTotals.
 func EstimateTotal(items []LineItem, taxRate string) (float64, error) {
 	totals, err := CalculateTotals(items, taxRate)
 	if err != nil {

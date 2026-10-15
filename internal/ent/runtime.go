@@ -571,16 +571,20 @@ func init() {
 	estimateDescLineItems := estimateFields[12].Descriptor()
 	// estimate.DefaultLineItems holds the default value on creation for the line_items field.
 	estimate.DefaultLineItems = estimateDescLineItems.Default.(string)
+	// estimateDescFinancial is the schema descriptor for financial field.
+	estimateDescFinancial := estimateFields[13].Descriptor()
+	// estimate.DefaultFinancial holds the default value on creation for the financial field.
+	estimate.DefaultFinancial = estimateDescFinancial.Default.(string)
 	// estimateDescCustomFields is the schema descriptor for custom_fields field.
-	estimateDescCustomFields := estimateFields[13].Descriptor()
+	estimateDescCustomFields := estimateFields[14].Descriptor()
 	// estimate.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	estimate.DefaultCustomFields = estimateDescCustomFields.Default.(string)
 	// estimateDescCreatedAt is the schema descriptor for created_at field.
-	estimateDescCreatedAt := estimateFields[16].Descriptor()
+	estimateDescCreatedAt := estimateFields[17].Descriptor()
 	// estimate.DefaultCreatedAt holds the default value on creation for the created_at field.
 	estimate.DefaultCreatedAt = estimateDescCreatedAt.Default.(func() time.Time)
 	// estimateDescUpdatedAt is the schema descriptor for updated_at field.
-	estimateDescUpdatedAt := estimateFields[17].Descriptor()
+	estimateDescUpdatedAt := estimateFields[18].Descriptor()
 	// estimate.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	estimate.DefaultUpdatedAt = estimateDescUpdatedAt.Default.(func() time.Time)
 	// estimate.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -647,24 +651,28 @@ func init() {
 	invoiceDescLineItems := invoiceFields[14].Descriptor()
 	// invoice.DefaultLineItems holds the default value on creation for the line_items field.
 	invoice.DefaultLineItems = invoiceDescLineItems.Default.(string)
+	// invoiceDescFinancial is the schema descriptor for financial field.
+	invoiceDescFinancial := invoiceFields[15].Descriptor()
+	// invoice.DefaultFinancial holds the default value on creation for the financial field.
+	invoice.DefaultFinancial = invoiceDescFinancial.Default.(string)
 	// invoiceDescSettlementState is the schema descriptor for settlement_state field.
-	invoiceDescSettlementState := invoiceFields[15].Descriptor()
+	invoiceDescSettlementState := invoiceFields[16].Descriptor()
 	// invoice.DefaultSettlementState holds the default value on creation for the settlement_state field.
 	invoice.DefaultSettlementState = invoiceDescSettlementState.Default.(string)
 	// invoiceDescDisplaySettings is the schema descriptor for display_settings field.
-	invoiceDescDisplaySettings := invoiceFields[16].Descriptor()
+	invoiceDescDisplaySettings := invoiceFields[17].Descriptor()
 	// invoice.DefaultDisplaySettings holds the default value on creation for the display_settings field.
 	invoice.DefaultDisplaySettings = invoiceDescDisplaySettings.Default.(string)
 	// invoiceDescCustomFields is the schema descriptor for custom_fields field.
-	invoiceDescCustomFields := invoiceFields[17].Descriptor()
+	invoiceDescCustomFields := invoiceFields[18].Descriptor()
 	// invoice.DefaultCustomFields holds the default value on creation for the custom_fields field.
 	invoice.DefaultCustomFields = invoiceDescCustomFields.Default.(string)
 	// invoiceDescCreatedAt is the schema descriptor for created_at field.
-	invoiceDescCreatedAt := invoiceFields[20].Descriptor()
+	invoiceDescCreatedAt := invoiceFields[21].Descriptor()
 	// invoice.DefaultCreatedAt holds the default value on creation for the created_at field.
 	invoice.DefaultCreatedAt = invoiceDescCreatedAt.Default.(func() time.Time)
 	// invoiceDescUpdatedAt is the schema descriptor for updated_at field.
-	invoiceDescUpdatedAt := invoiceFields[21].Descriptor()
+	invoiceDescUpdatedAt := invoiceFields[22].Descriptor()
 	// invoice.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	invoice.DefaultUpdatedAt = invoiceDescUpdatedAt.Default.(func() time.Time)
 	// invoice.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

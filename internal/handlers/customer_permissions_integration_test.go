@@ -428,9 +428,33 @@ func TestJobBoundDocumentsRetainAuthorizedCustomerInputWithoutMasterLeak(t *test
 	if response.Code != 303 {
 		t.Fatalf("bound create: %d %s", response.Code, response.Body.String())
 	}
-	var exempt bool
-	if err := pool.QueryRow(ctx, `SELECT tax_rate=0 FROM invoices WHERE title='Bound invoice'`).Scan(&exempt); err != nil || !exempt {
-		t.Fatalf("authorized pricing effect lost Customer exemption: zero=%v err=%v", exempt, err)
+	// The requested exact rate is retained; exemption is an accepted financial
+	// input whose effect is zero tax, not a replacement rate stored as zero.
+	var requestedRate string
+	var financial struct {
+		Version int `json:"version"`
+		Input   struct {
+			TaxRate   string `json:"tax_rate"`
+			TaxExempt bool   `json:"tax_exempt"`
+		} `json:"input"`
+		Result struct {
+			Pretax int64 `json:"pretax_cents,string"`
+			Tax    int64 `json:"tax_cents,string"`
+			Total  int64 `json:"total_cents,string"`
+			Lines  []struct {
+				Tax int64 `json:"tax_cents,string"`
+			} `json:"lines"`
+		} `json:"result"`
+	}
+	var encoded string
+	if err := pool.QueryRow(ctx, `SELECT tax_rate,financial FROM invoices WHERE title='Bound invoice'`).Scan(&requestedRate, &encoded); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal([]byte(encoded), &financial); err != nil {
+		t.Fatal(err)
+	}
+	if requestedRate != "9" || financial.Version != 1 || financial.Input.TaxRate != "9" || !financial.Input.TaxExempt || financial.Result.Pretax != 10000 || financial.Result.Tax != 0 || financial.Result.Total != 10000 || len(financial.Result.Lines) != 1 || financial.Result.Lines[0].Tax != 0 {
+		t.Fatalf("authorized pricing did not retain the rate and apply exemption: rate=%q financial=%+v", requestedRate, financial)
 	}
 	var invoiceID, estimateID int64
 	if err := pool.QueryRow(ctx, `SELECT id FROM invoices WHERE title='Bound invoice'`).Scan(&invoiceID); err != nil {
@@ -439,6 +463,9 @@ func TestJobBoundDocumentsRetainAuthorizedCustomerInputWithoutMasterLeak(t *test
 	if err := pool.QueryRow(ctx, `SELECT id FROM estimates WHERE job_id=$1`, job.ID).Scan(&estimateID); err != nil {
 		t.Fatal(err)
 	}
+	invoiceBody := requestBody(t, router, cookie, "GET", fmt.Sprintf("/invoices/%d", invoiceID), 200)
+	assertContains(t, invoiceBody, "Tax: $0.00")
+	assertContains(t, invoiceBody, "Grand Total: $100.00")
 	for _, path := range []string{fmt.Sprintf("/invoices/%d", invoiceID), fmt.Sprintf("/invoices/%d/edit", invoiceID), fmt.Sprintf("/estimates/%d", estimateID), fmt.Sprintf("/estimates/%d/edit", estimateID)} {
 		body := requestBody(t, router, cookie, "GET", path, 200)
 		assertContains(t, body, "Assigned Customer")

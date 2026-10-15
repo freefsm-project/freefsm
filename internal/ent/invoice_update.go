@@ -302,6 +302,20 @@ func (_u *InvoiceUpdate) SetNillableLineItems(v *string) *InvoiceUpdate {
 	return _u
 }
 
+// SetFinancial sets the "financial" field.
+func (_u *InvoiceUpdate) SetFinancial(v string) *InvoiceUpdate {
+	_u.mutation.SetFinancial(v)
+	return _u
+}
+
+// SetNillableFinancial sets the "financial" field if the given value is not nil.
+func (_u *InvoiceUpdate) SetNillableFinancial(v *string) *InvoiceUpdate {
+	if v != nil {
+		_u.SetFinancial(*v)
+	}
+	return _u
+}
+
 // SetSettlementState sets the "settlement_state" field.
 func (_u *InvoiceUpdate) SetSettlementState(v string) *InvoiceUpdate {
 	_u.mutation.SetSettlementState(v)
@@ -517,6 +531,9 @@ func (_u *InvoiceUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.LineItems(); ok {
 		_spec.SetField(invoice.FieldLineItems, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Financial(); ok {
+		_spec.SetField(invoice.FieldFinancial, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.SettlementState(); ok {
 		_spec.SetField(invoice.FieldSettlementState, field.TypeString, value)
@@ -836,6 +853,20 @@ func (_u *InvoiceUpdateOne) SetNillableLineItems(v *string) *InvoiceUpdateOne {
 	return _u
 }
 
+// SetFinancial sets the "financial" field.
+func (_u *InvoiceUpdateOne) SetFinancial(v string) *InvoiceUpdateOne {
+	_u.mutation.SetFinancial(v)
+	return _u
+}
+
+// SetNillableFinancial sets the "financial" field if the given value is not nil.
+func (_u *InvoiceUpdateOne) SetNillableFinancial(v *string) *InvoiceUpdateOne {
+	if v != nil {
+		_u.SetFinancial(*v)
+	}
+	return _u
+}
+
 // SetSettlementState sets the "settlement_state" field.
 func (_u *InvoiceUpdateOne) SetSettlementState(v string) *InvoiceUpdateOne {
 	_u.mutation.SetSettlementState(v)
@@ -1081,6 +1112,9 @@ func (_u *InvoiceUpdateOne) sqlSave(ctx context.Context) (_node *Invoice, err er
 	}
 	if value, ok := _u.mutation.LineItems(); ok {
 		_spec.SetField(invoice.FieldLineItems, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Financial(); ok {
+		_spec.SetField(invoice.FieldFinancial, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.SettlementState(); ok {
 		_spec.SetField(invoice.FieldSettlementState, field.TypeString, value)

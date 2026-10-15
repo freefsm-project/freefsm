@@ -41,6 +41,8 @@ type Estimate struct {
 	TaxRate string `json:"tax_rate,omitempty"`
 	// LineItems holds the value of the "line_items" field.
 	LineItems string `json:"line_items,omitempty"`
+	// Financial holds the value of the "financial" field.
+	Financial string `json:"financial,omitempty"`
 	// CustomFields holds the value of the "custom_fields" field.
 	CustomFields string `json:"custom_fields,omitempty"`
 	// DeletedAt holds the value of the "deleted_at" field.
@@ -61,7 +63,7 @@ func (*Estimate) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case estimate.FieldID, estimate.FieldDocumentNumber, estimate.FieldCompanyID, estimate.FieldCustomerID, estimate.FieldJobID, estimate.FieldStatusID:
 			values[i] = new(sql.NullInt64)
-		case estimate.FieldNumberLabel, estimate.FieldTitle, estimate.FieldNotes, estimate.FieldTerms, estimate.FieldTaxRate, estimate.FieldLineItems, estimate.FieldCustomFields:
+		case estimate.FieldNumberLabel, estimate.FieldTitle, estimate.FieldNotes, estimate.FieldTerms, estimate.FieldTaxRate, estimate.FieldLineItems, estimate.FieldFinancial, estimate.FieldCustomFields:
 			values[i] = new(sql.NullString)
 		case estimate.FieldValidThrough, estimate.FieldDeletedAt, estimate.FieldConversionHiddenAt, estimate.FieldCreatedAt, estimate.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -164,6 +166,12 @@ func (_m *Estimate) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field line_items", values[i])
 			} else if value.Valid {
 				_m.LineItems = value.String
+			}
+		case estimate.FieldFinancial:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field financial", values[i])
+			} else if value.Valid {
+				_m.Financial = value.String
 			}
 		case estimate.FieldCustomFields:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -282,6 +290,9 @@ func (_m *Estimate) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("line_items=")
 	builder.WriteString(_m.LineItems)
+	builder.WriteString(", ")
+	builder.WriteString("financial=")
+	builder.WriteString(_m.Financial)
 	builder.WriteString(", ")
 	builder.WriteString("custom_fields=")
 	builder.WriteString(_m.CustomFields)

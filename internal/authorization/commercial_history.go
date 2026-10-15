@@ -58,8 +58,8 @@ func (s *Service) CommercialHistory(ctx context.Context, a Actor, kind string, i
 			if err != nil {
 				return err
 			}
-			for _, field := range []struct{ key, label string }{{"title", "Title"}, {"notes", "Notes"}, {"terms", "Terms"}, {"invoice_date", "Invoice Date"}, {"due_date", "Due Date"}, {"valid_through", "Valid Through"}, {"customer_id", "Customer"}, {"job_id", "Job"}, {"line_items", "Lines"}, {"tax_rate", "Tax Rate"}, {"custom_fields", "Custom Fields"}} {
-				if !pricing && (field.key == "line_items" || field.key == "tax_rate") {
+			for _, field := range []struct{ key, label string }{{"title", "Title"}, {"notes", "Notes"}, {"terms", "Terms"}, {"invoice_date", "Invoice Date"}, {"due_date", "Due Date"}, {"valid_through", "Valid Through"}, {"customer_id", "Customer"}, {"job_id", "Job"}, {"line_items", "Lines"}, {"financial", "Accepted amounts and adjustments"}, {"tax_rate", "Tax Rate"}, {"custom_fields", "Custom Fields"}} {
+				if !pricing && (field.key == "line_items" || field.key == "tax_rate" || field.key == "financial") {
 					continue
 				}
 				if field.key == "customer_id" && !p.Allows("customer.view", All) || field.key == "job_id" && !p.Allows("job.view", All) {
@@ -115,7 +115,7 @@ func commercialHistoryText(field string, raw json.RawMessage) string {
 			for _, line := range lines {
 				for key := range line {
 					switch key {
-					case "item_id", "title", "description", "unit_price", "quantity", "taxable", "tax_rate", "discount", "surcharge":
+					case "item_id", "title", "description", "unit_price", "quantity", "taxable", "tax_rate", "discount", "surcharge", "unit_price_decimal", "quantity_decimal", "discount_adjustment", "surcharge_adjustment":
 					default:
 						delete(line, key)
 					}

@@ -57,36 +57,38 @@ type DashboardWidgetView struct {
 }
 
 type DashboardStats struct {
-	TotalCustomers         int
-	NewCustomersThisMonth  int
-	CustomerMonths         []DashboardMonthlyBar
-	NewJobsToday           int
-	NewQuotesToday         int
-	NewInvoicesToday       int
-	PaymentsCollectedToday float64
-	CustomersCreatedToday  int
-	JobsCompletedToday     int
-	JobsScheduledToday     int
-	JobsCompletedPercent   int
-	TotalJobs              int
-	JobsOverdue            int
-	JobMonths              []DashboardMonthlyBar
-	TotalEstimates         int
-	TotalInvoices          int
-	InvoicesPaid           int
-	InvoicesUnpaid         int
-	InvoicesOverdue        int
-	InvoiceMonths          []DashboardMonthlyBar
-	TotalProjects          int
-	ProjectsActive         int
-	ProjectsCompleted      int
-	ProjectMonths          []DashboardMonthlyBar
-	RevenueMonth           float64
-	OutstandingReceivables float64
-	OverdueAmount          float64
-	RecentJobs             []RecentJob
-	RecentInvoices         []RecentInvoice
-	RecentEstimates        []RecentEstimate
+	TotalCustomers                                                     int
+	NewCustomersThisMonth                                              int
+	CustomerMonths                                                     []DashboardMonthlyBar
+	NewJobsToday                                                       int
+	NewQuotesToday                                                     int
+	NewInvoicesToday                                                   int
+	PaymentsCollectedToday                                             float64
+	PaymentsCollectedTodayExact                                        string
+	CustomersCreatedToday                                              int
+	JobsCompletedToday                                                 int
+	JobsScheduledToday                                                 int
+	JobsCompletedPercent                                               int
+	TotalJobs                                                          int
+	JobsOverdue                                                        int
+	JobMonths                                                          []DashboardMonthlyBar
+	TotalEstimates                                                     int
+	TotalInvoices                                                      int
+	InvoicesPaid                                                       int
+	InvoicesUnpaid                                                     int
+	InvoicesOverdue                                                    int
+	InvoiceMonths                                                      []DashboardMonthlyBar
+	TotalProjects                                                      int
+	ProjectsActive                                                     int
+	ProjectsCompleted                                                  int
+	ProjectMonths                                                      []DashboardMonthlyBar
+	RevenueMonth                                                       float64
+	OutstandingReceivables                                             float64
+	OverdueAmount                                                      float64
+	RevenueMonthExact, OutstandingReceivablesExact, OverdueAmountExact string
+	RecentJobs                                                         []RecentJob
+	RecentInvoices                                                     []RecentInvoice
+	RecentEstimates                                                    []RecentEstimate
 }
 
 type DashboardMonthlyBar struct {
@@ -111,20 +113,22 @@ type RecentJob struct {
 }
 
 type RecentInvoice struct {
-	ID        int64
-	Title     string
-	Customer  string
-	Total     float64
-	Status    string
-	CreatedAt string
+	ID         int64
+	Title      string
+	Customer   string
+	Total      float64
+	TotalExact string
+	Status     string
+	CreatedAt  string
 }
 
 type RecentEstimate struct {
-	ID        int64
-	Title     string
-	Customer  string
-	Total     float64
-	CreatedAt string
+	ID         int64
+	Title      string
+	Customer   string
+	Total      float64
+	TotalExact string
+	CreatedAt  string
 }
 
 type DashboardService struct {
@@ -633,6 +637,7 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 
 	// Revenue this month (payments received)
 	var revenue, paymentsCollectedToday float64
+	var revenueMoney, todayMoney Money
 	financial := true
 	if p, current := authorization.NavigationPrincipal(ctx); current {
 		financial = p.Allows("customer.financial.view", authorization.All) && p.Allows("invoice.view", authorization.All) && p.Allows("pricing.view", authorization.All) && p.Allows("settlement.view", authorization.All)
@@ -643,6 +648,7 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 			return DashboardStats{}, err
 		}
 		revenue, paymentsCollectedToday = float64(monthCents)/100, float64(todayCents)/100
+		revenueMoney, todayMoney = Money{minorUnits: monthCents}, Money{minorUnits: todayCents}
 	}
 
 	// Financial totals (exclude draft, paid, and void invoices)
@@ -664,13 +670,27 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 			return DashboardStats{}, err
 		}
 	}
-	var outstanding, overdue float64
+	var outstandingMoney, overdueMoney Money
 	for _, i := range allInvoices {
-		balance := s.invoiceBalance(i, settledByInvoice[i.ID])
-		if balance > 0 {
-			outstanding += balance
+		if !financial {
+			break
+		}
+		totals, err := FinancialTotals(i.Financial, i.LineItems, i.TaxRate)
+		if err != nil {
+			return DashboardStats{}, err
+		}
+		balance, err := totals.Total.Sub(Money{minorUnits: settledByInvoice[i.ID]})
+		if err != nil {
+			return DashboardStats{}, err
+		}
+		if balance.MinorUnits() > 0 {
+			if err := addMoney(&outstandingMoney, balance); err != nil {
+				return DashboardStats{}, err
+			}
 			if IsCompanyDateOverdue(i.DueDate, now, loc) {
-				overdue += balance
+				if err := addMoney(&overdueMoney, balance); err != nil {
+					return DashboardStats{}, err
+				}
 			}
 		}
 	}
@@ -708,36 +728,38 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 	}
 
 	return DashboardStats{
-		TotalCustomers:         totalCustomers,
-		NewCustomersThisMonth:  newCustomers,
-		CustomerMonths:         customerMonths,
-		NewJobsToday:           newJobsToday,
-		NewQuotesToday:         newQuotesToday,
-		NewInvoicesToday:       newInvoicesToday,
-		PaymentsCollectedToday: paymentsCollectedToday,
-		CustomersCreatedToday:  customersCreatedToday,
-		JobsCompletedToday:     jobsCompletedToday,
-		JobsScheduledToday:     jobsScheduledToday,
-		JobsCompletedPercent:   jobsCompletedPercent,
-		TotalJobs:              totalJobs,
-		JobsOverdue:            jobsOverdue,
-		JobMonths:              jobMonths,
-		TotalEstimates:         totalEstimates,
-		TotalInvoices:          totalInvoices,
-		InvoicesPaid:           invoicesPaid,
-		InvoicesUnpaid:         invoicesUnpaid,
-		InvoicesOverdue:        invoicesOverdue,
-		InvoiceMonths:          invoiceMonths,
-		TotalProjects:          totalProjects,
-		ProjectsActive:         projectsActive,
-		ProjectsCompleted:      projectsCompleted,
-		ProjectMonths:          projectMonths,
-		RevenueMonth:           revenue,
-		OutstandingReceivables: outstanding,
-		OverdueAmount:          overdue,
-		RecentJobs:             s.toRecentJobs(recentJobs, custMap, loc, cs),
-		RecentInvoices:         s.toRecentInvoices(recentInvoices, custMap, statusMap, loc, cs),
-		RecentEstimates:        s.toRecentEstimates(recentEstimates, custMap, loc, cs),
+		TotalCustomers:              totalCustomers,
+		NewCustomersThisMonth:       newCustomers,
+		CustomerMonths:              customerMonths,
+		NewJobsToday:                newJobsToday,
+		NewQuotesToday:              newQuotesToday,
+		NewInvoicesToday:            newInvoicesToday,
+		PaymentsCollectedToday:      paymentsCollectedToday,
+		PaymentsCollectedTodayExact: todayMoney.Format(),
+		CustomersCreatedToday:       customersCreatedToday,
+		JobsCompletedToday:          jobsCompletedToday,
+		JobsScheduledToday:          jobsScheduledToday,
+		JobsCompletedPercent:        jobsCompletedPercent,
+		TotalJobs:                   totalJobs,
+		JobsOverdue:                 jobsOverdue,
+		JobMonths:                   jobMonths,
+		TotalEstimates:              totalEstimates,
+		TotalInvoices:               totalInvoices,
+		InvoicesPaid:                invoicesPaid,
+		InvoicesUnpaid:              invoicesUnpaid,
+		InvoicesOverdue:             invoicesOverdue,
+		InvoiceMonths:               invoiceMonths,
+		TotalProjects:               totalProjects,
+		ProjectsActive:              projectsActive,
+		ProjectsCompleted:           projectsCompleted,
+		ProjectMonths:               projectMonths,
+		RevenueMonth:                revenue,
+		OutstandingReceivables:      outstandingMoney.MajorUnits(),
+		OverdueAmount:               overdueMoney.MajorUnits(),
+		RevenueMonthExact:           revenueMoney.Format(), OutstandingReceivablesExact: outstandingMoney.Format(), OverdueAmountExact: overdueMoney.Format(),
+		RecentJobs:      s.toRecentJobs(recentJobs, custMap, loc, cs),
+		RecentInvoices:  s.toRecentInvoices(recentInvoices, custMap, statusMap, loc, cs),
+		RecentEstimates: s.toRecentEstimates(recentEstimates, custMap, loc, cs),
 	}, nil
 }
 
@@ -963,11 +985,7 @@ func (s *DashboardService) withEffectiveInvoiceStatuses(ctx context.Context, inv
 }
 
 func (s *DashboardService) invoiceSubtotal(i *ent.Invoice) float64 {
-	items, err := DecodeLineItems(i.LineItems)
-	if err != nil {
-		return 0
-	}
-	totals, err := CalculateTotals(items, i.TaxRate)
+	totals, err := FinancialTotals(i.Financial, i.LineItems, i.TaxRate)
 	if err != nil {
 		return 0
 	}
@@ -975,11 +993,7 @@ func (s *DashboardService) invoiceSubtotal(i *ent.Invoice) float64 {
 }
 
 func (s *DashboardService) invoiceTotal(i *ent.Invoice) float64 {
-	items, err := DecodeLineItems(i.LineItems)
-	if err != nil {
-		return 0
-	}
-	totals, err := CalculateTotals(items, i.TaxRate)
+	totals, err := FinancialTotals(i.Financial, i.LineItems, i.TaxRate)
 	if err != nil {
 		return 0
 	}
@@ -1049,12 +1063,13 @@ func (s *DashboardService) toRecentInvoices(invoices []*ent.Invoice, custMap, st
 		customerName := ""
 		customerName = custMap[inv.CustomerID]
 		result[i] = RecentInvoice{
-			ID:        inv.ID,
-			Title:     inv.Title,
-			Customer:  customerName,
-			Total:     s.invoiceTotal(inv),
-			Status:    statusName,
-			CreatedAt: FormatCompanyDate(inv.CreatedAt, loc, cs),
+			ID:         inv.ID,
+			Title:      inv.Title,
+			Customer:   customerName,
+			Total:      s.invoiceTotal(inv),
+			TotalExact: dashboardTotalExact(inv.Financial, inv.LineItems, inv.TaxRate),
+			Status:     statusName,
+			CreatedAt:  FormatCompanyDate(inv.CreatedAt, loc, cs),
 		}
 	}
 	return result
@@ -1068,24 +1083,29 @@ func (s *DashboardService) toRecentEstimates(estimates []*ent.Estimate, custMap 
 			customerName = custMap[*e.CustomerID]
 		}
 		result[i] = RecentEstimate{
-			ID:        e.ID,
-			Title:     e.Title,
-			Customer:  customerName,
-			Total:     s.estimateTotal(e),
-			CreatedAt: FormatCompanyDate(e.CreatedAt, loc, cs),
+			ID:         e.ID,
+			Title:      e.Title,
+			Customer:   customerName,
+			Total:      s.estimateTotal(e),
+			TotalExact: dashboardTotalExact(e.Financial, e.LineItems, e.TaxRate),
+			CreatedAt:  FormatCompanyDate(e.CreatedAt, loc, cs),
 		}
 	}
 	return result
 }
 
 func (s *DashboardService) estimateTotal(e *ent.Estimate) float64 {
-	items, err := DecodeLineItems(e.LineItems)
-	if err != nil {
-		return 0
-	}
-	totals, err := CalculateTotals(items, e.TaxRate)
+	totals, err := FinancialTotals(e.Financial, e.LineItems, e.TaxRate)
 	if err != nil {
 		return 0
 	}
 	return totals.Total.MajorUnits()
+}
+
+func dashboardTotalExact(financial, lines, rate string) string {
+	totals, err := FinancialTotals(financial, lines, rate)
+	if err != nil {
+		return "Unavailable"
+	}
+	return totals.Total.Format()
 }

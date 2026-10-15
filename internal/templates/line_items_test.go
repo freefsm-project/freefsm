@@ -10,6 +10,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
+	htmlnode "golang.org/x/net/html"
 )
 
 func TestLineItemHelpersMatchCanonicalMoney(t *testing.T) {
@@ -39,7 +40,7 @@ func TestLineItemHelpersMatchCanonicalMoney(t *testing.T) {
 	assertCents("grandTotal", grandTotal(items, "8.25"), totals.Total.MinorUnits())
 }
 
-func TestLineItemHelpersUseVisibleZeroFallbackForCorruptValues(t *testing.T) {
+func TestLegacyLineItemHelpersRetainZeroFallback(t *testing.T) {
 	invalid := services.LineItem{Title: "Corrupt", Quantity: math.NaN(), UnitPrice: 10, Taxable: true}
 	items := []services.LineItem{invalid}
 
@@ -56,9 +57,52 @@ func TestLineItemHelpersUseVisibleZeroFallbackForCorruptValues(t *testing.T) {
 		t.Errorf("grandTotal() = %v, want 0", got)
 	}
 
-	html := renderPricingComponent(t, EstimateShow(EstimateDetail{TaxRate: "8.25", LineItems: items}))
-	if !strings.Contains(html, "$0.00") {
-		t.Error("rendered corrupt line item does not show the $0.00 fallback")
+}
+
+func TestCommercialCorruptValuesRenderUnavailable(t *testing.T) {
+	for _, bad := range []struct {
+		name string
+		line services.LineItem
+	}{
+		{"quantity", services.LineItem{Title: "Corrupt", Description: "Retain for review", Quantity: math.NaN(), UnitPrice: 10, Taxable: true}},
+		{"price", services.LineItem{Title: "Corrupt", Description: "Retain for review", Quantity: 1, UnitPrice: math.Inf(1), Taxable: true}},
+	} {
+		items := []services.LineItem{bad.line, {Title: "Valid neighbor", Quantity: 1, UnitPrice: 12.34}}
+		for _, kind := range []string{"estimate", "invoice"} {
+			t.Run(kind+"/"+bad.name, func(t *testing.T) {
+				var component templ.Component = EstimateShow(EstimateDetail{TaxRate: "8.25", LineItems: items})
+				if kind == "invoice" {
+					component = InvoiceShow(InvoiceDetail{TaxRate: "8.25", LineItems: items})
+				}
+				doc := parseLineItemHTML(t, renderPricingComponent(t, component))
+				text := lineItemHTMLText(doc)
+				for _, want := range []string{"Corrupt", "Retain for review", "Valid neighbor", "Subtotal: Unavailable", "Tax: Unavailable", "Grand Total: Unavailable"} {
+					if !strings.Contains(text, want) {
+						t.Errorf("missing graceful rendering %q: %s", want, text)
+					}
+				}
+				for _, badValue := range []string{"$0.00", "$Unavailable", "NaN", "+Inf", "-Inf"} {
+					if strings.Contains(text, badValue) {
+						t.Errorf("corrupt data was presented as a financial value %q", badValue)
+					}
+				}
+				rows := lineItemHTMLRows(doc)
+				if row := rows["Corrupt"]; len(row) != 6 || row[5] != "Unavailable" {
+					t.Errorf("corrupt line amount: %v", row)
+				}
+				if row := rows["Valid neighbor"]; len(row) != 6 || row[5] != "$12.34" {
+					t.Errorf("valid neighboring line lost its amount: %v", row)
+				}
+			})
+		}
+	}
+	// A legitimate zero is still money, not an unavailable/error sentinel.
+	zero := []services.LineItem{{Title: "Legitimate zero", Quantity: 1, UnitPrice: 0}}
+	for _, component := range []templ.Component{EstimateShow(EstimateDetail{TaxRate: "0", LineItems: zero}), InvoiceShow(InvoiceDetail{TaxRate: "0", LineItems: zero})} {
+		text := lineItemHTMLText(parseLineItemHTML(t, renderPricingComponent(t, component)))
+		if !strings.Contains(text, "Grand Total: $0.00") || strings.Contains(text, "Unavailable") {
+			t.Fatalf("legitimate zero was lost: %s", text)
+		}
 	}
 }
 
@@ -120,7 +164,6 @@ func TestDocumentFormsRenderSharedLineItemEditorContract(t *testing.T) {
 				`x-model="item.discount"`,
 				`x-model="item.surcharge"`,
 				`Free-text line`,
-				`min="0.000001"`,
 				`name="line_items"`,
 			} {
 				if !strings.Contains(html, want) {
@@ -132,8 +175,84 @@ func TestDocumentFormsRenderSharedLineItemEditorContract(t *testing.T) {
 					t.Errorf("rendered form contains obsolete editor behavior %q", forbidden)
 				}
 			}
+			// Decimal text entry must not impose the old six-decimal floor or
+			// native floating-point input coercion. Positivity is validated at save.
+			var quantity map[string]string
+			var visit func(*htmlnode.Node)
+			visit = func(node *htmlnode.Node) {
+				if node.Type == htmlnode.ElementNode && node.Data == "input" {
+					attrs := map[string]string{}
+					for _, a := range node.Attr {
+						attrs[a.Key] = a.Val
+					}
+					if attrs["x-model"] == "item.quantity" {
+						quantity = attrs
+					}
+				}
+				for child := node.FirstChild; child != nil; child = child.NextSibling {
+					visit(child)
+				}
+			}
+			visit(parseLineItemHTML(t, html))
+			if quantity["type"] != "text" || quantity["inputmode"] != "decimal" || quantity["aria-label"] != "Quantity" {
+				t.Errorf("quantity is not exact decimal entry: %v", quantity)
+			}
+			if quantity["min"] == "0.000001" {
+				t.Error("obsolete six-decimal quantity floor returned")
+			}
 		})
 	}
+}
+
+func parseLineItemHTML(t *testing.T, markup string) *htmlnode.Node {
+	t.Helper()
+	doc, err := htmlnode.Parse(strings.NewReader(markup))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return doc
+}
+
+func lineItemHTMLText(node *htmlnode.Node) string {
+	var text strings.Builder
+	var visit func(*htmlnode.Node)
+	visit = func(n *htmlnode.Node) {
+		if n.Type == htmlnode.ElementNode && (n.Data == "script" || n.Data == "style" || n.Data == "template") {
+			return
+		}
+		if n.Type == htmlnode.TextNode {
+			text.WriteString(n.Data)
+			text.WriteByte(' ')
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(node)
+	return strings.Join(strings.Fields(text.String()), " ")
+}
+
+func lineItemHTMLRows(doc *htmlnode.Node) map[string][]string {
+	rows := map[string][]string{}
+	var visit func(*htmlnode.Node)
+	visit = func(n *htmlnode.Node) {
+		if n.Type == htmlnode.ElementNode && n.Data == "tr" {
+			var cells []string
+			for child := n.FirstChild; child != nil; child = child.NextSibling {
+				if child.Type == htmlnode.ElementNode && child.Data == "td" {
+					cells = append(cells, lineItemHTMLText(child))
+				}
+			}
+			if len(cells) > 0 {
+				rows[cells[0]] = cells
+			}
+		}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(doc)
+	return rows
 }
 
 func TestLineItemEditorCreateItemPermission(t *testing.T) {

@@ -370,7 +370,7 @@ func EstimateForm(p EstimateFormPageData) templ.Component {
 				return templ_7745c5c3_Err
 			}
 			if capturedPricingVisible(ctx, "estimate", p.Estimate.ID, p.IsNew) {
-				templ_7745c5c3_Err = LineItemEditor(LineItemEditorData{ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON}).Render(ctx, templ_7745c5c3_Buffer)
+				templ_7745c5c3_Err = LineItemEditor(LineItemEditorData{AdjustmentsJSON: p.AdjustmentsJSON, Financial: estimateFinancial(p.Estimate, p.ExistingItemsJSON, !p.IsNew), ExistingDocument: !p.IsNew && !p.PreserveEntered, ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON}).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

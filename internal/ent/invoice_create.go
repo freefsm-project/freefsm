@@ -192,6 +192,20 @@ func (_c *InvoiceCreate) SetNillableLineItems(v *string) *InvoiceCreate {
 	return _c
 }
 
+// SetFinancial sets the "financial" field.
+func (_c *InvoiceCreate) SetFinancial(v string) *InvoiceCreate {
+	_c.mutation.SetFinancial(v)
+	return _c
+}
+
+// SetNillableFinancial sets the "financial" field if the given value is not nil.
+func (_c *InvoiceCreate) SetNillableFinancial(v *string) *InvoiceCreate {
+	if v != nil {
+		_c.SetFinancial(*v)
+	}
+	return _c
+}
+
 // SetSettlementState sets the "settlement_state" field.
 func (_c *InvoiceCreate) SetSettlementState(v string) *InvoiceCreate {
 	_c.mutation.SetSettlementState(v)
@@ -351,6 +365,10 @@ func (_c *InvoiceCreate) defaults() {
 		v := invoice.DefaultLineItems
 		_c.mutation.SetLineItems(v)
 	}
+	if _, ok := _c.mutation.Financial(); !ok {
+		v := invoice.DefaultFinancial
+		_c.mutation.SetFinancial(v)
+	}
 	if _, ok := _c.mutation.SettlementState(); !ok {
 		v := invoice.DefaultSettlementState
 		_c.mutation.SetSettlementState(v)
@@ -398,6 +416,9 @@ func (_c *InvoiceCreate) check() error {
 	}
 	if _, ok := _c.mutation.LineItems(); !ok {
 		return &ValidationError{Name: "line_items", err: errors.New(`ent: missing required field "Invoice.line_items"`)}
+	}
+	if _, ok := _c.mutation.Financial(); !ok {
+		return &ValidationError{Name: "financial", err: errors.New(`ent: missing required field "Invoice.financial"`)}
 	}
 	if _, ok := _c.mutation.SettlementState(); !ok {
 		return &ValidationError{Name: "settlement_state", err: errors.New(`ent: missing required field "Invoice.settlement_state"`)}
@@ -501,6 +522,10 @@ func (_c *InvoiceCreate) createSpec() (*Invoice, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.LineItems(); ok {
 		_spec.SetField(invoice.FieldLineItems, field.TypeString, value)
 		_node.LineItems = value
+	}
+	if value, ok := _c.mutation.Financial(); ok {
+		_spec.SetField(invoice.FieldFinancial, field.TypeString, value)
+		_node.Financial = value
 	}
 	if value, ok := _c.mutation.SettlementState(); ok {
 		_spec.SetField(invoice.FieldSettlementState, field.TypeString, value)

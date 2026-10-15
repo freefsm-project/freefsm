@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/freefsm-project/freefsm/internal/commercial"
 	"github.com/freefsm-project/freefsm/internal/ent"
 )
 
@@ -35,7 +36,7 @@ func MoneyFromMajorUnits(value float64) (Money, error) {
 func (m Money) MajorUnits() float64 { return float64(m.minorUnits) / 100 }
 
 func (m Money) Format() string {
-	return fmt.Sprintf("%.2f", m.MajorUnits())
+	return commercial.FormatCents(m.minorUnits)
 }
 
 func (m Money) Add(other Money) (Money, error) {
@@ -72,16 +73,20 @@ type DocumentTotals struct {
 }
 
 type LineItem struct {
-	SnapshotID  string  `json:"snapshot_id,omitempty"`
-	ItemID      int64   `json:"item_id"`
-	Title       string  `json:"title"`
-	Description string  `json:"description"`
-	UnitPrice   float64 `json:"unit_price"`
-	Quantity    float64 `json:"quantity"`
-	Taxable     bool    `json:"taxable"`
-	TaxRate     string  `json:"tax_rate"`
-	Discount    float64 `json:"discount"`
-	Surcharge   float64 `json:"surcharge"`
+	ExactUnitPrice      string                 `json:"unit_price_decimal,omitempty"`
+	ExactQuantity       string                 `json:"quantity_decimal,omitempty"`
+	DiscountAdjustment  *commercial.Adjustment `json:"discount_adjustment,omitempty"`
+	SurchargeAdjustment *commercial.Adjustment `json:"surcharge_adjustment,omitempty"`
+	SnapshotID          string                 `json:"snapshot_id,omitempty"`
+	ItemID              int64                  `json:"item_id"`
+	Title               string                 `json:"title"`
+	Description         string                 `json:"description"`
+	UnitPrice           float64                `json:"unit_price"`
+	Quantity            float64                `json:"quantity"`
+	Taxable             bool                   `json:"taxable"`
+	TaxRate             string                 `json:"tax_rate"`
+	Discount            float64                `json:"discount"`
+	Surcharge           float64                `json:"surcharge"`
 }
 
 // CatalogSnapshot contains only the catalog values copied into a document line.
@@ -151,6 +156,14 @@ func ReferencesItem(items []LineItem, itemID int64) bool {
 }
 
 func EncodeEditorBootstrap(catalog []CatalogSnapshot, existingLineItems string, taxContext CustomerTaxContext) (EditorBootstrap, error) {
+	return encodeEditorBootstrap(catalog, existingLineItems, taxContext, false)
+}
+
+func EncodeCommercialEditorBootstrap(catalog []CatalogSnapshot, existingLineItems string, taxContext CustomerTaxContext) (EditorBootstrap, error) {
+	return encodeEditorBootstrap(catalog, existingLineItems, taxContext, true)
+}
+
+func encodeEditorBootstrap(catalog []CatalogSnapshot, existingLineItems string, taxContext CustomerTaxContext, exact bool) (EditorBootstrap, error) {
 	if catalog == nil {
 		catalog = []CatalogSnapshot{}
 	}
@@ -163,7 +176,20 @@ func EncodeEditorBootstrap(catalog []CatalogSnapshot, existingLineItems string, 
 	if err != nil {
 		return EditorBootstrap{}, fmt.Errorf("decode existing line items: %w", err)
 	}
-	existingJSON, err := EncodeLineItems(existing)
+	if exact && strings.TrimSpace(existingLineItems) != "" {
+		if exact, captureErr := commercial.CapturedInput(existingLineItems, "0", nil, nil); captureErr == nil {
+			for index := range existing {
+				existing[index].ExactUnitPrice = exact.Lines[index].UnitPrice
+				existing[index].ExactQuantity = exact.Lines[index].Quantity
+			}
+		}
+	}
+	var existingJSON string
+	if exact {
+		existingJSON, err = EncodeCommercialLines(existing)
+	} else {
+		existingJSON, err = EncodeLineItems(existing)
+	}
 	if err != nil {
 		return EditorBootstrap{}, fmt.Errorf("encode existing line items: %w", err)
 	}
@@ -228,6 +254,8 @@ func ValidateLineItems(items []LineItem) error {
 	return nil
 }
 
+// LineAmount preserves historical unversioned line arithmetic. New commercial
+// acceptance uses internal/commercial's staged calculation instead.
 func LineAmount(item LineItem) (Money, error) {
 	if err := ValidateLineItems([]LineItem{item}); err != nil {
 		return Money{}, err
@@ -243,6 +271,9 @@ func LineAmount(item LineItem) (Money, error) {
 	return roundMoney(amount)
 }
 
+// CalculateTotals is the legacy aggregate-tax calculator. Keep its semantics
+// stable for historical documents and the legacy settlement initializer.
+// Persisted commercial readers select the accepted version via FinancialTotals.
 func CalculateTotals(items []LineItem, taxRate string) (DocumentTotals, error) {
 	if err := ValidateLineItems(items); err != nil {
 		return DocumentTotals{}, err

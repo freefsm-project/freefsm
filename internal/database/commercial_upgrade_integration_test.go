@@ -61,7 +61,7 @@ func TestCommercialUpgradePreservesFactsAndRepairsFutureSequence(t *testing.T) {
 				t.Fatal(err)
 			}
 			var before, after string
-			query := `SELECT jsonb_build_object('estimates',(SELECT jsonb_agg(to_jsonb(e)-'commercial_revision' ORDER BY id) FROM estimates e),'invoices',(SELECT jsonb_agg(to_jsonb(i)-'commercial_revision' ORDER BY id) FROM invoices i),'issued',(SELECT jsonb_agg(n ORDER BY document_type,number) FROM issued_document_numbers n))::text`
+			query := `SELECT jsonb_build_object('estimates',(SELECT jsonb_agg((to_jsonb(e)-ARRAY['commercial_revision','financial'])||jsonb_build_object('tax_rate',e.tax_rate::text) ORDER BY id) FROM estimates e),'invoices',(SELECT jsonb_agg((to_jsonb(i)-ARRAY['commercial_revision','financial'])||jsonb_build_object('tax_rate',i.tax_rate::text) ORDER BY id) FROM invoices i),'issued',(SELECT jsonb_agg(n ORDER BY document_type,number) FROM issued_document_numbers n))::text`
 			mustMigrationScan(t, db.Pool.QueryRow(ctx, query), &before)
 			err = db.Migrate(ctx, MigrationFS())
 			if invalid {

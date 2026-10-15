@@ -11,6 +11,7 @@ type ReceivableSource struct {
 	ID                 int64
 	DueDate            *time.Time
 	LineItems, TaxRate string
+	Financial          string
 	SettledCents       int64
 }
 
@@ -25,7 +26,7 @@ func (s *Service) CustomerReceivableSources(ctx context.Context, a Actor, custom
 	if !p.Allows("customer.financial.view", All) {
 		return nil, ErrForbidden
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT i.id,i.due_date,i.line_items::text,i.tax_rate::text,
+	rows, err := s.Pool.Query(ctx, `SELECT i.id,i.due_date,i.line_items::text,i.tax_rate::text,i.financial,
  coalesce((SELECT sum(x.amount_cents) FROM payment_invoice_allocations x JOIN invoice_payments p ON p.id=x.payment_id WHERE x.invoice_id=i.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='payment' AND r.operation_id=p.id)),0)
  +coalesce((SELECT sum(x.amount_cents) FROM credit_applications x WHERE x.invoice_id=i.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=x.id)),0)
  FROM invoices i JOIN statuses s ON s.id=i.status_id WHERE i.customer_id=$1 AND i.company_id=$2 AND i.deleted_at IS NULL AND i.conversion_hidden_at IS NULL AND s.category_key NOT IN ('invoice:draft','invoice:void') AND ($4 OR ($5 AND EXISTS(SELECT 1 FROM jobs j JOIN job_assignments a ON a.job_id=j.id WHERE j.id=i.job_id AND j.company_id=$2 AND j.customer_id=$1 AND j.deleted_at IS NULL AND a.user_id=$3))) ORDER BY i.id`, customerID, p.CompanyID, a.UserID, p.Allows("invoice.view", All), p.Allows("invoice.view", Assigned))
@@ -36,7 +37,7 @@ func (s *Service) CustomerReceivableSources(ctx context.Context, a Actor, custom
 	result := []ReceivableSource{}
 	for rows.Next() {
 		var row ReceivableSource
-		if err = rows.Scan(&row.ID, &row.DueDate, &row.LineItems, &row.TaxRate, &row.SettledCents); err != nil {
+		if err = rows.Scan(&row.ID, &row.DueDate, &row.LineItems, &row.TaxRate, &row.Financial, &row.SettledCents); err != nil {
 			return nil, err
 		}
 		result = append(result, row)
