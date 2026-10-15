@@ -402,10 +402,12 @@ func (s *AssetService) Restore(ctx context.Context, id int64) error {
 	return nil
 }
 
-func (s *AssetService) GetServiceHistory(ctx context.Context, assetID int64) ([]*ent.Job, error) {
+// LinkedJobs preserves Job provenance; it is not evidence of performed service.
+func (s *AssetService) LinkedJobs(ctx context.Context, assetID int64) ([]*ent.Job, error) {
 	return s.client.Job.Query().
 		Where(job.DeletedAtIsNil(), func(s *sql.Selector) {
-			s.Where(sql.ExprP("EXISTS (SELECT 1 FROM job_asset_links l WHERE l.job_id="+s.C("id")+" AND l.asset_id=?)", assetID))
+			links := sql.Table("job_asset_links")
+			s.Where(sql.Exists(sql.Select(links.C("job_id")).From(links).Where(sql.And(sql.ColumnsEQ(links.C("job_id"), s.C("id")), sql.EQ(links.C("asset_id"), assetID)))))
 		}).
 		Order(ent.Desc(job.FieldUpdatedAt)).
 		All(ctx)

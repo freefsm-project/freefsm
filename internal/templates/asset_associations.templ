@@ -3,13 +3,16 @@ package templates
 import "fmt"
 import "github.com/freefsm-project/freefsm/internal/authorization"
 
-templ CustomerAssetHistory(id int64, periods []authorization.CustomerAssetPeriod) {
+templ CustomerAssetHistory(id int64, periods []authorization.CustomerAssetPeriod,canViewServiceEntries bool) {
  @Layout("Customer Asset history") {
   <h1>Customer Asset association periods</h1>
   <a href={templ.URL(fmt.Sprintf("/customers/%d",id))}>Back to Customer</a>
   <p>Each recorded visit is a distinct period. Past references grant no current operational access.</p>
   for _,period := range periods {
    <article><h2>{period.Number}</h2><p>{period.StartsOn} → {period.EndsBefore}</p></article>
+   if canViewServiceEntries {
+    <a href={templ.URL(fmt.Sprintf("/customers/%d/assets/%d/service-entries",id,period.AssetID))}>Service history for this Customer</a>
+   }
   }
  }
 }
