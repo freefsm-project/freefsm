@@ -46,8 +46,17 @@ type LegacyNumber struct {
 	Next       int64
 }
 
+func configurationPermission(section, action string) (string, Scope) {
+	if section == "offline" {
+		return "security.offline." + action, Sealed
+	}
+	return "configuration." + section + "." + action, Configuration
+}
+
 func configurationFields(section string) []ConfigurationField {
 	switch section {
+	case "offline":
+		return []ConfigurationField{{"offline_hours", "Offline authorization hours (0 disables; maximum 72)", "number"}}
 	case "company":
 		return []ConfigurationField{{"business_name", "Business name", "text"}, {"address", "Address", "text"}, {"city", "City", "text"}, {"state", "State", "text"}, {"zip", "ZIP", "text"}, {"phone", "Phone", "text"}, {"email", "Email", "text"}, {"tax_id", "Tax ID", "text"}, {"timezone", "Timezone", "text"}, {"date_format", "Date format", "text"}, {"invoice_color", "Document color", "color"}, {"invoice_footer", "Document footer", "textarea"}}
 	case "documents":
@@ -80,11 +89,13 @@ func (s *Service) Configuration(ctx context.Context, a Actor) (ConfigurationView
 			return v, err
 		}
 	}
-	for _, name := range []string{"company", "documents"} {
-		if !p.Allows("configuration."+name+".view", Configuration) {
+	for _, name := range []string{"company", "documents", "offline"} {
+		permission, scope := configurationPermission(name, "view")
+		if !p.Allows(permission, scope) {
 			continue
 		}
-		section := ConfigurationSection{Name: name, Label: strings.ToUpper(name[:1]) + name[1:], Manage: p.Allows("configuration."+name+".manage", Configuration), Fields: configurationFields(name), Values: map[string]string{}}
+		permission, scope = configurationPermission(name, "manage")
+		section := ConfigurationSection{Name: name, Label: strings.ToUpper(name[:1]) + name[1:], Manage: p.Allows(permission, scope), Fields: configurationFields(name), Values: map[string]string{}}
 		v.Sections = append(v.Sections, section)
 	}
 	if len(v.Sections) == 0 {
@@ -137,6 +148,12 @@ func validateConfigurationField(name, value string) (any, error) {
 		return invalid()
 	}
 	switch name {
+	case "offline_hours":
+		n, err := strconv.Atoi(value)
+		if err != nil || n < 0 || n > 72 {
+			return invalid()
+		}
+		return n, nil
 	case "business_name":
 		if strings.TrimSpace(value) == "" {
 			return invalid()
@@ -196,8 +213,8 @@ func validNumberText(value string) bool {
 // authorization and numbering; the immutable audit is part of the same commit.
 func (s *Service) SaveConfiguration(ctx context.Context, a Actor, section string, revision int64, values url.Values) error {
 	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
-		permission := "configuration." + section + ".manage"
-		if !p.Allows(permission, Configuration) {
+		permission, scope := configurationPermission(section, "manage")
+		if !p.Allows(permission, scope) {
 			return ErrForbidden
 		}
 		allowed := map[string]bool{"csrf_token": true, "revision": true, "section": true}
@@ -258,7 +275,7 @@ func (s *Service) SaveConfiguration(ctx context.Context, a Actor, section string
 		if _, err := tx.Exec(ctx, `UPDATE company_settings SET `+strings.Join(sets, ",")+`,updated_at=clock_timestamp() WHERE id=$1`, args...); err != nil {
 			return err
 		}
-		return audit(ctx, tx, a, p, permission, Configuration, "company_settings", id, map[string]any{"fields": changed, "reviewed_revision": revision})
+		return audit(ctx, tx, a, p, permission, scope, "company_settings", id, map[string]any{"fields": changed, "reviewed_revision": revision})
 	})
 }
 
