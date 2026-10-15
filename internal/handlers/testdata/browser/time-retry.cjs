@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 (async()=>{
- const [base,token,id]=process.argv.slice(2);
+ const [base,token,id,phase='history']=process.argv.slice(2);
  const context=await chromium.launchPersistentContext(fs.mkdtempSync(path.join(process.env.TMPDIR,'tr-')),{executablePath:process.env.BROWSER_EXECUTABLE,headless:true,args:['--no-sandbox']});
  try {
   await context.addCookies([{name:'session',value:token,url:base}]);
@@ -24,6 +24,6 @@ const path=require('node:path');
   assert.match(history,/before browser dependency fault/);assert.match(history,/after browser dependency recovery/);
   assert.equal(history.split('Browser exact-identity recovery').length-1,1);
   assert.equal(operations.length,2);assert.ok(operations[0]);assert.equal(operations[0],operations[1]);
-  console.log('Real history failure → verified nonterminal receipt → explicit same-ID browser retry → one persisted correction passed');
+  console.log(`Real ${phase} failure → verified nonterminal receipt → explicit same-ID browser retry → one persisted correction passed`);
  } finally {await context.close();}
 })().catch(e=>{console.error(e);process.exit(1)});

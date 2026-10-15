@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"net/http"
 	"strconv"
@@ -44,32 +45,38 @@ func (h *TimeEntryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Invalid form", 400)
 		return
 	}
 	for _, field := range []string{"latitude", "longitude", "gps", "accuracy", "captured_at"} {
 		if r.Form.Has(field) {
+			saveaction.RejectBeforeWrite(r.Context())
 			http.Error(w, "Manual entries cannot capture GPS", 400)
 			return
 		}
 	}
 	subject, err := strconv.ParseInt(r.FormValue("user_id"), 10, 64)
 	if err != nil || subject <= 0 {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Select a subject", 400)
 		return
 	}
 	job, err := parseOptionalID(r.FormValue("job_id"))
 	if err != nil || job < 0 {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Select an authorized active Job", 400)
 		return
 	}
 	start, err := parseTimeEntryEdit(r.FormValue("clock_in"), middleware.CompanyLocation(r.Context()))
 	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Provide an exact start with UTC offset", 400)
 		return
 	}
 	end, err := parseTimeEntryEdit(r.FormValue("clock_out"), middleware.CompanyLocation(r.Context()))
 	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		clockError(w, r, &authorization.ClockConflict{Code: "time_order"})
 		return
 	}
