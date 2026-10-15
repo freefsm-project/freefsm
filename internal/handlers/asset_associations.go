@@ -93,7 +93,7 @@ func (h *AssetHandler) CustomerHistory(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	periods, err := req.Service.CustomerAssetHistory(r.Context(), req.Actor, id)
+	periods, err := req.Service.CustomerAssetHistory(r.Context(), req.Actor, id, r.URL.Query().Get("archived") == "1")
 	if err != nil {
 		writeAssetVocabularyError(w, r, err)
 		return

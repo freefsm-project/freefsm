@@ -165,9 +165,12 @@ type AssetAssociationPeriod struct {
 type CustomerAssetPeriod struct {
 	AssetID                      int64
 	Number, StartsOn, EndsBefore string
+	Class                        string
+	Archived                     bool
+	Current                      bool
 }
 
-func (s *Service) CustomerAssetHistory(ctx context.Context, a Actor, id int64) ([]CustomerAssetPeriod, error) {
+func (s *Service) CustomerAssetHistory(ctx context.Context, a Actor, id int64, archived bool) ([]CustomerAssetPeriod, error) {
 	var out []CustomerAssetPeriod
 	err := s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
 		if !p.Allows("customer.view", All) || !p.Allows("asset.view", All) {
@@ -176,14 +179,17 @@ func (s *Service) CustomerAssetHistory(ctx context.Context, a Actor, id int64) (
 		if _, err := parentAccess(ctx, tx, p, "customer", id, "", false); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT p.asset_id,a.number,coalesce(p.starts_on::text,'Unknown — observed association'),coalesce(p.ends_before::text,'Current') FROM asset_association_periods p JOIN assets a ON a.id=p.asset_id WHERE p.customer_id=$1 AND a.company_id=$2 AND (a.deleted_at IS NULL OR $3) ORDER BY a.number,p.starts_on NULLS FIRST,p.event_id`, id, p.CompanyID, p.Allows("asset.archived.view", All))
+		if archived && !p.Allows("asset.archived.view", All) {
+			return ErrForbidden
+		}
+		rows, err := tx.Query(ctx, `SELECT p.asset_id,a.number,coalesce(p.starts_on::text,'Unknown — observed association'),coalesce(p.ends_before::text,'Current'),a.ownership_class,a.deleted_at IS NOT NULL,p.ends_before IS NULL FROM asset_association_periods p JOIN assets a ON a.id=p.asset_id WHERE p.customer_id=$1 AND a.company_id=$2 AND (a.deleted_at IS NULL OR $3) ORDER BY a.number,p.starts_on NULLS FIRST,p.event_id`, id, p.CompanyID, archived)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var v CustomerAssetPeriod
-			if err = rows.Scan(&v.AssetID, &v.Number, &v.StartsOn, &v.EndsBefore); err != nil {
+			if err = rows.Scan(&v.AssetID, &v.Number, &v.StartsOn, &v.EndsBefore, &v.Class, &v.Archived, &v.Current); err != nil {
 				return err
 			}
 			out = append(out, v)

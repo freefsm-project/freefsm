@@ -9,9 +9,57 @@ templ CustomerAssetHistory(id int64, periods []authorization.CustomerAssetPeriod
   <a href={templ.URL(fmt.Sprintf("/customers/%d",id))}>Back to Customer</a>
   <p>Each recorded visit is a distinct period. Past references grant no current operational access.</p>
   for _,period := range periods {
-   <article><h2>{period.Number}</h2><p>{period.StartsOn} → {period.EndsBefore}</p></article>
+   @customerAssetPeriod(period)
   }
  }
+}
+
+templ CustomerAssetSections(id int64, periods []authorization.CustomerAssetPeriod) {
+ <section aria-label="Assets">
+  <h2>Current Assets</h2>
+  <p>Current associations only. Asset visibility does not grant financial or related-record access.</p>
+  <a href={templ.URL(fmt.Sprintf("/assets?customer_id=%d",id))}>View all current Assets</a>
+  if len(customerAssetPeriods(periods,true))==0 {
+   <p>No current Assets</p>
+  }
+  for _,period:=range customerAssetPeriods(periods,true) {
+   @customerAssetPeriod(period)
+  }
+  <details><summary>Past Asset associations</summary>
+   <p>Each visit is retained separately. Historical references grant no current detail navigation.</p>
+   if len(customerAssetPeriods(periods,false))==0 {
+    <p>No past Asset associations</p>
+   }
+   for _,period:=range customerAssetPeriods(periods,false) {
+    @customerAssetPeriod(period)
+   }
+  </details>
+  <a href={templ.URL(fmt.Sprintf("/customers/%d/asset-history",id))}>Past and current Asset periods</a>
+  if canMaster(ctx,"asset.archived.view") {
+   <a href={templ.URL(fmt.Sprintf("/customers/%d/asset-history?archived=1",id))}>Include archived Asset references</a>
+  }
+ </section>
+}
+
+templ customerAssetPeriod(period authorization.CustomerAssetPeriod) {
+ <article>
+  <h3>{period.Number}</h3>
+  if period.Class=="company_owned" {
+   <p>Company-owned placement</p>
+  } else {
+   <p>Customer-owned ownership</p>
+  }
+  if period.Archived {
+   <p>Archived — historical reference</p>
+  }
+  <p>{period.StartsOn} → {period.EndsBefore}</p>
+ </article>
+}
+
+func customerAssetPeriods(periods []authorization.CustomerAssetPeriod,current bool) []authorization.CustomerAssetPeriod {
+ result:=[]authorization.CustomerAssetPeriod{}
+ for _,p:=range periods { if p.Current==current {result=append(result,p)} }
+ return result
 }
 
 templ AssetAssociations(id int64, history authorization.AssetAssociationHistory, actions []string, customers []SelectOption) {

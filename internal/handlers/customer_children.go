@@ -263,12 +263,19 @@ func customerRelatedWork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	rows, err := req.Service.CustomerRelatedWork(r.Context(), req.Actor, id)
+	kind := r.URL.Query().Get("type")
+	switch kind {
+	case "", "project", "job", "estimate", "invoice":
+	default:
+		http.Error(w, "Invalid work type", http.StatusBadRequest)
+		return
+	}
+	archived := r.URL.Query().Get("archived") == "1"
+	rows, err := req.Service.CustomerWorkCollection(r.Context(), req.Actor, id, kind, archived)
 	if err != nil {
 		authorizationError(w, r, err)
 		return
 	}
-	kind := r.URL.Query().Get("type")
 	filtered := []authorization.CustomerWork{}
 	for _, row := range rows {
 		if kind == "" || row.Kind == kind {
@@ -286,5 +293,5 @@ func customerRelatedWork(w http.ResponseWriter, r *http.Request) {
 	total := len(filtered)
 	start := min((page-1)*size, total)
 	filtered = filtered[start:min(start+size, total)]
-	templates.CustomerWorkPage(id, filtered, kind, page, size, total).Render(r.Context(), w)
+	templates.CustomerWorkPage(id, filtered, kind, page, size, total, archived).Render(r.Context(), w)
 }

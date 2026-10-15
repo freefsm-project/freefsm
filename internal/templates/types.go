@@ -203,6 +203,9 @@ type CustomerRow struct {
 }
 
 type CustomerShowPageData struct {
+	SectionErrors    map[string]bool
+	UpdatedAt        string
+	AssetPeriods     []authorization.CustomerAssetPeriod
 	ShowSettlement   bool
 	CanRefund        bool
 	CanReverseRefund bool

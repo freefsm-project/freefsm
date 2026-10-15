@@ -221,8 +221,9 @@ func TestCustomerDashboardDoesNotPresentFailedMasterQueryAsEmpty(t *testing.T) {
 	if _, err := pool.Exec(ctx, `ALTER TABLE customer_contacts RENAME TO temporarily_unavailable_contacts`); err != nil {
 		t.Fatal(err)
 	}
-	body := requestBody(t, router, cookie, "GET", fmt.Sprintf("/customers/%d", c.ID), http.StatusServiceUnavailable)
-	assertContains(t, body, "Service temporarily unavailable")
+	body := requestBody(t, router, cookie, "GET", fmt.Sprintf("/customers/%d", c.ID), http.StatusOK)
+	assertContains(t, body, "Contacts unavailable")
+	assertNotContains(t, body, "No contacts")
 	assertContains(t, body, fmt.Sprintf(`href="/customers/%d"`, c.ID))
 	assertNotContains(t, body, "customer_contacts")
 }
