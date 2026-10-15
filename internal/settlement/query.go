@@ -96,11 +96,12 @@ func (s *Service) GrantedInvoiceSettlement(ctx context.Context, actor Actor, inv
 func (s *Service) invoiceSettlement(ctx context.Context, actor Actor, invoiceID int64) (InvoiceSettlement, error) {
 	var out InvoiceSettlement
 	var encoded, tax string
-	err := s.db.QueryRow(ctx, `SELECT id,customer_id,settlement_state,line_items::text,tax_rate::text FROM invoices WHERE company_id=$1 AND id=$2 AND conversion_hidden_at IS NULL`, actor.CompanyID, invoiceID).Scan(&out.InvoiceID, &out.CustomerID, &out.State, &encoded, &tax)
+	var financial string
+	err := s.db.QueryRow(ctx, `SELECT id,customer_id,settlement_state,line_items::text,tax_rate::text,financial FROM invoices WHERE company_id=$1 AND id=$2 AND conversion_hidden_at IS NULL`, actor.CompanyID, invoiceID).Scan(&out.InvoiceID, &out.CustomerID, &out.State, &encoded, &tax, &financial)
 	if err != nil {
 		return out, err
 	}
-	out.TotalCents, err = invoiceTotal(encoded, tax)
+	out.TotalCents, err = invoiceTotal(encoded, tax, financial)
 	if err != nil {
 		return out, err
 	}

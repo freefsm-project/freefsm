@@ -2,7 +2,9 @@ package authorization
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/freefsm-project/freefsm/internal/commercial"
 	"strings"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 // DocumentCreation contains resolved, explicitly reviewed content. Defaults are
 // not reapplied here; current authority, selected inputs and numbering are.
 type DocumentCreation struct {
+	Financial                                             string
 	CustomerID, JobID, EstimateID                         int64
 	Title, Notes, Terms, TaxRate, LineItems, CustomFields string
 	InvoiceDate, DueDate                                  time.Time
@@ -107,12 +110,31 @@ func (s *Service) createDocument(ctx context.Context, tx pgx.Tx, a Actor, p Prin
 		if err := s.CheckItemSelections(ctx, a, tx, kind, 0, in.LineItems); err != nil {
 			return err
 		}
-		if exempt {
+		if exempt && in.Financial == "" {
 			in.TaxRate = "0"
 		}
 		state, err := prepare(in.TaxRate)
 		if err != nil {
 			return err
+		}
+		if in.Financial != "" {
+			snapshot, err := commercial.Read(in.Financial)
+			if err != nil {
+				return err
+			}
+			snapshot.Input.TaxExempt = exempt
+			in.Financial, err = commercial.Accept(snapshot.Input)
+			if err != nil {
+				return fmt.Errorf("%w: %v", ErrCommercialInput, err)
+			}
+			snapshot, err = commercial.Read(in.Financial)
+			if err != nil {
+				return err
+			}
+			state = "unpaid"
+			if snapshot.Result.TotalCents == 0 {
+				state = "paid"
+			}
 		}
 		var status int64
 		if err := tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.company_id=$1 AND w.company_id=$1 AND w.object_type=$2 AND s.category_key=$3 AND s.is_category_default FOR SHARE OF s`, p.CompanyID, kind, kind+":draft").Scan(&status); err != nil {
@@ -130,9 +152,9 @@ func (s *Service) createDocument(ctx context.Context, tx pgx.Tx, a Actor, p Prin
 			if number < next || number < 1 {
 				return ErrConflict
 			}
-			err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,terms,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state) VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15) RETURNING id`, p.CompanyID, in.CustomerID, in.JobID, in.EstimateID, status, number, in.Title, in.Notes, in.Terms, in.InvoiceDate, in.DueDate, in.TaxRate, in.LineItems, in.CustomFields, state).Scan(&id)
+			err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,terms,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state,financial) VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),$5,$6,$7,$8,$9,$10,$11,$12,$13::jsonb,$14::jsonb,$15,$16) RETURNING id`, p.CompanyID, in.CustomerID, in.JobID, in.EstimateID, status, number, in.Title, in.Notes, in.Terms, in.InvoiceDate, in.DueDate, in.TaxRate, in.LineItems, in.CustomFields, state, in.Financial).Scan(&id)
 		} else {
-			err = tx.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,job_id,status_id,title,notes,terms,valid_through,tax_rate,line_items,custom_fields) VALUES($1,$2,NULLIF($3,0),$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb) RETURNING id`, p.CompanyID, in.CustomerID, in.JobID, status, in.Title, in.Notes, in.Terms, in.ValidThrough, in.TaxRate, in.LineItems, in.CustomFields).Scan(&id)
+			err = tx.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,job_id,status_id,title,notes,terms,valid_through,tax_rate,line_items,custom_fields,financial) VALUES($1,$2,NULLIF($3,0),$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12) RETURNING id`, p.CompanyID, in.CustomerID, in.JobID, status, in.Title, in.Notes, in.Terms, in.ValidThrough, in.TaxRate, in.LineItems, in.CustomFields, in.Financial).Scan(&id)
 		}
 		if err != nil {
 			return err
@@ -141,7 +163,11 @@ func (s *Service) createDocument(ctx context.Context, tx pgx.Tx, a Actor, p Prin
 		if err := tx.QueryRow(ctx, `SELECT number_label FROM `+kind+`s WHERE id=$1`, id).Scan(&label); err != nil {
 			return err
 		}
-		return audit(ctx, tx, a, p, kind+".create", scope, kind, id, map[string]any{"number": label, "customer_id": in.CustomerID, "job_id": in.JobID})
+		detail := map[string]any{"number": label, "customer_id": in.CustomerID, "job_id": in.JobID}
+		if in.Financial != "" {
+			detail["financial"] = json.RawMessage(in.Financial)
+		}
+		return audit(ctx, tx, a, p, kind+".create", scope, kind, id, detail)
 	}()
 	return id, err
 }

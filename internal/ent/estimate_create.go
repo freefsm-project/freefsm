@@ -188,6 +188,20 @@ func (_c *EstimateCreate) SetNillableLineItems(v *string) *EstimateCreate {
 	return _c
 }
 
+// SetFinancial sets the "financial" field.
+func (_c *EstimateCreate) SetFinancial(v string) *EstimateCreate {
+	_c.mutation.SetFinancial(v)
+	return _c
+}
+
+// SetNillableFinancial sets the "financial" field if the given value is not nil.
+func (_c *EstimateCreate) SetNillableFinancial(v *string) *EstimateCreate {
+	if v != nil {
+		_c.SetFinancial(*v)
+	}
+	return _c
+}
+
 // SetCustomFields sets the "custom_fields" field.
 func (_c *EstimateCreate) SetCustomFields(v string) *EstimateCreate {
 	_c.mutation.SetCustomFields(v)
@@ -319,6 +333,10 @@ func (_c *EstimateCreate) defaults() {
 		v := estimate.DefaultLineItems
 		_c.mutation.SetLineItems(v)
 	}
+	if _, ok := _c.mutation.Financial(); !ok {
+		v := estimate.DefaultFinancial
+		_c.mutation.SetFinancial(v)
+	}
 	if _, ok := _c.mutation.CustomFields(); !ok {
 		v := estimate.DefaultCustomFields
 		_c.mutation.SetCustomFields(v)
@@ -349,6 +367,9 @@ func (_c *EstimateCreate) check() error {
 	}
 	if _, ok := _c.mutation.LineItems(); !ok {
 		return &ValidationError{Name: "line_items", err: errors.New(`ent: missing required field "Estimate.line_items"`)}
+	}
+	if _, ok := _c.mutation.Financial(); !ok {
+		return &ValidationError{Name: "financial", err: errors.New(`ent: missing required field "Estimate.financial"`)}
 	}
 	if _, ok := _c.mutation.CustomFields(); !ok {
 		return &ValidationError{Name: "custom_fields", err: errors.New(`ent: missing required field "Estimate.custom_fields"`)}
@@ -438,6 +459,10 @@ func (_c *EstimateCreate) createSpec() (*Estimate, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.LineItems(); ok {
 		_spec.SetField(estimate.FieldLineItems, field.TypeString, value)
 		_node.LineItems = value
+	}
+	if value, ok := _c.mutation.Financial(); ok {
+		_spec.SetField(estimate.FieldFinancial, field.TypeString, value)
+		_node.Financial = value
 	}
 	if value, ok := _c.mutation.CustomFields(); ok {
 		_spec.SetField(estimate.FieldCustomFields, field.TypeString, value)

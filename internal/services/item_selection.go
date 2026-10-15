@@ -35,7 +35,7 @@ func catalogWrite[T any](ctx context.Context, client *ent.Client, kind string, i
 		return zero, err
 	}
 	defer tx.Rollback()
-	raw, err := EncodeLineItems(lines)
+	raw, err := EncodeCommercialLines(lines)
 	if err != nil {
 		return zero, err
 	}

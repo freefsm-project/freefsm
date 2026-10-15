@@ -273,6 +273,20 @@ func (_u *EstimateUpdate) SetNillableLineItems(v *string) *EstimateUpdate {
 	return _u
 }
 
+// SetFinancial sets the "financial" field.
+func (_u *EstimateUpdate) SetFinancial(v string) *EstimateUpdate {
+	_u.mutation.SetFinancial(v)
+	return _u
+}
+
+// SetNillableFinancial sets the "financial" field if the given value is not nil.
+func (_u *EstimateUpdate) SetNillableFinancial(v *string) *EstimateUpdate {
+	if v != nil {
+		_u.SetFinancial(*v)
+	}
+	return _u
+}
+
 // SetCustomFields sets the "custom_fields" field.
 func (_u *EstimateUpdate) SetCustomFields(v string) *EstimateUpdate {
 	_u.mutation.SetCustomFields(v)
@@ -454,6 +468,9 @@ func (_u *EstimateUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.LineItems(); ok {
 		_spec.SetField(estimate.FieldLineItems, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Financial(); ok {
+		_spec.SetField(estimate.FieldFinancial, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(estimate.FieldCustomFields, field.TypeString, value)
@@ -738,6 +755,20 @@ func (_u *EstimateUpdateOne) SetNillableLineItems(v *string) *EstimateUpdateOne 
 	return _u
 }
 
+// SetFinancial sets the "financial" field.
+func (_u *EstimateUpdateOne) SetFinancial(v string) *EstimateUpdateOne {
+	_u.mutation.SetFinancial(v)
+	return _u
+}
+
+// SetNillableFinancial sets the "financial" field if the given value is not nil.
+func (_u *EstimateUpdateOne) SetNillableFinancial(v *string) *EstimateUpdateOne {
+	if v != nil {
+		_u.SetFinancial(*v)
+	}
+	return _u
+}
+
 // SetCustomFields sets the "custom_fields" field.
 func (_u *EstimateUpdateOne) SetCustomFields(v string) *EstimateUpdateOne {
 	_u.mutation.SetCustomFields(v)
@@ -949,6 +980,9 @@ func (_u *EstimateUpdateOne) sqlSave(ctx context.Context) (_node *Estimate, err 
 	}
 	if value, ok := _u.mutation.LineItems(); ok {
 		_spec.SetField(estimate.FieldLineItems, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Financial(); ok {
+		_spec.SetField(estimate.FieldFinancial, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CustomFields(); ok {
 		_spec.SetField(estimate.FieldCustomFields, field.TypeString, value)

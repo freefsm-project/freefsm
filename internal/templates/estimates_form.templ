@@ -56,7 +56,7 @@ templ EstimateForm(p EstimateFormPageData) {
 			</label>
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields, EditMode: true})
 			if capturedPricingVisible(ctx,"estimate",p.Estimate.ID,p.IsNew) {
-				@LineItemEditor(LineItemEditorData{ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON})
+				@LineItemEditor(LineItemEditorData{AdjustmentsJSON:p.AdjustmentsJSON,Financial:estimateFinancial(p.Estimate,p.ExistingItemsJSON,!p.IsNew),ExistingDocument:!p.IsNew && !p.PreserveEntered,ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON})
 			} else {
 				<p>Captured pricing is not available with your current permissions. Saving other details retains it.</p>
 			}

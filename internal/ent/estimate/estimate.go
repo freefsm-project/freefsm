@@ -37,6 +37,8 @@ const (
 	FieldTaxRate = "tax_rate"
 	// FieldLineItems holds the string denoting the line_items field in the database.
 	FieldLineItems = "line_items"
+	// FieldFinancial holds the string denoting the financial field in the database.
+	FieldFinancial = "financial"
 	// FieldCustomFields holds the string denoting the custom_fields field in the database.
 	FieldCustomFields = "custom_fields"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
@@ -66,6 +68,7 @@ var Columns = []string{
 	FieldValidThrough,
 	FieldTaxRate,
 	FieldLineItems,
+	FieldFinancial,
 	FieldCustomFields,
 	FieldDeletedAt,
 	FieldConversionHiddenAt,
@@ -94,6 +97,8 @@ var (
 	DefaultTaxRate string
 	// DefaultLineItems holds the default value on creation for the "line_items" field.
 	DefaultLineItems string
+	// DefaultFinancial holds the default value on creation for the "financial" field.
+	DefaultFinancial string
 	// DefaultCustomFields holds the default value on creation for the "custom_fields" field.
 	DefaultCustomFields string
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -170,6 +175,11 @@ func ByTaxRate(opts ...sql.OrderTermOption) OrderOption {
 // ByLineItems orders the results by the line_items field.
 func ByLineItems(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldLineItems, opts...).ToFunc()
+}
+
+// ByFinancial orders the results by the financial field.
+func ByFinancial(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldFinancial, opts...).ToFunc()
 }
 
 // ByCustomFields orders the results by the custom_fields field.

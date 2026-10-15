@@ -324,7 +324,7 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if taxRate == "" {
 		taxRate = "0"
 	}
-	taxRate, err = taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate, jobID)
+	_, err = taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate, jobID)
 	if err != nil {
 		authorizationError(w, r, err)
 		return
@@ -350,8 +350,20 @@ func (h *InvoiceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		LineItems:     lineItems,
 		CustomFields:  parseCustomFieldValues(r),
 	}
+	adjustments, err := documentAdjustments(r)
+	if err != nil {
+		h.invalidInvoiceForm(w, r, err.Error())
+		return
+	}
+	if adjustments != nil {
+		params.Adjustments = *adjustments
+	}
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, authorization.ErrCommercialInput) {
+			h.invalidInvoiceForm(w, r, err.Error())
+			return
+		}
 		if renderFieldSaveError(w, r, h.defSvc, "invoice", err) {
 			return
 		}
@@ -428,7 +440,7 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if custID != current.CustomerID && jobID == valueInt64(current.JobID) {
 		jobID = 0
 	}
-	pricingSubmitted := r.Form.Has("tax_rate") || r.Form.Has("line_items")
+	pricingSubmitted := r.Form.Has("tax_rate") || r.Form.Has("line_items") || r.Form.Has("adjustments")
 	contextChanged := custID != current.CustomerID || jobID != valueInt64(current.JobID)
 	if (pricingSubmitted || contextChanged) && !h.authorizeDestinationJob(w, r, custID, jobID) {
 		return
@@ -442,14 +454,6 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	taxRatePtr := formPtr(taxRate)
 	if taxRate == "" {
 		t := "0"
-		taxRatePtr = &t
-	}
-	if taxRatePtr != nil && pricingSubmitted {
-		t, err := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr, jobID)
-		if err != nil {
-			authorizationError(w, r, err)
-			return
-		}
 		taxRatePtr = &t
 	}
 	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), *taxRatePtr)
@@ -496,8 +500,10 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.DueDate = &t
 	}
 	params.LineItems = &lineItems
-	if !pricingSubmitted {
+	if !r.Form.Has("tax_rate") {
 		params.TaxRate = nil
+	}
+	if !r.Form.Has("line_items") {
 		params.LineItems = nil
 	}
 	if !contextChanged {
@@ -505,8 +511,20 @@ func (h *InvoiceHandler) Update(w http.ResponseWriter, r *http.Request) {
 		params.JobID = nil
 	}
 	params.CustomFields = parseCustomFieldPatch(r)
+	adjustments, err := documentAdjustments(r)
+	if err != nil {
+		h.invalidInvoiceForm(w, r, err.Error())
+		return
+	}
+	if pricingSubmitted {
+		params.Adjustments = adjustments
+	}
 	result, err := h.svc.SaveDetails(r.Context(), id, params)
 	if err != nil {
+		if errors.Is(err, authorization.ErrCommercialInput) {
+			h.invalidInvoiceForm(w, r, err.Error())
+			return
+		}
 		if renderFieldSaveError(w, r, h.defSvc, "invoice", err) {
 			return
 		}
@@ -661,7 +679,7 @@ func (h *InvoiceHandler) newInvoiceForm(ctx context.Context, customerIDs ...int6
 	detail.InvoiceDate = today.Format("2006-01-02")
 	detail.DueDate = defaults.DateFrom(today)
 	lineDescription := defaults.LineDescription
-	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, "[]", defaultTaxRate)
+	bootstrap, err := commercialLineItemEditorBootstrap(ctx, h.itemSvc, customers, "[]", defaultTaxRate)
 	if err != nil {
 		return templates.InvoiceFormPageData{}, err
 	}
@@ -687,6 +705,14 @@ func (h *InvoiceHandler) newInvoiceForm(ctx context.Context, customerIDs ...int6
 func (h *InvoiceHandler) invalidInvoiceForm(w http.ResponseWriter, r *http.Request, message string) {
 	saveaction.RejectBeforeWrite(r.Context())
 	data, err := h.newInvoiceForm(r.Context())
+	if id, parseErr := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64); parseErr == nil && id > 0 {
+		current, getErr := h.svc.GetByID(r.Context(), id)
+		if getErr != nil {
+			authorizationError(w, r, getErr)
+			return
+		}
+		data, err = h.formDataFromInvoice(r.Context(), current, h.statusesForSelect(r.Context()))
+	}
 	if err != nil {
 		internalServerError(w, r, "build invoice editor", err)
 		return
@@ -703,6 +729,7 @@ func (h *InvoiceHandler) invalidInvoiceForm(w http.ResponseWriter, r *http.Reque
 	data.EnteredInvoiceNumber = r.FormValue("invoice_number")
 	data.DefaultLineDescription = r.FormValue("default_line_description")
 	data.ExistingItemsJSON = submittedLineItems(r.FormValue("line_items"))
+	data.AdjustmentsJSON = submittedAdjustments(r.FormValue("adjustments"))
 	data.PreserveEntered = true
 	defs, err := h.defSvc.ListForObjectType(r.Context(), "invoice")
 	if err != nil {
@@ -753,7 +780,7 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 	if err != nil {
 		return templates.InvoiceFormPageData{}, err
 	}
-	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, i.LineItems, defaultTaxRate)
+	bootstrap, err := commercialLineItemEditorBootstrap(ctx, h.itemSvc, customers, i.LineItems, defaultTaxRate)
 	if err != nil {
 		return templates.InvoiceFormPageData{}, err
 	}
@@ -774,6 +801,7 @@ func (h *InvoiceHandler) formDataFromInvoice(ctx context.Context, i *ent.Invoice
 func invoiceToDetail(ctx context.Context, i *ent.Invoice, statuses []*ent.Status) templates.InvoiceDetail {
 	statusName := statusName(statuses, i.StatusID)
 	d := templates.InvoiceDetail{
+		Financial:   i.Financial,
 		NumberLabel: services.RecordedInvoiceNumber(i, middleware.CompanyFromContext(ctx)),
 		ID:          i.ID,
 		Number:      i.InvoiceNumber,
@@ -886,7 +914,7 @@ func (h *InvoiceHandler) CreateFromJob(w http.ResponseWriter, r *http.Request) {
 	}
 	jobs, _ := h.jobsForEditor(r.Context())
 	defs, _ := h.defSvc.ListForObjectType(r.Context(), "invoice")
-	bootstrap, err := lineItemEditorBootstrap(r.Context(), h.itemSvc, customers, j.LineItems, defaultTaxRate)
+	bootstrap, err := commercialLineItemEditorBootstrap(r.Context(), h.itemSvc, customers, j.LineItems, defaultTaxRate)
 	if err != nil {
 		internalServerError(w, r, "build invoice editor", err)
 		return
@@ -1249,11 +1277,7 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64, input
 	var settlementView settlement.InvoiceSettlement
 	if input.SettledCents != nil {
 		settled := *input.SettledCents
-		items, err := services.DecodeLineItems(i.LineItems)
-		if err != nil {
-			return documentPDF{}, err
-		}
-		totals, err := services.CalculateTotals(items, i.TaxRate)
+		totals, err := services.FinancialTotals(i.Financial, i.LineItems, i.TaxRate)
 		if err != nil {
 			return documentPDF{}, err
 		}

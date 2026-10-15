@@ -659,8 +659,8 @@ func projectActivity(ctx context.Context, tx pgx.Tx, p Principal, e ActivityReco
 		}
 	}
 	if e.Type == "job" || e.Type == "estimate" || e.Type == "invoice" {
-		b, bok := activityStructuredArray(before["line_items"], []string{"title", "description", "unit_price", "quantity", "taxable", "tax_rate", "discount", "surcharge"})
-		a, aok := activityStructuredArray(after["line_items"], []string{"title", "description", "unit_price", "quantity", "taxable", "tax_rate", "discount", "surcharge"})
+		b, bok := activityStructuredArray(before["line_items"], []string{"title", "description", "unit_price", "quantity", "taxable", "tax_rate", "discount", "surcharge", "unit_price_decimal", "quantity_decimal"})
+		a, aok := activityStructuredArray(after["line_items"], []string{"title", "description", "unit_price", "quantity", "taxable", "tax_rate", "discount", "surcharge", "unit_price_decimal", "quantity_decimal"})
 		if (bok || aok) && a != b {
 			allowed, err := activityFacet(ctx, tx, p, "pricing.view", job, false)
 			if err != nil {
@@ -857,7 +857,7 @@ func activityFields(typ string) map[string]string {
 		base = "title notes terms status_id invoice_date due_date valid_through"
 		fields["customer_id"] = "customer.view"
 		fields["job_id"] = "job.view"
-		for _, key := range strings.Fields("tax_rate subtotal total discount surcharge amount_cents") {
+		for _, key := range strings.Fields("tax_rate subtotal total discount surcharge amount_cents financial") {
 			fields[key] = "pricing.view"
 		}
 	case "project":

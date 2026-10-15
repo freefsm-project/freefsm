@@ -204,7 +204,10 @@ func TestInstalledIdentityHistoryHTTP(t *testing.T) {
 	snapshot := func() string {
 		t.Helper()
 		var value string
-		if err := pool.QueryRow(ctx, `SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM comment_operation_receipts x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id,client_hash) FROM job_field_operations x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM commercial_operations x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_publications x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_mutation_operations x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfers x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfer_chunks x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM files x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM comments x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM estimates x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM invoices x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY client_id) FROM commercial_client_identities x))::text`).Scan(&value); err != nil {
+		// Compare every installed fact.085 adds empty financial/legacy intent
+		// markers (asserted separately below) and preserves tax's exact decimal
+		// spelling while changing its SQL type from numeric to text.
+		if err := pool.QueryRow(ctx, `SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM comment_operation_receipts x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id,client_hash) FROM job_field_operations x),(SELECT jsonb_agg(to_jsonb(x)-'intent_version' ORDER BY operation_id) FROM commercial_operations x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_publications x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_mutation_operations x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfers x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfer_chunks x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM files x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM comments x),(SELECT jsonb_agg((to_jsonb(x)-'financial')||jsonb_build_object('tax_rate',x.tax_rate::text) ORDER BY id) FROM estimates x),(SELECT jsonb_agg((to_jsonb(x)-'financial')||jsonb_build_object('tax_rate',x.tax_rate::text) ORDER BY id) FROM invoices x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY client_id) FROM commercial_client_identities x))::text`).Scan(&value); err != nil {
 			t.Fatal(err)
 		}
 		var fields string
@@ -220,6 +223,13 @@ func TestInstalledIdentityHistoryHTTP(t *testing.T) {
 		}
 		if snapshot() != before {
 			t.Fatal("upgrade rewrote installed receipts/effects/transport")
+		}
+		var preserved bool
+		if err := pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM commercial_operations WHERE intent_version<>0) AND NOT EXISTS(SELECT 1 FROM estimates WHERE financial<>'') AND NOT EXISTS(SELECT 1 FROM invoices WHERE financial<>'')`).Scan(&preserved); err != nil {
+			t.Fatal(err)
+		}
+		if !preserved {
+			t.Fatal("upgrade invented accepted arithmetic or reinterpreted installed intent")
 		}
 	}
 	api := apiv1.NewRouter(pool, client, sessions, services.NewFileService(client, objectref.NewEntDirectory(client), t.TempDir(), 25<<20))

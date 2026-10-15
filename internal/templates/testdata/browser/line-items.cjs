@@ -6,10 +6,13 @@ const settle = page => page.evaluate(() => new Promise(resolve =>
   window.Alpine.nextTick(() => requestAnimationFrame(resolve))));
 
 function payload(rows) {
+  const adjustment = (kind, value) => Number(value) === 0 ? undefined : {kind: kind || 'fixed', value: kind === 'percentage' ? String(value) : Number(value).toFixed(2)};
   return rows.filter(row => row['item.title'] || Number(row['item.item_id']) > 0).map(row => ({
     item_id: Number(row['item.item_id']), title: row['item.title'], description: row['item.description'],
     quantity: Number(row['item.quantity']), unit_price: Number(row['item.unit_price']),
-    discount: Number(row['item.discount']), surcharge: Number(row['item.surcharge']),
+    quantity_decimal: String(row['item.quantity']), unit_price_decimal: Number(row['item.unit_price']).toFixed(2),
+    ...(Number(row['item.discount']) ? {discount_adjustment: adjustment(row['item.discount_kind'],row['item.discount'])} : {}),
+    ...(Number(row['item.surcharge']) ? {surcharge_adjustment: adjustment(row['item.surcharge_kind'],row['item.surcharge'])} : {}),
     taxable: row['item.taxable'], tax_rate: '',
   }));
 }

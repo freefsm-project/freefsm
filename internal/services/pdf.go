@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/commercial"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/jung-kurt/gofpdf"
 )
@@ -21,13 +22,15 @@ const (
 )
 
 type pdfTotals struct {
-	Subtotal        float64
-	Tax             float64
-	Total           float64
-	Paid            float64
-	Due             float64
-	TaxableSubtotal float64
-	totalMoney      Money
+	exact               DocumentTotals
+	paidCents, dueCents int64
+	Subtotal            float64
+	Tax                 float64
+	Total               float64
+	Paid                float64
+	Due                 float64
+	TaxableSubtotal     float64
+	totalMoney          Money
 }
 
 type InvoicePDFSettlement struct {
@@ -56,7 +59,7 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 	if e.Terms != nil {
 		writeDocumentNotes(pdf, *e.Terms)
 	}
-	totals, err := writeLineItems(pdf, items, e.TaxRate, cs)
+	totals, err := writeLineItems(pdf, items, e.TaxRate, cs, e.Financial)
 	if err != nil {
 		return fmt.Errorf("calculate estimate totals: %w", err)
 	}
@@ -86,12 +89,13 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job
 	for _, line := range fieldLines {
 		writeDocumentNotes(pdf, line)
 	}
-	totals, err := writeLineItems(pdf, items, i.TaxRate, cs)
+	totals, err := writeLineItems(pdf, items, i.TaxRate, cs, i.Financial)
 	if err != nil {
 		return fmt.Errorf("calculate invoice totals: %w", err)
 	}
 	totals.Paid = float64(settlement.AmountPaidCents) / 100
 	totals.Due = float64(settlement.AmountDueCents) / 100
+	totals.paidCents, totals.dueCents = settlement.AmountPaidCents, settlement.AmountDueCents
 	writeSummary(pdf, cs, totals, true)
 	return pdf.Output(w)
 }
@@ -206,9 +210,17 @@ func writeDocumentNotes(pdf *gofpdf.Fpdf, notes string) {
 	pdf.Ln(4)
 }
 
-func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate string, cs *ent.CompanySettings) (pdfTotals, error) {
+func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate string, cs *ent.CompanySettings, financial ...string) (pdfTotals, error) {
 	totals := pdfTotals{}
-	documentTotals, err := CalculateTotals(items, taxRate)
+	raw := ""
+	if len(financial) > 0 {
+		raw = financial[0]
+	}
+	encoded, err := EncodeCommercialLines(items)
+	if err != nil {
+		return totals, err
+	}
+	documentTotals, err := FinancialTotals(raw, encoded, taxRate)
 	if err != nil {
 		return totals, err
 	}
@@ -217,30 +229,55 @@ func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate string, cs *ent.
 	totals.Tax = documentTotals.Tax.MajorUnits()
 	totals.Total = documentTotals.Total.MajorUnits()
 	totals.totalMoney = documentTotals.Total
+	totals.exact = documentTotals
 	if len(items) == 0 {
 		return totals, nil
 	}
 
 	showDescriptions := cs != nil && cs.PdfShowLineItemDescriptions
+	if summary := FinancialAdjustmentText(raw); summary != "" {
+		pdf.SetFont("Helvetica", "", 8.5)
+		pdf.MultiCell(0, 4.5, summary, "", "L", false)
+		pdf.Ln(2)
+	}
 	widths := itemColumnWidths(pdf)
 	writeItemTableHeader(pdf, cs)
 
-	for _, li := range items {
-		lineAmount, err := LineAmount(li)
+	var accepted commercial.Snapshot
+	if raw != "" {
+		accepted, err = commercial.Read(raw)
+		if err != nil {
+			return totals, err
+		}
+	}
+	for index, li := range items {
+		var lineAmount Money
+		if raw != "" {
+			if index >= len(accepted.Result.Lines) {
+				return totals, commercial.ErrInvalid
+			}
+			lineAmount = Money{minorUnits: accepted.Result.Lines[index].AdjustedCents}
+		} else {
+			lineAmount, err = LineAmount(li)
+		}
 		if err != nil {
 			return pdfTotals{}, err
 		}
-		lineTotal := lineAmount.MajorUnits()
+		lineTotal := "$" + lineAmount.Format()
+		quantity, price := LineQuantityText(li), LineUnitPriceText(li)
 
 		itemText := li.Title
+		if summary := LineAdjustmentText(li); summary != "" {
+			itemText += "\n" + summary
+		}
 		if showDescriptions && strings.TrimSpace(li.Description) != "" {
 			itemText += "\n" + strings.TrimSpace(li.Description)
 		}
 		rowHeight := float64(maxLineCount(
 			pdf.SplitLines([]byte(itemText), widths[0]-2),
-			pdf.SplitLines([]byte(strconv.FormatFloat(li.Quantity, 'f', -1, 64)), widths[1]),
-			pdf.SplitLines([]byte(fmt.Sprintf("$%.2f", li.UnitPrice)), widths[2]),
-			pdf.SplitLines([]byte(fmt.Sprintf("$%.2f", lineTotal)), widths[3]),
+			pdf.SplitLines([]byte(quantity), widths[1]),
+			pdf.SplitLines([]byte("$"+price), widths[2]),
+			pdf.SplitLines([]byte(lineTotal), widths[3]),
 		)) * 4.3
 		rowHeight += 2
 		if rowHeight < 8 {
@@ -260,9 +297,9 @@ func writeLineItems(pdf *gofpdf.Fpdf, items []LineItem, taxRate string, cs *ent.
 		pdf.SetXY(x+1, y+1)
 		pdf.MultiCell(widths[0]-2, 4.3, itemText, "", "L", false)
 		pdf.SetXY(x+widths[0], y)
-		writeCenteredRowCell(pdf, widths[1], rowHeight, strconv.FormatFloat(li.Quantity, 'f', -1, 64))
-		writeRightRowCell(pdf, widths[2], rowHeight, fmt.Sprintf("$%.2f", li.UnitPrice))
-		writeRightRowCell(pdf, widths[3], rowHeight, fmt.Sprintf("$%.2f", lineTotal))
+		writeCenteredRowCell(pdf, widths[1], rowHeight, quantity)
+		writeRightRowCell(pdf, widths[2], rowHeight, "$"+price)
+		writeRightRowCell(pdf, widths[3], rowHeight, lineTotal)
 		pdf.SetXY(pdfMargin, y+rowHeight)
 	}
 
@@ -325,16 +362,16 @@ func writeSummary(pdf *gofpdf.Fpdf, cs *ent.CompanySettings, totals pdfTotals, i
 	}
 
 	pdf.SetXY(totalsX, y)
-	writeTotalLine(pdf, totalsX, "Subtotal", totals.Subtotal, false)
-	writeTotalLine(pdf, totalsX, "Tax", totals.Tax, false)
-	writeTotalLine(pdf, totalsX, "Total", totals.Total, true)
+	writeTotalLine(pdf, totalsX, "Subtotal", totals.exact.Subtotal.Format(), false)
+	writeTotalLine(pdf, totalsX, "Tax", totals.exact.Tax.Format(), false)
+	writeTotalLine(pdf, totalsX, "Total", totals.exact.Total.Format(), true)
 	if includePayments {
-		writeTotalLine(pdf, totalsX, "Amount Paid", totals.Paid, false)
-		writeTotalLine(pdf, totalsX, "Amount Due", totals.Due, true)
+		writeTotalLine(pdf, totalsX, "Amount Paid", commercial.FormatCents(totals.paidCents), false)
+		writeTotalLine(pdf, totalsX, "Amount Due", commercial.FormatCents(totals.dueCents), true)
 	}
 }
 
-func writeTotalLine(pdf *gofpdf.Fpdf, x float64, label string, amount float64, bold bool) {
+func writeTotalLine(pdf *gofpdf.Fpdf, x float64, label string, amount string, bold bool) {
 	style := ""
 	border := ""
 	if bold {
@@ -344,7 +381,7 @@ func writeTotalLine(pdf *gofpdf.Fpdf, x float64, label string, amount float64, b
 	pdf.SetX(x)
 	pdf.SetFont("Helvetica", style, 9)
 	pdf.CellFormat(35, 6, label+":", border, 0, "R", false, 0, "")
-	pdf.CellFormat(35, 6, fmt.Sprintf("$%.2f", amount), border, 1, "R", false, 0, "")
+	pdf.CellFormat(35, 6, "$"+amount, border, 1, "R", false, 0, "")
 }
 
 func ensureSpace(pdf *gofpdf.Fpdf, needed float64, repeatHeader bool, afterPageBreak func()) {

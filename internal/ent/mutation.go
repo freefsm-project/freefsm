@@ -13277,6 +13277,7 @@ type EstimateMutation struct {
 	valid_through        *time.Time
 	tax_rate             *string
 	line_items           *string
+	financial            *string
 	custom_fields        *string
 	deleted_at           *time.Time
 	conversion_hidden_at *time.Time
@@ -14020,6 +14021,42 @@ func (m *EstimateMutation) ResetLineItems() {
 	m.line_items = nil
 }
 
+// SetFinancial sets the "financial" field.
+func (m *EstimateMutation) SetFinancial(s string) {
+	m.financial = &s
+}
+
+// Financial returns the value of the "financial" field in the mutation.
+func (m *EstimateMutation) Financial() (r string, exists bool) {
+	v := m.financial
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFinancial returns the old "financial" field's value of the Estimate entity.
+// If the Estimate object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EstimateMutation) OldFinancial(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFinancial is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFinancial requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFinancial: %w", err)
+	}
+	return oldValue.Financial, nil
+}
+
+// ResetFinancial resets all changes to the "financial" field.
+func (m *EstimateMutation) ResetFinancial() {
+	m.financial = nil
+}
+
 // SetCustomFields sets the "custom_fields" field.
 func (m *EstimateMutation) SetCustomFields(s string) {
 	m.custom_fields = &s
@@ -14260,7 +14297,7 @@ func (m *EstimateMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EstimateMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.number_label != nil {
 		fields = append(fields, estimate.FieldNumberLabel)
 	}
@@ -14296,6 +14333,9 @@ func (m *EstimateMutation) Fields() []string {
 	}
 	if m.line_items != nil {
 		fields = append(fields, estimate.FieldLineItems)
+	}
+	if m.financial != nil {
+		fields = append(fields, estimate.FieldFinancial)
 	}
 	if m.custom_fields != nil {
 		fields = append(fields, estimate.FieldCustomFields)
@@ -14344,6 +14384,8 @@ func (m *EstimateMutation) Field(name string) (ent.Value, bool) {
 		return m.TaxRate()
 	case estimate.FieldLineItems:
 		return m.LineItems()
+	case estimate.FieldFinancial:
+		return m.Financial()
 	case estimate.FieldCustomFields:
 		return m.CustomFields()
 	case estimate.FieldDeletedAt:
@@ -14387,6 +14429,8 @@ func (m *EstimateMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldTaxRate(ctx)
 	case estimate.FieldLineItems:
 		return m.OldLineItems(ctx)
+	case estimate.FieldFinancial:
+		return m.OldFinancial(ctx)
 	case estimate.FieldCustomFields:
 		return m.OldCustomFields(ctx)
 	case estimate.FieldDeletedAt:
@@ -14489,6 +14533,13 @@ func (m *EstimateMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetLineItems(v)
+		return nil
+	case estimate.FieldFinancial:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFinancial(v)
 		return nil
 	case estimate.FieldCustomFields:
 		v, ok := value.(string)
@@ -14729,6 +14780,9 @@ func (m *EstimateMutation) ResetField(name string) error {
 		return nil
 	case estimate.FieldLineItems:
 		m.ResetLineItems()
+		return nil
+	case estimate.FieldFinancial:
+		m.ResetFinancial()
 		return nil
 	case estimate.FieldCustomFields:
 		m.ResetCustomFields()
@@ -16832,6 +16886,7 @@ type InvoiceMutation struct {
 	due_date             *time.Time
 	tax_rate             *string
 	line_items           *string
+	financial            *string
 	settlement_state     *string
 	display_settings     *string
 	custom_fields        *string
@@ -17656,6 +17711,42 @@ func (m *InvoiceMutation) ResetLineItems() {
 	m.line_items = nil
 }
 
+// SetFinancial sets the "financial" field.
+func (m *InvoiceMutation) SetFinancial(s string) {
+	m.financial = &s
+}
+
+// Financial returns the value of the "financial" field in the mutation.
+func (m *InvoiceMutation) Financial() (r string, exists bool) {
+	v := m.financial
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFinancial returns the old "financial" field's value of the Invoice entity.
+// If the Invoice object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *InvoiceMutation) OldFinancial(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFinancial is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFinancial requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFinancial: %w", err)
+	}
+	return oldValue.Financial, nil
+}
+
+// ResetFinancial resets all changes to the "financial" field.
+func (m *InvoiceMutation) ResetFinancial() {
+	m.financial = nil
+}
+
 // SetSettlementState sets the "settlement_state" field.
 func (m *InvoiceMutation) SetSettlementState(s string) {
 	m.settlement_state = &s
@@ -17968,7 +18059,7 @@ func (m *InvoiceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *InvoiceMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
 	if m.invoice_number != nil {
 		fields = append(fields, invoice.FieldInvoiceNumber)
 	}
@@ -18010,6 +18101,9 @@ func (m *InvoiceMutation) Fields() []string {
 	}
 	if m.line_items != nil {
 		fields = append(fields, invoice.FieldLineItems)
+	}
+	if m.financial != nil {
+		fields = append(fields, invoice.FieldFinancial)
 	}
 	if m.settlement_state != nil {
 		fields = append(fields, invoice.FieldSettlementState)
@@ -18068,6 +18162,8 @@ func (m *InvoiceMutation) Field(name string) (ent.Value, bool) {
 		return m.TaxRate()
 	case invoice.FieldLineItems:
 		return m.LineItems()
+	case invoice.FieldFinancial:
+		return m.Financial()
 	case invoice.FieldSettlementState:
 		return m.SettlementState()
 	case invoice.FieldDisplaySettings:
@@ -18119,6 +18215,8 @@ func (m *InvoiceMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldTaxRate(ctx)
 	case invoice.FieldLineItems:
 		return m.OldLineItems(ctx)
+	case invoice.FieldFinancial:
+		return m.OldFinancial(ctx)
 	case invoice.FieldSettlementState:
 		return m.OldSettlementState(ctx)
 	case invoice.FieldDisplaySettings:
@@ -18239,6 +18337,13 @@ func (m *InvoiceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetLineItems(v)
+		return nil
+	case invoice.FieldFinancial:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFinancial(v)
 		return nil
 	case invoice.FieldSettlementState:
 		v, ok := value.(string)
@@ -18505,6 +18610,9 @@ func (m *InvoiceMutation) ResetField(name string) error {
 		return nil
 	case invoice.FieldLineItems:
 		m.ResetLineItems()
+		return nil
+	case invoice.FieldFinancial:
+		m.ResetFinancial()
 		return nil
 	case invoice.FieldSettlementState:
 		m.ResetSettlementState()

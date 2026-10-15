@@ -202,28 +202,41 @@ type CustomerRow struct {
 	AccountType string
 }
 
+// CustomerAssetServiceHistory groups a Customer's recorded periods once per
+// Asset. Past-only Assets remain a separate disclosure from current ones.
+type CustomerAssetServiceHistory struct {
+	Number  string
+	Current bool
+	Entries []authorization.ServiceEntry
+}
+
 type CustomerShowPageData struct {
-	ShowSettlement   bool
-	CanRefund        bool
-	CanReverseRefund bool
-	Receivables      CustomerReceivables
-	ShowCredit       bool
-	CreditCents      int64
-	RelatedWork      []authorization.CustomerWork
-	ShowFinancial    bool
-	Customer         CustomerDetail
-	Locations        []LocationRow
-	Contacts         []ContactRow
-	Jobs             []JobRow
-	Estimates        []EstimateRow
-	Invoices         []InvoiceRow
-	Financial        CustomerFinancialSummary
-	Tags             []TagRow
-	AllTags          []TagRow
-	CustomFields     []CustomFieldDisplay
-	FileList         FileListPageData
-	Settlement       settlement.CustomerSettlement
-	RefundKey        string
+	AssetServiceHistory []CustomerAssetServiceHistory
+	ShowServiceEntries  bool
+	SectionErrors       map[string]bool
+	UpdatedAt           string
+	AssetPeriods        []authorization.CustomerAssetPeriod
+	ShowSettlement      bool
+	CanRefund           bool
+	CanReverseRefund    bool
+	Receivables         CustomerReceivables
+	ShowCredit          bool
+	CreditCents         int64
+	RelatedWork         []authorization.CustomerWork
+	ShowFinancial       bool
+	Customer            CustomerDetail
+	Locations           []LocationRow
+	Contacts            []ContactRow
+	Jobs                []JobRow
+	Estimates           []EstimateRow
+	Invoices            []InvoiceRow
+	Financial           CustomerFinancialSummary
+	Tags                []TagRow
+	AllTags             []TagRow
+	CustomFields        []CustomFieldDisplay
+	FileList            FileListPageData
+	Settlement          settlement.CustomerSettlement
+	RefundKey           string
 }
 
 type CustomerFinancialSummary struct {
@@ -655,6 +668,7 @@ type EstimateRow struct {
 }
 
 type EstimateDetail struct {
+	Financial      string
 	TermsUnknown   bool
 	ValidThrough   string
 	Terms          string
@@ -697,6 +711,7 @@ type EstimateListPageData struct {
 }
 
 type EstimateFormPageData struct {
+	AdjustmentsJSON        string
 	DefaultsJSON           string
 	PreserveEntered        bool
 	DefaultLineDescription string
@@ -728,6 +743,7 @@ type InvoiceRow struct {
 }
 
 type InvoiceDetail struct {
+	Financial          string
 	TermsUnknown       bool
 	NumberLabel        string
 	Terms              string
@@ -854,6 +870,7 @@ type SettingsPageData struct {
 }
 
 type InvoiceFormPageData struct {
+	AdjustmentsJSON        string
 	EnteredInvoiceNumber   string
 	DefaultsJSON           string
 	PreserveEntered        bool
@@ -1061,7 +1078,7 @@ func invoiceFormNumberValue(p InvoiceFormPageData) string {
 	return fmt.Sprintf("%d", p.Invoice.Number)
 }
 
-func cents(c int64) string { return fmt.Sprintf("$%.2f", float64(c)/100) }
+func cents(c int64) string { return exactCents(c) }
 
 func csrfToken(ctx context.Context) string {
 	return middleware.CSRFFromContext(ctx)

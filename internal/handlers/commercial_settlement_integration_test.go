@@ -81,7 +81,7 @@ func TestCommercialSettlementLocksEveryExistingWriter(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT to_jsonb(i)::text FROM invoices i WHERE id=$1`, id).Scan(&before); err != nil {
 		t.Fatal(err)
 	}
-	for _, change := range []string{`title='Changed'`, `notes='Changed'`, `terms='Changed'`, `invoice_date=invoice_date+1`, `due_date=due_date+1`, `job_id=NULL`, `line_items='[]'`, `tax_rate='9'`, `custom_fields='[{"definition_id":999,"value":"Changed"}]'`, `invoice_number=99999`} {
+	for _, change := range []string{`title='Changed'`, `notes='Changed'`, `terms='Changed'`, `invoice_date=invoice_date+1`, `due_date=due_date+1`, `job_id=NULL`, `line_items='[]'`, `tax_rate='9'`, `financial=''`, `financial=replace(financial,'"total_cents":"10000"','"total_cents":"1"')`, `custom_fields='[{"definition_id":999,"value":"Changed"}]'`, `invoice_number=99999`} {
 		if _, err := pool.Exec(ctx, `UPDATE invoices SET `+change+` WHERE id=$1`, id); err == nil {
 			t.Fatalf("settlement allowed writer %s", change)
 		}
@@ -124,6 +124,7 @@ func TestCommercialSettlementRaceRejectsWholeCustomerAndContentEditHTTP(t *testi
 	values.Set("customer_id", fmt.Sprint(replacement.ID))
 	values.Set("customer_defaults_reviewed", "true")
 	values.Set("notes", "Must roll back with the anchor change")
+	values.Set("adjustments", `{"discount":{"kind":"percentage","value":"20"},"surcharge":{"kind":"fixed","value":"1.00"}}`)
 	fence, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -153,7 +154,7 @@ func TestCommercialSettlementRaceRejectsWholeCustomerAndContentEditHTTP(t *testi
 		t.Fatalf("settlement race edit=%d: %s", w.Code, w.Body.String())
 	}
 	var intact bool
-	if err := pool.QueryRow(ctx, `SELECT customer_id=$2 AND job_id=$3 AND notes='Original notes' AND invoice_has_active_settlement(id) FROM invoices WHERE id=$1`, i.ID, c.ID, j.ID).Scan(&intact); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT customer_id=$2 AND job_id=$3 AND notes='Original notes' AND invoice_has_active_settlement(id) AND financial=$4 FROM invoices WHERE id=$1`, i.ID, c.ID, j.ID, i.Financial).Scan(&intact); err != nil {
 		t.Fatal(err)
 	}
 	if !intact {

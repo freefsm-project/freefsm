@@ -84,7 +84,7 @@ templ DashboardPage(p DashboardData) {
 								<div><span>{ fmt.Sprintf("%d", p.Stats.NewJobsToday) }</span><small>Jobs</small></div>
 								<div><span>{ fmt.Sprintf("%d", p.Stats.NewQuotesToday) }</span><small>Quotes</small></div>
 								<div><span>{ fmt.Sprintf("%d", p.Stats.NewInvoicesToday) }</span><small>Invoices</small></div>
-								<div><span>{ fmt.Sprintf("$%.2f", p.Stats.PaymentsCollectedToday) }</span><small>Payments</small></div>
+								<div><span>{ dashboardAmount(p.Stats.PaymentsCollectedTodayExact,p.Stats.PaymentsCollectedToday) }</span><small>Payments</small></div>
 								<div><span>{ fmt.Sprintf("%d", p.Stats.CustomersCreatedToday) }</span><small>Customers</small></div>
 							</div>
 							<div class="dashboard-gauge-wrap">
@@ -137,7 +137,7 @@ templ DashboardPage(p DashboardData) {
 										<tr><td colspan="3" class="dashboard-empty">No recent invoices</td></tr>
 									}
 									for _, inv := range p.Stats.RecentInvoices {
-										<tr><td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", inv.ID)) }>{ inv.Title }</a></td><td>{ inv.Customer }</td><td class="dashboard-amount">{ fmt.Sprintf("$%.2f", inv.Total) }</td></tr>
+										<tr><td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", inv.ID)) }>{ inv.Title }</a></td><td>{ inv.Customer }</td><td class="dashboard-amount">{ dashboardAmount(inv.TotalExact,inv.Total) }</td></tr>
 									}
 								</tbody>
 							</table>
@@ -151,7 +151,7 @@ templ DashboardPage(p DashboardData) {
 										<tr><td colspan="3" class="dashboard-empty">No recent estimates</td></tr>
 									}
 									for _, e := range p.Stats.RecentEstimates {
-										<tr><td><a href={ templ.URL(fmt.Sprintf("/estimates/%d", e.ID)) }>{ e.Title }</a></td><td>{ e.Customer }</td><td class="dashboard-amount">{ fmt.Sprintf("$%.2f", e.Total) }</td></tr>
+										<tr><td><a href={ templ.URL(fmt.Sprintf("/estimates/%d", e.ID)) }>{ e.Title }</a></td><td>{ e.Customer }</td><td class="dashboard-amount">{ dashboardAmount(e.TotalExact,e.Total) }</td></tr>
 									}
 								</tbody>
 							</table>
@@ -164,19 +164,19 @@ templ DashboardPage(p DashboardData) {
 					<div class="dashboard-financials">
 						<article class="dashboard-stat">
 							@DashboardSubcardTop("Revenue This Month")
-							<p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Stats.RevenueMonth) }</p>
+							<p class="dashboard-metric dashboard-metric-sm">{ dashboardAmount(p.Stats.RevenueMonthExact,p.Stats.RevenueMonth) }</p>
 						</article>
 						<article class="dashboard-stat">
 							@DashboardSubcardTop("Outstanding Receivables")
-							<p class="dashboard-metric dashboard-metric-sm">{ fmt.Sprintf("$%.2f", p.Stats.OutstandingReceivables) }</p>
+							<p class="dashboard-metric dashboard-metric-sm">{ dashboardAmount(p.Stats.OutstandingReceivablesExact,p.Stats.OutstandingReceivables) }</p>
 						</article>
 						<article class="dashboard-stat">
 							@DashboardSubcardTop("Overdue")
 							<p class="dashboard-metric dashboard-metric-sm">
 								if p.Stats.OverdueAmount > 0 {
-									<span class="dashboard-danger">{ fmt.Sprintf("$%.2f", p.Stats.OverdueAmount) }</span>
+									<span class="dashboard-danger">{ dashboardAmount(p.Stats.OverdueAmountExact,p.Stats.OverdueAmount) }</span>
 								} else {
-									{ fmt.Sprintf("$%.2f", p.Stats.OverdueAmount) }
+									{ dashboardAmount(p.Stats.OverdueAmountExact,p.Stats.OverdueAmount) }
 								}
 							</p>
 							<p class="dashboard-meta">{ fmt.Sprintf("%d invoices", p.Stats.InvoicesOverdue) }</p>

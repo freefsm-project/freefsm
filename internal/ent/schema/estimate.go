@@ -35,6 +35,7 @@ func (Estimate) Fields() []ent.Field {
 		field.Time("valid_through").Optional().Nillable(),
 		field.String("tax_rate").Default("0"),
 		field.String("line_items").Default("[]"),
+		field.String("financial").Default(""),
 		field.String("custom_fields").Default("[]"),
 		field.Time("deleted_at").Optional().Nillable(),
 		field.Time("conversion_hidden_at").Optional().Nillable(),

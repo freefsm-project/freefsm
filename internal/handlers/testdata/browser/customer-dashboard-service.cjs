@@ -1,0 +1,57 @@
+const {chromium} = require('playwright-core');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+(async () => {
+  const [base, session, admin, customer, job, asset] = process.argv.slice(2);
+  const browser = await chromium.launch({executablePath: process.env.BROWSER_EXECUTABLE, headless: true, args: ['--no-sandbox']});
+  try {
+    const context = await browser.newContext({viewport: {width: 390, height: 844}});
+    await context.addCookies([{name: 'session', value: session, url: base}]);
+    const page = await context.newPage();
+    await page.goto(`${base}/customers/${customer}`);
+    const history = page.getByRole('region', {name: 'Asset Service Entries', exact: true});
+    await history.getByText('Browser dashboard service', {exact: true}).waitFor();
+    assert.equal(await history.getByText('Original Customer service', {exact: true}).isVisible(), false);
+    await history.getByText('Service Entries for past Assets', {exact: true}).click();
+    await history.getByText('Original Customer service', {exact: true}).waitFor();
+    assert.equal(await history.locator('a').count(), 0);
+    assert.equal(await page.locator('[name=responsible_user_id]').count(), 0);
+    assert.doesNotMatch(await page.locator('body').innerText(), /PRIVATE NEXT|PRIVATE JOB FACET/);
+    const editor = await browser.newContext();
+    await editor.addCookies([{name: 'session', value: admin, url: base}]);
+    const edit = await editor.newPage();
+    await edit.goto(`${base}/jobs/${job}/assets/${asset}/service-entries`);
+    const form = edit.locator('form[data-service-revision]').first();
+    await form.locator('[name=summary]').fill('Browser revised service');
+    await form.getByRole('button', {name: 'Revise Service Entry', exact: true}).click();
+    await edit.getByText('Browser revised service', {exact: true}).first().waitFor();
+    const refresh = async () => {
+      await Promise.all([page.waitForNavigation(), page.getByRole('link', {name: 'Refresh dashboard', exact: true}).click()]);
+    };
+    await refresh();
+    await history.getByText('Browser revised service', {exact: true}).waitFor();
+    assert.equal(await history.getByText('Browser dashboard service', {exact: true}).count(), 0);
+    assert.match(await history.innerText(), /Revision accepted/);
+    assert.match(await page.locator('body').innerText(), /Updated at/);
+    const change = async name => assert.equal((await context.request.post(`${base}/__fixture/${name}`)).status(), 204);
+    await change('service-off');
+    await refresh();
+    await page.getByText('Service Entries unavailable', {exact: true}).waitFor();
+    assert.equal(await history.count(), 0);
+    assert.equal(await page.getByText('No Service Entries', {exact: true}).count(), 0);
+    assert.match(await page.getByRole('region', {name: 'Assets', exact: true}).innerText(), /BROWSER-SERVICE-104/);
+    await change('service-on');
+    await Promise.all([page.waitForNavigation(), page.getByRole('link', {name: 'Retry Service Entries', exact: true}).click()]);
+    await history.getByText('Browser revised service', {exact: true}).waitFor();
+    if (process.env.T104_BROWSER_EVIDENCE) await page.screenshot({path: path.join(process.env.T104_BROWSER_EVIDENCE, 'service-dashboard-mobile.png'), fullPage: true});
+    await change('archive');
+    await refresh();
+    assert.equal(await history.getByText('Browser revised service', {exact: true}).count(), 0);
+    assert.doesNotMatch(await page.locator('body').innerText(), /BROWSER-SERVICE-104/);
+    await change('revoke');
+    await refresh();
+    assert.equal(await history.count(), 0);
+    assert.equal(await page.getByText('Original Customer service', {exact: true}).count(), 0);
+    console.log('Customer Service Entry browser: partition, past disclosure, persisted revision, isolated failure/retry, archive and grant-loss refresh PASS');
+  } finally { await browser.close(); }
+})().catch(err => { console.error(err); process.exit(1); });
