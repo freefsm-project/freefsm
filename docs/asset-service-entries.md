@@ -28,7 +28,18 @@ GET  /api/v1/jobs/{job}/assets/{asset}/service-entries/{entry}/revisions
 GET  /api/v1/service-entry-operations/{operation}
 ```
 
-The GET data contains `entries` and the exact `link_id`. Mutations carry:
+The GET data contains `entries` and the exact `link_id`.
+
+An entry currently revisable through this exact Job/link also includes
+`responsible_user_ids`. A fresh client uses those stable identities from its read
+when retaining responsibility during a revision; names are neither unique nor
+identity keys. These IDs are omitted from read-only, cross-Job and lost-original-
+link rows and from the shared Customer/Assigned Context history projection.
+Revision forms similarly retain the current entry's responsible users even after
+unassignment, rename or disablement. Those retention choices are entry-specific
+and do not become eligible choices for new entries or unrelated revisions.
+
+Mutations carry:
 
 ```json
 {

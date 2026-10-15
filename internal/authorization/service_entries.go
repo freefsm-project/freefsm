@@ -19,6 +19,8 @@ type ServiceEntryInput struct {
 }
 
 type ServiceEntry struct {
+	LinkID           int64     `json:"-"`
+	CanRevise        bool      `json:"-"`
 	JobID            int64     `json:"-"`
 	ResponsibleUsers []int64   `json:"-"`
 	ID               int64     `json:"id"`
@@ -84,11 +86,50 @@ type ServiceEntryParticipant struct {
 	ID   int64
 	Name string
 }
+
+// RevisionParticipants includes the entry's current responsibility even when
+// those users are no longer eligible for new selection. Retention is local to
+// this entry; it never expands the create form or another entry's choices.
+func (entry ServiceEntry) RevisionParticipants(eligible []ServiceEntryParticipant) []ServiceEntryParticipant {
+	choices := append([]ServiceEntryParticipant(nil), eligible...)
+	seen := make(map[int64]bool, len(choices))
+	for _, user := range choices {
+		seen[user.ID] = true
+	}
+	// History loads both arrays in stable user-ID order.
+	for i, id := range entry.ResponsibleUsers {
+		if !seen[id] {
+			choices = append(choices, ServiceEntryParticipant{ID: id, Name: entry.ResponsibleNames[i]})
+			seen[id] = true
+		}
+	}
+	return choices
+}
+
 type ServiceEntryPage struct {
 	LinkID               int64
 	Entries              []ServiceEntry
 	Participants         []ServiceEntryParticipant
 	CanCreate, CanRevise bool
+}
+
+// ServiceEntryFieldRecord adds the minimum identity data needed to edit an
+// entry. The shared history/Assigned Context DTO intentionally remains bounded.
+type ServiceEntryFieldRecord struct {
+	ServiceEntry
+	ResponsibleUserIDs []int64 `json:"responsible_user_ids,omitempty"`
+}
+
+func (page ServiceEntryPage) FieldEntries() []ServiceEntryFieldRecord {
+	result := make([]ServiceEntryFieldRecord, 0, len(page.Entries))
+	for _, entry := range page.Entries {
+		row := ServiceEntryFieldRecord{ServiceEntry: entry}
+		if entry.CanRevise {
+			row.ResponsibleUserIDs = append([]int64(nil), entry.ResponsibleUsers...)
+		}
+		result = append(result, row)
+	}
+	return result
 }
 
 func (s *Service) ServiceEntryPage(ctx context.Context, a Actor, jobID, assetID int64) (ServiceEntryPage, error) {
@@ -105,6 +146,10 @@ func (s *Service) ServiceEntryPage(ctx context.Context, a Actor, jobID, assetID 
 		}
 		out.CanCreate = p.Allows("service_entry.create", scope)
 		out.CanRevise = p.Allows("service_entry.revise", scope)
+		for i := range out.Entries {
+			entry := &out.Entries[i]
+			entry.CanRevise = out.CanRevise && entry.JobID == jobID && entry.LinkID == link
+		}
 		rows, err := tx.Query(ctx, `SELECT id,name FROM users u WHERE company_id=$1 AND (id=$2 OR EXISTS(SELECT 1 FROM job_assignments WHERE job_id=$3 AND user_id=u.id) OR $4) ORDER BY name,id`, p.CompanyID, a.UserID, jobID, p.Allows("directory.view", All))
 		if err != nil {
 			return err
@@ -270,14 +315,14 @@ func (s *Service) AssetServiceEntries(ctx context.Context, a Actor, assetID, cus
 
 func serviceEntryHistory(ctx context.Context, q queryer, assetID, customerID int64) ([]ServiceEntry, error) {
 	result := []ServiceEntry{}
-	rows, err := q.Query(ctx, `SELECT e.id,r.id::text,r.service_date::text,r.summary,j.job_type,r.accepted_at,ARRAY(SELECT u.name FROM asset_service_responsible_users ru JOIN users u ON u.id=ru.user_id WHERE ru.revision_id=r.id ORDER BY u.id),e.job_id,ARRAY(SELECT user_id FROM asset_service_responsible_users WHERE revision_id=r.id ORDER BY user_id) FROM asset_service_entries e JOIN asset_service_revisions r ON r.entry_id=e.id JOIN jobs j ON j.id=e.job_id WHERE e.asset_id=$1 AND ($2::bigint=0 OR e.customer_id=$2) AND NOT EXISTS(SELECT 1 FROM asset_service_revisions next WHERE next.predecessor=r.id) ORDER BY r.service_date,e.id`, assetID, customerID)
+	rows, err := q.Query(ctx, `SELECT e.id,r.id::text,r.service_date::text,r.summary,j.job_type,r.accepted_at,ARRAY(SELECT u.name FROM asset_service_responsible_users ru JOIN users u ON u.id=ru.user_id WHERE ru.revision_id=r.id ORDER BY u.id),e.job_id,ARRAY(SELECT user_id FROM asset_service_responsible_users WHERE revision_id=r.id ORDER BY user_id),e.link_id FROM asset_service_entries e JOIN asset_service_revisions r ON r.entry_id=e.id JOIN jobs j ON j.id=e.job_id WHERE e.asset_id=$1 AND ($2::bigint=0 OR e.customer_id=$2) AND NOT EXISTS(SELECT 1 FROM asset_service_revisions next WHERE next.predecessor=r.id) ORDER BY r.service_date,e.id`, assetID, customerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var entry ServiceEntry
-		if err = rows.Scan(&entry.ID, &entry.Revision, &entry.ServiceDate, &entry.Summary, &entry.JobTitle, &entry.RevisedAt, &entry.ResponsibleNames, &entry.JobID, &entry.ResponsibleUsers); err != nil {
+		if err = rows.Scan(&entry.ID, &entry.Revision, &entry.ServiceDate, &entry.Summary, &entry.JobTitle, &entry.RevisedAt, &entry.ResponsibleNames, &entry.JobID, &entry.ResponsibleUsers, &entry.LinkID); err != nil {
 			return nil, err
 		}
 		result = append(result, entry)

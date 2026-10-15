@@ -47,9 +47,9 @@ func (h *handler) serviceEntries(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, 200, struct {
-			Entries []authorization.ServiceEntry `json:"entries"`
-			LinkID  int64                        `json:"link_id"`
-		}{page.Entries, page.LinkID})
+			Entries []authorization.ServiceEntryFieldRecord `json:"entries"`
+			LinkID  int64                                   `json:"link_id"`
+		}{page.FieldEntries(), page.LinkID})
 		return
 	}
 	var body struct {

@@ -39,7 +39,7 @@ templ ServiceEntries(jobID,assetID int64, page authorization.ServiceEntryPage) {
     <label>Summary<textarea name="summary" required></textarea></label>
     <label>Responsible Product Users<select name="responsible_user_id" multiple required>
      for _,user := range page.Participants {
-      <option value={fmt.Sprint(user.ID)}>{user.Name}</option>
+       <option value={fmt.Sprint(user.ID)}>{user.Name}</option>
      }
     </select></label>
     <button type="submit">Record Service Entry</button>
@@ -47,7 +47,7 @@ templ ServiceEntries(jobID,assetID int64, page authorization.ServiceEntryPage) {
   }
   if page.CanRevise {
    for _,entry := range page.Entries {
-    if entry.JobID==jobID {
+     if entry.CanRevise {
     <form data-service-revision method="post" action={templ.URL(fmt.Sprintf("/jobs/%d/assets/%d/service-entries/%d",jobID,assetID,entry.ID))}>
      <h2>Revise service</h2>
      <input type="hidden" name="csrf_token" value={csrfToken(ctx)}/>
@@ -57,8 +57,8 @@ templ ServiceEntries(jobID,assetID int64, page authorization.ServiceEntryPage) {
      <label>Service date<input name="service_date" type="date" value={entry.ServiceDate} required/></label>
      <label>Summary<textarea name="summary" required>{entry.Summary}</textarea></label>
      <label>Responsible Product Users<select name="responsible_user_id" multiple required>
-      for _,user := range page.Participants {
-       <option value={fmt.Sprint(user.ID)} selected?={slices.Contains(entry.ResponsibleUsers,user.ID)}>{user.Name}</option>
+       for _,user := range entry.RevisionParticipants(page.Participants) {
+        <option value={fmt.Sprint(user.ID)} selected?={slices.Contains(entry.ResponsibleUsers,user.ID)}>{user.Name}</option>
       }
      </select></label>
      <p>The originally read revision is required. Stale text cannot overwrite another revision.</p>

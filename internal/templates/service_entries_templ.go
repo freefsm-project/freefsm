@@ -267,7 +267,7 @@ func ServiceEntries(jobID, assetID int64, page authorization.ServiceEntryPage) t
 					var templ_7745c5c3_Var15 string
 					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(user.ID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/service_entries.templ`, Line: 42, Col: 40}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/service_entries.templ`, Line: 42, Col: 41}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 					if templ_7745c5c3_Err != nil {
@@ -280,7 +280,7 @@ func ServiceEntries(jobID, assetID int64, page authorization.ServiceEntryPage) t
 					var templ_7745c5c3_Var16 string
 					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(user.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/service_entries.templ`, Line: 42, Col: 52}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/service_entries.templ`, Line: 42, Col: 53}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 					if templ_7745c5c3_Err != nil {
@@ -302,7 +302,7 @@ func ServiceEntries(jobID, assetID int64, page authorization.ServiceEntryPage) t
 			}
 			if page.CanRevise {
 				for _, entry := range page.Entries {
-					if entry.JobID == jobID {
+					if entry.CanRevise {
 						templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<form data-service-revision method=\"post\" action=\"")
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
@@ -398,7 +398,7 @@ func ServiceEntries(jobID, assetID int64, page authorization.ServiceEntryPage) t
 						if templ_7745c5c3_Err != nil {
 							return templ_7745c5c3_Err
 						}
-						for _, user := range page.Participants {
+						for _, user := range entry.RevisionParticipants(page.Participants) {
 							templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "<option value=\"")
 							if templ_7745c5c3_Err != nil {
 								return templ_7745c5c3_Err
@@ -406,7 +406,7 @@ func ServiceEntries(jobID, assetID int64, page authorization.ServiceEntryPage) t
 							var templ_7745c5c3_Var24 string
 							templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(user.ID))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/service_entries.templ`, Line: 61, Col: 41}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/service_entries.templ`, Line: 61, Col: 42}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var24)
 							if templ_7745c5c3_Err != nil {
@@ -429,7 +429,7 @@ func ServiceEntries(jobID, assetID int64, page authorization.ServiceEntryPage) t
 							var templ_7745c5c3_Var25 string
 							templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(user.Name)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/service_entries.templ`, Line: 61, Col: 113}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/service_entries.templ`, Line: 61, Col: 114}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 							if templ_7745c5c3_Err != nil {
