@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -123,12 +124,25 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 	assetTypes, _ := h.assetTypeSvc.List(r.Context())
 	assetStatuses, _ := h.assetStatusSvc.List(r.Context())
 
-	// Get service history
-	serviceHistory, _ := h.svc.GetServiceHistory(r.Context(), id)
-	serviceHistory = filterReadableJobs(r.Context(), h.policySvc, u, serviceHistory)
-	jobRows := make([]templates.JobRow, len(serviceHistory))
-	for i, j := range serviceHistory {
+	// Retain legacy linked work without presenting it as performed service.
+	linkedJobs, err := h.svc.LinkedJobs(r.Context(), id)
+	if err != nil {
+		internalServerError(w, r, "load linked Job history", err)
+		return
+	}
+	linkedJobs = filterReadableJobs(r.Context(), h.policySvc, u, linkedJobs)
+	jobRows := make([]templates.JobRow, len(linkedJobs))
+	for i, j := range linkedJobs {
 		jobRows[i] = jobRowForAsset(j)
+	}
+	canViewServiceEntries := false
+	if req, ok := authorization.FromContext(r.Context()); ok {
+		principal, err := req.Service.Principal(r.Context(), req.Actor)
+		if err != nil {
+			writeServiceEntryError(w, r, err)
+			return
+		}
+		canViewServiceEntries = principal.Allows("service_entry.view", authorization.All)
 	}
 
 	// Get tags
@@ -172,12 +186,13 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 	assetDetail := assetToDetail(r.Context(), asset, assetTypes, assetStatuses)
 	files, _ := h.fileSvc.List(r.Context(), u.CompanyID, objectref.New(objectref.TypeAsset, id))
 	data := templates.AssetShowPageData{
-		Asset:          *assetDetail,
-		ServiceHistory: jobRows,
-		Tags:           assignedTags,
-		AllTags:        availableTags,
-		CustomFields:   cfDisplay,
-		FileList:       templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "asset"},
+		Asset:                 *assetDetail,
+		LinkedJobs:            jobRows,
+		CanViewServiceEntries: canViewServiceEntries,
+		Tags:                  assignedTags,
+		AllTags:               availableTags,
+		CustomFields:          cfDisplay,
+		FileList:              templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "asset"},
 	}
 
 	templates.AssetShow(data).Render(r.Context(), w)

@@ -98,5 +98,10 @@ func (h *AssetHandler) CustomerHistory(w http.ResponseWriter, r *http.Request) {
 		writeAssetVocabularyError(w, r, err)
 		return
 	}
-	render(w, r, templates.CustomerAssetHistory(id, periods))
+	principal, err := req.Service.Principal(r.Context(), req.Actor)
+	if err != nil {
+		writeServiceEntryError(w, r, err)
+		return
+	}
+	render(w, r, templates.CustomerAssetHistory(id, periods, principal.Allows("service_entry.view", authorization.All)))
 }
