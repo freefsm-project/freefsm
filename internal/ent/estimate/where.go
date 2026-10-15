@@ -114,6 +114,11 @@ func LineItems(v string) predicate.Estimate {
 	return predicate.Estimate(sql.FieldEQ(FieldLineItems, v))
 }
 
+// Financial applies equality check predicate on the "financial" field. It's identical to FinancialEQ.
+func Financial(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldFinancial, v))
+}
+
 // CustomFields applies equality check predicate on the "custom_fields" field. It's identical to CustomFieldsEQ.
 func CustomFields(v string) predicate.Estimate {
 	return predicate.Estimate(sql.FieldEQ(FieldCustomFields, v))
@@ -837,6 +842,71 @@ func LineItemsEqualFold(v string) predicate.Estimate {
 // LineItemsContainsFold applies the ContainsFold predicate on the "line_items" field.
 func LineItemsContainsFold(v string) predicate.Estimate {
 	return predicate.Estimate(sql.FieldContainsFold(FieldLineItems, v))
+}
+
+// FinancialEQ applies the EQ predicate on the "financial" field.
+func FinancialEQ(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEQ(FieldFinancial, v))
+}
+
+// FinancialNEQ applies the NEQ predicate on the "financial" field.
+func FinancialNEQ(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNEQ(FieldFinancial, v))
+}
+
+// FinancialIn applies the In predicate on the "financial" field.
+func FinancialIn(vs ...string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldIn(FieldFinancial, vs...))
+}
+
+// FinancialNotIn applies the NotIn predicate on the "financial" field.
+func FinancialNotIn(vs ...string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldNotIn(FieldFinancial, vs...))
+}
+
+// FinancialGT applies the GT predicate on the "financial" field.
+func FinancialGT(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGT(FieldFinancial, v))
+}
+
+// FinancialGTE applies the GTE predicate on the "financial" field.
+func FinancialGTE(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldGTE(FieldFinancial, v))
+}
+
+// FinancialLT applies the LT predicate on the "financial" field.
+func FinancialLT(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLT(FieldFinancial, v))
+}
+
+// FinancialLTE applies the LTE predicate on the "financial" field.
+func FinancialLTE(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldLTE(FieldFinancial, v))
+}
+
+// FinancialContains applies the Contains predicate on the "financial" field.
+func FinancialContains(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldContains(FieldFinancial, v))
+}
+
+// FinancialHasPrefix applies the HasPrefix predicate on the "financial" field.
+func FinancialHasPrefix(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldHasPrefix(FieldFinancial, v))
+}
+
+// FinancialHasSuffix applies the HasSuffix predicate on the "financial" field.
+func FinancialHasSuffix(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldHasSuffix(FieldFinancial, v))
+}
+
+// FinancialEqualFold applies the EqualFold predicate on the "financial" field.
+func FinancialEqualFold(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldEqualFold(FieldFinancial, v))
+}
+
+// FinancialContainsFold applies the ContainsFold predicate on the "financial" field.
+func FinancialContainsFold(v string) predicate.Estimate {
+	return predicate.Estimate(sql.FieldContainsFold(FieldFinancial, v))
 }
 
 // CustomFieldsEQ applies the EQ predicate on the "custom_fields" field.

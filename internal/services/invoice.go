@@ -41,6 +41,7 @@ func NewInvoiceService(client *ent.Client, db ...*pgxpool.Pool) *InvoiceService 
 }
 
 type InvoiceCreateParams struct {
+	Adjustments   DocumentAdjustments
 	Terms         string
 	InvoiceNumber *int64
 	CustomerID    int64
@@ -57,6 +58,7 @@ type InvoiceCreateParams struct {
 }
 
 type InvoiceUpdateParams struct {
+	Adjustments              *DocumentAdjustments
 	CustomerDefaultsReviewed bool
 	Terms                    *string
 	InvoiceNumber            *int64
@@ -240,20 +242,23 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 			return nil, err
 		}
 		customerCompanyID = &input.CompanyID
-		params.TaxRate = input.TaxRate
 	}
 	taxRate := params.TaxRate
-	if taxRate == "" {
+	if strings.TrimSpace(taxRate) == "" {
 		taxRate = "0"
 	}
-	totals, err := CalculateTotals(params.LineItems, taxRate)
+	financial, err := AcceptFinancial(ctx, s.client, params.CustomerID, params.LineItems, taxRate, params.Adjustments)
+	if err != nil {
+		return nil, err
+	}
+	totals, err := FinancialTotals(financial, "", taxRate)
 	if err != nil {
 		return nil, fmt.Errorf("calculate invoice totals: %w", err)
 	}
 	if totals.Total.MinorUnits() < 0 {
 		return nil, ErrNegativeInvoiceTotal
 	}
-	lineItems, err := EncodeLineItems(params.LineItems)
+	lineItems, err := EncodeCommercialLines(params.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("encode invoice line items: %w", err)
 	}
@@ -281,8 +286,8 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		customFields = "[]"
 	}
 	if request, ok := authorization.FromContext(ctx); ok {
-		id, err := createDocument(ctx, request, "invoice", authorization.DocumentCreation{CustomerID: params.CustomerID, JobID: params.JobID, EstimateID: params.EstimateID, Title: params.Title, Notes: params.Notes, Terms: params.Terms, TaxRate: taxRate, LineItems: lineItems, CustomFields: customFields, InvoiceDate: params.InvoiceDate, DueDate: params.DueDate, Number: params.InvoiceNumber}, func(rate string) (string, error) {
-			totals, err := CalculateTotals(params.LineItems, rate)
+		id, err := createDocument(ctx, request, "invoice", authorization.DocumentCreation{Financial: financial, CustomerID: params.CustomerID, JobID: params.JobID, EstimateID: params.EstimateID, Title: params.Title, Notes: params.Notes, Terms: params.Terms, TaxRate: taxRate, LineItems: lineItems, CustomFields: customFields, InvoiceDate: params.InvoiceDate, DueDate: params.DueDate, Number: params.InvoiceNumber}, func(rate string) (string, error) {
+			totals, err := FinancialTotals(financial, "", rate)
 			if err != nil {
 				return "", err
 			}
@@ -297,7 +302,7 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		return s.GetByID(ctx, id)
 	}
 	if s.db != nil {
-		return s.createTransactionally(ctx, params, taxRate, lineItems, customFields, totals.Total.MinorUnits())
+		return s.createTransactionally(ctx, params, taxRate, lineItems, customFields, financial, totals.Total.MinorUnits())
 	}
 	b := s.client.Invoice.Create().
 		SetNillableCompanyID(customerCompanyID).
@@ -310,6 +315,7 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		SetDueDate(params.DueDate).
 		SetTaxRate(taxRate).
 		SetLineItems(lineItems).
+		SetFinancial(financial).
 		SetCustomFields(customFields)
 
 	if params.JobID > 0 {
@@ -330,7 +336,7 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 	return i, nil
 }
 
-func (s *InvoiceService) createTransactionally(ctx context.Context, params InvoiceCreateParams, taxRate, lineItems, customFields string, totalCents int64) (*ent.Invoice, error) {
+func (s *InvoiceService) createTransactionally(ctx context.Context, params InvoiceCreateParams, taxRate, lineItems, customFields, financial string, totalCents int64) (*ent.Invoice, error) {
 	cs, err := s.client.CompanySettings.Query().First(ctx)
 	if err != nil || cs.CompanyID == nil {
 		return nil, fmt.Errorf("load company settings: %w", err)
@@ -343,6 +349,15 @@ func (s *InvoiceService) createTransactionally(ctx context.Context, params Invoi
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
 		return nil, err
 	}
+	financial, err = AcceptFinancial(context.WithValue(ctx, detailsTxKey{}, tx), s.client, params.CustomerID, params.LineItems, taxRate, params.Adjustments)
+	if err != nil {
+		return nil, err
+	}
+	accepted, err := FinancialTotals(financial, "", taxRate)
+	if err != nil {
+		return nil, err
+	}
+	totalCents = accepted.Total.MinorUnits()
 	if err := checkItemSelections(ctx, tx, "invoice", 0, lineItems); err != nil {
 		return nil, err
 	}
@@ -365,9 +380,9 @@ func (s *InvoiceService) createTransactionally(ctx context.Context, params Invoi
 		return nil, fmt.Errorf("invoice number %d is already in use", number)
 	}
 	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state,terms)
-		VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15) RETURNING id`,
-		*cs.CompanyID, params.CustomerID, params.JobID, params.EstimateID, params.StatusID, number, params.Title, params.Notes, params.InvoiceDate, params.DueDate, taxRate, lineItems, customFields, invoiceSettlementState(totalCents, 0), params.Terms).Scan(&id)
+	err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state,terms,financial)
+		VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15,$16) RETURNING id`,
+		*cs.CompanyID, params.CustomerID, params.JobID, params.EstimateID, params.StatusID, number, params.Title, params.Notes, params.InvoiceDate, params.DueDate, taxRate, lineItems, customFields, invoiceSettlementState(totalCents, 0), params.Terms, financial).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("create invoice: %w", err)
 	}
@@ -401,6 +416,10 @@ func (s *InvoiceService) SaveDetails(ctx context.Context, id int64, params Invoi
 }
 
 func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpdateParams) (*ent.Invoice, error) {
+	if params.TaxRate != nil && strings.TrimSpace(*params.TaxRate) == "" {
+		zero := "0"
+		params.TaxRate = &zero
+	}
 	if params.Title != nil && strings.TrimSpace(*params.Title) == "" {
 		return nil, authorization.ErrCommercialInput
 	}
@@ -415,7 +434,7 @@ func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpd
 	var encodedLineItems string
 	if params.LineItems != nil {
 		var err error
-		encodedLineItems, err = EncodeLineItems(*params.LineItems)
+		encodedLineItems, err = EncodeCommercialLines(*params.LineItems)
 		if err != nil {
 			return nil, fmt.Errorf("encode invoice line items: %w", err)
 		}
@@ -425,14 +444,32 @@ func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpd
 		return nil, err
 	}
 	var updatedTotalCents int64
-	var currentTotalCents int64
-	monetaryUpdate := params.LineItems != nil || params.TaxRate != nil
+	financial := current.Financial
+	monetaryUpdate := MonetaryChanged(current.LineItems, current.TaxRate, current.Financial, params.LineItems, params.TaxRate, params.Adjustments) || params.CustomerID != nil && *params.CustomerID != current.CustomerID
 	if monetaryUpdate {
+		if request, ok := authorization.FromContext(ctx); ok {
+			if err := request.Service.ParentFacet(ctx, request.Actor, "invoice", id, "pricing.view"); err != nil {
+				return nil, err
+			}
+			customer, job := current.CustomerID, int64Value(current.JobID)
+			if params.CustomerID != nil {
+				customer = *params.CustomerID
+			}
+			if params.JobID != nil {
+				job = *params.JobID
+			}
+			if customer != current.CustomerID && job == int64Value(current.JobID) {
+				job = 0
+			}
+			if _, err := request.Service.DocumentCustomer(ctx, request.Actor, customer, job, current.TaxRate); err != nil {
+				return nil, err
+			}
+		}
 		items := []LineItem(nil)
 		if params.LineItems != nil {
 			items = *params.LineItems
 		} else {
-			items, err = DecodeLineItems(current.LineItems)
+			items, err = DecodeCommercialLines(current.LineItems)
 			if err != nil {
 				return nil, fmt.Errorf("decode invoice line items: %w", err)
 			}
@@ -441,7 +478,22 @@ func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpd
 		if params.TaxRate != nil {
 			taxRate = *params.TaxRate
 		}
-		totals, err := CalculateTotals(items, taxRate)
+		adjustments, err := FinancialAdjustments(current.Financial)
+		if err != nil {
+			return nil, err
+		}
+		if params.Adjustments != nil {
+			adjustments = *params.Adjustments
+		}
+		customer := current.CustomerID
+		if params.CustomerID != nil {
+			customer = *params.CustomerID
+		}
+		financial, err = AcceptFinancial(ctx, s.client, customer, items, taxRate, adjustments)
+		if err != nil {
+			return nil, err
+		}
+		totals, err := FinancialTotals(financial, "", taxRate)
 		if err != nil {
 			return nil, fmt.Errorf("calculate invoice totals: %w", err)
 		}
@@ -449,17 +501,17 @@ func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpd
 			return nil, ErrNegativeInvoiceTotal
 		}
 		updatedTotalCents = totals.Total.MinorUnits()
-		currentItems, decodeErr := DecodeLineItems(current.LineItems)
-		if decodeErr != nil {
-			return nil, fmt.Errorf("decode current invoice line items: %w", decodeErr)
-		}
-		currentTotals, totalErr := CalculateTotals(currentItems, current.TaxRate)
-		if totalErr != nil {
-			return nil, fmt.Errorf("calculate current invoice totals: %w", totalErr)
-		}
-		currentTotalCents = currentTotals.Total.MinorUnits()
 	}
 	customerID := current.CustomerID
+	if !monetaryUpdate {
+		params.TaxRate = nil
+	}
+	if !monetaryUpdate && params.LineItems != nil {
+		encodedLineItems, err = preserveCapturedLineMoney(current.LineItems, *params.LineItems)
+		if err != nil {
+			return nil, err
+		}
+	}
 	jobID := int64Value(current.JobID)
 	estimateID := int64Value(current.EstimateID)
 	if params.CustomerID != nil {
@@ -487,6 +539,9 @@ func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpd
 	}
 
 	u := s.client.Invoice.UpdateOneID(id)
+	if monetaryUpdate {
+		u.SetFinancial(financial)
+	}
 	if params.Terms != nil {
 		u.SetTerms(*params.Terms)
 	}
@@ -535,7 +590,7 @@ func (s *InvoiceService) update(ctx context.Context, id int64, params InvoiceUpd
 	if params.LineItems != nil {
 		u.SetLineItems(encodedLineItems)
 	}
-	if monetaryUpdate && current.SettlementState != "partially_paid" && (current.SettlementState != "paid" || currentTotalCents == 0) {
+	if monetaryUpdate {
 		u.SetSettlementState(invoiceSettlementState(updatedTotalCents, 0))
 	}
 	if params.CustomFields != nil {
@@ -686,7 +741,7 @@ func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusS
 		return nil, fmt.Errorf("get job %d: %w", jobID, err)
 	}
 
-	items, err := DecodeLineItems(j.LineItems)
+	items, err := DecodeCommercialLines(j.LineItems)
 	if err != nil {
 		return nil, fmt.Errorf("parse job %d line items: %w", jobID, err)
 	}
@@ -726,6 +781,7 @@ func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusS
 	})
 }
 
+// InvoiceTotal is the unversioned legacy helper; document reads use FinancialTotals.
 func InvoiceTotal(items []LineItem, taxRate string) (float64, error) {
 	totals, err := CalculateTotals(items, taxRate)
 	if err != nil {

@@ -177,6 +177,14 @@ func (c handlerCustomerTaxContext) DefaultTaxRate() string                { retu
 func (c handlerCustomerTaxContext) CustomerTaxExemptions() map[int64]bool { return c.exemptions }
 
 func lineItemEditorBootstrap(ctx context.Context, itemSvc *services.ItemService, customers []*ent.Customer, existingLineItems, defaultTaxRate string) (services.EditorBootstrap, error) {
+	return buildLineItemEditorBootstrap(ctx, itemSvc, customers, existingLineItems, defaultTaxRate, false)
+}
+
+func commercialLineItemEditorBootstrap(ctx context.Context, itemSvc *services.ItemService, customers []*ent.Customer, existingLineItems, defaultTaxRate string) (services.EditorBootstrap, error) {
+	return buildLineItemEditorBootstrap(ctx, itemSvc, customers, existingLineItems, defaultTaxRate, true)
+}
+
+func buildLineItemEditorBootstrap(ctx context.Context, itemSvc *services.ItemService, customers []*ent.Customer, existingLineItems, defaultTaxRate string, commercial bool) (services.EditorBootstrap, error) {
 	if request, ok := authorization.FromContext(ctx); ok {
 		p, err := request.Service.Principal(ctx, request.Actor)
 		if err != nil {
@@ -198,10 +206,14 @@ func lineItemEditorBootstrap(ctx context.Context, itemSvc *services.ItemService,
 	for _, customer := range customers {
 		exemptions[customer.ID] = customer.TaxExempt
 	}
-	return services.EncodeEditorBootstrap(catalog, existingLineItems, handlerCustomerTaxContext{
+	taxContext := handlerCustomerTaxContext{
 		defaultTaxRate: defaultTaxRate,
 		exemptions:     exemptions,
-	})
+	}
+	if commercial {
+		return services.EncodeCommercialEditorBootstrap(catalog, existingLineItems, taxContext)
+	}
+	return services.EncodeEditorBootstrap(catalog, existingLineItems, taxContext)
 }
 
 func statusName(statuses []*ent.Status, id *int64) string {

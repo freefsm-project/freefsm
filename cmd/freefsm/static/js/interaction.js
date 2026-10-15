@@ -85,7 +85,7 @@
   });
   window.addEventListener('pagehide', () => { document.querySelector('.main-content')?.replaceChildren(); });
   document.addEventListener('htmx:historyRestore', restoreScroll);
-  const editable = form => (form.method.toLowerCase() === 'post' || form.hasAttribute('hx-post')) && form.querySelector('input:not([type=hidden]),textarea,select');
+  const editable = form => ((form.getAttribute('method') || 'get').toLowerCase() === 'post' || form.hasAttribute('hx-post')) && form.querySelector('input:not([type=hidden]),textarea,select');
   const credentialAction = path => /^\/(login|logout|change-password|forgot-password|reset-password|accept-invite|setup|sessions|pair|users\/\d+\/sessions)(\/|$)/.test(new URL(path,location.href).pathname);
   const snapshot = form => JSON.stringify([...new FormData(form)].filter(([key]) => !['csrf_token', 'operation_id', 'save_action_id', 'save_history'].includes(key)).map(([k,v]) => [k, v instanceof File ? (v.name ? `${v.name}:${v.size}:${v.lastModified}` : '') : v]));
   const dirty = () => [...document.forms].some(form => forms.has(form) && forms.get(form) !== snapshot(form)) || [...actions.values()].some(a => a.owner?.isConnected && ['pending','unknown','review'].includes(a.state));
@@ -531,7 +531,7 @@
   }, true);
   window.addEventListener('beforeunload', e => { if (!leaving && dirty()) { e.preventDefault(); e.returnValue = ''; } });
   document.addEventListener('submit', async e => {
-    if (e.defaultPrevented || e.target.method.toLowerCase() !== 'post') return;
+    if (e.defaultPrevented || (e.target.getAttribute('method') || 'get').toLowerCase() !== 'post') return;
     const form = e.target;
     // Providers with their own accepted/pending/result protocol attach a form
     // listener and preventDefault first. Native forms get retained-input fetch.

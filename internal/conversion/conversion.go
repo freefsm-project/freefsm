@@ -268,11 +268,11 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 				return Result{}, err
 			}
 		}
-		items, err := services.DecodeLineItems(string(lineItems))
-		if err != nil {
+		var financial string
+		if err := tx.QueryRow(ctx, `SELECT financial FROM estimates WHERE id=$1`, req.EstimateID).Scan(&financial); err != nil {
 			return Result{}, err
 		}
-		totals, err := services.CalculateTotals(items, taxRate)
+		totals, err := services.FinancialTotals(financial, string(lineItems), taxRate)
 		if err != nil {
 			return Result{}, err
 		}
@@ -409,7 +409,7 @@ func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) 
 		}
 		now := s.now()
 		var invoiceID int64
-		err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state,terms) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING id`, actor.CompanyID, customerID, jobID, req.EstimateID, statusID, number, title, notes, date, dueDate, taxRate, lineItems, invoiceCustom, settlementState, terms).Scan(&invoiceID)
+		err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state,terms,financial) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`, actor.CompanyID, customerID, jobID, req.EstimateID, statusID, number, title, notes, date, dueDate, taxRate, lineItems, invoiceCustom, settlementState, terms, financial).Scan(&invoiceID)
 		if err != nil {
 			return Result{}, err
 		}
@@ -498,7 +498,7 @@ func (s *Service) Revert(ctx context.Context, actor Actor, req RevertRequest) (R
 		if _, err = tx.Exec(ctx, `UPDATE invoices SET conversion_hidden_at=$1,updated_at=$1 WHERE id=$2`, now, r.InvoiceID); err != nil {
 			return Result{}, err
 		}
-		if _, err = tx.Exec(ctx, `UPDATE estimates SET customer_id=$1,job_id=$2,status_id=$3,title=$4,notes=$5,tax_rate=$6,line_items=$7,custom_fields=$8,deleted_at=NULL,conversion_hidden_at=NULL,updated_at=$9,terms=(SELECT terms FROM invoices WHERE id=$11) WHERE id=$10`, customerID, jobID, draftStatus, title, notes, taxRate, lineItems, mergedCustom, now, r.EstimateID, r.InvoiceID); err != nil {
+		if _, err = tx.Exec(ctx, `UPDATE estimates SET customer_id=$1,job_id=$2,status_id=$3,title=$4,notes=$5,tax_rate=$6,line_items=$7,custom_fields=$8,deleted_at=NULL,conversion_hidden_at=NULL,updated_at=$9,terms=(SELECT terms FROM invoices WHERE id=$11),financial=(SELECT financial FROM invoices WHERE id=$11) WHERE id=$10`, customerID, jobID, draftStatus, title, notes, taxRate, lineItems, mergedCustom, now, r.EstimateID, r.InvoiceID); err != nil {
 			return Result{}, err
 		}
 		if err = transferRelations(ctx, tx, actor.CompanyID, "invoice", r.InvoiceID, "estimate", r.EstimateID); err != nil {

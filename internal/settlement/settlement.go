@@ -110,7 +110,7 @@ func (s *Service) RecordPayment(ctx context.Context, actor Actor, req RecordPaym
 		if err := ValidateEffectiveDate(receivedDate, today, time.Time{}); err != nil {
 			return Result{}, err
 		}
-		total, err := invoiceTotal(inv.lineItems, inv.taxRate)
+		total, err := invoiceTotal(inv.lineItems, inv.taxRate, inv.financial)
 		if err != nil {
 			return Result{}, err
 		}
@@ -175,7 +175,7 @@ func (s *Service) ApplyCredit(ctx context.Context, actor Actor, req ApplyCreditR
 		if err = ValidateEffectiveDate(effectiveDate, today, sourceDate); err != nil {
 			return Result{}, err
 		}
-		total, err := invoiceTotal(inv.lineItems, inv.taxRate)
+		total, err := invoiceTotal(inv.lineItems, inv.taxRate, inv.financial)
 		if err != nil {
 			return Result{}, err
 		}
@@ -374,6 +374,7 @@ func (s *Service) reverse(ctx context.Context, actor Actor, kind string, req Rev
 type lockedInvoice struct {
 	id, customerID     int64
 	lineItems, taxRate string
+	financial          string
 }
 
 func lockInvoice(ctx context.Context, tx pgx.Tx, companyID, id int64) (lockedInvoice, error) {
@@ -381,7 +382,7 @@ func lockInvoice(ctx context.Context, tx pgx.Tx, companyID, id int64) (lockedInv
 	var archived *time.Time
 	var hidden *time.Time
 	var statusCategory string
-	err := tx.QueryRow(ctx, `SELECT i.id,i.customer_id,i.line_items::text,i.tax_rate::text,i.deleted_at,i.conversion_hidden_at,coalesce(s.category_key,'') FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.company_id=$1 AND i.id=$2 FOR UPDATE OF i`, companyID, id).Scan(&i.id, &i.customerID, &i.lineItems, &i.taxRate, &archived, &hidden, &statusCategory)
+	err := tx.QueryRow(ctx, `SELECT i.id,i.customer_id,i.line_items::text,i.tax_rate::text,i.deleted_at,i.conversion_hidden_at,coalesce(s.category_key,''),i.financial FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.company_id=$1 AND i.id=$2 FOR UPDATE OF i`, companyID, id).Scan(&i.id, &i.customerID, &i.lineItems, &i.taxRate, &archived, &hidden, &statusCategory, &i.financial)
 	if err != nil {
 		return i, err
 	}
@@ -404,12 +405,12 @@ func lockCustomer(ctx context.Context, tx pgx.Tx, companyID, id int64) error {
 	}
 	return err
 }
-func invoiceTotal(encoded, tax string) (int64, error) {
-	items, err := services.DecodeLineItems(encoded)
-	if err != nil {
-		return 0, err
+func invoiceTotal(encoded, tax string, financial ...string) (int64, error) {
+	raw := ""
+	if len(financial) > 0 {
+		raw = financial[0]
 	}
-	totals, err := services.CalculateTotals(items, tax)
+	totals, err := services.FinancialTotals(raw, encoded, tax)
 	if err != nil {
 		return 0, err
 	}
@@ -431,7 +432,7 @@ func reproject(ctx context.Context, tx pgx.Tx, a Actor, invoiceID int64, action 
 	if err != nil {
 		return err
 	}
-	total, err := invoiceTotal(inv.lineItems, inv.taxRate)
+	total, err := invoiceTotal(inv.lineItems, inv.taxRate, inv.financial)
 	if err != nil {
 		return err
 	}

@@ -32,6 +32,6 @@ templ CommercialCustomerReview(choices string,customer int64) {
 		<p>The incompatible Job link is cleared. Existing document values and provenance are retained. Review these defaults before saving; applying them is optional.</p>
 		<dl><template x-for="(value,name) in defaults"><div><dt x-text="name"></dt><dd x-text="value === '' ? 'None' : value"></dd></div></template></dl>
 		<button type="button" class="outline" @click="applyDefaults()">Apply displayed defaults</button>
-		<label><input type="checkbox" name="customer_defaults_reviewed" value="true" x-model="reviewed" x-bind:required="changed"/>I reviewed the defaults and the document values to save</label>
+		<label><input type="checkbox" name="customer_defaults_reviewed" value="true" x-model="reviewed" x-bind:required="changed"/>I reviewed the defaults and document values, including recalculation under current adjustment and tax rules for the new Customer</label>
 	</section>
 }

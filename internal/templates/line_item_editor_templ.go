@@ -11,6 +11,9 @@ import templruntime "github.com/a-h/templ/runtime"
 import "fmt"
 
 type LineItemEditorData struct {
+	AdjustmentsJSON   string
+	Financial         string
+	ExistingDocument  bool
 	JobPricing        bool
 	ItemsJSON         string
 	ExistingItemsJSON string
@@ -38,20 +41,41 @@ func LineItemEditor(p LineItemEditorData) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<script>\n\t\tfunction lineItemEditor(root) {\n\t\t\tconst readJSON = (name, fallback) => JSON.parse(root.querySelector(`[data-line-item-json=\"${name}\"]`).textContent || fallback);\n\t\t\tconst catalog = readJSON('catalog', '[]');\n\t\t\tconst existing = readJSON('existing', '[]');\n\t\t\tconst taxContext = readJSON('customers', '{\"default_tax_rate\":\"0\",\"customers\":{}}');\n\t\t\tconst form = root.closest('form');\n\t\t\tconst makeItem = () => ({ item_id: 0, title: '', description: form.querySelector('[name=\"default_line_description\"]')?.value || '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: 0, surcharge: 0 });\n\t\t\tconst makeNewItem = () => ({ name: '', type: 'product', sku: '', description: '', unit_price: 0, taxable: true, tax_rate: '', track_inventory: false });\n\t\t\tconst parseRate = (value) => (parseFloat(String(value || '').replace('%', '').trim()) || 0) / 100;\n\t\t\tconst roundMoney = (value) => Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * 100) / 100;\n\t\t\texisting.forEach((item) => {\n\t\t\t\tif (item.quantity === null || item.quantity === undefined || item.quantity === '') item.quantity = 1;\n\t\t\t\titem.item_id = Number(item.item_id) || 0;\n\t\t\t});\n\t\t\treturn {\n\t\t\t\titems: existing.length ? existing : [makeItem()],\n\t\t\t\tcatalog,\n\t\t\t\tnewItem: makeNewItem(),\n\t\t\t\tcreatingItem: false,\n\t\t\t\tcreateItemError: '',\n\t\t\t\twasTaxExempt: false,\n\t\t\t\tlastNonExemptTaxRate: taxContext.default_tax_rate || '0',\n\t\t\t\ttaxVersion: 0,\n\t\t\t\tinit() {\n\t\t\t\t\tconst customerSelect = form.querySelector('select[name=\"customer_id\"]');\n\t\t\t\t\tconst taxInput = form.querySelector('input[name=\"tax_rate\"]');\n\t\t\t\t\tif (customerSelect) customerSelect.addEventListener('change', () => this.syncCustomerTax());\n\t\t\t\t\tif (taxInput) taxInput.addEventListener('input', () => { this.taxVersion++; });\n\t\t\t\t\tthis.syncCustomerTax();\n\t\t\t\t},\n\t\t\t\tadd() { this.items.push(makeItem()); },\n\t\t\t\taddOnEnter(event) {\n\t\t\t\t\tif (!event.target.matches('input[type=\"text\"], input[type=\"number\"]')) return;\n\t\t\t\t\t// Enter may confirm an IME candidate rather than finish a line.\n\t\t\t\t\tif (event.isComposing || event.keyCode === 229) return;\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\tif (event.repeat) return;\n\t\t\t\t\tthis.add();\n\t\t\t\t\tthis.$nextTick(() => this.$refs.lineRows.querySelector('tr:last-child input[type=\"text\"]').focus());\n\t\t\t\t},\n\t\t\t\tremove(index) { this.items.splice(index, 1); },\n\t\t\t\tapplyCatalogItem(item, catalogItem) {\n\t\t\t\t\titem.item_id = Number(catalogItem.id) || 0;\n\t\t\t\t\titem.title = catalogItem.name;\n\t\t\t\t\titem.description = catalogItem.description || '';\n\t\t\t\t\titem.unit_price = Number(catalogItem.unit_price) || 0;\n\t\t\t\t\titem.taxable = Boolean(catalogItem.taxable);\n\t\t\t\t\titem.tax_rate = catalogItem.tax_rate || '';\n\t\t\t\t},\n\t\t\t\tselectItem(index, itemID) {\n\t\t\t\t\tthis.items[index].item_id = Number(itemID) || 0;\n\t\t\t\t\tconst catalogItem = this.catalog.find((candidate) => candidate.id == itemID);\n\t\t\t\t\tif (catalogItem) this.applyCatalogItem(this.items[index], catalogItem);\n\t\t\t\t},\n\t\t\t\topenCreateItemModal() {\n\t\t\t\t\tthis.createItemError = '';\n\t\t\t\t\tif (this.$refs.createItemDialog && !this.$refs.createItemDialog.open) this.$refs.createItemDialog.showModal();\n\t\t\t\t},\n\t\t\t\tcloseCreateItemModal() {\n\t\t\t\t\tif (this.$refs.createItemDialog && this.$refs.createItemDialog.open) this.$refs.createItemDialog.close();\n\t\t\t\t},\n\t\t\t\tdocumentTaxRate() {\n\t\t\t\t\tthis.taxVersion;\n\t\t\t\t\tconst taxInput = form.querySelector('input[name=\"tax_rate\"]');\n\t\t\t\t\treturn parseRate(taxInput ? taxInput.value : taxContext.default_tax_rate);\n\t\t\t\t},\n\t\t\t\tsyncCustomerTax() {\n\t\t\t\t\tconst customerSelect = form.querySelector('select[name=\"customer_id\"]');\n\t\t\t\t\tconst taxInput = form.querySelector('input[name=\"tax_rate\"]');\n\t\t\t\t\tif (!customerSelect || !taxInput) return;\n\t\t\t\t\tconst info = taxContext.customers[String(customerSelect.value)] || {};\n\t\t\t\t\tif (info.tax_exempt) {\n\t\t\t\t\t\tif (!this.wasTaxExempt && parseRate(taxInput.value) > 0) this.lastNonExemptTaxRate = taxInput.value;\n\t\t\t\t\t\ttaxInput.value = '0';\n\t\t\t\t\t\tthis.wasTaxExempt = true;\n\t\t\t\t\t\tthis.taxVersion++;\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tif (this.wasTaxExempt && parseRate(taxInput.value) <= 0) taxInput.value = this.lastNonExemptTaxRate || taxContext.default_tax_rate || '0';\n\t\t\t\t\tif (!this.wasTaxExempt && !taxInput.value) taxInput.value = taxContext.default_tax_rate || '0';\n\t\t\t\t\tthis.wasTaxExempt = false;\n\t\t\t\t\tthis.taxVersion++;\n\t\t\t\t},\n\t\t\t\tasync createItem() {\n\t\t\t\t\tthis.createItemError = '';\n\t\t\t\t\tif (!this.newItem.name.trim()) { this.createItemError = 'Item name is required.'; return; }\n\t\t\t\t\tthis.creatingItem = true;\n\t\t\t\t\ttry {\n\t\t\t\t\t\tconst body = new URLSearchParams();\n\t\t\t\t\t\t['name', 'type', 'sku', 'description', 'unit_price', 'tax_rate'].forEach((name) => body.set(name, this.newItem[name] ?? ''));\n\t\t\t\t\t\tbody.set('taxable', this.newItem.taxable ? 'true' : 'false');\n\t\t\t\t\t\tbody.set('track_inventory', this.newItem.track_inventory ? 'true' : 'false');\n\t\t\t\t\t\tconst csrf = document.querySelector('meta[name=\"csrf-token\"]');\n\t\t\t\t\t\tconst response = await window.freefsmActions.fetch('/items/inline', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrf ? csrf.content : '' }, body }, this.$refs.createItemDialog);\n\t\t\t\t\t\tif (!response.ok) throw new Error((await response.text()) || 'Unable to create item.');\n\t\t\t\t\t\tconst created = await response.json();\n\t\t\t\t\t\tthis.catalog.push(created);\n\t\t\t\t\t\tconst item = makeItem();\n\t\t\t\t\t\tthis.applyCatalogItem(item, created);\n\t\t\t\t\t\tthis.items.push(item);\n\t\t\t\t\t\tthis.newItem = makeNewItem();\n\t\t\t\t\t\tthis.closeCreateItemModal();\n\t\t\t\t\t} catch (error) {\n\t\t\t\t\t\tthis.createItemError = error.message || 'Unable to create item.';\n\t\t\t\t\t} finally { this.creatingItem = false; }\n\t\t\t\t},\n\t\t\t\tlineTotal(item) { return roundMoney((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount || 0) + Number(item.surcharge || 0)); },\n\t\t\t\tget subtotal() { return roundMoney(this.items.reduce((sum, item) => sum + this.lineTotal(item), 0)); },\n\t\t\t\tget tax() { if (root.dataset.jobPricing === 'true') return roundMoney(this.items.reduce((sum,item) => sum + (item.taxable ? roundMoney(this.lineTotal(item) * parseRate(item.tax_rate)) : 0), 0)); return roundMoney(this.items.reduce((sum, item) => item.taxable ? sum + this.lineTotal(item) : sum, 0) * this.documentTaxRate()); },\n\t\t\t\tget total() { return roundMoney(this.subtotal + this.tax); },\n\t\t\t\tget json() { return JSON.stringify(this.items.filter((item) => item.item_id > 0 || item.title).map((item) => ({ ...(item.snapshot_id ? {snapshot_id: item.snapshot_id} : {}), item_id: Number(item.item_id) || 0, title: item.title, description: item.description, unit_price: Number(item.unit_price) || 0, quantity: Number(item.quantity), taxable: Boolean(item.taxable), tax_rate: item.tax_rate || '', discount: Number(item.discount) || 0, surcharge: Number(item.surcharge) || 0 }))); },\n\t\t\t};\n\t\t}\n\t</script><fieldset x-data=\"lineItemEditor($el)\" data-line-item-editor data-job-pricing=\"")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<script src=\"/static/js/commercial-arithmetic.js\"></script><script>\n\t\tfunction lineItemEditor(root) {\n\t\t\tconst readJSON = (name, fallback) => JSON.parse(root.querySelector(`[data-line-item-json=\"${name}\"]`).textContent || fallback);\n\t\t\tconst catalog = readJSON('catalog', '[]');\n\t\t\tconst existing = readJSON('existing', '[]');\n\t\t\tconst taxContext = readJSON('customers', '{\"default_tax_rate\":\"0\",\"customers\":{}}');\n\t\t\tconst financial = readJSON('financial', '{}');\n\t\t\tconst documentAdjustments = readJSON('adjustments', 'null') || financial.input || {};\n\t\t\tconst form = root.closest('form');\n\t\t\tconst noAdjustment = root.dataset.jobPricing === 'true' ? 0 : '';\n\t\t\tconst makeItem = () => ({ item_id: 0, title: '', description: form.querySelector('[name=\"default_line_description\"]')?.value || '', unit_price: 0, quantity: 1, taxable: false, tax_rate: '', discount: noAdjustment, surcharge: noAdjustment });\n\t\t\tconst makeNewItem = () => ({ name: '', type: 'product', sku: '', description: '', unit_price: 0, taxable: true, tax_rate: '', track_inventory: false });\n\t\t\tconst parseRate = (value) => (parseFloat(String(value || '').replace('%', '').trim()) || 0) / 100;\n\t\t\tconst roundMoney = (value) => Math.sign(value) * Math.round((Math.abs(value) + Number.EPSILON) * 100) / 100;\n\t\t\texisting.forEach((item) => {\n\t\t\t\tif (item.quantity === null || item.quantity === undefined || item.quantity === '') item.quantity = 1;\n\t\t\t\titem.item_id = Number(item.item_id) || 0;\n\t\t\t\tif (root.dataset.jobPricing !== 'true') {\n\t\t\t\t\titem.unit_price = item.unit_price_decimal || String(item.unit_price);\n\t\t\t\t\titem.quantity = item.quantity_decimal || String(item.quantity);\n\t\t\t\t\tfor (const name of ['discount','surcharge']) {\n\t\t\t\t\t\titem[name+'_kind'] = item[name+'_adjustment']?.kind || 'fixed';\n\t\t\t\t\t\tif (item[name+'_adjustment']) item[name] = item[name+'_adjustment'].value;\n\t\t\t\t\t\telse if (Number(item[name] || 0) === 0) item[name] = '';\n\t\t\t\t\t}\n\t\t\t\t}\n\t\t\t});\n\t\t\treturn {\n\t\t\t\titems: existing.length ? existing : [makeItem()],\n\t\t\t\tdocumentDiscount: documentAdjustments.discount?.value ?? '',\n\t\t\t\tdocumentDiscountKind: documentAdjustments.discount?.kind || 'fixed',\n\t\t\t\tdocumentSurcharge: documentAdjustments.surcharge?.value ?? '',\n\t\t\t\tdocumentSurchargeKind: documentAdjustments.surcharge?.kind || 'fixed',\n\t\t\t\tbaseline: '',\n\t\t\t\teffectiveTaxKey: '',\n\t\t\t\teffectiveTaxRate: '',\n\t\t\t\ttaxRequest: 0,\n\t\t\t\ttaxPreviewError: '',\n\t\t\t\tcatalog,\n\t\t\t\tnewItem: makeNewItem(),\n\t\t\t\tcreatingItem: false,\n\t\t\t\tcreateItemError: '',\n\t\t\t\twasTaxExempt: Boolean(financial.input?.tax_exempt),\n\t\t\t\tlastNonExemptTaxRate: taxContext.default_tax_rate || '0',\n\t\t\t\ttaxVersion: 0,\n\t\t\t\tinit() {\n\t\t\t\t\tconst customerSelect = form.querySelector('select[name=\"customer_id\"]');\n\t\t\t\t\tconst taxInput = form.querySelector('input[name=\"tax_rate\"]');\n\t\t\t\t\tif (customerSelect) customerSelect.addEventListener('change', () => { this.syncCustomerTax(); this.refreshTax(); });\n\t\t\t\t\tif (taxInput) taxInput.addEventListener('input', () => { this.taxVersion++; this.refreshTax(); });\n\t\t\t\t\tconst jobSelect=form.querySelector('select[name=\"job_id\"]');\n\t\t\t\t\tif(jobSelect)jobSelect.addEventListener('change',()=>{this.taxVersion++;this.refreshTax();});\n\t\t\t\t\tif (root.dataset.existingDocument !== 'true') this.syncCustomerTax();\n\t\t\t\t\tthis.baseline = this.moneySignature();\n\t\t\t\t\tthis.refreshTax();\n\t\t\t\t},\n\t\t\t\tadd() { this.items.push(makeItem()); },\n\t\t\t\taddOnEnter(event) {\n\t\t\t\t\tif (!event.target.matches('input[type=\"text\"], input[type=\"number\"]')) return;\n\t\t\t\t\t// Enter may confirm an IME candidate rather than finish a line.\n\t\t\t\t\tif (event.isComposing || event.keyCode === 229) return;\n\t\t\t\t\tevent.preventDefault();\n\t\t\t\t\tif (event.repeat) return;\n\t\t\t\t\tthis.add();\n\t\t\t\t\tthis.$nextTick(() => this.$refs.lineRows.querySelector('tr:last-child input[type=\"text\"]').focus());\n\t\t\t\t},\n\t\t\t\tremove(index) { this.items.splice(index, 1); },\n\t\t\t\tapplyCatalogItem(item, catalogItem) {\n\t\t\t\t\titem.item_id = Number(catalogItem.id) || 0;\n\t\t\t\t\titem.title = catalogItem.name;\n\t\t\t\t\titem.description = catalogItem.description || '';\n\t\t\t\t\titem.unit_price = Number(catalogItem.unit_price) || 0;\n\t\t\t\t\titem.taxable = Boolean(catalogItem.taxable);\n\t\t\t\t\titem.tax_rate = catalogItem.tax_rate || '';\n\t\t\t\t},\n\t\t\t\tselectItem(index, itemID) {\n\t\t\t\t\tthis.items[index].item_id = Number(itemID) || 0;\n\t\t\t\t\tconst catalogItem = this.catalog.find((candidate) => candidate.id == itemID);\n\t\t\t\t\tif (catalogItem) this.applyCatalogItem(this.items[index], catalogItem);\n\t\t\t\t},\n\t\t\t\topenCreateItemModal() {\n\t\t\t\t\tthis.createItemError = '';\n\t\t\t\t\tif (this.$refs.createItemDialog && !this.$refs.createItemDialog.open) this.$refs.createItemDialog.showModal();\n\t\t\t\t},\n\t\t\t\tcloseCreateItemModal() {\n\t\t\t\t\tif (this.$refs.createItemDialog && this.$refs.createItemDialog.open) this.$refs.createItemDialog.close();\n\t\t\t\t},\n\t\t\t\tdocumentTaxRate() {\n\t\t\t\t\tthis.taxVersion;\n\t\t\t\t\tconst taxInput = form.querySelector('input[name=\"tax_rate\"]');\n\t\t\t\t\treturn parseRate(taxInput ? taxInput.value : taxContext.default_tax_rate);\n\t\t\t\t},\n\t\t\t\tsyncCustomerTax() {\n\t\t\t\t\tconst customerSelect = form.querySelector('select[name=\"customer_id\"]');\n\t\t\t\t\tconst taxInput = form.querySelector('input[name=\"tax_rate\"]');\n\t\t\t\t\tif (!customerSelect || !taxInput) return;\n\t\t\t\t\tthis.taxVersion++;\n\t\t\t\t\tconst info = taxContext.customers[String(customerSelect.value)] || {};\n\t\t\t\t\tif (info.tax_exempt) {\n\t\t\t\t\t\tif (!this.wasTaxExempt && parseRate(taxInput.value) > 0) this.lastNonExemptTaxRate = taxInput.value;\n\t\t\t\t\t\ttaxInput.value = '0';\n\t\t\t\t\t\tthis.wasTaxExempt = true;\n\t\t\t\t\t\tthis.taxVersion++;\n\t\t\t\t\t\treturn;\n\t\t\t\t\t}\n\t\t\t\t\tif (this.wasTaxExempt && parseRate(taxInput.value) <= 0) taxInput.value = this.lastNonExemptTaxRate || taxContext.default_tax_rate || '0';\n\t\t\t\t\tif (!this.wasTaxExempt && !taxInput.value) taxInput.value = taxContext.default_tax_rate || '0';\n\t\t\t\t\tthis.wasTaxExempt = false;\n\t\t\t\t\tthis.taxVersion++;\n\t\t\t\t},\n\t\t\t\tasync createItem() {\n\t\t\t\t\tthis.createItemError = '';\n\t\t\t\t\tif (!this.newItem.name.trim()) { this.createItemError = 'Item name is required.'; return; }\n\t\t\t\t\tthis.creatingItem = true;\n\t\t\t\t\ttry {\n\t\t\t\t\t\tconst body = new URLSearchParams();\n\t\t\t\t\t\t['name', 'type', 'sku', 'description', 'unit_price', 'tax_rate'].forEach((name) => body.set(name, this.newItem[name] ?? ''));\n\t\t\t\t\t\tbody.set('taxable', this.newItem.taxable ? 'true' : 'false');\n\t\t\t\t\t\tbody.set('track_inventory', this.newItem.track_inventory ? 'true' : 'false');\n\t\t\t\t\t\tconst csrf = document.querySelector('meta[name=\"csrf-token\"]');\n\t\t\t\t\t\tconst response = await window.freefsmActions.fetch('/items/inline', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRF-Token': csrf ? csrf.content : '' }, body }, this.$refs.createItemDialog);\n\t\t\t\t\t\tif (!response.ok) throw new Error((await response.text()) || 'Unable to create item.');\n\t\t\t\t\t\tconst created = await response.json();\n\t\t\t\t\t\tthis.catalog.push(created);\n\t\t\t\t\t\tconst item = makeItem();\n\t\t\t\t\t\tthis.applyCatalogItem(item, created);\n\t\t\t\t\t\tthis.items.push(item);\n\t\t\t\t\t\tthis.newItem = makeNewItem();\n\t\t\t\t\t\tthis.closeCreateItemModal();\n\t\t\t\t\t} catch (error) {\n\t\t\t\t\t\tthis.createItemError = error.message || 'Unable to create item.';\n\t\t\t\t\t} finally { this.creatingItem = false; }\n\t\t\t\t},\n\t\t\t\tlineTotal(item) { return roundMoney((Number(item.unit_price) * Number(item.quantity)) - Number(item.discount || 0) + Number(item.surcharge || 0)); },\n\t\t\t\tget subtotal() { return roundMoney(this.items.reduce((sum, item) => sum + this.lineTotal(item), 0)); },\n\t\t\t\tget tax() { if (root.dataset.jobPricing === 'true') return roundMoney(this.items.reduce((sum,item) => sum + (item.taxable ? roundMoney(this.lineTotal(item) * parseRate(item.tax_rate)) : 0), 0)); return roundMoney(this.items.reduce((sum, item) => item.taxable ? sum + this.lineTotal(item) : sum, 0) * this.documentTaxRate()); },\n\t\t\t\tget total() { return roundMoney(this.subtotal + this.tax); },\n\t\t\t\tadjustment(kind,value) { if (value === '') return undefined; return {kind:kind||'fixed',value:kind==='percentage'?String(value):this.moneyText(value)}; },\n\t\t\t\tmoneyText(value) { try {return window.freefsmCommercial.moneyText(value);} catch (_) {return String(value);} },\n\t\t\t\ttaxSelection() {this.taxVersion;return {customer_id:form.querySelector('[name=\"customer_id\"]')?.value||'0',job_id:form.querySelector('[name=\"job_id\"]')?.value||'0',rate:form.querySelector('[name=\"tax_rate\"]')?.value||'0'};},\n\t\t\t\ttaxKey() {return JSON.stringify(this.taxSelection());},\n\t\t\t\tasync refreshTax() {\n\t\t\t\t\tif(root.dataset.jobPricing==='true')return;\n\t\t\t\t\tconst selection=this.taxSelection(),key=JSON.stringify(selection),request=++this.taxRequest;\n\t\t\t\t\tthis.taxPreviewError='';\n\t\t\t\t\tif(!Number(selection.customer_id)){this.effectiveTaxKey=key;this.effectiveTaxRate=selection.rate;return;}\n\t\t\t\t\ttry {\n\t\t\t\t\t\tconst response=await fetch('/commercial/tax-preview?'+new URLSearchParams(selection),{cache:'no-store'});\n\t\t\t\t\t\tif(!response.ok)throw new Error('Tax preview unavailable. Check access and tax rate, then refresh.');\n\t\t\t\t\t\tconst data=await response.json();\n\t\t\t\t\t\tif(request!==this.taxRequest||key!==this.taxKey())return;\n\t\t\t\t\t\tthis.effectiveTaxRate=data.rate;this.effectiveTaxKey=key;\n\t\t\t\t\t} catch(error) {if(request===this.taxRequest){this.effectiveTaxKey='';this.taxPreviewError='Tax preview unavailable. Check access and tax rate, then refresh.';}}\n\t\t\t\t},\n\t\t\t\tget adjustmentsJSON() { return JSON.stringify({discount:this.adjustment(this.documentDiscountKind,this.documentDiscount),surcharge:this.adjustment(this.documentSurchargeKind,this.documentSurcharge)}); },\n\t\t\t\texactInput() {\n\t\t\t\t\tthis.taxVersion;\n\t\t\t\t\tconst customer = form.querySelector('[name=\"customer_id\"]');\n\t\t\t\t\tconst exempt = taxContext.customers[String(customer?.value)]?.tax_exempt || false;\n\t\t\t\t\treturn {...JSON.parse(this.adjustmentsJSON),tax_rate:String(form.querySelector('[name=\"tax_rate\"]')?.value || '0').replace('%','').trim(),tax_exempt:exempt,\n\t\t\t\t\t\tlines:this.items.filter(item=>item.item_id>0||item.title).map(item=>({quantity:String(item.quantity),unit_price:this.moneyText(item.unit_price),taxable:Boolean(item.taxable),discount:this.adjustment(item.discount_kind,item.discount),surcharge:this.adjustment(item.surcharge_kind,item.surcharge)}))};\n\t\t\t\t},\n\t\t\t\tmoneySignature() { return JSON.stringify({customer_id:form.querySelector('[name=\"customer_id\"]')?.value || '',input:window.freefsmCommercial.signature(this.exactInput())}); },\n\t\t\t\tget preview() {\n\t\t\t\t\tif(root.dataset.jobPricing==='true') return null;\n\t\t\t\t\tif(root.dataset.existingDocument==='true' && this.baseline===this.moneySignature()) return financial.result || {error:'Recorded totals unavailable. Review the financial inputs before saving monetary changes.'};\n\t\t\t\t\tif(this.effectiveTaxKey!==this.taxKey())return {error:this.taxPreviewError||'Checking tax preview…'};\n\t\t\t\t\ttry {const input=this.exactInput();input.tax_rate=String(this.effectiveTaxRate).replace('%','').trim();input.tax_exempt=false;return window.freefsmCommercial.calculate(input);} catch(error) {return {error:error.message};}\n\t\t\t\t},\n\t\t\t\tget previewError() { return this.preview?.error || ''; },\n\t\t\t\tlineDisplay(item,index) { const p=this.preview; if(p?.error)return 'Invalid'; if(p?.lines[index])return window.freefsmCommercial.format(p.lines[index].adjusted_cents); return this.lineTotal(item).toFixed(2); },\n\t\t\t\ttotalDisplay(part) { const p=this.preview;if(p?.error)return 'Invalid';if(p)return window.freefsmCommercial.format(p[part]);return (part==='pretax_cents'?this.subtotal:part==='tax_cents'?this.tax:this.total).toFixed(2); },\n\t\t\t\tget json() { return JSON.stringify(this.items.filter((item) => item.item_id > 0 || item.title).map((item) => ({ ...(item.snapshot_id ? {snapshot_id: item.snapshot_id} : {}), item_id: Number(item.item_id) || 0, title: item.title, description: item.description, unit_price: Number(item.unit_price) || 0, quantity: Number(item.quantity), taxable: Boolean(item.taxable), tax_rate: item.tax_rate || '', ...(root.dataset.jobPricing==='true'?{discount:Number(item.discount)||0,surcharge:Number(item.surcharge)||0}:{unit_price_decimal:this.moneyText(item.unit_price),quantity_decimal:String(item.quantity),discount_adjustment:this.adjustment(item.discount_kind,item.discount),surcharge_adjustment:this.adjustment(item.surcharge_kind,item.surcharge)}) }))); },\n\t\t\t};\n\t\t}\n\t</script><fieldset x-data=\"lineItemEditor($el)\" data-line-item-editor data-job-pricing=\"")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(p.JobPricing))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/line_item_editor.templ`, Line: 128, Col: 105}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/line_item_editor.templ`, Line: 193, Col: 105}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var2)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\" data-existing-document=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var3 string
+		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(p.ExistingDocument))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/line_item_editor.templ`, Line: 193, Col: 163}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templ.Raw(`<script type="application/json" data-line-item-json="financial">`+p.Financial+`</script>`).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templ.Raw(`<script type="application/json" data-line-item-json="adjustments">`+p.AdjustmentsJSON+`</script>`).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -67,70 +91,158 @@ func LineItemEditor(p LineItemEditorData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<legend>Line Items</legend><div class=\"table-scroll line-items-scroll\" role=\"region\" aria-label=\"Line items, scroll for more columns\" tabindex=\"0\"><table><thead><tr><th>Catalog</th><th>Title</th><th>Description</th><th>Qty</th><th>Price</th><th>Discount</th><th>Surcharge</th><th>Taxable</th>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<legend>Line Items</legend> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		if p.JobPricing {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<th>Captured tax rate (%)</th>")
+		if !p.JobPricing {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<small>Leave adjustment fields blank for no adjustment. An entered zero is retained as an explicit adjustment.</small>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<th>Total</th><th></th></tr></thead> <tbody x-ref=\"lineRows\" @keydown.enter=\"addOnEnter($event)\"><template x-for=\"(item, index) in items\" :key=\"index\"><tr><td>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"table-scroll line-items-scroll\" role=\"region\" aria-label=\"Line items, scroll for more columns\" tabindex=\"0\"><table><thead><tr><th>Catalog</th><th>Title</th><th>Description</th><th>Qty</th><th>Price</th><th>Discount</th><th>Surcharge</th><th>Taxable</th>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if p.JobPricing {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<template x-if=\"item.snapshot_id\"><span x-text=\"item.item_id ? 'Captured Item #' + item.item_id : 'Free-text capture'\"></span></template>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<th>Captured tax rate (%)</th>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<select aria-label=\"Catalog item\" x-model.number=\"item.item_id\" x-init=\"$nextTick(() => { $el.value = String(item.item_id || 0) })\" @change=\"selectItem(index, $el.value)\" :disabled=\"")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		var templ_7745c5c3_Var3 string
-		templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%t && !!item.snapshot_id", p.JobPricing))
-		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/line_item_editor.templ`, Line: 146, Col: 243}
-		}
-		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var3)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "\"><option value=\"0\">Free-text line</option><template x-for=\"catalogItem in catalog\" :key=\"catalogItem.id\"><option :value=\"catalogItem.id\" :selected=\"Number(catalogItem.id) === Number(item.item_id)\" x-text=\"catalogItem.name\"></option></template></select></td><td><input type=\"text\" x-model=\"item.title\" placeholder=\"Line title\" aria-label=\"Line item title\"></td><td><textarea x-model=\"item.description\" rows=\"2\" placeholder=\"Line item description\" aria-label=\"Line item description\"></textarea></td><td><input type=\"number\" x-model=\"item.quantity\" step=\"any\" min=\"0.000001\" class=\"input-width-70\" aria-label=\"Quantity\"></td><td><input type=\"number\" x-model=\"item.unit_price\" step=\"0.01\" class=\"input-width-100\" aria-label=\"Unit price\"></td><td><input type=\"number\" x-model=\"item.discount\" step=\"0.01\" min=\"0\" class=\"input-width-100\" aria-label=\"Discount\"></td><td><input type=\"number\" x-model=\"item.surcharge\" step=\"0.01\" min=\"0\" class=\"input-width-100\" aria-label=\"Surcharge\"></td><td><input type=\"checkbox\" x-model=\"item.taxable\" aria-label=\"Taxable line item\"></td>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<th>Total</th><th></th></tr></thead> <tbody x-ref=\"lineRows\" @keydown.enter=\"addOnEnter($event)\"><template x-for=\"(item, index) in items\" :key=\"index\"><tr><td>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if p.JobPricing {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<td><input type=\"text\" inputmode=\"decimal\" x-model=\"item.tax_rate\" aria-label=\"Captured tax rate\"></td>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "<template x-if=\"item.snapshot_id\"><span x-text=\"item.item_id ? 'Captured Item #' + item.item_id : 'Free-text capture'\"></span></template>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<td><span x-text=\"lineTotal(item).toFixed(2)\"></span></td><td><button type=\"button\" @click.prevent=\"remove(index)\" class=\"outline contrast small\" aria-label=\"Remove line item\">X</button></td></tr></template></tbody></table></div><div class=\"line-item-actions\"><button type=\"button\" @click.prevent=\"add()\" class=\"outline\">Add Line</button> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 10, "<select aria-label=\"Catalog item\" x-model.number=\"item.item_id\" x-init=\"$nextTick(() => { $el.value = String(item.item_id || 0) })\" @change=\"selectItem(index, $el.value)\" :disabled=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var4 string
+		templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%t && !!item.snapshot_id", p.JobPricing))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/line_item_editor.templ`, Line: 216, Col: 243}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "\"><option value=\"0\">Free-text line</option><template x-for=\"catalogItem in catalog\" :key=\"catalogItem.id\"><option :value=\"catalogItem.id\" :selected=\"Number(catalogItem.id) === Number(item.item_id)\" x-text=\"catalogItem.name\"></option></template></select></td><td><input type=\"text\" x-model=\"item.title\" placeholder=\"Line title\" aria-label=\"Line item title\"></td><td><textarea x-model=\"item.description\" rows=\"2\" placeholder=\"Line item description\" aria-label=\"Line item description\"></textarea></td><td><input type=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var5 string
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.ResolveAttributeValue(commercialInputType(p.JobPricing))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/line_item_editor.templ`, Line: 220, Col: 57}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var5)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "\" inputmode=\"decimal\" x-model=\"item.quantity\" step=\"any\" min=\"0\" class=\"input-width-70\" aria-label=\"Quantity\"></td><td><input type=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var6 string
+		templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.ResolveAttributeValue(commercialInputType(p.JobPricing))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/line_item_editor.templ`, Line: 221, Col: 57}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var6)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "\" inputmode=\"decimal\" x-model=\"item.unit_price\" step=\"0.01\" class=\"input-width-100\" aria-label=\"Unit price\"></td><td><input type=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var7 string
+		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(commercialInputType(p.JobPricing))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/line_item_editor.templ`, Line: 222, Col: 57}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "\" inputmode=\"decimal\" x-model=\"item.discount\" step=\"any\" min=\"0\" class=\"input-width-100\" aria-label=\"Discount\"> ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if !p.JobPricing {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 15, "<select x-model=\"item.discount_kind\" aria-label=\"Discount kind\"><option value=\"fixed\">USD</option><option value=\"percentage\">%</option></select>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 16, "</td><td><input type=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var8 string
+		templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.ResolveAttributeValue(commercialInputType(p.JobPricing))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/line_item_editor.templ`, Line: 227, Col: 57}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var8)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 17, "\" inputmode=\"decimal\" x-model=\"item.surcharge\" step=\"any\" min=\"0\" class=\"input-width-100\" aria-label=\"Surcharge\"> ")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if !p.JobPricing {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "<select x-model=\"item.surcharge_kind\" aria-label=\"Surcharge kind\"><option value=\"fixed\">USD</option><option value=\"percentage\">%</option></select>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "</td><td><input type=\"checkbox\" x-model=\"item.taxable\" aria-label=\"Taxable line item\"></td>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		if p.JobPricing {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 20, "<td><input type=\"text\" inputmode=\"decimal\" x-model=\"item.tax_rate\" aria-label=\"Captured tax rate\"></td>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 21, "<td><span x-text=\"lineDisplay(item,index)\"></span></td><td><button type=\"button\" @click.prevent=\"remove(index)\" class=\"outline contrast small\" aria-label=\"Remove line item\">X</button></td></tr></template></tbody></table></div><div class=\"line-item-actions\"><button type=\"button\" @click.prevent=\"add()\" class=\"outline\">Add Line</button> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if itemPermission(ctx, "item.create") && itemPermission(ctx, "pricebook.create") {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 11, "<button type=\"button\" @click.prevent=\"openCreateItemModal()\" class=\"outline\">Create Item</button>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 22, "<button type=\"button\" @click.prevent=\"openCreateItemModal()\" class=\"outline\">Create Item</button>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 12, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 23, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if itemPermission(ctx, "item.create") && itemPermission(ctx, "pricebook.create") {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 13, "<dialog class=\"item-create-dialog\" x-ref=\"createItemDialog\" @click.self=\"closeCreateItemModal()\"><article class=\"item-create-dialog-card\"><header class=\"item-create-dialog-header\"><strong>Create Item</strong><button type=\"button\" class=\"outline small\" @click=\"closeCreateItemModal()\">Close</button></header><div class=\"item-create-dialog-body\"><label>Name <small class=\"required-marker\">*</small><input type=\"text\" x-model=\"newItem.name\" placeholder=\"Item name\"></label><div class=\"grid\"><label>Type<select x-model=\"newItem.type\"><option value=\"product\">product</option><option value=\"service\">service</option></select></label><label>SKU<input type=\"text\" x-model=\"newItem.sku\" placeholder=\"Optional\"></label></div><label>Unit Price<input type=\"number\" x-model=\"newItem.unit_price\" step=\"0.01\" min=\"0\"></label><div class=\"grid\"><label><input type=\"checkbox\" x-model=\"newItem.taxable\"> Taxable</label><label>Tax Rate<input type=\"text\" x-model=\"newItem.tax_rate\" placeholder=\"e.g. 8.25%\"></label></div><label><input type=\"checkbox\" x-model=\"newItem.track_inventory\"> Track Inventory</label> <label>Description<textarea x-model=\"newItem.description\" rows=\"3\"></textarea></label> <small class=\"error-msg\" x-text=\"createItemError\" x-show=\"createItemError\"></small></div><footer class=\"item-create-dialog-actions\"><button type=\"button\" @click=\"createItem()\" :aria-busy=\"creatingItem\" x-text=\"creatingItem ? 'Creating...' : 'Create Item'\"></button><button type=\"button\" class=\"outline\" @click=\"closeCreateItemModal()\">Cancel</button></footer></article></dialog>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 24, "<dialog class=\"item-create-dialog\" x-ref=\"createItemDialog\" @click.self=\"closeCreateItemModal()\"><article class=\"item-create-dialog-card\"><header class=\"item-create-dialog-header\"><strong>Create Item</strong><button type=\"button\" class=\"outline small\" @click=\"closeCreateItemModal()\">Close</button></header><div class=\"item-create-dialog-body\"><label>Name <small class=\"required-marker\">*</small><input type=\"text\" x-model=\"newItem.name\" placeholder=\"Item name\"></label><div class=\"grid\"><label>Type<select x-model=\"newItem.type\"><option value=\"product\">product</option><option value=\"service\">service</option></select></label><label>SKU<input type=\"text\" x-model=\"newItem.sku\" placeholder=\"Optional\"></label></div><label>Unit Price<input type=\"number\" x-model=\"newItem.unit_price\" step=\"0.01\" min=\"0\"></label><div class=\"grid\"><label><input type=\"checkbox\" x-model=\"newItem.taxable\"> Taxable</label><label>Tax Rate<input type=\"text\" x-model=\"newItem.tax_rate\" placeholder=\"e.g. 8.25%\"></label></div><label><input type=\"checkbox\" x-model=\"newItem.track_inventory\"> Track Inventory</label> <label>Description<textarea x-model=\"newItem.description\" rows=\"3\"></textarea></label> <small class=\"error-msg\" x-text=\"createItemError\" x-show=\"createItemError\"></small></div><footer class=\"item-create-dialog-actions\"><button type=\"button\" @click=\"createItem()\" :aria-busy=\"creatingItem\" x-text=\"creatingItem ? 'Creating...' : 'Create Item'\"></button><button type=\"button\" class=\"outline\" @click=\"closeCreateItemModal()\">Cancel</button></footer></article></dialog> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 14, "<div class=\"line-item-totals\"><p>Subtotal: $<span x-text=\"subtotal.toFixed(2)\"></span></p><p>Tax: $<span x-text=\"tax.toFixed(2)\"></span></p><p><strong>Total: $<span x-text=\"total.toFixed(2)\"></span></strong></p></div><input type=\"hidden\" name=\"line_items\" :value=\"json\"></fieldset>")
+		if !p.JobPricing {
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 25, "<div class=\"grid\"><label>Document discount<input type=\"text\" inputmode=\"decimal\" x-model=\"documentDiscount\" aria-label=\"Document discount\"><select x-model=\"documentDiscountKind\" aria-label=\"Document discount kind\"><option value=\"fixed\">USD</option><option value=\"percentage\">%</option></select></label> <label>Document surcharge<input type=\"text\" inputmode=\"decimal\" x-model=\"documentSurcharge\" aria-label=\"Document surcharge\"><select x-model=\"documentSurchargeKind\" aria-label=\"Document surcharge kind\"><option value=\"fixed\">USD</option><option value=\"percentage\">%</option></select></label></div><input type=\"hidden\" name=\"adjustments\" :value=\"adjustmentsJSON\"><p role=\"status\" x-text=\"previewError\"></p><button type=\"button\" class=\"outline\" x-show=\"taxPreviewError\" @click=\"refreshTax()\">Refresh tax preview</button>")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 26, "<div class=\"line-item-totals\"><p>Subtotal: $<span x-text=\"totalDisplay('pretax_cents')\"></span></p><p>Tax: $<span x-text=\"totalDisplay('tax_cents')\"></span></p><p><strong>Total: $<span x-text=\"totalDisplay('total_cents')\"></span></strong></p></div><input type=\"hidden\" name=\"line_items\" :value=\"json\"></fieldset>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

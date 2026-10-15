@@ -34,6 +34,20 @@ func (h *handler) commercial(kind string) http.HandlerFunc {
 				return
 			}
 			if raw, ok := state["line_items"].(json.RawMessage); ok {
+				financial := ""
+				version := 0
+				if value, ok := state["financial"].(json.RawMessage); ok {
+					financial = string(value)
+					version = 1
+				}
+				tax, _ := state["tax_rate"].(string)
+				totals, err := services.FinancialTotals(financial, string(raw), tax)
+				if err != nil {
+					commercialError(w, err)
+					return
+				}
+				state["arithmetic_version"] = version
+				state["totals"] = map[string]string{"subtotal": totals.Subtotal.Format(), "tax": totals.Tax.Format(), "total": totals.Total.Format()}
 				lines, err := services.PublicCommercialLines(string(raw))
 				if err != nil {
 					commercialError(w, err)
@@ -45,7 +59,7 @@ func (h *handler) commercial(kind string) http.HandlerFunc {
 			return
 		}
 		var in services.CommercialInput
-		if !decodeExactJSON(w, r, &in, "operation_id", "job_id", "client_id", "revision", "occurred_at", "title", "notes", "terms", "tax_rate", "invoice_date", "due_date", "valid_through", "line_items", "custom_fields") {
+		if !decodeExactJSON(w, r, &in, "operation_id", "job_id", "client_id", "revision", "occurred_at", "title", "notes", "terms", "tax_rate", "invoice_date", "due_date", "valid_through", "line_items", "custom_fields", "adjustments") {
 			return
 		}
 		receipt, err := services.SaveCommercialAPI(r.Context(), kind, id, in)

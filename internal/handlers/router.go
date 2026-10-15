@@ -379,6 +379,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		})
 
 		// Assigned technicians may create documents from their Jobs and manage them.
+		r.Get("/commercial/tax-preview", commercialTaxPreview)
 		r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/create-invoice", invoiceHandler.CreateFromJob)
 		r.With(activeObjectGuard(objectref.TypeJob)).Get("/jobs/{id}/create-invoice", invoiceHandler.CreateFromJob)
 		r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/invoices", invoiceHandler.CreateForJob)

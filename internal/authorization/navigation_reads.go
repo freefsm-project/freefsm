@@ -242,7 +242,7 @@ func InstallNavigationReadBoundary(client *ent.Client) {
 						jobID = *row.JobID
 					}
 					if !NavigationFacetAllowed(ctx, "pricing.view", jobID) {
-						row.LineItems, row.TaxRate = "[]", ""
+						row.LineItems, row.TaxRate, row.Financial = "[]", "", ""
 					}
 				}
 			case []*ent.Invoice:
@@ -252,7 +252,7 @@ func InstallNavigationReadBoundary(client *ent.Client) {
 						jobID = *row.JobID
 					}
 					if !NavigationFacetAllowed(ctx, "pricing.view", jobID) {
-						row.LineItems, row.TaxRate = "[]", ""
+						row.LineItems, row.TaxRate, row.Financial = "[]", "", ""
 					}
 				}
 			}

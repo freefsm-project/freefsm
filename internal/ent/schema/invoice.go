@@ -37,6 +37,7 @@ func (Invoice) Fields() []ent.Field {
 		field.Time("due_date"),
 		field.String("tax_rate").Default("0"),
 		field.String("line_items").Default("[]"),
+		field.String("financial").Default(""),
 		field.String("settlement_state").Default("unpaid"),
 		field.String("display_settings").Default("{}"),
 		field.String("custom_fields").Default("[]"),

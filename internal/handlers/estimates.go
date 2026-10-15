@@ -297,7 +297,7 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if taxRate == "" {
 		taxRate = "0"
 	}
-	taxRate, err := taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate, jobID)
+	_, err := taxRateForCustomer(r.Context(), h.custSvc, custID, taxRate, jobID)
 	if err != nil {
 		authorizationError(w, r, err)
 		return
@@ -320,8 +320,20 @@ func (h *EstimateHandler) Create(w http.ResponseWriter, r *http.Request) {
 		LineItems:    lineItems,
 		CustomFields: parseCustomFieldValues(r),
 	}
+	adjustments, err := documentAdjustments(r)
+	if err != nil {
+		h.invalidEstimateForm(w, r, err.Error())
+		return
+	}
+	if adjustments != nil {
+		params.Adjustments = *adjustments
+	}
 	result, err := h.svc.Create(r.Context(), params)
 	if err != nil {
+		if errors.Is(err, authorization.ErrCommercialInput) {
+			h.invalidEstimateForm(w, r, err.Error())
+			return
+		}
 		if renderFieldSaveError(w, r, h.defSvc, "estimate", err) {
 			return
 		}
@@ -342,6 +354,14 @@ func (h *EstimateHandler) invalidEstimateForm(w http.ResponseWriter, r *http.Req
 	saveaction.RejectBeforeWrite(r.Context())
 	customerID, _ := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	data, err := h.newEstimateForm(r.Context(), customerID)
+	if id, parseErr := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64); parseErr == nil && id > 0 {
+		current, getErr := h.svc.GetByID(r.Context(), id)
+		if getErr != nil {
+			authorizationError(w, r, getErr)
+			return
+		}
+		data, err = h.formDataFromEstimate(r.Context(), current, h.statusesForSelect(r.Context()))
+	}
 	if err != nil {
 		authorizationError(w, r, err)
 		return
@@ -353,6 +373,7 @@ func (h *EstimateHandler) invalidEstimateForm(w http.ResponseWriter, r *http.Req
 	data.Estimate.ValidThrough = r.FormValue("valid_through")
 	data.Estimate.JobID, _ = strconv.ParseInt(r.FormValue("job_id"), 10, 64)
 	data.ExistingItemsJSON = submittedLineItems(r.FormValue("line_items"))
+	data.AdjustmentsJSON = submittedAdjustments(r.FormValue("adjustments"))
 	data.PreserveEntered = true
 	defs, err := h.defSvc.ListForObjectType(r.Context(), "estimate")
 	if err != nil {
@@ -414,7 +435,7 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if custID != valueInt64(current.CustomerID) && jobID == valueInt64(current.JobID) {
 		jobID = 0
 	}
-	pricingSubmitted := r.Form.Has("tax_rate") || r.Form.Has("line_items")
+	pricingSubmitted := r.Form.Has("tax_rate") || r.Form.Has("line_items") || r.Form.Has("adjustments")
 	contextChanged := custID != valueInt64(current.CustomerID) || jobID != valueInt64(current.JobID)
 	if (pricingSubmitted || contextChanged) && !h.authorizeDestinationJob(w, r, custID, jobID) {
 		return
@@ -423,14 +444,6 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 	taxRatePtr := formPtr(taxRate)
 	if taxRate == "" {
 		t := "0"
-		taxRatePtr = &t
-	}
-	if taxRatePtr != nil && pricingSubmitted {
-		t, err := taxRateForCustomer(r.Context(), h.custSvc, custID, *taxRatePtr, jobID)
-		if err != nil {
-			authorizationError(w, r, err)
-			return
-		}
 		taxRatePtr = &t
 	}
 	lineItems, err := decodeAndValidateLineItems(r.FormValue("line_items"), *taxRatePtr)
@@ -462,16 +475,30 @@ func (h *EstimateHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params.LineItems = &lineItems
-	if !pricingSubmitted {
+	if !r.Form.Has("tax_rate") {
 		params.TaxRate = nil
+	}
+	if !r.Form.Has("line_items") {
 		params.LineItems = nil
 	}
 	if !contextChanged {
 		params.CustomerID = nil
 		params.JobID = nil
 	}
+	adjustments, err := documentAdjustments(r)
+	if err != nil {
+		h.invalidEstimateForm(w, r, err.Error())
+		return
+	}
+	if pricingSubmitted {
+		params.Adjustments = adjustments
+	}
 	result, err := h.svc.SaveDetails(r.Context(), id, params)
 	if err != nil {
+		if errors.Is(err, authorization.ErrCommercialInput) {
+			h.invalidEstimateForm(w, r, err.Error())
+			return
+		}
 		if renderFieldSaveError(w, r, h.defSvc, "estimate", err) {
 			return
 		}
@@ -865,7 +892,7 @@ func (h *EstimateHandler) newEstimateForm(ctx context.Context, customerID int64)
 	jobs, _ := h.jobSvc.ListAll(ctx)
 	defs, _ := h.defSvc.ListForObjectType(ctx, "estimate")
 	defaultTaxRate := companyDefaultTaxRate(ctx)
-	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, "[]", defaultTaxRate)
+	bootstrap, err := commercialLineItemEditorBootstrap(ctx, h.itemSvc, customers, "[]", defaultTaxRate)
 	if err != nil {
 		return templates.EstimateFormPageData{}, err
 	}
@@ -930,7 +957,7 @@ func (h *EstimateHandler) formDataFromEstimate(ctx context.Context, e *ent.Estim
 	if err != nil {
 		return templates.EstimateFormPageData{}, err
 	}
-	bootstrap, err := lineItemEditorBootstrap(ctx, h.itemSvc, customers, e.LineItems, defaultTaxRate)
+	bootstrap, err := commercialLineItemEditorBootstrap(ctx, h.itemSvc, customers, e.LineItems, defaultTaxRate)
 	if err != nil {
 		return templates.EstimateFormPageData{}, err
 	}
@@ -990,6 +1017,7 @@ func (h *EstimateHandler) authorizeDestinationJob(w http.ResponseWriter, r *http
 
 func estimateToDetail(ctx context.Context, e *ent.Estimate, statuses []*ent.Status) templates.EstimateDetail {
 	d := templates.EstimateDetail{
+		Financial:   e.Financial,
 		NumberLabel: services.RecordedEstimateNumber(e, middleware.CompanyFromContext(ctx)),
 		ID:          e.ID,
 		CustomerID:  estCustID(e),

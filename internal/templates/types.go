@@ -655,6 +655,7 @@ type EstimateRow struct {
 }
 
 type EstimateDetail struct {
+	Financial      string
 	TermsUnknown   bool
 	ValidThrough   string
 	Terms          string
@@ -697,6 +698,7 @@ type EstimateListPageData struct {
 }
 
 type EstimateFormPageData struct {
+	AdjustmentsJSON        string
 	DefaultsJSON           string
 	PreserveEntered        bool
 	DefaultLineDescription string
@@ -728,6 +730,7 @@ type InvoiceRow struct {
 }
 
 type InvoiceDetail struct {
+	Financial          string
 	TermsUnknown       bool
 	NumberLabel        string
 	Terms              string
@@ -854,6 +857,7 @@ type SettingsPageData struct {
 }
 
 type InvoiceFormPageData struct {
+	AdjustmentsJSON        string
 	EnteredInvoiceNumber   string
 	DefaultsJSON           string
 	PreserveEntered        bool
@@ -1061,7 +1065,7 @@ func invoiceFormNumberValue(p InvoiceFormPageData) string {
 	return fmt.Sprintf("%d", p.Invoice.Number)
 }
 
-func cents(c int64) string { return fmt.Sprintf("$%.2f", float64(c)/100) }
+func cents(c int64) string { return exactCents(c) }
 
 func csrfToken(ctx context.Context) string {
 	return middleware.CSRFFromContext(ctx)

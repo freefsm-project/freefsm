@@ -96,10 +96,14 @@ func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id i
 		if p.Allows("pricing.view", All) || assigned && p.Allows("pricing.view", Assigned) {
 			var lines json.RawMessage
 			var tax string
-			if err := tx.QueryRow(ctx, `SELECT line_items,tax_rate FROM `+kind+`s WHERE id=$1`, id).Scan(&lines, &tax); err != nil {
+			var financial string
+			if err := tx.QueryRow(ctx, `SELECT line_items,tax_rate,financial FROM `+kind+`s WHERE id=$1`, id).Scan(&lines, &tax, &financial); err != nil {
 				return err
 			}
 			state["line_items"], state["tax_rate"] = lines, tax
+			if financial != "" {
+				state["financial"] = json.RawMessage(financial)
+			}
 		}
 		revision, err := saveaction.Revision(ctx, tx, a.UserID, fmt.Sprintf("/%ss/%d", kind, id))
 		state["revision"] = revision
@@ -128,7 +132,7 @@ func (s *Service) CommercialReceipt(ctx context.Context, a Actor, key string) (C
 
 // CommercialOperation owns identity, stale-intent rejection and the receipt.
 // The callback uses this transaction for all existing details/Item/field logic.
-func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string, id int64, in CommercialIntent, intent []byte, write func(context.Context, pgx.Tx, int64) (int64, error)) (CommercialReceipt, error) {
+func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string, id int64, in CommercialIntent, intent []byte, legacyIntent func() ([]byte, error), write func(context.Context, pgx.Tx, int64) (int64, error)) (CommercialReceipt, error) {
 	r := CommercialReceipt{OperationID: in.OperationID}
 	if kind != "estimate" && kind != "invoice" {
 		return r, ErrNotFound
@@ -139,11 +143,26 @@ func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string,
 	ctx = context.WithValue(ctx, commercialOperationKey{}, in)
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		var prior []byte
-		if err := admitOperation(ctx, tx, a, in.OperationID, "commercial."+kind, map[string]any{"id": id, "intent": json.RawMessage(intent)}); err != nil {
+		canonical := intent
+		var version int
+		versionErr := tx.QueryRow(ctx, `SELECT intent_version FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID).Scan(&version)
+		if versionErr == nil && version == 0 {
+			if legacyIntent == nil {
+				return ErrConflict
+			}
+			var err error
+			canonical, err = legacyIntent()
+			if err != nil {
+				return err
+			}
+		} else if versionErr != nil && versionErr != pgx.ErrNoRows {
+			return versionErr
+		}
+		if err := admitOperation(ctx, tx, a, in.OperationID, "commercial."+kind, map[string]any{"id": id, "intent": json.RawMessage(canonical)}); err != nil {
 			return err
 		}
 		var same bool
-		err := tx.QueryRow(ctx, `SELECT document_type=$4 AND requested_id=$5 AND intent=$6::jsonb,receipt FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID, kind, id, intent).Scan(&same, &prior)
+		err := tx.QueryRow(ctx, `SELECT document_type=$4 AND requested_id=$5 AND intent=$6::jsonb,receipt FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID, kind, id, canonical).Scan(&same, &prior)
 		if err == nil {
 			if !same {
 				return ErrConflict
@@ -256,7 +275,7 @@ func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string,
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO commercial_operations(user_id,client_hash,operation_id,document_type,requested_id,intent,receipt) VALUES($1,$2,$3,$4,$5,$6,$7)`, a.UserID, a.SessionHash, in.OperationID, kind, id, intent, raw)
+		_, err = tx.Exec(ctx, `INSERT INTO commercial_operations(user_id,client_hash,operation_id,document_type,requested_id,intent,receipt,intent_version) VALUES($1,$2,$3,$4,$5,$6,$7,1)`, a.UserID, a.SessionHash, in.OperationID, kind, id, canonical, raw)
 		return err
 	})
 	return r, err

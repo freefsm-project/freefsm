@@ -45,6 +45,8 @@ type Invoice struct {
 	TaxRate string `json:"tax_rate,omitempty"`
 	// LineItems holds the value of the "line_items" field.
 	LineItems string `json:"line_items,omitempty"`
+	// Financial holds the value of the "financial" field.
+	Financial string `json:"financial,omitempty"`
 	// SettlementState holds the value of the "settlement_state" field.
 	SettlementState string `json:"settlement_state,omitempty"`
 	// DisplaySettings holds the value of the "display_settings" field.
@@ -69,7 +71,7 @@ func (*Invoice) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case invoice.FieldID, invoice.FieldInvoiceNumber, invoice.FieldCompanyID, invoice.FieldCustomerID, invoice.FieldJobID, invoice.FieldEstimateID, invoice.FieldStatusID:
 			values[i] = new(sql.NullInt64)
-		case invoice.FieldNumberLabel, invoice.FieldTitle, invoice.FieldNotes, invoice.FieldTerms, invoice.FieldTaxRate, invoice.FieldLineItems, invoice.FieldSettlementState, invoice.FieldDisplaySettings, invoice.FieldCustomFields:
+		case invoice.FieldNumberLabel, invoice.FieldTitle, invoice.FieldNotes, invoice.FieldTerms, invoice.FieldTaxRate, invoice.FieldLineItems, invoice.FieldFinancial, invoice.FieldSettlementState, invoice.FieldDisplaySettings, invoice.FieldCustomFields:
 			values[i] = new(sql.NullString)
 		case invoice.FieldInvoiceDate, invoice.FieldDueDate, invoice.FieldDeletedAt, invoice.FieldConversionHiddenAt, invoice.FieldCreatedAt, invoice.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -182,6 +184,12 @@ func (_m *Invoice) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field line_items", values[i])
 			} else if value.Valid {
 				_m.LineItems = value.String
+			}
+		case invoice.FieldFinancial:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field financial", values[i])
+			} else if value.Valid {
+				_m.Financial = value.String
 			}
 		case invoice.FieldSettlementState:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -314,6 +322,9 @@ func (_m *Invoice) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("line_items=")
 	builder.WriteString(_m.LineItems)
+	builder.WriteString(", ")
+	builder.WriteString("financial=")
+	builder.WriteString(_m.Financial)
 	builder.WriteString(", ")
 	builder.WriteString("settlement_state=")
 	builder.WriteString(_m.SettlementState)

@@ -69,7 +69,7 @@ templ InvoiceForm(p InvoiceFormPageData) {
 				<p>Legacy terms were not recorded. Review and enter this document's terms before generating a new PDF. Blank explicitly records no terms.</p>
 			}
 			if capturedPricingVisible(ctx,"invoice",p.Invoice.ID,p.IsNew) {
-				@LineItemEditor(LineItemEditorData{ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON})
+				@LineItemEditor(LineItemEditorData{AdjustmentsJSON:p.AdjustmentsJSON,Financial:invoiceFinancial(p.Invoice,p.ExistingItemsJSON,!p.IsNew),ExistingDocument:!p.IsNew && !p.PreserveEntered,ItemsJSON: p.ItemsJSON, ExistingItemsJSON: p.ExistingItemsJSON, CustomersJSON: p.CustomersJSON})
 			} else {
 				<p>Captured pricing is not available with your current permissions. Saving other details retains it.</p>
 			}

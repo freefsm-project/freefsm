@@ -18,11 +18,7 @@ func customerReceivables(ctx context.Context, request authorization.Request, id 
 	now := time.Now().In(loc)
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	for _, row := range rows {
-		items, err := services.DecodeLineItems(row.LineItems)
-		if err != nil {
-			return result, err
-		}
-		totals, err := services.CalculateTotals(items, row.TaxRate)
+		totals, err := services.FinancialTotals(row.Financial, row.LineItems, row.TaxRate)
 		if err != nil {
 			return result, err
 		}
