@@ -79,8 +79,11 @@ Actions are serialized with an exclusive writer marker. Concurrent writers fail
 closed. If a process crashes while holding the marker, verify that no writer is
 running before handling `.writer`; there is no timed lock takeover. In particular,
 `protected_store_locked` leaves that durable marker when an authority-loss write
-fails, so restarting cannot expose the older cached authority. Do not simply
-remove the marker and view old content: obtain fresh authentication/current sync
+fails, so restarting cannot expose the older cached authority. Final synchronization
+writes that purge inaccessible targets and accepted issuance writes that detect
+restore use the same quarantine boundary, even when the directory remains writable.
+Do not simply remove the marker after key service recovery and view old content:
+obtain fresh authentication/current sync
 in a separate store and recover only authorized pending intent through explicit
 review, or destroy the old key/data. This reference deliberately fails closed
 rather than offering automatic damaged-store repair.

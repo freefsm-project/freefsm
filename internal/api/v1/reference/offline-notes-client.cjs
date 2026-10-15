@@ -97,7 +97,9 @@ class OfflineNotes {
   }
   s.authority={epoch:l.epoch,user:l.user_id,client:clientIdentity(token)};
   s.issuance={id:operation,state:'accepted'};s.user=l.user_id;s.lease=l;s.contactEpoch=l.epoch;s.leaseLocked=false;s.synced=false;s.cache={};s.notes={};s.highWater=Math.max(this.now(),issued);
-  await this.persist(s);return {expires_at:l.expires_at,state:'synchronization_required'};
+  // Accepted issuance can reveal a restored epoch. Its review lock must survive
+  // a failed final write, not just the earlier unknown-issuance checkpoint.
+  await this.persistAuthorityLoss(s);return {expires_at:l.expires_at,state:'synchronization_required'};
  });}
  async synchronize(){return this.transaction(async s=>{
   await this.policy(s);s.synced=false;s.cache={};s.notes={};await this.persist(s);
@@ -115,7 +117,9 @@ class OfflineNotes {
    if(e.job&&!records[e.job])this.purgeSensitiveTarget(s,e.job);
    else if(s.restore&&!['replaced','purged'].includes(e.state))e.state='restore_uncertain';
   }
-  s.cache=records;s.synced=true;s.restore=false;await this.persist(s);
+  // The complete snapshot carries observed scope removals and restore outcomes.
+  // Failed persistence must not revive older intent after authority returns.
+  s.cache=records;s.synced=true;s.restore=false;await this.persistAuthorityLoss(s);
   return {state:'synchronized',count:Object.keys(records).length};
  });}
  async readNotes(job){return this.transaction(async s=>{

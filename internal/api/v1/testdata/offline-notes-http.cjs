@@ -10,6 +10,7 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes.cjs');
  const input=JSON.parse(fs.readFileSync(0,'utf8')),{url,token}=input;
  const directory=input.directory||fs.mkdtempSync(join(tmpdir(),'offline-http-')),store=new ProtectedStore(directory,input.store_id||randomUUID());
  let lose=false,loseSync=false,loseLease=false,posts=0,leasePosts=0,issuanceLookups=0;
+ let syncFault;
  const transport=async(path,method,body,auth)=>{
   const headers={Authorization:'Bearer '+auth.token};if(auth.epoch)headers['X-FreeFSM-Session-Epoch']=auth.epoch;
   if(auth.operation)headers['Operation-ID']=auth.operation;
@@ -23,10 +24,60 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes.cjs');
   if(input.denial&&path.startsWith('/offline-authorization-operations/')){
    assert.equal(result.status,200);assert.equal(result.data.operation_id,input.operation);assert.equal(result.data.code,input.denial);
   }
+  if(syncFault?.armed&&((input.issuanceFailure&&path==='/offline/lease')||(!input.issuanceFailure&&path.startsWith('/sync/jobs')&&result.data?.complete))){
+   assert.equal(result.status,200);
+   const locked=await store.load();
+   assert.equal(locked.synced,false,'initial synchronization lock must already be durable');
+   if(input.issuanceFailure){
+    assert.equal(result.data.code,'accepted');assert.equal(result.data.operation_id,locked.issuance.id);
+    assert.notEqual(result.data.epoch,locked.issuance.previous.epoch,'accepted issuance must detect restored authority');
+   }else{
+    assert(!result.data.records.some(record=>record.id===syncFault.job),'completed snapshot must exclude staged target');
+    assert.deepEqual(locked.cache,{});assert.deepEqual(locked.notes,{});
+   }
+   assert.deepEqual(locked.pending[syncFault.pending].intent,syncFault.intent,'fault must occur after the locking write, before final purge persistence');
+   syncFault.armed=false;syncFault.observed=true;
+   // Fail actual secret-tool key acquisition only after receiving the full snapshot.
+   // The directory stays writable, so ordinary exclusive cleanup could unlink .writer.
+   process.env.DBUS_SESSION_BUS_ADDRESS='unix:path=/nonexistent-freefsm-sync-secret-service';
+  }
   return result;
  };
  const fixture=async(name)=>{const r=await fetch(url+'/__fixture/'+name,{method:'POST'});assert(r.ok,'fixture '+name);return r.status===204?null:r.json();};
   let client=new OfflineNotes(store,transport);
+ if(input.syncQuarantine){
+  await assert.rejects(client.view(),/store_busy/);
+  await assert.rejects(client.authenticate(token),/store_busy/);
+  await assert.rejects(client.synchronize(),/store_busy/);
+  console.log('PASS restart remains quarantined after key recovery and reassignment');return;
+ }
+ if(input.syncFailure||input.issuanceFailure){
+  const bus=process.env.DBUS_SESSION_BUS_ADDRESS;
+  const restoreKeyFacility=()=>{if(bus===undefined)delete process.env.DBUS_SESSION_BUS_ADDRESS;else process.env.DBUS_SESSION_BUS_ADDRESS=bus;};
+  try{
+   await client.initialize();await client.authenticate(token);await client.synchronize();
+   const view=await client.view(),job=Object.keys(view.cache).find(id=>view.cache[id].title==='Offline original target');assert(job);
+   await client.readNotes(job);const pending=await client.stage(job,'scope loss must survive failed final sync write');
+   const intent=(await client.view()).pending[pending].intent;
+   let bearer=token;
+   if(input.issuanceFailure){
+    await fixture('restore');bearer=(await fixture('token')).token;
+   }else{
+    await fixture('unassign');
+    if(input.restore){await fixture('restore');bearer=(await fixture('token')).token;await client.authenticate(bearer);}
+   }
+   syncFault={job,pending,intent,armed:true,observed:false};
+   await assert.rejects(input.issuanceFailure?client.authenticate(bearer):client.synchronize(),/protected_store_locked/);
+   assert(syncFault.observed,'final-write fault was not reached');
+   fs.accessSync(directory,fs.constants.W_OK);assert(fs.existsSync(join(directory,'.writer')),'authority-loss failure must retain durable quarantine');
+   restoreKeyFacility();await fixture('assign');
+   const restarted=spawnSync(process.execPath,[__filename],{input:JSON.stringify({url,token:bearer,directory,store_id:store.id,syncQuarantine:true}),encoding:'utf8',timeout:30000});
+   assert.equal(restarted.status,0,restarted.stderr);
+   assert.match(restarted.stdout,/PASS restart remains quarantined/);
+   console.log('PASS production authority final-write key failure: '+(input.issuanceFailure?'accepted restore issuance':input.restore?'restore synchronization':'ordinary synchronization')+' quarantines restart');
+  }finally{restoreKeyFacility();await fixture('assign');await store.destroy();fs.rmSync(directory,{recursive:true,force:true});}
+  return;
+ }
   if(input.denial){
    await assert.rejects(client.authenticate(token),/authorization_purged/);
    const purged=await store.load();
@@ -157,6 +208,13 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes.cjs');
   await fixture('disable');await assert.rejects(client.submit(disabledSubmit),/authorization_purged/);
   assert(!JSON.stringify(await store.load()).includes('disabled submission secret'));
   assert.equal(posts,5,'only the original four submissions and the explicit scope-denied submission occurred');
+  await fixture('enable');
+  for(const scenario of [{issuanceFailure:true},{syncFailure:true,restore:false},{syncFailure:true,restore:true}]){
+   const bearer=(await fixture('token')).token;
+   const fault=spawnSync(process.execPath,[__filename],{input:JSON.stringify({url,token:bearer,...scenario}),encoding:'utf8',timeout:30000});
+   assert.equal(fault.status,0,JSON.stringify(scenario)+' final authority write: '+fault.stderr);
+   console.log(fault.stdout.trim());
+  }
   console.log('PASS real Secret Service + production HTTP/schema: renewal-first restore lock, multi-intent target purge, disabled receipt reconnect with safe scope-lost receipt, committed issuance loss + fresh-process recovery, ordinary fresh-session purge with/without issuance loss, encrypted lifecycle and no automatic replay');
  }finally{await client.logout();fs.rmSync(directory,{recursive:true,force:true});}
 })().catch(e=>{console.error(e.message);process.exitCode=1;});
