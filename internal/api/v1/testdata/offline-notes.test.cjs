@@ -40,14 +40,15 @@ test('real Secret Service: encrypted restart, wrong key, destruction, unavailabl
 });
 
 test('failed filesystem purge or restore lock cannot revive old cache after restart', async()=>{
- for(const restore of [false,true]){
+ for(const outcome of ['unauthorized','instance_restored','offline_disabled','forbidden']){
   const dir=mkdtempSync(join(tmpdir(),'offline-fault-')),store=new ProtectedStore(dir,randomUUID());
   try{
-   await store.create();await store.save({token:'credential',lease:{expires_at:'2999-01-01T00:00:00Z'},synced:true,restore:false,highWater:0,cache:{job:{title:'restricted'}},notes:{},pending:{operation:{job:'job',state:'unknown',intent:{field_notes:'recoverable'}}}});
+   await store.create();await store.save({token:'credential',lease:{expires_at:'2999-01-01T00:00:00Z'},issuance:{id:'issuance',state:'unknown'},synced:true,restore:false,highWater:0,cache:{job:{title:'restricted'}},notes:{},pending:{operation:{job:'job',state:'unknown',intent:{field_notes:'recoverable'}}}});
    const originalSave=store.save.bind(store);
-   store.save=async s=>{chmodSync(dir,0o500);return originalSave(s);};
-   const c=new OfflineNotes(store,async()=>({status:401,error:restore?{code:'instance_restored',recovery_disposition:'locked_review'}:{code:'unauthorized',recovery_disposition:'purge'}}));
-   await assert.rejects(c.reconcile('operation'),/protected_store_locked/);
+   store.save=async s=>{if(s.token===null)chmodSync(dir,0o500);return originalSave(s);};
+   const issuanceDenial=['offline_disabled','forbidden'].includes(outcome);
+   const c=new OfflineNotes(store,async()=>issuanceDenial?{status:200,data:{operation_id:'issuance',code:outcome}}:{status:401,error:outcome==='instance_restored'?{code:outcome,recovery_disposition:'locked_review'}:{code:outcome,recovery_disposition:'purge'}});
+   await assert.rejects(issuanceDenial?c.authenticate('credential'):c.reconcile('operation'),/protected_store_locked/,outcome);
    chmodSync(dir,0o700);
    await assert.rejects(new OfflineNotes(new ProtectedStore(dir,store.id),async()=>{}).view(),/store_busy/);
    assert(existsSync(join(dir,'.writer')),'failed authority write lost durable quarantine');

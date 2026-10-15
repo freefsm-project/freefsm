@@ -28,10 +28,16 @@ class OfflineNotes {
   }
   s.highWater=now;await this.persist(s);
  }
- async purge(s){
+ async purge(s,issuance=null){
   // Retain only nonsensitive operation identities/dispositions for safe lookup.
   const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt};
-  Object.assign(s,fresh(),{pending:safe,user:s.user});await this.persistAuthorityLoss(s);
+  Object.assign(s,fresh(),{pending:safe,user:s.user,issuance});await this.persistAuthorityLoss(s);
+ }
+ async purgeDeniedIssuance(s,receipt){
+  // A recovered terminal denial is ordinary authority loss, just like its 403.
+  // Keep only the original issuance identity/disposition, never prior authority.
+  await this.purge(s,{id:receipt.operation_id,state:'terminal',code:receipt.code});
+  throw Error('authorization_purged');
  }
  purgeSensitiveTarget(s,job){
   delete s.cache[job];delete s.notes[job];
@@ -80,6 +86,7 @@ class OfflineNotes {
   if(!r||r.status===404)r=await this.contact(s,'/offline/lease','POST',{},operation);
   if(r.status!==200){s.token=null;await this.persist(s);throw Error('reauthorization_unavailable');}
   const l=r.data,issued=Date.parse(l?.issued_at),expires=Date.parse(l?.expires_at);
+  if(l?.operation_id===operation&&['offline_disabled','forbidden'].includes(l.code))await this.purgeDeniedIssuance(s,l);
   if(l?.code!=='accepted'||l.operation_id!==operation||!l.id||!l.user_id||!l.epoch||!Number.isFinite(issued)||!Number.isFinite(expires)||expires<=issued||expires-issued>72*3600000||this.now()>=expires){s.token=null;await this.persist(s);throw Error('invalid_lease');}
   if(oldUser&&oldUser!==l.user_id){await this.purge(s);s.pending={};s.token=token;}
   else if(previous&&previous.epoch!==l.epoch)s.restore=true;

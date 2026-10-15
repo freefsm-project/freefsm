@@ -19,10 +19,25 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes.cjs');
   if(method==='POST'&&path==='/offline/lease'){leasePosts++;if(loseLease){headers['X-Offline-Lose-Response']='yes';loseLease=false;}}
   if(method==='POST'&&path.endsWith('/field-notes')){posts++;if(lose){headers['X-Offline-Lose-Response']='yes';lose=false;}}
   const r=await fetch(url+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
-  return {status:r.status,...await r.json()};
+  const result={status:r.status,...await r.json()};
+  if(input.denial&&path.startsWith('/offline-authorization-operations/')){
+   assert.equal(result.status,200);assert.equal(result.data.operation_id,input.operation);assert.equal(result.data.code,input.denial);
+  }
+  return result;
  };
  const fixture=async(name)=>{const r=await fetch(url+'/__fixture/'+name,{method:'POST'});assert(r.ok,'fixture '+name);return r.status===204?null:r.json();};
- let client=new OfflineNotes(store,transport);
+  let client=new OfflineNotes(store,transport);
+  if(input.denial){
+   await assert.rejects(client.authenticate(token),/authorization_purged/);
+   const purged=await store.load();
+   for(const key of ['token','lease','authority','contactEpoch'])assert.equal(purged[key],null,key+' must be purged');
+   assert.deepEqual(purged.cache,{});assert.deepEqual(purged.notes,{});assert.equal(purged.synced,false);assert.equal(purged.restore,false);
+   assert.deepEqual(purged.issuance,{id:input.operation,state:'terminal',code:input.denial});
+   for(const pending of Object.values(purged.pending))assert.deepEqual(Object.keys(pending).sort(),pending.receipt?['receipt','state']:['state']);
+   assert.equal(purged.pending[input.pending].state,'purged');
+   await assert.rejects(client.view(),/locked_review/);
+   console.log(JSON.stringify({leasePosts,issuanceLookups}));return;
+  }
  if(input.restart){await client.authenticate(token);await client.synchronize();console.log(JSON.stringify({leasePosts,issuanceLookups}));return;}
  try{
   await client.initialize();await client.authenticate(token);await client.synchronize();
@@ -119,7 +134,26 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes.cjs');
    assert(!JSON.stringify(await store.load()).includes('ordinary fresh auth secret'));
    await client.readNotes(job);
   }
-  const disabledSubmit=await client.stage(job,'disabled submission secret');
+   for(const [deny,restore,code]of [['disable','enable','offline_disabled'],['remove-job-view','restore-job-view','forbidden']]){
+    const bearer=(await store.load()).token;
+    const pending=await client.stage(job,'lost denial must never revive '+code);
+    await fixture(deny);loseLease=true;
+    await assert.rejects(client.authenticate(bearer),/fetch failed/,'committed denial response must actually be lost');
+    const unknown=await store.load();assert.equal(unknown.issuance.state,'unknown');assert(unknown.pending[pending].intent);
+    const operation=unknown.issuance.id;
+    const restarted=spawnSync(process.execPath,[__filename],{input:JSON.stringify({url,token:bearer,directory,store_id:store.id,denial:code,operation,pending}),encoding:'utf8',timeout:30000});
+    assert.equal(restarted.status,0,code+': '+restarted.stderr);
+    assert.deepEqual(JSON.parse(restarted.stdout),{leasePosts:0,issuanceLookups:1},'denial recovery must query original receipt without renewal');
+    client=new OfflineNotes(new ProtectedStore(directory,store.id),transport);
+    assert(!JSON.stringify(await store.load()).includes('lost denial must never revive'));
+    await fixture(restore);await client.authenticate(bearer);await client.synchronize();await client.readNotes(job);
+    assert.equal((await client.view()).pending[pending].state,'purged');
+    assert(!JSON.stringify(await client.view()).includes('lost denial must never revive'));
+    await assert.rejects(client.submit(pending),/reconciliation_or_review_required/);
+    const original=await transport('/offline-authorization-operations/'+operation,'GET',undefined,{token:bearer});
+    assert.equal(original.status,200);assert.equal(original.data.operation_id,operation);assert.equal(original.data.code,code,'re-enablement must not rewrite terminal denial');
+   }
+   const disabledSubmit=await client.stage(job,'disabled submission secret');
   await fixture('disable');await assert.rejects(client.submit(disabledSubmit),/authorization_purged/);
   assert(!JSON.stringify(await store.load()).includes('disabled submission secret'));
   assert.equal(posts,5,'only the original four submissions and the explicit scope-denied submission occurred');

@@ -91,6 +91,10 @@ func TestOfflineNotesProtectedReferenceHTTP(t *testing.T) {
 				_, err = pool.Exec(ctx, `UPDATE company_settings SET offline_hours=0 WHERE company_id=$1`, company)
 			case "enable":
 				_, err = pool.Exec(ctx, `UPDATE company_settings SET offline_hours=24 WHERE company_id=$1`, company)
+			case "remove-job-view":
+				_, err = pool.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission IN ('job.view','job.field_notes.edit')`, role)
+			case "restore-job-view":
+				_, err = pool.Exec(ctx, `INSERT INTO authorization_grants(role_id,permission,scope) VALUES($1,'job.view',$2),($1,'job.field_notes.edit',$2)`, role, authorization.Assigned)
 			case "revoke-all":
 				_, err = pool.Exec(ctx, `UPDATE sessions SET revoked_at=clock_timestamp() WHERE user_id=$1`, user.ID)
 			case "revoke":
@@ -161,7 +165,7 @@ func TestOfflineNotesProtectedReferenceHTTP(t *testing.T) {
 		} else if err := schemas[name].Validate(value); err != nil {
 			t.Errorf("schema %s %s: %v", r.URL.Path, name, err)
 		}
-		if r.Header.Get("X-Offline-Lose-Response") == "yes" && response.Code == 200 {
+		if r.Header.Get("X-Offline-Lose-Response") == "yes" && (response.Code == 200 || (r.URL.Path == "/offline/lease" && response.Code == 403)) {
 			conn, _, err := w.(http.Hijacker).Hijack()
 			if err != nil {
 				t.Error(err)
