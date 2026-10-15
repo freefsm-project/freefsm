@@ -3,9 +3,9 @@ package database
 import (
 	"io/fs"
 	"os"
-	"strings"
 	"testing"
 	"testing/fstest"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -21,7 +21,8 @@ func TestOperationAdmissionInstalledReceiptsPreserved(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if e.IsDir() || strings.HasPrefix(e.Name(), "082_") || e.Name() == "084_security_operation_receipts.up.sql" {
+		// Install the historical schema before the operation admission registry.
+		if e.IsDir() || e.Name() >= "082_" {
 			continue
 		}
 		b, err := fs.ReadFile(MigrationFS(), e.Name())
@@ -33,8 +34,13 @@ func TestOperationAdmissionInstalledReceiptsPreserved(t *testing.T) {
 	if err := db.Migrate(ctx, prior); err != nil {
 		t.Fatal(err)
 	}
-	hash,err:=bcrypt.GenerateFromPassword([]byte("Upgrade-test-Password1!"),bcrypt.MinCost);if err!=nil{t.Fatal(err)}
-	if _,err:=db.Pool.Exec(ctx,`INSERT INTO users(id,company_id,email,name,password_hash,role,authorization_role_id) SELECT 8201,id,'admission-upgrade@test','Recorded actor',$1,'admin',1 FROM companies LIMIT 1`,string(hash));err!=nil{t.Fatal(err)}
+	hash, err := bcrypt.GenerateFromPassword([]byte("Upgrade-test-Password1!"), bcrypt.MinCost)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `INSERT INTO users(id,company_id,email,name,password_hash,role,authorization_role_id) SELECT 8201,id,'admission-upgrade@test','Recorded actor',$1,'admin',1 FROM companies LIMIT 1`, string(hash)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Pool.Exec(ctx, `
 	INSERT INTO job_execution_receipts(user_id,operation_id,client_key,intent_hash,code) VALUES
 	(8201,'82000000-0000-4000-8000-000000000001','api:recorded','original-intent','invalid_intent'),
