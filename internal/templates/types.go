@@ -202,31 +202,41 @@ type CustomerRow struct {
 	AccountType string
 }
 
+// CustomerAssetServiceHistory groups a Customer's recorded periods once per
+// Asset. Past-only Assets remain a separate disclosure from current ones.
+type CustomerAssetServiceHistory struct {
+	Number  string
+	Current bool
+	Entries []authorization.ServiceEntry
+}
+
 type CustomerShowPageData struct {
-	SectionErrors    map[string]bool
-	UpdatedAt        string
-	AssetPeriods     []authorization.CustomerAssetPeriod
-	ShowSettlement   bool
-	CanRefund        bool
-	CanReverseRefund bool
-	Receivables      CustomerReceivables
-	ShowCredit       bool
-	CreditCents      int64
-	RelatedWork      []authorization.CustomerWork
-	ShowFinancial    bool
-	Customer         CustomerDetail
-	Locations        []LocationRow
-	Contacts         []ContactRow
-	Jobs             []JobRow
-	Estimates        []EstimateRow
-	Invoices         []InvoiceRow
-	Financial        CustomerFinancialSummary
-	Tags             []TagRow
-	AllTags          []TagRow
-	CustomFields     []CustomFieldDisplay
-	FileList         FileListPageData
-	Settlement       settlement.CustomerSettlement
-	RefundKey        string
+	AssetServiceHistory []CustomerAssetServiceHistory
+	ShowServiceEntries  bool
+	SectionErrors       map[string]bool
+	UpdatedAt           string
+	AssetPeriods        []authorization.CustomerAssetPeriod
+	ShowSettlement      bool
+	CanRefund           bool
+	CanReverseRefund    bool
+	Receivables         CustomerReceivables
+	ShowCredit          bool
+	CreditCents         int64
+	RelatedWork         []authorization.CustomerWork
+	ShowFinancial       bool
+	Customer            CustomerDetail
+	Locations           []LocationRow
+	Contacts            []ContactRow
+	Jobs                []JobRow
+	Estimates           []EstimateRow
+	Invoices            []InvoiceRow
+	Financial           CustomerFinancialSummary
+	Tags                []TagRow
+	AllTags             []TagRow
+	CustomFields        []CustomFieldDisplay
+	FileList            FileListPageData
+	Settlement          settlement.CustomerSettlement
+	RefundKey           string
 }
 
 type CustomerFinancialSummary struct {

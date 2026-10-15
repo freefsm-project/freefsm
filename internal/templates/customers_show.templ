@@ -12,6 +12,13 @@ templ CustomerShow(p CustomerShowPageData) {
 				@CustomerSectionUnavailable(p.Customer.ID,"Assets")
 			} else {
 				@CustomerAssetSections(p.Customer.ID,p.AssetPeriods)
+				if p.ShowServiceEntries {
+					if p.SectionErrors["Service Entries"] {
+						@CustomerSectionUnavailable(p.Customer.ID,"Service Entries")
+					} else {
+						@CustomerAssetServiceEntries(p.AssetServiceHistory)
+					}
+				}
 			}
 		}
 		if canCustomer(ctx,"edit") && p.Customer.ArchivedAt == "" {

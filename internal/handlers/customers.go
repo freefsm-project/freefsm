@@ -151,6 +151,21 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 		assetPeriods, err = request.Service.CustomerAssetHistory(r.Context(), request.Actor, c.ID, false)
 		sectionFailed("Assets", err)
 	}
+	showServiceEntries := customerPermission(r, "asset.view") && customerPermission(r, "service_entry.view")
+	var assetServiceHistory []templates.CustomerAssetServiceHistory
+	if showServiceEntries && !sectionErrors["Assets"] {
+		seen := map[int64]int{}
+		for _, period := range assetPeriods {
+			if index, ok := seen[period.AssetID]; ok {
+				assetServiceHistory[index].Current = assetServiceHistory[index].Current || period.Current
+				continue
+			}
+			entries, loadErr := request.Service.AssetServiceEntries(r.Context(), request.Actor, period.AssetID, c.ID)
+			sectionFailed("Service Entries", loadErr)
+			seen[period.AssetID] = len(assetServiceHistory)
+			assetServiceHistory = append(assetServiceHistory, templates.CustomerAssetServiceHistory{Number: period.Number, Current: period.Current, Entries: entries})
+		}
+	}
 	showFinancial := customerPermission(r, "customer.financial.view")
 	var receivables templates.CustomerReceivables
 	if showFinancial {
@@ -174,26 +189,28 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	work, err := request.Service.CustomerRelatedWork(r.Context(), request.Actor, c.ID)
 	sectionFailed("Related Work", err)
 	templates.CustomerShow(templates.CustomerShowPageData{
-		SectionErrors:    sectionErrors,
-		AssetPeriods:     assetPeriods,
-		UpdatedAt:        time.Now().UTC().Format(time.RFC3339),
-		ShowSettlement:   showSettlement,
-		Settlement:       creditHistory,
-		CanRefund:        isAdminOrDispatcher(u) && customerPermission(r, "credit.refund"),
-		CanReverseRefund: isAdminOrDispatcher(u) && customerPermission(r, "credit.refund.reverse"),
-		Receivables:      receivables,
-		ShowCredit:       showCredit,
-		CreditCents:      credit,
-		RelatedWork:      work,
-		ShowFinancial:    showFinancial,
-		Customer:         customerToDetail(r.Context(), c),
-		Locations:        locationRows(locations),
-		Contacts:         contactRows(contacts),
-		Tags:             tagsToRows(tags),
-		AllTags:          tagsToRows(allTags),
-		CustomFields:     buildCustomFieldDisplay(defs, c.CustomFields),
-		FileList:         templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: c.ID, ObjectType: "customer"},
-		RefundKey:        newOperationKey(),
+		ShowServiceEntries:  showServiceEntries,
+		AssetServiceHistory: assetServiceHistory,
+		SectionErrors:       sectionErrors,
+		AssetPeriods:        assetPeriods,
+		UpdatedAt:           time.Now().UTC().Format(time.RFC3339),
+		ShowSettlement:      showSettlement,
+		Settlement:          creditHistory,
+		CanRefund:           isAdminOrDispatcher(u) && customerPermission(r, "credit.refund"),
+		CanReverseRefund:    isAdminOrDispatcher(u) && customerPermission(r, "credit.refund.reverse"),
+		Receivables:         receivables,
+		ShowCredit:          showCredit,
+		CreditCents:         credit,
+		RelatedWork:         work,
+		ShowFinancial:       showFinancial,
+		Customer:            customerToDetail(r.Context(), c),
+		Locations:           locationRows(locations),
+		Contacts:            contactRows(contacts),
+		Tags:                tagsToRows(tags),
+		AllTags:             tagsToRows(allTags),
+		CustomFields:        buildCustomFieldDisplay(defs, c.CustomFields),
+		FileList:            templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: c.ID, ObjectType: "customer"},
+		RefundKey:           newOperationKey(),
 	}).Render(ctx, w)
 }
 

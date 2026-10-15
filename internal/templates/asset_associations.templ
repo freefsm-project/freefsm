@@ -10,7 +10,7 @@ templ CustomerAssetHistory(id int64, periods []authorization.CustomerAssetPeriod
   <p>Each recorded visit is a distinct period. Past references grant no current operational access.</p>
   for _,period := range periods {
    @customerAssetPeriod(period)
-   if canViewServiceEntries {
+   if canViewServiceEntries && !period.Archived {
     <a href={templ.URL(fmt.Sprintf("/customers/%d/assets/%d/service-entries",id,period.AssetID))}>Service history for this Customer</a>
    }
   }
@@ -41,6 +41,28 @@ templ CustomerAssetSections(id int64, periods []authorization.CustomerAssetPerio
   if canMaster(ctx,"asset.archived.view") {
    <a href={templ.URL(fmt.Sprintf("/customers/%d/asset-history?archived=1",id))}>Include archived Asset references</a>
   }
+ </section>
+}
+
+templ CustomerAssetServiceEntries(histories []CustomerAssetServiceHistory) {
+ <section aria-label="Asset Service Entries">
+  <h2>Service Entries for this Customer</h2>
+  <p>Only this Customer's recorded association periods. Job titles and responsible names grant no related-record access.</p>
+  if len(histories)==0 {
+   <p>No Service Entries</p>
+  }
+  for _,history := range histories {
+   if history.Current {
+    <article><h3>{history.Number}</h3>@ServiceEntryHistory(history.Entries)</article>
+   }
+  }
+  <details><summary>Service Entries for past Assets</summary>
+   for _,history := range histories {
+    if !history.Current {
+     <article><h3>{history.Number}</h3>@ServiceEntryHistory(history.Entries)</article>
+    }
+   }
+  </details>
  </section>
 }
 
