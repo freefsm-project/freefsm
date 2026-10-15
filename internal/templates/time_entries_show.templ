@@ -12,7 +12,7 @@ templ TimeEntryShow(p TimeEntryShowPageData) {
 			<p role="status">Voided — terminal. Repair by creating a replacement closed manual entry.</p>
 		}
 		if p.CanVoid {
-			<form action={ templ.URL(fmt.Sprintf("/time-entries/%d/void", p.ID)) } method="post" hx-boost="false" data-save-terminal onsubmit="return confirm('Void this Time Entry permanently? Its recorded facts will be retained and excluded from totals.');">
+			<form action={ templ.URL(fmt.Sprintf("/time-entries/%d/void", p.ID)) } method="post" hx-boost="false" data-save-terminal hx-confirm="Void this Time Entry permanently? Its recorded facts will be retained and excluded from totals.">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<label>Reason for Void <input name="reason" required/></label>
 				<button type="submit" class="outline contrast">Void Time Entry</button>

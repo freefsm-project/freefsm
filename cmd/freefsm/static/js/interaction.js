@@ -540,6 +540,10 @@
     if (form.getAttribute('hx-boost') !== 'false' || form.hasAttribute('hx-post')) return;
     if (credentialAction(form.action) || form.closest('#backup-ui') || !form.querySelector('[name=save_action_id]')) { leaving = true; return; }
     e.preventDefault();
+    // Native guarded forms use the same declarative confirmation as HTMX.
+    // Check before allocating an action identity or capturing/sending input.
+    const confirmation = form.getAttribute('hx-confirm');
+    if (confirmation && !window.confirm(confirmation)) return;
     const data = new FormData(form, e.submitter);
     const body = form.enctype === 'multipart/form-data' ? data : new URLSearchParams(data);
     const url = e.submitter?.getAttribute('formaction') || form.action;
