@@ -14,6 +14,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/hostrecovery"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/jackc/pgx/v5"
 )
 
 func credentialPost(router http.Handler, path string, values url.Values, cookie *http.Cookie) *httptest.ResponseRecorder {
@@ -28,6 +29,15 @@ func credentialPost(router http.Handler, path string, values url.Values, cookie 
 }
 
 func TestSelfChangeAndRecoveryRaceHaveOneCredentialWinner(t *testing.T) {
+	testSelfChangeAndRecoveryRace(t, false)
+}
+
+func TestSelfChangeAndRecoveryRaceIgnoresUnrelatedLockWaiter(t *testing.T) {
+	testSelfChangeAndRecoveryRace(t, true)
+}
+
+func testSelfChangeAndRecoveryRace(t *testing.T, unrelatedWaiter bool) {
+	t.Helper()
 	pool, client, router, sessions, _, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
@@ -48,22 +58,79 @@ func TestSelfChangeAndRecoveryRaceHaveOneCredentialWinner(t *testing.T) {
 	if err = tx.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blocker); err != nil {
 		t.Fatal(err)
 	}
+	if unrelatedWaiter {
+		// Advisory locks are database-wide, even when fixtures use separate schemas.
+		cfg := pool.Config().ConnConfig.Copy()
+		cfg.RuntimeParams["application_name"] += "_unrelated"
+		conn, err := pgx.ConnectConfig(ctx, cfg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan error, 1)
+		go func() {
+			_, err := conn.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`)
+			done <- err
+		}()
+		defer func() {
+			// Release the fence before joining the waiter, including on failure.
+			_ = tx.Rollback(ctx)
+			if err := <-done; err != nil {
+				t.Error(err)
+			}
+			_ = conn.Close(ctx)
+		}()
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			var waiting bool
+			if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND $2::integer=ANY(pg_blocking_pids(pid)) AND wait_event='advisory')`, conn.PgConn().PID(), blocker).Scan(&waiting); err != nil {
+				t.Fatal(err)
+			}
+			if waiting {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatal("unrelated waiter did not reach the lock")
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
 	self, reset := make(chan *httptest.ResponseRecorder, 1), make(chan *httptest.ResponseRecorder, 1)
 	go func() {
 		self <- credentialPost(router, "/change-password", url.Values{"current_password": {"PermissionFixture1!"}, "new_password": {"RaceSelfPassword1!"}, "confirm_password": {"RaceSelfPassword1!"}}, cookie)
 	}()
 	go func() { reset <- recoveryPost(router, token, "RaceResetPassword1!") }()
+	if unrelatedWaiter {
+		// Pin the schedule: both requests and the unrelated backend must be
+		// waiting before exercising the barrier's count. Otherwise a transient
+		// count of two could release the fence before the second request arrives.
+		deadline := time.Now().Add(10 * time.Second)
+		for {
+			var n int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)) AND wait_event='advisory' AND application_name=$2`, blocker, pool.Config().ConnConfig.RuntimeParams["application_name"]).Scan(&n); err != nil {
+				t.Fatal(err)
+			}
+			if n == 2 {
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("regression setup: credential waiters=%d, want 2", n)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		var n int
-		if err = pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)) AND wait_event='advisory'`, blocker).Scan(&n); err != nil {
+		// Other fixtures share the database-wide lock, but their waiters do
+		// not prove that either of this fixture's credential requests arrived.
+		if err = pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)) AND wait_event='advisory' AND application_name=$2`, blocker, pool.Config().ConnConfig.RuntimeParams["application_name"]).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		if n == 2 {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatal("both credential actions did not reach the lock")
+			t.Fatalf("both credential actions did not reach the lock (observed %d waiters)", n)
 		}
 		time.Sleep(5 * time.Millisecond)
 	}

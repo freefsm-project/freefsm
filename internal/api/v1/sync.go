@@ -78,5 +78,5 @@ func writeSyncPurge(w http.ResponseWriter, status int, code, disposition string)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: apiError{RequestID: id, Details: map[string]any{"purge": "all"}, Code: code, Message: "purge cached Job context before synchronizing current authority", RecoveryDisposition: disposition}})
+	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: apiError{Status: status, RequestID: id, Details: map[string]any{"purge": "all"}, Code: code, Message: "purge cached Job context before synchronizing current authority", RecoveryDisposition: disposition}})
 }

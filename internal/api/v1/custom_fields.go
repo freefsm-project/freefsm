@@ -58,7 +58,7 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
 			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"code": conflict.Code, "message": "Review current field values and submit a new operation", "request_id": requestID, "details": map[string]any{}, "recovery_disposition": "review", "recovery": "new_reviewed_operation"}, "comparison": state})
+			json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"status": http.StatusConflict, "code": conflict.Code, "message": "Review current field values and submit a new operation", "request_id": requestID, "details": map[string]any{}, "recovery_disposition": "review", "recovery": "new_reviewed_operation"}, "comparison": state})
 		case errors.Is(err, authorization.ErrNotFound):
 			writeError(w, 404, "not_found", "Job not found")
 		case errors.Is(err, authorization.ErrForbidden):

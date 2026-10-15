@@ -49,7 +49,7 @@ func ResponsePolicy(origins []string, next http.Handler) http.Handler {
 					}
 					for _, header := range strings.Split(r.Header.Get("Access-Control-Request-Headers"), ",") {
 						switch strings.ToLower(strings.TrimSpace(header)) {
-						case "", "authorization", "content-type", "x-freefsm-session-epoch", "range", "if-range", "if-none-match":
+						case "", "authorization", "content-type", "operation-id", "x-freefsm-session-epoch", "range", "if-range", "if-none-match":
 						default:
 							writeError(w, 403, "origin_denied", "preflight header is not allowed")
 							return
