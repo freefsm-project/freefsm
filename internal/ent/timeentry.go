@@ -23,12 +23,16 @@ type TimeEntry struct {
 	UserID int64 `json:"user_id,omitempty"`
 	// JobID holds the value of the "job_id" field.
 	JobID *int64 `json:"job_id,omitempty"`
+	// JobTitleSnapshot holds the value of the "job_title_snapshot" field.
+	JobTitleSnapshot string `json:"job_title_snapshot,omitempty"`
 	// IsManual holds the value of the "is_manual" field.
 	IsManual bool `json:"is_manual,omitempty"`
 	// ClockIn holds the value of the "clock_in" field.
 	ClockIn time.Time `json:"clock_in,omitempty"`
 	// ClockOut holds the value of the "clock_out" field.
 	ClockOut *time.Time `json:"clock_out,omitempty"`
+	// VoidedAt holds the value of the "voided_at" field.
+	VoidedAt *time.Time `json:"voided_at,omitempty"`
 	// Latitude holds the value of the "latitude" field.
 	Latitude *float64 `json:"latitude,omitempty"`
 	// Longitude holds the value of the "longitude" field.
@@ -53,9 +57,9 @@ func (*TimeEntry) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case timeentry.FieldID, timeentry.FieldCompanyID, timeentry.FieldUserID, timeentry.FieldJobID:
 			values[i] = new(sql.NullInt64)
-		case timeentry.FieldNotes:
+		case timeentry.FieldJobTitleSnapshot, timeentry.FieldNotes:
 			values[i] = new(sql.NullString)
-		case timeentry.FieldClockIn, timeentry.FieldClockOut, timeentry.FieldCreatedAt, timeentry.FieldUpdatedAt:
+		case timeentry.FieldClockIn, timeentry.FieldClockOut, timeentry.FieldVoidedAt, timeentry.FieldCreatedAt, timeentry.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -98,6 +102,12 @@ func (_m *TimeEntry) assignValues(columns []string, values []any) error {
 				_m.JobID = new(int64)
 				*_m.JobID = value.Int64
 			}
+		case timeentry.FieldJobTitleSnapshot:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field job_title_snapshot", values[i])
+			} else if value.Valid {
+				_m.JobTitleSnapshot = value.String
+			}
 		case timeentry.FieldIsManual:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field is_manual", values[i])
@@ -116,6 +126,13 @@ func (_m *TimeEntry) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ClockOut = new(time.Time)
 				*_m.ClockOut = value.Time
+			}
+		case timeentry.FieldVoidedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field voided_at", values[i])
+			} else if value.Valid {
+				_m.VoidedAt = new(time.Time)
+				*_m.VoidedAt = value.Time
 			}
 		case timeentry.FieldLatitude:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
@@ -198,6 +215,9 @@ func (_m *TimeEntry) String() string {
 		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
 	builder.WriteString(", ")
+	builder.WriteString("job_title_snapshot=")
+	builder.WriteString(_m.JobTitleSnapshot)
+	builder.WriteString(", ")
 	builder.WriteString("is_manual=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsManual))
 	builder.WriteString(", ")
@@ -206,6 +226,11 @@ func (_m *TimeEntry) String() string {
 	builder.WriteString(", ")
 	if v := _m.ClockOut; v != nil {
 		builder.WriteString("clock_out=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
+	builder.WriteString(", ")
+	if v := _m.VoidedAt; v != nil {
+		builder.WriteString("voided_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")

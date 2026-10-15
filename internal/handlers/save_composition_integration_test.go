@@ -224,7 +224,7 @@ func TestGuardedTimeEntryTwoEditorsPreserveProtectedContextHTTP(t *testing.T) {
 		assertNotContains(t, body, "51.234567")
 	}
 	input := func(form, notes string) url.Values {
-		return url.Values{"save_action_id": {compositionField(t, form, "save_action_id")}, "save_history": {compositionField(t, form, "save_history")}, "save_revision": {compositionField(t, form, "save_revision")}, "notes": {notes}, "user_id": {fmt.Sprint(actor.ID)}}
+		return url.Values{"reason": {"Reviewed time correction"}, "save_action_id": {compositionField(t, form, "save_action_id")}, "save_history": {compositionField(t, form, "save_history")}, "save_revision": {compositionField(t, form, "save_revision")}, "notes": {notes}, "user_id": {fmt.Sprint(actor.ID)}}
 	}
 	// GPS is clock-only immutable data. Reject the entire attempted correction
 	// rather than silently dropping supplied coordinates and reporting success.

@@ -57,6 +57,7 @@ func (s *Service) Clock(ctx context.Context, a Actor, out bool, in ClockCommand)
 
 func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, in ClockCommand) (ClockEntry, error) {
 	var result ClockEntry
+	var before *TimeState
 	err := func() error {
 		if in.URLJobID != 0 && in.URLJobID != in.JobID {
 			return &ClockConflict{"invalid_job"}
@@ -123,6 +124,13 @@ func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, 
 			}
 		}
 		if out {
+			var voided bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM time_entries WHERE id=$1 AND user_id=$2 AND company_id=$3 AND voided_at IS NOT NULL)`, in.EntryID, p.UserID, p.CompanyID).Scan(&voided); err != nil {
+				return err
+			}
+			if voided {
+				return &ClockConflict{"time_void"}
+			}
 			err := tx.QueryRow(ctx, `SELECT id,user_id,job_id,clock_in,clock_out FROM time_entries WHERE id=$1 AND user_id=$2 AND company_id=$3 FOR UPDATE`, in.EntryID, p.UserID, p.CompanyID).Scan(&result.ID, &result.UserID, &result.JobID, &result.ClockIn, &result.ClockOut)
 			if errors.Is(err, pgx.ErrNoRows) {
 				return ErrNotFound
@@ -148,6 +156,11 @@ func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, 
 			if !occurrence.After(result.ClockIn) {
 				return &ClockConflict{"time_order"}
 			}
+			original, err := readTimeState(ctx, tx, result.ID)
+			if err != nil {
+				return err
+			}
+			before = &original
 			if err := checkTimeInterval(ctx, tx, p.UserID, result.ID, result.ClockIn, &occurrence); err != nil {
 				return err
 			}
@@ -160,7 +173,7 @@ func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, 
 				return &ClockConflict{"invalid_job"}
 			}
 			var active bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM time_entries WHERE user_id=$1 AND clock_out IS NULL)`, p.UserID).Scan(&active); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM time_entries WHERE user_id=$1 AND clock_out IS NULL AND voided_at IS NULL)`, p.UserID).Scan(&active); err != nil {
 				return err
 			}
 			if active {
@@ -198,6 +211,9 @@ func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, 
 				return err
 			}
 		}
+		if err := recordTimeHistory(ctx, tx, p.UserID, result.ID, action, "", before, now); err != nil {
+			return err
+		}
 		return audit(ctx, tx, a, p, permission, Own, "time_entry", result.ID, map[string]any{"clock_in": result.ClockIn, "clock_out": result.ClockOut, "operation_id": in.OperationID, "occurred_at": occurrence, "accepted_at": now})
 	}()
 	return result, err
@@ -206,7 +222,7 @@ func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, 
 // Half-open intervals permit exact adjacency without rounding or repair.
 func checkTimeInterval(ctx context.Context, tx pgx.Tx, subject, id int64, start time.Time, end *time.Time) error {
 	var overlap bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM time_entries WHERE user_id=$1 AND id<>$2 AND ($4::timestamptz IS NULL OR clock_in<$4) AND (clock_out IS NULL OR clock_out>$3))`, subject, id, start, end).Scan(&overlap); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM time_entries WHERE user_id=$1 AND id<>$2 AND voided_at IS NULL AND ($4::timestamptz IS NULL OR clock_in<$4) AND (clock_out IS NULL OR clock_out>$3))`, subject, id, start, end).Scan(&overlap); err != nil {
 		return err
 	}
 	if overlap {

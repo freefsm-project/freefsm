@@ -29001,29 +29001,31 @@ func (m *TagLinkMutation) ResetEdge(name string) error {
 // TimeEntryMutation represents an operation that mutates the TimeEntry nodes in the graph.
 type TimeEntryMutation struct {
 	config
-	op            Op
-	typ           string
-	id            *int64
-	company_id    *int64
-	addcompany_id *int64
-	user_id       *int64
-	adduser_id    *int64
-	job_id        *int64
-	addjob_id     *int64
-	is_manual     *bool
-	clock_in      *time.Time
-	clock_out     *time.Time
-	latitude      *float64
-	addlatitude   *float64
-	longitude     *float64
-	addlongitude  *float64
-	notes         *string
-	created_at    *time.Time
-	updated_at    *time.Time
-	clearedFields map[string]struct{}
-	done          bool
-	oldValue      func(context.Context) (*TimeEntry, error)
-	predicates    []predicate.TimeEntry
+	op                 Op
+	typ                string
+	id                 *int64
+	company_id         *int64
+	addcompany_id      *int64
+	user_id            *int64
+	adduser_id         *int64
+	job_id             *int64
+	addjob_id          *int64
+	job_title_snapshot *string
+	is_manual          *bool
+	clock_in           *time.Time
+	clock_out          *time.Time
+	voided_at          *time.Time
+	latitude           *float64
+	addlatitude        *float64
+	longitude          *float64
+	addlongitude       *float64
+	notes              *string
+	created_at         *time.Time
+	updated_at         *time.Time
+	clearedFields      map[string]struct{}
+	done               bool
+	oldValue           func(context.Context) (*TimeEntry, error)
+	predicates         []predicate.TimeEntry
 }
 
 var _ ent.Mutation = (*TimeEntryMutation)(nil)
@@ -29326,6 +29328,42 @@ func (m *TimeEntryMutation) ResetJobID() {
 	delete(m.clearedFields, timeentry.FieldJobID)
 }
 
+// SetJobTitleSnapshot sets the "job_title_snapshot" field.
+func (m *TimeEntryMutation) SetJobTitleSnapshot(s string) {
+	m.job_title_snapshot = &s
+}
+
+// JobTitleSnapshot returns the value of the "job_title_snapshot" field in the mutation.
+func (m *TimeEntryMutation) JobTitleSnapshot() (r string, exists bool) {
+	v := m.job_title_snapshot
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldJobTitleSnapshot returns the old "job_title_snapshot" field's value of the TimeEntry entity.
+// If the TimeEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TimeEntryMutation) OldJobTitleSnapshot(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldJobTitleSnapshot is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldJobTitleSnapshot requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldJobTitleSnapshot: %w", err)
+	}
+	return oldValue.JobTitleSnapshot, nil
+}
+
+// ResetJobTitleSnapshot resets all changes to the "job_title_snapshot" field.
+func (m *TimeEntryMutation) ResetJobTitleSnapshot() {
+	m.job_title_snapshot = nil
+}
+
 // SetIsManual sets the "is_manual" field.
 func (m *TimeEntryMutation) SetIsManual(b bool) {
 	m.is_manual = &b
@@ -29445,6 +29483,55 @@ func (m *TimeEntryMutation) ClockOutCleared() bool {
 func (m *TimeEntryMutation) ResetClockOut() {
 	m.clock_out = nil
 	delete(m.clearedFields, timeentry.FieldClockOut)
+}
+
+// SetVoidedAt sets the "voided_at" field.
+func (m *TimeEntryMutation) SetVoidedAt(t time.Time) {
+	m.voided_at = &t
+}
+
+// VoidedAt returns the value of the "voided_at" field in the mutation.
+func (m *TimeEntryMutation) VoidedAt() (r time.Time, exists bool) {
+	v := m.voided_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVoidedAt returns the old "voided_at" field's value of the TimeEntry entity.
+// If the TimeEntry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TimeEntryMutation) OldVoidedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVoidedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVoidedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVoidedAt: %w", err)
+	}
+	return oldValue.VoidedAt, nil
+}
+
+// ClearVoidedAt clears the value of the "voided_at" field.
+func (m *TimeEntryMutation) ClearVoidedAt() {
+	m.voided_at = nil
+	m.clearedFields[timeentry.FieldVoidedAt] = struct{}{}
+}
+
+// VoidedAtCleared returns if the "voided_at" field was cleared in this mutation.
+func (m *TimeEntryMutation) VoidedAtCleared() bool {
+	_, ok := m.clearedFields[timeentry.FieldVoidedAt]
+	return ok
+}
+
+// ResetVoidedAt resets all changes to the "voided_at" field.
+func (m *TimeEntryMutation) ResetVoidedAt() {
+	m.voided_at = nil
+	delete(m.clearedFields, timeentry.FieldVoidedAt)
 }
 
 // SetLatitude sets the "latitude" field.
@@ -29729,7 +29816,7 @@ func (m *TimeEntryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TimeEntryMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 13)
 	if m.company_id != nil {
 		fields = append(fields, timeentry.FieldCompanyID)
 	}
@@ -29739,6 +29826,9 @@ func (m *TimeEntryMutation) Fields() []string {
 	if m.job_id != nil {
 		fields = append(fields, timeentry.FieldJobID)
 	}
+	if m.job_title_snapshot != nil {
+		fields = append(fields, timeentry.FieldJobTitleSnapshot)
+	}
 	if m.is_manual != nil {
 		fields = append(fields, timeentry.FieldIsManual)
 	}
@@ -29747,6 +29837,9 @@ func (m *TimeEntryMutation) Fields() []string {
 	}
 	if m.clock_out != nil {
 		fields = append(fields, timeentry.FieldClockOut)
+	}
+	if m.voided_at != nil {
+		fields = append(fields, timeentry.FieldVoidedAt)
 	}
 	if m.latitude != nil {
 		fields = append(fields, timeentry.FieldLatitude)
@@ -29777,12 +29870,16 @@ func (m *TimeEntryMutation) Field(name string) (ent.Value, bool) {
 		return m.UserID()
 	case timeentry.FieldJobID:
 		return m.JobID()
+	case timeentry.FieldJobTitleSnapshot:
+		return m.JobTitleSnapshot()
 	case timeentry.FieldIsManual:
 		return m.IsManual()
 	case timeentry.FieldClockIn:
 		return m.ClockIn()
 	case timeentry.FieldClockOut:
 		return m.ClockOut()
+	case timeentry.FieldVoidedAt:
+		return m.VoidedAt()
 	case timeentry.FieldLatitude:
 		return m.Latitude()
 	case timeentry.FieldLongitude:
@@ -29808,12 +29905,16 @@ func (m *TimeEntryMutation) OldField(ctx context.Context, name string) (ent.Valu
 		return m.OldUserID(ctx)
 	case timeentry.FieldJobID:
 		return m.OldJobID(ctx)
+	case timeentry.FieldJobTitleSnapshot:
+		return m.OldJobTitleSnapshot(ctx)
 	case timeentry.FieldIsManual:
 		return m.OldIsManual(ctx)
 	case timeentry.FieldClockIn:
 		return m.OldClockIn(ctx)
 	case timeentry.FieldClockOut:
 		return m.OldClockOut(ctx)
+	case timeentry.FieldVoidedAt:
+		return m.OldVoidedAt(ctx)
 	case timeentry.FieldLatitude:
 		return m.OldLatitude(ctx)
 	case timeentry.FieldLongitude:
@@ -29854,6 +29955,13 @@ func (m *TimeEntryMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetJobID(v)
 		return nil
+	case timeentry.FieldJobTitleSnapshot:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetJobTitleSnapshot(v)
+		return nil
 	case timeentry.FieldIsManual:
 		v, ok := value.(bool)
 		if !ok {
@@ -29874,6 +29982,13 @@ func (m *TimeEntryMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetClockOut(v)
+		return nil
+	case timeentry.FieldVoidedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVoidedAt(v)
 		return nil
 	case timeentry.FieldLatitude:
 		v, ok := value.(float64)
@@ -30012,6 +30127,9 @@ func (m *TimeEntryMutation) ClearedFields() []string {
 	if m.FieldCleared(timeentry.FieldClockOut) {
 		fields = append(fields, timeentry.FieldClockOut)
 	}
+	if m.FieldCleared(timeentry.FieldVoidedAt) {
+		fields = append(fields, timeentry.FieldVoidedAt)
+	}
 	if m.FieldCleared(timeentry.FieldLatitude) {
 		fields = append(fields, timeentry.FieldLatitude)
 	}
@@ -30041,6 +30159,9 @@ func (m *TimeEntryMutation) ClearField(name string) error {
 	case timeentry.FieldClockOut:
 		m.ClearClockOut()
 		return nil
+	case timeentry.FieldVoidedAt:
+		m.ClearVoidedAt()
+		return nil
 	case timeentry.FieldLatitude:
 		m.ClearLatitude()
 		return nil
@@ -30064,6 +30185,9 @@ func (m *TimeEntryMutation) ResetField(name string) error {
 	case timeentry.FieldJobID:
 		m.ResetJobID()
 		return nil
+	case timeentry.FieldJobTitleSnapshot:
+		m.ResetJobTitleSnapshot()
+		return nil
 	case timeentry.FieldIsManual:
 		m.ResetIsManual()
 		return nil
@@ -30072,6 +30196,9 @@ func (m *TimeEntryMutation) ResetField(name string) error {
 		return nil
 	case timeentry.FieldClockOut:
 		m.ResetClockOut()
+		return nil
+	case timeentry.FieldVoidedAt:
+		m.ResetVoidedAt()
 		return nil
 	case timeentry.FieldLatitude:
 		m.ResetLatitude()

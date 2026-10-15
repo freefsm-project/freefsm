@@ -188,10 +188,12 @@ func TestClockCorrectionOverlapHTTP(t *testing.T) {
 	start := time.Now().Add(-24 * time.Hour).UTC().Truncate(time.Second)
 	first := client.TimeEntry.Create().SetCompanyID(company).SetUserID(admin).SetClockIn(start).SetClockOut(start.Add(time.Hour)).SaveX(ctx)
 	client.TimeEntry.Create().SetCompanyID(company).SetUserID(admin).SetClockIn(start.Add(2 * time.Hour)).SetClockOut(start.Add(3 * time.Hour)).SaveX(ctx)
-	values := url.Values{"clock_out": {start.Add(150 * time.Minute).Format("2006-01-02T15:04:05")}}
+	values := url.Values{"reason": {"Review overlapping end"}, "clock_out": {start.Add(150 * time.Minute).Format("2006-01-02T15:04:05")}}
+	cookie := sessionCookie(t, ctx, sessions, admin)
+	values = timeFormValues(t, router, cookie, fmt.Sprintf("/time-entries/%d", first.ID), values)
 	r := httptest.NewRequest("POST", fmt.Sprintf("/time-entries/%d", first.ID), strings.NewReader(values.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	r.AddCookie(sessionCookie(t, ctx, sessions, admin))
+	r.AddCookie(cookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, r)
 	if w.Code != 409 {
@@ -334,7 +336,7 @@ func TestClockManualAndCorrectionShareInvariant(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.CorrectTimeEntry(ctx, actor, entry.ID, authorization.TimeEntryCorrection{ClockIn: &overlap}); err == nil {
+	if err := svc.CorrectTimeEntry(ctx, actor, entry.ID, authorization.TimeEntryCorrection{Reason: "Review overlap", ClockIn: &overlap}); err == nil {
 		t.Fatal("correction overlapped manual entry")
 	}
 	if client.TimeEntry.GetX(ctx, id).CompanyID == nil || *client.TimeEntry.GetX(ctx, id).CompanyID != company {
@@ -350,7 +352,7 @@ func TestClockUpgradePreservesRecordedGPSAndGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, file := range files {
-		if strings.HasPrefix(file.Name(), "076_clock_evidence") || file.Name() == "082_operation_admission.up.sql" || file.Name() == "084_security_operation_receipts.up.sql" {
+		if strings.HasPrefix(file.Name(), "076_clock_evidence") || file.Name() == "082_operation_admission.up.sql" || file.Name() == "084_security_operation_receipts.up.sql" || file.Name() == "085_time_entry_history.up.sql" {
 			continue
 		}
 		data, err := fs.ReadFile(source, file.Name())
@@ -362,7 +364,14 @@ func TestClockUpgradePreservesRecordedGPSAndGrants(t *testing.T) {
 	pool, client, router, sessions, company, admin := permissionHTTPFixtureMigrations(t, old)
 	ctx := context.Background()
 	start := time.Date(2026, 1, 2, 3, 4, 5, 123456000, time.UTC)
-	entry := client.TimeEntry.Create().SetCompanyID(company).SetUserID(admin).SetClockIn(start).SetLatitude(51.234567).SetNotes("Known historical incomplete capture").SaveX(ctx)
+	// Use the installed schema, not the candidate Ent builder's new columns.
+	entry := struct {
+		ID    int64
+		Notes string
+	}{Notes: "Known historical incomplete capture"}
+	if err := pool.QueryRow(ctx, `INSERT INTO time_entries(company_id,user_id,clock_in,latitude,notes) VALUES($1,$2,$3,51.234567,$4) RETURNING id`, company, admin, start, entry.Notes).Scan(&entry.ID); err != nil {
+		t.Fatal(err)
+	}
 	var before, after string
 	if err := pool.QueryRow(ctx, `SELECT coalesce(jsonb_agg(to_jsonb(g) ORDER BY role_id,permission,scope),'[]')::text FROM authorization_grants g`).Scan(&before); err != nil {
 		t.Fatal(err)

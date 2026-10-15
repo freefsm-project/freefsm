@@ -12,6 +12,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -57,6 +58,7 @@ func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	entries, total, err := h.svc.List(r.Context(), services.TimeEntryListFilter{
+		IncludeVoid:   r.URL.Query().Get("include_void") == "true",
 		UserID:        filterUserID,
 		Search:        search,
 		ClockInFrom:   from,
@@ -94,6 +96,8 @@ func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := templates.TimeEntryListPageData{
+		IncludeVoid:    r.URL.Query().Get("include_void") == "true",
+		CanCreate:      p.Allows("time.create", authorization.Own) || p.Allows("time.create", authorization.Assigned) || p.Allows("time.create", authorization.All),
 		Entries:        rows,
 		Page:           page,
 		PerPage:        perPage,
@@ -160,6 +164,9 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	userName := view.SubjectName
 	jobID, jobName := h.timeEntryJob(r.Context(), entry)
+	if view.UserID == currentUser.ID && view.JobID > 0 {
+		jobID, jobName = view.JobID, view.JobTitle
+	}
 
 	clockInStr := displayDateTime(r.Context(), entry.ClockIn)
 	clockOutStr := ""
@@ -178,22 +185,45 @@ func (h *TimeEntryHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := templates.TimeEntryShowPageData{
-		CanEdit:   view.CanCorrect,
-		CanDelete: false,
-		ID:        entry.ID,
-		UserName:  userName,
-		JobID:     jobID,
-		JobName:   jobName,
-		ClockIn:   clockInStr,
-		ClockOut:  clockOutStr,
-		Duration:  duration,
-		IsManual:  entry.IsManual,
-		Notes:     entry.Notes,
-		GPSLat:    gpsLat,
-		GPSLon:    gpsLon,
+		NeedsReview: view.NeedsReview,
+		CanJob:      view.CanJob,
+		CanVoid:     view.CanVoid,
+		Voided:      view.VoidedAt != nil,
+		CanEdit:     view.CanCorrect,
+		CanDelete:   false,
+		ID:          entry.ID,
+		UserName:    userName,
+		JobID:       jobID,
+		JobName:     jobName,
+		ClockIn:     clockInStr,
+		ClockOut:    clockOutStr,
+		Duration:    duration,
+		IsManual:    entry.IsManual,
+		Notes:       entry.Notes,
+		GPSLat:      gpsLat,
+		GPSLon:      gpsLon,
 	}
 	// Deletion is not Void: never advertise the retired erasure action.
 	data.CanDelete = false
+	if data.Voided {
+		data.Duration = "Excluded from totals (Void)"
+	}
+	req, _ := authorization.FromContext(r.Context())
+	history, err := req.Service.TimeEntryHistory(r.Context(), req.Actor, id)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	for _, revision := range history {
+		row := templates.TimeEntryHistoryRow{Event: revision.Event, Actor: revision.Actor, AcceptedAt: displayDateTime(r.Context(), revision.AcceptedAt), Reason: revision.Reason, After: timeStateText(revision.After)}
+		if revision.ActorID > 0 {
+			row.Actor = fmt.Sprintf("%s (#%d)", revision.Actor, revision.ActorID)
+		}
+		if revision.Before != nil {
+			row.Before = timeStateText(*revision.Before)
+		}
+		data.History = append(data.History, row)
+	}
 	if view.CanGPS {
 		req, _ := authorization.FromContext(r.Context())
 		facts, err := req.Service.ClockGPS(r.Context(), req.Actor, id)
@@ -323,7 +353,9 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 
 		data := templates.TimeEntryFormPageData{
-			PreserveJob: view.JobID > 0 && !jobAllowed(jobs, view.JobID),
+			PreserveJob:      view.JobID > 0 && !jobAllowed(jobs, view.JobID) && view.UserID != user.ID,
+			RetainedJob:      view.JobID > 0 && !jobAllowed(jobs, view.JobID) && view.UserID == user.ID,
+			RetainedJobTitle: view.JobTitle,
 			Entry: &templates.TimeEntryFormEntry{
 				ID:       entry.ID,
 				JobID:    valueInt64(entry.JobID),
@@ -338,11 +370,13 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := r.ParseForm(); err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "invalid form", 400)
 		return
 	}
 
 	if r.Form.Has("latitude") || r.Form.Has("longitude") || r.Form.Has("captured_at") || r.Form.Has("accuracy") || r.Form.Has("gps") {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "GPS is immutable clock-only data", 400)
 		return
 	}
@@ -351,6 +385,7 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if clockIn := r.FormValue("clock_in"); clockIn != "" {
 		t, err := parseTimeEntryEdit(clockIn, loc)
 		if err != nil {
+			saveaction.RejectBeforeWrite(r.Context())
 			http.Error(w, "Invalid or ambiguous clock-in timestamp; include UTC offset", 400)
 			return
 		}
@@ -361,6 +396,7 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if clockOut := r.FormValue("clock_out"); clockOut != "" {
 		t, err := parseTimeEntryEdit(clockOut, loc)
 		if err != nil {
+			saveaction.RejectBeforeWrite(r.Context())
 			http.Error(w, "Invalid or ambiguous clock-out timestamp; include UTC offset", 400)
 			return
 		}
@@ -368,10 +404,15 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 			params.ClockOut = &t
 		}
 	}
-	params.Notes = formPtr(r.FormValue("notes"))
+	if r.Form.Has("notes") {
+		notes := r.FormValue("notes")
+		params.Notes = &notes
+	}
+	params.Reopen = r.Form.Has("clock_out") && r.FormValue("clock_out") == ""
 	if r.Form.Has("job_id") {
 		jobID, err := parseOptionalID(r.FormValue("job_id"))
 		if err != nil || jobID < 0 {
+			saveaction.RejectBeforeWrite(r.Context())
 			http.Error(w, "invalid job", 400)
 			return
 		}
@@ -384,8 +425,8 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	req, _ := authorization.FromContext(r.Context())
-	if err := req.Service.CorrectTimeEntry(r.Context(), req.Actor, id, authorization.TimeEntryCorrection{ClockIn: params.ClockIn, ClockOut: params.ClockOut, Notes: params.Notes, JobID: params.JobID, ClearJob: params.ClearJob}); err != nil {
-		authorizationError(w, r, err)
+	if err := req.Service.CorrectTimeEntry(r.Context(), req.Actor, id, authorization.TimeEntryCorrection{Reason: r.FormValue("reason"), Reopen: params.Reopen, ClockIn: params.ClockIn, ClockOut: params.ClockOut, Notes: params.Notes, JobID: params.JobID, ClearJob: params.ClearJob}); err != nil {
+		timeEntryError(w, r, err)
 		return
 	}
 	http.Redirect(w, r, "/time-entries?flash=Time+entry+updated", http.StatusSeeOther)
@@ -394,6 +435,24 @@ func (h *TimeEntryHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *TimeEntryHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Deletion cannot stand in for a reasoned terminal Void. Retain facts.
 	authorizationError(w, r, authorization.ErrForbidden)
+}
+
+func (h *TimeEntryHandler) Void(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
+		return
+	}
+	if err := req.Service.VoidTimeEntry(r.Context(), req.Actor, id, r.FormValue("reason")); err != nil {
+		timeEntryError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/time-entries/%d", id), http.StatusSeeOther)
 }
 
 func (h *TimeEntryHandler) jobNames(ctx context.Context, entries []*ent.TimeEntry) map[int64]string {
@@ -447,10 +506,16 @@ func timeEntryToRow(ctx context.Context, e *ent.TimeEntry, userNames map[int64]s
 	}
 
 	duration := services.TimeEntryDuration(e.ClockIn, safeTime(e.ClockOut))
+	if e.VoidedAt != nil {
+		duration = "Excluded (Void)"
+		clockOut = "Voided"
+	}
 
 	userName := userNames[e.UserID]
 
 	canEdit, canDelete := false, false
+	canJob := false
+	needsReview := false
 	jobID := valueInt64(e.JobID)
 	jobName := jobNames[jobID]
 	if jobID > 0 && jobName == "" {
@@ -462,25 +527,32 @@ func timeEntryToRow(ctx context.Context, e *ent.TimeEntry, userNames map[int64]s
 				canEdit = view.CanCorrect
 				canDelete = false // reasoned Void replaces destructive deletion (#59)
 				userName = view.SubjectName
+				canJob = view.CanJob
+				needsReview = view.NeedsReview
+				if view.UserID == currentUser.ID && view.JobID > 0 {
+					jobName = view.JobTitle
+				}
 			}
 		}
-		if jobNames[jobID] == "" {
+		if jobName == "" {
 			jobID, jobName = 0, ""
 		}
 	}
 
 	return templates.TimeEntryRow{
-		ID:        e.ID,
-		UserName:  userName,
-		IsManual:  e.IsManual,
-		ClockIn:   clockIn,
-		ClockOut:  clockOut,
-		JobID:     jobID,
-		JobName:   jobName,
-		Duration:  duration,
-		Notes:     e.Notes,
-		CanEdit:   canEdit,
-		CanDelete: canDelete,
+		NeedsReview: needsReview,
+		CanJob:      canJob,
+		ID:          e.ID,
+		UserName:    userName,
+		IsManual:    e.IsManual,
+		ClockIn:     clockIn,
+		ClockOut:    clockOut,
+		JobID:       jobID,
+		JobName:     jobName,
+		Duration:    duration,
+		Notes:       e.Notes,
+		CanEdit:     canEdit,
+		CanDelete:   canDelete,
 	}
 }
 
@@ -528,17 +600,48 @@ func safeTime(t *time.Time) time.Time {
 	return *t
 }
 
+func timeStateText(v authorization.TimeState) string {
+	end := "No end recorded"
+	if v.ClockOut != nil {
+		end = v.ClockOut.UTC().Format(time.RFC3339Nano)
+	}
+	job := "No Job"
+	if v.JobID != nil {
+		job = fmt.Sprintf("Job #%d %s", *v.JobID, v.JobTitle)
+	}
+	return fmt.Sprintf("Subject #%d; %s → %s; %s; Notes: %s", v.UserID, v.ClockIn.UTC().Format(time.RFC3339Nano), end, job, v.Notes)
+}
+
 func clockError(w http.ResponseWriter, r *http.Request, err error) {
 	var conflict *authorization.ClockConflict
 	if errors.As(err, &conflict) {
 		status := http.StatusConflict
-		if conflict.Code == "invalid_gps" || conflict.Code == "invalid_occurrence" {
+		if conflict.Code == "invalid_gps" || conflict.Code == "invalid_occurrence" || conflict.Code == "reason_required" {
 			status = http.StatusBadRequest
 		}
 		http.Error(w, conflict.Code+": review this clock; submit explicitly without location if GPS is invalid", status)
 		return
 	}
 	authorizationError(w, r, err)
+}
+
+// Only typed domain/authority failures are terminal. A database, history or
+// audit failure rolls back the whole effect and permits the same-ID retry.
+func timeEntryError(w http.ResponseWriter, r *http.Request, err error) {
+	var conflict *authorization.ClockConflict
+	if errors.As(err, &conflict) {
+		status := http.StatusConflict
+		if conflict.Code == "reason_required" {
+			status = http.StatusBadRequest
+		}
+		http.Error(w, conflict.Code+": review the Time Entry and submit a reasoned correction", status)
+		return
+	}
+	if errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrConflict) || errors.Is(err, saveaction.ErrStale) || errors.Is(err, saveaction.ErrRevisionRequired) {
+		authorizationError(w, r, err)
+		return
+	}
+	middleware.ServiceUnavailable(w, r)
 }
 
 // Explicit offsets preserve exact instants, including a daylight-saving fold.

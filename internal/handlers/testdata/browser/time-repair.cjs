@@ -1,0 +1,53 @@
+const {chromium} = require('playwright-core');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+(async () => {
+  const [base, token, evidence] = process.argv.slice(2);
+  const profile = fs.mkdtempSync(path.join(process.env.TMPDIR, 'time-'));
+  const context = await chromium.launchPersistentContext(profile, {executablePath: process.env.BROWSER_EXECUTABLE, headless: true, args: ['--no-sandbox'], viewport: {width:320,height:740}});
+  try {
+    await context.addCookies([{name:'session',value:token,url:base}]);
+    const page=await context.newPage();const acceptDialog=d=>d.accept();page.on('dialog',acceptDialog);
+    let voidRequests=0;
+    page.on('request',r=>{if(r.method()==='POST'&&new URL(r.url()).pathname.endsWith('/void'))voidRequests++;});
+    await page.goto(base+'/time-entries');
+    await page.getByRole('button',{name:'Create closed manual entry',exact:true}).click();
+    await page.locator('[name=clock_in]').fill('2026-01-01T10:00:00Z');
+    await page.locator('[name=clock_out]').fill('2026-01-01T11:00:00Z');
+    await page.locator('[name=notes]').fill('Browser original facts');
+    await page.getByRole('button',{name:'Create closed entry',exact:true}).click();
+    await page.waitForURL(/\/time-entries\/\d+$/);
+    const entry=page.url();
+    await page.reload();
+    assert.match(await page.locator('body').innerText(),/Browser original facts/);
+    await page.getByRole('button',{name:'Edit',exact:true}).click();
+    await page.locator('[name=notes]').fill('Browser corrected facts');
+    await page.locator('[name=reason]').fill('Browser paper-record review');
+    await page.getByRole('button',{name:'Save',exact:true}).click();
+    await page.waitForURL(/\/time-entries\?/);
+    await page.goto(entry);
+    const text=await page.locator('[aria-label="Immutable time history"]').innerText();
+    assert.match(text,/Browser original facts/);assert.match(text,/Browser corrected facts/);assert.match(text,/Browser paper-record review/);
+    // The current-authority activity seam must carry the same complete change.
+    const activity=await context.request.get(entry+'/activity');
+    assert.equal(activity.status(),200);assert.match(await activity.text(),/Browser original facts/);assert.match(await activity.text(),/Browser corrected facts/);
+    await page.locator('form[action$="/void"] [name=reason]').fill('Browser terminal repair');
+    page.off('dialog',acceptDialog);
+    const cancellation=page.waitForEvent('dialog').then(d=>d.dismiss());
+    await Promise.all([cancellation,page.getByRole('button',{name:'Void Time Entry',exact:true}).click()]);
+    assert.equal(voidRequests,0,'cancelled Void must not dispatch a command');
+    assert.equal(await page.locator('form[action$="/void"] [name=reason]').inputValue(),'Browser terminal repair');
+    page.on('dialog',acceptDialog);
+    await page.getByRole('button',{name:'Void Time Entry',exact:true}).click();
+    await page.getByText('Voided — terminal.',{exact:false}).waitFor({timeout:5000}).catch(async error=>{console.error('Void result',page.url(),await page.locator('body').innerText());throw error;});
+    await page.reload();assert.match(await page.locator('body').innerText(),/Browser terminal repair/);
+    assert.equal(voidRequests,1,'confirmed Void must dispatch exactly once');
+    assert.equal(await page.getByRole('button',{name:'Edit',exact:true}).count(),0);
+    await page.goto(base+'/time-entries');assert.doesNotMatch(await page.locator('#time-entry-list-content').innerText(),/Browser corrected facts/);
+    await page.goto(base+'/time-entries?include_void=true');assert.match(await page.locator('#time-entry-list-content').innerText(),/Excluded \(Void\)/);
+    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    await page.screenshot({path:path.join(evidence,'time-repair-phone.png'),fullPage:true});
+    console.log('Persisted phone manual creation → reasoned correction/full history+activity → cancelled Void sends nothing → confirmed terminal Void once → explicit excluded-history view passed');
+  } finally {await context.close();}
+})().catch(e=>{console.error(e);process.exit(1);});

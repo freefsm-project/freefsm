@@ -16,6 +16,7 @@ const { chromium } = require('playwright-core');
     await page.waitForURL(base+path+'/edit');
     assert.equal(await page.locator('[name=job_id]').count(),0,'inaccessible Job association is not submitted');
     await page.locator('textarea[name=notes]').fill('Persisted time correction').catch(async error=>{console.error('Time editor failure',page.url(),await page.locator('body').innerText());throw error;});
+    await page.locator('[name=reason]').fill('Reviewed browser time record');
     await page.getByRole('button',{name:'Save',exact:true}).click();
     await page.waitForURL(url=>url.pathname==='/time-entries');
     await page.locator(`.work-queue-table a[href="${path}"]`).click();

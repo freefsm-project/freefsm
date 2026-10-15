@@ -351,6 +351,9 @@ func filterValues(pairs ...string) url.Values {
 
 func timeEntryFilters(p TimeEntryListPageData) url.Values {
 	filters := filterValues("date_from", p.DateFrom, "date_to", p.DateTo)
+	if p.IncludeVoid {
+		filters.Set("include_void", "true")
+	}
 	if p.ShowUserFilter && p.UserID > 0 {
 		filters.Set("user_id", strconv.FormatInt(p.UserID, 10))
 	}
@@ -1653,20 +1656,24 @@ type ClockWidgetData struct {
 }
 
 type TimeEntryRow struct {
-	CanDelete bool
-	ID        int64
-	UserName  string
-	IsManual  bool
-	ClockIn   string
-	ClockOut  string
-	JobID     int64
-	JobName   string
-	Duration  string
-	Notes     string
-	CanEdit   bool
+	NeedsReview bool
+	CanJob      bool
+	CanDelete   bool
+	ID          int64
+	UserName    string
+	IsManual    bool
+	ClockIn     string
+	ClockOut    string
+	JobID       int64
+	JobName     string
+	Duration    string
+	Notes       string
+	CanEdit     bool
 }
 
 type TimeEntryListPageData struct {
+	IncludeVoid    bool
+	CanCreate      bool
 	Entries        []TimeEntryRow
 	Page           int
 	PerPage        int
@@ -1689,13 +1696,19 @@ type TimeEntryFormEntry struct {
 }
 
 type TimeEntryFormPageData struct {
-	PreserveJob bool
-	Entry       *TimeEntryFormEntry
-	Jobs        []SelectOption
-	Errors      map[string]string
+	RetainedJob      bool
+	RetainedJobTitle string
+	PreserveJob      bool
+	Entry            *TimeEntryFormEntry
+	Jobs             []SelectOption
+	Errors           map[string]string
 }
 
 type TimeEntryShowPageData struct {
+	NeedsReview        bool
+	CanJob             bool
+	CanVoid, Voided    bool
+	History            []TimeEntryHistoryRow
 	GPSIn, GPSOut      string
 	CanEdit, CanDelete bool
 	ID                 int64
@@ -1709,6 +1722,16 @@ type TimeEntryShowPageData struct {
 	Notes              string
 	GPSLat             string
 	GPSLon             string
+}
+
+type TimeEntryHistoryRow struct {
+	Event, Actor, AcceptedAt, Reason, Before, After string
+}
+
+type ManualTimePageData struct {
+	UserID   int64
+	Subjects []UserRow
+	Jobs     []SelectOption
 }
 
 func timeEntryFormTitle() string {

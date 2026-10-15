@@ -871,7 +871,7 @@ func activityFields(typ string) map[string]string {
 		}
 		fields["unit_cost"] = "cost.view"
 	case "time_entry":
-		base = "clock_in clock_out notes voided_at reason"
+		base = "user_id job_id clock_in clock_out notes voided_at reason"
 		for _, key := range strings.Fields("latitude longitude accuracy captured_at") {
 			fields[key] = "time.gps.view"
 		}

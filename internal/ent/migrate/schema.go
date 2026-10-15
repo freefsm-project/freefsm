@@ -907,9 +907,11 @@ var (
 		{Name: "company_id", Type: field.TypeInt64, Nullable: true},
 		{Name: "user_id", Type: field.TypeInt64},
 		{Name: "job_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "job_title_snapshot", Type: field.TypeString, Default: ""},
 		{Name: "is_manual", Type: field.TypeBool, Default: false},
 		{Name: "clock_in", Type: field.TypeTime},
 		{Name: "clock_out", Type: field.TypeTime, Nullable: true},
+		{Name: "voided_at", Type: field.TypeTime, Nullable: true},
 		{Name: "latitude", Type: field.TypeFloat64, Nullable: true},
 		{Name: "longitude", Type: field.TypeFloat64, Nullable: true},
 		{Name: "notes", Type: field.TypeString, Default: ""},
@@ -925,14 +927,14 @@ var (
 			{
 				Name:    "timeentry_user_id_clock_out",
 				Unique:  false,
-				Columns: []*schema.Column{TimeEntriesColumns[2], TimeEntriesColumns[6]},
+				Columns: []*schema.Column{TimeEntriesColumns[2], TimeEntriesColumns[7]},
 			},
 			{
 				Name:    "time_entries_one_active_per_user",
 				Unique:  true,
 				Columns: []*schema.Column{TimeEntriesColumns[2]},
 				Annotation: &entsql.IndexAnnotation{
-					Where: "clock_out IS NULL",
+					Where: "clock_out IS NULL AND voided_at IS NULL",
 				},
 			},
 			{
@@ -943,7 +945,7 @@ var (
 			{
 				Name:    "timeentry_clock_in",
 				Unique:  false,
-				Columns: []*schema.Column{TimeEntriesColumns[5]},
+				Columns: []*schema.Column{TimeEntriesColumns[6]},
 			},
 		},
 	}

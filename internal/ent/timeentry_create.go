@@ -54,6 +54,20 @@ func (_c *TimeEntryCreate) SetNillableJobID(v *int64) *TimeEntryCreate {
 	return _c
 }
 
+// SetJobTitleSnapshot sets the "job_title_snapshot" field.
+func (_c *TimeEntryCreate) SetJobTitleSnapshot(v string) *TimeEntryCreate {
+	_c.mutation.SetJobTitleSnapshot(v)
+	return _c
+}
+
+// SetNillableJobTitleSnapshot sets the "job_title_snapshot" field if the given value is not nil.
+func (_c *TimeEntryCreate) SetNillableJobTitleSnapshot(v *string) *TimeEntryCreate {
+	if v != nil {
+		_c.SetJobTitleSnapshot(*v)
+	}
+	return _c
+}
+
 // SetIsManual sets the "is_manual" field.
 func (_c *TimeEntryCreate) SetIsManual(v bool) *TimeEntryCreate {
 	_c.mutation.SetIsManual(v)
@@ -84,6 +98,20 @@ func (_c *TimeEntryCreate) SetClockOut(v time.Time) *TimeEntryCreate {
 func (_c *TimeEntryCreate) SetNillableClockOut(v *time.Time) *TimeEntryCreate {
 	if v != nil {
 		_c.SetClockOut(*v)
+	}
+	return _c
+}
+
+// SetVoidedAt sets the "voided_at" field.
+func (_c *TimeEntryCreate) SetVoidedAt(v time.Time) *TimeEntryCreate {
+	_c.mutation.SetVoidedAt(v)
+	return _c
+}
+
+// SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
+func (_c *TimeEntryCreate) SetNillableVoidedAt(v *time.Time) *TimeEntryCreate {
+	if v != nil {
+		_c.SetVoidedAt(*v)
 	}
 	return _c
 }
@@ -199,6 +227,10 @@ func (_c *TimeEntryCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *TimeEntryCreate) defaults() {
+	if _, ok := _c.mutation.JobTitleSnapshot(); !ok {
+		v := timeentry.DefaultJobTitleSnapshot
+		_c.mutation.SetJobTitleSnapshot(v)
+	}
 	if _, ok := _c.mutation.IsManual(); !ok {
 		v := timeentry.DefaultIsManual
 		_c.mutation.SetIsManual(v)
@@ -221,6 +253,9 @@ func (_c *TimeEntryCreate) defaults() {
 func (_c *TimeEntryCreate) check() error {
 	if _, ok := _c.mutation.UserID(); !ok {
 		return &ValidationError{Name: "user_id", err: errors.New(`ent: missing required field "TimeEntry.user_id"`)}
+	}
+	if _, ok := _c.mutation.JobTitleSnapshot(); !ok {
+		return &ValidationError{Name: "job_title_snapshot", err: errors.New(`ent: missing required field "TimeEntry.job_title_snapshot"`)}
 	}
 	if _, ok := _c.mutation.IsManual(); !ok {
 		return &ValidationError{Name: "is_manual", err: errors.New(`ent: missing required field "TimeEntry.is_manual"`)}
@@ -281,6 +316,10 @@ func (_c *TimeEntryCreate) createSpec() (*TimeEntry, *sqlgraph.CreateSpec) {
 		_spec.SetField(timeentry.FieldJobID, field.TypeInt64, value)
 		_node.JobID = &value
 	}
+	if value, ok := _c.mutation.JobTitleSnapshot(); ok {
+		_spec.SetField(timeentry.FieldJobTitleSnapshot, field.TypeString, value)
+		_node.JobTitleSnapshot = value
+	}
 	if value, ok := _c.mutation.IsManual(); ok {
 		_spec.SetField(timeentry.FieldIsManual, field.TypeBool, value)
 		_node.IsManual = value
@@ -292,6 +331,10 @@ func (_c *TimeEntryCreate) createSpec() (*TimeEntry, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.ClockOut(); ok {
 		_spec.SetField(timeentry.FieldClockOut, field.TypeTime, value)
 		_node.ClockOut = &value
+	}
+	if value, ok := _c.mutation.VoidedAt(); ok {
+		_spec.SetField(timeentry.FieldVoidedAt, field.TypeTime, value)
+		_node.VoidedAt = &value
 	}
 	if value, ok := _c.mutation.Latitude(); ok {
 		_spec.SetField(timeentry.FieldLatitude, field.TypeFloat64, value)

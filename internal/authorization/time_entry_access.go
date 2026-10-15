@@ -3,6 +3,7 @@ package authorization
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -11,6 +12,10 @@ import (
 // TimeEntryView is a bounded subject projection, not directory access. Own is
 // anchored to the recorded subject; Assigned requires a current active Job.
 type TimeEntryView struct {
+	NeedsReview                 bool
+	JobTitle                    string
+	CanJob                      bool
+	VoidedAt                    *time.Time
 	UserID, JobID               int64
 	SubjectName                 string
 	CanCorrect, CanGPS, CanVoid bool
@@ -38,8 +43,8 @@ func readTimeEntryAccess(ctx context.Context, q queryer, p Principal, id int64, 
 	if locking {
 		lock = " FOR UPDATE OF e"
 	}
-	err := q.QueryRow(ctx, `SELECT coalesce(e.company_id,0),e.user_id,coalesce(e.job_id,0),coalesce(u.name,''),coalesce(j.company_id=e.company_id,false)
- FROM time_entries e LEFT JOIN users u ON u.id=e.user_id AND u.company_id=e.company_id LEFT JOIN jobs j ON j.id=e.job_id WHERE e.id=$1`+lock, id).Scan(&company, &view.UserID, &view.JobID, &view.SubjectName, &sameJobCompany)
+	err := q.QueryRow(ctx, `SELECT coalesce(e.company_id,0),e.user_id,coalesce(e.job_id,0),coalesce(u.name,''),coalesce(j.company_id=e.company_id,false),e.voided_at,e.job_title_snapshot
+ FROM time_entries e LEFT JOIN users u ON u.id=e.user_id AND u.company_id=e.company_id LEFT JOIN jobs j ON j.id=e.job_id WHERE e.id=$1`+lock, id).Scan(&company, &view.UserID, &view.JobID, &view.SubjectName, &sameJobCompany, &view.VoidedAt, &view.JobTitle)
 	if errors.Is(err, pgx.ErrNoRows) || err == nil && company != p.CompanyID {
 		return view, ErrNotFound
 	}
@@ -54,16 +59,29 @@ func readTimeEntryAccess(ctx context.Context, q queryer, p Principal, id int64, 
 		}
 	}
 	own := view.UserID == p.UserID
+	if view.JobID > 0 {
+		_, err := parentAccess(ctx, q, p, "job", view.JobID, "", locking)
+		view.CanJob = err == nil
+		if err != nil && !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrForbidden) {
+			return view, err
+		}
+	}
+	if !own && !view.CanJob {
+		view.JobTitle = ""
+	}
 	if timeEntryGrant(p, "time.view", own, assigned) == "" {
 		return view, ErrNotFound
 	}
 	if permission != "" && timeEntryGrant(p, permission, own, assigned) == "" {
 		return view, ErrForbidden
 	}
+	if err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM time_entry_review_required WHERE id=$1)`, id).Scan(&view.NeedsReview); err != nil {
+		return view, err
+	}
 	view.correctionScope = timeEntryGrant(p, "time.correct", own, assigned)
-	view.CanCorrect = view.correctionScope != ""
+	view.CanCorrect = view.correctionScope != "" && view.VoidedAt == nil
 	view.CanGPS = timeEntryGrant(p, "time.gps.view", own, assigned) != ""
-	view.CanVoid = timeEntryGrant(p, "time.void", own, assigned) != ""
+	view.CanVoid = timeEntryGrant(p, "time.void", own, assigned) != "" && view.VoidedAt == nil
 	return view, nil
 }
 
@@ -76,6 +94,8 @@ func (s *Service) TimeEntryAccess(ctx context.Context, a Actor, id int64, permis
 }
 
 type TimeEntryCorrection struct {
+	Reason            string
+	Reopen            bool
 	ClockIn, ClockOut *time.Time
 	Notes             *string
 	JobID             *int64
@@ -93,6 +113,19 @@ func (s *Service) CorrectTimeEntry(ctx context.Context, a Actor, id int64, patch
 		if err != nil {
 			return err
 		}
+		if strings.TrimSpace(patch.Reason) == "" {
+			return &ClockConflict{"reason_required"}
+		}
+		if err := checkTimeSave(ctx, tx, a, id); err != nil {
+			return err
+		}
+		original, err := readTimeState(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if original.VoidedAt != nil {
+			return &ClockConflict{"time_void"}
+		}
 		var oldStart time.Time
 		var oldEnd *time.Time
 		if err := tx.QueryRow(ctx, `SELECT clock_in,clock_out FROM time_entries WHERE id=$1`, id).Scan(&oldStart, &oldEnd); err != nil {
@@ -105,7 +138,10 @@ func (s *Service) CorrectTimeEntry(ctx context.Context, a Actor, id int64, patch
 		if patch.ClockOut != nil {
 			end = patch.ClockOut
 		}
-		if patch.ClockIn != nil || patch.ClockOut != nil {
+		if patch.Reopen {
+			end = nil
+		}
+		{
 			now := time.Now()
 			if start.After(now) || start.Nanosecond()%1000 != 0 || end != nil && (!start.Before(*end) || end.After(now) || end.Nanosecond()%1000 != 0) {
 				return &ClockConflict{"time_order"}
@@ -119,7 +155,7 @@ func (s *Service) CorrectTimeEntry(ctx context.Context, a Actor, id int64, patch
 		if !patch.ClearJob {
 			target = patch.JobID
 		}
-		if changeJob && target != nil {
+		if changeJob && target != nil && *target != before.JobID {
 			if _, err := parentAccess(ctx, tx, p, "job", *target, "", true); err != nil {
 				return err
 			}
@@ -131,7 +167,7 @@ func (s *Service) CorrectTimeEntry(ctx context.Context, a Actor, id int64, patch
 				return ErrForbidden
 			}
 		}
-		if _, err := tx.Exec(ctx, `UPDATE time_entries SET clock_in=coalesce($2,clock_in),clock_out=coalesce($3,clock_out),notes=coalesce($4,notes),job_id=CASE WHEN $5 THEN $6::bigint ELSE job_id END,updated_at=clock_timestamp() WHERE id=$1`, id, patch.ClockIn, patch.ClockOut, patch.Notes, changeJob, target); err != nil {
+		if _, err := tx.Exec(ctx, `UPDATE time_entries SET clock_in=$2,clock_out=$3,notes=coalesce($4,notes),job_id=CASE WHEN $5 THEN $6::bigint ELSE job_id END,updated_at=clock_timestamp() WHERE id=$1`, id, start, end, patch.Notes, changeJob, target); err != nil {
 			return err
 		}
 		if _, err := readTimeEntryAccess(ctx, tx, p, id, "time.correct", true); err != nil {
@@ -140,9 +176,14 @@ func (s *Service) CorrectTimeEntry(ctx context.Context, a Actor, id int64, patch
 			}
 			return err
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata,created_at) VALUES($1,$2,'updated','time_entry',$3,jsonb_build_object('time_entry_id',$3::bigint,'before_clock_in',$4::timestamptz,'before_clock_out',$5::timestamptz,'clock_in',$6::timestamptz,'clock_out',$7::timestamptz),clock_timestamp())`, p.CompanyID, p.UserID, id, oldStart, oldEnd, start, end); err != nil {
+		accepted := time.Now().UTC().Truncate(time.Microsecond)
+		if err := recordTimeHistory(ctx, tx, p.UserID, id, "corrected", patch.Reason, &original, accepted); err != nil {
 			return err
 		}
-		return audit(ctx, tx, a, p, "time.correct", before.correctionScope, "time_entry", id, map[string]any{"subject_user_id": before.UserID, "job_changed": changeJob, "before_clock_in": oldStart, "before_clock_out": oldEnd, "clock_in": start, "clock_out": end})
+		after, err := readTimeState(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		return audit(ctx, tx, a, p, "time.correct", before.correctionScope, "time_entry", id, map[string]any{"reason": patch.Reason, "before": original, "after": after, "accepted_at": accepted})
 	})
 }
