@@ -121,6 +121,7 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 						return
 					}
 					action = saveaction.Action{UserID: authorizationActor(r).UserID, ID: id, Revision: revision, Path: r.URL.Path, Outcome: &saveaction.Outcome{}, Atomic: atomicSavePath(r.URL.Path), NoChange: noChangeSavePath(r.URL.Path)}
+					action.RetryTransient = timeEntrySavePath(r.URL.Path)
 					pageRevision = revision
 					capture.Header().Set("X-FreeFSM-Action", id)
 					capture.Header().Set("X-FreeFSM-Receipt", "/save-actions/"+id)
@@ -146,6 +147,12 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 					if err != nil {
 						http.Error(w, "Cannot read submitted content. No action dispatched.", 400)
 						return
+					}
+					if action.RetryTransient {
+						if err := s.AdmitTimeEntrySave(r.Context(), authorizationActor(r), id, r.Method, r.URL.Path, digest); err != nil {
+							timeEntryError(w, r, err)
+							return
+						}
 					}
 					review := saveReviewPath(r)
 					admitted, err := store.Admit(r.Context(), action, digest, r.Method, r.URL.Path, review)
@@ -230,6 +237,12 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 // authorization/DetailsTransaction boundary. Legacy multi-step actions are
 // deliberately excluded from rollback-to-revise assurances.
 func atomicSavePath(path string) bool {
+	if path == "/time-entries" {
+		return true
+	}
+	if strings.HasPrefix(path, "/time-entries/") && strings.HasSuffix(path, "/void") {
+		return true
+	}
 	if path == "/preferences" || path == "/settings" || path == "/setup/company" || path == "/settings/mail" || path == "/settings/maps" || path == "/settings/open-tracking" {
 		return true
 	}
@@ -264,6 +277,18 @@ func atomicSavePath(path string) bool {
 		return true
 	}
 	return false
+}
+
+func timeEntrySavePath(path string) bool {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 1 {
+		return parts[0] == "time-entries"
+	}
+	if parts[0] != "time-entries" || len(parts) > 3 {
+		return false
+	}
+	id, err := strconv.ParseInt(parts[1], 10, 64)
+	return err == nil && id > 0 && (len(parts) == 2 || parts[2] == "void")
 }
 
 func noChangeSavePath(path string) bool {

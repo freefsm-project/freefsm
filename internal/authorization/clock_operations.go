@@ -229,7 +229,7 @@ func (s *Service) ActiveClock(ctx context.Context, a Actor) (*ClockEntry, error)
 			return ErrForbidden
 		}
 		e := &ClockEntry{}
-		err := tx.QueryRow(ctx, `SELECT id,user_id,clock_in FROM time_entries WHERE company_id=$1 AND user_id=$2 AND clock_out IS NULL`, p.CompanyID, p.UserID).Scan(&e.ID, &e.UserID, &e.ClockIn)
+		err := tx.QueryRow(ctx, `SELECT id,user_id,clock_in FROM time_entries WHERE company_id=$1 AND user_id=$2 AND clock_out IS NULL AND voided_at IS NULL`, p.CompanyID, p.UserID).Scan(&e.ID, &e.UserID, &e.ClockIn)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}

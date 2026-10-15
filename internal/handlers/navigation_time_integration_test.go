@@ -26,9 +26,9 @@ func TestNavigationTimeEntryScopesAndFacetsHTTP(t *testing.T) {
 	job := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("PRIVATE TIME JOB").SaveX(ctx)
 	otherJob := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Outside time assignment").SaveX(ctx)
 	client.JobAssignment.Create().SetUserID(reader.ID).SetJobID(job.ID).SaveX(ctx)
-	now := time.Now().UTC().Truncate(time.Second)
+	now := time.Now().UTC().Add(-4 * time.Hour).Truncate(time.Second)
 	linked := client.TimeEntry.Create().SetCompanyID(company).SetUserID(other.ID).SetJobID(job.ID).SetClockIn(now).SetClockOut(now.Add(time.Hour)).SetLatitude(51.234567).SetLongitude(12.345678).SetNotes("Other linked entry").SaveX(ctx)
-	unlinked := client.TimeEntry.Create().SetCompanyID(company).SetUserID(other.ID).SetClockIn(now).SetClockOut(now.Add(time.Hour)).SetNotes("Other unlinked entry").SaveX(ctx)
+	unlinked := client.TimeEntry.Create().SetCompanyID(company).SetUserID(other.ID).SetClockIn(now.Add(2 * time.Hour)).SetClockOut(now.Add(3 * time.Hour)).SetNotes("Other unlinked entry").SaveX(ctx)
 	own := client.TimeEntry.Create().SetCompanyID(company).SetUserID(reader.ID).SetClockIn(now).SetClockOut(now.Add(time.Hour)).SetLatitude(49.987654).SetNotes("Own entry").SaveX(ctx)
 	var foreignCompany int64
 	if err := pool.QueryRow(ctx, `INSERT INTO companies(name,slug) VALUES('Foreign time company','foreign-time-company') RETURNING id`).Scan(&foreignCompany); err != nil {
@@ -54,6 +54,8 @@ func TestNavigationTimeEntryScopesAndFacetsHTTP(t *testing.T) {
 			path := fmt.Sprintf("/time-entries/%d", id)
 			post := func(values url.Values, want int) {
 				t.Helper()
+				values.Set("reason", "Reviewed time record")
+				values = timeFormValues(t, router, cookie, path, values)
 				r := httptest.NewRequest("POST", path, strings.NewReader(values.Encode()))
 				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				r.AddCookie(cookie)
@@ -100,7 +102,8 @@ func TestNavigationTimeEntryScopesAndFacetsHTTP(t *testing.T) {
 			if scope != authorization.Own {
 				assertNotContains(t, form, `name="job_id"`)
 			}
-			r := httptest.NewRequest("POST", path, strings.NewReader(url.Values{"notes": {"Corrected " + string(scope)}}.Encode()))
+			values := timeFormValues(t, router, cookie, path, url.Values{"reason": {"Reviewed time record"}, "notes": {"Corrected " + string(scope)}})
+			r := httptest.NewRequest("POST", path, strings.NewReader(values.Encode()))
 			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 			r.AddCookie(cookie)
 			w := httptest.NewRecorder()
@@ -113,7 +116,7 @@ func TestNavigationTimeEntryScopesAndFacetsHTTP(t *testing.T) {
 				if _, err := pool.Exec(ctx, `CREATE FUNCTION fail_navigation_time_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='time.correct' THEN RAISE EXCEPTION 'injected time audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_navigation_time_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION fail_navigation_time_audit()`); err != nil {
 					t.Fatal(err)
 				}
-				post(url.Values{"notes": {"Must roll back"}}, 409)
+				post(url.Values{"notes": {"Must roll back"}}, 503)
 				assertContains(t, requestBody(t, router, cookie, "GET", path, 200), "Corrected A")
 				if _, err := pool.Exec(ctx, `DROP TRIGGER fail_navigation_time_audit ON authorization_audit`); err != nil {
 					t.Fatal(err)
@@ -164,7 +167,7 @@ func TestNavigationTimesheetPersistedBrowser(t *testing.T) {
 	}
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Private time browser Customer").SaveX(ctx)
 	job := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Private time browser Job").SaveX(ctx)
-	now := time.Now().UTC().Truncate(time.Second)
+	now := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Second)
 	entry := client.TimeEntry.Create().SetCompanyID(company).SetUserID(admin).SetJobID(job.ID).SetClockIn(now).SetClockOut(now.Add(time.Hour)).SetLatitude(51.234567).SetNotes("Browser other user's entry").SaveX(ctx)
 	mux := http.NewServeMux()
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))

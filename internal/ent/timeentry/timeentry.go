@@ -19,12 +19,16 @@ const (
 	FieldUserID = "user_id"
 	// FieldJobID holds the string denoting the job_id field in the database.
 	FieldJobID = "job_id"
+	// FieldJobTitleSnapshot holds the string denoting the job_title_snapshot field in the database.
+	FieldJobTitleSnapshot = "job_title_snapshot"
 	// FieldIsManual holds the string denoting the is_manual field in the database.
 	FieldIsManual = "is_manual"
 	// FieldClockIn holds the string denoting the clock_in field in the database.
 	FieldClockIn = "clock_in"
 	// FieldClockOut holds the string denoting the clock_out field in the database.
 	FieldClockOut = "clock_out"
+	// FieldVoidedAt holds the string denoting the voided_at field in the database.
+	FieldVoidedAt = "voided_at"
 	// FieldLatitude holds the string denoting the latitude field in the database.
 	FieldLatitude = "latitude"
 	// FieldLongitude holds the string denoting the longitude field in the database.
@@ -45,9 +49,11 @@ var Columns = []string{
 	FieldCompanyID,
 	FieldUserID,
 	FieldJobID,
+	FieldJobTitleSnapshot,
 	FieldIsManual,
 	FieldClockIn,
 	FieldClockOut,
+	FieldVoidedAt,
 	FieldLatitude,
 	FieldLongitude,
 	FieldNotes,
@@ -66,6 +72,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// DefaultJobTitleSnapshot holds the default value on creation for the "job_title_snapshot" field.
+	DefaultJobTitleSnapshot string
 	// DefaultIsManual holds the default value on creation for the "is_manual" field.
 	DefaultIsManual bool
 	// DefaultNotes holds the default value on creation for the "notes" field.
@@ -101,6 +109,11 @@ func ByJobID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldJobID, opts...).ToFunc()
 }
 
+// ByJobTitleSnapshot orders the results by the job_title_snapshot field.
+func ByJobTitleSnapshot(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldJobTitleSnapshot, opts...).ToFunc()
+}
+
 // ByIsManual orders the results by the is_manual field.
 func ByIsManual(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldIsManual, opts...).ToFunc()
@@ -114,6 +127,11 @@ func ByClockIn(opts ...sql.OrderTermOption) OrderOption {
 // ByClockOut orders the results by the clock_out field.
 func ByClockOut(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldClockOut, opts...).ToFunc()
+}
+
+// ByVoidedAt orders the results by the voided_at field.
+func ByVoidedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVoidedAt, opts...).ToFunc()
 }
 
 // ByLatitude orders the results by the latitude field.

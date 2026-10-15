@@ -24,9 +24,10 @@ type Action struct {
 	Path     string
 	// Outcome is request-local rollback evidence from an installed committing
 	// boundary, not a substitute for the durable receipt.
-	Outcome  *Outcome
-	Atomic   bool
-	NoChange bool // the installed owning command, not an incidental nested no-op
+	Outcome        *Outcome
+	Atomic         bool
+	NoChange       bool // the installed owning command, not an incidental nested no-op
+	RetryTransient bool // installed atomic command with typed transient failures
 }
 
 type Outcome struct{ RolledBack, ReadOnly, RejectedBeforeWrite atomic.Bool }
@@ -91,6 +92,11 @@ func SubmittedRevision(ctx context.Context) string {
 	return a.Revision
 }
 
+func SubmittedOperationID(ctx context.Context) string {
+	a, _ := ctx.Value(key{}).(Action)
+	return a.ID
+}
+
 type executor interface {
 	Exec(context.Context, string, ...any) (pgconn.CommandTag, error)
 }
@@ -110,17 +116,18 @@ func RecordEffect(ctx context.Context, tx executor, userID int64, action, target
 }
 
 type Receipt struct {
-	OperationID    string   `json:"operation_id"`
-	Disposition    string   `json:"disposition"`
-	ReviewURL      string   `json:"review_url"`
-	InputAccessURL string   `json:"input_access_url,omitempty"`
-	Location       string   `json:"location,omitempty"`
-	CommittedSteps int      `json:"committed_steps"`
-	ResponseStatus int      `json:"response_status,omitempty"`
-	ReviewPath     string   `json:"-"`
-	RequestPath    string   `json:"-"`
-	RetrySafe      bool     `json:"retry_safe"`
-	Effects        []Effect `json:"effects"`
+	RetrySameOperation bool     `json:"retry_same_operation,omitempty"`
+	OperationID        string   `json:"operation_id"`
+	Disposition        string   `json:"disposition"`
+	ReviewURL          string   `json:"review_url"`
+	InputAccessURL     string   `json:"input_access_url,omitempty"`
+	Location           string   `json:"location,omitempty"`
+	CommittedSteps     int      `json:"committed_steps"`
+	ResponseStatus     int      `json:"response_status,omitempty"`
+	ReviewPath         string   `json:"-"`
+	RequestPath        string   `json:"-"`
+	RetrySafe          bool     `json:"retry_safe"`
+	Effects            []Effect `json:"effects"`
 }
 
 type Effect struct {
@@ -149,6 +156,10 @@ func (s Store) Admit(ctx context.Context, a Action, digest, method, path, review
 	if old != digest {
 		return false, ErrIdentity
 	}
+	if a.RetryTransient {
+		tag, err := s.Pool.Exec(ctx, `UPDATE online_save_actions a SET transient_retry=false,response_status=NULL WHERE user_id=$1 AND operation_id=$2 AND transient_retry AND completed_at IS NULL AND domain_committed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID)
+		return tag.RowsAffected() == 1, err
+	}
 	return false, nil
 }
 
@@ -157,7 +168,7 @@ func (s Store) Receipt(ctx context.Context, a Action) (Receipt, error) {
 	if _, err := uuid.Parse(a.ID); err != nil {
 		return r, ErrIdentity
 	}
-	err := s.Pool.QueryRow(ctx, `SELECT CASE WHEN domain_committed_at IS NOT NULL THEN coalesce(domain_outcome,'saved') ELSE disposition END,location,review_path,request_path,coalesce(response_status,0),(SELECT count(*) FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id) FROM online_save_actions a WHERE user_id=$1 AND operation_id=$2`, a.UserID, a.ID).Scan(&r.Disposition, &r.Location, &r.ReviewPath, &r.RequestPath, &r.ResponseStatus, &r.CommittedSteps)
+	err := s.Pool.QueryRow(ctx, `SELECT CASE WHEN domain_committed_at IS NOT NULL THEN coalesce(domain_outcome,'saved') ELSE disposition END,location,review_path,request_path,coalesce(response_status,0),(SELECT count(*) FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id),transient_retry AND completed_at IS NULL AND domain_committed_at IS NULL FROM online_save_actions a WHERE user_id=$1 AND operation_id=$2`, a.UserID, a.ID).Scan(&r.Disposition, &r.Location, &r.ReviewPath, &r.RequestPath, &r.ResponseStatus, &r.CommittedSteps, &r.RetrySameOperation)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, nil
 	}
@@ -190,6 +201,10 @@ func (s Store) Receipt(ctx context.Context, a Action) (Receipt, error) {
 // that the asynchronously dispatched command finished.
 func (s Store) Complete(ctx context.Context, a Action, status int, location string, safeBoundary bool) error {
 	rejected := a.Outcome != nil && (safeBoundary && a.Outcome.RolledBack.Load() || a.Outcome.RejectedBeforeWrite.Load())
+	if a.RetryTransient && status >= 500 && rejected {
+		_, err := s.Pool.Exec(ctx, `UPDATE online_save_actions a SET response_status=$3,transient_retry=true WHERE user_id=$1 AND operation_id=$2 AND completed_at IS NULL AND domain_committed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID, status)
+		return err
+	}
 	readOnly := a.Outcome != nil && a.Outcome.ReadOnly.Load()
 	_, err := s.Pool.Exec(ctx, `UPDATE online_save_actions a SET response_status=$3,location=$4,completed_at=now(),disposition=CASE WHEN $3>=200 AND $3<400 AND $3<>202 AND EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id) THEN 'saved' WHEN $3>=200 AND $3<400 AND $3<>202 AND $6 THEN 'completed' WHEN $3>=400 AND ($5 OR $6) AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id) THEN 'rejected' ELSE 'review' END WHERE user_id=$1 AND operation_id=$2 AND completed_at IS NULL`, a.UserID, a.ID, status, location, rejected, readOnly)
 	return err

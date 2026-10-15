@@ -56,7 +56,7 @@ func TestClockCorrectionPreservesGPSAndRacesNewClock(t *testing.T) {
 	actor := authorization.Actor{UserID: admin, Channel: "web"}
 	correctedStart := start.Add(-time.Minute)
 	notes := "reviewed correction, GPS remains recorded evidence"
-	if err := svc.CorrectTimeEntry(ctx, actor, entry.ID, authorization.TimeEntryCorrection{ClockIn: &correctedStart, Notes: &notes}); err != nil {
+	if err := svc.CorrectTimeEntry(ctx, actor, entry.ID, authorization.TimeEntryCorrection{Reason: "Reviewed clock record", ClockIn: &correctedStart, Notes: &notes}); err != nil {
 		t.Fatal(err)
 	}
 	corrected := client.TimeEntry.GetX(ctx, entry.ID)
@@ -76,7 +76,7 @@ func TestClockCorrectionPreservesGPSAndRacesNewClock(t *testing.T) {
 	clock := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
 		<-release
-		correction <- svc.CorrectTimeEntry(ctx, actor, entry.ID, authorization.TimeEntryCorrection{ClockOut: &newEnd})
+		correction <- svc.CorrectTimeEntry(ctx, actor, entry.ID, authorization.TimeEntryCorrection{Reason: "Reviewed end", ClockOut: &newEnd})
 	}()
 	go func() {
 		<-release

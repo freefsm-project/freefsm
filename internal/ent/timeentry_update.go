@@ -103,6 +103,20 @@ func (_u *TimeEntryUpdate) ClearJobID() *TimeEntryUpdate {
 	return _u
 }
 
+// SetJobTitleSnapshot sets the "job_title_snapshot" field.
+func (_u *TimeEntryUpdate) SetJobTitleSnapshot(v string) *TimeEntryUpdate {
+	_u.mutation.SetJobTitleSnapshot(v)
+	return _u
+}
+
+// SetNillableJobTitleSnapshot sets the "job_title_snapshot" field if the given value is not nil.
+func (_u *TimeEntryUpdate) SetNillableJobTitleSnapshot(v *string) *TimeEntryUpdate {
+	if v != nil {
+		_u.SetJobTitleSnapshot(*v)
+	}
+	return _u
+}
+
 // SetIsManual sets the "is_manual" field.
 func (_u *TimeEntryUpdate) SetIsManual(v bool) *TimeEntryUpdate {
 	_u.mutation.SetIsManual(v)
@@ -148,6 +162,26 @@ func (_u *TimeEntryUpdate) SetNillableClockOut(v *time.Time) *TimeEntryUpdate {
 // ClearClockOut clears the value of the "clock_out" field.
 func (_u *TimeEntryUpdate) ClearClockOut() *TimeEntryUpdate {
 	_u.mutation.ClearClockOut()
+	return _u
+}
+
+// SetVoidedAt sets the "voided_at" field.
+func (_u *TimeEntryUpdate) SetVoidedAt(v time.Time) *TimeEntryUpdate {
+	_u.mutation.SetVoidedAt(v)
+	return _u
+}
+
+// SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
+func (_u *TimeEntryUpdate) SetNillableVoidedAt(v *time.Time) *TimeEntryUpdate {
+	if v != nil {
+		_u.SetVoidedAt(*v)
+	}
+	return _u
+}
+
+// ClearVoidedAt clears the value of the "voided_at" field.
+func (_u *TimeEntryUpdate) ClearVoidedAt() *TimeEntryUpdate {
+	_u.mutation.ClearVoidedAt()
 	return _u
 }
 
@@ -299,6 +333,9 @@ func (_u *TimeEntryUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if _u.mutation.JobIDCleared() {
 		_spec.ClearField(timeentry.FieldJobID, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.JobTitleSnapshot(); ok {
+		_spec.SetField(timeentry.FieldJobTitleSnapshot, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.IsManual(); ok {
 		_spec.SetField(timeentry.FieldIsManual, field.TypeBool, value)
 	}
@@ -310,6 +347,12 @@ func (_u *TimeEntryUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.ClockOutCleared() {
 		_spec.ClearField(timeentry.FieldClockOut, field.TypeTime)
+	}
+	if value, ok := _u.mutation.VoidedAt(); ok {
+		_spec.SetField(timeentry.FieldVoidedAt, field.TypeTime, value)
+	}
+	if _u.mutation.VoidedAtCleared() {
+		_spec.ClearField(timeentry.FieldVoidedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Latitude(); ok {
 		_spec.SetField(timeentry.FieldLatitude, field.TypeFloat64, value)
@@ -430,6 +473,20 @@ func (_u *TimeEntryUpdateOne) ClearJobID() *TimeEntryUpdateOne {
 	return _u
 }
 
+// SetJobTitleSnapshot sets the "job_title_snapshot" field.
+func (_u *TimeEntryUpdateOne) SetJobTitleSnapshot(v string) *TimeEntryUpdateOne {
+	_u.mutation.SetJobTitleSnapshot(v)
+	return _u
+}
+
+// SetNillableJobTitleSnapshot sets the "job_title_snapshot" field if the given value is not nil.
+func (_u *TimeEntryUpdateOne) SetNillableJobTitleSnapshot(v *string) *TimeEntryUpdateOne {
+	if v != nil {
+		_u.SetJobTitleSnapshot(*v)
+	}
+	return _u
+}
+
 // SetIsManual sets the "is_manual" field.
 func (_u *TimeEntryUpdateOne) SetIsManual(v bool) *TimeEntryUpdateOne {
 	_u.mutation.SetIsManual(v)
@@ -475,6 +532,26 @@ func (_u *TimeEntryUpdateOne) SetNillableClockOut(v *time.Time) *TimeEntryUpdate
 // ClearClockOut clears the value of the "clock_out" field.
 func (_u *TimeEntryUpdateOne) ClearClockOut() *TimeEntryUpdateOne {
 	_u.mutation.ClearClockOut()
+	return _u
+}
+
+// SetVoidedAt sets the "voided_at" field.
+func (_u *TimeEntryUpdateOne) SetVoidedAt(v time.Time) *TimeEntryUpdateOne {
+	_u.mutation.SetVoidedAt(v)
+	return _u
+}
+
+// SetNillableVoidedAt sets the "voided_at" field if the given value is not nil.
+func (_u *TimeEntryUpdateOne) SetNillableVoidedAt(v *time.Time) *TimeEntryUpdateOne {
+	if v != nil {
+		_u.SetVoidedAt(*v)
+	}
+	return _u
+}
+
+// ClearVoidedAt clears the value of the "voided_at" field.
+func (_u *TimeEntryUpdateOne) ClearVoidedAt() *TimeEntryUpdateOne {
+	_u.mutation.ClearVoidedAt()
 	return _u
 }
 
@@ -656,6 +733,9 @@ func (_u *TimeEntryUpdateOne) sqlSave(ctx context.Context) (_node *TimeEntry, er
 	if _u.mutation.JobIDCleared() {
 		_spec.ClearField(timeentry.FieldJobID, field.TypeInt64)
 	}
+	if value, ok := _u.mutation.JobTitleSnapshot(); ok {
+		_spec.SetField(timeentry.FieldJobTitleSnapshot, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.IsManual(); ok {
 		_spec.SetField(timeentry.FieldIsManual, field.TypeBool, value)
 	}
@@ -667,6 +747,12 @@ func (_u *TimeEntryUpdateOne) sqlSave(ctx context.Context) (_node *TimeEntry, er
 	}
 	if _u.mutation.ClockOutCleared() {
 		_spec.ClearField(timeentry.FieldClockOut, field.TypeTime)
+	}
+	if value, ok := _u.mutation.VoidedAt(); ok {
+		_spec.SetField(timeentry.FieldVoidedAt, field.TypeTime, value)
+	}
+	if _u.mutation.VoidedAtCleared() {
+		_spec.ClearField(timeentry.FieldVoidedAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Latitude(); ok {
 		_spec.SetField(timeentry.FieldLatitude, field.TypeFloat64, value)

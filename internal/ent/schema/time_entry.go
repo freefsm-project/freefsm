@@ -26,9 +26,11 @@ func (TimeEntry) Fields() []ent.Field {
 		field.Int64("company_id").Optional().Nillable(),
 		field.Int64("user_id"),
 		field.Int64("job_id").Optional().Nillable(),
+		field.String("job_title_snapshot").Default(""),
 		field.Bool("is_manual").Default(false),
 		field.Time("clock_in"),
 		field.Time("clock_out").Optional().Nillable(),
+		field.Time("voided_at").Optional().Nillable(),
 		field.Float("latitude").Optional().Nillable(),
 		field.Float("longitude").Optional().Nillable(),
 		field.String("notes").Default(""),
@@ -43,7 +45,7 @@ func (TimeEntry) Indexes() []ent.Index {
 		index.Fields("user_id").
 			Unique().
 			StorageKey("time_entries_one_active_per_user").
-			Annotations(entsql.IndexWhere("clock_out IS NULL")),
+			Annotations(entsql.IndexWhere("clock_out IS NULL AND voided_at IS NULL")),
 		index.Fields("job_id"),
 		index.Fields("clock_in"),
 	}

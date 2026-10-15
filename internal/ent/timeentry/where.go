@@ -69,6 +69,11 @@ func JobID(v int64) predicate.TimeEntry {
 	return predicate.TimeEntry(sql.FieldEQ(FieldJobID, v))
 }
 
+// JobTitleSnapshot applies equality check predicate on the "job_title_snapshot" field. It's identical to JobTitleSnapshotEQ.
+func JobTitleSnapshot(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldEQ(FieldJobTitleSnapshot, v))
+}
+
 // IsManual applies equality check predicate on the "is_manual" field. It's identical to IsManualEQ.
 func IsManual(v bool) predicate.TimeEntry {
 	return predicate.TimeEntry(sql.FieldEQ(FieldIsManual, v))
@@ -82,6 +87,11 @@ func ClockIn(v time.Time) predicate.TimeEntry {
 // ClockOut applies equality check predicate on the "clock_out" field. It's identical to ClockOutEQ.
 func ClockOut(v time.Time) predicate.TimeEntry {
 	return predicate.TimeEntry(sql.FieldEQ(FieldClockOut, v))
+}
+
+// VoidedAt applies equality check predicate on the "voided_at" field. It's identical to VoidedAtEQ.
+func VoidedAt(v time.Time) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldEQ(FieldVoidedAt, v))
 }
 
 // Latitude applies equality check predicate on the "latitude" field. It's identical to LatitudeEQ.
@@ -249,6 +259,71 @@ func JobIDNotNil() predicate.TimeEntry {
 	return predicate.TimeEntry(sql.FieldNotNull(FieldJobID))
 }
 
+// JobTitleSnapshotEQ applies the EQ predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotEQ(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldEQ(FieldJobTitleSnapshot, v))
+}
+
+// JobTitleSnapshotNEQ applies the NEQ predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotNEQ(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldNEQ(FieldJobTitleSnapshot, v))
+}
+
+// JobTitleSnapshotIn applies the In predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotIn(vs ...string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldIn(FieldJobTitleSnapshot, vs...))
+}
+
+// JobTitleSnapshotNotIn applies the NotIn predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotNotIn(vs ...string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldNotIn(FieldJobTitleSnapshot, vs...))
+}
+
+// JobTitleSnapshotGT applies the GT predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotGT(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldGT(FieldJobTitleSnapshot, v))
+}
+
+// JobTitleSnapshotGTE applies the GTE predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotGTE(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldGTE(FieldJobTitleSnapshot, v))
+}
+
+// JobTitleSnapshotLT applies the LT predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotLT(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldLT(FieldJobTitleSnapshot, v))
+}
+
+// JobTitleSnapshotLTE applies the LTE predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotLTE(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldLTE(FieldJobTitleSnapshot, v))
+}
+
+// JobTitleSnapshotContains applies the Contains predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotContains(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldContains(FieldJobTitleSnapshot, v))
+}
+
+// JobTitleSnapshotHasPrefix applies the HasPrefix predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotHasPrefix(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldHasPrefix(FieldJobTitleSnapshot, v))
+}
+
+// JobTitleSnapshotHasSuffix applies the HasSuffix predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotHasSuffix(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldHasSuffix(FieldJobTitleSnapshot, v))
+}
+
+// JobTitleSnapshotEqualFold applies the EqualFold predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotEqualFold(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldEqualFold(FieldJobTitleSnapshot, v))
+}
+
+// JobTitleSnapshotContainsFold applies the ContainsFold predicate on the "job_title_snapshot" field.
+func JobTitleSnapshotContainsFold(v string) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldContainsFold(FieldJobTitleSnapshot, v))
+}
+
 // IsManualEQ applies the EQ predicate on the "is_manual" field.
 func IsManualEQ(v bool) predicate.TimeEntry {
 	return predicate.TimeEntry(sql.FieldEQ(FieldIsManual, v))
@@ -347,6 +422,56 @@ func ClockOutIsNil() predicate.TimeEntry {
 // ClockOutNotNil applies the NotNil predicate on the "clock_out" field.
 func ClockOutNotNil() predicate.TimeEntry {
 	return predicate.TimeEntry(sql.FieldNotNull(FieldClockOut))
+}
+
+// VoidedAtEQ applies the EQ predicate on the "voided_at" field.
+func VoidedAtEQ(v time.Time) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldEQ(FieldVoidedAt, v))
+}
+
+// VoidedAtNEQ applies the NEQ predicate on the "voided_at" field.
+func VoidedAtNEQ(v time.Time) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldNEQ(FieldVoidedAt, v))
+}
+
+// VoidedAtIn applies the In predicate on the "voided_at" field.
+func VoidedAtIn(vs ...time.Time) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldIn(FieldVoidedAt, vs...))
+}
+
+// VoidedAtNotIn applies the NotIn predicate on the "voided_at" field.
+func VoidedAtNotIn(vs ...time.Time) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldNotIn(FieldVoidedAt, vs...))
+}
+
+// VoidedAtGT applies the GT predicate on the "voided_at" field.
+func VoidedAtGT(v time.Time) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldGT(FieldVoidedAt, v))
+}
+
+// VoidedAtGTE applies the GTE predicate on the "voided_at" field.
+func VoidedAtGTE(v time.Time) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldGTE(FieldVoidedAt, v))
+}
+
+// VoidedAtLT applies the LT predicate on the "voided_at" field.
+func VoidedAtLT(v time.Time) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldLT(FieldVoidedAt, v))
+}
+
+// VoidedAtLTE applies the LTE predicate on the "voided_at" field.
+func VoidedAtLTE(v time.Time) predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldLTE(FieldVoidedAt, v))
+}
+
+// VoidedAtIsNil applies the IsNil predicate on the "voided_at" field.
+func VoidedAtIsNil() predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldIsNull(FieldVoidedAt))
+}
+
+// VoidedAtNotNil applies the NotNil predicate on the "voided_at" field.
+func VoidedAtNotNil() predicate.TimeEntry {
+	return predicate.TimeEntry(sql.FieldNotNull(FieldVoidedAt))
 }
 
 // LatitudeEQ applies the EQ predicate on the "latitude" field.

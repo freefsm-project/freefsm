@@ -5,6 +5,19 @@ import "fmt"
 templ TimeEntryShow(p TimeEntryShowPageData) {
 	@Layout("Time Entry - "+p.UserName) {
 		<div class="work-item-detail">
+		if p.NeedsReview {
+			<p role="alert">Recorded interval requires review. Its original facts have been retained. An authorized reviewer must check the source records and make a reasoned correction or terminal Void; no time is shifted automatically.</p>
+		}
+		if p.Voided {
+			<p role="status">Voided — terminal. Repair by creating a replacement closed manual entry.</p>
+		}
+		if p.CanVoid {
+			<form action={ templ.URL(fmt.Sprintf("/time-entries/%d/void", p.ID)) } method="post" hx-boost="false" data-save-terminal onsubmit="return confirm('Void this Time Entry permanently? Its recorded facts will be retained and excluded from totals.');">
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<label>Reason for Void <input name="reason" required/></label>
+				<button type="submit" class="outline contrast">Void Time Entry</button>
+			</form>
+		}
 		<div class="work-item-detail-actions">
 			<div class="work-item-detail-action-group">
 				if p.CanEdit {
@@ -22,8 +35,10 @@ templ TimeEntryShow(p TimeEntryShowPageData) {
 			<tbody>
 				<tr><th>User</th><td>{ p.UserName }</td></tr>
 				<tr><th>Job</th><td>
-					if p.JobID > 0 {
+					if p.JobID > 0 && p.CanJob {
 						<a href={ templ.URL(fmt.Sprintf("/jobs/%d", p.JobID)) }>{ p.JobName }</a>
+					} else if p.JobID > 0 {
+						<span>Job #{ fmt.Sprint(p.JobID) } — { p.JobName } (retained identity only)</span>
 					} else {
 						-
 					}
@@ -52,6 +67,21 @@ templ TimeEntryShow(p TimeEntryShowPageData) {
 				}
 			</tbody>
 		</table>
+		<section aria-label="Immutable time history">
+			<h2>Immutable time history</h2>
+			<p>Retained-at-upgrade records describe only facts known at upgrade, not an inferred original revision. GPS observations retain their actual capture times separately.</p>
+			for _, revision := range p.History {
+				<article>
+					<h3>{ revision.Event }</h3>
+					<p>{ revision.Actor } — accepted { revision.AcceptedAt }</p>
+					<p>{ revision.Reason }</p>
+					if revision.Before != "" {
+						<p><strong>Before: </strong>{ revision.Before }</p>
+					}
+					<p><strong>After: </strong>{ revision.After }</p>
+				</article>
+			}
+		</section>
 		<div hx-get={ templ.URL(fmt.Sprintf("/time-entries/%d/activity", p.ID)) } hx-trigger="load" hx-swap="innerHTML">
 			<p>Loading activity...</p>
 		</div>

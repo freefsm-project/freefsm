@@ -39,6 +39,8 @@ type TimeEntryCreateParams struct {
 }
 
 type TimeEntryUpdateParams struct {
+	Reason   string
+	Reopen   bool
 	IsManual *bool
 	ClockIn  *time.Time
 	ClockOut *time.Time
@@ -48,6 +50,7 @@ type TimeEntryUpdateParams struct {
 }
 
 type TimeEntryListFilter struct {
+	IncludeVoid   bool
 	UserID        int64
 	Search        string
 	ClockInFrom   *time.Time
@@ -57,6 +60,9 @@ type TimeEntryListFilter struct {
 func (s *TimeEntryService) List(ctx context.Context, filter TimeEntryListFilter, page, perPage int) ([]*ent.TimeEntry, int, error) {
 	q := s.client.TimeEntry.Query().
 		Order(ent.Desc(timeentry.FieldClockIn))
+	if !filter.IncludeVoid {
+		q = q.Where(timeentry.VoidedAtIsNil())
+	}
 
 	if filter.UserID > 0 {
 		q = q.Where(timeentry.UserIDEQ(filter.UserID))
@@ -101,6 +107,7 @@ func (s *TimeEntryService) GetActiveByUser(ctx context.Context, userID int64) (*
 		Where(
 			timeentry.UserIDEQ(userID),
 			timeentry.ClockOutIsNil(),
+			timeentry.VoidedAtIsNil(),
 		).
 		Only(ctx)
 	if err != nil {
@@ -115,6 +122,7 @@ func (s *TimeEntryService) GetActiveByUserForCompany(ctx context.Context, compan
 			timeentry.CompanyIDEQ(companyID),
 			timeentry.UserIDEQ(userID),
 			timeentry.ClockOutIsNil(),
+			timeentry.VoidedAtIsNil(),
 		).
 		Only(ctx)
 	if err != nil {
@@ -128,6 +136,7 @@ func (s *TimeEntryService) HasActiveEntry(ctx context.Context, userID int64) (bo
 		Where(
 			timeentry.UserIDEQ(userID),
 			timeentry.ClockOutIsNil(),
+			timeentry.VoidedAtIsNil(),
 		).
 		Count(ctx)
 	if err != nil {
@@ -205,7 +214,7 @@ func (s *TimeEntryService) Update(ctx context.Context, id int64, params TimeEntr
 	if !ok {
 		return nil, authorization.ErrForbidden
 	}
-	err := req.Service.CorrectTimeEntry(ctx, req.Actor, id, authorization.TimeEntryCorrection{ClockIn: params.ClockIn, ClockOut: params.ClockOut, JobID: params.JobID, ClearJob: params.ClearJob, Notes: params.Notes})
+	err := req.Service.CorrectTimeEntry(ctx, req.Actor, id, authorization.TimeEntryCorrection{Reason: params.Reason, Reopen: params.Reopen, ClockIn: params.ClockIn, ClockOut: params.ClockOut, JobID: params.JobID, ClearJob: params.ClearJob, Notes: params.Notes})
 	if err != nil {
 		return nil, err
 	}
