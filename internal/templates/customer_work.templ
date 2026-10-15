@@ -12,6 +12,9 @@ templ CustomerWorkCards(customerID int64, rows []authorization.CustomerWork) {
 					<article class="dashboard-panel">
 						@customerDashboardCardTop(fmt.Sprintf("%ss (%d)",capitalize(kind),len(customerWorkKind(rows,kind))),fmt.Sprintf("/customers/%d/work?type=%s",customerID,kind))
 						@CustomerWorkTable(recentCustomerWork(customerWorkKind(rows,kind)))
+						if canMaster(ctx,kind+".archived.view") {
+							<a href={ templ.URL(fmt.Sprintf("/customers/%d/work?type=%s&archived=1",customerID,kind)) }>Include archived { capitalize(kind) }s</a>
+						}
 					</article>
 				}
 			}
@@ -21,20 +24,38 @@ templ CustomerWorkCards(customerID int64, rows []authorization.CustomerWork) {
 }
 
 templ CustomerWorkTable(rows []authorization.CustomerWork) {
+	if len(rows)==0 {
+		<p>No related work</p>
+	}
 	<table><thead><tr><th>Type</th><th>Title</th><th>Status</th></tr></thead><tbody>
 		for _,row := range rows {
-			<tr><td>{ capitalize(row.Kind) }</td><td><a href={ templ.URL(fmt.Sprintf("/%ss/%d",row.Kind,row.ID)) }>{ row.Title }</a></td><td>{ row.Status }</td></tr>
+			<tr><td>{ capitalize(row.Kind) }</td><td>
+				if row.Archived {
+					{ row.Title } <span>Archived — historical reference</span>
+				} else {
+					<a href={ templ.URL(fmt.Sprintf("/%ss/%d",row.Kind,row.ID)) }>{ row.Title }</a>
+				}
+			</td><td>{ row.Status }</td></tr>
 		}
 	</tbody></table>
 }
 
-templ CustomerWorkPage(customerID int64, rows []authorization.CustomerWork, kind string, page,size,total int) {
+templ CustomerWorkPage(customerID int64, rows []authorization.CustomerWork, kind string, page,size,total int, archived bool) {
 	@Layout("Related Work") {
 		<a href={ templ.URL(fmt.Sprintf("/customers/%d",customerID)) }>Back to Customer</a>
 		<h2>Related Work ({ fmt.Sprint(total) })</h2>
+		if archived {
+			<p>Including authorized archived references. Hidden converted documents remain excluded.</p>
+			<a href={ templ.URL(fmt.Sprintf("/customers/%d/work?type=%s",customerID,kind)) }>Active work only</a>
+		}
 		@CustomerWorkTable(rows)
-		@Pagination(PaginationData{CurrentPage:page,TotalPages:(total+size-1)/size,BaseURL:fmt.Sprintf("/customers/%d/work",customerID),Query:filterValues("type",kind,"per_page",fmt.Sprint(size))})
+		@Pagination(PaginationData{CurrentPage:page,TotalPages:(total+size-1)/size,BaseURL:fmt.Sprintf("/customers/%d/work",customerID),Query:filterValues("type",kind,"per_page",fmt.Sprint(size),"archived",customerWorkArchiveQuery(archived))})
 	}
+}
+
+func customerWorkArchiveQuery(archived bool) string {
+	if archived { return "1" }
+	return "0"
 }
 
 func customerWorkKind(rows []authorization.CustomerWork,kind string) []authorization.CustomerWork {

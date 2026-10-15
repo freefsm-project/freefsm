@@ -227,7 +227,7 @@
       const receipt = await response.json();
       const disposition = receipt.history_changed ? 'review' : receipt.response_status === 202 ? 'pending' : receipt.disposition;
       const destination = receipt.location && safeURL(receipt.location);
-      if (['saved','completed'].includes(disposition) && destination && (new URL(destination).pathname !== location.pathname || (action.owner.matches('form') && !editable(action.owner)))) {
+      if (['saved','completed'].includes(disposition) && destination && (new URL(destination).pathname !== location.pathname || action.owner.hasAttribute('data-save-terminal') || (action.owner.matches('form') && !editable(action.owner)))) {
         // Successful archive/create/transition may intentionally remove the
         // original editor. Authorize its result instead of interpreting that
         // vanished form as permission loss, and never render old input there.
@@ -252,14 +252,16 @@
       }
       const text = receipt.history_changed ? 'The original sign-in/history context is no longer available. This action may have completed before history changed. Review current records before deciding what remains to be done.' : disposition === 'pending' ? 'Pending—accepted by the server; completion has not been confirmed.' : disposition === 'not_received' ? 'The server has not received this action. Check again before deciding whether to submit the same action.' : disposition === 'rejected' ? 'Not saved. Review and revise the rejected input, or discard it.' : disposition === 'review' || disposition === 'identity_conflict' ? 'Review required. The action may have effects; compare the current authorized record before revising or discarding input.' : 'Save status unknown. Do not repeat this action while its outcome is unknown.';
       const state = ['review','identity_conflict'].includes(disposition) ? 'review' : disposition === 'rejected' ? 'rejected' : disposition === 'pending' ? 'pending' : 'unknown';
-      const node = showAction(action, state, text);
+      const retrySame = receipt.retry_same_operation === true && !receipt.history_changed;
+      const node = showAction(action, state, retrySame ? 'Nothing was committed. A temporary dependency failed. You may explicitly retry this same action without changing its identity or input.' : text);
       actionButton(node, 'Check save status', () => reconcile(action));
       if (receipt.review_url && safeURL(receipt.review_url)) { const a = document.createElement('a'); a.href = receipt.review_url; a.textContent = 'Review current authorized result'; node.append(a); }
-      if (disposition === 'not_received' && action.retry) actionButton(node, 'Submit same action', async () => {
+      if ((disposition === 'not_received' || retrySame) && action.retry) actionButton(node, retrySame ? 'Retry same action' : 'Submit same action', async () => {
         // A second authoritative lookup immediately precedes retry; reuse the
         // captured body/identity, never whatever has since changed in the DOM.
         const check = await nativeFetch(action.url, {cache:'no-store',headers:{Accept:'application/json','X-FreeFSM-History':action.history || ''}}).catch(() => null);
-        if (check?.ok && (await check.json()).disposition === 'not_received') action.retry().catch(() => {}); else reconcile(action);
+        const latest = check?.ok ? await check.json() : null;
+        if (latest && !latest.history_changed && (latest.disposition === 'not_received' || latest.retry_same_operation === true)) action.retry().catch(() => {}); else reconcile(action);
       });
       actionButton(node, 'Dismiss notice', () => { node.replaceChildren(document.createTextNode('Notice dismissed. The action is not resolved; do not repeat it without review.')); actionButton(node,'Check save status',()=>reconcile(action)); });
     } catch (_) {
@@ -538,6 +540,10 @@
     if (form.getAttribute('hx-boost') !== 'false' || form.hasAttribute('hx-post')) return;
     if (credentialAction(form.action) || form.closest('#backup-ui') || !form.querySelector('[name=save_action_id]')) { leaving = true; return; }
     e.preventDefault();
+    // Native guarded forms use the same declarative confirmation as HTMX.
+    // Check before allocating an action identity or capturing/sending input.
+    const confirmation = form.getAttribute('hx-confirm');
+    if (confirmation && !window.confirm(confirmation)) return;
     const data = new FormData(form, e.submitter);
     const body = form.enctype === 'multipart/form-data' ? data : new URLSearchParams(data);
     const url = e.submitter?.getAttribute('formaction') || form.action;

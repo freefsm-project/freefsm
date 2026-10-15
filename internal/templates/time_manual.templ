@@ -1,0 +1,31 @@
+package templates
+
+import "fmt"
+
+templ ManualTimeForm(p ManualTimePageData) {
+	@Layout("Closed manual Time Entry") {
+		<form action="/time-entries" method="post" hx-boost="false" class="entity-form compact-form">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<p>Create closed historical time only. Start must precede end and neither may be in the future. Use exact timestamps with UTC offsets; display timezone is { companyTimeZone(ctx) }.</p>
+			<label>Subject
+				<select name="user_id" required>
+					for _, subject := range p.Subjects {
+						<option value={ fmt.Sprint(subject.ID) } selected?={ subject.ID == p.UserID }>{ subject.Name }</option>
+					}
+				</select>
+			</label>
+			<label>Job
+				<select name="job_id">
+					<option value="">No Job</option>
+					for _, job := range p.Jobs {
+						<option value={ fmt.Sprint(job.Value) }>{ job.Label }</option>
+					}
+				</select>
+			</label>
+			<label>Start <input name="clock_in" placeholder="2026-01-01T09:00:00-05:00" required/></label>
+			<label>End <input name="clock_out" placeholder="2026-01-01T10:00:00-05:00" required/></label>
+			<label>Notes <textarea name="notes"></textarea></label>
+			<div class="entity-form-actions"><button type="submit">Create closed entry</button><a href="/time-entries">Cancel</a></div>
+		</form>
+	}
+}

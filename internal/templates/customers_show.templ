@@ -5,9 +5,21 @@ import "fmt"
 templ CustomerShow(p CustomerShowPageData) {
 	@Layout("Customer - "+p.Customer.DisplayName) {
 		<div class="work-item-detail customer-dashboard">
+		<p>Updated at <time datetime={ p.UpdatedAt }>{ p.UpdatedAt }</time> — successfully loaded sections. Activity is loaded separately.</p>
+		<a hx-boost="false" href={ templ.URL(fmt.Sprintf("/customers/%d",p.Customer.ID)) }>Refresh dashboard</a>
 		if canMaster(ctx,"asset.view") {
-			<a href={templ.URL(fmt.Sprintf("/assets?customer_id=%d",p.Customer.ID))}>Current Assets</a>
-			<a href={templ.URL(fmt.Sprintf("/customers/%d/asset-history",p.Customer.ID))}>Past and current Asset periods</a>
+			if p.SectionErrors["Assets"] {
+				@CustomerSectionUnavailable(p.Customer.ID,"Assets")
+			} else {
+				@CustomerAssetSections(p.Customer.ID,p.AssetPeriods)
+				if p.ShowServiceEntries {
+					if p.SectionErrors["Service Entries"] {
+						@CustomerSectionUnavailable(p.Customer.ID,"Service Entries")
+					} else {
+						@CustomerAssetServiceEntries(p.AssetServiceHistory)
+					}
+				}
+			}
 		}
 		if canCustomer(ctx,"edit") && p.Customer.ArchivedAt == "" {
 			<a href={ templ.URL(fmt.Sprintf("/customers/%d/edit",p.Customer.ID)) } role="button">Edit Customer</a>
@@ -15,12 +27,18 @@ templ CustomerShow(p CustomerShowPageData) {
 				<a href={ templ.URL(fmt.Sprintf("/customers/%d/document-defaults",p.Customer.ID)) } role="button">Document defaults</a>
 			}
 		}
-		if canManageOperational(ctx) && p.Customer.ArchivedAt == "" {
+		if p.Customer.ArchivedAt == "" && (canAllRecords(ctx,"job.create") || canAllRecords(ctx,"estimate.create") || canAllRecords(ctx,"invoice.create")) {
 			<div class="work-item-detail-actions">
 				<div class="work-item-detail-action-group">
-					<a href={ templ.URL(fmt.Sprintf("/jobs/new?customer_id=%d", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create job for %s", p.Customer.DisplayName) }>Create Job</a>
-					<a href={ templ.URL(fmt.Sprintf("/estimates/new?customer_id=%d", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create estimate for %s", p.Customer.DisplayName) }>Create Estimate</a>
-					<a href={ templ.URL(fmt.Sprintf("/customers/%d/create-invoice", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create invoice for %s", p.Customer.DisplayName) }>Create Invoice</a>
+					if canAllRecords(ctx,"job.create") {
+						<a href={ templ.URL(fmt.Sprintf("/jobs/new?customer_id=%d", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create job for %s", p.Customer.DisplayName) }>Create Job</a>
+					}
+					if canAllRecords(ctx,"estimate.create") {
+						<a href={ templ.URL(fmt.Sprintf("/estimates/new?customer_id=%d", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create estimate for %s", p.Customer.DisplayName) }>Create Estimate</a>
+					}
+					if canAllRecords(ctx,"invoice.create") {
+						<a href={ templ.URL(fmt.Sprintf("/customers/%d/create-invoice", p.Customer.ID)) } role="button" aria-label={ fmt.Sprintf("Create invoice for %s", p.Customer.DisplayName) }>Create Invoice</a>
+					}
 				</div>
 			</div>
 		}
@@ -38,8 +56,14 @@ templ CustomerShow(p CustomerShowPageData) {
 				}
 			</div>
 		}
-		@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: p.Customer.ArchivedAt != ""})
-		if len(p.CustomFields) > 0 {
+		if p.SectionErrors["Tags"] {
+			@CustomerSectionUnavailable(p.Customer.ID,"Tags")
+		} else {
+			@TagWidget(TagWidgetData{BaseURL: fmt.Sprintf("/customers/%d", p.Customer.ID), Tags: p.Tags, AllTags: p.AllTags, ReadOnly: p.Customer.ArchivedAt != ""})
+		}
+		if p.SectionErrors["Custom Fields"] {
+			@CustomerSectionUnavailable(p.Customer.ID,"Custom Fields")
+		} else if len(p.CustomFields) > 0 {
 			@CustomFieldsWidget(CustomFieldsWidgetData{Fields: p.CustomFields})
 			@FieldValuesLink("customer",p.Customer.ID,p.Customer.ArchivedAt=="")
 		}
@@ -80,30 +104,60 @@ templ CustomerShow(p CustomerShowPageData) {
 					<div class="customer-details-related">
 						if canMaster(ctx,"location.view") {
 							<a href={ templ.URL(fmt.Sprintf("/customers/%d/locations",p.Customer.ID)) }>Manage Locations</a>
-							@customerLocationsTable(p.Locations)
+							if canMaster(ctx,"location.archived.view") {
+								<a href={ templ.URL(fmt.Sprintf("/customers/%d/locations?archived=1",p.Customer.ID)) }>Archived Locations</a>
+							}
+							if p.SectionErrors["Locations"] {
+								@CustomerSectionUnavailable(p.Customer.ID,"Locations")
+							} else {
+								@customerLocationsTable(p.Locations)
+							}
 						}
 						if canMaster(ctx,"contact.view") {
 							<a href={ templ.URL(fmt.Sprintf("/customers/%d/contacts",p.Customer.ID)) }>Manage Contacts</a>
-							@customerContactsTable(p.Contacts)
+							if canMaster(ctx,"contact.archived.view") {
+								<a href={ templ.URL(fmt.Sprintf("/customers/%d/contacts?archived=1",p.Customer.ID)) }>Archived Contacts</a>
+							}
+							if p.SectionErrors["Contacts"] {
+								@CustomerSectionUnavailable(p.Customer.ID,"Contacts")
+							} else {
+								@customerContactsTable(p.Contacts)
+							}
 						}
 					</div>
 				</div>
 			</article>
 			if p.ShowFinancial {
-				@CustomerReceivablesCard(p.Receivables)
+				if p.SectionErrors["Receivables"] {
+					@CustomerSectionUnavailable(p.Customer.ID,"Receivables")
+				} else {
+					@CustomerReceivablesCard(p.Receivables)
+				}
 			}
 		</div>
 		<div class="customer-dashboard-supporting">
 			<article><h3>Service Notes</h3><p>{ p.Customer.ServiceNotes }</p></article>
 			@customerCommentsCard(p)
-			@customerFilesCard(p)
+			if p.SectionErrors["Files"] {
+				@CustomerSectionUnavailable(p.Customer.ID,"Files")
+			} else {
+				@customerFilesCard(p)
+			}
 		</div>
-		if p.ShowSettlement {
+		if p.ShowCredit && p.SectionErrors["Customer Credit"] {
+			@CustomerSectionUnavailable(p.Customer.ID,"Customer Credit")
+		} else if p.ShowSettlement {
 			@customerCredit(p)
 		} else if p.ShowCredit {
 			<article class="dashboard-panel"><h3>Customer Credit</h3><p>Available: { cents(p.CreditCents) }</p></article>
 		}
-		@CustomerWorkCards(p.Customer.ID,p.RelatedWork)
+		if canCustomerRelatedWork(ctx) {
+			if p.SectionErrors["Related Work"] {
+				@CustomerSectionUnavailable(p.Customer.ID,"Related Work")
+			} else {
+				@CustomerWorkCards(p.Customer.ID,p.RelatedWork)
+			}
+		}
 		<div hx-get={ templ.URL(fmt.Sprintf("/customers/%d/activity", p.Customer.ID)) } hx-trigger="load" hx-swap="innerHTML">
 			<p>Loading activity...</p>
 		</div>
@@ -112,6 +166,14 @@ templ CustomerShow(p CustomerShowPageData) {
 		}
 		</div>
 	}
+}
+
+templ CustomerSectionUnavailable(id int64, title string) {
+	<section aria-label={ title } role="status">
+		<h3>{ title } unavailable</h3>
+		<p>This section could not be loaded. No current results are shown.</p>
+		<a hx-boost="false" href={ templ.URL(fmt.Sprintf("/customers/%d",id)) }>Retry { title }</a>
+	</section>
 }
 
 templ customerCredit(p CustomerShowPageData) {

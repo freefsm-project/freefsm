@@ -253,6 +253,9 @@ func (s *Service) transact(ctx context.Context, a Actor, transition, consumingSe
 		}
 	}
 	if err := saveaction.ConfirmDomain(ctx, tx); err != nil {
+		// No Commit has been attempted: the deferred rollback discards the
+		// effect and its receipt together. Commit errors below remain uncertain.
+		saveaction.RolledBack(ctx)
 		return err
 	}
 	return tx.Commit(ctx)

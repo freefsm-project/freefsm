@@ -14,6 +14,9 @@ templ TimeEntriesIndex(p TimeEntryListPageData) {
 
 templ TimeEntriesListContent(p TimeEntryListPageData) {
 	<div id="time-entry-list-content" class="focused-list-content">
+		if p.CanCreate {
+			<a href="/time-entries/new" role="button">Create closed manual entry</a>
+		}
 		@ListToolbar(ListToolbarData{
 			Action: "/time-entries", Target: "#time-entry-list-content", Search: p.Search,
 			SearchPlaceholder: "Search notes...", ShowFilter: true,
@@ -32,6 +35,7 @@ templ TimeEntriesListContent(p TimeEntryListPageData) {
 			}
 			<label>From date<input type="date" name="date_from" value={ p.DateFrom }/></label>
 			<label>To date<input type="date" name="date_to" value={ p.DateTo }/></label>
+			<label><input type="checkbox" name="include_void" value="true" checked?={ p.IncludeVoid }/>Include terminal Void history (excluded from totals)</label>
 		}
 		@TimeEntriesTable(p)
 	</div>
@@ -63,8 +67,10 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 					<tr>
 						<td>{ e.UserName }</td>
 						<td>
-							if e.JobID > 0 {
+							if e.JobID > 0 && e.CanJob {
 								<a href={ templ.URL(fmt.Sprintf("/jobs/%d", e.JobID)) }>{ e.JobName }</a>
+							} else if e.JobID > 0 {
+								<span>Job #{ fmt.Sprint(e.JobID) } — { e.JobName }</span>
 							} else {
 								<span class="work-queue-muted">-</span>
 							}
@@ -81,6 +87,9 @@ templ TimeEntriesTable(p TimeEntryListPageData) {
 						<td>
 							if e.IsManual {
 								<small><mark class="manual-badge">Manual</mark></small>
+							}
+							if e.NeedsReview {
+								<mark>Recorded interval requires review</mark>
 							}
 							<small class="work-queue-muted">{ e.Notes }</small>
 						</td>

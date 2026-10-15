@@ -5,7 +5,7 @@ import "fmt"
 templ TimeEntryForm(p TimeEntryFormPageData) {
 	@Layout("Edit Time Entry") {
 
-		<form action={ templ.URL(fmt.Sprintf("/time-entries/%d", p.Entry.ID)) } method="post" autocomplete="off" class="entity-form compact-form">
+		<form action={ templ.URL(fmt.Sprintf("/time-entries/%d", p.Entry.ID)) } method="post" hx-boost="false" autocomplete="off" class="entity-form compact-form">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<p>Dates and times use { companyTimeZone(ctx) }. Timestamps include their UTC offset and exact fractional seconds; retain the offset when correcting a daylight-saving overlap.</p>
 			<div class="grid">
@@ -14,7 +14,7 @@ templ TimeEntryForm(p TimeEntryFormPageData) {
 					<input type="text" name="clock_in" value={ p.Entry.ClockIn } required/>
 				</label>
 				<label>
-					Clock Out
+					Clock Out (leave empty to reopen)
 					<input type="text" name="clock_out" value={ p.Entry.ClockOut }/>
 				</label>
 			</div>
@@ -23,6 +23,9 @@ templ TimeEntryForm(p TimeEntryFormPageData) {
 				Job
 				<select name="job_id">
 					<option value="" selected?={ p.Entry.JobID == 0 }>No Job</option>
+					if p.RetainedJob {
+						<option value={ fmt.Sprint(p.Entry.JobID) } selected>Retain Job #{ fmt.Sprint(p.Entry.JobID) } — { p.RetainedJobTitle }</option>
+					}
 					for _, j := range p.Jobs {
 						<option value={ fmt.Sprintf("%d", j.Value) } selected?={ p.Entry.JobID == j.Value }>{ j.Label }</option>
 					}
@@ -36,6 +39,7 @@ templ TimeEntryForm(p TimeEntryFormPageData) {
 				<textarea name="notes" rows="3">{ p.Entry.Notes }</textarea>
 			</label>
 			<div class="entity-form-actions">
+				<label>Reason for correction <input name="reason" required/></label>
 				<button type="submit">Save</button>
 				<a href="/time-entries" role="button" class="outline">Cancel</a>
 			</div>
