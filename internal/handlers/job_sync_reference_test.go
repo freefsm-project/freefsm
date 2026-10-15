@@ -186,6 +186,9 @@ func TestJobSyncReferenceOpenAPI(t *testing.T) {
 		}
 		if want >= 400 {
 			e := result["error"].(map[string]any)
+			if e["status"] != float64(w.Code) {
+				t.Fatalf("sync error status %v does not match HTTP %d", e["status"], w.Code)
+			}
 			codes := map[int]string{400: "invalid_request", 401: "unauthorized", 403: "forbidden", 409: "resnapshot_required", 429: "rate_limit_exceeded", 503: "unavailable"}
 			if e["code"] != codes[want] {
 				t.Fatalf("status %d error code %v", want, e["code"])

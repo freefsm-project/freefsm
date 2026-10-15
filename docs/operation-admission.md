@@ -7,6 +7,11 @@ terminal domain receipt use the committing transaction. A storage/audit rollback
 releases admission; an accepted or terminally rejected intent cannot be changed
 under its UUID. Domain receipt stores remain independent.
 
+See [operation receipts and Field Notes recovery](operation-receipts.md) for the
+retention floor, safe receipt projection, typed errors, explicit retry/repair and
+whole-instance restore caveat. The current stores have no expiry; no replacement
+registry or operation namespace is introduced by the receipt refinements.
+
 The registry records its deployment identity, user, authenticated client,
 operation family and immutable intent. API client identity is the authenticated
 mobile session, not an editable device label. Browser publication reconciliation

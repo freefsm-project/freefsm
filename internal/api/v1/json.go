@@ -18,6 +18,7 @@ type errorEnvelope struct {
 }
 
 type apiError struct {
+	Status              int            `json:"status"`
 	RequestID           string         `json:"request_id"`
 	Details             map[string]any `json:"details"`
 	RetryAfterSeconds   int            `json:"retry_after_seconds,omitempty"`
@@ -52,10 +53,15 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
-	w.WriteHeader(status)
 	disposition := "review"
 	if status == 429 || status >= 500 {
 		disposition = "retry"
+		// Dependency failures must carry usable timing even when the rejecting
+		// service did not provide a more specific backoff. Preserve rate-limit
+		// middleware's existing Retry-After when present.
+		if w.Header().Get("Retry-After") == "" {
+			w.Header().Set("Retry-After", "5")
+		}
 	}
 	if status == 401 || code == "password_change_required" {
 		disposition = "purge"
@@ -64,7 +70,8 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 		disposition = "locked_review"
 	}
 	retry, _ := strconv.Atoi(w.Header().Get("Retry-After"))
-	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: apiError{Code: code, Message: message, RecoveryDisposition: disposition, RequestID: id, Details: map[string]any{}, RetryAfterSeconds: retry}})
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: apiError{Status: status, Code: code, Message: message, RecoveryDisposition: disposition, RequestID: id, Details: map[string]any{}, RetryAfterSeconds: retry}})
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
