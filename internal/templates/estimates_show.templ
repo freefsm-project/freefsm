@@ -87,7 +87,7 @@ templ EstimateShow(p EstimateDetail) {
 							<td>{ li.Title }<small>{ lineAdjustmentSummary(li) }</small></td>
 							<td>{ li.Description }</td>
 							<td>{ commercialQuantity(li) }</td>
-							<td>{ "$"+commercialPrice(li) }</td>
+							<td>{ commercialCurrency(commercialPrice(li)) }</td>
 							<td>
 								if li.Taxable {
 									{ p.TaxRate }
@@ -95,16 +95,16 @@ templ EstimateShow(p EstimateDetail) {
 									No
 								}
 							</td>
-							<td>{ "$"+documentLineAmount(li,p.Financial,index) }</td>
+							<td>{ commercialCurrency(documentLineAmount(li,p.Financial,index)) }</td>
 						</tr>
 					}
 				</tbody>
 			</table>
 			<div class="work-item-detail-totals">
 				<p>{ documentAdjustmentSummary(p.Financial) }</p>
-				<p><strong>Subtotal: { "$"+documentAmount(p.LineItems,p.TaxRate,p.Financial,"subtotal") }</strong></p>
-				<p><strong>Tax: { "$"+documentAmount(p.LineItems,p.TaxRate,p.Financial,"tax") }</strong></p>
-				<p><strong>Grand Total: { "$"+documentAmount(p.LineItems,p.TaxRate,p.Financial,"total") }</strong></p>
+				<p><strong>Subtotal: { commercialCurrency(documentAmount(p.LineItems,p.TaxRate,p.Financial,"subtotal")) }</strong></p>
+				<p><strong>Tax: { commercialCurrency(documentAmount(p.LineItems,p.TaxRate,p.Financial,"tax")) }</strong></p>
+				<p><strong>Grand Total: { commercialCurrency(documentAmount(p.LineItems,p.TaxRate,p.Financial,"total")) }</strong></p>
 			</div>
 		}
 		if p.Notes != "" {

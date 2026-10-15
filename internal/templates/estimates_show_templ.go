@@ -456,9 +456,9 @@ func EstimateShow(p EstimateDetail) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var24 string
-					templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs("$" + commercialPrice(li))
+					templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(commercialCurrency(commercialPrice(li)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 90, Col: 36}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 90, Col: 52}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 					if templ_7745c5c3_Err != nil {
@@ -489,9 +489,9 @@ func EstimateShow(p EstimateDetail) templ.Component {
 						return templ_7745c5c3_Err
 					}
 					var templ_7745c5c3_Var26 string
-					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs("$" + documentLineAmount(li, p.Financial, index))
+					templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(commercialCurrency(documentLineAmount(li, p.Financial, index)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 98, Col: 57}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 98, Col: 73}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 					if templ_7745c5c3_Err != nil {
@@ -520,9 +520,9 @@ func EstimateShow(p EstimateDetail) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var28 string
-				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs("$" + documentAmount(p.LineItems, p.TaxRate, p.Financial, "subtotal"))
+				templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(commercialCurrency(documentAmount(p.LineItems, p.TaxRate, p.Financial, "subtotal")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 105, Col: 91}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 105, Col: 107}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 				if templ_7745c5c3_Err != nil {
@@ -533,9 +533,9 @@ func EstimateShow(p EstimateDetail) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var29 string
-				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs("$" + documentAmount(p.LineItems, p.TaxRate, p.Financial, "tax"))
+				templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinStringErrs(commercialCurrency(documentAmount(p.LineItems, p.TaxRate, p.Financial, "tax")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 106, Col: 81}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 106, Col: 97}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 				if templ_7745c5c3_Err != nil {
@@ -546,9 +546,9 @@ func EstimateShow(p EstimateDetail) templ.Component {
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var30 string
-				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs("$" + documentAmount(p.LineItems, p.TaxRate, p.Financial, "total"))
+				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(commercialCurrency(documentAmount(p.LineItems, p.TaxRate, p.Financial, "total")))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 107, Col: 91}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/estimates_show.templ`, Line: 107, Col: 107}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 				if templ_7745c5c3_Err != nil {

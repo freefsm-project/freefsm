@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/freefsm-project/freefsm/internal/commercial"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"math/big"
 )
 
 func documentAmount(items []services.LineItem, rate, financial, part string) string {
@@ -40,10 +41,28 @@ func documentLineAmount(li services.LineItem, financial string, index int) strin
 	return m.Format()
 }
 func commercialQuantity(li services.LineItem) string {
-	return services.LineQuantityText(li)
+	text := services.LineQuantityText(li)
+	value, ok := new(big.Rat).SetString(text)
+	if !ok || value.Sign() <= 0 {
+		return "Unavailable"
+	}
+	return text
 }
 func commercialPrice(li services.LineItem) string {
-	return services.LineUnitPriceText(li)
+	text := services.LineUnitPriceText(li)
+	if _, ok := new(big.Rat).SetString(text); !ok {
+		return "Unavailable"
+	}
+	return text
+}
+
+// A missing calculation is not a monetary value. Keep it visible without a
+// currency prefix, while valid zero and signed amounts retain their formatting.
+func commercialCurrency(value string) string {
+	if value == "Unavailable" {
+		return value
+	}
+	return "$" + value
 }
 func estimateFinancial(d *EstimateDetail, items string, existing bool) string {
 	if d == nil {
