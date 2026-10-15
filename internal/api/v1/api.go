@@ -144,6 +144,7 @@ func New(deps Dependencies) http.Handler {
 		r.Use(h.bearerAuth)
 		r.Use(h.authorizedBudget)
 		r.Get("/capabilities", h.capabilities)
+		r.Get("/sync/jobs", h.syncJobs)
 		// Synchronization routes remain within this authenticated budget boundary.
 		r.HandleFunc("/sync", func(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 404, "not_found", "synchronization endpoint not available")
