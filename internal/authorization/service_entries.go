@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -27,6 +28,56 @@ type ServiceEntry struct {
 	JobTitle         string    `json:"job_title"`
 	ResponsibleNames []string  `json:"responsible_names"`
 	RevisedAt        time.Time `json:"revised_at"`
+}
+
+type ServiceEntryRevision struct {
+	Revision         string    `json:"revision"`
+	ServiceDate      string    `json:"service_date"`
+	Summary          string    `json:"summary"`
+	ResponsibleNames []string  `json:"responsible_names"`
+	Actor            string    `json:"actor"`
+	AcceptedAt       time.Time `json:"accepted_at"`
+}
+
+func (s *Service) ServiceEntryRevisions(ctx context.Context, a Actor, jobID, assetID, entryID int64) ([]ServiceEntryRevision, error) {
+	result := []ServiceEntryRevision{}
+	err := s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
+		var customer int64
+		if jobID != 0 {
+			_, _, id, _, err := serviceEntryRelationship(ctx, tx, p, a, jobID, assetID, "view")
+			if err != nil {
+				return err
+			}
+			customer = id
+		} else {
+			if a.Channel == "api" || !p.Allows("service_entry.view", All) {
+				return ErrNotFound
+			}
+			if _, err := parentAccess(ctx, tx, p, "asset", assetID, "", false); err != nil {
+				return err
+			}
+		}
+		rows, err := tx.Query(ctx, `SELECT r.id::text,r.service_date::text,r.summary,ARRAY(SELECT u.name FROM asset_service_responsible_users ru JOIN users u ON u.id=ru.user_id WHERE ru.revision_id=r.id ORDER BY u.id),actor.name,r.accepted_at FROM asset_service_entries e JOIN asset_service_revisions r ON r.entry_id=e.id JOIN users actor ON actor.id=r.actor_id WHERE e.id=$1 AND e.asset_id=$2 AND e.company_id=$3 AND ($4::bigint=0 OR e.customer_id=$4) ORDER BY r.accepted_at,r.id`, entryID, assetID, p.CompanyID, customer)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var entry ServiceEntryRevision
+			if err = rows.Scan(&entry.Revision, &entry.ServiceDate, &entry.Summary, &entry.ResponsibleNames, &entry.Actor, &entry.AcceptedAt); err != nil {
+				return err
+			}
+			result = append(result, entry)
+		}
+		if err = rows.Err(); err != nil {
+			return err
+		}
+		if len(result) == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+	return result, err
 }
 
 type ServiceEntryParticipant struct {
@@ -118,7 +169,7 @@ func applyServiceEntry(ctx context.Context, tx pgx.Tx, p Principal, a Actor, job
 		if err != nil {
 			return err
 		}
-		if in.LinkID != link {
+		if in.LinkID != link || id == 0 && predecessor != "" {
 			return ErrConflict
 		}
 		if id != 0 {
@@ -139,7 +190,7 @@ func applyServiceEntry(ctx context.Context, tx pgx.Tx, p Principal, a Actor, job
 			}
 		}
 		date, err := time.Parse("2006-01-02", in.ServiceDate)
-		if err != nil || strings.TrimSpace(in.Summary) == "" || len(in.ResponsibleUsers) == 0 || occurred != nil && occurred.After(time.Now()) {
+		if err != nil || date.Year() < 1 || !utf8.ValidString(in.Summary) || strings.ContainsRune(in.Summary, 0) || strings.TrimSpace(in.Summary) == "" || len(in.ResponsibleUsers) == 0 || occurred != nil && occurred.After(time.Now()) {
 			return ErrConflict
 		}
 		var valid bool

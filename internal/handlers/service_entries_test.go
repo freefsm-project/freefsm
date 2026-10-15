@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -59,7 +60,7 @@ func TestServiceEntryFieldAPIAndOfflineReference(t *testing.T) {
 	defer server.Close()
 	runCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(runCtx, "node", "testdata/browser/service-entry-reference.cjs", server.URL, token, fmt.Sprint(j.ID), fmt.Sprint(a.ID), fmt.Sprint(admin), time.Now().UTC().Format("2006-01-02")).CombinedOutput()
+	out, err := exec.CommandContext(runCtx, "node", "testdata/browser/service-entry-reference.cjs", server.URL, token, fmt.Sprint(j.ID), fmt.Sprint(a.ID), fmt.Sprint(admin), time.Now().UTC().Format("2006-01-02"), filepath.Join(t.TempDir(), "service-pending.json")).CombinedOutput()
 	t.Logf("reference: %s", out)
 	if err != nil {
 		t.Fatal(err)
@@ -79,6 +80,11 @@ func TestServiceEntryCreatePreservesProvenanceHTTP(t *testing.T) {
 	serviceEntryPost(t, router, cookie, path, form, 303)
 	body := requestBody(t, router, cookie, "GET", path, 200)
 	assertContains(t, body, "Replaced seal")
+	assetPage := requestBody(t, router, cookie, "GET", fmt.Sprintf("/assets/%d", a.ID), 200)
+	assertContains(t, assetPage, fmt.Sprintf("/assets/%d/service-entries", a.ID))
+	assertContains(t, assetPage, "Linked Job history")
+	assertContains(t, assetPage, "Pump service")
+	assertNotContains(t, assetPage, "<h3>Service History</h3>")
 	var entries, blockers, audits int
 	if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM asset_service_entries WHERE job_id=$1),(SELECT count(*) FROM job_customer_blockers WHERE job_id=$1),(SELECT count(*) FROM authorization_audit WHERE action='service_entry.create')`, j.ID).Scan(&entries, &blockers, &audits); err != nil || entries != 1 || blockers != 1 || audits != 1 {
 		t.Fatalf("entries=%d blockers=%d audits=%d err=%v", entries, blockers, audits, err)
@@ -247,12 +253,12 @@ func TestServiceEntryAuditRollbackAndCustomerRaceHTTP(t *testing.T) {
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	path := fmt.Sprintf("/jobs/%d/assets/%d/service-entries", j.ID, a.ID)
 	form := url.Values{"operation_id": {newOperationKey()}, "service_date": {time.Now().UTC().Format("2006-01-02")}, "summary": {"Atomic service"}, "responsible_user_id": {fmt.Sprint(admin)}}
-	if _, err := pool.Exec(ctx, `CREATE FUNCTION fail_service_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='service_entry.create' THEN RAISE EXCEPTION 'injected service audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_service_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION fail_service_audit()`); err != nil {
+	if _, err := pool.Exec(ctx, `CREATE FUNCTION fail_service_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='service_entry.create' THEN RAISE EXCEPTION USING ERRCODE='23514',MESSAGE='injected service audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_service_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION fail_service_audit()`); err != nil {
 		t.Fatal(err)
 	}
-	serviceEntryPost(t, router, cookie, path, form, 500)
+	serviceEntryPost(t, router, cookie, path, form, 503)
 	var partial int
-	if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM asset_service_entries)+(SELECT count(*) FROM job_customer_blockers)+(SELECT count(*) FROM service_entry_operation_receipts)`).Scan(&partial); err != nil || partial != 0 {
+	if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM asset_service_entries)+(SELECT count(*) FROM job_customer_blockers)+(SELECT count(*) FROM service_entry_operation_receipts)+(SELECT count(*) FROM operation_admissions WHERE operation_id=$1)`, form.Get("operation_id")).Scan(&partial); err != nil || partial != 0 {
 		t.Fatalf("audit rollback partial=%d err=%v", partial, err)
 	}
 	if _, err := pool.Exec(ctx, `DROP TRIGGER fail_service_audit ON authorization_audit`); err != nil {
@@ -345,6 +351,10 @@ func TestServiceEntryRevisionRejectsABAAndRetainsIdentityHTTP(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM asset_service_revisions WHERE entry_id=$1`, first.ID).Scan(&n); err != nil || n != 3 {
 		t.Fatalf("immutable history n=%d err=%v", n, err)
 	}
+	history := requestBody(t, router, cookie, "GET", revise+"/revisions", 200)
+	assertContains(t, history, "Original")
+	assertContains(t, history, "Corrected")
+	assertContains(t, history, "Admin")
 }
 
 func TestServiceEntryLifetimeAndCustomerHistoryAfterTransferHTTP(t *testing.T) {

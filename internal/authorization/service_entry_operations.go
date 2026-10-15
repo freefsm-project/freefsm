@@ -2,8 +2,10 @@ package authorization
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -52,13 +54,21 @@ func (s *Service) SubmitServiceEntry(ctx context.Context, a Actor, in ServiceEnt
 	if err != nil {
 		return result, err
 	}
+	// Bind the exact canonical command without asking PostgreSQL JSONB to
+	// represent invalid text (for example U+0000). Such identifiable commands
+	// still need an immutable terminal rejection and same-intent replay.
+	intent := map[string]string{"sha256": fmt.Sprintf("%x", sha256.Sum256(raw))}
+	raw, err = json.Marshal(intent)
+	if err != nil {
+		return result, err
+	}
 	var outcome error
 	err = s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
 		kind := "service_entry.create"
 		if in.EntryID != 0 {
 			kind = "service_entry.revise"
 		}
-		if err := AdmitOperation(ctx, tx, a, in.OperationID, kind, in); err != nil {
+		if err := AdmitOperation(ctx, tx, a, in.OperationID, kind, intent); err != nil {
 			return err
 		}
 		var same bool

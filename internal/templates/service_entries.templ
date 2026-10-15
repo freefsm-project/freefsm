@@ -26,6 +26,9 @@ templ ServiceEntries(jobID,assetID int64, page authorization.ServiceEntryPage) {
  @Layout("Asset Service Entries") {
   <h1>Asset Service Entries</h1>
   @ServiceEntryHistory(page.Entries)
+  for _,entry := range page.Entries {
+   <a href={templ.URL(fmt.Sprintf("/jobs/%d/assets/%d/service-entries/%d/revisions",jobID,assetID,entry.ID))}>Revisions — {entry.ServiceDate}</a>
+  }
   if page.CanCreate {
    <h2>Record service</h2>
    <form id="service-entry-create" method="post" action={templ.URL(fmt.Sprintf("/jobs/%d/assets/%d/service-entries",jobID,assetID))}>
@@ -71,5 +74,21 @@ templ OfficeServiceEntryHistory(entries []authorization.ServiceEntry) {
  @Layout("Asset Service Entries") {
   <h1>Asset Service Entries</h1>
   @ServiceEntryHistory(entries)
+ }
+}
+
+templ ServiceEntryRevisions(entries []authorization.ServiceEntryRevision) {
+ @Layout("Service Entry revisions") {
+  <h1>Service Entry revisions</h1>
+  for _,entry := range entries {
+   <article><h2>{entry.ServiceDate}</h2><p>{entry.Summary}</p>
+    <p>Recorded by {entry.Actor} at {entry.AcceptedAt.Format("2006-01-02 15:04:05Z07:00")}</p>
+    <p>Responsible:
+     for _,name := range entry.ResponsibleNames {
+      <span>{name} </span>
+     }
+    </p>
+   </article>
+  }
  }
 }

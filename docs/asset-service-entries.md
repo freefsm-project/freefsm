@@ -24,6 +24,7 @@ The field API provides the same Job-bound collection:
 GET  /api/v1/jobs/{job}/assets/{asset}/service-entries
 POST /api/v1/jobs/{job}/assets/{asset}/service-entries
 POST /api/v1/jobs/{job}/assets/{asset}/service-entries/{entry}
+GET  /api/v1/jobs/{job}/assets/{asset}/service-entries/{entry}/revisions
 GET  /api/v1/service-entry-operations/{operation}
 ```
 
@@ -39,7 +40,9 @@ The GET data contains `entries` and the exact `link_id`. Mutations carry:
 }
 ```
 
-Revision also requires the originally read opaque `revision` UUID. Optional
+The revision-history route exposes retained service content, responsible names,
+actor and acceptance time under the same bounded authority. Revision also
+requires the originally read opaque `revision` UUID. Optional
 `occurred_at` records client occurrence independently from acceptance. A new
 operation cannot silently follow a replacement link, even if it connects the
 same Job and Asset after unlink/relink. Stale revisions reject, including ABA.

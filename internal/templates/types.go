@@ -1814,12 +1814,13 @@ type AssetRow struct {
 }
 
 type AssetShowPageData struct {
-	Asset          AssetDetail
-	ServiceHistory []JobRow
-	Tags           []TagRow
-	AllTags        []TagRow
-	CustomFields   []CustomFieldDisplay
-	FileList       FileListPageData
+	Asset                 AssetDetail
+	LinkedJobs            []JobRow
+	CanViewServiceEntries bool
+	Tags                  []TagRow
+	AllTags               []TagRow
+	CustomFields          []CustomFieldDisplay
+	FileList              FileListPageData
 }
 
 type AssetDetail struct {

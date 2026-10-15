@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,6 +11,16 @@ import (
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 )
+
+func writeServiceEntryError(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrConflict) {
+		authorizationError(w, r, err)
+		return
+	}
+	// A dependency's SQLSTATE is not a domain disposition. In particular an
+	// audit constraint failure must remain retryable under the original ID.
+	http.Error(w, "Service Entry temporarily unavailable. Retry the same operation.", 503)
+}
 
 func serviceEntries(w http.ResponseWriter, r *http.Request) {
 	req, ok := authorization.FromContext(r.Context())
@@ -54,7 +65,7 @@ func serviceEntries(w http.ResponseWriter, r *http.Request) {
 		}
 		_, err = req.Service.SubmitServiceEntry(r.Context(), req.Actor, command)
 		if err != nil {
-			writeAssetVocabularyError(w, r, err)
+			writeServiceEntryError(w, r, err)
 			return
 		}
 		http.Redirect(w, r, fmt.Sprintf("/jobs/%d/assets/%d/service-entries", jobID, assetID), 303)
@@ -62,7 +73,7 @@ func serviceEntries(w http.ResponseWriter, r *http.Request) {
 	}
 	page, err := req.Service.ServiceEntryPage(r.Context(), req.Actor, jobID, assetID)
 	if err != nil {
-		writeAssetVocabularyError(w, r, err)
+		writeServiceEntryError(w, r, err)
 		return
 	}
 	if r.URL.Query().Get("format") == "json" {
@@ -82,11 +93,44 @@ func serviceEntryReceipt(w http.ResponseWriter, r *http.Request) {
 	}
 	receipt, err := req.Service.ServiceEntryReceipt(r.Context(), req.Actor, chi.URLParam(r, "operation"))
 	if err != nil {
-		writeAssetVocabularyError(w, r, err)
+		writeServiceEntryError(w, r, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(receipt)
+}
+
+func serviceEntryRevisions(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", 401)
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	job, asset := int64(0), id
+	if value := chi.URLParam(r, "assetID"); value != "" {
+		job = id
+		asset, err = strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+	}
+	entry, err := strconv.ParseInt(chi.URLParam(r, "entryID"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	rows, err := req.Service.ServiceEntryRevisions(r.Context(), req.Actor, job, asset, entry)
+	if err != nil {
+		writeServiceEntryError(w, r, err)
+		return
+	}
+	render(w, r, templates.ServiceEntryRevisions(rows))
 }
 
 func serviceEntryHistory(w http.ResponseWriter, r *http.Request) {
@@ -111,7 +155,7 @@ func serviceEntryHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	entries, err := req.Service.AssetServiceEntries(r.Context(), req.Actor, asset, customer)
 	if err != nil {
-		writeAssetVocabularyError(w, r, err)
+		writeServiceEntryError(w, r, err)
 		return
 	}
 	render(w, r, templates.OfficeServiceEntryHistory(entries))

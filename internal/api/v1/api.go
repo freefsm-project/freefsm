@@ -171,6 +171,7 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/jobs/{id}/assets/{assetID}/service-entries", h.serviceEntries)
 		r.Post("/jobs/{id}/assets/{assetID}/service-entries", h.serviceEntries)
 		r.Post("/jobs/{id}/assets/{assetID}/service-entries/{entryID}", h.serviceEntries)
+		r.Get("/jobs/{id}/assets/{assetID}/service-entries/{entryID}/revisions", h.serviceEntryRevisions)
 		for _, kind := range []string{"estimate", "invoice"} {
 			r.Post("/"+kind+"s", h.commercial(kind))
 			r.Get("/"+kind+"s/{id}", h.commercial(kind))

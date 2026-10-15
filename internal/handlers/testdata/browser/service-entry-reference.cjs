@@ -1,15 +1,19 @@
 // Executable protocol reference, not a production offline cache or client.
 const assert=require('node:assert/strict');
 const {randomUUID}=require('node:crypto');
+const fs=require('node:fs');
 (async()=>{
- const [base,token,job,asset,user,date]=process.argv.slice(2);
+ const [base,token,job,asset,user,date,pendingFile]=process.argv.slice(2);
  const path=`/jobs/${job}/assets/${asset}/service-entries`;
  const call=async(method,path,body,status=200)=>{
   const response=await fetch(base+path,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
   const json=await response.json();assert.equal(response.status,status,JSON.stringify(json));return json.data;
  };
  const relationship=await call('GET',path);
- const pending={operation_id:randomUUID(),link_id:relationship.link_id,service_date:date,summary:'Original reference service',responsible_user_ids:[Number(user)]};
+ let pending={operation_id:randomUUID(),link_id:relationship.link_id,service_date:date,summary:'Original reference service',responsible_user_ids:[Number(user)]};
+ // Disposable reference persistence only, not a product encrypted cache.
+ fs.writeFileSync(pendingFile,JSON.stringify(pending),{mode:0o600});
+ pending=JSON.parse(fs.readFileSync(pendingFile,'utf8'));
  // Lost response is reconciled by the original identity before retry.
  await call('POST',path,pending);
  const receipt=await call('GET',`/service-entry-operations/${pending.operation_id}`);
@@ -17,6 +21,9 @@ const {randomUUID}=require('node:crypto');
  assert.deepEqual(await call('POST',path,pending),receipt);
  let rows=(await call('GET',path)).entries;assert.equal(rows.length,1);
  const original=rows[0];
+ const invalidCreate={...pending,operation_id:randomUUID(),revision:original.revision};
+ await call('POST',path,invalidCreate,409);
+ assert.equal((await call('GET',`/service-entry-operations/${invalidCreate.operation_id}`)).code,'service_entry_conflict');
  const revisionPath=`${path}/${receipt.entry_id}`;
  const revision={...pending,operation_id:randomUUID(),revision:original.revision,summary:'Reviewed revision'};
  await call('POST',revisionPath,revision);

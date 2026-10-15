@@ -73,9 +73,6 @@ func (h *handler) serviceEntries(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 404, "not_found", "not found")
 			return
 		}
-	} else if body.Revision != "" {
-		writeError(w, 400, "invalid_request", "creation has no predecessor revision")
-		return
 	}
 	receipt, err := req.Service.SubmitServiceEntry(r.Context(), req.Actor, in)
 	if err != nil {
@@ -98,4 +95,34 @@ func (h *handler) serviceEntryReceipt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, receipt)
+}
+
+func (h *handler) serviceEntryRevisions(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		writeError(w, 503, "unavailable", "authorization unavailable")
+		return
+	}
+	job, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeError(w, 404, "not_found", "not found")
+		return
+	}
+	asset, err := strconv.ParseInt(chi.URLParam(r, "assetID"), 10, 64)
+	if err != nil {
+		writeError(w, 404, "not_found", "not found")
+		return
+	}
+	entry, err := strconv.ParseInt(chi.URLParam(r, "entryID"), 10, 64)
+	if err != nil {
+		writeError(w, 404, "not_found", "not found")
+		return
+	}
+	rows, err := req.Service.ServiceEntryRevisions(r.Context(), req.Actor, job, asset, entry)
+	if err != nil {
+		serviceEntryAPIError(w, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, rows)
 }
