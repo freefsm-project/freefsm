@@ -26,24 +26,35 @@ func TestCommercialAdjustmentWinsRaceSettlementUsesAcceptedRevision(t *testing.T
 	path := fmt.Sprintf("/invoices/%d", inv.ID)
 	values := url.Values{"customer_id": {fmt.Sprint(c.ID)}, "invoice_number": {fmt.Sprint(inv.InvoiceNumber)}, "title": {"Adjustment race"}, "adjustments": {`{"discount":{"kind":"percentage","value":"50"}}`}}
 	values = commercialReviewedValues(t, router, cookie, path, values)
+	// Block the actual monetary UPDATE, after it holds the common authority
+	// fence. HTTP admission can use an earlier transaction; its arrival order
+	// does not establish which domain mutation commits first.
+	if _, err := pool.Exec(ctx, `CREATE FUNCTION hold_reviewed_adjustment() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.financial IS DISTINCT FROM OLD.financial THEN PERFORM pg_advisory_xact_lock(490049); END IF; RETURN NEW; END $$;
+	 CREATE TRIGGER hold_reviewed_adjustment BEFORE UPDATE ON invoices FOR EACH ROW EXECUTE FUNCTION hold_reviewed_adjustment()`); err != nil {
+		t.Fatal(err)
+	}
 	fence, err := pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer fence.Rollback(context.Background())
 	var blocker int
-	if err := fence.QueryRow(ctx, `SELECT pg_backend_pid() FROM (SELECT pg_advisory_xact_lock(190019)) barrier`).Scan(&blocker); err != nil {
+	if err := fence.QueryRow(ctx, `SELECT pg_backend_pid() FROM (SELECT pg_advisory_xact_lock(490049)) barrier`).Scan(&blocker); err != nil {
 		t.Fatal(err)
 	}
 	edited := make(chan *httptest.ResponseRecorder, 1)
 	go func() { edited <- jobRepairRawPost(router, cookie, path, values) }()
 	commercialWaiters(t, ctx, pool, blocker, 1)
+	var editor int
+	if err := pool.QueryRow(ctx, `SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)) AND wait_event='advisory'`, blocker).Scan(&editor); err != nil {
+		t.Fatal(err)
+	}
 	paid := make(chan error, 1)
 	go func() {
 		_, err := settlement.New(pool).RecordPayment(ctx, actor, settlement.RecordPaymentRequest{Operation: settlement.Operation{Key: newOperationKey()}, InvoiceID: inv.ID, AmountCents: 2500, Method: settlement.Cash, ReceivedDate: settlement.Date(time.Now().Format("2006-01-02"))})
 		paid <- err
 	}()
-	commercialWaiters(t, ctx, pool, blocker, 2)
+	commercialWaiters(t, ctx, pool, editor, 1)
 	if err := fence.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
