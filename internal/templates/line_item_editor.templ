@@ -169,12 +169,13 @@ templ LineItemEditor(p LineItemEditorData) {
 					} catch(error) {if(request===this.taxRequest){this.effectiveTaxKey='';this.taxPreviewError='Tax preview unavailable. Check access and tax rate, then refresh.';}}
 				},
 				get adjustmentsJSON() { return JSON.stringify({discount:this.adjustment(this.documentDiscountKind,this.documentDiscount),surcharge:this.adjustment(this.documentSurchargeKind,this.documentSurcharge)}); },
+				included(item) { return Boolean(item.item_id > 0 || item.title); },
 				exactInput() {
 					this.taxVersion;
 					const customer = form.querySelector('[name="customer_id"]');
 					const exempt = taxContext.customers[String(customer?.value)]?.tax_exempt || false;
 					return {...JSON.parse(this.adjustmentsJSON),tax_rate:String(form.querySelector('[name="tax_rate"]')?.value || '0').replace('%','').trim(),tax_exempt:exempt,
-						lines:this.items.filter(item=>item.item_id>0||item.title).map(item=>({quantity:String(item.quantity),unit_price:this.moneyText(item.unit_price),taxable:Boolean(item.taxable),discount:this.adjustment(item.discount_kind,item.discount),surcharge:this.adjustment(item.surcharge_kind,item.surcharge)}))};
+						lines:this.items.filter(item=>this.included(item)).map(item=>({quantity:String(item.quantity),unit_price:this.moneyText(item.unit_price),taxable:Boolean(item.taxable),discount:this.adjustment(item.discount_kind,item.discount),surcharge:this.adjustment(item.surcharge_kind,item.surcharge)}))};
 				},
 				moneySignature() { return JSON.stringify({customer_id:form.querySelector('[name="customer_id"]')?.value || '',input:window.freefsmCommercial.signature(this.exactInput())}); },
 				get preview() {
@@ -184,9 +185,20 @@ templ LineItemEditor(p LineItemEditorData) {
 					try {const input=this.exactInput();input.tax_rate=String(this.effectiveTaxRate).replace('%','').trim();input.tax_exempt=false;return window.freefsmCommercial.calculate(input);} catch(error) {return {error:error.message};}
 				},
 				get previewError() { return this.preview?.error || ''; },
-				lineDisplay(item,index) { const p=this.preview; if(p?.error)return 'Invalid'; if(p?.lines[index])return window.freefsmCommercial.format(p.lines[index].adjusted_cents); return this.lineTotal(item).toFixed(2); },
-				totalDisplay(part) { const p=this.preview;if(p?.error)return 'Invalid';if(p)return window.freefsmCommercial.format(p[part]);return (part==='pretax_cents'?this.subtotal:part==='tax_cents'?this.tax:this.total).toFixed(2); },
-				get json() { return JSON.stringify(this.items.filter((item) => item.item_id > 0 || item.title).map((item) => ({ ...(item.snapshot_id ? {snapshot_id: item.snapshot_id} : {}), item_id: Number(item.item_id) || 0, title: item.title, description: item.description, unit_price: Number(item.unit_price) || 0, quantity: Number(item.quantity), taxable: Boolean(item.taxable), tax_rate: item.tax_rate || '', ...(root.dataset.jobPricing==='true'?{discount:Number(item.discount)||0,surcharge:Number(item.surcharge)||0}:{unit_price_decimal:this.moneyText(item.unit_price),quantity_decimal:String(item.quantity),discount_adjustment:this.adjustment(item.discount_kind,item.discount),surcharge_adjustment:this.adjustment(item.surcharge_kind,item.surcharge)}) }))); },
+				lineDisplay(item,index) {
+					if(root.dataset.jobPricing==='true')return this.lineTotal(item).toFixed(2);
+					if(!this.included(item))return '—';
+					const p=this.preview;if(p?.error)return 'Invalid';
+					const resultIndex=this.items.slice(0,index).filter(row=>this.included(row)).length;
+					const line=p?.lines?.[resultIndex];
+					return line ? window.freefsmCommercial.format(line.adjusted_cents) : 'Unavailable';
+				},
+				totalDisplay(part) {
+					if(root.dataset.jobPricing==='true')return (part==='pretax_cents'?this.subtotal:part==='tax_cents'?this.tax:this.total).toFixed(2);
+					const p=this.preview;if(p?.error)return 'Invalid';
+					return p ? window.freefsmCommercial.format(p[part]) : 'Unavailable';
+				},
+				get json() { return JSON.stringify(this.items.filter((item) => this.included(item)).map((item) => ({ ...(item.snapshot_id ? {snapshot_id: item.snapshot_id} : {}), item_id: Number(item.item_id) || 0, title: item.title, description: item.description, unit_price: Number(item.unit_price) || 0, quantity: Number(item.quantity), taxable: Boolean(item.taxable), tax_rate: item.tax_rate || '', ...(root.dataset.jobPricing==='true'?{discount:Number(item.discount)||0,surcharge:Number(item.surcharge)||0}:{unit_price_decimal:this.moneyText(item.unit_price),quantity_decimal:String(item.quantity),discount_adjustment:this.adjustment(item.discount_kind,item.discount),surcharge_adjustment:this.adjustment(item.surcharge_kind,item.surcharge)}) }))); },
 			};
 		}
 	</script>
