@@ -177,7 +177,9 @@ func New(deps Dependencies) http.Handler {
 			r.Post("/"+kind+"s", h.commercial(kind))
 			r.Get("/"+kind+"s/{id}", h.commercial(kind))
 			r.Patch("/"+kind+"s/{id}", h.commercial(kind))
+			r.Post("/"+kind+"s/{id}/status", h.commercialLifecycle(kind, false))
 		}
+		r.Post("/invoices/{id}/finalize", h.commercialLifecycle("invoice", true))
 		r.Get("/commercial-operations/{operation}", h.commercialReceipt)
 		if deps.Files != nil {
 			r.Get("/files/limits", h.fileLimits)

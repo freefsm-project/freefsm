@@ -7,10 +7,35 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/delivery"
+	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+func TestCommercialLifecycleSettledDelivery(t *testing.T) {
+	f := integrationDelivery(t, "invoice")
+	ctx := context.Background()
+	if _, err := f.db.Exec(ctx, `UPDATE invoices SET line_items='[{"title":"Work","quantity":1,"unit_price":100}]' WHERE id=$1`, f.d.DocumentID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := settlement.New(f.db).RecordPayment(ctx, settlement.Actor{ID: f.a.ID, CompanyID: f.a.CompanyID, Role: "admin"}, settlement.RecordPaymentRequest{Operation: settlement.Operation{Key: uuid.NewString()}, InvoiceID: f.d.DocumentID, AmountCents: 2500, Method: settlement.Cash, ReceivedDate: settlement.Date(time.Now().Format("2006-01-02"))}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.TransitionInvoice(ctx, f.a, f.d.DocumentID, f.initial); err != ErrActiveSettlement {
+		t.Fatalf("settled manual no-op=%v, want active settlement rejection", err)
+	}
+	if ok, err := f.outbox.ProcessOne(ctx, integrationSender(integrationSend), NewAcceptanceHook(f.svc)); err != nil || !ok {
+		t.Fatalf("eligible settled sending failed: %v %v", ok, err)
+	}
+	var status int64
+	var state string
+	mustScan(t, f.db.QueryRow(ctx, `SELECT status_id FROM invoices WHERE id=$1`, f.d.DocumentID), &status)
+	mustScan(t, f.db.QueryRow(ctx, `SELECT state FROM document_deliveries WHERE id=$1`, f.d.ID), &state)
+	if status != f.initial || state != "accepted" {
+		t.Fatalf("settled send changed manual state or failed acceptance: %d %s", status, state)
+	}
+}
 
 type integrationDeliveryFixture struct {
 	db            *pgxpool.Pool

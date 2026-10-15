@@ -48,6 +48,17 @@ func (h AcceptanceHook) OnAccepted(ctx context.Context, tx pgx.Tx, d delivery.De
 	if (typ == Estimate && category != EstimateDraft && category != EstimateEstimate) || (typ == Invoice && category != InvoiceInvoiced) {
 		return nil
 	}
+	if typ == Invoice {
+		var active bool
+		if err := tx.QueryRow(ctx, `SELECT invoice_has_active_settlement($1)`, d.DocumentID).Scan(&active); err != nil {
+			return err
+		}
+		if active {
+			// Sending remains eligible; its acceptance must not mutate the
+			// settlement-locked preserved manual workflow.
+			return nil
+		}
+	}
 	var target int64
 	if err := tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id
 		WHERE w.company_id=$1 AND w.object_type=$2 AND s.category_key=$3 AND s.is_category_default FOR UPDATE OF s`, d.CompanyID, typ, sent).Scan(&target); err != nil {

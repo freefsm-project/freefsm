@@ -83,7 +83,19 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job
 	}
 	pdf := newDocumentPDF()
 	status, color := statusForPDF(statuses, i.StatusID)
-	writeTopHeader(pdf, "INVOICE", RecordedInvoiceNumber(i, cs), status, color, cs)
+	label := "INVOICE"
+	for _, definition := range statuses {
+		if i.StatusID != nil && definition.ID == *i.StatusID {
+			switch definition.CategoryKey {
+			case "invoice:void":
+				label = "VOID INVOICE"
+			case "invoice:draft":
+				label = "DRAFT INVOICE"
+			}
+			break
+		}
+	}
+	writeTopHeader(pdf, label, RecordedInvoiceNumber(i, cs), status, color, cs)
 	writeDetailRow(pdf, customer, job, asset, invoiceDetails(i, status, cs), cs)
 	writeDocumentNotes(pdf, i.Notes)
 	for _, line := range fieldLines {

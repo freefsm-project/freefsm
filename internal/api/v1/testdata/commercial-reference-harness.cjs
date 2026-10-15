@@ -14,9 +14,15 @@ class CommercialReference {
     if (!snapshot.id || !snapshot.job_id || !snapshot.revision) throw new Error('Reviewed document required');
     return this.entry(kind, snapshot.id, { ...values, job_id: snapshot.job_id, revision: snapshot.revision, operation_id: randomUUID() });
   }
-  entry(kind, target, intent) {
+  stageLifecycle(kind, snapshot, choice, action) {
+    if (!['estimate', 'invoice'].includes(kind) || !snapshot.id || !snapshot.job_id || !snapshot.revision || !choice?.id || !choice.meaning_revision || !['status', 'finalize'].includes(action) || action === 'finalize' && kind !== 'invoice') throw new Error('Reviewed lifecycle target and meaning required');
+    if (!snapshot.workflow?.some(x => x.id === choice.id && x.meaning_revision === choice.meaning_revision && x.category === choice.category)) throw new Error('Explicitly select a current workflow identity');
+    return this.entry(kind, snapshot.id, { job_id: snapshot.job_id, revision: snapshot.revision, status_id: choice.id, meaning_revision: choice.meaning_revision, operation_id: randomUUID() }, action);
+  }
+  entry(kind, target, intent, action = '') {
     return Object.defineProperties({ state: 'pending', receipt: null, unreceived: false }, {
       kind: { value: kind, enumerable: true }, target: { value: target, enumerable: true },
+      action: { value: action, enumerable: true },
       intent: { value: freeze(JSON.parse(JSON.stringify(intent))), enumerable: true },
     });
   }
@@ -38,7 +44,7 @@ class CommercialReference {
     entry.state = 'unknown';
     entry.unreceived = false;
     try {
-      const response = await this.request(entry.target ? 'PATCH' : 'POST', `/${entry.kind}s${entry.target ? '/' + entry.target : ''}`, entry.intent);
+      const response = await this.request(entry.action || !entry.target ? 'POST' : 'PATCH', `/${entry.kind}s${entry.target ? '/' + entry.target : ''}${entry.action ? '/' + entry.action : ''}`, entry.intent);
       if (response.status === 200) {
         entry.receipt = response.body.data;
         entry.state = entry.receipt?.operation_id !== entry.intent.operation_id ? 'locked' : entry.receipt.outcome === 'accepted' ? 'accepted' : 'needs_review';
