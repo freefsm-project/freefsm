@@ -63,7 +63,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 			w.Header().Set("Retry-After", "5")
 		}
 	}
-	if status == 401 || code == "password_change_required" {
+	if status == 401 || code == "password_change_required" || code == "offline_disabled" {
 		disposition = "purge"
 	}
 	if code == "instance_restored" {

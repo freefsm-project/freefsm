@@ -28,6 +28,10 @@ must still be purged. The in-memory reference locks pending work when receiving
 `instance_restored` / `locked_review`; it is not durable encrypted storage or a
 complete restore/offline client.
 
+The separate [encrypted offline Notes executable](api-offline-notes.md) adds
+platform-protected durable staging and the general Offline Authorization Lease;
+the browser exerciser above remains in-memory and the website online-only.
+
 ## Field Notes protocol
 
 1. Read `GET /api/v1/jobs/{id}/field-notes` under current Job View.
