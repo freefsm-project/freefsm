@@ -144,6 +144,9 @@ func New(deps Dependencies) http.Handler {
 		r.Use(h.bearerAuth)
 		r.Use(h.authorizedBudget)
 		r.Get("/capabilities", h.capabilities)
+		r.Get("/offline/policy", h.offlinePolicy)
+		r.Post("/offline/lease", h.offlineLease)
+		r.Get("/offline-authorization-operations/{operation}", h.offlineLeaseReceipt)
 		r.Get("/sync/jobs", h.syncJobs)
 		// Synchronization routes remain within this authenticated budget boundary.
 		r.HandleFunc("/sync", func(w http.ResponseWriter, r *http.Request) {
