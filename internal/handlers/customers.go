@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -116,82 +117,100 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
-	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, c.ID))
+	sectionErrors := map[string]bool{}
+	sectionFailed := func(section string, err error) {
+		if err != nil {
+			sectionErrors[section] = true
+			slog.ErrorContext(r.Context(), "load Customer dashboard section", "section", section, "error", err)
+		}
+	}
+	tags, err := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, c.ID))
+	sectionFailed("Tags", err)
 	var allTags []*ent.Tag
 	if canAttachTag(r, "customer", c.ID) {
-		allTags, _ = h.tagSvc.ListAll(r.Context(), u.CompanyID)
+		allTags, err = h.tagSvc.ListAll(r.Context(), u.CompanyID)
+		sectionFailed("Tags", err)
 	}
-	defs, _ := h.defSvc.ListForObjectType(r.Context(), "customer")
-	files, _ := h.fileSvc.List(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, c.ID))
+	defs, err := h.defSvc.ListForObjectType(r.Context(), "customer")
+	sectionFailed("Custom Fields", err)
+	files, err := h.fileSvc.List(r.Context(), u.CompanyID, objectref.New(objectref.TypeCustomer, c.ID))
+	sectionFailed("Files", err)
 	var locations []*ent.Location
 	var contacts []*ent.CustomerContact
 	if customerPermission(r, "location.view") {
 		locations, err = h.locationSvc.ListByCustomer(r.Context(), c.ID)
-		if err != nil {
-			internalServerError(w, r, "load Customer Locations", err)
-			return
-		}
+		sectionFailed("Locations", err)
 	}
 	if customerPermission(r, "contact.view") {
 		contacts, err = h.contactSvc.ListByCustomer(r.Context(), c.ID)
-		if err != nil {
-			internalServerError(w, r, "load Customer Contacts", err)
-			return
-		}
+		sectionFailed("Contacts", err)
 	}
 	request, _ := authorization.FromContext(r.Context())
+	var assetPeriods []authorization.CustomerAssetPeriod
+	if customerPermission(r, "asset.view") {
+		assetPeriods, err = request.Service.CustomerAssetHistory(r.Context(), request.Actor, c.ID, false)
+		sectionFailed("Assets", err)
+	}
+	showServiceEntries := customerPermission(r, "asset.view") && customerPermission(r, "service_entry.view")
+	var assetServiceHistory []templates.CustomerAssetServiceHistory
+	if showServiceEntries && !sectionErrors["Assets"] {
+		seen := map[int64]int{}
+		for _, period := range assetPeriods {
+			if index, ok := seen[period.AssetID]; ok {
+				assetServiceHistory[index].Current = assetServiceHistory[index].Current || period.Current
+				continue
+			}
+			entries, loadErr := request.Service.AssetServiceEntries(r.Context(), request.Actor, period.AssetID, c.ID)
+			sectionFailed("Service Entries", loadErr)
+			seen[period.AssetID] = len(assetServiceHistory)
+			assetServiceHistory = append(assetServiceHistory, templates.CustomerAssetServiceHistory{Number: period.Number, Current: period.Current, Entries: entries})
+		}
+	}
 	showFinancial := customerPermission(r, "customer.financial.view")
 	var receivables templates.CustomerReceivables
 	if showFinancial {
 		receivables, err = customerReceivables(r.Context(), request, c.ID, middleware.CompanyLocation(r.Context()))
-		if err != nil {
-			internalServerError(w, r, "load receivables", err)
-			return
-		}
+		sectionFailed("Receivables", err)
 	}
 	showCredit := customerPermission(r, "credit.view")
 	var credit int64
 	if showCredit {
 		credit, err = request.Service.CustomerCreditTotal(r.Context(), request.Actor, c.ID)
-		if err != nil {
-			internalServerError(w, r, "load Credit", err)
-			return
-		}
+		sectionFailed("Customer Credit", err)
 	}
 	showSettlement := showCredit && customerPermission(r, "settlement.view")
 	var creditHistory settlement.CustomerSettlement
 	if showSettlement {
 		actor, _ := settlementActor(r.Context())
 		creditHistory, err = h.settlement.CustomerMasterSettlement(r.Context(), actor, c.ID)
-		if err != nil {
-			internalServerError(w, r, "load settlement history", err)
-			return
-		}
+		sectionFailed("Customer Credit", err)
 	}
 	ctx := middleware.WithPageHeaderTitle(r.Context(), c.DisplayName)
 	work, err := request.Service.CustomerRelatedWork(r.Context(), request.Actor, c.ID)
-	if err != nil {
-		internalServerError(w, r, "load related work", err)
-		return
-	}
+	sectionFailed("Related Work", err)
 	templates.CustomerShow(templates.CustomerShowPageData{
-		ShowSettlement:   showSettlement,
-		Settlement:       creditHistory,
-		CanRefund:        isAdminOrDispatcher(u) && customerPermission(r, "credit.refund"),
-		CanReverseRefund: isAdminOrDispatcher(u) && customerPermission(r, "credit.refund.reverse"),
-		Receivables:      receivables,
-		ShowCredit:       showCredit,
-		CreditCents:      credit,
-		RelatedWork:      work,
-		ShowFinancial:    showFinancial,
-		Customer:         customerToDetail(r.Context(), c),
-		Locations:        locationRows(locations),
-		Contacts:         contactRows(contacts),
-		Tags:             tagsToRows(tags),
-		AllTags:          tagsToRows(allTags),
-		CustomFields:     buildCustomFieldDisplay(defs, c.CustomFields),
-		FileList:         templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: c.ID, ObjectType: "customer"},
-		RefundKey:        newOperationKey(),
+		ShowServiceEntries:  showServiceEntries,
+		AssetServiceHistory: assetServiceHistory,
+		SectionErrors:       sectionErrors,
+		AssetPeriods:        assetPeriods,
+		UpdatedAt:           time.Now().UTC().Format(time.RFC3339),
+		ShowSettlement:      showSettlement,
+		Settlement:          creditHistory,
+		CanRefund:           isAdminOrDispatcher(u) && customerPermission(r, "credit.refund"),
+		CanReverseRefund:    isAdminOrDispatcher(u) && customerPermission(r, "credit.refund.reverse"),
+		Receivables:         receivables,
+		ShowCredit:          showCredit,
+		CreditCents:         credit,
+		RelatedWork:         work,
+		ShowFinancial:       showFinancial,
+		Customer:            customerToDetail(r.Context(), c),
+		Locations:           locationRows(locations),
+		Contacts:            contactRows(contacts),
+		Tags:                tagsToRows(tags),
+		AllTags:             tagsToRows(allTags),
+		CustomFields:        buildCustomFieldDisplay(defs, c.CustomFields),
+		FileList:            templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: c.ID, ObjectType: "customer"},
+		RefundKey:           newOperationKey(),
 	}).Render(ctx, w)
 }
 
