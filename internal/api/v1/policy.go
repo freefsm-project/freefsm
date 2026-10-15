@@ -141,5 +141,5 @@ func (h *handler) capabilities(w http.ResponseWriter, r *http.Request) {
 		sessionError(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"grants": p.Grants, "limits": h.deps.Config, "window_seconds": 60})
+	writeJSON(w, 200, map[string]any{"grants": p.Grants, "limits": h.deps.Config, "window_seconds": 60, "sync": jobSyncDiscovery(p)})
 }
