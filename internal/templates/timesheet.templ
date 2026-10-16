@@ -1,0 +1,222 @@
+package templates
+
+import (
+	"fmt"
+	"github.com/freefsm-project/freefsm/internal/authorization"
+	"time"
+)
+
+templ TimesheetReport(p authorization.Timesheet) {
+	@Layout("Timesheets") {
+		<div id="time-entry-list-content" class="focused-list-content">
+			if p.CanCreate {
+				<a href="/time-entries/new" role="button">Create closed manual entry</a>
+			}
+			<form action="/time-entries" method="get">
+				<label>Search notes<input name="search" value={ p.Filter.Search }/></label>
+				<label>From date<input type="date" name="date_from" value={ p.Filter.DateFrom }/></label>
+				<label>To date<input type="date" name="date_to" value={ p.Filter.DateTo }/></label>
+				<label for="timesheet-subject">Subject</label>
+				<select id="timesheet-subject" name="user_id">
+					<option value="">All authorized subjects</option>
+					for _,option := range p.Subjects {
+						<option value={ fmt.Sprint(option.ID) } selected?={ p.Filter.UserID==option.ID }>{ option.Name }</option>
+					}
+				</select>
+				<label for="timesheet-job">Job</label>
+				<select id="timesheet-job" name="job_id">
+					<option value="">All authorized Jobs</option>
+					<option value="standalone" selected?={ p.Filter.Standalone }>Standalone</option>
+					for _,option := range p.Jobs {
+						<option value={ fmt.Sprint(option.ID) } selected?={ p.Filter.JobID==option.ID }>Job #{ fmt.Sprint(option.ID) } — { option.Name }</option>
+					}
+				</select>
+				<label for="timesheet-source">Source</label>
+				<select id="timesheet-source" name="source">
+					<option value="">All sources</option>
+					<option value="manual" selected?={ p.Filter.Source=="manual" }>Manual</option>
+					<option value="clocked" selected?={ p.Filter.Source=="clocked" }>Clocked</option>
+				</select>
+				<label for="timesheet-lifecycle">Lifecycle</label>
+				<select id="timesheet-lifecycle" name="lifecycle">
+					<option value="">All included entries</option>
+					<option value="active" selected?={ p.Filter.Lifecycle=="active" }>Active</option>
+					<option value="closed" selected?={ p.Filter.Lifecycle=="closed" }>Closed</option>
+					<option value="void" selected?={ p.Filter.Lifecycle=="void" }>Void (requires opt-in)</option>
+				</select>
+				<label for="timesheet-group">Group by</label>
+				<select id="timesheet-group" name="group_by">
+					<option value="subject" selected?={ p.Filter.GroupBy=="subject" }>Subject</option>
+					<option value="job" selected?={ p.Filter.GroupBy=="job" }>Job</option>
+				</select>
+				<label for="timesheet-sort">Sort within groups</label>
+				<select id="timesheet-sort" name="sort">
+					<option value="start_asc" selected?={ p.Filter.Sort=="start_asc" }>Clock In, oldest first</option>
+					<option value="start_desc" selected?={ p.Filter.Sort=="start_desc" }>Clock In, newest first</option>
+				</select>
+				<label><input type="checkbox" name="include_void" value="true" checked?={ p.Filter.IncludeVoid }/>Include terminal Void history (excluded from totals)</label>
+				<button type="submit">Refresh Timesheets</button>
+				<a href="/time-entries">Clear filters</a>
+			</form>
+			<p>Updated at <time datetime={ p.AsOf.Format(time.RFC3339Nano) }>{ p.AsOf.Format(time.RFC3339Nano) }</time>. Company timezone: { p.Timezone }. Exact elapsed time within the selected company dates.</p>
+			<p>
+				Total: <strong data-timesheet-total>{ p.Total.String() }</strong>
+				if p.Provisional {
+					<span>— Provisional as of the displayed refresh time</span>
+				}
+			</p>
+			<ul aria-label="Company-day totals">
+				for _,day := range p.Days {
+					<li>{ day.Date }: { day.Duration.String() }</li>
+				}
+			</ul>
+			for _,group := range p.Groups {
+				<section data-timesheet-group={ group.Key }>
+					<h2>
+						{ group.Name }
+						if group.ID>0 {
+							<span>(#{ fmt.Sprint(group.ID) })</span>
+						}
+					</h2>
+					<p>
+						Group total: { group.Total.String() }
+						if group.Provisional {
+							<span>— Provisional as of the displayed refresh time</span>
+						}
+					</p>
+					<ul>
+						for _,day := range group.Days {
+							<li>{ day.Date }: { day.Duration.String() }</li>
+						}
+					</ul>
+				</section>
+			}
+			if len(p.Rows)==0 {
+				if p.Filter.DateFrom=="" && p.Filter.DateTo=="" && p.Filter.Search=="" && p.Filter.UserID==0 && p.Filter.JobID==0 && !p.Filter.Standalone && p.Filter.Source=="" && p.Filter.Lifecycle=="" {
+					<p>No time entries in your current scope.</p>
+				} else {
+					<p>No time entries found matching these filters.</p>
+				}
+			}
+			<div class="work-queue-wrap">
+				<table class="work-queue-table">
+					<thead><tr><th>Subject</th><th>Job</th><th>Clock In</th><th>Clock Out</th><th>Duration in range</th><th>Notes</th><th>History</th></tr></thead>
+					<tbody>
+						for i,row := range p.Rows {
+							if i==0 || p.Rows[i-1].GroupID!=row.GroupID {
+								<tr>
+									<th colspan="7" scope="rowgroup">
+										{ row.GroupLabel }
+										if row.GroupID>0 {
+											<span>(#{ fmt.Sprint(row.GroupID) })</span>
+										}
+									</th>
+								</tr>
+							}
+							<tr data-time-entry={ fmt.Sprint(row.ID) }>
+								<td>{ row.Access.SubjectName }</td>
+								<td>
+									if row.Access.JobID>0 {
+										if row.Access.CanJob {
+											<a href={ templ.URL(fmt.Sprintf("/jobs/%d", row.Access.JobID)) }>{ row.Access.JobTitle }</a>
+										} else {
+											<span>Job #{ fmt.Sprint(row.Access.JobID) } — { row.Access.JobTitle }</span>
+										}
+									} else {
+										<span>Standalone</span>
+									}
+								</td>
+								<td>{ row.Start.Format(time.RFC3339Nano) }</td>
+								<td>
+									if row.End!=nil {
+										{ row.End.Format(time.RFC3339Nano) }
+									} else if row.Access.VoidedAt!=nil {
+										<span>No recorded end</span>
+									} else {
+										<mark>Active</mark>
+									}
+								</td>
+								<td>
+									if row.Access.VoidedAt!=nil {
+										<span>Excluded (Void)</span>
+									} else {
+										<strong>{ row.Duration.String() }</strong>
+										if row.Provisional {
+											<span>Provisional</span>
+										} else {
+											<span>Final</span>
+										}
+									}
+								</td>
+								<td>
+									{ row.Notes }
+									if row.Manual {
+										<mark>Manual</mark>
+									} else {
+										<span>Clocked</span>
+									}
+									if row.Access.NeedsReview {
+										<mark>Recorded interval requires review</mark>
+									}
+								</td>
+								<td>
+									<a href={ templ.URL(fmt.Sprintf("/time-entries/%d", row.ID)) }>View entry and history</a>
+									if len(row.History)>0 {
+										<details>
+											<summary>Revision history</summary>
+											for _,revision := range row.History {
+												<article>
+													<p>
+														{ revision.Event } — { revision.Actor }
+														if revision.ActorID>0 {
+															<span>(#{ fmt.Sprint(revision.ActorID) })</span>
+														}
+														<span>at { revision.AcceptedAt.Format(time.RFC3339Nano) }</span>
+													</p>
+													<p>{ revision.Reason }</p>
+													if revision.Before!=nil {
+														<p>Before: { timesheetHistoryState(*revision.Before) }</p>
+													}
+													<p>After: { timesheetHistoryState(revision.After) }</p>
+												</article>
+											}
+										</details>
+									}
+									if len(row.GPS)>0 {
+										<details>
+											<summary>Recorded clock GPS</summary>
+											<p>Original optional clock observations; not tracking or attendance proof. Corrections do not relocate these captures.</p>
+											for _,gps := range row.GPS {
+												<p>
+													{ gps.Event }: { fmt.Sprint(gps.Latitude) }, { fmt.Sprint(gps.Longitude) }; captured { gps.CapturedAt.Format(time.RFC3339Nano) }
+													if gps.Accuracy!=nil {
+														<span>; accuracy { fmt.Sprint(*gps.Accuracy) } m</span>
+													}
+												</p>
+											}
+										</details>
+									}
+									if row.Access.CanCorrect {
+										<a href={ templ.URL(fmt.Sprintf("/time-entries/%d/edit", row.ID)) }>Edit</a>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	}
+}
+
+func timesheetHistoryState(s authorization.TimeState) string {
+	end := "No recorded end"
+	if s.ClockOut != nil {
+		end = s.ClockOut.Format(time.RFC3339Nano)
+	}
+	job := "Standalone"
+	if s.JobID != nil {
+		job = fmt.Sprintf("Job #%d — %s", *s.JobID, s.JobTitle)
+	}
+	return fmt.Sprintf("%s → %s; %s; %s", s.ClockIn.Format(time.RFC3339Nano), end, job, s.Notes)
+}

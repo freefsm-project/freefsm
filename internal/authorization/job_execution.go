@@ -105,6 +105,10 @@ func (s *Service) SubmitJobStatus(ctx context.Context, a Actor, id int64, in Job
 }
 
 func (s *Service) submitJobExecution(ctx context.Context, a Actor, id int64, kind string, in JobExecutionCommand) (JobExecutionReceipt, error) {
+	return s.submitJobExecutionBound(ctx, a, id, kind, in, nil)
+}
+
+func (s *Service) submitJobExecutionBound(ctx context.Context, a Actor, id int64, kind string, in JobExecutionCommand, batch *batchExecution) (JobExecutionReceipt, error) {
 	out := JobExecutionReceipt{OperationID: in.OperationID}
 	op, err := uuid.Parse(in.OperationID)
 	if err != nil || op == uuid.Nil {
@@ -119,11 +123,16 @@ func (s *Service) submitJobExecution(ctx context.Context, a Actor, id int64, kin
 	}
 	in.OperationID = op.String()
 	out.OperationID = in.OperationID
+	var binding *BatchNotesOperation
+	if batch != nil {
+		binding = &batch.operation
+	}
 	encoded, _ := json.Marshal(struct {
 		JobID  int64
 		Kind   string
 		Intent JobExecutionCommand
-	}{id, kind, in})
+		Batch  *BatchNotesOperation `json:",omitempty"`
+	}{id, kind, in, binding})
 	digest := fmt.Sprintf("%x", sha256.Sum256(encoded))
 	var outcome error
 	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
@@ -145,10 +154,16 @@ func (s *Service) submitJobExecution(ctx context.Context, a Actor, id int64, kin
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		if kind == "status" {
-			out.EffectID, outcome = applyJobStatus(ctx, tx, p, a, id, in)
-		} else {
-			out.EffectID, outcome = applyJobNotes(ctx, tx, p, a, id, in)
+		if batch != nil {
+			outcome = batch.validate(ctx, tx, a)
+		}
+		// A dependency rejection is terminal intent, never a domain effect.
+		if outcome == nil {
+			if kind == "status" {
+				out.EffectID, outcome = applyJobStatus(ctx, tx, p, a, id, in)
+			} else {
+				out.EffectID, outcome = applyJobNotes(ctx, tx, p, a, id, in)
+			}
 		}
 		out.Code = executionCode(outcome)
 		if out.Code == "" {

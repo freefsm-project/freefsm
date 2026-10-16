@@ -158,4 +158,6 @@ to the original installed Job and its unchanged revision/receipt service.
 The local OpenAPI3.1 document describes the additive contract. Owning tests cover
 real Secret Service lifecycle, exact expiry/restart/wrong-key failure, ordinary
 purge and restore separately, plus production HTTP/DB acceptance and denial.
-Broader batches and financial restore recovery remain separate slices.
+[Ordered Notes batches](api-operation-batches.md) extend this same protected
+store with explicit dependencies and reviewed descendant repair. Financial
+restore recovery remains a separate slice.

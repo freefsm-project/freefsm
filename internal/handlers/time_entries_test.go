@@ -73,7 +73,9 @@ func TestTimeEntryListDateFilterUsesCompanyTimezoneAndRetainsValues(t *testing.T
 	body := requestBody(t, router, sessionCookie(t, ctx, sessions, admin), "GET", "/time-entries?date_from=2026-07-10&date_to=2026-07-10", http.StatusOK)
 	assertContains(t, body, "local day start")
 	assertContains(t, body, "local day end")
-	assertNotContains(t, body, "previous local day")
+	// Timesheets include the intersecting part of entries begun on an earlier
+	// company day, rather than filtering solely by the clock-in date.
+	assertContains(t, body, "previous local day")
 	assertNotContains(t, body, "next local day")
 	assertContains(t, body, `name="date_from" value="2026-07-10"`)
 	assertContains(t, body, `name="date_to" value="2026-07-10"`)
@@ -117,7 +119,8 @@ func TestTimeEntryListEnforcesGrantScopeAndCombinesAuthorizedFilters(t *testing.
 	client.TimeEntry.Create().SetCompanyID(companyID).SetUserID(other.ID).SetClockIn(clockIn).SetClockOut(clockIn.Add(time.Hour)).SetNotes("inspection wrong search").SaveX(ctx)
 
 	techBody := requestBody(t, router, sessionCookie(t, ctx, sessions, tech.ID), "GET", fmt.Sprintf("/time-entries?user_id=%d", other.ID), http.StatusOK)
-	assertContains(t, techBody, "repair self result")
+	// A supplied subject filter is retained, not silently replaced with Own.
+	assertNotContains(t, techBody, "repair self result")
 	assertNotContains(t, techBody, "repair selected result")
 
 	officePath := fmt.Sprintf("/time-entries?user_id=%d&search=repair&date_from=2026-07-10&date_to=2026-07-10", other.ID)
