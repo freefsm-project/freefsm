@@ -215,6 +215,7 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/jobs/{id}/field-notes/history", h.jobExecution)
 		r.Post("/jobs/{id}/field-notes", h.jobExecution)
 		r.Get("/job-execution-operations/{operation}", h.jobExecutionReceipt)
+		r.Get("/job-field-operations/{operation}", h.jobFieldReceipt)
 		r.Get("/time-entries/active", h.activeTimeEntry)
 		r.Post("/time-entries/clock-in", h.clockIn)
 		r.Post("/time-entries/lease", h.clockLease)

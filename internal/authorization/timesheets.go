@@ -91,20 +91,42 @@ type TimesheetDay struct {
 
 // Timesheet is an all-matching authorized snapshot. It is not an export artifact.
 type Timesheet struct {
-	Filter         TimesheetFilter
-	AsOf           time.Time
-	Timezone       string
-	Rows           []TimesheetRow
-	Days           []TimesheetDay
-	Total          ElapsedMicroseconds
-	Provisional    bool
-	CanCreate      bool
-	Subjects, Jobs []TimesheetChoice
-	Groups         []TimesheetGroup
+	Filter                  TimesheetFilter
+	AsOf                    time.Time
+	Timezone                string
+	Rows                    []TimesheetRow
+	Days                    []TimesheetDay
+	Total                   ElapsedMicroseconds
+	Provisional             bool
+	CanCreate               bool
+	CanExport, CanExportGPS bool
+	Subjects, Jobs          []TimesheetChoice
+	Groups                  []TimesheetGroup
 }
 
 func (s *Service) Timesheet(ctx context.Context, a Actor, filter TimesheetFilter) (Timesheet, error) {
 	var result Timesheet
+	p, err := s.Principal(ctx, a)
+	if err != nil {
+		return result, err
+	}
+	scope := timeEntryGrant(p, "time.view", true, true)
+	if scope == "" || a.Channel == "api" {
+		return result, ErrForbidden
+	}
+	err = s.WithinSnapshotPermission(ctx, a, "time.view", scope, func(tx pgx.Tx, p Principal) error {
+		var err error
+		result, err = readTimesheet(ctx, tx, p, filter, "", "")
+		return err
+	})
+	if err != nil {
+		return Timesheet{}, err
+	}
+	return result, nil
+}
+
+// NormalizeTimesheetFilter is shared by report and durable export acceptance.
+func NormalizeTimesheetFilter(filter TimesheetFilter) (TimesheetFilter, error) {
 	if filter.GroupBy == "" {
 		filter.GroupBy = "subject"
 	}
@@ -112,20 +134,28 @@ func (s *Service) Timesheet(ctx context.Context, a Actor, filter TimesheetFilter
 		filter.Sort = "start_asc"
 	}
 	if filter.GroupBy != "subject" && filter.GroupBy != "job" || filter.Sort != "start_asc" && filter.Sort != "start_desc" || filter.Source != "" && filter.Source != "manual" && filter.Source != "clocked" || filter.Lifecycle != "" && filter.Lifecycle != "active" && filter.Lifecycle != "closed" && filter.Lifecycle != "void" || filter.UserID < 0 || filter.JobID < 0 {
-		return result, ErrTimesheetFilter
+		return filter, ErrTimesheetFilter
 	}
-	p, err := s.Principal(ctx, a)
+	for _, date := range []string{filter.DateFrom, filter.DateTo} {
+		if date != "" {
+			if _, err := time.Parse("2006-01-02", date); err != nil {
+				return filter, ErrTimesheetFilter
+			}
+		}
+	}
+	if filter.DateFrom != "" && filter.DateTo != "" && filter.DateFrom > filter.DateTo {
+		return filter, ErrTimesheetFilter
+	}
+	return filter, nil
+}
+
+func readTimesheet(ctx context.Context, tx pgx.Tx, p Principal, filter TimesheetFilter, exportPermission string, exportScope Scope) (Timesheet, error) {
+	var result Timesheet
+	filter, err := NormalizeTimesheetFilter(filter)
 	if err != nil {
 		return result, err
 	}
-	scope := timeEntryGrant(p, "time.view", true, true)
-	if scope == "" {
-		return result, ErrForbidden
-	}
-	err = s.WithinSnapshotPermission(ctx, a, "time.view", scope, func(tx pgx.Tx, p Principal) error {
-		if a.Channel == "api" {
-			return ErrForbidden
-		}
+	err = func() error {
 		if err := tx.QueryRow(ctx, `SELECT timezone FROM company_settings LIMIT 1`).Scan(&result.Timezone); err != nil {
 			return err
 		}
@@ -133,24 +163,16 @@ func (s *Service) Timesheet(ctx context.Context, a Actor, filter TimesheetFilter
 		if err != nil {
 			return err
 		}
-		if filter.DateFrom != "" {
-			_, err := time.Parse("2006-01-02", filter.DateFrom)
-			if err != nil {
-				return fmt.Errorf("%w: invalid date_from", ErrTimesheetFilter)
-			}
+		if err := tx.QueryRow(ctx, `SELECT transaction_timestamp()`).Scan(&result.AsOf); err != nil {
+			return err
 		}
-		if filter.DateTo != "" {
-			_, err := time.Parse("2006-01-02", filter.DateTo)
-			if err != nil {
-				return fmt.Errorf("%w: invalid date_to", ErrTimesheetFilter)
-			}
-		}
-		if filter.DateFrom != "" && filter.DateTo != "" && filter.DateFrom > filter.DateTo {
-			return fmt.Errorf("%w: reversed dates", ErrTimesheetFilter)
-		}
-		result.AsOf = time.Now().Truncate(time.Microsecond).In(loc)
+		result.AsOf = result.AsOf.In(loc)
 		result.Filter = filter
 		result.CanCreate = timeEntryGrant(p, "time.create", true, true) != ""
+		for _, scope := range []Scope{All, Own, Assigned} {
+			result.CanExport = result.CanExport || AuthorizeTimeExport(p, "time.export", scope) == nil
+			result.CanExportGPS = result.CanExportGPS || AuthorizeTimeExport(p, "time.gps.export", scope) == nil
+		}
 		subjects, jobs := map[int64]string{}, map[int64]string{}
 		rows, err := tx.Query(ctx, `SELECT id,clock_in,clock_out,coalesce(notes,''),is_manual FROM time_entries WHERE company_id=$1 ORDER BY clock_in,id`, p.CompanyID)
 		if err != nil {
@@ -180,6 +202,14 @@ func (s *Service) Timesheet(ctx context.Context, a Actor, filter TimesheetFilter
 				return err
 			}
 			row.Access = access
+			if exportPermission != "" {
+				if err := checkTimeExportAnchor(ctx, tx, p, access.UserID, access.JobID, exportPermission, exportScope); err != nil {
+					if errors.Is(err, ErrForbidden) || errors.Is(err, ErrNotFound) {
+						continue
+					}
+					return err
+				}
+			}
 			if access.VoidedAt != nil && !filter.IncludeVoid {
 				continue
 			}
@@ -235,7 +265,7 @@ func (s *Service) Timesheet(ctx context.Context, a Actor, filter TimesheetFilter
 			if err != nil {
 				return err
 			}
-			if access.CanGPS {
+			if access.CanGPS && exportPermission != "time.export" {
 				row.GPS, err = readClockGPS(ctx, tx, row.ID)
 				if err != nil {
 					return err
@@ -335,7 +365,7 @@ func (s *Service) Timesheet(ctx context.Context, a Actor, filter TimesheetFilter
 		})
 		result.Days = sortedTimesheetDays(days)
 		return nil
-	})
+	}()
 	if err != nil {
 		return Timesheet{}, err
 	}
