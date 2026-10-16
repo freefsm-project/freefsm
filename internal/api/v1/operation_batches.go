@@ -65,7 +65,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 		}
 		part := r.Clone(r.Context())
 		part.Body = io.NopCloser(bytes.NewReader(raw))
-		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "revisions", "values") {
+		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "status_id", "status_revision", "meaning_revision", "subtask_id", "completion_revision", "completed", "revisions", "values") {
 			return
 		}
 		op := wire.BatchNotesOperation
@@ -75,11 +75,6 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			if !valid {
 				return
 			}
-		}
-		var members map[string]json.RawMessage
-		if err := json.Unmarshal(raw, &members); err != nil {
-			writeError(w, 400, "invalid_request", "Invalid operation shape")
-			return
 		}
 		if wire.DependsOn != nil {
 			op.DependsOn = make([]string, 0, len(wire.DependsOn))
@@ -94,13 +89,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			op.DependsOn = append(op.DependsOn, *dependency)
 		}
 		id, e := uuid.Parse(op.OperationID)
-		validIntent := op.Type == "job.field_notes" && op.Notes != nil && op.NotesRevision != "" && op.Values == nil && wire.Revisions == nil
-		if op.Type == "job.fields" {
-			_, hasNotes := members["field_notes"]
-			_, hasNotesRevision := members["notes_revision"]
-			validIntent = !hasNotes && !hasNotesRevision && op.Revisions != nil && len(op.Values) > 0 && op.Values[0] == '['
-		}
-		if e != nil || id == uuid.Nil || id.String() != op.OperationID || seen[op.OperationID] || !validIntent || op.Target == "" || op.DependsOn == nil {
+		if e != nil || id == uuid.Nil || id.String() != op.OperationID || seen[op.OperationID] || op.Target == "" || op.DependsOn == nil || !completeBatchFieldIntent(op, raw) {
 			writeError(w, 400, "invalid_request", "Each operation needs a unique canonical UUID and a complete supported field intent")
 			return
 		}
@@ -124,6 +113,12 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 				status, code = 403, "forbidden"
 			case errors.Is(result.Err, authorization.ErrNotFound):
 				status, code = 404, "not_found"
+			case errors.Is(result.Err, authorization.ErrConflict):
+				status, code = 409, "subtask_conflict"
+			case errors.Is(result.Err, authorization.ErrSubtaskInvalid):
+				status, code = 400, "invalid_subtask"
+			case errors.Is(result.Err, authorization.ErrSubtaskReview):
+				status, code = 409, "review_required"
 			}
 			disposition := "review"
 			retry := 0
@@ -136,6 +131,41 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 		out = append(out, item)
 	}
 	writeJSON(w, 200, map[string]any{"results": out})
+}
+
+// Each discriminated shape is closed before any member is dispatched. Even an
+// empty irrelevant property is rejected, rather than discarded from intent.
+func completeBatchFieldIntent(op authorization.BatchFieldOperation, raw []byte) bool {
+	allowed := map[string]bool{"operation_id": true, "type": true, "target": true, "depends_on": true, "occurred_at": true}
+	var fields []string
+	valid := false
+	switch op.Type {
+	case "job.field_notes":
+		fields = []string{"notes_revision", "field_notes"}
+		valid = op.Notes != nil && op.NotesRevision != ""
+	case "job.status":
+		fields = []string{"status_id", "status_revision", "meaning_revision"}
+		valid = op.StatusID != "" && op.StatusRevision != "" && op.MeaningRevision != ""
+	case "job.subtask":
+		fields = []string{"subtask_id", "completion_revision", "completed"}
+		valid = op.SubtaskID != "" && op.CompletionRevision != "" && op.Completed != nil
+	case "job.fields":
+		fields = []string{"revisions", "values"}
+		valid = op.Revisions != nil && len(op.Values) > 0
+	}
+	for _, key := range fields {
+		allowed[key] = true
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(raw, &object) != nil {
+		return false
+	}
+	for key := range object {
+		if !allowed[key] {
+			return false
+		}
+	}
+	return valid
 }
 
 type batchResult struct {

@@ -3,11 +3,12 @@ const {randomUUID,createHash}=require('node:crypto');
 const {ProtectedStore}=require('./protected-store.cjs');
 const clone=x=>JSON.parse(JSON.stringify(x));
 const clientIdentity=token=>token?createHash('sha256').update(token).digest('hex'):null;
-const fresh=()=>({version:1,user:null,token:null,lease:null,authority:null,contactEpoch:null,issuance:null,leaseLocked:false,cache:{},notes:{},pending:{},synced:false,restore:false,highWater:0});
+const jobCategories=new Set(['job:new','job:travel_time','job:in_progress','job:pending','job:completed','job:canceled']);
+const fresh=()=>({version:1,user:null,token:null,lease:null,authority:null,contactEpoch:null,issuance:null,leaseLocked:false,cache:{},notes:{},pending:{},syncCursor:null,synced:false,restore:false,highWater:0});
 
 // Each action is explicit and serialized, including its network round trips.
 // Nothing in construction/restart, authentication or synchronization submits work.
-class OfflineNotes {
+class OfflineFieldClient {
  constructor(store,transport,now=()=>Date.now()){this.store=store;this.transport=transport;this.now=now;}
  async initialize(){return this.store.exclusive(async()=>{await this.store.create();try{await this.store.load();}catch(e){if(e.code!=='ENOENT')throw e;await this.store.save(fresh());}});}
  async transaction(fn){return this.store.exclusive(async()=>{const s=await this.store.load();return fn(s);});}
@@ -30,7 +31,7 @@ class OfflineNotes {
  }
  async purge(s,issuance=null){
   // Retain only nonsensitive operation identities/dispositions for safe lookup.
-  const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt,receipt_family:e.receipt_family};
+  const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt,family:e.family,receipt_family:e.receipt_family};
   Object.assign(s,fresh(),{pending:safe,user:s.user,issuance});await this.persistAuthorityLoss(s);
  }
  async purgeDeniedIssuance(s,receipt){
@@ -42,7 +43,7 @@ class OfflineNotes {
  purgeSensitiveTarget(s,job){
   delete s.cache[job];delete s.notes[job];
   for(const e of Object.values(s.pending))if(e.job===job){
-   delete e.intent;delete e.batch;delete e.job;e.state='purged';
+   delete e.intent;delete e.batch;delete e.subtask;delete e.job;e.state='purged';
   }
  }
  async contact(s,path,method='GET',body,operation){
@@ -95,22 +96,24 @@ class OfflineNotes {
    // Old-client intent cannot be rebound; keep only safe receipt identities.
    await this.purge(s);s.token=token;
   }
-  s.authority={epoch:l.epoch,user:l.user_id,client:clientIdentity(token)};
+   s.authority={epoch:l.epoch,user:l.user_id,client:clientIdentity(token)};s.syncCursor=null;
   s.issuance={id:operation,state:'accepted'};s.user=l.user_id;s.lease=l;s.contactEpoch=l.epoch;s.leaseLocked=false;s.synced=false;s.cache={};s.notes={};s.highWater=Math.max(this.now(),issued);
   // Accepted issuance can reveal a restored epoch. Its review lock must survive
   // a failed final write, not just the earlier unknown-issuance checkpoint.
   await this.persistAuthorityLoss(s);return {expires_at:l.expires_at,state:'synchronization_required'};
  });}
- async synchronize(){return this.transaction(async s=>{
-  await this.policy(s);s.synced=false;s.cache={};s.notes={};await this.persist(s);
-  let page, records={};const seen=new Set();
+  async synchronize(delta=false){return this.transaction(async s=>{
+   if(delta){await this.enforceOfflineAccessWindow(s);if(!s.syncCursor)throw Error('synchronization_incomplete');}
+   await this.policy(s);const cursor=delta?s.syncCursor:null;
+   let page,records=delta?clone(s.cache):{},completion;const seen=new Set();
+   s.synced=false;s.cache={};s.notes={};await this.persist(s);
   do{
-   const r=await this.contact(s,'/sync/jobs?scope=assigned&page_size=200'+(page?'&page='+encodeURIComponent(page):''));
+    const r=await this.contact(s,'/sync/jobs?scope=assigned&page_size=200'+(page?'&page='+encodeURIComponent(page):cursor?'&cursor='+encodeURIComponent(cursor):''));
    if(r.status!==200||!Array.isArray(r.data?.records)||typeof r.data.complete!=='boolean'||!['none','all'].includes(r.data.purge))throw Error('synchronization_incomplete');
    if(r.data.purge==='all'){await this.purge(s);throw Error('authorization_purged');}
    for(const id of r.data.removed||[])delete records[id];
    for(const record of r.data.records){if(typeof record.id!=='string')throw Error('synchronization_incomplete');records[record.id]=record;}
-   if(r.data.complete){if(typeof r.data.completion_cursor!=='string'||!r.data.completion_cursor||r.data.next_page!==null)throw Error('synchronization_incomplete');page=null;}
+    if(r.data.complete){if(typeof r.data.completion_cursor!=='string'||!r.data.completion_cursor||r.data.next_page!==null)throw Error('synchronization_incomplete');completion=r.data.completion_cursor;page=null;}
    else {page=r.data.next_page;if(!page||seen.has(page))throw Error('synchronization_incomplete');seen.add(page);}
   }while(page);
   for(const e of Object.values(s.pending)){
@@ -119,7 +122,7 @@ class OfflineNotes {
   }
   // The complete snapshot carries observed scope removals and restore outcomes.
   // Failed persistence must not revive older intent after authority returns.
-  s.cache=records;s.synced=true;s.restore=false;await this.persistAuthorityLoss(s);
+   s.cache=records;s.syncCursor=completion;s.synced=true;s.restore=false;await this.persistAuthorityLoss(s);
   return {state:'synchronized',count:Object.keys(records).length};
  });}
  async readNotes(job){return this.transaction(async s=>{
@@ -145,7 +148,7 @@ class OfflineNotes {
    if(!Array.isArray(dependencies)||dependencies.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)))throw Error('review_required');
    return clone(dependencies);
   }
- async stageBatch(job,text,dependencies){return this.transaction(async s=>{
+  async stageBatch(job,text,dependencies){return this.transaction(async s=>{
    await this.enforceOfflineAccessWindow(s);const depends_on=this.reviewedDependencies(dependencies);
    const id=this.stageIn(s,job,text);s.pending[id].batch={type:'job.field_notes',target:job,depends_on};await this.persist(s);return id;
    });}
@@ -166,12 +169,37 @@ class OfflineNotes {
    await this.enforceOfflineAccessWindow(s);const id=this.stageFieldsIn(s,job,values,dependencies);await this.persist(s);return id;
   });}
   async repairFields(id,values,reviewedRevisions,dependencies){return this.transaction(async s=>{
-   await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
-   if(!e||e.receipt_family!=='job-field'||!['terminal','restore_uncertain'].includes(e.state)||!e.job||!Array.isArray(values))throw Error('review_required');
-   if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
+   await this.enforceOfflineAccessWindow(s);const e=this.repairableField(s,id,'job.fields');
+   if(!Array.isArray(values))throw Error('review_required');
    const fields=s.cache[e.job]?.custom_fields;
    if(!fields||!reviewedRevisions||values.some(v=>!reviewedRevisions[String(v.definition_id)]||reviewedRevisions[String(v.definition_id)]!==fields.revisions[String(v.definition_id)]))throw Error('review_required');
    const next=this.stageFieldsIn(s,e.job,values,dependencies);e.state='replaced';await this.persist(s);return next;
+  });}
+  stageStatusIn(s,job,status,revision,meaning,dependencies){
+   const record=s.cache[job],definition=record?.status_definitions?.find(v=>v.id===status);
+   if(record?.field_capabilities?.status!==true||!definition||!jobCategories.has(definition.category)||!revision||!meaning||record.status_revision!==revision||definition.meaning_revision!==meaning)throw Error('review_required');
+   const id=randomUUID();s.pending[id]={job,family:'job.execution',state:'pending',intent:{operation_id:id,status_id:status,status_revision:revision,meaning_revision:meaning,occurred_at:new Date(this.now()).toISOString()},batch:{type:'job.status',target:job,depends_on:this.reviewedDependencies(dependencies)}};return id;
+  }
+  stageSubtaskIn(s,job,subtask,completed,revision,dependencies){
+   const record=s.cache[job],task=record?.subtasks?.find(v=>v.id===subtask);
+   if(typeof completed!=='boolean'||!task||typeof task.completed!=='boolean'||!revision||record.field_capabilities?.[completed?'subtask_complete':'subtask_reopen']!==true||task.completion_revision!==revision)throw Error('review_required');
+   const id=randomUUID();s.pending[id]={job,subtask,family:'job.subtask',state:'pending',intent:{operation_id:id,subtask_id:subtask,completed,completion_revision:revision,occurred_at:new Date(this.now()).toISOString()},batch:{type:'job.subtask',target:job,depends_on:this.reviewedDependencies(dependencies)}};return id;
+  }
+  async stageStatus(job,status,revision,meaning,dependencies){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const id=this.stageStatusIn(s,job,status,revision,meaning,dependencies);await this.persist(s);return id;});}
+  async stageSubtask(job,subtask,completed,revision,dependencies){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const id=this.stageSubtaskIn(s,job,subtask,completed,revision,dependencies);await this.persist(s);return id;});}
+  repairableField(s,id,type){
+   const e=s.pending[id];
+   if(!e||e.batch?.type!==type||!e.job||!['terminal','restore_uncertain'].includes(e.state))throw Error('review_required');
+   if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
+   return e;
+  }
+  async repairStatus(id,status,revision,meaning,dependencies){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);const e=this.repairableField(s,id,'job.status');
+   const next=this.stageStatusIn(s,e.job,status,revision,meaning,dependencies);e.state='replaced';await this.persist(s);return next;
+  });}
+  async repairSubtask(id,completed,revision,dependencies){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);const e=this.repairableField(s,id,'job.subtask');
+   const next=this.stageSubtaskIn(s,e.job,e.subtask,completed,revision,dependencies);e.state='replaced';await this.persist(s);return next;
   });}
  async submitBatch(ids){return this.transaction(async s=>{
    await this.enforceOfflineAccessWindow(s);
@@ -228,8 +256,9 @@ class OfflineNotes {
   // Receipt lookup remains possible without resource visibility or a live offline
   // lease. It still requires a currently valid authenticated server session.
   if(!s.pending[id])throw Error('unknown_operation');
-  const family=s.pending[id].receipt_family==='job-field'?'job-field':'job-execution';
-  const r=await this.contact(s,`/${family}-operations/${encodeURIComponent(id)}`);
+  const entry=s.pending[id];
+  const endpoint=entry.family==='job.subtask'?'subtask-operations':entry.receipt_family==='job-field'?'job-field-operations':'job-execution-operations';
+  const r=await this.contact(s,`/${endpoint}/${encodeURIComponent(id)}`);
   // Receipt access is independent of offline policy and target visibility. Check
   // policy on this reconnect, then apply only safe receipt metadata after purge.
   await this.policy(s,true);
@@ -244,7 +273,7 @@ class OfflineNotes {
  });}
  async repair(id,text,reviewedRevision,reviewedDependencies){return this.transaction(async s=>{
   await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
-  if(!e||!['terminal','restore_uncertain'].includes(e.state)||!e.job)throw Error('review_required');
+   if(!e||!['terminal','restore_uncertain'].includes(e.state)||!e.job||(e.batch&&e.batch.type!=='job.field_notes'))throw Error('review_required');
   if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
   if(!reviewedRevision||s.notes[e.job]?.notes_revision!==reviewedRevision)throw Error('review_required');
   const batch=e.batch?{type:e.batch.type,target:e.batch.target,depends_on:this.reviewedDependencies(reviewedDependencies)}:null;
@@ -254,4 +283,6 @@ class OfflineNotes {
  async discard(id){return this.transaction(async s=>{delete s.pending[id];await this.persist(s);});}
  async logout(){return this.store.exclusive(()=>this.store.destroy());}
 }
-module.exports={OfflineNotes,ProtectedStore};
+// The original Notes entry point remains compatible; all field families share
+// one protected authority, receipt-recovery and quarantine state machine.
+module.exports={OfflineFieldClient,OfflineNotes:OfflineFieldClient,ProtectedStore};

@@ -22,6 +22,8 @@ type FieldError struct {
 
 func (e *FieldError) Error() string { return e.Name + ": " + e.Message }
 
+func (e *FieldError) ValidationReason() string { return e.Reason }
+
 type Value struct {
 	DefinitionID int64 `json:"definition_id"`
 	Value        any   `json:"value"`

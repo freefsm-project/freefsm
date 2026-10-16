@@ -20,6 +20,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/google/uuid"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // Last installed composition before the common registry existed. SQL comes
@@ -123,6 +124,9 @@ func TestInstalledIdentityHistoryHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	execSQL(`UPDATE jobs SET custom_fields=jsonb_build_array(jsonb_build_object('definition_id',$2::bigint,'value','Secret installed field value')) WHERE id=$1`, j.ID, definition)
+	// Recorded legacy evidence has no trustworthy modern definition mapping.
+	// Preserve its representation and actor, never infer IDs from old labels.
+	execSQL(`INSERT INTO authorization_audit(actor_kind,actor_id,role_id,action,scope,target_type,target_id,channel,detail,recorded_at) VALUES('product-user',$1,1,'job.fields.edit','A','job',$2,'web','{"before":{"serial":"old"},"after":{"serial":"recorded"}}','2020-01-03T04:05:06Z'),('product-user',$1,1,'job.fields.edit','A','job',$2,'web','{"before":"old text","after":"recorded text"}','2020-01-03T04:06:06Z')`, admin, j.ID)
 	fieldID := add("field_mobile", "job.fields", "api:"+hash, fmt.Sprintf("/jobs/%d/custom-fields?operation_id=", j.ID), 200)
 	fieldIntent := []byte(fmt.Sprintf(`{"operation_id":%q,"revisions":{},"values":[]}`, fieldID))
 	execSQL(`INSERT INTO job_field_operations(user_id,client_hash,operation_id,job_id,intent,outcome) VALUES($1,$2,$3,$4,$5,'accepted')`, admin, hash, fieldID, j.ID, fieldIntent)
@@ -206,12 +210,13 @@ func TestInstalledIdentityHistoryHTTP(t *testing.T) {
 		var value string
 		// Compare every installed fact.085 adds empty financial/legacy intent
 		// markers (asserted separately below) and preserves tax's exact decimal
-		// spelling while changing its SQL type from numeric to text.
-		if err := pool.QueryRow(ctx, `SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM comment_operation_receipts x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id,client_hash) FROM job_field_operations x),(SELECT jsonb_agg(to_jsonb(x)-'intent_version' ORDER BY operation_id) FROM commercial_operations x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_publications x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_mutation_operations x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfers x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfer_chunks x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM files x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM comments x),(SELECT jsonb_agg((to_jsonb(x)-'financial')||jsonb_build_object('tax_rate',x.tax_rate::text) ORDER BY id) FROM estimates x),(SELECT jsonb_agg((to_jsonb(x)-'financial')||jsonb_build_object('tax_rate',x.tax_rate::text) ORDER BY id) FROM invoices x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY client_id) FROM commercial_client_identities x))::text`).Scan(&value); err != nil {
+		// spelling while changing its SQL type from numeric to text.087 adds only
+		// an unknown nullable validation reason, independently asserted below.
+		if err := pool.QueryRow(ctx, `SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM comment_operation_receipts x),(SELECT jsonb_agg(to_jsonb(x)-'validation_reason' ORDER BY operation_id,client_hash) FROM job_field_operations x),(SELECT jsonb_agg(to_jsonb(x)-'intent_version' ORDER BY operation_id) FROM commercial_operations x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_publications x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_mutation_operations x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfers x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfer_chunks x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM files x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM comments x),(SELECT jsonb_agg((to_jsonb(x)-'financial')||jsonb_build_object('tax_rate',x.tax_rate::text) ORDER BY id) FROM estimates x),(SELECT jsonb_agg((to_jsonb(x)-'financial')||jsonb_build_object('tax_rate',x.tax_rate::text) ORDER BY id) FROM invoices x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY client_id) FROM commercial_client_identities x))::text`).Scan(&value); err != nil {
 			t.Fatal(err)
 		}
 		var fields string
-		if err := pool.QueryRow(ctx, `SELECT jsonb_build_object('values',(SELECT custom_fields FROM jobs WHERE id=$1),'revisions',(SELECT jsonb_agg(to_jsonb(r) ORDER BY definition_id) FROM job_field_revisions r WHERE job_id=$1))::text`, j.ID).Scan(&fields); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT jsonb_build_object('values',(SELECT custom_fields FROM jobs WHERE id=$1),'revisions',(SELECT jsonb_agg(to_jsonb(r) ORDER BY definition_id) FROM job_field_revisions r WHERE job_id=$1),'field_audit',(SELECT jsonb_agg(to_jsonb(a) ORDER BY id) FROM authorization_audit a WHERE action='job.fields.edit' AND target_id=$1))::text`, j.ID).Scan(&fields); err != nil {
 			t.Fatal(err)
 		}
 		return value + fields
@@ -225,7 +230,7 @@ func TestInstalledIdentityHistoryHTTP(t *testing.T) {
 			t.Fatal("upgrade rewrote installed receipts/effects/transport")
 		}
 		var preserved bool
-		if err := pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM commercial_operations WHERE intent_version<>0) AND NOT EXISTS(SELECT 1 FROM estimates WHERE financial<>'') AND NOT EXISTS(SELECT 1 FROM invoices WHERE financial<>'')`).Scan(&preserved); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM commercial_operations WHERE intent_version<>0) AND NOT EXISTS(SELECT 1 FROM estimates WHERE financial<>'') AND NOT EXISTS(SELECT 1 FROM invoices WHERE financial<>'') AND NOT EXISTS(SELECT 1 FROM job_field_operations WHERE validation_reason IS NOT NULL)`).Scan(&preserved); err != nil {
 			t.Fatal(err)
 		}
 		if !preserved {
@@ -254,6 +259,66 @@ func TestInstalledIdentityHistoryHTTP(t *testing.T) {
 		}
 		return w.Body.String()
 	}
+	legacyRequest := httptest.NewRequest("GET", "/sync/jobs?scope=all", nil)
+	legacyRequest.Header.Set("Authorization", "Bearer "+token)
+	legacyResponse := httptest.NewRecorder()
+	api.ServeHTTP(legacyResponse, legacyRequest)
+	if legacyResponse.Code != 200 {
+		t.Errorf("retained legacy field history unavailable: %d %s", legacyResponse.Code, legacyResponse.Body.String())
+	} else {
+		var observed struct {
+			Data struct {
+				Records []struct {
+					Fields struct {
+						History []struct {
+							Legacy struct{ Before, After json.RawMessage } `json:"legacy_values"`
+						} `json:"history"`
+					} `json:"custom_fields"`
+				} `json:"records"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(legacyResponse.Body.Bytes(), &observed); err != nil {
+			t.Fatal(err)
+		}
+		if len(observed.Data.Records) != 1 || len(observed.Data.Records[0].Fields.History) != 2 {
+			t.Fatalf("legacy history lost: %s", legacyResponse.Body.String())
+		}
+		history := observed.Data.Records[0].Fields.History
+		if string(history[0].Legacy.Before) != `{"serial":"old"}` || string(history[0].Legacy.After) != `{"serial":"recorded"}` || string(history[1].Legacy.Before) != `"old text"` || string(history[1].Legacy.After) != `"recorded text"` {
+			t.Errorf("legacy evidence reinterpreted: %s", legacyResponse.Body.String())
+		}
+		document := httptest.NewRecorder()
+		api.ServeHTTP(document, httptest.NewRequest("GET", "/openapi.json", nil))
+		var doc map[string]any
+		if err := json.Unmarshal(document.Body.Bytes(), &doc); err != nil {
+			t.Fatal(err)
+		}
+		compiler := jsonschema.NewCompiler()
+		compiler.AssertFormat()
+		if err := compiler.AddResource("https://installed.test/openapi.json", doc); err != nil {
+			t.Fatal(err)
+		}
+		schema, err := compiler.Compile("https://installed.test/openapi.json#/components/schemas/JobSyncEnvelope")
+		if err != nil {
+			t.Fatal(err)
+		}
+		value, err := jsonschema.UnmarshalJSON(strings.NewReader(legacyResponse.Body.String()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := schema.Validate(value); err != nil {
+			t.Error(err)
+		}
+	}
+	uniqueField := call("GET", "/job-field-operations/"+fieldID, "", "", 200)
+	assertContains(t, uniqueField, fmt.Sprintf(`"job_id":%d`, j.ID))
+	assertNotContains(t, uniqueField, `"effect_id"`)
+	assertNotContains(t, uniqueField, `"reason"`)
+	legacyBatch := call("POST", "/sync/operations", "", fmt.Sprintf(`{"operations":[{"operation_id":%q,"type":"job.fields","target":"%d","depends_on":[],"revisions":{},"values":[]}]}`, fieldID, j.ID), 200)
+	if !strings.Contains(legacyBatch, "operation_intent_changed") || strings.Contains(legacyBatch, `"receipt"`) {
+		t.Errorf("historical nonbatch receipt adopted new batch binding: %s", legacyBatch)
+	}
+	call("GET", "/job-field-operations/"+ambiguousField, "", "", 409)
 	if body := call("GET", fmt.Sprintf("/jobs/%d/custom-fields", j.ID), "", "", 200); !strings.Contains(body, "Secret installed field value") {
 		t.Fatalf("authorized field control lacks source value: %s", body)
 	}

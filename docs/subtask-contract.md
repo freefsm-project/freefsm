@@ -63,7 +63,8 @@ is the executable bounded staging/reconciliation reference: staged intent sends
 nothing, lost responses reconcile the original receipt, and terminal conflicts need
 explicit new reviewed intent. Its caller supplies staging authorization; this slice
 does not implement the general offline lease, encrypted cache or batch-sync engine.
-Those integrate through the same exact-ID command boundary in their owning slices.
+The [encrypted field synchronization reference](api-job-field-sync.md) now
+integrates those through the same exact-ID command and receipt boundary.
 
 ## Verification
 

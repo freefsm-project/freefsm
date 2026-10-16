@@ -81,6 +81,9 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 			return nil, err
 		}
 		e.Data["custom_fields"] = fieldData
+		if err := syncJobFields(ctx, tx, p, e); err != nil {
+			return nil, err
+		}
 		e.Data["masters"] = map[string]any{}
 		customer, cerr := jobCustomer(ctx, tx, p, a, e.InstalledID)
 		if cerr != nil && !errors.Is(cerr, ErrNotFound) {

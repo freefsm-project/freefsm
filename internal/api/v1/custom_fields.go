@@ -102,6 +102,10 @@ func (h *handler) jobFieldReceipt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	receipt, err := req.Service.JobFieldExecutionReceipt(r.Context(), req.Actor, chi.URLParam(r, "operation"))
+	if errors.Is(err, authorization.ErrConflict) {
+		writeError(w, 409, "operation_identity_conflict", "Original field operation binding requires review")
+		return
+	}
 	if errors.Is(err, authorization.ErrNotFound) {
 		writeError(w, 404, "not_found", "Operation not found")
 		return

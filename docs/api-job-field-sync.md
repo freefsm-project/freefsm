@@ -1,115 +1,120 @@
-# Offline Job Custom Field Values
+# Status and Subtask synchronization
 
-The API and encrypted reference support `job.fields` patches. The website stays
-online-only. Planning Edit does not grant `job.fields.edit`; current Job View and
-the independent Assigned Jobs or All Records value-edit grant are authoritative.
+The field API and encrypted native reference support independent Job Status and
+Subtask completion/reopening. The website remains online-only. Planning actions
+(add, rename, reorder, remove) remain web-only and retain their existing history.
 
-## Snapshot and definition evolution
+## One authorized snapshot
 
-Each authorized `/api/v1/sync/jobs` record includes a complete `custom_fields`
-facet: definitions, current values, per-value opaque revisions, `can_edit`, and
-recorded before/after history. Definitions include active and retained retired
-fields, type, precision, requiredness, help, and stable option identities. Existing
-numeric definition identities and exact option text identities remain unchanged;
-never infer identity from the display name or array position. Job targets use the
-existing opaque sync identity (the legacy decimal identity is still accepted).
+`GET /api/v1/sync/jobs` adds these fields to each complete Job replacement:
 
-Definition, value and history changes participate in the same coherent snapshot
-and subsequent deltas. History exposes only recorded field facts and attribution,
-not sealed Role/session evidence. No past revision or author is synthesized.
-Treat records as complete replacements and follow the existing sync purge rules.
+- `status.id` and `status.meaning_revision` (nullable for an unrecorded Status);
+  existing name/category presentation remains compatible.
+- `status_revision`: the independent opaque Job Status revision.
+- `status_definitions`: configured identity, label, color, category, order and
+  meaning revision. Definition IDs are strings identifying existing definitions;
+  no alternate UUID namespace or label-based identity is introduced.
+- `status_attribution`: actor identity, acceptance and optional occurrence for
+  the recorded event matching this exact revision, or null when not recorded.
+  Configuration replacement and historical baselines never invent attribution.
+- `subtasks`: stable IDs, titles/order, state, independent completion revisions,
+  and recorded completion/reopening actor/time. Unknown installed attribution
+  remains absent. Removed entries leave the active list.
+- `subtask_history`: recorded add/rename/reorder/remove/complete/reopen events,
+  actor/time and before/after. Removal retains history and never reuses an ID.
+- `subtask_review_required` and `field_capabilities` (`status`,
+  `subtask_complete`, `subtask_reopen`). Capabilities describe current grants;
+  they do not authorize a later submission.
 
-Cosmetic valid changes do not invalidate value tokens. A token advances only for
-its changed value, including ABA. Current type, precision, options, requiredness,
-retirement, authority and archive state are validated in the committing domain
-transaction, not against a cached definition revision.
+The existing authorization fence and coherent snapshot cover definitions,
+revisions and checklist facts together. Deltas catch cosmetic/semantic definition
+changes and every checklist event. Unchanged recorded facts produce no delta.
+Current Job View controls all these representations. Scope loss follows the
+existing purge/resnapshot protocol and withholds comparisons.
 
-The seven value representations remain: single-line `text`, multiline `textarea`,
-exact decimal-string `number`, ISO local `date`, explicit `"true"`/`"false"`
-`checkbox`, exact-key `select`, and distinct-key string-array `multiselect`.
-Required checkboxes never infer No from omission. Offline patches defer unrelated
-missing required fields, but not required changed values. Creation and conversion
-retain their own validation rules (including the existing minimal Job creation
-rule); this patch exemption never applies to those commands. Defaults are never
-backfilled by synchronization, editing, restoration or reactivation.
+## Original reviewed intent
 
-Retired fields remain readable with history but are excluded from ordinary entry.
-Submitted retired fields reject; a newly selected retired option rejects while
-an unchanged retained selection remains valid. Reactivation resumes current
-validation without filling missing values or retrying rejected operations.
-
-## Atomic patch and immutable intent
-
-Submit a single guarded PATCH at `/api/v1/jobs/{id}/custom-fields`, or an ordered
-batch member at `/api/v1/sync/operations`:
+Submit through the existing ordered `POST /api/v1/sync/operations` envelope:
 
 ```json
-{"operations":[{"operation_id":"82000000-0000-4000-8000-000000000001","type":"job.fields","target":"original-job-sync-identity","depends_on":[],"revisions":{"1":"original-opaque-value-token"},"values":[{"definition_id":1,"value":"12.50"}]}]}
+{"operations":[{"operation_id":"81000000-0000-4000-8000-000000000001","type":"job.status","target":"original-opaque-job-id","depends_on":[],"status_id":"17","status_revision":"original-status-revision","meaning_revision":"original-meaning-revision"},{"operation_id":"81000000-0000-4000-8000-000000000002","type":"job.subtask","target":"original-opaque-job-id","depends_on":["81000000-0000-4000-8000-000000000001"],"subtask_id":"81000000-0000-4000-8000-000000000003","completion_revision":"original-completion-revision","completed":true}]}
 ```
 
-Each member commits every changed value and its history/audit/receipt atomically.
-Only submitted values' revisions are checked. Unchanged fields and unrelated Job
-facets may change concurrently. A stale changed value rejects the entire patch.
-There is no force overwrite, text merge, target rewrite or default replay.
+Both optionally include `occurred_at` at microsecond precision. Each shape is
+closed: planning fields and fields belonging to another family reject the whole
+envelope before earlier effects. Limits remain 100 operations/1 MiB decoded JSON;
+null dependencies reject during preflight. Dependencies grant no authority.
 
-Batch limits, ordering and dependencies follow [the shared contract](api-operation-batches.md).
-The original target spelling, type, dependencies, values, revisions and occurrence
-are bound in the existing common operation registry. A batch intent cannot bypass
-dependencies through the single-PATCH endpoint. Same-ID replay returns the original
-receipt; transient failure retains the ID. Audit failure rolls back the complete
-effect and admission. A terminal rejection needs explicit comparison/discard before
-a new-ID repair, including after reactivation or regained authority.
+Status accepts any configured target on an active Job without a transition graph.
+Completed/Canceled Jobs remain actionable; archive closes field actions. Existing
+archived operational dependency checks still govern reopening. Subtask completion
+never selects Job Status. Unrelated Notes, values, planning and other Subtasks
+do not alter these independent revisions.
 
-The existing `invalid_custom_field` outcome is retained. New receipts add optional
-`reason`: `invalid_field_shape`, `invalid_field_identity`, `invalid_field_type`,
-`invalid_text`, `invalid_number`, `invalid_date`, `invalid_checkbox`,
-`invalid_option`, `required_field`, `retired_field`, or `retired_option`.
-Single-PATCH conflicts also include the reason in `error.details`. Branch on typed
-codes, never message text; unknown future reasons require safe review.
+The same currently valid Status target is an attribution-preserving no-op, even
+when its independent revision is old. Other stale state and ABA reject with
+`status_reselection_required`. Cosmetic rename/recolor is safe because identity
+and meaning remain valid. Replacement, category changes, and category ABA change
+meaning: explicitly reselect and create a new reviewed operation ID.
 
-`GET /api/v1/job-field-operations/{operation}` returns the original user's safe
-receipt (operation ID, outcome code, recorded acceptance time, optional reason)
-after scope loss or fresh authentication. It returns no field values/comparison.
-Accepted field receipts also retain their recorded `job_id`. When immutable field
-mutation audit records the operation, `effect_id` is that already-recorded operation
-UUID, stable across later edits and scope loss. No separate identity is invented
-for historical/no-op receipts without such evidence. Rejected hidden targets do
-not reveal resolved installed identities. Batch and global lookup use this same
-projection; legacy target-specific lookup retains the original recorded Job ID.
-Fresh authentication permits lookup, never rebinding a command to a new client.
-The existing target-specific receipt lookup remains compatible. After response
-loss, query the original receipt before retry; restore receipt absence is uncertainty.
+Complete/Reopen use only the exact Subtask and its completion revision. Same-state
+requests preserve actor/time/revision. Changed stale state returns
+`subtask_conflict`; a removed/foreign Subtask is `not_found`, never resurrected or
+matched by title. Existing independent Complete/Reopen grants are rechecked.
 
-## Encrypted reference
+Effects, existing immutable history/audit, common operation admission and owning
+receipt commit together. Audit/storage rollback is nonterminal and retains the
+same operation ID for an explicit retry after receipt lookup. Changed original
+type/target/revisions/dependencies/occurrence under one ID rejects. Earlier
+accepted batch members survive later unrelated failures. Terminal repair and
+blocked descendants each require a separately reviewed new ID; repairing a
+parent never rewrites old descendants.
 
-Use the existing `internal/api/v1/reference/offline-notes.cjs` executable and
-[protected-store setup](api-offline-notes.md). Authenticate and synchronize, then:
+## Protected executable and recovery
 
-| Action | Explicit inputs |
+The existing `offline-notes.cjs` executable now exposes a shared
+`OfflineFieldClient` (`OfflineNotes` remains a compatible exported alias). It uses
+the same protected store, offline authority, expiry, receipt recovery and durable
+quarantine; no second encryption or authorization mechanism exists.
+
+After `authenticate` and `synchronize`, choose original IDs/revisions from `view`:
+
+| Action | Explicit reviewed command fields |
 |---|---|
-| `stage-fields` | `job`, changed `values`, reviewed `depends_on` array |
-| `submit-batch` | ordered `operation_ids` |
-| `reconcile` | original `operation_id` |
-| `repair-fields` | rejected `operation_id`, reviewed `values`, current `revisions`, reviewed `depends_on` |
-| `discard` | `operation_id` |
+| `stage-status` | `job`, `status_id`, `status_revision`, `meaning_revision`, `depends_on` |
+| `stage-subtask` | `job`, `subtask_id`, `completed`, `completion_revision`, `depends_on` |
+| `submit-batch` | ordered pending `operation_ids` |
+| `reconcile` | original `operation_id`, never a mutation |
+| `synchronize-delta` | completed current cursor required; no implicit submission |
+| `repair-status` | old `operation_id`, explicitly selected `status_id`, current reviewed revisions, `depends_on` |
+| `repair-subtask` | old `operation_id`, reviewed `completed`, `completion_revision`, `depends_on`; original Subtask retained |
 
-Stage captures only changed revisions from the authorized snapshot. Synchronize
-again for comparison before repair. No staging, restart, sync or reactivation
-submits work automatically. Accepted work cannot be repaired as a rejection.
-Unknown work must reconcile first; failed descendants require their own new IDs.
+Staging is encrypted pending intent, not acceptance. Unknown outcomes require
+original receipt lookup before retry. The family selects the existing receipt
+endpoint, including after sensitive target data is purged. Unknown categories
+require review, never an inferred transition. Deltas atomically replace authorized
+cache/cursor and retain the established authority-loss quarantine on write failure.
+An interrupted synchronization locks disclosure until a complete fresh sync.
 
-These commands use the same platform-protected key, AES-GCM envelope, lease,
-writer serialization and durable quarantine as Notes. Ordinary scope loss purges
-all inaccessible field intent/context; only safe receipt metadata survives.
-Restore instead locks recoverable intent for fresh authentication, complete sync
-and explicit outcome reconciliation. No second encryption or authority mechanism
-is introduced. This is a reference harness, not mobile-device certification.
+Ordinary authority loss purges sensitive intent. A nondisclosing `not_found`
+conservatively purges that Job's cached/pending content before further review.
+Restore keeps recoverable intent encrypted and locked until fresh authentication,
+complete current-authority sync and explicit original-outcome reconciliation.
+A restored receipt miss remains uncertain, never permission to replay. No
+background submissions, automatic reselection, force, or title matching exists.
 
-Migration087 adds a nullable reason to existing immutable receipts without changing
-identities, grants, stored values or history, and without guessing historical reasons.
-Local OpenAPI3.1 documents the additive request/response contract.
+## Compatibility and conformance
 
-Both PATCH and batch preflight exact nested field property names, duplicate members,
-and nonnull string revision tokens before admission. A malformed later batch member
-cannot commit earlier work. Canonical but domain-invalid values still receive their
-own terminal typed result without rolling back unrelated earlier accepted members.
+No migration, grant expansion, replacement identity or historical backfill is
+needed. Existing single-action and Notes-batch serialized intent bindings remain
+unchanged. The local served OpenAPI 3.1 adds discriminated field batch shapes and
+optional snapshot fields, preserving earlier clients and receipt routes.
+`TestJobFieldSync*` exercises production HTTP with migrated PostgreSQL, actual
+protected native storage, served-schema validation, deltas, semantic/ABA conflicts,
+same-state attribution, removed identities, explicit dependent repair, concurrent
+web/API DML and rollback/replay. Existing persisted browser, workflow, checklist,
+protected-store and upgrade checks remain required regression evidence.
+
+Changelog: additive v1 Status/Subtask snapshot fields, two ordered operation
+families, and protected reference commands. Existing Notes, direct Status and
+Subtask request/response shapes and installed identifiers remain supported.

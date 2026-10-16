@@ -153,6 +153,15 @@ func (s *Service) patchFieldsReviewedWithBatch(ctx context.Context, a Actor, id 
 			}
 			return err
 		}
+		if batch != nil {
+			var historical bool
+			if err := tx.QueryRow(ctx, `SELECT intent IS NULL FROM operation_admissions WHERE operation_id=$1`, in.OperationID).Scan(&historical); err != nil {
+				return err
+			}
+			if historical {
+				return &FieldConflict{"operation_intent_changed"}
+			}
+		}
 		var same bool
 		err := tx.QueryRow(ctx, `SELECT job_id=$4 AND intent=$5::jsonb,outcome,coalesce(validation_reason,'') FROM job_field_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID, id, intent).Scan(&same, &outcome, &reason)
 		if err == nil {
@@ -227,7 +236,11 @@ func (s *Service) patchFieldsReviewedWithBatch(ctx context.Context, a Actor, id 
 			var invalid *customfields.FieldError
 			if errors.As(err, &invalid) {
 				outcome = "invalid_custom_field"
-				reason = invalid.Reason
+				// Historical initializer overlays retain the original error shape.
+				// Missing structured evidence stays unknown, never guessed from text.
+				if described, ok := any(invalid).(interface{ ValidationReason() string }); ok {
+					reason = described.ValidationReason()
+				}
 			} else if err != nil {
 				return err
 			} else {
@@ -239,7 +252,7 @@ func (s *Service) patchFieldsReviewedWithBatch(ctx context.Context, a Actor, id 
 					if _, err = tx.Exec(ctx, `UPDATE jobs SET custom_fields=$2::jsonb,updated_at=clock_timestamp() WHERE id=$1`, id, next); err != nil {
 						return err
 					}
-					if err = audit(ctx, tx, a, p, "job.fields.edit", scope, "job", id, map[string]any{"before": old, "after": next, "operation_id": in.OperationID, "occurred_at": in.OccurredAt}); err != nil {
+					if err = audit(ctx, tx, a, p, "job.fields.edit", scope, "job", id, map[string]any{"before": old, "after": next, "field_value_format": jobFieldValueFormatV1, "operation_id": in.OperationID, "occurred_at": in.OccurredAt}); err != nil {
 						return err
 					}
 				} else if err := saveaction.ConfirmNoChange(ctx, tx); err != nil {
