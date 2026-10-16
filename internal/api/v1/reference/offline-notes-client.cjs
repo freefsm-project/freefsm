@@ -42,7 +42,7 @@ class OfflineNotes {
  purgeSensitiveTarget(s,job){
   delete s.cache[job];delete s.notes[job];
   for(const e of Object.values(s.pending))if(e.job===job){
-   delete e.intent;delete e.job;e.state='purged';
+   delete e.intent;delete e.batch;delete e.job;e.state='purged';
   }
  }
  async contact(s,path,method='GET',body,operation){
@@ -141,9 +141,47 @@ class OfflineNotes {
   const id=randomUUID();s.pending[id]={job,state:'pending',intent:{operation_id:id,notes_revision:s.notes[job].notes_revision,field_notes:text,occurred_at:new Date(this.now()).toISOString()}};return id;
  }
  async stage(job,text){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const id=this.stageIn(s,job,text);await this.persist(s);return id;});}
+ reviewedDependencies(dependencies){
+   if(!Array.isArray(dependencies)||dependencies.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)))throw Error('review_required');
+   return clone(dependencies);
+  }
+ async stageBatch(job,text,dependencies){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);const depends_on=this.reviewedDependencies(dependencies);
+   const id=this.stageIn(s,job,text);s.pending[id].batch={type:'job.field_notes',target:job,depends_on};await this.persist(s);return id;
+  });}
+ async submitBatch(ids){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);
+   if(!Array.isArray(ids)||ids.length>100||new Set(ids).size!==ids.length)throw Error('batch_limit');
+   const operations=ids.map(id=>{
+    const e=s.pending[id];if(!e||e.state!=='pending'||!e.intent||!e.batch)throw Error('reconciliation_or_review_required');
+    if(e.retryNotBefore&&this.now()<e.retryNotBefore)throw Error('retry_after_required');
+    return {...clone(e.intent),...clone(e.batch)};
+   });
+   const body={operations};if(Buffer.byteLength(JSON.stringify(body),'utf8')>1048576)throw Error('batch_limit');
+   await this.policy(s);
+   for(const id of ids)s.pending[id].state='unknown';await this.persist(s);
+   const r=await this.contact(s,'/sync/operations','POST',body);
+   if(r.status===200){
+    if(!Array.isArray(r.data?.results)||r.data.results.length!==ids.length||r.data.results.some((v,i)=>v.operation_id!==ids[i]||(v.receipt&&v.receipt.operation_id!==ids[i])))throw Error('receipt_mismatch');
+    let lost=false;
+    for(const result of r.data.results){
+     const e=s.pending[result.operation_id];
+     if(result.receipt){this.receipt(e,result.operation_id,result.receipt);if(['forbidden','not_found'].includes(result.receipt.code)){this.purgeSensitiveTarget(s,e.job);lost=true;}}
+     else if(result.error?.status===403||result.error?.status===401){await this.purge(s);throw Error('authorization_purged');}
+     else if(result.error?.recovery_disposition==='retry')e.retryNotBefore=this.now()+this.retryDelay(result.error);
+     // Without a terminal receipt retain unknown, including identity misuse.
+    }
+    if(lost)await this.persistAuthorityLoss(s);else await this.persist(s);
+   }else{
+    if(r.status===429||r.status>=500)for(const id of ids)s.pending[id].retryNotBefore=this.now()+this.retryDelay(r.error);
+    await this.persist(s);
+   }
+   return ids.map(id=>({operation_id:id,state:s.pending[id].state,receipt:s.pending[id].receipt}));
+  });}
+ retryDelay(error){const seconds=error?.retry_after_seconds;return (Number.isSafeInteger(seconds)&&seconds>0&&seconds<Number.MAX_SAFE_INTEGER/1000?seconds:5)*1000;}
  async submit(id){return this.transaction(async s=>{
   await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
-  if(!e||e.state!=='pending'||!e.intent)throw Error('reconciliation_or_review_required');
+  if(!e||e.state!=='pending'||!e.intent||e.batch)throw Error('reconciliation_or_review_required');
   if(e.retryNotBefore&&this.now()<e.retryNotBefore)throw Error('retry_after_required');
   await this.policy(s);
   // Crash/response loss after this durable write always requires receipt lookup.
@@ -181,12 +219,13 @@ class OfflineNotes {
   // restore_uncertain + missing receipt remains uncertain, never retryable.
   await this.persist(s);return clone({state:e.state,receipt:e.receipt});
  });}
- async repair(id,text,reviewedRevision){return this.transaction(async s=>{
+ async repair(id,text,reviewedRevision,reviewedDependencies){return this.transaction(async s=>{
   await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
   if(!e||!['terminal','restore_uncertain'].includes(e.state)||!e.job)throw Error('review_required');
   if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
   if(!reviewedRevision||s.notes[e.job]?.notes_revision!==reviewedRevision)throw Error('review_required');
-  const next=this.stageIn(s,e.job,text);e.state='replaced';await this.persist(s);return next;
+  const batch=e.batch?{type:e.batch.type,target:e.batch.target,depends_on:this.reviewedDependencies(reviewedDependencies)}:null;
+  const next=this.stageIn(s,e.job,text);if(batch)s.pending[next].batch=batch;e.state='replaced';await this.persist(s);return next;
  });}
  async acknowledgeUncertain(id){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const e=s.pending[id];if(!e||e.state!=='restore_uncertain'||!e.lookupMissing)throw Error('restore_reconciliation_required');e.reconciled=true;await this.persist(s);});}
  async discard(id){return this.transaction(async s=>{delete s.pending[id];await this.persist(s);});}
