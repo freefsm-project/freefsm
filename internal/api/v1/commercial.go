@@ -33,20 +33,12 @@ func (h *handler) commercialLifecycle(kind string, finalize bool) http.HandlerFu
 			commercialError(w, err)
 			return
 		}
-		if receipt.Outcome != "accepted" {
-			code := 409
-			switch receipt.Outcome {
-			case "not_found":
-				code = 404
-			case "forbidden":
-				code = 403
-			case "invalid_document":
-				code = 422
-			}
-			writeError(w, code, receipt.Outcome, "Review the current document and workflow; explicitly reselect with a new operation identity")
+		status := commercialOutcomeStatus(receipt.Outcome)
+		if status != 200 {
+			writeError(w, status, receipt.Outcome, "Review the current document and workflow; explicitly reselect with a new operation identity")
 			return
 		}
-		writeJSON(w, 200, receipt)
+		writeJSON(w, status, receipt)
 	}
 }
 
@@ -106,18 +98,7 @@ func (h *handler) commercial(kind string) http.HandlerFunc {
 			commercialError(w, err)
 			return
 		}
-		status := 200
-		switch receipt.Outcome {
-		case "accepted":
-		case "not_found":
-			status = 404
-		case "forbidden":
-			status = 403
-		case "invalid_document":
-			status = 422
-		default:
-			status = 409
-		}
+		status := commercialOutcomeStatus(receipt.Outcome)
 		if status != 200 {
 			writeError(w, status, receipt.Outcome, "Review the current authorized document and submit a new operation identity; this intent will not be retried automatically")
 			return
@@ -138,6 +119,21 @@ func (h *handler) commercialReceipt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, receipt)
+}
+
+func commercialOutcomeStatus(outcome string) int {
+	switch outcome {
+	case "accepted":
+		return 200
+	case "not_found":
+		return 404
+	case "forbidden":
+		return 403
+	case "invalid_document":
+		return 422
+	default:
+		return 409
+	}
 }
 
 func commercialError(w http.ResponseWriter, err error) {
