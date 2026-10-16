@@ -131,6 +131,9 @@ func TestNavigationDetailAffordancesAndFacetsHTTP(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT id FROM statuses WHERE company_id=$1 AND category_key='invoice:void' LIMIT 1`, company).Scan(&void); err != nil {
 		t.Fatal(err)
 	}
+	if err := statusflow.New(pool).FinalizeInvoice(ctx, statusflow.Actor{ID: admin, CompanyID: company}, invoice.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := statusflow.New(pool).TransitionInvoice(ctx, statusflow.Actor{ID: admin, CompanyID: company, Role: "admin"}, invoice.ID, void); err != nil {
 		t.Fatal(err)
 	}

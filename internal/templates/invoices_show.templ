@@ -9,7 +9,7 @@ templ InvoiceShow(p InvoiceDetail) {
 			<div class="work-item-detail-actions">
 			<div class="work-item-detail-action-group">
 			if p.CanFinalize && detailCan(ctx,"finalize") {
-				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/finalize", p.ID)) } method="post" hx-confirm={ fmt.Sprintf("Finalize Invoice %q (record %d)? This will set its invoice and due dates from current settings.", p.Title, p.ID) }>
+				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/finalize", p.ID)) } method="post" hx-confirm={ fmt.Sprintf("Finalize Invoice %q (record %d) using its reviewed content and dates?", p.Title, p.ID) }>
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 					<button type="submit">Finalize Invoice</button>
 				</form>
@@ -80,7 +80,12 @@ templ InvoiceShow(p InvoiceDetail) {
 				if p.AssetID > 0 {
 					<tr><th>Asset</th><td><a href={ templ.URL(fmt.Sprintf("/assets/%d", p.AssetID)) }>{ p.AssetName }</a></td></tr>
 				}
-				<tr><th>Status</th><td>@StatusControl("invoice", p.ID, p.StatusID, p.StatusName, p.StatusColor, p.Statuses, p.ArchivedAt == "" && detailCan(ctx,"status"))</td></tr>
+				<tr><th>Status</th><td>
+					if p.ArchivedAt == "" && len(p.Statuses)>0 && detailCan(ctx,"status") {
+						<span class="status-badge" style={ badgeStyle(p.StatusColor) }>{ p.StatusName }</span>
+					}
+					@StatusControl("invoice", p.ID, p.StatusID, p.StatusName, p.StatusColor, p.Statuses, p.ArchivedAt == "" && len(p.Statuses)>0 && detailCan(ctx,"status"))
+				</td></tr>
 				if detailCan(ctx,"settlement") {
 					<tr><th>Settlement State</th><td><span class="status-badge">{ string(p.Settlement.State) }</span></td></tr>
 				}

@@ -131,7 +131,16 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 	statuses := h.statusesForSelect(r.Context())
 	d := invoiceToDetail(r.Context(), h.effectiveInvoice(r.Context(), i), statuses)
-	d.Statuses = statusOptions(statuses)
+	// Display the effective projection, but select the preserved manual choice.
+	d.StatusID = valueInt64(i.StatusID)
+	d.Statuses = nil
+	if statusCategory(statuses, i.StatusID) != string(statusflow.InvoiceDraft) {
+		for _, status := range statuses {
+			if status.CategoryKey != string(statusflow.InvoicePaid) && status.CategoryKey != string(statusflow.InvoicePartiallyPaid) {
+				d.Statuses = append(d.Statuses, templates.SelectOption{Value: status.ID, Label: status.Name})
+			}
+		}
+	}
 	u, _ := middleware.UserFromContext(r.Context())
 	d.CanManage = templates.DetailCan(r.Context(), "edit")
 	d.CanSettle = templates.DetailCan(r.Context(), "payment")

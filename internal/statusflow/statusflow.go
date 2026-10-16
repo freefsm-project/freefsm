@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/protectedaudit"
@@ -233,9 +234,6 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, a Actor, typ Obje
 	if !authorizedRecord(ctx, tx, a, typ, id, jobID) {
 		return ErrForbidden
 	}
-	if oldID != nil && *oldID == statusID {
-		return saveaction.ConfirmNoChange(ctx, tx)
-	}
 	var key CategoryKey
 	if err := tx.QueryRow(ctx, `SELECT s.category_key FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id
 		 WHERE s.id=$1 AND s.company_id=$2 AND w.company_id=$2 AND w.object_type=$3`, statusID, a.CompanyID, typ).Scan(&key); err != nil {
@@ -245,12 +243,12 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, a Actor, typ Obje
 		if key == InvoicePaid || key == InvoicePartiallyPaid {
 			return ErrPaymentDerived
 		}
-		if oldID != nil {
+		if oldID != nil && *oldID != statusID {
 			var oldKey CategoryKey
 			if err := tx.QueryRow(ctx, `SELECT category_key FROM statuses WHERE id=$1`, *oldID).Scan(&oldKey); err != nil {
 				return err
 			}
-			if oldKey == InvoiceVoid && key != InvoiceDraft {
+			if oldKey == InvoiceDraft && (a.permission != "invoice.finalize" || key != InvoiceInvoiced) {
 				return ErrInvalidTransition
 			}
 		}
@@ -261,6 +259,9 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, a Actor, typ Obje
 		if active {
 			return ErrActiveSettlement
 		}
+	}
+	if oldID != nil && *oldID == statusID {
+		return saveaction.ConfirmNoChange(ctx, tx)
 	}
 	if typ == Project {
 		if err := authorization.ProjectStatusDependencies(ctx, tx, a.CompanyID, id, string(key)); err != nil {
@@ -603,6 +604,17 @@ func usage(ctx context.Context, tx pgx.Tx, typ ObjectType, statusID int64) (int,
 	return n, err
 }
 func activity(ctx context.Context, tx pgx.Tx, a Actor, action string, typ ObjectType, id int64, metadata map[string]any) error {
+	if in, ok := ctx.Value(commercialIntentKey{}).(CommercialIntent); ok {
+		var accepted time.Time
+		if err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&accepted); err != nil {
+			return err
+		}
+		metadata["operation_id"] = in.OperationID
+		metadata["accepted_at"], metadata["occurred_at"], metadata["occurrence_source"] = accepted, accepted, "server"
+		if in.OccurredAt != nil {
+			metadata["occurred_at"], metadata["occurrence_source"] = in.OccurredAt, "client"
+		}
+	}
 	b, _ := json.Marshal(metadata)
 	_, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,$3,$4,$5,$6)`, a.CompanyID, a.ID, action, typ, id, b)
 	if err != nil {

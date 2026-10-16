@@ -183,6 +183,12 @@ func TestEffectiveInvoiceStatusDecisionTableIntegration(t *testing.T) {
 	if _, err = db.Exec(ctx, `UPDATE invoices SET status_id=$1 WHERE id=$2`, ids[InvoiceSent], invoice); err == nil {
 		t.Fatal("direct invoice status bypass succeeded")
 	}
+	if err = New(db).TransitionInvoice(ctx, Actor{ID: admin, CompanyID: company, Role: "admin"}, invoice, ids[InvoiceSent]); !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("Draft exit bypassed Finalize: %v", err)
+	}
+	if err = New(db).FinalizeInvoice(ctx, Actor{ID: admin, CompanyID: company}, invoice); err != nil {
+		t.Fatal(err)
+	}
 	if err = New(db).TransitionInvoice(ctx, Actor{ID: admin, CompanyID: company, Role: "admin"}, invoice, ids[InvoiceSent]); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +203,7 @@ func TestEffectiveInvoiceStatusDecisionTableIntegration(t *testing.T) {
 	if err := New(db).TransitionInvoice(ctx, actor, invoice, ids[InvoiceVoid]); err != nil {
 		t.Fatalf("void zero-total invoice: %v", err)
 	}
-	if err := New(db).TransitionInvoice(ctx, actor, invoice, ids[InvoiceSent]); !errors.Is(err, ErrInvalidTransition) {
+	if err := New(db).TransitionInvoice(ctx, actor, invoice, ids[InvoiceSent]); err != nil {
 		t.Fatalf("void to sent transition=%v", err)
 	}
 	if err := New(db).TransitionInvoice(ctx, actor, invoice, ids[InvoiceDraft]); err != nil {

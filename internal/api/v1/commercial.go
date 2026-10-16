@@ -8,8 +8,47 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/go-chi/chi/v5"
 )
+
+func (h *handler) commercialLifecycle(kind string, finalize bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		req, ok := authorization.FromContext(r.Context())
+		if !ok {
+			writeError(w, 403, "forbidden", "Permission denied")
+			return
+		}
+		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+		if err != nil || id <= 0 {
+			writeError(w, 404, "not_found", "Document not found")
+			return
+		}
+		var in statusflow.CommercialIntent
+		if !decodeExactJSON(w, r, &in, "operation_id", "job_id", "revision", "occurred_at", "status_id", "meaning_revision") {
+			return
+		}
+		receipt, err := statusflow.New(req.Service.Pool).ApplyCommercial(r.Context(), req.Actor, statusflow.ObjectType(kind), id, finalize, in)
+		if err != nil {
+			commercialError(w, err)
+			return
+		}
+		if receipt.Outcome != "accepted" {
+			code := 409
+			switch receipt.Outcome {
+			case "not_found":
+				code = 404
+			case "forbidden":
+				code = 403
+			case "invalid_document":
+				code = 422
+			}
+			writeError(w, code, receipt.Outcome, "Review the current document and workflow; explicitly reselect with a new operation identity")
+			return
+		}
+		writeJSON(w, 200, receipt)
+	}
+}
 
 func (h *handler) commercial(kind string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

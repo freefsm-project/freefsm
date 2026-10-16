@@ -38,6 +38,26 @@ const { CommercialReference } = require('./commercial-reference-harness.cjs');
     const persisted = (await request('GET', path)).body.data;
     assert.equal(persisted.notes, 'First field edit');
     assert.equal(persisted.terms, 'Explicitly reviewed terms');
+
+    const category = kind === 'invoice' ? 'invoice:invoiced' : 'estimate:accepted';
+    assert.ok(Array.isArray(persisted.workflow), 'review exposes current workflow meaning');
+    const choice = persisted.workflow.find(x => x.category === category);
+    assert.ok(choice, 'manual acceptance / finalize target discoverable');
+    const stagedCalls = calls;
+    const transition = client.stageLifecycle(kind, persisted, choice, kind === 'invoice' ? 'finalize' : 'status');
+    assert.equal(calls, stagedCalls, 'staged lifecycle contacted server');
+    lose = true;
+    await client.submit(transition);
+    assert.equal(transition.state, 'unknown');
+    await client.inspect(transition);
+    assert.equal(transition.state, 'accepted');
+    await assert.rejects(() => client.submit(transition));
+    const transitioned = (await request('GET', path)).body.data;
+    assert.equal(transitioned.manual_category, category);
+    const staleTransition = client.stageLifecycle(kind, persisted, choice, kind === 'invoice' ? 'finalize' : 'status');
+    await client.submit(staleTransition);
+    assert.equal(staleTransition.state, 'needs_review');
+    assert.equal((await request('GET', path)).body.data.revision, transitioned.revision, 'stale lifecycle changed document');
   }
   console.log('PASS persisted commercial reference: offline stage, lost response receipt, create-once, disjoint conflict, explicit same-target repair');
 })().catch(error => { console.error(error); process.exit(1); });

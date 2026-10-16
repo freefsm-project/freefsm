@@ -89,6 +89,28 @@ func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id i
 		if err := json.Unmarshal(raw, &state); err != nil {
 			return err
 		}
+		// Retained documents can have an explicitly unknown manual status.
+		// Reading must preserve that absence and expose the revision/choices for
+		// a deliberate repair, rather than fabricating a Draft or hiding the row.
+		var manual *string
+		if err := tx.QueryRow(ctx, `SELECT s.category_key FROM `+kind+`s d LEFT JOIN statuses s ON s.id=d.status_id WHERE d.id=$1`, id).Scan(&manual); err != nil {
+			return err
+		}
+		state["manual_category"] = manual
+		state["effective_category"] = manual
+		var workflow json.RawMessage
+		if err := tx.QueryRow(ctx, `SELECT coalesce(jsonb_agg(jsonb_build_object('id',s.id,'name',s.name,'color',s.color,'category',s.category_key,'meaning_revision',s.meaning_revision::text) ORDER BY s.category_key,s.category_order,s.id),'[]'::jsonb) FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE w.company_id=$1 AND w.object_type=$2 AND s.category_key NOT IN ('invoice:paid','invoice:partially_paid')`, p.CompanyID, kind).Scan(&workflow); err != nil {
+			return err
+		}
+		state["workflow"] = workflow
+		if kind == "invoice" {
+			var effective *string
+			var locked bool
+			if err := tx.QueryRow(ctx, `SELECT s.category_key,invoice_has_active_settlement(i.id) FROM invoices i LEFT JOIN invoice_effective_status e ON e.invoice_id=i.id LEFT JOIN statuses s ON s.id=e.status_id WHERE i.id=$1`, id).Scan(&effective, &locked); err != nil {
+				return err
+			}
+			state["effective_category"], state["settlement_locked"] = effective, locked
+		}
 		assigned, err := assignedJobAccess(ctx, tx, p.UserID, job, true)
 		if err != nil {
 			return err
@@ -133,6 +155,30 @@ func (s *Service) CommercialReceipt(ctx context.Context, a Actor, key string) (C
 // CommercialOperation owns identity, stale-intent rejection and the receipt.
 // The callback uses this transaction for all existing details/Item/field logic.
 func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string, id int64, in CommercialIntent, intent []byte, legacyIntent func() ([]byte, error), write func(context.Context, pgx.Tx, int64) (int64, error)) (CommercialReceipt, error) {
+	return s.commercialOperation(ctx, a, kind, id, kind+".edit", in, intent, legacyIntent, func(ctx context.Context, tx pgx.Tx, customer int64, _ Principal) (int64, error) {
+		return write(ctx, tx, customer)
+	})
+}
+
+// CommercialWorkflowOperation shares commercial admission and immutable receipts
+// with details saves, but checks the independently granted workflow action.
+func (s *Service) CommercialWorkflowOperation(ctx context.Context, a Actor, kind string, id int64, finalize bool, in CommercialIntent, intent []byte, write func(context.Context, pgx.Tx, Principal) error) (CommercialReceipt, error) {
+	permission := kind + ".status"
+	if finalize {
+		if kind != "invoice" {
+			return CommercialReceipt{}, ErrCommercialInput
+		}
+		permission = "invoice.finalize"
+	}
+	if id <= 0 {
+		return CommercialReceipt{}, ErrCommercialInput
+	}
+	return s.commercialOperation(ctx, a, kind, id, permission, in, intent, nil, func(ctx context.Context, tx pgx.Tx, _ int64, p Principal) (int64, error) {
+		return id, write(ctx, tx, p)
+	})
+}
+
+func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string, id int64, permission string, in CommercialIntent, intent []byte, legacyIntent func() ([]byte, error), write func(context.Context, pgx.Tx, int64, Principal) (int64, error)) (CommercialReceipt, error) {
 	r := CommercialReceipt{OperationID: in.OperationID}
 	if kind != "estimate" && kind != "invoice" {
 		return r, ErrNotFound
@@ -205,7 +251,7 @@ func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string,
 					return ErrConflict
 				}
 			} else {
-				if _, err := parentAccess(ctx, sp, p, kind, id, kind+".edit", true); err != nil {
+				if _, err := parentAccess(ctx, sp, p, kind, id, permission, true); err != nil {
 					return err
 				}
 				var job int64
@@ -227,7 +273,7 @@ func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string,
 				}
 			}
 			var err error
-			r.ID, err = write(s.WithTransactionReads(ctx, sp), sp, customer)
+			r.ID, err = write(s.WithTransactionReads(ctx, sp), sp, customer, p)
 			if err != nil {
 				return err
 			}
