@@ -16,7 +16,8 @@ import (
 
 func TestOperationBatchRollbackAuthorityHTTP(t *testing.T) {
 	pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Batch failure").SaveX(ctx)
 	job := client.Job.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetJobType("Private target").SaveX(ctx)
 	user := client.User.Create().SetCompanyID(company).SetName("Assigned batch user").SetEmail("batch80@test").SetPasswordHash("hash").SetRole("tech").SaveX(ctx)
@@ -103,26 +104,18 @@ func TestOperationBatchRollbackAuthorityHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019);`); err != nil {
+	var blocker int32
+	if err := tx.QueryRow(ctx, `SELECT pg_backend_pid() FROM (SELECT pg_advisory_xact_lock(190019)) fence`).Scan(&blocker); err != nil {
 		t.Fatal(err)
 	}
+	assertForeignAuthorityExcluded(t, ctx, pool, blocker)
 	raceOp := uuid.NewString()
 	done := make(chan *httptest.ResponseRecorder, 1)
-	go func() { done <- batchRequest(api, token, strings.Replace(body, op, raceOp, 1)) }()
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		var waiting bool
-		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype='advisory' AND NOT granted AND objid=190019)`).Scan(&waiting); err != nil {
-			t.Fatal(err)
-		}
-		if waiting {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatal("HTTP did not reach authority fence")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	raceRequest := httptest.NewRequest("POST", "/sync/operations", strings.NewReader(strings.Replace(body, op, raceOp, 1))).WithContext(ctx)
+	raceRequest.Header.Set("Authorization", "Bearer "+token)
+	raceRequest.Header.Set("Content-Type", "application/json")
+	go func() { w := httptest.NewRecorder(); api.ServeHTTP(w, raceRequest); done <- w }()
+	waitAuthorityRequest(t, ctx, pool, blocker, authorityWriterStatement)
 	if _, err := tx.Exec(ctx, `DELETE FROM job_assignments WHERE job_id=$1 AND user_id=$2`, job.ID, user.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -164,5 +157,68 @@ func TestOperationBatchEnvelopeDenialsHTTP(t *testing.T) {
 	}
 	if w.Code != 429 || w.Header().Get("Retry-After") == "" {
 		t.Fatalf("batch throttle %d %s", w.Code, w.Body.String())
+	}
+}
+
+func TestOperationBatchDependencyElementShapeHTTP(t *testing.T) {
+	for _, element := range []string{`null`, `42`, `true`, `{}`, `[]`, `"not-a-uuid"`, `""`} {
+		t.Run(element, func(t *testing.T) {
+			pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
+			ctx := context.Background()
+			customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Envelope atomicity").SaveX(ctx)
+			job := client.Job.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetJobType("Original target").SaveX(ctx)
+			var revision string
+			if err := pool.QueryRow(ctx, `SELECT notes_revision::text FROM jobs WHERE id=$1`, job.ID).Scan(&revision); err != nil {
+				t.Fatal(err)
+			}
+			token, err := sessions.CreateMobile(ctx, admin, "Dependency shape")
+			if err != nil {
+				t.Fatal(err)
+			}
+			first, later := uuid.NewString(), uuid.NewString()
+			operation := func(id, deps string) string {
+				return fmt.Sprintf(`{"operation_id":%q,"type":"job.field_notes","target":%q,"depends_on":%s,"notes_revision":%q,"field_notes":"first valid effect"}`, id, fmt.Sprint(job.ID), deps, revision)
+			}
+			body := `{"operations":[` + operation(first, `[]`) + `,` + operation(later, `[`+element+`]`) + `]}`
+			w := batchRequest(apiv1.NewRouter(pool, client, sessions), token, body)
+			isString := strings.HasPrefix(element, `"`)
+			wantStatus, wantCount := 400, 0
+			if isString {
+				wantStatus, wantCount = 200, 2
+			}
+			if w.Code != wantStatus {
+				t.Errorf("shape status=%d want=%d: %s", w.Code, wantStatus, w.Body.String())
+			}
+			if isString {
+				assertContains(t, w.Body.String(), `"code":"invalid_dependency"`)
+			}
+			for _, table := range []string{"operation_admissions", "job_execution_receipts"} {
+				var count int
+				if err := pool.QueryRow(ctx, `SELECT count(*) FROM `+table+` WHERE operation_id IN ($1,$2)`, first, later).Scan(&count); err != nil || count != wantCount {
+					t.Errorf("%s count=%d want=%d err=%v", table, count, wantCount, err)
+				}
+			}
+			var notes, currentRevision string
+			if err := pool.QueryRow(ctx, `SELECT COALESCE(tech_notes,''), notes_revision::text FROM jobs WHERE id=$1`, job.ID).Scan(&notes, &currentRevision); err != nil {
+				t.Fatal(err)
+			}
+			if !isString && (notes != "" || currentRevision != revision) {
+				t.Errorf("malformed later member committed earlier effect: notes=%q revision=%s", notes, currentRevision)
+			}
+			if isString && notes != "first valid effect" {
+				t.Errorf("typed dependency rejection lost earlier effect: %q", notes)
+			}
+			var audits int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM authorization_audit WHERE action='job.field_notes.edit'`).Scan(&audits); err != nil {
+				t.Fatal(err)
+			}
+			wantAudits := 0
+			if isString {
+				wantAudits = 1
+			}
+			if audits != wantAudits {
+				t.Errorf("mutation audits=%d want=%d", audits, wantAudits)
+			}
+		})
 	}
 }

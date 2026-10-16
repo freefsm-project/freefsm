@@ -10,23 +10,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
-
-func waitTimesheetReaders(t *testing.T, ctx context.Context, pool *pgxpool.Pool, count int) {
-	t.Helper()
-	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); {
-		var waiting int
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory'`).Scan(&waiting); err != nil {
-			t.Fatal(err)
-		}
-		if waiting >= count {
-			return
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	t.Fatal("report/writer did not reach real authority-lock contention")
-}
 
 func TestTimesheetsConcurrentWritersProduceOneSnapshotHTTP(t *testing.T) {
 	for _, kind := range []string{"correction", "void", "clock-out"} {
@@ -49,9 +33,11 @@ func TestTimesheetsConcurrentWritersProduceOneSnapshotHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer barrier.Rollback(context.Background())
-			if _, err := barrier.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+			var blocker int32
+			if err := barrier.QueryRow(ctx, `SELECT pg_backend_pid() FROM (SELECT pg_advisory_xact_lock(190019)) fence`).Scan(&blocker); err != nil {
 				t.Fatal(err)
 			}
+			assertForeignAuthorityExcluded(t, ctx, pool, blocker)
 			writer := make(chan error, 1)
 			go func() {
 				switch kind {
@@ -65,9 +51,13 @@ func TestTimesheetsConcurrentWritersProduceOneSnapshotHTTP(t *testing.T) {
 					writer <- err
 				}
 			}()
+			writerPID := waitAuthorityRequest(t, ctx, pool, blocker, authorityWriterStatement)
 			report := make(chan *httptest.ResponseRecorder, 1)
 			go func() { w := httptest.NewRecorder(); router.ServeHTTP(w, request); report <- w }()
-			waitTimesheetReaders(t, ctx, pool, 2)
+			reportPID := waitAuthorityRequest(t, ctx, pool, blocker, authoritySnapshotStatement)
+			if writerPID == reportPID {
+				t.Fatal("report and writer must be distinct contenders")
+			}
 			if err := barrier.Rollback(ctx); err != nil {
 				t.Fatal(err)
 			}
@@ -134,15 +124,20 @@ func TestTimesheetsRecheckAuthorityAfterSnapshotWaitHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer barrier.Rollback(context.Background())
-	if _, err := barrier.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+	var blocker int32
+	if err := barrier.QueryRow(ctx, `SELECT pg_backend_pid() FROM (SELECT pg_advisory_xact_lock(190019)) fence`).Scan(&blocker); err != nil {
 		t.Fatal(err)
 	}
+	assertForeignAuthorityExcluded(t, ctx, pool, blocker)
 	writer := make(chan error, 1)
 	go func() { writer <- auth.AssignUser(ctx, a, worker.ID, empty) }()
-	waitTimesheetReaders(t, ctx, pool, 1)
+	revokerPID := waitAuthorityRequest(t, ctx, pool, blocker, authorityWriterStatement)
 	report := make(chan *httptest.ResponseRecorder, 1)
 	go func() { w := httptest.NewRecorder(); router.ServeHTTP(w, request); report <- w }()
-	waitTimesheetReaders(t, ctx, pool, 2)
+	reportPID := waitAuthorityRequest(t, ctx, pool, blocker, authoritySnapshotStatement)
+	if revokerPID == reportPID {
+		t.Fatal("report and revoker must be distinct contenders")
+	}
 	if err := barrier.Rollback(ctx); err != nil {
 		t.Fatal(err)
 	}

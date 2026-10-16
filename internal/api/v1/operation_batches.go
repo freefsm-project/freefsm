@@ -58,11 +58,27 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 	operations := make([]authorization.BatchNotesOperation, 0, len(envelope.Operations))
 	seen := map[string]bool{}
 	for _, raw := range envelope.Operations {
-		var op authorization.BatchNotesOperation
+		var wire struct {
+			authorization.BatchNotesOperation
+			DependsOn []*string `json:"depends_on"`
+		}
 		part := r.Clone(r.Context())
 		part.Body = io.NopCloser(bytes.NewReader(raw))
-		if !decodeExactJSON(w, part, &op, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at") {
+		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at") {
 			return
+		}
+		op := wire.BatchNotesOperation
+		if wire.DependsOn != nil {
+			op.DependsOn = make([]string, 0, len(wire.DependsOn))
+		}
+		for _, dependency := range wire.DependsOn {
+			// JSON null decodes silently to the zero value of a string. Preserve
+			// wire shape here; malformed string UUIDs remain domain outcomes.
+			if dependency == nil {
+				writeError(w, 400, "invalid_request", "Dependencies must be strings")
+				return
+			}
+			op.DependsOn = append(op.DependsOn, *dependency)
 		}
 		id, e := uuid.Parse(op.OperationID)
 		if e != nil || id == uuid.Nil || id.String() != op.OperationID || seen[op.OperationID] || op.Type != "job.field_notes" || op.Target == "" || op.Notes == nil || op.DependsOn == nil || op.NotesRevision == "" {
