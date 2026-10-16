@@ -81,6 +81,18 @@ func (s *Service) Subtasks(ctx context.Context, a Actor, jobID int64) (Checklist
 		if err := subtaskInventory(ctx, tx, jobID); err != nil {
 			return err
 		}
+		var err error
+		result, err = subtaskChecklist(ctx, tx, jobID)
+		return err
+	})
+	return result, err
+}
+
+// subtaskChecklist reads recorded facts within its caller's authorized snapshot.
+// Inventory/review is owned by the checklist service, never invented by sync.
+func subtaskChecklist(ctx context.Context, tx pgx.Tx, jobID int64) (Checklist, error) {
+	result := Checklist{Entries: []Subtask{}, History: []SubtaskHistory{}}
+	err := func() error {
 		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM subtask_legacy_reviews WHERE job_id=$1 AND reviewed_at IS NULL)`, jobID).Scan(&result.ReviewRequired); err != nil {
 			return err
 		}
@@ -106,11 +118,15 @@ func (s *Service) Subtasks(ctx context.Context, a Actor, jobID int64) (Checklist
 			result.History = append(result.History, v)
 		}
 		return rows.Err()
-	})
+	}()
 	return result, err
 }
 
 func subtaskCode(err error) string {
+	var conflict *JobExecutionConflict
+	if errors.As(err, &conflict) {
+		return conflict.Code
+	}
 	switch {
 	case err == nil:
 		return "accepted"
@@ -129,6 +145,8 @@ func subtaskCode(err error) string {
 }
 func subtaskError(code string) error {
 	switch code {
+	case "invalid_dependency", "failed_dependency", "invalid_occurrence", "invalid_intent":
+		return &JobExecutionConflict{code}
 	case "not_found":
 		return ErrNotFound
 	case "forbidden":
@@ -146,6 +164,10 @@ func subtaskError(code string) error {
 // SubmitSubtask commits one immutable intent, effect, history, audit and receipt.
 // Terminal receipts expose identity/disposition only, including after scope loss.
 func (s *Service) SubmitSubtask(ctx context.Context, a Actor, jobID int64, in SubtaskCommand) (SubtaskReceipt, error) {
+	return s.submitSubtaskBound(ctx, a, jobID, in, nil)
+}
+
+func (s *Service) submitSubtaskBound(ctx context.Context, a Actor, jobID int64, in SubtaskCommand, batch *batchExecution) (SubtaskReceipt, error) {
 	result := SubtaskReceipt{OperationID: in.OperationID}
 	op, err := uuid.Parse(in.OperationID)
 	if err != nil || op == uuid.Nil {
@@ -153,14 +175,22 @@ func (s *Service) SubmitSubtask(ctx context.Context, a Actor, jobID int64, in Su
 	}
 	in.OperationID = op.String()
 	result.OperationID = in.OperationID
+	var binding *BatchFieldOperation
+	if batch != nil {
+		binding = &batch.operation
+	}
 	encoded, _ := json.Marshal(struct {
 		Job    int64
 		Intent SubtaskCommand
-	}{jobID, in})
+		Batch  *BatchFieldOperation `json:",omitempty"`
+	}{jobID, in, binding})
 	digest := fmt.Sprintf("%x", sha256.Sum256(encoded))
 	var outcome error
 	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		if err := admitOperation(ctx, tx, a, in.OperationID, "job.subtask", digest); err != nil {
+			if batch != nil && errors.Is(err, ErrConflict) {
+				return &JobExecutionConflict{"operation_intent_changed"}
+			}
 			return err
 		}
 		var saved, client string
@@ -175,7 +205,12 @@ func (s *Service) SubmitSubtask(ctx context.Context, a Actor, jobID int64, in Su
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		result.SubtaskID, outcome = applySubtask(ctx, tx, p, a, jobID, in)
+		if batch != nil {
+			outcome = batch.validate(ctx, tx, a)
+		}
+		if outcome == nil {
+			result.SubtaskID, outcome = applySubtask(ctx, tx, p, a, jobID, in)
+		}
 		result.Code = subtaskCode(outcome)
 		if result.Code == "" {
 			return outcome
