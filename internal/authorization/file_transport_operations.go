@@ -26,6 +26,7 @@ type FileTransportReceipt struct {
 
 func fileTransportCode(err error) string {
 	var validation *FileValidationError
+	var conflict *JobExecutionConflict
 	switch {
 	case err == nil:
 		return "accepted"
@@ -39,6 +40,11 @@ func fileTransportCode(err error) string {
 		return "invalid_file"
 	case errors.As(err, &validation):
 		return "invalid_file"
+	case errors.As(err, &conflict):
+		if conflict.Code == "invalid_dependency" || conflict.Code == "failed_dependency" || conflict.Code == "invalid_occurrence" {
+			return conflict.Code
+		}
+		return ""
 	default:
 		return ""
 	}
@@ -56,6 +62,8 @@ func fileTransportError(code string) error {
 		return ErrConflict
 	case "invalid_file":
 		return &FileValidationError{Message: "Invalid file input"}
+	case "invalid_dependency", "failed_dependency", "invalid_occurrence":
+		return &JobExecutionConflict{code}
 	default:
 		return ErrFileOperation
 	}

@@ -3,11 +3,9 @@ package services
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"strings"
 	"unicode"
@@ -23,16 +21,16 @@ import (
 // FileRevision is an opaque comparison token. It changes for edits and parent
 // moves, including ABA changes, without exposing an editable counter to clients.
 func FileRevision(f *ent.File) string {
-	sum := sha256.Sum256([]byte(fmt.Sprintf("%d:%d:%d:%s:%d", f.ID, f.CreatedAt.UnixNano(), f.Revision, f.ObjectType, f.ObjectID)))
-	return base64.RawURLEncoding.EncodeToString(sum[:])
+	return authorization.FileRevision(f)
 }
 
 type FileMutation struct {
 	authorization.FileOperation
-	Name       string `json:"name,omitempty"`
-	Revision   string `json:"revision"`
-	ObjectType string `json:"object_type"`
-	ObjectID   int64  `json:"object_id"`
+	Name       string                            `json:"name,omitempty"`
+	Revision   string                            `json:"revision"`
+	ObjectType string                            `json:"object_type"`
+	ObjectID   int64                             `json:"object_id"`
+	Batch      *authorization.BatchFileOperation `json:"batch,omitempty"`
 }
 
 func (s *FileService) MutateFile(ctx context.Context, company, id int64, in FileMutation, remove bool) error {

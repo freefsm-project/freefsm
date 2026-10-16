@@ -91,6 +91,9 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 					return err
 				}
 				previous = &base
+				if !syncFileParentsRetained(base.Baseline, current) {
+					return invalidate()
+				}
 				// A cursor has exactly one durable successor. Lost responses and retries
 				// never promote it to a newer baseline, even after later domain edits.
 				var first string
@@ -120,6 +123,9 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 			visible[e.ID] = e
 		}
 		if len(snapshot.Removed) != 0 {
+			return invalidate()
+		}
+		if !syncFileParentsRetained(snapshot.Baseline, current) {
 			return invalidate()
 		}
 		// Recheck the entire baseline, including earlier pages. A relationship loss

@@ -143,6 +143,8 @@ type FilePublication struct {
 	ID         string
 	Digest     string
 	OccurredAt *time.Time
+	Intent     any
+	Check      func(pgx.Tx) error
 }
 
 func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref.Ref, originalName string, mimeType string, fileSize int64, reader io.Reader, uploadedBy int64, publication ...FilePublication) (result *ent.File, resultErr error) {
@@ -153,7 +155,7 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 	if request, ok := authorization.FromContext(ctx); ok && request.Actor.Channel == "api" {
 		defer func() {
 			if resultErr != nil {
-				resultErr = request.Service.RejectFilePublication(ctx, request.Actor, identity.ID, filePublicationIntent(ref, originalName, fileSize, identity.Digest, identity.OccurredAt), resultErr)
+				resultErr = request.Service.RejectFilePublication(ctx, request.Actor, identity.ID, publicationIntent(identity, filePublicationIntent(ref, originalName, fileSize, identity.Digest, identity.OccurredAt)), resultErr, identity.Intent != nil)
 			}
 		}()
 	}
@@ -271,9 +273,15 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 				return 0, nil, authorization.ErrConflict
 			}
 			intentFields := filePublicationIntent(ref, originalName, actualSize, hex.EncodeToString(digest.Sum(nil)), identity.OccurredAt)
-			intentBytes, _ := json.Marshal(intentFields)
+			intentBytes, err := publicationIntentJSON(identity, intentFields)
+			if err != nil {
+				return 0, nil, err
+			}
 			intent := string(intentBytes)
 			if err := authorization.AdmitOperation(ctx, tx, request.Actor, identity.ID, "file.publication", json.RawMessage(intentBytes)); err != nil {
+				if identity.Intent != nil && errors.Is(err, authorization.ErrConflict) {
+					return 0, nil, &authorization.JobExecutionConflict{Code: "operation_intent_changed"}
+				}
 				return 0, nil, err
 			}
 			if err := authorization.FilePublicationRejection(ctx, tx, identity.ID); err != nil {
@@ -292,6 +300,11 @@ func (s *FileService) Create(ctx context.Context, companyID int64, ref objectref
 			}
 			if err != pgx.ErrNoRows {
 				return 0, nil, err
+			}
+			if identity.Check != nil {
+				if err := identity.Check(tx); err != nil {
+					return 0, nil, err
+				}
 			}
 			err = tx.QueryRow(ctx, `INSERT INTO files(company_id,object_type,object_id,original_name,stored_name,mime_type,file_size,file_path,uploaded_by,sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING to_jsonb(files)`, companyID, ref.ObjectType(), ref.ID, originalName, storedName, mimeType, actualSize, filePath, request.Actor.UserID, hex.EncodeToString(digest.Sum(nil))).Scan(&encoded)
 			if err != nil {

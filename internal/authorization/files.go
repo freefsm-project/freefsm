@@ -20,8 +20,9 @@ type FileOperation struct {
 	OperationID string     `json:"operation_id"`
 	OccurredAt  *time.Time `json:"occurred_at,omitempty"`
 	// Intent/TargetID are service-supplied command facts, never wire authority.
-	Intent   any   `json:"-"`
-	TargetID int64 `json:"-"`
+	Intent   any                                        `json:"-"`
+	TargetID int64                                      `json:"-"`
+	Check    func(context.Context, pgx.Tx, Actor) error `json:"-"`
 }
 
 func (op FileOperation) Validate() error {
@@ -67,9 +68,6 @@ func fileAccess(ctx context.Context, q queryer, p Principal, a Actor, ref object
 		if jobID == 0 {
 			return "", ErrNotFound
 		}
-		if (permission == "file.rename" || permission == "file.remove") && uploader != a.UserID {
-			return "", ErrForbidden
-		}
 	}
 	parentView := ref.ObjectType() + ".view"
 	all := p.Allows(parentView, All)
@@ -84,6 +82,9 @@ func fileAccess(ctx context.Context, q queryer, p Principal, a Actor, ref object
 	}
 	if !all && !assigned || !active && (!all || !p.Allows(ref.ObjectType()+".archived.view", All)) {
 		return "", ErrNotFound
+	}
+	if a.Channel == "api" && (permission == "file.rename" || permission == "file.remove") && uploader != a.UserID {
+		return "", ErrForbidden
 	}
 	if permission == "" {
 		if all {
@@ -186,6 +187,11 @@ func (s *Service) FileAction(ctx context.Context, a Actor, ref objectref.Ref, pe
 				if err := operation[0].Validate(); err != nil {
 					return err
 				}
+				if operation[0].Check != nil {
+					if err := operation[0].Check(ctx, tx, a); err != nil {
+						return err
+					}
+				}
 				if operation[0].TargetID > 0 {
 					if !ref.Valid() {
 						return ErrFileOperation
@@ -238,6 +244,9 @@ func (s *Service) FileAction(ctx context.Context, a Actor, ref objectref.Ref, pe
 		if len(operation) == 1 && operation[0].Intent != nil {
 			op := operation[0]
 			if err := admitOperation(ctx, tx, a, op.OperationID, "file.mutation", op.Intent); err != nil {
+				if op.Check != nil && errors.Is(err, ErrConflict) {
+					return &JobExecutionConflict{"operation_intent_changed"}
+				}
 				return err
 			}
 			var code string

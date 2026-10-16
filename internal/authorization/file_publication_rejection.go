@@ -8,9 +8,9 @@ import (
 
 // RejectFilePublication records only a terminal, identifiable pre-publication
 // domain rejection. Storage/audit failures and identity misuse remain untouched.
-func (s *Service) RejectFilePublication(ctx context.Context, a Actor, id string, intent any, cause error) error {
+func (s *Service) RejectFilePublication(ctx context.Context, a Actor, id string, intent any, cause error, terminalConflict ...bool) error {
 	code := fileTransportCode(cause)
-	if code == "" || code == "accepted" || code == "file_conflict" {
+	if code == "" || code == "accepted" || code == "file_conflict" && (len(terminalConflict) == 0 || !terminalConflict[0]) {
 		return cause
 	}
 	if key, err := uuid.Parse(id); err != nil || key == uuid.Nil {

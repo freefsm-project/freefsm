@@ -30,7 +30,7 @@ class OfflineNotes {
  }
  async purge(s,issuance=null){
   // Retain only nonsensitive operation identities/dispositions for safe lookup.
-  const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt};
+   const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt,...(e.family?{family:e.family}:{})};
   Object.assign(s,fresh(),{pending:safe,user:s.user,issuance});await this.persistAuthorityLoss(s);
  }
  async purgeDeniedIssuance(s,receipt){
@@ -114,7 +114,7 @@ class OfflineNotes {
    else {page=r.data.next_page;if(!page||seen.has(page))throw Error('synchronization_incomplete');seen.add(page);}
   }while(page);
   for(const e of Object.values(s.pending)){
-   if(e.job&&!records[e.job])this.purgeSensitiveTarget(s,e.job);
+    if(e.job&&!this.pendingTargetVisible(e,records))this.purgeSensitiveTarget(s,e.job);
    else if(s.restore&&!['replaced','purged'].includes(e.state))e.state='restore_uncertain';
   }
   // The complete snapshot carries observed scope removals and restore outcomes.
@@ -122,7 +122,8 @@ class OfflineNotes {
   s.cache=records;s.synced=true;s.restore=false;await this.persistAuthorityLoss(s);
   return {state:'synchronized',count:Object.keys(records).length};
  });}
- async readNotes(job){return this.transaction(async s=>{
+  pendingTargetVisible(e,records){return !!records[e.job];}
+  async readNotes(job){return this.transaction(async s=>{
   await this.enforceOfflineAccessWindow(s);await this.policy(s);
   if(!s.cache[job])throw Error('inaccessible_target');
   const r=await this.contact(s,`/jobs/${encodeURIComponent(job)}/field-notes`);
@@ -204,7 +205,7 @@ class OfflineNotes {
   // Receipt lookup remains possible without resource visibility or a live offline
   // lease. It still requires a currently valid authenticated server session.
   if(!s.pending[id])throw Error('unknown_operation');
-  const r=await this.contact(s,`/job-execution-operations/${encodeURIComponent(id)}`);
+   const r=await this.contact(s,`/${s.pending[id].family==='file'?'file-operations':'job-execution-operations'}/${encodeURIComponent(id)}`);
   // Receipt access is independent of offline policy and target visibility. Check
   // policy on this reconnect, then apply only safe receipt metadata after purge.
   await this.policy(s,true);

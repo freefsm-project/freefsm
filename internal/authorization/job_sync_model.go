@@ -15,10 +15,11 @@ import (
 // syncEntry separates private installed identity/authority anchors from the
 // closed public representation. Only Data is ever returned to the client.
 type syncEntry struct {
-	InstalledID int64          `json:"installed_id"`
-	Anchor      string         `json:"anchor"`
-	ID          string         `json:"id"`
-	Data        map[string]any `json:"data"`
+	InstalledID int64             `json:"installed_id"`
+	Anchor      string            `json:"anchor"`
+	ID          string            `json:"id"`
+	Data        map[string]any    `json:"data"`
+	FileParents map[string]string `json:"file_parents,omitempty"`
 }
 
 func syncIdentity(ctx context.Context, tx pgx.Tx, kind string, id int64) (string, error) {
@@ -70,6 +71,24 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 			return nil, err
 		}
 		e.Data["id"] = e.ID
+		files, err := syncJobFiles(ctx, tx, p, a, e.InstalledID)
+		if err != nil {
+			return nil, err
+		}
+		e.Data["files"] = files
+		e.FileParents = map[string]string{}
+		for _, f := range files {
+			e.FileParents[f["id"].(string)] = f["object_type"].(string) + ":" + f["object_id"].(string)
+		}
+		parents, err := syncFileParents(ctx, tx, p, a, e.InstalledID)
+		if err != nil {
+			return nil, err
+		}
+		e.Data["file_parents"] = parents
+		for _, parent := range parents {
+			key := parent["object_type"].(string) + ":" + parent["object_id"].(string)
+			e.FileParents["parent:"+key] = key
+		}
 		e.Data["masters"] = map[string]any{}
 		customer, cerr := jobCustomer(ctx, tx, p, a, e.InstalledID)
 		if cerr != nil && !errors.Is(cerr, ErrNotFound) {

@@ -5,12 +5,14 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"strconv"
 	"time"
 )
 
 type FileReceipt struct {
 	OperationID string    `json:"operation_id"`
 	FileID      int64     `json:"file_id,omitempty"`
+	EffectID    string    `json:"effect_id,omitempty"`
 	Code        string    `json:"code"`
 	AcceptedAt  time.Time `json:"accepted_at"`
 }
@@ -31,5 +33,8 @@ func (s *Service) FileReceipt(ctx context.Context, a Actor, id string) (FileRece
 		}
 		return err
 	})
+	if err == nil && r.Code == "accepted" && r.FileID > 0 {
+		r.EffectID = strconv.FormatInt(r.FileID, 10)
+	}
 	return r, err
 }

@@ -23,23 +23,62 @@ type BatchNotesOperation struct {
 	OccurredAt    *time.Time `json:"occurred_at,omitempty"`
 }
 
+// BatchFileOperation contains metadata intent only. Target is an immutable scoped
+// transfer for publication, or the existing File ID for rename/removal.
+type BatchFileOperation struct {
+	OperationID string     `json:"operation_id"`
+	Type        string     `json:"type"`
+	Target      string     `json:"target"`
+	DependsOn   []string   `json:"depends_on"`
+	ObjectType  string     `json:"object_type"`
+	ObjectID    int64      `json:"object_id"`
+	Revision    string     `json:"revision,omitempty"`
+	Name        string     `json:"name,omitempty"`
+	OccurredAt  *time.Time `json:"occurred_at,omitempty"`
+}
+
+// BatchOperation is an already-preflighted variant, not a second command store.
+type BatchOperation struct {
+	Notes *BatchNotesOperation
+	File  *BatchFileOperation
+}
+
+type FileBatchExecutor func(context.Context, BatchFileOperation, func(context.Context, pgx.Tx, Actor) error) (FileReceipt, error)
+
 type BatchOperationResult struct {
 	OperationID string
-	Receipt     *JobExecutionReceipt
+	Receipt     any
 	Err         error
 }
 
 // SubmitOperationBatch deliberately has no enclosing transaction. Each existing
 // domain transaction independently fences current authority and commits its own
 // immutable receipt. Cancellation leaves unprocessed identities unreconciled.
-func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []BatchNotesOperation) []BatchOperationResult {
+func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []BatchOperation, files FileBatchExecutor) []BatchOperationResult {
 	results := make([]BatchOperationResult, 0, len(ops))
 	positions := map[string]int{}
 	successful := map[string]bool{}
-	for i, op := range ops {
-		positions[op.OperationID] = i
+	for i, member := range ops {
+		if member.File != nil {
+			positions[member.File.OperationID] = i
+		} else {
+			positions[member.Notes.OperationID] = i
+		}
 	}
-	for i, op := range ops {
+	for i, member := range ops {
+		if member.File != nil {
+			op := *member.File
+			batch := batchExecution{operation: BatchNotesOperation{OperationID: op.OperationID, Type: op.Type, Target: op.Target, DependsOn: op.DependsOn, OccurredAt: op.OccurredAt}, positions: positions, index: i, successful: successful}
+			receipt, err := files(ctx, op, batch.validate)
+			result := BatchOperationResult{OperationID: op.OperationID, Err: err}
+			if receipt.Code != "" {
+				result.Receipt = receipt
+			}
+			results = append(results, result)
+			successful[op.OperationID] = err == nil && receipt.Code == "accepted"
+			continue
+		}
+		op := *member.Notes
 		id, err := strconv.ParseInt(op.Target, 10, 64)
 		if err != nil {
 			id, err = s.ResolveSyncedJob(ctx, op.Target)
@@ -62,7 +101,8 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			}
 		}
 		results = append(results, result)
-		successful[op.OperationID] = result.Err == nil && result.Receipt != nil && result.Receipt.Code == "accepted"
+		receipt, _ := result.Receipt.(*JobExecutionReceipt)
+		successful[op.OperationID] = result.Err == nil && receipt != nil && receipt.Code == "accepted"
 	}
 	return results
 }
@@ -78,7 +118,7 @@ type batchExecution struct {
 // authority transaction. Submitted position is eligibility, never part of intent;
 // a same-intent retry may submit only the unresolved operation.
 func (b *batchExecution) validate(ctx context.Context, tx pgx.Tx, a Actor) error {
-	if b.operation.Type != "job.field_notes" {
+	if b.operation.Type != "job.field_notes" && b.operation.Type != "file.publish" && b.operation.Type != "file.rename" && b.operation.Type != "file.remove" {
 		return &JobExecutionConflict{"invalid_intent"}
 	}
 	if at := b.operation.OccurredAt; at != nil && at.Nanosecond()%1000 != 0 {

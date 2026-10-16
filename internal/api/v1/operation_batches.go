@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/google/uuid"
@@ -55,9 +57,62 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_request", "operations must be an array")
 		return
 	}
-	operations := make([]authorization.BatchNotesOperation, 0, len(envelope.Operations))
+	operations := make([]authorization.BatchOperation, 0, len(envelope.Operations))
 	seen := map[string]bool{}
 	for _, raw := range envelope.Operations {
+		var discriminator struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal(raw, &discriminator) != nil {
+			writeError(w, 400, "invalid_request", "Invalid operation")
+			return
+		}
+		if strings.HasPrefix(discriminator.Type, "file.") {
+			var wire struct {
+				authorization.BatchFileOperation
+				DependsOn []*string `json:"depends_on"`
+			}
+			part := r.Clone(r.Context())
+			part.Body = io.NopCloser(bytes.NewReader(raw))
+			properties := []string{"operation_id", "type", "target", "depends_on", "object_type", "object_id", "occurred_at"}
+			if discriminator.Type == "file.rename" || discriminator.Type == "file.remove" {
+				properties = append(properties, "revision")
+			}
+			if discriminator.Type == "file.rename" {
+				properties = append(properties, "name")
+			}
+			if !decodeExactJSON(w, part, &wire, properties...) {
+				return
+			}
+			op := wire.BatchFileOperation
+			if wire.DependsOn != nil {
+				op.DependsOn = []string{}
+			}
+			for _, dep := range wire.DependsOn {
+				if dep == nil {
+					writeError(w, 400, "invalid_request", "Dependencies must be strings")
+					return
+				}
+				op.DependsOn = append(op.DependsOn, *dep)
+			}
+			id, e := uuid.Parse(op.OperationID)
+			validTarget := false
+			if op.Type == "file.publish" {
+				target, targetErr := uuid.Parse(op.Target)
+				validTarget = targetErr == nil && target != uuid.Nil && target.String() == op.Target
+			}
+			if op.Type == "file.rename" || op.Type == "file.remove" {
+				target, targetErr := strconv.ParseInt(op.Target, 10, 64)
+				validTarget = targetErr == nil && target > 0 && strconv.FormatInt(target, 10) == op.Target && op.Revision != "" && (op.Type == "file.remove" || op.Name != "")
+			}
+			if e != nil || id == uuid.Nil || id.String() != op.OperationID || seen[op.OperationID] || !validTarget || op.DependsOn == nil || !validTransferParent(op.ObjectType, op.ObjectID) {
+				writeError(w, 400, "invalid_request", "A complete canonical File intent is required")
+				return
+			}
+			seen[op.OperationID] = true
+			operations = append(operations, authorization.BatchOperation{File: &op})
+			continue
+		}
 		var wire struct {
 			authorization.BatchNotesOperation
 			DependsOn []*string `json:"depends_on"`
@@ -86,15 +141,16 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		seen[op.OperationID] = true
-		operations = append(operations, op)
+		operations = append(operations, authorization.BatchOperation{Notes: &op})
 	}
-	results := req.Service.SubmitOperationBatch(r.Context(), req.Actor, operations)
+	results := req.Service.SubmitOperationBatch(r.Context(), req.Actor, operations, h.deps.Files.SubmitBatchOperation)
 	out := make([]batchResult, 0, len(results))
 	for _, result := range results {
 		item := batchResult{OperationID: result.OperationID, Receipt: result.Receipt}
 		if result.Err != nil {
 			status, code := 503, "retryable_failure"
 			var conflict *authorization.JobExecutionConflict
+			var validation *authorization.FileValidationError
 			switch {
 			case errors.As(result.Err, &conflict):
 				status, code = 409, conflict.Code
@@ -105,6 +161,10 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 				status, code = 403, "forbidden"
 			case errors.Is(result.Err, authorization.ErrNotFound):
 				status, code = 404, "not_found"
+			case errors.Is(result.Err, authorization.ErrConflict):
+				status, code = 409, "file_conflict"
+			case errors.Is(result.Err, authorization.ErrFileOperation), errors.As(result.Err, &validation):
+				status, code = 400, "invalid_file"
 			}
 			disposition := "review"
 			retry := 0
@@ -120,7 +180,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 }
 
 type batchResult struct {
-	OperationID string                             `json:"operation_id"`
-	Receipt     *authorization.JobExecutionReceipt `json:"receipt,omitempty"`
-	Error       *apiError                          `json:"error,omitempty"`
+	OperationID string    `json:"operation_id"`
+	Receipt     any       `json:"receipt,omitempty"`
+	Error       *apiError `json:"error,omitempty"`
 }
