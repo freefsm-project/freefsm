@@ -89,8 +89,11 @@ func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id i
 		if err := json.Unmarshal(raw, &state); err != nil {
 			return err
 		}
-		var manual string
-		if err := tx.QueryRow(ctx, `SELECT s.category_key FROM `+kind+`s d JOIN statuses s ON s.id=d.status_id WHERE d.id=$1`, id).Scan(&manual); err != nil {
+		// Retained documents can have an explicitly unknown manual status.
+		// Reading must preserve that absence and expose the revision/choices for
+		// a deliberate repair, rather than fabricating a Draft or hiding the row.
+		var manual *string
+		if err := tx.QueryRow(ctx, `SELECT s.category_key FROM `+kind+`s d LEFT JOIN statuses s ON s.id=d.status_id WHERE d.id=$1`, id).Scan(&manual); err != nil {
 			return err
 		}
 		state["manual_category"] = manual
@@ -101,9 +104,9 @@ func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id i
 		}
 		state["workflow"] = workflow
 		if kind == "invoice" {
-			var effective string
+			var effective *string
 			var locked bool
-			if err := tx.QueryRow(ctx, `SELECT s.category_key,invoice_has_active_settlement(e.invoice_id) FROM invoice_effective_status e JOIN statuses s ON s.id=e.status_id WHERE e.invoice_id=$1`, id).Scan(&effective, &locked); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT s.category_key,invoice_has_active_settlement(i.id) FROM invoices i LEFT JOIN invoice_effective_status e ON e.invoice_id=i.id LEFT JOIN statuses s ON s.id=e.status_id WHERE i.id=$1`, id).Scan(&effective, &locked); err != nil {
 				return err
 			}
 			state["effective_category"], state["settlement_locked"] = effective, locked

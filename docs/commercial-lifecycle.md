@@ -12,6 +12,8 @@ Effective status is a projection: manual Void; unsettled manual Draft; active pa
 
 Authorized Job-bound document GETs return `revision`, `manual_category`, `effective_category`, `workflow` choices (stable `id`, `category`, `meaning_revision`, current name/color), and Invoice `settlement_locked`. Pricing remains separately authorized. Choices describe vocabulary, not an authorization grant.
 
+Retained documents without a recorded manual status remain readable: `status_id`, `manual_category` and an unknown `effective_category` are explicitly `null`. Their current revision, workflow choices and Invoice settlement lock remain available for deliberate review. A read never supplies Draft, creates a transition or invents financial history. Repair requires an explicit reviewed Status selection; its event preserves the unknown prior status rather than claiming a historical Draft or acceptance.
+
 POST `/api/v1/estimates/{id}/status`, `/api/v1/invoices/{id}/status`, or `/api/v1/invoices/{id}/finalize` with:
 
 ```json
