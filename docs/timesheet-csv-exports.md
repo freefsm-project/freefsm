@@ -28,6 +28,14 @@ not block an independently authorized time artifact. Observed blocks remain
 blocked; regenerate after reviewing current access. Downloaded copies are outside
 subsequent access control.
 
+Result and unavailable-download pages offer **Generate a new Timesheet export**
+and **Generate a new clock GPS export** independently under current Export grants.
+Each opens a fresh confirmation with currently authorized scope choices and
+default filters; old stored filters are not recovered from the unavailable result.
+To choose different filters, return to Timesheets and review a new export there.
+View alone exposes neither regeneration link. Losing GPS authority leaves the
+independently authorized Timesheet regeneration route available.
+
 ## Common fixed columns
 
 Both version-one formats begin with these columns, in this order:
