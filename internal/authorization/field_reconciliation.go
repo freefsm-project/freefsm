@@ -60,6 +60,7 @@ type FieldReceipt struct {
 	OperationID string `json:"operation_id"`
 	JobID       int64  `json:"job_id"`
 	Outcome     string `json:"outcome"`
+	Reason      string `json:"reason,omitempty"`
 }
 
 // Receipt lookup deliberately does not depend on current parent visibility and
@@ -70,7 +71,7 @@ func (s *Service) FieldOperationReceipt(ctx context.Context, a Actor, id int64, 
 		return receipt, ErrNotFound
 	}
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
-		err := tx.QueryRow(ctx, `SELECT operation_id::text,job_id,outcome FROM job_field_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3 AND job_id=$4`, a.UserID, a.SessionHash, key, id).Scan(&receipt.OperationID, &receipt.JobID, &receipt.Outcome)
+		err := tx.QueryRow(ctx, `SELECT operation_id::text,job_id,outcome,coalesce(validation_reason,'') FROM job_field_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3 AND job_id=$4`, a.UserID, a.SessionHash, key, id).Scan(&receipt.OperationID, &receipt.JobID, &receipt.Outcome, &receipt.Reason)
 		if err == pgx.ErrNoRows {
 			return ErrNotFound
 		}
@@ -123,6 +124,14 @@ func (s *Service) SaveFieldsReviewed(ctx context.Context, a Actor, id int64, in 
 }
 
 func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in ReviewedFieldPatch, mode customfields.SaveMode) (FieldState, error) {
+	return s.patchFieldsReviewedWithBatch(ctx, a, id, in, mode, nil)
+}
+
+func (s *Service) patchFieldsReviewedBound(ctx context.Context, a Actor, id int64, in ReviewedFieldPatch, batch *batchExecution) (FieldState, error) {
+	return s.patchFieldsReviewedWithBatch(ctx, a, id, in, customfields.ChangedValues, batch)
+}
+
+func (s *Service) patchFieldsReviewedWithBatch(ctx context.Context, a Actor, id int64, in ReviewedFieldPatch, mode customfields.SaveMode, batch *batchExecution) (FieldState, error) {
 	var state FieldState
 	if key, err := uuid.Parse(in.OperationID); err != nil || key == uuid.Nil {
 		return state, &FieldConflict{"invalid_operation_id"}
@@ -132,15 +141,29 @@ func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 		return state, err
 	}
 	outcome := ""
+	reason := ""
 	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
-		if err := admitOperation(ctx, tx, a, in.OperationID, "job.fields", map[string]any{"job_id": id, "mode": mode, "intent": json.RawMessage(intent)}); err != nil {
+		binding := map[string]any{"job_id": id, "mode": mode, "intent": json.RawMessage(intent)}
+		if batch != nil {
+			binding["batch"] = batch.operation
+		}
+		if err := admitOperation(ctx, tx, a, in.OperationID, "job.fields", binding); err != nil {
 			if errors.Is(err, ErrConflict) {
 				return &FieldConflict{"operation_intent_changed"}
 			}
 			return err
 		}
+		if batch != nil {
+			var historical bool
+			if err := tx.QueryRow(ctx, `SELECT intent IS NULL FROM operation_admissions WHERE operation_id=$1`, in.OperationID).Scan(&historical); err != nil {
+				return err
+			}
+			if historical {
+				return &FieldConflict{"operation_intent_changed"}
+			}
+		}
 		var same bool
-		err := tx.QueryRow(ctx, `SELECT job_id=$4 AND intent=$5::jsonb,outcome FROM job_field_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID, id, intent).Scan(&same, &outcome)
+		err := tx.QueryRow(ctx, `SELECT job_id=$4 AND intent=$5::jsonb,outcome,coalesce(validation_reason,'') FROM job_field_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID, id, intent).Scan(&same, &outcome, &reason)
 		if err == nil {
 			if !same {
 				outcome = "operation_intent_changed"
@@ -163,8 +186,17 @@ func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 			return err
 		}
 		persist := func() error {
-			_, err := tx.Exec(ctx, `INSERT INTO job_field_operations(user_id,client_hash,operation_id,job_id,intent,outcome) VALUES($1,$2,$3,$4,$5,$6)`, a.UserID, a.SessionHash, in.OperationID, id, intent, outcome)
+			_, err := tx.Exec(ctx, `INSERT INTO job_field_operations(user_id,client_hash,operation_id,job_id,intent,outcome,validation_reason) VALUES($1,$2,$3,$4,$5,$6,nullif($7,''))`, a.UserID, a.SessionHash, in.OperationID, id, intent, outcome, reason)
 			return err
+		}
+		if batch != nil {
+			if err := batch.validate(ctx, tx, a); err != nil {
+				outcome = executionCode(err)
+				if outcome == "" {
+					return err
+				}
+				return persist()
+			}
 		}
 		if in.OccurredAt != nil && (in.OccurredAt.IsZero() || in.OccurredAt.After(time.Now()) || in.OccurredAt.Nanosecond()%1000 != 0) {
 			outcome = "invalid_occurrence"
@@ -188,6 +220,7 @@ func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 		var entered []customfields.Value
 		if err = json.Unmarshal(in.Values, &entered); err != nil || entered == nil {
 			outcome = "invalid_custom_field"
+			reason = "invalid_field_shape"
 		} else {
 			for _, v := range entered {
 				key := fmt.Sprint(v.DefinitionID)
@@ -203,6 +236,11 @@ func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 			var invalid *customfields.FieldError
 			if errors.As(err, &invalid) {
 				outcome = "invalid_custom_field"
+				// Historical initializer overlays retain the original error shape.
+				// Missing structured evidence stays unknown, never guessed from text.
+				if described, ok := any(invalid).(interface{ ValidationReason() string }); ok {
+					reason = described.ValidationReason()
+				}
 			} else if err != nil {
 				return err
 			} else {
@@ -214,7 +252,7 @@ func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 					if _, err = tx.Exec(ctx, `UPDATE jobs SET custom_fields=$2::jsonb,updated_at=clock_timestamp() WHERE id=$1`, id, next); err != nil {
 						return err
 					}
-					if err = audit(ctx, tx, a, p, "job.fields.edit", scope, "job", id, map[string]any{"before": old, "after": next, "operation_id": in.OperationID, "occurred_at": in.OccurredAt}); err != nil {
+					if err = audit(ctx, tx, a, p, "job.fields.edit", scope, "job", id, map[string]any{"before": old, "after": next, "field_value_format": jobFieldValueFormatV1, "operation_id": in.OperationID, "occurred_at": in.OccurredAt}); err != nil {
 						return err
 					}
 				} else if err := saveaction.ConfirmNoChange(ctx, tx); err != nil {
@@ -244,7 +282,7 @@ func (s *Service) patchFieldsReviewed(ctx context.Context, a Actor, id int64, in
 	// ID misuse is an error about a different attempted intent, not a new
 	// disposition for the original immutable receipt. Lookup retains that fact.
 	if outcome != "operation_intent_changed" {
-		state.Receipt = &FieldReceipt{OperationID: in.OperationID, JobID: id, Outcome: outcome}
+		state.Receipt = &FieldReceipt{OperationID: in.OperationID, JobID: id, Outcome: outcome, Reason: reason}
 	}
 	if outcome != "accepted" {
 		return state, &FieldConflict{outcome}

@@ -60,14 +60,22 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 	for _, raw := range envelope.Operations {
 		var wire struct {
 			authorization.BatchNotesOperation
-			DependsOn []*string `json:"depends_on"`
+			DependsOn []*string       `json:"depends_on"`
+			Revisions json.RawMessage `json:"revisions"`
 		}
 		part := r.Clone(r.Context())
 		part.Body = io.NopCloser(bytes.NewReader(raw))
-		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "status_id", "status_revision", "meaning_revision", "subtask_id", "completion_revision", "completed") {
+		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "status_id", "status_revision", "meaning_revision", "subtask_id", "completion_revision", "completed", "revisions", "values") {
 			return
 		}
 		op := wire.BatchNotesOperation
+		if op.Type == "job.fields" {
+			var valid bool
+			op.Revisions, valid = fieldPatchWire(w, r, op.Values, wire.Revisions)
+			if !valid {
+				return
+			}
+		}
 		if wire.DependsOn != nil {
 			op.DependsOn = make([]string, 0, len(wire.DependsOn))
 		}
@@ -141,6 +149,9 @@ func completeBatchFieldIntent(op authorization.BatchFieldOperation, raw []byte) 
 	case "job.subtask":
 		fields = []string{"subtask_id", "completion_revision", "completed"}
 		valid = op.SubtaskID != "" && op.CompletionRevision != "" && op.Completed != nil
+	case "job.fields":
+		fields = []string{"revisions", "values"}
+		valid = op.Revisions != nil && len(op.Values) > 0
 	}
 	for _, key := range fields {
 		allowed[key] = true
