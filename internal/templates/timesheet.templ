@@ -56,6 +56,12 @@ templ TimesheetReport(p authorization.Timesheet) {
 				</select>
 				<label><input type="checkbox" name="include_void" value="true" checked?={ p.Filter.IncludeVoid }/>Include terminal Void history (excluded from totals)</label>
 				<button type="submit">Refresh Timesheets</button>
+				if p.CanExport {
+					<button type="submit" formaction="/time-entries/export" name="type" value="time">Export Timesheet CSV</button>
+				}
+				if p.CanExportGPS {
+					<button type="submit" formaction="/time-entries/export" name="type" value="gps">Export clock GPS CSV</button>
+				}
 				<a href="/time-entries">Clear filters</a>
 			</form>
 			<p>Updated at <time datetime={ p.AsOf.Format(time.RFC3339Nano) }>{ p.AsOf.Format(time.RFC3339Nano) }</time>. Company timezone: { p.Timezone }. Exact elapsed time within the selected company dates.</p>

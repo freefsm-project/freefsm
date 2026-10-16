@@ -1,0 +1,55 @@
+package templates
+
+import "net/url"
+import "strings"
+
+templ TimeExportReview(filters url.Values, scope, operation string, columns []string, gps bool, scopes []string) {
+	@Layout("Export Timesheets") {
+		if gps {
+			<h1>Export clock GPS observations</h1>
+		} else {
+			<h1>Export Timesheets</h1>
+		}
+		<p>All matching rows in one consistent snapshot. Scope: { scope } (A: All Records, J: Assigned Jobs, O: Own Records). Groups use stable identity order, then the selected start ordering and entry identity.</p>
+		<dl>
+			for key, values := range filters {
+				<dt>{ key }</dt>
+				for _, value := range values {
+					<dd>{ value }</dd>
+				}
+			}
+		</dl>
+		if gps {
+			<p>One row per accepted clock observation for matching entries. Missing or explicitly omitted GPS produces no row. Blank accuracy means not supplied. Entry filters and grouping match Timesheets. Original captures survive correction and Void; no inferred tracking or attendance proof. Time Export is independent; this file contains no duration, notes or revision history.</p>
+		} else {
+			<p>One row per entry and selected company date; sum duration_microseconds for exact totals. Void has zero counted duration and never invents a missing end. Active duration is provisional at as_of. Revisions are structured JSON repeated on each day's row; they are history, not additional counted entries. No GPS fields are included.</p>
+		}
+		<p>Fixed columns: { strings.Join(columns, ", ") }.</p>
+		<p>Ready results are requester-only for 24 hours. Every download rechecks every included record and field; access loss blocks the entire artifact. Downloaded copies are outside subsequent access control. Spreadsheet-formula-leading cells receive a reversible leading apostrophe.</p>
+		<form action="/time-entries/export" method="post" hx-boost="false">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="operation_id" value={ operation }/>
+			<label for="export-scope">Export scope</label>
+			<select id="export-scope" name="scope">
+				for _, candidate := range scopes {
+					<option value={ candidate } selected?={ candidate==scope }>
+						{ map[string]string{"A":"All Records","J":"Assigned Jobs","O":"Own Records"}[candidate] }
+					</option>
+				}
+			</select>
+			for key, values := range filters {
+				if key!="scope" {
+					for _, value := range values {
+						<input type="hidden" name={ key } value={ value }/>
+					}
+				}
+			}
+			if gps {
+				<button type="submit">Confirm GPS export</button>
+			} else {
+				<button type="submit">Confirm Timesheet export</button>
+			}
+		</form>
+		<a href="/exports">My CSV exports</a>
+	}
+}

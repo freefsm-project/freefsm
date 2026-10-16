@@ -74,8 +74,9 @@ corrected interval, manual entry or missing legacy capture.
 
 `authorization.Service.Timesheet` supplies the coherent authorized projection and
 explicit elapsed-microsecond values. It reuses existing Time access and snapshot
-authorization rather than replacing export infrastructure. Ticket #100 owns CSV,
-independent Export grants, durable export states, retention and complete download
+authorization rather than replacing export infrastructure. The shared transaction
+reader also supplies [Timesheet and GPS CSV exports](timesheet-csv-exports.md),
+with independent Export grants, durable states and complete download
 reauthorization. The public field API remains clocks-only and gains no report,
 manual Create, Correct, Void or export endpoint.
 
