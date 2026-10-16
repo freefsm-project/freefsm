@@ -1,5 +1,9 @@
 # Comments, replies and removal — #45
 
+The current API/encrypted-reference synchronization extension is documented in
+[Comment synchronization](api-comment-sync.md). The execution evidence below is
+historical #45 evidence; it is not the acceptance record for that extension.
+
 ## Runtime contract
 
 The web Comment widget on Customer, Project, Job, Asset, Estimate and Invoice

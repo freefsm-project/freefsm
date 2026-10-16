@@ -122,6 +122,9 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 			}
 			e.Anchor = string(b)
 		}
+		if err := syncComments(ctx, tx, p, a, e); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }
@@ -162,6 +165,8 @@ func syncOpaqueFields(ctx context.Context, tx pgx.Tx, kind string, v map[string]
 			childKind = "contact"
 		case "assets", "asset":
 			childKind = "asset"
+		case "comments":
+			childKind = "comment"
 		case "location":
 			childKind = "location"
 		}
@@ -186,6 +191,29 @@ func syncOpaqueFields(ctx context.Context, tx pgx.Tx, kind string, v map[string]
 					return err
 				}
 				v[key] = instant.Format("2006-01-02")
+			}
+		}
+	}
+	if kind == "comment" {
+		for _, key := range []string{"author_id", "removed_by"} {
+			if number, ok := v[key].(json.Number); ok {
+				v[key] = number.String()
+			}
+		}
+		if number, ok := v["reply_to"].(json.Number); ok {
+			id, err := number.Int64()
+			if err != nil {
+				return err
+			}
+			v["reply_to"], err = syncIdentity(ctx, tx, "comment", id)
+			if err != nil {
+				return err
+			}
+		}
+		if id, ok := v["id"]; ok {
+			v["thread_id"] = id
+			if parent, reply := v["reply_to"]; reply {
+				v["thread_id"] = parent
 			}
 		}
 	}

@@ -39,7 +39,9 @@ if(require.main===module){
    case 'read-notes':result=await client.readNotes(command.job);break;
    case 'view':result=await client.view();break;
    case 'stage':result={operation_id:await client.stage(command.job,command.text),state:'pending'};break;
-   case 'stage-batch-notes':result={operation_id:await client.stageBatch(command.job,command.text,command.depends_on),state:'pending'};break;
+    case 'stage-batch-notes':result={operation_id:await client.stageBatch(command.job,command.text,command.depends_on),state:'pending'};break;
+    case 'stage-comment':result={operation_id:await client.stageComment(command.job,command.reviewed,command.depends_on),state:'pending'};break;
+    case 'repair-comment':result={operation_id:await client.repairComment(command.operation_id,command.reviewed,command.depends_on),state:'pending'};break;
    case 'submit-batch':result=await client.submitBatch(command.operation_ids);break;
    case 'submit':result=await client.submit(command.operation_id);break;
    case 'reconcile':result=await client.reconcile(command.operation_id);break;

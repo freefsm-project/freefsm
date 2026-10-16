@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -28,6 +29,10 @@ type CommentReceipt struct {
 }
 
 func commentCode(err error) string {
+	var conflict *JobExecutionConflict
+	if errors.As(err, &conflict) {
+		return conflict.Code
+	}
 	switch {
 	case err == nil:
 		return "accepted"
@@ -53,6 +58,8 @@ func commentError(code string) error {
 		return ErrConflict
 	case "invalid_comment":
 		return ErrCommentInvalid
+	case "invalid_dependency", "failed_dependency", "invalid_occurrence", "invalid_intent":
+		return &JobExecutionConflict{code}
 	}
 	return nil
 }
@@ -61,6 +68,10 @@ func commentError(code string) error {
 // conversion or alters intent. Terminal rejections are durable; storage/audit
 // failures roll back the receipt and remain retryable under the same operation ID.
 func (s *Service) SubmitComment(ctx context.Context, a Actor, ref objectref.Ref, in CommentCommand) (CommentReceipt, error) {
+	return s.submitCommentBound(ctx, a, ref, in, nil)
+}
+
+func (s *Service) submitCommentBound(ctx context.Context, a Actor, ref objectref.Ref, in CommentCommand, batch *batchExecution) (CommentReceipt, error) {
 	result := CommentReceipt{OperationID: in.OperationID}
 	op, err := uuid.Parse(in.OperationID)
 	if err != nil || op == uuid.Nil {
@@ -75,15 +86,26 @@ func (s *Service) SubmitComment(ctx context.Context, a Actor, ref objectref.Ref,
 	}{string(ref.Type), ref.ID, in})
 	// RemoveID is intentionally absent from the wire command, but part of intent.
 	digest := fmt.Sprintf("%x", sha256.Sum256(append(encoded, []byte(fmt.Sprintf(":remove:%d", in.RemoveID))...)))
+	if batch != nil {
+		// Bind original wire identities, never a resolved or conversion-followed target.
+		encoded, _ = json.Marshal(struct{ Batch BatchOperation }{batch.operation})
+		digest = fmt.Sprintf("%x", sha256.Sum256(encoded))
+	}
 	var outcome error
 	err = s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		if err := admitOperation(ctx, tx, a, in.OperationID, "comment", digest); err != nil {
+			if batch != nil && errors.Is(err, ErrConflict) {
+				return &JobExecutionConflict{"operation_intent_changed"}
+			}
 			return err
 		}
 		var savedDigest, client string
 		err := tx.QueryRow(ctx, `SELECT intent_hash,client_key,coalesce(comment_id,0),code,accepted_at FROM comment_operation_receipts WHERE user_id=$1 AND operation_id=$2`, a.UserID, in.OperationID).Scan(&savedDigest, &client, &result.CommentID, &result.Code, &result.AcceptedAt)
 		if err == nil {
 			if savedDigest != digest || client != a.Channel+":"+a.SessionHash {
+				if batch != nil {
+					return &JobExecutionConflict{"operation_intent_changed"}
+				}
 				return ErrConflict
 			}
 			outcome = commentError(result.Code)
@@ -92,7 +114,21 @@ func (s *Service) SubmitComment(ctx context.Context, a Actor, ref objectref.Ref,
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
-		if in.ReplyTo < 0 || in.RemoveID < 0 || in.OccurredAt != nil && in.OccurredAt.After(time.Now()) {
+		if batch != nil {
+			outcome = batch.validate(ctx, tx, a)
+			if outcome == nil {
+				ref.ID, outcome = resolveCommentIdentity(ctx, tx, string(ref.Type), batch.operation.Target)
+			}
+			if outcome == nil && batch.operation.Comment.ReplyTo != "" {
+				in.ReplyTo, outcome = resolveCommentIdentity(ctx, tx, "comment", batch.operation.Comment.ReplyTo)
+			}
+			if outcome == nil && batch.operation.Type == "comment.remove" {
+				in.RemoveID, outcome = resolveCommentIdentity(ctx, tx, "comment", batch.operation.Comment.RemoveID)
+			}
+		}
+		if outcome != nil {
+			// Dependency/identity rejection has no collaboration effect.
+		} else if in.ReplyTo < 0 || in.RemoveID < 0 || in.OccurredAt != nil && in.OccurredAt.After(time.Now()) {
 			outcome = ErrCommentInvalid
 		} else {
 			result.CommentID, outcome = applyComment(ctx, tx, p, a, ref, in)
@@ -110,6 +146,18 @@ func (s *Service) SubmitComment(ctx context.Context, a Actor, ref objectref.Ref,
 		return CommentReceipt{}, err
 	}
 	return result, outcome
+}
+
+func resolveCommentIdentity(ctx context.Context, tx pgx.Tx, kind, value string) (int64, error) {
+	if id, err := strconv.ParseInt(value, 10, 64); err == nil && id > 0 {
+		return id, nil
+	}
+	var id int64
+	err := tx.QueryRow(ctx, `SELECT installed_id FROM job_sync_identities WHERE resource_type=$1 AND opaque_id::text=$2`, kind, value).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	return id, err
 }
 
 func (s *Service) CommentReceipt(ctx context.Context, a Actor, operationID string) (CommentReceipt, error) {

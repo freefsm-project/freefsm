@@ -37,7 +37,9 @@ Capabilities never authorize an action; every page checks current authority.
 Each `records` entry is a **complete replacement** of one Job: opaque `id`,
 `title`, `description`, `field_notes`, `status` (name/category), nullable start/end
 instants, due date and arrival-window instants, IANA `timezone`, optional
-`customer`, and `masters`. Absent context facets remove previously cached facets.
+`customer`, and `masters`. Comment synchronization also supplies `comments` and
+independently parent-authorized `document_comments`; see
+[Comment snapshots and recovery](api-comment-sync.md). Absent context facets remove previously cached facets.
 
 All context requires current explicit Job assignment, including for users with
 All Records grants, and independent View for each facet. Exact nested schemas

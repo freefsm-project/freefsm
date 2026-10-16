@@ -30,7 +30,7 @@ class OfflineNotes {
  }
  async purge(s,issuance=null){
   // Retain only nonsensitive operation identities/dispositions for safe lookup.
-  const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt};
+   const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt,family:e.family};
   Object.assign(s,fresh(),{pending:safe,user:s.user,issuance});await this.persistAuthorityLoss(s);
  }
  async purgeDeniedIssuance(s,receipt){
@@ -42,7 +42,7 @@ class OfflineNotes {
  purgeSensitiveTarget(s,job){
   delete s.cache[job];delete s.notes[job];
   for(const e of Object.values(s.pending))if(e.job===job){
-   delete e.intent;delete e.batch;delete e.job;e.state='purged';
+    delete e.intent;delete e.batch;delete e.job;delete e.parentType;e.state='purged';
   }
  }
  async contact(s,path,method='GET',body,operation){
@@ -113,8 +113,11 @@ class OfflineNotes {
    if(r.data.complete){if(typeof r.data.completion_cursor!=='string'||!r.data.completion_cursor||r.data.next_page!==null)throw Error('synchronization_incomplete');page=null;}
    else {page=r.data.next_page;if(!page||seen.has(page))throw Error('synchronization_incomplete');seen.add(page);}
   }while(page);
-  for(const e of Object.values(s.pending)){
-   if(e.job&&!records[e.job])this.purgeSensitiveTarget(s,e.job);
+   for(const e of Object.values(s.pending)){
+    if(e.job&&!records[e.job])this.purgeSensitiveTarget(s,e.job);
+    else if(e.family==='comment'&&e.job&&e.batch&&!this.commentProjection(records,e.job,{parent_type:e.intent?.comment?.parent_type||e.parentType,target:e.batch.target})){
+     delete e.intent;delete e.batch;delete e.job;delete e.parentType;e.state='purged';
+    }
    else if(s.restore&&!['replaced','purged'].includes(e.state))e.state='restore_uncertain';
   }
   // The complete snapshot carries observed scope removals and restore outcomes.
@@ -145,9 +148,41 @@ class OfflineNotes {
    if(!Array.isArray(dependencies)||dependencies.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)))throw Error('review_required');
    return clone(dependencies);
   }
- async stageBatch(job,text,dependencies){return this.transaction(async s=>{
+  async stageBatch(job,text,dependencies){return this.transaction(async s=>{
    await this.enforceOfflineAccessWindow(s);const depends_on=this.reviewedDependencies(dependencies);
    const id=this.stageIn(s,job,text);s.pending[id].batch={type:'job.field_notes',target:job,depends_on};await this.persist(s);return id;
+   });}
+  commentProjection(cache,job,reviewed){
+   const record=cache[job];if(!record)return null;
+   if(reviewed.parent_type==='job'&&reviewed.target===job)return record.comments;
+   return record.document_comments?.find(d=>d.parent_type===reviewed.parent_type&&d.id===reviewed.target)?.comments||null;
+  }
+  stageCommentIn(s,job,reviewed,dependencies){
+   if(!reviewed||typeof reviewed!=='object'||Array.isArray(reviewed)||Object.keys(reviewed).some(k=>!['parent_type','target','content','reply_to','remove_id'].includes(k)))throw Error('review_required');
+   const projection=this.commentProjection(s.cache,job,reviewed);
+   if(!projection)throw Error('review_required');
+   const removal=Object.hasOwn(reviewed,'remove_id');
+   if(removal){
+    if(typeof reviewed.remove_id!=='string'||Object.hasOwn(reviewed,'content')||Object.hasOwn(reviewed,'reply_to')||!projection.comments.some(c=>c.id===reviewed.remove_id&&c.can_remove))throw Error('review_required');
+   }else{
+    if(!projection.can_add||typeof reviewed.content!=='string'||!reviewed.content.trim()||reviewed.content.includes('\0')||[...reviewed.content].length>10000)throw Error('review_required');
+    if(Object.hasOwn(reviewed,'reply_to')&&(typeof reviewed.reply_to!=='string'||!projection.comments.some(c=>c.id===reviewed.reply_to&&c.can_reply)))throw Error('review_required');
+   }
+   const depends_on=this.reviewedDependencies(dependencies),id=randomUUID();
+   const {target,...comment}=clone(reviewed);
+   s.pending[id]={job,family:'comment',parentType:comment.parent_type,state:'pending',intent:{operation_id:id,occurred_at:new Date(this.now()).toISOString(),comment},batch:{type:removal?'comment.remove':'comment.add',target,depends_on}};
+   return id;
+  }
+  async stageComment(job,reviewed,dependencies){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);const id=this.stageCommentIn(s,job,reviewed,dependencies);await this.persist(s);return id;
+  });}
+  async repairComment(id,reviewed,dependencies){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
+   if(!e||e.family!=='comment'||!['terminal','restore_uncertain'].includes(e.state)||!e.intent||!e.job||!e.batch)throw Error('review_required');
+   if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
+   const old=e.intent.comment;
+   if(!reviewed||reviewed.target!==e.batch.target||reviewed.parent_type!==old.parent_type||reviewed.reply_to!==old.reply_to||reviewed.remove_id!==old.remove_id)throw Error('review_required');
+   const next=this.stageCommentIn(s,e.job,reviewed,dependencies);e.state='replaced';await this.persist(s);return next;
   });}
  async submitBatch(ids){return this.transaction(async s=>{
    await this.enforceOfflineAccessWindow(s);
@@ -204,7 +239,8 @@ class OfflineNotes {
   // Receipt lookup remains possible without resource visibility or a live offline
   // lease. It still requires a currently valid authenticated server session.
   if(!s.pending[id])throw Error('unknown_operation');
-  const r=await this.contact(s,`/job-execution-operations/${encodeURIComponent(id)}`);
+   const family=s.pending[id].family==='comment'?'comment-operations':'job-execution-operations';
+   const r=await this.contact(s,`/${family}/${encodeURIComponent(id)}`);
   // Receipt access is independent of offline policy and target visibility. Check
   // policy on this reconnect, then apply only safe receipt metadata after purge.
   await this.policy(s,true);
@@ -219,7 +255,7 @@ class OfflineNotes {
  });}
  async repair(id,text,reviewedRevision,reviewedDependencies){return this.transaction(async s=>{
   await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
-  if(!e||!['terminal','restore_uncertain'].includes(e.state)||!e.job)throw Error('review_required');
+   if(!e||e.family==='comment'||!['terminal','restore_uncertain'].includes(e.state)||!e.job)throw Error('review_required');
   if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
   if(!reviewedRevision||s.notes[e.job]?.notes_revision!==reviewedRevision)throw Error('review_required');
   const batch=e.batch?{type:e.batch.type,target:e.batch.target,depends_on:this.reviewedDependencies(reviewedDependencies)}:null;

@@ -6,33 +6,42 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
-// BatchNotesOperation is the currently supported field operation. Its original
+// BatchOperation carries a supported field operation. Its original
 // target and dependency references are intent, not instructions to rewrite later
 // operations using an earlier result's identity or revision.
-type BatchNotesOperation struct {
-	OperationID   string     `json:"operation_id"`
-	Type          string     `json:"type"`
-	Target        string     `json:"target"`
-	DependsOn     []string   `json:"depends_on"`
-	NotesRevision string     `json:"notes_revision"`
-	Notes         *string    `json:"field_notes"`
-	OccurredAt    *time.Time `json:"occurred_at,omitempty"`
+type BatchOperation struct {
+	OperationID   string              `json:"operation_id"`
+	Type          string              `json:"type"`
+	Target        string              `json:"target"`
+	DependsOn     []string            `json:"depends_on"`
+	NotesRevision string              `json:"notes_revision"`
+	Notes         *string             `json:"field_notes"`
+	OccurredAt    *time.Time          `json:"occurred_at,omitempty"`
+	Comment       *BatchCommentIntent `json:"comment,omitempty"`
+}
+
+type BatchCommentIntent struct {
+	ParentType string  `json:"parent_type"`
+	Content    *string `json:"content,omitempty"`
+	ReplyTo    string  `json:"reply_to,omitempty"`
+	RemoveID   string  `json:"remove_id,omitempty"`
 }
 
 type BatchOperationResult struct {
 	OperationID string
-	Receipt     *JobExecutionReceipt
+	Receipt     any
 	Err         error
 }
 
 // SubmitOperationBatch deliberately has no enclosing transaction. Each existing
 // domain transaction independently fences current authority and commits its own
 // immutable receipt. Cancellation leaves unprocessed identities unreconciled.
-func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []BatchNotesOperation) []BatchOperationResult {
+func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []BatchOperation) []BatchOperationResult {
 	results := make([]BatchOperationResult, 0, len(ops))
 	positions := map[string]int{}
 	successful := map[string]bool{}
@@ -40,6 +49,21 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 		positions[op.OperationID] = i
 	}
 	for i, op := range ops {
+		batch := batchExecution{operation: op, positions: positions, index: i, successful: successful}
+		if op.Comment != nil {
+			in := CommentCommand{OperationID: op.OperationID, OccurredAt: op.OccurredAt}
+			if op.Comment.Content != nil {
+				in.Content = *op.Comment.Content
+			}
+			receipt, err := s.submitCommentBound(ctx, a, objectref.Ref{Type: objectref.Type(op.Comment.ParentType)}, in, &batch)
+			result := BatchOperationResult{OperationID: op.OperationID, Err: err}
+			if receipt.Code != "" {
+				result.Receipt = &receipt
+			}
+			results = append(results, result)
+			successful[op.OperationID] = err == nil && receipt.Code == "accepted"
+			continue
+		}
 		id, err := strconv.ParseInt(op.Target, 10, 64)
 		if err != nil {
 			id, err = s.ResolveSyncedJob(ctx, op.Target)
@@ -54,7 +78,6 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			if op.Notes != nil {
 				in.Notes = *op.Notes
 			}
-			batch := batchExecution{operation: op, positions: positions, index: i, successful: successful}
 			receipt, e := s.submitJobExecutionBound(ctx, a, id, "field_notes", in, &batch)
 			result.Err = e
 			if receipt.Code != "" {
@@ -62,13 +85,13 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			}
 		}
 		results = append(results, result)
-		successful[op.OperationID] = result.Err == nil && result.Receipt != nil && result.Receipt.Code == "accepted"
+		successful[op.OperationID] = result.Err == nil && result.Receipt != nil
 	}
 	return results
 }
 
 type batchExecution struct {
-	operation  BatchNotesOperation
+	operation  BatchOperation
 	positions  map[string]int
 	index      int
 	successful map[string]bool
@@ -78,7 +101,7 @@ type batchExecution struct {
 // authority transaction. Submitted position is eligibility, never part of intent;
 // a same-intent retry may submit only the unresolved operation.
 func (b *batchExecution) validate(ctx context.Context, tx pgx.Tx, a Actor) error {
-	if b.operation.Type != "job.field_notes" {
+	if b.operation.Type != "job.field_notes" && b.operation.Type != "comment.add" && b.operation.Type != "comment.remove" {
 		return &JobExecutionConflict{"invalid_intent"}
 	}
 	if at := b.operation.OccurredAt; at != nil && at.Nanosecond()%1000 != 0 {

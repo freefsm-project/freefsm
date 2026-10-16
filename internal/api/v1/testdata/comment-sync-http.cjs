@@ -1,0 +1,59 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs/promises');
+const os=require('node:os');
+const path=require('node:path');
+const {randomUUID}=require('node:crypto');
+const {execFile}=require('node:child_process');
+const {promisify}=require('node:util');
+const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes-client.cjs');
+(async()=>{
+ let raw='';for await(const chunk of process.stdin)raw+=chunk;const cfg=JSON.parse(raw);
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'comments-'));await fs.chmod(directory,0o700);
+ const identity=randomUUID();let interrupt=false;
+ const transport=async(route,method,body,meta)=>{
+  const headers={Authorization:'Bearer '+meta.token,'Content-Type':'application/json'};
+  if(meta.epoch)headers['X-FreeFSM-Session-Epoch']=meta.epoch;
+  if(meta.operation)headers['Operation-ID']=meta.operation;
+  if(interrupt&&route==='/sync/operations'){headers['X-Comment-Interrupt']='yes';interrupt=false;}
+  const r=await fetch(cfg.url+route,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
+  const value=await r.json();return {status:r.status,...value};
+ };
+ const restart=()=>new OfflineNotes(new ProtectedStore(directory,identity),transport);
+ let client=restart();
+ try {
+  await client.initialize();await client.authenticate(cfg.token);await client.synchronize();
+  let state=await client.view();const job=Object.keys(state.cache)[0];
+  const document=state.cache[job].document_comments[0];
+  const intent=(content,extra={})=>({parent_type:'job',target:job,content,...extra});
+  const first=await client.stageComment(job,intent('Original\n'+ '界'.repeat(9991)),[]);
+  await assert.rejects(()=>client.stageComment(job,intent('界'.repeat(10001)),[]),/review_required/);
+  const second=await client.stageComment(job,intent('independent second'),[]);
+  const bytes=await fs.readFile(path.join(directory,'cache'));
+  assert(!bytes.includes(Buffer.from('independent second')));assert(!bytes.includes(Buffer.from(cfg.token)));
+  interrupt=true;await assert.rejects(()=>client.submitBatch([first,second]));
+  const reopened=await promisify(execFile)(process.execPath,['-e',`const {OfflineNotes,ProtectedStore}=require(${JSON.stringify(path.resolve(__dirname,'../reference/offline-notes-client.cjs'))});new OfflineNotes(new ProtectedStore(process.argv[1],process.argv[2]),()=>{throw Error('restart must not contact');}).view().then(s=>console.log(JSON.stringify(Object.fromEntries(Object.entries(s.pending).map(([id,e])=>[id,e.state]))))).catch(()=>process.exit(1));`,directory,identity]);
+  assert.equal(JSON.parse(reopened.stdout)[first],'unknown');assert.equal(JSON.parse(reopened.stdout)[second],'unknown');
+  client=restart();state=await client.view();assert.equal(state.pending[first].state,'unknown');assert.equal(state.pending[second].state,'unknown');
+  assert.equal((await client.reconcile(first)).state,'accepted');assert.equal((await client.reconcile(second)).state,'pending');
+  await client.submitBatch([second]);await client.synchronize();state=await client.view();
+  const root=state.cache[job].comments.comments.find(c=>c.content.startsWith('Original'));
+  const reply=await client.stageComment(job,intent('queued reply',{reply_to:root.id}),[]);
+  const removal=await client.stageComment(job,{parent_type:'job',target:job,remove_id:root.id},[]);
+  await client.submitBatch([removal]);assert.equal((await client.submitBatch([reply]))[0].receipt.code,'comment_conflict');
+  const blocked=await client.stageComment(job,intent('reviewed recovery'),[reply]);
+  const unrelated=await client.stageComment(job,intent('unrelated continues'),[]);
+  const results=await client.submitBatch([blocked,unrelated]);assert.equal(results[0].receipt.code,'failed_dependency');assert.equal(results[1].receipt.code,'accepted');
+  await client.synchronize();
+  const repaired=await client.repairComment(blocked,intent('reviewed recovery'),[]);assert.notEqual(repaired,blocked);
+  await client.submitBatch([repaired]);assert.equal((await client.view()).pending[blocked].state,'replaced');
+  const pendingDocument=await client.stageComment(job,{parent_type:'estimate',target:document.id,content:'never retarget document'},[]);
+  await fetch(cfg.url+'/__fixture/unlink',{method:'POST'});await client.synchronize();
+  state=await client.view();assert.equal(state.pending[pendingDocument].state,'purged');assert(!JSON.stringify(state).includes('never retarget document'));
+  const lost=await client.stageComment(job,intent('scope-lost pending'),[]);
+  await fetch(cfg.url+'/__fixture/scope-loss',{method:'POST'});await client.synchronize();
+  state=await client.view();assert.equal(state.pending[lost].state,'purged');assert.deepEqual(state.cache,{});
+  assert.equal((await client.reconcile(first)).receipt.code,'accepted');assert(!JSON.stringify(await client.view()).includes('Original'));
+  console.log('PASS encrypted Comments: bounds, persisted interruption, receipt recovery, closure, dependency repair and original-parent purge');
+ } finally {await client.logout();await fs.rm(directory,{recursive:true,force:true});}
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -95,12 +95,21 @@ func commentParent(ctx context.Context, tx pgx.Tx, p Principal, a Actor, ref obj
 	if !active && !p.Allows(string(ref.Type)+".archived.view", All) {
 		return "", ErrNotFound
 	}
-	if write && !active {
+	if write && !active && a.Channel != "api" {
 		return "", ErrConflict
 	}
 	// The field API never expands into Customer-only/master collaboration.
 	if a.Channel == "api" && (jobID == 0 || ref.Type != objectref.TypeJob && ref.Type != objectref.TypeEstimate && ref.Type != objectref.TypeInvoice) {
 		return "", ErrNotFound
+	}
+	if a.Channel == "api" {
+		var eligible bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM jobs WHERE id=$1 AND company_id=$2 AND deleted_at IS NULL)`, jobID, p.CompanyID).Scan(&eligible); err != nil {
+			return "", err
+		}
+		if !active || !eligible {
+			return "", ErrNotFound
+		}
 	}
 	return scope, nil
 }
@@ -108,6 +117,18 @@ func commentParent(ctx context.Context, tx pgx.Tx, p Principal, a Actor, ref obj
 func (s *Service) Comments(ctx context.Context, a Actor, ref objectref.Ref) (Comments, error) {
 	result := Comments{Entries: []Comment{}}
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		var err error
+		result, err = readComments(ctx, tx, p, a, ref)
+		return err
+	})
+	return result, err
+}
+
+// readComments is also used within the coherent synchronization transaction.
+// Both surfaces share parent authorization, placeholders and action capabilities.
+func readComments(ctx context.Context, tx pgx.Tx, p Principal, a Actor, ref objectref.Ref) (Comments, error) {
+	result := Comments{Entries: []Comment{}}
+	err := func() error {
 		scope, err := commentParent(ctx, tx, p, a, ref, false)
 		if err != nil {
 			return err
@@ -133,7 +154,7 @@ func (s *Service) Comments(ctx context.Context, a Actor, ref objectref.Ref) (Com
 			result.Entries = append(result.Entries, c)
 		}
 		return rows.Err()
-	})
+	}()
 	return result, err
 }
 

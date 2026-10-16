@@ -55,19 +55,45 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_request", "operations must be an array")
 		return
 	}
-	operations := make([]authorization.BatchNotesOperation, 0, len(envelope.Operations))
+	operations := make([]authorization.BatchOperation, 0, len(envelope.Operations))
 	seen := map[string]bool{}
 	for _, raw := range envelope.Operations {
 		var wire struct {
-			authorization.BatchNotesOperation
-			DependsOn []*string `json:"depends_on"`
+			authorization.BatchOperation
+			DependsOn []*string       `json:"depends_on"`
+			Comment   json.RawMessage `json:"comment"`
 		}
 		part := r.Clone(r.Context())
 		part.Body = io.NopCloser(bytes.NewReader(raw))
-		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at") {
+		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "comment") {
 			return
 		}
-		op := wire.BatchNotesOperation
+		op := wire.BatchOperation
+		var fields map[string]json.RawMessage
+		_ = json.Unmarshal(raw, &fields)
+		validIntent := false
+		switch op.Type {
+		case "job.field_notes":
+			validIntent = wire.Comment == nil && op.Notes != nil && op.NotesRevision != ""
+		case "comment.add", "comment.remove":
+			if wire.Comment == nil {
+				break
+			}
+			part.Body = io.NopCloser(bytes.NewReader(wire.Comment))
+			var intent authorization.BatchCommentIntent
+			if !decodeExactJSON(w, part, &intent, "parent_type", "content", "reply_to", "remove_id") {
+				return
+			}
+			var supplied map[string]json.RawMessage
+			_ = json.Unmarshal(wire.Comment, &supplied)
+			validIntent = (intent.ParentType == "job" || intent.ParentType == "estimate" || intent.ParentType == "invoice") && fields["notes_revision"] == nil && fields["field_notes"] == nil
+			if op.Type == "comment.add" {
+				validIntent = validIntent && intent.Content != nil && supplied["remove_id"] == nil && (supplied["reply_to"] == nil || intent.ReplyTo != "")
+			} else {
+				validIntent = validIntent && intent.RemoveID != "" && supplied["content"] == nil && supplied["reply_to"] == nil
+			}
+			op.Comment = &intent
+		}
 		if wire.DependsOn != nil {
 			op.DependsOn = make([]string, 0, len(wire.DependsOn))
 		}
@@ -81,8 +107,8 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			op.DependsOn = append(op.DependsOn, *dependency)
 		}
 		id, e := uuid.Parse(op.OperationID)
-		if e != nil || id == uuid.Nil || id.String() != op.OperationID || seen[op.OperationID] || op.Type != "job.field_notes" || op.Target == "" || op.Notes == nil || op.DependsOn == nil || op.NotesRevision == "" {
-			writeError(w, 400, "invalid_request", "Each operation needs a unique canonical UUID and a complete supported Notes intent")
+		if e != nil || id == uuid.Nil || id.String() != op.OperationID || seen[op.OperationID] || op.Target == "" || op.DependsOn == nil || !validIntent {
+			writeError(w, 400, "invalid_request", "Each operation needs a unique canonical UUID and a complete supported intent")
 			return
 		}
 		seen[op.OperationID] = true
@@ -105,6 +131,10 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 				status, code = 403, "forbidden"
 			case errors.Is(result.Err, authorization.ErrNotFound):
 				status, code = 404, "not_found"
+			case errors.Is(result.Err, authorization.ErrCommentInvalid):
+				status, code = 400, "invalid_comment"
+			case errors.Is(result.Err, authorization.ErrConflict):
+				status, code = 409, "comment_conflict"
 			}
 			disposition := "review"
 			retry := 0
@@ -120,7 +150,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 }
 
 type batchResult struct {
-	OperationID string                             `json:"operation_id"`
-	Receipt     *authorization.JobExecutionReceipt `json:"receipt,omitempty"`
-	Error       *apiError                          `json:"error,omitempty"`
+	OperationID string    `json:"operation_id"`
+	Receipt     any       `json:"receipt,omitempty"`
+	Error       *apiError `json:"error,omitempty"`
 }
