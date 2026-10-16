@@ -31,6 +31,13 @@ func (h *handler) jobExecution(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		id, err = req.Service.ResolveSyncedJob(r.Context(), chi.URLParam(r, "id"))
+		if err != nil && !errors.Is(err, authorization.ErrNotFound) {
+			jobExecutionAPIError(w, err)
+			return
+		}
+	}
 	if err != nil || id <= 0 {
 		writeError(w, 404, "not_found", "not found")
 		return

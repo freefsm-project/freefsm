@@ -352,7 +352,8 @@ func TestClockUpgradePreservesRecordedGPSAndGrants(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, file := range files {
-		if strings.HasPrefix(file.Name(), "076_clock_evidence") || file.Name() == "082_operation_admission.up.sql" || file.Name() == "084_security_operation_receipts.up.sql" || file.Name() == "085_time_entry_history.up.sql" {
+		// Install the historical schema immediately before Clock evidence.
+		if file.IsDir() || file.Name() >= "076_clock_evidence.up.sql" {
 			continue
 		}
 		data, err := fs.ReadFile(source, file.Name())
