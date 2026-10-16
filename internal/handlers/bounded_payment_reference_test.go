@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"os/exec"
 	"testing"
 	"time"
 
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
+	"github.com/jackc/pgx/v5"
 )
 
 func TestBoundedPaymentReferencePersistedAPI(t *testing.T) {
@@ -36,7 +39,58 @@ func TestBoundedPaymentReferencePersistedAPI(t *testing.T) {
 	if err := statusflow.New(pool).FinalizeInvoice(ctx, statusflow.Actor{ID: admin, CompanyID: company}, receipt.Data.ID); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(api)
+	auth := authorization.New(pool)
+	role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Reference collector", []authorization.Grant{{Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "payment.record", Scope: authorization.Assigned}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	collector := client.User.Create().SetCompanyID(company).SetEmail("reference-collector@test").SetName("Reference collector").SetRole("tech").SetPasswordHash("fixture").SaveX(ctx)
+	if err := auth.AssignUser(ctx, authorization.Actor{UserID: admin}, collector.ID, role); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO job_assignments(job_id,user_id) VALUES($1,$2)`, j.ID, collector.ID); err != nil {
+		t.Fatal(err)
+	}
+	token, err = sessions.CreateMobile(ctx, collector.ID, "Scoped Payment reference")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	mux.Handle("/", api)
+	mux.HandleFunc("/fixture/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "method", 405)
+			return
+		}
+		var err error
+		switch r.URL.Path {
+		case "/fixture/revoke":
+			err = auth.RevokeSessions(r.Context(), authorization.Actor{UserID: admin}, collector.ID, 0)
+		case "/fixture/remove-payment-grant":
+			_, err = auth.SaveRole(r.Context(), authorization.Actor{UserID: admin}, role, "Reference collector", []authorization.Grant{{Permission: "invoice.view", Scope: authorization.Assigned}}, 1)
+		case "/fixture/restore-payment-grant":
+			_, err = auth.SaveRole(r.Context(), authorization.Actor{UserID: admin}, role, "Reference collector", []authorization.Grant{{Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "payment.record", Scope: authorization.Assigned}}, 2)
+		case "/fixture/unassign", "/fixture/reassign":
+			err = auth.WithinActor(r.Context(), authorization.Actor{UserID: admin}, func(tx pgx.Tx, _ authorization.Principal) error {
+				if r.URL.Path == "/fixture/unassign" {
+					_, err := tx.Exec(r.Context(), `DELETE FROM job_assignments WHERE job_id=$1 AND user_id=$2`, j.ID, collector.ID)
+					return err
+				}
+				_, err := tx.Exec(r.Context(), `INSERT INTO job_assignments(job_id,user_id) VALUES($1,$2) ON CONFLICT DO NOTHING`, j.ID, collector.ID)
+				return err
+			})
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	})
+	server := httptest.NewServer(mux)
 	defer server.Close()
 	out, err := exec.CommandContext(ctx, "node", "../api/v1/testdata/payment-reference-conformance.cjs", server.URL, token, fmt.Sprint(receipt.Data.ID), fmt.Sprint(j.ID)).CombinedOutput()
 	t.Logf("reference: %s", out)

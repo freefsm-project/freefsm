@@ -69,7 +69,15 @@ users cannot inspect that receipt. Authentication revocation rules still apply.
 `internal/api/v1/testdata/payment-reference-harness.cjs` is an executable in-memory
 reference reconciler exercised against the real API. It freezes original intent,
 blocks replacement while unknown, queries the original receipt and keeps
-post-restore missing receipts uncertain until explicit review. It is not a
+post-restore missing receipts uncertain until explicit review. Sensitive intent is
+held separately from safe operation identity: ordinary authentication, grant or
+scope denial and logout purge owned input, including older retained entry handles.
+Receipt ownership alone never restores that input. Inspection rechecks current
+Payment authority; unavailable authority withholds input without fabricating loss.
+Explicit restore detection instead withholds recoverable pending input until fresh
+original-context authentication/current-target review; it never blindly resubmits.
+Each reference instance represents one authenticated context, and an ordinary purge
+requires a fresh authorized context for another intent. It is not a
 production encrypted offline cache or an implementation of downstream field sync.
 
 ## Installed records and recovery
