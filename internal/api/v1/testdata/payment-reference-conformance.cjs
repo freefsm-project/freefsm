@@ -1,0 +1,31 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {PaymentReference}=require('./payment-reference-harness.cjs');
+(async()=>{
+ const [base,token,invoice,job]=process.argv.slice(2);let posts=0,lose=true;
+ const request=async(method,path,body)=>{
+  if(method==='POST')posts++;
+  const response=await fetch(base+path,{method,headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});
+  const result={status:response.status,body:await response.json()};
+  if(method==='POST'&&lose){lose=false;throw new Error('response lost after commit');}return result;
+ };
+ const methods=await request('GET',`/invoices/${invoice}/payment-methods`);
+ assert.equal(methods.status,200);
+ assert.deepEqual(methods.body.data.map(x=>x.id),['cash','check','credit_card','transfer','other']);
+ assert.equal(methods.body.data[4].requires_description,true);
+ const client=new PaymentReference(request);
+ const entry=client.stage(Number(invoice),Number(job),{amount:'25.00',method:'credit_card',date:'2026-01-02',reference:'fixed-reference'});
+ await client.submit(entry);assert.equal(entry.state,'unknown');assert.equal(posts,1);
+ assert.throws(()=>client.stage(Number(invoice),Number(job),{amount:'1.00'}));
+ await assert.rejects(client.submit(entry));
+ await client.inspect(entry);assert.equal(entry.state,'accepted');assert.equal(posts,1);
+ assert.equal(entry.intent.amount,'25.00');assert.equal(entry.invoice,Number(invoice));
+ const replay=await request('POST',`/invoices/${invoice}/payments`,entry.intent);assert.deepEqual(replay.body.data,entry.receipt);
+ const changed=await request('POST',`/invoices/${invoice}/payments`,{...entry.intent,amount:'24.00'});assert.equal(changed.status,409);
+ const pending=client.stage(Number(invoice),Number(job),{amount:'10.00',method:'cash',date:'2026-01-02'});
+ client.restoreDetected();await assert.rejects(client.submit(pending));
+ await client.reconcileAfterFreshAuthentication(pending);assert.equal(pending.state,'unknown');
+ await assert.rejects(client.submit(pending));assert.throws(()=>client.stage(Number(invoice),Number(job),{amount:'10.00'}));
+ client.confirmUnreceivedAfterReview(pending);assert.equal(pending.state,'discarded');
+ assert.equal(posts,3);console.log('Fixed intent, lost response, original receipt, changed intent and restore uncertainty conformance passed.');
+})().catch(e=>{console.error(e);process.exit(1)});
