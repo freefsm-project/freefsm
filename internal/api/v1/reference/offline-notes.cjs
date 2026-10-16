@@ -40,11 +40,13 @@ if(require.main===module){
    case 'view':result=await client.view();break;
    case 'stage':result={operation_id:await client.stage(command.job,command.text),state:'pending'};break;
    case 'stage-batch-notes':result={operation_id:await client.stageBatch(command.job,command.text,command.depends_on),state:'pending'};break;
+   case 'stage-fields':result={operation_id:await client.stageFields(command.job,command.values,command.depends_on),state:'pending'};break;
    case 'submit-batch':result=await client.submitBatch(command.operation_ids);break;
    case 'submit':result=await client.submit(command.operation_id);break;
    case 'reconcile':result=await client.reconcile(command.operation_id);break;
    case 'acknowledge-uncertain':await client.acknowledgeUncertain(command.operation_id);result={state:'review_required'};break;
    case 'repair':result={operation_id:await client.repair(command.operation_id,command.text,command.notes_revision,command.depends_on),state:'pending'};break;
+   case 'repair-fields':result={operation_id:await client.repairFields(command.operation_id,command.values,command.revisions,command.depends_on),state:'pending'};break;
    case 'discard':await client.discard(command.operation_id);result={state:'discarded'};break;
    default:throw Error('unknown_action');
    }

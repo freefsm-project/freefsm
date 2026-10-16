@@ -2,6 +2,7 @@ package authorization
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
@@ -10,18 +11,23 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// BatchNotesOperation is the currently supported field operation. Its original
+// BatchOperation carries a supported field operation. Its original
 // target and dependency references are intent, not instructions to rewrite later
 // operations using an earlier result's identity or revision.
-type BatchNotesOperation struct {
-	OperationID   string     `json:"operation_id"`
-	Type          string     `json:"type"`
-	Target        string     `json:"target"`
-	DependsOn     []string   `json:"depends_on"`
-	NotesRevision string     `json:"notes_revision"`
-	Notes         *string    `json:"field_notes"`
-	OccurredAt    *time.Time `json:"occurred_at,omitempty"`
+type BatchOperation struct {
+	OperationID   string            `json:"operation_id"`
+	Type          string            `json:"type"`
+	Target        string            `json:"target"`
+	DependsOn     []string          `json:"depends_on"`
+	NotesRevision string            `json:"notes_revision"`
+	Notes         *string           `json:"field_notes"`
+	OccurredAt    *time.Time        `json:"occurred_at,omitempty"`
+	Revisions     map[string]string `json:"revisions,omitempty"`
+	Values        json.RawMessage   `json:"values,omitempty"`
 }
+
+// Retain source compatibility for the accepted Notes callers.
+type BatchNotesOperation = BatchOperation
 
 type BatchOperationResult struct {
 	OperationID string
@@ -49,6 +55,26 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			err = nil
 		}
 		result := BatchOperationResult{OperationID: op.OperationID, Err: err}
+		if err == nil && op.Type == "job.fields" {
+			batch := batchExecution{operation: op, positions: positions, index: i, successful: successful}
+			_, e := s.patchFieldsReviewedBound(ctx, a, id, ReviewedFieldPatch{OperationID: op.OperationID, Revisions: op.Revisions, Values: op.Values, OccurredAt: op.OccurredAt}, &batch)
+			result.Err = e
+			var conflict *FieldConflict
+			if errors.As(e, &conflict) {
+				result.Err = executionError(conflict.Code)
+			}
+			if e == nil || (errors.As(e, &conflict) && conflict.Code != "operation_intent_changed") || errors.Is(e, ErrForbidden) || errors.Is(e, ErrNotFound) {
+				receipt, receiptErr := s.JobFieldExecutionReceipt(ctx, a, op.OperationID)
+				if receiptErr == nil {
+					result.Receipt = &receipt
+				} else {
+					result.Err = receiptErr
+				}
+			}
+			results = append(results, result)
+			successful[op.OperationID] = result.Err == nil && result.Receipt != nil && result.Receipt.Code == "accepted"
+			continue
+		}
 		if err == nil {
 			in := JobExecutionCommand{OperationID: op.OperationID, NotesRevision: op.NotesRevision, MissingNotes: op.Notes == nil, OccurredAt: op.OccurredAt}
 			if op.Notes != nil {
@@ -78,7 +104,7 @@ type batchExecution struct {
 // authority transaction. Submitted position is eligibility, never part of intent;
 // a same-intent retry may submit only the unresolved operation.
 func (b *batchExecution) validate(ctx context.Context, tx pgx.Tx, a Actor) error {
-	if b.operation.Type != "job.field_notes" {
+	if b.operation.Type != "job.field_notes" && b.operation.Type != "job.fields" {
 		return &JobExecutionConflict{"invalid_intent"}
 	}
 	if at := b.operation.OccurredAt; at != nil && at.Nanosecond()%1000 != 0 {

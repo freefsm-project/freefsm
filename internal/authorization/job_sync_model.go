@@ -70,6 +70,23 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 			return nil, err
 		}
 		e.Data["id"] = e.ID
+		fields, err := jobFieldSnapshot(ctx, tx, p, e.InstalledID)
+		if err != nil {
+			return nil, err
+		}
+		// Use the same canonical JSON object representation as durable baselines.
+		// Struct field order must not manufacture changes after snapshot reload.
+		rawFields, err := json.Marshal(fields)
+		if err != nil {
+			return nil, err
+		}
+		var fieldData map[string]any
+		decoder := json.NewDecoder(bytes.NewReader(rawFields))
+		decoder.UseNumber()
+		if err := decoder.Decode(&fieldData); err != nil {
+			return nil, err
+		}
+		e.Data["custom_fields"] = fieldData
 		e.Data["masters"] = map[string]any{}
 		customer, cerr := jobCustomer(ctx, tx, p, a, e.InstalledID)
 		if cerr != nil && !errors.Is(cerr, ErrNotFound) {

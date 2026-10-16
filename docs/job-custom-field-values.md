@@ -1,5 +1,8 @@
 # Independent Job Custom Field Values (#41)
 
+The API snapshot/batch/encrypted-reference extension is documented in
+[Offline Job Custom Field Values](api-job-field-sync.md).
+
 Job View reveals current and retained retired field values. `job.fields.edit`
 at Assigned Jobs (`J`) or All Records (`A`) is the sole value-edit permission;
 planning Edit and definition management are independent. Fresh Technician and

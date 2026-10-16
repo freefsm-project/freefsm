@@ -64,10 +64,15 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 		}
 		part := r.Clone(r.Context())
 		part.Body = io.NopCloser(bytes.NewReader(raw))
-		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at") {
+		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "revisions", "values") {
 			return
 		}
 		op := wire.BatchNotesOperation
+		var members map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &members); err != nil {
+			writeError(w, 400, "invalid_request", "Invalid operation shape")
+			return
+		}
 		if wire.DependsOn != nil {
 			op.DependsOn = make([]string, 0, len(wire.DependsOn))
 		}
@@ -81,8 +86,14 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			op.DependsOn = append(op.DependsOn, *dependency)
 		}
 		id, e := uuid.Parse(op.OperationID)
-		if e != nil || id == uuid.Nil || id.String() != op.OperationID || seen[op.OperationID] || op.Type != "job.field_notes" || op.Target == "" || op.Notes == nil || op.DependsOn == nil || op.NotesRevision == "" {
-			writeError(w, 400, "invalid_request", "Each operation needs a unique canonical UUID and a complete supported Notes intent")
+		validIntent := op.Type == "job.field_notes" && op.Notes != nil && op.NotesRevision != "" && op.Values == nil && op.Revisions == nil
+		if op.Type == "job.fields" {
+			_, hasNotes := members["field_notes"]
+			_, hasNotesRevision := members["notes_revision"]
+			validIntent = !hasNotes && !hasNotesRevision && op.Revisions != nil && len(op.Values) > 0 && op.Values[0] == '['
+		}
+		if e != nil || id == uuid.Nil || id.String() != op.OperationID || seen[op.OperationID] || !validIntent || op.Target == "" || op.DependsOn == nil {
+			writeError(w, 400, "invalid_request", "Each operation needs a unique canonical UUID and a complete supported field intent")
 			return
 		}
 		seen[op.OperationID] = true

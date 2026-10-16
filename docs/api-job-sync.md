@@ -39,6 +39,10 @@ Each `records` entry is a **complete replacement** of one Job: opaque `id`,
 instants, due date and arrival-window instants, IANA `timezone`, optional
 `customer`, and `masters`. Absent context facets remove previously cached facets.
 
+The additive `custom_fields` facet includes authorized definitions, values,
+per-value revisions, independent value-edit capability and recorded history;
+see [Job field synchronization](api-job-field-sync.md).
+
 All context requires current explicit Job assignment, including for users with
 All Records grants, and independent View for each facet. Exact nested schemas
 are closed in the served OpenAPI:
