@@ -35,7 +35,7 @@ class OfflineFieldClient {
  }
  async purge(s,issuance=null){
   // Retain only nonsensitive operation identities/dispositions for safe lookup.
-   const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt,family:e.family};
+  const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt,family:e.family,receipt_family:e.receipt_family};
   Object.assign(s,fresh(),{pending:safe,user:s.user,issuance});await this.persistAuthorityLoss(s);
  }
  async purgeDeniedIssuance(s,receipt){
@@ -192,6 +192,29 @@ class OfflineFieldClient {
    if(!reviewed?.parent_revision||reviewed.target!==e.batch.target||reviewed.parent_type!==old.parent_type||reviewed.reply_to!==old.reply_to||reviewed.remove_id!==old.remove_id)throw Error('review_required');
    const next=this.stageCommentIn(s,e.job,reviewed,dependencies);e.state='replaced';await this.persist(s);return next;
   });}
+  stageFieldsIn(s,job,values,dependencies){
+   const fields=s.cache[job]?.custom_fields;
+   if(!fields?.can_edit||!Array.isArray(values)||!values.length)throw Error('review_required');
+   const revisions={},seen=new Set();
+   for(const value of values){
+    const definition=fields.definitions.find(d=>d.id===value.definition_id);
+    if(!definition||definition.retired||seen.has(definition.id)||!fields.revisions[String(definition.id)])throw Error('review_required');
+    seen.add(definition.id);revisions[String(definition.id)]=fields.revisions[String(definition.id)];
+   }
+   const depends_on=this.reviewedDependencies(dependencies),id=randomUUID();
+   s.pending[id]={job,state:'pending',receipt_family:'job-field',intent:{operation_id:id,revisions,values:clone(values),occurred_at:new Date(this.now()).toISOString()},batch:{type:'job.fields',target:job,depends_on}};
+   return id;
+  }
+  async stageFields(job,values,dependencies){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);const id=this.stageFieldsIn(s,job,values,dependencies);await this.persist(s);return id;
+  });}
+  async repairFields(id,values,reviewedRevisions,dependencies){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);const e=this.repairableField(s,id,'job.fields');
+   if(!Array.isArray(values))throw Error('review_required');
+   const fields=s.cache[e.job]?.custom_fields;
+   if(!fields||!reviewedRevisions||values.some(v=>!reviewedRevisions[String(v.definition_id)]||reviewedRevisions[String(v.definition_id)]!==fields.revisions[String(v.definition_id)]))throw Error('review_required');
+   const next=this.stageFieldsIn(s,e.job,values,dependencies);e.state='replaced';await this.persist(s);return next;
+  });}
   stageStatusIn(s,job,status,revision,meaning,dependencies){
    const record=s.cache[job],definition=record?.status_definitions?.find(v=>v.id===status);
    if(record?.field_capabilities?.status!==true||!definition||!jobCategories.has(definition.category)||!revision||!meaning||record.status_revision!==revision||definition.meaning_revision!==meaning)throw Error('review_required');
@@ -273,7 +296,8 @@ class OfflineFieldClient {
   // Receipt lookup remains possible without resource visibility or a live offline
   // lease. It still requires a currently valid authenticated server session.
   if(!s.pending[id])throw Error('unknown_operation');
-   const endpoint=s.pending[id].family==='comment'?'comment-operations':s.pending[id].family==='job.subtask'?'subtask-operations':'job-execution-operations';
+   const entry=s.pending[id];
+   const endpoint=entry.family==='comment'?'comment-operations':entry.family==='job.subtask'?'subtask-operations':entry.receipt_family==='job-field'?'job-field-operations':'job-execution-operations';
    let r;
    try {r=await this.contact(s,`/${endpoint}/${encodeURIComponent(id)}`);}
    finally {

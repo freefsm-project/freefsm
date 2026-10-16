@@ -1,7 +1,6 @@
 package authorization
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,8 +20,7 @@ func syncJobFields(ctx context.Context, tx pgx.Tx, p Principal, e *syncEntry) er
 	}
 	e.Data["status_revision"] = revision
 	status := e.Data["status"].(map[string]any)
-	status["id"] = nil
-	status["meaning_revision"] = nil
+	status["id"], status["meaning_revision"] = nil, nil
 	if statusID != nil {
 		status["id"] = strconv.FormatInt(*statusID, 10)
 	}
@@ -67,9 +65,7 @@ func syncJobFields(ctx context.Context, tx pgx.Tx, p Principal, e *syncEntry) er
 	if err != nil {
 		return err
 	}
-	e.Data["subtasks"] = checklist.Entries
-	e.Data["subtask_history"] = checklist.History
-	e.Data["subtask_review_required"] = checklist.ReviewRequired
+	e.Data["subtasks"], e.Data["subtask_history"], e.Data["subtask_review_required"] = checklist.Entries, checklist.History, checklist.ReviewRequired
 	var assigned bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM job_assignments WHERE job_id=$1 AND user_id=$2)`, e.InstalledID, p.UserID).Scan(&assigned); err != nil {
 		return err
@@ -78,13 +74,7 @@ func syncJobFields(ctx context.Context, tx pgx.Tx, p Principal, e *syncEntry) er
 		return p.Allows(permission, All) || assigned && p.Allows(permission, Assigned)
 	}
 	e.Data["field_capabilities"] = map[string]bool{"status": allowed("job.status"), "subtask_complete": !checklist.ReviewRequired && allowed("job.subtask.complete"), "subtask_reopen": !checklist.ReviewRequired && allowed("job.subtask.reopen")}
-	// Persisted snapshots decode into maps. Canonicalize typed child projections
-	// before comparison so field ordering cannot create phantom changes.
-	raw, err := json.Marshal(e.Data)
-	if err != nil {
-		return err
-	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	return decoder.Decode(&e.Data)
+	// The neutral canonicalizer never rewrites recorded field identities.
+	e.Data, err = syncJSONObject(e.Data)
+	return err
 }

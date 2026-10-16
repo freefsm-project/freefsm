@@ -19,6 +19,9 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
+		id, err = request.Service.ResolveSyncedJob(r.Context(), chi.URLParam(r, "id"))
+	}
+	if err != nil {
 		writeError(w, 404, "not_found", "Job not found")
 		return
 	}
@@ -39,9 +42,21 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		state, err = request.Service.ReadFieldState(r.Context(), request.Actor, id)
 	} else {
-		var input authorization.ReviewedFieldPatch
-		if !decodeExactJSON(w, r, &input, "operation_id", "revisions", "values", "occurred_at") {
+		var wire struct {
+			authorization.ReviewedFieldPatch
+			Revisions json.RawMessage `json:"revisions"`
+		}
+		if !decodeExactJSON(w, r, &wire, "operation_id", "revisions", "values", "occurred_at") {
 			return
+		}
+		input := wire.ReviewedFieldPatch
+		// Preserve the established invalid-operation response without admission.
+		if id, parseErr := uuid.Parse(input.OperationID); parseErr == nil && id != uuid.Nil {
+			var valid bool
+			input.Revisions, valid = fieldPatchWire(w, r, input.Values, wire.Revisions)
+			if !valid {
+				return
+			}
 		}
 		state, err = request.Service.PatchFieldsReviewed(r.Context(), request.Actor, id, input)
 	}
@@ -50,6 +65,10 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 		var conflict *authorization.FieldConflict
 		switch {
 		case errors.As(err, &conflict):
+			details := map[string]any{}
+			if state.Receipt != nil && state.Receipt.Reason != "" {
+				details["reason"] = state.Receipt.Reason
+			}
 			requestID := w.Header().Get("X-Request-ID")
 			if requestID == "" {
 				requestID = uuid.NewString()
@@ -58,7 +77,7 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.Header().Set("Cache-Control", "no-store")
 			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"status": http.StatusConflict, "code": conflict.Code, "message": "Review current field values and submit a new operation", "request_id": requestID, "details": map[string]any{}, "recovery_disposition": "review", "recovery": "new_reviewed_operation"}, "comparison": state})
+			json.NewEncoder(w).Encode(map[string]any{"error": map[string]any{"status": http.StatusConflict, "code": conflict.Code, "message": "Review current field values and submit a new operation", "request_id": requestID, "details": details, "recovery_disposition": "review", "recovery": "new_reviewed_operation"}, "comparison": state})
 		case errors.Is(err, authorization.ErrNotFound):
 			writeError(w, 404, "not_found", "Job not found")
 		case errors.Is(err, authorization.ErrForbidden):
@@ -74,4 +93,30 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, state)
+}
+
+func (h *handler) jobFieldReceipt(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		unauthorized(w)
+		return
+	}
+	receipt, err := req.Service.JobFieldExecutionReceipt(r.Context(), req.Actor, chi.URLParam(r, "operation"))
+	if errors.Is(err, authorization.ErrConflict) {
+		writeError(w, 409, "operation_identity_conflict", "Original field operation binding requires review")
+		return
+	}
+	if errors.Is(err, authorization.ErrNotFound) {
+		writeError(w, 404, "not_found", "Operation not found")
+		return
+	}
+	if errors.Is(err, authorization.ErrForbidden) {
+		writeError(w, 403, "forbidden", "Permission denied")
+		return
+	}
+	if err != nil {
+		writeError(w, 503, "unavailable", "Receipt unavailable")
+		return
+	}
+	writeJSON(w, 200, receipt)
 }

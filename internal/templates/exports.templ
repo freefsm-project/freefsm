@@ -77,6 +77,12 @@ templ ExportStatus(status exports.Status) {
 }
 
 templ ExportOrigins() {
+ if navigationPermission(ctx,"time.export","O","J","A") {
+  <a href="/time-entries/export">Generate a new Timesheet export</a>
+ }
+ if navigationPermission(ctx,"time.gps.export","O","J","A") {
+  <a href="/time-entries/export?type=gps">Generate a new clock GPS export</a>
+ }
  if navigationPermission(ctx,"activity.export","A","J") {
   <a href="/activity/export">Generate a new activity export</a>
  }

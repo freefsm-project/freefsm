@@ -17,9 +17,12 @@ import (
 type FieldError struct {
 	ID            int64
 	Name, Message string
+	Reason        string
 }
 
 func (e *FieldError) Error() string { return e.Name + ": " + e.Message }
+
+func (e *FieldError) ValidationReason() string { return e.Reason }
 
 type Value struct {
 	DefinitionID int64 `json:"definition_id"`
@@ -96,16 +99,16 @@ func Validate(ctx context.Context, tx pgx.Tx, typ string, old string, input *str
 		decoder := json.NewDecoder(strings.NewReader(*input))
 		decoder.DisallowUnknownFields()
 		if err = decoder.Decode(&entered); err != nil || entered == nil {
-			return "", &FieldError{Name: "Custom Fields", Message: "values must be an array of field identities and typed values"}
+			return "", &FieldError{Name: "Custom Fields", Message: "values must be an array of field identities and typed values", Reason: "invalid_field_shape"}
 		}
 		for _, v := range entered {
 			d, ok := defs[v.DefinitionID]
 			if !ok || seen[v.DefinitionID] {
-				return "", &FieldError{Name: "Custom Fields", Message: "unknown or repeated field"}
+				return "", &FieldError{Name: "Custom Fields", Message: "unknown or repeated field", Reason: "invalid_field_identity"}
 			}
 			seen[v.DefinitionID] = true
 			if d.Retired {
-				return "", &FieldError{d.ID, d.Name, "retired fields cannot be edited"}
+				return "", &FieldError{ID: d.ID, Name: d.Name, Message: "retired fields cannot be edited", Reason: "retired_field"}
 			}
 			if err := ValidateValue(d, v.Value); err != nil {
 				return "", err
@@ -118,7 +121,7 @@ func Validate(ctx context.Context, tx pgx.Tx, typ string, old string, input *str
 	}
 	for _, d := range defs {
 		if d.Required && !d.Retired && Empty(values[d.ID]) && !(creating && (typ == "job" || typ == "lease")) && (mode != ChangedValues || seen[d.ID]) {
-			return "", &FieldError{d.ID, d.Name, "a value is required"}
+			return "", &FieldError{ID: d.ID, Name: d.Name, Message: "a value is required", Reason: "required_field"}
 		}
 	}
 	result := make([]Value, 0, len(values))
@@ -163,7 +166,7 @@ func ValidateSelection(d Definition, previous, next any) error {
 	old := selections(previous)
 	for selected := range selections(next) {
 		if retired[selected] && !old[selected] {
-			return &FieldError{d.ID, d.Name, "retired options cannot be newly selected"}
+			return &FieldError{ID: d.ID, Name: d.Name, Message: "retired options cannot be newly selected", Reason: "retired_option"}
 		}
 	}
 	return nil
@@ -172,13 +175,13 @@ func ValidateSelection(d Definition, previous, next any) error {
 func ValidateValue(d Definition, value any) error {
 	v, scalar := value.(string)
 	if d.Type != "multiselect" && !scalar {
-		return &FieldError{d.ID, d.Name, "a single text value is required"}
+		return &FieldError{ID: d.ID, Name: d.Name, Message: "a single text value is required", Reason: "invalid_field_type"}
 	}
 	if d.Type == "multiselect" {
 		switch value.(type) {
 		case []string, []any:
 		default:
-			return &FieldError{d.ID, d.Name, "choose a list of options"}
+			return &FieldError{ID: d.ID, Name: d.Name, Message: "choose a list of options", Reason: "invalid_field_type"}
 		}
 	}
 	if Empty(value) {
@@ -230,7 +233,11 @@ func ValidateValue(d Definition, value any) error {
 		message = "unsupported field type requires review"
 	}
 	if message != "" {
-		return &FieldError{d.ID, d.Name, message}
+		reason := "invalid_" + d.Type
+		if d.Type == "select" || d.Type == "multiselect" {
+			reason = "invalid_option"
+		}
+		return &FieldError{ID: d.ID, Name: d.Name, Message: message, Reason: reason}
 	}
 	return nil
 }
@@ -258,7 +265,7 @@ func DefaultValue(d Definition) (any, error) {
 	}
 	var v []string
 	if err := json.Unmarshal([]byte(*d.Default), &v); err != nil || v == nil {
-		return nil, &FieldError{d.ID, d.Name, "multiselect default must be a JSON array"}
+		return nil, &FieldError{ID: d.ID, Name: d.Name, Message: "multiselect default must be a JSON array", Reason: "invalid_field_type"}
 	}
 	return v, nil
 }

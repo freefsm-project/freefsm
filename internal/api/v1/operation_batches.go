@@ -62,15 +62,23 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			authorization.BatchOperation
 			DependsOn []*string       `json:"depends_on"`
 			Comment   json.RawMessage `json:"comment"`
+			Revisions json.RawMessage `json:"revisions"`
 		}
 		part := r.Clone(r.Context())
 		part.Body = io.NopCloser(bytes.NewReader(raw))
-		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "status_id", "status_revision", "meaning_revision", "subtask_id", "completion_revision", "completed", "comment") {
+		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "status_id", "status_revision", "meaning_revision", "subtask_id", "completion_revision", "completed", "comment", "revisions", "values") {
 			return
 		}
 		op := wire.BatchOperation
 		validIntent := false
 		switch op.Type {
+		case "job.fields":
+			var valid bool
+			op.Revisions, valid = fieldPatchWire(w, r, op.Values, wire.Revisions)
+			if !valid {
+				return
+			}
+			validIntent = completeBatchFieldIntent(op, raw)
 		case "job.field_notes", "job.status", "job.subtask":
 			validIntent = completeBatchFieldIntent(op, raw)
 		case "comment.add", "comment.remove":
@@ -176,6 +184,9 @@ func completeBatchFieldIntent(op authorization.BatchFieldOperation, raw []byte) 
 	case "comment.add", "comment.remove":
 		fields = []string{"comment"}
 		valid = op.Comment != nil
+	case "job.fields":
+		fields = []string{"revisions", "values"}
+		valid = op.Revisions != nil && len(op.Values) > 0
 	}
 	for _, key := range fields {
 		allowed[key] = true

@@ -46,6 +46,10 @@ attribution, stable Subtasks and their completion revisions/history, review stat
 and independent field capabilities. These participate in the same coherent
 snapshot and complete-replacement delta, not separately timed reads.
 
+The additive `custom_fields` facet includes authorized definitions, values,
+per-value revisions, independent value-edit capability and recorded history;
+see [Job Custom Field Values synchronization](api-job-custom-field-sync.md).
+
 All context requires current explicit Job assignment, including for users with
 All Records grants, and independent View for each facet. Exact nested schemas
 are closed in the served OpenAPI:

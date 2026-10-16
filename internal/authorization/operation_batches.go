@@ -2,6 +2,7 @@ package authorization
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"time"
@@ -28,6 +29,8 @@ type BatchOperation struct {
 	SubtaskID          string              `json:"subtask_id,omitempty"`
 	CompletionRevision string              `json:"completion_revision,omitempty"`
 	Completed          *bool               `json:"completed,omitempty"`
+	Revisions          map[string]string   `json:"revisions,omitempty"`
+	Values             json.RawMessage     `json:"values,omitempty"`
 	Comment            *BatchCommentIntent `json:"comment,omitempty"`
 }
 
@@ -84,6 +87,27 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			err = nil
 		}
 		result := BatchOperationResult{OperationID: op.OperationID, Err: err}
+		if err == nil && op.Type == "job.fields" {
+			accepted := false
+			_, e := s.patchFieldsReviewedBound(ctx, a, id, ReviewedFieldPatch{OperationID: op.OperationID, Revisions: op.Revisions, Values: op.Values, OccurredAt: op.OccurredAt}, &batch)
+			result.Err = e
+			var conflict *FieldConflict
+			if errors.As(e, &conflict) {
+				result.Err = executionError(conflict.Code)
+			}
+			if e == nil || (errors.As(e, &conflict) && conflict.Code != "operation_intent_changed") || errors.Is(e, ErrForbidden) || errors.Is(e, ErrNotFound) {
+				receipt, receiptErr := s.JobFieldExecutionReceipt(ctx, a, op.OperationID)
+				if receiptErr == nil {
+					result.Receipt = &receipt
+					accepted = receipt.Code == "accepted"
+				} else {
+					result.Err = receiptErr
+				}
+			}
+			results = append(results, result)
+			successful[op.OperationID] = result.Err == nil && accepted
+			continue
+		}
 		if err == nil {
 			in := JobExecutionCommand{OperationID: op.OperationID, NotesRevision: op.NotesRevision, MissingNotes: op.Type == "job.field_notes" && op.Notes == nil, OccurredAt: op.OccurredAt, StatusRevision: op.StatusRevision, MeaningRevision: op.MeaningRevision}
 			in.StatusID, _ = strconv.ParseInt(op.StatusID, 10, 64)
@@ -131,7 +155,7 @@ type batchExecution struct {
 // authority transaction. Submitted position is eligibility, never part of intent;
 // a same-intent retry may submit only the unresolved operation.
 func (b *batchExecution) validate(ctx context.Context, tx pgx.Tx, a Actor) error {
-	if b.operation.Type != "job.field_notes" && b.operation.Type != "job.status" && b.operation.Type != "job.subtask" && b.operation.Type != "comment.add" && b.operation.Type != "comment.remove" {
+	if b.operation.Type != "job.field_notes" && b.operation.Type != "job.status" && b.operation.Type != "job.subtask" && b.operation.Type != "job.fields" && b.operation.Type != "comment.add" && b.operation.Type != "comment.remove" {
 		return &JobExecutionConflict{"invalid_intent"}
 	}
 	if at := b.operation.OccurredAt; at != nil && at.Nanosecond()%1000 != 0 {

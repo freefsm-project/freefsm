@@ -18,6 +18,7 @@ import (
 
 func registerExports(r chi.Router, pool *pgxpool.Pool) {
 	registerActivityExports(r, pool)
+	registerTimeExports(r, pool)
 	svc := exports.Product(pool)
 	r.Get("/exports", func(w http.ResponseWriter, r *http.Request) {
 		auth, ok := authorization.FromContext(r.Context())

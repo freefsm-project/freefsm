@@ -3,9 +3,11 @@
 `POST /api/v1/sync/operations` accepts an `operations` array in submitted order.
 The API and encrypted native reference own this protocol; the website is online-only.
 Supported operations are `job.field_notes`, `job.status`, `job.subtask`,
-`comment.add` and `comment.remove`;
+`job.fields`, `comment.add` and `comment.remove`;
 [Comment synchronization](api-comment-sync.md) defines exact parent/thread intent.
-Operation-specific synchronization for custom fields, clocks, Files, documents and Service Entries remains
+See [Status/Subtask synchronization](api-job-field-sync.md) and
+[Custom Field Values synchronization](api-job-custom-field-sync.md).
+Operation-specific synchronization for clocks, Files, documents and Service Entries remains
 with its owning tickets.
 
 ```json
@@ -22,7 +24,7 @@ requests are unsupported415. File bytes use separate transfer endpoints.
 Properties are exact-case, unknown/duplicate properties and duplicate operation
 IDs reject. An empty array is valid. No query parameters are accepted.
 
-Every operation commits independently through its existing domain service,
+Every operation commits independently through its existing owning domain service,
 common admission registry, current-authority transaction and immutable receipt.
 Earlier acceptance survives later failure. No occurrence-based sorting, global
 batch transaction, target mapping, revision substitution or implicit retry occurs.
