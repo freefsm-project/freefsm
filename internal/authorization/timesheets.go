@@ -199,21 +199,26 @@ func (s *Service) Timesheet(ctx context.Context, a Actor, filter TimesheetFilter
 			if filter.Lifecycle != "" && filter.Lifecycle != lifecycle {
 				continue
 			}
-			end := result.AsOf
-			if row.End != nil {
-				end = *row.End
-			}
-			if access.VoidedAt != nil && row.End == nil {
-				end = row.Start
-			}
-			selected, duration, matched, err := selectedCompanyDays(ctx, row.Start, end, loc, filter)
-			if err != nil {
-				return err
-			}
-			if !matched {
-				continue
-			}
-			if access.VoidedAt == nil {
+			if access.VoidedAt != nil {
+				matched, err := voidMatchesCompanyDates(ctx, row.Start, row.End, loc, filter)
+				if err != nil {
+					return err
+				}
+				if !matched {
+					continue
+				}
+			} else {
+				end := result.AsOf
+				if row.End != nil {
+					end = *row.End
+				}
+				selected, duration, matched, err := selectedCompanyDays(ctx, row.Start, end, loc, filter)
+				if err != nil {
+					return err
+				}
+				if !matched {
+					continue
+				}
 				row.Duration = duration
 				row.Days = selected
 				if result.Total > ElapsedMicroseconds(math.MaxInt64)-row.Duration {
@@ -311,10 +316,7 @@ func (s *Service) Timesheet(ctx context.Context, a Actor, filter TimesheetFilter
 			}
 		}
 		for id, g := range groups {
-			for date, duration := range groupDays[id] {
-				g.Days = append(g.Days, TimesheetDay{date, duration})
-			}
-			sort.Slice(g.Days, func(i, j int) bool { return g.Days[i].Date < g.Days[j].Date })
+			g.Days = sortedTimesheetDays(groupDays[id])
 			result.Groups = append(result.Groups, *g)
 		}
 		sort.Slice(result.Groups, func(i, j int) bool { return result.Groups[i].ID < result.Groups[j].ID })
@@ -331,10 +333,7 @@ func (s *Service) Timesheet(ctx context.Context, a Actor, filter TimesheetFilter
 			}
 			return a.Start.Before(b.Start)
 		})
-		for day, duration := range days {
-			result.Days = append(result.Days, TimesheetDay{day, duration})
-		}
-		sort.Slice(result.Days, func(i, j int) bool { return result.Days[i].Date < result.Days[j].Date })
+		result.Days = sortedTimesheetDays(days)
 		return nil
 	})
 	if err != nil {
@@ -374,10 +373,7 @@ func selectedCompanyDays(ctx context.Context, start, end time.Time, loc *time.Lo
 	if _, err := elapsedMicroseconds(start, end); err != nil {
 		return nil, 0, false, err
 	}
-	includes := func(date string) bool {
-		return (filter.DateFrom == "" || date >= filter.DateFrom) && (filter.DateTo == "" || date <= filter.DateTo)
-	}
-	matched := start.Equal(end) && includes(start.In(loc).Format("2006-01-02"))
+	matched := start.Equal(end) && filter.includesCompanyDate(start.In(loc).Format("2006-01-02"))
 	byDate := map[string]ElapsedMicroseconds{}
 	var total ElapsedMicroseconds
 	for cursor := start; cursor.Before(end); {
@@ -392,7 +388,7 @@ func selectedCompanyDays(ctx context.Context, start, end time.Time, loc *time.Lo
 			boundary = end
 		}
 		date := cursor.In(loc).Format("2006-01-02")
-		if includes(date) {
+		if filter.includesCompanyDate(date) {
 			part, err := elapsedMicroseconds(cursor, boundary)
 			if err != nil {
 				return nil, 0, false, err
@@ -403,10 +399,47 @@ func selectedCompanyDays(ctx context.Context, start, end time.Time, loc *time.Lo
 		}
 		cursor = boundary
 	}
+	return sortedTimesheetDays(byDate), total, matched, nil
+}
+
+func (filter TimesheetFilter) includesCompanyDate(date string) bool {
+	return (filter.DateFrom == "" || date >= filter.DateFrom) && (filter.DateTo == "" || date <= filter.DateTo)
+}
+
+// Void has no counted duration to validate. Missing or invalid retained ends
+// select by the known start date; an ordered recorded interval selects its
+// intersecting company dates. Neither case invents or rewrites an endpoint.
+func voidMatchesCompanyDates(ctx context.Context, start time.Time, end *time.Time, loc *time.Location, filter TimesheetFilter) (bool, error) {
+	if filter.DateFrom == "" && filter.DateTo == "" {
+		return true, nil
+	}
+	if end == nil || !end.After(start) {
+		return filter.includesCompanyDate(start.In(loc).Format("2006-01-02")), nil
+	}
+	for cursor := start; cursor.Before(*end); {
+		if err := ctx.Err(); err != nil {
+			return false, err
+		}
+		if filter.includesCompanyDate(cursor.In(loc).Format("2006-01-02")) {
+			return true, nil
+		}
+		boundary, err := nextCompanyDay(cursor, loc)
+		if err != nil {
+			return false, err
+		}
+		if boundary.After(*end) {
+			boundary = *end
+		}
+		cursor = boundary
+	}
+	return false, nil
+}
+
+func sortedTimesheetDays(byDate map[string]ElapsedMicroseconds) []TimesheetDay {
 	var days []TimesheetDay
 	for date, duration := range byDate {
 		days = append(days, TimesheetDay{date, duration})
 	}
 	sort.Slice(days, func(i, j int) bool { return days[i].Date < days[j].Date })
-	return days, total, matched, nil
+	return days
 }

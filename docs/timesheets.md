@@ -18,8 +18,12 @@ link or other context. Other subjects' standalone entries require All authority.
 - `lifecycle`: `active`, `closed`, or `void`; empty includes all eligible states.
 - `include_void=true`: explicit terminal Void opt-in. Selecting lifecycle `void`
   alone does not opt in. Void never contributes to any total and a missing end
-  remains missing. An open Void is selected by its recorded start date, not an
-  invented reporting end.
+  remains missing. A Void with a missing or retained invalid end (not after start)
+  is selected by its recorded start's company date, not an invented reporting
+  end or reordered endpoints. An ordered recorded Void interval is selected by
+  its intersecting company dates. Neither kind undergoes counted-duration
+  validation or contributes elapsed time; terminal repair of legacy invalid
+  facts therefore retains inspectable reason/history.
 - `search`: case-insensitive current notes substring.
 - `group_by`: `subject` (default) or `job`. Groups use stable identity order;
   Standalone is the Job group with identity zero.
