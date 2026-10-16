@@ -17,7 +17,7 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes-client.c
   if(meta.operation)headers['Operation-ID']=meta.operation;
   if(interrupt&&route==='/sync/operations'){headers['X-Comment-Interrupt']='yes';interrupt=false;}
   const r=await fetch(cfg.url+route,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
-  const value=await r.json();return {status:r.status,...value};
+  const value=await r.json();if(r.status>=400)console.log(`Comment transport status=${r.status} code=${value.error?.code}`);return {status:r.status,...value};
  };
  const restart=()=>new OfflineNotes(new ProtectedStore(directory,identity),transport);
  let client=restart();
@@ -36,17 +36,22 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes-client.c
   assert.equal(JSON.parse(reopened.stdout)[first],'unknown');assert.equal(JSON.parse(reopened.stdout)[second],'unknown');
   client=restart();state=await client.view();assert.equal(state.pending[first].state,'unknown');assert.equal(state.pending[second].state,'unknown');
   assert.equal((await client.reconcile(first)).state,'accepted');assert.equal((await client.reconcile(second)).state,'pending');
+  await assert.rejects(()=>client.view(),/locked_review/);await client.synchronize();
   await client.submitBatch([second]);await client.synchronize();state=await client.view();
   const root=state.cache[job].comments.comments.find(c=>c.content.startsWith('Original'));
   const reply=await client.stageComment(job,intent('queued reply',{reply_to:root.id}),[]);
   const removal=await client.stageComment(job,{parent_type:'job',target:job,remove_id:root.id},[]);
-  await client.submitBatch([removal]);assert.equal((await client.submitBatch([reply]))[0].receipt.code,'comment_conflict');
+  await client.submitBatch([removal]);await client.synchronize(true);
+  assert.equal((await client.view()).cache[job].comments.comments.find(c=>c.id===root.id).content,'');
+  assert.equal((await client.submitBatch([reply]))[0].receipt.code,'comment_conflict');
+  await assert.rejects(()=>client.view(),/locked_review/);await client.synchronize();
   const blocked=await client.stageComment(job,intent('reviewed recovery'),[reply]);
   const unrelated=await client.stageComment(job,intent('unrelated continues'),[]);
   const results=await client.submitBatch([blocked,unrelated]);assert.equal(results[0].receipt.code,'failed_dependency');assert.equal(results[1].receipt.code,'accepted');
-  await client.synchronize(true);
+  await client.synchronize();
   assert.equal((await client.view()).cache[job].comments.comments.find(c=>c.id===root.id).content,'');
-  const repaired=await client.repairComment(blocked,intent('reviewed recovery'),[]);assert.notEqual(repaired,blocked);
+  const reviewedRevision=(await client.view()).cache[job].comments.eligibility_revision;
+  const repaired=await client.repairComment(blocked,intent('reviewed recovery',{parent_revision:reviewedRevision}),[]);assert.notEqual(repaired,blocked);
   await client.submitBatch([repaired]);assert.equal((await client.view()).pending[blocked].state,'replaced');
   const pendingDocument=await client.stageComment(job,{parent_type:'estimate',target:document.id,content:'never retarget document'},[]);
   await fetch(cfg.url+'/__fixture/unlink',{method:'POST'});await client.synchronize();
@@ -56,8 +61,9 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes-client.c
   await fetch(cfg.url+'/__fixture/scope-loss',{method:'POST'});await client.synchronize();
   state=await client.view();assert.equal(state.pending[lost].state,'purged');assert.deepEqual(state.cache,{});
   assert.equal((await client.reconcile(lost)).receipt.code,'accepted');
+  await assert.rejects(()=>client.view(),/locked_review/);await client.synchronize();
   await assert.rejects(()=>client.submitBatch([lost]),/reconciliation_or_review_required/);
-  assert.equal((await client.reconcile(first)).receipt.code,'accepted');assert(!JSON.stringify(await client.view()).includes('Original'));
+  assert.equal((await client.reconcile(first)).receipt.code,'accepted');await assert.rejects(()=>client.view(),/locked_review/);await client.synchronize();assert(!JSON.stringify(await client.view()).includes('Original'));
   console.log('PASS encrypted Comments: bounds, persisted interruption, receipt recovery, closure, dependency repair and original-parent purge');
  } finally {await client.logout();await fs.rm(directory,{recursive:true,force:true});}
 })().catch(e=>{console.error(e);process.exitCode=1;});

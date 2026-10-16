@@ -21,6 +21,8 @@ func commentAPIError(w http.ResponseWriter, err error) {
 		status, code = 409, "comment_conflict"
 	case errors.Is(err, authorization.ErrCommentInvalid):
 		status, code = 400, "invalid_comment"
+	case errors.Is(err, authorization.ErrCommentParentChanged):
+		status, code = 409, "comment_parent_changed"
 	}
 	writeError(w, status, code, code)
 }
@@ -52,7 +54,7 @@ func (h *handler) comments(typ objectref.Type, remove bool) http.HandlerFunc {
 			return
 		}
 		var in authorization.CommentCommand
-		properties := []string{"operation_id", "occurred_at"}
+		properties := []string{"operation_id", "occurred_at", "parent_revision"}
 		if !remove {
 			properties = append(properties, "content", "reply_to")
 		}

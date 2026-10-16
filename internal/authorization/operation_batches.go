@@ -32,10 +32,11 @@ type BatchOperation struct {
 }
 
 type BatchCommentIntent struct {
-	ParentType string  `json:"parent_type"`
-	Content    *string `json:"content,omitempty"`
-	ReplyTo    string  `json:"reply_to,omitempty"`
-	RemoveID   string  `json:"remove_id,omitempty"`
+	ParentType     string  `json:"parent_type"`
+	Content        *string `json:"content,omitempty"`
+	ReplyTo        string  `json:"reply_to,omitempty"`
+	RemoveID       string  `json:"remove_id,omitempty"`
+	ParentRevision string  `json:"parent_revision,omitempty"`
 }
 
 // Retain the existing Go caller spelling and old serialized Notes intent.
@@ -61,7 +62,7 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 	for i, op := range ops {
 		batch := batchExecution{operation: op, positions: positions, index: i, successful: successful}
 		if op.Comment != nil {
-			in := CommentCommand{OperationID: op.OperationID, OccurredAt: op.OccurredAt}
+			in := CommentCommand{OperationID: op.OperationID, OccurredAt: op.OccurredAt, ParentRevision: op.Comment.ParentRevision, requireParentRevision: true}
 			if op.Comment.Content != nil {
 				in.Content = *op.Comment.Content
 			}

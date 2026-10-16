@@ -13,13 +13,17 @@ class OfflineFieldClient {
  async initialize(){return this.store.exclusive(async()=>{await this.store.create();try{await this.store.load();}catch(e){if(e.code!=='ENOENT')throw e;await this.store.save(fresh());}});}
  async transaction(fn){return this.store.exclusive(async()=>{const s=await this.store.load();return fn(s);});}
  async persist(s){await this.store.save(s);}
- async persistAuthorityLoss(s){
+  async persistAuthorityLoss(s){
   try{await this.persist(s);}catch{
    // The old ciphertext must not become visible after a failed purge/restore
    // write. The already-durable exclusive marker survives and blocks restart.
    this.store.quarantined=true;throw Error('protected_store_locked');
   }
- }
+  }
+  async withholdCache(s){
+   s.synced=false;s.cache={};s.notes={};s.syncCursor=null;
+   if(!this.store.quarantined)await this.persistAuthorityLoss(s);
+  }
  // Durably locks observed expiry/clock rollback and advances the high-water mark.
  async enforceOfflineAccessWindow(s){
   if(s.restore||!s.synced)throw Error('locked_review');
@@ -161,9 +165,9 @@ class OfflineFieldClient {
    return record.document_comments?.find(d=>d.parent_type===reviewed.parent_type&&d.id===reviewed.target)?.comments||null;
   }
   stageCommentIn(s,job,reviewed,dependencies){
-   if(!reviewed||typeof reviewed!=='object'||Array.isArray(reviewed)||Object.keys(reviewed).some(k=>!['parent_type','target','content','reply_to','remove_id'].includes(k)))throw Error('review_required');
+   if(!reviewed||typeof reviewed!=='object'||Array.isArray(reviewed)||Object.keys(reviewed).some(k=>!['parent_type','target','content','reply_to','remove_id','parent_revision'].includes(k)))throw Error('review_required');
    const projection=this.commentProjection(s.cache,job,reviewed);
-   if(!projection)throw Error('review_required');
+   if(!projection||typeof projection.eligibility_revision!=='string'||!projection.eligibility_revision||(Object.hasOwn(reviewed,'parent_revision')&&reviewed.parent_revision!==projection.eligibility_revision))throw Error('review_required');
    const removal=Object.hasOwn(reviewed,'remove_id');
    if(removal){
     if(typeof reviewed.remove_id!=='string'||Object.hasOwn(reviewed,'content')||Object.hasOwn(reviewed,'reply_to')||!projection.comments.some(c=>c.id===reviewed.remove_id&&c.can_remove))throw Error('review_required');
@@ -173,6 +177,7 @@ class OfflineFieldClient {
    }
    const depends_on=this.reviewedDependencies(dependencies),id=randomUUID();
    const {target,...comment}=clone(reviewed);
+   comment.parent_revision=projection.eligibility_revision;
    s.pending[id]={job,family:'comment',parentType:comment.parent_type,state:'pending',intent:{operation_id:id,occurred_at:new Date(this.now()).toISOString(),comment},batch:{type:removal?'comment.remove':'comment.add',target,depends_on}};
    return id;
   }
@@ -184,7 +189,7 @@ class OfflineFieldClient {
    if(!e||e.family!=='comment'||!['terminal','restore_uncertain'].includes(e.state)||!e.intent||!e.job||!e.batch)throw Error('review_required');
    if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
    const old=e.intent.comment;
-   if(!reviewed||reviewed.target!==e.batch.target||reviewed.parent_type!==old.parent_type||reviewed.reply_to!==old.reply_to||reviewed.remove_id!==old.remove_id)throw Error('review_required');
+   if(!reviewed?.parent_revision||reviewed.target!==e.batch.target||reviewed.parent_type!==old.parent_type||reviewed.reply_to!==old.reply_to||reviewed.remove_id!==old.remove_id)throw Error('review_required');
    const next=this.stageCommentIn(s,e.job,reviewed,dependencies);e.state='replaced';await this.persist(s);return next;
   });}
   stageStatusIn(s,job,status,revision,meaning,dependencies){
@@ -227,15 +232,15 @@ class OfflineFieldClient {
    const r=await this.contact(s,'/sync/operations','POST',body);
    if(r.status===200){
     if(!Array.isArray(r.data?.results)||r.data.results.length!==ids.length||r.data.results.some((v,i)=>v.operation_id!==ids[i]||(v.receipt&&v.receipt.operation_id!==ids[i])))throw Error('receipt_mismatch');
-    let lost=false;
+     let lost=false,review=false;
     for(const result of r.data.results){
      const e=s.pending[result.operation_id];
-     if(result.receipt){this.receipt(e,result.operation_id,result.receipt);if(['forbidden','not_found'].includes(result.receipt.code)){this.purgeSensitiveTarget(s,e.job);lost=true;}}
+      if(result.receipt){this.receipt(e,result.operation_id,result.receipt);if(e.family==='comment'&&result.receipt.code!=='accepted')review=true;if(['forbidden','not_found'].includes(result.receipt.code)){this.purgeSensitiveTarget(s,e.job);lost=true;}}
      else if(result.error?.status===403||result.error?.status===401){await this.purge(s);throw Error('authorization_purged');}
      else if(result.error?.recovery_disposition==='retry')e.retryNotBefore=this.now()+this.retryDelay(result.error);
      // Without a terminal receipt retain unknown, including identity misuse.
     }
-    if(lost)await this.persistAuthorityLoss(s);else await this.persist(s);
+     if(review)await this.withholdCache(s);else if(lost)await this.persistAuthorityLoss(s);else await this.persist(s);
    }else{
     if(r.status===429||r.status>=500)for(const id of ids)s.pending[id].retryNotBefore=this.now()+this.retryDelay(r.error);
     await this.persist(s);
@@ -269,7 +274,14 @@ class OfflineFieldClient {
   // lease. It still requires a currently valid authenticated server session.
   if(!s.pending[id])throw Error('unknown_operation');
    const endpoint=s.pending[id].family==='comment'?'comment-operations':s.pending[id].family==='job.subtask'?'subtask-operations':'job-execution-operations';
-   const r=await this.contact(s,`/${endpoint}/${encodeURIComponent(id)}`);
+   let r;
+   try {r=await this.contact(s,`/${endpoint}/${encodeURIComponent(id)}`);}
+   finally {
+    // A scope-independent receipt is never refreshed authority for cached data.
+    // Keep original pending intent encrypted but undisclosable until a complete
+    // explicit sync establishes current scope. A failed write must quarantine.
+    await this.withholdCache(s);
+   }
   // Receipt access is independent of offline policy and target visibility. Check
   // policy on this reconnect, then apply only safe receipt metadata after purge.
   await this.policy(s,true);
@@ -280,7 +292,7 @@ class OfflineFieldClient {
    if(e.state==='restore_uncertain')e.lookupMissing=true;
   }
   // restore_uncertain + missing receipt remains uncertain, never retryable.
-  await this.persist(s);return clone({state:e.state,receipt:e.receipt});
+   await this.persist(s);return clone({state:e.state,receipt:e.receipt,requires_synchronization:!s.synced});
  });}
  async repair(id,text,reviewedRevision,reviewedDependencies){return this.transaction(async s=>{
   await this.enforceOfflineAccessWindow(s);const e=s.pending[id];

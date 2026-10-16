@@ -120,6 +120,17 @@ read authorized current Notes and compare, then explicitly repair with the
 reviewed revision and a new UUID, or discard. Target/revision rewriting,
 automatic merge, force overwrite and automatic replay are unavailable.
 
+Receipt reconnect now durably withholds sensitive cache and pending disclosure,
+including after transport failure: a scope-independent receipt does not establish
+current target access. The safe result includes `requires_synchronization: true`.
+Reconcile all original IDs in a group, then explicitly run a complete fresh
+`synchronize` before view, staging, repair or submission. Read Notes again before
+staging new Notes. Existing pending IDs, payloads and retry delays remain unchanged;
+restore uncertainty still requires explicit outcome acknowledgement. Withholding
+uses the existing synchronized/locked state and authority-loss quarantine: failed
+persistence leaves the durable writer marker, so restoring files or access cannot
+revive old cached authority in a fresh process.
+
 ## Ordinary purge versus restore
 
 401/403 ordinary authorization failure purges credentials/cache/sensitive intent

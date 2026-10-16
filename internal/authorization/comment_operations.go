@@ -15,11 +15,13 @@ import (
 )
 
 type CommentCommand struct {
-	OperationID string     `json:"operation_id"`
-	Content     string     `json:"content,omitempty"`
-	ReplyTo     int64      `json:"reply_to,omitempty"`
-	RemoveID    int64      `json:"-"`
-	OccurredAt  *time.Time `json:"occurred_at,omitempty"`
+	OperationID           string     `json:"operation_id"`
+	Content               string     `json:"content,omitempty"`
+	ReplyTo               int64      `json:"reply_to,omitempty"`
+	RemoveID              int64      `json:"-"`
+	OccurredAt            *time.Time `json:"occurred_at,omitempty"`
+	ParentRevision        string     `json:"parent_revision,omitempty"`
+	requireParentRevision bool
 }
 type CommentReceipt struct {
 	OperationID string    `json:"operation_id"`
@@ -44,6 +46,8 @@ func commentCode(err error) string {
 		return "comment_conflict"
 	case errors.Is(err, ErrCommentInvalid):
 		return "invalid_comment"
+	case errors.Is(err, ErrCommentParentChanged):
+		return "comment_parent_changed"
 	default:
 		return ""
 	}
@@ -58,6 +62,8 @@ func commentError(code string) error {
 		return ErrConflict
 	case "invalid_comment":
 		return ErrCommentInvalid
+	case "comment_parent_changed":
+		return ErrCommentParentChanged
 	case "invalid_dependency", "failed_dependency", "invalid_occurrence", "invalid_intent":
 		return &JobExecutionConflict{code}
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -13,6 +14,29 @@ import (
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/google/uuid"
 )
+
+func commentRevisionHTTP(t *testing.T, api http.Handler, token, kind string, id int64) string {
+	t.Helper()
+	r := httptest.NewRequest("GET", fmt.Sprintf("/%ss/%d/comments", kind, id), nil)
+	r.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	api.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("parent eligibility %d %s", w.Code, w.Body.String())
+	}
+	var result struct {
+		Data struct {
+			Revision string `json:"eligibility_revision"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Data.Revision == "" {
+		t.Fatal("missing original eligibility witness")
+	}
+	return result.Data.Revision
+}
 
 func TestCommentSyncSnapshotsAndRemovalDeltasHTTP(t *testing.T) {
 	f, api, token, _, _, jobs := syncFixture(t, 1)
@@ -56,11 +80,12 @@ func TestCommentSyncBatchOriginalThreadAndDependenciesHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := apiv1.NewRouter(pool, client, sessions)
+	revision := commentRevisionHTTP(t, api, token, "job", job.ID)
 	op := func(kind, text, reply, remove string, deps ...string) map[string]any {
 		if deps == nil {
 			deps = []string{}
 		}
-		intent := map[string]any{"parent_type": "job"}
+		intent := map[string]any{"parent_type": "job", "parent_revision": revision}
 		if kind == "comment.add" {
 			intent["content"] = text
 		}
@@ -177,7 +202,7 @@ func TestCommentSyncDocumentScopeAndOpaqueOriginalParentHTTP(t *testing.T) {
 	if !ok || target == fmt.Sprint(estimate) || doc["parent_type"] != "estimate" {
 		t.Fatalf("stable opaque parent: %v", doc)
 	}
-	operation := map[string]any{"operation_id": uuid.NewString(), "type": "comment.add", "target": target, "depends_on": []string{}, "comment": map[string]any{"parent_type": "estimate", "content": "original document text"}}
+	operation := map[string]any{"operation_id": uuid.NewString(), "type": "comment.add", "target": target, "depends_on": []string{}, "comment": map[string]any{"parent_type": "estimate", "content": "original document text", "parent_revision": doc["comments"].(map[string]any)["eligibility_revision"]}}
 	body, _ := json.Marshal(map[string]any{"operations": []any{operation}})
 	if w := batchRequest(api, token, string(body)); w.Code != 200 || !strings.Contains(w.Body.String(), `"code":"accepted"`) {
 		t.Fatalf("opaque original parent: %d %s", w.Code, w.Body.String())

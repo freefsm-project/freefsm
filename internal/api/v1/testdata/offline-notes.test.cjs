@@ -86,6 +86,9 @@ test('lease exact expiry, original intent, receipt before retry and restore lock
   await c.synchronize();
   reply={status:503,error:{code:'unavailable'}}; await c.submit(id);
   reply={status:404,error:{code:'not_found'}}; await c.reconcile(id);
+  await assert.rejects(c.view(),/locked_review/);
+  reply={status:200,data:{records:[{id:'job',title:'Job'}],removed:[],complete:true,completion_cursor:'receipt-refresh',next_page:null,purge:'none'}};
+  await c.synchronize();
   assert.equal((await c.view()).pending[id].intent.operation_id,id);
   await assert.rejects(c.submit(id),/retry_after_required/,'explicit retry must honor server dependency backoff');
   now+=5000;

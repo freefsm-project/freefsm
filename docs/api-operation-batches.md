@@ -56,6 +56,9 @@ existing identities/history remain intact. No migration/backfill/grant change.
 Network loss may leave a committed prefix. Reconcile each original receipt before
 explicitly retrying unresolved work with identical IDs/intent. Audit/storage
 rollback leaves no receipt/admission/effect. An uncertain Commit remains unknown.
+The encrypted reference withholds cached content during receipt reconnect. After
+reconciling the group, explicitly complete a fresh sync before viewing or retrying;
+receipt success grants no cached target authority and never rewrites intent.
 Transient results retain the ID and a retry delay; they are not terminal failures.
 The authenticated request budget and12 sync requests/minute/client apply to whole
 batch requests. HTTP429 has typed timing and `Retry-After`; service errors use

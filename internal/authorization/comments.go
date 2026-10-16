@@ -30,8 +30,9 @@ type Comment struct {
 	CanReply  bool       `json:"can_reply"`
 }
 type Comments struct {
-	Entries []Comment `json:"comments"`
-	CanAdd  bool      `json:"can_add"`
+	Entries             []Comment `json:"comments"`
+	CanAdd              bool      `json:"can_add"`
+	EligibilityRevision string    `json:"eligibility_revision,omitempty"`
 }
 
 // Lock the exact parent before reading mutable lifecycle and assignment facts.
@@ -139,6 +140,12 @@ func readComments(ctx context.Context, tx pgx.Tx, p Principal, a Actor, ref obje
 		}
 		writable := writeErr == nil
 		result.CanAdd = writable && p.Allows("comment.add", scope)
+		if a.Channel == "api" {
+			result.EligibilityRevision, err = commentEligibility(ctx, tx, p, a, ref)
+			if err != nil {
+				return err
+			}
+		}
 		rows, err := tx.Query(ctx, `SELECT c.id,c.author_id,coalesce(u.name,'Unknown'),CASE WHEN c.removed_at IS NULL THEN c.content ELSE '' END,c.created_at,c.reply_to,c.removed_at,c.removed_by,coalesce(r.name,'Unknown') FROM comments c LEFT JOIN users u ON u.id=c.author_id LEFT JOIN users r ON r.id=c.removed_by WHERE c.company_id=$1 AND c.object_type=$2 AND c.object_id=$3 ORDER BY c.created_at,c.id`, p.CompanyID, string(ref.Type), ref.ID)
 		if err != nil {
 			return err
@@ -174,6 +181,9 @@ func applyComment(ctx context.Context, tx pgx.Tx, p Principal, a Actor, ref obje
 			}
 			if !p.Allows("comment.add", scope) {
 				return ErrForbidden
+			}
+			if err := validateCommentEligibility(ctx, tx, p, a, ref, in); err != nil {
+				return err
 			}
 			if !utf8.ValidString(content) || strings.ContainsRune(content, 0) || utf8.RuneCountInString(content) > 10000 || strings.TrimSpace(content) == "" {
 				return ErrCommentInvalid
@@ -219,6 +229,9 @@ func applyComment(ctx context.Context, tx pgx.Tx, p Principal, a Actor, ref obje
 			}
 			scope = Own
 		}
+		if err := validateCommentEligibility(ctx, tx, p, a, ref, in); err != nil {
+			return err
+		}
 		if removed {
 			return nil
 		}
@@ -232,6 +245,9 @@ func applyComment(ctx context.Context, tx pgx.Tx, p Principal, a Actor, ref obje
 
 func commentAudit(ctx context.Context, tx pgx.Tx, a Actor, p Principal, permission string, scope Scope, ref objectref.Ref, id int64, in CommentCommand) error {
 	detail := map[string]any{"comment_id": id, "operation_id": in.OperationID}
+	if in.ParentRevision != "" {
+		detail["parent_revision"] = in.ParentRevision
+	}
 	if in.OccurredAt != nil {
 		detail["occurred_at"] = in.OccurredAt
 	}

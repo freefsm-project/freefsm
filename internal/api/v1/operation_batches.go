@@ -79,7 +79,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			}
 			part.Body = io.NopCloser(bytes.NewReader(wire.Comment))
 			var intent authorization.BatchCommentIntent
-			if !decodeExactJSON(w, part, &intent, "parent_type", "content", "reply_to", "remove_id") {
+			if !decodeExactJSON(w, part, &intent, "parent_type", "content", "reply_to", "remove_id", "parent_revision") {
 				return
 			}
 			var supplied map[string]json.RawMessage
@@ -132,6 +132,8 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 				status, code = 404, "not_found"
 			case errors.Is(result.Err, authorization.ErrCommentInvalid):
 				status, code = 400, "invalid_comment"
+			case errors.Is(result.Err, authorization.ErrCommentParentChanged):
+				status, code = 409, "comment_parent_changed"
 			case errors.Is(result.Err, authorization.ErrConflict):
 				status, code = 409, "subtask_conflict"
 				if operations[i].Comment != nil {

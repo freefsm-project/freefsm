@@ -18,9 +18,10 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func commentSyncBody(job int64, kind string, intent map[string]any) (string, string) {
+func commentSyncBody(job int64, kind string, intent map[string]any, revision string) (string, string) {
 	id := uuid.NewString()
 	intent["parent_type"] = "job"
+	intent["parent_revision"] = revision
 	body, _ := json.Marshal(map[string]any{"operations": []any{map[string]any{"operation_id": id, "type": kind, "target": fmt.Sprint(job), "depends_on": []string{}, "comment": intent}}})
 	return string(body), id
 }
@@ -42,6 +43,7 @@ func TestCommentSyncActualMutationClosureRaceHTTP(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			revision := commentRevisionHTTP(t, api, token, "job", jobs[0])
 			condition := "TG_OP='UPDATE' AND NEW.removed_at IS DISTINCT FROM OLD.removed_at"
 			statement := "UPDATE comments%"
 			if replyFirst {
@@ -60,8 +62,8 @@ func TestCommentSyncActualMutationClosureRaceHTTP(t *testing.T) {
 			if err := barrier.QueryRow(ctx, `SELECT pg_backend_pid() FROM (SELECT pg_advisory_xact_lock(840084)) barrier`).Scan(&blocker); err != nil {
 				t.Fatal(err)
 			}
-			reply, _ := commentSyncBody(jobs[0], "comment.add", map[string]any{"content": "racing reply", "reply_to": fmt.Sprint(root)})
-			remove, _ := commentSyncBody(jobs[0], "comment.remove", map[string]any{"remove_id": fmt.Sprint(root)})
+			reply, _ := commentSyncBody(jobs[0], "comment.add", map[string]any{"content": "racing reply", "reply_to": fmt.Sprint(root)}, revision)
+			remove, _ := commentSyncBody(jobs[0], "comment.remove", map[string]any{"remove_id": fmt.Sprint(root)}, revision)
 			first, second := remove, reply
 			if replyFirst {
 				first, second = reply, remove
@@ -111,7 +113,7 @@ func TestCommentSyncActualMutationClosureRaceHTTP(t *testing.T) {
 			if len(before.Entries) != wantCount {
 				t.Fatalf("reply ordering: %+v", before)
 			}
-			noop, _ := commentSyncBody(jobs[0], "comment.remove", map[string]any{"remove_id": fmt.Sprint(root)})
+			noop, _ := commentSyncBody(jobs[0], "comment.remove", map[string]any{"remove_id": fmt.Sprint(root)}, revision)
 			if w := batchRequest(api, token, noop); w.Code != 200 || !strings.Contains(w.Body.String(), `"code":"accepted"`) {
 				t.Fatalf("no-op: %d %s", w.Code, w.Body.String())
 			}
@@ -137,7 +139,7 @@ func TestCommentSyncAuditRollbackAndSameIDRetryHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, id := commentSyncBody(jobs[0], "comment.add", map[string]any{"content": "atomic original"})
+	body, id := commentSyncBody(jobs[0], "comment.add", map[string]any{"content": "atomic original"}, commentRevisionHTTP(t, api, token, "job", jobs[0]))
 	if _, err := f.pool.Exec(ctx, `CREATE FUNCTION reject_sync_comment_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='comment.add' THEN RAISE EXCEPTION 'injected Comment audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_sync_comment_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION reject_sync_comment_audit()`); err != nil {
 		t.Fatal(err)
 	}
@@ -170,6 +172,7 @@ func TestCommentSyncDirectTransportAndArchivedVisibilityHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := apiv1.NewRouter(f.pool, f.client, f.sessions)
+	revision := commentRevisionHTTP(t, api, token, "job", jobs[0])
 	for _, body := range []string{
 		fmt.Sprintf(`{"operation_id":%q,"content":"first","content":"second"}`, uuid.NewString()),
 		fmt.Sprintf(`{"operation_id":%q,"content":"text","reply_to":null}`, uuid.NewString()),
@@ -194,10 +197,21 @@ func TestCommentSyncDirectTransportAndArchivedVisibilityHTTP(t *testing.T) {
 	if err := f.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM comments)+(SELECT count(*) FROM comment_operation_receipts)+(SELECT count(*) FROM operation_admissions WHERE operation_type='comment')`).Scan(&effects); err != nil || effects != 0 {
 		t.Errorf("malformed transport had effects=%d err=%v", effects, err)
 	}
+	missing := httptest.NewRequest("POST", fmt.Sprintf("/jobs/%d/comments", jobs[0]), strings.NewReader(fmt.Sprintf(`{"operation_id":%q,"content":"unguarded new direct intent"}`, uuid.NewString())))
+	missing.Header.Set("Authorization", "Bearer "+token)
+	missing.Header.Set("Content-Type", "application/json")
+	unbound := httptest.NewRecorder()
+	api.ServeHTTP(unbound, missing)
+	if unbound.Code != 409 || !strings.Contains(unbound.Body.String(), "comment_parent_changed") {
+		t.Fatalf("unguarded direct API effect: %d %s", unbound.Code, unbound.Body.String())
+	}
+	if err := f.pool.QueryRow(ctx, `SELECT count(*) FROM comments`).Scan(&effects); err != nil || effects != 0 {
+		t.Fatalf("unguarded direct Comment created: %d %v", effects, err)
+	}
 	if _, err := f.pool.Exec(ctx, `UPDATE jobs SET deleted_at=clock_timestamp() WHERE id=$1`, jobs[0]); err != nil {
 		t.Fatal(err)
 	}
-	body, _ := commentSyncBody(jobs[0], "comment.add", map[string]any{"content": "archived Job"})
+	body, _ := commentSyncBody(jobs[0], "comment.add", map[string]any{"content": "archived Job"}, revision)
 	w = batchRequest(api, token, body)
 	if w.Code != 200 || !strings.Contains(w.Body.String(), `"code":"not_found"`) {
 		t.Errorf("archived field parent visible: %d %s", w.Code, w.Body.String())
@@ -225,10 +239,11 @@ func TestCommentSyncOwnRemovalRechecksAssignmentAndRejectsBroadOfficeRemovalHTTP
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, _ := commentSyncBody(jobs[0], "comment.remove", map[string]any{"remove_id": fmt.Sprint(root)})
+	body, _ := commentSyncBody(jobs[0], "comment.remove", map[string]any{"remove_id": fmt.Sprint(root)}, commentRevisionHTTP(t, api, adminToken, "job", jobs[0]))
 	if w := batchRequest(api, adminToken, body); w.Code != 200 || !strings.Contains(w.Body.String(), `"code":"forbidden"`) {
 		t.Fatalf("broader office grant removed another author: %d %s", w.Code, w.Body.String())
 	}
+	revision := commentRevisionHTTP(t, api, token, "job", jobs[0])
 	fence, err := f.pool.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -239,7 +254,7 @@ func TestCommentSyncOwnRemovalRechecksAssignmentAndRejectsBroadOfficeRemovalHTTP
 		t.Fatal(err)
 	}
 	assertForeignAuthorityExcluded(t, ctx, f.pool, blocker)
-	body, _ = commentSyncBody(jobs[0], "comment.remove", map[string]any{"remove_id": fmt.Sprint(root)})
+	body, _ = commentSyncBody(jobs[0], "comment.remove", map[string]any{"remove_id": fmt.Sprint(root)}, revision)
 	done := make(chan *httptest.ResponseRecorder, 1)
 	go func() { done <- batchRequest(api, token, body) }()
 	waitAuthorityRequest(t, ctx, f.pool, blocker, authorityWriterStatement)

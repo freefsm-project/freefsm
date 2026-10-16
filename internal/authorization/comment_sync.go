@@ -20,6 +20,7 @@ func syncComments(ctx context.Context, tx pgx.Tx, p Principal, a Actor, job *syn
 		if err != nil {
 			return nil, err
 		}
+		anchors = append(anchors, "comment-eligibility:"+comments.EligibilityRevision)
 		for _, c := range comments.Entries {
 			if c.RemovedAt != nil {
 				anchors = append(anchors, fmt.Sprintf("removed-comment:%d", c.ID))
