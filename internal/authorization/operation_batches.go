@@ -15,14 +15,20 @@ import (
 // target and dependency references are intent, not instructions to rewrite later
 // operations using an earlier result's identity or revision.
 type BatchOperation struct {
-	OperationID   string              `json:"operation_id"`
-	Type          string              `json:"type"`
-	Target        string              `json:"target"`
-	DependsOn     []string            `json:"depends_on"`
-	NotesRevision string              `json:"notes_revision"`
-	Notes         *string             `json:"field_notes"`
-	OccurredAt    *time.Time          `json:"occurred_at,omitempty"`
-	Comment       *BatchCommentIntent `json:"comment,omitempty"`
+	OperationID        string              `json:"operation_id"`
+	Type               string              `json:"type"`
+	Target             string              `json:"target"`
+	DependsOn          []string            `json:"depends_on"`
+	NotesRevision      string              `json:"notes_revision"`
+	Notes              *string             `json:"field_notes"`
+	OccurredAt         *time.Time          `json:"occurred_at,omitempty"`
+	StatusID           string              `json:"status_id,omitempty"`
+	StatusRevision     string              `json:"status_revision,omitempty"`
+	MeaningRevision    string              `json:"meaning_revision,omitempty"`
+	SubtaskID          string              `json:"subtask_id,omitempty"`
+	CompletionRevision string              `json:"completion_revision,omitempty"`
+	Completed          *bool               `json:"completed,omitempty"`
+	Comment            *BatchCommentIntent `json:"comment,omitempty"`
 }
 
 type BatchCommentIntent struct {
@@ -31,6 +37,10 @@ type BatchCommentIntent struct {
 	ReplyTo    string  `json:"reply_to,omitempty"`
 	RemoveID   string  `json:"remove_id,omitempty"`
 }
+
+// Retain the existing Go caller spelling and old serialized Notes intent.
+type BatchNotesOperation = BatchOperation
+type BatchFieldOperation = BatchOperation
 
 type BatchOperationResult struct {
 	OperationID string
@@ -74,11 +84,30 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 		}
 		result := BatchOperationResult{OperationID: op.OperationID, Err: err}
 		if err == nil {
-			in := JobExecutionCommand{OperationID: op.OperationID, NotesRevision: op.NotesRevision, MissingNotes: op.Notes == nil, OccurredAt: op.OccurredAt}
+			in := JobExecutionCommand{OperationID: op.OperationID, NotesRevision: op.NotesRevision, MissingNotes: op.Type == "job.field_notes" && op.Notes == nil, OccurredAt: op.OccurredAt, StatusRevision: op.StatusRevision, MeaningRevision: op.MeaningRevision}
+			in.StatusID, _ = strconv.ParseInt(op.StatusID, 10, 64)
 			if op.Notes != nil {
 				in.Notes = *op.Notes
 			}
-			receipt, e := s.submitJobExecutionBound(ctx, a, id, "field_notes", in, &batch)
+			var receipt JobExecutionReceipt
+			var e error
+			switch op.Type {
+			case "job.subtask":
+				action := ""
+				if op.Completed != nil {
+					action = "reopen"
+					if *op.Completed {
+						action = "complete"
+					}
+				}
+				sub, err := s.submitSubtaskBound(ctx, a, id, SubtaskCommand{OperationID: op.OperationID, Action: action, SubtaskID: op.SubtaskID, CompletionRevision: op.CompletionRevision, OccurredAt: op.OccurredAt}, &batch)
+				e = err
+				receipt = JobExecutionReceipt{OperationID: sub.OperationID, Code: sub.Code, EffectID: sub.SubtaskID, AcceptedAt: sub.AcceptedAt}
+			case "job.status":
+				receipt, e = s.submitJobExecutionBound(ctx, a, id, "status", in, &batch)
+			default:
+				receipt, e = s.submitJobExecutionBound(ctx, a, id, "field_notes", in, &batch)
+			}
 			result.Err = e
 			if receipt.Code != "" {
 				result.Receipt = &receipt
@@ -101,7 +130,7 @@ type batchExecution struct {
 // authority transaction. Submitted position is eligibility, never part of intent;
 // a same-intent retry may submit only the unresolved operation.
 func (b *batchExecution) validate(ctx context.Context, tx pgx.Tx, a Actor) error {
-	if b.operation.Type != "job.field_notes" && b.operation.Type != "comment.add" && b.operation.Type != "comment.remove" {
+	if b.operation.Type != "job.field_notes" && b.operation.Type != "job.status" && b.operation.Type != "job.subtask" && b.operation.Type != "comment.add" && b.operation.Type != "comment.remove" {
 		return &JobExecutionConflict{"invalid_intent"}
 	}
 	if at := b.operation.OccurredAt; at != nil && at.Nanosecond()%1000 != 0 {

@@ -65,16 +65,14 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 		}
 		part := r.Clone(r.Context())
 		part.Body = io.NopCloser(bytes.NewReader(raw))
-		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "comment") {
+		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "status_id", "status_revision", "meaning_revision", "subtask_id", "completion_revision", "completed", "comment") {
 			return
 		}
 		op := wire.BatchOperation
-		var fields map[string]json.RawMessage
-		_ = json.Unmarshal(raw, &fields)
 		validIntent := false
 		switch op.Type {
-		case "job.field_notes":
-			validIntent = wire.Comment == nil && op.Notes != nil && op.NotesRevision != ""
+		case "job.field_notes", "job.status", "job.subtask":
+			validIntent = completeBatchFieldIntent(op, raw)
 		case "comment.add", "comment.remove":
 			if wire.Comment == nil {
 				break
@@ -86,13 +84,14 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			}
 			var supplied map[string]json.RawMessage
 			_ = json.Unmarshal(wire.Comment, &supplied)
-			validIntent = (intent.ParentType == "job" || intent.ParentType == "estimate" || intent.ParentType == "invoice") && fields["notes_revision"] == nil && fields["field_notes"] == nil
+			validIntent = intent.ParentType == "job" || intent.ParentType == "estimate" || intent.ParentType == "invoice"
 			if op.Type == "comment.add" {
 				validIntent = validIntent && intent.Content != nil && supplied["remove_id"] == nil && (supplied["reply_to"] == nil || intent.ReplyTo != "")
 			} else {
 				validIntent = validIntent && intent.RemoveID != "" && supplied["content"] == nil && supplied["reply_to"] == nil
 			}
 			op.Comment = &intent
+			validIntent = validIntent && completeBatchFieldIntent(op, raw)
 		}
 		if wire.DependsOn != nil {
 			op.DependsOn = make([]string, 0, len(wire.DependsOn))
@@ -116,7 +115,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 	}
 	results := req.Service.SubmitOperationBatch(r.Context(), req.Actor, operations)
 	out := make([]batchResult, 0, len(results))
-	for _, result := range results {
+	for i, result := range results {
 		item := batchResult{OperationID: result.OperationID, Receipt: result.Receipt}
 		if result.Err != nil {
 			status, code := 503, "retryable_failure"
@@ -134,7 +133,14 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			case errors.Is(result.Err, authorization.ErrCommentInvalid):
 				status, code = 400, "invalid_comment"
 			case errors.Is(result.Err, authorization.ErrConflict):
-				status, code = 409, "comment_conflict"
+				status, code = 409, "subtask_conflict"
+				if operations[i].Comment != nil {
+					code = "comment_conflict"
+				}
+			case errors.Is(result.Err, authorization.ErrSubtaskInvalid):
+				status, code = 400, "invalid_subtask"
+			case errors.Is(result.Err, authorization.ErrSubtaskReview):
+				status, code = 409, "review_required"
 			}
 			disposition := "review"
 			retry := 0
@@ -147,6 +153,41 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 		out = append(out, item)
 	}
 	writeJSON(w, 200, map[string]any{"results": out})
+}
+
+// Each discriminated shape is closed before any member is dispatched. Even an
+// empty irrelevant property is rejected, rather than discarded from intent.
+func completeBatchFieldIntent(op authorization.BatchFieldOperation, raw []byte) bool {
+	allowed := map[string]bool{"operation_id": true, "type": true, "target": true, "depends_on": true, "occurred_at": true}
+	var fields []string
+	valid := false
+	switch op.Type {
+	case "job.field_notes":
+		fields = []string{"notes_revision", "field_notes"}
+		valid = op.Notes != nil && op.NotesRevision != ""
+	case "job.status":
+		fields = []string{"status_id", "status_revision", "meaning_revision"}
+		valid = op.StatusID != "" && op.StatusRevision != "" && op.MeaningRevision != ""
+	case "job.subtask":
+		fields = []string{"subtask_id", "completion_revision", "completed"}
+		valid = op.SubtaskID != "" && op.CompletionRevision != "" && op.Completed != nil
+	case "comment.add", "comment.remove":
+		fields = []string{"comment"}
+		valid = op.Comment != nil
+	}
+	for _, key := range fields {
+		allowed[key] = true
+	}
+	var object map[string]json.RawMessage
+	if json.Unmarshal(raw, &object) != nil {
+		return false
+	}
+	for key := range object {
+		if !allowed[key] {
+			return false
+		}
+	}
+	return valid
 }
 
 type batchResult struct {

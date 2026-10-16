@@ -44,15 +44,19 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes-client.c
   const blocked=await client.stageComment(job,intent('reviewed recovery'),[reply]);
   const unrelated=await client.stageComment(job,intent('unrelated continues'),[]);
   const results=await client.submitBatch([blocked,unrelated]);assert.equal(results[0].receipt.code,'failed_dependency');assert.equal(results[1].receipt.code,'accepted');
-  await client.synchronize();
+  await client.synchronize(true);
+  assert.equal((await client.view()).cache[job].comments.comments.find(c=>c.id===root.id).content,'');
   const repaired=await client.repairComment(blocked,intent('reviewed recovery'),[]);assert.notEqual(repaired,blocked);
   await client.submitBatch([repaired]);assert.equal((await client.view()).pending[blocked].state,'replaced');
   const pendingDocument=await client.stageComment(job,{parent_type:'estimate',target:document.id,content:'never retarget document'},[]);
   await fetch(cfg.url+'/__fixture/unlink',{method:'POST'});await client.synchronize();
   state=await client.view();assert.equal(state.pending[pendingDocument].state,'purged');assert(!JSON.stringify(state).includes('never retarget document'));
   const lost=await client.stageComment(job,intent('scope-lost pending'),[]);
+  interrupt=true;await assert.rejects(()=>client.submitBatch([lost]));
   await fetch(cfg.url+'/__fixture/scope-loss',{method:'POST'});await client.synchronize();
   state=await client.view();assert.equal(state.pending[lost].state,'purged');assert.deepEqual(state.cache,{});
+  assert.equal((await client.reconcile(lost)).receipt.code,'accepted');
+  await assert.rejects(()=>client.submitBatch([lost]),/reconciliation_or_review_required/);
   assert.equal((await client.reconcile(first)).receipt.code,'accepted');assert(!JSON.stringify(await client.view()).includes('Original'));
   console.log('PASS encrypted Comments: bounds, persisted interruption, receipt recovery, closure, dependency repair and original-parent purge');
  } finally {await client.logout();await fs.rm(directory,{recursive:true,force:true});}
