@@ -113,48 +113,55 @@ func recordTimeHistory(ctx context.Context, tx pgx.Tx, actor, id int64, event, r
 func (s *Service) TimeEntryHistory(ctx context.Context, a Actor, id int64) ([]TimeRevision, error) {
 	var result []TimeRevision
 	err := s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
-		if _, err := readTimeEntryAccess(ctx, tx, p, id, "", false); err != nil {
-			return err
-		}
-		rows, err := tx.Query(ctx, `SELECT coalesce(h.actor_id,0),coalesce(h.actor_name,'Unknown historical actor'),h.accepted_at,h.event,h.reason,h.before_state,h.after_state FROM time_entry_history h WHERE h.entry_id=$1 ORDER BY h.id`, id)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		for rows.Next() {
-			var v TimeRevision
-			var before, after []byte
-			if err := rows.Scan(&v.ActorID, &v.Actor, &v.AcceptedAt, &v.Event, &v.Reason, &before, &after); err != nil {
-				return err
-			}
-			if len(before) > 0 {
-				if err := json.Unmarshal(before, &v.Before); err != nil {
-					return err
-				}
-			}
-			if err := json.Unmarshal(after, &v.After); err != nil {
-				return err
-			}
-			result = append(result, v)
-		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		rows.Close()
-		for i := range result {
-			for _, state := range []*TimeState{result[i].Before, &result[i].After} {
-				if state == nil || state.UserID == p.UserID || state.JobID == nil {
-					continue
-				}
-				if _, err := parentAccess(ctx, tx, p, "job", *state.JobID, "", false); err != nil {
-					if !errors.Is(err, ErrForbidden) && !errors.Is(err, ErrNotFound) {
-						return err
-					}
-					state.JobTitle = ""
-				}
-			}
-		}
-		return nil
+		var err error
+		result, err = readTimeEntryHistory(ctx, tx, p, id)
+		return err
 	})
 	return result, err
+}
+
+func readTimeEntryHistory(ctx context.Context, tx queryer, p Principal, id int64) ([]TimeRevision, error) {
+	var result []TimeRevision
+	if _, err := readTimeEntryAccess(ctx, tx, p, id, "", false); err != nil {
+		return nil, err
+	}
+	rows, err := tx.Query(ctx, `SELECT coalesce(h.actor_id,0),coalesce(h.actor_name,'Unknown historical actor'),h.accepted_at,h.event,h.reason,h.before_state,h.after_state FROM time_entry_history h WHERE h.entry_id=$1 ORDER BY h.id`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var v TimeRevision
+		var before, after []byte
+		if err := rows.Scan(&v.ActorID, &v.Actor, &v.AcceptedAt, &v.Event, &v.Reason, &before, &after); err != nil {
+			return nil, err
+		}
+		if len(before) > 0 {
+			if err := json.Unmarshal(before, &v.Before); err != nil {
+				return nil, err
+			}
+		}
+		if err := json.Unmarshal(after, &v.After); err != nil {
+			return nil, err
+		}
+		result = append(result, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+	for i := range result {
+		for _, state := range []*TimeState{result[i].Before, &result[i].After} {
+			if state == nil || state.UserID == p.UserID || state.JobID == nil {
+				continue
+			}
+			if _, err := parentAccess(ctx, tx, p, "job", *state.JobID, "", false); err != nil {
+				if !errors.Is(err, ErrForbidden) && !errors.Is(err, ErrNotFound) {
+					return nil, err
+				}
+				state.JobTitle = ""
+			}
+		}
+	}
+	return result, nil
 }

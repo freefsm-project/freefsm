@@ -30,92 +30,12 @@ func NewTimeEntryHandler(svc *services.TimeEntryService, userSvc *services.UserS
 }
 
 func (h *TimeEntryHandler) List(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
-	perPage := 25
-
 	user, _ := middleware.UserFromContext(r.Context())
 	if user == nil {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	p, _ := authorization.NavigationPrincipal(r.Context())
-	canViewAll := p.Allows("directory.view", authorization.All) && (p.Allows("time.view", authorization.All) || p.Allows("time.view", authorization.Assigned))
-	filterUserID, _ := strconv.ParseInt(r.URL.Query().Get("user_id"), 10, 64)
-	if !p.Allows("time.view", authorization.All) && !p.Allows("time.view", authorization.Assigned) {
-		filterUserID = user.ID
-	}
-
-	search := r.URL.Query().Get("search")
-	dateFrom := r.URL.Query().Get("date_from")
-	dateTo := r.URL.Query().Get("date_to")
-	from, before, err := parseTimeEntryDateRange(dateFrom, dateTo, middleware.CompanyLocation(r.Context()))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	entries, total, err := h.svc.List(r.Context(), services.TimeEntryListFilter{
-		IncludeVoid:   r.URL.Query().Get("include_void") == "true",
-		UserID:        filterUserID,
-		Search:        search,
-		ClockInFrom:   from,
-		ClockInBefore: before,
-	}, page, perPage)
-	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
-	}
-
-	userIDs := make(map[int64]struct{})
-	for _, e := range entries {
-		userIDs[e.UserID] = struct{}{}
-	}
-	userNames := make(map[int64]string)
-	for uid := range userIDs {
-		if u, err := h.userSvc.GetByID(r.Context(), uid); err == nil {
-			userNames[uid] = u.Name
-		}
-	}
-	jobNames := h.jobNames(r.Context(), entries)
-
-	rows := make([]templates.TimeEntryRow, len(entries))
-	for i, e := range entries {
-		rows[i] = timeEntryToRow(r.Context(), e, userNames, jobNames, user)
-	}
-
-	var users []templates.UserRow
-	if canViewAll {
-		allUsers, _ := h.userSvc.ListAll(r.Context())
-		users = make([]templates.UserRow, len(allUsers))
-		for i, u := range allUsers {
-			users[i] = templates.UserRow{ID: u.ID, Name: u.Name}
-		}
-	}
-
-	data := templates.TimeEntryListPageData{
-		IncludeVoid:    r.URL.Query().Get("include_void") == "true",
-		CanCreate:      p.Allows("time.create", authorization.Own) || p.Allows("time.create", authorization.Assigned) || p.Allows("time.create", authorization.All),
-		Entries:        rows,
-		Page:           page,
-		PerPage:        perPage,
-		Total:          total,
-		TotalPages:     services.TimeEntryPaginationTotalPages(total, perPage),
-		Search:         search,
-		UserID:         filterUserID,
-		DateFrom:       dateFrom,
-		DateTo:         dateTo,
-		ShowUserFilter: canViewAll,
-		Users:          users,
-	}
-
-	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
-		render(w, r, templates.TimeEntriesListContent(data))
-		return
-	}
-	render(w, r, templates.TimeEntriesIndex(data))
+	h.report(w, r)
 }
 
 func parseTimeEntryDateRange(dateFrom, dateTo string, loc *time.Location) (*time.Time, *time.Time, error) {
