@@ -23,6 +23,10 @@ split, rounding, reassignment or standalone fallback is performed.
   the same client's safe receipt, but blocks new issuance and clock acceptance.
   The common operation registry rejects reuse across any other mutation family.
   A lease is evidence of a window, never authority at acceptance.
+  New windows follow the existing offline policy (default 24 hours, maximum 72,
+  zero disables issuance/offline acceptance). Policy changes do not rewrite
+  original issuance receipts or bounds. Online server-time clocks remain under
+  their independent grants when offline access is disabled.
 - `POST /api/v1/time-entries/clock-in` accepts an optional `job_id`.
   `/api/v1/jobs/{id}/clock-in` binds the same command to that exact Job.
 - `POST /api/v1/time-entries/clock-out` requires `entry_id`.

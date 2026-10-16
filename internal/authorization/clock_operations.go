@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,6 +16,7 @@ import (
 type ClockReceipt struct {
 	OperationID string    `json:"operation_id"`
 	EntryID     int64     `json:"entry_id,omitempty"`
+	EntryRef    string    `json:"entry_ref,omitempty"`
 	Code        string    `json:"code"`
 	AcceptedAt  time.Time `json:"accepted_at"`
 }
@@ -61,15 +63,19 @@ func (s *Service) ClockLease(ctx context.Context, a Actor, operation string) (Cl
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
+		var hours int
+		if err := tx.QueryRow(ctx, `SELECT offline_hours FROM company_settings WHERE company_id=$1`, p.CompanyID).Scan(&hours); err != nil {
+			return err
+		}
 		if err := tx.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&l.AcceptedAt); err != nil {
 			return err
 		}
 		l.Code = "accepted"
-		if a.Channel != "api" || a.SessionHash == "" || !p.Allows("time.clock_in", Own) && !p.Allows("time.clock_out", Own) {
+		if hours == 0 || a.Channel != "api" || a.SessionHash == "" || !p.Allows("time.clock_in", Own) && !p.Allows("time.clock_out", Own) {
 			l.Code, outcome = "forbidden", ErrForbidden
 		} else {
 			l.ClockLease = &ClockLease{ID: uuid.NewString()}
-			if err := tx.QueryRow(ctx, `INSERT INTO time_clock_leases(id,user_id,client_key,issued_at,expires_at) VALUES($1,$2,$3,$4,$4::timestamptz+interval '24 hours') RETURNING issued_at,expires_at`, l.ID, p.UserID, operationClientKey(a), l.AcceptedAt).Scan(&l.IssuedAt, &l.ExpiresAt); err != nil {
+			if err := tx.QueryRow(ctx, `INSERT INTO time_clock_leases(id,user_id,client_key,issued_at,expires_at) VALUES($1,$2,$3,$4,$4::timestamptz+make_interval(hours=>$5)) RETURNING issued_at,expires_at`, l.ID, p.UserID, operationClientKey(a), l.AcceptedAt, hours).Scan(&l.IssuedAt, &l.ExpiresAt); err != nil {
 				return err
 			}
 			if err := audit(ctx, tx, a, p, "time.clock_lease.issue", Own, "user", p.UserID, map[string]any{"operation_id": l.OperationID, "lease_id": l.ID}); err != nil {
@@ -141,6 +147,10 @@ func clockOutcome(code string) error {
 // Receipts expose only a stable effect identity and disposition, including
 // after losing Job access. Failures of storage or audit remain nonterminal.
 func (s *Service) SubmitClock(ctx context.Context, a Actor, out bool, in ClockCommand) (ClockReceipt, error) {
+	return s.submitClockBound(ctx, a, out, in, nil)
+}
+
+func (s *Service) submitClockBound(ctx context.Context, a Actor, out bool, in ClockCommand, batch *clockBatchExecution) (ClockReceipt, error) {
 	result := ClockReceipt{OperationID: in.OperationID}
 	op, err := uuid.Parse(in.OperationID)
 	if err != nil || op == uuid.Nil {
@@ -153,10 +163,15 @@ func (s *Service) SubmitClock(ctx context.Context, a Actor, out bool, in ClockCo
 	if in.URLJobID == in.JobID {
 		in.URLJobID = 0
 	}
+	var binding *BatchClockOperation
+	if batch != nil {
+		binding = &batch.operation
+	}
 	data, err := json.Marshal(struct {
 		Out     bool
 		Command ClockCommand
-	}{out, in})
+		Batch   *BatchClockOperation `json:",omitempty"`
+	}{out, in, binding})
 	if err != nil {
 		return result, &ClockConflict{"invalid_gps"}
 	}
@@ -185,7 +200,18 @@ func (s *Service) SubmitClock(ctx context.Context, a Actor, out bool, in ClockCo
 		if err != nil {
 			return err
 		}
-		entry, applyErr := applyClock(ctx, effect, p, a, out, in)
+		var entry ClockEntry
+		var applyErr error
+		if batch != nil {
+			applyErr = batch.dependencies.validate(ctx, effect, a)
+			var dependency *JobExecutionConflict
+			if errors.As(applyErr, &dependency) {
+				applyErr = &ClockConflict{dependency.Code}
+			}
+		}
+		if applyErr == nil {
+			entry, applyErr = applyClock(ctx, effect, p, a, out, in)
+		}
 		result.Code = clockCode(applyErr)
 		if applyErr != nil {
 			_ = effect.Rollback(ctx)
@@ -199,10 +225,13 @@ func (s *Service) SubmitClock(ctx context.Context, a Actor, out bool, in ClockCo
 			}
 			result.EntryID = entry.ID
 		}
-		return tx.QueryRow(ctx, `INSERT INTO time_clock_receipts(user_id,operation_id,client_key,intent_hash,entry_id,code,accepted_at) VALUES($1,$2,$3,$4,nullif($5,0),$6,clock_timestamp()) RETURNING accepted_at`, p.UserID, in.OperationID, a.Channel+":"+a.SessionHash, digest, result.EntryID, result.Code).Scan(&result.AcceptedAt)
+		return tx.QueryRow(ctx, `INSERT INTO time_clock_receipts(user_id,operation_id,client_key,intent_hash,entry_id,code,accepted_at) VALUES($1,$2,$3,$4,nullif($5::bigint,0),$6,clock_timestamp()) RETURNING accepted_at`, p.UserID, in.OperationID, a.Channel+":"+a.SessionHash, digest, result.EntryID, result.Code).Scan(&result.AcceptedAt)
 	})
 	if err != nil {
 		return ClockReceipt{}, err
+	}
+	if result.EntryID > 0 {
+		result.EntryRef = strconv.FormatInt(result.EntryID, 10)
 	}
 	return result, outcome
 }
@@ -219,6 +248,9 @@ func (s *Service) ClockReceipt(ctx context.Context, a Actor, id string) (ClockRe
 		}
 		return err
 	})
+	if result.EntryID > 0 {
+		result.EntryRef = strconv.FormatInt(result.EntryID, 10)
+	}
 	return result, err
 }
 

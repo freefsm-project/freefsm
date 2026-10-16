@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,6 +31,9 @@ func syncIdentity(ctx context.Context, tx pgx.Tx, kind string, id int64) (string
 // Read the existing closed projections, never serializing domain entities.
 // Broad Job View permits unassigned Job rows, not unassigned C context.
 func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope string) ([]syncEntry, error) {
+	if scope == "all" && !p.Allows("job.view", All) {
+		return nil, ErrForbidden
+	}
 	rows, err := tx.Query(ctx, `SELECT j.id,jsonb_build_object(
  'title',j.job_type,'description',j.subtitle,'field_notes',j.tech_notes,
  'status',jsonb_build_object('name',coalesce(s.name,''),'category',coalesce(s.category_key,'')),
@@ -70,6 +74,9 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 			return nil, err
 		}
 		e.Data["id"] = e.ID
+		if p.Allows("time.clock_in", Own) {
+			e.Data["clock_job_id"] = strconv.FormatInt(e.InstalledID, 10)
+		}
 		e.Data["masters"] = map[string]any{}
 		customer, cerr := jobCustomer(ctx, tx, p, a, e.InstalledID)
 		if cerr != nil && !errors.Is(cerr, ErrNotFound) {

@@ -12,17 +12,30 @@ import (
 )
 
 func (h *handler) syncJobs(w http.ResponseWriter, r *http.Request) {
+	h.syncProjection(w, r, false)
+}
+
+func (h *handler) syncClocks(w http.ResponseWriter, r *http.Request) {
+	h.syncProjection(w, r, true)
+}
+
+func (h *handler) syncProjection(w http.ResponseWriter, r *http.Request, clocks bool) {
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {
 		unauthorized(w)
 		return
 	}
-	query, err := urlSyncQuery(r)
+	query, err := urlSyncQueryFor(r, clocks)
 	if err != nil {
 		writeError(w, 400, "invalid_request", "invalid synchronization query")
 		return
 	}
-	result, err := req.Service.SyncJobs(r.Context(), req.Actor, query)
+	var result authorization.SyncPage
+	if clocks {
+		result, err = req.Service.SyncClocks(r.Context(), req.Actor, query)
+	} else {
+		result, err = req.Service.SyncJobs(r.Context(), req.Actor, query)
+	}
 	switch {
 	case errors.Is(err, authorization.ErrSyncResnapshot):
 		writeSyncPurge(w, 409, "resnapshot_required", "purge_and_resnapshot")
@@ -37,7 +50,14 @@ func (h *handler) syncJobs(w http.ResponseWriter, r *http.Request) {
 }
 
 func urlSyncQuery(r *http.Request) (authorization.JobSyncRequest, error) {
+	return urlSyncQueryFor(r, false)
+}
+
+func urlSyncQueryFor(r *http.Request, clocks bool) (authorization.JobSyncRequest, error) {
 	in := authorization.JobSyncRequest{Scope: "assigned", PageSize: 50}
+	if clocks {
+		in.Scope = "own"
+	}
 	q, err := url.ParseQuery(r.URL.RawQuery)
 	if err != nil {
 		return in, err
@@ -63,7 +83,8 @@ func urlSyncQuery(r *http.Request) (authorization.JobSyncRequest, error) {
 			return in, errors.New("unknown parameter")
 		}
 	}
-	if in.Cursor != "" && in.Page != "" || in.Scope != "assigned" && in.Scope != "all" {
+	validScope := !clocks && (in.Scope == "assigned" || in.Scope == "all") || clocks && in.Scope == "own"
+	if in.Cursor != "" && in.Page != "" || !validScope {
 		return in, errors.New("invalid scope or token combination")
 	}
 	return in, nil
@@ -78,5 +99,5 @@ func writeSyncPurge(w http.ResponseWriter, status int, code, disposition string)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: apiError{Status: status, RequestID: id, Details: map[string]any{"purge": "all"}, Code: code, Message: "purge cached Job context before synchronizing current authority", RecoveryDisposition: disposition}})
+	_ = json.NewEncoder(w).Encode(errorEnvelope{Error: apiError{Status: status, RequestID: id, Details: map[string]any{"purge": "all"}, Code: code, Message: "purge cached synchronized context before synchronizing current authority", RecoveryDisposition: disposition}})
 }

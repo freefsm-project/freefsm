@@ -2,8 +2,9 @@
 
 `POST /api/v1/sync/operations` accepts an `operations` array in submitted order.
 The API and encrypted native reference own this protocol; the website is online-only.
-The current operation is `job.field_notes`; operation-specific synchronization
-for Status, fields, clocks, Comments, Files, documents and Service Entries remains
+Current operations are `job.field_notes`, `clock.in` and `clock.out`; see
+[own clock synchronization](api-clock-sync.md). Operation-specific synchronization
+for Status, fields, Comments, Files, documents and Service Entries remains
 with its owning tickets.
 
 ```json
@@ -20,7 +21,7 @@ requests are unsupported415. File bytes use separate transfer endpoints.
 Properties are exact-case, unknown/duplicate properties and duplicate operation
 IDs reject. An empty array is valid. No query parameters are accepted.
 
-Every operation commits independently through the existing Notes domain service,
+Every operation commits independently through its existing domain service,
 common admission registry, current-authority transaction and immutable receipt.
 Earlier acceptance survives later failure. No occurrence-based sorting, global
 batch transaction, target mapping, revision substitution or implicit retry occurs.

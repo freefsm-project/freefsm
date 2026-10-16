@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// BatchNotesOperation is the currently supported field operation. Its original
+// BatchNotesOperation retains the original Notes binding shape. Its original
 // target and dependency references are intent, not instructions to rewrite later
 // operations using an earlier result's identity or revision.
 type BatchNotesOperation struct {
@@ -25,21 +25,59 @@ type BatchNotesOperation struct {
 
 type BatchOperationResult struct {
 	OperationID string
-	Receipt     *JobExecutionReceipt
+	Receipt     any
 	Err         error
+}
+
+type BatchClockOperation struct {
+	OperationID string       `json:"operation_id"`
+	Type        string       `json:"type"`
+	DependsOn   []string     `json:"depends_on"`
+	Clock       ClockCommand `json:"clock"`
+	EntryRef    string       `json:"entry_ref,omitempty"`
+	JobRef      string       `json:"job_ref,omitempty"`
+}
+
+// A batch member retains its domain-specific reviewed intent. Clock commands
+// are not Notes commands and do not acquire revision/target substitution rules.
+type BatchOperation struct {
+	Notes *BatchNotesOperation
+	Clock *BatchClockOperation
+}
+
+func (op BatchOperation) id() string {
+	if op.Clock != nil {
+		return op.Clock.OperationID
+	}
+	return op.Notes.OperationID
 }
 
 // SubmitOperationBatch deliberately has no enclosing transaction. Each existing
 // domain transaction independently fences current authority and commits its own
 // immutable receipt. Cancellation leaves unprocessed identities unreconciled.
-func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []BatchNotesOperation) []BatchOperationResult {
+func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []BatchOperation) []BatchOperationResult {
 	results := make([]BatchOperationResult, 0, len(ops))
 	positions := map[string]int{}
 	successful := map[string]bool{}
 	for i, op := range ops {
-		positions[op.OperationID] = i
+		positions[op.id()] = i
 	}
-	for i, op := range ops {
+	for i, member := range ops {
+		if member.Clock != nil {
+			op := member.Clock
+			batch := clockBatchExecution{operation: *op, dependencies: batchDependencies{dependsOn: op.DependsOn, positions: positions, index: i, successful: successful}}
+			command := op.Clock
+			command.OperationID = op.OperationID
+			receipt, err := s.submitClockBound(ctx, a, op.Type == "clock.out", command, &batch)
+			result := BatchOperationResult{OperationID: op.OperationID, Err: err}
+			if receipt.Code != "" {
+				result.Receipt = &receipt
+			}
+			results = append(results, result)
+			successful[op.OperationID] = err == nil && receipt.Code == "accepted"
+			continue
+		}
+		op := *member.Notes
 		id, err := strconv.ParseInt(op.Target, 10, 64)
 		if err != nil {
 			id, err = s.ResolveSyncedJob(ctx, op.Target)
@@ -54,7 +92,7 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			if op.Notes != nil {
 				in.Notes = *op.Notes
 			}
-			batch := batchExecution{operation: op, positions: positions, index: i, successful: successful}
+			batch := batchExecution{operation: op, dependencies: batchDependencies{dependsOn: op.DependsOn, positions: positions, index: i, successful: successful}}
 			receipt, e := s.submitJobExecutionBound(ctx, a, id, "field_notes", in, &batch)
 			result.Err = e
 			if receipt.Code != "" {
@@ -62,13 +100,23 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			}
 		}
 		results = append(results, result)
-		successful[op.OperationID] = result.Err == nil && result.Receipt != nil && result.Receipt.Code == "accepted"
+		successful[op.OperationID] = result.Err == nil && result.Receipt != nil
 	}
 	return results
 }
 
 type batchExecution struct {
-	operation  BatchNotesOperation
+	operation    BatchNotesOperation
+	dependencies batchDependencies
+}
+
+type clockBatchExecution struct {
+	operation    BatchClockOperation
+	dependencies batchDependencies
+}
+
+type batchDependencies struct {
+	dependsOn  []string
 	positions  map[string]int
 	index      int
 	successful map[string]bool
@@ -84,7 +132,11 @@ func (b *batchExecution) validate(ctx context.Context, tx pgx.Tx, a Actor) error
 	if at := b.operation.OccurredAt; at != nil && at.Nanosecond()%1000 != 0 {
 		return &JobExecutionConflict{"invalid_occurrence"}
 	}
-	for _, dep := range b.operation.DependsOn {
+	return b.dependencies.validate(ctx, tx, a)
+}
+
+func (b *batchDependencies) validate(ctx context.Context, tx pgx.Tx, a Actor) error {
+	for _, dep := range b.dependsOn {
 		id, err := uuid.Parse(dep)
 		if err != nil || id == uuid.Nil || id.String() != dep {
 			return &JobExecutionConflict{"invalid_dependency"}
@@ -93,7 +145,7 @@ func (b *batchExecution) validate(ctx context.Context, tx pgx.Tx, a Actor) error
 			return &JobExecutionConflict{"invalid_dependency"}
 		}
 	}
-	for _, dep := range b.operation.DependsOn {
+	for _, dep := range b.dependsOn {
 		if _, earlier := b.positions[dep]; earlier && !b.successful[dep] {
 			return &JobExecutionConflict{"failed_dependency"}
 		}
