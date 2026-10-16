@@ -2,8 +2,8 @@
 
 `POST /api/v1/sync/operations` accepts an `operations` array in submitted order.
 The API and encrypted native reference own this protocol; the website is online-only.
-The current operation is `job.field_notes`; operation-specific synchronization
-for Status, fields, clocks, Comments, Files, documents and Service Entries remains
+The current operations are `job.field_notes`, `job.status`, and `job.subtask`;
+operation-specific synchronization for custom fields, clocks, Comments, Files, documents and Service Entries remains
 with its owning tickets.
 
 ```json
@@ -20,7 +20,7 @@ requests are unsupported415. File bytes use separate transfer endpoints.
 Properties are exact-case, unknown/duplicate properties and duplicate operation
 IDs reject. An empty array is valid. No query parameters are accepted.
 
-Every operation commits independently through the existing Notes domain service,
+Every operation commits independently through its existing Job execution or Subtask domain service,
 common admission registry, current-authority transaction and immutable receipt.
 Earlier acceptance survives later failure. No occurrence-based sorting, global
 batch transaction, target mapping, revision substitution or implicit retry occurs.
@@ -63,6 +63,12 @@ Rejected operations and blocked descendants require separate explicit reviewed
 repair: new IDs, current reviewed revisions/text and reviewed dependency UUIDs.
 Repairing a parent never rewrites descendants. Accepted operations cannot be
 repaired. No target/revision/amount rewrite is performed to make a batch succeed.
+
+Status and Subtask intent shapes and semantic recovery are documented in
+[Job field synchronization](api-job-field-sync.md). Batch receipts normalize the
+owning effect identity as `effect_id`; a Subtask's individual receipt remains at
+`/subtask-operations/{operation}` with its existing `subtask_id` field. Both refer
+to the same immutable receipt/effect. Original operation family determines lookup.
 
 ## Encrypted executable
 

@@ -38,6 +38,11 @@ Each `records` entry is a **complete replacement** of one Job: opaque `id`,
 `title`, `description`, `field_notes`, `status` (name/category), nullable start/end
 instants, due date and arrival-window instants, IANA `timezone`, optional
 `customer`, and `masters`. Absent context facets remove previously cached facets.
+The additive [field synchronization contract](api-job-field-sync.md) also supplies
+Status identity/meaning/independent revision, configured definitions, recorded
+attribution, stable Subtasks and their completion revisions/history, review state,
+and independent field capabilities. These participate in the same coherent
+snapshot and complete-replacement delta, not separately timed reads.
 
 All context requires current explicit Job assignment, including for users with
 All Records grants, and independent View for each facet. Exact nested schemas
