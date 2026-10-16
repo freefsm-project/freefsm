@@ -70,6 +70,12 @@ codes, never message text; unknown future reasons require safe review.
 `GET /api/v1/job-field-operations/{operation}` returns the original user's safe
 receipt (operation ID, outcome code, recorded acceptance time, optional reason)
 after scope loss or fresh authentication. It returns no field values/comparison.
+Accepted field receipts also retain their recorded `job_id`. When immutable field
+mutation audit records the operation, `effect_id` is that already-recorded operation
+UUID, stable across later edits and scope loss. No separate identity is invented
+for historical/no-op receipts without such evidence. Rejected hidden targets do
+not reveal resolved installed identities. Batch and global lookup use this same
+projection; legacy target-specific lookup retains the original recorded Job ID.
 Fresh authentication permits lookup, never rebinding a command to a new client.
 The existing target-specific receipt lookup remains compatible. After response
 loss, query the original receipt before retry; restore receipt absence is uncertainty.
@@ -102,3 +108,8 @@ is introduced. This is a reference harness, not mobile-device certification.
 Migration087 adds a nullable reason to existing immutable receipts without changing
 identities, grants, stored values or history, and without guessing historical reasons.
 Local OpenAPI3.1 documents the additive request/response contract.
+
+Both PATCH and batch preflight exact nested field property names, duplicate members,
+and nonnull string revision tokens before admission. A malformed later batch member
+cannot commit earlier work. Canonical but domain-invalid values still receive their
+own terminal typed result without rolling back unrelated earlier accepted members.

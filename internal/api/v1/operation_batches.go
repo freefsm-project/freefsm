@@ -60,7 +60,8 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 	for _, raw := range envelope.Operations {
 		var wire struct {
 			authorization.BatchNotesOperation
-			DependsOn []*string `json:"depends_on"`
+			DependsOn []*string       `json:"depends_on"`
+			Revisions json.RawMessage `json:"revisions"`
 		}
 		part := r.Clone(r.Context())
 		part.Body = io.NopCloser(bytes.NewReader(raw))
@@ -68,6 +69,13 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		op := wire.BatchNotesOperation
+		if op.Type == "job.fields" {
+			var valid bool
+			op.Revisions, valid = fieldPatchWire(w, r, op.Values, wire.Revisions)
+			if !valid {
+				return
+			}
+		}
 		var members map[string]json.RawMessage
 		if err := json.Unmarshal(raw, &members); err != nil {
 			writeError(w, 400, "invalid_request", "Invalid operation shape")
@@ -86,7 +94,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			op.DependsOn = append(op.DependsOn, *dependency)
 		}
 		id, e := uuid.Parse(op.OperationID)
-		validIntent := op.Type == "job.field_notes" && op.Notes != nil && op.NotesRevision != "" && op.Values == nil && op.Revisions == nil
+		validIntent := op.Type == "job.field_notes" && op.Notes != nil && op.NotesRevision != "" && op.Values == nil && wire.Revisions == nil
 		if op.Type == "job.fields" {
 			_, hasNotes := members["field_notes"]
 			_, hasNotesRevision := members["notes_revision"]

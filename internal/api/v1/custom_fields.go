@@ -42,9 +42,21 @@ func (h *handler) jobFields(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		state, err = request.Service.ReadFieldState(r.Context(), request.Actor, id)
 	} else {
-		var input authorization.ReviewedFieldPatch
-		if !decodeExactJSON(w, r, &input, "operation_id", "revisions", "values", "occurred_at") {
+		var wire struct {
+			authorization.ReviewedFieldPatch
+			Revisions json.RawMessage `json:"revisions"`
+		}
+		if !decodeExactJSON(w, r, &wire, "operation_id", "revisions", "values", "occurred_at") {
 			return
+		}
+		input := wire.ReviewedFieldPatch
+		// Preserve the established invalid-operation response without admission.
+		if id, parseErr := uuid.Parse(input.OperationID); parseErr == nil && id != uuid.Nil {
+			var valid bool
+			input.Revisions, valid = fieldPatchWire(w, r, input.Values, wire.Revisions)
+			if !valid {
+				return
+			}
 		}
 		state, err = request.Service.PatchFieldsReviewed(r.Context(), request.Actor, id, input)
 	}

@@ -137,7 +137,7 @@ func TestJobFieldsTypedValidationReasonHTTP(t *testing.T) {
 		id            int
 		value, reason string
 	}{
-		{1, `"12.345"`, "invalid_number"}, {1, `"not-number"`, "invalid_number"}, {1, `false`, "invalid_field_type"},
+		{1, `"12.345"`, "invalid_number"}, {1, `"not-number"`, "invalid_number"}, {1, `[]`, "invalid_field_type"},
 		{2, `"missing"`, "invalid_option"}, {3, `""`, "required_field"}, {3, `"maybe"`, "invalid_checkbox"}, {4, `"2026-02-30"`, "invalid_date"},
 	} {
 		operation := newOperationKey()

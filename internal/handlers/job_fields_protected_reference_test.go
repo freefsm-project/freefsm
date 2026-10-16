@@ -78,6 +78,16 @@ func TestJobFieldsProtectedReferenceHTTP(t *testing.T) {
 		}
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/__fixture/fresh-token" {
+			fresh, err := sessions.CreateMobile(ctx, worker.ID, "Fresh field reconciliation")
+			if err != nil {
+				t.Error(err)
+				w.WriteHeader(500)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]string{"token": fresh})
+			return
+		}
 		if r.URL.Path == "/__fixture/options" {
 			for id, typ := range map[int64]string{6: "select", 7: "multiselect"} {
 				_, err := authorization.New(pool).SaveField(ctx, authorization.Actor{UserID: admin}, id, authorization.FieldInput{Name: typ, Type: typ, Options: `["A","B"]`, RetiredOptions: `["B"]`})
@@ -158,7 +168,7 @@ func TestJobFieldsProtectedReferenceHTTP(t *testing.T) {
 		_, _ = w.Write(response.Body.Bytes())
 	}))
 	defer server.Close()
-	input, _ := json.Marshal(map[string]any{"url": server.URL, "token": token})
+	input, _ := json.Marshal(map[string]any{"url": server.URL, "token": token, "job_id": j.ID})
 	runCtx, cancel := context.WithTimeout(ctx, 180*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, "node", "../api/v1/testdata/job-fields-protected-http.cjs")

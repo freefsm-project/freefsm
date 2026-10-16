@@ -76,14 +76,8 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 		}
 		// Use the same canonical JSON object representation as durable baselines.
 		// Struct field order must not manufacture changes after snapshot reload.
-		rawFields, err := json.Marshal(fields)
+		fieldData, err := syncJSONObject(fields)
 		if err != nil {
-			return nil, err
-		}
-		var fieldData map[string]any
-		decoder := json.NewDecoder(bytes.NewReader(rawFields))
-		decoder.UseNumber()
-		if err := decoder.Decode(&fieldData); err != nil {
 			return nil, err
 		}
 		e.Data["custom_fields"] = fieldData
@@ -144,6 +138,19 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 }
 
 func syncDTO(ctx context.Context, tx pgx.Tx, kind string, value any) (map[string]any, error) {
+	v, err := syncJSONObject(value)
+	if err != nil {
+		return nil, err
+	}
+	if err := syncOpaqueFields(ctx, tx, kind, v); err != nil {
+		return nil, err
+	}
+	return v, nil
+}
+
+// JSON canonicalization is independent of context identity rewriting. Fields
+// retain their installed definition identities while context DTOs use aliases.
+func syncJSONObject(value any) (map[string]any, error) {
 	b, err := json.Marshal(value)
 	if err != nil {
 		return nil, err
@@ -152,9 +159,6 @@ func syncDTO(ctx context.Context, tx pgx.Tx, kind string, value any) (map[string
 	decoder := json.NewDecoder(bytes.NewReader(b))
 	decoder.UseNumber()
 	if err = decoder.Decode(&v); err != nil {
-		return nil, err
-	}
-	if err = syncOpaqueFields(ctx, tx, kind, v); err != nil {
 		return nil, err
 	}
 	return v, nil
