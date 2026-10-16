@@ -2,11 +2,13 @@ package settlement
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/protectedaudit"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -14,6 +16,7 @@ type MethodChoice struct {
 	ID                  PaymentMethod `json:"id"`
 	Label               string        `json:"label"`
 	RequiresDescription bool          `json:"requires_description"`
+	Revision            string        `json:"-"`
 }
 
 type PaymentEntryContext struct {
@@ -56,24 +59,29 @@ func (s *Service) PrepareBoundedPayment(ctx context.Context, a authorization.Act
 }
 
 // Defaults describe the established identities; overrides change presentation only.
-var methodDefaults = []MethodChoice{{Cash, "Cash", false}, {Check, "Check", false}, {CreditCard, "Card", false}, {Transfer, "Bank Transfer", false}, {Other, "Other", true}}
+var methodDefaults = []MethodChoice{{ID: Cash, Label: "Cash"}, {ID: Check, Label: "Check"}, {ID: CreditCard, Label: "Card"}, {ID: Transfer, Label: "Bank Transfer"}, {ID: Other, Label: "Other", RequiresDescription: true}}
+var ErrMethodLabel = errors.New("invalid Payment method label")
 
 func methodChoices(ctx context.Context, tx pgx.Tx, company int64) ([]MethodChoice, error) {
 	choices := append([]MethodChoice(nil), methodDefaults...)
-	rows, err := tx.Query(ctx, `SELECT method,label FROM payment_method_labels WHERE company_id=$1`, company)
+	for i := range choices {
+		choices[i].Revision = uuid.Nil.String()
+	}
+	rows, err := tx.Query(ctx, `SELECT method,label,revision::text FROM payment_method_labels WHERE company_id=$1`, company)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var id PaymentMethod
-		var label string
-		if err := rows.Scan(&id, &label); err != nil {
+		var label, revision string
+		if err := rows.Scan(&id, &label, &revision); err != nil {
 			return nil, err
 		}
 		for i := range choices {
 			if choices[i].ID == id {
 				choices[i].Label = label
+				choices[i].Revision = revision
 			}
 		}
 	}
@@ -100,11 +108,11 @@ func (s *Service) ConfiguredPaymentMethods(ctx context.Context, a authorization.
 	return choices, err
 }
 
-func (s *Service) RenamePaymentMethod(ctx context.Context, a authorization.Actor, id PaymentMethod, label string) error {
+func (s *Service) RenamePaymentMethod(ctx context.Context, a authorization.Actor, id PaymentMethod, label, expected string) error {
 	return authorization.New(s.db).WithinPermission(ctx, a, "configuration.company.manage", authorization.Configuration, func(tx pgx.Tx, p authorization.Principal) error {
 		label = strings.TrimSpace(label)
 		if !validMethod(id) || label == "" || utf8.RuneCountInString(label) > 80 {
-			return ErrInvalidAmount
+			return ErrMethodLabel
 		}
 		choices, err := methodChoices(ctx, tx, p.CompanyID)
 		if err != nil {
@@ -113,15 +121,18 @@ func (s *Service) RenamePaymentMethod(ctx context.Context, a authorization.Actor
 		var before string
 		for _, choice := range choices {
 			if choice.ID == id {
+				if expected != choice.Revision {
+					return authorization.ErrConflict
+				}
 				before = choice.Label
 			} else if strings.EqualFold(label, choice.Label) {
-				return ErrInvalidAmount
+				return ErrMethodLabel
 			}
 		}
 		if label == before {
 			return nil
 		}
-		if _, err := tx.Exec(ctx, `INSERT INTO payment_method_labels(company_id,method,label) VALUES($1,$2,$3) ON CONFLICT(company_id,method) DO UPDATE SET label=excluded.label`, p.CompanyID, id, label); err != nil {
+		if _, err := tx.Exec(ctx, `INSERT INTO payment_method_labels(company_id,method,label) VALUES($1,$2,$3) ON CONFLICT(company_id,method) DO UPDATE SET label=excluded.label,revision=gen_random_uuid()`, p.CompanyID, id, label); err != nil {
 			return err
 		}
 		return protectedaudit.RecordProduct(ctx, tx, protectedaudit.ProductAction{ActorID: p.UserID, RoleID: p.RoleID, Action: "configuration.company.manage", Scope: string(authorization.Configuration), TargetType: "company", TargetID: p.CompanyID, Channel: a.Channel, SessionHash: a.SessionHash, Detail: map[string]any{"payment_method": id, "before": before, "after": label}})

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/freefsm-project/freefsm/internal/templates"
@@ -20,7 +21,15 @@ func paymentMethodsSettings(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid form", 400)
 			return
 		}
-		if err := svc.RenamePaymentMethod(r.Context(), req.Actor, settlement.PaymentMethod(chi.URLParam(r, "method")), r.FormValue("label")); err != nil {
+		if err := svc.RenamePaymentMethod(r.Context(), req.Actor, settlement.PaymentMethod(chi.URLParam(r, "method")), r.FormValue("label"), r.FormValue("label_revision")); err != nil {
+			if errors.Is(err, authorization.ErrConflict) {
+				http.Error(w, "Payment method changed. Reload its current label before saving a reviewed change.", 409)
+				return
+			}
+			if errors.Is(err, settlement.ErrMethodLabel) {
+				http.Error(w, "Use a nonblank unique Payment method label of at most 80 characters.", 422)
+				return
+			}
 			writeSettlementError(w, r, err)
 			return
 		}

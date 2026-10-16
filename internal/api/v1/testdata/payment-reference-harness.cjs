@@ -1,5 +1,7 @@
 'use strict';
 const { randomUUID } = require('node:crypto');
+const terminalOutcomes=new Set(['not_found','forbidden','invalid_payment','invoice_ineligible']);
+const uuidPattern=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Executable in-memory reference only. It is not a production encrypted cache.
 class PaymentReference {
@@ -22,7 +24,8 @@ class PaymentReference {
     return entry;
   }
   acceptReceipt(entry,receipt) {
-    if(receipt?.operation_id!==entry.intent.operation_id) {entry.state='locked';return;}
+    if(receipt?.operation_id!==entry.intent.operation_id || typeof receipt.accepted_at!=='string' || !Number.isFinite(Date.parse(receipt.accepted_at)) ||
+      (receipt.outcome==='accepted' ? typeof receipt.payment_id!=='string'||!uuidPattern.test(receipt.payment_id) : !terminalOutcomes.has(receipt.outcome)||receipt.payment_id!==undefined)) {entry.state='locked';return;}
     entry.receipt=Object.freeze(receipt);entry.state=receipt.outcome==='accepted'?'accepted':'rejected';
   }
   async inspect(entry) {

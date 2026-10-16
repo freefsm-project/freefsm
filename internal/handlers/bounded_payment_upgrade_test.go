@@ -7,11 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"strings"
+	"net/url"
 	"testing"
 	"testing/fstest"
 	"time"
 
+	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/google/uuid"
@@ -25,7 +26,7 @@ func TestBoundedPaymentUpgradeRetainsInstalledReceipts(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, f := range files {
-		if strings.HasPrefix(f.Name(), "087_bounded_payment") || strings.HasPrefix(f.Name(), "088_payment_method") {
+		if f.Name() >= "087_" {
 			continue
 		}
 		data, err := fs.ReadFile(source, f.Name())
@@ -34,7 +35,7 @@ func TestBoundedPaymentUpgradeRetainsInstalledReceipts(t *testing.T) {
 		}
 		old[f.Name()] = &fstest.MapFile{Data: data}
 	}
-	pool, client, _, _, company, admin := permissionHTTPFixtureMigrations(t, old)
+	pool, client, router, sessions, company, admin := permissionHTTPFixtureMigrations(t, old)
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Installed settlement Customer").SaveX(ctx)
 	var status int64
@@ -43,6 +44,7 @@ func TestBoundedPaymentUpgradeRetainsInstalledReceipts(t *testing.T) {
 	}
 	i := client.Invoice.Create().SetCompanyID(company).SetCustomerID(c.ID).SetTitle("Installed receipt").SetStatusID(status).SetInvoiceDate(time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC)).SetDueDate(time.Time{}).SetLineItems(`[{"title":"Work","quantity":1,"unit_price":100}]`).SaveX(ctx)
 	id := uuid.New()
+	op := newOperationKey()
 	result := settlement.Result{ID: id, AppliedCents: 2500, State: settlement.PartiallyPaid}
 	raw, err := json.Marshal(result)
 	if err != nil {
@@ -60,7 +62,7 @@ func TestBoundedPaymentUpgradeRetainsInstalledReceipts(t *testing.T) {
 	if _, err := pool.Exec(ctx, `SELECT settlement_set_invoice_state($1,'partially_paid')`, i.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO settlement_idempotency(company_id,operation,idempotency_key,request_fingerprint,result_id,result_json) VALUES($1,'record_payment','installed-payment',$2,$3,$4)`, company, hex.EncodeToString(digest[:]), id, raw); err != nil {
+	if _, err := pool.Exec(ctx, `INSERT INTO settlement_idempotency(company_id,operation,idempotency_key,request_fingerprint,result_id,result_json) VALUES($1,'record_payment',$5,$2,$3,$4)`, company, hex.EncodeToString(digest[:]), id, raw, op); err != nil {
 		t.Fatal(err)
 	}
 	snapshot := func() string {
@@ -86,11 +88,31 @@ func TestBoundedPaymentUpgradeRetainsInstalledReceipts(t *testing.T) {
 	if !unknown {
 		t.Fatal("upgrade invented receipt metadata")
 	}
-	replayed, err := settlement.New(pool).RecordPayment(ctx, settlement.Actor{ID: admin, CompanyID: company, Role: "admin"}, settlement.RecordPaymentRequest{Operation: settlement.Operation{Key: "installed-payment"}, InvoiceID: i.ID, AmountCents: 2500, Method: settlement.Cash, ReceivedDate: "2020-01-02", Reference: "installed reference", Notes: "installed note"})
+	replayed, err := settlement.New(pool).RecordPayment(ctx, settlement.Actor{ID: admin, CompanyID: company, Role: "admin"}, settlement.RecordPaymentRequest{Operation: settlement.Operation{Key: op}, InvoiceID: i.ID, AmountCents: 2500, Method: settlement.Cash, ReceivedDate: "2020-01-02", Reference: "installed reference", Notes: "installed note"})
 	if err != nil {
 		t.Fatalf("installed intent cannot reconcile: %v", err)
 	}
 	if replayed != result || snapshot() != before {
 		t.Fatal("installed replay changed financial history")
+	}
+	cookie := sessionCookie(t, ctx, sessions, admin)
+	values := url.Values{"idempotency_key": {op}, "amount": {"25.00"}, "method": {"cash"}, "date": {"2020-01-02"}, "reference": {"installed reference"}, "notes": {"installed note"}}
+	documentTransactionRequest(t, router, cookie, "POST", fmt.Sprintf("/invoices/%d/payments", i.ID), values, 303)
+	if snapshot() != before {
+		t.Fatal("existing HTTP route repeated an installed Payment")
+	}
+	values.Set("amount", "25.01")
+	documentTransactionRequest(t, router, cookie, "POST", fmt.Sprintf("/invoices/%d/payments", i.ID), values, 409)
+	token, err := sessions.CreateMobile(ctx, admin, "Installed UUID collision")
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := boundedAPICall(apiv1.NewRouter(pool, client, sessions), token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":1,"title":"Collision","line_items":[]}`, op, newOperationKey()))
+	if w.Code != 409 {
+		t.Fatalf("legacy UUID cross-family reuse=%d: %s", w.Code, w.Body.String())
+	}
+	assertContains(t, w.Body.String(), "operation_intent_changed")
+	if snapshot() != before {
+		t.Fatal("legacy identity collision changed installed facts")
 	}
 }

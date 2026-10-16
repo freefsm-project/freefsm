@@ -2,6 +2,8 @@ package settlement
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"regexp"
@@ -49,14 +51,22 @@ func (s *Service) PaymentReceipt(ctx context.Context, a authorization.Actor, id 
 	if _, err := uuid.Parse(id); err != nil {
 		return r, authorization.ErrNotFound
 	}
-	err := authorization.New(s.db).WithinActor(ctx, a, func(tx pgx.Tx, _ authorization.Principal) error {
+	err := authorization.New(s.db).WithinActor(ctx, a, func(tx pgx.Tx, p authorization.Principal) error {
 		var raw []byte
 		// Fresh authentication of the original user permits read-only recovery
 		// after restore/session replacement. Admission still binds replay to the
 		// original client, and this projection contains no financial content.
 		if err := tx.QueryRow(ctx, `SELECT receipt FROM bounded_payment_operations WHERE operation_id=$1 AND user_id=$2`, id, a.UserID).Scan(&raw); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
-				return authorization.ErrNotFound
+				legacy, _, found, e := installedPaymentReceipt(ctx, tx, p, id)
+				if e != nil {
+					return e
+				}
+				if !found {
+					return authorization.ErrNotFound
+				}
+				r = legacy
+				return nil
 			}
 			return err
 		}
@@ -73,11 +83,46 @@ func (s *Service) AcceptBoundedPayment(ctx context.Context, a authorization.Acto
 		return r, ErrInvalidAmount
 	}
 	err := authorization.New(s.db).WithinActor(ctx, a, func(tx pgx.Tx, p authorization.Principal) error {
+		legacy, fingerprint, found, err := installedPaymentReceipt(ctx, tx, p, in.OperationID)
+		if err != nil {
+			return err
+		}
+		if found {
+			// The old browser command had no API client, occurrence or Job intent.
+			// Reconcile only its exact recorded request, without rebinding it.
+			if a.Channel == "api" || in.JobID != 0 || in.OccurredAt != nil || !paymentAmountPattern.MatchString(in.Amount) {
+				return authorization.ErrConflict
+			}
+			amount, err := strconv.ParseInt(strings.ReplaceAll(in.Amount, ".", ""), 10, 64)
+			if err != nil {
+				return authorization.ErrConflict
+			}
+			// Installed fingerprints used JSON-number canonicalization. Compare the
+			// immutable exact receipt facts too, so large cent values cannot alias
+			// through that historical floating-point representation.
+			var exact bool
+			if err := tx.QueryRow(ctx, `SELECT invoice_id=$1 AND amount_cents=$2 AND method=$3 AND received_date::text=$4 AND reference=$5 AND notes=$6 AND coalesce(other_description,'')=$7 FROM invoice_payments WHERE id=$8`, invoice, amount, in.Method, in.Date, in.Reference, in.Note, in.OtherDescription, legacy.PaymentID).Scan(&exact); err != nil {
+				return err
+			}
+			if !exact {
+				return authorization.ErrConflict
+			}
+			canonical, err := semanticJSON(RecordPaymentRequest{InvoiceID: invoice, AmountCents: amount, Method: in.Method, ReceivedDate: in.Date, Reference: in.Reference, Notes: in.Note, OtherDescription: in.OtherDescription})
+			if err != nil {
+				return err
+			}
+			sum := sha256.Sum256(canonical)
+			if hex.EncodeToString(sum[:]) != fingerprint {
+				return authorization.ErrConflict
+			}
+			r = legacy
+			return nil
+		}
 		if err := authorization.AdmitOperation(ctx, tx, a, in.OperationID, "payment.bounded", map[string]any{"invoice_id": invoice, "intent": in}); err != nil {
 			return err
 		}
 		var raw []byte
-		err := tx.QueryRow(ctx, `SELECT receipt FROM bounded_payment_operations WHERE operation_id=$1`, in.OperationID).Scan(&raw)
+		err = tx.QueryRow(ctx, `SELECT receipt FROM bounded_payment_operations WHERE operation_id=$1`, in.OperationID).Scan(&raw)
 		if err == nil {
 			return json.Unmarshal(raw, &r)
 		}
@@ -170,4 +215,24 @@ func (s *Service) AcceptBoundedPayment(ctx context.Context, a authorization.Acto
 		return err
 	})
 	return r, err
+}
+
+func installedPaymentReceipt(ctx context.Context, tx pgx.Tx, p authorization.Principal, key string) (PaymentReceipt, string, bool, error) {
+	r := PaymentReceipt{OperationID: key, Outcome: "accepted"}
+	var fingerprint, binding string
+	var actor *int64
+	err := tx.QueryRow(ctx, `SELECT p.id::text,p.actor_id,k.created_at,k.request_fingerprint,coalesce((SELECT operation_type FROM operation_admissions WHERE operation_id=$3::uuid),'') FROM settlement_idempotency k JOIN invoice_payments p ON p.id=k.result_id AND p.company_id=k.company_id WHERE k.company_id=$1 AND k.operation='record_payment' AND lower(k.idempotency_key)=lower($2)`, p.CompanyID, key, key).Scan(&r.PaymentID, &actor, &r.AcceptedAt, &fingerprint, &binding)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return r, "", false, nil
+	}
+	if err != nil {
+		return r, "", false, err
+	}
+	if actor == nil || *actor != p.UserID {
+		return r, "", false, authorization.ErrNotFound
+	}
+	if binding != "" && binding != "settlement.legacy" {
+		return r, "", false, authorization.ErrConflict
+	}
+	return r, fingerprint, true, nil
 }

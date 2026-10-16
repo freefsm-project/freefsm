@@ -1370,7 +1370,7 @@ func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	result, err := h.settlement.RecordBoundedPayment(r.Context(), actor, settlement.RecordPaymentRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, InvoiceID: id, AmountCents: amount, Method: settlement.PaymentMethod(r.FormValue("method")), ReceivedDate: settlement.Date(r.FormValue("date")), Reference: r.FormValue("reference"), Notes: r.FormValue("notes"), OtherDescription: r.FormValue("other_description")})
+	_, err = h.settlement.RecordBoundedPayment(r.Context(), actor, settlement.RecordPaymentRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, InvoiceID: id, AmountCents: amount, Method: settlement.PaymentMethod(r.FormValue("method")), ReceivedDate: settlement.Date(r.FormValue("date")), Reference: r.FormValue("reference"), Notes: r.FormValue("notes"), OtherDescription: r.FormValue("other_description")})
 	if err != nil {
 		writeSettlementError(w, r, err)
 		return
@@ -1391,7 +1391,7 @@ func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": receipt})
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+recorded%%3A+%%24%.2f+applied", id, float64(result.AppliedCents)/100), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+receipt+confirmed", id), http.StatusSeeOther)
 }
 
 func (h *InvoiceHandler) ReversePayment(w http.ResponseWriter, r *http.Request) {

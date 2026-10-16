@@ -47,7 +47,9 @@ func TestBoundedPaymentBackupRestoreReconciliationAPI(t *testing.T) {
 	historyCheck(t, json.Unmarshal([]byte(created), &document))
 	id := document.Data.ID
 	historyCheck(t, statusflow.New(src.pool).FinalizeInvoice(ctx, statusflow.Actor{ID: src.actor, CompanyID: src.company}, id))
-	historyCheck(t, settlement.New(src.pool).RenamePaymentMethod(ctx, authorization.Actor{UserID: src.actor, Channel: "web"}, settlement.Cash, "Notes and coins"))
+	methods, err := settlement.New(src.pool).ConfiguredPaymentMethods(ctx, authorization.Actor{UserID: src.actor, Channel: "web"})
+	historyCheck(t, err)
+	historyCheck(t, settlement.New(src.pool).RenamePaymentMethod(ctx, authorization.Actor{UserID: src.actor, Channel: "web"}, settlement.Cash, "Notes and coins", methods[0].Revision))
 	op, uncertain := newOperationKey(), newOperationKey()
 	path := fmt.Sprintf("/invoices/%d/payments", id)
 	command := func(op string) string {

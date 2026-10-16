@@ -22,7 +22,8 @@ The existing method identities are `cash`, `check`, `credit_card`, `transfer` an
 `other`, displayed initially as Cash, Check, Card, Bank Transfer and Other.
 **Company settings → Payment method labels** uses the existing independent company
 configuration View/Manage grants. Overrides customize labels only; method meaning
-and identity cannot change. New receipts snapshot their accepted display label,
+and identity cannot change. Reviewed opaque per-method revisions reject stale
+editors, including rename-away-and-back changes. New receipts snapshot their accepted display label,
 Other description and channel. Other requires a description regardless of rename.
 No payment-credential fields are collected or stored.
 
@@ -37,6 +38,11 @@ The website remains online-only. Its Payment form retains only the pending
 operation UUID in session storage and locks further submission while the outcome
 is unknown. **Check original Payment receipt** reconciles after a lost response or
 reload. A missing receipt is uncertainty, not permission to repeat a Payment.
+Unknown or malformed receipt dispositions remain locked; only explicitly known
+terminal outcomes permit review. Authentication/permission denial uses the shared
+browser input-purge contract while retaining the opaque operation identity. A
+deliberate different Payment reloads current authorized context and obtains both
+new domain and generic guarded-save identities/revisions.
 After restore, explicitly reconcile recorded history before proposing another
 intent. Terminal rejection requires explicit review and a new operation identity.
 
@@ -76,6 +82,27 @@ identity rather than today's label. Absent new request metadata is omitted from
 legacy idempotency fingerprints. The reviewed legacy settlement/workflow cutover
 continues to report ambiguous source values and never manufactures Payments to
 explain an old status.
+
+`089_installed_payment_operations` reserves actual installed operation UUIDs in
+the common registry with explicitly unknown historical clients. The existing web
+route reconciles the original user's exact immutable receipt facts and installed
+fingerprint before considering new money. Changed intent and cross-family reuse
+reject; collisions never receive a guessed historical winner. Read-only lookup
+can return the original receipt without creating a replacement financial fact.
+
+For installations still awaiting042, the strengthened preflight/cutover preserves
+recorded UUIDs directly and retains other original receipt IDs in
+`legacy_receipt_id`. Immutable `settlement_legacy_evidence` retains the complete
+source and explicit `review_issues`, including unknown actor, entry time or
+identity. Missing actor/entry time becomes null, never a selected present-day
+administrator or migration-time receipt. Recorded actor/time is retained when
+valid; ambiguous IDs/actors/times reject with explicit reconciliation diagnostics.
+`captured_at` in the evidence is the migration observation time, not receipt time.
+An operator can inspect `payment_id`, `source` and `review_issues` in that evidence
+as part of the existing maintenance-window review. `090_retained_payment_provenance`
+is additive for already-applied042: it never replays that migration or reconstructs
+facts discarded by an older binary. `091_payment_label_revisions` establishes the
+new configuration concurrency baseline without rewriting labels or receipts.
 
 Whole-instance backup preserves these tables alongside existing settlement and
 projections. Restored sessions are revoked. Pre-backup receipts remain queryable

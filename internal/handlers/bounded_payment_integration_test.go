@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -233,7 +234,7 @@ func TestBoundedPaymentMethodLabelsPreserveHistoryHTTP(t *testing.T) {
 	if err := statusflow.New(pool).FinalizeInvoice(ctx, statusflow.Actor{ID: admin, CompanyID: company}, id); err != nil {
 		t.Fatal(err)
 	}
-	documentTransactionRequest(t, web, cookie, "POST", "/settings/payment-methods/other", url.Values{"label": {"Alternative receipt"}}, 303)
+	documentTransactionRequest(t, web, cookie, "POST", "/settings/payment-methods/other", paymentMethodValues(t, web, cookie, "other", "Alternative receipt"), 303)
 	page := documentTransactionRequest(t, web, cookie, "GET", fmt.Sprintf("/invoices/%d", id), nil, 200)
 	assertContains(t, page.Body.String(), "Alternative receipt")
 	values := url.Values{"idempotency_key": {newOperationKey()}, "amount": {"25.00"}, "method": {"other"}, "date": {"2026-01-02"}, "reference": {"external-17"}, "notes": {"Historical receipt"}}
@@ -249,7 +250,7 @@ func TestBoundedPaymentMethodLabelsPreserveHistoryHTTP(t *testing.T) {
 	for _, fact := range []string{`"method": "other"`, `"method_label": "Alternative receipt"`, `"other_description": "Postal money order"`, `"channel": "web"`, `"received_date": "2026-01-02"`} {
 		assertContains(t, before, fact)
 	}
-	documentTransactionRequest(t, web, cookie, "POST", "/settings/payment-methods/other", url.Values{"label": {"Miscellaneous"}}, 303)
+	documentTransactionRequest(t, web, cookie, "POST", "/settings/payment-methods/other", paymentMethodValues(t, web, cookie, "other", "Miscellaneous"), 303)
 	if err := pool.QueryRow(ctx, `SELECT to_jsonb(p)::text FROM invoice_payments p`).Scan(&after); err != nil {
 		t.Fatal(err)
 	}
@@ -262,4 +263,31 @@ func TestBoundedPaymentMethodLabelsPreserveHistoryHTTP(t *testing.T) {
 	values.Set("idempotency_key", newOperationKey())
 	values.Del("other_description")
 	documentTransactionRequest(t, web, cookie, "POST", path, values, 422)
+}
+
+func paymentMethodValues(t *testing.T, web http.Handler, cookie *http.Cookie, method, label string) url.Values {
+	t.Helper()
+	body := documentTransactionRequest(t, web, cookie, "GET", "/settings/payment-methods", nil, 200).Body.String()
+	start := strings.Index(body, `action="/settings/payment-methods/`+method+`"`)
+	if start < 0 {
+		t.Fatal("method form absent")
+	}
+	part := strings.SplitN(body[start:], "</form>", 2)[0]
+	match := regexp.MustCompile(`name="label_revision" value="([^"]+)"`).FindStringSubmatch(part)
+	if len(match) != 2 {
+		t.Fatal("method editor has no reviewed revision")
+	}
+	return url.Values{"label": {label}, "label_revision": {match[1]}}
+}
+
+func TestBoundedPaymentLabelStaleReviewHTTP(t *testing.T) {
+	_, _, web, sessions, _, admin := permissionHTTPFixture(t)
+	cookie := sessionCookie(t, context.Background(), sessions, admin)
+	first := paymentMethodValues(t, web, cookie, "cash", "Reviewed cash")
+	documentTransactionRequest(t, web, cookie, "POST", "/settings/payment-methods/cash", first, 303)
+	first.Set("label", "Stale overwrite")
+	documentTransactionRequest(t, web, cookie, "POST", "/settings/payment-methods/cash", first, 409)
+	page := documentTransactionRequest(t, web, cookie, "GET", "/settings/payment-methods", nil, 200).Body.String()
+	assertContains(t, page, "Reviewed cash")
+	assertNotContains(t, page, "Stale overwrite")
 }

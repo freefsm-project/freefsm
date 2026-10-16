@@ -91,10 +91,6 @@ type Service struct {
 
 func New(db *pgxpool.Pool) *Service { return &Service{db: db, now: time.Now} }
 
-func (s *Service) RecordPayment(ctx context.Context, actor Actor, req RecordPaymentRequest) (Result, error) {
-	return s.recordPayment(ctx, actor, req, false)
-}
-
 // RecordBoundedPayment accepts the full fixed amount or rejects it. It never
 // creates Customer Credit and uses the same immutable settlement writer.
 func (s *Service) RecordBoundedPayment(ctx context.Context, actor Actor, req RecordPaymentRequest) (Result, error) {
@@ -109,7 +105,7 @@ func (s *Service) RecordBoundedPayment(ctx context.Context, actor Actor, req Rec
 	switch receipt.Outcome {
 	case "accepted":
 		id, err := uuid.Parse(receipt.PaymentID)
-		return Result{ID: id, AppliedCents: req.AmountCents}, err
+		return Result{ID: id}, err
 	case "not_found":
 		return Result{}, authorization.ErrNotFound
 	case "forbidden":
@@ -121,19 +117,15 @@ func (s *Service) RecordBoundedPayment(ctx context.Context, actor Actor, req Rec
 	}
 }
 
-func (s *Service) recordPayment(ctx context.Context, actor Actor, req RecordPaymentRequest, bounded bool) (Result, error) {
+func (s *Service) RecordPayment(ctx context.Context, actor Actor, req RecordPaymentRequest) (Result, error) {
 	if err := authorize(actor); err != nil {
 		return Result{}, err
 	}
 	if req.AmountCents <= 0 || !validMethod(req.Method) {
 		return Result{}, ErrInvalidAmount
 	}
-	operation := "record_payment"
-	if bounded {
-		operation = "record_bounded_payment"
-	}
-	return s.transact(ctx, actor, operation, req.Operation, req, func(tx pgx.Tx, today time.Time) (Result, error) {
-		return writePayment(ctx, tx, actor, req, today, bounded)
+	return s.transact(ctx, actor, "record_payment", req.Operation, req, func(tx pgx.Tx, today time.Time) (Result, error) {
+		return writePayment(ctx, tx, actor, req, today, false)
 	})
 }
 

@@ -30,7 +30,7 @@ func admitOperation(ctx context.Context, tx pgx.Tx, a Actor, id, kind string, in
 		return err
 	}
 	var same bool
-	err = tx.QueryRow(ctx, `SELECT user_id=$2 AND client_key=$3 AND operation_type=$4 AND (intent IS NULL OR intent=$5::jsonb)
+	err = tx.QueryRow(ctx, `SELECT coalesce(user_id=$2 AND client_key=$3 AND operation_type=$4 AND (intent IS NULL OR intent=$5::jsonb),false)
 	 FROM operation_admissions WHERE operation_id=$1`, id, a.UserID, operationClientKey(a), kind, raw).Scan(&same)
 	if err != nil {
 		return err

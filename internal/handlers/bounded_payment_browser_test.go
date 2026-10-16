@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 )
@@ -33,6 +34,17 @@ func TestBoundedPaymentLostResponsePersistedBrowser(t *testing.T) {
 		t.Fatal(err)
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("/fixture/revoke-payment-session", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "method", 405)
+			return
+		}
+		if err := authorization.New(pool).RevokeSessions(r.Context(), authorization.Actor{UserID: admin}, admin, 0); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(200)
+	})
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
 	mux.Handle("/", middleware.BrowserCSRF(middleware.CSRFToken(router)))
 	server := httptest.NewServer(mux)
@@ -47,7 +59,7 @@ func TestBoundedPaymentLostResponsePersistedBrowser(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT count(*),sum(amount_cents) FROM invoice_payments`).Scan(&count, &cents); err != nil {
 		t.Fatal(err)
 	}
-	if count != 1 || cents != 2500 {
+	if count != 2 || cents != 5000 {
 		t.Fatalf("lost response repeated payment: count%d cents%d", count, cents)
 	}
 }
