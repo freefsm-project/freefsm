@@ -190,9 +190,7 @@ class OfflineNotes {
   if(r.status===200){this.receipt(e,id,r.data);}
   else if([400,404,409].includes(r.status)){e.state='terminal';e.code=r.error?.code;if(r.status===404)this.purgeSensitiveTarget(s,e.job);}
   else if(r.status===429||r.status>=500){
-   const seconds=r.error?.retry_after_seconds;
-   const delay=Number.isSafeInteger(seconds)&&seconds>0&&seconds<Number.MAX_SAFE_INTEGER/1000?seconds:5;
-   e.retryNotBefore=this.now()+delay*1000;
+   e.retryNotBefore=this.now()+this.retryDelay(r.error);
   }
   // Even a service failure remains unknown until receipt lookup. Retry is explicit.
   if(r.status===404)await this.persistAuthorityLoss(s);else await this.persist(s);
