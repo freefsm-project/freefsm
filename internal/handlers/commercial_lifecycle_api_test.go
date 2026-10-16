@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -150,13 +151,20 @@ func TestCommercialLifecycleSettlementVoidRaceAPI(t *testing.T) {
 				t.Fatal(err)
 			}
 			body := fmt.Sprintf(`{"operation_id":%q,"job_id":%d,"revision":%q,"status_id":%d,"meaning_revision":%q}`, newOperationKey(), j.ID, receipt.Data.Revision, status, meaning)
+			// Pause the first actual domain write, not HTTP admission or an
+			// unrelated fixture's wait on the database-wide authority fence.
+			if _, err := pool.Exec(ctx, `CREATE FUNCTION hold_lifecycle_race() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(490149); RETURN NEW; END $$;
+			 CREATE TRIGGER hold_lifecycle_race BEFORE UPDATE OF status_id ON invoices FOR EACH ROW WHEN (NEW.status_id IS DISTINCT FROM OLD.status_id) EXECUTE FUNCTION hold_lifecycle_race();
+			 CREATE TRIGGER hold_lifecycle_race BEFORE INSERT ON invoice_payments FOR EACH ROW EXECUTE FUNCTION hold_lifecycle_race()`); err != nil {
+				t.Fatal(err)
+			}
 			fence, err := pool.Begin(ctx)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer fence.Rollback(context.Background())
 			var blocker int
-			if err := fence.QueryRow(ctx, `SELECT pg_backend_pid() FROM (SELECT pg_advisory_xact_lock(190019)) barrier`).Scan(&blocker); err != nil {
+			if err := fence.QueryRow(ctx, `SELECT pg_backend_pid() FROM (SELECT pg_advisory_xact_lock(490149)) barrier`).Scan(&blocker); err != nil {
 				t.Fatal(err)
 			}
 			paid := make(chan error, 1)
@@ -179,27 +187,60 @@ func TestCommercialLifecycleSettlementVoidRaceAPI(t *testing.T) {
 				go void()
 			}
 			commercialWaiters(t, ctx, pool, blocker, 1)
+			var writer int
+			var statement string
+			var holdsAuthority bool
+			application := pool.Config().ConnConfig.RuntimeParams["application_name"]
+			if err := pool.QueryRow(ctx, `SELECT a.pid,a.query,EXISTS(SELECT 1 FROM pg_locks l WHERE l.pid=a.pid AND l.locktype='advisory' AND l.classid=0 AND l.objid=190019 AND l.objsubid=1 AND l.granted) FROM pg_stat_activity a WHERE a.datname=current_database() AND a.application_name=$2 AND $1=ANY(pg_blocking_pids(a.pid)) AND a.wait_event='advisory'`, blocker, application).Scan(&writer, &statement, &holdsAuthority); err != nil {
+				t.Fatal(err)
+			}
+			wantStatement := "UPDATE invoices SET status_id="
+			if paymentFirst {
+				wantStatement = "INSERT INTO invoice_payments("
+			}
+			if !holdsAuthority || !strings.HasPrefix(statement, wantStatement) {
+				t.Fatalf("first contender is not the intended domain mutation: authority=%v query=%s", holdsAuthority, statement)
+			}
 			if paymentFirst {
 				go void()
 			} else {
 				go payment()
 			}
-			commercialWaiters(t, ctx, pool, blocker, 2)
+			commercialWaiters(t, ctx, pool, writer, 1)
+			var contender int
+			if err := pool.QueryRow(ctx, `SELECT pid FROM pg_stat_activity WHERE datname=current_database() AND application_name=$2 AND $1=ANY(pg_blocking_pids(pid)) AND wait_event='advisory' AND query='SELECT pg_advisory_xact_lock(190019)'`, writer, application).Scan(&contender); err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("domain order paymentFirst=%v: backend %d holds authority at %s; contender %d waits on its authority fence", paymentFirst, writer, statement, contender)
 			if err := fence.Commit(ctx); err != nil {
 				t.Fatal(err)
 			}
 			paymentErr, w := <-paid, <-voided
-			if paymentFirst && (paymentErr != nil || w.Code != 409) || !paymentFirst && (paymentErr == nil || w.Code != 200) {
+			if paymentFirst && (paymentErr != nil || w.Code != 409) || !paymentFirst && (!errors.Is(paymentErr, settlement.ErrVoid) || w.Code != 200) {
 				t.Fatalf("incompatible race outcomes: payment=%v void=%d %s", paymentErr, w.Code, w.Body.String())
 			}
 			state := lifecycleCall(t, api, token, "GET", path, "", 200)
 			if paymentFirst {
+				assertContains(t, w.Body.String(), `"code":"stale_commercial_revision"`)
 				assertContains(t, state, `"effective_category":"invoice:partially_paid"`)
 				assertContains(t, state, `"manual_category":"invoice:invoiced"`)
+				assertContains(t, state, `"settlement_locked":true`)
 			} else {
 				assertContains(t, state, `"effective_category":"invoice:void"`)
 				assertContains(t, state, `"settlement_locked":false`)
 			}
+			var payments, allocated, voidAudits int64
+			if err := pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM invoice_payments WHERE invoice_id=$1),(SELECT coalesce(sum(amount_cents),0) FROM payment_invoice_allocations WHERE invoice_id=$1),(SELECT count(*) FROM authorization_audit WHERE target_type='invoice' AND target_id=$1 AND action='invoice.status')`, id).Scan(&payments, &allocated, &voidAudits); err != nil {
+				t.Fatal(err)
+			}
+			wantPayments, wantAllocated, wantVoidAudits := int64(0), int64(0), int64(1)
+			if paymentFirst {
+				wantPayments, wantAllocated, wantVoidAudits = 1, 2500, 0
+			}
+			if payments != wantPayments || allocated != wantAllocated || voidAudits != wantVoidAudits {
+				t.Fatalf("incompatible persisted effects: payments=%d allocated=%d void audits=%d", payments, allocated, voidAudits)
+			}
+			t.Logf("persisted paymentFirst=%v: payments=%d allocated=%d void audits=%d", paymentFirst, payments, allocated, voidAudits)
 		})
 	}
 }

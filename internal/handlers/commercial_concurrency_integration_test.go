@@ -18,9 +18,15 @@ import (
 
 func commercialWaiters(t *testing.T, ctx context.Context, pool *pgxpool.Pool, blocker, want int) {
 	t.Helper()
+	// Advisory locks are database-wide, but other packages can run fixtures in
+	// this database concurrently. Their waiters cannot establish our race order.
+	application := pool.Config().ConnConfig.RuntimeParams["application_name"]
+	if application == "" {
+		t.Fatal("commercial race requires a fixture-specific application name")
+	}
 	for {
 		var n int
-		if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND $1=ANY(pg_blocking_pids(pid)) AND wait_event='advisory'`, blocker).Scan(&n); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND application_name=$2 AND $1=ANY(pg_blocking_pids(pid)) AND wait_event='advisory'`, blocker, application).Scan(&n); err != nil {
 			t.Fatal(err)
 		}
 		if n >= want {
@@ -28,7 +34,7 @@ func commercialWaiters(t *testing.T, ctx context.Context, pool *pgxpool.Pool, bl
 		}
 		select {
 		case <-ctx.Done():
-			t.Fatal("command did not reach authority fence")
+			t.Fatal("fixture command did not reach the expected advisory fence")
 		case <-time.After(10 * time.Millisecond):
 		}
 	}
