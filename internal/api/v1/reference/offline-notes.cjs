@@ -39,10 +39,12 @@ if(require.main===module){
    case 'read-notes':result=await client.readNotes(command.job);break;
    case 'view':result=await client.view();break;
    case 'stage':result={operation_id:await client.stage(command.job,command.text),state:'pending'};break;
+   case 'stage-batch-notes':result={operation_id:await client.stageBatch(command.job,command.text,command.depends_on),state:'pending'};break;
+   case 'submit-batch':result=await client.submitBatch(command.operation_ids);break;
    case 'submit':result=await client.submit(command.operation_id);break;
    case 'reconcile':result=await client.reconcile(command.operation_id);break;
    case 'acknowledge-uncertain':await client.acknowledgeUncertain(command.operation_id);result={state:'review_required'};break;
-   case 'repair':result={operation_id:await client.repair(command.operation_id,command.text,command.notes_revision),state:'pending'};break;
+   case 'repair':result={operation_id:await client.repair(command.operation_id,command.text,command.notes_revision,command.depends_on),state:'pending'};break;
    case 'discard':await client.discard(command.operation_id);result={state:'discarded'};break;
    default:throw Error('unknown_action');
    }
@@ -52,6 +54,7 @@ if(require.main===module){
   const safe=new Set(['key_protection_unavailable','protected_store_invalid','protected_directory_required','invalid_store_identity','store_busy','trusted_api_origin_required','server_binding_mismatch','locked_review','authorization_lease_expired','authorization_purged','authentication_required','reauthorization_unavailable','invalid_lease','synchronization_incomplete','inaccessible_target','notes_unavailable','review_required','reconciliation_or_review_required','receipt_mismatch','restore_reconciliation_required','unknown_operation','unknown_action','response_unavailable']);
   safe.add('protected_store_locked');
   safe.add('retry_after_required');
+  safe.add('batch_limit');
   console.error(safe.has(e.message)?e.message:'offline_action_unavailable');process.exitCode=1;
  });
 }

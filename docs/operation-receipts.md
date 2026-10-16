@@ -1,6 +1,8 @@
 # Operation receipts and Field Notes recovery
 
 The API uses the [shared operation admission registry](operation-admission.md).
+See [ordered operation batches](api-operation-batches.md) for whole-envelope
+limits, dependency outcomes, per-operation receipt recovery and explicit repair.
 Domain services own their receipts and commit admission, effects, attribution,
 history, activity and immutable audit in the same transaction. This contract does
 not replace pairing's one-use redemption or session/lease lifecycle protection.
