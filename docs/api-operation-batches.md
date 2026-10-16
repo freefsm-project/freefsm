@@ -2,9 +2,10 @@
 
 `POST /api/v1/sync/operations` accepts an `operations` array in submitted order.
 The API and encrypted native reference own this protocol; the website is online-only.
-The current operations include `job.field_notes` and `file.publish`, `file.rename`,
+The current operations include `job.field_notes`, `job.status`, `job.subtask`,
+`file.publish`, `file.rename`,
 `file.remove` ([File guide](api-offline-files.md)); operation-specific synchronization
-for Status, fields, clocks, Comments, documents and Service Entries remains
+for custom fields, clocks, Comments, documents and Service Entries remains
 with its owning tickets.
 
 ```json
@@ -64,6 +65,12 @@ Rejected operations and blocked descendants require separate explicit reviewed
 repair: new IDs, current reviewed revisions/text and reviewed dependency UUIDs.
 Repairing a parent never rewrites descendants. Accepted operations cannot be
 repaired. No target/revision/amount rewrite is performed to make a batch succeed.
+
+Status and Subtask intent shapes and semantic recovery are documented in
+[Job field synchronization](api-job-field-sync.md). Batch receipts normalize the
+owning effect identity as `effect_id`; a Subtask's individual receipt remains at
+`/subtask-operations/{operation}` with its existing `subtask_id` field. Both refer
+to the same immutable receipt/effect. Original operation family determines lookup.
 
 ## Encrypted executable
 

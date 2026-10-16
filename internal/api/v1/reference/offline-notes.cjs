@@ -36,7 +36,8 @@ if(require.main===module){
    let result;
    switch(action){
    case 'authenticate':result=await client.authenticate(command.token);break;
-   case 'synchronize':result=await client.synchronize();break;
+    case 'synchronize':result=await client.synchronize();break;
+    case 'synchronize-delta':result=await client.synchronize(true);break;
    case 'read-notes':result=await client.readNotes(command.job);break;
    case 'view':result=await client.view();break;
    case 'stage':result={operation_id:await client.stage(command.job,command.text),state:'pending'};break;
@@ -45,11 +46,15 @@ if(require.main===module){
     case 'transfer-file':result=await client.transferFile(command.operation_id);break;
     case 'stage-file-mutation':result={operation_id:await client.stageFileMutation(command.job,command.file_id,command.kind,command.name,command.depends_on),state:'pending'};break;
     case 'repair-file':result={operation_id:await client.repairFile(command.operation_id,command.review,command.depends_on),state:'pending'};break;
+    case 'stage-status':result={operation_id:await client.stageStatus(command.job,command.status_id,command.status_revision,command.meaning_revision,command.depends_on),state:'pending'};break;
+    case 'stage-subtask':result={operation_id:await client.stageSubtask(command.job,command.subtask_id,command.completed,command.completion_revision,command.depends_on),state:'pending'};break;
    case 'submit-batch':result=await client.submitBatch(command.operation_ids);break;
    case 'submit':result=await client.submit(command.operation_id);break;
    case 'reconcile':result=await client.reconcile(command.operation_id);break;
    case 'acknowledge-uncertain':await client.acknowledgeUncertain(command.operation_id);result={state:'review_required'};break;
-   case 'repair':result={operation_id:await client.repair(command.operation_id,command.text,command.notes_revision,command.depends_on),state:'pending'};break;
+    case 'repair':result={operation_id:await client.repair(command.operation_id,command.text,command.notes_revision,command.depends_on),state:'pending'};break;
+    case 'repair-status':result={operation_id:await client.repairStatus(command.operation_id,command.status_id,command.status_revision,command.meaning_revision,command.depends_on),state:'pending'};break;
+    case 'repair-subtask':result={operation_id:await client.repairSubtask(command.operation_id,command.completed,command.completion_revision,command.depends_on),state:'pending'};break;
    case 'discard':await client.discard(command.operation_id);result={state:'discarded'};break;
    default:throw Error('unknown_action');
    }

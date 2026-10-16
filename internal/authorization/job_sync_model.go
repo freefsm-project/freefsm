@@ -89,6 +89,9 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 			key := parent["object_type"].(string) + ":" + parent["object_id"].(string)
 			e.FileParents["parent:"+key] = key
 		}
+		if err := syncJobFields(ctx, tx, p, e); err != nil {
+			return nil, err
+		}
 		e.Data["masters"] = map[string]any{}
 		customer, cerr := jobCustomer(ctx, tx, p, a, e.InstalledID)
 		if cerr != nil && !errors.Is(cerr, ErrNotFound) {
