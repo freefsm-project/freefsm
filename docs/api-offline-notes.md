@@ -4,6 +4,11 @@ The website remains online-only. The native Node reference is a protocol
 exerciser, not a shipped mobile application. It uses the existing Job sync and
 Field Notes services and the shared operation admission registry.
 
+The same protected executable also supports [Status and Subtask synchronization](api-job-field-sync.md),
+including explicitly reviewed staging/repair, ordered dependencies and complete
+delta synchronization. Those commands share this lifecycle and key/quarantine
+boundary; the original Notes commands remain compatible.
+
 ## Authorization window
 
 The protected Administrator sets **Offline authorization hours** in the existing

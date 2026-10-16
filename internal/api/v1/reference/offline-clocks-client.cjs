@@ -21,16 +21,17 @@ class OfflineClocks extends ProtectedFieldClient {
   // of retaining a revoked Time/GPS projection. Refresh actual current scope.
   await this.synchronizeState(s,false);return true;
  }
- async pages(s,path){
-  let page,records={};const seen=new Set();
+ async pages(s,path,cursor=null,records={}){
+  let page,completion;const seen=new Set();
   do {
-   const r=await this.contact(s,path+'?page_size=200'+(page?'&page='+encodeURIComponent(page):''));
-   if(r.status!==200||!Array.isArray(r.data?.records)||typeof r.data.complete!=='boolean'||r.data.purge!=='none')throw Error('synchronization_incomplete');
+   const r=await this.contact(s,path+'?page_size=200'+(page?'&page='+encodeURIComponent(page):cursor?'&cursor='+encodeURIComponent(cursor):''));
+   if(r.status!==200||!Array.isArray(r.data?.records)||!Array.isArray(r.data.removed)||typeof r.data.complete!=='boolean'||r.data.purge!=='none')throw Error('synchronization_incomplete');
+   for(const id of r.data.removed)delete records[id];
    for(const record of r.data.records){if(typeof record.id!=='string')throw Error('synchronization_incomplete');records[record.id]=record;}
-   if(r.data.complete){if(typeof r.data.completion_cursor!=='string'||!r.data.completion_cursor||r.data.next_page!==null)throw Error('synchronization_incomplete');page=null;}
+   if(r.data.complete){if(typeof r.data.completion_cursor!=='string'||!r.data.completion_cursor||r.data.next_page!==null)throw Error('synchronization_incomplete');completion=r.data.completion_cursor;page=null;}
    else {page=r.data.next_page;if(!page||seen.has(page))throw Error('synchronization_incomplete');seen.add(page);}
   }while(page);
-  return records;
+  return {records,cursor:completion};
  }
  async clockLease(s){
   if(s.clockLease&&this.now()<Date.parse(s.clockLease.expires_at))return;
@@ -43,13 +44,15 @@ class OfflineClocks extends ProtectedFieldClient {
   if(r.status!==200||r.data?.code!=='accepted'||r.data.operation_id!==id||!r.data.id||!Number.isFinite(Date.parse(r.data.issued_at))||!Number.isFinite(Date.parse(r.data.expires_at)))throw Error('clock_lease_unavailable');
   s.clockLease=r.data;s.clockIssuance={id,state:'accepted'};await this.persist(s);
  }
- async synchronize(){return this.transaction(s=>this.synchronizeState(s));}
- async synchronizeState(s,issueLease=true){
+ async synchronize(delta=false){return this.transaction(s=>this.synchronizeState(s,true,delta));}
+ async synchronizeState(s,issueLease=true,delta=false){
+  if(delta){await this.enforceOfflineAccessWindow(s);if(!s.clockCursor)throw Error('synchronization_incomplete');}
+  const cursor=delta?s.clockCursor:null,previous=delta?clone(s.clocks):{};
   await this.policy(s);s.synced=false;s.clocks={};s.cache={};s.notes={};s.clockJobs={};await this.persistAuthorityLoss(s);
   const caps=await this.contact(s,'/capabilities');
   if(caps.status!==200||!caps.data?.clocks)throw Error('synchronization_incomplete');
-  const clocks=await this.pages(s,'/sync/clocks');
-  const jobs=caps.data.sync?.available?await this.pages(s,'/sync/jobs'):{};
+  const snapshot=await this.pages(s,'/sync/clocks',cursor,previous),clocks=snapshot.records;
+  const jobs=caps.data.sync?.available?(await this.pages(s,'/sync/jobs')).records:{};
   const clockJobs={};for(const job of Object.values(jobs))if(job.clock_job_id)clockJobs[job.clock_job_id]=true;
   const entries=new Set(Object.values(clocks).map(e=>e.entry_id));
   for(const e of Object.values(s.pending)){
@@ -61,7 +64,7 @@ class OfflineClocks extends ProtectedFieldClient {
   }
   s.clocks=clocks;s.clockJobs=clockJobs;s.clockCapabilities=caps.data.clocks;
   if(issueLease&&(caps.data.clocks.clock_in||caps.data.clocks.clock_out))await this.clockLease(s);
-  s.synced=true;s.restore=false;await this.persistAuthorityLoss(s);
+  s.clockCursor=snapshot.cursor;s.synced=true;s.restore=false;await this.persistAuthorityLoss(s);
   return {state:'synchronized',count:Object.keys(clocks).length};
  }
  async view(){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);return clone({clocks:s.clocks||{},pending:s.pending,capabilities:s.clockCapabilities});});}

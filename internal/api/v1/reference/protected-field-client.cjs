@@ -3,7 +3,7 @@ const {randomUUID,createHash}=require('node:crypto');
 const {ProtectedStore}=require('./protected-store.cjs');
 const clone=x=>JSON.parse(JSON.stringify(x));
 const clientIdentity=token=>token?createHash('sha256').update(token).digest('hex'):null;
-const fresh=()=>({version:1,user:null,token:null,lease:null,authority:null,contactEpoch:null,issuance:null,leaseLocked:false,cache:{},notes:{},clocks:{},clockJobs:{},clockCapabilities:null,clockLease:null,clockIssuance:null,pending:{},synced:false,restore:false,highWater:0});
+const fresh=()=>({version:1,user:null,token:null,lease:null,authority:null,contactEpoch:null,issuance:null,leaseLocked:false,cache:{},notes:{},clocks:{},clockJobs:{},clockCapabilities:null,clockLease:null,clockIssuance:null,pending:{},syncCursor:null,clockCursor:null,synced:false,restore:false,highWater:0});
 
 // Each action is explicit and serialized, including its network round trips.
 // Nothing in construction/restart, authentication or synchronization submits work.
@@ -44,7 +44,7 @@ class ProtectedFieldClient {
   const r=await this.transport(path,method,body,{token:s.token,epoch:s.contactEpoch||s.lease?.epoch,operation});
   // Inspect disposition before generic 401 purge. Persist before returning data.
   if(r.error?.code==='instance_restored'&&r.error?.recovery_disposition==='locked_review'){
-   s.token=null;s.lease=null;s.contactEpoch=null;s.restore=true;s.synced=false;s.cache={};s.notes={};s.clocks={};s.clockJobs={};s.clockCapabilities=null;s.clockLease=null;s.clockIssuance=null;
+   s.token=null;s.lease=null;s.contactEpoch=null;s.restore=true;s.synced=false;s.cache={};s.notes={};s.clocks={};s.clockJobs={};s.clockCapabilities=null;s.clockLease=null;s.clockIssuance=null;s.clockCursor=null;
    for(const e of Object.values(s.pending)){if(e.state!=='replaced')e.state='locked_review';}
    await this.persistAuthorityLoss(s);throw Error('locked_review');
   }
@@ -89,8 +89,8 @@ class ProtectedFieldClient {
    // Old-client intent cannot be rebound; keep only safe receipt identities.
    await this.purge(s);s.token=token;
   }
-  s.clocks={};s.clockJobs={};s.clockCapabilities=null;s.clockLease=null;s.clockIssuance=null;
-  s.authority={epoch:l.epoch,user:l.user_id,client:clientIdentity(token)};
+  s.clocks={};s.clockJobs={};s.clockCapabilities=null;s.clockLease=null;s.clockIssuance=null;s.clockCursor=null;
+  s.authority={epoch:l.epoch,user:l.user_id,client:clientIdentity(token)};s.syncCursor=null;
   s.issuance={id:operation,state:'accepted'};s.user=l.user_id;s.lease=l;s.contactEpoch=l.epoch;s.leaseLocked=false;s.synced=false;s.cache={};s.notes={};s.highWater=Math.max(this.now(),issued);
   // Accepted issuance can reveal a restored epoch. Its review lock must survive
   // a failed final write, not just the earlier unknown-issuance checkpoint.

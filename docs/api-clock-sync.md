@@ -85,6 +85,11 @@ staging lease. General offline authorization controls cache/staging; the Clock
 lease independently bounds clock occurrence/capture. Neither grants acceptance
 authority. A lost issuance reconciles its original same-ID receipt.
 
+`synchronize-delta` explicitly uses the last complete protected Clock cursor.
+Records and the successor cursor persist together only after all pages complete;
+failed authorization persistence uses the shared quarantine boundary. Incomplete
+synchronization stays locked for an explicit fresh snapshot, never false completion.
+
 * `stage-clock`: `clock_action` (`in` or `out`), reviewed `clock` fields, and
   explicit `depends_on`. Occurrence is captured once when staging. The result is
   pending, not accepted. Denied/unavailable location can be deliberately omitted.

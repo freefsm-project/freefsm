@@ -11,8 +11,9 @@ const {OfflineClocks,ProtectedStore}=require('../reference/offline-clocks-client
  const {url,token,job,scenario}=JSON.parse(input);
  const directory=await fs.mkdtemp(path.join(os.tmpdir(),'clock83-'));await fs.chmod(directory,0o700);
  const store=new ProtectedStore(directory,randomUUID());
- let lose=false;
+ let lose=false,deltaRequests=0;
  const transport=async(p,method='GET',body,auth={})=>{
+  if(p.startsWith('/sync/clocks?')&&p.includes('&cursor='))deltaRequests++;
   const headers={'Authorization':'Bearer '+auth.token,'Content-Type':'application/json'};
   if(auth.operation)headers['Operation-ID']=auth.operation;
   if(auth.epoch)headers['X-FreeFSM-Session-Epoch']=auth.epoch;
@@ -36,7 +37,7 @@ const {OfflineClocks,ProtectedStore}=require('../reference/offline-clocks-client
     assert.equal(invoke('submit-batch',{operation_ids:[inside.operation_id]})[0].receipt.code,'accepted');
     invoke('synchronize');const entry=Object.values(invoke('view').clocks)[0];
     const outside=invoke('stage-clock',{clock_action:'out',clock:{entry_id:entry.entry_id},depends_on:[inside.operation_id]});
-    invoke('submit-batch',{operation_ids:[outside.operation_id]});assert.equal(invoke('reconcile',{operation_id:outside.operation_id}).receipt.code,'accepted');
+    invoke('submit-batch',{operation_ids:[outside.operation_id]});invoke('synchronize-delta');assert.equal(Object.values(invoke('view').clocks)[0].state,'closed');assert.equal(invoke('reconcile',{operation_id:outside.operation_id}).receipt.code,'accepted');
     console.log('PASS executable Clock workflow across fresh protected processes and production HTTP/schema');
    }finally{invoke('logout');await fs.rm(child,{recursive:true,force:true});}
    return;
@@ -98,7 +99,7 @@ const {OfflineClocks,ProtectedStore}=require('../reference/offline-clocks-client
   await client.synchronize();
   const view=await client.view();const entry=Object.values(view.clocks)[0];assert.equal(entry.job.title,'Job 0');assert.equal(entry.state,'active');
   const out=await client.stageClock('out',{entry_id:Number(entry.entry_id),gps:{latitude:51.5,longitude:-0.12,accuracy:0,captured_at:new Date().toISOString()}},[repaired]);
-  await client.submitBatch([out]);await client.synchronize();
+  await client.submitBatch([out]);await client.synchronize(true);assert.equal(deltaRequests,1);
   const closed=Object.values((await client.view()).clocks)[0];assert.equal(closed.state,'closed');assert.equal(closed.gps[0].accuracy,0);assert.equal(closed.history.length,2);
   assert.equal((await client.reconcile(out)).receipt.code,'accepted');
   await assert.rejects(()=>client.submitWithoutLocation(out,[]),/review_required/);

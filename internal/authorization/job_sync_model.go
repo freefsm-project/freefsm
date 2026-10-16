@@ -77,6 +77,9 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 		if p.Allows("time.clock_in", Own) {
 			e.Data["clock_job_id"] = strconv.FormatInt(e.InstalledID, 10)
 		}
+		if err := syncJobFields(ctx, tx, p, e); err != nil {
+			return nil, err
+		}
 		e.Data["masters"] = map[string]any{}
 		customer, cerr := jobCustomer(ctx, tx, p, a, e.InstalledID)
 		if cerr != nil && !errors.Is(cerr, ErrNotFound) {

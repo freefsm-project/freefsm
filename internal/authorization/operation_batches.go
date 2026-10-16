@@ -10,18 +10,27 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// BatchNotesOperation retains the original Notes binding shape. Its original
+// BatchFieldOperation binds the supported independent field actions. Its original
 // target and dependency references are intent, not instructions to rewrite later
 // operations using an earlier result's identity or revision.
-type BatchNotesOperation struct {
-	OperationID   string     `json:"operation_id"`
-	Type          string     `json:"type"`
-	Target        string     `json:"target"`
-	DependsOn     []string   `json:"depends_on"`
-	NotesRevision string     `json:"notes_revision"`
-	Notes         *string    `json:"field_notes"`
-	OccurredAt    *time.Time `json:"occurred_at,omitempty"`
+type BatchFieldOperation struct {
+	OperationID        string     `json:"operation_id"`
+	Type               string     `json:"type"`
+	Target             string     `json:"target"`
+	DependsOn          []string   `json:"depends_on"`
+	NotesRevision      string     `json:"notes_revision"`
+	Notes              *string    `json:"field_notes"`
+	OccurredAt         *time.Time `json:"occurred_at,omitempty"`
+	StatusID           string     `json:"status_id,omitempty"`
+	StatusRevision     string     `json:"status_revision,omitempty"`
+	MeaningRevision    string     `json:"meaning_revision,omitempty"`
+	SubtaskID          string     `json:"subtask_id,omitempty"`
+	CompletionRevision string     `json:"completion_revision,omitempty"`
+	Completed          *bool      `json:"completed,omitempty"`
 }
+
+// Retain the existing Go caller spelling and old serialized Notes intent.
+type BatchNotesOperation = BatchFieldOperation
 
 type BatchOperationResult struct {
 	OperationID string
@@ -41,7 +50,7 @@ type BatchClockOperation struct {
 // A batch member retains its domain-specific reviewed intent. Clock commands
 // are not Notes commands and do not acquire revision/target substitution rules.
 type BatchOperation struct {
-	Notes *BatchNotesOperation
+	Job   *BatchFieldOperation
 	Clock *BatchClockOperation
 }
 
@@ -49,7 +58,7 @@ func (op BatchOperation) id() string {
 	if op.Clock != nil {
 		return op.Clock.OperationID
 	}
-	return op.Notes.OperationID
+	return op.Job.OperationID
 }
 
 // SubmitOperationBatch deliberately has no enclosing transaction. Each existing
@@ -77,7 +86,7 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			successful[op.OperationID] = err == nil && receipt.Code == "accepted"
 			continue
 		}
-		op := *member.Notes
+		op := *member.Job
 		id, err := strconv.ParseInt(op.Target, 10, 64)
 		if err != nil {
 			id, err = s.ResolveSyncedJob(ctx, op.Target)
@@ -87,20 +96,41 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			err = nil
 		}
 		result := BatchOperationResult{OperationID: op.OperationID, Err: err}
+		accepted := false
 		if err == nil {
-			in := JobExecutionCommand{OperationID: op.OperationID, NotesRevision: op.NotesRevision, MissingNotes: op.Notes == nil, OccurredAt: op.OccurredAt}
+			in := JobExecutionCommand{OperationID: op.OperationID, NotesRevision: op.NotesRevision, MissingNotes: op.Type == "job.field_notes" && op.Notes == nil, OccurredAt: op.OccurredAt, StatusRevision: op.StatusRevision, MeaningRevision: op.MeaningRevision}
+			in.StatusID, _ = strconv.ParseInt(op.StatusID, 10, 64)
 			if op.Notes != nil {
 				in.Notes = *op.Notes
 			}
 			batch := batchExecution{operation: op, dependencies: batchDependencies{dependsOn: op.DependsOn, positions: positions, index: i, successful: successful}}
-			receipt, e := s.submitJobExecutionBound(ctx, a, id, "field_notes", in, &batch)
+			var receipt JobExecutionReceipt
+			var e error
+			switch op.Type {
+			case "job.subtask":
+				action := ""
+				if op.Completed != nil {
+					action = "reopen"
+					if *op.Completed {
+						action = "complete"
+					}
+				}
+				sub, err := s.submitSubtaskBound(ctx, a, id, SubtaskCommand{OperationID: op.OperationID, Action: action, SubtaskID: op.SubtaskID, CompletionRevision: op.CompletionRevision, OccurredAt: op.OccurredAt}, &batch)
+				e = err
+				receipt = JobExecutionReceipt{OperationID: sub.OperationID, Code: sub.Code, EffectID: sub.SubtaskID, AcceptedAt: sub.AcceptedAt}
+			case "job.status":
+				receipt, e = s.submitJobExecutionBound(ctx, a, id, "status", in, &batch)
+			default:
+				receipt, e = s.submitJobExecutionBound(ctx, a, id, "field_notes", in, &batch)
+			}
 			result.Err = e
+			accepted = e == nil && receipt.Code == "accepted"
 			if receipt.Code != "" {
 				result.Receipt = &receipt
 			}
 		}
 		results = append(results, result)
-		successful[op.OperationID] = result.Err == nil && result.Receipt != nil
+		successful[op.OperationID] = accepted
 	}
 	return results
 }
@@ -126,7 +156,7 @@ type batchDependencies struct {
 // authority transaction. Submitted position is eligibility, never part of intent;
 // a same-intent retry may submit only the unresolved operation.
 func (b *batchExecution) validate(ctx context.Context, tx pgx.Tx, a Actor) error {
-	if b.operation.Type != "job.field_notes" {
+	if b.operation.Type != "job.field_notes" && b.operation.Type != "job.status" && b.operation.Type != "job.subtask" {
 		return &JobExecutionConflict{"invalid_intent"}
 	}
 	if at := b.operation.OccurredAt; at != nil && at.Nanosecond()%1000 != 0 {

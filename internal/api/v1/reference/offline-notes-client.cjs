@@ -2,35 +2,38 @@
 const {randomUUID}=require('node:crypto');
 const {ProtectedFieldClient,ProtectedStore}=require('./protected-field-client.cjs');
 const clone=x=>JSON.parse(JSON.stringify(x));
+const jobCategories=new Set(['job:new','job:travel_time','job:in_progress','job:pending','job:completed','job:canceled']);
 
-// Notes owns its target/revision workflow; protected authority and receipt-first
-// reconciliation are shared with the independent Clock workflow.
-class OfflineNotes extends ProtectedFieldClient {
+// Job fields own their target/revision rules. Both Job and Clock workflows use
+// the same protected authority, receipt recovery and quarantine implementation.
+class OfflineFieldClient extends ProtectedFieldClient {
  purgeSensitiveTarget(s,job){
   delete s.cache[job];delete s.notes[job];
   for(const e of Object.values(s.pending))if(e.job===job){
-   delete e.intent;delete e.batch;delete e.job;e.state='purged';
+   delete e.intent;delete e.batch;delete e.subtask;delete e.job;e.state='purged';
   }
  }
- async synchronize(){return this.transaction(async s=>{
-  await this.policy(s);s.synced=false;s.cache={};s.notes={};await this.persist(s);
-  let page, records={};const seen=new Set();
+ async synchronize(delta=false){return this.transaction(async s=>{
+  if(delta){await this.enforceOfflineAccessWindow(s);if(!s.syncCursor)throw Error('synchronization_incomplete');}
+  await this.policy(s);const cursor=delta?s.syncCursor:null;
+  let page,records=delta?clone(s.cache):{},completion;const seen=new Set();
+  s.synced=false;s.cache={};s.notes={};await this.persist(s);
   do{
-   const r=await this.contact(s,'/sync/jobs?scope=assigned&page_size=200'+(page?'&page='+encodeURIComponent(page):''));
+   const r=await this.contact(s,'/sync/jobs?scope=assigned&page_size=200'+(page?'&page='+encodeURIComponent(page):cursor?'&cursor='+encodeURIComponent(cursor):''));
    if(r.status!==200||!Array.isArray(r.data?.records)||typeof r.data.complete!=='boolean'||!['none','all'].includes(r.data.purge))throw Error('synchronization_incomplete');
    if(r.data.purge==='all'){await this.purge(s);throw Error('authorization_purged');}
    for(const id of r.data.removed||[])delete records[id];
    for(const record of r.data.records){if(typeof record.id!=='string')throw Error('synchronization_incomplete');records[record.id]=record;}
-   if(r.data.complete){if(typeof r.data.completion_cursor!=='string'||!r.data.completion_cursor||r.data.next_page!==null)throw Error('synchronization_incomplete');page=null;}
+   if(r.data.complete){if(typeof r.data.completion_cursor!=='string'||!r.data.completion_cursor||r.data.next_page!==null)throw Error('synchronization_incomplete');completion=r.data.completion_cursor;page=null;}
    else {page=r.data.next_page;if(!page||seen.has(page))throw Error('synchronization_incomplete');seen.add(page);}
   }while(page);
   for(const e of Object.values(s.pending)){
    if(e.job&&!records[e.job])this.purgeSensitiveTarget(s,e.job);
    else if(s.restore&&!['replaced','purged'].includes(e.state))e.state='restore_uncertain';
   }
-  // The complete snapshot carries observed scope removals and restore outcomes.
-  // Failed persistence must not revive older intent after authority returns.
-  s.cache=records;s.synced=true;s.restore=false;await this.persistAuthorityLoss(s);
+  // A complete snapshot/delta and its cursor commit together; a failed observed
+  // authority-loss write cannot revive old data after authority returns.
+  s.cache=records;s.syncCursor=completion;s.synced=true;s.restore=false;await this.persistAuthorityLoss(s);
   return {state:'synchronized',count:Object.keys(records).length};
  });}
  async readNotes(job){return this.transaction(async s=>{
@@ -56,22 +59,46 @@ class OfflineNotes extends ProtectedFieldClient {
   await this.enforceOfflineAccessWindow(s);const depends_on=this.reviewedDependencies(dependencies);
   const id=this.stageIn(s,job,text);s.pending[id].batch={type:'job.field_notes',target:job,depends_on};await this.persist(s);return id;
  });}
+ stageStatusIn(s,job,status,revision,meaning,dependencies){
+  const record=s.cache[job],definition=record?.status_definitions?.find(v=>v.id===status);
+  if(record?.field_capabilities?.status!==true||!definition||!jobCategories.has(definition.category)||!revision||!meaning||record.status_revision!==revision||definition.meaning_revision!==meaning)throw Error('review_required');
+  const id=randomUUID();s.pending[id]={job,family:'job.execution',state:'pending',intent:{operation_id:id,status_id:status,status_revision:revision,meaning_revision:meaning,occurred_at:new Date(this.now()).toISOString()},batch:{type:'job.status',target:job,depends_on:this.reviewedDependencies(dependencies)}};return id;
+ }
+ stageSubtaskIn(s,job,subtask,completed,revision,dependencies){
+  const record=s.cache[job],task=record?.subtasks?.find(v=>v.id===subtask);
+  if(typeof completed!=='boolean'||!task||typeof task.completed!=='boolean'||!revision||record.field_capabilities?.[completed?'subtask_complete':'subtask_reopen']!==true||task.completion_revision!==revision)throw Error('review_required');
+  const id=randomUUID();s.pending[id]={job,subtask,family:'job.subtask',state:'pending',intent:{operation_id:id,subtask_id:subtask,completed,completion_revision:revision,occurred_at:new Date(this.now()).toISOString()},batch:{type:'job.subtask',target:job,depends_on:this.reviewedDependencies(dependencies)}};return id;
+ }
+ async stageStatus(job,status,revision,meaning,dependencies){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const id=this.stageStatusIn(s,job,status,revision,meaning,dependencies);await this.persist(s);return id;});}
+ async stageSubtask(job,subtask,completed,revision,dependencies){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const id=this.stageSubtaskIn(s,job,subtask,completed,revision,dependencies);await this.persist(s);return id;});}
+ repairableField(s,id,type){
+  const e=s.pending[id];
+  if(!e||e.batch?.type!==type||!e.job||!['terminal','restore_uncertain'].includes(e.state))throw Error('review_required');
+  if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
+  return e;
+ }
+ async repairStatus(id,status,revision,meaning,dependencies){return this.transaction(async s=>{
+  await this.enforceOfflineAccessWindow(s);const e=this.repairableField(s,id,'job.status');
+  const next=this.stageStatusIn(s,e.job,status,revision,meaning,dependencies);e.state='replaced';await this.persist(s);return next;
+ });}
+ async repairSubtask(id,completed,revision,dependencies){return this.transaction(async s=>{
+  await this.enforceOfflineAccessWindow(s);const e=this.repairableField(s,id,'job.subtask');
+  const next=this.stageSubtaskIn(s,e.job,e.subtask,completed,revision,dependencies);e.state='replaced';await this.persist(s);return next;
+ });}
  async submit(id){return this.transaction(async s=>{
   await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
   if(!e||e.state!=='pending'||!e.intent||e.batch)throw Error('reconciliation_or_review_required');
   if(e.retryNotBefore&&this.now()<e.retryNotBefore)throw Error('retry_after_required');
   await this.policy(s);
-  // Crash/response loss after this durable write always requires receipt lookup.
   e.state='unknown';await this.persist(s);
   const r=await this.contact(s,`/jobs/${encodeURIComponent(e.job)}/field-notes`,'POST',e.intent);
   if(r.status===200){this.receipt(e,id,r.data);}
   else if([400,404,409].includes(r.status)){e.state='terminal';e.code=r.error?.code;if(r.status===404)this.purgeSensitiveTarget(s,e.job);}
   else if(r.status===429||r.status>=500)e.retryNotBefore=this.now()+this.retryDelay(r.error);
-  // Even a service failure remains unknown until receipt lookup. Retry is explicit.
   if(r.status===404)await this.persistAuthorityLoss(s);else await this.persist(s);
   return {state:e.state,code:e.code,retry_not_before:e.retryNotBefore};
  });}
- receiptPath(e,id){return `/job-execution-operations/${encodeURIComponent(id)}`;}
+ receiptPath(e,id){return `/${e.family==='job.subtask'?'subtask-operations':'job-execution-operations'}/${encodeURIComponent(id)}`;}
  async receiptAuthority(s,e,code,receiptOnly=false){
   if(!['forbidden','not_found'].includes(code))return false;
   if(receiptOnly)await this.purge(s);else this.purgeSensitiveTarget(s,e.job);
@@ -79,11 +106,11 @@ class OfflineNotes extends ProtectedFieldClient {
  }
  async repair(id,text,reviewedRevision,reviewedDependencies){return this.transaction(async s=>{
   await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
-  if(!e||!['terminal','restore_uncertain'].includes(e.state)||!e.job)throw Error('review_required');
+  if(!e||!['terminal','restore_uncertain'].includes(e.state)||!e.job||(e.batch&&e.batch.type!=='job.field_notes'))throw Error('review_required');
   if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
   if(!reviewedRevision||s.notes[e.job]?.notes_revision!==reviewedRevision)throw Error('review_required');
   const batch=e.batch?{type:e.batch.type,target:e.batch.target,depends_on:this.reviewedDependencies(reviewedDependencies)}:null;
   const next=this.stageIn(s,e.job,text);if(batch)s.pending[next].batch=batch;e.state='replaced';await this.persist(s);return next;
  });}
 }
-module.exports={OfflineNotes,ProtectedStore};
+module.exports={OfflineFieldClient,OfflineNotes:OfflineFieldClient,ProtectedStore};
