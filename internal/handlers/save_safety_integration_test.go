@@ -86,7 +86,13 @@ func TestSaveSafetyNativeInitialReadFailureHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer pool.Exec(ctx, `ALTER TABLE safety_unavailable_records RENAME TO `+table)
-			path := "/" + strings.ReplaceAll(table, "_", "-") + "?search=Keep+filter&sort=name_desc&page=2"
+			sort := "name_desc"
+			if table == "time_entries" {
+				// Exercise the read fault with a valid report selector, rather
+				// than an unrelated validation rejection before the database read.
+				sort = "start_desc"
+			}
+			path := "/" + strings.ReplaceAll(table, "_", "-") + "?search=Keep+filter&sort=" + sort + "&page=2"
 			w := safetyRequest(router, cookie, "GET", path, nil, "")
 			if w.Code != 503 || !strings.Contains(w.Body.String(), "Retry") {
 				t.Fatalf("native initial read failure: %d %.300s", w.Code, w.Body.String())
