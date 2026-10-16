@@ -88,6 +88,16 @@ func (s *Service) AcceptBoundedPayment(ctx context.Context, a authorization.Acto
 			return err
 		}
 		if found {
+			// Receipt ownership is independent of operation replay authority. A
+			// historical cross-family binding never authorizes another mutation,
+			// but must not hide an independently identifiable original receipt.
+			var binding string
+			if err := tx.QueryRow(ctx, `SELECT coalesce((SELECT operation_type FROM operation_admissions WHERE operation_id=$1),'')`, in.OperationID).Scan(&binding); err != nil {
+				return err
+			}
+			if binding != "" && binding != "settlement.legacy" {
+				return authorization.ErrConflict
+			}
 			// The old browser command had no API client, occurrence or Job intent.
 			// Reconcile only its exact recorded request, without rebinding it.
 			if a.Channel == "api" || in.JobID != 0 || in.OccurredAt != nil || !paymentAmountPattern.MatchString(in.Amount) {
@@ -219,20 +229,25 @@ func (s *Service) AcceptBoundedPayment(ctx context.Context, a authorization.Acto
 
 func installedPaymentReceipt(ctx context.Context, tx pgx.Tx, p authorization.Principal, key string) (PaymentReceipt, string, bool, error) {
 	r := PaymentReceipt{OperationID: key, Outcome: "accepted"}
-	var fingerprint, binding string
-	var actor *int64
-	err := tx.QueryRow(ctx, `SELECT p.id::text,p.actor_id,k.created_at,k.request_fingerprint,coalesce((SELECT operation_type FROM operation_admissions WHERE operation_id=$3::uuid),'') FROM settlement_idempotency k JOIN invoice_payments p ON p.id=k.result_id AND p.company_id=k.company_id WHERE k.company_id=$1 AND k.operation='record_payment' AND lower(k.idempotency_key)=lower($2)`, p.CompanyID, key, key).Scan(&r.PaymentID, &actor, &r.AcceptedAt, &fingerprint, &binding)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return r, "", false, nil
-	}
+	var fingerprint string
+	rows, err := tx.Query(ctx, `SELECT k.idempotency_key,p.id::text,k.created_at,k.request_fingerprint FROM settlement_idempotency k JOIN invoice_payments p ON p.id=k.result_id AND p.company_id=k.company_id WHERE k.company_id=$1 AND k.operation='record_payment' AND lower(k.idempotency_key)=lower($2) AND p.actor_id=$3 LIMIT 2`, p.CompanyID, key, p.UserID)
 	if err != nil {
 		return r, "", false, err
 	}
-	if actor == nil || *actor != p.UserID {
-		return r, "", false, authorization.ErrNotFound
+	defer rows.Close()
+	if !rows.Next() {
+		return r, "", false, rows.Err()
 	}
-	if binding != "" && binding != "settlement.legacy" {
-		return r, "", false, authorization.ErrConflict
+	if err := rows.Scan(&r.OperationID, &r.PaymentID, &r.AcceptedAt, &fingerprint); err != nil {
+		return r, "", false, err
+	}
+	// No arbitrary winner when the original user genuinely has multiple
+	// financial receipts under the same normalized UUID.
+	if rows.Next() {
+		return PaymentReceipt{}, "", false, authorization.ErrConflict
+	}
+	if err := rows.Err(); err != nil {
+		return r, "", false, err
 	}
 	return r, fingerprint, true, nil
 }

@@ -88,7 +88,11 @@ the common registry with explicitly unknown historical clients. The existing web
 route reconciles the original user's exact immutable receipt facts and installed
 fingerprint before considering new money. Changed intent and cross-family reuse
 reject; collisions never receive a guessed historical winner. Read-only lookup
-can return the original receipt without creating a replacement financial fact.
+returns a uniquely identifiable original-user Payment receipt even when its UUID
+also has another family's retained admission. Replay still conflicts, the other
+binding is untouched, and genuinely multiple matching Payment receipts remain
+explicitly ambiguous rather than selecting one. No replacement financial fact is
+created by reconciliation.
 
 For installations still awaiting042, the strengthened preflight/cutover preserves
 recorded UUIDs directly and retains other original receipt IDs in
