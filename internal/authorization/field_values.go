@@ -222,7 +222,7 @@ func (s *Service) detailsInTransaction(ctx context.Context, tx pgx.Tx, a Actor, 
 		}
 	}
 	if fieldScope != "" && fields != old {
-		if err := audit(ctx, tx, a, p, "job.fields.edit", fieldScope, typ, result, map[string]any{"before": old, "after": fields}); err != nil {
+		if err := audit(ctx, tx, a, p, "job.fields.edit", fieldScope, typ, result, map[string]any{"before": old, "after": fields, "field_value_format": jobFieldValueFormatV1}); err != nil {
 			return err
 		}
 	}

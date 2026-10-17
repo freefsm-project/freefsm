@@ -38,6 +38,8 @@ type JobExecutionReceipt struct {
 	Code        string    `json:"code"`
 	EffectID    string    `json:"effect_id,omitempty"`
 	AcceptedAt  time.Time `json:"accepted_at"`
+	Reason      string    `json:"reason,omitempty"`
+	JobID       int64     `json:"job_id,omitempty"`
 }
 
 type JobExecutionConflict struct{ Code string }

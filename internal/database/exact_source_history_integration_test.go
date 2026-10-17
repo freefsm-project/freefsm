@@ -160,21 +160,28 @@ func TestExactSourceInstalledHistories(t *testing.T) {
 			}
 			t.Cleanup(db.Close)
 			source := exactHistorySQL(t, pin)
-			// All helpers called by the historical initializer are unchanged. Fail
-			// closed if that stops being true, rather than silently using new code.
+			// Execute the historical initializer AND its pinned dependencies. Current
+			// validation may evolve; it must never silently initialize old evidence.
+			dir := t.TempDir()
+			replacements := map[string]string{}
 			for _, path := range []string{"internal/database/workflow_preflight.go", "internal/database/asset_identity_preflight.go", "internal/database/vocabulary_preflight.go", "internal/customfields/preflight.go", "internal/customfields/values.go", "internal/customfields/catalog.go", "internal/customfields/references.go", "internal/customfields/cycles.go"} {
 				old := historyGit(t, "show", pin+":"+path)
-				current, err := os.ReadFile(filepath.Join("../..", path))
+				current, err := filepath.Abs(filepath.Join("../..", path))
 				if err != nil {
 					t.Fatal(err)
 				}
-				if string(old) != string(current) {
-					t.Fatalf("historical initializer dependency changed: %s", path)
+				replacement := filepath.Join(dir, "source", path)
+				if err := os.MkdirAll(filepath.Dir(replacement), 0700); err != nil {
+					t.Fatal(err)
 				}
+				if err := os.WriteFile(replacement, old, 0600); err != nil {
+					t.Fatal(err)
+				}
+				replacements[current] = replacement
+				t.Logf("historical initializer dependency %s sha256=%x", path, sha256.Sum256(old))
 			}
 			original := historyGit(t, "show", pin+":internal/database/database.go")
 			t.Logf("database.go sha256=%x", sha256.Sum256(original))
-			dir := t.TempDir()
 			replacement := filepath.Join(dir, "database.go")
 			if err := os.WriteFile(replacement, original, 0600); err != nil {
 				t.Fatal(err)
@@ -183,7 +190,8 @@ func TestExactSourceInstalledHistories(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			overlay, _ := json.Marshal(map[string]any{"Replace": map[string]string{current: replacement}})
+			replacements[current] = replacement
+			overlay, _ := json.Marshal(map[string]any{"Replace": replacements})
 			overlayPath := filepath.Join(dir, "overlay.json")
 			if err := os.WriteFile(overlayPath, overlay, 0600); err != nil {
 				t.Fatal(err)

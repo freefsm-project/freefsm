@@ -57,7 +57,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_request", "operations must be an array")
 		return
 	}
-	operations := make([]authorization.BatchOperation, 0, len(envelope.Operations))
+	operations := make([]authorization.OrderedBatchOperation, 0, len(envelope.Operations))
 	seen := map[string]bool{}
 	for _, raw := range envelope.Operations {
 		var discriminator struct {
@@ -110,19 +110,27 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			seen[op.OperationID] = true
-			operations = append(operations, authorization.BatchOperation{File: &op})
+			operations = append(operations, authorization.OrderedBatchOperation{File: &op})
 			continue
 		}
 		var wire struct {
 			authorization.BatchNotesOperation
-			DependsOn []*string `json:"depends_on"`
+			DependsOn []*string       `json:"depends_on"`
+			Revisions json.RawMessage `json:"revisions"`
 		}
 		part := r.Clone(r.Context())
 		part.Body = io.NopCloser(bytes.NewReader(raw))
-		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "status_id", "status_revision", "meaning_revision", "subtask_id", "completion_revision", "completed") {
+		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "status_id", "status_revision", "meaning_revision", "subtask_id", "completion_revision", "completed", "revisions", "values") {
 			return
 		}
 		op := wire.BatchNotesOperation
+		if op.Type == "job.fields" {
+			var valid bool
+			op.Revisions, valid = fieldPatchWire(w, r, op.Values, wire.Revisions)
+			if !valid {
+				return
+			}
+		}
 		if wire.DependsOn != nil {
 			op.DependsOn = make([]string, 0, len(wire.DependsOn))
 		}
@@ -141,7 +149,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		seen[op.OperationID] = true
-		operations = append(operations, authorization.BatchOperation{Field: &op})
+		operations = append(operations, authorization.OrderedBatchOperation{Field: &op})
 	}
 	results := req.Service.SubmitOperationBatch(r.Context(), req.Actor, operations, h.deps.Files.SubmitBatchOperation)
 	out := make([]batchResult, 0, len(results))
@@ -202,6 +210,9 @@ func completeBatchFieldIntent(op authorization.BatchFieldOperation, raw []byte) 
 	case "job.subtask":
 		fields = []string{"subtask_id", "completion_revision", "completed"}
 		valid = op.SubtaskID != "" && op.CompletionRevision != "" && op.Completed != nil
+	case "job.fields":
+		fields = []string{"revisions", "values"}
+		valid = op.Revisions != nil && len(op.Values) > 0
 	}
 	for _, key := range fields {
 		allowed[key] = true
