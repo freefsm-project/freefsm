@@ -33,7 +33,7 @@ func TestCommentSyncReceiptFirstScopeLossHTTP(t *testing.T) {
 }
 
 func TestCommentSyncOriginalEligibilityHTTP(t *testing.T) {
-	for _, mode := range []string{"convert-revert", "archive-restore", "relink"} {
+	for _, mode := range []string{"convert-revert", "archive-restore", "relink", "relink-back", "assignment-aba"} {
 		t.Run(mode, func(t *testing.T) { commentSyncReference(t, "comment-eligibility-http.cjs", "eligibility-"+mode) })
 	}
 }
@@ -140,9 +140,20 @@ func commentSyncReference(t *testing.T, script, mode string) {
 				case "eligibility-archive-restore":
 					commentPost(t, web, adminCookie, base+"/delete", nil, 303)
 					commentPost(t, web, adminCookie, base+"/restore", nil, 303)
-				case "eligibility-relink":
+				case "eligibility-relink", "eligibility-relink-back":
 					values := commercialReviewedValues(t, web, adminCookie, base, url.Values{"customer_id": {fmt.Sprint(customer.ID)}, "job_id": {fmt.Sprint(otherJob)}, "title": {"Relinked document"}, "line_items": {"[]"}, "tax_rate": {"0"}})
 					documentTransactionRequest(t, web, adminCookie, "POST", base, values, 303)
+					if mode == "eligibility-relink-back" {
+						back := commercialReviewedValues(t, web, adminCookie, base, url.Values{"customer_id": {fmt.Sprint(customer.ID)}, "job_id": {fmt.Sprint(job.ID)}, "title": {"Returned original document"}, "line_items": {"[]"}, "tax_rate": {"0"}})
+						documentTransactionRequest(t, web, adminCookie, "POST", base, back, 303)
+					}
+				case "eligibility-assignment-aba":
+					if _, err := pool.Exec(ctx, `DELETE FROM job_assignments WHERE job_id=$1 AND user_id=$2`, job.ID, userID); err != nil {
+						t.Fatal(err)
+					}
+					if _, err := pool.Exec(ctx, `INSERT INTO job_assignments(job_id,user_id) VALUES($1,$2)`, job.ID, userID); err != nil {
+						t.Fatal(err)
+					}
 				default:
 					t.Error("unknown eligibility fixture")
 				}
