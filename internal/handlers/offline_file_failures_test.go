@@ -303,3 +303,78 @@ func TestOfflineFilesPublicationStorageRetryHTTP(t *testing.T) {
 		t.Fatalf("same-ID storage recovery: %v", r)
 	}
 }
+
+func TestOfflineFilesConcurrentRejectionCannotBorrowReceiptHTTP(t *testing.T) {
+	f := offlineFiles(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	transfer, pub := f.transfer(t, "existing.txt", "existing bytes")
+	r := f.batch(t, fileBatchOp(pub, "file.publish", transfer, f.job))[0].(map[string]any)["receipt"].(map[string]any)
+	id := fmt.Sprint(r["file_id"])
+	meta := f.call(t, "GET", "/files/"+id+"/metadata", nil, 200)
+	shared, incomplete := uuid.NewString(), uuid.NewString()
+	f.call(t, "POST", "/file-transfers", map[string]any{"id": incomplete, "publication_id": shared, "object_type": "job", "object_id": f.job, "name": "incomplete.txt", "size": 4, "sha256": strings.Repeat("a", 64)}, 201)
+	readGate, err := f.pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer readGate.Rollback(context.Background())
+	var blocker int32
+	if _, err := readGate.Exec(ctx, `LOCK TABLE file_transfers IN ACCESS EXCLUSIVE MODE`); err != nil {
+		t.Fatal(err)
+	}
+	if err := readGate.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blocker); err != nil {
+		t.Fatal(err)
+	}
+	request := fileBatchOp(shared, "file.publish", incomplete, f.job)
+	raw, _ := json.Marshal(map[string]any{"operations": []any{request}})
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- batchRequest(f.api, f.token, string(raw)) }()
+	application := f.pool.Config().ConnConfig.RuntimeParams["application_name"]
+	var reader int32
+	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); {
+		var pids []int32
+		if err := f.pool.QueryRow(ctx, `SELECT coalesce(array_agg(pid),'{}') FROM pg_stat_activity WHERE datname=current_database() AND application_name=$2 AND $1=ANY(pg_blocking_pids(pid)) AND wait_event_type='Lock' AND query LIKE 'SELECT id::text,publication_id::text,%'`, blocker, application).Scan(&pids); err != nil {
+			t.Fatal(err)
+		}
+		if len(pids) == 1 {
+			reader = pids[0]
+			break
+		}
+		if len(pids) > 1 {
+			t.Fatal("ambiguous publication reader")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if reader == 0 {
+		t.Fatal("publication did not pass initial admission lookup and reach scoped transfer read")
+	}
+	// While publication is paused AFTER its original receipt miss, the same
+	// caller commits a different actual domain mutation under that UUID.
+	f.call(t, "POST", "/files/"+id+"/rename", map[string]any{"operation_id": shared, "object_type": "job", "object_id": f.job, "revision": meta["revision"], "name": "accepted-mutation.txt"}, 200)
+	current := f.call(t, "GET", "/files/"+id+"/metadata", nil, 200)
+	if current["name"] != "accepted-mutation.txt" {
+		t.Fatal("competing domain UPDATE did not commit")
+	}
+	t.Logf("fixture=%s publication backend%d blocked by transfer-table holder%d after receipt miss; actual File rename committed before read release", application, reader, blocker)
+	if err := readGate.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	w := <-done
+	if w.Code != 200 {
+		t.Fatalf("publication response: %d %s", w.Code, w.Body.String())
+	}
+	var out struct {
+		Data struct{ Results []map[string]any }
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	result := out.Data.Results[0]
+	if result["receipt"] != nil || result["error"].(map[string]any)["status"] != float64(409) {
+		t.Fatalf("publication borrowed a different immutable receipt: %s", w.Body.String())
+	}
+	if receipt := f.call(t, "GET", "/file-operations/"+shared, nil, 200); receipt["effect_id"] != id || receipt["code"] != "accepted" {
+		t.Fatalf("original mutation receipt changed: %v", receipt)
+	}
+}

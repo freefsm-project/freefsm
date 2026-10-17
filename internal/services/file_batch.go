@@ -19,6 +19,9 @@ func (s *FileService) SubmitBatchOperation(ctx context.Context, op authorization
 	if !ok {
 		return authorization.FileReceipt{}, authorization.ErrForbidden
 	}
+	if s == nil {
+		return authorization.FileReceipt{}, errors.New("File storage dependency is unavailable")
+	}
 	if op.Type == "file.rename" || op.Type == "file.remove" {
 		id, err := strconv.ParseInt(op.Target, 10, 64)
 		if err != nil {
@@ -77,12 +80,30 @@ func (s *FileService) SubmitBatchOperation(ctx context.Context, op authorization
 	if err != nil {
 		err = r.Service.RejectFilePublication(ctx, r.Actor, op.OperationID, intent, err, true)
 	}
+	// Validation may run outside the effect transaction. Another command can
+	// acquire this UUID after our initial receipt miss but before rejection is
+	// recorded. Never attach that command's receipt to the rejected intent.
+	bound, bindingErr := r.Service.ReplayFileCommand(ctx, r.Actor, op.OperationID, "file.publication", intent)
+	if bindingErr != nil {
+		return authorization.FileReceipt{}, bindingErr
+	}
+	if !bound {
+		if err != nil {
+			return authorization.FileReceipt{}, err
+		}
+		return authorization.FileReceipt{}, errors.New("File publication receipt is unavailable")
+	}
 	receipt, lookupErr := r.Service.FileReceipt(ctx, r.Actor, op.OperationID)
 	if lookupErr != nil {
 		if err != nil {
 			return authorization.FileReceipt{}, err
 		}
 		return authorization.FileReceipt{}, lookupErr
+	}
+	// A concurrent same-intent acceptance is authoritative even if this attempt
+	// subsequently observed parent/byte loss. It is not a second failed effect.
+	if receipt.Code == "accepted" {
+		return receipt, nil
 	}
 	return receipt, err
 }

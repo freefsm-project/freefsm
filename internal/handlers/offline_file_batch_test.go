@@ -320,3 +320,28 @@ func TestOfflineFilesInstalledIdentityReceiptPrecisionHTTP(t *testing.T) {
 		t.Fatalf("scope-loss identity: %v", safe)
 	}
 }
+
+func TestOfflineFilesUnavailableServiceDoesNotBlockUnrelatedHTTP(t *testing.T) {
+	f := offlineFiles(t)
+	transfer, pub := f.transfer(t, "available.txt", "available bytes")
+	notes := f.call(t, "GET", fmt.Sprintf("/jobs/%d/field-notes", f.job), nil, 200)
+	op := fileBatchOp(pub, "file.publish", transfer, f.job)
+	good := map[string]any{"operation_id": uuid.NewString(), "type": "job.field_notes", "target": fmt.Sprint(f.job), "depends_on": []string{}, "notes_revision": notes["notes_revision"], "field_notes": "unrelated survives"}
+	// The production router supports optional File storage dependencies. A
+	// missing service must be a per-operation retry, never panic the whole batch.
+	withFiles := f.api
+	f.api = apiv1.NewRouter(f.pool, f.client, f.sessions)
+	results := f.batch(t, op, good)
+	first := results[0].(map[string]any)
+	if first["receipt"] != nil || first["error"].(map[string]any)["code"] != "retryable_failure" {
+		t.Fatalf("missing dependency disposition: %v", first)
+	}
+	if results[1].(map[string]any)["receipt"].(map[string]any)["code"] != "accepted" {
+		t.Fatalf("unrelated blocked: %v", results[1])
+	}
+	f.api = withFiles
+	f.call(t, "GET", "/file-operations/"+pub, nil, 404)
+	if r := f.batch(t, op)[0].(map[string]any)["receipt"].(map[string]any); r["code"] != "accepted" {
+		t.Fatalf("same-ID dependency recovery: %v", r)
+	}
+}
