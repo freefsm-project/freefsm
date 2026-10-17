@@ -55,6 +55,23 @@ class ProtectedFieldClient {
   }
   return r;
  }
+ // Traverse one protected projection; adapters own its cache commit and pending
+ // intent policy. A delta starts from the caller's detached previous records.
+ async pages(s,path,cursor=null,records={}){
+  let page,completion;const seen=new Set();
+  const query=path+(path.includes('?')?'&':'?')+'page_size=200';
+  do{
+   const r=await this.contact(s,query+(page?'&page='+encodeURIComponent(page):cursor?'&cursor='+encodeURIComponent(cursor):''));
+   if(r.status!==200||!Array.isArray(r.data?.records)||typeof r.data.complete!=='boolean'||!['none','all'].includes(r.data.purge))throw Error('synchronization_incomplete');
+   if(r.data.purge==='all'){await this.purge(s);throw Error('authorization_purged');}
+   if(!Array.isArray(r.data.removed))throw Error('synchronization_incomplete');
+   for(const id of r.data.removed)delete records[id];
+   for(const record of r.data.records){if(typeof record?.id!=='string')throw Error('synchronization_incomplete');records[record.id]=record;}
+   if(r.data.complete){if(typeof r.data.completion_cursor!=='string'||!r.data.completion_cursor||r.data.next_page!==null)throw Error('synchronization_incomplete');completion=r.data.completion_cursor;page=null;}
+   else {page=r.data.next_page;if(!page||seen.has(page))throw Error('synchronization_incomplete');seen.add(page);}
+  }while(page);
+  return {records,cursor:completion};
+ }
  async policy(s,receiptOnly=false){
   const r=await this.contact(s,'/offline/policy');
   if(r.status!==200)throw Error('reauthorization_unavailable');

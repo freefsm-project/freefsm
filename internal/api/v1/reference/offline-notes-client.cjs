@@ -16,24 +16,16 @@ class OfflineFieldClient extends ProtectedFieldClient {
  async synchronize(delta=false){return this.transaction(async s=>{
   if(delta){await this.enforceOfflineAccessWindow(s);if(!s.syncCursor)throw Error('synchronization_incomplete');}
   await this.policy(s);const cursor=delta?s.syncCursor:null;
-  let page,records=delta?clone(s.cache):{},completion;const seen=new Set();
+  const previous=delta?clone(s.cache):{};
   s.synced=false;s.cache={};s.notes={};await this.persist(s);
-  do{
-   const r=await this.contact(s,'/sync/jobs?scope=assigned&page_size=200'+(page?'&page='+encodeURIComponent(page):cursor?'&cursor='+encodeURIComponent(cursor):''));
-   if(r.status!==200||!Array.isArray(r.data?.records)||typeof r.data.complete!=='boolean'||!['none','all'].includes(r.data.purge))throw Error('synchronization_incomplete');
-   if(r.data.purge==='all'){await this.purge(s);throw Error('authorization_purged');}
-   for(const id of r.data.removed||[])delete records[id];
-   for(const record of r.data.records){if(typeof record.id!=='string')throw Error('synchronization_incomplete');records[record.id]=record;}
-   if(r.data.complete){if(typeof r.data.completion_cursor!=='string'||!r.data.completion_cursor||r.data.next_page!==null)throw Error('synchronization_incomplete');completion=r.data.completion_cursor;page=null;}
-   else {page=r.data.next_page;if(!page||seen.has(page))throw Error('synchronization_incomplete');seen.add(page);}
-  }while(page);
+  const snapshot=await this.pages(s,'/sync/jobs?scope=assigned',cursor,previous),records=snapshot.records;
   for(const e of Object.values(s.pending)){
    if(e.job&&!records[e.job])this.purgeSensitiveTarget(s,e.job);
    else if(s.restore&&!['replaced','purged'].includes(e.state))e.state='restore_uncertain';
   }
   // A complete snapshot/delta and its cursor commit together; a failed observed
   // authority-loss write cannot revive old data after authority returns.
-  s.cache=records;s.syncCursor=completion;s.synced=true;s.restore=false;await this.persistAuthorityLoss(s);
+  s.cache=records;s.syncCursor=snapshot.cursor;s.synced=true;s.restore=false;await this.persistAuthorityLoss(s);
   return {state:'synchronized',count:Object.keys(records).length};
  });}
  async readNotes(job){return this.transaction(async s=>{

@@ -21,18 +21,6 @@ class OfflineClocks extends ProtectedFieldClient {
   // of retaining a revoked Time/GPS projection. Refresh actual current scope.
   await this.synchronizeState(s,false);return true;
  }
- async pages(s,path,cursor=null,records={}){
-  let page,completion;const seen=new Set();
-  do {
-   const r=await this.contact(s,path+'?page_size=200'+(page?'&page='+encodeURIComponent(page):cursor?'&cursor='+encodeURIComponent(cursor):''));
-   if(r.status!==200||!Array.isArray(r.data?.records)||!Array.isArray(r.data.removed)||typeof r.data.complete!=='boolean'||r.data.purge!=='none')throw Error('synchronization_incomplete');
-   for(const id of r.data.removed)delete records[id];
-   for(const record of r.data.records){if(typeof record.id!=='string')throw Error('synchronization_incomplete');records[record.id]=record;}
-   if(r.data.complete){if(typeof r.data.completion_cursor!=='string'||!r.data.completion_cursor||r.data.next_page!==null)throw Error('synchronization_incomplete');completion=r.data.completion_cursor;page=null;}
-   else {page=r.data.next_page;if(!page||seen.has(page))throw Error('synchronization_incomplete');seen.add(page);}
-  }while(page);
-  return {records,cursor:completion};
- }
  async clockLease(s){
   if(s.clockLease&&this.now()<Date.parse(s.clockLease.expires_at))return;
   const retry=s.clockIssuance?.state==='unknown';
