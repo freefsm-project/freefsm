@@ -72,6 +72,9 @@ blocks replacement while unknown, queries the original receipt and keeps
 post-restore missing receipts uncertain until explicit review. Sensitive intent is
 held separately from safe operation identity: ordinary authentication, grant or
 scope denial and logout purge owned input, including older retained entry handles.
+Public intent views resolve readability on every field access, so a caller-held
+view also withholds sensitive fields/serialization after purge or restore locking;
+the private immutable submission object is never returned as a cache projection.
 Receipt ownership alone never restores that input. Inspection rechecks current
 Payment authority; unavailable authority withholds input without fabricating loss.
 Explicit restore detection instead withholds recoverable pending input until fresh

@@ -2,17 +2,29 @@
 const { randomUUID } = require('node:crypto');
 const terminalOutcomes = new Set(['not_found', 'forbidden', 'invalid_payment', 'invoice_ineligible']);
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const freeze = value => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
+const inputFields = new Set(['amount', 'method', 'date', 'reference', 'note', 'other_description', 'occurred_at']);
+
+function intentView(record) {
+  const view = { operation_id: record.id };
+  for (const name of ['job_id', ...inputFields]) {
+    Object.defineProperty(view, name, {
+      enumerable: true,
+      get: () => record.sensitive?.readable ? record.sensitive.intent[name] : undefined,
+    });
+  }
+  return Object.freeze(view);
+}
 
 // The view owns no permanent copy of sensitive input. Clearing/withholding the
 // private record also removes access through every retained entry handle.
 function entryView(record) {
+  const projection = intentView(record);
   return Object.freeze({
     operation_id: record.id,
     get state() { return record.state; },
     get receipt() { return record.receipt; },
     get invoice() { return record.sensitive?.readable ? record.sensitive.invoice : undefined; },
-    get intent() { return record.sensitive?.readable ? record.sensitive.intent : undefined; },
+    get intent() { return record.sensitive?.readable ? projection : undefined; },
   });
 }
 
@@ -42,7 +54,14 @@ class PaymentReference {
     if (this.#revoked) throw new Error('Fresh authorized reference context required');
     if (this.#restored || this.#pending && !['accepted', 'rejected', 'discarded'].includes(this.#pending.state)) throw new Error('Reconcile the original financial intent first');
     if (!Number.isSafeInteger(invoice) || invoice < 1 || !Number.isSafeInteger(job) || job < 1) throw new Error('Original Invoice and Job required');
-    const intent = freeze(JSON.parse(JSON.stringify({ ...values, job_id: job, operation_id: randomUUID() })));
+    if (!values || typeof values !== 'object' || Array.isArray(values)) throw new Error('Payment input must be an object');
+    const captured = {};
+    for (const [name, value] of Object.entries(values)) {
+      if (value === undefined) continue;
+      if (!inputFields.has(name) || typeof value !== 'string') throw new Error('Payment input fields must use the declared string contract');
+      captured[name] = value;
+    }
+    const intent = Object.freeze({ ...captured, job_id: job, operation_id: randomUUID() });
     const record = { id: intent.operation_id, state: 'pending', receipt: null, sensitive: { invoice, intent, readable: true } };
     const entry = entryView(record);
     this.#records.set(entry, record); this.#pending = entry;
@@ -53,7 +72,8 @@ class PaymentReference {
     if (entry !== this.#pending || record.state !== 'pending' || this.#restored || this.#revoked || !record.sensitive?.readable) throw new Error('Explicit original-intent review required');
     record.state = 'unknown';
     try {
-      const response = await this.request('POST', `/invoices/${record.sensitive.invoice}/payments`, record.sensitive.intent);
+      // Transport receives a wire snapshot, never the retained backing object.
+      const response = await this.request('POST', `/invoices/${record.sensitive.invoice}/payments`, Object.freeze({ ...record.sensitive.intent }));
       if (response.status === 200) this.#acceptReceipt(entry, response.body?.data);
       else if (response.status === 401) this.#purge();
       else await this.inspect(entry);
@@ -66,7 +86,8 @@ class PaymentReference {
       (receipt.outcome === 'accepted' ? typeof receipt.payment_id !== 'string' || !uuidPattern.test(receipt.payment_id) : !terminalOutcomes.has(receipt.outcome) || receipt.payment_id !== undefined)) {
       record.state = 'locked'; return;
     }
-    record.receipt = Object.freeze(receipt);
+    record.receipt = Object.freeze({ operation_id: receipt.operation_id, outcome: receipt.outcome, accepted_at: receipt.accepted_at,
+      ...(receipt.payment_id === undefined ? {} : { payment_id: receipt.payment_id }) });
     if (['forbidden', 'not_found'].includes(receipt.outcome)) { this.#purge(); return; }
     record.state = !record.sensitive ? 'purged' : receipt.outcome === 'accepted' ? 'accepted' : 'rejected';
   }
