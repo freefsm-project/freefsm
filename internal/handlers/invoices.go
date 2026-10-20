@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -210,6 +211,17 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	d.PaymentKey, d.ApplyCreditKey = newOperationKey(), newOperationKey()
+	if templates.DetailCan(r.Context(), "payment") {
+		if request, ok := authorization.FromContext(r.Context()); ok {
+			var entry settlement.PaymentEntryContext
+			entry, err = settlement.New(request.Service.Pool).PrepareBoundedPayment(r.Context(), request.Actor, id)
+			if err != nil {
+				writeSettlementError(w, r, err)
+				return
+			}
+			d.PaymentMethods, d.PaymentEligible, d.PaymentDueCents = entry.Methods, entry.Eligible, entry.DueCents
+		}
+	}
 	tags, _ := h.tagLinkSvc.ListForObject(r.Context(), u.CompanyID, objectref.New(objectref.TypeInvoice, id))
 	allTags, _ := h.tagSvc.ListAll(r.Context(), u.CompanyID)
 	d.Tags = tagsToRows(tags)
@@ -1358,12 +1370,28 @@ func (h *InvoiceHandler) RecordPayment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	result, err := h.settlement.RecordPayment(r.Context(), actor, settlement.RecordPaymentRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, InvoiceID: id, AmountCents: amount, Method: settlement.PaymentMethod(r.FormValue("method")), ReceivedDate: settlement.Date(r.FormValue("date")), Reference: r.FormValue("reference"), Notes: r.FormValue("notes")})
+	_, err = h.settlement.RecordBoundedPayment(r.Context(), actor, settlement.RecordPaymentRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, InvoiceID: id, AmountCents: amount, Method: settlement.PaymentMethod(r.FormValue("method")), ReceivedDate: settlement.Date(r.FormValue("date")), Reference: r.FormValue("reference"), Notes: r.FormValue("notes"), OtherDescription: r.FormValue("other_description")})
 	if err != nil {
 		writeSettlementError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+recorded%%3A+%%24%.2f+applied", id, float64(result.AppliedCents)/100), http.StatusSeeOther)
+	if r.Header.Get("Accept") == "application/json" {
+		request, ok := authorization.FromContext(r.Context())
+		if !ok {
+			http.Error(w, "Unauthorized", 401)
+			return
+		}
+		receipt, err := settlement.New(request.Service.Pool).PaymentReceipt(r.Context(), request.Actor, r.FormValue("idempotency_key"))
+		if err != nil {
+			writeSettlementError(w, r, err)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": receipt})
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Payment+receipt+confirmed", id), http.StatusSeeOther)
 }
 
 func (h *InvoiceHandler) ReversePayment(w http.ResponseWriter, r *http.Request) {

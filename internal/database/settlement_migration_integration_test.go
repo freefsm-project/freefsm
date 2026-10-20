@@ -146,12 +146,57 @@ func TestSettlementMigration042Integration(t *testing.T) {
 		}
 	})
 
+	t.Run("retains actual receipt identity and unknown provenance", func(t *testing.T) {
+		db, ctx := migrationDatabaseThrough041(t, dsn)
+		invoiceID := seedLegacySettlement(t, ctx, db, `[{"id":"50000000-0000-4000-8000-000000000017","amount":25,"method":"cash","date":"2020-01-02","notes":"Original recorded note"},{"id":"paper-receipt-17","amount":25,"method":"check","date":"2020-01-03"}]`, `[{"title":"Work","quantity":1,"unit_price":100}]`, "Sent")
+		if err := db.Migrate(ctx, settlementMigrationFS(t)); err != nil {
+			t.Fatal(err)
+		}
+		var retained, unknown bool
+		if err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM invoice_payments WHERE id='50000000-0000-4000-8000-000000000017' AND invoice_id=$1 AND received_date='2020-01-02' AND notes='Original recorded note'),bool_and(actor_id IS NULL AND created_at IS NULL) FROM invoice_payments`, invoiceID).Scan(&retained, &unknown); err != nil {
+			t.Fatal(err)
+		}
+		if !retained || !unknown {
+			t.Fatalf("known identity retained=%v unknown historical attribution=%v", retained, unknown)
+		}
+		var opaque bool
+		if err := db.Pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM settlement_legacy_evidence e JOIN invoice_payments p ON p.id=e.payment_id WHERE e.source->>'id'='paper-receipt-17' AND p.legacy_receipt_id='paper-receipt-17' AND e.review_issues ? 'entry_time_unknown' AND e.review_issues ? 'actor_unknown')`).Scan(&opaque); err != nil {
+			t.Fatal(err)
+		}
+		if !opaque {
+			t.Fatal("opaque receipt identity or provenance review was discarded")
+		}
+	})
+
+	t.Run("retains explicitly recorded actor and entry time", func(t *testing.T) {
+		db, ctx := migrationDatabaseThrough041(t, dsn)
+		invoiceID := seedLegacySettlement(t, ctx, db, `[{"id":"paper-known","amount":25,"method":"cash","date":"2020-01-02"}]`, `[{"title":"Work","quantity":1,"unit_price":100}]`, "Sent")
+		var actor int64
+		if err := db.Pool.QueryRow(ctx, `SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1`).Scan(&actor); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Pool.Exec(ctx, `UPDATE invoices SET payments=jsonb_set(jsonb_set(payments,'{0,actor_id}',to_jsonb($2::bigint)),'{0,created_at}','"2020-01-03T12:00:00Z"'::jsonb) WHERE id=$1`, invoiceID, actor); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Migrate(ctx, settlementMigrationFS(t)); err != nil {
+			t.Fatal(err)
+		}
+		var exact bool
+		if err := db.Pool.QueryRow(ctx, `SELECT p.actor_id=$1 AND p.created_at='2020-01-03T12:00Z' AND p.received_date='2020-01-02' AND p.legacy_receipt_id='paper-known' AND e.source->>'created_at'='2020-01-03T12:00:00Z' AND e.review_issues='[]'::jsonb FROM invoice_payments p JOIN settlement_legacy_evidence e ON e.payment_id=p.id WHERE p.invoice_id=$2`, actor, invoiceID).Scan(&exact); err != nil {
+			t.Fatal(err)
+		}
+		if !exact {
+			t.Fatal("recorded actor/time/source changed")
+		}
+	})
+
 	failures := []struct {
 		name, payments, items, status string
 	}{
 		{"null payments", `null`, `[]`, "Sent"},
 		{"malformed payments", `[{"amount":"bad","method":"cash","date":"2026-01-01"}]`, `[]`, "Sent"},
 		{"invalid method", `[{"amount":1,"method":"wire","date":"2026-01-01"}]`, `[]`, "Sent"},
+		{"unknown recorded actor", `[{"id":"known","amount":1,"method":"cash","date":"2020-01-02","actor_id":9999999}]`, `[]`, "Sent"},
 		{"invalid date", `[{"amount":1,"method":"cash","date":"not-a-date"}]`, `[]`, "Sent"},
 		{"future date", `[{"amount":1,"method":"cash","date":"2999-01-01"}]`, `[]`, "Sent"},
 		{"negative total", `[]`, `[{"title":"Credit","quantity":1,"unit_price":-1}]`, "Sent"},

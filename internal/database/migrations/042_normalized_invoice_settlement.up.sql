@@ -22,10 +22,17 @@ BEGIN
   IF EXISTS (SELECT 1 FROM customers WHERE company_id IS NULL) THEN
     RAISE EXCEPTION 'settlement preflight: missing company ownership: customers=%', (SELECT count(*) FROM customers WHERE company_id IS NULL);
   END IF;
-  IF EXISTS (
-    SELECT 1 FROM invoices i WHERE jsonb_array_length(i.payments)>0 AND NOT EXISTS(
-      SELECT 1 FROM users u WHERE u.company_id=i.company_id AND u.role IN ('admin','dispatcher'))
-  ) THEN RAISE EXCEPTION 'settlement preflight: legacy payment has no authorized migration actor'; END IF;
+  IF EXISTS (SELECT 1 FROM settlement_migration_payments p JOIN invoices i ON i.id=p.invoice_id
+    WHERE p.actor_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM users u WHERE u.id=p.actor_id AND u.company_id=i.company_id)) THEN
+    RAISE EXCEPTION 'settlement preflight: recorded payment actor requires explicit reconciliation';
+  END IF;
+  IF EXISTS(SELECT 1 FROM settlement_migration_payments WHERE created_at>CURRENT_TIMESTAMP) THEN
+    RAISE EXCEPTION 'settlement preflight: recorded entry time requires explicit reconciliation';
+  END IF;
+  IF EXISTS(SELECT 1 FROM settlement_migration_payments GROUP BY
+    CASE WHEN legacy_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN legacy_id::uuid ELSE md5(invoice_id::text||':'||ordinal::text)::uuid END HAVING count(*)>1) THEN
+    RAISE EXCEPTION 'settlement preflight: ambiguous receipt identity requires explicit reconciliation';
+  END IF;
   IF EXISTS (SELECT 1 FROM invoices WHERE customer_id IS NULL) THEN
     RAISE EXCEPTION 'settlement preflight: orphan invoice(s) have no customer';
   END IF;
@@ -90,7 +97,7 @@ CREATE TABLE invoice_payments (
   method TEXT NOT NULL CHECK(method IN ('cash','check','credit_card','transfer','other')),
   received_date DATE NOT NULL,
   reference TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
-  actor_id BIGINT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  actor_id BIGINT, created_at TIMESTAMPTZ DEFAULT NOW(), legacy_receipt_id TEXT,
   FOREIGN KEY(customer_id,company_id) REFERENCES customers(id,company_id),
   FOREIGN KEY(invoice_id,customer_id,company_id) REFERENCES invoices(id,customer_id,company_id),
   FOREIGN KEY(actor_id,company_id) REFERENCES users(id,company_id)
@@ -152,13 +159,12 @@ CREATE TABLE settlement_reversals (
 -- Deterministic legacy conversion in invoice/date/array order. Canonical totals must
 -- be proven by the application preflight before this migration is run.
 WITH legacy AS (
-  SELECT i.id invoice_id,i.company_id,i.customer_id,p.ordinal ordinal,p.received_date,p.amount_cents,p.method,p.reference,p.notes
+  SELECT i.id invoice_id,i.company_id,i.customer_id,p.ordinal ordinal,p.received_date,p.amount_cents,p.method,p.reference,p.notes,p.legacy_id,p.actor_id,p.created_at
   FROM invoices i JOIN settlement_migration_payments p ON p.invoice_id=i.id
 ), inserted AS (
-  INSERT INTO invoice_payments(id,company_id,customer_id,invoice_id,amount_cents,method,received_date,reference,notes,actor_id)
-  SELECT md5(l.invoice_id::text||':'||l.ordinal::text)::uuid,l.company_id,l.customer_id,l.invoice_id,l.amount_cents,
-         l.method,l.received_date,l.reference,l.notes,
-         (SELECT u.id FROM users u WHERE u.company_id=l.company_id AND u.role IN ('admin','dispatcher') ORDER BY (u.role='admin') DESC,u.id LIMIT 1)
+  INSERT INTO invoice_payments(id,company_id,customer_id,invoice_id,amount_cents,method,received_date,reference,notes,actor_id,created_at,legacy_receipt_id)
+  SELECT CASE WHEN l.legacy_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN l.legacy_id::uuid ELSE md5(l.invoice_id::text||':'||l.ordinal::text)::uuid END,l.company_id,l.customer_id,l.invoice_id,l.amount_cents,
+         l.method,l.received_date,l.reference,l.notes,l.actor_id,l.created_at,nullif(l.legacy_id,'')
   FROM legacy l RETURNING *
 )
 SELECT count(*) FROM inserted;
@@ -167,7 +173,7 @@ WITH ordered AS (
   SELECT p.*, t.total_cents, legacy.ordinal,
     coalesce(sum(p.amount_cents) OVER (PARTITION BY p.invoice_id ORDER BY p.received_date,legacy.ordinal ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING),0) prior
   FROM invoice_payments p JOIN settlement_migration_invoice_totals t ON t.invoice_id=p.invoice_id
-  JOIN settlement_migration_payments legacy ON legacy.invoice_id=p.invoice_id AND p.id=md5(p.invoice_id::text||':'||legacy.ordinal::text)::uuid
+  JOIN settlement_migration_payments legacy ON legacy.invoice_id=p.invoice_id AND p.id=CASE WHEN legacy.legacy_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN legacy.legacy_id::uuid ELSE md5(p.invoice_id::text||':'||legacy.ordinal::text)::uuid END
 ), allocations AS (
   INSERT INTO payment_invoice_allocations(payment_id,invoice_id,amount_cents)
   SELECT id,invoice_id,least(amount_cents,greatest(total_cents-prior,0)) FROM ordered
@@ -193,6 +199,19 @@ FROM statuses old, LATERAL (
 WHERE i.status_id=old.id AND lower(old.name) IN ('paid','partially paid') AND current_setting('freefsm.workflow_review',true) IS NULL;
 DELETE FROM statuses s USING status_workflows w WHERE s.workflow_id=w.id AND w.object_type='invoice' AND lower(s.name) IN ('paid','partially paid') AND current_setting('freefsm.workflow_review',true) IS NULL;
 
+CREATE TABLE settlement_legacy_evidence (
+ payment_id UUID PRIMARY KEY REFERENCES invoice_payments(id),
+ source JSONB NOT NULL,
+ review_issues JSONB NOT NULL,
+ captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+INSERT INTO settlement_legacy_evidence(payment_id,source,review_issues)
+ SELECT CASE WHEN legacy_id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN legacy_id::uuid ELSE md5(invoice_id::text||':'||ordinal::text)::uuid END,source,
+ (CASE WHEN actor_id IS NULL THEN '["actor_unknown"]'::jsonb ELSE '[]'::jsonb END)||
+ (CASE WHEN created_at IS NULL THEN '["entry_time_unknown"]'::jsonb ELSE '[]'::jsonb END)||
+ (CASE WHEN legacy_id='' THEN '["receipt_identity_unknown"]'::jsonb ELSE '[]'::jsonb END)
+ FROM settlement_migration_payments;
+
 ALTER TABLE invoices ALTER COLUMN customer_id SET NOT NULL;
 ALTER TABLE invoices DROP COLUMN payments;
 DROP TABLE settlement_migration_invoice_totals;
@@ -201,6 +220,7 @@ DROP TABLE settlement_migration_payments;
 -- Originals are immutable at the database boundary.
 CREATE FUNCTION reject_settlement_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN RAISE EXCEPTION 'financial originals are immutable'; END $$;
+CREATE TRIGGER settlement_legacy_evidence_immutable BEFORE UPDATE OR DELETE ON settlement_legacy_evidence FOR EACH ROW EXECUTE FUNCTION reject_settlement_mutation();
 CREATE TRIGGER invoice_payments_immutable BEFORE UPDATE OR DELETE ON invoice_payments FOR EACH ROW EXECUTE FUNCTION reject_settlement_mutation();
 CREATE TRIGGER payment_allocations_immutable BEFORE UPDATE OR DELETE ON payment_invoice_allocations FOR EACH ROW EXECUTE FUNCTION reject_settlement_mutation();
 CREATE TRIGGER customer_credits_immutable BEFORE UPDATE OR DELETE ON customer_credits FOR EACH ROW EXECUTE FUNCTION reject_settlement_mutation();

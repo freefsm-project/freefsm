@@ -451,12 +451,15 @@ func (f *historyBackupInstance) operation(t *testing.T, w *httptest.ResponseReco
 	}
 }
 
-func (f *historyBackupInstance) roundTripTo(t *testing.T, dst *historyBackupInstance) {
+func (f *historyBackupInstance) roundTripTo(t *testing.T, dst *historyBackupInstance, afterArchive ...func()) {
 	t.Helper()
 	op := f.operation(t, f.request("create", strings.NewReader(url.Values{"archive_password": {"history-archive-secret"}}.Encode()), false, ""))
 	archive := f.request("download", strings.NewReader(url.Values{"operation": {op.ID}, "current_password": {"history-account-secret"}}.Encode()), false, "")
 	if archive.Code != http.StatusOK || !strings.Contains(archive.Header().Get("Content-Disposition"), ".age") || !bytes.HasPrefix(archive.Body.Bytes(), []byte("age-encryption.org/v1")) {
 		t.Fatalf("encrypted handler download: status=%d headers=%v", archive.Code, archive.Header())
+	}
+	for _, writeAfterSnapshot := range afterArchive {
+		writeAfterSnapshot()
 	}
 	op = dst.operation(t, dst.request("upload", bytes.NewReader(archive.Body.Bytes()), true, ""))
 	if op.SourceName != f.name || op.ArchiveDigest == "" {

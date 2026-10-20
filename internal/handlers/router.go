@@ -416,6 +416,10 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Get("/invoices/{id}/pdf/preview", invoiceHandler.PreviewPDF)
 		r.Post("/invoices/{id}/pdf/save", invoiceHandler.SavePDF)
 		r.Post("/estimates/{id}/pdf/save", estimateHandler.SavePDF)
+		r.Post("/invoices/{id}/payments", invoiceHandler.RecordPayment)
+		r.Get("/payment-operations/{operation}", paymentOperationReceipt)
+		r.Get("/settings/payment-methods", paymentMethodsSettings)
+		r.Post("/settings/payment-methods/{method}", paymentMethodsSettings)
 
 		// Office-only billing and general document mutations.
 		r.Group(func(r chi.Router) {
@@ -424,7 +428,6 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/delete", estimateHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/delete", invoiceHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/finalize", invoiceHandler.Finalize)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/payments", invoiceHandler.RecordPayment)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/payments/{payment_id}/reverse", invoiceHandler.ReversePayment)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications", invoiceHandler.ApplyCredit)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications/{application_id}/reverse", invoiceHandler.ReverseCreditApplication)

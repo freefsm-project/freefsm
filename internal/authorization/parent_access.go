@@ -30,6 +30,12 @@ func (s *Service) WithinParent(ctx context.Context, a Actor, typ string, id int6
 	})
 }
 
+// CheckParentTransaction authorizes a domain-owned effect inside WithinActor's
+// committing transaction, including current parent and assignment row locks.
+func CheckParentTransaction(ctx context.Context, tx pgx.Tx, p Principal, typ string, id int64, permission string) (Scope, error) {
+	return parentAccess(ctx, tx, p, typ, id, permission, true)
+}
+
 func parentAccess(ctx context.Context, q queryer, p Principal, typ string, id int64, permission string, locking bool) (Scope, error) {
 	table, ok := customfields.ParentTable(typ)
 	if !ok {

@@ -186,6 +186,9 @@ func New(deps Dependencies) http.Handler {
 		}
 		r.Post("/invoices/{id}/finalize", h.commercialLifecycle("invoice", true))
 		r.Get("/commercial-operations/{operation}", h.commercialReceipt)
+		r.Post("/invoices/{id}/payments", h.boundedPayment)
+		r.Get("/invoices/{id}/payment-methods", h.paymentMethods)
+		r.Get("/payment-operations/{operation}", h.paymentReceipt)
 		if deps.Files != nil {
 			r.Get("/files/limits", h.fileLimits)
 			r.Post("/file-transfers", h.startFileTransfer)

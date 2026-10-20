@@ -2,19 +2,23 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/settlement"
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 type settlementService interface {
+	RecordBoundedPayment(context.Context, settlement.Actor, settlement.RecordPaymentRequest) (settlement.Result, error)
 	RecordPayment(context.Context, settlement.Actor, settlement.RecordPaymentRequest) (settlement.Result, error)
 	ApplyCredit(context.Context, settlement.Actor, settlement.ApplyCreditRequest) (settlement.Result, error)
 	RefundCredit(context.Context, settlement.Actor, settlement.RefundCreditRequest) (settlement.Result, error)
@@ -77,11 +81,11 @@ func parseUUID(value, label string) (uuid.UUID, error) {
 func writeSettlementError(w http.ResponseWriter, r *http.Request, err error) {
 	status, message := http.StatusUnprocessableEntity, "settlement request could not be processed"
 	switch {
-	case errors.Is(err, settlement.ErrForbidden):
+	case errors.Is(err, settlement.ErrForbidden), errors.Is(err, authorization.ErrForbidden):
 		status, message = http.StatusForbidden, "settlement operation forbidden"
-	case errors.Is(err, settlement.ErrNotFound), errors.Is(err, pgx.ErrNoRows):
+	case errors.Is(err, settlement.ErrNotFound), errors.Is(err, pgx.ErrNoRows), errors.Is(err, authorization.ErrNotFound):
 		status, message = http.StatusNotFound, "settlement record not found"
-	case errors.Is(err, settlement.ErrIdempotencyConflict):
+	case errors.Is(err, settlement.ErrIdempotencyConflict), errors.Is(err, authorization.ErrConflict):
 		status, message = http.StatusConflict, "idempotency key was already used for another request"
 	case errors.Is(err, settlement.ErrDependency):
 		status, message = http.StatusConflict, "operation has active settlement dependencies"
@@ -102,3 +106,19 @@ func writeSettlementError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 func newOperationKey() string { return uuid.NewString() }
+
+func paymentOperationReceipt(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		http.Error(w, "Unauthorized", 401)
+		return
+	}
+	receipt, err := settlement.New(req.Service.Pool).PaymentReceipt(r.Context(), req.Actor, chi.URLParam(r, "operation"))
+	if err != nil {
+		writeSettlementError(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]any{"data": receipt})
+}
