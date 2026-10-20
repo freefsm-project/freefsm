@@ -18,11 +18,11 @@ var ErrSyncResnapshot = errors.New("synchronization requires a new snapshot")
 
 var errSyncAuthorityChanged = errors.New("synchronization authority changed")
 
-type JobSyncRequest struct {
+type SyncRequest struct {
 	Cursor, Page, Scope string
 	PageSize            int
 }
-type JobSyncPage struct {
+type SyncPage struct {
 	Records          []map[string]any `json:"records"`
 	Removed          []string         `json:"removed"`
 	NextPage         *string          `json:"next_page"`
@@ -31,6 +31,11 @@ type JobSyncPage struct {
 	Complete         bool             `json:"complete"`
 	Purge            string           `json:"purge"`
 }
+
+// Keep existing Job callers compatible while the protocol serves independent
+// authorized projections. The historical table/token identities stay unchanged.
+type JobSyncRequest = SyncRequest
+type JobSyncPage = SyncPage
 type syncSnapshot struct {
 	ID, Grants        string
 	Baseline, Changes []syncEntry
@@ -41,20 +46,23 @@ type syncSnapshot struct {
 // SyncJobs materializes protocol state atomically with its tokens. There is no
 // domain mutation or fabricated domain audit for these read-only snapshots.
 func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (JobSyncPage, error) {
-	out := JobSyncPage{Records: []map[string]any{}, Removed: []string{}, Purge: "none"}
 	if in.PageSize < 1 || in.PageSize > 200 || (in.Scope != "assigned" && in.Scope != "all") || a.SessionHash == "" {
-		return out, ErrSyncResnapshot
+		return JobSyncPage{}, ErrSyncResnapshot
 	}
+	return s.syncRecords(ctx, a, in, "job.view", Assigned, syncReadModel)
+}
+
+// syncRecords shares durable pagination and continuity, not domain authority.
+// Each projection supplies its own permission, scope namespace and closed reader.
+func (s *Service) syncRecords(ctx context.Context, a Actor, in SyncRequest, permission string, scope Scope, read func(context.Context, pgx.Tx, Principal, Actor, string) ([]syncEntry, error)) (SyncPage, error) {
+	out := SyncPage{Records: []map[string]any{}, Removed: []string{}, Purge: "none"}
 	resnapshot := false
-	err := s.WithinSnapshotPermission(ctx, a, "job.view", Assigned, func(tx pgx.Tx, p Principal) error {
+	err := s.WithinSnapshotPermission(ctx, a, permission, scope, func(tx pgx.Tx, p Principal) error {
 		invalidate := func() error {
 			resnapshot = true
 			// Return nil on success so the invalidation COMMITS before the typed
 			// recovery response. Returning ErrSyncResnapshot here would roll back.
 			return syncInvalidate(ctx, tx, a)
-		}
-		if in.Scope == "all" && !p.Allows("job.view", All) {
-			return ErrForbidden
 		}
 		var epoch string
 		if err := tx.QueryRow(ctx, `SELECT epoch::text FROM session_instance WHERE singleton`).Scan(&epoch); err != nil {
@@ -66,7 +74,7 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 		}
 		sum := sha256.Sum256(grants)
 		fingerprint := hex.EncodeToString(sum[:])
-		current, err := syncReadModel(ctx, tx, p, a, in.Scope)
+		current, err := read(ctx, tx, p, a, in.Scope)
 		if err != nil {
 			return err
 		}
@@ -91,6 +99,17 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 					return err
 				}
 				previous = &base
+				// A new delta must not let a client keep a now-inaccessible facet
+				// from its completed baseline while later pages are outstanding.
+				anchors := make(map[string]string, len(current))
+				for _, entry := range current {
+					anchors[entry.ID] = entry.Anchor
+				}
+				for _, entry := range base.Baseline {
+					if anchor, visible := anchors[entry.ID]; !visible || anchor != entry.Anchor {
+						return invalidate()
+					}
+				}
 				// A cursor has exactly one durable successor. Lost responses and retries
 				// never promote it to a newer baseline, even after later domain edits.
 				var first string
@@ -162,7 +181,7 @@ func (s *Service) SyncJobs(ctx context.Context, a Actor, in JobSyncRequest) (Job
 		return nil
 	})
 	if errors.Is(err, ErrForbidden) {
-		// Missing Job View (including All narrowed to Assigned) also instructs
+		// Missing projection View or a denied requested scope also instructs
 		// cache purge. Recheck current identity/session under the existing fence
 		// before recording that observation; denial grants no domain access.
 		if invalidateErr := s.WithinActor(ctx, a, func(tx pgx.Tx, _ Principal) error {

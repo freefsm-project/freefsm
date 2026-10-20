@@ -52,6 +52,11 @@ All context requires current explicit Job assignment, including for users with
 All Records grants, and independent View for each facet. Exact nested schemas
 are closed in the served OpenAPI:
 
+With the independent own Clock-in grant, `clock_job_id` additionally supplies the
+exact existing Clock command identity as an opaque decimal string. It grants no
+authority; Clock acceptance still rechecks the original Job. See
+[own Clock synchronization](api-clock-sync.md) for its separately scoped records.
+
 * Customer: identity, display/person/organization names, Kind, phone/email,
   Service Notes.
 * Explicit Contact(s): identity, name, role/title, phone/email, Service Notes.

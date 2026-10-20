@@ -107,6 +107,13 @@ func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, 
 			if in.OccurredAt.Before(issued) || in.OccurredAt.After(expires) {
 				return &ClockConflict{"invalid_lease"}
 			}
+			var offlineEnabled bool
+			if err := tx.QueryRow(ctx, `SELECT offline_hours>0 FROM company_settings WHERE company_id=$1`, p.CompanyID).Scan(&offlineEnabled); err != nil {
+				return err
+			}
+			if !offlineEnabled {
+				return ErrForbidden
+			}
 			if in.GPS != nil && (in.GPS.CapturedAt.Before(issued) || in.GPS.CapturedAt.After(expires)) {
 				return &ClockConflict{"invalid_gps"}
 			}
@@ -182,7 +189,7 @@ func applyClock(ctx context.Context, tx pgx.Tx, p Principal, a Actor, out bool, 
 			if err := checkTimeInterval(ctx, tx, p.UserID, 0, occurrence, nil); err != nil {
 				return err
 			}
-			if err := tx.QueryRow(ctx, `INSERT INTO time_entries(company_id,user_id,job_id,is_manual,clock_in,notes,created_at,updated_at) VALUES($1,$2,nullif($3,0),false,$4,$5,$6,$6) RETURNING id,user_id,job_id,clock_in,clock_out`, p.CompanyID, p.UserID, in.JobID, occurrence, in.Notes, now).Scan(&result.ID, &result.UserID, &result.JobID, &result.ClockIn, &result.ClockOut); err != nil {
+			if err := tx.QueryRow(ctx, `INSERT INTO time_entries(company_id,user_id,job_id,is_manual,clock_in,notes,created_at,updated_at) VALUES($1,$2,nullif($3::bigint,0),false,$4,$5,$6,$6) RETURNING id,user_id,job_id,clock_in,clock_out`, p.CompanyID, p.UserID, in.JobID, occurrence, in.Notes, now).Scan(&result.ID, &result.UserID, &result.JobID, &result.ClockIn, &result.ClockOut); err != nil {
 				return err
 			}
 		}
