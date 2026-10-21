@@ -34,6 +34,7 @@ class PaymentReference {
   #pending = null;
   #restored = false;
   #revoked = false;
+  #generation = 0;
   constructor(request) { this.request = request; }
   get pending() { return this.#pending; }
   #record(entry) {
@@ -42,6 +43,7 @@ class PaymentReference {
     return record;
   }
   #purge() {
+    ++this.#generation;
     // Ordinary denial invalidates this reference's cached authority context.
     // Keep safe identities/receipts, but no sensitive input from older entries.
     for (const record of this.#records.values()) {
@@ -71,9 +73,11 @@ class PaymentReference {
     const record = this.#record(entry);
     if (entry !== this.#pending || record.state !== 'pending' || this.#restored || this.#revoked || !record.sensitive?.readable) throw new Error('Explicit original-intent review required');
     record.state = 'unknown';
+    const generation = this.#generation;
     try {
       // Transport receives a wire snapshot, never the retained backing object.
       const response = await this.request('POST', `/invoices/${record.sensitive.invoice}/payments`, Object.freeze({ ...record.sensitive.intent }));
+      if (generation !== this.#generation) return entry;
       if (response.status === 200) this.#acceptReceipt(entry, response.body?.data);
       else if (response.status === 401) this.#purge();
       else await this.inspect(entry);
@@ -92,10 +96,18 @@ class PaymentReference {
     record.state = !record.sensitive ? 'purged' : receipt.outcome === 'accepted' ? 'accepted' : 'rejected';
   }
   async inspect(entry) {
+    this.#record(entry);
+    // Restore recovery requires an explicit fresh-authentication review, not an
+    // ordinary lookup that happened to finish under a now-invalid context.
+    if (this.#restored) return entry;
+    return this.#inspect(entry, this.#generation);
+  }
+  async #inspect(entry, generation) {
     const record = this.#record(entry);
     if (record.sensitive) record.sensitive.readable = false;
     try {
       const response = await this.request('GET', `/payment-operations/${record.id}`);
+      if (generation !== this.#generation) return entry;
       if (response.status === 401) {
         if (this.#restored) { if (record.sensitive) record.sensitive.readable = false; record.state = 'locked'; }
         else this.#purge();
@@ -103,26 +115,32 @@ class PaymentReference {
       }
       if (response.status === 403) { this.#purge(); return entry; }
       if (response.status === 200) this.#acceptReceipt(entry, response.body?.data);
-      else record.state = response.status === 404 && !record.receipt ? 'unknown' : 'locked';
+      else if (!this.#revoked) record.state = response.status === 404 && !record.receipt ? 'unknown' : 'locked';
       // Receipt ownership is not permission to retain Invoice/Payment input.
       if (record.sensitive) {
         const access = await this.request('GET', `/invoices/${record.sensitive.invoice}/payment-methods`);
-        if (!record.sensitive) return entry; // A concurrent logout/denial wins.
+        if (generation !== this.#generation || !record.sensitive) return entry;
         if (access.status === 200) record.sensitive.readable = true;
         else if ([401, 403, 404].includes(access.status)) this.#purge();
         else { record.sensitive.readable = false; record.state = 'locked'; }
       }
-    } catch { record.state = 'locked'; }
+    } catch {
+      if (generation === this.#generation && !this.#revoked) record.state = 'locked';
+    }
     return entry;
   }
   restoreDetected() {
+    if (this.#revoked) return;
+    ++this.#generation;
     this.#restored = true;
     for (const record of this.#records.values()) if (record.sensitive) record.sensitive.readable = false;
     if (this.#pending) this.#record(this.#pending).state = 'locked';
   }
   async reconcileAfterFreshAuthentication(entry) {
     if (!this.#restored) throw new Error('No restore review pending');
-    await this.inspect(entry);
+    const generation = ++this.#generation;
+    await this.#inspect(entry, generation);
+    if (generation !== this.#generation) return entry;
     const record = this.#record(entry);
     // Missing post-backup history never permits automatic financial replay.
     if (record.sensitive?.readable && record.receipt && ['accepted', 'rejected'].includes(record.state)) this.#restored = false;
@@ -131,6 +149,7 @@ class PaymentReference {
   confirmUnreceivedAfterReview(entry) {
     const record = this.#record(entry);
     if (entry !== this.#pending || record.state !== 'unknown' || record.receipt || !record.sensitive?.readable) throw new Error('Inspect original receipt and explicitly reconcile authorized history first');
+    ++this.#generation;
     record.sensitive = undefined; record.state = 'discarded'; this.#restored = false;
   }
   logout() {
