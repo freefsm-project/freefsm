@@ -1,0 +1,20 @@
+package templates
+
+import "github.com/freefsm-project/freefsm/internal/settlement"
+
+templ PaymentMethodSettings(methods []settlement.MethodChoice, manage bool) {
+	@Layout("Payment method labels") {
+		<h1>Payment method labels</h1>
+		<p>Labels change future presentation only. Stable method identities and recorded receipts remain unchanged. Other always requires a description.</p>
+		for _,method := range methods {
+			<form method="post" hx-boost="false" action={ templ.URL("/settings/payment-methods/"+string(method.ID)) }>
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<input type="hidden" name="label_revision" value={ method.Revision }/>
+				<label>{ string(method.ID) }<input name="label" value={ method.Label } maxlength="80" required disabled?={ !manage }/></label>
+				if manage {
+					<button type="submit">Save label</button>
+				}
+			</form>
+		}
+	}
+}

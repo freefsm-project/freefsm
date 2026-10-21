@@ -5,6 +5,7 @@ const {OfflineNotes,ProtectedStore}=require('./offline-notes-client.cjs');
 // File intent shares the existing protected store, lease, quarantine, batch and
 // receipt lifecycle. This module adds domain selection, not cached authority.
 class OfflineFiles extends OfflineNotes {
+ receiptPath(e,id){return e.family==='file'?'/file-operations/'+encodeURIComponent(id):super.receiptPath(e,id);}
  pendingTargetVisible(e,records){
   if(!super.pendingTargetVisible(e,records))return false;
   if(e.family!=='file'||!e.file)return true;

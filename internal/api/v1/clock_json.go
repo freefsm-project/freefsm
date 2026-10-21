@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"strconv"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/google/uuid"
@@ -15,13 +16,25 @@ import (
 type clockWire struct{ authorization.ClockCommand }
 
 func (wire *clockWire) UnmarshalJSON(data []byte) error {
+	return wire.decode(data, nil)
+}
+
+func (wire *clockWire) decode(data []byte, extra map[string]any) error {
 	var gps json.RawMessage
 	in := authorization.ClockCommand{}
-	if err := clockObject(data, map[string]any{
+	properties := map[string]any{
 		"operation_id": &in.OperationID, "entry_id": &in.EntryID,
 		"job_id": &in.JobID, "notes": &in.Notes, "gps": &gps,
 		"occurred_at": &in.OccurredAt, "lease_id": &in.LeaseID,
-	}); err != nil {
+	}
+	for key, target := range extra {
+		if target == nil {
+			delete(properties, key)
+		} else {
+			properties[key] = target
+		}
+	}
+	if err := clockObject(data, properties); err != nil {
 		return err
 	}
 	if gps != nil {
@@ -34,6 +47,39 @@ func (wire *clockWire) UnmarshalJSON(data []byte) error {
 		}
 	}
 	wire.ClockCommand = in
+	return nil
+}
+
+// Batch references preserve installed bigint identities in JavaScript without
+// widening the existing integer-only single-command request contract.
+type batchClockWire struct {
+	authorization.ClockCommand
+	EntryRef, JobRef string
+}
+
+func (wire *batchClockWire) UnmarshalJSON(data []byte) error {
+	var command clockWire
+	var entryRef, jobRef *string
+	if err := command.decode(data, map[string]any{"operation_id": nil, "entry_ref": &entryRef, "job_ref": &jobRef}); err != nil {
+		return err
+	}
+	for _, reference := range []struct {
+		text    *string
+		target  *int64
+		binding *string
+	}{{entryRef, &command.EntryID, &wire.EntryRef}, {jobRef, &command.JobID, &wire.JobRef}} {
+		if reference.text == nil {
+			continue
+		}
+		text := *reference.text
+		id, err := strconv.ParseInt(text, 10, 64)
+		if err != nil || id <= 0 || strconv.FormatInt(id, 10) != text || *reference.target != 0 {
+			return errors.New("invalid clock reference")
+		}
+		*reference.target = id
+		*reference.binding = text
+	}
+	wire.ClockCommand = command.ClockCommand
 	return nil
 }
 

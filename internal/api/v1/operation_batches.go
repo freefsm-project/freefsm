@@ -57,7 +57,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "invalid_request", "operations must be an array")
 		return
 	}
-	operations := make([]authorization.OrderedBatchOperation, 0, len(envelope.Operations))
+	operations := make([]authorization.BatchOperation, 0, len(envelope.Operations))
 	seen := map[string]bool{}
 	for _, raw := range envelope.Operations {
 		var discriminator struct {
@@ -110,7 +110,20 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			seen[op.OperationID] = true
-			operations = append(operations, authorization.OrderedBatchOperation{File: &op})
+			operations = append(operations, authorization.BatchOperation{File: &op})
+			continue
+		}
+		if discriminator.Type == "clock.in" || discriminator.Type == "clock.out" {
+			op, ok := decodeBatchClock(w, r, raw)
+			if !ok {
+				return
+			}
+			if seen[op.OperationID] {
+				writeError(w, 400, "invalid_request", "Duplicate operation identity")
+				return
+			}
+			seen[op.OperationID] = true
+			operations = append(operations, authorization.BatchOperation{Clock: op})
 			continue
 		}
 		var wire struct {
@@ -149,7 +162,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		seen[op.OperationID] = true
-		operations = append(operations, authorization.OrderedBatchOperation{Field: &op})
+		operations = append(operations, authorization.BatchOperation{Job: &op})
 	}
 	results := req.Service.SubmitOperationBatch(r.Context(), req.Actor, operations, h.deps.Files.SubmitBatchOperation)
 	out := make([]batchResult, 0, len(results))
@@ -159,7 +172,13 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			status, code := 503, "retryable_failure"
 			var conflict *authorization.JobExecutionConflict
 			var validation *authorization.FileValidationError
+			var clockConflict *authorization.ClockConflict
 			switch {
+			case errors.As(result.Err, &clockConflict):
+				status, code = 409, clockConflict.Code
+				if code == "invalid_dependency" || code == "invalid_occurrence" || code == "invalid_gps" || code == "invalid_clock" || code == "invalid_lease" {
+					status = 400
+				}
 			case errors.As(result.Err, &conflict):
 				status, code = 409, conflict.Code
 				if code == "invalid_intent" || code == "invalid_occurrence" || code == "invalid_dependency" {
@@ -233,4 +252,32 @@ type batchResult struct {
 	OperationID string    `json:"operation_id"`
 	Receipt     any       `json:"receipt,omitempty"`
 	Error       *apiError `json:"error,omitempty"`
+}
+
+func decodeBatchClock(w http.ResponseWriter, r *http.Request, raw []byte) (*authorization.BatchClockOperation, bool) {
+	var wire struct {
+		OperationID string          `json:"operation_id"`
+		Type        string          `json:"type"`
+		DependsOn   []*string       `json:"depends_on"`
+		Clock       *batchClockWire `json:"clock"`
+	}
+	part := r.Clone(r.Context())
+	part.Body = io.NopCloser(bytes.NewReader(raw))
+	if !decodeExactJSON(w, part, &wire, "operation_id", "type", "depends_on", "clock") {
+		return nil, false
+	}
+	id, err := uuid.Parse(wire.OperationID)
+	if err != nil || id == uuid.Nil || id.String() != wire.OperationID || wire.DependsOn == nil || wire.Clock == nil || wire.Clock.OperationID != "" {
+		writeError(w, 400, "invalid_request", "Clock batch requires canonical operation identity, dependencies and clock intent")
+		return nil, false
+	}
+	dependencies := []string{}
+	for _, dep := range wire.DependsOn {
+		if dep == nil {
+			writeError(w, 400, "invalid_request", "Dependencies must be strings")
+			return nil, false
+		}
+		dependencies = append(dependencies, *dep)
+	}
+	return &authorization.BatchClockOperation{OperationID: wire.OperationID, Type: wire.Type, DependsOn: dependencies, Clock: wire.Clock.ClockCommand, EntryRef: wire.Clock.EntryRef, JobRef: wire.Clock.JobRef}, true
 }

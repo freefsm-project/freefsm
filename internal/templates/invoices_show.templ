@@ -162,7 +162,7 @@ templ InvoiceShow(p InvoiceDetail) {
 					for _, pmt := range p.Settlement.Payments {
 						<tr>
 							<td>{ pmt.ReceivedDate.Format("2006-01-02") }</td>
-							<td>{ string(pmt.Method) }</td>
+							<td>{ pmt.MethodLabel }<small>{ pmt.OtherDescription }</small></td>
 							<td>{ pmt.Reference }</td>
 							<td>{ cents(pmt.AmountCents) } ({ cents(pmt.AppliedCents) } applied)</td>
 							<td>
@@ -203,7 +203,13 @@ templ InvoiceShow(p InvoiceDetail) {
 		if p.ArchivedAt == "" && detailCan(ctx,"payment") {
 		<details open>
 			<summary>Record Payment</summary>
-			<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments", p.ID)) } method="post" class="inline-add-form">
+			if p.PaymentEligible {
+				<p>Current Invoice due: { cents(p.PaymentDueCents) }. The full Payment must fit when accepted.</p>
+			} else {
+				<p>Payment unavailable: this Invoice must be active, finalized, non-Void and have a positive amount due.</p>
+			}
+			<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments", p.ID)) } method="post" hx-boost="false" data-bounded-payment data-payment-eligible={ fmt.Sprint(p.PaymentEligible) } class="inline-add-form">
+				<fieldset disabled?={ !p.PaymentEligible }>
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<input type="hidden" name="idempotency_key" value={ p.PaymentKey }/>
 				<div class="grid">
@@ -214,11 +220,9 @@ templ InvoiceShow(p InvoiceDetail) {
 					<label>
 						Method
 						<select name="method">
-							<option value="cash">Cash</option>
-							<option value="check">Check</option>
-							<option value="credit_card">Credit Card</option>
-							<option value="transfer">Transfer</option>
-							<option value="other">Other</option>
+							for _,method := range p.PaymentMethods {
+								<option value={ string(method.ID) }>{ method.Label }</option>
+							}
 						</select>
 					</label>
 				</div>
@@ -233,11 +237,19 @@ templ InvoiceShow(p InvoiceDetail) {
 					</label>
 				</div>
 				<label>
+					Other method description (required for Other)
+					<input type="text" name="other_description" maxlength="500"/>
+				</label>
+				<p>Record only the receipt. Do not enter payment credentials or card details.</p>
+				<label>
 					Notes
 					<input type="text" name="notes" placeholder="Optional"/>
 				</label>
 				<button type="submit">Record Payment</button>
+				</fieldset>
 			</form>
+			<div data-payment-reconciliation role="status" aria-live="polite"></div>
+			<script src="/static/js/bounded-payment.js" defer></script>
 		</details>
 		if detailCan(ctx,"apply-credit") && len(p.CreditSources) > 0 && p.Settlement.AmountDueCents > 0 {
 		<details><summary>Apply Customer Credit</summary><form action={ templ.URL(fmt.Sprintf("/invoices/%d/credit-applications",p.ID)) } method="post">

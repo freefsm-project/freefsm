@@ -401,7 +401,8 @@ func (db *DB) preflightSettlement(ctx context.Context, tx pgx.Tx) error {
 	if _, err := tx.Exec(ctx, `CREATE TABLE IF NOT EXISTS settlement_migration_payments (
 		invoice_id BIGINT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE, ordinal INTEGER NOT NULL,
 		amount_cents BIGINT NOT NULL CHECK(amount_cents > 0), method TEXT NOT NULL, received_date DATE NOT NULL,
-		reference TEXT NOT NULL, notes TEXT NOT NULL, PRIMARY KEY(invoice_id,ordinal))`); err != nil {
+		reference TEXT NOT NULL, notes TEXT NOT NULL, legacy_id TEXT NOT NULL, source JSONB NOT NULL,
+		actor_id BIGINT, created_at TIMESTAMPTZ, PRIMARY KEY(invoice_id,ordinal))`); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `TRUNCATE settlement_migration_invoice_totals`); err != nil {
@@ -460,7 +461,7 @@ func (db *DB) preflightSettlement(ctx context.Context, tx pgx.Tx) error {
 			if dateErr != nil {
 				return fmt.Errorf("invoice %d payment %d date: %w", invoice.id, ordinal+1, dateErr)
 			}
-			if _, err = tx.Exec(ctx, `INSERT INTO settlement_migration_payments VALUES($1,$2,$3,$4,$5,$6,$7)`, invoice.id, ordinal+1, payment.amountCents, payment.method, date, payment.reference, payment.notes); err != nil {
+			if _, err = tx.Exec(ctx, `INSERT INTO settlement_migration_payments VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`, invoice.id, ordinal+1, payment.amountCents, payment.method, date, payment.reference, payment.notes, payment.id, payment.source, payment.actorID, payment.createdAt); err != nil {
 				return err
 			}
 		}
@@ -471,6 +472,9 @@ func (db *DB) preflightSettlement(ctx context.Context, tx pgx.Tx) error {
 type legacyPayment struct {
 	id, method, date, reference, notes string
 	amountCents                        int64
+	source                             json.RawMessage
+	actorID                            *int64
+	createdAt                          *time.Time
 }
 
 func decodeLegacyPayments(encoded string) ([]legacyPayment, error) {
@@ -491,6 +495,8 @@ func decodeLegacyPayments(encoded string) ([]legacyPayment, error) {
 			Date      string      `json:"date"`
 			Reference string      `json:"reference"`
 			Notes     string      `json:"notes"`
+			ActorID   *int64      `json:"actor_id"`
+			CreatedAt *time.Time  `json:"created_at"`
 		}
 		decoder := json.NewDecoder(strings.NewReader(string(entry)))
 		decoder.DisallowUnknownFields()
@@ -512,7 +518,7 @@ func decodeLegacyPayments(encoded string) ([]legacyPayment, error) {
 			}
 			seen[raw.ID] = struct{}{}
 		}
-		payments = append(payments, legacyPayment{id: raw.ID, method: raw.Method, date: raw.Date, reference: raw.Reference, notes: raw.Notes, amountCents: rat.Num().Int64()})
+		payments = append(payments, legacyPayment{id: raw.ID, method: raw.Method, date: raw.Date, reference: raw.Reference, notes: raw.Notes, amountCents: rat.Num().Int64(), source: entry, actorID: raw.ActorID, createdAt: raw.CreatedAt})
 	}
 	return payments, nil
 }

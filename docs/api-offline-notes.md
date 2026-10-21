@@ -25,12 +25,15 @@ expires_at. Reconcile issuance at
 returns the original window; only a new successful online issuance renews it.
 The receipt belongs to the original authenticated client; it cannot be used to
 rebind another device. Throttle/service failure remains nonterminal. Disabled
-policy or insufficient Job View rejects with 403 and a durable rejection.
+policy or absence of both eligible Job View and Own Time View rejects with403
+and a durable rejection. Own Time View permits the separate Clock reference
+workflow, never Job context or Notes mutation.
 Receipt lookup returns that rejection with HTTP200 and code `offline_disabled`
 or `forbidden`. Recovering either terminal denial purges sensitive state just as
 the original403 does; restoring policy/grants cannot revive the discarded intent.
 
-The general Offline Authorization Lease is distinct from Clock staging leases.
+The general Offline Authorization Lease is distinct in purpose from Clock staging
+leases; both new windows honor the configured offline hours/disablement.
 It permits client disclosure/staging, never server mutation authority. The server
 still checks current session, independent grants, assignment, active Job and
 original Notes revision at commit. An occurrence timestamp grants nothing,

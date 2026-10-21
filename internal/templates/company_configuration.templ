@@ -46,6 +46,9 @@ templ CompanyConfiguration(view authorization.ConfigurationView, message string)
 		}
 		for _, section := range view.Sections {
 			<h2>{ section.Label }</h2>
+			if section.Name == "company" {
+				<p><a href="/settings/payment-methods">Payment method labels</a></p>
+			}
 			<form action={ templ.URL(view.FormAction) } method="post" hx-boost="false">
 				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 				<input type="hidden" name="section" value={ section.Name }/>

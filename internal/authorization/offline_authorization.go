@@ -91,7 +91,7 @@ func (s *Service) IssueOfflineAuthorization(ctx context.Context, a Actor, operat
 		result.Code = "forbidden"
 		if hours == 0 {
 			result.Code, outcome = "offline_disabled", ErrOfflineDisabled
-		} else if !p.Allows("job.view", Assigned) && !p.Allows("job.view", All) {
+		} else if !p.Allows("job.view", Assigned) && !p.Allows("job.view", All) && !p.Allows("time.view", Own) {
 			outcome = ErrForbidden
 		} else {
 			result.Code = "accepted"

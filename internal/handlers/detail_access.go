@@ -75,7 +75,7 @@ func withDetailPresentation(r *http.Request, typ string, id int64, policy *servi
 		access["convert"] = action("estimate.convert")
 		access["revert"] = action("invoice.revert")
 		access["finalize"] = action("invoice.finalize") && legacyDelete
-		access["payment"] = action("payment.record") && legacyDelete
+		access["payment"] = action("payment.record")
 		access["apply-credit"] = p.Allows("credit.apply", authorization.All) && p.Allows("credit.view", authorization.All) && access["settlement"] && legacyDelete
 		access["reverse-payment"] = p.Allows("payment.reverse", authorization.All) && access["settlement"] && legacyDelete
 		access["reverse-application"] = p.Allows("credit.application.reverse", authorization.All) && access["settlement"] && legacyDelete

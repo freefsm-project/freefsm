@@ -3,11 +3,11 @@
 `POST /api/v1/sync/operations` accepts an `operations` array in submitted order.
 The API and encrypted native reference own this protocol; the website is online-only.
 The supported operations are `job.field_notes`, `job.status`, `job.subtask`, and
-`job.fields`, plus `file.publish`, `file.rename` and `file.remove`; see
+`job.fields`, plus `file.publish`, `file.rename`, `file.remove`, `clock.in` and `clock.out`; see
 [Status/Subtask synchronization](api-job-field-sync.md),
 [Custom Field Values synchronization](api-job-custom-field-sync.md) and
-[File synchronization](api-offline-files.md).
-Operation-specific synchronization for clocks, Comments, documents and Service Entries remains
+[File synchronization](api-offline-files.md) and [own clock synchronization](api-clock-sync.md).
+Operation-specific synchronization for Comments, documents and Service Entries remains
 with its owning tickets.
 
 ```json
