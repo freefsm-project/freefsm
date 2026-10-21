@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -52,6 +53,8 @@ type RecordPaymentRequest struct {
 	Method                 PaymentMethod
 	ReceivedDate           Date
 	Reference, Notes       string
+	// Omit absent new metadata from installed request fingerprints.
+	OtherDescription string `json:"OtherDescription,omitempty"`
 }
 type ApplyCreditRequest struct {
 	Operation      Operation
@@ -88,6 +91,32 @@ type Service struct {
 
 func New(db *pgxpool.Pool) *Service { return &Service{db: db, now: time.Now} }
 
+// RecordBoundedPayment accepts the full fixed amount or rejects it. It never
+// creates Customer Credit and uses the same immutable settlement writer.
+func (s *Service) RecordBoundedPayment(ctx context.Context, actor Actor, req RecordPaymentRequest) (Result, error) {
+	current, ok := authorization.FromContext(ctx)
+	if !ok || current.Actor.UserID != actor.ID {
+		return Result{}, ErrForbidden
+	}
+	receipt, err := s.AcceptBoundedPayment(ctx, current.Actor, req.InvoiceID, BoundedIntent{OperationID: req.Operation.Key, Amount: fmt.Sprintf("%d.%02d", req.AmountCents/100, req.AmountCents%100), Method: req.Method, Date: req.ReceivedDate, Reference: req.Reference, Note: req.Notes, OtherDescription: req.OtherDescription})
+	if err != nil {
+		return Result{}, err
+	}
+	switch receipt.Outcome {
+	case "accepted":
+		id, err := uuid.Parse(receipt.PaymentID)
+		return Result{ID: id}, err
+	case "not_found":
+		return Result{}, authorization.ErrNotFound
+	case "forbidden":
+		return Result{}, authorization.ErrForbidden
+	case "invoice_ineligible":
+		return Result{}, ErrVoid
+	default:
+		return Result{}, ErrInvalidAmount
+	}
+}
+
 func (s *Service) RecordPayment(ctx context.Context, actor Actor, req RecordPaymentRequest) (Result, error) {
 	if err := authorize(actor); err != nil {
 		return Result{}, err
@@ -96,54 +125,83 @@ func (s *Service) RecordPayment(ctx context.Context, actor Actor, req RecordPaym
 		return Result{}, ErrInvalidAmount
 	}
 	return s.transact(ctx, actor, "record_payment", req.Operation, req, func(tx pgx.Tx, today time.Time) (Result, error) {
-		inv, err := lockInvoice(ctx, tx, actor.CompanyID, req.InvoiceID)
-		if err != nil {
-			return Result{}, err
-		}
-		if err := lockCustomer(ctx, tx, actor.CompanyID, inv.customerID); err != nil {
-			return Result{}, err
-		}
-		receivedDate, err := parseRequestDate(req.ReceivedDate, today.Location())
-		if err != nil {
-			return Result{}, err
-		}
-		if err := ValidateEffectiveDate(receivedDate, today, time.Time{}); err != nil {
-			return Result{}, err
-		}
-		total, err := invoiceTotal(inv.lineItems, inv.taxRate, inv.financial)
-		if err != nil {
-			return Result{}, err
-		}
-		settled, err := activeSettled(ctx, tx, inv.id)
-		if err != nil {
-			return Result{}, err
-		}
-		applied, credit, err := SplitPayment(req.AmountCents, max(total-settled, 0))
-		if err != nil {
-			return Result{}, err
-		}
-		id := uuid.New()
-		_, err = tx.Exec(ctx, `INSERT INTO invoice_payments(id,company_id,customer_id,invoice_id,amount_cents,method,received_date,reference,notes,actor_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, id, actor.CompanyID, inv.customerID, inv.id, req.AmountCents, req.Method, receivedDate, req.Reference, req.Notes, actor.ID)
-		if err != nil {
-			return Result{}, err
-		}
-		if applied > 0 {
-			if _, err = tx.Exec(ctx, `INSERT INTO payment_invoice_allocations VALUES($1,$2,$3)`, id, inv.id, applied); err != nil {
-				return Result{}, err
-			}
-		}
-		if credit > 0 {
-			_, err = tx.Exec(ctx, `INSERT INTO customer_credits(id,company_id,customer_id,source_payment_id,original_amount_cents,source_date) VALUES($1,$2,$3,$4,$5,$6)`, uuid.New(), actor.CompanyID, inv.customerID, id, credit, receivedDate)
-			if err != nil {
-				return Result{}, err
-			}
-		}
-		state, _ := StateFor(total, settled+applied)
-		if err = projectAndLog(ctx, tx, actor, inv.id, state, "payment_recorded", id); err != nil {
-			return Result{}, err
-		}
-		return Result{ID: id, AppliedCents: applied, CreditCents: credit, State: state}, nil
+		return writePayment(ctx, tx, actor, req, today, false)
 	})
+}
+
+// writePayment is the single receipt/allocation/projection writer for both
+// established office settlement and the fixed-amount bounded action.
+func writePayment(ctx context.Context, tx pgx.Tx, actor Actor, req RecordPaymentRequest, today time.Time, bounded bool) (Result, error) {
+	if req.Method == Other && strings.TrimSpace(req.OtherDescription) == "" {
+		return Result{}, ErrInvalidAmount
+	}
+	inv, err := lockInvoice(ctx, tx, actor.CompanyID, req.InvoiceID)
+	if err != nil {
+		return Result{}, err
+	}
+	if err := lockCustomer(ctx, tx, actor.CompanyID, inv.customerID); err != nil {
+		return Result{}, err
+	}
+	receivedDate, err := parseRequestDate(req.ReceivedDate, today.Location())
+	if err != nil {
+		return Result{}, err
+	}
+	if err := ValidateEffectiveDate(receivedDate, today, time.Time{}); err != nil {
+		return Result{}, err
+	}
+	total, err := invoiceTotal(inv.lineItems, inv.taxRate, inv.financial)
+	if err != nil {
+		return Result{}, err
+	}
+	settled, err := activeSettled(ctx, tx, inv.id)
+	if err != nil {
+		return Result{}, err
+	}
+	if bounded && req.AmountCents > max(total-settled, 0) {
+		return Result{}, ErrInvalidAmount
+	}
+	applied, credit, err := SplitPayment(req.AmountCents, max(total-settled, 0))
+	if err != nil {
+		return Result{}, err
+	}
+	id := uuid.New()
+	choices, err := methodChoices(ctx, tx, actor.CompanyID)
+	if err != nil {
+		return Result{}, err
+	}
+	var label string
+	for _, choice := range choices {
+		if choice.ID == req.Method {
+			label = choice.Label
+		}
+	}
+	channel := "internal"
+	if request, ok := authorization.FromContext(ctx); ok {
+		channel = request.Actor.Channel
+		if channel == "" {
+			channel = "web"
+		}
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO invoice_payments(id,company_id,customer_id,invoice_id,amount_cents,method,received_date,reference,notes,actor_id,method_label,other_description,channel) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, id, actor.CompanyID, inv.customerID, inv.id, req.AmountCents, req.Method, receivedDate, req.Reference, req.Notes, actor.ID, label, req.OtherDescription, channel)
+	if err != nil {
+		return Result{}, err
+	}
+	if applied > 0 {
+		if _, err = tx.Exec(ctx, `INSERT INTO payment_invoice_allocations VALUES($1,$2,$3)`, id, inv.id, applied); err != nil {
+			return Result{}, err
+		}
+	}
+	if credit > 0 {
+		_, err = tx.Exec(ctx, `INSERT INTO customer_credits(id,company_id,customer_id,source_payment_id,original_amount_cents,source_date) VALUES($1,$2,$3,$4,$5,$6)`, uuid.New(), actor.CompanyID, inv.customerID, id, credit, receivedDate)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	state, _ := StateFor(total, settled+applied)
+	if err = projectAndLog(ctx, tx, actor, inv.id, state, "payment_recorded", id); err != nil {
+		return Result{}, err
+	}
+	return Result{ID: id, AppliedCents: applied, CreditCents: credit, State: state}, nil
 }
 
 func (s *Service) ApplyCredit(ctx context.Context, actor Actor, req ApplyCreditRequest) (Result, error) {

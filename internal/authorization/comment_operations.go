@@ -94,7 +94,7 @@ func (s *Service) submitCommentBound(ctx context.Context, a Actor, ref objectref
 	digest := fmt.Sprintf("%x", sha256.Sum256(append(encoded, []byte(fmt.Sprintf(":remove:%d", in.RemoveID))...)))
 	if batch != nil {
 		// Bind original wire identities, never a resolved or conversion-followed target.
-		encoded, _ = json.Marshal(struct{ Batch BatchOperation }{batch.operation})
+		encoded, _ = json.Marshal(struct{ Batch BatchFieldOperation }{batch.operation})
 		digest = fmt.Sprintf("%x", sha256.Sum256(encoded))
 	}
 	var outcome error

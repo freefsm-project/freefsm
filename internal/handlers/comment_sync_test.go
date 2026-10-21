@@ -60,7 +60,10 @@ func TestCommentSyncSnapshotsAndRemovalDeltasHTTP(t *testing.T) {
 	if err := service.RemoveComment(ctx, actor, parent, id); err != nil {
 		t.Fatal(err)
 	}
-	delta := syncGet(t, api, token, "?cursor="+*first.Cursor, 200)
+	// Removed text in the completed baseline must be purged before any new
+	// pages are disclosed. Recover a complete replacement with stable identity.
+	syncGet(t, api, token, "?cursor="+*first.Cursor, 409)
+	delta := syncGet(t, api, token, "", 200)
 	if len(delta.Records) != 1 {
 		t.Fatalf("removal omitted from delta: %v", delta)
 	}

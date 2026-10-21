@@ -141,5 +141,5 @@ func (h *handler) capabilities(w http.ResponseWriter, r *http.Request) {
 		sessionError(w, err)
 		return
 	}
-	writeJSON(w, 200, map[string]any{"grants": p.Grants, "limits": h.deps.Config, "window_seconds": 60, "sync": jobSyncDiscovery(p)})
+	writeJSON(w, 200, map[string]any{"grants": p.Grants, "limits": h.deps.Config, "window_seconds": 60, "sync": jobSyncDiscovery(p), "clocks": map[string]any{"endpoint": "/api/v1/sync/clocks", "available": p.Allows("time.view", authorization.Own), "clock_in": p.Allows("time.clock_in", authorization.Own), "clock_out": p.Allows("time.clock_out", authorization.Own), "gps_capture": p.Allows("time.gps.capture", authorization.Own)}})
 }

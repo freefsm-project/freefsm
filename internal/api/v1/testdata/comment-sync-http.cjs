@@ -41,10 +41,10 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes-client.c
   const root=state.cache[job].comments.comments.find(c=>c.content.startsWith('Original'));
   const reply=await client.stageComment(job,intent('queued reply',{reply_to:root.id}),[]);
   const removal=await client.stageComment(job,{parent_type:'job',target:job,remove_id:root.id},[]);
-  await client.submitBatch([removal]);await client.synchronize(true);
-  assert.equal((await client.view()).cache[job].comments.comments.find(c=>c.id===root.id).content,'');
+  await client.submitBatch([removal]);
   assert.equal((await client.submitBatch([reply]))[0].receipt.code,'comment_conflict');
   await assert.rejects(()=>client.view(),/locked_review/);await client.synchronize();
+  assert.equal((await client.view()).cache[job].comments.comments.find(c=>c.id===root.id).content,'');
   const blocked=await client.stageComment(job,intent('reviewed recovery'),[reply]);
   const unrelated=await client.stageComment(job,intent('unrelated continues'),[]);
   const results=await client.submitBatch([blocked,unrelated]);assert.equal(results[0].receipt.code,'failed_dependency');assert.equal(results[1].receipt.code,'accepted');

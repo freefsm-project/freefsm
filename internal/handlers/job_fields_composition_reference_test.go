@@ -54,7 +54,7 @@ func TestJobFieldsMixedExecutionProtectedReferenceHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	schemas := map[string]*jsonschema.Schema{}
-	for _, name := range []string{"OperationBatch", "OperationBatchEnvelope", "JobSyncEnvelope", "JobExecutionReceiptEnvelope", "SubtaskReceiptEnvelope", "ErrorEnvelope"} {
+	for _, name := range []string{"OperationBatch", "OperationBatchEnvelope", "JobSyncEnvelope", "ClockSyncEnvelope", "ClockReceiptEnvelope", "JobExecutionReceiptEnvelope", "SubtaskReceiptEnvelope", "ErrorEnvelope"} {
 		schema, err := compiler.Compile("https://mixed.test/openapi.json#/components/schemas/" + name)
 		if err != nil {
 			t.Fatal(err)
@@ -93,6 +93,10 @@ func TestJobFieldsMixedExecutionProtectedReferenceHTTP(t *testing.T) {
 			name = "OperationBatchEnvelope"
 		case r.URL.Path == "/sync/jobs":
 			name = "JobSyncEnvelope"
+		case r.URL.Path == "/sync/clocks":
+			name = "ClockSyncEnvelope"
+		case strings.HasPrefix(r.URL.Path, "/time-operations/"):
+			name = "ClockReceiptEnvelope"
 		case strings.HasPrefix(r.URL.Path, "/job-field-operations/") || strings.HasPrefix(r.URL.Path, "/job-execution-operations/"):
 			name = "JobExecutionReceiptEnvelope"
 		case strings.HasPrefix(r.URL.Path, "/subtask-operations/"):

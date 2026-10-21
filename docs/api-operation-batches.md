@@ -3,11 +3,12 @@
 `POST /api/v1/sync/operations` accepts an `operations` array in submitted order.
 The API and encrypted native reference own this protocol; the website is online-only.
 Supported operations are `job.field_notes`, `job.status`, `job.subtask`,
-`job.fields`, `comment.add` and `comment.remove`;
+`job.fields`, `comment.add`, `comment.remove`, `clock.in` and `clock.out`;
 [Comment synchronization](api-comment-sync.md) defines exact parent/thread intent.
 See [Status/Subtask synchronization](api-job-field-sync.md) and
-[Custom Field Values synchronization](api-job-custom-field-sync.md).
-Operation-specific synchronization for clocks, Files, documents and Service Entries remains
+[Custom Field Values synchronization](api-job-custom-field-sync.md) and
+[own clock synchronization](api-clock-sync.md). Operation-specific synchronization
+for Files, documents and Service Entries remains
 with its owning tickets.
 
 ```json

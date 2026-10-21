@@ -20,7 +20,10 @@ func syncComments(ctx context.Context, tx pgx.Tx, p Principal, a Actor, job *syn
 		if err != nil {
 			return nil, err
 		}
-		anchors = append(anchors, "comment-eligibility:"+comments.EligibilityRevision)
+		// Eligibility is mutation intent, not a disclosure boundary. Its rotation
+		// belongs in the complete replacement delta, so another client's observed
+		// assignment loss cannot invalidate this client's otherwise safe baseline.
+		// New effects still validate the original witness at commit time.
 		for _, c := range comments.Entries {
 			if c.RemovedAt != nil {
 				anchors = append(anchors, fmt.Sprintf("removed-comment:%d", c.ID))

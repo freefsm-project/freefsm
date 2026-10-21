@@ -26,6 +26,9 @@ func (f *fakeSettlement) RecordPayment(_ context.Context, a settlement.Actor, r 
 	f.actor, f.payment = a, r
 	return settlement.Result{AppliedCents: r.AmountCents}, nil
 }
+func (f *fakeSettlement) RecordBoundedPayment(ctx context.Context, a settlement.Actor, r settlement.RecordPaymentRequest) (settlement.Result, error) {
+	return f.RecordPayment(ctx, a, r)
+}
 func (*fakeSettlement) ApplyCredit(context.Context, settlement.Actor, settlement.ApplyCreditRequest) (settlement.Result, error) {
 	return settlement.Result{}, nil
 }

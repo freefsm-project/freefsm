@@ -379,10 +379,16 @@ func TestTypedInvoiceFieldsRespectSettlementAndSeparateActionsHTTP(t *testing.T)
 		}()
 		return done
 	}
+	var payment <-chan *httptest.ResponseRecorder
 	wait := func(want int) {
 		t.Helper()
 		deadline := time.Now().Add(10 * time.Second)
 		for {
+			select {
+			case response := <-payment:
+				t.Fatalf("Payment completed before the settlement race barrier: %d %s", response.Code, response.Body.String())
+			default:
+			}
 			var n int
 			if err := pool.QueryRow(ctx, `WITH RECURSIVE blocked(pid) AS (SELECT $1::integer UNION SELECT a.pid FROM pg_stat_activity a JOIN blocked b ON b.pid=ANY(pg_blocking_pids(a.pid))) SELECT count(*)-1 FROM blocked`, pid).Scan(&n); err != nil {
 				t.Fatal(err)
@@ -396,7 +402,7 @@ func TestTypedInvoiceFieldsRespectSettlementAndSeparateActionsHTTP(t *testing.T)
 			time.Sleep(10 * time.Millisecond)
 		}
 	}
-	payment := async(path+"/payments", url.Values{"amount": {"10.00"}, "method": {"cash"}, "date": {time.Now().Format("2006-01-02")}, "idempotency_key": {"typed-fields-payment"}})
+	payment = async(path+"/payments", url.Values{"amount": {"10.00"}, "method": {"cash"}, "date": {time.Now().Format("2006-01-02")}, "idempotency_key": {newOperationKey()}})
 	wait(1)
 	save := async(path, input)
 	wait(2)

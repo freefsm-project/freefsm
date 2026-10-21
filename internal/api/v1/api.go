@@ -148,6 +148,7 @@ func New(deps Dependencies) http.Handler {
 		r.Post("/offline/lease", h.offlineLease)
 		r.Get("/offline-authorization-operations/{operation}", h.offlineLeaseReceipt)
 		r.Get("/sync/jobs", h.syncJobs)
+		r.Get("/sync/clocks", h.syncClocks)
 		r.Post("/sync/operations", h.operationBatch)
 		// Synchronization routes remain within this authenticated budget boundary.
 		r.HandleFunc("/sync", func(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +186,9 @@ func New(deps Dependencies) http.Handler {
 		}
 		r.Post("/invoices/{id}/finalize", h.commercialLifecycle("invoice", true))
 		r.Get("/commercial-operations/{operation}", h.commercialReceipt)
+		r.Post("/invoices/{id}/payments", h.boundedPayment)
+		r.Get("/invoices/{id}/payment-methods", h.paymentMethods)
+		r.Get("/payment-operations/{operation}", h.paymentReceipt)
 		if deps.Files != nil {
 			r.Get("/files/limits", h.fileLimits)
 			r.Post("/file-transfers", h.startFileTransfer)

@@ -772,6 +772,9 @@ type InvoiceDetail struct {
 	Settlement         settlement.InvoiceSettlement
 	CreditSources      []settlement.CreditSource
 	PaymentKey         string
+	PaymentMethods     []settlement.MethodChoice
+	PaymentEligible    bool
+	PaymentDueCents    int64
 	ApplyCreditKey     string
 	Tags               []TagRow
 	AllTags            []TagRow
