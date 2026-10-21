@@ -24,10 +24,13 @@ strings. Never infer an identity from a list position or follow conversion.
 Removed entries have empty text and retain their placeholders/attribution.
 Removing a root preserves replies but closes further replies; removing a reply
 does not close its root. Retained text is available only through separately
-authorized online audit with current parent access. Old materialized pages that
-could disclose newly removed text or a lost document relationship require purge
-and resnapshot. Fresh deltas carry current placeholders. Apply complete Job
-replacements atomically, including omitted document facets.
+authorized online audit with current parent access. Old materialized pages, and
+delta baselines retaining newly removed text or a lost document relationship,
+require purge and resnapshot before any further pages are disclosed. The fresh
+snapshot carries current placeholders. Apply complete Job replacements atomically,
+including omitted document facets. Eligibility-witness rotation alone is not a
+disclosure loss: a safe delta carries the changed witness in its complete Job
+replacement, while new mutations still validate the originally staged witness.
 
 ## Ordered immutable intent
 
