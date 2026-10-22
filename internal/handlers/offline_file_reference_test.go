@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/freefsm-project/freefsm/internal/conversion"
+	"github.com/google/uuid"
 )
 
 func TestOfflineFilesProtectedReferenceHTTP(t *testing.T) {
@@ -25,15 +28,39 @@ func TestOfflineFilesProtectedNoopHistoryHTTP(t *testing.T) {
 	runOfflineFileReference(t, "offline-file-noop-http.cjs", "PASS encrypted File no-op history")
 }
 
-func runOfflineFileReference(t *testing.T, script, success string) {
+func TestOfflineFilesDocumentLossPreservesIndependentWorkHTTP(t *testing.T) {
+	for _, scenario := range []string{"snapshot", "restore", "transport", "receipt", "publication", "publication-receipt"} {
+		t.Run(scenario, func(t *testing.T) {
+			runOfflineFileReference(t, "offline-file-parent-loss-http.cjs", "PASS precise File parent loss", scenario)
+		})
+	}
+}
+
+func runOfflineFileReference(t *testing.T, script, success string, scenario ...string) {
 	t.Helper()
 	if os.Getenv("FREEFSM_OFFLINE_KEY_TESTS") != "1" {
 		t.Skip("set FREEFSM_OFFLINE_KEY_TESTS=1 with actual Secret Service")
 	}
 	f := offlineFiles(t)
 	ctx := context.Background()
+	var document int64
+	if len(scenario) != 0 {
+		job := f.client.Job.GetX(ctx, f.job)
+		document = f.client.Estimate.Create().SetCompanyID(f.company).SetCustomerID(job.CustomerID).SetJobID(f.job).SetTitle("Original File parent").SaveX(ctx).ID
+		if _, err := f.pool.Exec(ctx, `INSERT INTO authorization_grants(role_id,permission,scope) VALUES($1,'estimate.view','J')`, f.role); err != nil {
+			t.Fatal(err)
+		}
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/__fixture/document-loss":
+			if _, err := conversion.New(f.pool).Convert(ctx, conversion.Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, conversion.ConvertRequest{Operation: conversion.Operation{Key: uuid.New()}, EstimateID: document}); err != nil {
+				t.Error(err)
+				w.WriteHeader(500)
+				return
+			}
+			w.WriteHeader(204)
+			return
 		case "/__fixture/corrupt-transfer":
 			var in struct{ ID string }
 			if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
@@ -94,7 +121,7 @@ func runOfflineFileReference(t *testing.T, script, success string) {
 		f.api.ServeHTTP(w, r)
 	}))
 	defer server.Close()
-	input, _ := json.Marshal(map[string]any{"url": server.URL, "token": f.token})
+	input, _ := json.Marshal(map[string]any{"url": server.URL, "token": f.token, "scenario": scenario})
 	runCtx, cancel := context.WithTimeout(ctx, 240*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, "node", "../api/v1/testdata/"+script)

@@ -14,10 +14,9 @@ class OfflineFieldClient extends ProtectedFieldClient {
  async receiptContactComplete(s){await this.withholdCache(s);}
  purgeSensitiveTarget(s,job){
   delete s.cache[job];delete s.notes[job];
-  for(const e of Object.values(s.pending))if(e.job===job){
-   delete e.intent;delete e.batch;delete e.subtask;delete e.job;delete e.parentType;e.state='purged';
-  }
+  for(const e of Object.values(s.pending))if(e.job===job)this.purgeSensitiveOperation(e);
  }
+ purgeSensitiveOperation(e){delete e.intent;delete e.batch;delete e.subtask;delete e.job;delete e.parentType;e.state='purged';}
  async synchronize(delta=false){return this.transaction(async s=>{
   if(delta){await this.enforceOfflineAccessWindow(s);if(!s.syncCursor)throw Error('synchronization_incomplete');}
   await this.policy(s);const cursor=delta?s.syncCursor:null;
@@ -25,7 +24,8 @@ class OfflineFieldClient extends ProtectedFieldClient {
   s.synced=false;s.cache={};s.notes={};await this.persist(s);
   const snapshot=await this.pages(s,'/sync/jobs?scope=assigned',cursor,previous),records=snapshot.records;
   for(const e of Object.values(s.pending)){
-     if(e.job&&!this.pendingTargetVisible(e,records))this.purgeSensitiveTarget(s,e.job);
+   if(e.job&&!records[e.job])this.purgeSensitiveTarget(s,e.job);
+   else if(e.job&&!this.pendingTargetVisible(e,records))this.purgeSensitiveOperation(e);
    else if(e.family==='comment'&&e.job&&e.batch&&!this.commentProjection(records,e.job,{parent_type:e.intent?.comment?.parent_type||e.parentType,target:e.batch.target})){
     delete e.intent;delete e.batch;delete e.job;delete e.parentType;e.state='purged';
    }

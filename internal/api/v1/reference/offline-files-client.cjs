@@ -19,9 +19,14 @@ class OfflineFiles extends OfflineNotes {
    const safe=op=>({id:op.id,state:op.state,receipt:op.receipt,retryNotBefore:op.retryNotBefore});
    return {start:safe(e.transport.start),chunks:Object.fromEntries(Object.values(e.transport.chunks).map(op=>[op.id,safe(op)]))};
   }
-  purgeSensitiveTarget(s,job){for(const e of Object.values(s.pending))if(e.job===job){e.transport=this.safeTransport(e);delete e.upload;delete e.file;}super.purgeSensitiveTarget(s,job);}
+  purgeSensitiveOperation(e){e.transport=this.safeTransport(e);delete e.upload;delete e.file;super.purgeSensitiveOperation(e);}
   purgedOperation(e){return {...super.purgedOperation(e),transport:this.safeTransport(e)};}
  receipt(e,id,r){super.receipt(e,id,r);if(e.family==='file'&&e.state==='accepted')delete e.upload;}
+ async receiptAuthority(s,e,code,receiptOnly=false){
+  if(e.family!=='file')return super.receiptAuthority(s,e,code,receiptOnly);
+  if(!['forbidden','not_found'].includes(code))return false;
+  this.purgeSensitiveOperation(e);await this.withholdCache(s);return true;
+ }
  fileParent(s,job,parent){
   const parents=s.cache[job]?.file_parents||[];
   const selected=parent?parents.find(p=>p.object_type===parent.object_type&&p.object_id===String(parent.object_id)):parents.find(p=>p.object_type==='job');
@@ -66,7 +71,7 @@ class OfflineFiles extends OfflineNotes {
    if(!op)return {state:e.state,requires_synchronization:true};
    if(r.status===200){
     this.transportReceipt(e,op,r.data);
-    if(['forbidden','not_found'].includes(r.data.code)){this.purgeSensitiveTarget(s,e.job);await this.persistAuthorityLoss(s);}
+    if(['forbidden','not_found'].includes(r.data.code)){this.purgeSensitiveOperation(e);await this.persistAuthorityLoss(s);}
    }else if(r.status===404&&r.error?.code==='not_found'){
     if(op.state==='unknown'&&e.state==='pending')op.state='pending';
    }else{
@@ -77,7 +82,7 @@ class OfflineFiles extends OfflineNotes {
   }
   async reconcileFileTransfer(id,operation){return this.transaction(s=>this.reconcileTransportIn(s,id,operation));}
   async transportFailure(s,e,r,operation){
-   if(r.status===404){this.purgeSensitiveTarget(s,e.job);await this.persistAuthorityLoss(s);throw Error('inaccessible_target');}
+   if(r.status===404){this.purgeSensitiveOperation(e);await this.withholdCache(s);throw Error('inaccessible_target');}
    if(r.error?.recovery_disposition==='retry'||r.status===429||r.status>=500){
     (operation||e.transport).retryNotBefore=this.now()+this.retryDelay(r.error);await this.persist(s);throw Error('retry_after_required');
    }

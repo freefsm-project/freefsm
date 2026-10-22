@@ -120,6 +120,15 @@ bytes are discarded; this cache is not a backup. The native reference refuses
 parent numeric IDs outside JavaScript's safe integer range rather than rounding
 them; File targets and accepted receipt identities remain exact strings.
 
+A complete snapshot that still contains a Job but loses one File's exact original
+document parent purges that File intent only. Independent authorized Notes and
+Job-direct File intent remain recoverable, including during restore review;
+dependencies retain their original IDs and cannot acquire success from a purged
+predecessor. File-specific transport/publication denials withhold stale cached
+projections until synchronization without deleting unrelated pending work.
+Actual whole-Job loss still purges every intent associated with that Job, and
+server-directed broad authority loss retains the existing global purge rules.
+
 See [File snapshots](api-file-snapshots.md), [batches](api-operation-batches.md) and
 the local OpenAPI `BatchFileOperation`, `SyncFile`, `SyncFileParent` and
 `FileReceiptEnvelope` schemas. Website behavior remains online-only.
