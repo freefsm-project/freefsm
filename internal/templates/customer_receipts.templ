@@ -1,0 +1,75 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/settlement"
+
+templ CustomerReceipts(p settlement.CustomerReceiptPage, operation string) {
+	@Layout("Customer receipts — "+p.CustomerName) {
+		<h1>Customer receipts — { p.CustomerName }</h1>
+		<a href={ templ.URL(fmt.Sprintf("/customers/%d",p.CustomerID)) }>Customer dashboard</a>
+		if p.CanRecord {
+			<h2>Record money received</h2>
+			<p>Record the full amount actually received. The selected Invoice receives the lesser of this amount and its current due. The remainder is Payment-funded Customer Credit. Without an Invoice, the entire receipt is Unapplied Payment Credit. Credit does not automatically settle other Invoices.</p>
+			<form method="post" hx-boost="false" action={ templ.URL(fmt.Sprintf("/customers/%d/payments",p.CustomerID)) } data-office-payment>
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<input type="hidden" name="idempotency_key" value={ operation }/>
+				<label>Invoice (optional)<select name="invoice_id"><option value="">No Invoice — Unapplied Payment</option>
+					for _,i := range p.Invoices {
+						<option value={ fmt.Sprint(i.ID) }>Invoice { i.Label } — due { cents(i.DueCents) }</option>
+					}
+				</select></label>
+				<label>Amount received<input name="amount" inputmode="decimal" type="number" min="0.01" step="0.01" required/></label>
+				<label>Method<select name="method" required>
+					for _,m := range p.Methods {
+						<option value={ string(m.ID) }>{ m.Label }</option>
+					}
+				</select></label>
+				<label>Other description (required for Other)<input name="other_description"/></label>
+				<label>Received date<input name="date" type="date" value={ p.Today } max={ p.Today } required/></label>
+				<label>Reference<input name="reference"/></label><label>Note<textarea name="notes"></textarea></label>
+				<button type="submit">Record receipt</button>
+			</form>
+			<p data-office-payment-status role="status"></p>
+			<button type="button" data-office-payment-check hidden>Check original receipt</button>
+			<button type="button" data-office-payment-new hidden>Review a different receipt</button>
+			<script src="/static/js/office-payment.js" defer></script>
+		}
+		if p.ShowHistory {
+			<h2>Receipt history</h2>
+			<p>Receipt = initial Invoice allocation + origin Credit. Origin Credit is not another receipt; available Credit is shown separately on the Customer dashboard.</p>
+			for _,r := range p.Receipts {
+				<article data-payment-id={ r.ID.String() }>
+					<h3>Payment { r.ID.String() }</h3>
+					if r.InvoiceID == 0 {
+						<p>Unapplied Payment</p>
+					} else {
+						<p>Initial Invoice identity: { fmt.Sprint(r.InvoiceID) }</p>
+					}
+					<p>Received { cents(r.AmountCents) } = allocated { cents(r.AppliedCents) } + origin Credit { cents(r.CreditCents) }</p>
+					if r.SourceCreditID != nil {
+						<p>Credit source: { r.SourceCreditID.String() }</p>
+					}
+					<p>{ r.ReceivedDate.Format("2006-01-02") } — { r.MethodLabel } ({ string(r.Method) }) { r.OtherDescription }</p>
+					<p>Reference: { r.Reference } — Note: { r.Notes }</p>
+					<p>Recorded by { r.ActorName } — channel: { r.Channel }
+						if r.EnteredAt != nil {
+							<span> — entered { r.EnteredAt.Format("2006-01-02 15:04:05Z07:00") }</span>
+						} else {
+							<span> — historical entry time unknown</span>
+						}
+					</p>
+					if r.Reversal != nil {
+						<p>Reversed { r.Reversal.EffectiveDate.Format("2006-01-02") }: { r.Reversal.Reason }</p>
+					} else if p.CanReverse && r.InvoiceID == 0 {
+						<details><summary>Reverse Unapplied Payment</summary>
+							<form method="post" hx-boost="false" action={ templ.URL(fmt.Sprintf("/customers/%d/payments/%s/reverse",p.CustomerID,r.ID)) }>
+								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ r.ReversalKey }/>
+								<label>Reversal date<input type="date" name="date" value={ p.Today } max={ p.Today } required/></label><label>Reason<input name="reason" required/></label><button>Reverse receipt</button>
+							</form>
+						</details>
+					}
+				</article>
+			}
+		}
+	}
+}

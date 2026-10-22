@@ -164,10 +164,28 @@ func writePayment(ctx context.Context, tx pgx.Tx, actor Actor, req RecordPayment
 	if err != nil {
 		return Result{}, err
 	}
+	id, err := writeReceipt(ctx, tx, actor, req, inv.customerID, receivedDate, applied, credit)
+	if err != nil {
+		return Result{}, err
+	}
+	state, _ := StateFor(total, settled+applied)
+	if err = projectAndLog(ctx, tx, actor, inv.id, state, "payment_recorded", id); err != nil {
+		return Result{}, err
+	}
+	return Result{ID: id, AppliedCents: applied, CreditCents: credit, State: state}, nil
+}
+
+// writeReceipt persists one actual receipt and its initial destinations. A nil
+// Invoice means all value is Unapplied Payment Credit, never a synthetic Invoice.
+// Callers hold current authority and target locks and validate effective dates.
+func writeReceipt(ctx context.Context, tx pgx.Tx, actor Actor, req RecordPaymentRequest, customerID int64, receivedDate time.Time, applied, credit int64) (uuid.UUID, error) {
+	if req.AmountCents <= 0 || !validMethod(req.Method) || applied < 0 || credit < 0 || applied > req.AmountCents || credit != req.AmountCents-applied || (req.InvoiceID == 0 && applied != 0) || (req.Method == Other && strings.TrimSpace(req.OtherDescription) == "") {
+		return uuid.Nil, ErrInvalidAmount
+	}
 	id := uuid.New()
 	choices, err := methodChoices(ctx, tx, actor.CompanyID)
 	if err != nil {
-		return Result{}, err
+		return uuid.Nil, err
 	}
 	var label string
 	for _, choice := range choices {
@@ -182,26 +200,22 @@ func writePayment(ctx context.Context, tx pgx.Tx, actor Actor, req RecordPayment
 			channel = "web"
 		}
 	}
-	_, err = tx.Exec(ctx, `INSERT INTO invoice_payments(id,company_id,customer_id,invoice_id,amount_cents,method,received_date,reference,notes,actor_id,method_label,other_description,channel) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, id, actor.CompanyID, inv.customerID, inv.id, req.AmountCents, req.Method, receivedDate, req.Reference, req.Notes, actor.ID, label, req.OtherDescription, channel)
+	_, err = tx.Exec(ctx, `INSERT INTO invoice_payments(id,company_id,customer_id,invoice_id,amount_cents,method,received_date,reference,notes,actor_id,method_label,other_description,channel) VALUES($1,$2,$3,nullif($4::bigint,0),$5,$6,$7,$8,$9,$10,$11,$12,$13)`, id, actor.CompanyID, customerID, req.InvoiceID, req.AmountCents, req.Method, receivedDate, req.Reference, req.Notes, actor.ID, label, req.OtherDescription, channel)
 	if err != nil {
-		return Result{}, err
+		return uuid.Nil, err
 	}
 	if applied > 0 {
-		if _, err = tx.Exec(ctx, `INSERT INTO payment_invoice_allocations VALUES($1,$2,$3)`, id, inv.id, applied); err != nil {
-			return Result{}, err
+		if _, err = tx.Exec(ctx, `INSERT INTO payment_invoice_allocations VALUES($1,$2,$3)`, id, req.InvoiceID, applied); err != nil {
+			return uuid.Nil, err
 		}
 	}
 	if credit > 0 {
-		_, err = tx.Exec(ctx, `INSERT INTO customer_credits(id,company_id,customer_id,source_payment_id,original_amount_cents,source_date) VALUES($1,$2,$3,$4,$5,$6)`, uuid.New(), actor.CompanyID, inv.customerID, id, credit, receivedDate)
+		_, err = tx.Exec(ctx, `INSERT INTO customer_credits(id,company_id,customer_id,source_payment_id,original_amount_cents,source_date) VALUES($1,$2,$3,$4,$5,$6)`, uuid.New(), actor.CompanyID, customerID, id, credit, receivedDate)
 		if err != nil {
-			return Result{}, err
+			return uuid.Nil, err
 		}
 	}
-	state, _ := StateFor(total, settled+applied)
-	if err = projectAndLog(ctx, tx, actor, inv.id, state, "payment_recorded", id); err != nil {
-		return Result{}, err
-	}
-	return Result{ID: id, AppliedCents: applied, CreditCents: credit, State: state}, nil
+	return id, nil
 }
 
 func (s *Service) ApplyCredit(ctx context.Context, actor Actor, req ApplyCreditRequest) (Result, error) {
@@ -341,92 +355,109 @@ func (s *Service) reverse(ctx context.Context, actor Actor, kind string, req Rev
 		return Result{}, errors.New("reversal reason is required")
 	}
 	return s.transact(ctx, actor, "reverse_"+kind, req.Operation, req, func(tx pgx.Tx, today time.Time) (Result, error) {
-		effectiveDate, err := parseRequestDate(req.EffectiveDate, today.Location())
-		if err != nil {
-			return Result{}, err
-		}
-		if err := ValidateEffectiveDate(effectiveDate, today, time.Time{}); err != nil {
-			return Result{}, err
-		}
-		var invoiceID, customerID int64
-		var originalDate time.Time
-		query := map[string]string{"payment": `SELECT invoice_id,customer_id,received_date FROM invoice_payments WHERE company_id=$1 AND id=$2 AND invoice_id=$3`, "credit_application": `SELECT invoice_id,customer_id,effective_date FROM credit_applications WHERE company_id=$1 AND id=$2 AND invoice_id=$3`, "credit_refund": `SELECT 0,customer_id,effective_date FROM credit_refunds WHERE company_id=$1 AND id=$2 AND customer_id=$3`}[kind]
-		parentID := req.InvoiceID
-		if kind == "credit_refund" {
-			parentID = req.CustomerID
-		}
-		if err := tx.QueryRow(ctx, query, actor.CompanyID, req.ID, parentID).Scan(&invoiceID, &customerID, &originalDate); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return Result{}, ErrNotFound
-			}
-			return Result{}, err
-		}
-		if effectiveDate.Before(dateOnly(originalDate)) {
-			return Result{}, errors.New("reversal date precedes original operation")
-		}
-		if invoiceID > 0 {
-			inv, err := lockInvoice(ctx, tx, actor.CompanyID, invoiceID)
-			if err != nil {
-				return Result{}, err
-			}
-			if err = lockCustomer(ctx, tx, actor.CompanyID, inv.customerID); err != nil {
-				return Result{}, err
-			}
-		}
-		// Lock every affected source after invoice/customer, preserving the global order.
-		var lockRows pgx.Rows
-		switch kind {
-		case "payment":
-			lockRows, err = tx.Query(ctx, `SELECT c.id FROM customer_credits c WHERE c.source_payment_id=$1 ORDER BY c.source_date,c.id FOR UPDATE`, req.ID)
-		case "credit_application":
-			lockRows, err = tx.Query(ctx, `SELECT c.id FROM customer_credits c JOIN credit_applications a ON a.credit_id=c.id WHERE a.id=$1 ORDER BY c.source_date,c.id FOR UPDATE OF c`, req.ID)
-		case "credit_refund":
-			err = lockCustomer(ctx, tx, actor.CompanyID, customerID)
-			if err == nil {
-				lockRows, err = tx.Query(ctx, `SELECT c.id FROM customer_credits c JOIN credit_refund_allocations a ON a.credit_id=c.id WHERE a.refund_id=$1 ORDER BY c.source_date,c.id FOR UPDATE OF c`, req.ID)
-			}
-		}
-		if err != nil {
-			return Result{}, err
-		}
-		if lockRows != nil {
-			for lockRows.Next() {
-				var ignored uuid.UUID
-				if err = lockRows.Scan(&ignored); err != nil {
-					return Result{}, err
-				}
-			}
-			if err = lockRows.Err(); err != nil {
-				return Result{}, err
-			}
-			lockRows.Close()
-		}
-		if checkDeps {
-			var dependent bool
-			err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM customer_credits c WHERE c.source_payment_id=$1 AND (EXISTS(SELECT 1 FROM credit_applications a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=a.id)) OR EXISTS(SELECT 1 FROM credit_refund_allocations ra JOIN credit_refunds f ON f.id=ra.refund_id WHERE ra.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_refund' AND r.operation_id=f.id))))`, req.ID).Scan(&dependent)
-			if err != nil {
-				return Result{}, err
-			}
-			if dependent {
-				return Result{}, ErrDependency
-			}
-		}
-		id := uuid.New()
-		_, err = tx.Exec(ctx, `INSERT INTO settlement_reversals(id,company_id,operation_type,operation_id,reason,actor_id,effective_date) VALUES($1,$2,$3,$4,$5,$6,$7)`, id, actor.CompanyID, kind, req.ID, req.Reason, actor.ID, effectiveDate)
-		if err != nil {
-			return Result{}, err
-		}
-		if invoiceID > 0 {
-			if err = reproject(ctx, tx, actor, invoiceID, "settlement_reversed", id); err != nil {
-				return Result{}, err
-			}
-		} else {
-			if err = logActivity(ctx, tx, actor, "customer", customerID, "credit_refund_reversed", id); err != nil {
-				return Result{}, err
-			}
-		}
-		return Result{ID: id}, nil
+		return reverseSettlement(ctx, tx, actor, kind, req, today, checkDeps)
 	})
+}
+
+func reverseSettlement(ctx context.Context, tx pgx.Tx, actor Actor, kind string, req ReverseRequest, today time.Time, checkDeps bool) (Result, error) {
+	effectiveDate, err := parseRequestDate(req.EffectiveDate, today.Location())
+	if err != nil {
+		return Result{}, err
+	}
+	if err := ValidateEffectiveDate(effectiveDate, today, time.Time{}); err != nil {
+		return Result{}, err
+	}
+	var invoiceID, customerID int64
+	var originalDate time.Time
+	query := map[string]string{"payment": `SELECT invoice_id,customer_id,received_date FROM invoice_payments WHERE company_id=$1 AND id=$2 AND invoice_id=$3`, "credit_application": `SELECT invoice_id,customer_id,effective_date FROM credit_applications WHERE company_id=$1 AND id=$2 AND invoice_id=$3`, "credit_refund": `SELECT 0,customer_id,effective_date FROM credit_refunds WHERE company_id=$1 AND id=$2 AND customer_id=$3`}[kind]
+	parentID := req.InvoiceID
+	if kind == "payment" && req.InvoiceID == 0 {
+		query = `SELECT 0,customer_id,received_date FROM invoice_payments WHERE company_id=$1 AND id=$2 AND invoice_id IS NULL AND customer_id=$3`
+		parentID = req.CustomerID
+	}
+	if kind == "credit_refund" {
+		parentID = req.CustomerID
+	}
+	if err := tx.QueryRow(ctx, query, actor.CompanyID, req.ID, parentID).Scan(&invoiceID, &customerID, &originalDate); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Result{}, ErrNotFound
+		}
+		return Result{}, err
+	}
+	// PostgreSQL DATE is a calendar value, not midnight in the decoder's UTC
+	// zone. Compare the original calendar day in the company zone as well.
+	y, m, d := originalDate.Date()
+	if effectiveDate.Before(time.Date(y, m, d, 0, 0, 0, 0, today.Location())) {
+		return Result{}, errors.New("reversal date precedes original operation")
+	}
+	if invoiceID > 0 {
+		inv, err := lockInvoice(ctx, tx, actor.CompanyID, invoiceID)
+		if err != nil {
+			return Result{}, err
+		}
+		if err = lockCustomer(ctx, tx, actor.CompanyID, inv.customerID); err != nil {
+			return Result{}, err
+		}
+	} else if err = lockCustomer(ctx, tx, actor.CompanyID, customerID); err != nil {
+		return Result{}, err
+	}
+	// Lock every affected source after invoice/customer, preserving the global order.
+	var lockRows pgx.Rows
+	switch kind {
+	case "payment":
+		lockRows, err = tx.Query(ctx, `SELECT c.id FROM customer_credits c WHERE c.source_payment_id=$1 ORDER BY c.source_date,c.id FOR UPDATE`, req.ID)
+	case "credit_application":
+		lockRows, err = tx.Query(ctx, `SELECT c.id FROM customer_credits c JOIN credit_applications a ON a.credit_id=c.id WHERE a.id=$1 ORDER BY c.source_date,c.id FOR UPDATE OF c`, req.ID)
+	case "credit_refund":
+		err = lockCustomer(ctx, tx, actor.CompanyID, customerID)
+		if err == nil {
+			lockRows, err = tx.Query(ctx, `SELECT c.id FROM customer_credits c JOIN credit_refund_allocations a ON a.credit_id=c.id WHERE a.refund_id=$1 ORDER BY c.source_date,c.id FOR UPDATE OF c`, req.ID)
+		}
+	}
+	if err != nil {
+		return Result{}, err
+	}
+	if lockRows != nil {
+		for lockRows.Next() {
+			var ignored uuid.UUID
+			if err = lockRows.Scan(&ignored); err != nil {
+				return Result{}, err
+			}
+		}
+		if err = lockRows.Err(); err != nil {
+			return Result{}, err
+		}
+		lockRows.Close()
+	}
+	if checkDeps {
+		var dependent bool
+		err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM customer_credits c WHERE c.source_payment_id=$1 AND (EXISTS(SELECT 1 FROM credit_applications a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=a.id)) OR EXISTS(SELECT 1 FROM credit_refund_allocations ra JOIN credit_refunds f ON f.id=ra.refund_id WHERE ra.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_refund' AND r.operation_id=f.id))))`, req.ID).Scan(&dependent)
+		if err != nil {
+			return Result{}, err
+		}
+		if dependent {
+			return Result{}, ErrDependency
+		}
+	}
+	id := uuid.New()
+	_, err = tx.Exec(ctx, `INSERT INTO settlement_reversals(id,company_id,operation_type,operation_id,reason,actor_id,effective_date) VALUES($1,$2,$3,$4,$5,$6,$7)`, id, actor.CompanyID, kind, req.ID, req.Reason, actor.ID, effectiveDate)
+	if err != nil {
+		return Result{}, err
+	}
+	if invoiceID > 0 {
+		if err = reproject(ctx, tx, actor, invoiceID, "settlement_reversed", id); err != nil {
+			return Result{}, err
+		}
+	} else {
+		action := "credit_refund_reversed"
+		if kind == "payment" {
+			action = "settlement_reversed"
+		}
+		if err = logActivity(ctx, tx, actor, "customer", customerID, action, id); err != nil {
+			return Result{}, err
+		}
+	}
+	return Result{ID: id}, nil
 }
 
 type lockedInvoice struct {

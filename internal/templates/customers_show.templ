@@ -7,6 +7,9 @@ templ CustomerShow(p CustomerShowPageData) {
 		<div class="work-item-detail customer-dashboard">
 		<p>Updated at <time datetime={ p.UpdatedAt }>{ p.UpdatedAt }</time> — successfully loaded sections. Activity is loaded separately.</p>
 		<a hx-boost="false" href={ templ.URL(fmt.Sprintf("/customers/%d",p.Customer.ID)) }>Refresh dashboard</a>
+		if canAllRecords(ctx,"payment.credit") || canAllRecords(ctx,"settlement.view") {
+			<a href={ templ.URL(fmt.Sprintf("/customers/%d/payments",p.Customer.ID)) }>Customer receipts</a>
+		}
 		if canMaster(ctx,"asset.view") {
 			if p.SectionErrors["Assets"] {
 				@CustomerSectionUnavailable(p.Customer.ID,"Assets")
@@ -181,7 +184,13 @@ templ customerCredit(p CustomerShowPageData) {
 	if len(p.Settlement.Sources) > 0 {
 		<h4>Sources</h4><div style="overflow-x: auto;"><table><thead><tr><th>Date</th><th>Origin</th><th>Original</th><th>Remaining</th></tr></thead><tbody>
 		for _, s := range p.Settlement.Sources {
-			<tr><td>{ s.SourceDate.Format("2006-01-02") }</td><td><a href={ templ.URL(fmt.Sprintf("/invoices/%d",s.InvoiceID)) }>Payment { s.SourcePaymentID.String() }</a> { string(s.PaymentMethod) } { s.PaymentReference }</td><td>{ cents(s.OriginalCents) }</td><td>{ cents(s.AvailableCents) }</td></tr>
+			<tr><td>{ s.SourceDate.Format("2006-01-02") }</td><td>
+				if s.InvoiceID == 0 {
+					<a href={ templ.URL(fmt.Sprintf("/customers/%d/payments",p.Customer.ID)) }>Unapplied Payment { s.SourcePaymentID.String() }</a>
+				} else {
+					<a href={ templ.URL(fmt.Sprintf("/invoices/%d",s.InvoiceID)) }>Payment { s.SourcePaymentID.String() }</a>
+				}
+				{ string(s.PaymentMethod) } { s.PaymentReference }</td><td>{ cents(s.OriginalCents) }</td><td>{ cents(s.AvailableCents) }</td></tr>
 		}
 		</tbody></table></div>
 	}

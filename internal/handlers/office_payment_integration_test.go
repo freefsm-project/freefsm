@@ -44,6 +44,11 @@ func TestOfficePaymentInvoiceSplitHTTP(t *testing.T) {
 	if count != 1 || receipt != 12501 || allocated != 10000 || credit != 2501 {
 		t.Fatalf("count=%d receipt=%d allocated=%d credit=%d", count, receipt, allocated, credit)
 	}
+	for _, statement := range []string{`UPDATE payment_invoice_allocations SET amount_cents=1`, `UPDATE payment_invoice_allocations SET invoice_id=invoice_id`, `UPDATE customer_credits SET original_amount_cents=1`} {
+		if _, err := pool.Exec(ctx, statement); err == nil {
+			t.Fatalf("financial original mutable: %s", statement)
+		}
+	}
 	page := documentTransactionRequest(t, web, cookie, "GET", fmt.Sprintf("/invoices/%d", invoice), nil, 200)
 	assertContains(t, page.Body.String(), "125.01")
 	values.Set("idempotency_key", newOperationKey())
@@ -182,6 +187,8 @@ func TestOfficePaymentAuthorityFailureAndContentionHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := apiv1.NewRouter(pool, client, sessions)
+	lifecycleCall(t, api, token, "POST", fmt.Sprintf("/customers/%d/payments", c.ID), `{}`, 404)
+	lifecycleCall(t, api, token, "POST", fmt.Sprintf("/invoices/%d/payments-with-credit", invoice), `{}`, 404)
 	lifecycleCall(t, api, token, "POST", fmt.Sprintf("/invoices/%d/payments", invoice), fmt.Sprintf(`{"operation_id":%q,"job_id":%d,"amount":"125.00","method":"cash","date":"2026-01-02"}`, newOperationKey(), j.ID), 422)
 	// Two actual HTTP commands contend behind the shared financial fence. The
 	// second receipt keeps its full amount but allocates only the remaining40.

@@ -1,0 +1,60 @@
+'use strict';
+const {chromium}=require('playwright-core');
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+(async()=>{
+  const [base,cookie,customer,invoice]=process.argv.slice(2);
+  const browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE,args:['--no-sandbox']});
+  try {
+    const context=await browser.newContext({viewport:{width:390,height:844}});
+    await context.addCookies([{name:'session',value:cookie,url:base}]);
+    const page=await context.newPage();page.on('dialog',d=>d.accept());
+    await page.goto(base+'/customers/'+customer);
+    await page.getByRole('link',{name:'Customer receipts',exact:true}).click();
+    const form=page.locator('form[data-office-payment]');
+    await form.locator('[name=invoice_id]').selectOption(invoice);
+    await form.locator('[name=amount]').fill('125.01');
+    await form.locator('[name=reference]').fill('Browser selected receipt');
+    let posts=0;
+    await page.route('**/customers/'+customer+'/payments',async route=>{
+      if(route.request().method()!=='POST')return route.continue();
+      posts++;
+      if(posts===1){const response=await route.fetch();assert.equal(response.status(),200);await route.abort('failed');}
+      else await route.continue();
+    });
+    await form.getByRole('button',{name:'Record receipt',exact:true}).click();
+    await page.getByText('Receipt status unknown. Check the original receipt before recording more money.',{exact:true}).waitFor();
+    await page.reload();
+    await page.getByRole('button',{name:'Check original receipt',exact:true}).click();
+    await page.getByText('Receipt accepted. Do not record this money again.',{exact:true}).waitFor();
+    assert.equal(posts,1);
+    await page.getByRole('button',{name:'Review a different receipt'}).click();
+    await page.waitForFunction(()=>document.querySelector('[name=amount]')?.disabled===false);
+    assert.equal(await form.locator('[name=invoice_id]').inputValue(),'');
+    await form.locator('[name=amount]').fill('40.12');
+    await form.locator('[name=method]').selectOption('other');
+    await form.locator('[name=other_description]').fill('Postal order');
+    await form.locator('[name=reference]').fill('Browser unapplied receipt');
+    await form.getByRole('button',{name:'Record receipt',exact:true}).click();
+    await page.getByText('Receipt accepted. Do not record this money again.',{exact:true}).waitFor();
+    await page.reload();
+    assert.equal(await page.locator('[data-payment-id]').count(),2);
+    const history=await page.locator('[data-payment-id]').allTextContents();
+    assert(history.some(x=>x.includes('125.01')&&x.includes('100.00')&&x.includes('25.01')));
+    assert(history.some(x=>x.includes('Unapplied Payment')&&x.includes('40.12')&&x.includes('Postal order')));
+    const evidence=fs.mkdtempSync(path.join(process.env.TMPDIR,'office-payment-browser-'));
+    await page.screenshot({path:path.join(evidence,'receipts.png'),fullPage:true});
+    await page.getByRole('button',{name:'Check original receipt',exact:true}).click();
+    await page.getByRole('button',{name:'Review a different receipt'}).click();
+    await page.waitForFunction(()=>document.querySelector('[name=amount]')?.disabled===false);
+    await form.locator('[name=amount]').fill('1.00');
+    await form.locator('[name=reference]').fill('Secret denied receipt');
+    assert.equal((await page.request.post(base+'/fixture/revoke-office-session')).status(),200);
+    await form.getByRole('button',{name:'Record receipt',exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('form[data-office-payment]'));
+    assert(!(await page.content()).includes('Secret denied receipt'));
+    assert.equal(posts,3);
+    console.log('Selected split, lost response, Unapplied receipt, persistent history and session denial; two receipts. Evidence: '+evidence);
+  } finally {await browser.close();}
+})().catch(e=>{console.error(e);process.exit(1);});

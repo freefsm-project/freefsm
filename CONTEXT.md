@@ -257,8 +257,16 @@ The Invoice Status presented for behavior and reporting. Paid takes precedence o
 _Avoid_: Stored status, payment history
 
 **Payment**:
-An immutable positive receipt against one Invoice.
+An immutable positive receipt of money belonging to one Customer. Its initial allocation may settle at most one eligible Invoice for that Customer; any remainder is Payment-funded Customer Credit.
 _Avoid_: Credit, transaction
+
+**Bounded Payment**:
+A Payment whose entire fixed amount must fit the current positive due of its selected Invoice. It cannot create Customer Credit or become an Unapplied Payment.
+_Avoid_: Overpayment, automatic split
+
+**Unapplied Payment**:
+A Payment recorded without an Invoice target. Its full amount becomes traceable Customer Credit without settling or netting against any Invoice.
+_Avoid_: Noncash Credit, synthetic Invoice, automatic settlement
 
 **Settlement State**:
 The monetary state of an Invoice: Unpaid, Partially Paid, or Paid. It is separate from Invoice Status.
@@ -288,7 +296,7 @@ An optional, imperfect indication that a recipient may have opened a delivered m
 _Avoid_: Read receipt, proof of viewing
 
 **Customer Credit**:
-Unused value from an overpayment, owned by one Customer and linked to the originating Payment. Credit is unresolved while its available value is greater than zero.
+Unused value from an overpayment or Unapplied Payment, owned by one Customer and linked to the originating Payment. Credit is unresolved while its available value is greater than zero.
 _Avoid_: Balance, refund, payment
 
 **Credit Application**:
