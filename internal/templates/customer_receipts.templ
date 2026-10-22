@@ -5,7 +5,7 @@ import "github.com/freefsm-project/freefsm/internal/settlement"
 
 templ CustomerReceipts(p settlement.CustomerReceiptPage, operation string) {
 	@Layout("Customer receipts — "+p.CustomerName) {
-		<h1>Customer receipts — { p.CustomerName }</h1>
+		<h1 data-office-payment-page>Customer receipts — { p.CustomerName }</h1>
 		<a href={ templ.URL(fmt.Sprintf("/customers/%d",p.CustomerID)) }>Customer dashboard</a>
 		if p.CanRecord {
 			<h2>Record money received</h2>
@@ -29,11 +29,11 @@ templ CustomerReceipts(p settlement.CustomerReceiptPage, operation string) {
 				<label>Reference<input name="reference"/></label><label>Note<textarea name="notes"></textarea></label>
 				<button type="submit">Record receipt</button>
 			</form>
-			<p data-office-payment-status role="status"></p>
-			<button type="button" data-office-payment-check hidden>Check original receipt</button>
-			<button type="button" data-office-payment-new hidden>Review a different receipt</button>
-			<script src="/static/js/office-payment.js" defer></script>
 		}
+		<p data-office-payment-status role="status"></p>
+		<button type="button" data-office-payment-check hidden>Check original receipt</button>
+		<button type="button" data-office-payment-new hidden>Review a different receipt</button>
+		<script src="/static/js/office-payment.js" defer></script>
 		if p.ShowHistory {
 			<h2>Receipt history</h2>
 			<p>Receipt = initial Invoice allocation + origin Credit. Origin Credit is not another receipt; available Credit is shown separately on the Customer dashboard.</p>

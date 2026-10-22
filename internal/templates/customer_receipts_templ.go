@@ -44,14 +44,14 @@ func CustomerReceipts(p settlement.CustomerReceiptPage, operation string) templ.
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<h1>Customer receipts — ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<h1 data-office-payment-page>Customer receipts — ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(p.CustomerName)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/customer_receipts.templ`, Line: 8, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/customer_receipts.templ`, Line: 8, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -225,12 +225,12 @@ func CustomerReceipts(p settlement.CustomerReceiptPage, operation string) templ.
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" required></label> <label>Reference<input name=\"reference\"></label><label>Note<textarea name=\"notes\"></textarea></label> <button type=\"submit\">Record receipt</button></form><p data-office-payment-status role=\"status\"></p><button type=\"button\" data-office-payment-check hidden>Check original receipt</button> <button type=\"button\" data-office-payment-new hidden>Review a different receipt</button><script src=\"/static/js/office-payment.js\" defer></script>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "\" required></label> <label>Reference<input name=\"reference\"></label><label>Note<textarea name=\"notes\"></textarea></label> <button type=\"submit\">Record receipt</button></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, " <p data-office-payment-status role=\"status\"></p><button type=\"button\" data-office-payment-check hidden>Check original receipt</button> <button type=\"button\" data-office-payment-new hidden>Review a different receipt</button><script src=\"/static/js/office-payment.js\" defer></script> ")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

@@ -28,6 +28,16 @@ authority. Session/action denial purges input. The existing bounded web/API form
 and their fixed-amount semantics are unchanged; no field API Customer receipt or
 Credit route exists, regardless of grants.
 
+Submission and receipt reconciliation withhold the entire previously rendered
+Customer projection, including history, Invoice options and document title. Only
+a fresh authorized server-rendered page restores those facets; an action-allowed
+header alone cannot authorize retained HTML. Missing, denied or failed current
+context leaves a neutral reconciliation view with no previous Customer content.
+The original user's nonsensitive receipt outcome is an explicit exception: it
+remains independently queryable after Customer or facet access loss. That outcome
+does not restore input/history or authorize replay, and a new receipt requires a
+currently authorized entry form plus explicit review.
+
 Receipt history reconciles the full amount to its initial allocation and origin
 Credit, showing stable Payment and Credit identities, recorded method label and
 identity, effective date, reference, note, actor, entry time and channel. Origin
