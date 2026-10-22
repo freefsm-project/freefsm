@@ -77,13 +77,40 @@ It accepts JSON on stdin, never credentials in argv:
 - `transfer-file`: original `operation_id`; explicitly sends/resumes separate raw
   chunks, checks discovered limits and verifies the digest. Completion is labelled
   `transferred_not_published`.
+- `reconcile-file-transfer`: publication `operation_id` and original
+  `transport_operation_id`; queries only that start/chunk receipt. Safe lookup is
+  independent of the offline lease and parent visibility, but requires a current
+  authenticated session. Receipt contact withholds cached projections (including
+  when the lookup fails): synchronize before another transfer attempt.
 - `stage-file-mutation`: cached `job`, exact `file_id`, `kind` (`rename`/`remove`),
   rename `name` and explicit `depends_on`; takes the currently reviewed revision.
 - `submit-batch` and `reconcile`: existing receipt-first, persisted-unknown flow.
 - `repair-file`: original ID, explicit `depends_on` and `review` containing current
-  `revision` (and new rename `name`), or the exact reviewed publication parent.
+  `revision` (and new rename `name`), or the exact reviewed publication parent and
+  optional explicitly corrected publication `name`.
   Creates new IDs without changing the original target. Publication repair stages
   a new scoped transfer. Restored uncertainty first requires `acknowledge-uncertain`.
+
+Each transport command has its own durable pending/unknown/accepted/terminal
+disposition, separate from the publication receipt. Unknown is encrypted before
+network send; a chunk's UUID, offset and length are staged with the original exact
+bytes and never resized under that UUID when discovery limits change. An explicit
+`transfer-file` encountering unknown transport first queries its original receipt
+and returns `requires_synchronization`; it sends no bytes in that recovery call.
+After synchronization, an accepted operation uses authorized transfer progress,
+never write replay. Only a successful same-deployment receipt miss permits an
+unchanged retry. Unavailable or malformed lookup retains unknown. Retry deadlines
+from typed errors persist across restart, including discovery/progress/verification
+failures. Terminal transport or verification failures require explicit reviewed
+repair with new publication, transfer and operation IDs. Verification is a fresh
+observation, not a receipt-bearing publication or a durable integrity certificate.
+
+Older encrypted queues lacking segment lengths reconcile their recorded UUIDs;
+an unreceived historical chunk requires review rather than guessing its shape.
+Scope loss retains only safe transport identities/dispositions/receipts, removing
+bytes, names, segment shape and original-parent details. Restore receipt absence
+never authorizes replay; transport acceptance alone does not resolve publication
+uncertainty or bypass the existing explicit restore review.
 
 Ordinary scope loss purges inaccessible names/bytes/intent; failed persistence
 quarantines the old ciphertext. Restore locks pending intent until fresh auth,

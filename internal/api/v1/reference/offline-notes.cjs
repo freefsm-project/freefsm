@@ -45,6 +45,7 @@ if(require.main===module){
    case 'view':result=await client.view();break;
     case 'stage-file-publication':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.stageFilePublication(command.job,command.name,Buffer.from(command.bytes_base64,'base64'),command.depends_on,command.parent),state:'pending'};break;
     case 'transfer-file':if(workflow!=='notes')throw Error('unknown_action');result=await client.transferFile(command.operation_id);break;
+    case 'reconcile-file-transfer':if(workflow!=='notes')throw Error('unknown_action');result=await client.reconcileFileTransfer(command.operation_id,command.transport_operation_id);break;
     case 'stage-file-mutation':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.stageFileMutation(command.job,command.file_id,command.kind,command.name,command.depends_on),state:'pending'};break;
     case 'repair-file':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.repairFile(command.operation_id,command.review,command.depends_on),state:'pending'};break;
     case 'stage-comment':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.stageComment(command.job,command.reviewed,command.depends_on),state:'pending'};break;

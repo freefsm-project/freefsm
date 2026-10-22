@@ -30,9 +30,10 @@ class ProtectedFieldClient {
  }
  async purge(s,issuance=null){
   // Retain only nonsensitive operation identities/dispositions for safe lookup.
-  const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]={state:'purged',receipt:e.receipt,family:e.family,receipt_family:e.receipt_family};
+  const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]=this.purgedOperation(e);
   Object.assign(s,fresh(),{pending:safe,user:s.user,issuance});await this.persistAuthorityLoss(s);
  }
+ purgedOperation(e){return {state:'purged',receipt:e.receipt,family:e.family,receipt_family:e.receipt_family};}
  async purgeDeniedIssuance(s,receipt){
   // A recovered terminal denial is ordinary authority loss, just like its 403.
   // Keep only the original issuance identity/disposition, never prior authority.
