@@ -478,7 +478,8 @@ func TestProtectedAuditEventRoleAndAPIDeviceSnapshotsHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := apiv1.NewRouter(pool, client, sessions)
-	r := httptest.NewRequest("POST", fmt.Sprintf("/jobs/%d/comments", j.ID), strings.NewReader(`{"operation_id":"10300000-0000-4000-8000-000000000002","content":"Never emit comment content","occurred_at":"2025-01-02T03:04:05Z"}`))
+	parentRevision := commentRevisionHTTP(t, api, token, "job", j.ID)
+	r := httptest.NewRequest("POST", fmt.Sprintf("/jobs/%d/comments", j.ID), strings.NewReader(fmt.Sprintf(`{"operation_id":"10300000-0000-4000-8000-000000000002","content":"Never emit comment content","occurred_at":"2025-01-02T03:04:05Z","parent_revision":%q}`, parentRevision)))
 	r.Header.Set("Authorization", "Bearer "+token)
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()

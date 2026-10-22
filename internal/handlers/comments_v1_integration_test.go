@@ -331,8 +331,16 @@ func TestCommentsAPICreateOnceAndOriginalThread(t *testing.T) {
 	}
 	router := apiv1.NewRouter(pool, client, sessions)
 	path := fmt.Sprintf("/jobs/%d/comments", j.ID)
+	parentRevision := commentRevisionHTTP(t, router, token, "job", j.ID)
 	post := func(path, body string, want int) map[string]any {
 		t.Helper()
+		var staged map[string]any
+		if err := json.Unmarshal([]byte(body), &staged); err != nil {
+			t.Fatal(err)
+		}
+		staged["parent_revision"] = parentRevision // captured once, never refreshed on replay
+		raw, _ := json.Marshal(staged)
+		body = string(raw)
 		r := httptest.NewRequest("POST", path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Content-Type", "application/json")
@@ -396,8 +404,18 @@ func TestCommentsAssignedScopeAndLostResponseHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := apiv1.NewRouter(pool, client, sessions)
+	parentRevision := commentRevisionHTTP(t, api, token, "job", j.ID)
 	call := func(method, path, body string, want int) string {
 		t.Helper()
+		if method == "POST" {
+			var staged map[string]any
+			if err := json.Unmarshal([]byte(body), &staged); err != nil {
+				t.Fatal(err)
+			}
+			staged["parent_revision"] = parentRevision // keep original eligibility after scope loss
+			raw, _ := json.Marshal(staged)
+			body = string(raw)
+		}
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Content-Type", "application/json")

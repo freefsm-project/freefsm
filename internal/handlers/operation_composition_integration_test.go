@@ -38,6 +38,9 @@ func TestOperationCompositionCrossFamilyHTTP(t *testing.T) {
 				notes["operation_id"] = op
 				otherPath := path + "/comments"
 				other := map[string]any{"operation_id": op, "content": "Exactly once comment"}
+				if family == "comment" {
+					other["parent_revision"] = commentRevisionHTTP(t, api, token, "job", j.ID)
+				}
 				if family == "clock" {
 					otherPath = "/time-entries/clock-in"
 					other = map[string]any{"operation_id": op}

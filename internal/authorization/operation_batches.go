@@ -7,29 +7,39 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
-// BatchFieldOperation binds the supported independent field actions. Its original
+// BatchFieldOperation carries a supported field operation. Its original
 // target and dependency references are intent, not instructions to rewrite later
 // operations using an earlier result's identity or revision.
 type BatchFieldOperation struct {
-	OperationID        string            `json:"operation_id"`
-	Type               string            `json:"type"`
-	Target             string            `json:"target"`
-	DependsOn          []string          `json:"depends_on"`
-	NotesRevision      string            `json:"notes_revision"`
-	Notes              *string           `json:"field_notes"`
-	OccurredAt         *time.Time        `json:"occurred_at,omitempty"`
-	StatusID           string            `json:"status_id,omitempty"`
-	StatusRevision     string            `json:"status_revision,omitempty"`
-	MeaningRevision    string            `json:"meaning_revision,omitempty"`
-	SubtaskID          string            `json:"subtask_id,omitempty"`
-	CompletionRevision string            `json:"completion_revision,omitempty"`
-	Completed          *bool             `json:"completed,omitempty"`
-	Revisions          map[string]string `json:"revisions,omitempty"`
-	Values             json.RawMessage   `json:"values,omitempty"`
+	OperationID        string              `json:"operation_id"`
+	Type               string              `json:"type"`
+	Target             string              `json:"target"`
+	DependsOn          []string            `json:"depends_on"`
+	NotesRevision      string              `json:"notes_revision"`
+	Notes              *string             `json:"field_notes"`
+	OccurredAt         *time.Time          `json:"occurred_at,omitempty"`
+	StatusID           string              `json:"status_id,omitempty"`
+	StatusRevision     string              `json:"status_revision,omitempty"`
+	MeaningRevision    string              `json:"meaning_revision,omitempty"`
+	SubtaskID          string              `json:"subtask_id,omitempty"`
+	CompletionRevision string              `json:"completion_revision,omitempty"`
+	Completed          *bool               `json:"completed,omitempty"`
+	Revisions          map[string]string   `json:"revisions,omitempty"`
+	Values             json.RawMessage     `json:"values,omitempty"`
+	Comment            *BatchCommentIntent `json:"comment,omitempty"`
+}
+
+type BatchCommentIntent struct {
+	ParentType     string  `json:"parent_type"`
+	Content        *string `json:"content,omitempty"`
+	ReplyTo        string  `json:"reply_to,omitempty"`
+	RemoveID       string  `json:"remove_id,omitempty"`
+	ParentRevision string  `json:"parent_revision,omitempty"`
 }
 
 // Retain the existing Go caller spelling and old serialized Notes intent.
@@ -122,6 +132,21 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			continue
 		}
 		op := *member.Job
+		batch := batchExecution{operation: op, dependencies: batchDependencies{dependsOn: op.DependsOn, positions: positions, index: i, successful: successful}}
+		if op.Comment != nil {
+			in := CommentCommand{OperationID: op.OperationID, OccurredAt: op.OccurredAt, ParentRevision: op.Comment.ParentRevision, requireParentRevision: true}
+			if op.Comment.Content != nil {
+				in.Content = *op.Comment.Content
+			}
+			receipt, err := s.submitCommentBound(ctx, a, objectref.Ref{Type: objectref.Type(op.Comment.ParentType)}, in, &batch)
+			result := BatchOperationResult{OperationID: op.OperationID, Err: err}
+			if receipt.Code != "" {
+				result.Receipt = &receipt
+			}
+			results = append(results, result)
+			successful[op.OperationID] = err == nil && receipt.Code == "accepted"
+			continue
+		}
 		id, err := strconv.ParseInt(op.Target, 10, 64)
 		if err != nil {
 			id, err = s.ResolveSyncedJob(ctx, op.Target)
@@ -132,7 +157,6 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 		}
 		result := BatchOperationResult{OperationID: op.OperationID, Err: err}
 		if err == nil && op.Type == "job.fields" {
-			batch := batchExecution{operation: op, dependencies: batchDependencies{dependsOn: op.DependsOn, positions: positions, index: i, successful: successful}}
 			accepted := false
 			_, e := s.patchFieldsReviewedBound(ctx, a, id, ReviewedFieldPatch{OperationID: op.OperationID, Revisions: op.Revisions, Values: op.Values, OccurredAt: op.OccurredAt}, &batch)
 			result.Err = e
@@ -160,7 +184,6 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 			if op.Notes != nil {
 				in.Notes = *op.Notes
 			}
-			batch := batchExecution{operation: op, dependencies: batchDependencies{dependsOn: op.DependsOn, positions: positions, index: i, successful: successful}}
 			var receipt JobExecutionReceipt
 			var e error
 			switch op.Type {
@@ -213,7 +236,7 @@ type batchDependencies struct {
 // authority transaction. Submitted position is eligibility, never part of intent;
 // a same-intent retry may submit only the unresolved operation.
 func (b *batchExecution) validate(ctx context.Context, tx pgx.Tx, a Actor) error {
-	if b.operation.Type != "job.field_notes" && b.operation.Type != "job.status" && b.operation.Type != "job.subtask" && b.operation.Type != "job.fields" && b.operation.Type != "file.publish" && b.operation.Type != "file.rename" && b.operation.Type != "file.remove" {
+	if b.operation.Type != "job.field_notes" && b.operation.Type != "job.status" && b.operation.Type != "job.subtask" && b.operation.Type != "job.fields" && b.operation.Type != "file.publish" && b.operation.Type != "file.rename" && b.operation.Type != "file.remove" && b.operation.Type != "comment.add" && b.operation.Type != "comment.remove" {
 		return &JobExecutionConflict{"invalid_intent"}
 	}
 	if at := b.operation.OccurredAt; at != nil && at.Nanosecond()%1000 != 0 {

@@ -100,6 +100,9 @@ need separate new IDs. Notes, Status, Subtasks and values share one protected ke
 AES-GCM envelope, lease, serialization and durable quarantine. Ordinary scope loss
 purges inaccessible content; safe receipt-family metadata survives. Restore locks
 recoverable intent until fresh auth, complete current sync and explicit reconciliation.
+Receipt reconnect withholds sensitive cache until a complete explicit fresh sync.
+Recover the original receipts as a group, then refresh scope before view/staging/
+submission/repair; original per-value revisions and pending payloads are not rewritten.
 
 Migration087 adds only nullable validation_reason, preserving every prior receipt
 field and leaving historical reasons NULL. No grant/identity/value/history rewrite.

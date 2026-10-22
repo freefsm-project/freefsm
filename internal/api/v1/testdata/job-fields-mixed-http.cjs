@@ -28,7 +28,7 @@ const {OfflineClocks}=require('../reference/offline-clocks-client.cjs');
   lose=true;await assert.rejects(client.submitBatch(ids),/lost mixed committed response/);
   const child=spawnSync(process.execPath,[__filename],{input:JSON.stringify({url:input.url,directory,store_id:store.id,restart:true,ids}),encoding:'utf8',timeout:30000});assert.equal(child.status,0,child.stderr);
   client=new OfflineNotes(new ProtectedStore(directory,store.id),transport);assert.equal(posts,1);
-  await client.synchronize(true);row=(await client.view()).cache[job];
+  await assert.rejects(client.view(),/locked_review/);await client.synchronize();row=(await client.view()).cache[job];
   assert.equal(row.status.category,'job:completed');assert.equal(row.subtasks[0].completed,true);assert.equal(row.field_notes,'composed notes');assert.equal(row.custom_fields.values[0].value,'composed reading');assert.equal(row.custom_fields.history.length,1);
   const fieldRevision=row.custom_fields.revisions['1'];await client.readNotes(job);
   const again=await client.stageStatus(job,target.id,row.status_revision,target.meaning_revision,[]);
@@ -40,7 +40,8 @@ const {OfflineClocks}=require('../reference/offline-clocks-client.cjs');
   const currentNotes=await client.readNotes(job);await assert.rejects(client.repair(invalid,'wrong family',currentNotes.notes_revision,[]),/review_required/);
   const before=await client.stageBatch(job,'must not pass malformed envelope',[]),bad=await client.stageFields(job,[{definition_id:1,value:'malformed'}],[]);
   malform=true;await client.submitBatch([before,bad]);assert.equal((await client.reconcile(before)).state,'pending');assert.equal((await client.reconcile(bad)).state,'pending');
-   assert.equal((await client.readNotes(job)).field_notes,'unrelated notes survive');await client.discard(before);await client.discard(bad);
+  await assert.rejects(client.view(),/locked_review/);await client.synchronize();
+  assert.equal((await client.readNotes(job)).field_notes,'unrelated notes survive');await client.discard(before);await client.discard(bad);
    // Compose the public staged intents from both encrypted domain adapters into
    // one HTTP batch. Neither adapter may invent another family's target mapping.
    const clockDirectory=fs.mkdtempSync(join(tmpdir(),'mixed-clocks-'));
@@ -69,7 +70,7 @@ const {OfflineClocks}=require('../reference/offline-clocks-client.cjs');
    assert.equal((await clocks.reconcile(outside)).receipt.entry_ref,original.entry_id);
    assert.equal((await client.reconcile(mixedField)).receipt.effect_id,mixedField);
    assert.equal((await clocks.reconcile(nextClock)).receipt.code,'accepted');
-   await clocks.synchronize(true);await client.synchronize(true);
+   await clocks.synchronize(true);await assert.rejects(client.view(),/locked_review/);await client.synchronize();
    const clockRows=Object.values((await clocks.view()).clocks),closed=clockRows.find(v=>v.entry_id===original.entry_id);
    assert.equal(clockRows.length,2);assert.equal(closed.state,'closed');assert.equal(closed.history.length,2);
    assert.equal(Date.parse(closed.clock_out),Date.parse(pendingClocks[outside].intent.clock.occurred_at));

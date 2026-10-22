@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io/fs"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -30,6 +31,37 @@ func continuityResnapshot(t *testing.T, w *httptest.ResponseRecorder) {
 	t.Helper()
 	if w.Code != 409 || !strings.Contains(w.Body.String(), `"code":"resnapshot_required"`) || !strings.Contains(w.Body.String(), `"recovery_disposition":"purge_and_resnapshot"`) || !strings.Contains(w.Body.String(), `"purge":"all"`) || strings.Contains(w.Body.String(), "Closed Customer") {
 		t.Fatalf("unsafe continuity: %d %s", w.Code, w.Body.String())
+	}
+}
+
+// Reassignment restores the same record/facets, but it must not restore the
+// original Comment intent eligibility. Compare every other field unchanged and
+// positively require the one new protocol witness to rotate.
+func continuityRestoredRecord(t *testing.T, before, after map[string]any) {
+	t.Helper()
+	if after == nil {
+		t.Fatal("authoritative recovery omitted the original Job")
+	}
+	oldComments, ok := before["comments"].(map[string]any)
+	if !ok {
+		t.Fatal("original Comment projection absent")
+	}
+	newComments, ok := after["comments"].(map[string]any)
+	if !ok {
+		t.Fatal("restored Comment projection absent")
+	}
+	oldRevision, oldOK := oldComments["eligibility_revision"].(string)
+	newRevision, newOK := newComments["eligibility_revision"].(string)
+	if !oldOK || !newOK || oldRevision == "" || newRevision == "" || oldRevision == newRevision {
+		t.Fatal("assignment ABA must rotate Comment eligibility")
+	}
+	oldRecord, newRecord := maps.Clone(before), maps.Clone(after)
+	oldProjection, newProjection := maps.Clone(oldComments), maps.Clone(newComments)
+	delete(oldProjection, "eligibility_revision")
+	delete(newProjection, "eligibility_revision")
+	oldRecord["comments"], newRecord["comments"] = oldProjection, newProjection
+	if !reflect.DeepEqual(oldRecord, newRecord) {
+		t.Fatal("authoritative recovery changed other original Job/facet facts")
 	}
 }
 
@@ -83,9 +115,10 @@ func TestJobSyncContinuityUnchangedReassignment(t *testing.T) {
 			for _, record := range fresh.Records {
 				cache[record["id"].(string)] = record
 			}
-			if len(cache) != 2 || !reflect.DeepEqual(cache[first.Records[0]["id"].(string)], first.Records[0]) {
+			if len(cache) != 2 {
 				t.Fatal("fresh authoritative replacement did not restore unchanged A")
 			}
+			continuityRestoredRecord(t, first.Records[0], cache[first.Records[0]["id"].(string)])
 			continuityResnapshot(t, continuityRequest(api, token, query))
 			delta := syncGet(t, api, token, "?cursor="+*fresh.Cursor, 200)
 			if len(delta.Records) != 0 || len(delta.Removed) != 0 {
@@ -211,9 +244,7 @@ func TestJobSyncContinuityCacheRestoresUnchangedJob(t *testing.T) {
 			for _, record := range fresh.Records {
 				cache[record["id"].(string)] = record
 			}
-			if !reflect.DeepEqual(cache[lost], first.Records[0]) {
-				t.Fatal("authoritative recovery did not restore unchanged A")
-			}
+			continuityRestoredRecord(t, first.Records[0], cache[lost])
 		})
 	}
 }
@@ -309,11 +340,13 @@ func TestJobSyncContinuityClientIsolation(t *testing.T) {
 	}
 	continuityResnapshot(t, continuityRequest(api, token, "?cursor="+*a.Cursor))
 	f.client.JobAssignment.Create().SetJobID(ids[0]).SetUserID(uid).SaveX(ctx)
-	// This client never observed a purge and still has A; its continuity is safe.
+	// This client never observed a purge: continuity remains usable, but the
+	// changed assignment eligibility must arrive as a complete replacement delta.
 	delta := syncGet(t, api, other, "?cursor="+*b.Cursor, 200)
-	if len(delta.Records) != 0 || len(delta.Removed) != 0 {
-		t.Fatal("unrelated client continuity changed")
+	if len(delta.Records) != 1 || len(delta.Removed) != 0 {
+		t.Fatal("other client lost continuity or missed changed Comment eligibility")
 	}
+	continuityRestoredRecord(t, b.Records[0], delta.Records[0])
 }
 
 func TestJobSyncContinuityInstalled078Upgrade(t *testing.T) {

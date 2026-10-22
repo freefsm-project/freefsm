@@ -35,6 +35,7 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes.cjs');
   const child=spawnSync(process.execPath,[__filename],{input:JSON.stringify({url:input.url,directory,store_id:store.id,restart:true,operation_id:first}),encoding:'utf8',timeout:30000});
   assert.equal(child.status,0,child.stderr);
   client=new OfflineNotes(new ProtectedStore(directory,store.id),transport);
+  await assert.rejects(client.view(),/locked_review/);await client.synchronize();
   assert.equal((await client.view()).pending[first].state,'accepted');
   const original=(await client.view()).pending[first].receipt;
   assert.deepEqual({job_id:original.job_id,effect_id:original.effect_id},{job_id:input.job_id,effect_id:first},'safe receipt retains recorded target/effect identity');

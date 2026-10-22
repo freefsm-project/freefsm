@@ -127,22 +127,47 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		var wire struct {
-			authorization.BatchNotesOperation
+			authorization.BatchFieldOperation
 			DependsOn []*string       `json:"depends_on"`
+			Comment   json.RawMessage `json:"comment"`
 			Revisions json.RawMessage `json:"revisions"`
 		}
 		part := r.Clone(r.Context())
 		part.Body = io.NopCloser(bytes.NewReader(raw))
-		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "status_id", "status_revision", "meaning_revision", "subtask_id", "completion_revision", "completed", "revisions", "values") {
+		if !decodeExactJSON(w, part, &wire, "operation_id", "type", "target", "depends_on", "notes_revision", "field_notes", "occurred_at", "status_id", "status_revision", "meaning_revision", "subtask_id", "completion_revision", "completed", "comment", "revisions", "values") {
 			return
 		}
-		op := wire.BatchNotesOperation
-		if op.Type == "job.fields" {
+		op := wire.BatchFieldOperation
+		validIntent := false
+		switch op.Type {
+		case "job.fields":
 			var valid bool
 			op.Revisions, valid = fieldPatchWire(w, r, op.Values, wire.Revisions)
 			if !valid {
 				return
 			}
+			validIntent = completeBatchFieldIntent(op, raw)
+		case "job.field_notes", "job.status", "job.subtask":
+			validIntent = completeBatchFieldIntent(op, raw)
+		case "comment.add", "comment.remove":
+			if wire.Comment == nil {
+				break
+			}
+			part.Body = io.NopCloser(bytes.NewReader(wire.Comment))
+			var intent authorization.BatchCommentIntent
+			if !decodeExactJSON(w, part, &intent, "parent_type", "content", "reply_to", "remove_id", "parent_revision") {
+				return
+			}
+			var supplied map[string]json.RawMessage
+			_ = json.Unmarshal(wire.Comment, &supplied)
+			validIntent = intent.ParentType == "job" || intent.ParentType == "estimate" || intent.ParentType == "invoice"
+			if op.Type == "comment.add" {
+				validIntent = validIntent && intent.Content != nil && supplied["remove_id"] == nil && (supplied["reply_to"] == nil || intent.ReplyTo != "")
+			} else {
+				validIntent = validIntent && intent.RemoveID != "" && supplied["content"] == nil && supplied["reply_to"] == nil
+			}
+			op.Comment = &intent
+			validIntent = validIntent && completeBatchFieldIntent(op, raw)
 		}
 		if wire.DependsOn != nil {
 			op.DependsOn = make([]string, 0, len(wire.DependsOn))
@@ -157,8 +182,8 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			op.DependsOn = append(op.DependsOn, *dependency)
 		}
 		id, e := uuid.Parse(op.OperationID)
-		if e != nil || id == uuid.Nil || id.String() != op.OperationID || seen[op.OperationID] || op.Target == "" || op.DependsOn == nil || !completeBatchFieldIntent(op, raw) {
-			writeError(w, 400, "invalid_request", "Each operation needs a unique canonical UUID and a complete supported field intent")
+		if e != nil || id == uuid.Nil || id.String() != op.OperationID || seen[op.OperationID] || op.Target == "" || op.DependsOn == nil || !validIntent {
+			writeError(w, 400, "invalid_request", "Each operation needs a unique canonical UUID and a complete supported intent")
 			return
 		}
 		seen[op.OperationID] = true
@@ -188,10 +213,17 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 				status, code = 403, "forbidden"
 			case errors.Is(result.Err, authorization.ErrNotFound):
 				status, code = 404, "not_found"
+			case errors.Is(result.Err, authorization.ErrCommentInvalid):
+				status, code = 400, "invalid_comment"
+			case errors.Is(result.Err, authorization.ErrCommentParentChanged):
+				status, code = 409, "comment_parent_changed"
 			case errors.Is(result.Err, authorization.ErrConflict):
 				status, code = 409, "subtask_conflict"
 				if operations[index].File != nil {
 					code = "file_conflict"
+				}
+				if operations[index].Job != nil && operations[index].Job.Comment != nil {
+					code = "comment_conflict"
 				}
 			case errors.Is(result.Err, authorization.ErrFileOperation), errors.As(result.Err, &validation):
 				status, code = 400, "invalid_file"
@@ -229,6 +261,9 @@ func completeBatchFieldIntent(op authorization.BatchFieldOperation, raw []byte) 
 	case "job.subtask":
 		fields = []string{"subtask_id", "completion_revision", "completed"}
 		valid = op.SubtaskID != "" && op.CompletionRevision != "" && op.Completed != nil
+	case "comment.add", "comment.remove":
+		fields = []string{"comment"}
+		valid = op.Comment != nil
 	case "job.fields":
 		fields = []string{"revisions", "values"}
 		valid = op.Revisions != nil && len(op.Values) > 0

@@ -157,7 +157,9 @@ class ProtectedFieldClient {
   // Receipt lookup remains possible without resource visibility or a live offline
   // lease. It still requires a currently valid authenticated server session.
   if(!s.pending[id])throw Error('unknown_operation');
-  const r=await this.contact(s,this.receiptPath(s.pending[id],id));
+   let r;
+   try{r=await this.contact(s,this.receiptPath(s.pending[id],id));}
+   finally{await this.receiptContactComplete(s);}
   // Receipt access is independent of offline policy and target visibility. Check
   // policy on this reconnect, then apply only safe receipt metadata after purge.
   await this.policy(s,true);
@@ -168,8 +170,11 @@ class ProtectedFieldClient {
    if(e.state==='restore_uncertain')e.lookupMissing=true;
   }
   // restore_uncertain + missing receipt remains uncertain, never retryable.
-  await this.persist(s);return clone({state:e.state,receipt:e.receipt});
- });}
+   await this.persist(s);return clone({state:e.state,receipt:e.receipt,requires_synchronization:!s.synced});
+  });}
+  // Domain projections may require fresh synchronization after scope-independent
+  // receipt contact, including transport failure. Persist that lock before return.
+  async receiptContactComplete(s){}
  receiptPath(){throw Error('unknown_operation');}
  async receiptAuthority(s,e,code){
   if(!['forbidden','not_found'].includes(code))return false;

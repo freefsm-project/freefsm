@@ -95,6 +95,9 @@ endpoint, including after sensitive target data is purged. Unknown categories
 require review, never an inferred transition. Deltas atomically replace authorized
 cache/cursor and retain the established authority-loss quarantine on write failure.
 An interrupted synchronization locks disclosure until a complete fresh sync.
+Receipt reconciliation also withholds sensitive cache until an explicit complete
+fresh sync; recover a group of original receipts first, then refresh current scope
+once. Original Status/Subtask intents, revisions and retry IDs are not rewritten.
 
 Ordinary authority loss purges sensitive intent. A nondisclosing `not_found`
 conservatively purges that Job's cached/pending content before further review.

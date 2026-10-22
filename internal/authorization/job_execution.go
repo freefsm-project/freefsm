@@ -125,7 +125,7 @@ func (s *Service) submitJobExecutionBound(ctx context.Context, a Actor, id int64
 	}
 	in.OperationID = op.String()
 	out.OperationID = in.OperationID
-	var binding *BatchNotesOperation
+	var binding *BatchFieldOperation
 	if batch != nil {
 		binding = &batch.operation
 	}
@@ -133,7 +133,7 @@ func (s *Service) submitJobExecutionBound(ctx context.Context, a Actor, id int64
 		JobID  int64
 		Kind   string
 		Intent JobExecutionCommand
-		Batch  *BatchNotesOperation `json:",omitempty"`
+		Batch  *BatchFieldOperation `json:",omitempty"`
 	}{id, kind, in, binding})
 	digest := fmt.Sprintf("%x", sha256.Sum256(encoded))
 	var outcome error

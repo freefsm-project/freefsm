@@ -2,12 +2,14 @@
 
 `POST /api/v1/sync/operations` accepts an `operations` array in submitted order.
 The API and encrypted native reference own this protocol; the website is online-only.
-The supported operations are `job.field_notes`, `job.status`, `job.subtask`, and
-`job.fields`, plus `file.publish`, `file.rename`, `file.remove`, `clock.in` and `clock.out`; see
+The supported operations are `job.field_notes`, `job.status`, `job.subtask`,
+`job.fields`, `comment.add`, `comment.remove`, `file.publish`, `file.rename`,
+`file.remove`, `clock.in` and `clock.out`; see
 [Status/Subtask synchronization](api-job-field-sync.md),
 [Custom Field Values synchronization](api-job-custom-field-sync.md) and
 [File synchronization](api-offline-files.md) and [own clock synchronization](api-clock-sync.md).
-Operation-specific synchronization for Comments, documents and Service Entries remains
+[Comment synchronization](api-comment-sync.md) defines exact parent/thread intent.
+Operation-specific synchronization for documents and Service Entries remains
 with its owning tickets.
 
 ```json
@@ -58,6 +60,9 @@ existing identities/history remain intact. No migration/backfill/grant change.
 Network loss may leave a committed prefix. Reconcile each original receipt before
 explicitly retrying unresolved work with identical IDs/intent. Audit/storage
 rollback leaves no receipt/admission/effect. An uncertain Commit remains unknown.
+The encrypted reference withholds cached content during receipt reconnect. After
+reconciling the group, explicitly complete a fresh sync before viewing or retrying;
+receipt success grants no cached target authority and never rewrites intent.
 Transient results retain the ID and a retry delay; they are not terminal failures.
 The authenticated request budget and12 sync requests/minute/client apply to whole
 batch requests. HTTP429 has typed timing and `Retry-After`; service errors use

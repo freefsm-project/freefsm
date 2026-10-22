@@ -28,7 +28,8 @@ const {OfflineFiles,ProtectedStore}=require('../reference/offline-files-client.c
   await client.synchronize();assert.equal((await client.view()).cache[job].files.length,0,'transfer published early');
   lose=true;await assert.rejects(client.submitBatch([publication]));assert.equal(submissions,1);
   store=new ProtectedStore(directory,identity);client=new OfflineFiles(store,transport);
-  assert.equal((await client.reconcile(publication)).state,'accepted');assert.equal(submissions,1,'receipt recovery resubmitted');
+   assert.equal((await client.reconcile(publication)).state,'accepted');assert.equal(submissions,1,'receipt recovery resubmitted');
+   await client.synchronize();
   const damaged=await client.stageFilePublication(job,'digest.txt',Buffer.from('digest-specific bytes'),[]);await client.transferFile(damaged);
   const original=(await client.view()).pending[damaged].file;
   await fetch(input.url+'/__fixture/corrupt-transfer',{method:'POST',body:JSON.stringify({id:original.target})});
@@ -47,7 +48,7 @@ const {OfflineFiles,ProtectedStore}=require('../reference/offline-files-client.c
   await assert.rejects(client.synchronize(),/locked_review/);
   await client.authenticate(restored.token);await client.synchronize();
   await assert.rejects(client.submitBatch([remove]),/reconciliation_or_review_required/);
-  await client.reconcile(remove);await client.acknowledgeUncertain(remove);
+   await client.reconcile(remove);await client.synchronize();await client.acknowledgeUncertain(remove);
   const reviewed=await client.repairFile(remove,{revision:file.revision},[]);
   await client.submitBatch([reviewed]);await client.synchronize();assert((await client.view()).cache[job].files[0].removed_at);
   const pending=await client.stageFilePublication(job,'purge-name.txt',Buffer.from('purge-byte-secret'),[]);

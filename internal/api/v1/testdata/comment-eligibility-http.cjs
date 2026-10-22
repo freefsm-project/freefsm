@@ -1,0 +1,52 @@
+'use strict';
+const assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path');
+const {randomUUID}=require('node:crypto');
+const {OfflineFieldClient,ProtectedStore}=require('../reference/offline-notes-client.cjs');
+(async()=>{
+ let raw='';for await(const c of process.stdin)raw+=c;const cfg=JSON.parse(raw);
+ const directory=await fs.mkdtemp(path.join(os.tmpdir(),'comment-eligibility-'));await fs.chmod(directory,0o700);
+ const identity=randomUUID();let authorization,posts=0;
+ const transport=async(route,method,body,auth)=>{
+  authorization=auth;if(route==='/sync/operations')posts++;
+  const headers={Authorization:'Bearer '+auth.token,'Content-Type':'application/json'};
+  if(auth.epoch)headers['X-FreeFSM-Session-Epoch']=auth.epoch;if(auth.operation)headers['Operation-ID']=auth.operation;
+  const response=await fetch(cfg.url+route,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});return {status:response.status,...await response.json()};
+ };
+ const restart=()=>new OfflineFieldClient(new ProtectedStore(directory,identity),transport);let client=restart();
+ const fixture=async name=>{const r=await fetch(cfg.url+'/__fixture/'+name,{method:'POST'});assert.equal(r.status,204);};
+ const counts=async()=>await (await fetch(cfg.url+'/__fixture/comment-counts')).json();
+ try {
+  await client.initialize();await client.authenticate(cfg.token);await client.synchronize();let view=await client.view();
+  const job=Object.keys(view.cache).find(id=>view.cache[id].title==='Original Job');
+  const doc=view.cache[job].document_comments.find(d=>d.parent_type==='estimate');assert(doc);
+  const parent={parent_type:'estimate',target:doc.id};
+  const root=await client.stageComment(job,{...parent,content:'root original'},[]);
+  const rootEntry=(await client.view()).pending[root],rootWire={...rootEntry.intent,...rootEntry.batch};
+  const accepted=(await client.submitBatch([root]))[0].receipt;assert.equal(accepted.code,'accepted');
+  await client.synchronize();view=await client.view();
+  const collection=view.cache[job].document_comments[0].comments,thread=collection.comments[0].id;
+  const control=await client.stageComment(job,{...parent,reply_to:thread,content:'independent unrelated edits'},[]);
+  const pending=await client.stageComment(job,{...parent,reply_to:thread,content:'old unsubmitted reply'},[]);
+  const original=structuredClone((await client.view()).pending[pending]);
+  await fixture('unrelated-edit');assert.equal((await client.submitBatch([control]))[0].receipt.code,'accepted');
+  await fixture('eligibility-change');client=restart();
+  assert.deepEqual((await client.view()).pending[pending].intent,original.intent,'restart must preserve original eligibility intent');
+  const before=await counts();
+  const result=(await client.submitBatch([pending]))[0];
+  assert.equal(result.receipt.code,'comment_parent_changed','returning/currently-authorized IDs must not rehabilitate old intent');
+  await assert.rejects(()=>client.view(),/locked_review/,'changed eligibility requires current authorized review');
+  assert.deepEqual(await counts(),before,'stale parent guard must have no Comment or audit effect');
+  const replay=await transport('/sync/operations','POST',{operations:[rootWire]},authorization);
+  assert.deepEqual(replay.data.results[0].receipt,accepted,'already terminal original receipt must survive lifecycle change');
+  await client.synchronize();view=await client.view();
+  const currentJob=Object.keys(view.cache).find(id=>view.cache[id].document_comments.some(d=>d.id===doc.id));assert(currentJob);
+  const current=view.cache[currentJob].document_comments.find(d=>d.id===doc.id).comments;
+  assert.equal(current.comments[0].id,thread,'conversion and restore preserve original thread identity');
+  assert(current.eligibility_revision&&current.eligibility_revision!==collection.eligibility_revision,'eligibility witness detects lifecycle/relationship ABA');
+  const reviewed={...parent,reply_to:thread,content:'reviewed new reply',parent_revision:current.eligibility_revision};
+  const repaired=currentJob===job?await client.repairComment(pending,reviewed,[]):await client.stageComment(currentJob,reviewed,[]);
+  assert.notEqual(repaired,pending);assert.equal((await client.submitBatch([repaired]))[0].receipt.code,'accepted');
+  const after=await counts();assert.equal(after.comments,before.comments+1);assert.equal(after.audits,before.audits+1);
+  console.log('PASS original eligibility '+cfg.mode);
+ } finally {await client.logout();await fs.rm(directory,{recursive:true,force:true});}
+})().catch(e=>{console.error(e);process.exitCode=1;});

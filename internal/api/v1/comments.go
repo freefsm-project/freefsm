@@ -21,6 +21,8 @@ func commentAPIError(w http.ResponseWriter, err error) {
 		status, code = 409, "comment_conflict"
 	case errors.Is(err, authorization.ErrCommentInvalid):
 		status, code = 400, "invalid_comment"
+	case errors.Is(err, authorization.ErrCommentParentChanged):
+		status, code = 409, "comment_parent_changed"
 	}
 	writeError(w, status, code, code)
 }
@@ -38,6 +40,10 @@ func (h *handler) comments(typ objectref.Type, remove bool) http.HandlerFunc {
 		}
 		ref := objectref.New(typ, id)
 		w.Header().Set("Cache-Control", "no-store")
+		if r.URL.RawQuery != "" {
+			writeError(w, 400, "invalid_request", "Comment requests have no query parameters")
+			return
+		}
 		if r.Method == http.MethodGet {
 			result, err := req.Service.Comments(r.Context(), req.Actor, ref)
 			if err != nil {
@@ -48,7 +54,11 @@ func (h *handler) comments(typ objectref.Type, remove bool) http.HandlerFunc {
 			return
 		}
 		var in authorization.CommentCommand
-		if !decodeJSON(w, r, &in) {
+		properties := []string{"operation_id", "occurred_at", "parent_revision"}
+		if !remove {
+			properties = append(properties, "content", "reply_to")
+		}
+		if !decodeExactJSON(w, r, &in, properties...) {
 			return
 		}
 		if remove {

@@ -29,8 +29,8 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes-client.c
   await fixture('rename');
   drop=true;await assert.rejects(client.submitBatch([first]),/lost_response/);
   client=new OfflineNotes(new ProtectedStore(directory,identity),transport);
-  assert.equal((await client.reconcile(first)).state,'accepted');
-  await client.synchronize(true);view=await client.view();
+   assert.equal((await client.reconcile(first)).state,'accepted');
+   await assert.rejects(client.view(),/locked_review/);await client.synchronize();view=await client.view();
   assert.equal(view.cache[job].status.id,input.target);
   assert.equal(selected().name,'Cosmetic target');
   const attribution=structuredClone(view.cache[job].status_attribution);
@@ -78,7 +78,8 @@ const {OfflineNotes,ProtectedStore}=require('../reference/offline-notes-client.c
   const fresh=await (await fetch(input.url+'/__fixture/token',{method:'POST'})).json();
   await client.authenticate(fresh.token);await client.synchronize();view=await client.view();
   assert.equal(view.pending[complete].state,'restore_uncertain');
-  await client.reconcile(complete);
+   await client.reconcile(complete);
+   await assert.rejects(client.view(),/locked_review/);await client.synchronize();
   await assert.rejects(client.repairSubtask(complete,true,recorded.completion_revision,[]),/restore_reconciliation_required/);
   await client.acknowledgeUncertain(complete);
   assert.equal(submissions,beforeRestore,'restore recovery automatically replayed work');

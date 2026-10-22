@@ -47,6 +47,8 @@ if(require.main===module){
     case 'transfer-file':if(workflow!=='notes')throw Error('unknown_action');result=await client.transferFile(command.operation_id);break;
     case 'stage-file-mutation':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.stageFileMutation(command.job,command.file_id,command.kind,command.name,command.depends_on),state:'pending'};break;
     case 'repair-file':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.repairFile(command.operation_id,command.review,command.depends_on),state:'pending'};break;
+    case 'stage-comment':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.stageComment(command.job,command.reviewed,command.depends_on),state:'pending'};break;
+    case 'repair-comment':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.repairComment(command.operation_id,command.reviewed,command.depends_on),state:'pending'};break;
     case 'stage-fields':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.stageFields(command.job,command.values,command.depends_on),state:'pending'};break;
     case 'stage':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.stage(command.job,command.text),state:'pending'};break;
     case 'stage-batch-notes':if(workflow!=='notes')throw Error('unknown_action');result={operation_id:await client.stageBatch(command.job,command.text,command.depends_on),state:'pending'};break;
