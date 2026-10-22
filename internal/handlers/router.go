@@ -417,6 +417,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/invoices/{id}/pdf/save", invoiceHandler.SavePDF)
 		r.Post("/estimates/{id}/pdf/save", estimateHandler.SavePDF)
 		r.Post("/invoices/{id}/payments", invoiceHandler.RecordPayment)
+		r.Post("/invoices/{id}/payments-with-credit", recordInvoicePaymentWithCredit)
 		r.Get("/payment-operations/{operation}", paymentOperationReceipt)
 		r.Get("/settings/payment-methods", paymentMethodsSettings)
 		r.Post("/settings/payment-methods/{method}", paymentMethodsSettings)
