@@ -49,7 +49,7 @@ func (s *FileService) SubmitBatchOperation(ctx context.Context, op authorization
 	intent := struct {
 		Batch authorization.BatchFileOperation
 	}{op}
-	if found, err := r.Service.ReplayFileCommand(ctx, r.Actor, op.OperationID, "file.publication", intent); err != nil || found {
+	if found, err := r.Service.ReplayFileBatchCommand(ctx, r.Actor, op.OperationID, "file.publication", intent); err != nil || found {
 		if err != nil {
 			return authorization.FileReceipt{}, err
 		}
@@ -83,7 +83,7 @@ func (s *FileService) SubmitBatchOperation(ctx context.Context, op authorization
 	// Validation may run outside the effect transaction. Another command can
 	// acquire this UUID after our initial receipt miss but before rejection is
 	// recorded. Never attach that command's receipt to the rejected intent.
-	bound, bindingErr := r.Service.ReplayFileCommand(ctx, r.Actor, op.OperationID, "file.publication", intent)
+	bound, bindingErr := r.Service.ReplayFileBatchCommand(ctx, r.Actor, op.OperationID, "file.publication", intent)
 	if bindingErr != nil {
 		return authorization.FileReceipt{}, bindingErr
 	}

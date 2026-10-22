@@ -265,6 +265,9 @@ func (s *Service) FileAction(ctx context.Context, a Actor, ref objectref.Ref, pe
 			err = tx.QueryRow(ctx, `SELECT intent_hash,client_key FROM file_mutation_operations WHERE operation_id=$1 AND user_id=$2`, op.OperationID, a.UserID).Scan(&legacyIntent, &legacyClient)
 			if err == nil {
 				if intent, ok := op.Intent.(string); !ok || intent != legacyIntent || legacyClient != a.SessionHash {
+					if op.Check != nil {
+						return &JobExecutionConflict{Code: "operation_intent_changed"}
+					}
 					return ErrConflict
 				}
 				return nil

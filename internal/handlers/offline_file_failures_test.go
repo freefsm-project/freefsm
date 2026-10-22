@@ -48,7 +48,7 @@ func TestOfflineFilesPublicationFailureAndMixedDependenciesHTTP(t *testing.T) {
 	}
 	changed := fileBatchOp(pub, "file.publish", uuid.NewString(), f.job)
 	misuse := f.batch(t, changed)[0].(map[string]any)
-	if misuse["receipt"] != nil || misuse["error"].(map[string]any)["status"] != float64(409) {
+	if misuse["receipt"] != nil || misuse["error"].(map[string]any)["status"] != float64(409) || misuse["error"].(map[string]any)["code"] != "operation_intent_changed" {
 		t.Fatalf("changed intent borrowed success: %v", misuse)
 	}
 	badTransfer, badOp := uuid.NewString(), uuid.NewString()
@@ -371,7 +371,7 @@ func TestOfflineFilesConcurrentRejectionCannotBorrowReceiptHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := out.Data.Results[0]
-	if result["receipt"] != nil || result["error"].(map[string]any)["status"] != float64(409) {
+	if result["receipt"] != nil || result["error"].(map[string]any)["status"] != float64(409) || result["error"].(map[string]any)["code"] != "operation_intent_changed" {
 		t.Fatalf("publication borrowed a different immutable receipt: %s", w.Body.String())
 	}
 	if receipt := f.call(t, "GET", "/file-operations/"+shared, nil, 200); receipt["effect_id"] != id || receipt["code"] != "accepted" {
