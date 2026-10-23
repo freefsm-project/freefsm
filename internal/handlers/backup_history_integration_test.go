@@ -85,6 +85,16 @@ func TestBackupHistoricalDomainRoundTrip(t *testing.T) {
 	}
 	paid := newInvoice("Original invoice", 100)
 	partial := newInvoice("Credit application invoice", 30)
+	// This installed-history fixture needs a finalized Credit destination.
+	// Status configuration above is intentionally independent of current grants.
+	statusTx, err := src.pool.Begin(ctx)
+	historyCheck(t, err)
+	defer statusTx.Rollback(ctx)
+	_, err = statusTx.Exec(ctx, `SELECT set_config('freefsm.status_transition','allowed',true)`)
+	historyCheck(t, err)
+	_, err = statusTx.Exec(ctx, `UPDATE invoices SET status_id=(SELECT id FROM statuses WHERE company_id=$1 AND category_key='invoice:invoiced' AND is_category_default) WHERE id=$2`, src.company, partial.ID)
+	historyCheck(t, err)
+	historyCheck(t, statusTx.Commit(ctx))
 	actor := settlement.Actor{ID: src.actor, CompanyID: src.company, Role: "admin"}
 	financial := settlement.New(src.pool)
 	today := settlement.Date(time.Now().UTC().Format("2006-01-02"))

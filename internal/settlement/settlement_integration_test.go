@@ -98,8 +98,29 @@ func TestRecordPaymentIsAtomicAndIdempotentIntegration(t *testing.T) {
 		t.Fatalf("idempotency conflict = %v", err)
 	}
 
-	var secondInvoice int64
-	err = db.Pool.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,invoice_number,title,invoice_date,due_date,line_items,tax_rate) VALUES($1,$2,2,'Second',CURRENT_DATE,CURRENT_DATE,'[{"title":"Work","unit_price":10,"quantity":1}]','0') RETURNING id`, companyID, customerID).Scan(&secondInvoice)
+	// Credit can only be applied to an explicitly finalized Invoice; this
+	// low-level fixture previously left the destination without a manual status.
+	var workflow, finalizedStatus, secondInvoice int64
+	statusTx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer statusTx.Rollback(ctx)
+	if err = statusTx.QueryRow(ctx, `INSERT INTO status_workflows(company_id,name,object_type) VALUES($1,'Invoices','invoice') RETURNING id`, companyID).Scan(&workflow); err != nil {
+		t.Fatal(err)
+	}
+	for _, category := range []string{"draft", "invoiced", "sent", "partially_paid", "paid", "void"} {
+		if _, err = statusTx.Exec(ctx, `INSERT INTO statuses(company_id,workflow_id,name,category_key,category_order,is_category_default) VALUES($1,$2,$3,$4,1,true)`, companyID, workflow, category, "invoice:"+category); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err = statusTx.QueryRow(ctx, `SELECT id FROM statuses WHERE workflow_id=$1 AND category_key='invoice:invoiced'`, workflow).Scan(&finalizedStatus); err != nil {
+		t.Fatal(err)
+	}
+	if err = statusTx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	err = db.Pool.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,invoice_number,title,invoice_date,due_date,line_items,tax_rate,status_id) VALUES($1,$2,2,'Second',CURRENT_DATE,CURRENT_DATE,'[{"title":"Work","unit_price":10,"quantity":1}]','0',$3) RETURNING id`, companyID, customerID, finalizedStatus).Scan(&secondInvoice)
 	if err != nil {
 		t.Fatal(err)
 	}

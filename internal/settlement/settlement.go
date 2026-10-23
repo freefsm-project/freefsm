@@ -24,6 +24,7 @@ var (
 	ErrArchived            = errors.New("archived invoice cannot be settled")
 	ErrHidden              = errors.New("conversion-hidden invoice cannot be settled")
 	ErrVoid                = errors.New("void invoice cannot be settled")
+	ErrNotFinalized        = errors.New("invoice must be finalized before applying credit")
 	ErrDependency          = errors.New("operation has active dependants")
 	ErrNotFound            = errors.New("settlement record not found")
 )
@@ -230,6 +231,9 @@ func (s *Service) ApplyCredit(ctx context.Context, actor Actor, req ApplyCreditR
 		if err != nil {
 			return Result{}, err
 		}
+		if inv.category != "invoice:invoiced" && inv.category != "invoice:sent" {
+			return Result{}, ErrNotFinalized
+		}
 		if err = lockCustomer(ctx, tx, actor.CompanyID, inv.customerID); err != nil {
 			return Result{}, err
 		}
@@ -255,8 +259,10 @@ func (s *Service) ApplyCredit(ctx context.Context, actor Actor, req ApplyCreditR
 		if err != nil {
 			return Result{}, err
 		}
-		amount := min(req.RequestedCents, min(available, max(total-settled, 0)))
-		if amount <= 0 {
+		// An Application is the user's exact selected-source instruction. Unlike
+		// a Payment allocation, it must never silently shrink to fit a balance.
+		amount := req.RequestedCents
+		if amount > available || amount > max(total-settled, 0) {
 			return Result{}, ErrInvalidAmount
 		}
 		id := uuid.New()
@@ -464,14 +470,14 @@ type lockedInvoice struct {
 	id, customerID     int64
 	lineItems, taxRate string
 	financial          string
+	category           string
 }
 
 func lockInvoice(ctx context.Context, tx pgx.Tx, companyID, id int64) (lockedInvoice, error) {
 	var i lockedInvoice
 	var archived *time.Time
 	var hidden *time.Time
-	var statusCategory string
-	err := tx.QueryRow(ctx, `SELECT i.id,i.customer_id,i.line_items::text,i.tax_rate::text,i.deleted_at,i.conversion_hidden_at,coalesce(s.category_key,''),i.financial FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.company_id=$1 AND i.id=$2 FOR UPDATE OF i`, companyID, id).Scan(&i.id, &i.customerID, &i.lineItems, &i.taxRate, &archived, &hidden, &statusCategory, &i.financial)
+	err := tx.QueryRow(ctx, `SELECT i.id,i.customer_id,i.line_items::text,i.tax_rate::text,i.deleted_at,i.conversion_hidden_at,coalesce(s.category_key,''),i.financial FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.company_id=$1 AND i.id=$2 FOR UPDATE OF i`, companyID, id).Scan(&i.id, &i.customerID, &i.lineItems, &i.taxRate, &archived, &hidden, &i.category, &i.financial)
 	if err != nil {
 		return i, err
 	}
@@ -481,7 +487,7 @@ func lockInvoice(ctx context.Context, tx pgx.Tx, companyID, id int64) (lockedInv
 	if hidden != nil {
 		return i, ErrHidden
 	}
-	if statusCategory == "invoice:void" {
+	if i.category == "invoice:void" {
 		return i, ErrVoid
 	}
 	return i, nil
