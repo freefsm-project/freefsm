@@ -1,0 +1,78 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/settlement"
+
+templ CustomerRefunds(p settlement.RefundPage, operation string) {
+ @Layout("Refunds and Payment reversals") {
+  <h1 data-credit-page data-operation-family="refund">Refunds and Payment reversals</h1>
+  <a href={ templ.URL(fmt.Sprintf("/customers/%d",p.CustomerID)) }>Customer dashboard</a>
+  if p.ShowCredit {
+   <p>Available Credit: { cents(p.AvailableCents) }</p>
+  }
+  if p.CanRefund {
+   <h2>Record external refund</h2><p>Record money already returned outside FreeFSM. This action does not move money. Available sources are consumed oldest first.</p>
+   <form method="post" hx-boost="false" data-credit-command action={ templ.URL(fmt.Sprintf("/customers/%d/credit/refunds",p.CustomerID)) }>
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ operation }/>
+    <label>Amount<input name="amount" type="number" min="0.01" step="0.01" required/></label>
+    <label>Method<select name="method" required><option value="cash">Cash</option><option value="check">Check</option><option value="credit_card">Card</option><option value="transfer">Bank Transfer</option><option value="other">Other</option></select></label>
+    <label>Effective date<input name="effective_date" type="date" value={ p.Today } max={ p.Today } required/></label>
+    <label>Reason<input name="reason" required/></label><label>Reference<input name="reference"/></label><label>Note<textarea name="notes"></textarea></label><button>Record refund</button>
+   </form>
+  }
+  <p data-credit-status role="status"></p><button type="button" data-credit-check hidden>Check original operation</button><button type="button" data-credit-new hidden>Start a different operation</button>
+  <script src="/static/js/credit-applications.js" defer></script>
+  if p.ShowHistory {
+   <h2>Refund history</h2>
+   for _,f := range p.Refunds {
+    <article data-refund-id={ f.ID.String() }>
+     <p>Refund { f.ID.String() } — { cents(f.AmountCents) } — { f.EffectiveDate.Format("2006-01-02") } — { string(f.Method) }</p>
+     <p>{ f.Reason } — { f.Reference } — { f.Notes }</p>
+     <p>Recorded by { f.ActorName } — entered { f.EnteredAt.Format("2006-01-02 15:04:05Z07:00") }</p>
+     <ul aria-label="Immutable source portions">
+      for _,a := range f.Allocations {
+       <li>{ a.SourceID } — { cents(a.Cents) }</li>
+      }
+     </ul>
+     if f.Reversal != nil {
+      <p>Reversed { f.Reversal.EffectiveDate.Format("2006-01-02") }: { f.Reversal.Reason }. Exact original source portions restored.</p>
+     } else if p.CanReverseRefund {
+      <form method="post" hx-boost="false" data-credit-command action={ templ.URL(fmt.Sprintf("/customers/%d/credit/refunds/%s/reverse",p.CustomerID,f.ID)) }>
+       <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ f.ReversalKey }/>
+       <label>Reversal date<input name="effective_date" type="date" value={ p.Today } max={ p.Today } required/></label><label>Reason<input name="reason" required/></label><button>Reverse Refund</button>
+      </form>
+     }
+    </article>
+   }
+   <h2>Payment reversal history</h2><p>Reverse consuming Applications and refunds explicitly first. No action cascades or moves money. Original receipts remain unchanged.</p>
+   for _,v := range p.Payments {
+    <article data-payment-id={ v.ID.String() }>
+     <p>Payment { v.ID.String() } — { cents(v.AmountCents) } — { v.Date.Format("2006-01-02") }</p>
+     if v.Reversal != nil {
+      <p>Reversed { v.Reversal.EffectiveDate.Format("2006-01-02") }: { v.Reversal.Reason } — { v.Reversal.Reference } — { v.Reversal.Notes }. Original allocation compensated and origin Credit removed.</p>
+     } else if v.CanReverse {
+      @paymentReversalForm(p.CustomerID,v,p.Today)
+     }
+    </article>
+   }
+  }
+ }
+}
+
+templ paymentReversalForm(customerID int64, v settlement.RefundPayment, date string) {
+ if v.InvoiceID == 0 {
+  <form method="post" hx-boost="false" data-credit-command action={ templ.URL(fmt.Sprintf("/customers/%d/payments/%s/reverse",customerID,v.ID)) }>
+   @paymentReversalFields(v.Key,date,"date")
+  </form>
+ } else {
+  <form method="post" hx-boost="false" data-credit-command action={ templ.URL(fmt.Sprintf("/invoices/%d/payments/%s/reverse",v.InvoiceID,v.ID)) }>
+   @paymentReversalFields(v.Key,date,"effective_date")
+  </form>
+ }
+}
+templ paymentReversalFields(key string,date string,dateField string) {
+ <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ key }/>
+ <label>Reversal date<input name={ dateField } type="date" value={ date } max={ date } required/></label>
+ <label>Reason<select name="reason" required><option value="">Select reason</option><option value="error">Error</option><option value="failure">Failure</option><option value="chargeback">Chargeback</option><option value="external_return">External return</option></select></label>
+ <label>Reference<input name="reference"/></label><label>Note<textarea name="notes"></textarea></label><button>Reverse Payment</button>
+}

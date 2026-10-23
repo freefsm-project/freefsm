@@ -14,6 +14,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+var ErrPaymentReversalReason = errors.New("Payment reversal reason must be error, failure, chargeback, or external_return")
+
 // refundCommand admits office refunds and their explicit compensations under
 // the same authority/commercial fence as Payments and Applications. The existing
 // immutable writers remain the only source of financial effects.
@@ -69,6 +71,19 @@ func (s *Service) refundCommand(ctx context.Context, a authorization.Actor, perm
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
+		}
+		// Installed receipts are replayed above without rewriting their historical
+		// free-text reasons. New Payment corrections use the closed vocabulary.
+		if operation == "reverse_payment" {
+			r, ok := request.(ReverseRequest)
+			if !ok {
+				return ErrInvalidAmount
+			}
+			switch r.Reason {
+			case "error", "failure", "chargeback", "external_return":
+			default:
+				return ErrPaymentReversalReason
+			}
 		}
 		if err := lockCustomer(ctx, tx, p.CompanyID, customerID); err != nil {
 			return err

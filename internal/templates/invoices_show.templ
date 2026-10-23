@@ -167,15 +167,9 @@ templ InvoiceShow(p InvoiceDetail) {
 							<td>{ cents(pmt.AmountCents) } ({ cents(pmt.AppliedCents) } applied)</td>
 							<td>
 							if pmt.Reversal != nil {
-								Reversed { pmt.Reversal.EffectiveDate.Format("2006-01-02") }: { pmt.Reversal.Reason }
+								Reversed { pmt.Reversal.EffectiveDate.Format("2006-01-02") }: { pmt.Reversal.Reason } — { pmt.Reversal.Reference } — { pmt.Reversal.Notes }
 							} else if p.ArchivedAt == "" && detailCan(ctx,"reverse-payment") {
-									<form action={ templ.URL(fmt.Sprintf("/invoices/%d/payments/%s/reverse", p.ID, pmt.ID)) } method="post">
-										<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-										<input type="hidden" name="idempotency_key" value={ pmt.ReversalKey }/>
-										<input type="date" name="effective_date" value={ today(ctx) } required/>
-										<input type="text" name="reason" placeholder="Reason" required/>
-										<button type="submit" class="outline contrast">Reverse</button>
-									</form>
+									<a href={ templ.URL(fmt.Sprintf("/customers/%d/refunds", p.Settlement.CustomerID)) }>Review Payment reversal</a>
 							}
 							</td>
 						</tr>

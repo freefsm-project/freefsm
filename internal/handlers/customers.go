@@ -196,8 +196,8 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 		UpdatedAt:           time.Now().UTC().Format(time.RFC3339),
 		ShowSettlement:      showSettlement,
 		Settlement:          creditHistory,
-		CanRefund:           isAdminOrDispatcher(u) && customerPermission(r, "credit.refund"),
-		CanReverseRefund:    isAdminOrDispatcher(u) && customerPermission(r, "credit.refund.reverse"),
+		CanRefund:           customerPermission(r, "credit.refund"),
+		CanReverseRefund:    customerPermission(r, "credit.refund.reverse"),
 		Receivables:         receivables,
 		ShowCredit:          showCredit,
 		CreditCents:         credit,
@@ -1226,6 +1226,10 @@ func (h *CustomerHandler) RefundCredit(w http.ResponseWriter, r *http.Request) {
 		writeSettlementError(w, r, err)
 		return
 	}
+	if r.Header.Get("Accept") == "application/json" {
+		refundOperationResponse(w, r, r.FormValue("idempotency_key"))
+		return
+	}
 	http.Redirect(w, r, fmt.Sprintf("/customers/%d?flash=Customer+credit+refunded", id), 303)
 }
 
@@ -1252,6 +1256,10 @@ func (h *CustomerHandler) ReverseRefund(w http.ResponseWriter, r *http.Request) 
 	_, err = h.settlement.ReverseRefund(r.Context(), actor, settlement.ReverseRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, ID: refundID, CustomerID: id, EffectiveDate: settlement.Date(r.FormValue("effective_date")), Reason: r.FormValue("reason")})
 	if err != nil {
 		writeSettlementError(w, r, err)
+		return
+	}
+	if r.Header.Get("Accept") == "application/json" {
+		refundOperationResponse(w, r, r.FormValue("idempotency_key"))
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/customers/%d?flash=Credit+refund+reversed", id), 303)

@@ -62,7 +62,7 @@ func TestOfficePaymentBackupRestoresSourcesReversalsAndReceipts(t *testing.T) {
 	documentTransactionRequest(t, web, cookie, "POST", path, values, 303)
 	var reversed string
 	historyCheck(t, src.pool.QueryRow(ctx, `SELECT id::text FROM invoice_payments WHERE amount_cents=987`).Scan(&reversed))
-	documentTransactionRequest(t, web, cookie, "POST", path+"/"+reversed+"/reverse", url.Values{"idempotency_key": {newOperationKey()}, "date": {"2026-01-02"}, "reason": {"Return before backup"}}, 303)
+	documentTransactionRequest(t, web, cookie, "POST", path+"/"+reversed+"/reverse", url.Values{"idempotency_key": {newOperationKey()}, "date": {"2026-01-02"}, "reason": {"external_return"}, "notes": {"Return before backup"}}, 303)
 	methods, err = finance.ConfiguredPaymentMethods(ctx, actor)
 	historyCheck(t, err)
 	historyCheck(t, finance.RenamePaymentMethod(ctx, actor, settlement.Cash, "Next cash label", methods[0].Revision))

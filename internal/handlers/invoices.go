@@ -1474,5 +1474,9 @@ func (h *InvoiceHandler) reverseSettlement(w http.ResponseWriter, r *http.Reques
 		writeApplicationReceipt(w, r, r.FormValue("idempotency_key"))
 		return
 	}
+	if param == "payment_id" && strings.Contains(r.Header.Get("Accept"), "application/json") {
+		refundOperationResponse(w, r, r.FormValue("idempotency_key"))
+		return
+	}
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=%s", invoiceID, flash), 303)
 }

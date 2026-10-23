@@ -7,6 +7,9 @@ templ CustomerReceipts(p settlement.CustomerReceiptPage, operation string) {
 	@Layout("Customer receipts — "+p.CustomerName) {
 		<h1 data-office-payment-page>Customer receipts — { p.CustomerName }</h1>
 		<a href={ templ.URL(fmt.Sprintf("/customers/%d",p.CustomerID)) }>Customer dashboard</a>
+		if p.ShowHistory {
+			<a href={ templ.URL(fmt.Sprintf("/customers/%d/refunds",p.CustomerID)) }>Refunds and Payment reversals</a>
+		}
 		if p.CanRecord {
 			<h2>Record money received</h2>
 			<p>Record the full amount actually received. The selected Invoice receives the lesser of this amount and its current due. The remainder is Payment-funded Customer Credit. Without an Invoice, the entire receipt is Unapplied Payment Credit. Credit does not automatically settle other Invoices.</p>
@@ -59,14 +62,9 @@ templ CustomerReceipts(p settlement.CustomerReceiptPage, operation string) {
 						}
 					</p>
 					if r.Reversal != nil {
-						<p>Reversed { r.Reversal.EffectiveDate.Format("2006-01-02") }: { r.Reversal.Reason }</p>
+						<p>Reversed { r.Reversal.EffectiveDate.Format("2006-01-02") }: { r.Reversal.Reason } — { r.Reversal.Reference } — { r.Reversal.Notes }</p>
 					} else if p.CanReverse && r.InvoiceID == 0 {
-						<details><summary>Reverse Unapplied Payment</summary>
-							<form method="post" hx-boost="false" action={ templ.URL(fmt.Sprintf("/customers/%d/payments/%s/reverse",p.CustomerID,r.ID)) }>
-								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ r.ReversalKey }/>
-								<label>Reversal date<input type="date" name="date" value={ p.Today } max={ p.Today } required/></label><label>Reason<input name="reason" required/></label><button>Reverse receipt</button>
-							</form>
-						</details>
+						<a href={ templ.URL(fmt.Sprintf("/customers/%d/refunds",p.CustomerID)) }>Review Payment reversal</a>
 					}
 				</article>
 			}

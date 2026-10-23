@@ -1,9 +1,12 @@
 (() => {
   'use strict';
-  const key = 'freefsm.credit-application.pending-operation';
   function setup() {
     let marker = document.querySelector('[data-credit-page]');
     if (!marker || marker.dataset.ready) return;
+    const refunds = marker.dataset.operationFamily === 'refund';
+    const key = refunds ? 'freefsm.refund.pending-operation' : 'freefsm.credit-application.pending-operation';
+    const receiptPath = refunds ? '/refund-operations/' : '/credit-application-operations/';
+    const effectTypes = refunds ? ['credit_refund','credit_refund_reversal','payment_reversal'] : ['credit_application','credit_application_reversal'];
     marker.dataset.ready = 'true';
     const main = marker.closest('.main-content'), path = location.pathname;
     let pending, busy = false, status, check, next;
@@ -16,7 +19,7 @@
       main.querySelectorAll('form[data-credit-command]').forEach(form => { form.onsubmit = submit; });
       check.onclick = inspect;
       next.onclick = () => {
-        if (!busy && confirm('Have you reconciled the original operation? Continue only for a different Application or reversal.')) {
+        if (!busy && confirm('Have you reconciled the original operation? Continue only for a different financial operation.')) {
           sessionStorage.removeItem(key); location.assign(path);
         }
       };
@@ -51,13 +54,13 @@
     async function reconcile() {
       // Receipt first, then a new authorized projection. Neither the POST nor
       // the receipt is permission to restore old source options or history.
-      const response = await fetch('/credit-application-operations/'+pending,{cache:'no-store',headers:{Accept:'application/json'}});
+      const response = await fetch(receiptPath+pending,{cache:'no-store',headers:{Accept:'application/json'}});
       let accepted = false;
       if (response.ok && !response.redirected) {
         const data = (await response.json()).data;
         accepted = data?.operation_id === pending && data.outcome === 'accepted' &&
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.effect_id) &&
-          ['credit_application','credit_application_reversal'].includes(data.effect_type);
+          effectTypes.includes(data.effect_type);
       }
       try { await refresh(); } catch { /* remain neutral on denied/offline refresh */ }
       if (!live()) return;

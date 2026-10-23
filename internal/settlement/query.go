@@ -53,6 +53,8 @@ type CreditSource struct {
 }
 
 type RefundEntry struct {
+	ActorName                string
+	EnteredAt                time.Time
 	ID                       uuid.UUID
 	CustomerID, AmountCents  int64
 	Method                   PaymentMethod
@@ -107,7 +109,7 @@ func (s *Service) invoiceSettlement(ctx context.Context, actor Actor, invoiceID 
 	if err != nil {
 		return out, err
 	}
-	rows, err := s.db.Query(ctx, `SELECT p.id,p.amount_cents,coalesce(a.amount_cents,0),p.amount_cents-coalesce(a.amount_cents,0),p.method,p.received_date,p.reference,p.notes,r.id,r.effective_date,r.reason,coalesce(p.method_label,p.method),coalesce(p.other_description,''),coalesce(p.channel,'unknown') FROM invoice_payments p LEFT JOIN payment_invoice_allocations a ON a.payment_id=p.id LEFT JOIN settlement_reversals r ON r.operation_type='payment' AND r.operation_id=p.id WHERE p.company_id=$1 AND p.invoice_id=$2 ORDER BY p.received_date,p.id`, actor.CompanyID, invoiceID)
+	rows, err := s.db.Query(ctx, `SELECT p.id,p.amount_cents,coalesce(a.amount_cents,0),p.amount_cents-coalesce(a.amount_cents,0),p.method,p.received_date,p.reference,p.notes,r.id,r.effective_date,r.reason,coalesce(p.method_label,p.method),coalesce(p.other_description,''),coalesce(p.channel,'unknown'),coalesce(r.reference,''),coalesce(r.notes,'') FROM invoice_payments p LEFT JOIN payment_invoice_allocations a ON a.payment_id=p.id LEFT JOIN settlement_reversals r ON r.operation_type='payment' AND r.operation_id=p.id WHERE p.company_id=$1 AND p.invoice_id=$2 ORDER BY p.received_date,p.id`, actor.CompanyID, invoiceID)
 	if err != nil {
 		return out, err
 	}
@@ -116,12 +118,13 @@ func (s *Service) invoiceSettlement(ctx context.Context, actor Actor, invoiceID 
 		var rid *uuid.UUID
 		var rd *time.Time
 		var reason *string
-		if err = rows.Scan(&e.ID, &e.AmountCents, &e.AppliedCents, &e.CreditCents, &e.Method, &e.ReceivedDate, &e.Reference, &e.Notes, &rid, &rd, &reason, &e.MethodLabel, &e.OtherDescription, &e.Channel); err != nil {
+		var reference, notes string
+		if err = rows.Scan(&e.ID, &e.AmountCents, &e.AppliedCents, &e.CreditCents, &e.Method, &e.ReceivedDate, &e.Reference, &e.Notes, &rid, &rd, &reason, &e.MethodLabel, &e.OtherDescription, &e.Channel, &reference, &notes); err != nil {
 			rows.Close()
 			return out, err
 		}
 		if rid != nil {
-			e.Reversal = &ReversalEntry{ID: *rid, EffectiveDate: *rd, Reason: *reason}
+			e.Reversal = &ReversalEntry{ID: *rid, EffectiveDate: *rd, Reason: *reason, Reference: reference, Notes: notes}
 		}
 		e.ReversalKey = uuid.NewString()
 		out.Payments = append(out.Payments, e)

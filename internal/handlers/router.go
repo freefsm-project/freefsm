@@ -418,6 +418,8 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/invoices/{id}/payments-with-credit", recordInvoicePaymentWithCredit)
 		r.Post("/customers/{id}/payments", recordCustomerPayment)
 		r.Post("/customers/{id}/credit/refunds", customerHandler.RefundCredit)
+		r.Get("/customers/{id}/refunds", customerRefunds)
+		r.Get("/refund-operations/{operation}", refundOperationReceipt)
 		r.Post("/customers/{id}/credit/refunds/{refund_id}/reverse", customerHandler.ReverseRefund)
 		r.Post("/invoices/{id}/payments/{payment_id}/reverse", invoiceHandler.ReversePayment)
 		r.Get("/customers/{id}/payments", customerReceipts)

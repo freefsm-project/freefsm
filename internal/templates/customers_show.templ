@@ -10,6 +10,9 @@ templ CustomerShow(p CustomerShowPageData) {
 		if canAllRecords(ctx,"payment.credit") || canAllRecords(ctx,"settlement.view") {
 			<a href={ templ.URL(fmt.Sprintf("/customers/%d/payments",p.Customer.ID)) }>Customer receipts</a>
 		}
+		if canAllRecords(ctx,"credit.view") || canAllRecords(ctx,"settlement.view") {
+			<a href={ templ.URL(fmt.Sprintf("/customers/%d/refunds",p.Customer.ID)) }>Refunds and Payment reversals</a>
+		}
 		if canMaster(ctx,"asset.view") {
 			if p.SectionErrors["Assets"] {
 				@CustomerSectionUnavailable(p.Customer.ID,"Assets")
@@ -206,7 +209,7 @@ templ customerCredit(p CustomerShowPageData) {
 		</tbody></table></div>
 	}
 	if p.CanRefund && p.Customer.ArchivedAt == "" && p.Settlement.AvailableCreditCents > 0 {
-		<details><summary>Refund Available Credit</summary><form action={ templ.URL(fmt.Sprintf("/customers/%d/credit/refunds",p.Customer.ID)) } method="post"><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ p.RefundKey }/><label>Amount<input name="amount" inputmode="decimal" required/></label><label>Method<select name="method"><option value="cash">Cash</option><option value="check">Check</option><option value="credit_card">Credit Card</option><option value="transfer">Transfer</option><option value="other">Other</option></select></label><label>Date<input type="date" name="effective_date" value={ today(ctx) } required/></label><label>Reason<input name="reason" required/></label><label>Reference<input name="reference"/></label><label>Notes<input name="notes"/></label><button>Refund Credit</button></form></details>
+		<a href={ templ.URL(fmt.Sprintf("/customers/%d/refunds",p.Customer.ID)) }>Refund Available Credit</a>
 	}
 	if len(p.Settlement.Refunds) > 0 {
 		<h4>Refunds</h4><div style="overflow-x: auto;"><table><tbody>
@@ -215,7 +218,7 @@ templ customerCredit(p CustomerShowPageData) {
 			if f.Reversal != nil {
 				<span>Reversed: { f.Reversal.Reason }</span>
 			} else if p.CanReverseRefund && p.Customer.ArchivedAt == "" {
-				<form action={ templ.URL(fmt.Sprintf("/customers/%d/credit/refunds/%s/reverse",p.Customer.ID,f.ID)) } method="post"><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ f.ReversalKey }/><input type="date" name="effective_date" value={ today(ctx) } required/><input name="reason" placeholder="Reason" required/><button class="outline contrast">Reverse</button></form>
+				<a href={ templ.URL(fmt.Sprintf("/customers/%d/refunds",p.Customer.ID)) }>Review refund reversal</a>
 			}
 			</td></tr>
 		}

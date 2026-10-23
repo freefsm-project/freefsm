@@ -57,7 +57,7 @@ func TestOfficePaymentUnappliedReceiptHTTP(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT id::text FROM invoice_payments`).Scan(&payment); err != nil {
 		t.Fatal(err)
 	}
-	reverse := url.Values{"idempotency_key": {newOperationKey()}, "date": {"2026-01-02"}, "reason": {"Returned retainer"}}
+	reverse := url.Values{"idempotency_key": {newOperationKey()}, "date": {"2026-01-02"}, "reason": {"external_return"}, "notes": {"Returned retainer"}}
 	documentTransactionRequest(t, web, cookie, "POST", path+"/"+payment+"/reverse", reverse, 303)
 	documentTransactionRequest(t, web, cookie, "POST", path+"/"+payment+"/reverse", reverse, 303)
 	page = documentTransactionRequest(t, web, cookie, "GET", path, nil, 200)
@@ -118,14 +118,14 @@ func TestOfficePaymentCustomerScopeAndReceivablesHTTP(t *testing.T) {
 	var payment, credit string
 	historyCheck(t, pool.QueryRow(ctx, `SELECT source_payment_id::text,id::text FROM customer_credits`).Scan(&payment, &credit))
 	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/invoices/%d/credit-applications", ids[0]), url.Values{"idempotency_key": {newOperationKey()}, "amount": {"20.00"}, "credit_id": {credit}, "effective_date": {"2026-01-02"}}, 303)
-	reverse := url.Values{"idempotency_key": {newOperationKey()}, "reason": {"Return receipt"}, "date": {"2026-01-02"}}
+	reverse := url.Values{"idempotency_key": {newOperationKey()}, "reason": {"external_return"}, "date": {"2026-01-02"}}
 	documentTransactionRequest(t, web, cookie, "POST", path+"/"+payment+"/reverse", reverse, 409)
 	var application string
 	historyCheck(t, pool.QueryRow(ctx, `SELECT id::text FROM credit_applications`).Scan(&application))
 	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/invoices/%d/credit-applications/%s/reverse", ids[0], application), url.Values{"idempotency_key": {newOperationKey()}, "reason": {"Undo application"}, "effective_date": {"2026-01-02"}}, 303)
 	documentTransactionRequest(t, web, cookie, "POST", path+"/"+payment+"/reverse", reverse, 303)
 	// Customer-scoped reversal cannot use an Invoice route or another Customer.
-	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/customers/%d/payments/%s/reverse", other.ID, payment), url.Values{"idempotency_key": {newOperationKey()}, "reason": {"Wrong owner"}, "date": {"2026-01-02"}}, 404)
+	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/customers/%d/payments/%s/reverse", other.ID, payment), url.Values{"idempotency_key": {newOperationKey()}, "reason": {"error"}, "date": {"2026-01-02"}}, 404)
 }
 
 func TestOfficePaymentUnappliedCurrentAuthorityHTTP(t *testing.T) {

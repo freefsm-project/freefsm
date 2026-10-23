@@ -132,9 +132,13 @@ func reverseUnappliedPayment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid form", 400)
 		return
 	}
-	_, err = settlement.New(a.Service.Pool).ReverseUnappliedPayment(r.Context(), a.Actor, settlement.ReverseRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, ID: payment, CustomerID: id, EffectiveDate: settlement.Date(r.FormValue("date")), Reason: r.FormValue("reason")})
+	_, err = settlement.New(a.Service.Pool).ReverseUnappliedPayment(r.Context(), a.Actor, settlement.ReverseRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, ID: payment, CustomerID: id, EffectiveDate: settlement.Date(r.FormValue("date")), Reason: r.FormValue("reason"), Reference: r.FormValue("reference"), Notes: r.FormValue("notes")})
 	if err != nil {
 		writeSettlementError(w, r, err)
+		return
+	}
+	if r.Header.Get("Accept") == "application/json" {
+		refundOperationResponse(w, r, r.FormValue("idempotency_key"))
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/customers/%d/payments?flash=Receipt+reversed", id), 303)
