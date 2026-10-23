@@ -86,6 +86,9 @@ func TestOfficePaymentBackupRestoresSourcesReversalsAndReceipts(t *testing.T) {
 	applicationValues.Set("idempotency_key", currentKey)
 	applicationValues.Set("amount", "10.00")
 	documentTransactionRequest(t, web, cookie, "POST", applicationPath, applicationValues, 303)
+	var currentApplicationID, reversalID string
+	historyCheck(t, src.pool.QueryRow(ctx, `SELECT result_id FROM settlement_idempotency WHERE operation='apply_credit' AND idempotency_key=$1`, currentKey).Scan(&currentApplicationID))
+	historyCheck(t, src.pool.QueryRow(ctx, `SELECT id FROM settlement_reversals WHERE operation_type='credit_application' AND operation_id=$1`, applicationID).Scan(&reversalID))
 	tables := []string{"invoice_payments", "payment_invoice_allocations", "customer_credits", "credit_applications", "settlement_reversals", "invoices", "settlement_idempotency", "operation_admissions", "payment_method_labels", "activity_logs"}
 	before := historyDurableRows(t, src.pool, tables)
 	lost := newOperationKey()
@@ -102,12 +105,13 @@ func TestOfficePaymentBackupRestoresSourcesReversalsAndReceipts(t *testing.T) {
 	assertContains(t, lookup.Body.String(), `"outcome":"accepted"`)
 	documentTransactionRequest(t, web, fresh, "GET", "/payment-operations/"+lost, nil, 404)
 	documentTransactionRequest(t, web, fresh, "POST", path, url.Values{"idempotency_key": {op}, "amount": {"125.00"}, "method": {"cash"}, "date": {"2026-01-02"}, "invoice_id": {fmt.Sprint(invoice)}}, 303)
-	for _, key := range []string{applicationKey, reverseKey, currentKey} {
-		receipt := documentTransactionRequest(t, web, fresh, "GET", "/credit-application-operations/"+key, nil, 200)
-		assertContains(t, receipt.Body.String(), `"outcome":"accepted"`)
+	for _, known := range []struct{ key, id, kind string }{{applicationKey, applicationID, "credit_application"}, {reverseKey, reversalID, "credit_application_reversal"}, {currentKey, currentApplicationID, "credit_application"}} {
+		assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, fresh, "GET", "/credit-application-operations/"+known.key, nil, 200), known.key, known.id, known.kind)
 	}
 	documentTransactionRequest(t, web, fresh, "POST", applicationPath, applicationValues, 303)
 	documentTransactionRequest(t, web, fresh, "POST", applicationPath+"/"+applicationID+"/reverse", reverseValues, 303)
+	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, fresh, "GET", "/credit-application-operations/"+currentKey, nil, 200), currentKey, currentApplicationID, "credit_application")
+	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, fresh, "GET", "/credit-application-operations/"+reverseKey, nil, 200), reverseKey, reversalID, "credit_application_reversal")
 	historyEqual(t, "restored replay never duplicates receipt or Credit", historyDurableRows(t, dst.pool, tables), before)
 	applicationPage := documentTransactionRequest(t, web, fresh, "GET", fmt.Sprintf("/invoices/%d/credit", destination), nil, 200)
 	for _, s := range []string{applicationID, sourceID, "REV-52", "Exact original source retained"} {

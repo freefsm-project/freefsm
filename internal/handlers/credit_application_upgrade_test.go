@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io/fs"
 	"net/url"
@@ -43,7 +45,13 @@ func TestCreditApplicationInstalledHistoryUpgradeHTTP(t *testing.T) {
 	historyCheck(t, err)
 	// This is an actual pre093 schema. Record the old reversal shape, which had
 	// no reference/note columns, without synthesizing any missing metadata.
-	_, err = pool.Exec(ctx, `INSERT INTO settlement_reversals(id,company_id,operation_type,operation_id,reason,actor_id,effective_date) VALUES($1,$2,'credit_application',$3,'Installed correction',$4,'2026-01-02')`, uuid.New(), company, application.ID, admin)
+	reversalID, reverseKey := uuid.New(), newOperationKey()
+	_, err = pool.Exec(ctx, `INSERT INTO settlement_reversals(id,company_id,operation_type,operation_id,reason,actor_id,effective_date) VALUES($1,$2,'credit_application',$3,'Installed correction',$4,'2026-01-02')`, reversalID, company, application.ID, admin)
+	historyCheck(t, err)
+	// Recorded pre093 semantic request shape: optional metadata did not exist.
+	canonical := fmt.Sprintf(`{"CustomerID":0,"EffectiveDate":"2026-01-02","ID":%q,"InvoiceID":%d,"Reason":"Installed correction"}`, application.ID.String(), invoice)
+	hash := sha256.Sum256([]byte(canonical))
+	_, err = pool.Exec(ctx, `INSERT INTO settlement_idempotency(company_id,operation,idempotency_key,request_fingerprint,result_id,result_json) VALUES($1,'reverse_credit_application',$2,$3,$4::uuid,jsonb_build_object('ID',$4::uuid::text,'AppliedCents',0,'CreditCents',0,'State',''))`, company, reverseKey, hex.EncodeToString(hash[:]), reversalID)
 	historyCheck(t, err)
 	_, err = pool.Exec(ctx, `SELECT settlement_set_invoice_state($1,'unpaid')`, invoice)
 	historyCheck(t, err)
@@ -62,8 +70,18 @@ func TestCreditApplicationInstalledHistoryUpgradeHTTP(t *testing.T) {
 		t.Fatal("upgrade rewrote reversal or invented metadata")
 	}
 	lookup := documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+key, nil, 200)
-	assertContains(t, lookup.Body.String(), `"outcome":"accepted"`)
+	assertCreditApplicationReceipt(t, lookup, key, application.ID.String(), "credit_application")
+	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+reverseKey, nil, 200), reverseKey, reversalID.String(), "credit_application_reversal")
 	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/invoices/%d/credit-applications", invoice), url.Values{"idempotency_key": {key}, "credit_id": {credit.String()}, "amount": {"60.00"}, "effective_date": {"2026-01-02"}}, 303)
 	historyEqual(t, "installed replay preserves original reversed Application", historyDurableRows(t, pool, tables), before)
+	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+key, nil, 200), key, application.ID.String(), "credit_application")
+	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/invoices/%d/credit-applications/%s/reverse", invoice, application.ID), url.Values{"idempotency_key": {reverseKey}, "effective_date": {"2026-01-02"}, "reason": {"Installed correction"}}, 303)
+	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+reverseKey, nil, 200), reverseKey, reversalID.String(), "credit_application_reversal")
+	historyEqual(t, "installed compensation replay keeps its original effect", historyDurableRows(t, pool, tables), before)
 	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/invoices/%d/credit-applications", invoice), url.Values{"idempotency_key": {key}, "credit_id": {credit.String()}, "amount": {"60.01"}, "effective_date": {"2026-01-02"}}, 409)
+	// Old per-family keys could collide. Both real effects remain recorded, but
+	// an untyped lookup must not choose an arbitrary effect identity for the key.
+	_, err = pool.Exec(ctx, `INSERT INTO settlement_idempotency(company_id,operation,idempotency_key,request_fingerprint,result_id,result_json) SELECT company_id,operation,$1,request_fingerprint,result_id,result_json FROM settlement_idempotency WHERE operation='reverse_credit_application' AND idempotency_key=$2`, key, reverseKey)
+	historyCheck(t, err)
+	documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+key, nil, 409)
 }

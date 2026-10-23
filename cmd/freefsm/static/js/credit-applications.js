@@ -55,7 +55,9 @@
       let accepted = false;
       if (response.ok && !response.redirected) {
         const data = (await response.json()).data;
-        accepted = data?.operation_id === pending && data.outcome === 'accepted';
+        accepted = data?.operation_id === pending && data.outcome === 'accepted' &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.effect_id) &&
+          ['credit_application','credit_application_reversal'].includes(data.effect_type);
       }
       try { await refresh(); } catch { /* remain neutral on denied/offline refresh */ }
       if (!live()) return;

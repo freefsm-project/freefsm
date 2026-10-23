@@ -52,7 +52,7 @@ func TestCreditApplicationPersistedBrowser(t *testing.T) {
 					return
 				}
 				var grants []authorization.Grant
-				if scenario == "reverse-only" {
+				if scenario == "reverse-only" && r.URL.Query().Get("revoke") != "1" {
 					grants = append(base, authorization.Grant{Permission: "settlement.view", Scope: authorization.All}, authorization.Grant{Permission: "credit.application.reverse", Scope: authorization.All})
 				}
 				if _, err := auth.SaveRole(r.Context(), authorization.Actor{UserID: admin}, role, "Changed Credit authority", grants, revision); err != nil {

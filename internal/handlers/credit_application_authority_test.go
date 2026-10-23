@@ -64,6 +64,7 @@ func TestCreditApplicationIndependentAuthorityHTTP(t *testing.T) {
 	if effects != 0 {
 		t.Fatalf("audit rollback effects=%d", effects)
 	}
+	documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+values.Get("idempotency_key"), nil, 404)
 	if _, err := pool.Exec(ctx, `DROP TRIGGER credit_audit_failure ON authorization_audit; DROP FUNCTION credit_audit_failure()`); err != nil {
 		t.Fatal(err)
 	}
@@ -89,6 +90,15 @@ func TestCreditApplicationIndependentAuthorityHTTP(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT id FROM credit_applications`).Scan(&application); err != nil {
 		t.Fatal(err)
 	}
+	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+applyKey, nil, 200), applyKey, application, "credit_application")
+	documentTransactionRequest(t, web, cookie, "POST", path, values, 303)
+	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+applyKey, nil, 200), applyKey, application, "credit_application")
+	documentTransactionRequest(t, web, adminCookie, "POST", path, values, 409)
+	documentTransactionRequest(t, web, adminCookie, "POST", "/invoices", url.Values{"customer_id": {fmt.Sprint(c.ID)}, "title": {"Different receipt parent"}, "invoice_date": {"2026-01-02"}, "line_items": {`[{"title":"Work","quantity":1,"unit_price":100}]`}, "tax_rate": {"0"}}, 303)
+	var anotherInvoice int64
+	historyCheck(t, pool.QueryRow(ctx, `SELECT max(id) FROM invoices`).Scan(&anotherInvoice))
+	historyCheck(t, statusflow.New(pool).FinalizeInvoice(ctx, statusflow.Actor{ID: admin, CompanyID: company}, anotherInvoice))
+	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/invoices/%d/credit-applications", anotherInvoice), values, 409)
 	reverse := url.Values{"idempotency_key": {newOperationKey()}, "effective_date": {"2026-01-02"}, "reason": {"Selected wrong Invoice"}, "reference": {"correction-52"}, "notes": {"No cash movement"}}
 	documentTransactionRequest(t, web, cookie, "POST", path+"/"+application+"/reverse", reverse, 403)
 	var revision int64
@@ -119,6 +129,7 @@ func TestCreditApplicationIndependentAuthorityHTTP(t *testing.T) {
 	if effects != 0 {
 		t.Fatalf("reversal audit rollback effects=%d", effects)
 	}
+	documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+reverse.Get("idempotency_key"), nil, 404)
 	if _, err := pool.Exec(ctx, `DROP TRIGGER credit_reverse_audit_failure ON authorization_audit; DROP FUNCTION credit_reverse_audit_failure()`); err != nil {
 		t.Fatal(err)
 	}
@@ -131,8 +142,8 @@ func TestCreditApplicationIndependentAuthorityHTTP(t *testing.T) {
 	if audits != 2 {
 		t.Fatalf("immutable application audits=%d want2", audits)
 	}
-	var reference, notes string
-	if err := pool.QueryRow(ctx, `SELECT reference,notes FROM settlement_reversals WHERE operation_id=$1`, application).Scan(&reference, &notes); err != nil {
+	var reference, notes, reversalID string
+	if err := pool.QueryRow(ctx, `SELECT reference,notes,id FROM settlement_reversals WHERE operation_id=$1`, application).Scan(&reference, &notes, &reversalID); err != nil {
 		t.Fatal(err)
 	}
 	if reference != "correction-52" || notes != "No cash movement" {
@@ -141,8 +152,23 @@ func TestCreditApplicationIndependentAuthorityHTTP(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE settlement_reversals SET notes='rewritten' WHERE operation_id=$1`, application); err == nil {
 		t.Fatal("reversal metadata mutable")
 	}
+	reverseKey := reverse.Get("idempotency_key")
+	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+reverseKey, nil, 200), reverseKey, reversalID, "credit_application_reversal")
 	reverse.Set("idempotency_key", newOperationKey())
 	documentTransactionRequest(t, web, cookie, "POST", path+"/"+application+"/reverse", reverse, 409)
+	documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+reverse.Get("idempotency_key"), nil, 404)
+	// Fresh authentication of the original web user retains receipt ownership
+	// after all resource/action grants are removed; another user cannot borrow it.
+	historyCheck(t, pool.QueryRow(ctx, `SELECT revision FROM authorization_roles WHERE id=$1`, role).Scan(&revision))
+	_, err = auth.SaveRole(ctx, authorization.Actor{UserID: admin}, role, "Receipt recovery only", nil, revision)
+	historyCheck(t, err)
+	documentTransactionRequest(t, web, cookie, "GET", fmt.Sprintf("/invoices/%d/credit", invoice), nil, 404)
+	fresh := sessionCookie(t, ctx, sessions, u.ID)
+	for _, known := range []struct{ key, id, kind string }{{applyKey, application, "credit_application"}, {reverseKey, reversalID, "credit_application_reversal"}} {
+		assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+known.key, nil, 200), known.key, known.id, known.kind)
+		assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, fresh, "GET", "/credit-application-operations/"+known.key, nil, 200), known.key, known.id, known.kind)
+		documentTransactionRequest(t, web, adminCookie, "GET", "/credit-application-operations/"+known.key, nil, 404)
+	}
 	// Outcome ownership remains useful after action loss without revealing any
 	// Invoice, selected source, amount, or reversal metadata.
 	receipt := documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+applyKey, nil, 200)
@@ -157,6 +183,10 @@ func TestCreditApplicationIndependentAuthorityHTTP(t *testing.T) {
 	api := apiv1.NewRouter(pool, client, sessions)
 	lifecycleCall(t, api, token, "POST", path, `{}`, 404)
 	lifecycleCall(t, api, token, "POST", path+"/"+application+"/reverse", `{}`, 404)
+	lifecycleCall(t, api, token, "GET", "/credit-application-operations/"+applyKey, ``, 404)
+	ownerToken, err := sessions.CreateMobile(ctx, u.ID, "Original owner other channel")
+	historyCheck(t, err)
+	lifecycleCall(t, api, ownerToken, "GET", "/credit-application-operations/"+applyKey, ``, 404)
 }
 
 func TestCreditApplicationCommitAuthorityHTTP(t *testing.T) {

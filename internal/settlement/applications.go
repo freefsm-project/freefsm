@@ -99,6 +99,8 @@ func (s *Service) ApplicationContext(ctx context.Context, a authorization.Actor,
 type ApplicationReceipt struct {
 	OperationID string `json:"operation_id"`
 	Outcome     string `json:"outcome"`
+	EffectID    string `json:"effect_id,omitempty"`
+	EffectType  string `json:"effect_type,omitempty"`
 }
 
 // Read-only recovery is actor-owned and reveals no Invoice/source/amount/history.
@@ -112,13 +114,30 @@ func (s *Service) ApplicationReceipt(ctx context.Context, a authorization.Actor,
 		return out, authorization.ErrNotFound
 	}
 	err := authorization.New(s.db).WithinActor(ctx, a, func(tx pgx.Tx, p authorization.Principal) error {
-		var found bool
-		err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM settlement_idempotency i LEFT JOIN credit_applications a ON i.operation='apply_credit' AND a.id=i.result_id LEFT JOIN settlement_reversals r ON i.operation='reverse_credit_application' AND r.id=i.result_id WHERE i.company_id=$1 AND i.idempotency_key=$2 AND coalesce(a.actor_id,r.actor_id)=$3)`, p.CompanyID, key, p.UserID).Scan(&found)
+		// Only a recorded, actor-owned committed effect can establish acceptance.
+		// Intent identity is not effect identity, and a later reversal must not
+		// replace the original Application's ID in its retained receipt.
+		rows, err := tx.Query(ctx, `SELECT i.result_id,CASE i.operation WHEN 'apply_credit' THEN 'credit_application' ELSE 'credit_application_reversal' END FROM settlement_idempotency i LEFT JOIN credit_applications a ON i.operation='apply_credit' AND a.id=i.result_id AND a.company_id=i.company_id LEFT JOIN settlement_reversals r ON i.operation='reverse_credit_application' AND r.id=i.result_id AND r.company_id=i.company_id AND r.operation_type='credit_application' WHERE i.company_id=$1 AND i.idempotency_key=$2 AND coalesce(a.actor_id,r.actor_id)=$3 LIMIT 2`, p.CompanyID, key, p.UserID)
 		if err != nil {
 			return err
 		}
-		if !found {
+		defer rows.Close()
+		if !rows.Next() {
+			if err := rows.Err(); err != nil {
+				return err
+			}
 			return authorization.ErrNotFound
+		}
+		if err := rows.Scan(&out.EffectID, &out.EffectType); err != nil {
+			return err
+		}
+		// Installed per-family keys could collide before shared admission. Do
+		// not arbitrarily attribute such an intent to one of two real effects.
+		if rows.Next() {
+			return ErrIdempotencyConflict
+		}
+		if err := rows.Err(); err != nil {
+			return err
 		}
 		out.Outcome = "accepted"
 		return nil
