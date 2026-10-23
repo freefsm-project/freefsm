@@ -1207,7 +1207,7 @@ func (h *CustomerHandler) RefundCredit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	if err = r.ParseForm(); err != nil {
+	if err = uniqueSettlementForm(r); err != nil {
 		http.Error(w, "invalid form", 400)
 		return
 	}
@@ -1239,7 +1239,7 @@ func (h *CustomerHandler) ReverseRefund(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	if err = r.ParseForm(); err != nil {
+	if err = uniqueSettlementForm(r); err != nil {
 		http.Error(w, "invalid form", 400)
 		return
 	}

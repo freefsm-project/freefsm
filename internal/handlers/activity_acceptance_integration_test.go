@@ -488,7 +488,7 @@ func TestActivityFinancialFactsAndReversalAuthorityHTTP(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT id::text FROM invoice_payments WHERE invoice_id=$1`, i.ID).Scan(&payment); err != nil {
 		t.Fatal(err)
 	}
-	itemPost(t, router, adminCookie, fmt.Sprintf("/invoices/%d/payments/%s/reverse", i.ID, payment), url.Values{"effective_date": {time.Now().Format("2006-01-02")}, "reason": {"Entered twice"}, "idempotency_key": {newOperationKey()}}, 303)
+	itemPost(t, router, adminCookie, fmt.Sprintf("/invoices/%d/payments/%s/reverse", i.ID, payment), url.Values{"effective_date": {time.Now().Format("2006-01-02")}, "reason": {"error"}, "notes": {"Entered twice"}, "idempotency_key": {newOperationKey()}}, 303)
 	auth := authorization.New(pool)
 	base := []authorization.Grant{{Permission: "invoice.view", Scope: authorization.All}}
 	role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Invoice history reader", base)

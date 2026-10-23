@@ -128,7 +128,7 @@ func reverseUnappliedPayment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid Payment", 400)
 		return
 	}
-	if err := r.ParseForm(); err != nil {
+	if err := uniqueSettlementForm(r); err != nil {
 		http.Error(w, "invalid form", 400)
 		return
 	}

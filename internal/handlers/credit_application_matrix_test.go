@@ -141,7 +141,7 @@ func TestCreditApplicationMixedFinancialContentionHTTP(t *testing.T) {
 					case "application":
 						contender = f.apply(f.newInvoice(t, "100"), "60.00")
 					case "source-reversal":
-						contender = creditCommand{fmt.Sprintf("/customers/%d/payments/%s/reverse", f.customer, f.payment), url.Values{"idempotency_key": {newOperationKey()}, "date": {"2026-01-02"}, "reason": {"external return"}}}
+						contender = creditCommand{fmt.Sprintf("/customers/%d/payments/%s/reverse", f.customer, f.payment), url.Values{"idempotency_key": {newOperationKey()}, "date": {"2026-01-02"}, "reason": {"external_return"}}}
 					}
 					var p, c *httptest.ResponseRecorder
 					if primaryFirst {
@@ -409,7 +409,7 @@ func TestCreditApplicationCompensatingRestorationContentionHTTP(t *testing.T) {
 						f.post(t, creditCommand{path, url.Values{"idempotency_key": {newOperationKey()}, "amount": {"60.00"}, "method": {"cash"}, "date": {"2026-01-02"}}}, 303)
 						var id string
 						historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT id FROM invoice_payments WHERE invoice_id=$1`, f.invoice).Scan(&id))
-						other = creditCommand{fmt.Sprintf("/invoices/%d/payments/%s/reverse", f.invoice, id), url.Values{"idempotency_key": {newOperationKey()}, "effective_date": {"2026-01-02"}, "reason": {"payment correction"}}}
+						other = creditCommand{fmt.Sprintf("/invoices/%d/payments/%s/reverse", f.invoice, id), url.Values{"idempotency_key": {newOperationKey()}, "effective_date": {"2026-01-02"}, "reason": {"error"}, "notes": {"payment correction"}}}
 					}
 					primary := f.apply(f.invoice, "60.00")
 					if operation == "reverse" {

@@ -111,6 +111,19 @@ func writeSettlementError(w http.ResponseWriter, r *http.Request, err error) {
 
 func newOperationKey() string { return uuid.NewString() }
 
+// Financial intent fields must be unambiguous, including query/body clashes.
+func uniqueSettlementForm(r *http.Request) error {
+	if err := r.ParseForm(); err != nil {
+		return err
+	}
+	for _, values := range r.Form {
+		if len(values) != 1 {
+			return errors.New("financial fields must have exactly one value")
+		}
+	}
+	return nil
+}
+
 func paymentOperationReceipt(w http.ResponseWriter, r *http.Request) {
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {

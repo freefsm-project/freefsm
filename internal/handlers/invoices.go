@@ -1451,7 +1451,7 @@ func (h *InvoiceHandler) ReverseCreditApplication(w http.ResponseWriter, r *http
 }
 
 func (h *InvoiceHandler) reverseSettlement(w http.ResponseWriter, r *http.Request, invoiceID int64, param string, fn func(context.Context, settlement.Actor, settlement.ReverseRequest) (settlement.Result, error), flash string) {
-	if err := r.ParseForm(); err != nil {
+	if err := uniqueSettlementForm(r); err != nil {
 		http.Error(w, "invalid form", 400)
 		return
 	}

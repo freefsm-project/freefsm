@@ -45,7 +45,7 @@ const assert=require('node:assert/strict');
    assert.deepEqual(await page.locator('[data-refund-id] li').allTextContents(),portions);
    assert((await page.content()).includes('Exact original source portions restored.'));
    await page.getByRole('button',{name:'Start a different operation',exact:true}).click();
-   const payment=page.locator('[data-payment-id] form').first();await payment.locator('[name=reason]').selectOption('external_return');
+   const payment=scenario==='invoice-reverse'?page.locator('[data-payment-id] form').last():page.locator('[data-payment-id] form').first();await payment.locator('[name=reason]').selectOption('external_return');
    await payment.locator('[name=reference]').fill('RETURN-53');await payment.locator('[name=notes]').fill('External bank return');
    const reversalKey=await payment.locator('[name=idempotency_key]').inputValue();
    await payment.getByRole('button',{name:'Reverse Payment',exact:true}).click();

@@ -55,7 +55,7 @@ func TestCreditApplicationRemainingEligibilityHTTP(t *testing.T) {
 				cmd.path = fmt.Sprintf("/invoices/%d/credit-applications", hidden)
 				want = 404
 			case "reversed-source":
-				f.post(t, creditCommand{fmt.Sprintf("/customers/%d/payments/%s/reverse", f.customer, f.payment), url.Values{"idempotency_key": {newOperationKey()}, "date": {"2026-01-02"}, "reason": {"source returned"}}}, 303)
+				f.post(t, creditCommand{fmt.Sprintf("/customers/%d/payments/%s/reverse", f.customer, f.payment), url.Values{"idempotency_key": {newOperationKey()}, "date": {"2026-01-02"}, "reason": {"external_return"}, "notes": {"source returned"}}}, 303)
 				want = 404
 			case "refund-not-source":
 				f.post(t, creditCommand{fmt.Sprintf("/customers/%d/credit/refunds", f.customer), url.Values{"idempotency_key": {newOperationKey()}, "amount": {"1.00"}, "method": {"cash"}, "effective_date": {"2026-01-02"}, "reason": {"external refund"}}}, 303)
