@@ -529,22 +529,12 @@ func (h *EstimateHandler) ConvertToInvoice(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
 	}
-	key, err := uuid.Parse(r.FormValue("idempotency_key"))
+	_, err = uuid.Parse(r.FormValue("idempotency_key"))
 	if err != nil {
 		http.Error(w, "valid idempotency UUID is required", http.StatusUnprocessableEntity)
 		return
 	}
-	actor, ok := conversionActor(r)
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	result, err := h.conversion.Convert(r.Context(), actor, conversion.ConvertRequest{Operation: conversion.Operation{Key: key}, EstimateID: id, InvoiceFields: parseCustomFieldPatch(r)})
-	if err != nil {
-		writeConversionError(w, r, err)
-		return
-	}
-	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Estimate+converted+to+invoice", result.InvoiceID), http.StatusSeeOther)
+	submitReviewedConversion(w, r, "estimate", id)
 }
 
 func writeConversionError(w http.ResponseWriter, r *http.Request, err error) {

@@ -1,20 +1,76 @@
 package templates
 
 import "fmt"
+import "github.com/freefsm-project/freefsm/internal/conversion"
+import "github.com/freefsm-project/freefsm/internal/services"
 
-templ FieldConversionPreview(id int64, key string, paired, inputs []CustomFieldDisplay, canEdit bool) {
+templ FieldConversionPreview(id int64, key string, preview conversion.Preview, lines []services.LineItem, paired, inputs []CustomFieldDisplay) {
  @Layout("Convert Estimate to Invoice") {
+  <h2>{ preview.Title }</h2>
+  <p>{ preview.Notes }</p>
+  <p>Invoice date: { preview.InvoiceDate }</p>
+  if preview.DueDate!=nil {
+   <p>Due date: { *preview.DueDate }</p>
+  } else {
+   <p>No Due Date</p>
+  }
+  if preview.Terms != nil {
+   <p>{ *preview.Terms }</p>
+  }
+  if len(preview.LineItems)>0 {
+   <table>
+    <thead><tr><th>Item</th><th>Description</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+    <tbody>
+     if len(lines)==0 {
+      <tr><td colspan="5">No line items</td></tr>
+     }
+     for index,li:=range lines {
+      <tr>
+       <td>{ li.Title }<small>{ lineAdjustmentSummary(li) }</small></td>
+       <td>{ li.Description }</td>
+       <td>{ commercialQuantity(li) }</td>
+       <td>{ commercialCurrency(commercialPrice(li)) }</td>
+       <td>{ commercialCurrency(documentLineAmount(li,string(preview.Financial),index)) }</td>
+      </tr>
+     }
+    </tbody>
+   </table>
+   <p>{ documentAdjustmentSummary(string(preview.Financial)) }</p>
+   <p>Subtotal: { commercialCurrency(documentAmount(lines,preview.TaxRate,string(preview.Financial),"subtotal")) }</p>
+   <p>Tax: { commercialCurrency(documentAmount(lines,preview.TaxRate,string(preview.Financial),"tax")) }</p>
+   <p><strong>Grand Total: { commercialCurrency(documentAmount(lines,preview.TaxRate,string(preview.Financial),"total")) }</strong></p>
+  }
+  if preview.Validation!="" {
+   <p role="alert">{ preview.Validation }</p>
+  }
   <h2>Review Invoice Custom Fields</h2>
   <p>Paired Estimate values take precedence. Unpaired defaults apply only to this new Invoice. Required Invoice values must be supplied before conversion.</p>
   @CustomFieldsWidget(CustomFieldsWidgetData{Fields:paired})
   <form action={ templ.URL(fmt.Sprintf("/estimates/%d/convert",id)) } method="post" hx-boost="false">
    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-   <input type="hidden" name="idempotency_key" value={ key }/>
-   @CustomFieldsWidget(CustomFieldsWidgetData{Fields:inputs,EditMode:canEdit})
-   if !canEdit {
+    <input type="hidden" name="idempotency_key" value={ key }/>
+    <input type="hidden" name="revision" value={ preview.Revision }/>
+    @CustomFieldsWidget(CustomFieldsWidgetData{Fields:inputs,EditMode:preview.CanEdit})
+    if !preview.CanEdit {
     <p>Invoice Edit permission is required to enter Invoice values.</p>
    }
-   <button type="submit">Convert to Invoice</button>
+    <button type="submit">Convert to Invoice</button>
+    <a href={ templ.URL("/commercial-operations/"+key) }>Check this operation</a>
+  </form>
+ }
+}
+
+templ ReversionPreview(id int64, key, revision, cycle string) {
+ @Layout("Revert Invoice to Estimate") {
+  <h2>Review reversion</h2>
+  <p>Restore the original Estimate as Draft using current shared content. This exact cycle must still be active. Explicitly unwind all settlement, origin Credit and refund dependencies first; reversion never performs that unwind.</p>
+  <form action={ templ.URL(fmt.Sprintf("/invoices/%d/revert-to-estimate",id)) } method="post" hx-boost="false">
+   <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+   <input type="hidden" name="idempotency_key" value={ key }/>
+   <input type="hidden" name="revision" value={ revision }/>
+   <input type="hidden" name="cycle_id" value={ cycle }/>
+   <button type="submit">Revert to Estimate</button>
+   <a href={ templ.URL("/commercial-operations/"+key) }>Check this operation</a>
   </form>
  }
 }

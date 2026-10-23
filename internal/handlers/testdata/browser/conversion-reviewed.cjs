@@ -1,0 +1,48 @@
+const assert = require('node:assert/strict');
+const { chromium } = require('playwright-core');
+(async () => {
+  const [base, cookie, estimate] = process.argv.slice(2);
+  const browser = await chromium.launch({ executablePath: process.env.BROWSER_EXECUTABLE, headless: true, args: ['--no-sandbox'] });
+  try {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await context.addCookies([{ name: 'session', value: cookie, url: base, httpOnly: true }]);
+    const page = await context.newPage();
+    const source = `${base}/estimates/${estimate}`;
+    assert.equal((await page.goto(source + '/convert')).status(), 200);
+    assert.match(await page.locator('[name=revision]').inputValue(), /^[a-f0-9]{64}$/);
+    assert.equal(await page.locator('[name=save_action_id]').count(), 0, 'conversion owns one commercial operation identity');
+    const staleOperation = await page.locator('[name=idempotency_key]').inputValue();
+    assert.match(await page.locator('main').innerText(), /Browser conversion source/);
+    const editor = await context.newPage();
+    assert.equal((await editor.goto(source + '/edit')).status(), 200);
+    await editor.locator('[name=notes]').fill('Current reviewed browser note');
+    await Promise.all([editor.waitForURL(new RegExp(`/estimates/${estimate}(?:\\?|$)`)), editor.getByRole('button', { name: 'Save', exact: true }).click()]);
+    const rejected = page.waitForResponse(response => response.request().method() === 'POST' && response.url() === source + '/convert');
+    await page.getByRole('button', { name: 'Convert to Invoice', exact: true }).click();
+    assert.equal((await rejected).status(), 409);
+    await page.getByText(/stale_commercial_revision/).waitFor();
+    assert.match(await page.locator('body').innerText(), /stale_commercial_revision/);
+    const receipt = await context.request.get(base + '/commercial-operations/' + staleOperation);
+    assert.equal(receipt.status(), 200);
+    assert.equal((await receipt.json()).outcome, 'stale_commercial_revision');
+    await page.goto(source + '/convert');
+    assert.notEqual(await page.locator('[name=idempotency_key]').inputValue(), staleOperation);
+    assert.match(await page.locator('main').innerText(), /Current reviewed browser note/);
+    await Promise.all([page.waitForURL(/\/invoices\/\d+$/), page.getByRole('button', { name: 'Convert to Invoice', exact: true }).click()]);
+    const first = page.url();
+    await page.getByRole('link', { name: 'Review reversion to Estimate', exact: true }).click();
+    await page.waitForURL(first + '/revert-to-estimate');
+    const cycle = await page.locator('[name=cycle_id]').inputValue();
+    assert.match(cycle, /^[0-9a-f-]{36}$/);
+    assert.match(await page.locator('[name=revision]').inputValue(), /^[a-f0-9]{64}$/);
+    await Promise.all([page.waitForURL(source), page.getByRole('button', { name: 'Revert to Estimate', exact: true }).click()]);
+    assert.equal((await page.goto(source + '/convert')).status(), 200);
+    await Promise.all([page.waitForURL(/\/invoices\/\d+$/), page.getByRole('button', { name: 'Convert to Invoice', exact: true }).click()]);
+    assert.notEqual(page.url(), first);
+    const second = page.url();
+    await page.goto(second + '/revert-to-estimate');
+    assert.notEqual(await page.locator('[name=cycle_id]').inputValue(), cycle);
+    if (process.env.T104_BROWSER_EVIDENCE) await page.screenshot({ path: process.env.T104_BROWSER_EVIDENCE + '/reviewed-reconversion.png', fullPage: true });
+    console.log(JSON.stringify({ source, first, second, firstCycle: cycle, secondCycle: await page.locator('[name=cycle_id]').inputValue() }));
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

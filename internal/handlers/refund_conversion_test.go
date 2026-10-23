@@ -55,20 +55,23 @@ func TestRefundConversionRequiresCompleteUnwindHTTP(t *testing.T) {
 			var application, refundID string
 			historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT id FROM credit_applications WHERE invoice_id=$1`, f.invoice).Scan(&application))
 			historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT result_id FROM settlement_idempotency WHERE operation='refund_credit' AND idempotency_key=$1`, refund.values.Get("idempotency_key")).Scan(&refundID))
-			revert := creditCommand{fmt.Sprintf("/invoices/%d/revert-to-estimate", invoice), url.Values{"idempotency_key": {newOperationKey()}}}
+			reviewRevert := func() creditCommand {
+				return creditCommand{fmt.Sprintf("/invoices/%d/revert-to-estimate", invoice), url.Values{"idempotency_key": {newOperationKey()}}}
+			}
 			reversePayment := creditCommand{fmt.Sprintf("/invoices/%d/payments/%s/reverse", invoice, payment), url.Values{"idempotency_key": {newOperationKey()}, "effective_date": {"2026-01-03"}, "reason": {"error"}}}
-			f.post(t, revert, 422)
+			f.post(t, reviewRevert(), 422)
 			f.post(t, reversePayment, 409)
 			f.post(t, creditCommand{fmt.Sprintf("/invoices/%d/credit-applications/%s/reverse", f.invoice, application), url.Values{"idempotency_key": {newOperationKey()}, "effective_date": {"2026-01-03"}, "reason": {"Explicit unwind"}}}, 303)
-			f.post(t, revert, 422)
+			f.post(t, reviewRevert(), 422)
 			f.post(t, reversePayment, 409)
 			f.post(t, creditCommand{fmt.Sprintf("/customers/%d/credit/refunds/%s/reverse", f.customer, refundID), url.Values{"idempotency_key": {newOperationKey()}, "effective_date": {"2026-01-03"}, "reason": {"Explicit unwind"}}}, 303)
-			f.post(t, revert, 422) // Restored origin Credit is still an active effect.
+			f.post(t, reviewRevert(), 422) // Restored origin Credit is still an active effect.
 			f.post(t, reversePayment, 303)
+			revert := reviewRevert()
 			f.post(t, revert, 303)
-			// The installed web guard rejects ordinary access to the resulting
-			// hidden tombstone, including another POST; financial history remains.
-			f.post(t, revert, 403)
+			// Same-identity replay returns the immutable receipt; it never acts on
+			// a later cycle or repeats the explicit financial unwind.
+			f.post(t, revert, 303)
 			var intact bool
 			historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT p.invoice_id=$2 AND c.original_amount_cents=5000 AND (SELECT count(*) FROM credit_refund_allocations WHERE refund_id=$3)=1 FROM invoice_payments p JOIN customer_credits c ON c.source_payment_id=p.id WHERE p.id=$1`, payment, invoice, refundID).Scan(&intact))
 			if !intact {

@@ -22,6 +22,9 @@ import (
 
 func commentPost(t *testing.T, router http.Handler, cookie *http.Cookie, path string, form url.Values, want int) string {
 	t.Helper()
+	if strings.HasSuffix(path, "/convert") || strings.HasSuffix(path, "/revert-to-estimate") {
+		return fieldPost(t, router, cookie, path, form, want).Body.String()
+	}
 	r := httptest.NewRequest("POST", path, strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.AddCookie(cookie)

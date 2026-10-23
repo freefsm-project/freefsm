@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -221,297 +220,241 @@ func (s *Service) Timeline(ctx context.Context, actor Actor, estimateID int64) (
 
 func (s *Service) Convert(ctx context.Context, actor Actor, req ConvertRequest) (Result, error) {
 	return s.transact(ctx, actor, "convert", req.Operation, req, func(tx pgx.Tx, actorName string) (Result, error) {
-		var customerID int64
-		var jobID *int64
-		var title, notes, taxRate string
-		var lineItems, customFields, snapshot []byte
-		var deletedAt, hiddenAt *time.Time
-		err := tx.QueryRow(ctx, `SELECT e.customer_id,e.job_id,e.title,e.notes,e.tax_rate::text,e.line_items,e.custom_fields,e.deleted_at,e.conversion_hidden_at,to_jsonb(e) FROM estimates e WHERE e.company_id=$1 AND e.id=$2 FOR UPDATE OF e`, actor.CompanyID, req.EstimateID).Scan(&customerID, &jobID, &title, &notes, &taxRate, &lineItems, &customFields, &deletedAt, &hiddenAt, &snapshot)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Result{}, ErrNotFound
-		}
-		if err != nil {
-			return Result{}, err
-		}
-		if deletedAt != nil {
-			return Result{}, ErrArchived
-		}
-		if hiddenAt != nil {
-			return Result{}, ErrNotFound
-		}
-		if _, bound := authorization.FromContext(ctx); bound {
-			var source struct {
-				Label string  `json:"number_label"`
-				Terms *string `json:"terms"`
-			}
-			if err := json.Unmarshal(snapshot, &source); err != nil {
-				return Result{}, err
-			}
-			if source.Label == "" || source.Terms == nil {
-				return Result{}, authorization.ErrConflict
-			}
-		}
-		if _, bound := authorization.FromContext(ctx); bound {
-			var reviewed struct {
-				Label string  `json:"number_label"`
-				Terms *string `json:"terms"`
-			}
-			if err := json.Unmarshal(snapshot, &reviewed); err != nil {
-				return Result{}, err
-			}
-			if reviewed.Label == "" || reviewed.Terms == nil {
-				return Result{}, authorization.ErrConflict
-			}
-		}
-		if _, bound := authorization.FromContext(ctx); !bound {
-			if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
-				return Result{}, err
-			}
-		}
-		var financial string
-		if err := tx.QueryRow(ctx, `SELECT financial FROM estimates WHERE id=$1`, req.EstimateID).Scan(&financial); err != nil {
-			return Result{}, err
-		}
-		totals, err := services.FinancialTotals(financial, string(lineItems), taxRate)
-		if err != nil {
-			return Result{}, err
-		}
-		if totals.Total.MinorUnits() < 0 {
-			return Result{}, services.ErrNegativeInvoiceTotal
-		}
-		settlementState := "unpaid"
-		if totals.Total.MinorUnits() == 0 {
-			settlementState = "paid"
-		}
-		invoiceCustom, err := mapCustomFields(ctx, tx, actor.CompanyID, customFields, "estimate", "invoice", false)
-		if err != nil {
-			return Result{}, err
-		}
-		var paired, entered []customfields.Value
-		if err = json.Unmarshal(invoiceCustom, &paired); err != nil {
-			return Result{}, err
-		}
-		if req.InvoiceFields != nil {
-			if err = json.Unmarshal([]byte(*req.InvoiceFields), &entered); err != nil {
-				return Result{}, err
-			}
-		}
-		// Explicit pairing owns the target value, including an explicit empty.
-		pairedIDs := map[int64]bool{}
-		for _, value := range paired {
-			pairedIDs[value.DefinitionID] = true
-		}
-		for _, value := range entered {
-			if !pairedIDs[value.DefinitionID] {
-				paired = append(paired, value)
-			}
-		}
-		pairs, err := customFieldPairs(ctx, tx, actor.CompanyID)
-		if err != nil {
-			return Result{}, err
-		}
-		present := map[int64]bool{}
-		for _, v := range paired {
-			present[v.DefinitionID] = true
-		}
-		for _, target := range pairs {
-			if present[target] {
-				continue
-			}
-			var typ string
-			if err = tx.QueryRow(ctx, `SELECT field_type FROM custom_field_definitions WHERE id=$1`, target).Scan(&typ); err != nil {
-				return Result{}, err
-			}
-			var empty any = ""
-			if typ == "multiselect" {
-				empty = []string{}
-			}
-			paired = append(paired, customfields.Value{DefinitionID: target, Value: empty})
-		}
-		inputBytes, err := json.Marshal(paired)
-		if err != nil {
-			return Result{}, err
-		}
-		input := string(inputBytes)
-		validated, err := customfields.Validate(ctx, tx, "invoice", "[]", &input, customfields.Creation, actor.CompanyID)
-		if err != nil {
-			return Result{}, err
-		}
-		invoiceCustom = []byte(validated)
-		// Freeze the definitions and explicit pairing inside the immutable source
-		// snapshot. Current configuration must never redefine an earlier cycle.
-		var definitions json.RawMessage
-		if err = tx.QueryRow(ctx, `SELECT coalesce(jsonb_agg(to_jsonb(d) ORDER BY id),'[]') FROM custom_field_definitions d WHERE custom_field_applies_to_company(company_id,$1) AND object_type IN ('estimate','invoice')`, actor.CompanyID).Scan(&definitions); err != nil {
-			return Result{}, err
-		}
-		var captured map[string]json.RawMessage
-		if err = json.Unmarshal(snapshot, &captured); err != nil {
-			return Result{}, err
-		}
-		captured["field_definitions"] = definitions
-		captured["field_pairs"], err = json.Marshal(pairs)
-		if err != nil {
-			return Result{}, err
-		}
-		snapshot, err = json.Marshal(captured)
-		if err != nil {
-			return Result{}, err
-		}
+		return s.convertTx(ctx, tx, actor, req, actorName)
+	})
+}
 
-		var settingsID, number int64
-		var dueDays *int
-		var timezone, terms string
-		if err = tx.QueryRow(ctx, `SELECT id,next_invoice_number,default_due_days,timezone,invoice_payment_terms FROM company_settings WHERE company_id=$1 FOR UPDATE`, actor.CompanyID).Scan(&settingsID, &number, &dueDays, &timezone, &terms); err != nil {
-			return Result{}, err
-		}
-		var dueOverride, termsOverride *string
-		err = tx.QueryRow(ctx, `SELECT defaults->>'invoice_due_days',defaults->>'invoice_terms' FROM customer_document_defaults WHERE customer_id=$1`, customerID).Scan(&dueOverride, &termsOverride)
-		if err != nil && err != pgx.ErrNoRows {
-			return Result{}, err
-		}
-		if termsOverride != nil {
-			terms = *termsOverride
-		}
-		var sourceTerms struct {
+func (s *Service) convertTx(ctx context.Context, tx pgx.Tx, actor Actor, req ConvertRequest, actorName string) (Result, error) {
+	var customerID int64
+	var jobID *int64
+	var title, notes, taxRate string
+	var lineItems, customFields, snapshot []byte
+	var deletedAt, hiddenAt *time.Time
+	err := tx.QueryRow(ctx, `SELECT e.customer_id,e.job_id,e.title,e.notes,e.tax_rate::text,e.line_items,e.custom_fields,e.deleted_at,e.conversion_hidden_at,to_jsonb(e) FROM estimates e WHERE e.company_id=$1 AND e.id=$2 FOR UPDATE OF e`, actor.CompanyID, req.EstimateID).Scan(&customerID, &jobID, &title, &notes, &taxRate, &lineItems, &customFields, &deletedAt, &hiddenAt, &snapshot)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Result{}, ErrNotFound
+	}
+	if err != nil {
+		return Result{}, err
+	}
+	if deletedAt != nil {
+		return Result{}, ErrArchived
+	}
+	if hiddenAt != nil {
+		return Result{}, ErrNotFound
+	}
+	if _, bound := authorization.FromContext(ctx); bound {
+		var source struct {
+			Label string  `json:"number_label"`
 			Terms *string `json:"terms"`
 		}
-		if err := json.Unmarshal(snapshot, &sourceTerms); err != nil {
+		if err := json.Unmarshal(snapshot, &source); err != nil {
 			return Result{}, err
 		}
-		if sourceTerms.Terms != nil {
-			terms = *sourceTerms.Terms
+		if source.Label == "" || source.Terms == nil {
+			return Result{}, authorization.ErrConflict
 		}
-		loc, err := time.LoadLocation(timezone)
-		if err != nil {
+	}
+	if _, bound := authorization.FromContext(ctx); bound {
+		var reviewed struct {
+			Label string  `json:"number_label"`
+			Terms *string `json:"terms"`
+		}
+		if err := json.Unmarshal(snapshot, &reviewed); err != nil {
 			return Result{}, err
 		}
-		date, _ := time.Parse("2006-01-02", s.now().In(loc).Format("2006-01-02"))
-		dueDate := time.Time{}
-		if dueDays != nil {
-			dueDate = date.AddDate(0, 0, *dueDays)
+		if reviewed.Label == "" || reviewed.Terms == nil {
+			return Result{}, authorization.ErrConflict
 		}
-		if dueOverride != nil {
-			dueDate = time.Time{}
-			if *dueOverride != "" {
-				days, err := strconv.ParseInt(*dueOverride, 10, 32)
-				if err != nil {
-					return Result{}, fmt.Errorf("invalid Customer due offset")
-				}
-				dueDate = date.AddDate(0, 0, int(days))
-			}
-		}
-		if !dueDate.IsZero() && (dueDate.Year() < 1 || dueDate.Year() > 9999) {
-			return Result{}, fmt.Errorf("due offset produces an unsupported date")
-		}
-		var statusID int64
-		if err = tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.company_id=$1 AND w.company_id=$1 AND w.object_type='invoice' AND s.category_key='invoice:draft' AND s.is_category_default`, actor.CompanyID).Scan(&statusID); err != nil {
-			return Result{}, fmt.Errorf("resolve invoice draft status: %w", err)
-		}
-		now := s.now()
-		var invoiceID int64
-		err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state,terms,financial) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`, actor.CompanyID, customerID, jobID, req.EstimateID, statusID, number, title, notes, date, dueDate, taxRate, lineItems, invoiceCustom, settlementState, terms, financial).Scan(&invoiceID)
-		if err != nil {
+	}
+	if _, bound := authorization.FromContext(ctx); !bound {
+		if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
 			return Result{}, err
 		}
-		if _, err = tx.Exec(ctx, `UPDATE company_settings SET next_invoice_number=$1 WHERE id=$2`, number+1, settingsID); err != nil {
-			return Result{}, err
-		}
-		cycleID := uuid.New()
-		if _, err = tx.Exec(ctx, `INSERT INTO estimate_invoice_conversion_cycles(id,company_id,estimate_id,invoice_id,invoice_number,source_snapshot,converted_by,converted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, cycleID, actor.CompanyID, req.EstimateID, invoiceID, number, snapshot, actor.ID, now); err != nil {
-			return Result{}, err
-		}
-		if _, err = tx.Exec(ctx, `UPDATE estimates SET conversion_hidden_at=$1,updated_at=$1 WHERE id=$2`, now, req.EstimateID); err != nil {
-			return Result{}, err
-		}
-		if err = transferRelations(ctx, tx, actor.CompanyID, "estimate", req.EstimateID, "invoice", invoiceID); err != nil {
-			return Result{}, err
-		}
-		if err = logActivity(ctx, tx, actor, actorName, title, "estimate", req.EstimateID, "estimate_converted", cycleID, invoiceID); err != nil {
-			return Result{}, err
-		}
-		return Result{CycleID: cycleID, EstimateID: req.EstimateID, InvoiceID: invoiceID, InvoiceNumber: number, SourceCustomFields: customFields, InvoiceCustomFields: invoiceCustom}, nil
-	})
+	}
+	var financial string
+	if err := tx.QueryRow(ctx, `SELECT financial FROM estimates WHERE id=$1`, req.EstimateID).Scan(&financial); err != nil {
+		return Result{}, err
+	}
+	totals, err := services.FinancialTotals(financial, string(lineItems), taxRate)
+	if err != nil {
+		return Result{}, err
+	}
+	if totals.Total.MinorUnits() < 0 {
+		return Result{}, services.ErrNegativeInvoiceTotal
+	}
+	settlementState := "unpaid"
+	if totals.Total.MinorUnits() == 0 {
+		settlementState = "paid"
+	}
+	input, pairs, err := invoiceFieldInput(ctx, tx, actor.CompanyID, customFields, req.InvoiceFields)
+	if err != nil {
+		return Result{}, err
+	}
+	validated, err := customfields.Validate(ctx, tx, "invoice", "[]", &input, customfields.Creation, actor.CompanyID)
+	if err != nil {
+		return Result{}, err
+	}
+	invoiceCustom := []byte(validated)
+	// Freeze the definitions and explicit pairing inside the immutable source
+	// snapshot. Current configuration must never redefine an earlier cycle.
+	var definitions json.RawMessage
+	if err = tx.QueryRow(ctx, `SELECT coalesce(jsonb_agg(to_jsonb(d) ORDER BY id),'[]') FROM custom_field_definitions d WHERE custom_field_applies_to_company(company_id,$1) AND object_type IN ('estimate','invoice')`, actor.CompanyID).Scan(&definitions); err != nil {
+		return Result{}, err
+	}
+	var captured map[string]json.RawMessage
+	if err = json.Unmarshal(snapshot, &captured); err != nil {
+		return Result{}, err
+	}
+	captured["field_definitions"] = definitions
+	captured["field_pairs"], err = json.Marshal(pairs)
+	if err != nil {
+		return Result{}, err
+	}
+	snapshot, err = json.Marshal(captured)
+	if err != nil {
+		return Result{}, err
+	}
+
+	var settingsID, number int64
+	var dueDays *int
+	var timezone, terms string
+	if err = tx.QueryRow(ctx, `SELECT id,next_invoice_number,default_due_days,timezone,invoice_payment_terms FROM company_settings WHERE company_id=$1 FOR UPDATE`, actor.CompanyID).Scan(&settingsID, &number, &dueDays, &timezone, &terms); err != nil {
+		return Result{}, err
+	}
+	var dueOverride, termsOverride *string
+	err = tx.QueryRow(ctx, `SELECT defaults->>'invoice_due_days',defaults->>'invoice_terms' FROM customer_document_defaults WHERE customer_id=$1`, customerID).Scan(&dueOverride, &termsOverride)
+	if err != nil && err != pgx.ErrNoRows {
+		return Result{}, err
+	}
+	if termsOverride != nil {
+		terms = *termsOverride
+	}
+	var sourceTerms struct {
+		Terms *string `json:"terms"`
+	}
+	if err := json.Unmarshal(snapshot, &sourceTerms); err != nil {
+		return Result{}, err
+	}
+	if sourceTerms.Terms != nil {
+		terms = *sourceTerms.Terms
+	}
+	date, dueDate, err := invoiceDates(s.now(), timezone, dueDays, dueOverride)
+	if err != nil {
+		return Result{}, err
+	}
+	var statusID int64
+	if err = tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.company_id=$1 AND w.company_id=$1 AND w.object_type='invoice' AND s.category_key='invoice:draft' AND s.is_category_default`, actor.CompanyID).Scan(&statusID); err != nil {
+		return Result{}, fmt.Errorf("resolve invoice draft status: %w", err)
+	}
+	now := s.now()
+	var invoiceID int64
+	err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state,terms,financial) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`, actor.CompanyID, customerID, jobID, req.EstimateID, statusID, number, title, notes, date, dueDate, taxRate, lineItems, invoiceCustom, settlementState, terms, financial).Scan(&invoiceID)
+	if err != nil {
+		return Result{}, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE company_settings SET next_invoice_number=$1 WHERE id=$2`, number+1, settingsID); err != nil {
+		return Result{}, err
+	}
+	cycleID := uuid.New()
+	if _, err = tx.Exec(ctx, `INSERT INTO estimate_invoice_conversion_cycles(id,company_id,estimate_id,invoice_id,invoice_number,source_snapshot,converted_by,converted_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, cycleID, actor.CompanyID, req.EstimateID, invoiceID, number, snapshot, actor.ID, now); err != nil {
+		return Result{}, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE estimates SET conversion_hidden_at=$1,updated_at=$1 WHERE id=$2`, now, req.EstimateID); err != nil {
+		return Result{}, err
+	}
+	if err = transferRelations(ctx, tx, actor.CompanyID, "estimate", req.EstimateID, "invoice", invoiceID); err != nil {
+		return Result{}, err
+	}
+	if err = logActivity(ctx, tx, actor, actorName, title, "estimate", req.EstimateID, "estimate_converted", cycleID, invoiceID); err != nil {
+		return Result{}, err
+	}
+	return Result{CycleID: cycleID, EstimateID: req.EstimateID, InvoiceID: invoiceID, InvoiceNumber: number, SourceCustomFields: customFields, InvoiceCustomFields: invoiceCustom}, nil
 }
 
 func (s *Service) Revert(ctx context.Context, actor Actor, req RevertRequest) (Result, error) {
 	return s.transact(ctx, actor, "revert", req.Operation, req, func(tx pgx.Tx, actorName string) (Result, error) {
-		var r Result
-		var jobID *int64
-		var deletedAt, hiddenAt *time.Time
-		var customerID int64
-		var title, notes, taxRate string
-		var lineItems, invoiceCustom, sourceCustom []byte
-		err := tx.QueryRow(ctx, `SELECT c.id,c.estimate_id,c.invoice_id,c.invoice_number,i.customer_id,i.job_id,i.title,i.notes,i.tax_rate::text,i.line_items,i.custom_fields,c.source_snapshot->'custom_fields',i.deleted_at,i.conversion_hidden_at FROM estimate_invoice_conversion_cycles c JOIN invoices i ON i.id=c.invoice_id AND i.company_id=c.company_id WHERE c.company_id=$1 AND c.invoice_id=$2 AND c.reverted_at IS NULL FOR UPDATE OF c,i`, actor.CompanyID, req.InvoiceID).Scan(&r.CycleID, &r.EstimateID, &r.InvoiceID, &r.InvoiceNumber, &customerID, &jobID, &title, &notes, &taxRate, &lineItems, &invoiceCustom, &sourceCustom, &deletedAt, &hiddenAt)
-		if errors.Is(err, pgx.ErrNoRows) {
-			return Result{}, ErrNotFound
-		}
-		if err != nil {
-			return Result{}, err
-		}
-		if deletedAt != nil {
-			return Result{}, ErrArchived
-		}
-		if hiddenAt != nil {
-			return Result{}, ErrNotFound
-		}
-		if _, bound := authorization.FromContext(ctx); !bound {
-			if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
-				return Result{}, err
-			}
-		}
-		blockers, err := settlement.RevertBlockers(ctx, tx, actor.CompanyID, r.InvoiceID)
-		if err != nil {
-			return Result{}, err
-		}
-		if len(blockers) > 0 {
-			return Result{}, fmt.Errorf("%w: %v", ErrSettlement, blockers)
-		}
-		var draftStatus int64
-		if err = tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.company_id=$1 AND w.company_id=$1 AND w.object_type='estimate' AND s.category_key='estimate:draft' AND s.is_category_default`, actor.CompanyID).Scan(&draftStatus); err != nil {
-			return Result{}, fmt.Errorf("resolve estimate draft status: %w", err)
-		}
-		now := s.now()
-		if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.conversion_revert_cycle',$1,true)`, r.CycleID.String()); err != nil {
-			return Result{}, err
-		}
-		if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.status_transition','allowed',true)`); err != nil {
-			return Result{}, err
-		}
-		var capturedPairs []byte
-		if err = tx.QueryRow(ctx, `SELECT conversion_field_snapshot(id)->'field_pairs' FROM estimate_invoice_conversion_cycles WHERE id=$1`, r.CycleID).Scan(&capturedPairs); err != nil {
-			return Result{}, err
-		}
-		var pairs map[int64]int64
-		if len(capturedPairs) == 0 || json.Unmarshal(capturedPairs, &pairs) != nil || pairs == nil {
-			return Result{}, fmt.Errorf("%w: /settings/custom-fields/cycles/%s/review", ErrHistoricalFieldReview, r.CycleID)
-		}
-		if err = customfields.CheckCycleValues(ctx, tx, "invoice", r.InvoiceID, string(invoiceCustom)); err != nil {
-			return Result{}, err
-		}
-		mergedCustom, err := mergeRevertCustomFields(sourceCustom, invoiceCustom, pairs)
-		if err != nil {
-			return Result{}, err
-		}
-		if _, err = tx.Exec(ctx, `UPDATE estimate_invoice_conversion_cycles SET reverted_by=$1,reverted_at=$2 WHERE id=$3`, actor.ID, now, r.CycleID); err != nil {
-			return Result{}, err
-		}
-		if _, err = tx.Exec(ctx, `UPDATE invoices SET conversion_hidden_at=$1,updated_at=$1 WHERE id=$2`, now, r.InvoiceID); err != nil {
-			return Result{}, err
-		}
-		if _, err = tx.Exec(ctx, `UPDATE estimates SET customer_id=$1,job_id=$2,status_id=$3,title=$4,notes=$5,tax_rate=$6,line_items=$7,custom_fields=$8,deleted_at=NULL,conversion_hidden_at=NULL,updated_at=$9,terms=(SELECT terms FROM invoices WHERE id=$11),financial=(SELECT financial FROM invoices WHERE id=$11) WHERE id=$10`, customerID, jobID, draftStatus, title, notes, taxRate, lineItems, mergedCustom, now, r.EstimateID, r.InvoiceID); err != nil {
-			return Result{}, err
-		}
-		if err = transferRelations(ctx, tx, actor.CompanyID, "invoice", r.InvoiceID, "estimate", r.EstimateID); err != nil {
-			return Result{}, err
-		}
-		if err = logActivity(ctx, tx, actor, actorName, title, "invoice", r.InvoiceID, "invoice_conversion_reverted", r.CycleID, r.EstimateID); err != nil {
-			return Result{}, err
-		}
-		r.Reverted = true
-		r.SourceCustomFields = sourceCustom
-		r.InvoiceCustomFields = invoiceCustom
-		return r, nil
+		return s.revertTx(ctx, tx, actor, req, actorName)
 	})
+}
+
+func (s *Service) revertTx(ctx context.Context, tx pgx.Tx, actor Actor, req RevertRequest, actorName string) (Result, error) {
+	var r Result
+	var jobID *int64
+	var deletedAt, hiddenAt *time.Time
+	var customerID int64
+	var title, notes, taxRate string
+	var lineItems, invoiceCustom, sourceCustom []byte
+	err := tx.QueryRow(ctx, `SELECT c.id,c.estimate_id,c.invoice_id,c.invoice_number,i.customer_id,i.job_id,i.title,i.notes,i.tax_rate::text,i.line_items,i.custom_fields,c.source_snapshot->'custom_fields',i.deleted_at,i.conversion_hidden_at FROM estimate_invoice_conversion_cycles c JOIN invoices i ON i.id=c.invoice_id AND i.company_id=c.company_id WHERE c.company_id=$1 AND c.invoice_id=$2 AND c.reverted_at IS NULL FOR UPDATE OF c,i`, actor.CompanyID, req.InvoiceID).Scan(&r.CycleID, &r.EstimateID, &r.InvoiceID, &r.InvoiceNumber, &customerID, &jobID, &title, &notes, &taxRate, &lineItems, &invoiceCustom, &sourceCustom, &deletedAt, &hiddenAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Result{}, ErrNotFound
+	}
+	if err != nil {
+		return Result{}, err
+	}
+	if deletedAt != nil {
+		return Result{}, ErrArchived
+	}
+	if hiddenAt != nil {
+		return Result{}, ErrNotFound
+	}
+	if _, bound := authorization.FromContext(ctx); !bound {
+		if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
+			return Result{}, err
+		}
+	}
+	blockers, err := settlement.RevertBlockers(ctx, tx, actor.CompanyID, r.InvoiceID)
+	if err != nil {
+		return Result{}, err
+	}
+	if len(blockers) > 0 {
+		return Result{}, fmt.Errorf("%w: %v", ErrSettlement, blockers)
+	}
+	var draftStatus int64
+	if err = tx.QueryRow(ctx, `SELECT s.id FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE s.company_id=$1 AND w.company_id=$1 AND w.object_type='estimate' AND s.category_key='estimate:draft' AND s.is_category_default`, actor.CompanyID).Scan(&draftStatus); err != nil {
+		return Result{}, fmt.Errorf("resolve estimate draft status: %w", err)
+	}
+	now := s.now()
+	if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.conversion_revert_cycle',$1,true)`, r.CycleID.String()); err != nil {
+		return Result{}, err
+	}
+	if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.status_transition','allowed',true)`); err != nil {
+		return Result{}, err
+	}
+	var capturedPairs []byte
+	if err = tx.QueryRow(ctx, `SELECT conversion_field_snapshot(id)->'field_pairs' FROM estimate_invoice_conversion_cycles WHERE id=$1`, r.CycleID).Scan(&capturedPairs); err != nil {
+		return Result{}, err
+	}
+	var pairs map[int64]int64
+	if len(capturedPairs) == 0 || json.Unmarshal(capturedPairs, &pairs) != nil || pairs == nil {
+		return Result{}, fmt.Errorf("%w: /settings/custom-fields/cycles/%s/review", ErrHistoricalFieldReview, r.CycleID)
+	}
+	if err = customfields.CheckCycleValues(ctx, tx, "invoice", r.InvoiceID, string(invoiceCustom)); err != nil {
+		return Result{}, err
+	}
+	mergedCustom, err := mergeRevertCustomFields(sourceCustom, invoiceCustom, pairs)
+	if err != nil {
+		return Result{}, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE estimate_invoice_conversion_cycles SET reverted_by=$1,reverted_at=$2 WHERE id=$3`, actor.ID, now, r.CycleID); err != nil {
+		return Result{}, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE invoices SET conversion_hidden_at=$1,updated_at=$1 WHERE id=$2`, now, r.InvoiceID); err != nil {
+		return Result{}, err
+	}
+	if _, err = tx.Exec(ctx, `UPDATE estimates SET customer_id=$1,job_id=$2,status_id=$3,title=$4,notes=$5,tax_rate=$6,line_items=$7,custom_fields=$8,deleted_at=NULL,conversion_hidden_at=NULL,updated_at=$9,terms=(SELECT terms FROM invoices WHERE id=$11),financial=(SELECT financial FROM invoices WHERE id=$11) WHERE id=$10`, customerID, jobID, draftStatus, title, notes, taxRate, lineItems, mergedCustom, now, r.EstimateID, r.InvoiceID); err != nil {
+		return Result{}, err
+	}
+	if err = transferRelations(ctx, tx, actor.CompanyID, "invoice", r.InvoiceID, "estimate", r.EstimateID); err != nil {
+		return Result{}, err
+	}
+	if err = logActivity(ctx, tx, actor, actorName, title, "invoice", r.InvoiceID, "invoice_conversion_reverted", r.CycleID, r.EstimateID); err != nil {
+		return Result{}, err
+	}
+	r.Reverted = true
+	r.SourceCustomFields = sourceCustom
+	r.InvoiceCustomFields = invoiceCustom
+	return r, nil
 }
 
 func authorizeDocument(ctx context.Context, tx pgx.Tx, a Actor, jobID *int64) (string, error) {

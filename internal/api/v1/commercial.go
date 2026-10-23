@@ -131,6 +131,8 @@ func commercialOutcomeStatus(outcome string) int {
 		return 403
 	case "invalid_document":
 		return 422
+	case "review_required":
+		return 428
 	default:
 		return 409
 	}

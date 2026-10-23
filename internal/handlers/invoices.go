@@ -1068,22 +1068,12 @@ func (h *InvoiceHandler) RevertToEstimate(w http.ResponseWriter, r *http.Request
 		http.Error(w, "invalid form", http.StatusBadRequest)
 		return
 	}
-	key, err := uuid.Parse(r.FormValue("idempotency_key"))
+	_, err = uuid.Parse(r.FormValue("idempotency_key"))
 	if err != nil {
 		http.Error(w, "valid idempotency UUID is required", http.StatusUnprocessableEntity)
 		return
 	}
-	actor, ok := conversionActor(r)
-	if !ok {
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-		return
-	}
-	result, err := h.conversion.Revert(r.Context(), actor, conversion.RevertRequest{Operation: conversion.Operation{Key: key}, InvoiceID: id})
-	if err != nil {
-		writeConversionError(w, r, err)
-		return
-	}
-	http.Redirect(w, r, fmt.Sprintf("/estimates/%d?flash=Invoice+reverted+to+estimate", result.EstimateID), http.StatusSeeOther)
+	submitReviewedConversion(w, r, "invoice", id)
 }
 
 func conversionBlockerText(blocker conversion.Blocker) string {

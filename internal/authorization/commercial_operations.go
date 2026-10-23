@@ -14,6 +14,7 @@ import (
 )
 
 var ErrCommercialInput = errors.New("invalid commercial document")
+var ErrConversionCycle = errors.New("reviewed conversion cycle is no longer active")
 
 type CommercialIntent struct {
 	OperationID string     `json:"operation_id"`
@@ -26,14 +27,23 @@ type CommercialIntent struct {
 // Receipts deliberately contain only effect identity and disposition. Replaying
 // after scope loss does not disclose a previously visible commercial document.
 type CommercialReceipt struct {
-	OperationID string `json:"operation_id"`
-	ID          int64  `json:"id,omitempty"`
-	Number      string `json:"number,omitempty"`
-	Revision    string `json:"revision,omitempty"`
-	Outcome     string `json:"outcome"`
+	CycleID      string `json:"cycle_id,omitempty"`
+	DocumentType string `json:"document_type,omitempty"`
+	OperationID  string `json:"operation_id"`
+	ID           int64  `json:"id,omitempty"`
+	Number       string `json:"number,omitempty"`
+	Revision     string `json:"revision,omitempty"`
+	Outcome      string `json:"outcome"`
 }
 
 type commercialOperationKey struct{}
+
+func commercialReceiptClient(a Actor) string {
+	if a.Channel == "web" {
+		return "web"
+	}
+	return a.SessionHash
+}
 
 func commercialAuditDetail(ctx context.Context, tx interface {
 	QueryRow(context.Context, string, ...any) pgx.Row
@@ -104,6 +114,11 @@ func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id i
 		}
 		state["workflow"] = workflow
 		if kind == "invoice" {
+			var cycle *string
+			if err := tx.QueryRow(ctx, `SELECT (SELECT id::text FROM estimate_invoice_conversion_cycles WHERE invoice_id=$1 AND reverted_at IS NULL)`, id).Scan(&cycle); err != nil {
+				return err
+			}
+			state["cycle_id"] = cycle
 			var effective *string
 			var locked bool
 			if err := tx.QueryRow(ctx, `SELECT s.category_key,invoice_has_active_settlement(i.id) FROM invoices i LEFT JOIN invoice_effective_status e ON e.invoice_id=i.id LEFT JOIN statuses s ON s.id=e.status_id WHERE i.id=$1`, id).Scan(&effective, &locked); err != nil {
@@ -141,7 +156,7 @@ func (s *Service) CommercialReceipt(ctx context.Context, a Actor, key string) (C
 	}
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		var raw []byte
-		if err := tx.QueryRow(ctx, `SELECT receipt FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, key).Scan(&raw); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT receipt FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, commercialReceiptClient(a), key).Scan(&raw); err != nil {
 			if err == pgx.ErrNoRows {
 				return ErrNotFound
 			}
@@ -157,7 +172,7 @@ func (s *Service) CommercialReceipt(ctx context.Context, a Actor, key string) (C
 func (s *Service) CommercialOperation(ctx context.Context, a Actor, kind string, id int64, in CommercialIntent, intent []byte, legacyIntent func() ([]byte, error), write func(context.Context, pgx.Tx, int64) (int64, error)) (CommercialReceipt, error) {
 	return s.commercialOperation(ctx, a, kind, id, kind+".edit", in, intent, legacyIntent, func(ctx context.Context, tx pgx.Tx, customer int64, _ Principal) (int64, error) {
 		return write(ctx, tx, customer)
-	})
+	}, nil)
 }
 
 // CommercialWorkflowOperation shares commercial admission and immutable receipts
@@ -175,10 +190,22 @@ func (s *Service) CommercialWorkflowOperation(ctx context.Context, a Actor, kind
 	}
 	return s.commercialOperation(ctx, a, kind, id, permission, in, intent, nil, func(ctx context.Context, tx pgx.Tx, _ int64, p Principal) (int64, error) {
 		return id, write(ctx, tx, p)
-	})
+	}, nil)
 }
 
-func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string, id int64, permission string, in CommercialIntent, intent []byte, legacyIntent func() ([]byte, error), write func(context.Context, pgx.Tx, int64, Principal) (int64, error)) (CommercialReceipt, error) {
+// CommercialTransition uses the same admission and receipt transaction as edits,
+// but owns a domain-specific authorization/precondition check and changes the
+// identity of the current document. It never creates a second receipt protocol.
+type CommercialTransition struct {
+	Check func(context.Context, pgx.Tx) error
+	Write func(context.Context, pgx.Tx) (CommercialReceipt, error)
+}
+
+func (s *Service) CommercialTransitionOperation(ctx context.Context, a Actor, kind string, id int64, in CommercialIntent, intent []byte, transition CommercialTransition) (CommercialReceipt, error) {
+	return s.commercialOperation(ctx, a, kind, id, "", in, intent, nil, nil, &transition)
+}
+
+func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string, id int64, permission string, in CommercialIntent, intent []byte, legacyIntent func() ([]byte, error), write func(context.Context, pgx.Tx, int64, Principal) (int64, error), transition *CommercialTransition) (CommercialReceipt, error) {
 	r := CommercialReceipt{OperationID: in.OperationID}
 	if kind != "estimate" && kind != "invoice" {
 		return r, ErrNotFound
@@ -191,7 +218,7 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 		var prior []byte
 		canonical := intent
 		var version int
-		versionErr := tx.QueryRow(ctx, `SELECT intent_version FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID).Scan(&version)
+		versionErr := tx.QueryRow(ctx, `SELECT intent_version FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, commercialReceiptClient(a), in.OperationID).Scan(&version)
 		if versionErr == nil && version == 0 {
 			if legacyIntent == nil {
 				return ErrConflict
@@ -208,7 +235,7 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 			return err
 		}
 		var same bool
-		err := tx.QueryRow(ctx, `SELECT document_type=$4 AND requested_id=$5 AND intent=$6::jsonb,receipt FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, a.SessionHash, in.OperationID, kind, id, canonical).Scan(&same, &prior)
+		err := tx.QueryRow(ctx, `SELECT document_type=$4 AND requested_id=$5 AND intent=$6::jsonb,receipt FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, commercialReceiptClient(a), in.OperationID, kind, id, canonical).Scan(&same, &prior)
 		if err == nil {
 			if !same {
 				return ErrConflict
@@ -223,7 +250,7 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 			return err
 		}
 		effect := func() error {
-			if a.Channel != "api" || in.JobID <= 0 {
+			if (a.Channel != "api" || in.JobID <= 0) && (transition == nil || a.Channel != "web") {
 				return ErrCommercialInput
 			}
 			if in.OccurredAt != nil && (in.OccurredAt.IsZero() || in.OccurredAt.After(time.Now())) {
@@ -251,28 +278,46 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 					return ErrConflict
 				}
 			} else {
-				if _, err := parentAccess(ctx, sp, p, kind, id, permission, true); err != nil {
-					return err
+				if transition != nil {
+					if err := transition.Check(ctx, sp); err != nil {
+						return err
+					}
+				} else {
+					if _, err := parentAccess(ctx, sp, p, kind, id, permission, true); err != nil {
+						return err
+					}
 				}
 				var job int64
 				if err := sp.QueryRow(ctx, `SELECT coalesce(job_id,0),customer_id FROM `+kind+`s WHERE id=$1`, id).Scan(&job, &customer); err != nil {
 					return err
 				}
-				if job == 0 {
+				if job == 0 && a.Channel == "api" {
 					return ErrNotFound
 				}
-				if job != in.JobID {
+				if job != in.JobID && a.Channel == "api" {
 					return ErrConflict
 				}
 				current, err := saveaction.Revision(ctx, sp, a.UserID, fmt.Sprintf("/%ss/%d", kind, id))
 				if err != nil {
 					return err
 				}
+				if in.Revision == "" && transition != nil {
+					return saveaction.ErrRevisionRequired
+				}
 				if in.Revision == "" || in.Revision != current {
 					return saveaction.ErrStale
 				}
 			}
 			var err error
+			if transition != nil {
+				effect, err := transition.Write(s.WithTransactionReads(ctx, sp), sp)
+				if err != nil {
+					return err
+				}
+				r = effect
+				r.OperationID = in.OperationID
+				return nil
+			}
 			r.ID, err = write(s.WithTransactionReads(ctx, sp), sp, customer, p)
 			if err != nil {
 				return err
@@ -304,6 +349,10 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 				r.Outcome = "forbidden"
 			case errors.Is(effect, saveaction.ErrStale):
 				r.Outcome = "stale_commercial_revision"
+			case errors.Is(effect, saveaction.ErrRevisionRequired):
+				r.Outcome = "review_required"
+			case errors.Is(effect, ErrConversionCycle):
+				r.Outcome = "stale_conversion_cycle"
 			case errors.Is(effect, ErrConflict):
 				r.Outcome = "commercial_conflict"
 			case errors.Is(effect, ErrCommercialInput), errors.As(effect, &field):
@@ -321,7 +370,7 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 		if err != nil {
 			return err
 		}
-		_, err = tx.Exec(ctx, `INSERT INTO commercial_operations(user_id,client_hash,operation_id,document_type,requested_id,intent,receipt,intent_version) VALUES($1,$2,$3,$4,$5,$6,$7,1)`, a.UserID, a.SessionHash, in.OperationID, kind, id, canonical, raw)
+		_, err = tx.Exec(ctx, `INSERT INTO commercial_operations(user_id,client_hash,operation_id,document_type,requested_id,intent,receipt,intent_version) VALUES($1,$2,$3,$4,$5,$6,$7,1)`, a.UserID, commercialReceiptClient(a), in.OperationID, kind, id, canonical, raw)
 		return err
 	})
 	return r, err

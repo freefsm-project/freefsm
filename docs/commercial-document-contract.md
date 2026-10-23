@@ -43,6 +43,9 @@ Authenticated routes:
 - `POST /api/v1/estimates`, `POST /api/v1/invoices`
 - `GET|PATCH /api/v1/estimates/{id}`, `GET|PATCH /api/v1/invoices/{id}`
 - `GET /api/v1/commercial-operations/{operation_id}`
+- `GET|POST /api/v1/estimates/{id}/conversion-preview`
+- `POST /api/v1/estimates/{id}/convert`
+- `POST /api/v1/invoices/{id}/revert-to-estimate`
 
 Every command carries a UUID `operation_id`. Creation additionally carries a
 UUID `client_id`, a nonzero `job_id`, and a title. The server derives Customer
@@ -83,6 +86,35 @@ in-memory reference reconciler. It stages without network access, preserves
 uncertain identities after lost responses, queries receipts before retry, and
 requires explicit same-target repair after conflict. It does not implement a
 production encrypted mobile cache or claim the broader synchronization protocol.
+
+### Reviewed conversion and reversion
+
+Conversion commands use the same operation admission and immutable commercial
+receipts as edits and workflow. Both require the reviewed whole-commercial
+`revision` and original `job_id`; reversion also requires the exact `cycle_id`
+returned by the Invoice read. Successful receipts identify the resulting
+`document_type`, `id`, `number`, `revision`, and `cycle_id`. Replaying the original
+successful revert returns that receipt even after reconversion; it cannot act
+on the newer Invoice. Content drift (`stale_commercial_revision`) and cycle drift
+(`stale_conversion_cycle`) are distinct terminal dispositions. Missing reviewed
+revision returns `review_required` (428). Repair requires explicit review and a
+new operation UUID. Neither direction automatically unwinds settlement.
+
+Preview and commit share field merging and date-default calculation. Current
+paired source values win over submitted target values. An absent paired source
+does not invent an Invoice default; deliberately entered required values remain
+possible. Unpaired defaults apply prospectively. Explicit `custom_fields`, even
+an empty array, independently requires Invoice Edit. Preview returns validation
+text without allocating a document, number, cycle, or receipt; conversion rejects
+invalid fields atomically. Captured pricing is omitted without its independent
+View grant. Commit always rechecks current authorization and definitions.
+
+Web conversion/reversion review forms carry the same commercial revision and
+exact cycle and use one commercial operation identity, rather than a second
+generic save-action admission. Their “Check this operation” links query
+`GET /commercial-operations/{operation_id}` using the authenticated web actor.
+An All Records converter may carry an Estimate's existing archived Job; this
+does not allow new archived Job selections or Assigned Jobs conversion.
 
 ## Verification seams
 

@@ -2,6 +2,7 @@ package authorization
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -18,6 +19,41 @@ type ReversionAuthority struct {
 	principal Principal
 	scope     Scope
 	invoiceID int64
+}
+
+// A reviewed command may report cycle drift for its exact former target, after
+// current scoped authority is rechecked. This grants no tombstone content read
+// and cannot authorize another cycle or produce a reversion approval.
+func (s *Service) AuthorizeReviewedReversion(ctx context.Context, tx pgx.Tx, a Actor, id int64) (ReversionAuthority, error) {
+	approval, err := s.AuthorizeReversion(ctx, tx, a, id)
+	if !errors.Is(err, ErrNotFound) {
+		return approval, err
+	}
+	p, err := principal(ctx, tx, a, false)
+	if err != nil {
+		return ReversionAuthority{}, err
+	}
+	var job *int64
+	err = tx.QueryRow(ctx, `SELECT job_id FROM invoices i WHERE id=$1 AND company_id=$2 AND conversion_hidden_at IS NOT NULL AND EXISTS(SELECT 1 FROM estimate_invoice_conversion_cycles c WHERE c.invoice_id=i.id AND c.reverted_at IS NOT NULL)`, id, p.CompanyID).Scan(&job)
+	if err == pgx.ErrNoRows {
+		return ReversionAuthority{}, ErrNotFound
+	}
+	if err != nil {
+		return ReversionAuthority{}, err
+	}
+	if p.Allows("invoice.revert", All) {
+		return ReversionAuthority{}, ErrConversionCycle
+	}
+	if job != nil && p.Allows("invoice.revert", Assigned) {
+		assigned, err := assignedJobAccess(ctx, tx, p.UserID, *job, true)
+		if err != nil {
+			return ReversionAuthority{}, err
+		}
+		if assigned {
+			return ReversionAuthority{}, ErrConversionCycle
+		}
+	}
+	return ReversionAuthority{}, ErrNotFound
 }
 
 func (s *Service) AuthorizeReversion(ctx context.Context, tx pgx.Tx, a Actor, id int64) (ReversionAuthority, error) {

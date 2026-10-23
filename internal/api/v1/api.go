@@ -185,6 +185,10 @@ func New(deps Dependencies) http.Handler {
 			r.Post("/"+kind+"s/{id}/status", h.commercialLifecycle(kind, false))
 		}
 		r.Post("/invoices/{id}/finalize", h.commercialLifecycle("invoice", true))
+		r.Post("/estimates/{id}/convert", h.conversion("estimate"))
+		r.Get("/estimates/{id}/conversion-preview", h.conversionPreview)
+		r.Post("/estimates/{id}/conversion-preview", h.conversionPreview)
+		r.Post("/invoices/{id}/revert-to-estimate", h.conversion("invoice"))
 		r.Get("/commercial-operations/{operation}", h.commercialReceipt)
 		r.Post("/invoices/{id}/payments", h.boundedPayment)
 		r.Get("/invoices/{id}/payment-methods", h.paymentMethods)

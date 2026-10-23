@@ -3,8 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/customfields"
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -23,30 +25,13 @@ func (h *EstimateHandler) ConversionPreview(w http.ResponseWriter, r *http.Reque
 		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
-	tx, err := bound.Service.Pool.Begin(r.Context())
+	preview, err := conversion.New(bound.Service.Pool).Preview(r.Context(), id, nil)
 	if err != nil {
-		internalServerError(w, r, "conversion preview", err)
+		writeConversionError(w, r, err)
 		return
 	}
-	defer tx.Rollback(r.Context())
-	approval, err := bound.Service.AuthorizeConversion(r.Context(), tx, bound.Actor, id)
-	if err != nil {
-		authorizationError(w, r, err)
-		return
-	}
-	canEdit := bound.Service.AuthorizeConversionValues(r.Context(), tx, approval) == nil
-	var source string
-	if err = tx.QueryRow(r.Context(), `SELECT custom_fields::text FROM estimates WHERE id=$1 AND conversion_hidden_at IS NULL`, id).Scan(&source); err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	// Release locks before using the Ent read adapter. Commit repeats every check.
-	if err = tx.Rollback(r.Context()); err != nil {
-		internalServerError(w, r, "conversion preview", err)
-		return
-	}
-	defs, err := h.defSvc.ListAll(r.Context())
-	if err != nil {
+	var defs []*ent.CustomFieldDefinition
+	if err = json.Unmarshal(preview.Definitions, &defs); err != nil {
 		internalServerError(w, r, "conversion preview", err)
 		return
 	}
@@ -57,7 +42,7 @@ func (h *EstimateHandler) ConversionPreview(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	var values []customfields.Value
-	if err = json.Unmarshal([]byte(source), &values); err != nil {
+	if err = json.Unmarshal(preview.SourceFields, &values); err != nil {
 		internalServerError(w, r, "conversion preview", err)
 		return
 	}
@@ -85,5 +70,12 @@ func (h *EstimateHandler) ConversionPreview(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	encoded, _ := json.Marshal(pairedValues)
-	templates.FieldConversionPreview(id, uuid.NewString(), buildCustomFieldDisplay(pairedDefs, string(encoded)), buildCustomFieldInitialDisplay(entryDefs), canEdit).Render(r.Context(), w)
+	var lines []services.LineItem
+	if len(preview.LineItems) > 0 {
+		if err = json.Unmarshal(preview.LineItems, &lines); err != nil {
+			internalServerError(w, r, "conversion preview lines", err)
+			return
+		}
+	}
+	templates.FieldConversionPreview(id, uuid.NewString(), preview, lines, buildCustomFieldDisplay(pairedDefs, string(encoded)), buildCustomFieldInitialDisplay(entryDefs)).Render(r.Context(), w)
 }

@@ -19,6 +19,16 @@ class CommercialReference {
     if (!snapshot.workflow?.some(x => x.id === choice.id && x.meaning_revision === choice.meaning_revision && x.category === choice.category)) throw new Error('Explicitly select a current workflow identity');
     return this.entry(kind, snapshot.id, { job_id: snapshot.job_id, revision: snapshot.revision, status_id: choice.id, meaning_revision: choice.meaning_revision, operation_id: randomUUID() }, action);
   }
+  stageConversion(kind, snapshot, values = {}) {
+    if (!['estimate', 'invoice'].includes(kind) || !snapshot.id || !snapshot.job_id || !snapshot.revision) throw new Error('Reviewed conversion target required');
+    if (kind === 'invoice' && !snapshot.cycle_id) throw new Error('Exact active conversion cycle required');
+    if (Object.keys(values).some(key => key !== 'custom_fields') || kind === 'invoice' && Object.keys(values).length) throw new Error('Conversion accepts only explicit Invoice fields; unwind is separate');
+    return this.entry(kind, snapshot.id, { ...values, job_id: snapshot.job_id, revision: snapshot.revision, ...(kind === 'invoice' ? { cycle_id: snapshot.cycle_id } : {}), operation_id: randomUUID() }, kind === 'estimate' ? 'convert' : 'revert-to-estimate');
+  }
+  reviewedConversion(entry, snapshot, values = {}) {
+    if (entry.state !== 'needs_review' || snapshot.id !== entry.target || snapshot.job_id !== entry.intent.job_id || entry.action === 'revert-to-estimate' && snapshot.cycle_id !== entry.intent.cycle_id) throw new Error('Review must retain the original target, Job and exact cycle; never automatically unwind');
+    return this.stageConversion(entry.kind, snapshot, values);
+  }
   entry(kind, target, intent, action = '') {
     return Object.defineProperties({ state: 'pending', receipt: null, unreceived: false }, {
       kind: { value: kind, enumerable: true }, target: { value: target, enumerable: true },

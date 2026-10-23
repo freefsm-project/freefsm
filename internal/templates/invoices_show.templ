@@ -21,11 +21,7 @@ templ InvoiceShow(p InvoiceDetail) {
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/edit", p.ID)) } role="button" class="outline" aria-label={ fmt.Sprintf("Edit %s", p.Title) }>Edit</a>
 			}
 			if p.CanRevert && detailCan(ctx,"revert") {
-				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/revert-to-estimate", p.ID)) } method="post" hx-confirm={ fmt.Sprintf("Revert Invoice %q (record %d) to its original Estimate? The Invoice will disappear and its number remains consumed. Current values and relations return to the original Draft Estimate.", p.Title, p.ID) }>
-					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<input type="hidden" name="idempotency_key" value={ p.RevertKey }/>
-					<button type="submit" class="outline">Revert to Estimate</button>
-				</form>
+				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/revert-to-estimate", p.ID)) } class="outline">Review reversion to Estimate</a>
 			}
 			if detailCan(ctx,"archive") {
 				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", p.ID)) } method="post" hx-confirm="Delete this invoice?">

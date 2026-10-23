@@ -18,6 +18,15 @@ import (
 
 func fieldPost(t *testing.T, router http.Handler, cookie *http.Cookie, path string, values url.Values, want int) *httptest.ResponseRecorder {
 	t.Helper()
+	if (strings.HasSuffix(path, "/convert") || strings.HasSuffix(path, "/revert-to-estimate")) && !values.Has("revision") && want != 403 && want != 404 {
+		form := requestBody(t, router, cookie, "GET", path, 200)
+		for _, name := range []string{"revision", "cycle_id"} {
+			match := regexp.MustCompile(`name="` + name + `" value="([^"]*)"`).FindStringSubmatch(form)
+			if len(match) == 2 {
+				values.Set(name, html.UnescapeString(match[1]))
+			}
+		}
+	}
 	values = currentJobFormValues(t, router, cookie, path, values)
 	if regexp.MustCompile(`^/jobs/[1-9][0-9]*/custom-fields$`).MatchString(path) && !values.Has("field_operation_id") && want != 403 && want != 404 {
 		values = reviewedJobFieldsForm(t, router, cookie, path, values)

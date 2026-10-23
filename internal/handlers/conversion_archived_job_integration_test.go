@@ -42,7 +42,7 @@ func TestConversionCarriesExistingArchivedJobOnlyWithAllRecordsHTTP(t *testing.T
 	client.JobAssignment.Create().SetJobID(job.ID).SetUserID(user.ID).SaveX(ctx)
 	client.Job.UpdateOneID(job.ID).SetDeletedAt(time.Now()).ExecX(ctx)
 	assignedCookie := sessionCookie(t, ctx, sessions, user.ID)
-	fieldPost(t, router, assignedCookie, estimatePath+"/convert", url.Values{"idempotency_key": {newOperationKey()}}, 403)
+	fieldPost(t, router, assignedCookie, estimatePath+"/convert", url.Values{"idempotency_key": {newOperationKey()}, "revision": {"unauthorized submitted revision"}}, 403)
 	var cycles int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM estimate_invoice_conversion_cycles`).Scan(&cycles); err != nil || cycles != 0 {
 		t.Fatalf("denied conversion produced a cycle: %d %v", cycles, err)

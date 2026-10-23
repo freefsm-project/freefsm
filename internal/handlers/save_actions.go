@@ -40,7 +40,7 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Pairing, Job execution and checklist commands own their committing
 			// protocols; do not journal secrets or impose whole-Job revisions.
-			if r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") || jobExecutionPath(r.URL.Path) || subtaskProtocolPath(r.URL.Path) {
+			if r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") || jobExecutionPath(r.URL.Path) || subtaskProtocolPath(r.URL.Path) || conversionProtocolPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -583,7 +583,7 @@ func installSaveForms(body []byte, revision func(string) string, history string)
 		if !strings.EqualFold(method, "post") {
 			continue
 		}
-		if jobExecutionPath(action) {
+		if jobExecutionPath(action) || conversionProtocolPath(action) {
 			continue
 		}
 		if action != "" {
@@ -606,4 +606,11 @@ func installSaveForms(body []byte, revision func(string) string, history string)
 func jobExecutionPath(path string) bool {
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	return len(parts) == 3 && parts[0] == "jobs" && (parts[2] == "status" || parts[2] == "field-notes")
+}
+
+// Conversion has one reviewed identity in the shared commercial registry. A
+// second generic form admission would mask terminal cycle/content dispositions.
+func conversionProtocolPath(path string) bool {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	return len(parts) == 3 && ((parts[0] == "estimates" && parts[2] == "convert") || (parts[0] == "invoices" && parts[2] == "revert-to-estimate"))
 }

@@ -71,6 +71,10 @@ func (f *creditMatrix) call(c creditCommand) *httptest.ResponseRecorder {
 }
 func (f *creditMatrix) post(t *testing.T, c creditCommand, want int) {
 	t.Helper()
+	if strings.HasSuffix(c.path, "/convert") || strings.HasSuffix(c.path, "/revert-to-estimate") {
+		fieldPost(t, f.web, f.cookie, c.path, c.values, want)
+		return
+	}
 	w := f.call(c)
 	if w.Code != want {
 		t.Fatalf("POST %s = %d want%d: %s", c.path, w.Code, want, w.Body.String())
