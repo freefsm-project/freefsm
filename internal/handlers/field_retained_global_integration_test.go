@@ -195,6 +195,7 @@ func TestRetainedGlobalLegacyCycleRequiresReviewAndRemainsRecoverableHTTP(t *tes
 	})
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	invoicePath := fmt.Sprintf("/invoices/%d", invoice)
+	assertContains(t, requestBody(t, router, cookie, "GET", invoicePath+"/revert-to-estimate", 200), "/settings/custom-fields/cycles/"+cycle+"/review")
 	fieldPost(t, router, cookie, invoicePath+"/revert-to-estimate", url.Values{"idempotency_key": {"30000000-0000-4000-8000-000000000321"}}, 409)
 	fieldPost(t, router, cookie, "/settings/custom-fields/9202/delete", url.Values{}, 422)
 	fieldPost(t, router, cookie, "/settings/custom-fields/9202", url.Values{"name": {"Historical unknown pairing"}, "field_type": {"number"}, "precision": {"2"}}, 422)

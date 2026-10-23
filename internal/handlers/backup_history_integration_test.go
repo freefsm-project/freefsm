@@ -332,6 +332,7 @@ func TestBackupHistoricalDomainRoundTrip(t *testing.T) {
 }
 
 type historyBackupInstance struct {
+	uploadDir                     string
 	role, name, web, mobile, csrf string
 	company, actor                int64
 	pool                          *pgxpool.Pool
@@ -370,6 +371,7 @@ func newHistoryBackupInstance(t *testing.T, admin *pgx.Conn, dsn, name string) *
 	f.control, err = instancecontrol.New(filepath.Join(root, "state"))
 	historyCheck(t, err)
 	uploads := filepath.Join(root, "uploads")
+	f.uploadDir = uploads
 	historyCheck(t, os.MkdirAll(uploads, 0700))
 	f.manager, err = backup.New(backup.Config{DSN: u.String(), UploadDir: uploads, StateDir: f.control.StateDir(), Version: "v1.2.3", Commit: "abcdef1234567", Control: f.control, ResetConnections: db.Pool.Reset})
 	historyCheck(t, err)

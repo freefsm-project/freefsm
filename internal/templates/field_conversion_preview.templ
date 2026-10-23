@@ -60,16 +60,22 @@ templ FieldConversionPreview(id int64, key string, preview conversion.Preview, l
  }
 }
 
-templ ReversionPreview(id int64, key, revision, cycle string) {
+templ ReversionPreview(id int64, key, revision, cycle string, needsReview, canReview bool) {
  @Layout("Revert Invoice to Estimate") {
   <h2>Review reversion</h2>
   <p>Restore the original Estimate as Draft using current shared content. This exact cycle must still be active. Explicitly unwind all settlement, origin Credit and refund dependencies first; reversion never performs that unwind.</p>
+  if needsReview {
+   <p role="alert">Historical field pairing is unknown. A product Administrator must review recorded evidence before reversion; current names and settings are not historical facts.</p>
+   if canReview {
+    <a href={ templ.URL("/settings/custom-fields/cycles/"+cycle+"/review") }>Review historical field pairing</a>
+   }
+  }
   <form action={ templ.URL(fmt.Sprintf("/invoices/%d/revert-to-estimate",id)) } method="post" hx-boost="false">
    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
    <input type="hidden" name="idempotency_key" value={ key }/>
    <input type="hidden" name="revision" value={ revision }/>
    <input type="hidden" name="cycle_id" value={ cycle }/>
-   <button type="submit">Revert to Estimate</button>
+   <button type="submit" disabled?={ needsReview }>Revert to Estimate</button>
    <a href={ templ.URL("/commercial-operations/"+key) }>Check this operation</a>
   </form>
  }

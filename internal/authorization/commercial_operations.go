@@ -158,7 +158,9 @@ func (s *Service) CommercialReceipt(ctx context.Context, a Actor, key string) (C
 		var raw []byte
 		if err := tx.QueryRow(ctx, `SELECT receipt FROM commercial_operations WHERE user_id=$1 AND client_hash=$2 AND operation_id=$3`, a.UserID, commercialReceiptClient(a), key).Scan(&raw); err != nil {
 			if err == pgx.ErrNoRows {
-				return ErrNotFound
+				var legacyErr error
+				receipt, legacyErr = installedConversionReceipt(ctx, tx, p, key)
+				return legacyErr
 			}
 			return err
 		}

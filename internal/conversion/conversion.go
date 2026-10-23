@@ -22,8 +22,8 @@ import (
 )
 
 var (
-	ErrForbidden             = errors.New("conversion operation forbidden")
-	ErrNotFound              = errors.New("document not found")
+	ErrForbidden             = authorization.ErrForbidden
+	ErrNotFound              = authorization.ErrNotFound
 	ErrArchived              = errors.New("archived document must be restored first")
 	ErrSettlement            = errors.New("invoice has financial settlement blockers")
 	ErrIdempotencyConflict   = errors.New("idempotency key reused with a different request")
@@ -267,11 +267,6 @@ func (s *Service) convertTx(ctx context.Context, tx pgx.Tx, actor Actor, req Con
 			return Result{}, authorization.ErrConflict
 		}
 	}
-	if _, bound := authorization.FromContext(ctx); !bound {
-		if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
-			return Result{}, err
-		}
-	}
 	var financial string
 	if err := tx.QueryRow(ctx, `SELECT financial FROM estimates WHERE id=$1`, req.EstimateID).Scan(&financial); err != nil {
 		return Result{}, err
@@ -398,11 +393,6 @@ func (s *Service) revertTx(ctx context.Context, tx pgx.Tx, actor Actor, req Reve
 	if hiddenAt != nil {
 		return Result{}, ErrNotFound
 	}
-	if _, bound := authorization.FromContext(ctx); !bound {
-		if _, err = authorizeDocument(ctx, tx, actor, jobID); err != nil {
-			return Result{}, err
-		}
-	}
 	blockers, err := settlement.RevertBlockers(ctx, tx, actor.CompanyID, r.InvoiceID)
 	if err != nil {
 		return Result{}, err
@@ -485,26 +475,6 @@ func authorizeDocument(ctx context.Context, tx pgx.Tx, a Actor, jobID *int64) (s
 		return "", ErrForbidden
 	}
 	return name, nil
-}
-
-func authorizeRequest(ctx context.Context, tx pgx.Tx, actor Actor, request any) (string, error) {
-	var jobID *int64
-	var err error
-	switch req := request.(type) {
-	case ConvertRequest:
-		err = tx.QueryRow(ctx, `SELECT job_id FROM estimates WHERE company_id=$1 AND id=$2`, actor.CompanyID, req.EstimateID).Scan(&jobID)
-	case RevertRequest:
-		err = tx.QueryRow(ctx, `SELECT job_id FROM invoices WHERE company_id=$1 AND id=$2`, actor.CompanyID, req.InvoiceID).Scan(&jobID)
-	default:
-		return "", ErrForbidden
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrNotFound
-	}
-	if err != nil {
-		return "", err
-	}
-	return authorizeDocument(ctx, tx, actor, jobID)
 }
 
 type customFieldValue struct {
@@ -668,35 +638,46 @@ func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Ope
 		return Result{}, err
 	}
 	var actorName string
-	if bound, ok := authorization.FromContext(ctx); ok && kind == "convert" {
+	authority := authorization.New(s.db)
+	caller := authorization.Actor{UserID: a.ID}
+	if bound, ok := authorization.FromContext(ctx); ok {
+		authority, caller = bound.Service, bound.Actor
+	}
+	if caller.UserID != a.ID {
+		return Result{}, ErrForbidden
+	}
+	var cycleDrift error
+	if kind == "convert" {
 		input, ok := request.(ConvertRequest)
-		if !ok || bound.Actor.UserID != a.ID {
+		if !ok {
 			return Result{}, ErrForbidden
 		}
-		grant, e := bound.Service.AuthorizeConversion(ctx, tx, bound.Actor, input.EstimateID)
+		grant, e := authority.AuthorizeConversion(ctx, tx, caller, input.EstimateID)
 		if e != nil {
 			return Result{}, e
 		}
 		approval = &grant
 		if input.InvoiceFields != nil {
-			if err = bound.Service.AuthorizeConversionValues(ctx, tx, grant); err != nil {
+			if err = authority.AuthorizeConversionValues(ctx, tx, grant); err != nil {
 				return Result{}, err
 			}
 		}
 		err = tx.QueryRow(ctx, `SELECT name FROM users WHERE id=$1 AND company_id=$2`, a.ID, a.CompanyID).Scan(&actorName)
-	} else if bound, ok := authorization.FromContext(ctx); ok && kind == "revert" {
+	} else if kind == "revert" {
 		input, ok := request.(RevertRequest)
-		if !ok || bound.Actor.UserID != a.ID {
+		if !ok {
 			return Result{}, ErrForbidden
 		}
-		grant, e := bound.Service.AuthorizeReversion(ctx, tx, bound.Actor, input.InvoiceID)
-		if e != nil {
+		grant, e := authority.AuthorizeReviewedReversion(ctx, tx, caller, input.InvoiceID)
+		if errors.Is(e, authorization.ErrConversionCycle) {
+			cycleDrift = e
+		} else if e != nil {
 			return Result{}, e
 		}
 		revertApproval = &grant
 		err = tx.QueryRow(ctx, `SELECT name FROM users WHERE id=$1 AND company_id=$2`, a.ID, a.CompanyID).Scan(&actorName)
 	} else {
-		actorName, err = authorizeRequest(ctx, tx, a, request)
+		return Result{}, ErrForbidden
 	}
 	if err != nil {
 		return Result{}, err
@@ -709,7 +690,7 @@ func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Ope
 	var resultJSON []byte
 	err = tx.QueryRow(ctx, `SELECT actor_id,request_fingerprint,result FROM estimate_invoice_conversion_operations WHERE company_id=$1 AND operation=$2 AND idempotency_key=$3 FOR UPDATE`, a.CompanyID, kind, op.Key).Scan(&originalActor, &old, &resultJSON)
 	if err == nil {
-		if old != fingerprint {
+		if old != fingerprint || originalActor != a.ID {
 			return Result{}, ErrIdempotencyConflict
 		}
 		var r Result
@@ -721,6 +702,19 @@ func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Ope
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return Result{}, err
 	}
+	if cycleDrift != nil {
+		return Result{}, cycleDrift
+	}
+	// Compatibility writers reserve their UUID in the same global namespace.
+	// No historical client/revision is inferred and no foreign admission reused.
+	var admitted uuid.UUID
+	err = tx.QueryRow(ctx, `INSERT INTO operation_admissions(operation_id,deployment_id,user_id,client_key,operation_type) SELECT $1,id,$2,'legacy.unknown','conversion.legacy' FROM operation_deployment ON CONFLICT(operation_id) DO NOTHING RETURNING operation_id`, op.Key, a.ID).Scan(&admitted)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Result{}, ErrIdempotencyConflict
+	}
+	if err != nil {
+		return Result{}, err
+	}
 	if _, err = tx.Exec(ctx, `INSERT INTO estimate_invoice_conversion_operations(company_id,operation,idempotency_key,actor_id,request_fingerprint) VALUES($1,$2,$3,$4,$5)`, a.CompanyID, kind, op.Key, a.ID, fingerprint); err != nil {
 		return Result{}, err
 	}
@@ -729,19 +723,17 @@ func (s *Service) transactOnce(ctx context.Context, a Actor, kind string, op Ope
 		return Result{}, err
 	}
 	if approval != nil {
-		bound, _ := authorization.FromContext(ctx)
-		if err := bound.Service.AuditConvertedDocument(ctx, tx, *approval, r.InvoiceID); err != nil {
+		if err := authority.AuditConvertedDocument(ctx, tx, *approval, r.InvoiceID); err != nil {
 			return Result{}, err
 		}
 		if input, ok := request.(ConvertRequest); ok && input.InvoiceFields != nil {
-			if err := bound.Service.AuditConversionValues(ctx, tx, *approval, r.InvoiceID); err != nil {
+			if err := authority.AuditConversionValues(ctx, tx, *approval, r.InvoiceID); err != nil {
 				return Result{}, err
 			}
 		}
 	}
 	if revertApproval != nil {
-		bound, _ := authorization.FromContext(ctx)
-		if err := bound.Service.AuditRevertedDocument(ctx, tx, *revertApproval, r.EstimateID); err != nil {
+		if err := authority.AuditRevertedDocument(ctx, tx, *revertApproval, r.EstimateID); err != nil {
 			return Result{}, err
 		}
 	}

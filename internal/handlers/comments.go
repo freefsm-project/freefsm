@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -19,6 +20,10 @@ func NewCommentHandler(objects objectref.Directory) *CommentHandler {
 }
 
 func (h *CommentHandler) List(typ objectref.Type) http.HandlerFunc {
+	return h.listAfterMutation(typ, nil)
+}
+
+func (h *CommentHandler) listAfterMutation(typ objectref.Type, receipt *authorization.CommentReceipt) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		req, ok := authorization.FromContext(r.Context())
 		if !ok {
@@ -32,6 +37,16 @@ func (h *CommentHandler) List(typ objectref.Type) http.HandlerFunc {
 		}
 		result, err := req.Service.Comments(r.Context(), req.Actor, ref)
 		if err != nil {
+			if receipt != nil && receipt.Code == "accepted" {
+				// The command is already durable. Conversion or access loss during
+				// the subsequent widget read cannot turn it into a failed write or
+				// silently follow the Comment to its new current document owner.
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.Header().Set("X-FreeFSM-Comment-Operation", receipt.OperationID)
+				w.WriteHeader(http.StatusAccepted)
+				fmt.Fprintf(w, "Comment saved (operation %s). The document view changed or is unavailable; refresh before another action.", receipt.OperationID)
+				return
+			}
 			h.handleServiceError(w, r, err)
 			return
 		}
@@ -80,12 +95,12 @@ func (h *CommentHandler) Create(typ objectref.Type) http.HandlerFunc {
 		if op == "" {
 			op = uuid.NewString()
 		}
-		_, err = req.Service.SubmitComment(r.Context(), req.Actor, ref, authorization.CommentCommand{OperationID: op, Content: r.FormValue("content"), ReplyTo: replyTo})
+		receipt, err := req.Service.SubmitComment(r.Context(), req.Actor, ref, authorization.CommentCommand{OperationID: op, Content: r.FormValue("content"), ReplyTo: replyTo})
 		if err != nil {
 			h.handleServiceError(w, r, err)
 			return
 		}
-		h.List(typ).ServeHTTP(w, r)
+		h.listAfterMutation(typ, &receipt).ServeHTTP(w, r)
 	}
 }
 
@@ -110,11 +125,12 @@ func (h *CommentHandler) Delete(typ objectref.Type) http.HandlerFunc {
 		if op == "" {
 			op = uuid.NewString()
 		}
-		if _, err := req.Service.SubmitComment(r.Context(), req.Actor, ref, authorization.CommentCommand{OperationID: op, RemoveID: id}); err != nil {
+		receipt, err := req.Service.SubmitComment(r.Context(), req.Actor, ref, authorization.CommentCommand{OperationID: op, RemoveID: id})
+		if err != nil {
 			h.handleServiceError(w, r, err)
 			return
 		}
-		h.List(typ).ServeHTTP(w, r)
+		h.listAfterMutation(typ, &receipt).ServeHTTP(w, r)
 	}
 }
 

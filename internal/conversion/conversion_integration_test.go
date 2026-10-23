@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -304,7 +305,9 @@ func TestConversionPolicyStatusArchiveAndSettlementBlockersIntegration(t *testin
 	if _, err = f.db.Pool.Exec(ctx, `UPDATE invoices SET deleted_at=now(),settlement_state='paid' WHERE id=$1`, r.InvoiceID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = svc.Revert(ctx, tech, conversion.RevertRequest{Operation: conversion.Operation{Key: uuid.New()}, InvoiceID: r.InvoiceID}); !errors.Is(err, conversion.ErrArchived) {
+	// Assigned authority cannot access the archived mutation target; restore is
+	// an independently authorized action, not an effect of reversion.
+	if _, err = svc.Revert(ctx, tech, conversion.RevertRequest{Operation: conversion.Operation{Key: uuid.New()}, InvoiceID: r.InvoiceID}); !errors.Is(err, conversion.ErrNotFound) {
 		t.Fatalf("archived revert=%v", err)
 	}
 	if _, err = f.db.Pool.Exec(ctx, `UPDATE invoices SET deleted_at=NULL WHERE id=$1`, r.InvoiceID); err != nil {
@@ -636,6 +639,19 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO users(company_id,email,password_hash,name,role) VALUES($1,'tech@conversion.test','x','Tech','tech') RETURNING id`, f.company).Scan(&f.tech); err != nil {
+		t.Fatal(err)
+	}
+	// Current grants, not the retained legacy Role label, authorize this fixture.
+	auth := authorization.New(db.Pool)
+	role, err := auth.SaveRole(ctx, authorization.Actor{UserID: f.admin}, 0, "Conversion fixture", []authorization.Grant{
+		{Permission: "estimate.view", Scope: authorization.Assigned}, {Permission: "estimate.convert", Scope: authorization.Assigned},
+		{Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "invoice.create", Scope: authorization.Assigned},
+		{Permission: "invoice.edit", Scope: authorization.Assigned}, {Permission: "invoice.revert", Scope: authorization.Assigned},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = auth.AssignUser(ctx, authorization.Actor{UserID: f.admin}, f.tech, role); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO jobs(company_id,customer_id,job_type) VALUES($1,$2,'Work') RETURNING id`, f.company, f.customer).Scan(&f.job); err != nil {

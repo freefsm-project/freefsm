@@ -116,6 +116,22 @@ generic save-action admission. Their “Check this operation” links query
 An All Records converter may carry an Estimate's existing archived Job; this
 does not allow new archived Job selections or Assigned Jobs conversion.
 
+Installed conversion UUIDs are reserved non-destructively in the same admission
+namespace. Missing past client or reviewed revision facts remain unknown;
+colliding UUIDs do not acquire an invented winner. Completed legacy operations
+are immutable. Their original authenticated actor may recover minimal recorded
+effect/cycle identities through the receipt endpoint, without a fabricated
+historical revision or number label. An incomplete or ambiguous record requires
+review and cannot authorize a new effect. A fresh reviewed command must use a
+fresh UUID. Compatibility service writers also check current grants and reserve
+new UUIDs globally; a retained legacy Role label grants no mutation authority.
+
+Unknown historical field pairing continues to use the existing protected product
+Administrator review at `/settings/custom-fields/cycles/{cycle}/review`. Its
+separate immutable evidence supplements, rather than rewrites, the original
+cycle snapshot. Current names or current configuration never establish past
+pairing facts.
+
 ## Verification seams
 
 The commercial acceptance tests exercise authenticated production web/API

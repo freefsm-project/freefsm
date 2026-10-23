@@ -86,7 +86,8 @@ func (h *InvoiceHandler) ReversionPreview(w http.ResponseWriter, r *http.Request
 		return
 	}
 	var cycle string
-	if err = tx.QueryRow(r.Context(), `SELECT id::text FROM estimate_invoice_conversion_cycles WHERE invoice_id=$1 AND reverted_at IS NULL`, id).Scan(&cycle); err != nil {
+	var needsReview bool
+	if err = tx.QueryRow(r.Context(), `SELECT id::text,conversion_field_snapshot(id)->'field_pairs' IS NULL FROM estimate_invoice_conversion_cycles WHERE invoice_id=$1 AND reverted_at IS NULL`, id).Scan(&cycle, &needsReview); err != nil {
 		http.NotFound(w, r)
 		return
 	}
@@ -95,5 +96,10 @@ func (h *InvoiceHandler) ReversionPreview(w http.ResponseWriter, r *http.Request
 		internalServerError(w, r, "revert preview", err)
 		return
 	}
-	templates.ReversionPreview(id, uuid.NewString(), revision, cycle).Render(r.Context(), w)
+	principal, err := bound.Service.Principal(r.Context(), bound.Actor)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	templates.ReversionPreview(id, uuid.NewString(), revision, cycle, needsReview, principal.Protected).Render(r.Context(), w)
 }
