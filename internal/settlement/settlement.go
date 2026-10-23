@@ -25,6 +25,8 @@ var (
 	ErrHidden              = errors.New("conversion-hidden invoice cannot be settled")
 	ErrVoid                = errors.New("void invoice cannot be settled")
 	ErrNotFinalized        = errors.New("invoice must be finalized before applying credit")
+	ErrCustomerArchived    = errors.New("archived customer must be restored before settlement")
+	ErrAlreadyReversed     = errors.New("settlement operation is already reversed")
 	ErrDependency          = errors.New("operation has active dependants")
 	ErrNotFound            = errors.New("settlement record not found")
 )
@@ -78,6 +80,8 @@ type ReverseRequest struct {
 	CustomerID    int64
 	EffectiveDate Date
 	Reason        string
+	Reference     string `json:"Reference,omitempty"`
+	Notes         string `json:"Notes,omitempty"`
 }
 type Result struct {
 	ID                        uuid.UUID
@@ -220,6 +224,14 @@ func writeReceipt(ctx context.Context, tx pgx.Tx, actor Actor, req RecordPayment
 }
 
 func (s *Service) ApplyCredit(ctx context.Context, actor Actor, req ApplyCreditRequest) (Result, error) {
+	if current, ok := authorization.FromContext(ctx); ok {
+		if current.Actor.UserID != actor.ID {
+			return Result{}, ErrForbidden
+		}
+		return s.applicationCommand(ctx, current.Actor, "credit.apply", "apply_credit", req.Operation, req.InvoiceID, req, func(tx pgx.Tx, verified Actor, today time.Time) (Result, error) {
+			return writeCreditApplication(ctx, tx, verified, req, today)
+		})
+	}
 	if err := authorize(actor); err != nil {
 		return Result{}, err
 	}
@@ -227,55 +239,62 @@ func (s *Service) ApplyCredit(ctx context.Context, actor Actor, req ApplyCreditR
 		return Result{}, ErrInvalidAmount
 	}
 	return s.transact(ctx, actor, "apply_credit", req.Operation, req, func(tx pgx.Tx, today time.Time) (Result, error) {
-		inv, err := lockInvoice(ctx, tx, actor.CompanyID, req.InvoiceID)
-		if err != nil {
-			return Result{}, err
-		}
-		if inv.category != "invoice:invoiced" && inv.category != "invoice:sent" {
-			return Result{}, ErrNotFinalized
-		}
-		if err = lockCustomer(ctx, tx, actor.CompanyID, inv.customerID); err != nil {
-			return Result{}, err
-		}
-		var sourceDate time.Time
-		var available int64
-		var sourceID uuid.UUID
-		err = tx.QueryRow(ctx, creditAvailableSQL+` AND c.id=$3 FOR UPDATE OF c`, actor.CompanyID, inv.customerID, req.CreditID).Scan(&sourceID, &sourceDate, &available)
-		if err != nil {
-			return Result{}, err
-		}
-		effectiveDate, err := parseRequestDate(req.EffectiveDate, today.Location())
-		if err != nil {
-			return Result{}, err
-		}
-		if err = ValidateEffectiveDate(effectiveDate, today, sourceDate); err != nil {
-			return Result{}, err
-		}
-		total, err := invoiceTotal(inv.lineItems, inv.taxRate, inv.financial)
-		if err != nil {
-			return Result{}, err
-		}
-		settled, err := activeSettled(ctx, tx, inv.id)
-		if err != nil {
-			return Result{}, err
-		}
-		// An Application is the user's exact selected-source instruction. Unlike
-		// a Payment allocation, it must never silently shrink to fit a balance.
-		amount := req.RequestedCents
-		if amount > available || amount > max(total-settled, 0) {
-			return Result{}, ErrInvalidAmount
-		}
-		id := uuid.New()
-		_, err = tx.Exec(ctx, `INSERT INTO credit_applications(id,company_id,customer_id,invoice_id,credit_id,amount_cents,effective_date,actor_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, id, actor.CompanyID, inv.customerID, inv.id, req.CreditID, amount, effectiveDate, actor.ID)
-		if err != nil {
-			return Result{}, err
-		}
-		state, _ := StateFor(total, settled+amount)
-		if err = projectAndLog(ctx, tx, actor, inv.id, state, "credit_applied", id); err != nil {
-			return Result{}, err
-		}
-		return Result{ID: id, AppliedCents: amount, State: state}, nil
+		return writeCreditApplication(ctx, tx, actor, req, today)
 	})
+}
+
+func writeCreditApplication(ctx context.Context, tx pgx.Tx, actor Actor, req ApplyCreditRequest, today time.Time) (Result, error) {
+	if req.RequestedCents <= 0 {
+		return Result{}, ErrInvalidAmount
+	}
+	inv, err := lockInvoice(ctx, tx, actor.CompanyID, req.InvoiceID)
+	if err != nil {
+		return Result{}, err
+	}
+	if inv.category != "invoice:invoiced" && inv.category != "invoice:sent" {
+		return Result{}, ErrNotFinalized
+	}
+	if err = lockCustomer(ctx, tx, actor.CompanyID, inv.customerID); err != nil {
+		return Result{}, err
+	}
+	var sourceDate time.Time
+	var available int64
+	var sourceID uuid.UUID
+	err = tx.QueryRow(ctx, creditAvailableSQL+` AND c.id=$3 FOR UPDATE OF c`, actor.CompanyID, inv.customerID, req.CreditID).Scan(&sourceID, &sourceDate, &available)
+	if err != nil {
+		return Result{}, err
+	}
+	effectiveDate, err := parseRequestDate(req.EffectiveDate, today.Location())
+	if err != nil {
+		return Result{}, err
+	}
+	if err = ValidateEffectiveDate(effectiveDate, today, sourceDate); err != nil {
+		return Result{}, err
+	}
+	total, err := invoiceTotal(inv.lineItems, inv.taxRate, inv.financial)
+	if err != nil {
+		return Result{}, err
+	}
+	settled, err := activeSettled(ctx, tx, inv.id)
+	if err != nil {
+		return Result{}, err
+	}
+	// An Application is the user's exact selected-source instruction. Unlike
+	// a Payment allocation, it must never silently shrink to fit a balance.
+	amount := req.RequestedCents
+	if amount > available || amount > max(total-settled, 0) {
+		return Result{}, ErrInvalidAmount
+	}
+	id := uuid.New()
+	_, err = tx.Exec(ctx, `INSERT INTO credit_applications(id,company_id,customer_id,invoice_id,credit_id,amount_cents,effective_date,actor_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, id, actor.CompanyID, inv.customerID, inv.id, req.CreditID, amount, effectiveDate, actor.ID)
+	if err != nil {
+		return Result{}, err
+	}
+	state, _ := StateFor(total, settled+amount)
+	if err = projectAndLog(ctx, tx, actor, inv.id, state, "credit_applied", id); err != nil {
+		return Result{}, err
+	}
+	return Result{ID: id, AppliedCents: amount, State: state}, nil
 }
 
 func (s *Service) RefundCredit(ctx context.Context, actor Actor, req RefundCreditRequest) (Result, error) {
@@ -347,6 +366,17 @@ func (s *Service) ReversePayment(ctx context.Context, a Actor, r ReverseRequest)
 	return s.reverse(ctx, a, "payment", r, true)
 }
 func (s *Service) ReverseCreditApplication(ctx context.Context, a Actor, r ReverseRequest) (Result, error) {
+	if current, ok := authorization.FromContext(ctx); ok {
+		if current.Actor.UserID != a.ID {
+			return Result{}, ErrForbidden
+		}
+		return s.applicationCommand(ctx, current.Actor, "credit.application.reverse", "reverse_credit_application", r.Operation, r.InvoiceID, r, func(tx pgx.Tx, verified Actor, today time.Time) (Result, error) {
+			if strings.TrimSpace(r.Reason) == "" {
+				return Result{}, errors.New("reversal reason is required")
+			}
+			return reverseSettlement(ctx, tx, verified, "credit_application", r, today, false)
+		})
+	}
 	return s.reverse(ctx, a, "credit_application", r, false)
 }
 func (s *Service) ReverseRefund(ctx context.Context, a Actor, r ReverseRequest) (Result, error) {
@@ -446,7 +476,14 @@ func reverseSettlement(ctx context.Context, tx pgx.Tx, actor Actor, kind string,
 		}
 	}
 	id := uuid.New()
-	_, err = tx.Exec(ctx, `INSERT INTO settlement_reversals(id,company_id,operation_type,operation_id,reason,actor_id,effective_date) VALUES($1,$2,$3,$4,$5,$6,$7)`, id, actor.CompanyID, kind, req.ID, req.Reason, actor.ID, effectiveDate)
+	var reversed bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM settlement_reversals WHERE operation_type=$1 AND operation_id=$2)`, kind, req.ID).Scan(&reversed); err != nil {
+		return Result{}, err
+	}
+	if reversed {
+		return Result{}, ErrAlreadyReversed
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO settlement_reversals(id,company_id,operation_type,operation_id,reason,actor_id,effective_date,reference,notes) VALUES($1,$2,$3,$4,$5,$6,$7,nullif($8,''),nullif($9,''))`, id, actor.CompanyID, kind, req.ID, req.Reason, actor.ID, effectiveDate, req.Reference, req.Notes)
 	if err != nil {
 		return Result{}, err
 	}
@@ -496,7 +533,7 @@ func lockCustomer(ctx context.Context, tx pgx.Tx, companyID, id int64) error {
 	var archived *time.Time
 	err := tx.QueryRow(ctx, `SELECT deleted_at FROM customers WHERE company_id=$1 AND id=$2 FOR UPDATE`, companyID, id).Scan(&archived)
 	if err == nil && archived != nil {
-		return errors.New("archived customer")
+		return ErrCustomerArchived
 	}
 	return err
 }

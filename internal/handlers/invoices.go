@@ -197,20 +197,8 @@ func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {
 			writeSettlementError(w, r, err)
 			return
 		}
-		if templates.DetailCan(r.Context(), "apply-credit") {
-			credit, err := h.settlement.CustomerMasterSettlement(r.Context(), actor, d.Settlement.CustomerID)
-			if err != nil {
-				writeSettlementError(w, r, err)
-				return
-			}
-			for _, source := range credit.Sources {
-				if source.AvailableCents > 0 {
-					d.CreditSources = append(d.CreditSources, source)
-				}
-			}
-		}
 	}
-	d.PaymentKey, d.ApplyCreditKey = newOperationKey(), newOperationKey()
+	d.PaymentKey = newOperationKey()
 	if templates.DetailCan(r.Context(), "payment") {
 		if request, ok := authorization.FromContext(r.Context()); ok {
 			var entry settlement.PaymentEntryContext
@@ -1433,6 +1421,10 @@ func (h *InvoiceHandler) ApplyCredit(w http.ResponseWriter, r *http.Request) {
 		writeSettlementError(w, r, err)
 		return
 	}
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		writeApplicationReceipt(w, r, r.FormValue("idempotency_key"))
+		return
+	}
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=Customer+credit+applied%%3A+%%24%.2f", id, float64(result.AppliedCents)/100), 303)
 }
 
@@ -1460,9 +1452,13 @@ func (h *InvoiceHandler) reverseSettlement(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Unauthorized", 401)
 		return
 	}
-	_, err = fn(r.Context(), actor, settlement.ReverseRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, ID: opID, InvoiceID: invoiceID, EffectiveDate: settlement.Date(r.FormValue("effective_date")), Reason: r.FormValue("reason")})
+	_, err = fn(r.Context(), actor, settlement.ReverseRequest{Operation: settlement.Operation{Key: r.FormValue("idempotency_key")}, ID: opID, InvoiceID: invoiceID, EffectiveDate: settlement.Date(r.FormValue("effective_date")), Reason: r.FormValue("reason"), Reference: r.FormValue("reference"), Notes: r.FormValue("notes")})
 	if err != nil {
 		writeSettlementError(w, r, err)
+		return
+	}
+	if param == "application_id" && strings.Contains(r.Header.Get("Accept"), "application/json") {
+		writeApplicationReceipt(w, r, r.FormValue("idempotency_key"))
 		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/invoices/%d?flash=%s", invoiceID, flash), 303)

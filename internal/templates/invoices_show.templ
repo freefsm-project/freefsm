@@ -193,7 +193,7 @@ templ InvoiceShow(p InvoiceDetail) {
 				if a.Reversal != nil {
 					Reversed: { a.Reversal.Reason }
 				} else if p.ArchivedAt == "" && detailCan(ctx,"reverse-application") {
-					<form action={ templ.URL(fmt.Sprintf("/invoices/%d/credit-applications/%s/reverse",p.ID,a.ID)) } method="post"><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ a.ReversalKey }/><input type="date" name="effective_date" value={ today(ctx) } required/><input name="reason" placeholder="Reason" required/><button class="outline contrast">Reverse</button></form>
+					<a href={ templ.URL(fmt.Sprintf("/invoices/%d/credit",p.ID)) }>Reverse Application</a>
 				}
 				</td></tr>
 			}
@@ -251,17 +251,9 @@ templ InvoiceShow(p InvoiceDetail) {
 			<div data-payment-reconciliation role="status" aria-live="polite"></div>
 			<script src="/static/js/bounded-payment.js" defer></script>
 		</details>
-		if detailCan(ctx,"apply-credit") && len(p.CreditSources) > 0 && p.Settlement.AmountDueCents > 0 {
-		<details><summary>Apply Customer Credit</summary><form action={ templ.URL(fmt.Sprintf("/invoices/%d/credit-applications",p.ID)) } method="post">
-		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ p.ApplyCreditKey }/>
-		<label>Source<select name="credit_id" required>
-		for _, s := range p.CreditSources {
-			<option value={ s.ID.String() }>{ s.SourceDate.Format("2006-01-02") } { string(s.PaymentMethod) } { s.PaymentReference } ({ cents(s.AvailableCents) } available)</option>
 		}
-		</select></label>
-		<label>Amount<input name="amount" inputmode="decimal" required/></label><label>Effective Date<input type="date" name="effective_date" value={ today(ctx) } required/></label><button>Apply Credit</button>
-		</form></details>
-		}
+		if detailCan(ctx,"apply-credit") || detailCan(ctx,"reverse-application") {
+			<a href={ templ.URL(fmt.Sprintf("/invoices/%d/credit",p.ID)) }>Apply Credit / Reverse Application</a>
 		}
 		if p.Notes != "" {
 			<h3>Notes</h3>

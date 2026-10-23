@@ -770,12 +770,10 @@ type InvoiceDetail struct {
 	TaxRate            string
 	LineItems          []services.LineItem
 	Settlement         settlement.InvoiceSettlement
-	CreditSources      []settlement.CreditSource
 	PaymentKey         string
 	PaymentMethods     []settlement.MethodChoice
 	PaymentEligible    bool
 	PaymentDueCents    int64
-	ApplyCreditKey     string
 	Tags               []TagRow
 	AllTags            []TagRow
 	CustomFields       []CustomFieldDisplay

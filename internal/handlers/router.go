@@ -422,6 +422,10 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Get("/customers/{id}/payments", customerReceipts)
 		r.Post("/customers/{id}/payments/{payment_id}/reverse", reverseUnappliedPayment)
 		r.Get("/payment-operations/{operation}", paymentOperationReceipt)
+		r.Get("/credit-application-operations/{operation}", applicationOperationReceipt)
+		r.Get("/invoices/{id}/credit", creditApplications)
+		r.Post("/invoices/{id}/credit-applications", invoiceHandler.ApplyCredit)
+		r.Post("/invoices/{id}/credit-applications/{application_id}/reverse", invoiceHandler.ReverseCreditApplication)
 		r.Get("/settings/payment-methods", paymentMethodsSettings)
 		r.Post("/settings/payment-methods/{method}", paymentMethodsSettings)
 
@@ -433,8 +437,6 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/delete", invoiceHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/finalize", invoiceHandler.Finalize)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/payments/{payment_id}/reverse", invoiceHandler.ReversePayment)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications", invoiceHandler.ApplyCredit)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/credit-applications/{application_id}/reverse", invoiceHandler.ReverseCreditApplication)
 		})
 
 		// Vocabulary configuration and parent-bounded tagging have independent grants.

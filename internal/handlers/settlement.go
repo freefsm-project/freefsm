@@ -89,7 +89,7 @@ func writeSettlementError(w http.ResponseWriter, r *http.Request, err error) {
 		status, message = http.StatusConflict, "idempotency key was already used for another request"
 	case errors.Is(err, settlement.ErrDependency):
 		status, message = http.StatusConflict, "operation has active settlement dependencies"
-	case errors.Is(err, settlement.ErrArchived), errors.Is(err, settlement.ErrVoid), errors.Is(err, settlement.ErrNotFinalized):
+	case errors.Is(err, settlement.ErrArchived), errors.Is(err, settlement.ErrCustomerArchived), errors.Is(err, settlement.ErrAlreadyReversed), errors.Is(err, settlement.ErrVoid), errors.Is(err, settlement.ErrNotFinalized):
 		status, message = http.StatusConflict, err.Error()
 	case errors.Is(err, settlement.ErrInvalidAmount):
 		message = "invalid settlement amount"

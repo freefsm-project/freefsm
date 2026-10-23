@@ -82,8 +82,13 @@ func ValidateEffectiveDate(date, today, notBefore time.Time) error {
 	if date.After(today) {
 		return errors.New("effective date must not be in the future")
 	}
-	if !notBefore.IsZero() && date.Before(dateOnly(notBefore)) {
-		return errors.New("effective date precedes its credit source")
+	if !notBefore.IsZero() {
+		// PostgreSQL DATE is decoded in UTC, but represents a calendar day,
+		// not an instant. Compare it in the request's company calendar.
+		y, m, d := notBefore.Date()
+		if date.Before(time.Date(y, m, d, 0, 0, 0, 0, date.Location())) {
+			return errors.New("effective date precedes its credit source")
+		}
 	}
 	return nil
 }

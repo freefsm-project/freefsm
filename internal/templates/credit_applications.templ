@@ -1,0 +1,46 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/settlement"
+
+templ CreditApplications(p settlement.ApplicationPage, operation string) {
+	@Layout("Invoice Credit Applications") {
+		<h1 data-credit-page>Invoice Credit Applications</h1>
+		<a href={ templ.URL(fmt.Sprintf("/invoices/%d",p.InvoiceID)) }>Invoice</a>
+		if p.CanApply {
+			<h2>Apply Credit</h2>
+			<p>Invoice due: { cents(p.DueCents) }. Select exactly one Payment-funded source. The full amount must fit both available Credit and current Invoice due.</p>
+			<form method="post" hx-boost="false" data-credit-command action={ templ.URL(fmt.Sprintf("/invoices/%d/credit-applications",p.InvoiceID)) }>
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ operation }/>
+				<label>Credit source<select name="credit_id" required><option value="">Select a source</option>
+					for _,s := range p.Sources {
+						<option value={ s.ID.String() }>{ s.ID.String() } — { s.SourceDate.Format("2006-01-02") } — { cents(s.AvailableCents) } available</option>
+					}
+				</select></label>
+				<label>Amount<input name="amount" type="number" min="0.01" step="0.01" required/></label>
+				<label>Effective date<input name="effective_date" type="date" value={ p.Today } max={ p.Today } required/></label>
+				<button>Apply Credit</button>
+			</form>
+		}
+		<p data-credit-status role="status"></p><button type="button" data-credit-check hidden>Check original operation</button><button type="button" data-credit-new hidden>Start a different operation</button>
+		<script src="/static/js/credit-applications.js" defer></script>
+		if p.ShowHistory {
+			<h2>Application history</h2>
+			for _,a := range p.Applications {
+				<article data-application-id={ a.ID.String() }>
+					<p>Application { a.ID.String() } — source { a.CreditID.String() } — { cents(a.AmountCents) } — { a.EffectiveDate.Format("2006-01-02") }</p>
+					if a.Reversal != nil {
+						<p>Reversed { a.Reversal.EffectiveDate.Format("2006-01-02") }: { a.Reversal.Reason } — { a.Reversal.Reference } — { a.Reversal.Notes }</p>
+					} else if p.CanReverse {
+						<form method="post" hx-boost="false" data-credit-command action={ templ.URL(fmt.Sprintf("/invoices/%d/credit-applications/%s/reverse",p.InvoiceID,a.ID)) }>
+							<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ a.ReversalKey }/>
+							<label>Reversal date<input name="effective_date" type="date" value={ p.Today } max={ p.Today } required/></label>
+							<label>Reason<input name="reason" required/></label><label>Reference<input name="reference"/></label><label>Note<textarea name="notes"></textarea></label>
+							<button>Reverse Application</button>
+						</form>
+					}
+				</article>
+			}
+		}
+	}
+}

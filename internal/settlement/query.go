@@ -37,9 +37,10 @@ type CreditApplicationEntry struct {
 }
 
 type ReversalEntry struct {
-	ID            uuid.UUID
-	EffectiveDate time.Time
-	Reason        string
+	ID               uuid.UUID
+	EffectiveDate    time.Time
+	Reason           string
+	Reference, Notes string
 }
 
 type CreditSource struct {
@@ -130,7 +131,7 @@ func (s *Service) invoiceSettlement(ctx context.Context, actor Actor, invoiceID 
 		return out, err
 	}
 	rows.Close()
-	rows, err = s.db.Query(ctx, `SELECT a.id,a.credit_id,a.invoice_id,a.amount_cents,a.effective_date,r.id,r.effective_date,r.reason FROM credit_applications a LEFT JOIN settlement_reversals r ON r.operation_type='credit_application' AND r.operation_id=a.id WHERE a.company_id=$1 AND a.invoice_id=$2 ORDER BY a.effective_date,a.id`, actor.CompanyID, invoiceID)
+	rows, err = s.db.Query(ctx, `SELECT a.id,a.credit_id,a.invoice_id,a.amount_cents,a.effective_date,r.id,r.effective_date,r.reason,coalesce(r.reference,''),coalesce(r.notes,'') FROM credit_applications a LEFT JOIN settlement_reversals r ON r.operation_type='credit_application' AND r.operation_id=a.id WHERE a.company_id=$1 AND a.invoice_id=$2 ORDER BY a.effective_date,a.id`, actor.CompanyID, invoiceID)
 	if err != nil {
 		return out, err
 	}
@@ -196,7 +197,7 @@ func (s *Service) customerSettlement(ctx context.Context, actor Actor, customerI
 		return out, err
 	}
 	rows.Close()
-	rows, err = s.db.Query(ctx, `SELECT a.id,a.credit_id,a.invoice_id,a.amount_cents,a.effective_date,r.id,r.effective_date,r.reason FROM credit_applications a JOIN invoices i ON i.id=a.invoice_id AND i.company_id=a.company_id AND i.conversion_hidden_at IS NULL LEFT JOIN settlement_reversals r ON r.operation_type='credit_application' AND r.operation_id=a.id WHERE a.company_id=$1 AND a.customer_id=$2 ORDER BY a.effective_date,a.id`, actor.CompanyID, customerID)
+	rows, err = s.db.Query(ctx, `SELECT a.id,a.credit_id,a.invoice_id,a.amount_cents,a.effective_date,r.id,r.effective_date,r.reason,coalesce(r.reference,''),coalesce(r.notes,'') FROM credit_applications a JOIN invoices i ON i.id=a.invoice_id AND i.company_id=a.company_id AND i.conversion_hidden_at IS NULL LEFT JOIN settlement_reversals r ON r.operation_type='credit_application' AND r.operation_id=a.id WHERE a.company_id=$1 AND a.customer_id=$2 ORDER BY a.effective_date,a.id`, actor.CompanyID, customerID)
 	if err != nil {
 		return out, err
 	}
@@ -261,11 +262,12 @@ func scanApplications(rows interface {
 		var rid *uuid.UUID
 		var rd *time.Time
 		var reason *string
-		if err := rows.Scan(&e.ID, &e.CreditID, &e.InvoiceID, &e.AmountCents, &e.EffectiveDate, &rid, &rd, &reason); err != nil {
+		var reference, notes string
+		if err := rows.Scan(&e.ID, &e.CreditID, &e.InvoiceID, &e.AmountCents, &e.EffectiveDate, &rid, &rd, &reason, &reference, &notes); err != nil {
 			return nil, err
 		}
 		if rid != nil {
-			e.Reversal = &ReversalEntry{ID: *rid, EffectiveDate: *rd, Reason: *reason}
+			e.Reversal = &ReversalEntry{ID: *rid, EffectiveDate: *rd, Reason: *reason, Reference: reference, Notes: notes}
 		}
 		e.ReversalKey = uuid.NewString()
 		out = append(out, e)

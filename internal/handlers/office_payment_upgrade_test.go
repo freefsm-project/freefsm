@@ -57,12 +57,28 @@ func TestOfficePaymentUpgradePreservesSourcesAndUnknownFacts(t *testing.T) {
 	}
 	_, err = pool.Exec(ctx, `SELECT settlement_set_invoice_state($1,'paid')`, i.ID)
 	historyCheck(t, err)
-	tables := []string{"invoice_payments", "payment_invoice_allocations", "customer_credits", "settlement_reversals", "authorization_grants", "invoices"}
+	tables := []string{"invoice_payments", "payment_invoice_allocations", "customer_credits", "authorization_grants", "invoices"}
+	// Migration093 adds nullable reversal metadata, not historical facts. Compare
+	// all installed columns and separately require the new values to stay unknown.
+	reversalSnapshot := func() string {
+		var raw string
+		historyCheck(t, pool.QueryRow(ctx, `SELECT coalesce(jsonb_agg(to_jsonb(r)-'reference'-'notes' ORDER BY r.id),'[]'::jsonb)::text FROM settlement_reversals r`).Scan(&raw))
+		return raw
+	}
+	reversalsBefore := reversalSnapshot()
 	before := historyDurableRows(t, pool, tables)
 	for range 2 {
 		historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, source))
 	}
 	historyEqual(t, "installed source identities, unknown facts, reversals and grants", historyDurableRows(t, pool, tables), before)
+	if reversalSnapshot() != reversalsBefore {
+		t.Fatal("migration changed installed reversal history")
+	}
+	var invented int
+	historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM settlement_reversals WHERE reference IS NOT NULL OR notes IS NOT NULL`).Scan(&invented))
+	if invented != 0 {
+		t.Fatal("migration invented historical reversal metadata")
+	}
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	page := documentTransactionRequest(t, web, cookie, "GET", fmt.Sprintf("/customers/%d/payments", c.ID), nil, 200)
 	for _, s := range []string{"Unknown historical actor", "historical entry time unknown", "Installed reversal", "125.00", "30.00"} {

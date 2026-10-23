@@ -76,9 +76,9 @@ func withDetailPresentation(r *http.Request, typ string, id int64, policy *servi
 		access["revert"] = action("invoice.revert")
 		access["finalize"] = action("invoice.finalize") && legacyDelete
 		access["payment"] = action("payment.record")
-		access["apply-credit"] = p.Allows("credit.apply", authorization.All) && p.Allows("credit.view", authorization.All) && access["settlement"] && legacyDelete
+		access["apply-credit"] = p.Allows("credit.apply", authorization.All) && p.Allows("credit.view", authorization.All) && p.Allows("customer.financial.view", authorization.All)
 		access["reverse-payment"] = p.Allows("payment.reverse", authorization.All) && access["settlement"] && legacyDelete
-		access["reverse-application"] = p.Allows("credit.application.reverse", authorization.All) && access["settlement"] && legacyDelete
+		access["reverse-application"] = p.Allows("credit.application.reverse", authorization.All) && access["settlement"]
 	}
 	return r.WithContext(templates.WithDetailAccess(ctx, access))
 }

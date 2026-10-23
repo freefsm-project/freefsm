@@ -81,6 +81,7 @@ func TestCreditApplicationContentionAndRestorationHTTP(t *testing.T) {
 	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/customers/%d/payments", c.ID), url.Values{"idempotency_key": {newOperationKey()}, "amount": {"100.00"}, "method": {"cash"}, "date": {"2026-01-02"}}, 303)
 	documentTransactionRequest(t, web, cookie, "POST", "/invoices", url.Values{"customer_id": {fmt.Sprint(c.ID)}, "title": {"Credit destination"}, "invoice_date": {"2026-01-02"}, "line_items": {`[{"title":"Work","quantity":1,"unit_price":100}]`}, "tax_rate": {"0"}}, 303)
 	var invoice, manualStatus int64
+	var originalFinancial string
 	var credit string
 	if err := pool.QueryRow(ctx, `SELECT id FROM invoices`).Scan(&invoice); err != nil {
 		t.Fatal(err)
@@ -91,7 +92,7 @@ func TestCreditApplicationContentionAndRestorationHTTP(t *testing.T) {
 	if err := statusflow.New(pool).FinalizeInvoice(ctx, statusflow.Actor{ID: admin, CompanyID: company}, invoice); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `SELECT status_id FROM invoices WHERE id=$1`, invoice).Scan(&manualStatus); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT status_id,financial FROM invoices WHERE id=$1`, invoice).Scan(&manualStatus, &originalFinancial); err != nil {
 		t.Fatal(err)
 	}
 	path := fmt.Sprintf("/invoices/%d/credit-applications", invoice)
@@ -154,6 +155,9 @@ func TestCreditApplicationContentionAndRestorationHTTP(t *testing.T) {
 	if amount != 6000 {
 		t.Fatalf("accepted amount=%d", amount)
 	}
+	if _, err := pool.Exec(ctx, `UPDATE invoices SET notes='rewrite during settlement' WHERE id=$1`, invoice); err == nil {
+		t.Fatal("active Application did not lock commercial content")
+	}
 	reversal := url.Values{"idempotency_key": {newOperationKey()}, "effective_date": {"2026-01-02"}, "reason": {"Wrong allocation"}}
 	documentTransactionRequest(t, web, cookie, "POST", path+"/"+application+"/reverse", reversal, 303)
 	documentTransactionRequest(t, web, cookie, "POST", path+"/"+application+"/reverse", reversal, 303)
@@ -163,6 +167,16 @@ func TestCreditApplicationContentionAndRestorationHTTP(t *testing.T) {
 	}
 	if restoredStatus != manualStatus || state != "unpaid" {
 		t.Fatalf("restoration status=%d want=%d state=%s", restoredStatus, manualStatus, state)
+	}
+	var intact, locked bool
+	if err := pool.QueryRow(ctx, `SELECT financial=$2,invoice_has_active_settlement(id) FROM invoices WHERE id=$1`, invoice, originalFinancial).Scan(&intact, &locked); err != nil {
+		t.Fatal(err)
+	}
+	if !intact || locked {
+		t.Fatalf("reversal changed commercial past or retained settlement lock: intact=%v locked=%v", intact, locked)
+	}
+	if _, err := pool.Exec(ctx, `UPDATE invoices SET notes='Authorized correction after reversal' WHERE id=$1`, invoice); err != nil {
+		t.Fatalf("last reversal did not unlock commercial content: %v", err)
 	}
 	// The same selected source can now cover the full original due. Neither
 	// compensation nor reapplication may create another cash receipt.
