@@ -382,8 +382,6 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.With(detailsAccess("invoice")).Post("/invoices", invoiceHandler.Create)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.DispatcherOrAdmin)
-			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/credit/refunds", customerHandler.RefundCredit)
-			r.With(activeObjectGuard(objectref.TypeCustomer)).Post("/customers/{id}/credit/refunds/{refund_id}/reverse", customerHandler.ReverseRefund)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/create-next-occurrence", jobHandler.CreateNextOccurrence)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/cancel-next-occurrence", jobHandler.CancelNextOccurrence)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/delete", jobHandler.Delete)
@@ -419,6 +417,9 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/invoices/{id}/payments", invoiceHandler.RecordPayment)
 		r.Post("/invoices/{id}/payments-with-credit", recordInvoicePaymentWithCredit)
 		r.Post("/customers/{id}/payments", recordCustomerPayment)
+		r.Post("/customers/{id}/credit/refunds", customerHandler.RefundCredit)
+		r.Post("/customers/{id}/credit/refunds/{refund_id}/reverse", customerHandler.ReverseRefund)
+		r.Post("/invoices/{id}/payments/{payment_id}/reverse", invoiceHandler.ReversePayment)
 		r.Get("/customers/{id}/payments", customerReceipts)
 		r.Post("/customers/{id}/payments/{payment_id}/reverse", reverseUnappliedPayment)
 		r.Get("/payment-operations/{operation}", paymentOperationReceipt)
@@ -436,7 +437,6 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/delete", estimateHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/delete", invoiceHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/finalize", invoiceHandler.Finalize)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/payments/{payment_id}/reverse", invoiceHandler.ReversePayment)
 		})
 
 		// Vocabulary configuration and parent-bounded tagging have independent grants.

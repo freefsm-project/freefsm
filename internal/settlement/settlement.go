@@ -298,6 +298,14 @@ func writeCreditApplication(ctx context.Context, tx pgx.Tx, actor Actor, req App
 }
 
 func (s *Service) RefundCredit(ctx context.Context, actor Actor, req RefundCreditRequest) (Result, error) {
+	if current, ok := authorization.FromContext(ctx); ok {
+		if current.Actor.UserID != actor.ID {
+			return Result{}, ErrForbidden
+		}
+		return s.refundCommand(ctx, current.Actor, "credit.refund", "refund_credit", req.Operation, "customer", req.CustomerID, req, func(tx pgx.Tx, verified Actor, today time.Time) (Result, error) {
+			return writeRefund(ctx, tx, verified, req, today)
+		})
+	}
 	if err := authorize(actor); err != nil {
 		return Result{}, err
 	}
@@ -305,61 +313,68 @@ func (s *Service) RefundCredit(ctx context.Context, actor Actor, req RefundCredi
 		return Result{}, ErrInvalidAmount
 	}
 	return s.transact(ctx, actor, "refund_credit", req.Operation, req, func(tx pgx.Tx, today time.Time) (Result, error) {
-		if err := lockCustomer(ctx, tx, actor.CompanyID, req.CustomerID); err != nil {
-			return Result{}, err
-		}
-		rows, err := tx.Query(ctx, creditAvailableSQL+` AND available.amount_cents>0 ORDER BY c.source_date,c.id FOR UPDATE`, actor.CompanyID, req.CustomerID)
-		if err != nil {
-			return Result{}, err
-		}
-		defer rows.Close()
-		var sources []AvailableSource
-		dates := make(map[string]time.Time)
-		for rows.Next() {
-			var id uuid.UUID
-			var d time.Time
-			var cents int64
-			if err = rows.Scan(&id, &d, &cents); err != nil {
-				return Result{}, err
-			}
-			sources = append(sources, AvailableSource{ID: id.String(), Date: d, Cents: cents})
-			dates[id.String()] = d
-		}
-		if err = rows.Err(); err != nil {
-			return Result{}, err
-		}
-		allocs, err := AllocateFIFO(req.AmountCents, sources)
-		if err != nil {
-			return Result{}, err
-		}
-		var newestConsumed time.Time
-		for _, allocation := range allocs {
-			if dates[allocation.SourceID].After(newestConsumed) {
-				newestConsumed = dates[allocation.SourceID]
-			}
-		}
-		effectiveDate, err := parseRequestDate(req.EffectiveDate, today.Location())
-		if err != nil {
-			return Result{}, err
-		}
-		if err = ValidateEffectiveDate(effectiveDate, today, newestConsumed); err != nil {
-			return Result{}, err
-		}
-		id := uuid.New()
-		_, err = tx.Exec(ctx, `INSERT INTO credit_refunds(id,company_id,customer_id,amount_cents,method,effective_date,reference,notes,reason,actor_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, id, actor.CompanyID, req.CustomerID, req.AmountCents, req.Method, effectiveDate, req.Reference, req.Notes, req.Reason, actor.ID)
-		if err != nil {
-			return Result{}, err
-		}
-		for _, a := range allocs {
-			if _, err = tx.Exec(ctx, `INSERT INTO credit_refund_allocations VALUES($1,$2,$3)`, id, a.SourceID, a.Cents); err != nil {
-				return Result{}, err
-			}
-		}
-		if err = logActivity(ctx, tx, actor, "customer", req.CustomerID, "credit_refunded", id); err != nil {
-			return Result{}, err
-		}
-		return Result{ID: id}, nil
+		return writeRefund(ctx, tx, actor, req, today)
 	})
+}
+
+func writeRefund(ctx context.Context, tx pgx.Tx, actor Actor, req RefundCreditRequest, today time.Time) (Result, error) {
+	if req.AmountCents <= 0 || !validMethod(req.Method) || strings.TrimSpace(req.Reason) == "" {
+		return Result{}, ErrInvalidAmount
+	}
+	if err := lockCustomer(ctx, tx, actor.CompanyID, req.CustomerID); err != nil {
+		return Result{}, err
+	}
+	rows, err := tx.Query(ctx, creditAvailableSQL+` AND available.amount_cents>0 ORDER BY c.source_date,c.id FOR UPDATE`, actor.CompanyID, req.CustomerID)
+	if err != nil {
+		return Result{}, err
+	}
+	defer rows.Close()
+	var sources []AvailableSource
+	dates := make(map[string]time.Time)
+	for rows.Next() {
+		var id uuid.UUID
+		var d time.Time
+		var cents int64
+		if err = rows.Scan(&id, &d, &cents); err != nil {
+			return Result{}, err
+		}
+		sources = append(sources, AvailableSource{ID: id.String(), Date: d, Cents: cents})
+		dates[id.String()] = d
+	}
+	if err = rows.Err(); err != nil {
+		return Result{}, err
+	}
+	allocs, err := AllocateFIFO(req.AmountCents, sources)
+	if err != nil {
+		return Result{}, err
+	}
+	var newestConsumed time.Time
+	for _, allocation := range allocs {
+		if dates[allocation.SourceID].After(newestConsumed) {
+			newestConsumed = dates[allocation.SourceID]
+		}
+	}
+	effectiveDate, err := parseRequestDate(req.EffectiveDate, today.Location())
+	if err != nil {
+		return Result{}, err
+	}
+	if err = ValidateEffectiveDate(effectiveDate, today, newestConsumed); err != nil {
+		return Result{}, err
+	}
+	id := uuid.New()
+	_, err = tx.Exec(ctx, `INSERT INTO credit_refunds(id,company_id,customer_id,amount_cents,method,effective_date,reference,notes,reason,actor_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, id, actor.CompanyID, req.CustomerID, req.AmountCents, req.Method, effectiveDate, req.Reference, req.Notes, req.Reason, actor.ID)
+	if err != nil {
+		return Result{}, err
+	}
+	for _, a := range allocs {
+		if _, err = tx.Exec(ctx, `INSERT INTO credit_refund_allocations VALUES($1,$2,$3)`, id, a.SourceID, a.Cents); err != nil {
+			return Result{}, err
+		}
+	}
+	if err = logActivity(ctx, tx, actor, "customer", req.CustomerID, "credit_refunded", id); err != nil {
+		return Result{}, err
+	}
+	return Result{ID: id}, nil
 }
 
 func (s *Service) ReversePayment(ctx context.Context, a Actor, r ReverseRequest) (Result, error) {
@@ -384,6 +399,25 @@ func (s *Service) ReverseRefund(ctx context.Context, a Actor, r ReverseRequest) 
 }
 
 func (s *Service) reverse(ctx context.Context, actor Actor, kind string, req ReverseRequest, checkDeps bool) (Result, error) {
+	if current, ok := authorization.FromContext(ctx); ok {
+		if current.Actor.UserID != actor.ID {
+			return Result{}, ErrForbidden
+		}
+		permission := "credit.refund.reverse"
+		targetType, targetID := "customer", req.CustomerID
+		if kind == "payment" {
+			permission = "payment.reverse"
+			if req.InvoiceID != 0 {
+				targetType, targetID = "invoice", req.InvoiceID
+			}
+		}
+		return s.refundCommand(ctx, current.Actor, permission, "reverse_"+kind, req.Operation, targetType, targetID, req, func(tx pgx.Tx, verified Actor, today time.Time) (Result, error) {
+			if strings.TrimSpace(req.Reason) == "" {
+				return Result{}, errors.New("reversal reason is required")
+			}
+			return reverseSettlement(ctx, tx, verified, kind, req, today, checkDeps)
+		})
+	}
 	if err := authorize(actor); err != nil {
 		return Result{}, err
 	}
