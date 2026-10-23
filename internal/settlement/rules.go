@@ -15,6 +15,7 @@ const (
 )
 
 var ErrInvalidAmount = errors.New("amount must be positive")
+var ErrInsufficientCredit = errors.New("insufficient available customer credit")
 
 func StateFor(totalCents, settledCents int64) (State, error) {
 	if totalCents < 0 {
@@ -72,7 +73,7 @@ func AllocateFIFO(requested int64, sources []AvailableSource) ([]Allocation, err
 		remaining -= amount
 	}
 	if remaining != 0 {
-		return nil, errors.New("insufficient available customer credit")
+		return nil, ErrInsufficientCredit
 	}
 	return allocations, nil
 }

@@ -575,7 +575,11 @@ func (h *InvoiceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.Archive(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+		if errors.Is(err, services.ErrInvoiceArchiveIneligible) {
+			http.Error(w, err.Error(), http.StatusConflict)
+		} else {
+			internalServerError(w, r, "archive invoice", err)
+		}
 		return
 	}
 	u, _ := middleware.UserFromContext(r.Context())
@@ -1400,6 +1404,15 @@ func (h *InvoiceHandler) ApplyCredit(w http.ResponseWriter, r *http.Request) {
 	if err = r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", 400)
 		return
+	}
+	// One explicit source/amount/date/identity constitutes one Application.
+	// FormValue silently chooses the first repeated field, which could hide a
+	// second selected source or a changed amount (including query/body clashes).
+	for _, field := range []string{"credit_id", "amount", "effective_date", "idempotency_key"} {
+		if len(r.Form[field]) > 1 {
+			http.Error(w, "Application fields must have exactly one value", http.StatusBadRequest)
+			return
+		}
 	}
 	amount, err := parseCents(r.FormValue("amount"))
 	if err != nil {

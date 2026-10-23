@@ -93,6 +93,8 @@ func writeSettlementError(w http.ResponseWriter, r *http.Request, err error) {
 		status, message = http.StatusConflict, err.Error()
 	case errors.Is(err, settlement.ErrInvalidAmount):
 		message = "invalid settlement amount"
+	case errors.Is(err, settlement.ErrInsufficientCredit):
+		message = err.Error()
 	default:
 		validation := err.Error()
 		if strings.Contains(validation, "date") || strings.Contains(validation, "reason is required") || strings.Contains(validation, "idempotency key is required") {

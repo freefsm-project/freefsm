@@ -12,10 +12,12 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/companysettings"
 	"github.com/freefsm-project/freefsm/internal/ent/invoice"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrNegativeInvoiceTotal = errors.New("invoice total must not be negative")
+var ErrInvoiceArchiveIneligible = errors.New("invoice can only be archived when paid or void")
 
 func invoiceSettlementState(totalCents, settledCents int64) string {
 	if totalCents == 0 || settledCents >= totalCents {
@@ -709,6 +711,13 @@ func (s *InvoiceService) Archive(ctx context.Context, id int64) error {
 	now := time.Now()
 	_, err := s.client.Invoice.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
 	if err != nil {
+		// Settlement may change after the page/handler check. The database
+		// rechecks under the shared fence; expose that decision as a conflict,
+		// not an internal error or raw PostgreSQL diagnostic.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "P0001" && pgErr.Message == "invoice archive requires paid or void" {
+			return ErrInvoiceArchiveIneligible
+		}
 		return fmt.Errorf("archive invoice %d: %w", id, err)
 	}
 	return nil
