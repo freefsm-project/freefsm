@@ -108,14 +108,17 @@ func (s *Service) AuthorizeConversion(ctx context.Context, tx pgx.Tx, a Actor, i
 		if err := tx.QueryRow(ctx, `SELECT customer_id,deleted_at IS NULL FROM jobs WHERE id=$1 AND company_id=$2 FOR SHARE`, *job, p.CompanyID).Scan(&owner, &active); err != nil {
 			return out, ErrNotFound
 		}
-		if !active || owner != customer {
+		if owner != customer {
 			return out, ErrForbidden
 		}
 		rows, err := tx.Query(ctx, `SELECT user_id FROM job_assignments WHERE job_id=$1 AND user_id=$2 FOR SHARE`, *job, p.UserID)
 		if err != nil {
 			return out, err
 		}
-		assigned = rows.Next()
+		// Conversion may carry this already-linked archived Job for All Records
+		// authority. It does not reactivate Assigned Jobs authority or permit a
+		// new archived Job selection through ordinary document creation.
+		assigned = rows.Next() && active
 		rows.Close()
 		if err := rows.Err(); err != nil {
 			return out, err
