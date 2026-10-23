@@ -23,7 +23,6 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/justinas/nosurf"
 )
@@ -499,7 +498,9 @@ func TestCompanyConfigurationEstimateSnapshotsHTTP(t *testing.T) {
 	assertContains(t, requestBody(t, router, cookie, "GET", match[1]+"/pdf", 200), "%PDF-")
 	body = requestBody(t, router, cookie, "GET", "/settings", 200)
 	settingsPost(t, router, cookie, url.Values{"section": {"documents"}, "revision": {configurationRevision(t, body)}, "default_due_days": {"12"}}, 303)
-	r = httptest.NewRequest("POST", match[1]+"/convert", strings.NewReader(url.Values{"idempotency_key": {uuid.NewString()}}.Encode()))
+	review := requestBody(t, router, cookie, "GET", match[1]+"/convert", 200)
+	conversionValues := url.Values{"idempotency_key": {compositionField(t, review, "idempotency_key")}, "revision": {compositionField(t, review, "revision")}}
+	r = httptest.NewRequest("POST", match[1]+"/convert", strings.NewReader(conversionValues.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.AddCookie(cookie)
 	w = httptest.NewRecorder()
@@ -884,7 +885,10 @@ func TestCompanyConfigurationCreationRechecksAuthorityAndAuditHTTP(t *testing.T)
 		assertNotContains(t, requestBody(t, router, cookie, "GET", "/"+kind+"s", 200), "Audit rejected "+kind)
 	}
 	e := client.Estimate.Create().SetCompanyID(company).SetCustomerID(c.ID).SetTitle("Conversion audit source").SaveX(ctx)
-	r := httptest.NewRequest("POST", fmt.Sprintf("/estimates/%d/convert", e.ID), strings.NewReader(url.Values{"idempotency_key": {uuid.NewString()}}.Encode()))
+	conversionPath := fmt.Sprintf("/estimates/%d/convert", e.ID)
+	review := requestBody(t, router, cookie, "GET", conversionPath, 200)
+	conversionValues := url.Values{"idempotency_key": {compositionField(t, review, "idempotency_key")}, "revision": {compositionField(t, review, "revision")}}
+	r := httptest.NewRequest("POST", conversionPath, strings.NewReader(conversionValues.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.AddCookie(cookie)
 	w := httptest.NewRecorder()
