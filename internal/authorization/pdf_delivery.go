@@ -7,8 +7,9 @@ import (
 )
 
 type PDFDeliverySelection struct {
-	Version PDFVersion
-	Source  []byte
+	CurrentToken string
+	Version      PDFVersion
+	Source       []byte
 }
 
 func selectDeliveryPDF(ctx context.Context, q queryer, p Principal, kind string, id, version int64) (PDFDeliverySelection, error) {
@@ -16,11 +17,15 @@ func selectDeliveryPDF(ctx context.Context, q queryer, p Principal, kind string,
 	if _, err := pdfDocumentAccess(ctx, q, p, kind, id, "delivery.request"); err != nil {
 		return out, err
 	}
+	if _, err := pdfDocumentAccess(ctx, q, p, kind, id, "pdf.download"); err != nil {
+		return out, err
+	}
 	source, err := pdfSource(ctx, q, p, kind, id)
 	if err != nil {
 		return out, err
 	}
 	out.Version, err = selectedPDFVersion(ctx, q, p, kind, id, version, source.Token)
+	out.CurrentToken = source.ReviewToken
 	out.Source = out.Version.Source
 	if err == pgx.ErrNoRows {
 		return out, ErrConflict

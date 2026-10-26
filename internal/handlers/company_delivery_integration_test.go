@@ -38,7 +38,9 @@ func TestCompanyConfigurationEmailPreservesSelectedPDFHTTP(t *testing.T) {
 	version := regexp.MustCompile(`name="version" value="([0-9]+)"`).FindStringSubmatch(preview)[1]
 	original := requestBody(t, router, adminCookie, "GET", path+"/pdf?version="+version, 200)
 	svc := authorization.New(pool)
-	role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Delivery without generation", []authorization.Grant{{Permission: "invoice.view", Scope: authorization.All}, {Permission: "invoice.delivery.request", Scope: authorization.All}})
+	// Sending an existing PDF requires Download independently; Generate remains
+	// absent so the selected-version path cannot hide a rendering dependency.
+	role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Delivery without generation", []authorization.Grant{{Permission: "invoice.view", Scope: authorization.All}, {Permission: "invoice.delivery.request", Scope: authorization.All}, {Permission: "invoice.pdf.download", Scope: authorization.All}})
 	if err != nil {
 		t.Fatal(err)
 	}

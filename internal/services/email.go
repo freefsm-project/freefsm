@@ -195,6 +195,14 @@ func (s *EmailService) SendDocumentSnapshot(ctx context.Context, recipients Emai
 }
 
 func (s *EmailService) SendCompanyDocumentSnapshot(ctx context.Context, companyID int64, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachment EmailAttachment, frozenSender ...string) error {
+	return s.sendCompanyDocumentAttachments(ctx, companyID, recipients, subject, textBody, htmlBody, messageID, []EmailAttachment{attachment}, frozenSender...)
+}
+
+func (s *EmailService) SendCompanyDocumentAttachments(ctx context.Context, companyID int64, recipients EmailRecipients, subject, textBody, htmlBody, messageID, frozenSender string, attachments []EmailAttachment) error {
+	return s.sendCompanyDocumentAttachments(ctx, companyID, recipients, subject, textBody, htmlBody, messageID, attachments, frozenSender)
+}
+
+func (s *EmailService) sendCompanyDocumentAttachments(ctx context.Context, companyID int64, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachments []EmailAttachment, frozenSender ...string) error {
 	ctx, release, err := s.control.EnterEmail(ctx)
 	if err != nil {
 		return err
@@ -211,7 +219,7 @@ func (s *EmailService) SendCompanyDocumentSnapshot(ctx context.Context, companyI
 			return fmt.Errorf("saved delivery sender is unavailable; explicit historical review required")
 		}
 	}
-	msg, err := buildDocumentEmailMessage(from, recipients, subject, textBody, htmlBody, messageID, attachment)
+	msg, err := buildDocumentEmailMessage(from, recipients, subject, textBody, htmlBody, messageID, attachments...)
 	if err != nil {
 		return err
 	}
@@ -251,7 +259,7 @@ func (s *EmailService) sendBuilt(ctx context.Context, cs *ent.CompanySettings, f
 	return nil
 }
 
-func buildDocumentEmailMessage(from string, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachment EmailAttachment) (string, error) {
+func buildDocumentEmailMessage(from string, recipients EmailRecipients, subject, textBody, htmlBody, messageID string, attachments ...EmailAttachment) (string, error) {
 	if len(recipients.To) == 0 || sanitizeHeader(messageID) == "" {
 		return "", fmt.Errorf("recipient and message ID are required")
 	}
@@ -270,13 +278,20 @@ func buildDocumentEmailMessage(from string, recipients EmailRecipients, subject,
 		fmt.Fprintf(&buf, "--%s\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n", alt, htmlBody)
 	}
 	fmt.Fprintf(&buf, "--%s--\r\n", alt)
-	filename := sanitizeHeader(attachment.Filename)
-	if filename == "" {
-		return "", fmt.Errorf("attachment filename is required")
+	for _, attachment := range attachments {
+		filename := sanitizeHeader(attachment.Filename)
+		if filename == "" {
+			return "", fmt.Errorf("attachment filename is required")
+		}
+		contentType := attachment.ContentType
+		if contentType == "" {
+			contentType = "application/pdf"
+		}
+		fmt.Fprintf(&buf, "--%s\r\nContent-Type: %s\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: %s\r\n\r\n", mixed, sanitizeHeader(contentType), mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+		writeBase64Lines(&buf, attachment.Data)
+		buf.WriteString("\r\n")
 	}
-	fmt.Fprintf(&buf, "--%s\r\nContent-Type: application/pdf\r\nContent-Transfer-Encoding: base64\r\nContent-Disposition: %s\r\n\r\n", mixed, mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
-	writeBase64Lines(&buf, attachment.Data)
-	fmt.Fprintf(&buf, "\r\n--%s--\r\n", mixed)
+	fmt.Fprintf(&buf, "--%s--\r\n", mixed)
 	return buf.String(), nil
 }
 

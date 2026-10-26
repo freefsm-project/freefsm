@@ -96,6 +96,20 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 	cs := middleware.CompanyFromContext(r.Context())
 	data := templates.DocumentEmailData{ObjectType: kind, ObjectID: id, Title: doc.Title, BackURL: fmt.Sprintf("/%ss/%d/pdf/preview", kind, id), ActionURL: fmt.Sprintf("/%ss/%d/email", kind, id), To: doc.CustomerEmail, CC: emailAutoCC(cs), IdempotencyKey: uuid.NewString(), PDFVersion: selection.Version.ID, PDFStale: selection.Version.Stale}
 	data.Subject, data.Body = documentEmailDefaults(kind, doc, cs)
+	choices, err := request.Service.DeliveryFileChoices(r.Context(), request.Actor, kind, id)
+	if err != nil {
+		authorizationError(w, r, err)
+		return true
+	}
+	for _, f := range choices {
+		selected := false
+		for _, value := range r.Form["extra_file_id"] {
+			if value == strconv.FormatInt(f.ID, 10) {
+				selected = true
+			}
+		}
+		data.ExtraFiles = append(data.ExtraFiles, templates.DocumentEmailFile{ID: f.ID, Name: f.Name, Selected: selected})
+	}
 	if r.Method == http.MethodGet {
 		data.HTMLBody, err = composeHTMLDefault(queue, r, kind, doc, cs)
 		if err != nil {
@@ -123,7 +137,21 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 		return true
 	}
 	u, _ := middleware.UserFromContext(r.Context())
-	_, err = queue.Queue(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, delivery.QueueRequest{Key: key, Document: delivery.DocumentRef{Type: kind, ID: id}, PDFVersionID: selection.Version.ID, ConfirmStalePDF: data.ConfirmStalePDF, Snapshot: delivery.Snapshot{To: recipients.To, CC: recipients.CC, BCC: recipients.BCC, Subject: data.Subject, TextBody: data.Body, HTMLBody: selectedEmailHTML(data.Body, data.HTMLBody), PDF: selection.Version.Content, PDFFilename: selection.Version.Filename}})
+	var extraIDs []int64
+	for _, value := range r.Form["extra_file_id"] {
+		id, parseErr := strconv.ParseInt(value, 10, 64)
+		if parseErr != nil || id <= 0 {
+			http.Error(w, "Invalid extra File identity", 422)
+			return true
+		}
+		extraIDs = append(extraIDs, id)
+	}
+	_, err = queue.Queue(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, delivery.QueueRequest{Key: key, ExtraFileIDs: extraIDs, Document: delivery.DocumentRef{Type: kind, ID: id}, PDFVersionID: selection.Version.ID, ConfirmStalePDF: data.ConfirmStalePDF, Snapshot: delivery.Snapshot{To: recipients.To, CC: recipients.CC, BCC: recipients.BCC, Subject: data.Subject, TextBody: data.Body, HTMLBody: selectedEmailHTML(data.Body, data.HTMLBody), PDF: selection.Version.Content, PDFFilename: selection.Version.Filename}})
+	var invalidFile *authorization.FileValidationError
+	if errors.As(err, &invalidFile) {
+		http.Error(w, invalidFile.Error(), 422)
+		return true
+	}
 	if errors.Is(err, authorization.ErrConflict) {
 		data.PDFStale = true
 		data.Error = "The selected PDF is stale. Confirm sending this exact version or select a new version."

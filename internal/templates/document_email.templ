@@ -42,6 +42,14 @@ templ DocumentEmailCompose(p DocumentEmailData) {
 			</label>
 			<label>HTML body (optional; blank uses plain text)<textarea name="html_body" rows="10">{ p.HTMLBody }</textarea></label>
 			<p class="settings-help">Provide a plain-text or HTML message. Each recipient receives a separately tracked email.</p>
+			if len(p.ExtraFiles)>0 {
+				<fieldset><legend>Extra Files from this document</legend>
+					for _,f:=range p.ExtraFiles {
+						<label><input type="checkbox" name="extra_file_id" value={fmt.Sprint(f.ID)} checked?={f.Selected}/> {f.Name}</label>
+					}
+				</fieldset>
+			}
+			<p class="settings-help">At most 10 extra Files; 15 MiB total raw bytes including the selected PDF. Allowed: PDF, TXT, CSV, PNG, JPEG, GIF, WebP, DOCX, XLSX, ODT, ODS. Content is validated before queue acceptance.</p>
 			<button type="submit">Queue Email</button>
 		</form>
 	}

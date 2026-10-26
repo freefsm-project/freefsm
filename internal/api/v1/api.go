@@ -11,6 +11,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/requestlimits"
@@ -60,6 +61,7 @@ type policyService interface {
 }
 
 type Dependencies struct {
+	Delivery      *delivery.Service
 	Limits        *requestlimits.Limiter
 	Config        config.APIConfig
 	Files         *services.FileService
@@ -85,6 +87,12 @@ func NewConfiguredRouter(db *pgxpool.Pool, client *ent.Client, sessions SessionS
 }
 
 func NewRouterWithLimits(db *pgxpool.Pool, client *ent.Client, sessions SessionService, policy config.APIConfig, limits *requestlimits.Limiter, files ...*services.FileService) http.Handler {
+	return NewRouterWithDelivery(db, client, sessions, policy, limits, delivery.New(db, ""), files...)
+}
+
+// NewRouterWithDelivery shares the process-owned mail admission and restore gate
+// with document web requests and the worker.
+func NewRouterWithDelivery(db *pgxpool.Pool, client *ent.Client, sessions SessionService, policy config.APIConfig, limits *requestlimits.Limiter, deliveries *delivery.Service, files ...*services.FileService) http.Handler {
 	authorization.InstallCustomerBoundary(client)
 	objects := objectref.NewEntDirectory(client)
 	var fileService *services.FileService
@@ -92,6 +100,7 @@ func NewRouterWithLimits(db *pgxpool.Pool, client *ent.Client, sessions SessionS
 		fileService = files[0]
 	}
 	return New(Dependencies{
+		Delivery:      deliveries,
 		Limits:        limits,
 		Config:        policy,
 		Files:         fileService,
@@ -180,6 +189,8 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/jobs/{id}/assets/{assetID}/service-entries/{entryID}/revisions", h.serviceEntryRevisions)
 		for _, kind := range []string{"estimate", "invoice"} {
 			r.Get("/"+kind+"s/{id}/pdf/source", h.pdfSource(kind))
+			r.Post("/"+kind+"s/{id}/deliveries/review", h.deliveryReview(kind))
+			r.Post("/"+kind+"s/{id}/deliveries", h.deliveryQueue(kind))
 			r.Post("/"+kind+"s/{id}/pdf/generate", h.pdfGenerate(kind))
 			r.Get("/"+kind+"s/{id}/pdf/versions", h.pdfVersions(kind))
 			r.Get("/"+kind+"s/{id}/pdf/versions/{version}", h.pdfDownload(kind))
@@ -195,6 +206,7 @@ func New(deps Dependencies) http.Handler {
 		r.Post("/invoices/{id}/revert-to-estimate", h.conversion("invoice"))
 		r.Get("/commercial-operations/{operation}", h.commercialReceipt)
 		r.Get("/pdf-operations/{operation}", h.pdfReceipt)
+		r.Get("/delivery-operations/{operation}", h.deliveryReceipt)
 		r.Post("/invoices/{id}/payments", h.boundedPayment)
 		r.Get("/invoices/{id}/payment-methods", h.paymentMethods)
 		r.Get("/payment-operations/{operation}", h.paymentReceipt)

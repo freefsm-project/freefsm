@@ -83,6 +83,7 @@ type Snapshot struct {
 	PDFFilename                 string
 }
 type QueueRequest struct {
+	ExtraFileIDs    []int64
 	PDFVersionID    int64
 	ConfirmStalePDF bool
 	Key             uuid.UUID
@@ -90,6 +91,7 @@ type QueueRequest struct {
 	Snapshot        Snapshot
 }
 type Delivery struct {
+	Attachments                                                                  []authorization.DeliveryFile
 	From                                                                         string
 	ID, CompanyID, DocumentID, ActorID                                           int64
 	DocumentType, State, Subject, TextBody, HTMLBody, PDFFilename, MessageID     string
@@ -167,6 +169,19 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 		return Delivery{}, err
 	}
 	defer release()
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return Delivery{}, err
+	}
+	defer tx.Rollback(ctx)
+	d, err := s.queueTx(ctx, tx, a, r)
+	if err != nil {
+		return Delivery{}, err
+	}
+	return d, tx.Commit(ctx)
+}
+
+func (s *Service) queueTx(ctx context.Context, tx pgx.Tx, a Actor, r QueueRequest) (Delivery, error) {
 	if a.ID <= 0 || a.CompanyID <= 0 || r.Key == uuid.Nil || (r.Document.Type != "estimate" && r.Document.Type != "invoice") || r.Document.ID <= 0 || len(r.Snapshot.To) == 0 || strings.TrimSpace(r.Snapshot.Subject) == "" || len(r.Snapshot.PDF) == 0 || strings.TrimSpace(r.Snapshot.PDFFilename) == "" {
 		return Delivery{}, ErrInvalid
 	}
@@ -184,11 +199,7 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 			}
 		}
 	}
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return Delivery{}, err
-	}
-	defer tx.Rollback(ctx)
+	var err error
 	// Workflow configuration uses the authorization mutex before any row locks.
 	// Capture a coherent immutable intent under that same fence, including on
 	// the legacy queue path which does not call BindDeliveryPDF.
@@ -242,17 +253,58 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 		if !equalBytes(existingFingerprint, fingerprint) {
 			return Delivery{}, ErrIdempotencyConflict
 		}
+		if migrated && request.Actor.Channel != "api" {
+			var bound bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM operation_admissions WHERE operation_id=$1)`, r.Key).Scan(&bound); err != nil {
+				return Delivery{}, err
+			}
+			if bound {
+				if err := authorization.AdmitOperation(ctx, tx, request.Actor, r.Key.String(), r.Document.Type+".delivery.request", map[string]any{"document_id": r.Document.ID, "fingerprint": hex.EncodeToString(fingerprint)}); err != nil {
+					return Delivery{}, err
+				}
+			}
+		}
 		d, e := get(ctx, tx, a.CompanyID, existingID)
 		if e != nil {
 			return Delivery{}, e
 		}
-		return d, tx.Commit(ctx)
+		return d, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return Delivery{}, err
 	}
+	if migrated && request.Actor.Channel != "api" {
+		if err := authorization.AdmitOperation(ctx, tx, request.Actor, r.Key.String(), r.Document.Type+".delivery.request", map[string]any{"document_id": r.Document.ID, "fingerprint": hex.EncodeToString(fingerprint)}); err != nil {
+			return Delivery{}, err
+		}
+	}
 	if migrated && selected.Version.Stale && !r.ConfirmStalePDF {
 		return Delivery{}, authorization.ErrConflict
+	}
+	if len(r.Snapshot.PDF) > authorization.MaxDeliveryAttachmentBytes || len(r.ExtraFileIDs) > authorization.MaxDeliveryExtraFiles {
+		return Delivery{}, ErrInvalid
+	}
+	attachments := []authorization.DeliveryFile{}
+	if len(r.ExtraFileIDs) > 0 {
+		if !migrated {
+			return Delivery{}, ErrForbidden
+		}
+		attachments, err = request.Service.BindDeliveryFiles(ctx, tx, request.Actor, r.Document.Type, r.Document.ID, r.ExtraFileIDs, len(r.Snapshot.PDF))
+		if err != nil {
+			return Delivery{}, err
+		}
+	}
+	attachmentJSON, err := json.Marshal(attachments)
+	if err != nil {
+		return Delivery{}, err
+	}
+	settingsJSON, err := compositionSettings(ctx, tx, a.CompanyID, r.Document.Type)
+	if err != nil {
+		return Delivery{}, err
+	}
+	compositionJSON, err := json.Marshal(map[string]any{"settings": json.RawMessage(settingsJSON), "pdf_source": json.RawMessage(selected.Source), "pdf_source_known": selected.Version.SourceKnown})
+	if err != nil {
+		return Delivery{}, err
 	}
 	var host, password string
 	var port int
@@ -292,8 +344,8 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 			invoiceID = r.Document.ID
 		}
 		var id int64
-		err = tx.QueryRow(ctx, `INSERT INTO document_deliveries(company_id,document_type,document_id,estimate_id,invoice_id,actor_id,idempotency_key,request_fingerprint,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,tracking_enabled,tracking_token_hash,pdf_version_id,sender_address,expected_status_revision,expected_meaning_revision)
-	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NULLIF($21,0),$22,$23,$24) RETURNING id`, a.CompanyID, r.Document.Type, r.Document.ID, estimateID, invoiceID, a.ID, key, fingerprint, []string{recipient}, []string{}, []string{}, r.Snapshot.Subject, r.Snapshot.TextBody, html, r.Snapshot.PDF, r.Snapshot.PDFFilename, messageID, statusID, tracking, tokenHash, r.PDFVersionID, from, statusRevision, meaningRevision).Scan(&id)
+		err = tx.QueryRow(ctx, `INSERT INTO document_deliveries(company_id,document_type,document_id,estimate_id,invoice_id,actor_id,idempotency_key,request_fingerprint,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,tracking_enabled,tracking_token_hash,pdf_version_id,sender_address,expected_status_revision,expected_meaning_revision,attachment_snapshots,composition_snapshot)
+	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NULLIF($21,0),$22,$23,$24,$25,$26) RETURNING id`, a.CompanyID, r.Document.Type, r.Document.ID, estimateID, invoiceID, a.ID, key, fingerprint, []string{recipient}, []string{}, []string{}, r.Snapshot.Subject, r.Snapshot.TextBody, html, r.Snapshot.PDF, r.Snapshot.PDFFilename, messageID, statusID, tracking, tokenHash, r.PDFVersionID, from, statusRevision, meaningRevision, attachmentJSON, compositionJSON).Scan(&id)
 		if err != nil {
 			return Delivery{}, err
 		}
@@ -316,7 +368,7 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 			first = d
 		}
 	}
-	return first, tx.Commit(ctx)
+	return first, nil
 }
 
 func canonicalAddresses(v []string) []string {
@@ -344,8 +396,9 @@ func requestFingerprint(r QueueRequest, status *int64, tracking bool) ([]byte, e
 		Subject, Text, HTML, Filename, PDFHash string
 		Status                                 *int64
 		Tracking                               bool
-		PDFVersion                             int64 `json:"pdf_version,omitempty"`
-	}{r.Document, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, r.Snapshot.HTMLBody, r.Snapshot.PDFFilename, hex.EncodeToString(pdf[:]), status, tracking, r.PDFVersionID}
+		PDFVersion                             int64   `json:"pdf_version,omitempty"`
+		ExtraFiles                             []int64 `json:"extra_files,omitempty"`
+	}{r.Document, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, r.Snapshot.HTMLBody, r.Snapshot.PDFFilename, hex.EncodeToString(pdf[:]), status, tracking, r.PDFVersionID, r.ExtraFileIDs}
 	b, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
@@ -781,7 +834,11 @@ func get(ctx context.Context, q rowQuerier, company, id int64) (Delivery, error)
 		d.AttemptToken = *token
 	}
 	if err == nil {
-		err = q.QueryRow(ctx, `SELECT coalesce(sender_address,''),expected_status_revision,expected_meaning_revision FROM document_deliveries WHERE id=$1`, d.ID).Scan(&d.From, &d.ExpectedStatusRevision, &d.ExpectedMeaningRevision)
+		var raw []byte
+		err = q.QueryRow(ctx, `SELECT coalesce(sender_address,''),expected_status_revision,expected_meaning_revision,attachment_snapshots FROM document_deliveries WHERE id=$1`, d.ID).Scan(&d.From, &d.ExpectedStatusRevision, &d.ExpectedMeaningRevision, &raw)
+		if err == nil && len(raw) > 0 {
+			err = json.Unmarshal(raw, &d.Attachments)
+		}
 	}
 	return d, err
 }

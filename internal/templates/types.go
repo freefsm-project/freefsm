@@ -906,6 +906,7 @@ type DocumentPreviewData struct {
 }
 
 type DocumentEmailData struct {
+	ExtraFiles                []DocumentEmailFile
 	HTMLBody                  string
 	PDFVersion                int64
 	PDFStale, ConfirmStalePDF bool
@@ -921,6 +922,12 @@ type DocumentEmailData struct {
 	Body                      string
 	Error                     string
 	IdempotencyKey            string
+}
+
+type DocumentEmailFile struct {
+	ID       int64
+	Name     string
+	Selected bool
 }
 
 type DeliveryHistoryRow struct {
