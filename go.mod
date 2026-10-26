@@ -15,6 +15,7 @@ require (
 	github.com/justinas/nosurf v1.2.0
 	github.com/richardlehane/mscfb v1.0.6
 	golang.org/x/crypto v0.48.0
+	golang.org/x/image v0.43.0
 	golang.org/x/net v0.51.0
 	golang.org/x/text v0.38.0
 )

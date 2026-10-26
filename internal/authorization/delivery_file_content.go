@@ -18,6 +18,10 @@ import (
 	"unicode/utf8"
 
 	"github.com/gabriel-vasile/mimetype"
+	"golang.org/x/image/riff"
+	"golang.org/x/image/vp8"
+	"golang.org/x/image/vp8l"
+	_ "golang.org/x/image/webp"
 )
 
 var deliveryScriptPrefix = regexp.MustCompile(`(?is)^\s*(?:(?:const|let|var)\s+[a-z_$][\w$]*\s*=|(?:async\s+)?function\s+\w+\s*\(|(?:alert|eval|exec|require|print|document\.write|console\.log)\s*\(|from\s+[\w.]+\s+import\b|import\s+[\w.]+\s*(?:;|$)|param\s*\(|(?:set-|invoke-)[\w-]+\b)`)
@@ -59,17 +63,85 @@ func validateDeliveryFile(f DeliveryFile) error {
 	if ext == ".pdf" && deliveryActivePDFName.Match(f.Data) {
 		return invalid()
 	}
-	if strings.HasPrefix(want, "image/") && ext != ".webp" {
-		if _, _, err := image.DecodeConfig(bytes.NewReader(f.Data)); err != nil {
-			return invalid()
-		}
-	}
-	if ext == ".webp" {
-		if len(f.Data) < 20 || string(f.Data[:4]) != "RIFF" || int64(binary.LittleEndian.Uint32(f.Data[4:8]))+8 != int64(len(f.Data)) {
-			return invalid()
-		}
+	if strings.HasPrefix(want, "image/") && !validDeliveryImage(f.Data, want) {
+		return invalid()
 	}
 	return nil
+}
+
+// Match the existing company-logo decoded-image budget. The raw attachment
+// limit alone cannot bound allocation for a compressed, attacker-sized canvas.
+const maxDeliveryImagePixels = 25_000_000
+
+func validDeliveryImage(data []byte, want string) bool {
+	config, format, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || config.Width < 1 || config.Height < 1 || config.Width > maxDeliveryImagePixels/config.Height || "image/"+format != want {
+		return false
+	}
+	if format == "webp" && !validDeliveryWebPContainer(data, config) {
+		return false
+	}
+	decoded, actual, err := image.Decode(bytes.NewReader(data))
+	if err != nil || actual != format {
+		return false
+	}
+	// A valid GIF frame may occupy a subrectangle of its logical canvas.
+	if format == "gif" {
+		return !decoded.Bounds().Empty() && decoded.Bounds().In(image.Rect(0, 0, config.Width, config.Height))
+	}
+	return decoded.Bounds().Dx() == config.Width && decoded.Bounds().Dy() == config.Height
+}
+
+// The codec validates pixels; the RIFF reader also validates the entire
+// container, including chunks after the image that a decoder may not consume.
+func validDeliveryWebPContainer(data []byte, canvas image.Config) bool {
+	if len(data) < 12 || uint64(binary.LittleEndian.Uint32(data[4:8]))+8 != uint64(len(data)) {
+		return false
+	}
+	form, reader, err := riff.NewReader(bytes.NewReader(data))
+	if err != nil || form != (riff.FourCC{'W', 'E', 'B', 'P'}) {
+		return false
+	}
+	images, extended := 0, 0
+	for index := 0; ; index++ {
+		id, size, chunk, err := reader.Next()
+		if err == io.EOF {
+			return images == 1
+		}
+		if err != nil {
+			return false
+		}
+		switch string(id[:]) {
+		case "VP8 ", "VP8L":
+			images++
+			if images > 1 {
+				return false
+			}
+			// Check the actual coded image, not only a potentially smaller VP8X
+			// canvas, before allowing the full decoder to allocate pixel buffers.
+			if string(id[:]) == "VP8L" {
+				config, err := vp8l.DecodeConfig(chunk)
+				if err != nil || config.Width != canvas.Width || config.Height != canvas.Height {
+					return false
+				}
+			} else {
+				decoder := vp8.NewDecoder()
+				decoder.Init(chunk, int(size))
+				header, err := decoder.DecodeFrameHeader()
+				if err != nil || header.Width != canvas.Width || header.Height != canvas.Height {
+					return false
+				}
+			}
+		case "VP8X":
+			extended++
+			if extended > 1 || index != 0 {
+				return false
+			}
+		}
+		if _, err := io.Copy(io.Discard, chunk); err != nil {
+			return false
+		}
+	}
 }
 
 // Office documents are ZIP containers, but general archives, embedded active
@@ -81,12 +153,14 @@ func safeDeliveryOffice(data []byte, ext, want string) bool {
 		return false
 	}
 	entries := map[string][]byte{}
+	seen := map[string]bool{}
 	var expanded uint64
 	for _, entry := range z.File {
 		name := strings.ToLower(entry.Name)
-		if strings.Contains(name, "..") || strings.HasPrefix(name, "/") || strings.Contains(name, "\\") || entries[name] != nil {
+		if strings.Contains(name, "..") || strings.HasPrefix(name, "/") || strings.Contains(name, "\\") || seen[name] {
 			return false
 		}
+		seen[name] = true
 		if strings.Contains(name, "vba") || strings.Contains(name, "macro") || strings.Contains(name, "scripts/") || strings.Contains(name, "basic/") || strings.Contains(name, "embeddings/") || strings.Contains(name, "activex/") {
 			return false
 		}
@@ -134,10 +208,10 @@ func safeDeliveryOffice(data []byte, ext, want string) bool {
 				}
 			}
 		}
-		entries[name] = body
+		entries[entry.Name] = body
 	}
 	if ext == ".odt" || ext == ".ods" {
-		return string(entries["mimetype"]) == want && deliveryXMLRoot(entries["content.xml"], "document-content", "urn:oasis:names:tc:opendocument:xmlns:office:1.0")
+		return string(entries["mimetype"]) == want && validDeliveryODF(entries, ext, want)
 	}
 	main, contentType := "word/document.xml", "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"
 	if ext == ".xlsx" {
@@ -156,7 +230,7 @@ func safeDeliveryOffice(data []byte, ext, want string) bool {
 			ContentType string `xml:"ContentType,attr"`
 		} `xml:"Override"`
 	}
-	if xml.Unmarshal(entries["[content_types].xml"], &types) != nil || len(entries[main]) == 0 {
+	if xml.Unmarshal(entries["[Content_Types].xml"], &types) != nil || len(entries[main]) == 0 {
 		return false
 	}
 	for _, part := range types.Overrides {

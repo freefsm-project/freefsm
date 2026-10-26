@@ -304,7 +304,7 @@ func DocumentEmailCompose(p DocumentEmailData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<p class=\"settings-help\">At most 10 extra Files; 15 MiB total raw bytes including the selected PDF. Allowed: PDF, TXT, CSV, PNG, JPEG, GIF, WebP, DOCX, XLSX, ODT, ODS. Content is validated before queue acceptance.</p><button type=\"submit\">Queue Email</button></form>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 29, "<p class=\"settings-help\">At most 10 extra Files; 15 MiB total raw bytes including the selected PDF. Allowed: PDF, TXT, CSV, PNG, JPEG, GIF, WebP, DOCX, XLSX, ODT, ODS. Images must decode within a 25-million-pixel canvas. Content is validated before queue acceptance.</p><button type=\"submit\">Queue Email</button></form>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

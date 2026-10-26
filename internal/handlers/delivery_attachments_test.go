@@ -5,15 +5,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/freefsm-project/freefsm/internal/delivery"
@@ -102,13 +106,109 @@ func TestDeliveryAttachmentLimitsAndContentHTTP(t *testing.T) {
 		{"pixel.jpg", "image/jpeg", deliveryImageFixture(t, "jpeg"), 303},
 		{"pixel.jpeg", "image/jpeg", deliveryImageFixture(t, "jpeg"), 303},
 		{"pixel.gif", "image/gif", deliveryImageFixture(t, "gif"), 303},
+		{"offset.gif", "image/gif", deliveryImageFixture(t, "gif-offset"), 303},
 		{"pixel.webp", "image/webp", deliveryImageFixture(t, "webp"), 303},
+		{"lossy-pixel.webp", "image/webp", deliveryImageFixture(t, "webp-lossy"), 303},
 		{"mismatch.png", "image/png", deliveryImageFixture(t, "jpeg"), 422},
 		{"wrong-mime.png", "image/jpeg", deliveryImageFixture(t, "png"), 422},
 		{"forged.png", "image/png", []byte("\x89PNG\r\n\x1a\nnot a PNG"), 422},
+		{"review-forged.webp", "image/webp", []byte("RIFF\x0c\x00\x00\x00WEBPnotimage"), 422},
+		{"review-text-as-sheet.ods", "application/vnd.oasis.opendocument.spreadsheet", deliveryOfficeVariant(t, "odt", map[string]string{
+			"mimetype":              "application/vnd.oasis.opendocument.spreadsheet",
+			"META-INF/manifest.xml": deliveryODFManifest("application/vnd.oasis.opendocument.spreadsheet"),
+		}), 422},
+		{"truncated-pixels.webp", "image/webp", deliveryWebPHeaderOnly(t, 1, 1), 422},
+		{"oversized-canvas.webp", "image/webp", deliveryWebPHeaderOnly(t, 16384, 16384), 422},
+		{"extended-pixel.webp", "image/webp", deliveryExtendedWebP(t, deliveryImageFixture(t, "webp"), 1, 1), 303},
+		{"extended-lossy-pixel.webp", "image/webp", deliveryExtendedWebP(t, deliveryImageFixture(t, "webp-lossy"), 1, 1), 303},
+		{"small-canvas-large-coded-image.webp", "image/webp", deliveryExtendedWebP(t, deliveryWebPHeaderOnly(t, 16384, 16384), 1, 1), 422},
+		{"canvas-mismatch.webp", "image/webp", deliveryExtendedWebP(t, deliveryImageFixture(t, "webp"), 2, 1), 422},
+		{"lossy-canvas-mismatch.webp", "image/webp", deliveryExtendedWebP(t, deliveryImageFixture(t, "webp-lossy"), 2, 1), 422},
+		{"truncated-trailing-chunk.webp", "image/webp", deliveryWebPBrokenTail(t), 422},
+		{"truncated-pixels.png", "image/png", deliveryImageFixture(t, "png")[:33], 422},
+		{"truncated-pixels.jpg", "image/jpeg", deliveryImageFixture(t, "jpeg")[:100], 422},
+		{"truncated-pixels.gif", "image/gif", deliveryImageFixture(t, "gif")[:13], 422},
+		{"manifest-mismatch.ods", "application/vnd.oasis.opendocument.spreadsheet", deliveryOfficeVariant(t, "ods", map[string]string{"META-INF/manifest.xml": deliveryODFManifest("application/vnd.oasis.opendocument.text")}), 422},
+		{"sheet-as-text.odt", "application/vnd.oasis.opendocument.text", deliveryOfficeVariant(t, "ods", map[string]string{"mimetype": "application/vnd.oasis.opendocument.text", "META-INF/manifest.xml": deliveryODFManifest("application/vnd.oasis.opendocument.text")}), 422},
+		{"mixed-bodies.ods", "application/vnd.oasis.opendocument.spreadsheet", deliveryOfficeVariant(t, "ods", map[string]string{"content.xml": deliveryODFContent(`<office:spreadsheet/><office:text/>`)}), 422},
+		{"wrong-body-namespace.ods", "application/vnd.oasis.opendocument.spreadsheet", deliveryOfficeVariant(t, "ods", map[string]string{"content.xml": deliveryODFContent(`<wrong:spreadsheet xmlns:wrong="urn:wrong"/>`)}), 422},
+		{"missing-body.ods", "application/vnd.oasis.opendocument.spreadsheet", deliveryOfficeVariant(t, "ods", map[string]string{"content.xml": `<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"/>`}), 422},
+		{"malformed-body.ods", "application/vnd.oasis.opendocument.spreadsheet", deliveryOfficeVariant(t, "ods", map[string]string{"content.xml": `<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:body><office:spreadsheet>`}), 422},
+		{"empty-manifest.odt", "application/vnd.oasis.opendocument.text", deliveryOfficeVariant(t, "odt", map[string]string{"META-INF/manifest.xml": ""}), 422},
+		{"duplicate-payload.odt", "application/vnd.oasis.opendocument.text", deliveryOfficeVariant(t, "odt", map[string]string{"content.xml": deliveryODFContent(`<office:text/><office:text/>`)}), 422},
+		{"duplicate-office-body.odt", "application/vnd.oasis.opendocument.text", deliveryOfficeVariant(t, "odt", map[string]string{"content.xml": strings.Replace(deliveryODFContent(`<office:text><text:p>First</text:p></office:text>`), `</office:body>`, `</office:body><office:body><office:text><text:p>Second</text:p></office:text></office:body>`, 1)}), 422},
+		{"wrong-manifest-namespace.odt", "application/vnd.oasis.opendocument.text", deliveryOfficeVariant(t, "odt", map[string]string{"META-INF/manifest.xml": strings.ReplaceAll(deliveryODFManifest("application/vnd.oasis.opendocument.text"), "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0", "urn:wrong")}), 422},
+		{"ambiguous-manifest.odt", "application/vnd.oasis.opendocument.text", deliveryOfficeVariant(t, "odt", map[string]string{"META-INF/manifest.xml": strings.Replace(deliveryODFManifest("application/vnd.oasis.opendocument.text"), `</manifest:manifest>`, `<manifest:file-entry manifest:full-path="/" manifest:media-type="application/vnd.oasis.opendocument.text"/></manifest:manifest>`, 1)}), 422},
+		{"inline-script.odt", "application/vnd.oasis.opendocument.text", deliveryOfficeVariant(t, "odt", map[string]string{"content.xml": deliveryODFContent(`<office:text><office:script>unsafe</office:script></office:text>`)}), 422},
 	} {
 		t.Run(tc.name, func(t *testing.T) { submit(t, []string{add(tc.name, tc.mime, tc.data, doc.ID)}, tc.status) })
 	}
+}
+
+func deliveryWebPHeaderOnly(t *testing.T, width, height uint32) []byte {
+	t.Helper()
+	data := append([]byte{}, deliveryImageFixture(t, "webp")[:25]...)
+	data = append(data, 0)
+	binary.LittleEndian.PutUint32(data[4:8], uint32(len(data)-8))
+	binary.LittleEndian.PutUint32(data[16:20], 5)
+	binary.LittleEndian.PutUint32(data[21:25], (width-1)|((height-1)<<14))
+	return data
+}
+
+func deliveryExtendedWebP(t *testing.T, coded []byte, width, height uint32) []byte {
+	t.Helper()
+	data := append([]byte("RIFF\x00\x00\x00\x00WEBPVP8X\x0a\x00\x00\x00"), make([]byte, 10)...)
+	data[24] = byte(width - 1)
+	data[25] = byte((width - 1) >> 8)
+	data[26] = byte((width - 1) >> 16)
+	data[27] = byte(height - 1)
+	data[28] = byte((height - 1) >> 8)
+	data[29] = byte((height - 1) >> 16)
+	data = append(data, coded[12:]...)
+	binary.LittleEndian.PutUint32(data[4:8], uint32(len(data)-8))
+	return data
+}
+
+func deliveryWebPBrokenTail(t *testing.T) []byte {
+	t.Helper()
+	data := append(deliveryImageFixture(t, "webp"), []byte("XMP \x10\x00\x00\x00oops")...)
+	binary.LittleEndian.PutUint32(data[4:8], uint32(len(data)-8))
+	return data
+}
+
+func deliveryOfficeVariant(t *testing.T, kind string, overrides map[string]string) []byte {
+	t.Helper()
+	data := deliveryOfficeFixture(t, kind, false)
+	archive, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	historyCheck(t, err)
+	var out bytes.Buffer
+	writer := zip.NewWriter(&out)
+	seen := map[string]bool{}
+	for _, entry := range archive.File {
+		reader, err := entry.Open()
+		historyCheck(t, err)
+		raw, err := io.ReadAll(reader)
+		historyCheck(t, err)
+		historyCheck(t, reader.Close())
+		if replacement, ok := overrides[entry.Name]; ok {
+			raw = []byte(replacement)
+		}
+		seen[entry.Name] = true
+		part, err := writer.CreateHeader(&zip.FileHeader{Name: entry.Name, Method: entry.Method})
+		historyCheck(t, err)
+		_, err = part.Write(raw)
+		historyCheck(t, err)
+	}
+	for name, value := range overrides {
+		if !seen[name] {
+			part, err := writer.Create(name)
+			historyCheck(t, err)
+			_, err = part.Write([]byte(value))
+			historyCheck(t, err)
+		}
+	}
+	historyCheck(t, writer.Close())
+	return out.Bytes()
 }
 
 func deliveryImageFixture(t *testing.T, kind string) []byte {
@@ -123,9 +223,23 @@ func deliveryImageFixture(t *testing.T, kind string) []byte {
 		historyCheck(t, jpeg.Encode(&b, pixel, nil))
 	case "gif":
 		historyCheck(t, gif.Encode(&b, pixel, nil))
-	case "webp":
-		data, err := base64.StdEncoding.DecodeString("UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAAAfQ//73v/+BiOh/AAA=")
+	case "gif-offset":
+		palette := color.Palette{color.White, color.Black}
+		frame := image.NewPaletted(image.Rect(1, 1, 2, 2), palette)
+		historyCheck(t, gif.EncodeAll(&b, &gif.GIF{Image: []*image.Paletted{frame}, Delay: []int{0}, Config: image.Config{ColorModel: palette, Width: 2, Height: 2}}))
+	case "webp", "webp-lossy":
+		encoded := "UklGRh4AAABXRUJQVlA4TBEAAAAvAAAAAAfQ//73v/+BiOh/AAA="
+		if kind == "webp-lossy" {
+			// Generated from an owned 1x1 red pixel; no encoder dependency in CI.
+			encoded = "UklGRjwAAABXRUJQVlA4IDAAAADQAQCdASoBAAEAAgA0JaACdLoB+AADsAD+8MQL/yC5YXXI1/8gP+QH/ID/+PIAAAA="
+		}
+		data, err := base64.StdEncoding.DecodeString(encoded)
 		historyCheck(t, err)
+		decoded, format, err := image.Decode(bytes.NewReader(data))
+		historyCheck(t, err)
+		if format != "webp" || decoded.Bounds().Dx() != 1 || decoded.Bounds().Dy() != 1 {
+			t.Fatal("WebP positive fixture must decode as an actual 1x1 image")
+		}
 		return data
 	}
 	return b.Bytes()
@@ -138,17 +252,24 @@ func deliveryOfficeFixture(t *testing.T, kind string, macro bool) []byte {
 	entries := map[string]string{}
 	switch kind {
 	case "docx":
-		entries["[Content_Types].xml"] = `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
-		entries["word/document.xml"] = `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>`
+		entries["[Content_Types].xml"] = `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`
+		entries["_rels/.rels"] = `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`
+		entries["word/document.xml"] = `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Reviewed document</w:t></w:r></w:p></w:body></w:document>`
 	case "xlsx":
-		entries["[Content_Types].xml"] = `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>`
-		entries["xl/workbook.xml"] = `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"/>`
+		entries["[Content_Types].xml"] = `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`
+		entries["_rels/.rels"] = `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`
+		entries["xl/workbook.xml"] = `<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>`
+		entries["xl/_rels/workbook.xml.rels"] = `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`
+		entries["xl/worksheets/sheet1.xml"] = `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="inlineStr"><is><t>Reviewed cell</t></is></c></row></sheetData></worksheet>`
 	case "odt":
 		entries["mimetype"] = "application/vnd.oasis.opendocument.text"
-		entries["content.xml"] = `<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:script="urn:oasis:names:tc:opendocument:xmlns:script:1.0"><office:scripts/><office:body><office:text/></office:body></office:document-content>`
+		entries["content.xml"] = deliveryODFContent(`<office:text><text:p>Reviewed document</text:p></office:text>`)
 	case "ods":
 		entries["mimetype"] = "application/vnd.oasis.opendocument.spreadsheet"
-		entries["content.xml"] = `<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"><office:body><office:spreadsheet/></office:body></office:document-content>`
+		entries["content.xml"] = deliveryODFContent(`<office:spreadsheet><table:table table:name="Sheet1"><table:table-row><table:table-cell office:value-type="string"><text:p>Reviewed cell</text:p></table:table-cell></table:table-row></table:table></office:spreadsheet>`)
+	}
+	if media, ok := entries["mimetype"]; ok {
+		entries["META-INF/manifest.xml"] = deliveryODFManifest(media)
 	}
 	if macro {
 		switch kind {
@@ -160,8 +281,23 @@ func deliveryOfficeFixture(t *testing.T, kind string, macro bool) []byte {
 			entries["Basic/Standard/Module1.xml"] = "macro"
 		}
 	}
-	for name, data := range entries {
-		part, err := w.Create(name)
+	names := make([]string, 0, len(entries))
+	for name := range entries {
+		if name != "mimetype" {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	if _, ok := entries["mimetype"]; ok {
+		names = append([]string{"mimetype"}, names...)
+	}
+	for _, name := range names {
+		data := entries[name]
+		method := uint16(zip.Deflate)
+		if name == "mimetype" {
+			method = zip.Store
+		}
+		part, err := w.CreateHeader(&zip.FileHeader{Name: name, Method: method})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -173,6 +309,14 @@ func deliveryOfficeFixture(t *testing.T, kind string, macro bool) []byte {
 		t.Fatal(err)
 	}
 	return b.Bytes()
+}
+
+func deliveryODFManifest(media string) string {
+	return `<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.3"><manifest:file-entry manifest:full-path="/" manifest:media-type="` + media + `" manifest:version="1.3"/><manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/></manifest:manifest>`
+}
+
+func deliveryODFContent(body string) string {
+	return `<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0" office:version="1.3"><office:scripts/><office:body>` + body + `</office:body></office:document-content>`
 }
 
 func TestDeliveryAttachmentSnapshotHTTP(t *testing.T) {

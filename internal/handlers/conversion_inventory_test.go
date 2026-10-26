@@ -10,7 +10,9 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -105,7 +107,7 @@ func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cli
 		_, err := pool.Exec(ctx, `DROP TRIGGER inventory_audit_failure ON authorization_audit; DROP FUNCTION inventory_audit_failure()`)
 		historyCheck(t, err)
 	}
-	fixed := []string{"document_pdf_versions", "document_deliveries"}
+	fixed := []string{"document_pdf_versions", "document_deliveries", "document_delivery_events"}
 	beforePDF := historyDurableRows(t, pool, fixed)
 	before := conversionRelations(t, pool, "estimate", out.estimate)
 	command := creditCommand{source + "/convert", conversionReview(t, web, cookie, source+"/convert")}
@@ -120,7 +122,10 @@ func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cli
 	if failedCycles != 0 {
 		t.Fatal("failed conversion left a cycle")
 	}
+	historyEqual(t, "failed conversion rolls back cancellation and every original PDF/Delivery field", historyDurableRows(t, pool, fixed), beforePDF)
 	clearFault()
+	var conversionStarted time.Time
+	historyCheck(t, pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&conversionStarted))
 	fieldPost(t, web, cookie, command.path, command.values, 303)
 	out.commands = append(out.commands, command)
 	historyCheck(t, pool.QueryRow(ctx, `SELECT invoice_id FROM estimate_invoice_conversion_cycles WHERE estimate_id=$1 AND reverted_at IS NULL`, out.estimate).Scan(&out.first))
@@ -138,7 +143,7 @@ func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cli
 	if got := conversionRelations(t, pool, "estimate", out.estimate); got != "[[], [], []]" {
 		t.Fatal("source retains current collaboration", got)
 	}
-	historyEqual(t, "PDF/Delivery original identities after convert", historyDurableRows(t, pool, fixed), beforePDF)
+	beforePDF = conversionCancelledDeliveries(t, pool, beforePDF, "estimate", out.estimate, conversionStarted)
 	fieldPost(t, web, cookie, invoice+"/custom-fields", url.Values{"custom_field_2": {"Current shared"}, "custom_field_4": {"First Invoice-only changed"}}, 303)
 	fieldPost(t, web, cookie, invoice+"/comments", url.Values{"content": {"Current Invoice Comment"}}, 200)
 	conversionUpload(t, web, cookie, "invoice", out.first, "invoice.txt", "Current Invoice file bytes")
@@ -157,7 +162,9 @@ func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cli
 	if !active {
 		t.Fatal("failed reversion closed cycle")
 	}
+	historyEqual(t, "failed reversion rolls back cancellation and every original PDF/Delivery field", historyDurableRows(t, pool, fixed), beforePDF)
 	clearFault()
+	historyCheck(t, pool.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&conversionStarted))
 	fieldPost(t, web, cookie, command.path, command.values, 303)
 	out.commands = append(out.commands, command)
 	expectStatus(t, web, cookie, "GET", invoice, 403)
@@ -169,7 +176,18 @@ func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cli
 	if got := conversionRelations(t, pool, "invoice", out.first); got != "[[], [], []]" {
 		t.Fatal("hidden Invoice retains current collaboration", got)
 	}
-	historyEqual(t, "PDF/Delivery original identities after revert", historyDurableRows(t, pool, fixed), beforePDF)
+	beforePDF = conversionCancelledDeliveries(t, pool, beforePDF, "invoice", out.first, conversionStarted)
+	noResurrection := func() {
+		t.Helper()
+		sender := &compositionSender{}
+		worked, err := delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+		historyCheck(t, err)
+		if worked || len(sender.messages) != 0 {
+			t.Fatal("conversion/reversion resurrected or retargeted original mail")
+		}
+		historyEqual(t, "worker leaves cancelled original inventory unchanged", historyDurableRows(t, pool, fixed), beforePDF)
+	}
+	noResurrection()
 	var restored, hidden string
 	historyCheck(t, pool.QueryRow(ctx, `SELECT custom_fields::text FROM estimates WHERE id=$1`, out.estimate).Scan(&restored))
 	historyCheck(t, pool.QueryRow(ctx, `SELECT custom_fields::text FROM invoices WHERE id=$1`, out.first).Scan(&hidden))
@@ -195,6 +213,12 @@ func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cli
 	assertNotContains(t, current, "Original Estimate-only")
 	assertNotContains(t, current, "First Invoice-only changed")
 	historyEqual(t, "PDF/Delivery bytes and identities over all cycles", historyDurableRows(t, pool, fixed), beforePDF)
+	currentPath := fmt.Sprintf("/invoices/%d", out.current)
+	fieldPost(t, web, cookie, currentPath+"/finalize", commercialReviewedValues(t, web, cookie, currentPath, url.Values{}), 303)
+	fieldPost(t, web, cookie, currentPath+"/delete", url.Values{}, 303)
+	historyEqual(t, "archive cannot alter or retarget the original cancelled inventory", historyDurableRows(t, pool, fixed), beforePDF)
+	fieldPost(t, web, cookie, currentPath+"/restore", url.Values{}, 303)
+	noResurrection()
 	for _, name := range []string{"source.txt", "invoice.txt"} {
 		var id int64
 		historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM files WHERE original_name=$1`, name).Scan(&id))
