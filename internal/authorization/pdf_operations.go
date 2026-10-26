@@ -108,15 +108,15 @@ func (s *Service) GenerateReviewedPDF(ctx context.Context, a Actor, kind string,
 		}
 		effect := func() error {
 			for _, dep := range in.DependsOn {
-				prior, err := pdfReceipt(ctx, sp, a, dep)
-				if errors.Is(err, ErrNotFound) {
+				code, err := boundDependencyCode(ctx, sp, a, dep)
+				if err == nil && code == "" {
 					r.Outcome = "invalid_dependency"
 					return nil
 				}
 				if err != nil {
 					return err
 				}
-				if prior.Outcome != "accepted" {
+				if code != "accepted" {
 					r.Outcome = "dependency_failed"
 					return nil
 				}
@@ -145,7 +145,7 @@ func (s *Service) GenerateReviewedPDF(ctx context.Context, a Actor, kind string,
 			if err != nil {
 				return err
 			}
-			return savePDFVersion(ctx, sp, p, a, kind, id, source.Token, source.ReviewToken, filename, content, &r.VersionID)
+			return savePDFVersion(ctx, sp, p, a, kind, id, source, filename, content, &r.VersionID)
 		}()
 		if effect != nil {
 			_ = sp.Rollback(ctx)

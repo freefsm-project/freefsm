@@ -2,7 +2,6 @@ package authorization
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -27,6 +26,8 @@ type PDFSource struct {
 	AppliedCents    int64
 }
 type PDFVersion struct {
+	SourceKnown bool
+	Source      []byte
 	ID          int64
 	GeneratedAt time.Time
 	Stale       bool
@@ -217,7 +218,10 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 			applied += entry.Amount
 		}
 	}
-	token := fmt.Sprintf("%x", sha256.Sum256(snapshot))
+	token, known := pdfSourceFingerprint(snapshot)
+	if !known {
+		return PDFSource{}, fmt.Errorf("incomplete captured PDF source")
+	}
 	return PDFSource{LogoUnavailable: logoUnavailable, Logo: logo, Asset: financial.Asset, Token: token, ReviewToken: fmt.Sprintf("%s:%d", token, presentationRevision), Settings: cs, Snapshot: snapshot, SettledCents: settled, AllocatedCents: allocated, AppliedCents: applied, FieldLines: fieldLines}, nil
 }
 
@@ -241,14 +245,14 @@ func (s *Service) PDFPermission(ctx context.Context, a Actor, kind string, id in
 	return err
 }
 
-func (s *Service) SavePDFVersion(ctx context.Context, a Actor, kind string, id int64, source, reviewToken, filename string, content []byte) error {
+func (s *Service) SavePDFVersion(ctx context.Context, a Actor, kind string, id int64, source PDFSource, filename string, content []byte) error {
 	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		var version int64
-		return savePDFVersion(ctx, tx, p, a, kind, id, source, reviewToken, filename, content, &version)
+		return savePDFVersion(ctx, tx, p, a, kind, id, source, filename, content, &version)
 	})
 }
 
-func savePDFVersion(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind string, id int64, source, reviewToken, filename string, content []byte, version *int64) error {
+func savePDFVersion(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind string, id int64, source PDFSource, filename string, content []byte, version *int64) error {
 	scope, err := pdfDocumentAccess(ctx, tx, p, kind, id, "pdf.generate")
 	if err != nil {
 		return err
@@ -283,13 +287,13 @@ func savePDFVersion(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind s
 	if err != nil {
 		return err
 	}
-	if current.Token != source || current.ReviewToken != reviewToken {
+	if current.Token != source.Token || current.ReviewToken != source.ReviewToken {
 		return ErrConflict
 	}
 	if len(content) == 0 {
 		return fmt.Errorf("empty PDF")
 	}
-	if err := tx.QueryRow(ctx, `INSERT INTO document_pdf_versions(company_id,document_type,document_id,source_token,filename,content,generated_by,source_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, p.CompanyID, kind, id, source, filename, content, a.UserID, current.Snapshot).Scan(version); err != nil {
+	if err := tx.QueryRow(ctx, `INSERT INTO document_pdf_versions(company_id,document_type,document_id,source_token,filename,content,generated_by,source_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, p.CompanyID, kind, id, source.Token, filename, content, a.UserID, source.Snapshot).Scan(version); err != nil {
 		return err
 	}
 	return audit(ctx, tx, a, p, kind+".pdf.generate", scope, kind, id, map[string]any{"pdf_version": *version})
@@ -303,24 +307,16 @@ func (s *Service) PDFVersions(ctx context.Context, a Actor, kind string, id int6
 	if _, err := pdfDocumentAccess(ctx, s.Pool, p, kind, id, "view"); err != nil {
 		return nil, err
 	}
+	if a.Channel == "api" {
+		if err := fieldPDFAnchor(ctx, s.Pool, kind, id); err != nil {
+			return nil, err
+		}
+	}
 	source, err := pdfSource(ctx, s.Pool, p, kind, id)
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.Pool.Query(ctx, `SELECT id,generated_at,source_token<>$4,filename FROM document_pdf_versions WHERE company_id=$1 AND document_type=$2 AND document_id=$3 ORDER BY id DESC`, p.CompanyID, kind, id, source.Token)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	versions := []PDFVersion{}
-	for rows.Next() {
-		var v PDFVersion
-		if err := rows.Scan(&v.ID, &v.GeneratedAt, &v.Stale, &v.Filename); err != nil {
-			return nil, err
-		}
-		versions = append(versions, v)
-	}
-	return versions, rows.Err()
+	return readPDFVersions(ctx, s.Pool, p, kind, id, source.Token, 0)
 }
 
 func (s *Service) DownloadPDFVersion(ctx context.Context, a Actor, kind string, id, version int64, confirm bool) (PDFVersion, error) {
@@ -329,6 +325,11 @@ func (s *Service) DownloadPDFVersion(ctx context.Context, a Actor, kind string, 
 		scope, err := pdfDocumentAccess(ctx, tx, p, kind, id, "pdf.download")
 		if err != nil {
 			return err
+		}
+		if a.Channel == "api" {
+			if err := fieldPDFAnchor(ctx, tx, kind, id); err != nil {
+				return err
+			}
 		}
 		if _, err := tx.Exec(ctx, `SELECT id FROM `+kind+`s WHERE id=$1 AND company_id=$2 FOR SHARE`, id, p.CompanyID); err != nil {
 			return err
@@ -345,11 +346,16 @@ func (s *Service) DownloadPDFVersion(ctx context.Context, a Actor, kind string, 
 		if err != nil {
 			return err
 		}
+		if a.Channel == "api" {
+			if err := fieldPDFAnchor(ctx, tx, kind, id); err != nil {
+				return err
+			}
+		}
 		source, err := pdfSource(ctx, tx, p, kind, id)
 		if err != nil {
 			return err
 		}
-		err = tx.QueryRow(ctx, `SELECT id,generated_at,source_token<>$5,filename,content FROM document_pdf_versions WHERE company_id=$1 AND document_type=$2 AND document_id=$3 AND (($4=0 AND source_token=$5) OR id=$4) ORDER BY id DESC LIMIT 1`, p.CompanyID, kind, id, version, source.Token).Scan(&v.ID, &v.GeneratedAt, &v.Stale, &v.Filename, &v.Content)
+		v, err = selectedPDFVersion(ctx, tx, p, kind, id, version, source.Token)
 		if err == pgx.ErrNoRows {
 			return ErrNotFound
 		}

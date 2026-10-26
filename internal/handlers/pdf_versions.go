@@ -51,7 +51,7 @@ func documentPDFVersions(w http.ResponseWriter, r *http.Request, kind string, id
 			internalServerError(w, r, "PDF generation failed", err)
 			return true
 		}
-		if err := request.Service.SavePDFVersion(r.Context(), request.Actor, kind, id, source.Token, source.ReviewToken, filename, content); err != nil {
+		if err := request.Service.SavePDFVersion(r.Context(), request.Actor, kind, id, source, filename, content); err != nil {
 			if errors.Is(err, authorization.ErrConflict) || errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrPending) || errors.Is(err, authorization.ErrUnavailable) {
 				authorizationError(w, r, err)
 			} else {

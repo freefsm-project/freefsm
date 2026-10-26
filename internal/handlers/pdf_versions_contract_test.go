@@ -32,6 +32,9 @@ func TestPDFVersionInvalidSelectionNeverFallsBackHTTP(t *testing.T) {
 				expectStatus(t, router, cookie, "GET", path+"/pdf?version="+selection, 400)
 			}
 			expectStatus(t, router, cookie, "GET", path+"/pdf?version=999999", 404)
+			for _, selection := range []string{"pdf_version=", "pdf_version=1&pdf_version=2", "pdf_version=1&version=2"} {
+				expectStatus(t, router, cookie, "GET", path+"/email?"+selection, 422)
+			}
 		})
 	}
 }

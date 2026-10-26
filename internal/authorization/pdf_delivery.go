@@ -20,7 +20,8 @@ func selectDeliveryPDF(ctx context.Context, q queryer, p Principal, kind string,
 	if err != nil {
 		return out, err
 	}
-	err = q.QueryRow(ctx, `SELECT id,generated_at,source_token<>$5,filename,content,source_snapshot FROM document_pdf_versions WHERE company_id=$1 AND document_type=$2 AND document_id=$3 AND (($4=0 AND source_token=$5) OR id=$4) ORDER BY id DESC LIMIT 1`, p.CompanyID, kind, id, version, source.Token).Scan(&out.Version.ID, &out.Version.GeneratedAt, &out.Version.Stale, &out.Version.Filename, &out.Version.Content, &out.Source)
+	out.Version, err = selectedPDFVersion(ctx, q, p, kind, id, version, source.Token)
+	out.Source = out.Version.Source
 	if err == pgx.ErrNoRows {
 		return out, ErrConflict
 	}

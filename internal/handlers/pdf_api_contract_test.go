@@ -64,6 +64,21 @@ func TestPDFReviewedSourceReceiptAndDependentDriftAPI(t *testing.T) {
 	if first["version_id"] == nil {
 		t.Fatal("missing PDF effect identity")
 	}
+	originalToken := token
+	token, err = sessions.CreateMobile(ctx, admin, "Different PDF client")
+	historyCheck(t, err)
+	call("POST", path+"/generate", intent, 409)
+	call("GET", "/pdf-operations/"+key, "", 404)
+	token = originalToken
+	call("POST", fmt.Sprintf("/estimates/%d/pdf/generate", i.ID), intent, 409)
+	var bound bool
+	historyCheck(t, pool.QueryRow(ctx, `SELECT a.deployment_id=d.id AND a.operation_type='invoice.pdf.generate' AND a.user_id=$2 AND a.client_key LIKE 'api:%' FROM operation_admissions a CROSS JOIN operation_deployment d WHERE a.operation_id=$1`, key, admin).Scan(&bound))
+	if !bound {
+		t.Fatal("PDF operation lost deployment/type/client binding")
+	}
+	if _, err := pool.Exec(ctx, `UPDATE operation_admissions SET operation_type='estimate.pdf.generate' WHERE operation_id=$1`, key); err == nil {
+		t.Fatal("operation identity can be borrowed by another type")
+	}
 	replayed := call("POST", path+"/generate", intent, 200)["data"].(map[string]any)
 	if first["version_id"] != replayed["version_id"] {
 		t.Fatal("retry regenerated PDF")
@@ -76,6 +91,14 @@ func TestPDFReviewedSourceReceiptAndDependentDriftAPI(t *testing.T) {
 	stored := call("GET", "/pdf-operations/"+staleKey, "", 200)["data"].(map[string]any)
 	if stored["outcome"] != "source_drift" {
 		t.Fatalf("receipt=%v", stored)
+	}
+	notes := call("GET", fmt.Sprintf("/jobs/%d/field-notes", j.ID), "", 200)["data"].(map[string]any)
+	for _, dependency := range []struct{ id, outcome string }{{staleKey, "failed_dependency"}, {key, "accepted"}} {
+		batch := fmt.Sprintf(`{"operations":[{"operation_id":%q,"type":"job.field_notes","target":%q,"depends_on":[%q],"notes_revision":%q,"field_notes":"Dependent work"}]}`, newOperationKey(), fmt.Sprint(j.ID), dependency.id, notes["notes_revision"])
+		result := call("POST", "/sync/operations", batch, 200)
+		raw, err := json.Marshal(result)
+		historyCheck(t, err)
+		assertContains(t, string(raw), dependency.outcome)
 	}
 	current := call("GET", path+"/source", "", 200)["data"].(map[string]any)["source_token"].(string)
 	dependent := fmt.Sprintf(`{"operation_id":%q,"job_id":%d,"source_token":%q,"depends_on":[%q]}`, newOperationKey(), j.ID, current, staleKey)
@@ -126,6 +149,14 @@ func TestPDFGenerationIndependentGrantAndReceiptAfterScopeLossAPI(t *testing.T) 
 	key := newOperationKey()
 	intent := fmt.Sprintf(`{"operation_id":%q,"job_id":%d,"source_token":%q,"depends_on":[]}`, key, j.ID, source.Data.Token)
 	first := call("POST", path+"/generate", intent, 200)
+	var generated struct {
+		Data struct {
+			Version int64 `json:"version_id"`
+		}
+	}
+	historyCheck(t, json.Unmarshal([]byte(first), &generated))
+	call("GET", fmt.Sprintf("%s/versions/%d", path, generated.Data.Version), "", 403)
+	call("GET", path+"/versions", "", 200)
 	expectStatus(t, web, sessionCookie(t, ctx, sessions, u.ID), "GET", path, 403)
 	_, err = auth.SaveRole(ctx, actor, role, "PDF authority removed", nil, 1)
 	historyCheck(t, err)

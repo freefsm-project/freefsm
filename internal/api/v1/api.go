@@ -181,6 +181,8 @@ func New(deps Dependencies) http.Handler {
 		for _, kind := range []string{"estimate", "invoice"} {
 			r.Get("/"+kind+"s/{id}/pdf/source", h.pdfSource(kind))
 			r.Post("/"+kind+"s/{id}/pdf/generate", h.pdfGenerate(kind))
+			r.Get("/"+kind+"s/{id}/pdf/versions", h.pdfVersions(kind))
+			r.Get("/"+kind+"s/{id}/pdf/versions/{version}", h.pdfDownload(kind))
 			r.Post("/"+kind+"s", h.commercial(kind))
 			r.Get("/"+kind+"s/{id}", h.commercial(kind))
 			r.Patch("/"+kind+"s/{id}", h.commercial(kind))

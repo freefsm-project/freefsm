@@ -26,9 +26,20 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 		http.Error(w, "Invalid form", 400)
 		return true
 	}
-	text := r.FormValue("pdf_version")
-	if text == "" && r.Method == http.MethodGet {
-		text = r.FormValue("version")
+	selected, present := r.Form["pdf_version"]
+	alias, aliasPresent := r.Form["version"]
+	if !present && r.Method == http.MethodGet {
+		selected, present = alias, aliasPresent
+		aliasPresent = false
+	}
+	if present && (len(selected) != 1 || selected[0] == "" || aliasPresent) {
+		saveaction.RejectBeforeWrite(r.Context())
+		http.Error(w, "Invalid PDF selection", 422)
+		return true
+	}
+	text := ""
+	if present {
+		text = selected[0]
 	}
 	var version int64
 	if text != "" {
@@ -45,7 +56,7 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 		http.Error(w, "Select a saved PDF version before sending", 409)
 		return true
 	}
-	selected, err := request.Service.DeliveryPDF(r.Context(), request.Actor, kind, id, version)
+	selection, err := request.Service.DeliveryPDF(r.Context(), request.Actor, kind, id, version)
 	if err != nil {
 		saveaction.RejectBeforeWrite(r.Context()) // only selection was read; Queue has not run
 		if errors.Is(err, authorization.ErrConflict) {
@@ -69,13 +80,13 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 			Subtitle string `json:"subtitle"`
 		}
 	}
-	if err := json.Unmarshal(selected.Source, &source); err != nil {
+	if err := json.Unmarshal(selection.Source, &source); err != nil {
 		internalServerError(w, r, "load PDF source", err)
 		return true
 	}
 	doc := documentPDF{Title: source.Document.Title, Number: source.Document.Number, CustomerEmail: source.Customer.Email, CustomerName: source.Customer.Name, JobName: source.Job.Title, JobType: source.Job.Title, JobSubtitle: source.Job.Subtitle, Date: displayDate(r.Context(), time.Now())}
 	cs := middleware.CompanyFromContext(r.Context())
-	data := templates.DocumentEmailData{ObjectType: kind, ObjectID: id, Title: doc.Title, BackURL: fmt.Sprintf("/%ss/%d/pdf/preview", kind, id), ActionURL: fmt.Sprintf("/%ss/%d/email", kind, id), To: doc.CustomerEmail, CC: emailAutoCC(cs), IdempotencyKey: uuid.NewString(), PDFVersion: selected.Version.ID, PDFStale: selected.Version.Stale}
+	data := templates.DocumentEmailData{ObjectType: kind, ObjectID: id, Title: doc.Title, BackURL: fmt.Sprintf("/%ss/%d/pdf/preview", kind, id), ActionURL: fmt.Sprintf("/%ss/%d/email", kind, id), To: doc.CustomerEmail, CC: emailAutoCC(cs), IdempotencyKey: uuid.NewString(), PDFVersion: selection.Version.ID, PDFStale: selection.Version.Stale}
 	data.Subject, data.Body = documentEmailDefaults(kind, doc, cs)
 	if r.Method == http.MethodGet {
 		data.HTMLBody, err = composeHTMLDefault(queue, r, kind, doc, cs)
@@ -104,7 +115,7 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 		return true
 	}
 	u, _ := middleware.UserFromContext(r.Context())
-	_, err = queue.Queue(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, delivery.QueueRequest{Key: key, Document: delivery.DocumentRef{Type: kind, ID: id}, PDFVersionID: selected.Version.ID, ConfirmStalePDF: data.ConfirmStalePDF, Snapshot: delivery.Snapshot{To: recipients.To, CC: recipients.CC, BCC: recipients.BCC, Subject: data.Subject, TextBody: data.Body, HTMLBody: selectedEmailHTML(data.Body, data.HTMLBody), PDF: selected.Version.Content, PDFFilename: selected.Version.Filename}})
+	_, err = queue.Queue(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, delivery.QueueRequest{Key: key, Document: delivery.DocumentRef{Type: kind, ID: id}, PDFVersionID: selection.Version.ID, ConfirmStalePDF: data.ConfirmStalePDF, Snapshot: delivery.Snapshot{To: recipients.To, CC: recipients.CC, BCC: recipients.BCC, Subject: data.Subject, TextBody: data.Body, HTMLBody: selectedEmailHTML(data.Body, data.HTMLBody), PDF: selection.Version.Content, PDFFilename: selection.Version.Filename}})
 	if errors.Is(err, authorization.ErrConflict) {
 		data.PDFStale = true
 		data.Error = "The selected PDF is stale. Confirm sending this exact version or select a new version."
