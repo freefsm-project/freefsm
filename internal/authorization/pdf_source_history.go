@@ -15,11 +15,14 @@ import (
 // Compare only retained source facts, never reconstruct history from today's
 // document. This adapter supports the installed pre-format source shape while
 // leaving its bytes, original fingerprint, identity and snapshot untouched.
-func pdfSourceFingerprint(raw []byte) (string, bool) {
+func pdfSourceFingerprint(kind string, raw []byte) (string, bool) {
 	var source map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	if decoder.Decode(&source) != nil {
+		return "", false
+	}
+	if !pdfSourceShapeKnown(kind, source) {
 		return "", false
 	}
 	document, ok := source["document"].(map[string]any)
@@ -153,7 +156,7 @@ func readPDFVersions(ctx context.Context, q queryer, p Principal, kind string, i
 		if err := rows.Scan(&v.ID, &v.GeneratedAt, &v.Filename, &v.Source); err != nil {
 			return nil, err
 		}
-		fingerprint, known := pdfSourceFingerprint(v.Source)
+		fingerprint, known := pdfSourceFingerprint(kind, v.Source)
 		v.SourceKnown = known
 		v.Stale = !known || fingerprint != token
 		versions = append(versions, v)

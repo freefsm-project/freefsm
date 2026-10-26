@@ -27,6 +27,13 @@ type PDFReceipt struct {
 
 type PDFRenderer func(string, PDFSource) (string, []byte, error)
 
+// Attribution accompanies the accepted effect into the protected audit writer;
+// the operation receipt is not a replacement for occurrence evidence.
+type pdfGenerationAttribution struct {
+	OperationID string
+	OccurredAt  *time.Time
+}
+
 func (s *Service) ReviewedPDFSource(ctx context.Context, a Actor, kind string, id int64) (PDFSource, int64, error) {
 	var source PDFSource
 	var job int64
@@ -145,7 +152,7 @@ func (s *Service) GenerateReviewedPDF(ctx context.Context, a Actor, kind string,
 			if err != nil {
 				return err
 			}
-			return savePDFVersion(ctx, sp, p, a, kind, id, source, filename, content, &r.VersionID)
+			return savePDFVersion(ctx, sp, p, a, kind, id, source, filename, content, &r.VersionID, &pdfGenerationAttribution{OperationID: in.OperationID, OccurredAt: in.OccurredAt})
 		}()
 		if effect != nil {
 			_ = sp.Rollback(ctx)

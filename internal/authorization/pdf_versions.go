@@ -218,7 +218,7 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 			applied += entry.Amount
 		}
 	}
-	token, known := pdfSourceFingerprint(snapshot)
+	token, known := pdfSourceFingerprint(kind, snapshot)
 	if !known {
 		return PDFSource{}, fmt.Errorf("incomplete captured PDF source")
 	}
@@ -248,11 +248,11 @@ func (s *Service) PDFPermission(ctx context.Context, a Actor, kind string, id in
 func (s *Service) SavePDFVersion(ctx context.Context, a Actor, kind string, id int64, source PDFSource, filename string, content []byte) error {
 	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		var version int64
-		return savePDFVersion(ctx, tx, p, a, kind, id, source, filename, content, &version)
+		return savePDFVersion(ctx, tx, p, a, kind, id, source, filename, content, &version, nil)
 	})
 }
 
-func savePDFVersion(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind string, id int64, source PDFSource, filename string, content []byte, version *int64) error {
+func savePDFVersion(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind string, id int64, source PDFSource, filename string, content []byte, version *int64, attribution *pdfGenerationAttribution) error {
 	scope, err := pdfDocumentAccess(ctx, tx, p, kind, id, "pdf.generate")
 	if err != nil {
 		return err
@@ -293,10 +293,19 @@ func savePDFVersion(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind s
 	if len(content) == 0 {
 		return fmt.Errorf("empty PDF")
 	}
-	if err := tx.QueryRow(ctx, `INSERT INTO document_pdf_versions(company_id,document_type,document_id,source_token,filename,content,generated_by,source_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, p.CompanyID, kind, id, source.Token, filename, content, a.UserID, source.Snapshot).Scan(version); err != nil {
+	var accepted time.Time
+	if err := tx.QueryRow(ctx, `INSERT INTO document_pdf_versions(company_id,document_type,document_id,source_token,filename,content,generated_by,source_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id,generated_at`, p.CompanyID, kind, id, source.Token, filename, content, a.UserID, source.Snapshot).Scan(version, &accepted); err != nil {
 		return err
 	}
-	return audit(ctx, tx, a, p, kind+".pdf.generate", scope, kind, id, map[string]any{"pdf_version": *version})
+	detail := map[string]any{"pdf_version": *version, "accepted_at": accepted, "occurred_at": accepted, "occurrence_source": "server"}
+	if attribution != nil {
+		detail["operation_id"] = attribution.OperationID
+		if attribution.OccurredAt != nil {
+			detail["occurred_at"] = *attribution.OccurredAt
+			detail["occurrence_source"] = "client"
+		}
+	}
+	return audit(ctx, tx, a, p, kind+".pdf.generate", scope, kind, id, detail)
 }
 
 func (s *Service) PDFVersions(ctx context.Context, a Actor, kind string, id int64) ([]PDFVersion, error) {

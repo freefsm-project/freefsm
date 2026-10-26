@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -21,6 +22,13 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 	request, ok := authorization.FromContext(r.Context())
 	if !ok {
 		return false
+	}
+	// Validate the original query even if middleware has already parsed Form.
+	// URL.Query silently drops malformed pairs and must not select a default.
+	if _, err := url.ParseQuery(r.URL.RawQuery); err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
+		http.Error(w, "Invalid PDF selection", http.StatusBadRequest)
+		return true
 	}
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Invalid form", 400)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mime"
 	"net/http"
+	"net/url"
 	"strconv"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -61,8 +62,13 @@ func documentPDFVersions(w http.ResponseWriter, r *http.Request, kind string, id
 		}
 		http.Redirect(w, r, fmt.Sprintf("/%ss/%d/pdf/preview", kind, id), 303)
 	case "download":
+		query, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			http.Error(w, "invalid PDF version selection", http.StatusBadRequest)
+			return true
+		}
 		var version int64
-		if selected, present := r.URL.Query()["version"]; present {
+		if selected, present := query["version"]; present {
 			var err error
 			if len(selected) == 1 {
 				version, err = strconv.ParseInt(selected[0], 10, 64)
@@ -72,7 +78,7 @@ func documentPDFVersions(w http.ResponseWriter, r *http.Request, kind string, id
 				return true
 			}
 		}
-		v, err := request.Service.DownloadPDFVersion(r.Context(), request.Actor, kind, id, version, r.URL.Query().Get("confirm_stale") == "1")
+		v, err := request.Service.DownloadPDFVersion(r.Context(), request.Actor, kind, id, version, query.Get("confirm_stale") == "1")
 		if err != nil {
 			authorizationError(w, r, err)
 			return true
