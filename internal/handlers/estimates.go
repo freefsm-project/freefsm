@@ -610,9 +610,7 @@ func (h *EstimateHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	if documentPDFVersions(w, r, "estimate", id, "download", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
-		return h.estimatePDFDocument(ctx, id, input)
-	}) {
+	if documentPDFVersions(w, r, "estimate", id, "download") {
 		return
 	}
 	if !h.authorizeEstimate(w, r, id, policyRead) {
@@ -635,9 +633,7 @@ func (h *EstimateHandler) PreviewPDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	if documentPDFVersions(w, r, "estimate", id, "preview", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
-		return h.estimatePDFDocument(ctx, id, input)
-	}) {
+	if documentPDFVersions(w, r, "estimate", id, "preview") {
 		return
 	}
 	if !h.authorizeEstimate(w, r, id, policyRead) {
@@ -667,9 +663,7 @@ func (h *EstimateHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	if documentPDFVersions(w, r, "estimate", id, "save", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
-		return h.estimatePDFDocument(ctx, id, input)
-	}) {
+	if documentPDFVersions(w, r, "estimate", id, "save") {
 		return
 	}
 	if !h.authorizeEstimate(w, r, id, policyUpdate) {

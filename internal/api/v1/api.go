@@ -179,6 +179,8 @@ func New(deps Dependencies) http.Handler {
 		r.Post("/jobs/{id}/assets/{assetID}/service-entries/{entryID}", h.serviceEntries)
 		r.Get("/jobs/{id}/assets/{assetID}/service-entries/{entryID}/revisions", h.serviceEntryRevisions)
 		for _, kind := range []string{"estimate", "invoice"} {
+			r.Get("/"+kind+"s/{id}/pdf/source", h.pdfSource(kind))
+			r.Post("/"+kind+"s/{id}/pdf/generate", h.pdfGenerate(kind))
 			r.Post("/"+kind+"s", h.commercial(kind))
 			r.Get("/"+kind+"s/{id}", h.commercial(kind))
 			r.Patch("/"+kind+"s/{id}", h.commercial(kind))
@@ -190,6 +192,7 @@ func New(deps Dependencies) http.Handler {
 		r.Post("/estimates/{id}/conversion-preview", h.conversionPreview)
 		r.Post("/invoices/{id}/revert-to-estimate", h.conversion("invoice"))
 		r.Get("/commercial-operations/{operation}", h.commercialReceipt)
+		r.Get("/pdf-operations/{operation}", h.pdfReceipt)
 		r.Post("/invoices/{id}/payments", h.boundedPayment)
 		r.Get("/invoices/{id}/payment-methods", h.paymentMethods)
 		r.Get("/payment-operations/{operation}", h.paymentReceipt)

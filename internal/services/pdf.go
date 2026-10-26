@@ -1,10 +1,12 @@
 package services
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +44,10 @@ type InvoicePDFSettlement struct {
 }
 
 func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, job *ent.Job, statuses []*ent.Status, cs *ent.CompanySettings, fieldLines ...string) error {
+	return generateEstimatePDF(w, e, customer, job, statuses, cs, nil, fieldLines...)
+}
+
+func generateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, job *ent.Job, statuses []*ent.Status, cs *ent.CompanySettings, logo *[]byte, fieldLines ...string) error {
 	if e.NumberLabel == "" || e.Terms == nil {
 		return ErrDocumentPresentationReview
 	}
@@ -53,7 +59,7 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 	pdf := newDocumentPDF()
 	status, statusColor := statusForPDF(statuses, e.StatusID)
 	number := RecordedEstimateNumber(e, cs)
-	writeTopHeader(pdf, "ESTIMATE", number, status, statusColor, cs)
+	writeTopHeader(pdf, "ESTIMATE", number, status, statusColor, cs, logo)
 	writeDetailRow(pdf, customer, job, nil, estimateDetails(e, status, cs), cs)
 	writeDocumentNotes(pdf, e.Notes)
 	for _, line := range fieldLines {
@@ -72,6 +78,10 @@ func GenerateEstimatePDF(w io.Writer, e *ent.Estimate, customer *ent.Customer, j
 }
 
 func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, asset *ent.Asset, statuses []*ent.Status, cs *ent.CompanySettings, settlement InvoicePDFSettlement, fieldLines ...string) error {
+	return generateInvoicePDF(w, i, customer, job, asset, statuses, cs, settlement, nil, fieldLines...)
+}
+
+func generateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job *ent.Job, asset *ent.Asset, statuses []*ent.Status, cs *ent.CompanySettings, settlement InvoicePDFSettlement, logo *[]byte, fieldLines ...string) error {
 	if i.NumberLabel == "" || i.Terms == nil {
 		return ErrDocumentPresentationReview
 	}
@@ -98,7 +108,7 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job
 			break
 		}
 	}
-	writeTopHeader(pdf, label, RecordedInvoiceNumber(i, cs), status, color, cs)
+	writeTopHeader(pdf, label, RecordedInvoiceNumber(i, cs), status, color, cs, logo)
 	writeDetailRow(pdf, customer, job, asset, invoiceDetails(i, status, cs), cs)
 	writeDocumentNotes(pdf, i.Notes)
 	for _, line := range fieldLines {
@@ -124,16 +134,22 @@ func newDocumentPDF() *gofpdf.Fpdf {
 	return pdf
 }
 
-func writeTopHeader(pdf *gofpdf.Fpdf, docType, number, status, statusColor string, cs *ent.CompanySettings) {
+func writeTopHeader(pdf *gofpdf.Fpdf, docType, number, status, statusColor string, cs *ent.CompanySettings, logo *[]byte) {
 	pageWidth, _ := pdf.GetPageSize()
 	accentR, accentG, accentB := accentColor(cs)
 
 	if cs != nil && cs.InvoiceLogoPath != "" {
-		if _, err := os.Stat(cs.InvoiceLogoPath); err != nil {
-			pdf.SetError(fmt.Errorf("company logo unavailable: %w", err))
-			return
+		if logo != nil {
+			options := gofpdf.ImageOptions{ImageType: strings.TrimPrefix(filepath.Ext(cs.InvoiceLogoPath), ".")}
+			pdf.RegisterImageOptionsReader("captured-company-logo", options, bytes.NewReader(*logo))
+			pdf.ImageOptions("captured-company-logo", pdfMargin, 11, 41.6, 0, false, options, 0, "")
+		} else {
+			if _, err := os.Stat(cs.InvoiceLogoPath); err != nil {
+				pdf.SetError(fmt.Errorf("company logo unavailable: %w", err))
+				return
+			}
+			pdf.ImageOptions(cs.InvoiceLogoPath, pdfMargin, 11, 41.6, 0, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
 		}
-		pdf.ImageOptions(cs.InvoiceLogoPath, pdfMargin, 11, 41.6, 0, false, gofpdf.ImageOptions{ImageType: ""}, 0, "")
 	}
 
 	pdf.SetTextColor(0, 0, 0)

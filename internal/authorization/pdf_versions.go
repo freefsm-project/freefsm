@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"os"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/ent"
@@ -13,15 +14,17 @@ import (
 )
 
 type PDFSource struct {
-	Asset          *ent.Asset
-	FieldLines     []string
-	Token          string
-	ReviewToken    string
-	Settings       *ent.CompanySettings
-	Snapshot       []byte
-	SettledCents   int64
-	AllocatedCents int64
-	AppliedCents   int64
+	LogoUnavailable bool
+	Logo            []byte
+	Asset           *ent.Asset
+	FieldLines      []string
+	Token           string
+	ReviewToken     string
+	Settings        *ent.CompanySettings
+	Snapshot        []byte
+	SettledCents    int64
+	AllocatedCents  int64
+	AppliedCents    int64
 }
 type PDFVersion struct {
 	ID          int64
@@ -109,48 +112,83 @@ func pdfDocumentAccess(ctx context.Context, q queryer, p Principal, kind string,
 }
 
 func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int64) (PDFSource, error) {
-	var settings, snapshot, review []byte
+	var settings, snapshot []byte
+	var presentationRevision int64
 	// Only rendering presentation participates: editing future numbering/defaults
 	// or collaboration does not invalidate an already generated version.
 	settlement := ""
 	if kind == "invoice" {
 		settlement = `, 'allocations',(SELECT jsonb_agg(to_jsonb(a)||jsonb_build_object('reversed',EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='payment' AND r.operation_id=a.payment_id)) ORDER BY a.payment_id) FROM payment_invoice_allocations a WHERE a.invoice_id=d.id),'credit_applications',(SELECT jsonb_agg(to_jsonb(a)||jsonb_build_object('reversed',EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=a.id)) ORDER BY a.id) FROM credit_applications a WHERE a.invoice_id=d.id)`
 	}
-	query := `SELECT presentation,snapshot,jsonb_build_object('configuration_revision',cs.configuration_revision,'document',to_jsonb(d),'customer',to_jsonb(c),'job',to_jsonb(j),'asset',to_jsonb(asset),'status',to_jsonb(st)) FROM ` + kind + `s d LEFT JOIN customers c ON c.id=d.customer_id LEFT JOIN jobs j ON j.id=d.job_id
+	statusJoin := `LEFT JOIN statuses st ON st.id=d.status_id`
+	if kind == "invoice" {
+		statusJoin = `LEFT JOIN invoice_effective_status es ON es.invoice_id=d.id LEFT JOIN statuses st ON st.id=es.status_id`
+	}
+	query := `SELECT presentation,snapshot,cs.pdf_presentation_revision FROM ` + kind + `s d LEFT JOIN customers c ON c.id=d.customer_id LEFT JOIN jobs j ON j.id=d.job_id
  LEFT JOIN assets asset ON asset.id=j.asset_id AND asset.customer_id=j.customer_id AND asset.deleted_at IS NULL AND EXISTS(SELECT 1 FROM job_asset_links al WHERE al.job_id=j.id AND al.asset_id=asset.id AND al.operational AND al.unlinked_at IS NULL)
- LEFT JOIN statuses st ON st.id=d.status_id JOIN company_settings cs ON cs.company_id=d.company_id CROSS JOIN LATERAL (SELECT jsonb_build_object('business_name',cs.business_name,'address',cs.address,'city',cs.city,'state',cs.state,'zip',cs.zip,'phone',cs.phone,'email',cs.email,'tax_id',cs.tax_id,'invoice_color',cs.invoice_color,'invoice_footer',cs.invoice_footer,'invoice_logo_path',cs.invoice_logo_path,'pdf_show_line_item_descriptions',cs.pdf_show_line_item_descriptions,'timezone',cs.timezone,'date_format',cs.date_format,'invoice_payment_terms',CASE WHEN d.terms IS NULL THEN cs.invoice_payment_terms ELSE d.terms END) AS presentation) presentation CROSS JOIN LATERAL (SELECT jsonb_build_object('document',CASE WHEN d.financial='' THEN (to_jsonb(d)-ARRAY['updated_at','financial'])||jsonb_build_object('tax_rate',regexp_replace(btrim(d.tax_rate),'%$','')::numeric) ELSE to_jsonb(d)-'updated_at' END,'customer',jsonb_build_object('display_name',c.display_name,'company_name',c.company_name,'email',c.email,'phone',c.phone),'job',jsonb_build_object('job_type',j.job_type,'subtitle',j.subtitle,'start_time',j.start_time,'due_date',j.due_date),'asset',jsonb_build_object('manufacturer',asset.manufacturer,'model',asset.model,'serial_number',asset.serial_number),'status',to_jsonb(st),'presentation',presentation` + settlement + `) AS snapshot) source WHERE d.id=$1 AND d.company_id=$2`
-	if err := q.QueryRow(ctx, query, id, p.CompanyID).Scan(&settings, &snapshot, &review); err != nil {
-		return PDFSource{}, err
-	}
-	fieldLines, err := pdfFieldLines(ctx, q, kind, id, p.CompanyID)
-	if err != nil {
-		return PDFSource{}, err
-	}
-	if len(fieldLines) > 0 {
-		var captured map[string]json.RawMessage
-		if err = json.Unmarshal(snapshot, &captured); err != nil {
-			return PDFSource{}, err
-		}
-		captured["custom_field_lines"], err = json.Marshal(fieldLines)
-		if err != nil {
-			return PDFSource{}, err
-		}
-		snapshot, err = json.Marshal(captured)
-		if err != nil {
-			return PDFSource{}, err
-		}
-	}
-	review, err = json.Marshal(struct {
-		State  json.RawMessage
-		RoleID int64
-		Grants []Grant
-	}{review, p.RoleID, p.Grants})
-	if err != nil {
+ ` + statusJoin + ` JOIN company_settings cs ON cs.company_id=d.company_id
+ CROSS JOIN LATERAL (SELECT jsonb_build_object('business_name',cs.business_name,'address',cs.address,'city',cs.city,'state',cs.state,'zip',cs.zip,'phone',cs.phone,'email',cs.email,'tax_id',cs.tax_id,'invoice_color',cs.invoice_color,'invoice_footer',cs.invoice_footer,'invoice_logo_path',cs.invoice_logo_path,'pdf_show_line_item_descriptions',cs.pdf_show_line_item_descriptions,'timezone',cs.timezone,'date_format',cs.date_format,'invoice_payment_terms',d.terms) AS presentation) presentation
+ CROSS JOIN LATERAL (SELECT jsonb_build_object(
+ 'source_format',2,
+ 'document',(SELECT jsonb_object_agg(key,value) FROM jsonb_each(to_jsonb(d)) WHERE key=ANY(ARRAY['id','customer_id','job_id','number_label','invoice_number','title','notes','terms','line_items','tax_rate','financial','invoice_date','due_date','valid_through','created_at','status_id'])),
+ 'customer',CASE WHEN c.id IS NOT NULL THEN jsonb_build_object('id',c.id,'display_name',c.display_name,'company_name',c.company_name,'email',c.email,'phone',c.phone) END,
+ 'job',CASE WHEN j.id IS NOT NULL THEN jsonb_build_object('id',j.id,'job_type',j.job_type,'subtitle',j.subtitle,'start_time',j.start_time,'due_date',j.due_date) END,
+ 'asset',CASE WHEN asset.id IS NOT NULL AND $3='invoice' THEN jsonb_build_object('id',asset.id,'manufacturer',asset.manufacturer,'model',asset.model,'serial_number',asset.serial_number) END,
+ 'status',CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id',st.id,'name',st.name,'color',st.color,'category_key',st.category_key) END,
+ 'custom_field_values',(SELECT coalesce(jsonb_agg(jsonb_build_object('name',f.name,'type',f.field_type,'value',v->'value') ORDER BY f.sort_order,f.id),'[]'::jsonb) FROM jsonb_array_elements(d.custom_fields) v JOIN custom_field_definitions f ON f.id=(v->>'definition_id')::bigint WHERE f.include_pdf),
+ 'presentation',presentation` + settlement + `) AS snapshot) source WHERE d.id=$1 AND d.company_id=$2`
+	if err := q.QueryRow(ctx, query, id, p.CompanyID, kind).Scan(&settings, &snapshot, &presentationRevision); err != nil {
 		return PDFSource{}, err
 	}
 	cs := new(ent.CompanySettings)
 	if err := json.Unmarshal(settings, cs); err != nil {
 		return PDFSource{}, err
+	}
+	var logo []byte
+	var logoUnavailable bool
+	if cs.InvoiceLogoPath != "" {
+		var err error
+		logo, err = os.ReadFile(cs.InvoiceLogoPath)
+		if err != nil {
+			// Current branding is unavailable, so no current-source version can
+			// be generated. Retained exact bytes remain selectable with a stale
+			// warning; a missing branding file must not turn Download into render.
+			logoUnavailable = true
+		}
+	}
+	var captured map[string]json.RawMessage
+	if err := json.Unmarshal(snapshot, &captured); err != nil {
+		return PDFSource{}, err
+	}
+	captured["logo"], _ = json.Marshal(logo)
+	if logoUnavailable {
+		captured["logo_unavailable"] = json.RawMessage("true")
+	}
+	snapshot, err := json.Marshal(captured)
+	if err != nil {
+		return PDFSource{}, err
+	}
+	var fields struct {
+		Values []struct {
+			Name  string
+			Type  string
+			Value any
+		} `json:"custom_field_values"`
+	}
+	if err := json.Unmarshal(snapshot, &fields); err != nil {
+		return PDFSource{}, err
+	}
+	var fieldLines []string
+	for _, field := range fields.Values {
+		text := fmt.Sprint(field.Value)
+		if field.Type == "checkbox" {
+			if text == "true" {
+				text = "Yes"
+			} else if text == "false" {
+				text = "No"
+			}
+		}
+		fieldLines = append(fieldLines, field.Name+": "+text)
 	}
 	type allocation struct {
 		Amount   int64 `json:"amount_cents"`
@@ -179,37 +217,8 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 			applied += entry.Amount
 		}
 	}
-	return PDFSource{Asset: financial.Asset, Token: fmt.Sprintf("%x", sha256.Sum256(snapshot)), ReviewToken: fmt.Sprintf("%x", sha256.Sum256(review)), Settings: cs, Snapshot: snapshot, SettledCents: settled, AllocatedCents: allocated, AppliedCents: applied, FieldLines: fieldLines}, nil
-}
-
-func pdfFieldLines(ctx context.Context, q queryer, kind string, id, company int64) ([]string, error) {
-	rows, err := q.Query(ctx, `SELECT f.name,f.field_type,v->'value' FROM `+kind+`s d,jsonb_array_elements(d.custom_fields) v JOIN custom_field_definitions f ON f.id=(v->>'definition_id')::bigint WHERE d.id=$1 AND d.company_id=$2 AND f.include_pdf ORDER BY f.sort_order,f.id`, id, company)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var lines []string
-	for rows.Next() {
-		var name, typ string
-		var raw []byte
-		if err = rows.Scan(&name, &typ, &raw); err != nil {
-			return nil, err
-		}
-		var value any
-		if err = json.Unmarshal(raw, &value); err != nil {
-			return nil, err
-		}
-		text := fmt.Sprint(value)
-		if typ == "checkbox" {
-			if text == "true" {
-				text = "Yes"
-			} else if text == "false" {
-				text = "No"
-			}
-		}
-		lines = append(lines, name+": "+text)
-	}
-	return lines, rows.Err()
+	token := fmt.Sprintf("%x", sha256.Sum256(snapshot))
+	return PDFSource{LogoUnavailable: logoUnavailable, Logo: logo, Asset: financial.Asset, Token: token, ReviewToken: fmt.Sprintf("%s:%d", token, presentationRevision), Settings: cs, Snapshot: snapshot, SettledCents: settled, AllocatedCents: allocated, AppliedCents: applied, FieldLines: fieldLines}, nil
 }
 
 func (s *Service) DocumentPDFSource(ctx context.Context, a Actor, kind string, id int64) (PDFSource, error) {
@@ -234,52 +243,56 @@ func (s *Service) PDFPermission(ctx context.Context, a Actor, kind string, id in
 
 func (s *Service) SavePDFVersion(ctx context.Context, a Actor, kind string, id int64, source, reviewToken, filename string, content []byte) error {
 	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
-		scope, err := pdfDocumentAccess(ctx, tx, p, kind, id, "pdf.generate")
-		if err != nil {
-			return err
-		}
-		// Keep presentation and document stable until source comparison and commit.
-		if _, err := tx.Exec(ctx, `SELECT id FROM company_settings WHERE company_id=$1 FOR SHARE`, p.CompanyID); err != nil {
-			return err
-		}
-		if _, err := tx.Exec(ctx, `SELECT id FROM `+kind+`s WHERE id=$1 FOR SHARE`, id); err != nil {
-			return err
-		}
-		for _, query := range []string{
-			`SELECT id FROM customers WHERE id=(SELECT customer_id FROM ` + kind + `s WHERE id=$1) FOR SHARE`,
-			`SELECT id FROM jobs WHERE id=(SELECT job_id FROM ` + kind + `s WHERE id=$1) FOR SHARE`,
-			`SELECT id FROM assets WHERE id=(SELECT asset_id FROM jobs WHERE id=(SELECT job_id FROM ` + kind + `s WHERE id=$1)) FOR SHARE`,
-			`SELECT id FROM statuses WHERE id=(SELECT status_id FROM ` + kind + `s WHERE id=$1) FOR SHARE`,
-		} {
-			if _, err := tx.Exec(ctx, query, id); err != nil {
-				return err
-			}
-		}
-		if scope == Assigned {
-			if _, err := tx.Exec(ctx, `SELECT job_id FROM job_assignments WHERE user_id=$1 AND job_id=(SELECT job_id FROM `+kind+`s WHERE id=$2) FOR SHARE`, p.UserID, id); err != nil {
-				return err
-			}
-		}
-		scope, err = pdfDocumentAccess(ctx, tx, p, kind, id, "pdf.generate")
-		if err != nil {
-			return err
-		}
-		current, err := pdfSource(ctx, tx, p, kind, id)
-		if err != nil {
-			return err
-		}
-		if current.Token != source || current.ReviewToken != reviewToken {
-			return ErrConflict
-		}
-		if len(content) == 0 {
-			return fmt.Errorf("empty PDF")
-		}
 		var version int64
-		if err := tx.QueryRow(ctx, `INSERT INTO document_pdf_versions(company_id,document_type,document_id,source_token,filename,content,generated_by,source_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, p.CompanyID, kind, id, source, filename, content, a.UserID, current.Snapshot).Scan(&version); err != nil {
+		return savePDFVersion(ctx, tx, p, a, kind, id, source, reviewToken, filename, content, &version)
+	})
+}
+
+func savePDFVersion(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind string, id int64, source, reviewToken, filename string, content []byte, version *int64) error {
+	scope, err := pdfDocumentAccess(ctx, tx, p, kind, id, "pdf.generate")
+	if err != nil {
+		return err
+	}
+	// Keep presentation and document stable until source comparison and commit.
+	if _, err := tx.Exec(ctx, `SELECT id FROM company_settings WHERE company_id=$1 FOR SHARE`, p.CompanyID); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `SELECT id FROM `+kind+`s WHERE id=$1 FOR SHARE`, id); err != nil {
+		return err
+	}
+	for _, query := range []string{
+		`SELECT id FROM customers WHERE id=(SELECT customer_id FROM ` + kind + `s WHERE id=$1) FOR SHARE`,
+		`SELECT id FROM jobs WHERE id=(SELECT job_id FROM ` + kind + `s WHERE id=$1) FOR SHARE`,
+		`SELECT id FROM assets WHERE id=(SELECT asset_id FROM jobs WHERE id=(SELECT job_id FROM ` + kind + `s WHERE id=$1)) FOR SHARE`,
+		`SELECT id FROM statuses WHERE id=(SELECT status_id FROM ` + kind + `s WHERE id=$1) FOR SHARE`,
+	} {
+		if _, err := tx.Exec(ctx, query, id); err != nil {
 			return err
 		}
-		return audit(ctx, tx, a, p, kind+".pdf.generate", scope, kind, id, map[string]any{"pdf_version": version})
-	})
+	}
+	if scope == Assigned {
+		if _, err := tx.Exec(ctx, `SELECT job_id FROM job_assignments WHERE user_id=$1 AND job_id=(SELECT job_id FROM `+kind+`s WHERE id=$2) FOR SHARE`, p.UserID, id); err != nil {
+			return err
+		}
+	}
+	scope, err = pdfDocumentAccess(ctx, tx, p, kind, id, "pdf.generate")
+	if err != nil {
+		return err
+	}
+	current, err := pdfSource(ctx, tx, p, kind, id)
+	if err != nil {
+		return err
+	}
+	if current.Token != source || current.ReviewToken != reviewToken {
+		return ErrConflict
+	}
+	if len(content) == 0 {
+		return fmt.Errorf("empty PDF")
+	}
+	if err := tx.QueryRow(ctx, `INSERT INTO document_pdf_versions(company_id,document_type,document_id,source_token,filename,content,generated_by,source_snapshot) VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`, p.CompanyID, kind, id, source, filename, content, a.UserID, current.Snapshot).Scan(version); err != nil {
+		return err
+	}
+	return audit(ctx, tx, a, p, kind+".pdf.generate", scope, kind, id, map[string]any{"pdf_version": *version})
 }
 
 func (s *Service) PDFVersions(ctx context.Context, a Actor, kind string, id int64) ([]PDFVersion, error) {

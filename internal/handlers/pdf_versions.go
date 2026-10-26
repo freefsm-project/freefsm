@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"context"
+	"errors"
 	"fmt"
 	"mime"
 	"net/http"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/ent"
+	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 )
 
@@ -23,7 +24,7 @@ type PDFRenderInput struct {
 	AppliedCents   int64
 }
 
-func documentPDFVersions(w http.ResponseWriter, r *http.Request, kind string, id int64, action string, generate func(context.Context, PDFRenderInput) (documentPDF, error)) bool {
+func documentPDFVersions(w http.ResponseWriter, r *http.Request, kind string, id int64, action string) bool {
 	request, ok := authorization.FromContext(r.Context())
 	if !ok {
 		return false
@@ -45,13 +46,17 @@ func documentPDFVersions(w http.ResponseWriter, r *http.Request, kind string, id
 			authorizationError(w, r, err)
 			return true
 		}
-		doc, err := generate(r.Context(), PDFRenderInput{Asset: source.Asset, Presentation: source.Settings, SettledCents: &source.SettledCents, AllocatedCents: source.AllocatedCents, AppliedCents: source.AppliedCents, FieldLines: source.FieldLines})
+		filename, content, err := services.RenderPDFSource(kind, source)
 		if err != nil {
-			http.Error(w, "PDF generation failed", 500)
+			internalServerError(w, r, "PDF generation failed", err)
 			return true
 		}
-		if err := request.Service.SavePDFVersion(r.Context(), request.Actor, kind, id, source.Token, source.ReviewToken, doc.Filename, doc.Data); err != nil {
-			authorizationError(w, r, err)
+		if err := request.Service.SavePDFVersion(r.Context(), request.Actor, kind, id, source.Token, source.ReviewToken, filename, content); err != nil {
+			if errors.Is(err, authorization.ErrConflict) || errors.Is(err, authorization.ErrForbidden) || errors.Is(err, authorization.ErrNotFound) || errors.Is(err, authorization.ErrPending) || errors.Is(err, authorization.ErrUnavailable) {
+				authorizationError(w, r, err)
+			} else {
+				internalServerError(w, r, "PDF storage failed", err)
+			}
 			return true
 		}
 		http.Redirect(w, r, fmt.Sprintf("/%ss/%d/pdf/preview", kind, id), 303)

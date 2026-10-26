@@ -1097,9 +1097,7 @@ func (h *InvoiceHandler) PDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	if documentPDFVersions(w, r, "invoice", id, "download", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
-		return h.invoicePDFDocument(ctx, id, input)
-	}) {
+	if documentPDFVersions(w, r, "invoice", id, "download") {
 		return
 	}
 	if !h.authorizeInvoice(w, r, id, policyRead) {
@@ -1122,9 +1120,7 @@ func (h *InvoiceHandler) PreviewPDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	if documentPDFVersions(w, r, "invoice", id, "preview", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
-		return h.invoicePDFDocument(ctx, id, input)
-	}) {
+	if documentPDFVersions(w, r, "invoice", id, "preview") {
 		return
 	}
 	if !h.authorizeInvoice(w, r, id, policyRead) {
@@ -1154,9 +1150,7 @@ func (h *InvoiceHandler) SavePDF(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	if documentPDFVersions(w, r, "invoice", id, "save", func(ctx context.Context, input PDFRenderInput) (documentPDF, error) {
-		return h.invoicePDFDocument(ctx, id, input)
-	}) {
+	if documentPDFVersions(w, r, "invoice", id, "save") {
 		return
 	}
 	if !h.authorizeInvoice(w, r, id, policyUpdate) {
