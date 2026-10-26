@@ -115,7 +115,7 @@ func selectedPDFEmail(w http.ResponseWriter, r *http.Request, kind string, id in
 	data.ConfirmStalePDF = r.FormValue("confirm_stale_pdf") == "1"
 	recipients, err := services.ParseEmailRecipients(data.To, data.CC, data.BCC)
 	key, keyErr := uuid.Parse(data.IdempotencyKey)
-	if err != nil || keyErr != nil || data.Subject == "" || data.Body == "" {
+	if err != nil || keyErr != nil || data.Subject == "" || (data.Body == "" && data.HTMLBody == "") {
 		saveaction.RejectBeforeWrite(r.Context())
 		data.Error = "Valid recipients, subject, body and operation ID are required"
 		w.WriteHeader(422)

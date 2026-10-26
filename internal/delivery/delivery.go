@@ -157,6 +157,10 @@ func (s *Service) SetInstanceControl(control *instancecontrol.Control) { s.contr
 // during initialization; ProcessOne calls it after admission and before claiming.
 func (s *Service) SetBeforeWork(fn func() error) { s.beforeWork = fn }
 
+// Queue atomically creates one Delivery per distinct recipient, including copy
+// recipients. It returns the first Delivery as the stable request identity;
+// History exposes each independently tracked transmission. Existing legacy
+// requests reconcile their original Delivery without rewriting its snapshot.
 func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery, error) {
 	ctx, release, err := s.control.EnterEmail(ctx)
 	if err != nil {
@@ -171,6 +175,14 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 	r.Snapshot.BCC = canonicalAddresses(r.Snapshot.BCC)
 	if len(r.Snapshot.To) == 0 {
 		return Delivery{}, ErrInvalid
+	}
+	for _, group := range [][]string{r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC} {
+		for _, recipient := range group {
+			address, err := mail.ParseAddress(recipient)
+			if err != nil || address.Address != recipient || strings.ContainsAny(recipient, "\r\n") {
+				return Delivery{}, ErrInvalid
+			}
+		}
 	}
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -253,60 +265,58 @@ func (s *Service) Queue(ctx context.Context, a Actor, r QueueRequest) (Delivery,
 	if _, err = credentials.Open(password); err != nil {
 		return Delivery{}, err
 	}
-	messageID := fmt.Sprintf("<delivery-%d-%s@freefsm.local>", a.CompanyID, r.Key)
-	var tokenHash []byte
-	html := r.Snapshot.HTMLBody
-	if tracking {
-		raw := make([]byte, TrackingTokenSize)
-		if _, err = rand.Read(raw); err != nil {
+	recipients := canonicalAddresses(append(append(append([]string{}, r.Snapshot.To...), r.Snapshot.CC...), r.Snapshot.BCC...))
+	var first Delivery
+	for i, recipient := range recipients {
+		key := r.Key
+		if i > 0 {
+			key = uuid.NewSHA1(r.Key, []byte(recipient))
+		}
+		messageID := fmt.Sprintf("<delivery-%d-%s@freefsm.local>", a.CompanyID, key)
+		var tokenHash []byte
+		html := r.Snapshot.HTMLBody
+		if tracking {
+			raw := make([]byte, TrackingTokenSize)
+			if _, err = rand.Read(raw); err != nil {
+				return Delivery{}, err
+			}
+			token := base64.RawURLEncoding.EncodeToString(raw)
+			sum := sha256.Sum256([]byte(token))
+			tokenHash = sum[:]
+			html = injectPixel(html, s.publicURL+"/delivery/open/"+token)
+		}
+		var estimateID, invoiceID any
+		if r.Document.Type == "estimate" {
+			estimateID = r.Document.ID
+		} else {
+			invoiceID = r.Document.ID
+		}
+		var id int64
+		err = tx.QueryRow(ctx, `INSERT INTO document_deliveries(company_id,document_type,document_id,estimate_id,invoice_id,actor_id,idempotency_key,request_fingerprint,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,tracking_enabled,tracking_token_hash,pdf_version_id,sender_address,expected_status_revision,expected_meaning_revision)
+	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NULLIF($21,0),$22,$23,$24) RETURNING id`, a.CompanyID, r.Document.Type, r.Document.ID, estimateID, invoiceID, a.ID, key, fingerprint, []string{recipient}, []string{}, []string{}, r.Snapshot.Subject, r.Snapshot.TextBody, html, r.Snapshot.PDF, r.Snapshot.PDFFilename, messageID, statusID, tracking, tokenHash, r.PDFVersionID, from, statusRevision, meaningRevision).Scan(&id)
+		if err != nil {
 			return Delivery{}, err
 		}
-		token := base64.RawURLEncoding.EncodeToString(raw)
-		sum := sha256.Sum256([]byte(token))
-		tokenHash = sum[:]
-		html = injectPixel(html, s.publicURL+"/delivery/open/"+token)
-	}
-	var estimateID, invoiceID any
-	if r.Document.Type == "estimate" {
-		estimateID = r.Document.ID
-	} else {
-		invoiceID = r.Document.ID
-	}
-	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO document_deliveries(company_id,document_type,document_id,estimate_id,invoice_id,actor_id,idempotency_key,request_fingerprint,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,expected_status_id,tracking_enabled,tracking_token_hash,pdf_version_id,sender_address,expected_status_revision,expected_meaning_revision)
-	 VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,NULLIF($21,0),$22,$23,$24) ON CONFLICT(company_id,idempotency_key) DO NOTHING RETURNING id`, a.CompanyID, r.Document.Type, r.Document.ID, estimateID, invoiceID, a.ID, r.Key, fingerprint, r.Snapshot.To, r.Snapshot.CC, r.Snapshot.BCC, r.Snapshot.Subject, r.Snapshot.TextBody, html, r.Snapshot.PDF, r.Snapshot.PDFFilename, messageID, statusID, tracking, tokenHash, r.PDFVersionID, from, statusRevision, meaningRevision).Scan(&id)
-	if errors.Is(err, pgx.ErrNoRows) {
-		if err = tx.QueryRow(ctx, `SELECT id,request_fingerprint FROM document_deliveries WHERE company_id=$1 AND idempotency_key=$2`, a.CompanyID, r.Key).Scan(&id, &existingFingerprint); err != nil {
+		if err = event(ctx, tx, id, a.CompanyID, &a.ID, "state", "", "queued", "", "", map[string]any{"reason": "queued"}); err != nil {
 			return Delivery{}, err
 		}
-		if !equalBytes(existingFingerprint, fingerprint) {
-			return Delivery{}, ErrIdempotencyConflict
-		}
-		d, e := get(ctx, tx, a.CompanyID, id)
-		if e != nil {
-			return Delivery{}, e
-		}
-		return d, tx.Commit(ctx)
-	}
-	if err != nil {
-		return Delivery{}, err
-	}
-	if err = event(ctx, tx, id, a.CompanyID, &a.ID, "state", "", "queued", "", "", map[string]any{"reason": "queued"}); err != nil {
-		return Delivery{}, err
-	}
-	if _, err = tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,'document_delivery_queued',$3,$4,jsonb_build_object('delivery_id',$5::bigint))`, a.CompanyID, a.ID, r.Document.Type, r.Document.ID, id); err != nil {
-		return Delivery{}, err
-	}
-	d, err := get(ctx, tx, a.CompanyID, id)
-	if err != nil {
-		return Delivery{}, err
-	}
-	if migrated {
-		if err := request.Service.AuditPDFDelivery(ctx, tx, request.Actor, r.Document.Type, r.Document.ID, r.PDFVersionID, id, selected.Version.Stale); err != nil {
+		if _, err = tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,'document_delivery_queued',$3,$4,jsonb_build_object('delivery_id',$5::bigint))`, a.CompanyID, a.ID, r.Document.Type, r.Document.ID, id); err != nil {
 			return Delivery{}, err
 		}
+		d, err := get(ctx, tx, a.CompanyID, id)
+		if err != nil {
+			return Delivery{}, err
+		}
+		if migrated {
+			if err := request.Service.AuditPDFDelivery(ctx, tx, request.Actor, r.Document.Type, r.Document.ID, r.PDFVersionID, id, selected.Version.Stale); err != nil {
+				return Delivery{}, err
+			}
+		}
+		if i == 0 {
+			first = d
+		}
 	}
-	return d, tx.Commit(ctx)
+	return first, tx.Commit(ctx)
 }
 
 func canonicalAddresses(v []string) []string {

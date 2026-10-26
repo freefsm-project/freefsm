@@ -93,6 +93,40 @@ func (s *compositionSender) Send(_ context.Context, d delivery.Delivery) (delive
 	return delivery.SendResult{ProviderIdentifier: d.MessageID}, nil
 }
 
+func TestIntegrationDeliveryFanoutHTMLOnlyHTTP(t *testing.T) {
+	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	cookie := sessionCookie(t, ctx, sessions, admin)
+	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Customer").SaveX(ctx)
+	id := client.Estimate.Create().SetCompanyID(company).SetCustomerID(c.ID).SetTitle("Review").SaveX(ctx).ID
+	path := fmt.Sprintf("/estimates/%d", id)
+	if _, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_from='frozen@example.test',smtp_host='localhost',smtp_port=2525 WHERE company_id=$1`, company); err != nil {
+		t.Fatal(err)
+	}
+	expectStatus(t, router, cookie, "POST", path+"/pdf/save", 303)
+	version := compositionInput(t, requestBody(t, router, cookie, "GET", path+"/pdf/preview", 200), "version")
+	original := requestBody(t, router, cookie, "GET", path+"/pdf?version="+version, 200)
+	values := url.Values{"pdf_version": {version}, "idempotency_key": {uuid.NewString()}, "to": {"external@example.test, other@example.test"}, "bcc": {"private@example.test"}, "subject": {"Reviewed"}, "html_body": {"<p>HTML only</p>"}}
+	fieldPost(t, router, cookie, path+"/email", values, 303)
+	fieldPost(t, router, cookie, path+"/email", values, 303)
+	worker := delivery.New(pool, "")
+	history, err := worker.History(ctx, company, delivery.DocumentRef{Type: "estimate", ID: id})
+	if err != nil || len(history) != 3 {
+		t.Fatalf("fanout/replay = %+v, %v", history, err)
+	}
+	transport := &compositionSender{}
+	for range 3 {
+		if worked, err := worker.ProcessOne(ctx, transport, nil); !worked || err != nil {
+			t.Fatalf("worker = %v, %v", worked, err)
+		}
+	}
+	for _, sent := range transport.messages {
+		if len(sent.To) != 1 || len(sent.CC) != 0 || len(sent.BCC) != 0 || sent.HTMLBody != "<p>HTML only</p>" || sent.TextBody != "" || string(sent.PDF) != original {
+			t.Fatalf("unexpected message: %+v", sent)
+		}
+	}
+}
+
 func TestIntegrationSelectedPDFHTMLCompositionHTTP(t *testing.T) {
 	for _, kind := range []string{"invoice", "estimate"} {
 		t.Run(kind, func(t *testing.T) {

@@ -38,9 +38,10 @@ templ DocumentEmailCompose(p DocumentEmailData) {
 			</label>
 			<label>
 				Body
-				<textarea name="body" rows="10" required>{ p.Body }</textarea>
+				<textarea name="body" rows="10">{ p.Body }</textarea>
 			</label>
 			<label>HTML body (optional; blank uses plain text)<textarea name="html_body" rows="10">{ p.HTMLBody }</textarea></label>
+			<p class="settings-help">Provide a plain-text or HTML message. Each recipient receives a separately tracked email.</p>
 			<button type="submit">Queue Email</button>
 		</form>
 	}
