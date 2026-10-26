@@ -7,6 +7,9 @@ const { chromium } = require('playwright-core');
     const context = await browser.newContext();
     await context.addCookies([{name: 'session', value: cookie, url: base, httpOnly: true}]);
     const page = await context.newPage();
+    const currentStatus = () => page.locator('article')
+      .filter({has: page.getByRole('heading', {name: 'Details', exact: true})})
+      .locator('p').filter({has: page.getByText('Status:', {exact: true})}).locator('.status-badge');
     const path = base + '/assets/' + asset;
     assert.equal((await page.goto(path + '/edit')).status(), 200);
     assert.equal(await page.locator('[name=asset_status_id]').inputValue(), status);
@@ -14,8 +17,8 @@ const { chromium } = require('playwright-core');
     await Promise.all([page.waitForNavigation(), page.locator('form.entity-form button[type=submit]').click()]);
     assert.equal(new URL(page.url()).pathname, '/assets/' + asset);
     await page.reload();
-    assert.match(await page.locator('main').innerText(), /No Status/);
-    assert.doesNotMatch(await page.locator('main').innerText(), /Browser clearable status/);
+    assert.equal(await currentStatus().innerText(), 'No Status');
+    assert.match(await page.locator('.activity-list').innerText(), /Before:\s*Browser clearable status/);
     await page.goto(path + '/edit');
     assert.equal(await page.locator('[name=asset_status_id]').inputValue(), '0');
     // An active definition can be selected again; retirement then preserves it
@@ -30,12 +33,13 @@ const { chromium } = require('playwright-core');
     await page.locator('[name=name]').fill('Unrelated browser edit');
     await Promise.all([page.waitForNavigation(), page.locator('form.entity-form button[type=submit]').click()]);
     await page.reload();
-    assert.match(await page.locator('main').innerText(), /Browser clearable status/);
+    assert.equal(await currentStatus().innerText(), 'Browser clearable status');
     await page.goto(path + '/edit');
     await page.locator('[name=asset_status_id]').selectOption({label: 'No Status'});
     await Promise.all([page.waitForNavigation(), page.locator('form.entity-form button[type=submit]').click()]);
     await page.reload();
-    assert.match(await page.locator('main').innerText(), /No Status/);
+    assert.equal(await currentStatus().innerText(), 'No Status');
+    assert.match(await page.locator('.activity-list').innerText(), /Before:\s*Browser clearable status/);
     await page.goto(path + '/edit');
     assert.equal(await page.locator('[name=asset_status_id]').inputValue(), '0');
     assert.equal(await page.locator('[name=asset_status_id] option[value="' + status + '"]').count(), 0);

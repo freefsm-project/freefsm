@@ -1,23 +1,25 @@
 'use strict';
 const assert = require('node:assert/strict');
-const { randomUUID } = require('node:crypto');
+const { randomUUID, createHash } = require('node:crypto');
 const { PDFReference } = require('../reference/pdf-client.cjs');
 const [base, token, document] = process.argv.slice(2);
 (async () => {
-  const request = async (method, path, input) => {
-    const response = await fetch(base + path, { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: input ? JSON.stringify(input) : undefined });
-    return { status: response.status, body: await response.json() };
+  const request = async (method, path, input, binding) => {
+    if (binding && binding.client !== createHash('sha256').update(token).digest('hex')) throw new Error('authentication_changed');
+    const response = await fetch(base + path, { method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(binding ? {'X-FreeFSM-Session-Epoch': binding.epoch} : {}) }, body: input ? JSON.stringify(input) : undefined });
+    return { status: response.status, body: await response.json(), client: createHash('sha256').update(token).digest('hex'), epoch: response.headers.get('X-FreeFSM-Session-Epoch') };
   };
   const path = `/invoices/${document}`;
-  const review = (await request('GET', path + '/pdf/source')).body.data;
+  const reviewed = await request('GET', path + '/pdf/source');
+  const review = reviewed.body.data;
   let lose = true;
   let posts = 0;
-  const client = new PDFReference(async (method, path, body) => {
+  const client = new PDFReference(async (method, path, body, binding) => {
     if (method === 'POST') posts++;
-    const result = await request(method, path, body);
+    const result = await request(method, path, body, binding);
     if (method === 'POST' && lose) { lose = false; throw new Error('lost response after commit'); }
     return result;
-  });
+  }, {client: reviewed.client, epoch: reviewed.epoch});
   const entry = client.stage('invoice', review);
   assert.equal(posts, 0, 'offline staging contacted server');
   await client.submit(entry); assert.equal(entry.state, 'unknown');
