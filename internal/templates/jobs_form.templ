@@ -22,11 +22,13 @@ templ JobForm(p JobFormPageData) {
 					<small class="error-msg">{ p.Errors["customer_id"] }</small>
 				}
 			</label>
-			if p.Job.ID > 0 && canDispatchJob(ctx) {
-				if canMaster(ctx,"customer.view") {
+			if p.Job.ID > 0 {
+				if canAllRecords(ctx,"job.edit") && canAllRecords(ctx,"customer.view") {
 					<label><input type="checkbox" name="replace_customer" value="true"/> Replace Customer deliberately and clear all operational Location, Project, Contact and Asset links. Linked Estimates and editable Draft Invoices move to this Customer and recalculate under current adjustment and tax rules, including exemption. Recorded PDF versions remain unchanged. Finalized or settled Invoices and Service Entries block replacement.</label>
 				}
-				<a href={ templ.URL(fmt.Sprintf("/jobs/%d/contacts",p.Job.ID)) }>Manage explicit Job Contacts</a>
+				if canAllRecords(ctx,"job.relations.edit") {
+					<a href={ templ.URL(fmt.Sprintf("/jobs/%d/contacts",p.Job.ID)) }>Manage explicit Job Contacts</a>
+				}
 			}
 			<div class="grid">
 				<label>
@@ -131,12 +133,12 @@ templ JobForm(p JobFormPageData) {
 							<tr>
 								<td><input type="text" x-model="st.title" placeholder="e.g. Pre-site survey" aria-label="Subtask title"></td>
 								<td><input type="number" x-model.number="st.sort_order" min="0" class="input-width-70" aria-label="Subtask display order"></td>
-								<td><button @click.prevent="remove(idx)" class="outline contrast small" aria-label="Remove subtask">X</button></td>
+								<td><button type="button" @click.prevent="remove(idx)" class="outline contrast small" aria-label="Remove subtask">X</button></td>
 							</tr>
 						</template>
 					</tbody>
 				</table>
-				<button @click.prevent="add()" class="outline">+ Add Subtask</button>
+				<button type="button" @click.prevent="add()" class="outline">+ Add Subtask</button>
 				<input type="hidden" name="subtasks" :value="json">
 			</fieldset>
 			<div class="entity-form-actions">

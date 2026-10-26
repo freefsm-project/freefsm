@@ -58,6 +58,9 @@ func TestJobIndependentLinksAndCustomerReplacementHTTP(t *testing.T) {
 	}
 	input := url.Values{"form_mode": {"edit"}, "job_id": {fmt.Sprint(j.ID)}, "customer_id": {fmt.Sprint(c.ID)}, "job_type": {"Work"}, "location_id": {fmt.Sprint(l.ID)}}
 	path := fmt.Sprintf("/jobs/%d", j.ID)
+	editForm := requestBody(t, router, sessionCookie(t, ctx, sessions, u.ID), "GET", path+"/edit", 200)
+	assertContains(t, editForm, `name="replace_customer"`)
+	assertNotContains(t, editForm, `href="`+path+`/contacts"`)
 	masterPost(t, router, sessionCookie(t, ctx, sessions, u.ID), path, input, 403)
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	masterPost(t, router, cookie, path, input, 303)
