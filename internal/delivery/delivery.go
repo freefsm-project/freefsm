@@ -107,6 +107,7 @@ type Delivery struct {
 	AcceptedAt, DeliveredAt, BouncedAt, FailedAt                                 *time.Time
 }
 type Summary struct {
+	SenderRecorded                     bool
 	ID                                 int64
 	State, LastError                   string
 	To                                 []string
@@ -221,8 +222,8 @@ func (s *Service) queueTx(ctx context.Context, tx pgx.Tx, a Actor, r QueueReques
 	}
 	var jobID, statusID *int64
 	var statusRevision, meaningRevision *uuid.UUID
-	q := fmt.Sprintf(`SELECT o.job_id,o.status_id,o.status_revision,s.meaning_revision FROM %ss o LEFT JOIN statuses s ON s.id=o.status_id WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL AND o.conversion_hidden_at IS NULL FOR SHARE OF o`, r.Document.Type)
-	if err = tx.QueryRow(ctx, q, r.Document.ID, a.CompanyID).Scan(&jobID, &statusID, &statusRevision, &meaningRevision); errors.Is(err, pgx.ErrNoRows) {
+	q := fmt.Sprintf(`SELECT o.job_id,o.status_id,o.status_revision,s.meaning_revision FROM %ss o JOIN customers c ON c.id=o.customer_id AND c.company_id=o.company_id LEFT JOIN statuses s ON s.id=o.status_id WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL AND o.conversion_hidden_at IS NULL AND c.deleted_at IS NULL AND ($3<>'invoice' OR coalesce(s.category_key,'')<>'invoice:void') FOR SHARE OF o,c`, r.Document.Type)
+	if err = tx.QueryRow(ctx, q, r.Document.ID, a.CompanyID, r.Document.Type).Scan(&jobID, &statusID, &statusRevision, &meaningRevision); errors.Is(err, pgx.ErrNoRows) {
 		return Delivery{}, ErrNotFound
 	} else if err != nil {
 		return Delivery{}, err
@@ -435,6 +436,11 @@ func authorize(ctx context.Context, tx pgx.Tx, a Actor, jobID *int64) error {
 }
 
 func (s *Service) Claim(ctx context.Context) (Delivery, error) {
+	ctx, release, err := s.control.EnterEmail(ctx)
+	if err != nil {
+		return Delivery{}, err
+	}
+	defer release()
 	if err := ctx.Err(); err != nil {
 		return Delivery{}, err
 	}
@@ -443,7 +449,14 @@ func (s *Service) Claim(ctx context.Context) (Delivery, error) {
 		return Delivery{}, err
 	}
 	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return Delivery{}, err
+	}
 	if err = allowTransitions(ctx, tx); err != nil {
+		return Delivery{}, err
+	}
+	cleaned, err := tx.Exec(ctx, `UPDATE document_deliveries SET state='cancelled',cancelled_at=clock_timestamp(),last_error='Original document or Customer is archived, hidden, or Void',updated_at=clock_timestamp() WHERE state='queued' AND NOT delivery_document_sendable(company_id,document_type,document_id)`)
+	if err != nil {
 		return Delivery{}, err
 	}
 	now := s.now()
@@ -472,12 +485,16 @@ func (s *Service) Claim(ctx context.Context) (Delivery, error) {
 			state = "failed"
 			failed = now
 		}
-		tag, e := tx.Exec(ctx, `UPDATE document_deliveries SET state=$1,attempt_token=NULL,lease_expires_at=NULL,next_attempt_at=$2,last_error='worker lease expired after ambiguous transport outcome',failed_at=$3,updated_at=$2 WHERE id=$4 AND state='sending'`, state, now, failed, x.id)
+		var actual string
+		e := tx.QueryRow(ctx, `UPDATE document_deliveries SET state=$1,attempt_token=NULL,lease_expires_at=NULL,next_attempt_at=$2,last_error='worker lease expired after ambiguous transport outcome',failed_at=$3,updated_at=$2 WHERE id=$4 AND state='sending' RETURNING state`, state, now, failed, x.id).Scan(&actual)
 		if e != nil {
 			return Delivery{}, e
 		}
-		if tag.RowsAffected() != 1 {
-			return Delivery{}, ErrLeaseLost
+		if actual == "cancelled" {
+			if err := event(ctx, tx, x.id, x.company, nil, "transport_failure", "", "", "", "", map[string]any{"reason": "lease_expired", "outcome": "ambiguous"}); err != nil {
+				return Delivery{}, err
+			}
+			continue
 		}
 		if e = event(ctx, tx, x.id, x.company, nil, "state", "sending", state, "", "", map[string]any{"reason": "lease_expired", "outcome": "ambiguous"}); e != nil {
 			return Delivery{}, e
@@ -486,7 +503,7 @@ func (s *Service) Claim(ctx context.Context) (Delivery, error) {
 	var id int64
 	err = tx.QueryRow(ctx, `SELECT id FROM document_deliveries WHERE state='queued' AND sender_address IS NOT NULL AND sender_address<>'' AND next_attempt_at<=$1 ORDER BY next_attempt_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, now).Scan(&id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) && len(staleRows) > 0 {
+		if errors.Is(err, pgx.ErrNoRows) && (len(staleRows) > 0 || cleaned.RowsAffected() > 0) {
 			if commitErr := tx.Commit(ctx); commitErr != nil {
 				return Delivery{}, commitErr
 			}
@@ -495,7 +512,7 @@ func (s *Service) Claim(ctx context.Context) (Delivery, error) {
 	}
 	token := uuid.New()
 	lease := now.Add(LeaseDuration)
-	tag, err := tx.Exec(ctx, `UPDATE document_deliveries SET state='sending',lifetime_attempt_count=lifetime_attempt_count+1,cycle_attempt_count=cycle_attempt_count+1,attempt_token=$1,lease_expires_at=$2,updated_at=$3 WHERE id=$4 AND state='queued'`, token, lease, now, id)
+	tag, err := tx.Exec(ctx, `UPDATE document_deliveries SET state='sending',dispatch_boundary_known=true,handoff_started_at=NULL,lifetime_attempt_count=lifetime_attempt_count+1,cycle_attempt_count=cycle_attempt_count+1,attempt_token=$1,lease_expires_at=$2,updated_at=$3 WHERE id=$4 AND state='queued'`, token, lease, now, id)
 	if err != nil {
 		return Delivery{}, err
 	}
@@ -505,6 +522,9 @@ func (s *Service) Claim(ctx context.Context) (Delivery, error) {
 	d, err := get(ctx, tx, 0, id)
 	if err != nil {
 		return Delivery{}, err
+	}
+	if d.State == "cancelled" {
+		return d, tx.Commit(ctx)
 	}
 	if err = event(ctx, tx, id, d.CompanyID, nil, "state", "queued", "sending", "", "", map[string]any{"attempt_token": token, "cycle_attempt": d.CycleAttemptCount}); err != nil {
 		return Delivery{}, err
@@ -535,6 +555,13 @@ func (s *Service) ProcessOne(ctx context.Context, sender Sender, hook Acceptance
 	}
 	if hook == nil {
 		hook = NopAcceptanceHook{}
+	}
+	admitted, err := s.beginDispatch(ctx, d)
+	if err != nil {
+		return true, err
+	}
+	if !admitted {
+		return true, nil
 	}
 	sendCtx, cancel := context.WithTimeout(ctx, SendTimeout)
 	result, sendErr := sender.Send(sendCtx, d)
@@ -604,6 +631,15 @@ func (s *Service) failAttempt(ctx context.Context, d Delivery, cause error) erro
 		return err
 	}
 	defer tx.Rollback(ctx)
+	// Serialize retry admission with archive's cancellation scan, including a
+	// transport that finishes after that scan but before archive commits.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return err
+	}
+	q := fmt.Sprintf(`SELECT o.id FROM %ss o JOIN customers c ON c.id=o.customer_id AND c.company_id=o.company_id WHERE o.id=$1 AND o.company_id=$2 FOR SHARE OF o,c`, d.DocumentType)
+	if _, err = tx.Exec(ctx, q, d.DocumentID, d.CompanyID); err != nil {
+		return err
+	}
 	if err = allowTransitions(ctx, tx); err != nil {
 		return err
 	}
@@ -616,12 +652,19 @@ func (s *Service) failAttempt(ctx context.Context, d Delivery, cause error) erro
 		state = "failed"
 		failed = now
 	}
-	tag, err := tx.Exec(ctx, `UPDATE document_deliveries SET state=$1,next_attempt_at=$2,attempt_token=NULL,lease_expires_at=NULL,last_error=$3,failed_at=$4,updated_at=$5 WHERE id=$6 AND attempt_token=$7 AND state='sending'`, state, next, cause.Error(), failed, now, d.ID, d.AttemptToken)
+	var actual string
+	err = tx.QueryRow(ctx, `UPDATE document_deliveries SET state=$1,next_attempt_at=$2,attempt_token=NULL,lease_expires_at=NULL,last_error=$3,failed_at=$4,updated_at=$5 WHERE id=$6 AND attempt_token=$7 AND state='sending' RETURNING state`, state, next, cause.Error(), failed, now, d.ID, d.AttemptToken).Scan(&actual)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrLeaseLost
+	}
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() != 1 {
-		return ErrLeaseLost
+	if actual == "cancelled" {
+		if err := event(ctx, tx, d.ID, d.CompanyID, nil, "transport_failure", "", "", "", "", map[string]any{"error": cause.Error(), "classification": kind}); err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
 	}
 	if err = event(ctx, tx, d.ID, d.CompanyID, nil, "state", "sending", state, "", "", map[string]any{"error": cause.Error(), "classification": kind}); err != nil {
 		return err
@@ -654,6 +697,9 @@ func (s *Service) ManualRetry(ctx context.Context, a Actor, id int64, reason str
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return err
+	}
 	d, err := get(ctx, tx, a.CompanyID, id)
 	if err != nil {
 		return err
@@ -662,8 +708,29 @@ func (s *Service) ManualRetry(ctx context.Context, a Actor, id int64, reason str
 	if !active {
 		return ErrNotFound
 	}
-	if err = authorize(ctx, tx, a, jobID); err != nil {
+	request, migrated := authorization.FromContext(ctx)
+	if migrated {
+		if a.ID != request.Actor.UserID {
+			return ErrForbidden
+		}
+		if err = request.Service.AuthorizeDeliveryRetry(ctx, tx, request.Actor, a.CompanyID, d.DocumentType, d.DocumentID, len(d.Attachments) > 0); err != nil {
+			return err
+		}
+	} else if err = authorize(ctx, tx, a, jobID); err != nil {
 		return err
+	}
+	if _, err = tx.Exec(ctx, `SELECT id FROM document_deliveries WHERE id=$1 AND company_id=$2 FOR UPDATE`, id, a.CompanyID); err != nil {
+		return err
+	}
+	d, err = get(ctx, tx, a.CompanyID, id)
+	if err != nil {
+		return err
+	}
+	if d.State == "accepted" {
+		return tx.Commit(ctx)
+	}
+	if d.From == "" {
+		return ErrInvalid
 	}
 	var key uuid.UUID
 	if len(keys) > 0 {
@@ -688,7 +755,7 @@ func (s *Service) ManualRetry(ctx context.Context, a Actor, id int64, reason str
 		return err
 	}
 	now := s.now()
-	tag, err := tx.Exec(ctx, `UPDATE document_deliveries SET state='queued',cycle_attempt_count=0,retry_cycle=retry_cycle+1,next_attempt_at=$1,failed_at=NULL,bounced_at=NULL,last_error='',updated_at=$1,last_manual_retry_key=NULLIF($4::uuid,'00000000-0000-0000-0000-000000000000') WHERE id=$2 AND company_id=$3 AND state IN ('failed','bounced')`, now, id, a.CompanyID, key)
+	tag, err := tx.Exec(ctx, `UPDATE document_deliveries SET state='queued',retry_cycle=retry_cycle+1,handoff_started_at=NULL,next_attempt_at=$1,failed_at=NULL,bounced_at=NULL,last_error='',updated_at=$1,last_manual_retry_key=NULLIF($4::uuid,'00000000-0000-0000-0000-000000000000') WHERE id=$2 AND company_id=$3 AND state IN ('failed','bounced')`, now, id, a.CompanyID, key)
 	if err != nil {
 		return err
 	}
@@ -701,11 +768,16 @@ func (s *Service) ManualRetry(ctx context.Context, a Actor, id int64, reason str
 	if _, err = tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,action,object_type,object_id,metadata) VALUES($1,$2,'document_delivery_retried',$3,$4,jsonb_build_object('delivery_id',$5::bigint,'reason',$6::text))`, a.CompanyID, a.ID, d.DocumentType, d.DocumentID, id, reason); err != nil {
 		return err
 	}
+	if migrated {
+		if err = request.Service.AuditDeliveryRetry(ctx, tx, request.Actor, d.DocumentType, d.DocumentID, d.ID, reason); err != nil {
+			return err
+		}
+	}
 	return tx.Commit(ctx)
 }
 func documentJobID(ctx context.Context, tx pgx.Tx, d Delivery) (*int64, bool) {
 	var id *int64
-	err := tx.QueryRow(ctx, fmt.Sprintf(`SELECT job_id FROM %ss WHERE id=$1 AND company_id=$2 AND deleted_at IS NULL AND conversion_hidden_at IS NULL`, d.DocumentType), d.DocumentID, d.CompanyID).Scan(&id)
+	err := tx.QueryRow(ctx, fmt.Sprintf(`SELECT o.job_id FROM %ss o JOIN customers c ON c.id=o.customer_id AND c.company_id=o.company_id WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL AND o.conversion_hidden_at IS NULL AND c.deleted_at IS NULL FOR SHARE OF o,c`, d.DocumentType), d.DocumentID, d.CompanyID).Scan(&id)
 	return id, err == nil
 }
 
@@ -802,7 +874,7 @@ func TrackingPixelGIF() []byte {
 }
 
 func (s *Service) History(ctx context.Context, company int64, ref DocumentRef) ([]Summary, error) {
-	rows, err := s.db.Query(ctx, `SELECT id,state,last_error,recipients_to,lifetime_attempt_count,open_count,created_at,accepted_at,delivered_at,bounced_at,failed_at,last_open_at FROM document_deliveries WHERE company_id=$1 AND document_type=$2 AND document_id=$3 ORDER BY created_at DESC,id DESC`, company, ref.Type, ref.ID)
+	rows, err := s.db.Query(ctx, `SELECT id,state,CASE WHEN state='sending' AND dispatch_boundary_known IS NULL THEN 'Legacy transport handoff unknown; await lease recovery and review the original intent' WHEN state IN ('queued','failed','bounced') AND coalesce(sender_address,'')='' THEN 'Legacy sender snapshot unknown; explicit review and a new Delivery are required' ELSE last_error END,recipients_to,lifetime_attempt_count,open_count,created_at,accepted_at,delivered_at,bounced_at,failed_at,last_open_at,coalesce(sender_address,'')<>'' FROM document_deliveries WHERE company_id=$1 AND document_type=$2 AND document_id=$3 ORDER BY created_at DESC,id DESC`, company, ref.Type, ref.ID)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
@@ -814,7 +886,7 @@ func (s *Service) History(ctx context.Context, company int64, ref DocumentRef) (
 	var out []Summary
 	for rows.Next() {
 		var item Summary
-		if err = rows.Scan(&item.ID, &item.State, &item.LastError, &item.To, &item.LifetimeAttemptCount, &item.OpenCount, &item.CreatedAt, &item.AcceptedAt, &item.DeliveredAt, &item.BouncedAt, &item.FailedAt, &item.LastOpenAt); err != nil {
+		if err = rows.Scan(&item.ID, &item.State, &item.LastError, &item.To, &item.LifetimeAttemptCount, &item.OpenCount, &item.CreatedAt, &item.AcceptedAt, &item.DeliveredAt, &item.BouncedAt, &item.FailedAt, &item.LastOpenAt, &item.SenderRecorded); err != nil {
 			return nil, err
 		}
 		out = append(out, item)

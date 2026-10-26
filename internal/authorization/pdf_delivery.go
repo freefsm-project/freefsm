@@ -3,6 +3,7 @@ package authorization
 import (
 	"context"
 
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -10,6 +11,48 @@ type PDFDeliverySelection struct {
 	CurrentToken string
 	Version      PDFVersion
 	Source       []byte
+}
+
+// Retry authorizes the already frozen communication, without reloading live
+// attachment bytes or substituting a PDF. File Download remains independent.
+func (s *Service) AuthorizeDeliveryRetry(ctx context.Context, tx pgx.Tx, a Actor, company int64, kind string, id int64, extras bool) error {
+	p, err := principal(ctx, tx, a, false)
+	if err != nil {
+		return err
+	}
+	if p.CompanyID != company {
+		return ErrForbidden
+	}
+	for _, permission := range []string{"delivery.request", "pdf.download"} {
+		if _, err := pdfDocumentAccess(ctx, tx, p, kind, id, permission); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `SELECT o.id FROM `+kind+`s o JOIN customers c ON c.id=o.customer_id WHERE o.id=$1 AND o.company_id=$2 FOR SHARE OF o,c`, id, company); err != nil {
+		return err
+	}
+	if extras {
+		ref, err := objectref.Parse(kind, id)
+		if err != nil {
+			return err
+		}
+		if _, err = fileAccess(ctx, tx, p, a, ref, "file.download", 0, true); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) AuditDeliveryRetry(ctx context.Context, tx pgx.Tx, a Actor, kind string, id, delivery int64, reason string) error {
+	p, err := principal(ctx, tx, a, false)
+	if err != nil {
+		return err
+	}
+	scope, err := pdfDocumentAccess(ctx, tx, p, kind, id, "delivery.request")
+	if err != nil {
+		return err
+	}
+	return audit(ctx, tx, a, p, kind+".delivery.retry", scope, kind, id, map[string]any{"delivery_id": delivery, "reason": reason})
 }
 
 func selectDeliveryPDF(ctx context.Context, q queryer, p Principal, kind string, id, version int64) (PDFDeliverySelection, error) {

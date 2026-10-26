@@ -97,6 +97,15 @@ func pdfDocumentAccess(ctx context.Context, q queryer, p Principal, kind string,
 	if archived && (action == "pdf.generate" || action == "delivery.request") {
 		return "", ErrForbidden
 	}
+	if action == "delivery.request" {
+		var customerActive bool
+		if err := q.QueryRow(ctx, `SELECT c.deleted_at IS NULL FROM `+kind+`s o JOIN customers c ON c.id=o.customer_id AND c.company_id=o.company_id WHERE o.id=$1 AND o.company_id=$2`, id, p.CompanyID).Scan(&customerActive); err != nil {
+			return "", err
+		}
+		if !customerActive {
+			return "", ErrForbidden
+		}
+	}
 	if action == "pdf.generate" && (label == "" || !termsRecorded) {
 		return "", ErrConflict
 	}

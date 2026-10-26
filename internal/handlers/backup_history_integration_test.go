@@ -168,7 +168,10 @@ func TestBackupHistoricalDomainRoundTrip(t *testing.T) {
 	deliveryActor := delivery.Actor{ID: src.actor, CompanyID: src.company, Role: "admin"}
 	queue := func(invoiceID int64, title string) delivery.Delivery {
 		t.Helper()
-		d, err := outbox.Queue(ctx, deliveryActor, delivery.QueueRequest{Key: uuid.New(), Document: delivery.DocumentRef{Type: "invoice", ID: invoiceID}, Snapshot: delivery.Snapshot{To: []string{"original@example.test"}, CC: []string{"accounts@example.test"}, BCC: []string{"audit@example.test"}, Subject: title, TextBody: "Original text\nwith historical values", HTMLBody: "<p>Original <b>historical</b> values</p>", PDF: []byte("%PDF-1.7\n\x00\xffhistorical attachment\n%%EOF"), PDFFilename: "original-invoice.pdf"}})
+		// This lifecycle fixture follows one logical recipient. Current fanout is
+		// covered by the Delivery encrypted round trip; installed multi-address
+		// snapshots are covered by the populated pre-096 upgrade fixture.
+		d, err := outbox.Queue(ctx, deliveryActor, delivery.QueueRequest{Key: uuid.New(), Document: delivery.DocumentRef{Type: "invoice", ID: invoiceID}, Snapshot: delivery.Snapshot{To: []string{"original@example.test"}, Subject: title, TextBody: "Original text\nwith historical values", HTMLBody: "<p>Original <b>historical</b> values</p>", PDF: []byte("%PDF-1.7\n\x00\xffhistorical attachment\n%%EOF"), PDFFilename: "original-invoice.pdf"}})
 		historyCheck(t, err)
 		return d
 	}

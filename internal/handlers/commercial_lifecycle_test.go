@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
+	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 )
 
@@ -56,6 +57,11 @@ func TestCommercialLifecycleVoidPDFPreservesPriorBytesHTTP(t *testing.T) {
 	if err := pool.QueryRow(ctx, `SELECT id FROM document_pdf_versions`).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_host='localhost',smtp_from='sender@example.test' WHERE company_id=$1`, company); err != nil {
+		t.Fatal(err)
+	}
+	message := url.Values{"pdf_version": {fmt.Sprint(version)}, "idempotency_key": {newOperationKey()}, "to": {"one@example.test,two@example.test"}, "subject": {"Draft review"}, "body": {"Message"}}
+	fieldPost(t, router, cookie, path+"/email", message, 303)
 	svc := statusflow.New(pool)
 	actor := statusflow.Actor{ID: admin, CompanyID: company}
 	if err := svc.FinalizeInvoice(ctx, actor, id); err != nil {
@@ -66,6 +72,19 @@ func TestCommercialLifecycleVoidPDFPreservesPriorBytesHTTP(t *testing.T) {
 	}
 	if err := svc.TransitionInvoice(ctx, actor, id, void); err != nil {
 		t.Fatal(err)
+	}
+	message.Set("idempotency_key", newOperationKey())
+	message.Set("confirm_stale_pdf", "1")
+	fieldPost(t, router, cookie, path+"/email", message, 403)
+	history, err := delivery.New(pool, "").History(ctx, company, delivery.DocumentRef{Type: "invoice", ID: id})
+	historyCheck(t, err)
+	if len(history) != 2 {
+		t.Fatal("Draft review did not fan out")
+	}
+	for _, row := range history {
+		if row.State != "cancelled" {
+			t.Fatal("Void Invoice retained sendable mail")
+		}
 	}
 	fieldPost(t, router, cookie, path+"/pdf/save", url.Values{}, 303)
 	pdf := requestBody(t, router, cookie, "GET", path+"/pdf", 200)

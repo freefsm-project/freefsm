@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
@@ -68,7 +69,7 @@ func writeDeliveryError(w http.ResponseWriter, r *http.Request, err error, data 
 func deliveryHistoryRows(items []delivery.Summary) []templates.DeliveryHistoryRow {
 	rows := make([]templates.DeliveryHistoryRow, 0, len(items))
 	for _, item := range items {
-		rows = append(rows, templates.DeliveryHistoryRow{ID: item.ID, State: item.State, Recipients: strings.Join(item.To, ", "), QueuedAt: deliveryTime(item.CreatedAt), AcceptedAt: deliveryTime(item.AcceptedAt), DeliveredAt: deliveryTime(item.DeliveredAt), BouncedAt: deliveryTime(item.BouncedAt), FailedAt: deliveryTime(item.FailedAt), OpenedAt: deliveryTime(item.LastOpenAt), OpenCount: item.OpenCount, Attempts: item.LifetimeAttemptCount, LastError: item.LastError, CanRetry: item.State == "failed" || item.State == "bounced", RetryKey: uuid.NewString()})
+		rows = append(rows, templates.DeliveryHistoryRow{ID: item.ID, State: item.State, Recipients: strings.Join(item.To, ", "), QueuedAt: deliveryTime(item.CreatedAt), AcceptedAt: deliveryTime(item.AcceptedAt), DeliveredAt: deliveryTime(item.DeliveredAt), BouncedAt: deliveryTime(item.BouncedAt), FailedAt: deliveryTime(item.FailedAt), OpenedAt: deliveryTime(item.LastOpenAt), OpenCount: item.OpenCount, Attempts: item.LifetimeAttemptCount, LastError: item.LastError, CanRetry: item.SenderRecorded && (item.State == "failed" || item.State == "bounced"), RetryKey: uuid.NewString()})
 	}
 	return rows
 }
@@ -120,6 +121,8 @@ func retryDocumentDelivery(svc *delivery.Service, objectType string, w http.Resp
 	err = svc.ManualRetry(r.Context(), delivery.Actor{ID: u.ID, CompanyID: u.CompanyID, Role: u.Role}, deliveryID, r.FormValue("reason"), key)
 	if err != nil {
 		switch {
+		case errors.Is(err, authorization.ErrForbidden), errors.Is(err, authorization.ErrNotFound), errors.Is(err, authorization.ErrPending):
+			authorizationError(w, r, err)
 		case errors.Is(err, instancecontrol.ErrEmailDisabled), errors.Is(err, instancecontrol.ErrMaintenance):
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		case errors.Is(err, delivery.ErrForbidden):

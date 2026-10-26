@@ -66,7 +66,11 @@ func TestReviewedDeliveryAPIReceiptAndDrift(t *testing.T) {
 	intent["review_token"] = review["review_token"]
 	intent["job_id"] = job.ID
 	intent["occurred_at"] = "2026-01-02T03:04:05Z"
-	_, err = pool.Exec(ctx, `CREATE FUNCTION fail_delivery_review_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='estimate.delivery.request' THEN RAISE EXCEPTION 'injected delivery audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER delivery_review_audit_fault BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION fail_delivery_review_audit()`)
+	// Transport and the other document kind's future template are not the
+	// reviewed communication: changing either must not invalidate this intent.
+	_, err = pool.Exec(ctx, `UPDATE company_settings SET smtp_host='replacement.invalid',smtp_port=2525,invoice_email_body='Unrelated future Invoice template' WHERE company_id=$1`, company)
+	historyCheck(t, err)
+	_, err = pool.Exec(ctx, `CREATE FUNCTION fail_delivery_review_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='estimate.delivery.request' AND (SELECT count(*) FROM document_deliveries)=2 THEN RAISE EXCEPTION 'injected second-recipient audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER delivery_review_audit_fault BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION fail_delivery_review_audit()`)
 	historyCheck(t, err)
 	call("POST", path+"/deliveries", intent, 503)
 	call("GET", "/delivery-operations/"+intent["operation_id"].(string), nil, 404)
@@ -74,6 +78,10 @@ func TestReviewedDeliveryAPIReceiptAndDrift(t *testing.T) {
 	historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM document_deliveries`).Scan(&failedCount))
 	if failedCount != 0 {
 		t.Fatal("audit fault published fanout")
+	}
+	historyCheck(t, pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM authorization_audit WHERE action='estimate.delivery.request')+(SELECT count(*) FROM operation_admissions WHERE operation_id=$1)`, intent["operation_id"]).Scan(&failedCount))
+	if failedCount != 0 {
+		t.Fatal("partial recipient audit or admission survived failed fanout")
 	}
 	_, err = pool.Exec(ctx, `DROP TRIGGER delivery_review_audit_fault ON authorization_audit`)
 	historyCheck(t, err)
@@ -122,6 +130,29 @@ func TestReviewedDeliveryAPIReceiptAndDrift(t *testing.T) {
 	call("POST", path+"/deliveries/review?version=%zz", draft, 400)
 	values := url.Values{"pdf_version": {version}, "idempotency_key": {uuid.NewString()}, "to": {"web@example.test"}, "subject": {"Web"}, "body": {"Body"}}
 	fieldPost(t, web, cookie, path+"/email", values, 303)
+	var unknownVersion int64
+	historyCheck(t, pool.QueryRow(ctx, `INSERT INTO document_pdf_versions(company_id,document_type,document_id,source_token,source_snapshot,filename,content,generated_by) VALUES($1,'estimate',$2,'installed-unknown','{}','unknown-source.pdf',$3,$4) RETURNING id`, company, doc.ID, []byte(originalPDF), admin).Scan(&unknownVersion))
+	unknownMessage := map[string]any{}
+	for key, value := range draft {
+		unknownMessage[key] = value
+	}
+	unknownMessage["pdf_version_id"] = unknownVersion
+	call("POST", path+"/deliveries/review", unknownMessage, 409)
+	unknownMessage["confirm_stale_pdf"] = true
+	unknownReview := call("POST", path+"/deliveries/review", unknownMessage, 200)["data"].(map[string]any)
+	if unknownReview["pdf_source_known"] != false || unknownReview["pdf_stale"] != true {
+		t.Fatal("unknown PDF source was reconstructed")
+	}
+	unknownMessage["operation_id"] = newOperationKey()
+	unknownMessage["job_id"] = job.ID
+	unknownMessage["review_token"] = unknownReview["review_token"]
+	unknownReceipt := call("POST", path+"/deliveries", unknownMessage, 200)["data"].(map[string]any)
+	var unknownBytes []byte
+	var savedVersion int64
+	historyCheck(t, pool.QueryRow(ctx, `SELECT pdf_data,pdf_version_id FROM document_deliveries WHERE id=$1`, int64(unknownReceipt["delivery_ids"].([]any)[0].(float64))).Scan(&unknownBytes, &savedVersion))
+	if string(unknownBytes) != originalPDF || savedVersion != unknownVersion {
+		t.Fatal("unknown selected version was substituted")
+	}
 	server := httptest.NewServer(api)
 	defer server.Close()
 	bounded, cancel := context.WithTimeout(ctx, 45*time.Second)
