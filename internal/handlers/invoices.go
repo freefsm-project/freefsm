@@ -1278,6 +1278,7 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64, input
 	i = h.effectiveInvoice(ctx, i)
 	statuses, _ := h.statusSvc.ByObjectType(ctx, "invoice")
 	var settlementView settlement.InvoiceSettlement
+	allocated, applied := input.AllocatedCents, input.AppliedCents
 	if input.SettledCents != nil {
 		settled := *input.SettledCents
 		totals, err := services.FinancialTotals(i.Financial, i.LineItems, i.TaxRate)
@@ -1298,6 +1299,16 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64, input
 		if err != nil {
 			return documentPDF{}, fmt.Errorf("load invoice settlement: %w", err)
 		}
+		for _, payment := range settlementView.Payments {
+			if payment.Reversal == nil {
+				allocated += payment.AppliedCents
+			}
+		}
+		for _, application := range settlementView.Applications {
+			if application.Reversal == nil {
+				applied += application.AmountCents
+			}
+		}
 	}
 	var customer *ent.Customer
 	if i.CustomerID > 0 {
@@ -1313,6 +1324,8 @@ func (h *InvoiceHandler) invoicePDFDocument(ctx context.Context, id int64, input
 	}
 	data, err := generatePDFBytes(func(w io.Writer) error {
 		return services.GenerateInvoicePDF(w, i, customer, job, asset, statuses, cs, services.InvoicePDFSettlement{
+			AllocatedCents:  allocated,
+			AppliedCents:    applied,
 			AmountPaidCents: settlementView.SettledCents,
 			AmountDueCents:  settlementView.AmountDueCents,
 		}, input.FieldLines...)

@@ -22,18 +22,21 @@ const (
 )
 
 type pdfTotals struct {
-	exact               DocumentTotals
-	paidCents, dueCents int64
-	Subtotal            float64
-	Tax                 float64
-	Total               float64
-	Paid                float64
-	Due                 float64
-	TaxableSubtotal     float64
-	totalMoney          Money
+	exact                        DocumentTotals
+	paidCents, dueCents          int64
+	allocatedCents, appliedCents int64
+	Subtotal                     float64
+	Tax                          float64
+	Total                        float64
+	Paid                         float64
+	Due                          float64
+	TaxableSubtotal              float64
+	totalMoney                   Money
 }
 
 type InvoicePDFSettlement struct {
+	AllocatedCents  int64
+	AppliedCents    int64
 	AmountPaidCents int64
 	AmountDueCents  int64
 }
@@ -108,6 +111,7 @@ func GenerateInvoicePDF(w io.Writer, i *ent.Invoice, customer *ent.Customer, job
 	totals.Paid = float64(settlement.AmountPaidCents) / 100
 	totals.Due = float64(settlement.AmountDueCents) / 100
 	totals.paidCents, totals.dueCents = settlement.AmountPaidCents, settlement.AmountDueCents
+	totals.allocatedCents, totals.appliedCents = settlement.AllocatedCents, settlement.AppliedCents
 	writeSummary(pdf, cs, totals, true)
 	return pdf.Output(w)
 }
@@ -359,7 +363,11 @@ func writeRightRowCell(pdf *gofpdf.Fpdf, width, rowHeight float64, text string) 
 }
 
 func writeSummary(pdf *gofpdf.Fpdf, cs *ent.CompanySettings, totals pdfTotals, includePayments bool) {
-	ensureSpace(pdf, 40, false, nil)
+	needed := 40.0
+	if includePayments {
+		needed = 48
+	}
+	ensureSpace(pdf, needed, false, nil)
 	pageWidth, _ := pdf.GetPageSize()
 	y := pdf.GetY()
 	footerWidth := 92.0
@@ -378,6 +386,8 @@ func writeSummary(pdf *gofpdf.Fpdf, cs *ent.CompanySettings, totals pdfTotals, i
 	writeTotalLine(pdf, totalsX, "Tax", totals.exact.Tax.Format(), false)
 	writeTotalLine(pdf, totalsX, "Total", totals.exact.Total.Format(), true)
 	if includePayments {
+		writeTotalLine(pdf, totalsX, "Payments Allocated", commercial.FormatCents(totals.allocatedCents), false)
+		writeTotalLine(pdf, totalsX, "Credit Applied", commercial.FormatCents(totals.appliedCents), false)
 		writeTotalLine(pdf, totalsX, "Amount Paid", commercial.FormatCents(totals.paidCents), false)
 		writeTotalLine(pdf, totalsX, "Amount Due", commercial.FormatCents(totals.dueCents), true)
 	}

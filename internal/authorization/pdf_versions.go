@@ -13,13 +13,15 @@ import (
 )
 
 type PDFSource struct {
-	Asset        *ent.Asset
-	FieldLines   []string
-	Token        string
-	ReviewToken  string
-	Settings     *ent.CompanySettings
-	Snapshot     []byte
-	SettledCents int64
+	Asset          *ent.Asset
+	FieldLines     []string
+	Token          string
+	ReviewToken    string
+	Settings       *ent.CompanySettings
+	Snapshot       []byte
+	SettledCents   int64
+	AllocatedCents int64
+	AppliedCents   int64
 }
 type PDFVersion struct {
 	ID          int64
@@ -162,8 +164,8 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 	if err := json.Unmarshal(snapshot, &financial); err != nil {
 		return PDFSource{}, err
 	}
-	var settled int64
-	for _, entry := range append(financial.Allocations, financial.Applications...) {
+	var settled, allocated, applied int64
+	for index, entry := range append(financial.Allocations, financial.Applications...) {
 		if entry.Reversed {
 			continue
 		}
@@ -171,8 +173,13 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 			return PDFSource{}, fmt.Errorf("invalid settlement snapshot")
 		}
 		settled += entry.Amount
+		if index < len(financial.Allocations) {
+			allocated += entry.Amount
+		} else {
+			applied += entry.Amount
+		}
 	}
-	return PDFSource{Asset: financial.Asset, Token: fmt.Sprintf("%x", sha256.Sum256(snapshot)), ReviewToken: fmt.Sprintf("%x", sha256.Sum256(review)), Settings: cs, Snapshot: snapshot, SettledCents: settled, FieldLines: fieldLines}, nil
+	return PDFSource{Asset: financial.Asset, Token: fmt.Sprintf("%x", sha256.Sum256(snapshot)), ReviewToken: fmt.Sprintf("%x", sha256.Sum256(review)), Settings: cs, Snapshot: snapshot, SettledCents: settled, AllocatedCents: allocated, AppliedCents: applied, FieldLines: fieldLines}, nil
 }
 
 func pdfFieldLines(ctx context.Context, q queryer, kind string, id, company int64) ([]string, error) {

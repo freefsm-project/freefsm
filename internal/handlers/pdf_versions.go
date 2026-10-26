@@ -15,10 +15,12 @@ import (
 // PDFRenderInput makes the reviewed presentation and financial snapshot explicit
 // without changing ordinary request configuration or authorization context.
 type PDFRenderInput struct {
-	Asset        *ent.Asset
-	FieldLines   []string
-	Presentation *ent.CompanySettings
-	SettledCents *int64
+	Asset          *ent.Asset
+	FieldLines     []string
+	Presentation   *ent.CompanySettings
+	SettledCents   *int64
+	AllocatedCents int64
+	AppliedCents   int64
 }
 
 func documentPDFVersions(w http.ResponseWriter, r *http.Request, kind string, id int64, action string, generate func(context.Context, PDFRenderInput) (documentPDF, error)) bool {
@@ -43,7 +45,7 @@ func documentPDFVersions(w http.ResponseWriter, r *http.Request, kind string, id
 			authorizationError(w, r, err)
 			return true
 		}
-		doc, err := generate(r.Context(), PDFRenderInput{Asset: source.Asset, Presentation: source.Settings, SettledCents: &source.SettledCents, FieldLines: source.FieldLines})
+		doc, err := generate(r.Context(), PDFRenderInput{Asset: source.Asset, Presentation: source.Settings, SettledCents: &source.SettledCents, AllocatedCents: source.AllocatedCents, AppliedCents: source.AppliedCents, FieldLines: source.FieldLines})
 		if err != nil {
 			http.Error(w, "PDF generation failed", 500)
 			return true
@@ -54,7 +56,17 @@ func documentPDFVersions(w http.ResponseWriter, r *http.Request, kind string, id
 		}
 		http.Redirect(w, r, fmt.Sprintf("/%ss/%d/pdf/preview", kind, id), 303)
 	case "download":
-		version, _ := strconv.ParseInt(r.URL.Query().Get("version"), 10, 64)
+		var version int64
+		if selected, present := r.URL.Query()["version"]; present {
+			var err error
+			if len(selected) == 1 {
+				version, err = strconv.ParseInt(selected[0], 10, 64)
+			}
+			if len(selected) != 1 || err != nil || version <= 0 {
+				http.Error(w, "invalid PDF version selection", http.StatusBadRequest)
+				return true
+			}
+		}
 		v, err := request.Service.DownloadPDFVersion(r.Context(), request.Actor, kind, id, version, r.URL.Query().Get("confirm_stale") == "1")
 		if err != nil {
 			authorizationError(w, r, err)
