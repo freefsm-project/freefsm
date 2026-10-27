@@ -40,6 +40,9 @@ func TestCommercialArchivedTargetsDoNotExpandSourceAuthorityHTTP(t *testing.T) {
 	for _, source := range []string{fmt.Sprintf("/customers/%d", c.ID), fmt.Sprintf("/jobs/%d", j.ID), "/search?q=ARCHIVED"} {
 		body := requestBody(t, web, cookie, "GET", source, 200)
 		assertNotContains(t, body, "PRIVATE ARCHIVED CONTENT")
+		if source == "/search?q=ARCHIVED" {
+			assertNotContains(t, body, "ARCHIVED TARGET")
+		}
 		for _, path := range paths {
 			assertNotContains(t, body, `href="`+path)
 			assertNotContains(t, body, `hx-get="`+path)
