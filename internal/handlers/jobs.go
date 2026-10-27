@@ -603,6 +603,10 @@ func (h *JobHandler) CancelNextOccurrence(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := h.svc.Delete(r.Context(), id); err != nil {
+		if errors.Is(err, authorization.ErrForbidden) {
+			authorizationError(w, r, err)
+			return
+		}
 		internalServerError(w, r, "cancel next occurrence", err)
 		return
 	}

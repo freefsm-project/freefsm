@@ -1051,6 +1051,11 @@ func (s *JobService) assignedJobIDs(ctx context.Context, userID int64) ([]int64,
 }
 
 func (s *JobService) Delete(ctx context.Context, id int64) error {
+	// Product work has a retained identity. The legacy occurrence-cancellation
+	// adapter must not bypass the lifecycle boundary with a hard delete.
+	if _, ok := authorization.FromContext(ctx); ok {
+		return authorization.ErrForbidden
+	}
 	if err := s.client.Job.DeleteOneID(id).Exec(ctx); err != nil {
 		return fmt.Errorf("delete job %d: %w", id, err)
 	}
