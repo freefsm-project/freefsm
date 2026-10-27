@@ -11,6 +11,70 @@ import (
 	"github.com/freefsm-project/freefsm/internal/delivery"
 )
 
+func TestDeliveryAutomaticRetryBudgetSurvivesManualRetryHTTP(t *testing.T) {
+	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	cookie := sessionCookie(t, ctx, sessions, admin)
+	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Retry budget").SaveX(ctx)
+	doc := client.Estimate.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetTitle("Frozen retry budget").SaveX(ctx)
+	path := fmt.Sprintf("/estimates/%d", doc.ID)
+	_, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_from='sender@example.test',smtp_host='localhost' WHERE company_id=$1`, company)
+	historyCheck(t, err)
+	expectStatus(t, web, cookie, "POST", path+"/pdf/save", 303)
+	version := compositionInput(t, requestBody(t, web, cookie, "GET", path+"/pdf/preview", 200), "version")
+	fieldPost(t, web, cookie, path+"/email", url.Values{"pdf_version": {version}, "idempotency_key": {newOperationKey()}, "to": {"retry@example.test"}, "subject": {"Frozen"}, "body": {"Body"}}, 303)
+	var id int64
+	var message string
+	historyCheck(t, pool.QueryRow(ctx, `SELECT id,message_id FROM document_deliveries`).Scan(&id, &message))
+	sends := 0
+	sender := deliveryTestSender(func(_ context.Context, d delivery.Delivery) (delivery.SendResult, error) {
+		sends++
+		if d.MessageID != message || d.Subject != "Frozen" {
+			t.Fatal("retry changed frozen intent")
+		}
+		return delivery.SendResult{}, &delivery.SendError{Kind: delivery.SendTemporary, Err: errors.New("owned temporary failure")}
+	})
+	for attempt := 1; attempt <= 5; attempt++ {
+		// Recreate the worker each time: the budget must be durable.
+		worked, err := delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+		historyCheck(t, err)
+		if !worked {
+			t.Fatalf("attempt %d missing", attempt)
+		}
+		var state string
+		var count int
+		historyCheck(t, pool.QueryRow(ctx, `SELECT state,lifetime_attempt_count FROM document_deliveries WHERE id=$1`, id).Scan(&state, &count))
+		want := "queued"
+		if attempt == 5 {
+			want = "failed"
+		}
+		if state != want || count != attempt {
+			t.Fatalf("attempt %d: state=%s count=%d; want %s", attempt, state, count, want)
+		}
+		_, err = pool.Exec(ctx, `UPDATE document_deliveries SET next_attempt_at=clock_timestamp() WHERE id=$1`, id)
+		historyCheck(t, err)
+	}
+	retry := fmt.Sprintf("%s/deliveries/%d/retry", path, id)
+	command := url.Values{"idempotency_key": {newOperationKey()}, "reason": {"explicit retry after exhaustion"}}
+	fieldPost(t, web, cookie, retry, command, 303)
+	fieldPost(t, web, cookie, retry, command, 303)
+	worked, err := delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+	historyCheck(t, err)
+	if !worked || sends != 6 {
+		t.Fatalf("manual attempt: worked=%v sends=%d", worked, sends)
+	}
+	var state string
+	historyCheck(t, pool.QueryRow(ctx, `SELECT state FROM document_deliveries WHERE id=$1`, id).Scan(&state))
+	if state != "failed" {
+		t.Fatalf("manual retry reset automatic budget: %s", state)
+	}
+	worked, err = delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+	historyCheck(t, err)
+	if worked || sends != 6 {
+		t.Fatal("exhausted delivery sent automatically")
+	}
+}
+
 func TestDeliveryManualRetryUsesCurrentIndependentGrantsHTTP(t *testing.T) {
 	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()

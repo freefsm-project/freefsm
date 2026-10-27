@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	MaxAttempts       = 6
+	MaxAttempts       = 5
 	BaseRetryDelay    = time.Minute
 	MaxRetryDelay     = time.Hour
 	LeaseDuration     = 45 * time.Second
@@ -460,7 +460,7 @@ func (s *Service) Claim(ctx context.Context) (Delivery, error) {
 		return Delivery{}, err
 	}
 	now := s.now()
-	rows, err := tx.Query(ctx, `SELECT id,company_id,cycle_attempt_count FROM document_deliveries WHERE state='sending' AND lease_expires_at<=$1 FOR UPDATE`, now)
+	rows, err := tx.Query(ctx, `SELECT id,company_id,greatest(lifetime_attempt_count,cycle_attempt_count) FROM document_deliveries WHERE state='sending' AND lease_expires_at<=$1 FOR UPDATE`, now)
 	if err != nil {
 		return Delivery{}, err
 	}
@@ -500,10 +500,14 @@ func (s *Service) Claim(ctx context.Context) (Delivery, error) {
 			return Delivery{}, e
 		}
 	}
+	expired, err := expireAutomaticRetries(ctx, tx, now)
+	if err != nil {
+		return Delivery{}, err
+	}
 	var id int64
 	err = tx.QueryRow(ctx, `SELECT id FROM document_deliveries WHERE state='queued' AND sender_address IS NOT NULL AND sender_address<>'' AND next_attempt_at<=$1 ORDER BY next_attempt_at,id FOR UPDATE SKIP LOCKED LIMIT 1`, now).Scan(&id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) && (len(staleRows) > 0 || cleaned.RowsAffected() > 0) {
+		if errors.Is(err, pgx.ErrNoRows) && (len(staleRows) > 0 || cleaned.RowsAffected() > 0 || expired > 0) {
 			if commitErr := tx.Commit(ctx); commitErr != nil {
 				return Delivery{}, commitErr
 			}
@@ -647,8 +651,12 @@ func (s *Service) failAttempt(ctx context.Context, d Delivery, cause error) erro
 	kind := classifySendError(cause)
 	state := "queued"
 	next := now.Add(retryDelay(d.CycleAttemptCount))
+	deadline, err := retryDeadline(ctx, tx, d.ID)
+	if err != nil {
+		return err
+	}
 	var failed any = nil
-	if kind == SendPermanent || d.CycleAttemptCount >= MaxAttempts {
+	if kind == SendPermanent || max(d.LifetimeAttemptCount, d.CycleAttemptCount) >= MaxAttempts || deadline == nil || !next.Before(*deadline) {
 		state = "failed"
 		failed = now
 	}
