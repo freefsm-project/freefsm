@@ -11,10 +11,12 @@ const RetryWindow = 24 * time.Hour
 
 // The first durable claim anchors the retry window, not process uptime or a
 // manual retry cycle. Existing events are authoritative; missing legacy facts
-// do not establish a fresh automatic retry allowance.
+// do not establish a fresh automatic retry allowance. Require a complete claim
+// ledger matching the lifetime counter so a new manual claim cannot masquerade
+// as the original attempt when older events are unavailable.
 func retryDeadline(ctx context.Context, tx pgx.Tx, id int64) (*time.Time, error) {
 	var first *time.Time
-	err := tx.QueryRow(ctx, `SELECT min(created_at) FROM document_delivery_events WHERE delivery_id=$1 AND event_kind='state' AND to_state='sending'`, id).Scan(&first)
+	err := tx.QueryRow(ctx, `SELECT CASE WHEN count(*)=(SELECT lifetime_attempt_count FROM document_deliveries WHERE id=$1) THEN min(created_at) END FROM document_delivery_events WHERE delivery_id=$1 AND event_kind='state' AND to_state='sending'`, id).Scan(&first)
 	if first != nil {
 		deadline := first.Add(RetryWindow)
 		return &deadline, err
@@ -30,6 +32,7 @@ func expireAutomaticRetries(ctx context.Context, tx pgx.Tx, now time.Time) (int,
 	 WHERE state='queued' AND lifetime_attempt_count>0
 	 AND NOT coalesce((SELECT e.evidence->>'manual'='true' FROM document_delivery_events e WHERE e.delivery_id=d.id AND e.event_kind='state' AND e.to_state='queued' ORDER BY e.id DESC LIMIT 1),false)
 	 AND (greatest(lifetime_attempt_count,cycle_attempt_count)>=$1 OR
+	 (SELECT count(*) FROM document_delivery_events e WHERE e.delivery_id=d.id AND e.event_kind='state' AND e.to_state='sending')<>lifetime_attempt_count OR
 	 coalesce((SELECT min(e.created_at) FROM document_delivery_events e WHERE e.delivery_id=d.id AND e.event_kind='state' AND e.to_state='sending')<=$2,true))
 	 FOR UPDATE OF d`, MaxAttempts, now.Add(-RetryWindow))
 	if err != nil {

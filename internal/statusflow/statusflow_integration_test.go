@@ -292,7 +292,7 @@ func TestAcceptanceHookTransitionsToConfiguredSentDefaultOnlyWhenStatusUnchanged
 	if actual != draftID || logs != 0 {
 		t.Fatalf("unknown delivery status=%d logs=%d, want %d/0", actual, logs, draftID)
 	}
-	mustScan(t, db.QueryRow(ctx, `SELECT o.status_revision,s.meaning_revision FROM estimates o JOIN statuses s ON s.id=o.status_id WHERE o.id=$1`, estimateID), &d.ExpectedStatusRevision, &d.ExpectedMeaningRevision)
+	mustScan(t, db.QueryRow(ctx, `SELECT o.status_revision,s.meaning_revision,o.commercial_revision FROM estimates o JOIN statuses s ON s.id=o.status_id WHERE o.id=$1`, estimateID), &d.ExpectedStatusRevision, &d.ExpectedMeaningRevision, &d.ExpectedCommercialRevision)
 	withTx(t, db, func(tx pgx.Tx) error { return hook.OnAccepted(ctx, tx, d) })
 	mustScan(t, db.QueryRow(ctx, `SELECT status_id FROM estimates WHERE id=$1`, estimateID), &actual)
 	mustScan(t, db.QueryRow(ctx, `SELECT count(*) FROM activity_logs WHERE object_type='estimate' AND object_id=$1 AND action='status_transitioned'`, estimateID), &logs)
@@ -312,7 +312,7 @@ func TestAcceptanceHookTransitionsToConfiguredSentDefaultOnlyWhenStatusUnchanged
 	// The identity can remain unchanged while its meaning changes. Acceptance
 	// must not turn a newly Accepted definition back into Sent.
 	d.ExpectedStatusID = &otherID
-	mustScan(t, db.QueryRow(ctx, `SELECT o.status_revision,s.meaning_revision FROM estimates o JOIN statuses s ON s.id=o.status_id WHERE o.id=$1`, estimateID), &d.ExpectedStatusRevision, &d.ExpectedMeaningRevision)
+	mustScan(t, db.QueryRow(ctx, `SELECT o.status_revision,s.meaning_revision,o.commercial_revision FROM estimates o JOIN statuses s ON s.id=o.status_id WHERE o.id=$1`, estimateID), &d.ExpectedStatusRevision, &d.ExpectedMeaningRevision, &d.ExpectedCommercialRevision)
 	svc := New(db)
 	actor := Actor{ID: admin, CompanyID: company}
 	replacement, err := svc.Create(ctx, actor, CreateRequest{Type: Estimate, Name: "Other proposal", Category: EstimateEstimate})

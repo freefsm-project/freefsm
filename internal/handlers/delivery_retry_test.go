@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -51,6 +52,13 @@ func TestDeliveryAutomaticRetryBudgetSurvivesManualRetryHTTP(t *testing.T) {
 		if state != want || count != attempt {
 			t.Fatalf("attempt %d: state=%s count=%d; want %s", attempt, state, count, want)
 		}
+		page := requestBody(t, web, cookie, "GET", path, 200)
+		if !strings.Contains(page, "Attempt history") || !strings.Contains(page, "owned temporary failure") {
+			t.Fatal("persisted attempt history/reason absent")
+		}
+		if strings.Contains(page, "Next attempt:") != (attempt < 5) {
+			t.Fatal("next attempt must be visible only for queued work")
+		}
 		_, err = pool.Exec(ctx, `UPDATE document_deliveries SET next_attempt_at=clock_timestamp() WHERE id=$1`, id)
 		historyCheck(t, err)
 	}
@@ -72,6 +80,21 @@ func TestDeliveryAutomaticRetryBudgetSurvivesManualRetryHTTP(t *testing.T) {
 	historyCheck(t, err)
 	if worked || sends != 6 {
 		t.Fatal("exhausted delivery sent automatically")
+	}
+	second := url.Values{"idempotency_key": {newOperationKey()}, "reason": {"another explicit retry"}}
+	fieldPost(t, web, cookie, retry, second, 303)
+	worked, err = delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+	historyCheck(t, err)
+	if !worked || sends != 7 {
+		t.Fatal("second explicit manual retry missing")
+	}
+	// A delayed lost-response replay must remain the original accepted command,
+	// even after a later manual retry has replaced the latest-key projection.
+	fieldPost(t, web, cookie, retry, command, 303)
+	worked, err = delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+	historyCheck(t, err)
+	if worked || sends != 7 {
+		t.Fatal("old manual receipt replay caused another attempt")
 	}
 }
 
@@ -141,5 +164,11 @@ func TestDeliveryManualRetryUsesCurrentIndependentGrantsHTTP(t *testing.T) {
 	historyCheck(t, err)
 	if worked {
 		t.Fatal("retry of Accepted created more mail")
+	}
+	fieldPost(t, web, cookie, path+"/email", url.Values{"pdf_version": {version}, "idempotency_key": {newOperationKey()}, "to": {"retry@example.test"}, "subject": {"Explicit resend"}, "body": {"Body"}, "extra_file_id": {fmt.Sprint(file)}}, 303)
+	worked, err = svc.ProcessOne(ctx, capture, nil)
+	historyCheck(t, err)
+	if !worked || len(capture.messages) != 2 || capture.messages[1].ID == sent.ID || capture.messages[1].MessageID == originalMessage {
+		t.Fatal("explicit resend did not create a distinct intent")
 	}
 }

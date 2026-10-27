@@ -59,3 +59,33 @@ func TestRetryWindowSurvivesRestartAndExplicitManualRetry(t *testing.T) {
 		})
 	}
 }
+
+func TestManualRetryCannotInventUnknownOriginalWindow(t *testing.T) {
+	f := newDeliveryFixture(t)
+	ctx := context.Background()
+	svc := New(f.db.Pool, "")
+	a := Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
+	d, err := svc.Queue(ctx, a, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"owned@example.test"}, Subject: "Legacy", PDF: []byte("pdf-v1"), PDFFilename: "x.pdf"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Installed counters can outlive individual recorded attempts. This does
+	// not assert when those missing attempts occurred.
+	if _, err = f.db.Pool.Exec(ctx, `UPDATE document_deliveries SET lifetime_attempt_count=2,cycle_attempt_count=2 WHERE id=$1`, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	sender := &fakeSender{err: errors.New("temporary")}
+	if worked, err := svc.ProcessOne(ctx, sender, nil); err != nil || worked {
+		t.Fatalf("unknown original window sent automatically: %v %v", worked, err)
+	}
+	if err = svc.ManualRetry(ctx, a, d.ID, "reviewed original intent"); err != nil {
+		t.Fatal(err)
+	}
+	if worked, err := svc.ProcessOne(ctx, sender, nil); err != nil || !worked {
+		t.Fatalf("manual retry=%v %v", worked, err)
+	}
+	history, err := svc.History(ctx, f.company, DocumentRef{Type: "estimate", ID: f.estimate})
+	if err != nil || history[0].State != "failed" || sender.calls != 1 {
+		t.Fatalf("manual invented original window: %+v calls=%d err=%v", history, sender.calls, err)
+	}
+}

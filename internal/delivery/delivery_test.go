@@ -87,11 +87,25 @@ func TestQueueWorkerTrackingAndEvidenceIntegration(t *testing.T) {
 		t.Fatalf("tracking HTML = %q", d.HTMLBody)
 	}
 	token := strings.Split(strings.Split(d.HTMLBody, "/delivery/open/")[1], `"`)[0]
+	latestSignal := time.Now().UTC()
+	svc.now = func() time.Time { return latestSignal }
 	if err = svc.RecordOpen(ctx, token); err != nil {
 		t.Fatal(err)
 	}
+	earliestSignal := latestSignal.Add(-time.Minute)
+	svc.now = func() time.Time { return earliestSignal }
 	if err = svc.RecordOpen(ctx, token); err != nil {
 		t.Fatal(err)
+	}
+	svc.now = time.Now
+	var firstSignal, lastSignal time.Time
+	var openState string
+	var openEvents int
+	if err = f.db.Pool.QueryRow(ctx, `SELECT first_open_at,last_open_at,state,(SELECT count(*) FROM document_delivery_events WHERE delivery_id=$1 AND event_kind='open') FROM document_deliveries WHERE id=$1`, d.ID).Scan(&firstSignal, &lastSignal, &openState, &openEvents); err != nil {
+		t.Fatal(err)
+	}
+	if firstSignal.UnixMicro() != earliestSignal.UnixMicro() || lastSignal.UnixMicro() != latestSignal.UnixMicro() || openState != "queued" || openEvents != 0 {
+		t.Fatal("open signals changed status, retained per-open events, or regressed aggregate time")
 	}
 	var openCount int
 	var storedToken string

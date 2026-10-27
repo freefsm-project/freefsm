@@ -4,6 +4,7 @@ import "fmt"
 
 templ DeliveryHistory(objectType string, objectID int64, rows []DeliveryHistoryRow, archived bool) {
 	<h3>Delivery History</h3>
+	<p>Accepted means the mail system accepted the message, not that it arrived or was read. Delivery is at least once: an ambiguous handoff may result in duplicate email. Already handed-off mail cannot be recalled.</p>
 	if len(rows) == 0 {
 		<p>No document emails have been queued.</p>
 	}
@@ -13,7 +14,18 @@ templ DeliveryHistory(objectType string, objectID int64, rows []DeliveryHistoryR
 			<article class="delivery-history-item">
 				<header><strong>{ row.State }</strong><span>{ row.QueuedAt }</span></header>
 				<p><strong>To:</strong> { row.Recipients }</p>
-				<p>Attempts: { fmt.Sprintf("%d", row.Attempts) } | Opens: { fmt.Sprintf("%d", row.OpenCount) }</p>
+				<p>Attempts: { fmt.Sprintf("%d", row.Attempts) }</p>
+				if row.NextAttemptAt != "" {
+					<p>Next attempt: { row.NextAttemptAt }</p>
+				}
+				if row.TrackingEnabled {
+					<p>Open signals: { fmt.Sprintf("%d", row.OpenCount) }. These observations do not prove a person read the message.</p>
+					if row.FirstOpenAt != "" {
+						<p>First open signal: { row.FirstOpenAt }</p>
+					}
+				} else {
+					<p>Open tracking disabled.</p>
+				}
 				if row.AcceptedAt != "" {
 					<p>Accepted: { row.AcceptedAt }</p>
 				}
@@ -27,11 +39,32 @@ templ DeliveryHistory(objectType string, objectID int64, rows []DeliveryHistoryR
 					<p>Failed: { row.FailedAt }</p>
 				}
 				if row.OpenedAt != "" {
-					<p>Last open: { row.OpenedAt }</p>
+					<p>Latest open signal: { row.OpenedAt }</p>
 				}
 				if row.LastError != "" {
 					<p class="document-error">{ row.LastError }</p>
 				}
+				<details><summary>Attempt history</summary>
+					<p>Retained events only; unavailable historical attempt details are not reconstructed.</p>
+					<ol>
+					for _, event := range row.Events {
+						<li><time>{ event.At }</time> { event.Kind } { event.State }
+							if event.Attempt != "" {
+								<p>Attempt: { event.Attempt }</p>
+							}
+							if event.Reason != "" {
+								<p>{ event.Reason }</p>
+							}
+							if event.Provider != "" {
+								<p>Transport reference: { event.Provider }</p>
+							}
+							if event.Evidence != "" {
+								<pre>{ event.Evidence }</pre>
+							}
+						</li>
+					}
+					</ol>
+				</details>
 				if row.CanRetry && !archived && detailCan(ctx,"delivery-retry") {
 					<form action={ templ.URL(fmt.Sprintf("/%ss/%d/deliveries/%d/retry", objectType, objectID, row.ID)) } method="post">
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><input type="hidden" name="idempotency_key" value={ row.RetryKey }/>

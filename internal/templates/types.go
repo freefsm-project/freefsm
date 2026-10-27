@@ -931,11 +931,15 @@ type DocumentEmailFile struct {
 }
 
 type DeliveryHistoryRow struct {
+	NextAttemptAt, FirstOpenAt                                                                               string
+	TrackingEnabled                                                                                          bool
+	Events                                                                                                   []DeliveryEventRow
 	ID                                                                                                       int64
 	State, Recipients, QueuedAt, AcceptedAt, DeliveredAt, BouncedAt, FailedAt, OpenedAt, LastError, RetryKey string
 	OpenCount, Attempts                                                                                      int
 	CanRetry                                                                                                 bool
 }
+type DeliveryEventRow struct{ At, Kind, State, Reason, Provider, Attempt, Evidence string }
 
 func jobFormTitle(id int64) string {
 	if id == 0 {

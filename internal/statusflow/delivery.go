@@ -34,15 +34,19 @@ func (h AcceptanceHook) OnAccepted(ctx context.Context, tx pgx.Tx, d delivery.De
 	}
 	var current *int64
 	var statusRevision, meaningRevision uuid.UUID
+	var commercialRevision int64
 	var category CategoryKey
-	query := `SELECT o.status_id,s.category_key,o.status_revision,s.meaning_revision FROM ` + string(typ) + `s o JOIN statuses s ON s.id=o.status_id WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL AND o.conversion_hidden_at IS NULL FOR UPDATE OF o,s`
-	if err := tx.QueryRow(ctx, query, d.DocumentID, d.CompanyID).Scan(&current, &category, &statusRevision, &meaningRevision); err != nil {
+	query := `SELECT o.status_id,s.category_key,o.status_revision,s.meaning_revision,o.commercial_revision FROM ` + string(typ) + `s o JOIN statuses s ON s.id=o.status_id WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL AND o.conversion_hidden_at IS NULL FOR UPDATE OF o,s`
+	if err := tx.QueryRow(ctx, query, d.DocumentID, d.CompanyID).Scan(&current, &category, &statusRevision, &meaningRevision, &commercialRevision); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil // Sending succeeded even if the document is no longer active.
 		}
 		return err
 	}
 	if !sameStatus(current, d.ExpectedStatusID) || d.ExpectedStatusRevision == nil || d.ExpectedMeaningRevision == nil || statusRevision != *d.ExpectedStatusRevision || meaningRevision != *d.ExpectedMeaningRevision {
+		return nil
+	}
+	if d.ExpectedCommercialRevision == nil || commercialRevision != *d.ExpectedCommercialRevision {
 		return nil
 	}
 	if (typ == Estimate && category != EstimateDraft && category != EstimateEstimate) || (typ == Invoice && category != InvoiceInvoiced) {

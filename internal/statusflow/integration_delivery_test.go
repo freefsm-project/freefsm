@@ -46,7 +46,7 @@ type integrationDeliveryFixture struct {
 	sent, initial int64
 }
 
-func integrationDelivery(t *testing.T, typ string) integrationDeliveryFixture {
+func integrationDelivery(t *testing.T, typ string, initialCategories ...string) integrationDeliveryFixture {
 	t.Helper()
 	db, company, admin, _, customer := statusDB(t)
 	ctx := context.Background()
@@ -57,6 +57,9 @@ func integrationDelivery(t *testing.T, typ string) integrationDeliveryFixture {
 	if typ == "invoice" {
 		categories = []string{"draft", "invoiced", "sent", "partially_paid", "paid", "void"}
 		initialCategory = "invoiced"
+	}
+	if len(initialCategories) > 0 {
+		initialCategory = initialCategories[0]
 	}
 	withTx(t, db, func(tx pgx.Tx) error {
 		for _, category := range categories {
@@ -80,6 +83,30 @@ func integrationDelivery(t *testing.T, typ string) integrationDeliveryFixture {
 	return integrationDeliveryFixture{db, New(db), outbox, Actor{ID: admin, CompanyID: company}, d, sent, initial}
 }
 
+func TestDeliveryEligibleProposalAndDraftInvoiceReview(t *testing.T) {
+	for _, tc := range []struct {
+		typ, category string
+		sent          bool
+	}{{"estimate", "estimate", true}, {"invoice", "draft", false}} {
+		t.Run(tc.typ+"/"+tc.category, func(t *testing.T) {
+			f := integrationDelivery(t, tc.typ, tc.category)
+			ctx := context.Background()
+			if worked, err := f.outbox.ProcessOne(ctx, integrationSender(integrationSend), NewAcceptanceHook(f.svc)); err != nil || !worked {
+				t.Fatalf("accept=%v %v", worked, err)
+			}
+			var actual int64
+			mustScan(t, f.db.QueryRow(ctx, `SELECT status_id FROM `+tc.typ+`s WHERE id=$1`, f.d.DocumentID), &actual)
+			want := f.initial
+			if tc.sent {
+				want = f.sent
+			}
+			if actual != want {
+				t.Fatalf("status=%d want %d", actual, want)
+			}
+		})
+	}
+}
+
 type integrationSender func(context.Context, delivery.Delivery) (delivery.SendResult, error)
 
 func (s integrationSender) Send(ctx context.Context, d delivery.Delivery) (delivery.SendResult, error) {
@@ -95,11 +122,20 @@ func integrationSend(_ context.Context, d delivery.Delivery) (delivery.SendResul
 
 func TestIntegrationDeliveryWorkflowRevisions(t *testing.T) {
 	for _, typ := range []string{"estimate", "invoice"} {
-		for _, change := range []string{"unchanged", "rename", "record ABA", "meaning ABA", "legacy unknown"} {
+		for _, change := range []string{"unchanged", "rename", "commercial edit", "commercial ABA", "record ABA", "meaning ABA", "legacy unknown"} {
 			t.Run(typ+"/"+change, func(t *testing.T) {
 				f := integrationDelivery(t, typ)
 				ctx := context.Background()
 				switch change {
+				case "commercial edit", "commercial ABA":
+					if _, err := f.db.Exec(ctx, `UPDATE `+typ+`s SET title='Changed' WHERE id=$1`, f.d.DocumentID); err != nil {
+						t.Fatal(err)
+					}
+					if change == "commercial ABA" {
+						if _, err := f.db.Exec(ctx, `UPDATE `+typ+`s SET title='Delivery' WHERE id=$1`, f.d.DocumentID); err != nil {
+							t.Fatal(err)
+						}
+					}
 				case "rename":
 					if _, err := f.svc.Update(ctx, f.a, f.initial, "Renamed", "#112233"); err != nil {
 						t.Fatal(err)

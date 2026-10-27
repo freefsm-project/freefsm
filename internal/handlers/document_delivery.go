@@ -70,6 +70,11 @@ func deliveryHistoryRows(items []delivery.Summary) []templates.DeliveryHistoryRo
 	rows := make([]templates.DeliveryHistoryRow, 0, len(items))
 	for _, item := range items {
 		rows = append(rows, templates.DeliveryHistoryRow{ID: item.ID, State: item.State, Recipients: strings.Join(item.To, ", "), QueuedAt: deliveryTime(item.CreatedAt), AcceptedAt: deliveryTime(item.AcceptedAt), DeliveredAt: deliveryTime(item.DeliveredAt), BouncedAt: deliveryTime(item.BouncedAt), FailedAt: deliveryTime(item.FailedAt), OpenedAt: deliveryTime(item.LastOpenAt), OpenCount: item.OpenCount, Attempts: item.LifetimeAttemptCount, LastError: item.LastError, CanRetry: item.SenderRecorded && (item.State == "failed" || item.State == "bounced"), RetryKey: uuid.NewString()})
+		row := &rows[len(rows)-1]
+		row.NextAttemptAt, row.FirstOpenAt, row.TrackingEnabled = deliveryTime(item.NextAttemptAt), deliveryTime(item.FirstOpenAt), item.TrackingEnabled
+		for _, e := range item.Events {
+			row.Events = append(row.Events, templates.DeliveryEventRow{At: deliveryTime(&e.At), Kind: e.Kind, State: e.State, Reason: e.Reason, Provider: e.Provider, Attempt: e.Attempt, Evidence: e.Evidence})
+		}
 	}
 	return rows
 }
@@ -131,10 +136,12 @@ func retryDocumentDelivery(svc *delivery.Service, objectType string, w http.Resp
 			http.NotFound(w, r)
 		case errors.Is(err, delivery.ErrInvalid):
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
+		case errors.Is(err, delivery.ErrIdempotencyConflict):
+			http.Error(w, err.Error(), http.StatusConflict)
 		default:
 			internalServerError(w, r, "retry delivery", err)
 		}
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/%ss/%d?flash=Delivery+retry+queued", objectType, id), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/%ss/%d?flash=Delivery+retry+request+recorded.+Check+Delivery+History+for+the+current+state", objectType, id), http.StatusSeeOther)
 }

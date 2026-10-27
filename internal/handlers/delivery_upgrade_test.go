@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -47,13 +48,15 @@ func TestDeliveryInstalledOutboxUpgradePreservesKnownAndUnknown(t *testing.T) {
 	before := historyDurableRows(t, pool, []string{"document_deliveries", "document_delivery_events", "authorization_grants"})
 	historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS()))
 	var upgraded string
-	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(d)-ARRAY['attachment_snapshots','composition_snapshot','handoff_started_at','dispatch_boundary_known','cancelled_at'] ORDER BY (to_jsonb(d)-ARRAY['attachment_snapshots','composition_snapshot','handoff_started_at','dispatch_boundary_known','cancelled_at'])::text)::text FROM document_deliveries d`).Scan(&upgraded))
+	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(d)-ARRAY['attachment_snapshots','composition_snapshot','handoff_started_at','dispatch_boundary_known','cancelled_at','expected_commercial_revision'] ORDER BY (to_jsonb(d)-ARRAY['attachment_snapshots','composition_snapshot','handoff_started_at','dispatch_boundary_known','cancelled_at','expected_commercial_revision'])::text)::text FROM document_deliveries d`).Scan(&upgraded))
 	historyEqual(t, "upgrade retains all recorded outbox facts", upgraded, before["document_deliveries"])
 	retained := historyDurableRows(t, pool, []string{"document_delivery_events", "authorization_grants"})
-	historyEqual(t, "no fabricated historical events", retained["document_delivery_events"], before["document_delivery_events"])
+	var priorEvents string
+	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(e)-ARRAY['attempt_token','message_id','provider_state','transport_event_id'] ORDER BY (to_jsonb(e)-ARRAY['attempt_token','message_id','provider_state','transport_event_id'])::text)::text FROM document_delivery_events e`).Scan(&priorEvents))
+	historyEqual(t, "no fabricated historical events", priorEvents, before["document_delivery_events"])
 	historyEqual(t, "no new nonprotected grants", retained["authorization_grants"], before["authorization_grants"])
 	var invented bool
-	historyCheck(t, pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM document_deliveries WHERE attachment_snapshots IS NOT NULL OR composition_snapshot IS NOT NULL OR handoff_started_at IS NOT NULL OR dispatch_boundary_known IS NOT NULL OR cancelled_at IS NOT NULL)`).Scan(&invented))
+	historyCheck(t, pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM document_deliveries WHERE attachment_snapshots IS NOT NULL OR composition_snapshot IS NOT NULL OR handoff_started_at IS NOT NULL OR dispatch_boundary_known IS NOT NULL OR cancelled_at IS NOT NULL OR expected_commercial_revision IS NOT NULL) OR EXISTS(SELECT 1 FROM document_delivery_events WHERE attempt_token IS NOT NULL OR message_id IS NOT NULL OR provider_state IS NOT NULL OR transport_event_id IS NOT NULL)`).Scan(&invented))
 	if invented {
 		t.Fatal("upgrade invented historical snapshots/dispatch")
 	}
@@ -76,6 +79,14 @@ func TestDeliveryInstalledOutboxUpgradePreservesKnownAndUnknown(t *testing.T) {
 	assertContains(t, requestBody(t, web, sessionCookie(t, ctx, sessions, admin), "GET", fmt.Sprintf("/estimates/%d", doc.ID), 200), "Legacy transport handoff unknown")
 	sender := &compositionSender{}
 	worked, err := svc.ProcessOne(ctx, sender, nil)
+	historyCheck(t, err)
+	if worked || len(sender.messages) != 0 {
+		t.Fatal("unknown original retry window silently renewed")
+	}
+	var pending int64
+	historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM document_deliveries WHERE message_id='<installed-pending@example.test>' AND state='failed'`).Scan(&pending))
+	fieldPost(t, web, sessionCookie(t, ctx, sessions, admin), fmt.Sprintf("/estimates/%d/deliveries/%d/retry", doc.ID, pending), url.Values{"idempotency_key": {newOperationKey()}, "reason": {"Reviewed original installed communication"}}, 303)
+	worked, err = svc.ProcessOne(ctx, sender, nil)
 	historyCheck(t, err)
 	if !worked || len(sender.messages) != 1 {
 		t.Fatal("known installed pending work lost")
