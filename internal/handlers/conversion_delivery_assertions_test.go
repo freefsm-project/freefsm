@@ -100,6 +100,12 @@ func conversionCancelledDeliveries(t *testing.T, pool *pgxpool.Pool, before map[
 			t.Fatal("cancellation event backdated")
 		}
 		expected := map[string]any{"id": event["id"], "delivery_id": record["id"], "company_id": record["company_id"], "actor_id": nil, "event_kind": "state", "from_state": "queued", "to_state": "cancelled", "provider_identifier": "", "provider_event_id": nil, "evidence": map[string]any{"reason": reason, "dispatch_admitted": false}, "created_at": event["created_at"]}
+		// Pre-handoff cancellation has no transport/provider attempt evidence.
+		// Require actual NULLs in migration 099's columns; retain exact row equality.
+		expected["attempt_token"] = nil
+		expected["message_id"] = nil
+		expected["provider_state"] = nil
+		expected["transport_event_id"] = nil
 		historyEqual(t, "exact cancellation event", event, expected)
 	}
 	return after
