@@ -18,9 +18,9 @@ templ EstimateShow(p EstimateDetail) {
 				<a href={ templ.URL(fmt.Sprintf("/estimates/%d/convert", p.ID)) } role="button">Convert to Invoice</a>
 			}
 			if detailCan(ctx,"archive") {
-				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", p.ID)) } method="post" hx-confirm="Delete this estimate?">
+				<form action={ templ.URL(fmt.Sprintf("/estimates/%d/delete", p.ID)) } method="post" hx-confirm="Archive this estimate as read-only history? Pending deliveries will be cancelled.">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Title) }>Delete</button>
+					<button class="outline contrast" aria-label={ fmt.Sprintf("Archive %s", p.Title) }>Archive</button>
 				</form>
 			}
 			</div>

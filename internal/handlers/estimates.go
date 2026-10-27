@@ -817,22 +817,14 @@ func (h *EstimateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	e, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
-	entityName := e.Title
-	if err := h.svc.Archive(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+	if err := req.Service.ArchiveCommercialDocument(r.Context(), req.Actor, "estimate", id); err != nil {
+		commercialLifecycleError(w, r, err)
 		return
-	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "archived", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
-			"entity_name": entityName,
-			"actor_name":  u.Name,
-		})
 	}
 	http.Redirect(w, r, "/estimates?flash=Estimate+archived", http.StatusSeeOther)
 }
@@ -843,21 +835,14 @@ func (h *EstimateHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	e, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
-	if err := h.svc.Restore(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+	if err := req.Service.RestoreCommercialDocument(r.Context(), req.Actor, "estimate", id); err != nil {
+		commercialLifecycleError(w, r, err)
 		return
-	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "restored", objectref.New(objectref.TypeEstimate, id), map[string]interface{}{
-			"entity_name": e.Title,
-			"actor_name":  u.Name,
-		})
 	}
 	http.Redirect(w, r, "/estimates/"+strconv.FormatInt(id, 10)+"?flash=Estimate+restored", http.StatusSeeOther)
 }

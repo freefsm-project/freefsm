@@ -564,35 +564,14 @@ func (h *InvoiceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	inv, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
-	title := inv.Title
-	effective, err := h.statusflow.EffectiveInvoiceStatus(r.Context(), *inv.CompanyID, id)
-	if err != nil {
-		internalServerError(w, r, "invoice archive eligibility", err)
+	if err := req.Service.ArchiveCommercialDocument(r.Context(), req.Actor, "invoice", id); err != nil {
+		commercialLifecycleError(w, r, err)
 		return
-	}
-	if effective.Category != statusflow.InvoicePaid && effective.Category != statusflow.InvoiceVoid {
-		http.Error(w, "invoice can only be archived when paid or void", http.StatusConflict)
-		return
-	}
-	if err := h.svc.Archive(r.Context(), id); err != nil {
-		if errors.Is(err, services.ErrInvoiceArchiveIneligible) {
-			http.Error(w, err.Error(), http.StatusConflict)
-		} else {
-			internalServerError(w, r, "archive invoice", err)
-		}
-		return
-	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "archived", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
-			"entity_name": title,
-			"actor_name":  u.Name,
-		})
 	}
 	http.Redirect(w, r, "/invoices?flash=Invoice+archived", http.StatusSeeOther)
 }
@@ -603,21 +582,14 @@ func (h *InvoiceHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	i, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
-	if err := h.svc.Restore(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+	if err := req.Service.RestoreCommercialDocument(r.Context(), req.Actor, "invoice", id); err != nil {
+		commercialLifecycleError(w, r, err)
 		return
-	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "restored", objectref.New(objectref.TypeInvoice, id), map[string]interface{}{
-			"entity_name": i.Title,
-			"actor_name":  u.Name,
-		})
 	}
 	http.Redirect(w, r, "/invoices/"+strconv.FormatInt(id, 10)+"?flash=Invoice+restored", http.StatusSeeOther)
 }

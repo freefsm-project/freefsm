@@ -24,9 +24,9 @@ templ InvoiceShow(p InvoiceDetail) {
 				<a href={ templ.URL(fmt.Sprintf("/invoices/%d/revert-to-estimate", p.ID)) } class="outline">Review reversion to Estimate</a>
 			}
 			if detailCan(ctx,"archive") {
-				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", p.ID)) } method="post" hx-confirm="Delete this invoice?">
+				<form action={ templ.URL(fmt.Sprintf("/invoices/%d/delete", p.ID)) } method="post" hx-confirm="Archive this invoice as read-only history? Pending deliveries will be cancelled.">
 					<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-					<button class="outline contrast" aria-label={ fmt.Sprintf("Delete %s", p.Title) }>Delete</button>
+					<button class="outline contrast" aria-label={ fmt.Sprintf("Archive %s", p.Title) }>Archive</button>
 				</form>
 			}
 			</div>

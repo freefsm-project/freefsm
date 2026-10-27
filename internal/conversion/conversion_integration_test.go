@@ -16,6 +16,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/settlement"
+	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -302,7 +303,11 @@ func TestConversionPolicyStatusArchiveAndSettlementBlockersIntegration(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = f.db.Pool.Exec(ctx, `UPDATE invoices SET deleted_at=now(),settlement_state='paid' WHERE id=$1`, r.InvoiceID); err != nil {
+	// A zero-total Draft remains effectively Draft until explicitly finalized.
+	if err = statusflow.New(f.db.Pool).FinalizeInvoice(ctx, statusflow.Actor{ID: f.admin, CompanyID: f.company}, r.InvoiceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err = f.db.Pool.Exec(ctx, `UPDATE invoices SET deleted_at=now() WHERE id=$1`, r.InvoiceID); err != nil {
 		t.Fatal(err)
 	}
 	// Assigned authority cannot access the archived mutation target; restore is

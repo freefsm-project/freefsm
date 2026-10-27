@@ -91,7 +91,7 @@ func (s *Service) JobInputs(ctx context.Context, tx pgx.Tx, a Actor, id, custome
 		// The details boundary already authorizes planning Edit. Clearing
 		// incompatible links is its inseparable effect, not extra discretion.
 		var blocked bool
-		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.job_id=$1 AND i.conversion_hidden_at IS NULL AND (coalesce(s.category_key,'')<>'invoice:draft' OR i.deleted_at IS NOT NULL OR invoice_has_active_settlement(i.id))) OR EXISTS(SELECT 1 FROM job_customer_blockers WHERE job_id=$1)`, id).Scan(&blocked); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.job_id=$1 AND i.conversion_hidden_at IS NULL AND (coalesce(s.category_key,'')<>'invoice:draft' OR i.deleted_at IS NOT NULL OR invoice_has_active_settlement(i.id))) OR EXISTS(SELECT 1 FROM estimates WHERE job_id=$1 AND conversion_hidden_at IS NULL AND deleted_at IS NOT NULL) OR EXISTS(SELECT 1 FROM job_customer_blockers WHERE job_id=$1)`, id).Scan(&blocked); err != nil {
 			return err
 		}
 		if blocked {

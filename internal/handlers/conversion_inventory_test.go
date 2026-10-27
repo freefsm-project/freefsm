@@ -131,6 +131,8 @@ func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cli
 	historyCheck(t, pool.QueryRow(ctx, `SELECT invoice_id FROM estimate_invoice_conversion_cycles WHERE estimate_id=$1 AND reverted_at IS NULL`, out.estimate).Scan(&out.first))
 	invoice := fmt.Sprintf("/invoices/%d", out.first)
 	expectStatus(t, web, cookie, "GET", source, 403)
+	fieldPost(t, web, cookie, source+"/restore", nil, 404)
+	assertNotContains(t, requestBody(t, web, cookie, "GET", fmt.Sprintf("/customers/%d/work?type=estimate&archived=1", c.ID), 200), source+`"`)
 	assertNotContains(t, requestBody(t, web, cookie, "GET", "/estimates", 200), source+`"`)
 	assertNotContains(t, requestBody(t, web, cookie, "GET", "/search?q=Conversion", 200), source)
 	fieldPost(t, web, cookie, source+"/custom-fields", url.Values{"custom_field_1": {"Must not mutate hidden source"}}, 404)
@@ -168,6 +170,8 @@ func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cli
 	fieldPost(t, web, cookie, command.path, command.values, 303)
 	out.commands = append(out.commands, command)
 	expectStatus(t, web, cookie, "GET", invoice, 403)
+	fieldPost(t, web, cookie, invoice+"/restore", nil, 404)
+	assertNotContains(t, requestBody(t, web, cookie, "GET", fmt.Sprintf("/customers/%d/work?type=invoice&archived=1", c.ID), 200), invoice+`"`)
 	assertNotContains(t, requestBody(t, web, cookie, "GET", "/invoices", 200), invoice+`"`)
 	assertNotContains(t, requestBody(t, web, cookie, "GET", "/search?q=Conversion", 200), invoice)
 	if got := conversionRelations(t, pool, "estimate", out.estimate); got != before {

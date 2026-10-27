@@ -434,12 +434,15 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Get("/settings/payment-methods", paymentMethodsSettings)
 		r.Post("/settings/payment-methods/{method}", paymentMethodsSettings)
 
-		// Office-only billing and general document mutations.
+		// Commercial lifecycle commands enforce independent All Records grants.
+		r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/delete", estimateHandler.Delete)
+		r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/delete", invoiceHandler.Delete)
+		r.Post("/estimates/{id}/restore", estimateHandler.Restore)
+		r.Post("/invoices/{id}/restore", invoiceHandler.Restore)
+		// Office-only billing entry points.
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.DispatcherOrAdmin)
 			r.With(activeObjectGuard(objectref.TypeCustomer)).Get("/customers/{id}/create-invoice", invoiceHandler.CreateFromCustomer)
-			r.With(activeObjectGuard(objectref.TypeEstimate)).Post("/estimates/{id}/delete", estimateHandler.Delete)
-			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/delete", invoiceHandler.Delete)
 			r.With(activeObjectGuard(objectref.TypeInvoice)).Post("/invoices/{id}/finalize", invoiceHandler.Finalize)
 		})
 
@@ -528,8 +531,6 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.Use(middleware.AdminOnly)
 			// Restore archived entities
 			r.Post("/jobs/{id}/restore", jobHandler.Restore)
-			r.Post("/estimates/{id}/restore", estimateHandler.Restore)
-			r.Post("/invoices/{id}/restore", invoiceHandler.Restore)
 			// Admin activity feeds
 			r.Get("/settings/activity/history", activityHandler.ListAll)
 			r.Get("/settings/activity", activityHandler.ListByType(objectref.TypeCompanySettings))

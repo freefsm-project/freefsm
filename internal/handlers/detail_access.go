@@ -70,6 +70,8 @@ func withDetailPresentation(r *http.Request, typ string, id int64, policy *servi
 		access["subtask-manage"] = action("job.subtask.manage")
 	}
 	if typ == "estimate" || typ == "invoice" {
+		access["archive"] = p.Allows(typ+".archive", authorization.All) && action(typ+".archive")
+		access["restore"] = req.Service.CommercialRestoreAccess(ctx, req.Actor, typ, id) == nil
 		access["pdf"] = req.Service.PDFPermission(ctx, req.Actor, typ, id, "pdf.generate") == nil || req.Service.PDFPermission(ctx, req.Actor, typ, id, "pdf.download") == nil || req.Service.PDFPermission(ctx, req.Actor, typ, id, "delivery.request") == nil
 		access["delivery-retry"] = action(typ+".delivery.request") && legacyUpdate
 		access["convert"] = action("estimate.convert")
