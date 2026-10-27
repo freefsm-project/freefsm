@@ -65,7 +65,8 @@ func TestMasterArchiveEncryptedBackupPreservesDependencies(t *testing.T) {
 	p := src.client.Project.Create().SetCompanyID(src.company).SetCustomerID(c.ID).SetLocationID(location.ID).SetStatusID(projectStatus).SetName("Finished historical Project").SaveX(ctx)
 	j := src.client.Job.Create().SetCompanyID(src.company).SetCustomerID(c.ID).SetLocationID(location.ID).SetCustomerContactID(contact.ID).SetAssetID(owned.ID).SetProjectID(p.ID).SetStatusID(jobStatus).SetJobType("Finished historical Job").SaveX(ctx)
 	jobPath := fmt.Sprintf("/jobs/%d", j.ID)
-	i := src.client.Item.Create().SetCompanyID(src.company).SetName("Captured catalog identity").SetSku("BACKUP-SKU-63").SetUnitPrice(99).SaveX(ctx)
+	i := src.client.Item.Create().SetCompanyID(src.company).SetName("Captured catalog identity").SetSku("BACKUP-OLD-SKU-63").SetUnitPrice(99).SaveX(ctx)
+	fieldPost(t, web, cookie, fmt.Sprintf("/items/%d", i.ID), url.Values{"sku": {"BACKUP-SKU-63"}}, 303)
 	fieldPost(t, web, cookie, jobPath, url.Values{"form_mode": {"edit"}, "job_id": {fmt.Sprint(j.ID)}, "line_items": {fmt.Sprintf(`[{"item_id":%d,"title":"Recorded price","quantity":2,"unit_price":11.25}]`, i.ID)}}, 303)
 	fieldPost(t, web, cookie, jobPath+"/create-estimate", nil, 303)
 	serviceEntryPost(t, web, cookie, fmt.Sprintf("/jobs/%d/assets/%d/service-entries", j.ID, owned.ID), url.Values{"service_date": {time.Now().UTC().Format("2006-01-02")}, "summary": {"Recorded service history"}, "responsible_user_id": {fmt.Sprint(src.actor)}}, 303)
@@ -91,7 +92,7 @@ func TestMasterArchiveEncryptedBackupPreservesDependencies(t *testing.T) {
 	}
 	_, err = svc.SaveRole(ctx, authorization.Actor{UserID: src.actor}, 0, "Retained view without Restore", []authorization.Grant{{Permission: "asset.view", Scope: authorization.All}, {Permission: "asset.archived.view", Scope: authorization.All}})
 	historyCheck(t, err)
-	tables := []string{"customers", "customer_contacts", "locations", "assets", "items", "jobs", "projects", "estimates", "job_contacts", "job_asset_links", "job_customer_blockers", "asset_association_origins", "asset_association_events", "asset_association_origin_revisions", "asset_service_entries", "asset_service_revisions", "asset_service_responsible_users", "custom_field_definitions", "lease_master_dependencies", "lease_asset_dependencies", "authorization_roles", "authorization_grants", "activity_logs"}
+	tables := []string{"customers", "customer_contacts", "locations", "assets", "asset_types", "asset_statuses", "items", "item_sku_claims", "jobs", "projects", "estimates", "job_contacts", "job_asset_links", "job_customer_blockers", "asset_association_origins", "asset_association_events", "asset_association_origin_revisions", "asset_service_entries", "asset_service_revisions", "asset_service_responsible_users", "custom_field_definitions", "lease_master_dependencies", "lease_asset_dependencies", "authorization_roles", "authorization_grants", "activity_logs"}
 	snapshot := func(pool *pgxpool.Pool) map[string]string {
 		out := map[string]string{}
 		for _, table := range tables {
@@ -120,6 +121,7 @@ func TestMasterArchiveEncryptedBackupPreservesDependencies(t *testing.T) {
 	fieldPost(t, web, cookie, fmt.Sprintf("/assets/%d/delete", placed.ID), nil, 409)
 	fieldPost(t, web, cookie, fmt.Sprintf("/locations/%d/delete", leaseSite.ID), nil, 409)
 	fieldPost(t, web, cookie, "/items", url.Values{"name": {"No SKU reuse"}, "type": {"service"}, "sku": {"BACKUP-SKU-63"}}, 409)
+	fieldPost(t, web, cookie, "/items", url.Values{"name": {"No historical SKU reuse"}, "type": {"service"}, "sku": {"BACKUP-OLD-SKU-63"}}, 409)
 	after := snapshot(dst.pool)
 	for _, table := range tables {
 		if table == "customer_contacts" || table == "locations" || table == "assets" || table == "items" || table == "activity_logs" {
