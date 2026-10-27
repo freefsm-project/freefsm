@@ -414,9 +414,18 @@ func (s *Service) Move(ctx context.Context, a Actor, r MoveRequest) error {
 			return ErrConfirmationRequired
 		}
 		if crossCategory && (typ == Project || typ == Job) && string(r.Category) != string(typ)+":completed" && string(r.Category) != string(typ)+":canceled" {
-			// Reclassification changes the meaning of every reference, including
-			// archived Projects. Confirmation is not a dependency repair. The
-			// configuration transaction holds the shared authority/master fence.
+			// Reclassification is a semantic write to every referencing record.
+			// Archive closes work even when the write originates in vocabulary
+			// settings; confirmation is neither Restore nor permission to reopen.
+			var archived bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM `+string(typ)+`s WHERE company_id=$1 AND status_id=$2 AND deleted_at IS NOT NULL)`, a.CompanyID, r.StatusID).Scan(&archived); err != nil {
+				return err
+			}
+			if archived {
+				return ErrInvalidTransition
+			}
+			// For active references, confirmation is not a dependency repair.
+			// Configuration holds the shared authority/master fence through commit.
 			rows, err := tx.Query(ctx, `SELECT id FROM `+string(typ)+`s WHERE company_id=$1 AND status_id=$2 ORDER BY id FOR UPDATE`, a.CompanyID, r.StatusID)
 			if err != nil {
 				return err

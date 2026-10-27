@@ -121,8 +121,14 @@ func TestClockOwnAuthorityCloseoutAndAuditHTTP(t *testing.T) {
 	if otherResponse.Code != 404 || client.TimeEntry.GetX(ctx, entry.ID).ClockOut != nil {
 		t.Fatalf("Administrator clocked another user: %d", otherResponse.Code)
 	}
+	// Archive through the production command while the exact own entry is
+	// active. Archive alone removes Assigned Job Context; assignment is retained.
+	beforeArchive := historyDurableRows(t, pool, []string{"time_entries", "time_entry_history"})
+	fieldPost(t, router, sessionCookie(t, ctx, sessions, admin), fmt.Sprintf("/jobs/%d/delete", job.ID), nil, 303)
+	historyEqual(t, "archive must not close or revise active time", historyDurableRows(t, pool, []string{"time_entries", "time_entry_history"}), beforeArchive)
+	requestBody(t, router, cookie, "GET", fmt.Sprintf("/jobs/%d", job.ID), 403)
+	// Preserve the original combined assignment-loss close-out case as well.
 	client.JobAssignment.DeleteOne(assignment).ExecX(ctx)
-	client.Job.UpdateOneID(job.ID).SetDeletedAt(time.Now()).SaveX(ctx)
 	post(fmt.Sprintf("/jobs/%d/clock-out", job.ID), url.Values{"entry_id": {fmt.Sprint(entry.ID)}, "latitude": {"51.5"}, "longitude": {"-0.12"}, "captured_at": {time.Now().Add(-time.Second).Truncate(time.Microsecond).Format(time.RFC3339Nano)}, "accuracy": {"0"}}, 303)
 	if client.TimeEntry.GetX(ctx, entry.ID).JobID == nil {
 		t.Fatal("closeout lost Job association")
