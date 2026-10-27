@@ -118,6 +118,19 @@ settlement, conversion and delivery history across restore, including reversals,
 conversion cycles, immutable delivery snapshots and provider evidence. It uses
 the same disposable-cluster environment variable.
 
+The executable startup and host-recovery tests in
+`cmd/freefsm/installation_integration_test.go` also provision isolated databases.
+Keep `FREEFSM_TEST_DATABASE_URL` on the normal application test role and set
+`FREEFSM_INSTALLATION_TEST_ADMIN_URL` to an administrator on the same owned,
+disposable, trust-authenticated cluster. This URL is used only by the test fixture
+to create/drop its databases and roles; it is not passed to the production
+executable. Each executable runs with a newly generated role explicitly verified
+as NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION and NOBYPASSRLS. For older
+harnesses, an unset installation-admin URL falls back to
+`FREEFSM_TEST_DATABASE_URL`, which must then support fixture provisioning.
+Enable the persisted installation browser journey with `BROWSER_TESTS=1` and the
+browser executable/Node module configuration described in the browser test docs.
+
 After first start, visit `/setup` on your server and enter the
 `FREEFSM_SETUP_TOKEN` from your config to create the first admin account. The
 token is required at every startup, so retain it in the config and protect it

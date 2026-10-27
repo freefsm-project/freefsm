@@ -38,6 +38,12 @@ func installationFixture(t *testing.T) (string, []string, *pgx.Conn) {
 	if dsn == "" {
 		t.Skip("set FREEFSM_TEST_DATABASE_URL to a disposable cluster")
 	}
+	// Provisioning needs CREATE ROLE/DATABASE, unlike the executable under test.
+	// Keep the general test connection unprivileged when a separate disposable
+	// cluster administrator is supplied. The fallback preserves older harnesses.
+	if adminDSN := os.Getenv("FREEFSM_INSTALLATION_TEST_ADMIN_URL"); adminDSN != "" {
+		dsn = adminDSN
+	}
 	ctx := context.Background()
 	admin, err := pgx.Connect(ctx, dsn)
 	if err != nil {
@@ -46,7 +52,7 @@ func installationFixture(t *testing.T) (string, []string, *pgx.Conn) {
 	t.Cleanup(func() { admin.Close(ctx) })
 	name := fmt.Sprintf("installation_%d", time.Now().UnixNano())
 	ident := pgx.Identifier{name}.Sanitize()
-	if _, err = admin.Exec(ctx, "CREATE ROLE "+ident+" LOGIN NOSUPERUSER NOCREATEDB"); err != nil {
+	if _, err = admin.Exec(ctx, "CREATE ROLE "+ident+" LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { admin.Exec(ctx, "DROP ROLE "+ident) })
@@ -64,6 +70,15 @@ func installationFixture(t *testing.T) (string, []string, *pgx.Conn) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { db.Close(ctx) })
+	var runtimeRole string
+	var privileged bool
+	if err := db.QueryRow(ctx, `SELECT current_user,rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls FROM pg_roles WHERE rolname=current_user`).Scan(&runtimeRole, &privileged); err != nil {
+		t.Fatal(err)
+	}
+	if runtimeRole != name || privileged {
+		t.Fatalf("installation runtime must use its generated unprivileged role: role=%q privileged=%v", runtimeRole, privileged)
+	}
+	t.Logf("installation runtime role=%s: NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS", runtimeRole)
 	root := t.TempDir()
 	binary := filepath.Join(root, "freefsm")
 	if supplied := os.Getenv("FREEFSM_INSTALLATION_BINARY"); supplied != "" {
