@@ -220,8 +220,18 @@ GRANT ALL PRIVILEGES ON DATABASE freefsm_test TO freefsm;
 ```
 
 ```bash
-FREEFSM_TEST_DATABASE_URL='postgres://freefsm:changeme@localhost/freefsm_test?sslmode=disable' make test
+FREEFSM_TEST_DATABASE_URL='postgres://freefsm:changeme@localhost/freefsm_test?sslmode=disable' \
+FREEFSM_INSTALLATION_TEST_ADMIN_URL="$TEST_CLUSTER_ADMIN_URL" make test
 ```
+
+Use a normal application role for `FREEFSM_TEST_DATABASE_URL` and set
+`TEST_CLUSTER_ADMIN_URL` to a separate administrator on the same disposable
+PostgreSQL host/port. Installation provisioning and the export MVCC fixtures use
+that administrator. The export fixtures perform their deliberate out-of-band
+source edits in a schema-scoped administrator transaction with a transaction-local
+replication mode; HTTP/worker connections retain the normal role and production
+guards. These tests fail explicitly if that fixture administrator is missing;
+they do not promote the application role or skip the snapshot assertions.
 
 Run with a custom config file:
 

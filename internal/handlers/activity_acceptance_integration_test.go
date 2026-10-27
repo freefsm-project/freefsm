@@ -16,6 +16,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/exports"
+	"github.com/jackc/pgx/v5"
 )
 
 func TestActivityExportFieldReauthorizationAndSeparateGrantHTTP(t *testing.T) {
@@ -66,6 +67,7 @@ func TestActivityExportSnapshotConcurrencyHTTP(t *testing.T) {
 	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	mutateSource := exportSnapshotWriter(t, ctx, pool)
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Consistent activity subject").SaveX(ctx)
 	if _, err := pool.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,object_type,object_id,action) SELECT $1,$2,'customer',$3,'updated' FROM generate_series(1,260)`, company, admin, c.ID); err != nil {
 		t.Fatal(err)
@@ -90,12 +92,21 @@ func TestActivityExportSnapshotConcurrencyHTTP(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { _, err := exports.Product(pool).ProcessOne(ctx); done <- err }()
 	waitExportBlocker(t, ctx, pool, pid)
-	// Bypass the product fence deliberately to challenge the export's MVCC snapshot.
-	if _, err := pool.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,object_type,object_id,action) VALUES($1,$2,'customer',$3,'created')`, company, admin, c.ID); err != nil {
+	// Use a distinct fixture administrator for the deliberate out-of-band edit;
+	// the runtime Customer statement guard must remain enabled and observable.
+	mutateSource(pid, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `INSERT INTO activity_logs(company_id,actor_id,object_type,object_id,action) VALUES($1,$2,'customer',$3,'created')`, company, admin, c.ID); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE customers SET display_name='Changed after snapshot' WHERE id=$1`, c.ID)
+		return err
+	})
+	var changed bool
+	if err := pool.QueryRow(ctx, `SELECT display_name='Changed after snapshot' AND (SELECT count(*) FROM activity_logs WHERE object_type='customer' AND object_id=$1)=261 FROM customers WHERE id=$1`, c.ID).Scan(&changed); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `UPDATE customers SET display_name='Changed after snapshot' WHERE id=$1`, c.ID); err != nil {
-		t.Fatal(err)
+	if !changed {
+		t.Fatal("concurrent source name/event changes were not applied")
 	}
 	if err := blocker.Commit(ctx); err != nil {
 		t.Fatal(err)

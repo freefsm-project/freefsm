@@ -21,6 +21,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/exports"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/justinas/nosurf"
 )
@@ -99,6 +100,7 @@ func TestCustomerExportSnapshotConcurrentEditHTTP(t *testing.T) {
 	pool, _, router, sessions, company, admin := permissionHTTPFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
+	mutateSource := exportSnapshotWriter(t, ctx, pool)
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	if _, err := pool.Exec(ctx, `INSERT INTO customers(company_id,display_name) SELECT $1,'Original '||lpad(n::text,4,'0') FROM generate_series(1,260) n`, company); err != nil {
 		t.Fatal(err)
@@ -122,13 +124,21 @@ func TestCustomerExportSnapshotConcurrentEditHTTP(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { _, err := exports.New(pool, exports.Customers{}).ProcessOne(ctx); done <- err }()
 	waitExportBlocker(t, ctx, pool, pid)
-	// Deliberately bypass production's writer fence to challenge MVCC: half the
-	// cursor has been consumed when every source record changes and one is added.
-	if _, err := pool.Exec(ctx, `UPDATE customers SET display_name='New value'`); err != nil {
+	// Half the cursor has been consumed. The fixture administrator bypasses the
+	// SQL writer fence locally; runtime writers must still wait on the exporter.
+	mutateSource(pid, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `UPDATE customers SET display_name='New value'`); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `INSERT INTO customers(company_id,display_name) VALUES($1,'Inserted later')`, company)
+		return err
+	})
+	var changed, inserted int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FILTER (WHERE display_name='New value'),count(*) FILTER (WHERE display_name='Inserted later') FROM customers WHERE company_id=$1`, company).Scan(&changed, &inserted); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `INSERT INTO customers(company_id,display_name) VALUES($1,'Inserted later')`, company); err != nil {
-		t.Fatal(err)
+	if changed != 260 || inserted != 1 {
+		t.Fatalf("concurrent source edit was not applied: changed=%d inserted=%d", changed, inserted)
 	}
 	if err := blocker.Commit(ctx); err != nil {
 		t.Fatal(err)
