@@ -3,6 +3,7 @@ package authorization
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -38,7 +39,7 @@ func (s *Service) WriteLeaseDependencies(ctx context.Context, tx pgx.Tx, a Actor
 	if err != nil {
 		return err
 	}
-	if a.Channel == "api" || !p.Allows("lease.manage", All) {
+	if a.Channel == "api" || !p.Allows("lease.view", All) || !p.Allows("lease.manage", All) {
 		return ErrForbidden
 	}
 	var before json.RawMessage
@@ -46,10 +47,17 @@ func (s *Service) WriteLeaseDependencies(ctx context.Context, tx pgx.Tx, a Actor
 		return err
 	}
 	var prior struct {
-		Archived bool `json:"archived"`
+		CompanyID  int64                  `json:"company_id"`
+		CustomerID int64                  `json:"customer_id"`
+		PremisesID *int64                 `json:"premises_id"`
+		Archived   bool                   `json:"archived"`
+		Coverage   []LeaseAssetDependency `json:"coverage"`
 	}
 	if err := json.Unmarshal(before, &prior); err != nil {
 		return err
+	}
+	if prior.CompanyID != 0 && prior.CompanyID != p.CompanyID {
+		return ErrNotFound
 	}
 	if prior.Archived && !p.Allows("lease.archived.view", All) {
 		return ErrNotFound
@@ -61,6 +69,75 @@ func (s *Service) WriteLeaseDependencies(ctx context.Context, tx pgx.Tx, a Actor
 		}
 		if !p.Allows(permission, All) {
 			return ErrForbidden
+		}
+	}
+	// Lease authority does not authorize selecting a known master ID. Retained
+	// references may be kept/removed without expanding target visibility, while
+	// changed selections require current All Records View and active same-tenant
+	// targets. SQL still validates every retained dependency's domain eligibility.
+	if in.CustomerID != prior.CustomerID {
+		if !p.Allows("customer.view", All) {
+			return ErrNotFound
+		}
+		active, err := customerLifecycleState(ctx, tx, p, in.CustomerID, true)
+		if err != nil {
+			return err
+		}
+		if !active {
+			return ErrConflict
+		}
+	}
+	if in.PremisesID != nil && (prior.PremisesID == nil || *in.PremisesID != *prior.PremisesID || in.CustomerID != prior.CustomerID) {
+		if !p.Allows("location.view", All) {
+			return ErrNotFound
+		}
+		var active bool
+		err := tx.QueryRow(ctx, `SELECT deleted_at IS NULL FROM locations WHERE id=$1 AND company_id=$2 AND object_type='customer' AND object_id=$3 FOR UPDATE`, *in.PremisesID, p.CompanyID, in.CustomerID).Scan(&active)
+		if err == pgx.ErrNoRows {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if !active {
+			return ErrConflict
+		}
+	}
+	type coverageKey struct {
+		asset int64
+		start string
+	}
+	retained := map[coverageKey]bool{}
+	for _, row := range prior.Coverage {
+		retained[coverageKey{row.AssetID, row.StartsOn}] = true
+	}
+	for _, row := range in.Coverage {
+		if _, err := time.Parse(time.DateOnly, row.StartsOn); err != nil {
+			return ErrConflict
+		}
+		if row.EndsOn != nil {
+			if _, err := time.Parse(time.DateOnly, *row.EndsOn); err != nil {
+				return ErrConflict
+			}
+		}
+		// Moving the start/re-adding coverage is a new selected dependency, not a
+		// retained interval. An end-date revision keeps its original selection.
+		if retained[coverageKey{row.AssetID, row.StartsOn}] {
+			continue
+		}
+		if !p.Allows("asset.view", All) {
+			return ErrNotFound
+		}
+		var active bool
+		err := tx.QueryRow(ctx, `SELECT deleted_at IS NULL FROM assets WHERE id=$1 AND company_id=$2 FOR UPDATE`, row.AssetID, p.CompanyID).Scan(&active)
+		if err == pgx.ErrNoRows {
+			return ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		if !active {
+			return ErrConflict
 		}
 	}
 	if in.Coverage == nil {
@@ -75,6 +152,11 @@ func (s *Service) WriteLeaseDependencies(ctx context.Context, tx pgx.Tx, a Actor
 	}
 	var after json.RawMessage
 	if err := tx.QueryRow(ctx, `SELECT lease_dependency_snapshot($1)`, in.LeaseID).Scan(&after); err != nil {
+		return err
+	}
+	// The fence holds grants stable; re-read identity/session after any row-lock
+	// wait as well, including time-based expiry, before recording the effect.
+	if _, err := principal(ctx, tx, a, false); err != nil {
 		return err
 	}
 	return audit(ctx, tx, a, p, "lease.dependencies.change", All, "lease", in.LeaseID, map[string]any{"before": before, "after": after})

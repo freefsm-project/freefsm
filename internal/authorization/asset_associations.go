@@ -144,6 +144,12 @@ func (s *Service) ChangeAssetAssociation(ctx context.Context, a Actor, id int64,
 		if invalid {
 			return fmt.Errorf("%w: association change would invalidate retained Service Entry provenance", ErrConflict)
 		}
+		// A past factual correction can leave today's placement unchanged while
+		// contradicting coverage. Validate every affected recorded period under
+		// the same fence used by Lease registration, before projection or audit.
+		if _, err = tx.Exec(ctx, `SELECT lease_asset_timeline_validate($1)`, id); err != nil {
+			return err
+		}
 		if _, err = tx.Exec(ctx, `SELECT set_config('freefsm.asset_association','allowed',true)`); err != nil {
 			return err
 		}

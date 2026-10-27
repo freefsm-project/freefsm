@@ -205,7 +205,7 @@ func TestMasterLeaseHookRechecksWaitingGrant(t *testing.T) {
 	defer cancel()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Hook owner").SaveX(ctx)
 	svc := authorization.New(pool)
-	role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Lease writer", []authorization.Grant{{Permission: "lease.view", Scope: authorization.All}, {Permission: "lease.manage", Scope: authorization.All}})
+	role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Lease writer", []authorization.Grant{{Permission: "lease.view", Scope: authorization.All}, {Permission: "lease.manage", Scope: authorization.All}, {Permission: "customer.view", Scope: authorization.All}})
 	historyCheck(t, err)
 	u := client.User.Create().SetCompanyID(company).SetName("Lease writer").SetEmail("lease-writer63@test").SetPasswordHash("x").SetRole("tech").SaveX(ctx)
 	historyCheck(t, svc.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role))

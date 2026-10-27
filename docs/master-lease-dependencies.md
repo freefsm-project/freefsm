@@ -33,6 +33,22 @@ The caller must roll back on any error and owns commit. It must also enforce
 the agreement's own rules (term, at-least-one-Asset, overlap, billing, transition
 and event history); this hook does not replace them or commit independently.
 
+New selections are independently authorized inside that same fence. A new
+Customer requires All Records Customer View; a changed/nonempty premises requires
+All Records Location View; a new coverage key `(Asset ID, starts_on)` requires All
+Records Asset View. New targets must be active and belong to the actor's Company
+(and premises to the selected Customer). Lease Manage, a known ID, or Assigned Job
+Context does not substitute for any of those grants. An existing foreign-Company
+Lease ID is not a usable retained-reference anchor. Dates supplied to the adapter
+are ISO company-calendar dates, with NULL for an open coverage end.
+
+Retaining an existing Customer/premises/coverage key or removing a reference does
+not reacquire selection authority. Revising the end of a retained coverage key
+keeps that selection; moving its start or re-adding a removed interval is a new
+selection. Every retained reference still undergoes domain validation: this
+exception does not finalize stale archived selections or bypass placement rules.
+Terminated retained history may reference archived masters without reviving them.
+
 The database seam `set_lease_master_dependencies` is available to transactional
 SQL writers. Like other direct SQL writers, those callers own actor authorization
 and audit; web/field callers must not invoke it as an unaudited command. Projection
@@ -59,6 +75,42 @@ keys; it is not an event ledger and cannot stand in for Lease history.
   be explicitly returned before archive.
 - Unarchived non-Terminated Lease dependency snapshots also block Customer archive
   and its cascade preview.
+
+## Whole placement timeline (migration 104)
+
+`lease_asset_timeline_validate` is shared by registration/replacement and the
+existing association/correction command, including initial-observation factual
+revisions. It checks overlap between **every recorded** coverage interval of an
+unarchived Scheduled/Active/Month-to-Month Lease and each differently placed
+Customer period, not just `assets.customer_id` today. A return that leaves the
+Asset unplaced today cannot hide a conflicting earlier placement.
+
+Association periods are `[starts_on, ends_before)`; coverage is
+`[starts_on, ends_on]` with an inclusive final company-calendar day. Coverage
+starting on a return day does not overlap the placement that ends before that
+day. Coverage ending on a placement's start day does overlap. Same-day empty
+placement periods do not conflict. Unknown initial starts remain NULL: the guard
+conservatively checks possible overlap using the existing unbounded lower bound,
+without writing or claiming an acquisition date. Unplaced periods do not conflict.
+
+This timeline consistency rule includes earlier covered dates of live finalized
+Leases. It is distinct from archive eligibility: wholly past coverage does not
+block master archive, and Draft, archived or Terminated references do not block
+these placement corrections. Non-overlapping historical placements remain valid.
+Original association facts remain immutable; accepted corrections append a new
+revision and their actual audit rather than rewriting old dates/owners.
+
+The commands validate before their audit. Deferred database constraint triggers
+also enforce the same invariant on direct Lease projection and association-event
+SQL, evaluating final transaction state for multi-row repairs. Projection
+eligibility is also validated against the final lifecycle, so replacing an
+Active projection with Terminated references does not accidentally validate the
+new references against transient old Active metadata. Immutable identity checks
+remain immediate. New Draft coverage still requires an active Asset at commit;
+retained stale Draft keys are not treated as new selections. Statement fences
+on association events/origin revisions use the same 190019 owner as the Lease
+projection writers. Migration 104 adds guards only; it does not rewrite existing
+facts, synthesize coverage, fill unknown starts or change grants.
 
 No rows are backfilled, no dates are inferred from Asset placement, and no grants
 are added. If an installed database already contains `leases`, `lease_assets` or
