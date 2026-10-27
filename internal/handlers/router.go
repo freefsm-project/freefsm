@@ -304,6 +304,8 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.With(collectionRead("job")).Get("/jobs", jobHandler.List)
 		r.With(collectionRead("job")).Get("/jobs/activity", activityHandler.ListByType(objectref.TypeJob))
 		r.Post("/jobs/{id}/status", jobHandler.UpdateStatus)
+		r.Post("/jobs/{id}/delete", jobHandler.Delete)
+		r.Post("/jobs/{id}/restore", jobHandler.Restore)
 		r.Get("/jobs/{id}/field-notes", jobHandler.FieldNotes)
 		r.Post("/jobs/{id}/field-notes", jobHandler.FieldNotes)
 		r.Get("/jobs/{id}/field-notes/history", jobHandler.FieldNotes)
@@ -384,7 +386,6 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.Use(middleware.DispatcherOrAdmin)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/create-next-occurrence", jobHandler.CreateNextOccurrence)
 			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/cancel-next-occurrence", jobHandler.CancelNextOccurrence)
-			r.With(activeObjectGuard(objectref.TypeJob)).Post("/jobs/{id}/delete", jobHandler.Delete)
 		})
 
 		// Assigned technicians may create documents from their Jobs and manage them.
@@ -529,8 +530,6 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/settings/custom-fields/{id}/delete", cfHandler.Delete)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.AdminOnly)
-			// Restore archived entities
-			r.Post("/jobs/{id}/restore", jobHandler.Restore)
 			// Admin activity feeds
 			r.Get("/settings/activity/history", activityHandler.ListAll)
 			r.Get("/settings/activity", activityHandler.ListByType(objectref.TypeCompanySettings))

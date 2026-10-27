@@ -788,22 +788,9 @@ func (h *JobHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	j, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	entityName := j.JobType
 	if err := h.svc.Archive(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+		recordLifecycleError(w, r, "archive Job", err)
 		return
-	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "archived", objectref.New(objectref.TypeJob, id), map[string]interface{}{
-			"entity_name": entityName,
-			"actor_name":  u.Name,
-		})
 	}
 	http.Redirect(w, r, "/jobs?flash=Job+archived", http.StatusSeeOther)
 }
@@ -814,21 +801,9 @@ func (h *JobHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", 400)
 		return
 	}
-	j, err := h.svc.GetByID(r.Context(), id)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
 	if err := h.svc.Restore(r.Context(), id); err != nil {
-		http.Error(w, err.Error(), 500)
+		recordLifecycleError(w, r, "restore Job", err)
 		return
-	}
-	u, _ := middleware.UserFromContext(r.Context())
-	if u != nil {
-		h.activitySvc.Record(r.Context(), u.CompanyID, u.ID, "restored", objectref.New(objectref.TypeJob, id), map[string]interface{}{
-			"entity_name": j.JobType,
-			"actor_name":  u.Name,
-		})
 	}
 	http.Redirect(w, r, "/jobs/"+strconv.FormatInt(id, 10)+"?flash=Job+restored", http.StatusSeeOther)
 }

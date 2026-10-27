@@ -1058,6 +1058,9 @@ func (s *JobService) Delete(ctx context.Context, id int64) error {
 }
 
 func (s *JobService) Archive(ctx context.Context, id int64) error {
+	if r, ok := authorization.FromContext(ctx); ok {
+		return r.Service.JobLifecycle(ctx, r.Actor, id, false)
+	}
 	now := time.Now()
 	_, err := s.client.Job.UpdateOneID(id).SetDeletedAt(now).Save(ctx)
 	if err != nil {
@@ -1067,6 +1070,9 @@ func (s *JobService) Archive(ctx context.Context, id int64) error {
 }
 
 func (s *JobService) Restore(ctx context.Context, id int64) error {
+	if r, ok := authorization.FromContext(ctx); ok {
+		return r.Service.JobLifecycle(ctx, r.Actor, id, true)
+	}
 	_, err := s.client.Job.UpdateOneID(id).ClearDeletedAt().Save(ctx)
 	if err != nil {
 		return fmt.Errorf("restore job %d: %w", id, err)

@@ -2,8 +2,8 @@ package authorization
 
 import "context"
 
-// MasterRestoreAccess is the current, read-only discovery check for the Project
-// and Asset lifecycle commands. Those commands recheck authority and dependencies
+// MasterRestoreAccess is the current, read-only discovery check for the Job,
+// Project and Asset lifecycle commands. Those commands recheck authority and dependencies
 // in their committing transactions; rendering a control never grants authority.
 // Dependency checks return only eligibility, not hidden master labels or fields.
 func (s *Service) MasterRestoreAccess(ctx context.Context, a Actor, typ string, id int64) error {
@@ -11,7 +11,7 @@ func (s *Service) MasterRestoreAccess(ctx context.Context, a Actor, typ string, 
 	if err != nil {
 		return err
 	}
-	if typ != "project" && typ != "asset" {
+	if typ != "project" && typ != "asset" && typ != "job" {
 		return ErrNotFound
 	}
 	if _, err := parentAccess(ctx, s.Pool, p, typ, id, "", false); err != nil {
@@ -21,9 +21,9 @@ func (s *Service) MasterRestoreAccess(ctx context.Context, a Actor, typ string, 
 		return ErrForbidden
 	}
 	var eligible bool
-	if typ == "project" {
+	if typ == "project" || typ == "job" {
 		err = s.Pool.QueryRow(ctx, `SELECT p.deleted_at IS NOT NULL AND c.deleted_at IS NULL
-		 FROM projects p JOIN customers c ON c.id=p.customer_id AND c.company_id=p.company_id
+		 FROM `+typ+`s p JOIN customers c ON c.id=p.customer_id AND c.company_id=p.company_id
 		 WHERE p.id=$1 AND p.company_id=$2`, id, p.CompanyID).Scan(&eligible)
 	} else {
 		err = s.Pool.QueryRow(ctx, `SELECT a.deleted_at IS NOT NULL
