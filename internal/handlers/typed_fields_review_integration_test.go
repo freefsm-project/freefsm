@@ -315,15 +315,20 @@ func TestTypedReviewJobArchiveWaitsForAssignedDocumentSaveHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Archive customer").SaveX(ctx)
-	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Archive race").SaveX(ctx)
+	// The race isolates commit ordering, not archive eligibility: finished work
+	// with a Rejected proposal may archive while that active proposal is edited.
+	var completed, rejected int64
+	historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM statuses WHERE company_id=$1 AND category_key='job:completed' AND is_category_default`, company).Scan(&completed))
+	historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM statuses WHERE company_id=$1 AND category_key='estimate:rejected' AND is_category_default`, company).Scan(&rejected))
+	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetStatusID(completed).SetJobType("Archive race").SaveX(ctx)
 	client.JobAssignment.Create().SetJobID(j.ID).SetUserID(u.ID).SaveX(ctx)
-	i := client.Invoice.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobID(j.ID).SetInvoiceNumber(29).SetTitle("Assigned invoice").SetInvoiceDate(time.Now()).SetDueDate(time.Now()).SetSettlementState("paid").SaveX(ctx)
+	e := client.Estimate.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobID(j.ID).SetStatusID(rejected).SetTitle("Assigned rejected proposal").SaveX(ctx)
 	adminCookie := sessionCookie(t, ctx, sessions, admin)
 	cookie := sessionCookie(t, ctx, sessions, u.ID)
-	fieldPost(t, router, adminCookie, "/settings/custom-fields", url.Values{"object_type": {"invoice"}, "name": {"Invoice field"}, "field_type": {"text"}}, 303)
-	path := fmt.Sprintf("/invoices/%d/custom-fields", i.ID)
+	fieldPost(t, router, adminCookie, "/settings/custom-fields", url.Values{"object_type": {"estimate"}, "name": {"Proposal field"}, "field_type": {"text"}}, 303)
+	path := fmt.Sprintf("/estimates/%d/custom-fields", e.ID)
 	input := currentCommercialFormValues(t, router, cookie, path, url.Values{"custom_field_1": {"Committed before archive"}})
-	if _, err := pool.Exec(ctx, `CREATE FUNCTION hold_document_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='invoice.edit' THEN PERFORM pg_advisory_xact_lock(190129); END IF; RETURN NEW; END $$; CREATE TRIGGER hold_document_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION hold_document_audit()`); err != nil {
+	if _, err := pool.Exec(ctx, `CREATE FUNCTION hold_document_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='estimate.edit' THEN PERFORM pg_advisory_xact_lock(190129); END IF; RETURN NEW; END $$; CREATE TRIGGER hold_document_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION hold_document_audit()`); err != nil {
 		t.Fatal(err)
 	}
 	blocker, err := pool.Begin(ctx)
@@ -374,6 +379,7 @@ func TestTypedReviewJobArchiveWaitsForAssignedDocumentSaveHTTP(t *testing.T) {
 			t.Fatal(err)
 		}
 		if waiting {
+			t.Logf("observed document audit holder=%d save=%d; Job archive blocked behind uncommitted save", blockerPID, savePID)
 			break
 		}
 		if time.Now().After(deadline) {
@@ -393,4 +399,9 @@ func TestTypedReviewJobArchiveWaitsForAssignedDocumentSaveHTTP(t *testing.T) {
 	expectStatus(t, router, cookie, "GET", path, 404)
 	fieldPost(t, router, cookie, path, url.Values{"custom_field_1": {"Must not save after archive"}}, 404)
 	assertContains(t, requestBody(t, router, adminCookie, "GET", path, 200), "Committed before archive")
+	var preserved bool
+	historyCheck(t, pool.QueryRow(ctx, `SELECT j.deleted_at IS NOT NULL AND j.status_id=$3 AND e.status_id=$4 AND e.deleted_at IS NULL AND e.job_id=j.id FROM jobs j JOIN estimates e ON e.id=$2 WHERE j.id=$1`, j.ID, e.ID, completed, rejected).Scan(&preserved))
+	if !preserved {
+		t.Fatal("ordered archive changed finished Job or independent rejected proposal")
+	}
 }
