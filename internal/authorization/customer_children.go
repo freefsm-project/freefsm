@@ -336,9 +336,6 @@ func (s *Service) CustomerChildLifecycle(ctx context.Context, a Actor, customerI
 		if err != nil {
 			return err
 		}
-		if !active {
-			return ErrForbidden
-		}
 		action := kind + ".archive"
 		if restore {
 			action = kind + ".restore"
@@ -355,6 +352,12 @@ func (s *Service) CustomerChildLifecycle(ctx context.Context, a Actor, customerI
 			return ErrNotFound
 		}
 		if !p.Allows(action, All) {
+			return ErrForbidden
+		}
+		if !active {
+			if restore {
+				return ErrConflict
+			}
 			return ErrForbidden
 		}
 		if archived == !restore {

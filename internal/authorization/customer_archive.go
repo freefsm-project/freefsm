@@ -45,6 +45,7 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
  OR EXISTS(SELECT 1 FROM estimates WHERE customer_id=$1 AND deleted_at IS NULL AND conversion_hidden_at IS NULL)
  OR EXISTS(SELECT 1 FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.customer_id=$1 AND i.deleted_at IS NULL AND i.conversion_hidden_at IS NULL AND (coalesce(s.category_key,'invoice:draft')='invoice:draft' OR (coalesce(s.category_key,'')<>'invoice:void' AND i.settlement_state<>'paid')))
  OR EXISTS(SELECT 1 FROM assets WHERE customer_id=$1 AND ownership_class='company_owned')
+ OR lease_customer_blocks_archive($1)
  OR EXISTS(SELECT 1 FROM customer_credits c WHERE c.customer_id=$1 AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='payment' AND r.operation_id=c.source_payment_id) AND c.original_amount_cents
  -coalesce((SELECT sum(a.amount_cents) FROM credit_applications a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=a.id)),0)
  -coalesce((SELECT sum(a.amount_cents) FROM credit_refund_allocations a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_refund' AND r.operation_id=a.refund_id)),0)>0)`, id).Scan(&blocked); err != nil {

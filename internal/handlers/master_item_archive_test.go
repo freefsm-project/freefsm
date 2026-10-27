@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"testing"
@@ -41,6 +43,48 @@ func TestMasterItemRestoreIndependentAuthorityHTTP(t *testing.T) {
 	}
 	itemPost(t, router, cookie, path+"/restore", nil, 303)
 	assertNotContains(t, requestBody(t, router, cookie, "GET", path, 200), "Archived on")
+}
+
+func TestMasterItemRestorePreservesSKUAndCapturedWorkHTTP(t *testing.T) {
+	_, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	cookie := sessionCookie(t, ctx, sessions, admin)
+	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Captured owner").SaveX(ctx)
+	i := client.Item.Create().SetCompanyID(company).SetName("Reserved catalog identity").SetSku("RESERVED-RESTORE-63").SetUnitPrice(99).SaveX(ctx)
+	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Captured work").SaveX(ctx)
+	jobPath, itemPath := fmt.Sprintf("/jobs/%d", j.ID), fmt.Sprintf("/items/%d", i.ID)
+	values := url.Values{"form_mode": {"edit"}, "job_id": {fmt.Sprint(j.ID)}, "line_items": {fmt.Sprintf(`[{"item_id":%d,"title":"Accepted capture","unit_price":11.25,"quantity":2}]`, i.ID)}}
+	itemPost(t, web, cookie, jobPath, values, 303)
+	expectStatus(t, web, cookie, "POST", jobPath+"/create-estimate", 303)
+	e := client.Estimate.Query().OnlyX(ctx)
+	documentCapture := e.LineItems
+	itemPost(t, web, cookie, itemPath+"/delete", nil, 303)
+	duplicate := url.Values{"name": {"Forbidden SKU reuse"}, "type": {"service"}, "sku": {"RESERVED-RESTORE-63"}}
+	itemPost(t, web, cookie, "/items", duplicate, 409)
+	var lines []map[string]any
+	historyCheck(t, json.Unmarshal([]byte(client.Job.GetX(ctx, j.ID).LineItems), &lines))
+	// A free-text addition is not a new selection of the retained archived Item.
+	lines = append(lines, map[string]any{"title": "Optional new free-text work", "unit_price": 7.5, "quantity": 1})
+	raw, err := json.Marshal(lines)
+	historyCheck(t, err)
+	values.Set("line_items", string(raw))
+	itemPost(t, web, cookie, jobPath, values, 303)
+	jobCapture := client.Job.GetX(ctx, j.ID).LineItems
+	lines = append(lines, map[string]any{"item_id": i.ID, "title": "Forbidden new archived selection", "unit_price": 11.25, "quantity": 1})
+	raw, err = json.Marshal(lines)
+	historyCheck(t, err)
+	values.Set("line_items", string(raw))
+	itemPost(t, web, cookie, jobPath, values, 409)
+	itemPost(t, web, cookie, itemPath+"/restore", url.Values{"unit_price": {"999"}, "sku": {"REPLACE-IDENTITY"}}, 303)
+	if got := client.Item.GetX(ctx, i.ID); got.Sku != "RESERVED-RESTORE-63" || got.UnitPrice != 99 {
+		t.Fatalf("Restore changed Item facts: %+v", got)
+	}
+	if client.Job.GetX(ctx, j.ID).LineItems != jobCapture || client.Estimate.GetX(ctx, e.ID).LineItems != documentCapture {
+		t.Fatal("archive/Restore or rejected new selection rewrote captures/provenance")
+	}
+	itemPost(t, web, cookie, "/items", duplicate, 409)
+	assertContains(t, requestBody(t, web, cookie, "GET", jobPath, 200), "11.25")
+	assertContains(t, requestBody(t, web, cookie, "GET", fmt.Sprintf("/estimates/%d", e.ID), 200), "11.25")
 }
 
 func TestMasterItemArchivedListHTTP(t *testing.T) {
