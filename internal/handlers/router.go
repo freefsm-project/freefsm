@@ -90,7 +90,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 				info.NavigationGrants[grant.Permission+"/"+string(grant.Scope)] = true
 			}
 		}
-		for _, permission := range []string{"item.view", "item.create", "item.edit", "item.archive", "item.restore", "pricebook.view", "pricebook.create", "pricebook.edit", "cost.view", "cost.edit"} {
+		for _, permission := range []string{"item.view", "item.create", "item.edit", "item.archive", "item.archived.view", "item.restore", "pricebook.view", "pricebook.create", "pricebook.edit", "cost.view", "cost.edit"} {
 			info.ItemPermissions[permission] = principal.Allows(permission, authorization.All)
 		}
 		return info, nil

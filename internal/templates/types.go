@@ -522,6 +522,7 @@ type ItemDetail struct {
 }
 
 type ItemListPageData struct {
+	Archived   bool
 	Items      []ItemRow
 	Page       int
 	PerPage    int

@@ -31,7 +31,15 @@ func (h *ItemHandler) List(w http.ResponseWriter, r *http.Request) {
 		page = 1
 	}
 	search := r.URL.Query().Get("search")
-	items, total, err := h.svc.List(r.Context(), search, page, 25)
+	archived := r.URL.Query().Get("archived") == "1"
+	list := h.svc.List
+	if archived {
+		if !requireItemPermission(w, r, "item.archived.view") {
+			return
+		}
+		list = h.svc.ListArchived
+	}
+	items, total, err := list(r.Context(), search, page, 25)
 	if err != nil {
 		authorizationError(w, r, err)
 		return
@@ -40,7 +48,7 @@ func (h *ItemHandler) List(w http.ResponseWriter, r *http.Request) {
 	for n, i := range items {
 		rows[n] = itemRow(i)
 	}
-	d := templates.ItemListPageData{Items: rows, Page: page, PerPage: 25, Total: total, TotalPages: services.ItemPaginationTotalPages(total, 25), Search: search}
+	d := templates.ItemListPageData{Items: rows, Page: page, PerPage: 25, Total: total, TotalPages: services.ItemPaginationTotalPages(total, 25), Search: search, Archived: archived}
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
 		templates.ItemsListContent(d).Render(r.Context(), w)
 		return

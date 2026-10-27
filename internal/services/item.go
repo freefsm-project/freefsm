@@ -59,7 +59,29 @@ type ItemUpdateParams struct {
 }
 
 func (s *ItemService) List(ctx context.Context, search string, page, perPage int) ([]*ent.Item, int, error) {
-	q := s.client.Item.Query().Where(item.DeletedAtIsNil())
+	return s.list(ctx, search, page, perPage, false)
+}
+
+func (s *ItemService) ListArchived(ctx context.Context, search string, page, perPage int) ([]*ent.Item, int, error) {
+	if r, ok := authorization.FromContext(ctx); ok {
+		p, err := r.Service.Principal(ctx, r.Actor)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !p.Allows("item.view", authorization.All) || !p.Allows("item.archived.view", authorization.All) {
+			return nil, 0, authorization.ErrForbidden
+		}
+	}
+	return s.list(ctx, search, page, perPage, true)
+}
+
+func (s *ItemService) list(ctx context.Context, search string, page, perPage int, archived bool) ([]*ent.Item, int, error) {
+	q := s.client.Item.Query()
+	if archived {
+		q = q.Where(item.DeletedAtNotNil())
+	} else {
+		q = q.Where(item.DeletedAtIsNil())
+	}
 
 	if search != "" {
 		filters := []predicate.Item{item.NameContainsFold(search), item.DescriptionContainsFold(search)}

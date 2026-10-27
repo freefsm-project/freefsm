@@ -1,6 +1,12 @@
 package templates
 
 import "fmt"
+import "net/url"
+
+func itemListScope(archived bool) url.Values {
+	if archived { return url.Values{"archived": {"1"}} }
+	return nil
+}
 
 templ ItemsIndex(p ItemListPageData) {
 	@Layout("Items") {
@@ -14,13 +20,19 @@ templ ItemsIndex(p ItemListPageData) {
 
 templ ItemsListContent(p ItemListPageData) {
 	<div id="item-list-content" class="focused-list-content">
+		if itemPermission(ctx, "item.archived.view") {
+			<nav aria-label="Item archive views">
+				<a href="/items">Current Items</a>
+				<a href="/items?archived=1">Archived Items</a>
+			</nav>
+		}
 		if itemPermission(ctx, "item.create") {
 		@ListToolbar(ListToolbarData{
-			Action: "/items", Target: "#item-list-content", Search: p.Search,
+			Action: "/items", Target: "#item-list-content", Search: p.Search, Scope: itemListScope(p.Archived),
 			SearchPlaceholder: "Search by name or SKU...", NewURL: "/items/new", NewLabel: "New Item",
 		})
 		} else {
-		@ListToolbar(ListToolbarData{Action: "/items", Target: "#item-list-content", Search: p.Search, SearchPlaceholder: "Search Items..."})
+		@ListToolbar(ListToolbarData{Action: "/items", Target: "#item-list-content", Search: p.Search, SearchPlaceholder: "Search Items...", Scope: itemListScope(p.Archived)})
 		}
 		@ItemsTable(p)
 	</div>
@@ -54,6 +66,9 @@ templ ItemsTable(p ItemListPageData) {
 					<tr>
 						<td>
 							<a href={ templ.URL(fmt.Sprintf("/items/%d", i.ID)) } class="work-queue-title">{ i.Name }</a>
+							if p.Archived {
+								<mark>Archived</mark>
+							}
 						</td>
 						<td><mark>{ i.Type }</mark></td>
 						if itemPermission(ctx, "pricebook.view") {
@@ -67,13 +82,13 @@ templ ItemsTable(p ItemListPageData) {
 							}
 						</td>
 						<td class="work-queue-actions">
-							if itemPermission(ctx, "item.edit") || itemPermission(ctx, "pricebook.edit") || itemPermission(ctx, "cost.edit") {
+							if !p.Archived && (itemPermission(ctx, "item.edit") || itemPermission(ctx, "pricebook.edit") || itemPermission(ctx, "cost.edit")) {
 							<a href={ templ.URL(fmt.Sprintf("/items/%d/edit", i.ID)) } role="button" class="outline small" aria-label={ fmt.Sprintf("Edit %s", i.Name) }>Edit</a>
 							}
-							if itemPermission(ctx, "item.archive") {
-							<form action={ templ.URL(fmt.Sprintf("/items/%d/delete", i.ID)) } method="post" hx-confirm="Delete this item?">
+							if !p.Archived && itemPermission(ctx, "item.archive") {
+							<form action={ templ.URL(fmt.Sprintf("/items/%d/delete", i.ID)) } method="post" hx-confirm="Archive this item?">
 								<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
-								<button class="outline contrast small" aria-label={ fmt.Sprintf("Delete %s", i.Name) }>Del</button>
+								<button class="outline contrast small" aria-label={ fmt.Sprintf("Archive %s", i.Name) }>Archive</button>
 							</form>
 							}
 						</td>
@@ -86,7 +101,7 @@ templ ItemsTable(p ItemListPageData) {
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
 			BaseURL:     "/items",
-			Query:       listQuery(p.Search, nil, nil),
+			Query:       listQuery(p.Search, nil, itemListScope(p.Archived)),
 			Target:      "#item-list-content",
 		})
 	</div>
