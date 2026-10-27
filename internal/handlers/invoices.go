@@ -570,7 +570,12 @@ func (h *InvoiceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	title := inv.Title
-	if inv.SettlementState != "paid" && statusCategory(h.statusesForSelect(r.Context()), inv.StatusID) != string(statusflow.InvoiceVoid) {
+	effective, err := h.statusflow.EffectiveInvoiceStatus(r.Context(), *inv.CompanyID, id)
+	if err != nil {
+		internalServerError(w, r, "invoice archive eligibility", err)
+		return
+	}
+	if effective.Category != statusflow.InvoicePaid && effective.Category != statusflow.InvoiceVoid {
 		http.Error(w, "invoice can only be archived when paid or void", http.StatusConflict)
 		return
 	}

@@ -55,6 +55,9 @@ func TestConversionReversionRequiresExplicitInvoiceRestoreAndFreshReviewHTTP(t *
 	var invoice int64
 	historyCheck(t, pool.QueryRow(ctx, `SELECT invoice_id FROM estimate_invoice_conversion_cycles WHERE estimate_id=$1`, e.ID).Scan(&invoice))
 	path := fmt.Sprintf("/invoices/%d", invoice)
+	// Zero-total Draft is still effectively Draft; explicitly finalize it before
+	// archiving the resulting Paid history.
+	fieldPost(t, web, cookie, path+"/finalize", url.Values{}, 303)
 	old := conversionReview(t, web, cookie, path+"/revert-to-estimate")
 	fieldPost(t, web, cookie, path+"/delete", url.Values{}, 303)
 	fieldPost(t, web, cookie, path+"/revert-to-estimate", old, 403)
