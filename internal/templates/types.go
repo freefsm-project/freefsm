@@ -1839,6 +1839,7 @@ func displayDateValue(ctx context.Context, value string) string {
 
 // Asset types
 type AssetListPageData struct {
+	Archived      bool
 	Assets        []AssetRow
 	AssetTypes    []SelectOption
 	AssetStatuses []SelectOption

@@ -1,6 +1,13 @@
 package templates
 
 import "fmt"
+import "net/url"
+
+func assetListScope(p AssetListPageData) url.Values {
+	scope := customerScope(p.CustomerID)
+	if p.Archived { scope.Set("archived", "1") }
+	return scope
+}
 
 templ AssetIndex(p AssetListPageData) {
 	@Layout("Assets") {
@@ -14,12 +21,18 @@ templ AssetIndex(p AssetListPageData) {
 
 templ AssetListContent(p AssetListPageData) {
 	<div id="asset-list-content" class="focused-list-content">
+		if navigationPermission(ctx, "asset.archived.view", "A") {
+			<nav aria-label="Asset archive views">
+				<a href="/assets">Current Assets</a>
+				<a href="/assets?archived=1">Archived Assets</a>
+			</nav>
+		}
 		@ListToolbar(ListToolbarData{
 			Action: "/assets", Target: "#asset-list-content", Search: p.Search,
 			SearchPlaceholder: "Search assets...", NewURL: operationalNewURL(ctx, "/assets/new"), NewLabel: "New Asset",
 			ShowFilter: true,
 			Filters: filterValues("asset_type_id", fmt.Sprintf("%d", p.AssetTypeID), "asset_status_id", fmt.Sprintf("%d", p.AssetStatusID)),
-			Scope: customerScope(p.CustomerID),
+			Scope: assetListScope(p),
 			FilterCount: activeFilterCount(filterValues("asset_type_id", fmt.Sprintf("%d", p.AssetTypeID), "asset_status_id", fmt.Sprintf("%d", p.AssetStatusID))),
 		}) {
 			<label>Asset type
@@ -74,6 +87,9 @@ templ AssetTable(p AssetListPageData) {
 								{ a.Name }
 								<small>{ a.Number } · { assetOwnershipLabel(a.OwnershipClass) }</small>
 							</a>
+							if p.Archived {
+								<mark>Archived</mark>
+							}
 						</td>
 						<td>{ a.Manufacturer }</td>
 						<td>{ a.Model }</td>
@@ -93,7 +109,9 @@ templ AssetTable(p AssetListPageData) {
 							}
 						</td>
 						<td class="work-queue-actions">
-							@CollectionActions("asset", a.ID, a.Name)
+							if !p.Archived {
+								@CollectionActions("asset", a.ID, a.Name)
+							}
 						</td>
 					</tr>
 				}
@@ -104,7 +122,7 @@ templ AssetTable(p AssetListPageData) {
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
 			BaseURL:     "/assets",
-			Query:       listQuery(p.Search, filterValues("asset_type_id", fmt.Sprintf("%d", p.AssetTypeID), "asset_status_id", fmt.Sprintf("%d", p.AssetStatusID)), customerScope(p.CustomerID)),
+			Query:       listQuery(p.Search, filterValues("asset_type_id", fmt.Sprintf("%d", p.AssetTypeID), "asset_status_id", fmt.Sprintf("%d", p.AssetStatusID)), assetListScope(p)),
 			Target:      "#asset-list-content",
 		})
 	</div>

@@ -11,6 +11,9 @@ templ JobAssetReferences(links []authorization.JobAssetReference) {
    } else {
     <span>{link.Number} — {link.Name}</span>
    }
+   if link.Archived {
+    <span>Archived</span>
+   }
    if !link.Operational {
     <span>Historical (non-authorizing)</span>
    }

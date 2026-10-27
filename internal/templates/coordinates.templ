@@ -12,6 +12,9 @@ func coordinateValue(v *float64) string {
 templ CoordinatesPage(v authorization.Coordinates, manage bool) {
  @Layout("Location coordinates") {
   <h1>Review location coordinates</h1>
+  if v.Archived {
+   <p><mark>Archived — read-only</mark></p>
+  }
   <p>{ v.Address }</p>
   if v.Proposal {
    <p>Provider proposal only. Review the coordinates and explicitly accept to save.</p>

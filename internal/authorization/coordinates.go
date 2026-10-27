@@ -20,6 +20,7 @@ type Coordinates struct {
 	Revision, Address   string
 	Latitude, Longitude *float64
 	Proposal            bool
+	Archived, ReadOnly  bool
 }
 
 func (s *Service) LocationCoordinates(ctx context.Context, a Actor, id int64) (Coordinates, error) {
@@ -31,7 +32,7 @@ func (s *Service) LocationCoordinates(ctx context.Context, a Actor, id int64) (C
 	if !p.Allows("location.view", All) {
 		return v, ErrForbidden
 	}
-	err = s.Pool.QueryRow(ctx, `SELECT l.xmin::text,concat_ws(', ',nullif(l.address_1,''),nullif(l.address_2,''),nullif(l.city,''),nullif(l.state,''),nullif(l.zip_code,'')),l.latitude,l.longitude FROM locations l JOIN customers c ON l.object_type='customer' AND c.id=l.object_id AND c.company_id=l.company_id WHERE l.id=$1 AND l.company_id=$2 AND c.deleted_at IS NULL`, id, p.CompanyID).Scan(&v.Revision, &v.Address, &v.Latitude, &v.Longitude)
+	err = s.Pool.QueryRow(ctx, `SELECT l.xmin::text,concat_ws(', ',nullif(l.address_1,''),nullif(l.address_2,''),nullif(l.city,''),nullif(l.state,''),nullif(l.zip_code,'')),l.latitude,l.longitude,l.deleted_at IS NOT NULL,l.deleted_at IS NOT NULL OR c.deleted_at IS NOT NULL FROM locations l JOIN customers c ON l.object_type='customer' AND c.id=l.object_id AND c.company_id=l.company_id WHERE l.id=$1 AND l.company_id=$2 AND (l.deleted_at IS NULL OR $3)`, id, p.CompanyID, p.Allows("location.archived.view", All)).Scan(&v.Revision, &v.Address, &v.Latitude, &v.Longitude, &v.Archived, &v.ReadOnly)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = ErrNotFound
 	}
@@ -53,6 +54,9 @@ func (s *Service) LookupCoordinates(ctx context.Context, a Actor, id int64, revi
 	}
 	if !p.Allows("location.edit", All) {
 		return v, ErrForbidden
+	}
+	if v.ReadOnly {
+		return v, ErrConflict
 	}
 	if revision != v.Revision {
 		return v, ErrConflict
@@ -111,7 +115,7 @@ func (s *Service) LookupCoordinates(ctx context.Context, a Actor, id int64, revi
 	if !p.Allows("location.edit", All) {
 		return v, ErrForbidden
 	}
-	if current.Revision != revision {
+	if current.ReadOnly || current.Revision != revision {
 		return v, ErrConflict
 	}
 	v.Latitude = &lat
@@ -133,7 +137,7 @@ func (s *Service) SaveCoordinates(ctx context.Context, a Actor, id int64, revisi
 			return ErrIntegrationInvalid
 		}
 		var current string
-		if err := tx.QueryRow(ctx, `SELECT l.xmin::text FROM locations l JOIN customers c ON l.object_type='customer' AND c.id=l.object_id AND c.company_id=l.company_id WHERE l.id=$1 AND l.company_id=$2 AND c.deleted_at IS NULL FOR UPDATE OF l FOR SHARE OF c`, id, p.CompanyID).Scan(&current); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT l.xmin::text FROM locations l JOIN customers c ON l.object_type='customer' AND c.id=l.object_id AND c.company_id=l.company_id WHERE l.id=$1 AND l.company_id=$2 AND l.deleted_at IS NULL AND c.deleted_at IS NULL FOR UPDATE OF l FOR SHARE OF c`, id, p.CompanyID).Scan(&current); err != nil {
 			return ErrNotFound
 		}
 		if current != revision {

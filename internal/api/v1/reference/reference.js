@@ -127,7 +127,7 @@
   const contact = value => pick(value, ['id', 'name', 'role_title', 'phone', 'email', 'service_notes']);
   const asset = value => {
     const result = pick(value, ['id', 'number', 'name', 'ownership_class', 'type', 'status', 'serial_number', 'manufacturer', 'model', 'installed_at', 'warranty_expires', 'service_notes']);
-    result.location = value.location ? pick(value.location, ['id', 'title']) : null;
+    result.location = value.location ? pick(value.location, value.location.archived === true ? ['title', 'archived'] : ['id', 'title']) : null;
     if (!['customer_owned', 'company_owned'].includes(result.ownership_class)) result.ownership_class = 'unknown';
     return result;
   };
@@ -146,7 +146,14 @@
     for (const [key, transform] of Object.entries({
       contact, contacts: values => values.map(contact), asset, assets: values => values.map(asset),
       location: value => pick(value, ['id', 'title', 'address_1', 'address_2', 'city', 'state', 'zip_code', 'latitude', 'longitude', 'access_notes', 'service_notes']),
-      project: value => pick(value, ['name', 'description', 'status', 'progress', 'planned_start_date', 'planned_end_date', 'location', 'service_notes']),
+      project: value => {
+        const result = pick(value, ['name', 'description', 'status', 'progress', 'planned_start_date', 'planned_end_date', 'location', 'service_notes']);
+        if (Object.hasOwn(value, 'location_archived')) {
+          if (value.location_archived !== true) throw new Error('Unknown Location lifecycle');
+          result.location_archived = true;
+        }
+        return result;
+      },
       project_reference: value => { if (value.archived !== true) throw new Error('Unknown lifecycle'); return pick(value, ['name', 'archived']); }
     })) if (Object.hasOwn(masters, key)) result.masters[key] = transform(masters[key]);
     return result;

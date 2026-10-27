@@ -45,6 +45,38 @@ func TestMasterItemRestoreIndependentAuthorityHTTP(t *testing.T) {
 	assertNotContains(t, requestBody(t, router, cookie, "GET", path, 200), "Archived on")
 }
 
+func TestMasterItemRestoreRechecksWaitingArchivedViewHTTP(t *testing.T) {
+	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	i := client.Item.Create().SetCompanyID(company).SetName("Hidden restore target").SaveX(ctx)
+	path := fmt.Sprintf("/items/%d", i.ID)
+	itemPost(t, web, sessionCookie(t, ctx, sessions, admin), path+"/delete", nil, 303)
+	svc := authorization.New(pool)
+	role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Waiting Item restorer", []authorization.Grant{{Permission: "item.view", Scope: authorization.All}, {Permission: "item.archived.view", Scope: authorization.All}, {Permission: "item.restore", Scope: authorization.All}})
+	historyCheck(t, err)
+	u := client.User.Create().SetCompanyID(company).SetName("Restorer").SetEmail("view-race63@test").SetPasswordHash("x").SetRole("tech").SaveX(ctx)
+	historyCheck(t, svc.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role))
+	cookie := sessionCookie(t, ctx, sessions, u.ID)
+	before := historyDurableRows(t, pool, []string{"items", "authorization_audit", "activity_logs"})
+	barrier, err := pool.Begin(ctx)
+	historyCheck(t, err)
+	defer barrier.Rollback(context.Background())
+	var holder int
+	historyCheck(t, barrier.QueryRow(ctx, `SELECT pg_backend_pid() FROM pg_advisory_xact_lock(190019)`).Scan(&holder))
+	f := &creditMatrix{ctx: ctx, pool: pool, web: web, cookie: cookie}
+	done := make(chan *httptest.ResponseRecorder, 1)
+	go func() { done <- f.call(creditCommand{path: path + "/restore"}) }()
+	commercialWaiters(t, ctx, pool, holder, 1)
+	_, err = barrier.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='item.archived.view'`, role)
+	historyCheck(t, err)
+	historyCheck(t, barrier.Commit(ctx))
+	if response := <-done; response.Code != 403 {
+		t.Fatalf("Restore without current archived View=%d: %s", response.Code, response.Body.String())
+	}
+	historyEqual(t, "archived View loss rejects whole Restore", historyDurableRows(t, pool, []string{"items", "authorization_audit", "activity_logs"}), before)
+}
+
 func TestMasterItemRestorePreservesSKUAndCapturedWorkHTTP(t *testing.T) {
 	_, client, web, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()

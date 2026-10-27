@@ -61,7 +61,29 @@ type AssetUpdateParams struct {
 }
 
 func (s *AssetService) List(ctx context.Context, search string, customerID, assetTypeID, assetStatusID int64, page, perPage int) ([]*ent.Asset, int, error) {
-	q := s.client.Asset.Query().Where(asset.DeletedAtIsNil())
+	return s.list(ctx, search, customerID, assetTypeID, assetStatusID, page, perPage, false)
+}
+
+func (s *AssetService) ListArchived(ctx context.Context, search string, customerID, assetTypeID, assetStatusID int64, page, perPage int) ([]*ent.Asset, int, error) {
+	if req, ok := authorization.FromContext(ctx); ok {
+		p, err := req.Service.Principal(ctx, req.Actor)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !p.Allows("asset.view", authorization.All) || !p.Allows("asset.archived.view", authorization.All) {
+			return nil, 0, authorization.ErrForbidden
+		}
+	}
+	return s.list(ctx, search, customerID, assetTypeID, assetStatusID, page, perPage, true)
+}
+
+func (s *AssetService) list(ctx context.Context, search string, customerID, assetTypeID, assetStatusID int64, page, perPage int, archived bool) ([]*ent.Asset, int, error) {
+	q := s.client.Asset.Query()
+	if archived {
+		q = q.Where(asset.DeletedAtNotNil())
+	} else {
+		q = q.Where(asset.DeletedAtIsNil())
+	}
 
 	if search != "" {
 		q = q.Where(

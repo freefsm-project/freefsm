@@ -8,9 +8,9 @@ import (
 )
 
 type JobAssetReference struct {
-	ID, AssetID                        int64
-	Number, Name                       string
-	Operational, CanNavigate, Unlinked bool
+	ID, AssetID                                  int64
+	Number, Name                                 string
+	Operational, CanNavigate, Unlinked, Archived bool
 }
 
 // LinkedJobAssets exposes immutable link labels for historical references.
@@ -22,7 +22,7 @@ func (s *Service) LinkedJobAssets(ctx context.Context, a Actor, id int64) ([]Job
 			return err
 		}
 		rows, err := tx.Query(ctx, `SELECT l.id,l.asset_id,l.number,l.name,l.operational AND l.unlinked_at IS NULL,l.unlinked_at IS NOT NULL,
-   l.operational AND l.unlinked_at IS NULL AND a.deleted_at IS NULL AND a.customer_id=j.customer_id AND $2
+   l.operational AND l.unlinked_at IS NULL AND a.deleted_at IS NULL AND a.customer_id=j.customer_id AND $2,a.deleted_at IS NOT NULL
    FROM job_asset_links l JOIN jobs j ON j.id=l.job_id JOIN assets a ON a.id=l.asset_id WHERE l.job_id=$1
    AND (NOT l.operational OR l.unlinked_at IS NOT NULL OR $2 OR ($3 AND j.deleted_at IS NULL AND EXISTS(SELECT 1 FROM job_assignments WHERE job_id=j.id AND user_id=$4)))
    ORDER BY l.id`, id, p.Allows("asset.view", All), p.Allows("asset.view", Context) && p.Allows("job.view", Assigned), p.UserID)
@@ -32,7 +32,7 @@ func (s *Service) LinkedJobAssets(ctx context.Context, a Actor, id int64) ([]Job
 		defer rows.Close()
 		for rows.Next() {
 			var v JobAssetReference
-			if err = rows.Scan(&v.ID, &v.AssetID, &v.Number, &v.Name, &v.Operational, &v.Unlinked, &v.CanNavigate); err != nil {
+			if err = rows.Scan(&v.ID, &v.AssetID, &v.Number, &v.Name, &v.Operational, &v.Unlinked, &v.CanNavigate, &v.Archived); err != nil {
 				return err
 			}
 			out = append(out, v)

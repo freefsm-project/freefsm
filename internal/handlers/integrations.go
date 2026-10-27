@@ -80,7 +80,7 @@ func (h *integrationHandler) coordinates(w http.ResponseWriter, r *http.Request)
 		authorizationError(w, r, err)
 		return
 	}
-	render(w, r, templates.CoordinatesPage(v, p.Allows("location.edit", authorization.All)))
+	render(w, r, templates.CoordinatesPage(v, !v.ReadOnly && p.Allows("location.edit", authorization.All)))
 }
 
 func (h *integrationHandler) settings(w http.ResponseWriter, r *http.Request) {

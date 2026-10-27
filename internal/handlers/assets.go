@@ -69,7 +69,16 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 	assetTypeID, _ := strconv.ParseInt(r.URL.Query().Get("asset_type_id"), 10, 64)
 	assetStatusID, _ := strconv.ParseInt(r.URL.Query().Get("asset_status_id"), 10, 64)
 
-	assets, total, err := h.svc.List(r.Context(), search, customerID, assetTypeID, assetStatusID, page, perPage)
+	archived := r.URL.Query().Get("archived") == "1"
+	list := h.svc.List
+	if archived {
+		if !allRecordsPermission(r, "asset.archived.view") {
+			authorizationError(w, r, authorization.ErrForbidden)
+			return
+		}
+		list = h.svc.ListArchived
+	}
+	assets, total, err := list(r.Context(), search, customerID, assetTypeID, assetStatusID, page, perPage)
 	if err != nil {
 		http.Error(w, err.Error(), 500)
 		return
@@ -84,6 +93,7 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := templates.AssetListPageData{
+		Archived:      archived,
 		Assets:        rows,
 		AssetTypes:    assetTypesToOptions(assetTypes),
 		AssetStatuses: assetStatusesToOptions(assetStatuses),

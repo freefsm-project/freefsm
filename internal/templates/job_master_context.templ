@@ -21,7 +21,11 @@ templ JobMasterContext(p authorization.JobMasterContext) {
 			if p.Project.PlannedEndDate != nil {
 				<p>Planned end: { *p.Project.PlannedEndDate }</p>
 			}
-			<p>{ p.Project.Location }</p><p>{ p.Project.ServiceNotes }</p>
+			<p>{ p.Project.Location }
+				if p.Project.LocationArchived {
+					<mark>Archived</mark>
+				}
+			</p><p>{ p.Project.ServiceNotes }</p>
 		}
 		for _, equipment := range p.Assets {
 			<h3>Operational Asset</h3>
@@ -35,7 +39,11 @@ templ JobMasterContext(p authorization.JobMasterContext) {
 				<p>Warranty: { displayDatePtr(ctx,equipment.WarrantyExpires) }</p>
 			}
 			if equipment.Location != nil {
-				<p>Current Location: { equipment.Location.Title }</p>
+				<p>Current Location: { equipment.Location.Title }
+					if equipment.Location.Archived {
+						<mark>Archived</mark>
+					}
+				</p>
 			}
 			<p>{ equipment.ServiceNotes }</p>
 			if equipment.ServiceEntryPath!="" {

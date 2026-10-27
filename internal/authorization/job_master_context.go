@@ -57,6 +57,7 @@ type JobProjectContext struct {
 	PlannedStartDate *string `json:"planned_start_date"`
 	PlannedEndDate   *string `json:"planned_end_date"`
 	Location         string  `json:"location"`
+	LocationArchived bool    `json:"location_archived,omitempty"`
 	ServiceNotes     string  `json:"service_notes"`
 }
 
@@ -80,8 +81,9 @@ type JobAssetContext struct {
 	ServiceNotes     string                `json:"service_notes"`
 }
 type AssetLocationContext struct {
-	ID    int64  `json:"id"`
-	Title string `json:"title"`
+	ID       int64  `json:"id,omitempty"`
+	Title    string `json:"title"`
+	Archived bool   `json:"archived,omitempty"`
 }
 
 func (s *Service) JobMasters(ctx context.Context, a Actor, jobID int64) (JobMasterContext, error) {
@@ -120,7 +122,7 @@ func jobMasters(ctx context.Context, q queryer, p Principal, a Actor, jobID int6
 	err := q.QueryRow(ctx, `SELECT
  CASE WHEN $4 AND c.id IS NOT NULL THEN jsonb_build_object('id',c.id,'name',trim(c.first_name||' '||c.last_name),'role_title',c.role_title,'phone',c.phone,'email',c.email,'service_notes',c.service_notes) END,
  CASE WHEN $5 AND l.id IS NOT NULL THEN jsonb_build_object('id',l.id,'title',l.title,'address_1',l.address_1,'address_2',l.address_2,'city',l.city,'state',l.state,'zip_code',l.zip_code,'latitude',l.latitude,'longitude',l.longitude,'access_notes',l.access_notes,'service_notes',l.service_notes) END,
- CASE WHEN $6 AND p.id IS NOT NULL AND (p.deleted_at IS NULL OR $7) THEN jsonb_build_object('name',p.name,'description',p.description,'status',coalesce(ps.name,''),'progress',CASE WHEN ps.category_key='project:completed' THEN 100 ELSE p.completion_percentage END,'planned_start_date',p.planned_start_date::text,'planned_end_date',p.planned_end_date::text,'location',coalesce(pl.title,''),'service_notes',p.service_notes) END,
+ CASE WHEN $6 AND p.id IS NOT NULL AND (p.deleted_at IS NULL OR $7) THEN jsonb_build_object('name',p.name,'description',p.description,'status',coalesce(ps.name,''),'progress',CASE WHEN ps.category_key='project:completed' THEN 100 ELSE p.completion_percentage END,'planned_start_date',p.planned_start_date::text,'planned_end_date',p.planned_end_date::text,'location',coalesce(pl.title,''),'location_archived',pl.deleted_at IS NOT NULL,'service_notes',p.service_notes) END,
  CASE WHEN $6 AND p.deleted_at IS NOT NULL THEN jsonb_build_object('name',p.name,'archived',true) END
  FROM jobs j JOIN job_assignments a ON a.job_id=j.id
  LEFT JOIN customer_contacts c ON c.id=j.customer_contact_id AND c.customer_id=j.customer_id AND c.company_id=j.company_id AND c.deleted_at IS NULL
@@ -177,7 +179,7 @@ func jobMasters(ctx context.Context, q queryer, p Principal, a Actor, jobID int6
 		}
 	}
 	if p.Allows("asset.view", Context) {
-		rows, err := q.Query(ctx, `SELECT jsonb_build_object('id',equipment.id,'number',equipment.number,'name',equipment.name,'ownership_class',equipment.ownership_class,'type',typ.name,'status',coalesce(st.name,''),'serial_number',equipment.serial_number,'manufacturer',equipment.manufacturer,'model',equipment.model,'installed_at',equipment.installed_at,'warranty_expires',equipment.warranty_expires,'service_notes',equipment.notes,'location',CASE WHEN place.id IS NOT NULL THEN jsonb_build_object('id',place.id,'title',place.title) END)
+		rows, err := q.Query(ctx, `SELECT jsonb_build_object('id',equipment.id,'number',equipment.number,'name',equipment.name,'ownership_class',equipment.ownership_class,'type',typ.name,'status',coalesce(st.name,''),'serial_number',equipment.serial_number,'manufacturer',equipment.manufacturer,'model',equipment.model,'installed_at',equipment.installed_at,'warranty_expires',equipment.warranty_expires,'service_notes',equipment.notes,'location',CASE WHEN place.id IS NOT NULL THEN CASE WHEN place.deleted_at IS NOT NULL THEN jsonb_build_object('title',place.title,'archived',true) ELSE jsonb_build_object('id',place.id,'title',place.title) END END)
  FROM jobs j JOIN job_asset_links al ON al.job_id=j.id AND al.operational AND al.unlinked_at IS NULL
  JOIN assets equipment ON equipment.id=al.asset_id AND equipment.company_id=j.company_id AND equipment.customer_id=j.customer_id AND equipment.deleted_at IS NULL
  JOIN asset_types typ ON typ.id=equipment.asset_type_id LEFT JOIN asset_statuses st ON st.id=equipment.asset_status_id
