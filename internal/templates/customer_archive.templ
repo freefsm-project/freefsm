@@ -5,10 +5,21 @@ import "github.com/freefsm-project/freefsm/internal/authorization"
 templ CustomerArchiveReview(p authorization.CustomerArchivePreview) {
 	@Layout("Review Customer archive") {
 		<h2>Archive { p.Name }</h2>
-		<p>This archives the Customer and exactly the active Contacts and Locations below. Identity and historical links remain. Restoring the Customer will not restore these records or their primary designations.</p>
+		<p>This archives the Customer and exactly the active Contacts, Locations, and Customer-owned Assets below. Company-owned Assets are excluded. Identity and historical links remain. Restoring the Customer will not restore these records or their primary designations.</p>
+		<h3>Required independent Archive permissions</h3>
+		<ul>
+		for _,permission := range p.RequiredPermissions {
+			<li>{ permission }</li>
+		}
+		</ul>
+		<h3>Included records</h3>
 		<ul>
 		for _,child := range p.Children {
-			<li>{ capitalize(child.Kind) }: { child.Name } (#{ fmt.Sprint(child.ID) })</li>
+			<li>{ capitalize(child.Kind) }: { child.Name } (#{ fmt.Sprint(child.ID) })
+			if child.Primary {
+				<span> — Primary default will be cleared; no replacement</span>
+			}
+			</li>
 		}
 		</ul>
 		<form method="post" action={ templ.URL(fmt.Sprintf("/customers/%d/delete",p.CustomerID)) }>

@@ -11,19 +11,21 @@ import (
 )
 
 type ArchiveChild struct {
-	Kind string
-	ID   int64
-	Name string
+	Kind    string
+	ID      int64
+	Name    string
+	Primary bool
 }
 type CustomerArchivePreview struct {
-	Snapshot   string
-	CustomerID int64
-	Name       string
-	Children   []ArchiveChild
+	Snapshot            string
+	CustomerID          int64
+	Name                string
+	Children            []ArchiveChild
+	RequiredPermissions []string
 }
 
 func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int64) (CustomerArchivePreview, error) {
-	preview := CustomerArchivePreview{CustomerID: id, Children: []ArchiveChild{}}
+	preview := CustomerArchivePreview{CustomerID: id, Children: []ArchiveChild{}, RequiredPermissions: []string{"customer.archive"}}
 	active, err := childCustomer(ctx, q, p, id, false)
 	if err != nil {
 		return preview, err
@@ -61,15 +63,16 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
 		if kind == "location" {
 			name = "title"
 		}
-		rows, err := q.Query(ctx, `SELECT id,`+name+`,updated_at::text FROM `+table+` WHERE `+childWhere(kind, owner)+` AND deleted_at IS NULL ORDER BY id`, id, p.CompanyID)
+		rows, err := q.Query(ctx, `SELECT id,`+name+`,updated_at::text,is_primary FROM `+table+` WHERE `+childWhere(kind, owner)+` AND deleted_at IS NULL ORDER BY id`, id, p.CompanyID)
 		if err != nil {
 			return preview, err
 		}
+		hasChildren := false
 		for rows.Next() {
 			var row ArchiveChild
 			var version string
 			row.Kind = kind
-			if err = rows.Scan(&row.ID, &row.Name, &version); err != nil {
+			if err = rows.Scan(&row.ID, &row.Name, &version, &row.Primary); err != nil {
 				rows.Close()
 				return preview, err
 			}
@@ -78,12 +81,16 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
 				return preview, ErrForbidden
 			}
 			preview.Children = append(preview.Children, row)
+			hasChildren = true
 			versions = append(versions, version)
 		}
 		err = rows.Err()
 		rows.Close()
 		if err != nil {
 			return preview, err
+		}
+		if hasChildren {
+			preview.RequiredPermissions = append(preview.RequiredPermissions, kind+".archive")
 		}
 	}
 	rows, err := q.Query(ctx, `SELECT id,name,updated_at::text FROM assets WHERE customer_id=$1 AND company_id=$2 AND ownership_class='customer_owned' AND deleted_at IS NULL ORDER BY id`, id, p.CompanyID)
@@ -109,6 +116,9 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
 	rows.Close()
 	if err != nil {
 		return preview, err
+	}
+	if len(preview.Children) > 0 && preview.Children[len(preview.Children)-1].Kind == "asset" {
+		preview.RequiredPermissions = append(preview.RequiredPermissions, "asset.archive")
 	}
 	b, err := json.Marshal([]any{preview, versions})
 	if err != nil {
@@ -155,7 +165,7 @@ func (s *Service) ArchiveCustomer(ctx context.Context, a Actor, id int64, snapsh
 			if _, err = tx.Exec(ctx, `UPDATE `+table+` SET deleted_at=clock_timestamp()`+primary+`,updated_at=clock_timestamp() WHERE id=$1`, child.ID); err != nil {
 				return err
 			}
-			if err = auditLifecycle(ctx, tx, a, p, child.Kind, child.ID, "archive", before, map[string]any{"customer_cascade": id, "primary_cleared": child.Kind != "asset"}); err != nil {
+			if err = auditLifecycle(ctx, tx, a, p, child.Kind, child.ID, "archive", before, map[string]any{"customer_cascade": id, "primary_cleared": child.Primary}); err != nil {
 				return err
 			}
 		}
