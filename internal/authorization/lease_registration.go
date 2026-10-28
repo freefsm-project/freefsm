@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/freefsm-project/freefsm/internal/customfields"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -18,6 +19,14 @@ type LeaseRegistration struct {
 func (s *Service) RegisterDraftLease(ctx context.Context, a Actor, customerID int64) (LeaseRegistration, error) {
 	var out LeaseRegistration
 	err := s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
+		// Until the INSERT below, this command has only read/locked preflight
+		// state. Never extend this assurance past the first write dispatch.
+		writeDispatched := false
+		defer func() {
+			if !writeDispatched {
+				saveaction.RejectBeforeWrite(ctx)
+			}
+		}()
 		if a.Channel == "api" || !p.Allows("lease.view", All) || !p.Allows("lease.manage", All) {
 			return ErrForbidden
 		}
@@ -35,6 +44,7 @@ func (s *Service) RegisterDraftLease(ctx context.Context, a Actor, customerID in
 		if err != nil {
 			return err
 		}
+		writeDispatched = true
 		if err := tx.QueryRow(ctx, `INSERT INTO leases(company_id,customer_id,custom_fields) VALUES($1,$2,$3::jsonb) RETURNING id,customer_id,number_label`, p.CompanyID, customerID, fields).Scan(&out.ID, &out.CustomerID, &out.Number); err != nil {
 			return err
 		}

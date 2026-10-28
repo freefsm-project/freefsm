@@ -7,6 +7,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/customfields"
 	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -81,6 +82,14 @@ func (s *Service) DraftLeaseBase(ctx context.Context, a Actor, id int64) (DraftL
 
 func (s *Service) SaveDraftLeaseDetails(ctx context.Context, a Actor, id int64, in DraftLeaseDetailsInput) error {
 	return s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
+		// Validation and selection checks are read-only. The dependency writer
+		// is the first mutating call; errors after dispatch remain conservative.
+		writeDispatched := false
+		defer func() {
+			if !writeDispatched {
+				saveaction.RejectBeforeWrite(ctx)
+			}
+		}()
 		if a.Channel == "api" || !p.Allows("lease.view", All) || !p.Allows("lease.manage", All) {
 			return ErrForbidden
 		}
@@ -140,6 +149,7 @@ func (s *Service) SaveDraftLeaseDetails(ctx context.Context, a Actor, id int64, 
 				}
 			}
 		}
+		writeDispatched = true
 		if err := s.WriteLeaseDependencies(ctx, tx, a, LeaseDependencies{LeaseID: id, CustomerID: old.CustomerID, PremisesID: in.PremisesID, Lifecycle: "draft"}); err != nil {
 			return err
 		}

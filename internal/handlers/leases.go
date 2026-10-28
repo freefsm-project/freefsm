@@ -11,6 +11,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/customfields"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/objectref"
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -61,6 +62,7 @@ func (h *LeaseHandler) Restore(w http.ResponseWriter, r *http.Request) { h.lifec
 func (h *LeaseHandler) lifecycle(w http.ResponseWriter, r *http.Request, restore bool) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.NotFound(w, r)
 		return
 	}
@@ -81,6 +83,7 @@ func (h *LeaseHandler) lifecycle(w http.ResponseWriter, r *http.Request, restore
 func (h *LeaseHandler) Register(w http.ResponseWriter, r *http.Request) {
 	customer, err := strconv.ParseInt(r.FormValue("customer_id"), 10, 64)
 	if err != nil || customer < 1 {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Select an active Customer", http.StatusBadRequest)
 		return
 	}
@@ -136,6 +139,37 @@ func (h *LeaseHandler) show(w http.ResponseWriter, r *http.Request, submitted *a
 			authorizationError(w, r, authorization.ErrForbidden)
 			return
 		}
+		if err := h.authority.ParentAccess(r.Context(), authorizationActor(r), "lease", id, "lease.manage"); err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+		if submitted.AgreementFileID != nil {
+			// Preserve replace/clear separately from omission, using only the
+			// current exact-parent File list and independently current authority.
+			// An unavailable choice rejects recovery; never fall back to A/None.
+			if !data.Choices.CanSelectAgreement {
+				authorizationError(w, r, authorization.ErrForbidden)
+				return
+			}
+			if err := h.authority.FileAccess(r.Context(), authorizationActor(r), ref, "file.download", 0); err != nil {
+				authorizationError(w, r, err)
+				return
+			}
+			if selected := *submitted.AgreementFileID; selected != nil {
+				allowed := false
+				for _, file := range data.Files.Files {
+					if file.ID == *selected && file.CanDownload {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					authorizationError(w, r, authorization.ErrNotFound)
+					return
+				}
+			}
+			data.Base.AgreementFileID = *submitted.AgreementFileID
+		}
 		data.Error = message
 		data.Base.Revision = submitted.Revision
 		data.Base.Title, data.Base.Reference = submitted.Title, submitted.Reference
@@ -174,6 +208,7 @@ func leaseOptionalID(r *http.Request, name string) (*int64, error) {
 func (h *LeaseHandler) Billing(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.NotFound(w, r)
 		return
 	}
@@ -188,16 +223,19 @@ func (h *LeaseHandler) Billing(w http.ResponseWriter, r *http.Request) {
 	}
 	// Authorize before parsing sensitive input; validation errors never reflect it.
 	if _, err := h.authority.DraftLeaseBilling(r.Context(), authorizationActor(r), id); err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
 	revision, err := strconv.ParseInt(r.FormValue("revision"), 10, 64)
 	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Reload current Billing terms", 409)
 		return
 	}
 	asset, err := strconv.ParseInt(r.FormValue("asset_id"), 10, 64)
 	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Select an intended Asset", 400)
 		return
 	}
@@ -206,6 +244,7 @@ func (h *LeaseHandler) Billing(w http.ResponseWriter, r *http.Request) {
 		if raw := r.FormValue(name); raw != "" {
 			value, err := strconv.ParseInt(raw, 10, 64)
 			if err != nil || value < 0 {
+				saveaction.RejectBeforeWrite(r.Context())
 				http.Error(w, "Enter nonnegative whole cents", 400)
 				return
 			}
@@ -216,6 +255,7 @@ func (h *LeaseHandler) Billing(w http.ResponseWriter, r *http.Request) {
 	if raw := r.FormValue("lifecycle_revision"); raw != "" {
 		lifecycleRevision, err = strconv.ParseInt(raw, 10, 64)
 		if err != nil {
+			saveaction.RejectBeforeWrite(r.Context())
 			http.Error(w, "Reload current Billing terms", 409)
 			return
 		}
@@ -230,20 +270,24 @@ func (h *LeaseHandler) Billing(w http.ResponseWriter, r *http.Request) {
 func (h *LeaseHandler) Save(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.NotFound(w, r)
 		return
 	}
 	if err = r.ParseForm(); err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Invalid form", 400)
 		return
 	}
 	revision, err := strconv.ParseInt(r.FormValue("revision"), 10, 64)
 	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Reload the current Draft before saving", 409)
 		return
 	}
 	premises, err := leaseOptionalID(r, "premises_id")
 	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
 		authorizationError(w, r, err)
 		return
 	}
@@ -254,6 +298,7 @@ func (h *LeaseHandler) Save(w http.ResponseWriter, r *http.Request) {
 		}
 		asset, err := strconv.ParseInt(value, 10, 64)
 		if err != nil || asset < 1 {
+			saveaction.RejectBeforeWrite(r.Context())
 			http.Error(w, "Invalid intended Asset", 400)
 			return
 		}
@@ -262,6 +307,7 @@ func (h *LeaseHandler) Save(w http.ResponseWriter, r *http.Request) {
 	if r.Form.Has("agreement_file_id") {
 		file, err := leaseOptionalID(r, "agreement_file_id")
 		if err != nil {
+			saveaction.RejectBeforeWrite(r.Context())
 			authorizationError(w, r, err)
 			return
 		}

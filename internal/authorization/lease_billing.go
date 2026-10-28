@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -74,6 +75,14 @@ var leaseTaxPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?$`)
 
 func (s *Service) SaveDraftLeaseBilling(ctx context.Context, a Actor, id, revision int64, due string, in DraftLeaseTerms, lifecycleRevision int64) error {
 	return s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
+		// The no-write proof ends before the first prospective-terms INSERT,
+		// not after an audit, commit, or transport failure.
+		writeDispatched := false
+		defer func() {
+			if !writeDispatched {
+				saveaction.RejectBeforeWrite(ctx)
+			}
+		}()
 		if a.Channel == "api" || !p.Allows("lease.billing.view", All) || !p.Allows("lease.billing.manage", All) {
 			return ErrForbidden
 		}
@@ -120,6 +129,7 @@ func (s *Service) SaveDraftLeaseBilling(ctx context.Context, a Actor, id, revisi
 		if !selected {
 			return ErrConflict
 		}
+		writeDispatched = true
 		if _, err := tx.Exec(ctx, `INSERT INTO lease_draft_billing(lease_id,revision,initial_due_on) VALUES($1,1,NULLIF($2,'')::date) ON CONFLICT(lease_id) DO UPDATE SET revision=lease_draft_billing.revision+1,initial_due_on=EXCLUDED.initial_due_on`, id, due); err != nil {
 			return err
 		}
