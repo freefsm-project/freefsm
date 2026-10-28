@@ -11,7 +11,6 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/ent/companysettings"
 	"github.com/freefsm-project/freefsm/internal/ent/invoice"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -227,6 +226,14 @@ func (s *InvoiceService) GetByID(ctx context.Context, id int64) (*ent.Invoice, e
 }
 
 func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams) (*ent.Invoice, error) {
+	if needsCommercialTransaction(ctx) {
+		return commercialWrite(ctx, s.client, func(ctx context.Context, c *ent.Client) (*ent.Invoice, error) {
+			return NewInvoiceService(c).Create(ctx, params)
+		})
+	}
+	if err := commercialWriteCustomer(ctx, "invoice", 0, params.CustomerID); err != nil {
+		return nil, err
+	}
 	if needsDetailsTransaction(ctx) {
 		return saveDetails(ctx, "invoice", 0, params.JobID, &params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Invoice, int64, error) {
 			params.CustomFields = fields
@@ -303,9 +310,6 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 		}
 		return s.GetByID(ctx, id)
 	}
-	if s.db != nil {
-		return s.createTransactionally(ctx, params, taxRate, lineItems, customFields, financial, totals.Total.MinorUnits())
-	}
 	b := s.client.Invoice.Create().
 		SetNillableCompanyID(customerCompanyID).
 		SetCustomerID(params.CustomerID).
@@ -338,73 +342,17 @@ func (s *InvoiceService) Create(ctx context.Context, params InvoiceCreateParams)
 	return i, nil
 }
 
-func (s *InvoiceService) createTransactionally(ctx context.Context, params InvoiceCreateParams, taxRate, lineItems, customFields, financial string, totalCents int64) (*ent.Invoice, error) {
-	cs, err := s.client.CompanySettings.Query().First(ctx)
-	if err != nil || cs.CompanyID == nil {
-		return nil, fmt.Errorf("load company settings: %w", err)
-	}
-	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
-		return nil, err
-	}
-	financial, err = AcceptFinancial(context.WithValue(ctx, detailsTxKey{}, tx), s.client, params.CustomerID, params.LineItems, taxRate, params.Adjustments)
-	if err != nil {
-		return nil, err
-	}
-	accepted, err := FinancialTotals(financial, "", taxRate)
-	if err != nil {
-		return nil, err
-	}
-	totalCents = accepted.Total.MinorUnits()
-	if err := checkItemSelections(ctx, tx, "invoice", 0, lineItems); err != nil {
-		return nil, err
-	}
-	var next int64
-	if err = tx.QueryRow(ctx, `SELECT next_invoice_number FROM company_settings WHERE company_id=$1 FOR UPDATE`, *cs.CompanyID).Scan(&next); err != nil {
-		return nil, err
-	}
-	number := next
-	if params.InvoiceNumber != nil {
-		number = *params.InvoiceNumber
-	}
-	if number <= 0 {
-		return nil, errors.New("invoice number must be greater than zero")
-	}
-	var used bool
-	if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM invoices WHERE company_id=$1 AND invoice_number=$2)`, *cs.CompanyID, number).Scan(&used); err != nil {
-		return nil, err
-	}
-	if used {
-		return nil, fmt.Errorf("invoice number %d is already in use", number)
-	}
-	var id int64
-	err = tx.QueryRow(ctx, `INSERT INTO invoices(company_id,customer_id,job_id,estimate_id,status_id,invoice_number,title,notes,invoice_date,due_date,tax_rate,line_items,custom_fields,settlement_state,terms,financial)
-		VALUES($1,$2,NULLIF($3,0),NULLIF($4,0),NULLIF($5,0),$6,$7,$8,$9,$10,$11,$12::jsonb,$13::jsonb,$14,$15,$16) RETURNING id`,
-		*cs.CompanyID, params.CustomerID, params.JobID, params.EstimateID, params.StatusID, number, params.Title, params.Notes, params.InvoiceDate, params.DueDate, taxRate, lineItems, customFields, invoiceSettlementState(totalCents, 0), params.Terms, financial).Scan(&id)
-	if err != nil {
-		return nil, fmt.Errorf("create invoice: %w", err)
-	}
-	if number >= next {
-		if _, err = tx.Exec(ctx, `UPDATE company_settings SET next_invoice_number=$1 WHERE company_id=$2`, number+1, *cs.CompanyID); err != nil {
-			return nil, err
-		}
-	}
-	if err := recheckSelectionActor(ctx); err != nil {
-		return nil, err
-	}
-	if err = tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-	return s.GetByID(ctx, id)
-}
-
 func (s *InvoiceService) Update(ctx context.Context, id int64, params InvoiceUpdateParams) (*ent.Invoice, error) {
 	if _, ok := authorization.FromContext(ctx); ok {
 		return s.SaveDetails(ctx, id, params)
+	}
+	if needsCommercialTransaction(ctx) {
+		return commercialWrite(ctx, s.client, func(ctx context.Context, c *ent.Client) (*ent.Invoice, error) {
+			return NewInvoiceService(c).Update(ctx, id, params)
+		})
+	}
+	if err := commercialWriteCustomer(ctx, "invoice", id, int64Value(params.CustomerID)); err != nil {
+		return nil, err
 	}
 	return s.update(ctx, id, params)
 }
@@ -623,7 +571,10 @@ func (s *InvoiceService) assignInvoiceNumber(ctx context.Context, b *ent.Invoice
 		return err
 	}
 	b.SetInvoiceNumber(number)
-	return s.bumpNextInvoiceNumber(ctx, companyID, number)
+	// reserve_document_identity owns the high-water mark and issued identity in
+	// the insert transaction. Advancing it first both rejects this number and,
+	// in the old context-free adapter, could leave a partial numbering effect.
+	return nil
 }
 
 func (s *InvoiceService) validateInvoiceNumber(ctx context.Context, companyID *int64, excludeID, number int64) error {
@@ -744,6 +695,11 @@ func (s *InvoiceService) LineItems(i *ent.Invoice) []LineItem {
 }
 
 func (s *InvoiceService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService, defaultTaxRate string) (*ent.Invoice, error) {
+	if needsCommercialTransaction(ctx) {
+		return commercialWrite(ctx, s.client, func(ctx context.Context, c *ent.Client) (*ent.Invoice, error) {
+			return NewInvoiceService(c).CreateFromJob(ctx, jobID, statusSvc, defaultTaxRate)
+		})
+	}
 	ctx = authorization.WithCapturedItemSource(ctx, "job", jobID)
 	j, err := s.client.Job.Get(ctx, jobID)
 	if err != nil {

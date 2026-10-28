@@ -65,6 +65,12 @@ func commercialDetailsCheck(ctx context.Context, tx pgx.Tx, p Principal, kind st
 	if strings.TrimSpace(next.Title) == "" {
 		return ErrConflict
 	}
+	if err := CommercialCustomerForWrite(ctx, tx, old.CustomerID); err != nil {
+		return err
+	}
+	if err := CommercialCustomerForWrite(ctx, tx, next.CustomerID); err != nil {
+		return err
+	}
 	job := func(id *int64) int64 {
 		if id == nil {
 			return 0

@@ -17,6 +17,11 @@ func fieldParent(ctx context.Context, tx pgx.Tx, p Principal, typ string, id int
 	if err != nil {
 		return "", "", err
 	}
+	if (typ == "estimate" || typ == "invoice") && (permission != "" || len(mutation) > 0 && mutation[0]) {
+		if err := commercialDocumentCustomerForWrite(ctx, tx, typ, id); err != nil {
+			return "", "", err
+		}
+	}
 	table, _ := customfields.ParentTable(typ)
 	var fields string
 	if err = tx.QueryRow(ctx, `SELECT custom_fields::text FROM `+table+` WHERE id=$1`, id).Scan(&fields); err != nil {
@@ -215,6 +220,11 @@ func (s *Service) detailsInTransaction(ctx context.Context, tx pgx.Tx, a Actor, 
 	// own scope, so recheck both independently authorized effects after writes.
 	if _, err := parentAccess(ctx, tx, p, typ, result, permission, true); err != nil {
 		return err
+	}
+	if typ == "estimate" || typ == "invoice" {
+		if err := commercialDocumentCustomerForWrite(ctx, tx, typ, result); err != nil {
+			return err
+		}
 	}
 	if fieldScope != "" {
 		if _, err := parentAccess(ctx, tx, p, "job", result, "job.fields.edit", true); err != nil {

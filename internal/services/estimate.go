@@ -123,6 +123,14 @@ func (s *EstimateService) GetByID(ctx context.Context, id int64) (*ent.Estimate,
 }
 
 func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParams) (*ent.Estimate, error) {
+	if needsCommercialTransaction(ctx) {
+		return commercialWrite(ctx, s.client, func(ctx context.Context, c *ent.Client) (*ent.Estimate, error) {
+			return NewEstimateService(c).Create(ctx, params)
+		})
+	}
+	if err := commercialWriteCustomer(ctx, "estimate", 0, params.CustomerID); err != nil {
+		return nil, err
+	}
 	if needsDetailsTransaction(ctx) {
 		return saveDetails(ctx, "estimate", 0, params.JobID, &params.CustomFields, func(ctx context.Context, c *ent.Client, fields string) (*ent.Estimate, int64, error) {
 			params.CustomFields = fields
@@ -206,6 +214,14 @@ func (s *EstimateService) Create(ctx context.Context, params EstimateCreateParam
 func (s *EstimateService) Update(ctx context.Context, id int64, params EstimateUpdateParams) (*ent.Estimate, error) {
 	if _, ok := authorization.FromContext(ctx); ok {
 		return s.SaveDetails(ctx, id, params)
+	}
+	if needsCommercialTransaction(ctx) {
+		return commercialWrite(ctx, s.client, func(ctx context.Context, c *ent.Client) (*ent.Estimate, error) {
+			return NewEstimateService(c).Update(ctx, id, params)
+		})
+	}
+	if err := commercialWriteCustomer(ctx, "estimate", id, int64Value(params.CustomerID)); err != nil {
+		return nil, err
 	}
 	return s.update(ctx, id, params)
 }
@@ -396,6 +412,11 @@ func EstimatePaginationTotalPages(total, perPage int) int {
 }
 
 func (s *EstimateService) CreateFromJob(ctx context.Context, jobID int64, statusSvc *StatusService, defaultTaxRate string, fields ...string) (*ent.Estimate, error) {
+	if needsCommercialTransaction(ctx) {
+		return commercialWrite(ctx, s.client, func(ctx context.Context, c *ent.Client) (*ent.Estimate, error) {
+			return NewEstimateService(c).CreateFromJob(ctx, jobID, statusSvc, defaultTaxRate, fields...)
+		})
+	}
 	ctx = authorization.WithCapturedItemSource(ctx, "job", jobID)
 	j, err := s.client.Job.Get(ctx, jobID)
 	if err != nil {
