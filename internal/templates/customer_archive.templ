@@ -12,6 +12,21 @@ templ CustomerArchiveReview(p authorization.CustomerArchivePreview) {
 			<li>{ permission }</li>
 		}
 		</ul>
+		if len(p.Blockers) > 0 {
+			<h3>Resolve before archiving</h3>
+			<ul>
+			for _,blocker := range p.Blockers {
+				<li>
+				if blocker.ID == "" {
+					<span>Restricted dependency</span>
+				} else {
+					<span>{ capitalize(blocker.Kind) } #{ blocker.ID } { blocker.Name }</span>
+				}
+				<span> — { blocker.Reason }. Required permission: { blocker.RequiredPermission }</span>
+				</li>
+			}
+			</ul>
+		}
 		<h3>Included records</h3>
 		<ul>
 		for _,child := range p.Children {
@@ -22,11 +37,13 @@ templ CustomerArchiveReview(p authorization.CustomerArchivePreview) {
 			</li>
 		}
 		</ul>
+		if p.Snapshot != "" && len(p.Blockers) == 0 {
 		<form method="post" action={ templ.URL(fmt.Sprintf("/customers/%d/delete",p.CustomerID)) }>
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 			<input type="hidden" name="archive_snapshot" value={ p.Snapshot }/>
 			<button>Confirm archive</button>
 		</form>
+		}
 		<a href={ templ.URL(fmt.Sprintf("/customers/%d",p.CustomerID)) }>Cancel</a>
 	}
 }

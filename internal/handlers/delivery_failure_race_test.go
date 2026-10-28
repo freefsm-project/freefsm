@@ -14,6 +14,12 @@ import (
 )
 
 func TestDeliveryFailureCannotRequeueBehindArchiveCancellation(t *testing.T) {
+	for _, customer := range []bool{false, true} {
+		t.Run(fmt.Sprintf("customer=%v", customer), func(t *testing.T) { deliveryFailureBehindArchive(t, customer) })
+	}
+}
+
+func deliveryFailureBehindArchive(t *testing.T, customerArchive bool) {
 	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -29,9 +35,18 @@ func TestDeliveryFailureCannotRequeueBehindArchiveCancellation(t *testing.T) {
 	expectStatus(t, web, cookie, "POST", path+"/pdf/save", 303)
 	version := compositionInput(t, requestBody(t, web, cookie, "GET", path+"/pdf/preview", 200), "version")
 	fieldPost(t, web, cookie, path+"/email", url.Values{"pdf_version": {version}, "idempotency_key": {newOperationKey()}, "to": {"recipient@example.test"}, "subject": {"Frozen"}, "body": {"Message"}}, 303)
+	archive := creditCommand{path + "/delete", url.Values{}}
+	table := "invoices"
+	if customerArchive {
+		base := fmt.Sprintf("/customers/%d", customer.ID)
+		var preview struct{ Snapshot string }
+		masterJSON(t, web, cookie, base+"/archive", &preview)
+		archive = creditCommand{base + "/delete", url.Values{"archive_snapshot": {preview.Snapshot}}}
+		table = "customers"
+	}
 	// AFTER archive's cancellation scan, but before its commit: an admitted
 	// transport has not yet finished. Its retry decision must wait for archive.
-	_, err = pool.Exec(ctx, `CREATE FUNCTION hold_archive_after_cancellation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(560057); RETURN NEW; END $$; CREATE TRIGGER zz_hold_archive_after_cancellation AFTER UPDATE OF deleted_at ON invoices FOR EACH ROW EXECUTE FUNCTION hold_archive_after_cancellation()`)
+	_, err = pool.Exec(ctx, `CREATE FUNCTION hold_archive_after_cancellation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(560057); RETURN NEW; END $$; CREATE TRIGGER zz_hold_archive_after_cancellation AFTER UPDATE OF deleted_at ON `+table+` FOR EACH ROW EXECUTE FUNCTION hold_archive_after_cancellation()`)
 	historyCheck(t, err)
 	barrier, err := pool.Begin(ctx)
 	historyCheck(t, err)
@@ -67,7 +82,7 @@ func TestDeliveryFailureCannotRequeueBehindArchiveCancellation(t *testing.T) {
 	}()
 	archived := make(chan *httptest.ResponseRecorder, 1)
 	f := &creditMatrix{ctx: ctx, pool: pool, web: web, cookie: cookie}
-	go func() { archived <- f.call(creditCommand{path + "/delete", url.Values{}}) }()
+	go func() { archived <- f.call(archive) }()
 	commercialWaiters(t, ctx, pool, holder, 1)
 	historyCheck(t, pool.QueryRow(ctx, `SELECT pid FROM pg_stat_activity WHERE application_name=$2 AND $1=ANY(pg_blocking_pids(pid))`, holder, pool.Config().ConnConfig.RuntimeParams["application_name"]).Scan(&archivePID))
 	close(release)

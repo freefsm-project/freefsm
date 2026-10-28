@@ -234,6 +234,20 @@ func (s *Service) transitionTx(ctx context.Context, tx pgx.Tx, a Actor, typ Obje
 	if !authorizedRecord(ctx, tx, a, typ, id, jobID) {
 		return ErrForbidden
 	}
+	if typ == Estimate || typ == Invoice {
+		// Paid/Void documents remain readable beneath an archived Customer,
+		// but a workflow transition is new operational intent (Void -> Invoiced
+		// can recreate debt). Both reviewed and legacy commands reach this check
+		// under the shared authority fence. Transport evidence has its separate
+		// handoff-aware acceptance path and is not recalled by Customer archive.
+		var active bool
+		if err := tx.QueryRow(ctx, `SELECT c.deleted_at IS NULL FROM `+table+` d JOIN customers c ON c.id=d.customer_id AND c.company_id=d.company_id WHERE d.id=$1 FOR SHARE OF c`, id).Scan(&active); err != nil {
+			return err
+		}
+		if !active {
+			return ErrInvalidTransition
+		}
+	}
 	var key CategoryKey
 	if err := tx.QueryRow(ctx, `SELECT s.category_key FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id
 		 WHERE s.id=$1 AND s.company_id=$2 AND w.company_id=$2 AND w.object_type=$3`, statusID, a.CompanyID, typ).Scan(&key); err != nil {

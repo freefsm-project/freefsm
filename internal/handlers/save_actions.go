@@ -237,6 +237,11 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 // authorization/DetailsTransaction boundary. Legacy multi-step actions are
 // deliberately excluded from rollback-to-revise assurances.
 func atomicSavePath(path string) bool {
+	// Customer lifecycle commands own one fenced transaction containing the
+	// entire cascade, immutable audit and the original action's receipt.
+	if parts := strings.Split(strings.Trim(path, "/"), "/"); len(parts) == 3 && parts[0] == "customers" && (parts[2] == "delete" || parts[2] == "restore") {
+		return true
+	}
 	if path == "/time-entries" {
 		return true
 	}

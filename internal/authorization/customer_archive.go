@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -22,10 +21,12 @@ type CustomerArchivePreview struct {
 	Name                string
 	Children            []ArchiveChild
 	RequiredPermissions []string
+	Blockers            []CustomerArchiveBlocker
+	missingChildGrant   bool
 }
 
 func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int64) (CustomerArchivePreview, error) {
-	preview := CustomerArchivePreview{CustomerID: id, Children: []ArchiveChild{}, RequiredPermissions: []string{"customer.archive"}}
+	preview := CustomerArchivePreview{CustomerID: id, Children: []ArchiveChild{}, RequiredPermissions: []string{"customer.archive"}, Blockers: []CustomerArchiveBlocker{}}
 	active, err := childCustomer(ctx, q, p, id, false)
 	if err != nil {
 		return preview, err
@@ -40,21 +41,8 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
 	if err = q.QueryRow(ctx, `SELECT display_name,updated_at::text FROM customers WHERE id=$1`, id).Scan(&preview.Name, &customerVersion); err != nil {
 		return preview, err
 	}
-	var blocked bool
-	if err = q.QueryRow(ctx, `SELECT
- EXISTS(SELECT 1 FROM jobs WHERE customer_id=$1 AND deleted_at IS NULL)
- OR EXISTS(SELECT 1 FROM projects WHERE customer_id=$1 AND deleted_at IS NULL)
- OR EXISTS(SELECT 1 FROM estimates WHERE customer_id=$1 AND deleted_at IS NULL AND conversion_hidden_at IS NULL)
- OR EXISTS(SELECT 1 FROM invoices i LEFT JOIN statuses s ON s.id=i.status_id WHERE i.customer_id=$1 AND i.deleted_at IS NULL AND i.conversion_hidden_at IS NULL AND (coalesce(s.category_key,'invoice:draft')='invoice:draft' OR (coalesce(s.category_key,'')<>'invoice:void' AND i.settlement_state<>'paid')))
- OR EXISTS(SELECT 1 FROM assets WHERE customer_id=$1 AND ownership_class='company_owned')
- OR lease_customer_blocks_archive($1)
- OR EXISTS(SELECT 1 FROM customer_credits c WHERE c.customer_id=$1 AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='payment' AND r.operation_id=c.source_payment_id) AND c.original_amount_cents
- -coalesce((SELECT sum(a.amount_cents) FROM credit_applications a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_application' AND r.operation_id=a.id)),0)
- -coalesce((SELECT sum(a.amount_cents) FROM credit_refund_allocations a WHERE a.credit_id=c.id AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.operation_type='credit_refund' AND r.operation_id=a.refund_id)),0)>0)`, id).Scan(&blocked); err != nil {
+	if preview.Blockers, err = customerArchiveBlockers(ctx, q, p, id); err != nil {
 		return preview, err
-	}
-	if blocked {
-		return preview, fmt.Errorf("active dependencies block Customer archive")
 	}
 	versions := []string{customerVersion}
 	for _, kind := range []string{"contact", "location"} {
@@ -76,11 +64,9 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
 				rows.Close()
 				return preview, err
 			}
-			if !p.Allows(kind+".view", All) || !p.Allows(kind+".archive", All) {
-				rows.Close()
-				return preview, ErrForbidden
+			if p.Allows(kind+".view", All) {
+				preview.Children = append(preview.Children, row)
 			}
-			preview.Children = append(preview.Children, row)
 			hasChildren = true
 			versions = append(versions, version)
 		}
@@ -91,12 +77,14 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
 		}
 		if hasChildren {
 			preview.RequiredPermissions = append(preview.RequiredPermissions, kind+".archive")
+			preview.checkChildGrants(p, kind)
 		}
 	}
 	rows, err := q.Query(ctx, `SELECT id,name,updated_at::text FROM assets WHERE customer_id=$1 AND company_id=$2 AND ownership_class='customer_owned' AND deleted_at IS NULL ORDER BY id`, id, p.CompanyID)
 	if err != nil {
 		return preview, err
 	}
+	hasAssets := false
 	for rows.Next() {
 		var child ArchiveChild
 		var version string
@@ -105,11 +93,10 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
 			rows.Close()
 			return preview, err
 		}
-		if !p.Allows("asset.view", All) || !p.Allows("asset.archive", All) {
-			rows.Close()
-			return preview, ErrForbidden
+		hasAssets = true
+		if p.Allows("asset.view", All) {
+			preview.Children = append(preview.Children, child)
 		}
-		preview.Children = append(preview.Children, child)
 		versions = append(versions, version)
 	}
 	err = rows.Err()
@@ -117,8 +104,12 @@ func customerArchivePreview(ctx context.Context, q queryer, p Principal, id int6
 	if err != nil {
 		return preview, err
 	}
-	if len(preview.Children) > 0 && preview.Children[len(preview.Children)-1].Kind == "asset" {
+	if hasAssets {
 		preview.RequiredPermissions = append(preview.RequiredPermissions, "asset.archive")
+		preview.checkChildGrants(p, "asset")
+	}
+	if len(preview.Blockers) != 0 {
+		return preview, nil
 	}
 	b, err := json.Marshal([]any{preview, versions})
 	if err != nil {
@@ -147,6 +138,12 @@ func (s *Service) ArchiveCustomer(ctx context.Context, a Actor, id int64, snapsh
 		preview, err := customerArchivePreview(ctx, tx, p, id)
 		if err != nil {
 			return err
+		}
+		if preview.missingChildGrant {
+			return ErrForbidden
+		}
+		if len(preview.Blockers) != 0 {
+			return ErrConflict
 		}
 		if snapshot == "" || snapshot != preview.Snapshot {
 			return ErrConflict

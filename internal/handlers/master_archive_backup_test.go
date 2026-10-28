@@ -92,6 +92,20 @@ func TestMasterArchiveEncryptedBackupPreservesDependencies(t *testing.T) {
 	}
 	_, err = svc.SaveRole(ctx, authorization.Actor{UserID: src.actor}, 0, "Retained view without Restore", []authorization.Grant{{Permission: "asset.view", Scope: authorization.All}, {Permission: "asset.archived.view", Scope: authorization.All}})
 	historyCheck(t, err)
+	// A real reviewed Customer cascade must survive the same encrypted backup,
+	// not merely individually archived masters. Keep the other live dependencies
+	// above as independent controls for placement and Lease guards after restore.
+	cascade := src.client.Customer.Create().SetCompanyID(src.company).SetDisplayName("Archived cascade backup owner").SaveX(ctx)
+	cascadePath := fmt.Sprintf("/customers/%d", cascade.ID)
+	masterPost(t, web, cookie, cascadePath+"/contacts", url.Values{"first_name": {"Cascade primary"}, "is_primary": {"true"}}, 303)
+	masterPost(t, web, cookie, cascadePath+"/locations", url.Values{"title": {"Cascade primary place"}, "is_primary": {"true"}}, 303)
+	src.client.Asset.Create().SetCompanyID(src.company).SetCustomerID(cascade.ID).SetOwnershipClass("customer_owned").SetAssetTypeID(typ.ID).SetName("Cascade equipment").SetNumber("CASCADE-BACKUP-64").SaveX(ctx)
+	var review authorization.CustomerArchivePreview
+	masterJSON(t, web, cookie, cascadePath+"/archive", &review)
+	if len(review.Children) != 3 || review.Snapshot == "" {
+		t.Fatalf("backup fixture is not an exact three-child cascade: %+v", review)
+	}
+	masterPost(t, web, cookie, cascadePath+"/delete", url.Values{"archive_snapshot": {review.Snapshot}}, 303)
 	tables := []string{"customers", "customer_contacts", "locations", "assets", "asset_types", "asset_statuses", "items", "item_sku_claims", "jobs", "projects", "estimates", "job_contacts", "job_asset_links", "job_customer_blockers", "asset_association_origins", "asset_association_events", "asset_association_origin_revisions", "asset_service_entries", "asset_service_revisions", "asset_service_responsible_users", "custom_field_definitions", "lease_master_dependencies", "lease_asset_dependencies", "authorization_roles", "authorization_grants", "activity_logs"}
 	snapshot := func(pool *pgxpool.Pool) map[string]string {
 		out := map[string]string{}
@@ -136,5 +150,17 @@ func TestMasterArchiveEncryptedBackupPreservesDependencies(t *testing.T) {
 	}
 	if got := dst.client.Asset.GetX(ctx, owned.ID); got.CustomFields != owned.CustomFields || got.OwnershipClass != "customer_owned" || got.CustomerID != c.ID || got.LocationID == nil || *got.LocationID != location.ID {
 		t.Fatalf("Restore rewrote owner/current Location/field metadata: %+v", got)
+	}
+	beforeCustomerRestore := snapshot(dst.pool)
+	masterPost(t, web, cookie, cascadePath+"/restore", nil, 303)
+	for table, rows := range snapshot(dst.pool) {
+		if table != "customers" && table != "activity_logs" {
+			historyEqual(t, "restored backup Customer does not revive or rewrite "+table, rows, beforeCustomerRestore[table])
+		}
+	}
+	var activeChildren int
+	historyCheck(t, dst.pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM customer_contacts WHERE customer_id=$1 AND (deleted_at IS NULL OR is_primary))+(SELECT count(*) FROM locations WHERE object_type='customer' AND object_id=$1 AND (deleted_at IS NULL OR is_primary))+(SELECT count(*) FROM assets WHERE customer_id=$1 AND deleted_at IS NULL)`, cascade.ID).Scan(&activeChildren))
+	if activeChildren != 0 || dst.client.Customer.GetX(ctx, cascade.ID).DeletedAt != nil {
+		t.Fatal("encrypted restore/Customer restore revived children or failed to restore only Customer")
 	}
 }
