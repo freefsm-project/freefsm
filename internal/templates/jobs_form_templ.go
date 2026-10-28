@@ -740,6 +740,13 @@ func JobForm(p JobFormPageData) templ.Component {
 			const jobLookupControllers = new WeakMap();
 			const jobLookupValues = new WeakMap();
 			const jobLookupLabels = { 'contact-select': 'Contact', 'job-project-select': 'Project', 'job-location-select': 'Location', 'job-asset-select': 'Asset' };
+			// This inline editor can run before deferred Alpine/interaction scripts.
+			// Hold choices/Save immediately, but do not dispatch a lookup whose 401
+			// could outrun the shared security purge. Boosted editors reuse the
+			// already installed guard; initial documents wait for deferred startup.
+			const jobLookupsReady = window.freefsmActions || document.readyState === 'complete'
+				? Promise.resolve()
+				: new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once: true}));
 			function unresolvedJobChoices(scope) {
 				return [...scope.querySelectorAll('select[data-lookup-state]')].filter(select => !['ready', 'empty'].includes(select.dataset.lookupState));
 			}
@@ -810,8 +817,12 @@ func JobForm(p JobFormPageData) templ.Component {
 				select.setCustomValidity(''); holdJobChoice(select, true);
 				jobChoiceNotice(select, 'loading', 'Loading ' + (jobLookupLabels[select.id] || 'Location') + ' choices; Save waits for confirmation.');
 				const controller = new AbortController(); jobLookupControllers.set(select, controller);
-				const timeout = setTimeout(() => controller.abort(), 15000);
-				return fetch(url + '?selected=' + encodeURIComponent(desired), {cache: 'no-store', signal: controller.signal})
+				let timeout;
+				return jobLookupsReady.then(() => {
+					if (controller.signal.aborted || !select.isConnected || select.dataset.refreshRequest !== requestID) throw new DOMException('Lookup superseded', 'AbortError');
+					timeout = setTimeout(() => controller.abort(), 15000);
+					return fetch(url + '?selected=' + encodeURIComponent(desired), {cache: 'no-store', signal: controller.signal});
+				})
 					.then(async response => {
 						if (!response.ok || response.redirected) { const error = new Error('lookup unavailable'); error.status = response.redirected ? 401 : response.status; throw error; }
 						const html = await response.text();
@@ -1130,7 +1141,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 			var templ_7745c5c3_Var37 string
 			templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", s.Value))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 522, Col: 50}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 533, Col: 50}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 			if templ_7745c5c3_Err != nil {
@@ -1143,7 +1154,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 			var templ_7745c5c3_Var38 string
 			templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(s.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 522, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 533, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 			if templ_7745c5c3_Err != nil {
@@ -1175,7 +1186,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 				var templ_7745c5c3_Var39 string
 				templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", t.Value))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 598, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 609, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 				if templ_7745c5c3_Err != nil {
@@ -1188,7 +1199,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 				var templ_7745c5c3_Var40 string
 				templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(t.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 598, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 609, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 				if templ_7745c5c3_Err != nil {
@@ -1213,7 +1224,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 				var templ_7745c5c3_Var41 string
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", s.Value))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 608, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 619, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 				if templ_7745c5c3_Err != nil {
@@ -1226,7 +1237,7 @@ func JobQuickCreateDialogs(p JobFormPageData) templ.Component {
 				var templ_7745c5c3_Var42 string
 				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.JoinStringErrs(s.Label)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 608, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 619, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var42))
 				if templ_7745c5c3_Err != nil {
@@ -1287,7 +1298,7 @@ func AssetOptions(options []SelectOption, selectedID int64) templ.Component {
 			var templ_7745c5c3_Var44 string
 			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("%d", o.Value))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 668, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 679, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var44)
 			if templ_7745c5c3_Err != nil {
@@ -1310,7 +1321,7 @@ func AssetOptions(options []SelectOption, selectedID int64) templ.Component {
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.JoinStringErrs(o.Label)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 668, Col: 92}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/jobs_form.templ`, Line: 679, Col: 92}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var45))
 			if templ_7745c5c3_Err != nil {

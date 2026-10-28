@@ -163,6 +163,13 @@ templ JobForm(p JobFormPageData) {
 			const jobLookupControllers = new WeakMap();
 			const jobLookupValues = new WeakMap();
 			const jobLookupLabels = { 'contact-select': 'Contact', 'job-project-select': 'Project', 'job-location-select': 'Location', 'job-asset-select': 'Asset' };
+			// This inline editor can run before deferred Alpine/interaction scripts.
+			// Hold choices/Save immediately, but do not dispatch a lookup whose 401
+			// could outrun the shared security purge. Boosted editors reuse the
+			// already installed guard; initial documents wait for deferred startup.
+			const jobLookupsReady = window.freefsmActions || document.readyState === 'complete'
+				? Promise.resolve()
+				: new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, {once: true}));
 			function unresolvedJobChoices(scope) {
 				return [...scope.querySelectorAll('select[data-lookup-state]')].filter(select => !['ready', 'empty'].includes(select.dataset.lookupState));
 			}
@@ -233,8 +240,12 @@ templ JobForm(p JobFormPageData) {
 				select.setCustomValidity(''); holdJobChoice(select, true);
 				jobChoiceNotice(select, 'loading', 'Loading ' + (jobLookupLabels[select.id] || 'Location') + ' choices; Save waits for confirmation.');
 				const controller = new AbortController(); jobLookupControllers.set(select, controller);
-				const timeout = setTimeout(() => controller.abort(), 15000);
-				return fetch(url + '?selected=' + encodeURIComponent(desired), {cache: 'no-store', signal: controller.signal})
+				let timeout;
+				return jobLookupsReady.then(() => {
+					if (controller.signal.aborted || !select.isConnected || select.dataset.refreshRequest !== requestID) throw new DOMException('Lookup superseded', 'AbortError');
+					timeout = setTimeout(() => controller.abort(), 15000);
+					return fetch(url + '?selected=' + encodeURIComponent(desired), {cache: 'no-store', signal: controller.signal});
+				})
 					.then(async response => {
 						if (!response.ok || response.redirected) { const error = new Error('lookup unavailable'); error.status = response.redirected ? 401 : response.status; throw error; }
 						const html = await response.text();
