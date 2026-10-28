@@ -8,6 +8,10 @@ func leaseCents(v *int64) string { if v==nil {return ""};return fmt.Sprint(*v) }
 templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 	@Layout(p.Number+" Billing") {
 		<h1>{ p.Number } Billing</h1>
+		<a href="/leases?facet=billing">Leases — Billing</a> <a href={templ.URL(fmt.Sprintf("/leases/%d/billing/history",p.ID))}>Billing history</a>
+		if p.Archived {
+			<div role="status">Archived — read-only Billing history</div>
+		}
 		<p>Prospective Draft terms only. Saving creates no Invoice or billing obligation. Amounts are whole cents; tax is a percentage.</p>
 		if len(p.Terms)==0 {
 			<p>No intended Assets. A base Lease manager can select them on the basic view.</p>
@@ -15,6 +19,9 @@ templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 		for _,term:=range p.Terms {
 			<section aria-label={ fmt.Sprintf("Asset %d terms",term.AssetID) }>
 				<h2>Asset { fmt.Sprint(term.AssetID) }</h2>
+				if term.AssetArchived {
+					<p>Archived Asset — retained terms only; repair before finalization.</p>
+				}
 				if !term.Selected {
 					<p>Previously selected Asset — retained terms, not current intent.</p>
 				}
@@ -22,6 +29,7 @@ templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 					<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.ID)) }>
 						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
 						<input type="hidden" name="revision" value={ fmt.Sprint(p.Revision) }/>
+						<input type="hidden" name="lifecycle_revision" value={ fmt.Sprint(p.LifecycleRevision) }/>
 						<input type="hidden" name="asset_id" value={ fmt.Sprint(term.AssetID) }/>
 						<label>Initial amount (cents)<input name="initial_cents" inputmode="numeric" value={ leaseCents(term.InitialCents) }/></label>
 						<label>Monthly rent (cents)<input name="rent_cents" inputmode="numeric" value={ leaseCents(term.RentCents) }/></label>

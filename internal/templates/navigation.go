@@ -56,11 +56,17 @@ func operationalLinks(ctx context.Context) []navigationLink {
 	if len(links) > 0 {
 		links = append(links, navigationLink{"/activity", "Activity"})
 	}
+	if navigationPermission(ctx, "lease.view", "A") || navigationPermission(ctx, "lease.billing.view", "A") {
+		links = append(links, navigationLink{"/leases", "Leases"})
+	}
 	return links
 }
 
 func creationLinks(ctx context.Context) []navigationLink {
 	var links []navigationLink
+	if navigationPermission(ctx, "lease.view", "A") && navigationPermission(ctx, "lease.manage", "A") && navigationPermission(ctx, "customer.view", "A") {
+		links = append(links, navigationLink{"/leases/new", "Register Lease"})
+	}
 	for _, domain := range []navigationLink{{"customer", "Customer"}, {"job", "Job"}, {"project", "Project"}, {"asset", "Asset"}, {"estimate", "Estimate"}, {"invoice", "Invoice"}, {"item", "Item"}} {
 		if navigationPermission(ctx, domain.URL+".create", "A") {
 			links = append(links, navigationLink{"/" + domain.URL + "s/new", "New " + domain.Label})

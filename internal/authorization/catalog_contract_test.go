@@ -25,6 +25,9 @@ func TestCatalogViewPrerequisiteContract(t *testing.T) {
 		grants  []authorization.Grant
 		allowed bool
 	}{
+		{"Lease archived Billing without base", []authorization.Grant{g("lease.billing.view", authorization.All), g("lease.archived.view", authorization.All)}, true},
+		{"Lease archived View without facet", []authorization.Grant{g("lease.archived.view", authorization.All)}, false},
+		{"Lease Restore requires base as well as archived View", []authorization.Grant{g("lease.billing.view", authorization.All), g("lease.archived.view", authorization.All), g("lease.restore", authorization.All)}, false},
 		{"Estimate assigned export", []authorization.Grant{g("estimate.view", authorization.Assigned), g("estimate.export", authorization.Assigned)}, true},
 		{"Invoice assigned export", []authorization.Grant{g("invoice.view", authorization.Assigned), g("invoice.export", authorization.Assigned)}, true},
 		{"Job export without View", []authorization.Grant{g("job.export", authorization.Assigned)}, false},

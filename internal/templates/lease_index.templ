@@ -1,0 +1,98 @@
+package templates
+
+import "fmt"
+import "net/url"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+func leaseListURL(p authorization.LeaseList,page int) string {
+	q:=url.Values{"search":{p.Search},"state":{p.State},"page":{fmt.Sprint(page)},"per_page":{fmt.Sprint(p.PerPage)}}
+	if p.Billing {q.Set("facet","billing")};return "/leases?"+q.Encode()
+}
+
+templ LeaseIndex(p authorization.LeaseList) {
+	@Layout("Leases") {
+		<h1>Leases</h1>
+		if p.Billing {
+			<p>Billing view — search by Number.</p>
+		}
+		if p.CanRegister {
+			<a href="/leases/new">Register Draft</a>
+		}
+		<form method="get" action="/leases">
+			if p.Billing {
+				<input type="hidden" name="facet" value="billing"/>
+			}
+			<label>Search<input name="search" value={ p.Search }/></label>
+			<label>State<select name="state"><option value="active" selected?={p.State=="active"}>Unarchived</option>
+				if p.CanViewArchived {
+					<option value="archived" selected?={p.State=="archived"}>Archived</option><option value="all" selected?={p.State=="all"}>All</option>
+				}
+			</select></label>
+			<label>Per page<select name="per_page">
+				for _,size:=range []int{25,50,100} {
+					<option value={fmt.Sprint(size)} selected?={p.PerPage==size}>{fmt.Sprint(size)}</option>
+				}
+			</select></label><button>Apply</button>
+		</form>
+		<p>{fmt.Sprint(p.Total)} visible Leases</p><ul>
+			for _,row:=range p.Rows {
+				<li>
+					if p.Billing {
+						<a href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>{row.Number} Billing</a>
+					} else {
+						<a href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>{row.Number} {row.Title}</a>
+					}
+					if row.Archived {
+						<span>Archived</span>
+					}
+				</li>
+			}
+		</ul>
+		if p.Page>1 {
+			<a href={templ.URL(leaseListURL(p,p.Page-1))}>Previous</a>
+		}
+		if p.Page*p.PerPage<p.Total {
+			<a href={templ.URL(leaseListURL(p,p.Page+1))}>Next</a>
+		}
+	}
+}
+
+templ LeaseRegistrationForm(customers []authorization.LeaseChoice) {
+	@Layout("Register Draft Lease") {
+		<h1>Register Draft Lease</h1><p>Record an external agreement. Only an active Customer is required. Customer and assigned Number cannot be changed; archive and replace a wrong-Customer agreement.</p>
+		<form method="post" action="/leases"><input type="hidden" name="csrf_token" value={csrfToken(ctx)}/>
+			<label>Customer<select name="customer_id" required><option value="">Select Customer</option>
+				for _,c:=range customers {
+					<option value={fmt.Sprint(c.ID)}>{c.Label}</option>
+				}
+			</select></label><button>Register Draft</button>
+		</form>
+	}
+}
+
+templ LeaseHistoryPage(p authorization.LeaseHistory) {
+	@Layout(p.Number+" History") {
+		<h1>{p.Number} History</h1>
+		if p.Billing {
+			<a href={templ.URL(fmt.Sprintf("/leases/%d/billing",p.ID))}>Back to Billing</a>
+		} else {
+			<a href={templ.URL(fmt.Sprintf("/leases/%d",p.ID))}>Back to basic view</a>
+		}
+		for _,event:=range p.Events {
+			<section><h2>{event.Action}</h2><p>{displayDateTime(ctx,event.At)}</p>
+				if event.ActorID>0 {
+					<p>User {fmt.Sprint(event.ActorID)}</p>
+				} else {
+					<p>Recorded actor unavailable</p>
+				}
+				if event.AgreementChanged {
+					<p>Agreement File selection changed. File access remains independently authorized.</p>
+				}
+				if event.Before!="" {
+					<h3>Before</h3><pre>{event.Before}</pre>
+				}
+				<h3>After</h3><pre>{event.After}</pre>
+			</section>
+		}
+	}
+}

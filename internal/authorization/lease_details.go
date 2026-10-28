@@ -18,6 +18,8 @@ type DraftLeaseBase struct {
 	AssetIDs                                                  []int64
 	CustomFields                                              string
 	CanManage                                                 bool
+	Archived, CanArchive, CanRestore, PremisesArchived        bool
+	ArchivedAssetIDs                                          []int64
 }
 
 type DraftLeaseDetailsInput struct {
@@ -32,8 +34,11 @@ type DraftLeaseDetailsInput struct {
 
 func readLeaseBase(ctx context.Context, tx pgx.Tx, p Principal, id int64) (DraftLeaseBase, error) {
 	var out DraftLeaseBase
-	err := tx.QueryRow(ctx, `SELECT id,customer_id,details_revision,number_label,title,reference,coalesce(execution_date::text,''),coalesce(starts_on::text,''),coalesce(ends_on::text,''),premises_id,agreement_file_id,custom_fields::text,ARRAY(SELECT asset_id FROM lease_intended_assets WHERE lease_id=l.id ORDER BY asset_id) FROM leases l WHERE id=$1 AND company_id=$2 AND deleted_at IS NULL FOR UPDATE`, id, p.CompanyID).Scan(&out.ID, &out.CustomerID, &out.Revision, &out.Number, &out.Title, &out.Reference, &out.ExecutionDate, &out.StartsOn, &out.EndsOn, &out.PremisesID, &out.AgreementFileID, &out.CustomFields, &out.AssetIDs)
+	err := tx.QueryRow(ctx, `SELECT id,customer_id,details_revision,number_label,title,reference,coalesce(execution_date::text,''),coalesce(starts_on::text,''),coalesce(ends_on::text,''),premises_id,agreement_file_id,custom_fields::text,ARRAY(SELECT asset_id FROM lease_intended_assets WHERE lease_id=l.id ORDER BY asset_id),deleted_at IS NOT NULL,EXISTS(SELECT 1 FROM locations WHERE id=l.premises_id AND deleted_at IS NOT NULL),ARRAY(SELECT i.asset_id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id WHERE i.lease_id=l.id AND a.deleted_at IS NOT NULL ORDER BY i.asset_id) FROM leases l WHERE id=$1 AND company_id=$2 FOR UPDATE`, id, p.CompanyID).Scan(&out.ID, &out.CustomerID, &out.Revision, &out.Number, &out.Title, &out.Reference, &out.ExecutionDate, &out.StartsOn, &out.EndsOn, &out.PremisesID, &out.AgreementFileID, &out.CustomFields, &out.AssetIDs, &out.Archived, &out.PremisesArchived, &out.ArchivedAssetIDs)
 	if err == pgx.ErrNoRows {
+		err = ErrNotFound
+	}
+	if err == nil && out.Archived && !p.Allows("lease.archived.view", All) {
 		err = ErrNotFound
 	}
 	return out, err
@@ -50,7 +55,14 @@ func (s *Service) DraftLeaseBase(ctx context.Context, a Actor, id int64) (DraftL
 		if err != nil {
 			return err
 		}
-		out.CanManage = p.Allows("lease.manage", All)
+		out.CanManage = !out.Archived && p.Allows("lease.manage", All)
+		out.CanArchive = !out.Archived && p.Allows("lease.archive", All)
+		if out.Archived && p.Allows("lease.restore", All) {
+			out.CanRestore, err = customerLifecycleState(ctx, tx, p, out.CustomerID, true)
+			if err != nil {
+				return err
+			}
+		}
 		if !p.Allows("file.download", All) {
 			out.AgreementFileID = nil
 		} else if out.AgreementFileID != nil {
@@ -78,6 +90,9 @@ func (s *Service) SaveDraftLeaseDetails(ctx context.Context, a Actor, id int64, 
 		}
 		if old.Revision != in.Revision {
 			return ErrConflict
+		}
+		if old.Archived {
+			return ErrForbidden
 		}
 		for _, date := range []string{in.ExecutionDate, in.StartsOn, in.EndsOn} {
 			if date != "" {

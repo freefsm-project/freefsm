@@ -70,6 +70,9 @@ func canonicalBaseView(key string, scope authorization.Scope) string {
 	if strings.HasSuffix(key, ".restore") && scope == authorization.All {
 		return strings.TrimSuffix(key, ".restore") + ".archived.view"
 	}
+	if key == "lease.archived.view" {
+		return ""
+	} // independent base/Billing alternatives
 	if strings.HasSuffix(key, ".archived.view") {
 		return strings.TrimSuffix(key, ".archived.view") + ".view"
 	}
@@ -138,7 +141,7 @@ func TestEveryCatalogActionLocksItsCanonicalBaseView(t *testing.T) {
 			if (base == "") != (actual == nil) || actual != nil && *actual != base {
 				t.Errorf("%s/%s prerequisite=%v want %q", key, scope, actual, base)
 			}
-			parentBound := key == "pricing.view" || key == "activity.export" || strings.HasPrefix(key, "comment.") || strings.HasPrefix(key, "file.") || key == "tag.attach" || key == "tag.detach"
+			parentBound := key == "lease.archived.view" || key == "pricing.view" || key == "activity.export" || strings.HasPrefix(key, "comment.") || strings.HasPrefix(key, "file.") || key == "tag.attach" || key == "tag.detach"
 			if scope != authorization.Sealed && (base != "" || parentBound) {
 				if _, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Viewless "+key+string(scope), []authorization.Grant{{Permission: key, Scope: scope}}); err == nil {
 					t.Errorf("%s/%s accepted with no required View", key, scope)

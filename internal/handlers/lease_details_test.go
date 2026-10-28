@@ -50,7 +50,7 @@ func TestLeaseFourCollaborationsHTTP(t *testing.T) {
 	historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM leases`).Scan(&id))
 	path := fmt.Sprintf("/leases/%d", id)
 	grants := []authorization.Grant{{Permission: "lease.view", Scope: authorization.All}, {Permission: "lease.manage", Scope: authorization.All}}
-	for _, key := range []string{"comment.add", "file.upload", "file.download", "tag.attach", "tag.detach", "lease.billing.view", "lease.billing.manage"} {
+	for _, key := range []string{"comment.add", "file.upload", "file.download", "tag.attach", "tag.detach", "lease.billing.view", "lease.billing.manage", "lease.archive", "lease.archived.view", "lease.restore"} {
 		grants = append(grants, authorization.Grant{Permission: key, Scope: authorization.All})
 	}
 	for _, key := range []string{"comment.remove", "file.rename", "file.remove"} {
@@ -101,9 +101,17 @@ func TestLeaseFourCollaborationsHTTP(t *testing.T) {
 	token, err := sessions.CreateMobile(ctx, u.ID, "Lease denial device")
 	historyCheck(t, err)
 	api := apiv1.NewRouter(pool, client, sessions, services.NewFileService(client, objectref.NewLeaseDirectory(objectref.NewEntDirectory(client), pool), t.TempDir(), 0))
-	for _, route := range []string{path, path + "/billing", path + "/comments", path + "/custom-fields", fmt.Sprintf("/files/%d/metadata", file), fmt.Sprintf("/files/%d", file)} {
+	for _, route := range []string{"/leases", "/leases/new", path, path + "/billing", path + "/comments", path + "/custom-fields", path + "/history", path + "/billing/history", path + "/delete", path + "/restore", fmt.Sprintf("%s/tags/%d/attach", path, tag.ID), fmt.Sprintf("/files/%d/metadata", file), fmt.Sprintf("/files/%d", file), fmt.Sprintf("/files/%d/rename", file), fmt.Sprintf("/files/%d/remove", file)} {
 		for _, method := range []string{"GET", "POST"} {
-			r := httptest.NewRequest(method, route, strings.NewReader(`{}`))
+			body := `{}`
+			if method == "POST" && strings.HasPrefix(route, "/files/") && (strings.HasSuffix(route, "/rename") || strings.HasSuffix(route, "/remove")) {
+				name := ""
+				if strings.HasSuffix(route, "/rename") {
+					name = "denied.txt"
+				}
+				body = fmt.Sprintf(`{"operation_id":%q,"occurred_at":%q,"object_type":"lease","object_id":%d,"revision":%q,"name":%q}`, newOperationKey(), time.Now().UTC().Format(time.RFC3339Nano), id, services.FileRevision(client.File.GetX(ctx, file)), name)
+			}
+			r := httptest.NewRequest(method, route, strings.NewReader(body))
 			r.Header.Set("Authorization", "Bearer "+token)
 			r.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()

@@ -101,6 +101,21 @@ func (db *DB) VocabularyPreflight(ctx context.Context) ([]string, error) {
 				targets = append(targets, `SELECT '`+kind+`' kind,id FROM `+kind+`s`)
 			}
 		}
+		// A native Lease is recognized by its applied owning migration, never
+		// merely by an unknown legacy table named leases.
+		var hasMigrations bool
+		if err := tx.QueryRow(ctx, `SELECT to_regclass(current_schema()||'.schema_migrations') IS NOT NULL`).Scan(&hasMigrations); err != nil {
+			return nil, err
+		}
+		if hasMigrations {
+			var native bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM schema_migrations WHERE name='105_draft_lease_registration') AND to_regclass(current_schema()||'.leases') IS NOT NULL`).Scan(&native); err != nil {
+				return nil, err
+			}
+			if native {
+				targets = append(targets, `SELECT 'lease' kind,id FROM leases`)
+			}
+		}
 		if len(targets) > 0 {
 			rows, err := tx.Query(ctx, `SELECT l.id FROM tag_links l LEFT JOIN tags t ON t.id=l.tag_id LEFT JOIN (`+strings.Join(targets, " UNION ALL ")+`) p ON p.kind=l.object_type AND p.id=l.object_id WHERE t.id IS NULL OR p.id IS NULL ORDER BY l.id`)
 			if err != nil {

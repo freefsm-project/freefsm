@@ -457,6 +457,11 @@ func (m *Manager) protect(ctx context.Context, paths []pathMapping) error {
 	})); e != nil {
 		return e
 	}
+	// A verified restore relocates storage only, including archived Files. The
+	// transaction-local guard exception cannot edit any File business metadata.
+	if _, e = tx.Exec(ctx, `SELECT set_config('freefsm.backup_path_rebase','allowed',true)`); e != nil {
+		return e
+	}
 	for _, q := range []string{"UPDATE public.files f SET file_path=p.destination FROM backup_paths p WHERE f.file_path=p.original", "UPDATE public.company_settings s SET invoice_logo_path=p.destination FROM backup_paths p WHERE s.invoice_logo_path=p.original"} {
 		if _, e = tx.Exec(ctx, q); e != nil {
 			return e

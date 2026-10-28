@@ -10,16 +10,32 @@ templ LeaseDetailsPage(data LeasePageData) {
 			<div role="alert" data-error-summary>{ data.Error }</div>
 		}
 		<h1>{ p.Number }</h1><p>Draft</p>
+		<p>Customer { fmt.Sprint(p.CustomerID) } — immutable; archive and replace a wrong-Customer agreement.</p>
+		<a href="/leases">Leases</a> <a href={templ.URL(fmt.Sprintf("/leases/%d/history",p.ID))}>Base history</a>
+		if p.Archived {
+			<div role="status">Archived — read-only history</div>
+			if p.CanRestore {
+				<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/restore",p.ID)) }><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><button>Restore Draft</button></form>
+			}
+		} else if p.CanArchive {
+			<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/delete",p.ID)) } hx-confirm="Archive this Draft as read-only history? It will no longer block Customer or premises archive."><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><button>Archive Draft</button></form>
+		}
 		<p>External agreement. Draft selections reserve no coverage, move no Assets, and create no billing.</p>
 		<h2>{ p.Title }</h2><p>{ p.Reference }</p>
 		<dl><dt>Execution date</dt><dd>{ p.ExecutionDate }</dd><dt>Start</dt><dd>{ p.StartsOn }</dd><dt>End</dt><dd>{ p.EndsOn }</dd></dl>
 		if p.PremisesID != nil {
 			<p>Selected premises: Location { fmt.Sprint(*p.PremisesID) }</p>
+			if p.PremisesArchived {
+				<p>Archived Location — retained selection; repair before finalization.</p>
+			}
 		}
 		if len(p.AssetIDs)>0 {
 			<p>Intended Assets (not reserved):</p><ul>
 				for _,id:=range p.AssetIDs {
 					<li>Asset { fmt.Sprint(id) }</li>
+					if slices.Contains(p.ArchivedAssetIDs,id) {
+						<li>Archived Asset — retained intent; repair before finalization.</li>
+					}
 				}
 			</ul>
 		}
@@ -74,8 +90,10 @@ templ LeaseDetailsPage(data LeasePageData) {
 				<button type="submit">Save Draft details</button>
 			</form>
 		}
-		@TagWidget(TagWidgetData{BaseURL:fmt.Sprintf("/leases/%d",p.ID),Tags:data.Tags,AllTags:data.AllTags})
-		@FileUploadWidget("lease",p.ID,fmt.Sprintf("/leases/%d",p.ID))
+		@TagWidget(TagWidgetData{BaseURL:fmt.Sprintf("/leases/%d",p.ID),Tags:data.Tags,AllTags:data.AllTags,ReadOnly:p.Archived})
+		if !p.Archived {
+			@FileUploadWidget("lease",p.ID,fmt.Sprintf("/leases/%d",p.ID))
+		}
 		@FileList(data.Files)
 		<div hx-get={ templ.URL(fmt.Sprintf("/leases/%d/comments",p.ID)) } hx-trigger="load" hx-swap="innerHTML"><p>Loading comments...</p></div>
 	}

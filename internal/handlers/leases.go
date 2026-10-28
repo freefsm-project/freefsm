@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/customfields"
@@ -21,6 +22,60 @@ type LeaseHandler struct {
 	tags      *services.TagService
 	tagLinks  *services.TagLinkService
 	fields    *services.CustomFieldDefinitionService
+}
+
+func (h *LeaseHandler) List(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	size, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	data, err := h.authority.LeaseList(r.Context(), authorizationActor(r), r.URL.Query().Get("facet") == "billing", r.URL.Query().Get("search"), r.URL.Query().Get("state"), page, size)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	templates.LeaseIndex(data).Render(r.Context(), w)
+}
+func (h *LeaseHandler) New(w http.ResponseWriter, r *http.Request) {
+	choices, err := h.authority.LeaseRegistrationCustomers(r.Context(), authorizationActor(r))
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	templates.LeaseRegistrationForm(choices).Render(r.Context(), w)
+}
+func (h *LeaseHandler) History(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := h.authority.LeaseHistory(r.Context(), authorizationActor(r), id, strings.Contains(r.URL.Path, "/billing/"))
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	templates.LeaseHistoryPage(data).Render(r.Context(), w)
+}
+
+func (h *LeaseHandler) Archive(w http.ResponseWriter, r *http.Request) { h.lifecycle(w, r, false) }
+func (h *LeaseHandler) Restore(w http.ResponseWriter, r *http.Request) { h.lifecycle(w, r, true) }
+func (h *LeaseHandler) lifecycle(w http.ResponseWriter, r *http.Request, restore bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err = h.authority.LeaseLifecycle(r.Context(), authorizationActor(r), id, restore); err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	destination := fmt.Sprintf("/leases/%d", id)
+	if !restore {
+		p, err := h.authority.Principal(r.Context(), authorizationActor(r))
+		if err != nil || !p.Allows("lease.view", authorization.All) || !p.Allows("lease.archived.view", authorization.All) {
+			destination = "/leases"
+		}
+	}
+	http.Redirect(w, r, destination, 303)
 }
 
 func (h *LeaseHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -157,7 +212,15 @@ func (h *LeaseHandler) Billing(w http.ResponseWriter, r *http.Request) {
 			*dst = &value
 		}
 	}
-	if err := h.authority.SaveDraftLeaseBilling(r.Context(), authorizationActor(r), id, revision, r.FormValue("initial_due_on"), term); err != nil {
+	var lifecycleRevision int64
+	if raw := r.FormValue("lifecycle_revision"); raw != "" {
+		lifecycleRevision, err = strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			http.Error(w, "Reload current Billing terms", 409)
+			return
+		}
+	}
+	if err := h.authority.SaveDraftLeaseBilling(r.Context(), authorizationActor(r), id, revision, r.FormValue("initial_due_on"), term, lifecycleRevision); err != nil {
 		authorizationError(w, r, err)
 		return
 	}
