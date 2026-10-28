@@ -236,6 +236,9 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {
 			handleLogout(w, r, sessions, activitySvc)
 		})
+		leaseHandler := &LeaseHandler{authority: authority}
+		r.Post("/leases", leaseHandler.Register)
+		r.Get("/leases/{id}", leaseHandler.Show)
 		r.With(collectionRead("project")).Get("/projects", projectHandler.List)
 		r.With(collectionRead("project")).Get("/projects/activity", activityHandler.ListByType(objectref.TypeProject))
 		r.With(detailPresentation("project", policySvc)).Get("/projects/{id}", projectHandler.Show)
