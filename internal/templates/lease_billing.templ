@@ -1,0 +1,38 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+func leaseCents(v *int64) string { if v==nil {return ""};return fmt.Sprint(*v) }
+
+templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
+	@Layout(p.Number+" Billing") {
+		<h1>{ p.Number } Billing</h1>
+		<p>Prospective Draft terms only. Saving creates no Invoice or billing obligation. Amounts are whole cents; tax is a percentage.</p>
+		if len(p.Terms)==0 {
+			<p>No intended Assets. A base Lease manager can select them on the basic view.</p>
+		}
+		for _,term:=range p.Terms {
+			<section aria-label={ fmt.Sprintf("Asset %d terms",term.AssetID) }>
+				<h2>Asset { fmt.Sprint(term.AssetID) }</h2>
+				if !term.Selected {
+					<p>Previously selected Asset — retained terms, not current intent.</p>
+				}
+				if p.CanManage && term.Selected {
+					<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.ID)) }>
+						<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+						<input type="hidden" name="revision" value={ fmt.Sprint(p.Revision) }/>
+						<input type="hidden" name="asset_id" value={ fmt.Sprint(term.AssetID) }/>
+						<label>Initial amount (cents)<input name="initial_cents" inputmode="numeric" value={ leaseCents(term.InitialCents) }/></label>
+						<label>Monthly rent (cents)<input name="rent_cents" inputmode="numeric" value={ leaseCents(term.RentCents) }/></label>
+						<label>Tax rate (%)<input name="tax_rate" inputmode="decimal" value={ term.TaxRate }/></label>
+						<label>Initial due date<input name="initial_due_on" type="date" value={ p.InitialDueOn }/></label>
+						<button type="submit">Save Billing terms</button>
+					</form>
+				} else {
+					<dl><dt>Initial cents</dt><dd>{ leaseCents(term.InitialCents) }</dd><dt>Monthly rent cents</dt><dd>{ leaseCents(term.RentCents) }</dd><dt>Tax rate</dt><dd>{ term.TaxRate }</dd><dt>Initial due date</dt><dd>{ p.InitialDueOn }</dd></dl>
+				}
+			</section>
+		}
+	}
+}

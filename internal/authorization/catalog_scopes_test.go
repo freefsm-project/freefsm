@@ -94,7 +94,7 @@ func canonicalBaseView(key string, scope authorization.Scope) string {
 	case "payment.reverse", "credit.application.reverse", "credit.refund.reverse", "settlement.export":
 		return "settlement.view"
 	case "lease.billing.view":
-		return "lease.view"
+		return ""
 	case "lease.billing.manage":
 		return "lease.billing.view"
 	case "time.gps.view":

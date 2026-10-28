@@ -23,7 +23,9 @@ func TestMasterDependenciesInstalledUpgradePreservesFacts(t *testing.T) {
 			entries, err := fs.ReadDir(database.MigrationFS(), ".")
 			historyCheck(t, err)
 			for _, entry := range entries {
-				if entry.Name() == "103_master_lease_dependencies.up.sql" || entry.Name() == "104_lease_placement_timeline.up.sql" {
+				// Preserve the actual pre-103 installation boundary as later
+				// Lease migrations are introduced; never apply descendants first.
+				if entry.Name() >= "103_" {
 					continue
 				}
 				raw, err := fs.ReadFile(database.MigrationFS(), entry.Name())

@@ -203,6 +203,8 @@ func tagParentAccess(ctx context.Context, q queryer, p Principal, kind string, i
 		table = "estimates"
 	case "invoice":
 		table = "invoices"
+	case "lease":
+		table = "leases"
 	default:
 		return "", ErrNotFound
 	}

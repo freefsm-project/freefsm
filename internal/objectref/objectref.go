@@ -11,6 +11,7 @@ type Type string
 
 const (
 	TypeCustomer        Type = "customer"
+	TypeLease           Type = "lease"
 	TypeJob             Type = "job"
 	TypeProject         Type = "project"
 	TypeEstimate        Type = "estimate"
@@ -95,6 +96,7 @@ var (
 )
 
 var knownTypes = map[Type]struct{}{
+	TypeLease:           {},
 	TypeInstance:        {},
 	TypeCustomer:        {},
 	TypeJob:             {},
@@ -114,6 +116,7 @@ var knownTypes = map[Type]struct{}{
 }
 
 var descriptors = map[Type]Descriptor{
+	TypeLease:           {Type: TypeLease, SingularName: "lease", Capabilities: CapActivity | CapFiles | CapArchive | CapTags | CapComments},
 	TypeInstance:        {Type: TypeInstance, SingularName: "instance", AdminOnly: true, Capabilities: CapActivity},
 	TypeCustomer:        {Type: TypeCustomer, SingularName: "customer", Capabilities: CapActivity | CapFiles | CapArchive | CapTags | CapComments},
 	TypeJob:             {Type: TypeJob, SingularName: "job", Capabilities: CapActivity | CapFiles | CapArchive | CapTags | CapComments},
@@ -162,6 +165,7 @@ func AllTypes() []Type {
 	return []Type{
 		TypeInstance,
 		TypeCustomer,
+		TypeLease,
 		TypeJob,
 		TypeProject,
 		TypeEstimate,
@@ -215,6 +219,8 @@ func URL(ref Ref) (string, bool) {
 		return "/jobs/" + id, true
 	case TypeProject:
 		return "/projects/" + id, true
+	case TypeLease:
+		return "/leases/" + id, true
 	case TypeEstimate:
 		return "/estimates/" + id, true
 	case TypeInvoice:

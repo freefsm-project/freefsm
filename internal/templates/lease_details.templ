@@ -1,0 +1,82 @@
+package templates
+
+import "fmt"
+import "slices"
+
+templ LeaseDetailsPage(data LeasePageData) {
+	{{ p := data.Base }}
+	@Layout(p.Number) {
+		if data.Error!="" {
+			<div role="alert" data-error-summary>{ data.Error }</div>
+		}
+		<h1>{ p.Number }</h1><p>Draft</p>
+		<p>External agreement. Draft selections reserve no coverage, move no Assets, and create no billing.</p>
+		<h2>{ p.Title }</h2><p>{ p.Reference }</p>
+		<dl><dt>Execution date</dt><dd>{ p.ExecutionDate }</dd><dt>Start</dt><dd>{ p.StartsOn }</dd><dt>End</dt><dd>{ p.EndsOn }</dd></dl>
+		if p.PremisesID != nil {
+			<p>Selected premises: Location { fmt.Sprint(*p.PremisesID) }</p>
+		}
+		if len(p.AssetIDs)>0 {
+			<p>Intended Assets (not reserved):</p><ul>
+				for _,id:=range p.AssetIDs {
+					<li>Asset { fmt.Sprint(id) }</li>
+				}
+			</ul>
+		}
+		for _,file:=range data.Files.Files {
+			if file.CanDownload && p.AgreementFileID!=nil && *p.AgreementFileID==file.ID {
+				<p>Agreement File: <a href={ templ.URL(fmt.Sprintf("/files/%d",file.ID)) }>{ file.OriginalName }</a></p>
+			}
+		}
+		if data.Choices.CanViewBilling {
+			<a href={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.ID)) }>Billing</a>
+		}
+		@CustomFieldsWidget(CustomFieldsWidgetData{Fields:data.Fields})
+		if p.CanManage {
+			<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d",p.ID)) }>
+				<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+				<input type="hidden" name="revision" value={ fmt.Sprint(p.Revision) }/>
+				<label>Title<input name="title" value={ p.Title }/></label>
+				<label>Reference<input name="reference" value={ p.Reference }/></label>
+				<label>Execution date<input type="date" name="execution_date" value={ p.ExecutionDate }/></label>
+				<label>Start date<input type="date" name="starts_on" value={ p.StartsOn }/></label>
+				<label>End date<input type="date" name="ends_on" value={ p.EndsOn }/></label>
+				<label>Premises<select name="premises_id">
+					<option value="">Not selected</option>
+					if p.PremisesID != nil && !leaseChoiceContains(data.Choices.Premises,*p.PremisesID) {
+						<option value={ fmt.Sprint(*p.PremisesID) } selected>Retained Location { fmt.Sprint(*p.PremisesID) }</option>
+					}
+					for _,c:=range data.Choices.Premises {
+						<option value={ fmt.Sprint(c.ID) } selected?={ p.PremisesID!=nil && *p.PremisesID==c.ID }>{ c.Label }</option>
+					}
+				</select></label>
+				<label>Intended Assets<select name="asset_ids" multiple>
+					for _,id:=range p.AssetIDs {
+						if !leaseChoiceContains(data.Choices.Assets,id) {
+							<option value={ fmt.Sprint(id) } selected>Retained Asset { fmt.Sprint(id) } — repair stale selections before finalization</option>
+						}
+					}
+					for _,c:=range data.Choices.Assets {
+						<option value={ fmt.Sprint(c.ID) } selected?={ slices.Contains(p.AssetIDs,c.ID) }>{ c.Label }</option>
+					}
+				</select></label>
+				if data.Choices.CanSelectAgreement {
+					<label>Agreement File<select name="agreement_file_id">
+						<option value="">Not selected</option>
+						for _,file:=range data.Files.Files {
+							if file.CanDownload {
+								<option value={ fmt.Sprint(file.ID) } selected?={ p.AgreementFileID!=nil && *p.AgreementFileID==file.ID }>{ file.OriginalName }</option>
+							}
+						}
+					</select></label>
+				}
+				@CustomFieldsWidget(CustomFieldsWidgetData{Fields:data.Fields,EditMode:true})
+				<button type="submit">Save Draft details</button>
+			</form>
+		}
+		@TagWidget(TagWidgetData{BaseURL:fmt.Sprintf("/leases/%d",p.ID),Tags:data.Tags,AllTags:data.AllTags})
+		@FileUploadWidget("lease",p.ID,fmt.Sprintf("/leases/%d",p.ID))
+		@FileList(data.Files)
+		<div hx-get={ templ.URL(fmt.Sprintf("/leases/%d/comments",p.ID)) } hx-trigger="load" hx-swap="innerHTML"><p>Loading comments...</p></div>
+	}
+}

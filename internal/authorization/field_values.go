@@ -54,11 +54,17 @@ func (s *Service) DetailsAccess(ctx context.Context, a Actor, typ string, id int
 }
 
 func (s *Service) ReadFields(ctx context.Context, a Actor, typ string, id int64, edit bool) (string, error) {
+	if typ == "lease" && a.Channel == "api" {
+		return "", ErrNotFound
+	}
 	var fields string
 	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		permission := ""
 		if edit {
 			permission = typ + ".edit"
+			if typ == "lease" {
+				permission = "lease.manage"
+			}
 			if typ == "job" {
 				permission = "job.fields.edit"
 			}
@@ -75,6 +81,10 @@ func (s *Service) SaveFields(ctx context.Context, a Actor, typ string, id int64,
 }
 
 func (s *Service) saveFields(ctx context.Context, a Actor, typ string, id int64, input string, mode customfields.SaveMode) (string, error) {
+	// Lease fields participate in its revisioned base-details command.
+	if typ == "lease" {
+		return "", ErrForbidden
+	}
 	if typ == "job" {
 		return "", &FieldConflict{"field_review_required"}
 	}

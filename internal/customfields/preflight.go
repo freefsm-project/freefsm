@@ -8,12 +8,15 @@ import (
 	"strings"
 )
 
-// Preflight inspects all recorded values, including archives, tombstones and
-// immutable conversion snapshots. It never rewrites values or infers validation
-// history. Diagnostics name identities, never echo the record's entered values.
+// Preflight inspects migration 058's recorded values, including archives,
+// tombstones and immutable conversion snapshots. Its historical parent set must
+// not grow with the runtime catalog: an unknown legacy Lease store belongs to
+// migration 103's explicit mapping review, not an inferred native field schema.
+// Diagnostics name identities, never echo the record's entered values.
 func Preflight(ctx context.Context, tx pgx.Tx) error {
 	tables := []string{"custom_field_definitions", "estimate_invoice_conversion_cycles"}
-	for _, p := range ExistingParents() {
+	installedParents := []Parent{{"customer", "customers"}, {"project", "projects"}, {"job", "jobs"}, {"asset", "assets"}, {"estimate", "estimates"}, {"invoice", "invoices"}}
+	for _, p := range installedParents {
 		tables = append(tables, p.Table)
 	}
 	if _, err := tx.Exec(ctx, `LOCK TABLE `+strings.Join(tables, ",")+` IN SHARE ROW EXCLUSIVE MODE`); err != nil {
@@ -63,7 +66,7 @@ func Preflight(ctx context.Context, tx pgx.Tx) error {
 	if err != nil {
 		return err
 	}
-	for _, parent := range ExistingParents() {
+	for _, parent := range installedParents {
 		typ := parent.Type
 		rows, err := tx.Query(ctx, `SELECT id,custom_fields::text FROM `+parent.Table+` ORDER BY id`)
 		if err != nil {

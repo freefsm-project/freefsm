@@ -38,12 +38,12 @@ func (s *PolicyService) CanAccessObject(ctx context.Context, userID int64, role 
 		case objectref.TypeTimeEntry:
 			_, err := request.Service.TimeEntryAccess(ctx, request.Actor, ref.ID, "")
 			return err == nil
-		case objectref.TypeJob, objectref.TypeProject, objectref.TypeAsset, objectref.TypeEstimate, objectref.TypeInvoice:
+		case objectref.TypeLease, objectref.TypeJob, objectref.TypeProject, objectref.TypeAsset, objectref.TypeEstimate, objectref.TypeInvoice:
 			err := request.Service.ParentAccess(ctx, request.Actor, string(ref.Type), ref.ID, "")
 			return err == nil
 		}
 	}
-	if ref.Type == objectref.TypeAsset {
+	if ref.Type == objectref.TypeAsset || ref.Type == objectref.TypeLease {
 		// Migrated Asset domains never derive authority from a legacy Role label
 		// or a retained Job reference. Commands use their dedicated boundary.
 		return false

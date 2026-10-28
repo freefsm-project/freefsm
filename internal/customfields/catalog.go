@@ -8,7 +8,7 @@ type Parent struct{ Type, Table string }
 
 var parents = []Parent{
 	{"customer", "customers"}, {"project", "projects"}, {"job", "jobs"},
-	{"asset", "assets"}, {"estimate", "estimates"}, {"invoice", "invoices"}, {"lease", ""},
+	{"asset", "assets"}, {"estimate", "estimates"}, {"invoice", "invoices"}, {"lease", "leases"},
 }
 var types = []string{"text", "number", "date", "textarea", "select", "checkbox", "multiselect"}
 

@@ -3,6 +3,7 @@ package authorization
 import (
 	"context"
 
+	"github.com/freefsm-project/freefsm/internal/customfields"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -30,7 +31,11 @@ func (s *Service) RegisterDraftLease(ctx context.Context, a Actor, customerID in
 		if !active {
 			return ErrConflict
 		}
-		if err := tx.QueryRow(ctx, `INSERT INTO leases(company_id,customer_id) VALUES($1,$2) RETURNING id,customer_id,number_label`, p.CompanyID, customerID).Scan(&out.ID, &out.CustomerID, &out.Number); err != nil {
+		fields, err := customfields.Validate(ctx, tx, "lease", "[]", nil, customfields.Creation, p.CompanyID)
+		if err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `INSERT INTO leases(company_id,customer_id,custom_fields) VALUES($1,$2,$3::jsonb) RETURNING id,customer_id,number_label`, p.CompanyID, customerID, fields).Scan(&out.ID, &out.CustomerID, &out.Number); err != nil {
 			return err
 		}
 		if err := s.WriteLeaseDependencies(ctx, tx, a, LeaseDependencies{LeaseID: out.ID, CustomerID: customerID, Lifecycle: "draft"}); err != nil {

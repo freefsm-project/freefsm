@@ -97,7 +97,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 	}
 	authMW := middleware.Auth(sessions, userFn)
 
-	objects := objectref.NewEntDirectory(entClient)
+	objects := objectref.NewLeaseDirectory(objectref.NewEntDirectory(entClient), db)
 	activeObjectGuard := func(objectType objectref.Type) func(http.Handler) http.Handler {
 		return requireActiveObject(objects, objectType)
 	}
@@ -236,9 +236,12 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {
 			handleLogout(w, r, sessions, activitySvc)
 		})
-		leaseHandler := &LeaseHandler{authority: authority}
+		leaseHandler := &LeaseHandler{authority: authority, files: fileSvc, tags: tagSvc, tagLinks: tagLinkSvc, fields: defSvc}
 		r.Post("/leases", leaseHandler.Register)
 		r.Get("/leases/{id}", leaseHandler.Show)
+		r.Post("/leases/{id}", leaseHandler.Save)
+		r.Get("/leases/{id}/billing", leaseHandler.Billing)
+		r.Post("/leases/{id}/billing", leaseHandler.Billing)
 		r.With(collectionRead("project")).Get("/projects", projectHandler.List)
 		r.With(collectionRead("project")).Get("/projects/activity", activityHandler.ListByType(objectref.TypeProject))
 		r.With(detailPresentation("project", policySvc)).Get("/projects/{id}", projectHandler.Show)
@@ -321,6 +324,9 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/jobs/{id}/clock-out", jobHandler.ClockOut)
 		r.With(detailPresentation("job", policySvc)).Get("/jobs/{id}", jobHandler.Show)
 		for _, parent := range customfields.ExistingParents() {
+			if parent.Type == "lease" {
+				continue
+			} // revisioned fields live in Lease base details
 			typ := parent.Type
 			r.Get("/"+typ+"s/{id}/custom-fields", cfHandler.Values(typ))
 			r.Post("/"+typ+"s/{id}/custom-fields", cfHandler.Values(typ))
@@ -466,7 +472,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 				r.Post(v.prefix+"/{id}/"+op, vocabularyMutation(v.kind, op))
 			}
 		}
-		for _, kind := range []string{"customer", "project", "job", "asset", "estimate", "invoice"} {
+		for _, kind := range []string{"customer", "project", "job", "asset", "estimate", "invoice", "lease"} {
 			r.Post("/"+kind+"s/{id}/tags/{tag_id}/attach", tagLinkMutation(kind, true, tagSvc, tagLinkSvc))
 			r.Post("/"+kind+"s/{id}/tags/{tag_id}/detach", tagLinkMutation(kind, false, tagSvc, tagLinkSvc))
 		}
@@ -479,6 +485,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			objType objectref.Type
 		}{
 			{"/customers", objectref.TypeCustomer},
+			{"/leases", objectref.TypeLease},
 			{"/jobs", objectref.TypeJob},
 			{"/projects", objectref.TypeProject},
 			{"/estimates", objectref.TypeEstimate},

@@ -53,6 +53,8 @@ func commentParent(ctx context.Context, tx pgx.Tx, p Principal, a Actor, ref obj
 		table = "estimates"
 	case objectref.TypeInvoice:
 		table = "invoices"
+	case objectref.TypeLease:
+		table = "leases"
 	default:
 		return "", ErrNotFound
 	}

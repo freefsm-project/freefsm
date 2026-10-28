@@ -11,6 +11,9 @@ import (
 // collaboration parents. Read authorization neither locks writers nor loads a
 // Custom Fields payload. Mutations use the same rules with transaction locks.
 func (s *Service) ParentAccess(ctx context.Context, a Actor, typ string, id int64, permission string) error {
+	if typ == "lease" && a.Channel == "api" {
+		return ErrNotFound
+	}
 	p, err := s.Principal(ctx, a)
 	if err != nil {
 		return err
@@ -22,6 +25,9 @@ func (s *Service) ParentAccess(ctx context.Context, a Actor, typ string, id int6
 // WithinParent holds the authority fence and record/assignment locks while a
 // domain reads a coherent action snapshot or commits an authorized effect.
 func (s *Service) WithinParent(ctx context.Context, a Actor, typ string, id int64, permission string, fn func(pgx.Tx, Principal) error) error {
+	if typ == "lease" && a.Channel == "api" {
+		return ErrNotFound
+	}
 	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
 		if _, err := parentAccess(ctx, tx, p, typ, id, permission, true); err != nil {
 			return err
