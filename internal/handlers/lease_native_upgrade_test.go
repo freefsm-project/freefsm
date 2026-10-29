@@ -89,13 +89,19 @@ func TestLeasePopulatedNativeUpgradePreservesKnownFacts(t *testing.T) {
 	before := known()
 	logLeaseInventory(t, "native pre-upgrade inventory", before)
 	var sequences string
-	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(jsonb_build_array(sequencename,last_value) ORDER BY sequencename)::text FROM pg_sequences WHERE schemaname=current_schema()`).Scan(&sequences))
+	var sequenceNames []string
+	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(jsonb_build_array(sequencename,last_value) ORDER BY sequencename)::text,array_agg(sequencename::text ORDER BY sequencename) FROM pg_sequences WHERE schemaname=current_schema()`).Scan(&sequences, &sequenceNames))
 	historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS()))
 	historyEqual(t, "native upgrade preserves records, fields, grants, billing intent and audit", known(), before)
 	logLeaseInventory(t, "native post-upgrade inventory", known())
 	var afterSequences string
-	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(jsonb_build_array(sequencename,last_value) ORDER BY sequencename)::text FROM pg_sequences WHERE schemaname=current_schema()`).Scan(&afterSequences))
+	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(jsonb_build_array(sequencename,last_value) ORDER BY sequencename)::text FROM pg_sequences WHERE schemaname=current_schema() AND sequencename::text=ANY($1::text[])`, sequenceNames).Scan(&afterSequences))
 	historyEqual(t, "sequence states unchanged by upgrade", afterSequences, sequences)
+	var unallocated bool
+	historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM pg_sequences WHERE schemaname=current_schema() AND NOT(sequencename::text=ANY($1::text[])) AND last_value IS NOT NULL)`, sequenceNames).Scan(&unallocated))
+	if !unallocated {
+		t.Fatal("upgrade allocated invented new identities")
+	}
 	var notInvented bool
 	historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM leases WHERE id=900) AND NOT EXISTS(SELECT 1 FROM lease_asset_dependencies) AND NOT EXISTS(SELECT 1 FROM invoices) AND EXISTS(SELECT 1 FROM leases WHERE id=$1 AND execution_date IS NULL)`, ids[1]).Scan(&notInvented))
 	if !notInvented {
@@ -186,4 +192,63 @@ func TestLeaseRegistrationNeverAdoptsOpaqueLegacyReferences(t *testing.T) {
 	if body := requestBody(t, web, cookie, "GET", fmt.Sprintf("/leases/%d/comments", id), 200); strings.Contains(body, "Opaque pre-existing") {
 		t.Fatal("new agreement inherited unknown collaboration")
 	}
+}
+
+func TestLeaseFinalizationReviewedPopulatedUpgrade(t *testing.T) {
+	prior := fstest.MapFS{}
+	entries, err := fs.ReadDir(database.MigrationFS(), ".")
+	historyCheck(t, err)
+	for _, entry := range entries {
+		if entry.Name() >= "110_" {
+			continue
+		}
+		raw, err := fs.ReadFile(database.MigrationFS(), entry.Name())
+		historyCheck(t, err)
+		prior[entry.Name()] = &fstest.MapFile{Data: raw}
+	}
+	pool, client, web, sessions, company, admin := permissionHTTPFixtureMigrations(t, prior)
+	ctx := context.Background()
+	cookie := sessionCookie(t, ctx, sessions, admin)
+	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Legacy coverage Customer").SaveX(ctx)
+	typ := client.AssetType.Create().SetCompanyID(company).SetName("Legacy equipment").SaveX(ctx)
+	a := client.Asset.Create().SetCompanyID(company).SetOwnershipClass("company_owned").SetAssetTypeID(typ.ID).SetName("Retained historical coverage").SaveX(ctx)
+	svc := authorization.New(pool)
+	_, err = svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Retained view-only Lease Role", []authorization.Grant{{Permission: "lease.view", Scope: authorization.All}})
+	historyCheck(t, err)
+	write := func(id int64, start, end string) {
+		t.Helper()
+		tx, err := pool.Begin(ctx)
+		historyCheck(t, err)
+		defer tx.Rollback(ctx)
+		historyCheck(t, svc.WriteLeaseDependencies(ctx, tx, authorization.Actor{UserID: admin}, authorization.LeaseDependencies{LeaseID: id, CustomerID: c.ID, Lifecycle: "terminated", Coverage: []authorization.LeaseAssetDependency{{AssetID: a.ID, StartsOn: start, EndsOn: &end}}}))
+		historyCheck(t, tx.Commit(ctx))
+	}
+	write(900, "2020-01-01", "2020-02-01")
+	write(901, "2020-02-01", "2020-03-01") // Inclusive shared day is incompatible.
+	tables := []string{"leases", "lease_master_dependencies", "lease_asset_dependencies", "lease_draft_billing", "lease_draft_asset_terms", "authorization_roles", "authorization_grants", "authorization_audit", "issued_document_numbers", "company_settings", "invoices"}
+	before := leasePreservationRows(t, pool, tables)
+	err = (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS())
+	if err == nil || !strings.Contains(err.Error(), "explicit mapping review") {
+		t.Fatalf("overlapping legacy facts must stop recoverably: %v", err)
+	}
+	historyEqual(t, "failed migration preserves incompatible facts and authority", leasePreservationRows(t, pool, tables), before)
+	// A protected human-authorized owning-hook correction records both versions;
+	// migration neither guesses a boundary nor invents agreement terms/grants.
+	write(901, "2020-02-02", "2020-03-01")
+	before = leasePreservationRows(t, pool, tables)
+	historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS()))
+	// invoices gains only the nullable origin column.
+	historyEqual(t, "reviewed populated upgrade preserves all known facts", leasePreservationRows(t, pool, tables), before)
+	var untouched bool
+	historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM leases) AND NOT EXISTS(SELECT 1 FROM lease_finalizations) AND NOT EXISTS(SELECT 1 FROM lease_billing_obligations) AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations) AND EXISTS(SELECT 1 FROM authorization_audit WHERE target_id=901 AND detail::text LIKE '%2020-02-01%' AND detail::text LIKE '%2020-02-02%')`).Scan(&untouched))
+	if !untouched {
+		t.Fatal("upgrade invented native obligations or lost explicit review evidence")
+	}
+	id, values := populateFinalizedLease(t, pool, client, web, cookie, company)
+	voidLeaseInvoiceAndReplay(t, pool, web, cookie, company, admin, id, values)
+	tables = append(tables, "lease_finalizations", "lease_billing_obligations", "lease_invoice_generations")
+	before = leasePreservationRows(t, pool, tables)
+	historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS()))
+	historyEqual(t, "migration replay preserves finalized coverage, pending IDs and Void provenance", leasePreservationRows(t, pool, tables), before)
+	assertFinalizedPreservation(t, pool, id)
 }

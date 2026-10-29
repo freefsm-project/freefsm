@@ -208,9 +208,26 @@ func TestLeaseFinalizationBoundariesHTTP(t *testing.T) {
 		{"exact equivalent rates", "", 0, 0, false, "5.000", 303},
 		{"future pending", "", 60, 60, false, "0", 303},
 		{"advance allowed before cutoff", "", 20, 20, false, "0", 303},
+		{"exactly thirty days eligible", "", 30, 30, false, "0", 303},
+		{"thirty one days pending", "", 31, 31, false, "0", 303},
+		{"cutoff excludes due by one day", "", 30, 31, false, "0", 303},
+		{"cutoff before due", "", 30, 29, false, "0", 303},
 		{"historical cutoff excludes initial", "", -60, 0, false, "0", 303},
+		{"historical explicit cutoff retains managed charges", "", -60, -60, false, "0", 303},
+		{"cutoff beyond fixed term remains explicit", "", 0, 800, false, "0", 303},
 		{"missing terms", "terms", 0, 0, true, "7", 409},
+		{"missing initial amount", "initial", 0, 0, true, "7", 409},
+		{"missing tax even exempt", "tax", 0, 0, true, "7", 409},
+		{"total amount overflow", "overflow", 0, 0, true, "7", 409},
 		{"archived Asset", "asset", 0, 0, false, "0", 409},
+		{"premises archive guarded", "premises", 0, 0, false, "0", 303},
+		{"Customer archive guarded", "customer", 0, 0, false, "0", 303},
+		{"missing premises", "missingpremises", 0, 0, false, "0", 409},
+		{"no selected Assets", "noassets", 0, 0, false, "0", 409},
+		{"missing managed cutoff", "cutoff", 0, 0, false, "0", 409},
+		{"missing commencement", "start", 0, 0, false, "0", 409},
+		{"missing fixed end", "end", 0, 0, false, "0", 409},
+		{"missing initial due", "missingdue", 0, 0, false, "0", 409},
 		{"reversed dates", "dates", 0, 0, false, "0", 409},
 		{"late initial due", "due", 0, 0, false, "0", 409},
 	} {
@@ -230,7 +247,11 @@ func TestLeaseFinalizationBoundariesHTTP(t *testing.T) {
 			historyCheck(t, pool.QueryRow(ctx, `SELECT lease_dependency_today($1)`, company).Scan(&today))
 			start := today.AddDate(0, 0, tc.startDays).Format(time.DateOnly)
 			path := fmt.Sprintf("/leases/%d", id)
-			fieldPost(t, web, cookie, path, url.Values{"revision": {"0"}, "starts_on": {start}, "ends_on": {today.AddDate(1, 0, 0).Format(time.DateOnly)}, "premises_id": {fmt.Sprint(l.ID)}, "asset_ids": {fmt.Sprint(a.ID), fmt.Sprint(b.ID)}}, 303)
+			premises := fmt.Sprint(l.ID)
+			if tc.fault == "missingpremises" {
+				premises = ""
+			}
+			fieldPost(t, web, cookie, path, url.Values{"revision": {"0"}, "starts_on": {start}, "ends_on": {today.AddDate(1, 0, 0).Format(time.DateOnly)}, "premises_id": {premises}, "asset_ids": {fmt.Sprint(a.ID), fmt.Sprint(b.ID)}}, 303)
 			svc := authorization.New(pool)
 			amount := int64(101)
 			for i, asset := range []int64{a.ID, b.ID} {
@@ -240,7 +261,28 @@ func TestLeaseFinalizationBoundariesHTTP(t *testing.T) {
 				}
 				historyCheck(t, svc.SaveDraftLeaseBilling(ctx, authorization.Actor{UserID: admin}, id, int64(i), start, authorization.DraftLeaseTerms{AssetID: asset, InitialCents: &amount, RentCents: &amount, TaxRate: rate}, 0))
 			}
+			revision := "1"
 			switch tc.fault {
+			case "noassets":
+				fieldPost(t, web, cookie, path, url.Values{"revision": {"1"}, "starts_on": {start}, "ends_on": {today.AddDate(1, 0, 0).Format(time.DateOnly)}, "premises_id": {premises}}, 303)
+				revision = "2"
+			case "initial", "tax", "overflow":
+				change := map[string]string{"initial": "initial_cents=NULL", "tax": "tax_rate=NULL", "overflow": "initial_cents=9223372036854775807,rent_cents=9223372036854775807"}[tc.fault]
+				_, err := pool.Exec(ctx, `UPDATE lease_draft_asset_terms SET `+change+` WHERE lease_id=$1`, id)
+				historyCheck(t, err)
+			case "start", "end":
+				column := map[string]string{"start": "starts_on", "end": "ends_on"}[tc.fault]
+				_, err := pool.Exec(ctx, `UPDATE leases SET `+column+`=NULL WHERE id=$1`, id)
+				historyCheck(t, err)
+			case "missingdue":
+				_, err := pool.Exec(ctx, `UPDATE lease_draft_billing SET initial_due_on=NULL WHERE lease_id=$1`, id)
+				historyCheck(t, err)
+			case "premises":
+				fieldPost(t, web, cookie, fmt.Sprintf("/locations/%d/delete", l.ID), nil, 409)
+			case "customer":
+				if _, err := pool.Exec(ctx, `UPDATE customers SET deleted_at=clock_timestamp() WHERE id=$1`, c.ID); err == nil {
+					t.Fatal("native Customer guard allowed an archived dependency")
+				}
 			case "terms":
 				_, err := pool.Exec(ctx, `UPDATE lease_draft_asset_terms SET rent_cents=NULL WHERE asset_id=$1`, b.ID)
 				historyCheck(t, err)
@@ -265,12 +307,19 @@ func TestLeaseFinalizationBoundariesHTTP(t *testing.T) {
 			u := client.User.Create().SetCompanyID(company).SetName("Finalizer").SetEmail("boundary-finalizer66@test").SetPasswordHash("x").SetRole("tech").SaveX(ctx)
 			historyCheck(t, svc.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role))
 			cookie = sessionCookie(t, ctx, sessions, u.ID)
-			fieldPost(t, web, cookie, path+"/finalize", url.Values{"revision": {"1"}, "billing_revision": {"2"}, "managed_billing_start": {today.AddDate(0, 0, tc.cutoffDays).Format(time.DateOnly)}}, tc.want)
+			tables := []string{"leases", "lease_master_dependencies", "lease_asset_dependencies", "lease_finalizations", "lease_billing_obligations", "lease_invoice_generations", "invoices", "company_settings", "issued_document_numbers", "authorization_audit"}
+			before := leasePreservationRows(t, pool, tables)
+			cutoff := today.AddDate(0, 0, tc.cutoffDays).Format(time.DateOnly)
+			if tc.fault == "cutoff" {
+				cutoff = ""
+			}
+			fieldPost(t, web, cookie, path+"/finalize", url.Values{"revision": {revision}, "billing_revision": {"2"}, "managed_billing_start": {cutoff}}, tc.want)
 			var finalized, invoices, initial int
 			historyCheck(t, pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM lease_finalizations),(SELECT count(*) FROM invoices),(SELECT count(*) FROM lease_billing_obligations WHERE kind='initial')`).Scan(&finalized, &invoices, &initial))
 			if tc.want == 409 {
+				historyEqual(t, "invalid finalization leaves no partial facts or numbering", leasePreservationRows(t, pool, tables), before)
 				if finalized != 0 || invoices != 0 {
-					t.Fatal("invalid tax partially finalized")
+					t.Fatal("invalid agreement partially finalized")
 				}
 				return
 			}
@@ -300,8 +349,30 @@ func TestLeaseFinalizationBoundariesHTTP(t *testing.T) {
 			if tc.startDays == 20 && invoices == 0 {
 				t.Fatal("cutoff incorrectly blocked advance generation")
 			}
-			if tc.startDays < 0 && initial != 0 {
+			if tc.startDays < tc.cutoffDays && initial != 0 {
 				t.Fatal("pre-cutoff charge invented")
+			}
+			var valid bool
+			historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM lease_billing_obligations WHERE due_on<$1::date) AND NOT EXISTS(SELECT 1 FROM lease_billing_obligations o WHERE EXISTS(SELECT 1 FROM lease_invoice_generations g WHERE g.obligation_id=o.id) IS DISTINCT FROM (o.due_on <= $2::date+30))`, today.AddDate(0, 0, tc.cutoffDays).Format(time.DateOnly), today.Format(time.DateOnly)).Scan(&valid))
+			if !valid {
+				t.Fatal("managed cutoff or inclusive 30-calendar-day generation boundary violated")
+			}
+			var pending int
+			historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM lease_billing_obligations o WHERE kind='monthly' AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations g WHERE g.obligation_id=o.id)`).Scan(&pending))
+			if pending != 1 {
+				t.Fatal("first not-yet-eligible monthly obligation must remain durable")
+			}
+			if tc.startDays == tc.cutoffDays && initial != 1 {
+				t.Fatal("cutoff-equal initial obligation missing")
+			}
+			historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM invoices i JOIN statuses s ON s.id=i.status_id WHERE s.category_key<>'invoice:draft' OR i.settlement_state<>'unpaid') AND NOT EXISTS(SELECT 1 FROM invoice_payments) AND NOT EXISTS(SELECT 1 FROM document_deliveries) AND NOT EXISTS(SELECT 1 FROM lease_billing_obligations WHERE kind='monthly' AND extract(day FROM due_on)<>1)`).Scan(&valid))
+			if !valid {
+				t.Fatal("finalization invented issuance, settlement, delivery or a non-monthly rent date")
+			}
+			var fullCharges bool
+			historyCheck(t, pool.QueryRow(ctx, `SELECT bool_and((financial::jsonb->'result'->>'pretax_cents')::bigint=202) FROM lease_billing_obligations`).Scan(&fullCharges))
+			if !fullCharges {
+				t.Fatal("initial/monthly obligations must retain full per-Asset charges without proration")
 			}
 			if tc.exempt {
 				rows, err := pool.Query(ctx, `SELECT financial FROM invoices`)

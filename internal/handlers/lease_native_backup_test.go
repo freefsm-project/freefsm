@@ -82,7 +82,19 @@ func TestLeaseNativeEncryptedBackupNormalRoles(t *testing.T) {
 	fieldPost(t, web, adminCookie, fmt.Sprintf("/assets/%d/delete", asset.ID), nil, 303)
 	_, err = src.pool.Exec(ctx, `SELECT set_lease_master_dependencies(900,$1,$2,NULL,'terminated',true,'[]')`, src.company, c.ID)
 	historyCheck(t, err)
-	tables := []string{"leases", "lease_intended_assets", "lease_draft_billing", "lease_draft_asset_terms", "lease_master_dependencies", "lease_asset_dependencies", "issued_document_numbers", "company_settings", "customers", "locations", "assets", "asset_types", "comments", "files", "tags", "tag_links", "custom_field_definitions", "users", "authorization_roles", "authorization_grants"}
+	var workflow int64
+	tx, err := src.pool.Begin(ctx)
+	historyCheck(t, err)
+	defer tx.Rollback(ctx)
+	historyCheck(t, tx.QueryRow(ctx, `INSERT INTO status_workflows(company_id,name,object_type) VALUES($1,'Invoices','invoice') RETURNING id`, src.company).Scan(&workflow))
+	for _, category := range []string{"draft", "invoiced", "sent", "partially_paid", "paid", "void"} {
+		_, err = tx.Exec(ctx, `INSERT INTO statuses(company_id,workflow_id,name,category_key,category_order,is_category_default) VALUES($1,$2,$3,$4,1,true)`, src.company, workflow, category, "invoice:"+category)
+		historyCheck(t, err)
+	}
+	historyCheck(t, tx.Commit(ctx))
+	finalized, finalizeValues := populateFinalizedLease(t, src.pool, src.client, web, adminCookie, src.company)
+	voidLeaseInvoiceAndReplay(t, src.pool, web, adminCookie, src.company, src.actor, finalized, finalizeValues)
+	tables := []string{"leases", "lease_intended_assets", "lease_draft_billing", "lease_draft_asset_terms", "lease_master_dependencies", "lease_asset_dependencies", "lease_finalizations", "lease_billing_obligations", "lease_invoice_generations", "invoices", "issued_document_numbers", "company_settings", "customers", "locations", "assets", "asset_types", "comments", "files", "tags", "tag_links", "custom_field_definitions", "users", "authorization_roles", "authorization_grants"}
 	snapshot := func(pool *pgxpool.Pool) map[string]string {
 		out := map[string]string{}
 		for _, table := range tables {
@@ -98,9 +110,10 @@ func TestLeaseNativeEncryptedBackupNormalRoles(t *testing.T) {
 	before := snapshot(src.pool)
 	logLeaseInventory(t, "encrypted backup source inventory (root-relative File paths)", before)
 	var through, lastID int64
-	var audit string
+	var audit, sequences string
 	historyCheck(t, src.pool.QueryRow(ctx, `SELECT max(id),jsonb_agg(to_jsonb(a) ORDER BY id)::text FROM authorization_audit a`).Scan(&through, &audit))
 	historyCheck(t, src.pool.QueryRow(ctx, `SELECT pg_sequence_last_value(pg_get_serial_sequence('leases','id')::regclass)`).Scan(&lastID))
+	historyCheck(t, src.pool.QueryRow(ctx, `SELECT jsonb_agg(jsonb_build_array(sequencename,last_value) ORDER BY sequencename)::text FROM pg_sequences WHERE schemaname='public' AND sequencename IN ('leases_id_seq','lease_billing_obligations_id_seq','invoices_id_seq')`).Scan(&sequences))
 	src.roundTripTo(t, dst)
 	historyCheck(t, dst.manager.RefreshConnections())
 	historyEqual(t, "encrypted native restore preserves all master, agreement, field, collaborator, grant and numbering facts", snapshot(dst.pool), before)
@@ -112,7 +125,14 @@ func TestLeaseNativeEncryptedBackupNormalRoles(t *testing.T) {
 	var restoredLast int64
 	historyCheck(t, dst.pool.QueryRow(ctx, `SELECT pg_sequence_last_value(pg_get_serial_sequence('leases','id')::regclass)`).Scan(&restoredLast))
 	historyEqual(t, "native identity sequence preserved", restoredLast, lastID)
+	var restoredSequences string
+	historyCheck(t, dst.pool.QueryRow(ctx, `SELECT jsonb_agg(jsonb_build_array(sequencename,last_value) ORDER BY sequencename)::text FROM pg_sequences WHERE schemaname='public' AND sequencename IN ('leases_id_seq','lease_billing_obligations_id_seq','invoices_id_seq')`).Scan(&restoredSequences))
+	historyEqual(t, "Lease, obligation and Invoice sequence identities preserved", restoredSequences, sequences)
 	web = middleware.Company(services.NewCompanySettingsService(dst.client))(New(dst.pool, dst.client, dst.sessions, &config.Config{UploadDir: dst.uploadDir, MaxUploadSize: 25 << 20}))
+	assertFinalizedPreservation(t, dst.pool, finalized)
+	adminCookie = sessionCookie(t, ctx, dst.sessions, src.actor)
+	fieldPost(t, web, adminCookie, fmt.Sprintf("/leases/%d/finalize", finalized), finalizeValues, 303)
+	historyEqual(t, "restored Void replay preserves pending and generation IDs and numbering", snapshot(dst.pool), before)
 	baseCookie = sessionCookie(t, ctx, dst.sessions, userIDs["base"])
 	billingCookie = sessionCookie(t, ctx, dst.sessions, userIDs["billing"])
 	body := requestBody(t, web, baseCookie, "GET", path, 200)
@@ -133,10 +153,10 @@ func TestLeaseNativeEncryptedBackupNormalRoles(t *testing.T) {
 	assertContains(t, requestBody(t, web, baseCookie, "GET", path+"/comments", 200), "Preserved native discussion")
 	fieldPost(t, web, baseCookie, path+"/restore", nil, 303)
 	var stateOnly bool
-	historyCheck(t, dst.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM locations WHERE id=$1 AND deleted_at IS NOT NULL) AND EXISTS(SELECT 1 FROM assets WHERE id=$2 AND deleted_at IS NOT NULL AND customer_id IS NULL) AND NOT EXISTS(SELECT 1 FROM lease_asset_dependencies) AND NOT EXISTS(SELECT 1 FROM invoices) AND NOT EXISTS(SELECT 1 FROM leases WHERE id=900)`, l.ID, asset.ID).Scan(&stateOnly))
+	historyCheck(t, dst.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM locations WHERE id=$1 AND deleted_at IS NOT NULL) AND EXISTS(SELECT 1 FROM assets WHERE id=$2 AND deleted_at IS NOT NULL AND customer_id IS NULL) AND NOT EXISTS(SELECT 1 FROM lease_asset_dependencies WHERE lease_id=$3) AND NOT EXISTS(SELECT 1 FROM invoices WHERE lease_id=$3) AND NOT EXISTS(SELECT 1 FROM leases WHERE id=900)`, l.ID, asset.ID, id).Scan(&stateOnly))
 	if !stateOnly {
 		t.Fatal("restored native history revived dependencies or fabricated agreements/effects")
 	}
 	fieldPost(t, web, baseCookie, "/leases", url.Values{"customer_id": {fmt.Sprint(c.ID)}}, 303)
-	assertContains(t, requestBody(t, web, baseCookie, "GET", "/leases", 200), "BACK-00092")
+	assertContains(t, requestBody(t, web, baseCookie, "GET", "/leases", 200), "BACK-00093")
 }
