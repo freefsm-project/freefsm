@@ -6,7 +6,7 @@ import "github.com/freefsm-project/freefsm/internal/authorization"
 templ LeaseBillingPeriodPage(p authorization.LeaseBillingPeriod) {
  @Layout("Lease billing period") {
   <h1>Lease billing period</h1>
-  <a href={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.LeaseID)) }>Billing</a>
+  <a href={ templ.URL(leaseBillingListURL(p.LeaseID,p.ListQuery,p.ListQuery.Page,p.ListQuery.Filter)) }>Billing</a>
   <p>{ p.Kind } due { p.DueOn }; approved total { fmt.Sprint(p.TotalCents) } cents.</p>
   if p.EligibilityMessage != "" {
    <p role="status">{ p.EligibilityMessage }</p>
@@ -46,7 +46,7 @@ templ LeaseBillingPeriodPage(p authorization.LeaseBillingPeriod) {
   if p.CanReplace {
    <h2>Review replacement</h2>
    <p>The current generation is Void. Explicit replacement creates one ordinary Draft for this exact obligation and preserves the original Invoice and generation history.</p>
-   <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d/replace",p.LeaseID,p.ObligationID)) }>
+   <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d/replace",p.LeaseID,p.ObligationID)+leaseBillingQuerySuffix(p.ListQuery)) }>
     <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
     <input type="hidden" name="invoice_id" value={ fmt.Sprint(p.InvoiceID) }/>
     <input type="hidden" name="review_hash" value={ p.ReviewHash }/>
@@ -56,7 +56,7 @@ templ LeaseBillingPeriodPage(p authorization.LeaseBillingPeriod) {
    <p>If the response is lost, reopen this period to read its generation receipt. Resubmitting the same reviewed operation does not create another Invoice.</p>
   }
   if p.CanRetry {
-   <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d/retry",p.LeaseID,p.ObligationID)) }>
+   <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d/retry",p.LeaseID,p.ObligationID)+leaseBillingQuerySuffix(p.ListQuery)) }>
     <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
     <input type="hidden" name="review_hash" value={ p.ReviewHash }/>
     <input type="hidden" name="operation_key" value={ p.OperationKey }/>

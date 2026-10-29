@@ -49,9 +49,9 @@ func LeaseBillingPeriodPage(p authorization.LeaseBillingPeriod) templ.Component 
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var3 templ.SafeURL
-			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/leases/%d/billing", p.LeaseID)))
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(leaseBillingListURL(p.LeaseID, p.ListQuery, p.ListQuery.Page, p.ListQuery.Filter)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/lease_billing_period.templ`, Line: 9, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/lease_billing_period.templ`, Line: 9, Col: 101}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -381,9 +381,9 @@ func LeaseBillingPeriodPage(p authorization.LeaseBillingPeriod) templ.Component 
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var21 templ.SafeURL
-				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d/replace", p.LeaseID, p.ObligationID)))
+				templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d/replace", p.LeaseID, p.ObligationID) + leaseBillingQuerySuffix(p.ListQuery)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/lease_billing_period.templ`, Line: 49, Col: 120}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/lease_billing_period.templ`, Line: 49, Col: 157}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 				if templ_7745c5c3_Err != nil {
@@ -456,9 +456,9 @@ func LeaseBillingPeriodPage(p authorization.LeaseBillingPeriod) templ.Component 
 					return templ_7745c5c3_Err
 				}
 				var templ_7745c5c3_Var26 templ.SafeURL
-				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d/retry", p.LeaseID, p.ObligationID)))
+				templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d/retry", p.LeaseID, p.ObligationID) + leaseBillingQuerySuffix(p.ListQuery)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/lease_billing_period.templ`, Line: 59, Col: 118}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/lease_billing_period.templ`, Line: 59, Col: 155}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 				if templ_7745c5c3_Err != nil {

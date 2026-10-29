@@ -25,6 +25,7 @@ type LeaseBillingPeriod struct {
 	EligibilityMessage                             string
 	OriginalTotalCents                             int64
 	Revisions                                      []LeaseBillingRevision
+	ListQuery                                      LeaseBillingQuery
 }
 
 type LeaseBillingRevision struct {
@@ -142,7 +143,7 @@ func readLeaseBillingPeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, 
 	return out, nil
 }
 
-func (s *Service) ReviewLeaseBillingPeriod(ctx context.Context, a Actor, lease, obligation int64) (LeaseBillingPeriod, error) {
+func (s *Service) ReviewLeaseBillingPeriod(ctx context.Context, a Actor, lease, obligation int64, options ...LeaseBillingQuery) (LeaseBillingPeriod, error) {
 	var out LeaseBillingPeriod
 	err := s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
 		if a.Channel == "api" || !p.Allows("lease.billing.view", All) {
@@ -150,6 +151,14 @@ func (s *Service) ReviewLeaseBillingPeriod(ctx context.Context, a Actor, lease, 
 		}
 		var err error
 		out, err = readLeaseBillingPeriod(ctx, tx, p, lease, obligation)
+		if err != nil {
+			return err
+		}
+		query := LeaseBillingQuery{}
+		if len(options) > 0 {
+			query = options[0]
+		}
+		out.ListQuery, err = NormalizeLeaseBillingQuery(query)
 		return err
 	})
 	return out, err

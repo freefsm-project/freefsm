@@ -25,6 +25,20 @@ type LeaseHandler struct {
 	fields    *services.CustomFieldDefinitionService
 }
 
+func leaseBillingQuery(r *http.Request) authorization.LeaseBillingQuery {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	size, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
+	return authorization.LeaseBillingQuery{Page: page, PerPage: size, Filter: r.URL.Query().Get("filter")}
+}
+
+func leaseBillingPeriodDestination(r *http.Request, lease, obligation int64) string {
+	q, err := authorization.NormalizeLeaseBillingQuery(leaseBillingQuery(r))
+	if err != nil {
+		q, _ = authorization.NormalizeLeaseBillingQuery(authorization.LeaseBillingQuery{})
+	}
+	return templates.LeaseBillingPeriodURL(lease, obligation, q)
+}
+
 func (h *LeaseHandler) BillingPeriod(w http.ResponseWriter, r *http.Request) {
 	lease, e1 := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	obligation, e2 := strconv.ParseInt(chi.URLParam(r, "obligation"), 10, 64)
@@ -32,7 +46,7 @@ func (h *LeaseHandler) BillingPeriod(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	data, err := h.authority.ReviewLeaseBillingPeriod(r.Context(), authorizationActor(r), lease, obligation)
+	data, err := h.authority.ReviewLeaseBillingPeriod(r.Context(), authorizationActor(r), lease, obligation, leaseBillingQuery(r))
 	if err != nil {
 		authorizationError(w, r, err)
 		return
@@ -53,7 +67,7 @@ func (h *LeaseHandler) ReplaceBillingPeriod(w http.ResponseWriter, r *http.Reque
 		authorizationError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/leases/%d/billing/periods/%d", lease, obligation), 303)
+	http.Redirect(w, r, leaseBillingPeriodDestination(r, lease, obligation), 303)
 }
 
 func (h *LeaseHandler) RetryBillingPeriod(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +82,7 @@ func (h *LeaseHandler) RetryBillingPeriod(w http.ResponseWriter, r *http.Request
 		authorizationError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/leases/%d/billing/periods/%d", lease, obligation), 303)
+	http.Redirect(w, r, leaseBillingPeriodDestination(r, lease, obligation), 303)
 }
 
 func (h *LeaseHandler) FinalizationReview(w http.ResponseWriter, r *http.Request) {
@@ -298,7 +312,7 @@ func (h *LeaseHandler) Billing(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		p, err := h.authority.DraftLeaseBilling(r.Context(), authorizationActor(r), id)
+		p, err := h.authority.DraftLeaseBilling(r.Context(), authorizationActor(r), id, leaseBillingQuery(r))
 		if err != nil {
 			authorizationError(w, r, err)
 			return

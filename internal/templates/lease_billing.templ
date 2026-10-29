@@ -1,9 +1,26 @@
 package templates
 
 import "fmt"
+import "net/url"
 import "github.com/freefsm-project/freefsm/internal/authorization"
 
 func leaseCents(v *int64) string { if v==nil {return ""};return fmt.Sprint(*v) }
+
+func leaseBillingQuerySuffix(q authorization.LeaseBillingQuery) string {
+ if q.Page==1 && q.PerPage==25 && q.Filter=="all" {return ""}
+ return "?"+url.Values{"page":{fmt.Sprint(q.Page)},"per_page":{fmt.Sprint(q.PerPage)},"filter":{q.Filter}}.Encode()
+}
+
+func LeaseBillingPeriodURL(lease,obligation int64,q authorization.LeaseBillingQuery)string {
+ return fmt.Sprintf("/leases/%d/billing/periods/%d",lease,obligation)+leaseBillingQuerySuffix(q)
+}
+
+func leaseBillingListURL(lease int64,q authorization.LeaseBillingQuery,page int,filter string)string {
+ q.Page=page;q.Filter=filter
+ return fmt.Sprintf("/leases/%d/billing",lease)+leaseBillingQuerySuffix(q)
+}
+
+func leaseBillingLastPage(p authorization.DraftLeaseBilling)int {return max(1,(p.Total+p.Query.PerPage-1)/p.Query.PerPage)}
 
 templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 	@Layout(p.Number+" Billing") {
@@ -17,20 +34,56 @@ templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 			<h2>Last scheduler failure</h2>
 			<p role="alert">{ p.GenerationFailure }</p>
 		}
-		if len(p.Failures) > 0 {
-			<h2>Periods requiring retry (up to 100)</h2>
-			for _, failure := range p.Failures {
-				<p role="alert">{ failure.Kind } due { failure.DueOn }: { failure.Message }</p>
-			}
-		}
-		if len(p.Periods) > 0 {
-			<h2>Recent billing obligations (up to 100)</h2>
-			for _, period := range p.Periods {
-				<p><a href={ templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d",p.ID,period.ObligationID)) }>{ period.Kind } due { period.DueOn }</a></p>
-				if len(period.ReviewFlags) > 0 {
-					<p role="alert">Manual review required for generated billing in this period.</p>
+		if p.Finalized && !p.Archived {
+			<h2>Billing periods</h2>
+			<nav aria-label="Billing period filters">
+				<a href={ templ.URL(leaseBillingListURL(p.ID,p.Query,1,"all")) }>All periods</a>
+				<a href={ templ.URL(leaseBillingListURL(p.ID,p.Query,1,"review")) }>Review required</a>
+				<a href={ templ.URL(leaseBillingListURL(p.ID,p.Query,1,"failed")) }>Periods requiring retry</a>
+			</nav>
+			<form method="get" action={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.ID)) }>
+				<label for="billing-period-filter">Filter</label><select id="billing-period-filter" name="filter">
+					<option value="all" selected?={p.Query.Filter=="all"}>All periods</option>
+					<option value="review" selected?={p.Query.Filter=="review"}>Review required</option>
+					<option value="failed" selected?={p.Query.Filter=="failed"}>Failed periods</option>
+				</select>
+				<label for="billing-period-size">Per page</label><select id="billing-period-size" name="per_page">
+					for _, size := range []int{25,50,100} {
+						<option value={fmt.Sprint(size)} selected?={p.Query.PerPage==size}>{fmt.Sprint(size)}</option>
+					}
+				</select><button>Apply</button>
+			</form>
+			<p>{fmt.Sprint(p.Total)} billing periods</p>
+			<ul aria-label="Billing periods">
+				for _, period := range p.Periods {
+					<li>
+						if period.ObligationID != 0 {
+							<a href={ templ.URL(LeaseBillingPeriodURL(p.ID,period.ObligationID,p.Query)) }>{ period.Kind } due { period.DueOn }</a>
+						} else {
+							<span>{ period.Kind } due { period.DueOn }</span><p>No obligation materialized.</p>
+						}
+						if period.ReviewRequired {
+							<p role="alert">Manual review required for generated billing in this period.</p>
+						}
+						if period.Failure != "" {
+							<p role="alert">{ period.Failure }</p>
+						}
+					</li>
 				}
-			}
+			</ul>
+			<nav aria-label="Billing period pages">
+				<p>Page {fmt.Sprint(p.Query.Page)} of {fmt.Sprint(leaseBillingLastPage(p))}</p>
+				if p.Query.Page > 1 {
+					<a href={templ.URL(leaseBillingListURL(p.ID,p.Query,1,p.Query.Filter))}>First</a>
+					<a href={templ.URL(leaseBillingListURL(p.ID,p.Query,p.Query.Page-1,p.Query.Filter))}>Previous</a>
+				}
+				if p.Query.Page < leaseBillingLastPage(p) {
+					<a href={templ.URL(leaseBillingListURL(p.ID,p.Query,p.Query.Page+1,p.Query.Filter))}>Next</a>
+				}
+				if p.Query.Page != leaseBillingLastPage(p) {
+					<a href={templ.URL(leaseBillingListURL(p.ID,p.Query,leaseBillingLastPage(p),p.Query.Filter))}>Last</a>
+				}
+			</nav>
 		}
 		if p.Finalized || p.Lifecycle != "draft" {
 			<p>Finalized billing terms — read-only. Generated Invoices retain their original commercial facts. Amounts are whole cents; tax is a percentage.</p>
