@@ -14,6 +14,8 @@ import (
 // DraftLeaseBase contains no financial fields, even for a fully privileged actor.
 type DraftLeaseBase struct {
 	LeaseCalendar
+	// Coverage is the retained finalized timeline, not Draft selection intent.
+	Coverage                                                  []LeaseAssetDependency
 	UnplacedAssetIDs, WrongPremisesAssetIDs                   []int64
 	ID, CustomerID, Revision                                  int64
 	Number, Title, Reference, ExecutionDate, StartsOn, EndsOn string
@@ -21,7 +23,7 @@ type DraftLeaseBase struct {
 	AssetIDs                                                  []int64
 	CustomFields                                              string
 	CanManage                                                 bool
-	CanReviewFinalization                                      bool
+	CanReviewFinalization                                     bool
 	Archived, CanArchive, CanRestore, PremisesArchived        bool
 	ArchivedAssetIDs                                          []int64
 }
@@ -46,12 +48,23 @@ func readLeaseBase(ctx context.Context, tx pgx.Tx, p Principal, id int64) (Draft
 		err = ErrNotFound
 	}
 	if err == nil {
-		var state string
-		var today time.Time
-		err = tx.QueryRow(ctx, `SELECT lifecycle,lease_dependency_today(company_id) FROM leases WHERE id=$1`, id).Scan(&state, &today)
-		if err == nil {
-			out.LeaseCalendar, err = leaseCalendar(state, out.StartsOn, out.EndsOn, today)
+		out.LeaseCalendar, err = readLeaseCalendar(ctx, tx, id)
+	}
+	if err == nil {
+		var rows pgx.Rows
+		rows, err = tx.Query(ctx, `SELECT asset_id,starts_on::text,ends_on::text FROM lease_asset_dependencies WHERE lease_id=$1 ORDER BY asset_id,starts_on`, id)
+		if err != nil {
+			return out, err
 		}
+		defer rows.Close()
+		for rows.Next() {
+			var coverage LeaseAssetDependency
+			if err := rows.Scan(&coverage.AssetID, &coverage.StartsOn, &coverage.EndsOn); err != nil {
+				return out, err
+			}
+			out.Coverage = append(out.Coverage, coverage)
+		}
+		err = rows.Err()
 	}
 	if err == nil {
 		err = tx.QueryRow(ctx, `SELECT ARRAY(SELECT a.id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id WHERE i.lease_id=$1 AND a.customer_id IS NULL ORDER BY a.id),ARRAY(SELECT a.id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id JOIN leases l ON l.id=i.lease_id WHERE i.lease_id=$1 AND a.customer_id=l.customer_id AND a.location_id IS DISTINCT FROM l.premises_id ORDER BY a.id)`, id).Scan(&out.UnplacedAssetIDs, &out.WrongPremisesAssetIDs)

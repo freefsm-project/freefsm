@@ -20,6 +20,7 @@ type DraftLeaseTerms struct {
 
 // Billing has its own DTO and queries: it never loads base details/collaboration.
 type DraftLeaseBilling struct {
+	Lifecycle            string
 	Finalized            bool
 	ID, Revision         int64
 	Number, InitialDueOn string
@@ -44,6 +45,11 @@ func readLeaseBilling(ctx context.Context, tx pgx.Tx, p Principal, id int64) (Dr
 	if out.Archived && !p.Allows("lease.archived.view", All) {
 		return out, ErrNotFound
 	}
+	calendar, err := readLeaseCalendar(ctx, tx, id)
+	if err != nil {
+		return out, err
+	}
+	out.Lifecycle = calendar.Lifecycle
 	rows, err := tx.Query(ctx, `SELECT ids.asset_id,t.initial_cents,t.rent_cents,coalesce(t.tax_rate::text,''),EXISTS(SELECT 1 FROM lease_intended_assets i WHERE i.lease_id=$1 AND i.asset_id=ids.asset_id),EXISTS(SELECT 1 FROM assets a WHERE a.id=ids.asset_id AND a.deleted_at IS NOT NULL) FROM (SELECT asset_id FROM lease_intended_assets WHERE lease_id=$1 UNION SELECT asset_id FROM lease_draft_asset_terms WHERE lease_id=$1) ids LEFT JOIN lease_draft_asset_terms t ON t.lease_id=$1 AND t.asset_id=ids.asset_id ORDER BY ids.asset_id`, id)
 	if err != nil {
 		return out, err
@@ -67,7 +73,7 @@ func (s *Service) DraftLeaseBilling(ctx context.Context, a Actor, id int64) (Dra
 		}
 		var err error
 		out, err = readLeaseBilling(ctx, tx, p, id)
-		out.CanManage = !out.Archived && !out.Finalized && p.Allows("lease.billing.manage", All)
+		out.CanManage = !out.Archived && !out.Finalized && out.Lifecycle == "draft" && p.Allows("lease.billing.manage", All)
 		return err
 	})
 	return out, err
@@ -100,7 +106,7 @@ func (s *Service) SaveDraftLeaseBilling(ctx context.Context, a Actor, id, revisi
 		if old.Archived {
 			return ErrForbidden
 		}
-		if old.Finalized {
+		if old.Finalized || old.Lifecycle != "draft" {
 			return ErrConflict
 		}
 		if old.LifecycleRevision != lifecycleRevision {

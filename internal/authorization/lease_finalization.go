@@ -48,6 +48,9 @@ func (s *Service) FinalizeLease(ctx context.Context, a Actor, id int64, in Lease
 		if err != pgx.ErrNoRows {
 			return err
 		}
+		if base.Lifecycle != "draft" {
+			return ErrConflict
+		}
 		billing, err := readLeaseBilling(ctx, tx, p, id)
 		if err != nil {
 			return err
@@ -140,7 +143,7 @@ func (s *Service) FinalizeLease(ctx context.Context, a Actor, id int64, in Lease
 		if err := audit(ctx, tx, a, p, "lease.billing.finalize", All, "lease", id, map[string]any{"after": map[string]any{"InitialDueOn": billing.InitialDueOn, "Terms": billing.Terms, "ManagedBillingStart": in.ManagedBillingStart}}); err != nil {
 			return err
 		}
-		return audit(ctx, tx, a, p, "lease.finalize", All, "lease", id, map[string]any{"after": map[string]any{"StartsOn": base.StartsOn, "EndsOn": base.EndsOn, "PremisesID": base.PremisesID, "AssetIDs": base.AssetIDs}})
+		return audit(ctx, tx, a, p, "lease.finalize", All, "lease", id, map[string]any{"after": map[string]any{"StartsOn": base.StartsOn, "EndsOn": base.EndsOn, "PremisesID": base.PremisesID, "AssetIDs": base.AssetIDs, "Coverage": coverage}})
 	})
 }
 

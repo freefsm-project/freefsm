@@ -44,16 +44,23 @@ Customer exemption removes otherwise-valid rate conflicts. The existing exact
 commercial calculator owns totals and rounding. No rate blending or tax-based
 Invoice splitting occurs.
 
-## Milestone boundary
+## Owning boundaries
 
-This slice supplies the transactional HTTP command, browser review/receipt and
-read-derived lifecycle detail, with unplaced/wrong-premises warnings. Draft
-edit/archive commands cannot rewrite a finalized agreement. Reasoned
-post-finalization revision commands, exhaustive native race/API checks, and
-populated upgrade/encrypted-backup qualification are
-remaining milestones. The ongoing scheduler/retry worker belongs to #67 and
-must recheck current eligibility and tax facts without silently repricing retained
-snapshots. This is not full ticket or release qualification.
+This slice supplies the transactional HTTP command, browser review/receipt,
+date-derived current reads and finalized base coverage contract. Draft writers
+cannot change finalized terms, dates or selections, including moving a selection
+out to another Draft. Generated and pending obligation snapshots both remain
+immutable. Pending does not mean permission to mutate approved inputs: a later
+reasoned revision must explicitly reconcile pending obligations and flag generated
+documents for review, never rewrite or automatically replace a generated Invoice.
+Those revision/termination/manual-review commands belong to their later owning
+tickets. Retained Terminated facts are readable here without adding a workflow.
+
+The ongoing scheduler/retry worker belongs to #67 and must recheck current
+eligibility and tax facts without silently repricing snapshots. Downstream related
+views and Job context are separately owned. These boundaries are not missing #66
+features. Full race/browser qualification and independent review remain separate
+from focused source verification.
 
 ## Browser review and recovery
 
@@ -73,7 +80,19 @@ The base Lease domain read includes `LeaseCalendar`: lifecycle plus the current
 monthly renewal's inclusive `RenewalStartsOn` and `RenewalEndsOn`. Renewal dates
 are empty during Draft, Scheduled, Active and Terminated states. The company-local
 civil date comes from `lease_dependency_today`; reading never updates agreement
-state or generates billing. Field API access remains independently denied.
+state or generates billing. List (both facets), Billing and history headers use
+the same company-date derivation; historical audit payloads remain captured facts,
+not retroactively recalculated events. Field API access remains independently denied.
+
+`DraftLeaseBase.Coverage` exposes the retained finalized Asset intervals with
+inclusive starts/ends (nil end means ongoing), distinct from `AssetIDs` Draft
+selection intent. The base DTO and base history contain no commercial terms.
+Billing retains its own DTO/grants and exposes lifecycle without base coverage,
+premises, collaboration or renewal-date fields. Reading coverage needs Lease View,
+not independent Asset View; new dependency selections still need their own All
+Records View, while saved selections do not expand selection authority. All saved
+dependencies are revalidated for company, ownership, archive and timeline eligibility
+at finalization. No Invoice Create prerequisite is imposed.
 
 The first renewal starts the day after the inclusive fixed end. Every later
 boundary is calculated from that original anchor, clamping to the target month's

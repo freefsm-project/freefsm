@@ -9,6 +9,7 @@ import (
 )
 
 type LeaseListRow struct {
+	Lifecycle     string
 	ID            int64
 	Number, Title string
 	Archived      bool
@@ -52,20 +53,27 @@ func (s *Service) LeaseList(ctx context.Context, a Actor, billing bool, search, 
 		if out.Billing {
 			title, searchExpr = "''::text", "number_label"
 		}
-		where := ` FROM leases WHERE company_id=$1 AND ($2='all' OR ($2='archived')=(deleted_at IS NOT NULL)) AND strpos(lower(` + searchExpr + `),lower($3))>0`
+		where := ` FROM leases l WHERE company_id=$1 AND ($2='all' OR ($2='archived')=(deleted_at IS NOT NULL)) AND strpos(lower(` + searchExpr + `),lower($3))>0`
 		if err := tx.QueryRow(ctx, `SELECT count(*)`+where, p.CompanyID, out.State, search).Scan(&out.Total); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT id,number_label,`+title+`,deleted_at IS NOT NULL`+where+` ORDER BY document_number,id LIMIT $4 OFFSET $5`, p.CompanyID, out.State, search, out.PerPage, (out.Page-1)*out.PerPage)
+		rows, err := tx.Query(ctx, `SELECT id,number_label,`+title+`,deleted_at IS NOT NULL,`+leaseCalendarColumns+where+` ORDER BY document_number,id LIMIT $4 OFFSET $5`, p.CompanyID, out.State, search, out.PerPage, (out.Page-1)*out.PerPage)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var row LeaseListRow
-			if err := rows.Scan(&row.ID, &row.Number, &row.Title, &row.Archived); err != nil {
+			var state, start, end string
+			var today time.Time
+			if err := rows.Scan(&row.ID, &row.Number, &row.Title, &row.Archived, &state, &start, &end, &today); err != nil {
 				return err
 			}
+			calendar, err := leaseCalendar(state, start, end, today)
+			if err != nil {
+				return err
+			}
+			row.Lifecycle = calendar.Lifecycle
 			out.Rows = append(out.Rows, row)
 		}
 		return rows.Err()
@@ -104,10 +112,11 @@ type LeaseHistoryEvent struct {
 	AgreementChanged bool
 }
 type LeaseHistory struct {
-	ID      int64
-	Number  string
-	Billing bool
-	Events  []LeaseHistoryEvent
+	Lifecycle string
+	ID        int64
+	Number    string
+	Billing   bool
+	Events    []LeaseHistoryEvent
 }
 
 // History is an allowlisted projection of captured immutable events. It neither
@@ -133,6 +142,11 @@ func (s *Service) LeaseHistory(ctx context.Context, a Actor, id int64, billing b
 		if archived && !p.Allows("lease.archived.view", All) {
 			return ErrNotFound
 		}
+		calendar, err := readLeaseCalendar(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		out.Lifecycle = calendar.Lifecycle
 		actions := []string{"lease.create", "lease.details.change", "lease.finalize", "lease.archive", "lease.restore"}
 		if billing {
 			actions = []string{"lease.billing.change", "lease.billing.finalize", "lease.archive", "lease.restore"}
@@ -156,7 +170,7 @@ func (s *Service) LeaseHistory(ctx context.Context, a Actor, id int64, billing b
 			if event.Action == "lease.create" {
 				after = detail
 			}
-			keys := []string{"ID", "CustomerID", "Number", "Title", "Reference", "ExecutionDate", "StartsOn", "EndsOn", "PremisesID", "AssetIDs", "CustomFields"}
+			keys := []string{"ID", "CustomerID", "Number", "Title", "Reference", "ExecutionDate", "StartsOn", "EndsOn", "PremisesID", "AssetIDs", "Coverage", "CustomFields"}
 			if billing {
 				keys = []string{"ID", "Number", "InitialDueOn", "Terms", "ManagedBillingStart"}
 			}

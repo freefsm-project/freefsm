@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,7 +68,7 @@ func TestLeaseFinalizationHTTP(t *testing.T) {
 	// Inject a late failure after numbering and generation, proving all-or-zero.
 	_, err = pool.Exec(ctx, `CREATE FUNCTION reject_finalization_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='lease.finalize' THEN RAISE EXCEPTION 'injected finalization audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_finalization_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION reject_finalization_audit()`)
 	historyCheck(t, err)
-	tables := []string{"leases", "lease_master_dependencies", "lease_asset_dependencies", "lease_finalizations", "lease_billing_obligations", "lease_invoice_generations", "invoices", "company_settings", "issued_document_numbers", "authorization_audit"}
+	tables := []string{"leases", "lease_intended_assets", "lease_draft_asset_terms", "lease_draft_billing", "lease_master_dependencies", "lease_asset_dependencies", "lease_finalizations", "lease_billing_obligations", "lease_invoice_generations", "invoices", "company_settings", "issued_document_numbers", "authorization_audit"}
 	rows := func() map[string]string {
 		out := map[string]string{}
 		for _, table := range tables {
@@ -168,6 +169,19 @@ func TestLeaseFinalizationHTTP(t *testing.T) {
 	_, err = svc.SaveRole(ctx, authorization.Actor{UserID: admin}, role, "Lease finalizer", []authorization.Grant{{Permission: "lease.view", Scope: authorization.All}}, roleRevision)
 	historyCheck(t, err)
 	fieldPost(t, web, cookie, path+"/finalize", values, 403)
+	baseOnly, err := svc.DraftLeaseBase(ctx, authorization.Actor{UserID: u.ID}, id)
+	historyCheck(t, err)
+	if len(baseOnly.Coverage) != 1 || baseOnly.Coverage[0].AssetID != a.ID {
+		t.Fatalf("base-only finalized coverage: %+v", baseOnly.Coverage)
+	}
+	baseHistory := requestBody(t, web, cookie, "GET", path+"/history", 200)
+	for _, financialKey := range []string{"InitialDueOn", "Terms", "ManagedBillingStart", "RentCents", "TaxRate"} {
+		if strings.Contains(baseHistory, financialKey) {
+			t.Fatalf("base history exposed %s", financialKey)
+		}
+	}
+	requestBody(t, web, cookie, "GET", path+"/billing", 404)
+	requestBody(t, web, cookie, "GET", path+"/billing/history", 404)
 	// Drafts do not reserve Assets, but a second native finalization cannot
 	// claim any part of the first agreement's open-ended continuation.
 	fieldPost(t, web, adminCookie, "/leases", url.Values{"customer_id": {fmt.Sprint(c.ID)}}, 303)
@@ -178,6 +192,31 @@ func TestLeaseFinalizationHTTP(t *testing.T) {
 	historyCheck(t, svc.SaveDraftLeaseBilling(ctx, authorization.Actor{UserID: admin}, second, 0, date, authorization.DraftLeaseTerms{AssetID: a.ID, InitialCents: &amount, RentCents: &rent, TaxRate: "5"}, 0))
 	before = rows()
 	fieldPost(t, web, adminCookie, secondPath+"/finalize", values, 409)
+	// Both endpoints of a terms move must be guarded. Pending obligations are
+	// approved snapshots too; a Draft writer cannot revise or discard them.
+	for _, query := range []string{
+		fmt.Sprintf(`UPDATE lease_draft_asset_terms SET lease_id=%d WHERE lease_id=%d`, second, id),
+		fmt.Sprintf(`UPDATE lease_draft_billing SET lease_id=%d WHERE lease_id=%d`, second, id),
+		fmt.Sprintf(`UPDATE lease_intended_assets SET lease_id=%d WHERE lease_id=%d`, second, id),
+		`UPDATE lease_billing_obligations SET due_on=due_on+1 WHERE id NOT IN (SELECT obligation_id FROM lease_invoice_generations)`,
+		`DELETE FROM lease_billing_obligations WHERE id NOT IN (SELECT obligation_id FROM lease_invoice_generations)`,
+	} {
+		tx, err := pool.Begin(ctx)
+		historyCheck(t, err)
+		// Remove destination Draft rows so uniqueness cannot mask the guard.
+		_, err = tx.Exec(ctx, `DELETE FROM lease_draft_asset_terms WHERE lease_id=$1;`, second)
+		historyCheck(t, err)
+		_, err = tx.Exec(ctx, `DELETE FROM lease_draft_billing WHERE lease_id=$1`, second)
+		historyCheck(t, err)
+		_, err = tx.Exec(ctx, `DELETE FROM lease_intended_assets WHERE lease_id=$1`, second)
+		historyCheck(t, err)
+		_, rejected := tx.Exec(ctx, query)
+		historyCheck(t, tx.Rollback(ctx))
+		if rejected == nil {
+			t.Fatalf("finalized/pending snapshot mutation accepted: %s", query)
+		}
+		historyEqual(t, "rejected storage edit preserves generated and pending state", rows(), before)
+	}
 	historyEqual(t, "native overlapping coverage rejected atomically", rows(), before)
 	// Lease origin does not bypass the ordinary Draft/settlement boundary.
 	payment := url.Values{"idempotency_key": {newOperationKey()}, "amount": {"0.01"}, "method": {"cash"}, "date": {date}}

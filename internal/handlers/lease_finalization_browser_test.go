@@ -38,6 +38,7 @@ func TestLeaseFinalizationReviewBrowser(t *testing.T) {
 	svc := authorization.New(pool)
 	historyCheck(t, svc.SaveDraftLeaseBilling(ctx, authorization.Actor{UserID: admin}, id, 0, date, authorization.DraftLeaseTerms{AssetID: a.ID, InitialCents: &amount, RentCents: &amount, TaxRate: "0"}, 0))
 	cookies := []string{}
+	var finalizerRole int64
 	for i, keys := range [][]string{{"lease.view", "lease.manage", "lease.billing.view", "lease.billing.manage"}, {"lease.view", "lease.manage"}} {
 		grants := []authorization.Grant{}
 		for _, key := range keys {
@@ -45,11 +46,28 @@ func TestLeaseFinalizationReviewBrowser(t *testing.T) {
 		}
 		role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, fmt.Sprintf("Browser finalizer %d", i), grants)
 		historyCheck(t, err)
+		if i == 0 {
+			finalizerRole = role
+		}
 		u := client.User.Create().SetCompanyID(company).SetName("Finalizer").SetEmail(fmt.Sprintf("finalizer%d@browser66.test", i)).SetPasswordHash("x").SetRole("tech").SaveX(ctx)
 		historyCheck(t, svc.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role))
 		cookies = append(cookies, sessionCookie(t, ctx, sessions, u.ID).Value)
 	}
 	mux := http.NewServeMux()
+	// Test-only control changes the real Role between review and submission.
+	mux.HandleFunc("/test/billing-grant", func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		if r.URL.Query().Get("restore") == "1" {
+			_, err = pool.Exec(r.Context(), `INSERT INTO authorization_grants(role_id,permission,scope) VALUES($1,'lease.billing.view','A')`, finalizerRole)
+		} else {
+			_, err = pool.Exec(r.Context(), `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='lease.billing.view'`, finalizerRole)
+		}
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
+		w.WriteHeader(204)
+	})
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
 	mux.Handle("/", middleware.BrowserCSRF(middleware.CSRFToken(web)))
 	server := httptest.NewServer(mux)

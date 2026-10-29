@@ -37,6 +37,7 @@ templ LeaseIndex(p authorization.LeaseList) {
 		<p>{fmt.Sprint(p.Total)} visible Leases</p><ul>
 			for _,row:=range p.Rows {
 				<li>
+					<span>{row.Lifecycle}</span>
 					if p.Billing {
 						<a href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>{row.Number} Billing</a>
 					} else {
@@ -73,6 +74,7 @@ templ LeaseRegistrationForm(customers []authorization.LeaseChoice) {
 templ LeaseHistoryPage(p authorization.LeaseHistory) {
 	@Layout(p.Number+" History") {
 		<h1>{p.Number} History</h1>
+		<p>Current lifecycle: {p.Lifecycle}</p>
 		if p.Billing {
 			<a href={templ.URL(fmt.Sprintf("/leases/%d/billing",p.ID))}>Back to Billing</a>
 		} else {

@@ -33,6 +33,23 @@ templ LeaseDetailsPage(data LeasePageData) {
 			<p role="status">Asset { fmt.Sprint(id) } is placed at different premises.</p>
 		}
 		<dl><dt>Execution date</dt><dd>{ p.ExecutionDate }</dd><dt>Start</dt><dd>{ p.StartsOn }</dd><dt>End</dt><dd>{ p.EndsOn }</dd></dl>
+		if p.RenewalStartsOn != "" {
+			<p>Current monthly renewal: {p.RenewalStartsOn} through {p.RenewalEndsOn} (inclusive).</p>
+		}
+		if len(p.Coverage)>0 {
+			<h2>Finalized coverage</h2>
+			<ul>
+				for _, coverage := range p.Coverage {
+					<li>Asset {fmt.Sprint(coverage.AssetID)}: {coverage.StartsOn}
+						if coverage.EndsOn != nil {
+							<span> through {*coverage.EndsOn} (inclusive)</span>
+						} else {
+							<span> onward, including monthly continuation</span>
+						}
+					</li>
+				}
+			</ul>
+		}
 		if p.PremisesID != nil {
 			<p>Selected premises: Location { fmt.Sprint(*p.PremisesID) }</p>
 			if p.PremisesArchived {
