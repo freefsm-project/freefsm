@@ -52,14 +52,25 @@ func (s *Service) createDocument(ctx context.Context, tx pgx.Tx, a Actor, p Prin
 // obligation is server-owned and usable only for an exact, pending Lease charge.
 // Ordinary callers always pass zero and retain all independent Invoice grants.
 func (s *Service) createBoundDocument(ctx context.Context, tx pgx.Tx, a Actor, p Principal, kind string, in DocumentCreation, prepare func(string) (string, error), obligation int64) (int64, error) {
+	return s.createApprovedDocument(ctx, tx, a, p, kind, in, prepare, obligation, nil)
+}
+
+// A worker capability is constructed only after locked agreement validation.
+// It has no product identity, grants, or caller-supplied Invoice content.
+type leaseGenerationCapability struct{ obligation, company int64 }
+
+func (s *Service) createApprovedDocument(ctx context.Context, tx pgx.Tx, a Actor, p Principal, kind string, in DocumentCreation, prepare func(string) (string, error), obligation int64, capability *leaseGenerationCapability) (int64, error) {
 	var id int64
 	err := func() error {
 		if kind != "invoice" && kind != "estimate" {
 			return ErrForbidden
 		}
 		scope := All
+		if capability != nil && (obligation == 0 || capability.obligation != obligation || capability.company != p.CompanyID || a.UserID != 0) {
+			return ErrForbidden
+		}
 		if obligation != 0 {
-			if kind != "invoice" || a.Channel == "api" || !p.Allows("lease.manage", All) || !p.Allows("lease.billing.manage", All) || in.JobID != 0 || in.EstimateID != 0 || in.Number != nil {
+			if kind != "invoice" || a.Channel == "api" || (capability == nil && (!p.Allows("lease.manage", All) || !p.Allows("lease.billing.manage", All))) || in.JobID != 0 || in.EstimateID != 0 || in.Number != nil {
 				return ErrForbidden
 			}
 			var valid bool
@@ -124,8 +135,22 @@ func (s *Service) createBoundDocument(ctx context.Context, tx pgx.Tx, a Actor, p
 		}
 		// Only explicit server-owned copy context exempts retained occurrences.
 		// A submitted Job binding alone is not proof of a copied snapshot.
-		if err := s.CheckItemSelections(ctx, a, tx, kind, 0, in.LineItems); err != nil {
-			return err
+		if capability == nil {
+			if err := s.CheckItemSelections(ctx, a, tx, kind, 0, in.LineItems); err != nil {
+				return err
+			}
+		} else {
+			var lines []struct {
+				ItemID int64 `json:"item_id"`
+			}
+			if err := json.Unmarshal([]byte(in.LineItems), &lines); err != nil {
+				return err
+			}
+			for _, line := range lines {
+				if line.ItemID != 0 {
+					return ErrForbidden
+				}
+			}
 		}
 		if exempt && in.Financial == "" {
 			in.TaxRate = "0"
@@ -191,6 +216,14 @@ func (s *Service) createBoundDocument(ctx context.Context, tx pgx.Tx, a Actor, p
 		if obligation != 0 {
 			action = "lease.invoice.generate"
 			detail["obligation_id"] = obligation
+		}
+		if capability != nil {
+			raw, err := json.Marshal(detail)
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec(ctx, `INSERT INTO authorization_audit(actor_kind,action,target_type,target_id,channel,detail) VALUES('lease-billing-worker','lease.invoice.generate','invoice',$1,'worker',$2)`, id, raw)
+			return err
 		}
 		return audit(ctx, tx, a, p, action, scope, kind, id, detail)
 	}()

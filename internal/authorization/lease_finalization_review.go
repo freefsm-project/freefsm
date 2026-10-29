@@ -14,6 +14,7 @@ type LeaseFinalizationReview struct {
 	Finalized           bool
 	ManagedBillingStart string
 	Generated, Pending  int
+	GenerationFailure   string
 }
 
 func (s *Service) ReviewLeaseFinalization(ctx context.Context, a Actor, id int64) (LeaseFinalizationReview, error) {
@@ -42,6 +43,9 @@ func (s *Service) ReviewLeaseFinalization(ctx context.Context, a Actor, id int64
 			return err
 		}
 		out.Finalized = true
+		if err := tx.QueryRow(ctx, `SELECT coalesce((SELECT failure FROM lease_billing_worker_state WHERE lease_id=$1),'')`, id).Scan(&out.GenerationFailure); err != nil {
+			return err
+		}
 		return tx.QueryRow(ctx, `SELECT count(*) FILTER(WHERE g.invoice_id IS NOT NULL),count(*) FILTER(WHERE g.invoice_id IS NULL) FROM lease_billing_obligations o LEFT JOIN lease_invoice_generations g ON g.obligation_id=o.id WHERE o.lease_id=$1`, id).Scan(&out.Generated, &out.Pending)
 	})
 	return out, err

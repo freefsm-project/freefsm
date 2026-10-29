@@ -148,9 +148,24 @@ func (s *Service) FinalizeLease(ctx context.Context, a Actor, id int64, in Lease
 }
 
 func (s *Service) createLeaseObligation(ctx context.Context, tx pgx.Tx, a Actor, p Principal, base DraftLeaseBase, terms []DraftLeaseTerms, kind string, due, today time.Time, input commercial.Input) error {
-	financial, err := commercial.Accept(input)
+	obligation, financial, encoded, err := materializeLeaseObligation(ctx, tx, base, terms, kind, due, input)
 	if err != nil {
 		return err
+	}
+	if due.After(today.AddDate(0, 0, 30)) {
+		return nil
+	}
+	invoice, err := s.createBoundDocument(ctx, tx, a, p, "invoice", DocumentCreation{CustomerID: base.CustomerID, Title: base.Number + " " + kind + " " + due.Format(time.DateOnly), TaxRate: input.TaxRate, LineItems: encoded, Financial: financial, CustomFields: "[]", InvoiceDate: today, DueDate: due}, func(string) (string, error) { return "unpaid", nil }, obligation)
+	if err != nil {
+		return err
+	}
+	return recordLeaseGeneration(ctx, tx, base.ID, obligation, invoice)
+}
+
+func materializeLeaseObligation(ctx context.Context, tx pgx.Tx, base DraftLeaseBase, terms []DraftLeaseTerms, kind string, due time.Time, input commercial.Input) (int64, string, string, error) {
+	financial, err := commercial.Accept(input)
+	if err != nil {
+		return 0, "", "", err
 	}
 	lines := make([]map[string]any, 0, len(input.Lines))
 	for _, term := range terms {
@@ -162,23 +177,21 @@ func (s *Service) createLeaseObligation(ctx context.Context, tx pgx.Tx, a Actor,
 	}
 	encoded, err := json.Marshal(lines)
 	if err != nil {
-		return err
+		return 0, "", "", err
 	}
 	var obligation int64
-	if err := tx.QueryRow(ctx, `INSERT INTO lease_billing_obligations(lease_id,kind,due_on,financial,line_items) VALUES($1,$2,$3,$4,$5) RETURNING id`, base.ID, kind, due, financial, encoded).Scan(&obligation); err != nil {
+	err = tx.QueryRow(ctx, `SELECT id FROM lease_billing_obligations WHERE lease_id=$1 AND kind=$2 AND due_on=$3`, base.ID, kind, due).Scan(&obligation)
+	if err == pgx.ErrNoRows {
+		err = tx.QueryRow(ctx, `INSERT INTO lease_billing_obligations(lease_id,kind,due_on,financial,line_items) VALUES($1,$2,$3,$4,$5) RETURNING id`, base.ID, kind, due, financial, encoded).Scan(&obligation)
+	}
+	return obligation, financial, string(encoded), err
+}
+
+func recordLeaseGeneration(ctx context.Context, tx pgx.Tx, lease, obligation, invoice int64) error {
+	if _, err := tx.Exec(ctx, `UPDATE invoices SET lease_id=$2 WHERE id=$1`, invoice, lease); err != nil {
 		return err
 	}
-	if due.After(today.AddDate(0, 0, 30)) {
-		return nil
-	}
-	invoice, err := s.createBoundDocument(ctx, tx, a, p, "invoice", DocumentCreation{CustomerID: base.CustomerID, Title: base.Number + " " + kind + " " + due.Format(time.DateOnly), TaxRate: input.TaxRate, LineItems: string(encoded), Financial: financial, CustomFields: "[]", InvoiceDate: today, DueDate: due}, func(string) (string, error) { return "unpaid", nil }, obligation)
-	if err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `UPDATE invoices SET lease_id=$2 WHERE id=$1`, invoice, base.ID); err != nil {
-		return err
-	}
-	_, err = tx.Exec(ctx, `INSERT INTO lease_invoice_generations(obligation_id,invoice_id) VALUES($1,$2)`, obligation, invoice)
+	_, err := tx.Exec(ctx, `INSERT INTO lease_invoice_generations(obligation_id,invoice_id) VALUES($1,$2)`, obligation, invoice)
 	return err
 }
 

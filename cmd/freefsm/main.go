@@ -18,6 +18,7 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
+	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/database"
@@ -275,6 +276,13 @@ func run() error {
 	workerDone := make(chan struct{})
 	recoveryDone := make(chan struct{})
 	exportDone := make(chan struct{})
+	leaseBillingDone := make(chan struct{})
+	go func() {
+		defer close(leaseBillingDone)
+		if err := authorization.New(db.Pool).RunLeaseBilling(ctx, control, manager.RefreshConnections); err != nil && !errors.Is(err, context.Canceled) {
+			slog.Error("Lease billing worker stopped", "error", err)
+		}
+	}()
 	go func() {
 		defer close(exportDone)
 		if err := exports.Product(db.Pool).Run(ctx, control, manager.RefreshConnections); err != nil && !errors.Is(err, context.Canceled) {
@@ -312,6 +320,9 @@ func run() error {
 	}
 
 	slog.Info("shutting down")
+	// Cancellation reaches active billing transactions before application pools
+	// close; wait for rollback/commit and admission release on every exit path.
+	defer func() { stop(); <-leaseBillingDone }()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
