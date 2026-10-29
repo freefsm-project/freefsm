@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/database"
+	"github.com/freefsm-project/freefsm/internal/testutil"
 	"github.com/google/uuid"
 )
 
@@ -66,11 +67,14 @@ func TestOfficePaymentUpgradePreservesSourcesAndUnknownFacts(t *testing.T) {
 		return raw
 	}
 	reversalsBefore := reversalSnapshot()
-	before := historyDurableRows(t, pool, tables)
+	before := preLeaseUpgradeRows(t, pool, tables)
+	sequences := testutil.Sequences(t, ctx, pool)
 	for range 2 {
 		historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, source))
 	}
-	historyEqual(t, "installed source identities, unknown facts, reversals and grants", historyDurableRows(t, pool, tables), before)
+	testutil.AssertNoInvoiceLeaseBackfill(t, ctx, pool)
+	testutil.AssertSequenceUpgrade(t, ctx, pool, sequences, "lease_billing_obligations_id_seq", "leases_id_seq")
+	historyEqual(t, "installed source identities, unknown facts, reversals and grants", preLeaseUpgradeRows(t, pool, tables), before)
 	if reversalSnapshot() != reversalsBefore {
 		t.Fatal("migration changed installed reversal history")
 	}

@@ -193,14 +193,19 @@ func TestCompanyConfigurationRequiresExplicitLegacyNumberReviewHTTP(t *testing.T
 	pool, _, router, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
 	// A restored pre-v1 record has no recorded label. Do not infer its old prefix.
-	_, err := pool.Exec(ctx, fmt.Sprintf(`ALTER TABLE invoices DISABLE TRIGGER invoice_identity; INSERT INTO customers(company_id,display_name) VALUES(%d,'Legacy'); INSERT INTO invoices(company_id,customer_id,invoice_number,title,invoice_date,due_date) SELECT %d,id,70,'Preserved',current_date,current_date FROM customers WHERE display_name='Legacy'; ALTER TABLE invoices ENABLE TRIGGER invoice_identity`, company, company))
+	// Validate queued provenance constraints before changing trigger metadata.
+	// The legacy identity fixture disables only its historical numbering trigger,
+	// never the new deferred Lease consistency guard.
+	_, err := pool.Exec(ctx, fmt.Sprintf(`ALTER TABLE invoices DISABLE TRIGGER invoice_identity; INSERT INTO customers(company_id,display_name) VALUES(%d,'Legacy'); INSERT INTO invoices(company_id,customer_id,invoice_number,title,invoice_date,due_date) SELECT %d,id,70,'Preserved',current_date,current_date FROM customers WHERE display_name='Legacy'; SET CONSTRAINTS ALL IMMEDIATE; ALTER TABLE invoices ENABLE TRIGGER invoice_identity`, company, company))
 	if err != nil {
 		t.Fatal(err)
 	}
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	body := requestBody(t, router, cookie, "GET", "/settings", 200)
 	assertContains(t, body, "Legacy numbering requires explicit review")
+	before := historyDurableRows(t, pool, []string{"invoices", "company_settings"})
 	settingsPost(t, router, cookie, url.Values{"section": {"documents"}, "revision": {configurationRevision(t, body)}, "invoice_prefix": {"NEW-"}}, 409)
+	historyEqual(t, "review rejection retains legacy identity and allocator", historyDurableRows(t, pool, []string{"invoices", "company_settings"}), before)
 }
 
 func TestCompanyConfigurationLogoFailurePreservesBytesHTTP(t *testing.T) {

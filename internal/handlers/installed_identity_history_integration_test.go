@@ -19,6 +19,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/freefsm-project/freefsm/internal/testutil"
 	"github.com/google/uuid"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -207,12 +208,17 @@ func TestInstalledIdentityHistoryHTTP(t *testing.T) {
 	execSQL(`INSERT INTO file_transfer_chunks(transfer_id,user_id,session_hash,offset_bytes,data) VALUES($1,$2,$3,0,$4)`, transfer, admin, hash, []byte("hello world"))
 	snapshot := func() string {
 		t.Helper()
+		var invented bool
+		historyCheck(t, pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM invoices i WHERE to_jsonb(i)->'lease_id' IS NOT NULL AND to_jsonb(i)->'lease_id'<>'null'::jsonb)`).Scan(&invented))
+		if invented {
+			t.Fatal("installed Invoice acquired invented Lease provenance")
+		}
 		var value string
 		// Compare every installed fact.085 adds empty financial/legacy intent
 		// markers (asserted separately below) and preserves tax's exact decimal
 		// spelling while changing its SQL type from numeric to text.087 adds only
 		// an unknown nullable validation reason, independently asserted below.
-		if err := pool.QueryRow(ctx, `SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM comment_operation_receipts x),(SELECT jsonb_agg(to_jsonb(x)-'validation_reason' ORDER BY operation_id,client_hash) FROM job_field_operations x),(SELECT jsonb_agg(to_jsonb(x)-'intent_version' ORDER BY operation_id) FROM commercial_operations x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_publications x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_mutation_operations x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfers x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfer_chunks x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM files x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM comments x),(SELECT jsonb_agg((to_jsonb(x)-'financial')||jsonb_build_object('tax_rate',x.tax_rate::text) ORDER BY id) FROM estimates x),(SELECT jsonb_agg((to_jsonb(x)-'financial')||jsonb_build_object('tax_rate',x.tax_rate::text) ORDER BY id) FROM invoices x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY client_id) FROM commercial_client_identities x))::text`).Scan(&value); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM comment_operation_receipts x),(SELECT jsonb_agg(to_jsonb(x)-'validation_reason' ORDER BY operation_id,client_hash) FROM job_field_operations x),(SELECT jsonb_agg(to_jsonb(x)-'intent_version' ORDER BY operation_id) FROM commercial_operations x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_publications x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY operation_id) FROM file_mutation_operations x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfers x),(SELECT jsonb_agg(to_jsonb(x)) FROM file_transfer_chunks x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM files x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY id) FROM comments x),(SELECT jsonb_agg((to_jsonb(x)-'financial')||jsonb_build_object('tax_rate',x.tax_rate::text) ORDER BY id) FROM estimates x),(SELECT jsonb_agg((to_jsonb(x)-'financial'-'lease_id')||jsonb_build_object('tax_rate',x.tax_rate::text) ORDER BY id) FROM invoices x),(SELECT jsonb_agg(to_jsonb(x) ORDER BY client_id) FROM commercial_client_identities x))::text`).Scan(&value); err != nil {
 			t.Fatal(err)
 		}
 		var fields string
@@ -222,10 +228,13 @@ func TestInstalledIdentityHistoryHTTP(t *testing.T) {
 		return value + fields
 	}
 	before := snapshot()
+	sequences := testutil.Sequences(t, ctx, pool)
 	for range 2 {
 		if err := (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS()); err != nil {
 			t.Fatal(err)
 		}
+		testutil.AssertNoInvoiceLeaseBackfill(t, ctx, pool)
+		testutil.AssertSequenceUpgrade(t, ctx, pool, sequences, "asset_association_events_id_seq", "asset_service_entries_id_seq", "job_asset_links_id_seq", "lease_billing_obligations_id_seq", "leases_id_seq", "time_entry_history_id_seq")
 		if snapshot() != before {
 			t.Fatal("upgrade rewrote installed receipts/effects/transport")
 		}

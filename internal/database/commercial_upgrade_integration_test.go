@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/freefsm-project/freefsm/internal/testutil"
 )
 
 func TestCommercialUpgradePreservesFactsAndRepairsFutureSequence(t *testing.T) {
@@ -61,8 +63,9 @@ func TestCommercialUpgradePreservesFactsAndRepairsFutureSequence(t *testing.T) {
 				t.Fatal(err)
 			}
 			var before, after string
-			query := `SELECT jsonb_build_object('estimates',(SELECT jsonb_agg((to_jsonb(e)-ARRAY['commercial_revision','financial'])||jsonb_build_object('tax_rate',e.tax_rate::text) ORDER BY id) FROM estimates e),'invoices',(SELECT jsonb_agg((to_jsonb(i)-ARRAY['commercial_revision','financial'])||jsonb_build_object('tax_rate',i.tax_rate::text) ORDER BY id) FROM invoices i),'issued',(SELECT jsonb_agg(n ORDER BY document_type,number) FROM issued_document_numbers n))::text`
+			query := `SELECT jsonb_build_object('estimates',(SELECT jsonb_agg((to_jsonb(e)-ARRAY['commercial_revision','financial'])||jsonb_build_object('tax_rate',e.tax_rate::text) ORDER BY id) FROM estimates e),'invoices',(SELECT jsonb_agg((to_jsonb(i)-ARRAY['commercial_revision','financial','lease_id'])||jsonb_build_object('tax_rate',i.tax_rate::text) ORDER BY id) FROM invoices i),'issued',(SELECT jsonb_agg(n ORDER BY document_type,number) FROM issued_document_numbers n))::text`
 			mustMigrationScan(t, db.Pool.QueryRow(ctx, query), &before)
+			sequences := testutil.Sequences(t, ctx, db.Pool)
 			err = db.Migrate(ctx, MigrationFS())
 			if invalid {
 				if err == nil || !strings.Contains(err.Error(), "Administrator review") {
@@ -72,6 +75,12 @@ func TestCommercialUpgradePreservesFactsAndRepairsFutureSequence(t *testing.T) {
 				t.Fatal(err)
 			}
 			mustMigrationScan(t, db.Pool.QueryRow(ctx, query), &after)
+			added := []string{"asset_association_events_id_seq", "job_asset_links_id_seq", "subtask_history_id_seq"}
+			if !invalid {
+				testutil.AssertNoInvoiceLeaseBackfill(t, ctx, db.Pool)
+				added = append(added, "asset_service_entries_id_seq", "lease_billing_obligations_id_seq", "leases_id_seq", "time_entry_history_id_seq")
+			}
+			testutil.AssertSequenceUpgrade(t, ctx, db.Pool, sequences, added...)
 			if before != after {
 				t.Fatal("commercial upgrade rewrote recorded facts")
 			}

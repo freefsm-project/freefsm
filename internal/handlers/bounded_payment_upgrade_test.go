@@ -17,6 +17,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/settlement"
+	"github.com/freefsm-project/freefsm/internal/testutil"
 	"github.com/google/uuid"
 )
 
@@ -113,18 +114,28 @@ func testInstalledPaymentUpgrade(t *testing.T, collision bool) {
 		}
 	}
 	snapshot := func() string {
+		// Preserve the assertion through every receipt replay as well as upgrade.
+		// Before 110 the key is absent; afterward only an explicit NULL is allowed.
+		var invented bool
+		historyCheck(t, pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM invoices i WHERE to_jsonb(i)->'lease_id' IS NOT NULL AND to_jsonb(i)->'lease_id'<>'null'::jsonb)`).Scan(&invented))
+		if invented {
+			t.Fatal("installed Invoice acquired invented Lease provenance")
+		}
 		var v string
-		if err := pool.QueryRow(ctx, `SELECT jsonb_build_object('payments',(SELECT jsonb_agg(to_jsonb(p)-'method_label'-'other_description'-'channel' ORDER BY id) FROM invoice_payments p),'allocations',(SELECT jsonb_agg(to_jsonb(a) ORDER BY payment_id) FROM payment_invoice_allocations a),'idempotency',(SELECT jsonb_agg(to_jsonb(k)) FROM settlement_idempotency k),'invoices',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM invoices i),'grants',(SELECT jsonb_agg(to_jsonb(g) ORDER BY role_id,permission,scope) FROM authorization_grants g))::text`).Scan(&v); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT jsonb_build_object('payments',(SELECT jsonb_agg(to_jsonb(p)-'method_label'-'other_description'-'channel' ORDER BY id) FROM invoice_payments p),'allocations',(SELECT jsonb_agg(to_jsonb(a) ORDER BY payment_id) FROM payment_invoice_allocations a),'idempotency',(SELECT jsonb_agg(to_jsonb(k)) FROM settlement_idempotency k),'invoices',(SELECT jsonb_agg(to_jsonb(i)-'lease_id' ORDER BY id) FROM invoices i),'grants',(SELECT jsonb_agg(to_jsonb(g) ORDER BY role_id,permission,scope) FROM authorization_grants g))::text`).Scan(&v); err != nil {
 			t.Fatal(err)
 		}
 		return v
 	}
 	before := snapshot()
+	sequences := testutil.Sequences(t, ctx, pool)
 	for range 2 {
 		if err := (&database.DB{Pool: pool}).Migrate(ctx, source); err != nil {
 			t.Fatal(err)
 		}
 	}
+	testutil.AssertNoInvoiceLeaseBackfill(t, ctx, pool)
+	testutil.AssertSequenceUpgrade(t, ctx, pool, sequences, "lease_billing_obligations_id_seq", "leases_id_seq")
 	if snapshot() != before {
 		t.Fatal("upgrade changed installed history, allocation, identities, projection or grants")
 	}

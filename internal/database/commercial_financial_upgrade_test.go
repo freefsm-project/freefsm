@@ -5,6 +5,8 @@ import (
 	"os"
 	"testing"
 	"testing/fstest"
+
+	"github.com/freefsm-project/freefsm/internal/testutil"
 )
 
 func TestCommercialFinancialUpgradePreservesLegacyAmountsAndPDF(t *testing.T) {
@@ -49,18 +51,23 @@ func TestCommercialFinancialUpgradePreservesLegacyAmountsAndPDF(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `INSERT INTO operation_admissions(operation_id,deployment_id,user_id,client_key,operation_type,intent) SELECT $1,id,$2,'api:recorded-device','commercial.invoice',jsonb_build_object('id',0,'intent',$3::jsonb) FROM operation_deployment`, operation, a.user, intent); err != nil {
 		t.Fatal(err)
 	}
-	query := `SELECT jsonb_build_object('invoice',(SELECT (to_jsonb(i)-'financial')||jsonb_build_object('tax_rate',i.tax_rate::text) FROM invoices i WHERE id=$1),'pdf',(SELECT jsonb_agg(to_jsonb(p)) FROM document_pdf_versions p),'numbers',(SELECT jsonb_agg(to_jsonb(n) ORDER BY document_type,number) FROM issued_document_numbers n),'operations',(SELECT jsonb_agg(to_jsonb(o)-'intent_version' ORDER BY operation_id) FROM commercial_operations o),'admissions',(SELECT jsonb_agg(to_jsonb(a) ORDER BY operation_id) FROM operation_admissions a))::text`
+	query := `SELECT jsonb_build_object('invoice',(SELECT (to_jsonb(i)-'financial'-'lease_id')||jsonb_build_object('tax_rate',i.tax_rate::text) FROM invoices i WHERE id=$1),'pdf',(SELECT jsonb_agg(to_jsonb(p)) FROM document_pdf_versions p),'numbers',(SELECT jsonb_agg(to_jsonb(n) ORDER BY document_type,number) FROM issued_document_numbers n),'operations',(SELECT jsonb_agg(to_jsonb(o)-'intent_version' ORDER BY operation_id) FROM commercial_operations o),'admissions',(SELECT jsonb_agg(to_jsonb(a) ORDER BY operation_id) FROM operation_admissions a))::text`
 	var before, after string
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, query, invoice), &before)
 	var oldPDFDocument, newPDFDocument string
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT (to_jsonb(i)-'updated_at')::text FROM invoices i WHERE id=$1`, invoice), &oldPDFDocument)
+	sequences := testutil.Sequences(t, ctx, db.Pool)
 	for range 2 {
 		if err := db.Migrate(ctx, MigrationFS()); err != nil {
 			t.Fatal(err)
 		}
 	}
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, query, invoice), &after)
-	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT ((to_jsonb(i)-ARRAY['updated_at','financial'])||jsonb_build_object('tax_rate',tax_rate::numeric))::text FROM invoices i WHERE id=$1`, invoice), &newPDFDocument)
+	// lease_id is new non-rendering provenance, not a recorded legacy fact.
+	// Compare every old key and separately reject fabricated provenance.
+	testutil.AssertNoInvoiceLeaseBackfill(t, ctx, db.Pool)
+	testutil.AssertSequenceUpgrade(t, ctx, db.Pool, sequences, "asset_service_entries_id_seq", "lease_billing_obligations_id_seq", "leases_id_seq", "time_entry_history_id_seq")
+	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT ((to_jsonb(i)-ARRAY['updated_at','financial','lease_id'])||jsonb_build_object('tax_rate',tax_rate::numeric))::text FROM invoices i WHERE id=$1`, invoice), &newPDFDocument)
 	if oldPDFDocument != newPDFDocument {
 		t.Fatal("schema-only upgrade changed the legacy PDF document source projection")
 	}

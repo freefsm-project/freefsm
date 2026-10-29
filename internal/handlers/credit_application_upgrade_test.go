@@ -13,6 +13,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
+	"github.com/freefsm-project/freefsm/internal/testutil"
 	"github.com/google/uuid"
 )
 
@@ -73,13 +74,16 @@ func TestCreditApplicationInstalledHistoryUpgradeHTTP(t *testing.T) {
 	_, err = pool.Exec(ctx, `INSERT INTO settlement_reversals(id,company_id,operation_type,operation_id,reason,actor_id,effective_date) VALUES($1,$2,'payment',$3,'Historical bank return prose',$4,'2026-01-03')`, paymentReverseID, company, oldPayment, admin)
 	historyCheck(t, err)
 	tables := []string{"credit_applications", "credit_refunds", "credit_refund_allocations", "customer_credits", "invoice_payments", "settlement_idempotency", "invoices", "authorization_grants"}
-	before := historyDurableRows(t, pool, tables)
+	before := preLeaseUpgradeRows(t, pool, tables)
+	sequences := testutil.Sequences(t, ctx, pool)
 	var oldReversal string
 	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(r) ORDER BY id)::text FROM settlement_reversals r`).Scan(&oldReversal))
 	for range 2 {
 		historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, source))
 	}
-	historyEqual(t, "installed Applications and grants unchanged", historyDurableRows(t, pool, tables), before)
+	testutil.AssertNoInvoiceLeaseBackfill(t, ctx, pool)
+	testutil.AssertSequenceUpgrade(t, ctx, pool, sequences, "lease_billing_obligations_id_seq", "leases_id_seq")
+	historyEqual(t, "installed Applications and grants unchanged", preLeaseUpgradeRows(t, pool, tables), before)
 	var after string
 	var unknown bool
 	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(r)-'reference'-'notes' ORDER BY id)::text,bool_and(reference IS NULL AND notes IS NULL) FROM settlement_reversals r`).Scan(&after, &unknown))
@@ -97,11 +101,11 @@ func TestCreditApplicationInstalledHistoryUpgradeHTTP(t *testing.T) {
 	assertCreditApplicationReceipt(t, lookup, key, application.ID.String(), "credit_application")
 	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+reverseKey, nil, 200), reverseKey, reversalID.String(), "credit_application_reversal")
 	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/invoices/%d/credit-applications", invoice), url.Values{"idempotency_key": {key}, "credit_id": {credit.String()}, "amount": {"60.00"}, "effective_date": {"2026-01-02"}}, 303)
-	historyEqual(t, "installed replay preserves original reversed Application", historyDurableRows(t, pool, tables), before)
+	historyEqual(t, "installed replay preserves original reversed Application", preLeaseUpgradeRows(t, pool, tables), before)
 	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+key, nil, 200), key, application.ID.String(), "credit_application")
 	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/invoices/%d/credit-applications/%s/reverse", invoice, application.ID), url.Values{"idempotency_key": {reverseKey}, "effective_date": {"2026-01-02"}, "reason": {"Installed correction"}}, 303)
 	assertCreditApplicationReceipt(t, documentTransactionRequest(t, web, cookie, "GET", "/credit-application-operations/"+reverseKey, nil, 200), reverseKey, reversalID.String(), "credit_application_reversal")
-	historyEqual(t, "installed compensation replay keeps its original effect", historyDurableRows(t, pool, tables), before)
+	historyEqual(t, "installed compensation replay keeps its original effect", preLeaseUpgradeRows(t, pool, tables), before)
 	documentTransactionRequest(t, web, cookie, "POST", fmt.Sprintf("/invoices/%d/credit-applications", invoice), url.Values{"idempotency_key": {key}, "credit_id": {credit.String()}, "amount": {"60.01"}, "effective_date": {"2026-01-02"}}, 409)
 	// Old per-family keys could collide. Both real effects remain recorded, but
 	// an untyped lookup must not choose an arbitrary effect identity for the key.
