@@ -28,6 +28,8 @@ type DraftLeaseBilling struct {
 	Archived             bool
 	LifecycleRevision    int64
 	Terms                []DraftLeaseTerms
+	GenerationFailure    string
+	Periods              []LeaseBillingPeriod
 }
 
 func readLeaseBilling(ctx context.Context, tx pgx.Tx, p Principal, id int64) (DraftLeaseBilling, error) {
@@ -74,7 +76,25 @@ func (s *Service) DraftLeaseBilling(ctx context.Context, a Actor, id int64) (Dra
 		var err error
 		out, err = readLeaseBilling(ctx, tx, p, id)
 		out.CanManage = !out.Archived && !out.Finalized && out.Lifecycle == "draft" && p.Allows("lease.billing.manage", All)
-		return err
+		if err != nil || !out.Finalized || out.Archived {
+			return err
+		}
+		if err = tx.QueryRow(ctx, `SELECT coalesce((SELECT failure FROM lease_billing_worker_state WHERE lease_id=$1),'')`, id).Scan(&out.GenerationFailure); err != nil {
+			return err
+		}
+		rows, err := tx.Query(ctx, `SELECT o.id,o.kind,o.due_on::text,ARRAY(SELECT c.reason FROM lease_invoice_review_flags r JOIN lease_billing_source_changes c ON c.id=r.change_id JOIN lease_invoice_generations g ON g.invoice_id=r.invoice_id WHERE g.obligation_id=o.id ORDER BY c.id) FROM lease_billing_obligations o WHERE o.lease_id=$1 ORDER BY o.due_on DESC,o.id DESC LIMIT 100`, id)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			period := LeaseBillingPeriod{LeaseID: id}
+			if err = rows.Scan(&period.ObligationID, &period.Kind, &period.DueOn, &period.ReviewFlags); err != nil {
+				return err
+			}
+			out.Periods = append(out.Periods, period)
+		}
+		return rows.Err()
 	})
 	return out, err
 }

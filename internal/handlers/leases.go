@@ -25,6 +25,52 @@ type LeaseHandler struct {
 	fields    *services.CustomFieldDefinitionService
 }
 
+func (h *LeaseHandler) BillingPeriod(w http.ResponseWriter, r *http.Request) {
+	lease, e1 := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	obligation, e2 := strconv.ParseInt(chi.URLParam(r, "obligation"), 10, 64)
+	if e1 != nil || e2 != nil {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := h.authority.ReviewLeaseBillingPeriod(r.Context(), authorizationActor(r), lease, obligation)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	templates.LeaseBillingPeriodPage(data).Render(r.Context(), w)
+}
+
+func (h *LeaseHandler) ReplaceBillingPeriod(w http.ResponseWriter, r *http.Request) {
+	lease, e1 := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	obligation, e2 := strconv.ParseInt(chi.URLParam(r, "obligation"), 10, 64)
+	invoice, e3 := strconv.ParseInt(r.FormValue("invoice_id"), 10, 64)
+	if e1 != nil || e2 != nil || e3 != nil {
+		http.Error(w, "Review the billing period", 400)
+		return
+	}
+	_, err := h.authority.ReplaceLeaseInvoice(r.Context(), authorizationActor(r), lease, obligation, authorization.LeaseReplacementInput{InvoiceID: invoice, ReviewHash: r.FormValue("review_hash"), OperationKey: r.FormValue("operation_key")})
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/leases/%d/billing/periods/%d", lease, obligation), 303)
+}
+
+func (h *LeaseHandler) RetryBillingPeriod(w http.ResponseWriter, r *http.Request) {
+	lease, e1 := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	obligation, e2 := strconv.ParseInt(chi.URLParam(r, "obligation"), 10, 64)
+	if e1 != nil || e2 != nil {
+		http.NotFound(w, r)
+		return
+	}
+	_, err := h.authority.RetryLeaseBillingPeriod(r.Context(), authorizationActor(r), lease, obligation, r.FormValue("review_hash"), r.FormValue("operation_key"))
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/leases/%d/billing/periods/%d", lease, obligation), 303)
+}
+
 func (h *LeaseHandler) FinalizationReview(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {

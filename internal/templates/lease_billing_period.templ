@@ -1,0 +1,57 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ LeaseBillingPeriodPage(p authorization.LeaseBillingPeriod) {
+ @Layout("Lease billing period") {
+  <h1>Lease billing period</h1>
+  <a href={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.LeaseID)) }>Billing</a>
+  <p>{ p.Kind } due { p.DueOn }; approved total { fmt.Sprint(p.TotalCents) } cents.</p>
+  <p>Approved document tax rate: { p.TaxRate }%.</p>
+  if p.TaxExempt {
+   <p>Customer exemption applies to the approved obligation.</p>
+  }
+  for _, line := range p.Lines {
+   <p>Asset { fmt.Sprint(line.AssetID) }: full-period charge { line.Amount }; taxable: { fmt.Sprint(line.Taxable) }.</p>
+  }
+  if p.Disposition != "" {
+   <p role="status">{ p.Disposition }. Original obligation retained; no new Invoice is implied.</p>
+  }
+  if len(p.ReviewFlags) > 0 {
+   <h2>Manual review required</h2>
+   <p>Recorded source changes have not rewritten generated Invoice facts.</p>
+   for _, flag := range p.ReviewFlags {
+    <p role="alert">{ flag }</p>
+   }
+  }
+  if p.Failure != "" {
+   <p role="alert">{ p.Failure }</p>
+  }
+  if p.InvoiceID != 0 {
+   <p role="status">Generation receipt: Invoice { fmt.Sprint(p.InvoiceID) }. Invoice access and actions require separate permissions.</p>
+  } else {
+   <p role="status">Pending obligation { fmt.Sprint(p.ObligationID) }. No successful Invoice generation is recorded.</p>
+  }
+  if p.CanReplace {
+   <h2>Review replacement</h2>
+   <p>The current generation is Void. Explicit replacement creates one ordinary Draft for this exact obligation and preserves the original Invoice and generation history.</p>
+   <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d/replace",p.LeaseID,p.ObligationID)) }>
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+    <input type="hidden" name="invoice_id" value={ fmt.Sprint(p.InvoiceID) }/>
+    <input type="hidden" name="review_hash" value={ p.ReviewHash }/>
+    <input type="hidden" name="operation_key" value={ p.OperationKey }/>
+    <button type="submit">Replace reviewed Void generation</button>
+   </form>
+   <p>If the response is lost, reopen this period to read its generation receipt. Resubmitting the same reviewed operation does not create another Invoice.</p>
+  }
+  if p.CanRetry {
+   <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d/retry",p.LeaseID,p.ObligationID)) }>
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+    <input type="hidden" name="review_hash" value={ p.ReviewHash }/>
+    <input type="hidden" name="operation_key" value={ p.OperationKey }/>
+    <button type="submit">Retry reviewed obligation</button>
+   </form>
+  }
+ }
+}

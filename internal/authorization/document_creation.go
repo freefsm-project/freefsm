@@ -55,9 +55,10 @@ func (s *Service) createBoundDocument(ctx context.Context, tx pgx.Tx, a Actor, p
 	return s.createApprovedDocument(ctx, tx, a, p, kind, in, prepare, obligation, nil)
 }
 
-// A worker capability is constructed only after locked agreement validation.
-// It has no product identity, grants, or caller-supplied Invoice content.
-type leaseGenerationCapability struct{ obligation, company int64 }
+// An obligation capability is constructed only after locked source validation.
+// Workers have no product identity; explicit replacements additionally require
+// current product authority and an exact reviewed predecessor.
+type leaseGenerationCapability struct{ obligation, company, predecessor int64 }
 
 func (s *Service) createApprovedDocument(ctx context.Context, tx pgx.Tx, a Actor, p Principal, kind string, in DocumentCreation, prepare func(string) (string, error), obligation int64, capability *leaseGenerationCapability) (int64, error) {
 	var id int64
@@ -66,7 +67,7 @@ func (s *Service) createApprovedDocument(ctx context.Context, tx pgx.Tx, a Actor
 			return ErrForbidden
 		}
 		scope := All
-		if capability != nil && (obligation == 0 || capability.obligation != obligation || capability.company != p.CompanyID || a.UserID != 0) {
+		if capability != nil && (obligation == 0 || capability.obligation != obligation || capability.company != p.CompanyID || (capability.predecessor == 0 && a.UserID != 0) || (capability.predecessor != 0 && (!p.Allows("lease.manage", All) || !p.Allows("lease.billing.manage", All)))) {
 			return ErrForbidden
 		}
 		if obligation != 0 {
@@ -74,7 +75,11 @@ func (s *Service) createApprovedDocument(ctx context.Context, tx pgx.Tx, a Actor
 				return ErrForbidden
 			}
 			var valid bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_billing_obligations o JOIN leases l ON l.id=o.lease_id WHERE o.id=$1 AND l.company_id=$2 AND l.customer_id=$3 AND l.deleted_at IS NULL AND o.financial=$4 AND o.line_items=$5::jsonb AND o.due_on=$6 AND o.due_on<=lease_dependency_today(l.company_id)+30 AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations g WHERE g.obligation_id=o.id))`, obligation, p.CompanyID, in.CustomerID, in.Financial, in.LineItems, in.DueDate).Scan(&valid); err != nil {
+			predecessor := int64(0)
+			if capability != nil {
+				predecessor = capability.predecessor
+			}
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_billing_obligations o JOIN leases l ON l.id=o.lease_id WHERE o.id=$1 AND l.company_id=$2 AND l.customer_id=$3 AND l.deleted_at IS NULL AND o.financial=$4 AND o.line_items=$5::jsonb AND o.due_on=$6 AND o.due_on<=lease_dependency_today(l.company_id)+30 AND (($7::bigint=0 AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations g WHERE g.obligation_id=o.id)) OR EXISTS(SELECT 1 FROM lease_invoice_generations g JOIN invoices i ON i.id=g.invoice_id JOIN statuses s ON s.id=i.status_id WHERE g.obligation_id=o.id AND g.invoice_id=$7 AND s.category_key='invoice:void' AND i.deleted_at IS NULL AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations n WHERE n.predecessor_invoice_id=g.invoice_id))))`, obligation, p.CompanyID, in.CustomerID, in.Financial, in.LineItems, in.DueDate, predecessor).Scan(&valid); err != nil {
 				return err
 			}
 			if !valid {
@@ -217,7 +222,7 @@ func (s *Service) createApprovedDocument(ctx context.Context, tx pgx.Tx, a Actor
 			action = "lease.invoice.generate"
 			detail["obligation_id"] = obligation
 		}
-		if capability != nil {
+		if capability != nil && a.UserID == 0 {
 			raw, err := json.Marshal(detail)
 			if err != nil {
 				return err

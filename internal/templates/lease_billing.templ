@@ -13,6 +13,18 @@ templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 		if p.Archived {
 			<div role="status">Archived — read-only Billing history</div>
 		}
+		if p.GenerationFailure != "" {
+			<p role="alert">{ p.GenerationFailure }</p>
+		}
+		if len(p.Periods) > 0 {
+			<h2>Recent billing obligations (up to 100)</h2>
+			for _, period := range p.Periods {
+				<p><a href={ templ.URL(fmt.Sprintf("/leases/%d/billing/periods/%d",p.ID,period.ObligationID)) }>{ period.Kind } due { period.DueOn }</a></p>
+				if len(period.ReviewFlags) > 0 {
+					<p role="alert">Manual review required for generated billing in this period.</p>
+				}
+			}
+		}
 		if p.Finalized || p.Lifecycle != "draft" {
 			<p>Finalized billing terms — read-only. Generated Invoices retain their original commercial facts. Amounts are whole cents; tax is a percentage.</p>
 		} else {

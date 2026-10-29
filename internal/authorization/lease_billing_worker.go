@@ -75,6 +75,9 @@ func (s *Service) GenerateLeaseDrafts(ctx context.Context) error {
 }
 
 func (s *Service) generateLeaseDrafts(ctx context.Context, id int64) error {
+	if err := s.materializeLeasePeriods(ctx, id); err != nil {
+		return err
+	}
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -83,12 +86,13 @@ func (s *Service) generateLeaseDrafts(ctx context.Context, id int64) error {
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
 		return err
 	}
-	// A savepoint preserves visible failure without partial commercial effects.
+	// The previous transaction committed approved period identities before any
+	// Invoice work. A crash here leaves pending obligations, never new retry IDs.
 	work, err := tx.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	generationErr := s.generateLeasePeriods(ctx, work, id)
+	generationErr := s.generateLeasePeriods(ctx, work, id, false)
 	if generationErr == nil {
 		// Evaluate deferred storage invariants before releasing the savepoint.
 		_, generationErr = work.Exec(ctx, `SET CONSTRAINTS ALL IMMEDIATE`)
@@ -104,6 +108,9 @@ func (s *Service) generateLeaseDrafts(ctx context.Context, id int64) error {
 	if generationErr != nil {
 		message = "Draft generation failed; review current agreement, coverage and billing terms, then retry."
 	}
+	if _, err := tx.Exec(ctx, `INSERT INTO lease_billing_attempts(obligation_id,failure) SELECT o.id,$2 FROM lease_billing_obligations o JOIN leases l ON l.id=o.lease_id WHERE o.lease_id=$1 AND o.due_on<=lease_dependency_today(l.company_id)+30 AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations g WHERE g.obligation_id=o.id) ON CONFLICT(obligation_id) DO UPDATE SET attempted_at=clock_timestamp(),failure=excluded.failure`, id, message); err != nil {
+		return errors.Join(generationErr, err)
+	}
 	if _, err := tx.Exec(ctx, `INSERT INTO lease_billing_worker_state(lease_id,failure) VALUES($1,$2) ON CONFLICT(lease_id) DO UPDATE SET attempted_at=clock_timestamp(),failure=excluded.failure`, id, message); err != nil {
 		return errors.Join(generationErr, err)
 	}
@@ -113,7 +120,51 @@ func (s *Service) generateLeaseDrafts(ctx context.Context, id int64) error {
 	return generationErr
 }
 
-func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64) error {
+func (s *Service) materializeLeasePeriods(ctx context.Context, id int64) error {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(context.WithoutCancel(ctx))
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
+		return err
+	}
+	work, err := tx.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	materializationErr := s.generateLeasePeriods(ctx, work, id, true)
+	if materializationErr == nil {
+		_, materializationErr = work.Exec(ctx, `SET CONSTRAINTS ALL IMMEDIATE`)
+	}
+	if materializationErr != nil {
+		if err = work.Rollback(ctx); err != nil {
+			return errors.Join(materializationErr, err)
+		}
+	} else if err = work.Commit(ctx); err != nil {
+		return err
+	}
+	message := "Generation has not completed; the same obligation will be retried automatically."
+	if materializationErr != nil {
+		message = "Draft generation failed; review current agreement, coverage and billing terms, then retry."
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO lease_billing_attempts(obligation_id,failure) SELECT o.id,$2 FROM lease_billing_obligations o JOIN leases l ON l.id=o.lease_id WHERE o.lease_id=$1 AND o.due_on<=lease_dependency_today(l.company_id)+30 AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations g WHERE g.obligation_id=o.id) ON CONFLICT(obligation_id) DO NOTHING`, id, message); err != nil {
+		return err
+	}
+	state := ""
+	if materializationErr != nil {
+		state = message
+	}
+	if _, err = tx.Exec(ctx, `INSERT INTO lease_billing_worker_state(lease_id,failure) VALUES($1,$2) ON CONFLICT(lease_id) DO UPDATE SET attempted_at=clock_timestamp(),failure=CASE WHEN excluded.failure<>'' THEN excluded.failure ELSE lease_billing_worker_state.failure END`, id, state); err != nil {
+		return err
+	}
+	if err = tx.Commit(ctx); err != nil {
+		return err
+	}
+	return materializationErr
+}
+
+func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64, materializeOnly bool) error {
 	var company int64
 	var start, end, cutoff, anchor, today time.Time
 	var raw []byte
@@ -154,7 +205,11 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64)
 	}
 	// Existing pending rows always precede newly materialized months. A generation
 	// remains consumed even if its ordinary Invoice was subsequently voided.
-	rows, err := tx.Query(ctx, `SELECT o.kind,o.due_on FROM lease_billing_obligations o WHERE lease_id=$1 AND due_on<= $2::date+30 AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations g WHERE g.obligation_id=o.id) ORDER BY due_on,kind LIMIT 24`, id, today)
+	var sourceRevision int64
+	if err := tx.QueryRow(ctx, `SELECT coalesce(max(id),0) FROM lease_billing_source_changes WHERE lease_id=$1`, id).Scan(&sourceRevision); err != nil {
+		return err
+	}
+	rows, err := tx.Query(ctx, `SELECT kind,due_on FROM (SELECT o.kind,o.due_on FROM lease_billing_obligations o WHERE lease_id=$1 AND due_on<= $2::date+30 AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations g WHERE g.obligation_id=o.id) AND NOT EXISTS(SELECT 1 FROM lease_billing_period_dispositions d WHERE d.lease_id=o.lease_id AND d.kind=o.kind AND d.due_on=o.due_on AND d.source_revision=$3) UNION SELECT kind,due_on FROM lease_billing_period_dispositions WHERE $4::boolean AND lease_id=$1 AND source_revision<>$3 AND due_on<=$2::date+30) candidates ORDER BY due_on,kind LIMIT 24`, id, today, sourceRevision, materializeOnly)
 	if err != nil {
 		return err
 	}
@@ -177,7 +232,7 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64)
 		return err
 	}
 	var next time.Time
-	if err := tx.QueryRow(ctx, `SELECT coalesce((max(due_on)+interval '1 month')::date,$2::date) FROM lease_billing_obligations WHERE lease_id=$1 AND kind='monthly'`, id, anchor).Scan(&next); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT coalesce((max(due_on)+interval '1 month')::date,$2::date) FROM (SELECT due_on FROM lease_billing_obligations WHERE lease_id=$1 AND kind='monthly' UNION ALL SELECT due_on FROM lease_billing_period_dispositions WHERE lease_id=$1 AND kind='monthly') periods`, id, anchor).Scan(&next); err != nil {
 		return err
 	}
 	if next.Before(cutoff) {
@@ -186,7 +241,7 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64)
 			next = next.AddDate(0, 1, 0)
 		}
 	}
-	for len(periods) < 24 && !next.After(today.AddDate(0, 0, 30)) {
+	for materializeOnly && len(periods) < 24 && !next.After(today.AddDate(0, 0, 30)) {
 		periods = append(periods, period{"monthly", next})
 		next = next.AddDate(0, 1, 0)
 	}
@@ -199,6 +254,7 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64)
 			coveredAt = start
 		}
 		selected := append([]DraftLeaseTerms(nil), terms...)
+		selectedCount := 0
 		for i := range selected {
 			approved := selected[i].Selected
 			selected[i].Selected = false
@@ -214,6 +270,7 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64)
 			if !selected[i].Selected {
 				continue
 			}
+			selectedCount++
 			if err := tx.QueryRow(ctx, `SELECT deleted_at IS NULL AND company_id=$2 AND ownership_class='company_owned' FROM assets WHERE id=$1 FOR SHARE`, selected[i].AssetID, company).Scan(&eligible); err != nil {
 				return err
 			}
@@ -239,6 +296,15 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64)
 				return &LeaseValidationError{Message: "Covered Asset requires approved billing terms"}
 			}
 		}
+		if selectedCount == 0 {
+			if _, err := tx.Exec(ctx, `INSERT INTO lease_billing_period_dispositions(lease_id,kind,due_on,source_revision,reason) VALUES($1,$2,$3,$4,'No Assets covered at period start; no charge owed') ON CONFLICT(lease_id,kind,due_on) DO UPDATE SET source_revision=excluded.source_revision,reason=excluded.reason`, id, period.kind, period.due, sourceRevision); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM lease_billing_period_dispositions WHERE lease_id=$1 AND kind=$2 AND due_on=$3`, id, period.kind, period.due); err != nil {
+			return err
+		}
 		input, err := leaseObligationInput(selected, period.kind == "monthly", exempt)
 		if err != nil {
 			return err
@@ -246,6 +312,9 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64)
 		obligation, financial, lines, err := materializeLeaseObligation(ctx, tx, base, selected, period.kind, period.due, input)
 		if err != nil {
 			return err
+		}
+		if materializeOnly {
+			continue
 		}
 		invoice, err := s.createApprovedDocument(ctx, tx, Actor{}, p, "invoice", DocumentCreation{CustomerID: base.CustomerID, Title: base.Number + " " + period.kind + " " + period.due.Format(time.DateOnly), TaxRate: input.TaxRate, LineItems: lines, Financial: financial, CustomFields: "[]", InvoiceDate: today, DueDate: period.due}, func(string) (string, error) { return "unpaid", nil }, obligation, &leaseGenerationCapability{obligation: obligation, company: company})
 		if err != nil {
