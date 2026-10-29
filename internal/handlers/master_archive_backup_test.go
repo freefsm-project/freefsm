@@ -78,9 +78,10 @@ func TestMasterArchiveEncryptedBackupPreservesDependencies(t *testing.T) {
 	}
 	fieldPost(t, web, cookie, fmt.Sprintf("/assets/%d/associations/return", returned.ID), url.Values{"effective_date": {time.Now().UTC().Format("2006-01-02")}, "reason": {"Recorded return"}, "revision": {"1"}}, 303)
 	svc := authorization.New(src.pool)
+	retainedEnd := "2000-01-31"
 	for _, dep := range []authorization.LeaseDependencies{
 		{LeaseID: 63, CustomerID: c.ID, PremisesID: &leaseSite.ID, Lifecycle: "scheduled", Coverage: []authorization.LeaseAssetDependency{{AssetID: placed.ID, StartsOn: "2099-01-01"}}},
-		{LeaseID: 64, CustomerID: c.ID, PremisesID: &location.ID, Lifecycle: "terminated", Coverage: []authorization.LeaseAssetDependency{{AssetID: returned.ID, StartsOn: "2099-01-01"}}},
+		{LeaseID: 64, CustomerID: c.ID, PremisesID: &location.ID, Lifecycle: "terminated", Coverage: []authorization.LeaseAssetDependency{{AssetID: returned.ID, StartsOn: "2000-01-01", EndsOn: &retainedEnd}}},
 	} {
 		tx, err := src.pool.Begin(ctx)
 		historyCheck(t, err)

@@ -176,6 +176,7 @@ func TestLeaseReviewDateBoundariesAndHistoricalControls(t *testing.T) {
 				wantConflict = true
 			case "terminated":
 				in.Lifecycle = "terminated"
+				in.Coverage[0].EndsOn = date(returned.AddDate(0, 0, -1))
 			case "archived-draft":
 				in.Lifecycle, in.Archived = "draft", true
 			case "draft":
@@ -183,7 +184,7 @@ func TestLeaseReviewDateBoundariesAndHistoricalControls(t *testing.T) {
 			case "past-matching-coverage":
 				in.Coverage[0].EndsOn = date(returned.AddDate(0, 0, -1))
 			}
-			if scenario != "past-matching-coverage" {
+			if scenario != "past-matching-coverage" && scenario != "terminated" {
 				command := f.correction()
 				if scenario == "same-day-placement-return" {
 					var returnedEvent int64
@@ -262,22 +263,49 @@ func TestLeaseReviewOriginCorrectionRetainsUnknownStartAndOriginalFact(t *testin
 		t.Fatal("direct SQL origin correction contradicted live coverage")
 	}
 	historyEqual(t, "deferred origin guard retains original observation", f.snapshot(t), before)
-	// The original row is immutable even when a Terminated reference no longer
-	// blocks a legitimate factual correction. No acquisition date is fabricated.
+	// Termination does not exempt overlapping history. A compatible correction
+	// still retains the original observation and never invents an acquisition date.
 	in.Lifecycle = "terminated"
 	historyCheck(t, f.register(authorization.Actor{UserID: f.admin}, in))
+	before = f.snapshot(t)
+	fieldPost(t, f.web, f.cookie, command.path, command.values, 409)
+	historyEqual(t, "terminated origin retains historical Customer", f.snapshot(t), before)
+	command.values.Set("customer_id", fmt.Sprint(f.a))
 	fieldPost(t, f.web, f.cookie, command.path, command.values, 303)
 	var preserved bool
-	historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT o.customer_id=$2 AND p.customer_id=$3 AND p.starts_on IS NULL AND a.customer_id IS NULL AND (SELECT count(*) FROM asset_association_origin_revisions WHERE asset_id=$1)=1 FROM asset_association_origins o JOIN asset_association_periods p ON p.asset_id=o.asset_id AND p.event_id=0 JOIN assets a ON a.id=o.asset_id WHERE o.asset_id=$1`, f.asset, f.a, f.b).Scan(&preserved))
+	historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT o.customer_id=$2 AND p.customer_id=$2 AND p.starts_on IS NULL AND a.customer_id IS NULL AND (SELECT count(*) FROM asset_association_origin_revisions WHERE asset_id=$1)=1 FROM asset_association_origins o JOIN asset_association_periods p ON p.asset_id=o.asset_id AND p.event_id=0 JOIN assets a ON a.id=o.asset_id WHERE o.asset_id=$1`, f.asset, f.a).Scan(&preserved))
 	if !preserved {
 		t.Fatal("correction rewrote original fact, invented start, or changed current placement")
 	}
 }
 
 func TestLeaseReviewHistoricalCorrectionRegistrationCommitOrdersHTTP(t *testing.T) {
-	for _, first := range []string{"coverage", "correction"} {
-		t.Run(first, func(t *testing.T) {
+	for _, scenario := range []struct {
+		state, first string
+		archived     bool
+	}{
+		{"active", "coverage", false}, {"active", "correction", false},
+		{"terminated", "coverage", false}, {"terminated", "correction", false},
+		{"terminated", "coverage", true}, {"terminated", "correction", true},
+	} {
+		t.Run(fmt.Sprintf("%s/archived=%t/%s", scenario.state, scenario.archived, scenario.first), func(t *testing.T) {
 			f := newLeaseReviewFixture(t)
+			first := scenario.first
+			in := f.dependency()
+			in.Lifecycle, in.Archived = scenario.state, scenario.archived
+			returned, err := time.Parse(time.DateOnly, f.returned)
+			historyCheck(t, err)
+			end := returned.AddDate(0, 0, -1).Format(time.DateOnly)
+			in.Coverage[0].EndsOn = &end
+			_, err = f.pool.Exec(f.ctx, `CREATE TABLE retained_race_expected (state jsonb);
+CREATE FUNCTION retained_race_state() RETURNS jsonb LANGUAGE plpgsql AS $$ DECLARE result jsonb:='{}'; name text; value jsonb; BEGIN
+ FOREACH name IN ARRAY ARRAY['leases','lease_intended_assets','lease_draft_billing','lease_draft_asset_terms','lease_master_dependencies','lease_asset_dependencies','lease_finalizations','lease_billing_obligations','lease_invoice_generations','invoices','company_settings','issued_document_numbers','authorization_audit','assets','locations','customers','asset_association_events','asset_association_origins','asset_association_origin_revisions','activity_logs'] LOOP
+ EXECUTE format('SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY to_jsonb(t)::text),''[]''::jsonb) FROM %I t',name) INTO value;
+ result:=result||jsonb_build_object(name,value); END LOOP; RETURN result; END $$;
+CREATE FUNCTION retained_capture_winner() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN
+ IF NEW.action IN ('lease.dependencies.change','asset.history.correct') THEN INSERT INTO retained_race_expected VALUES(retained_race_state()); END IF; RETURN NEW; END $$;
+CREATE TRIGGER retained_capture_winner AFTER INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION retained_capture_winner()`)
+			historyCheck(t, err)
 			barrier, err := f.pool.Begin(f.ctx)
 			historyCheck(t, err)
 			defer barrier.Rollback(context.Background())
@@ -287,7 +315,7 @@ func TestLeaseReviewHistoricalCorrectionRegistrationCommitOrdersHTTP(t *testing.
 			corrected := make(chan *httptest.ResponseRecorder, 1)
 			if first == "coverage" {
 				historyCheck(t, barrier.QueryRow(f.ctx, `SELECT pg_backend_pid() FROM pg_advisory_xact_lock(190019)`).Scan(&holder))
-				historyCheck(t, authorization.New(f.pool).WriteLeaseDependencies(f.ctx, barrier, authorization.Actor{UserID: f.admin}, f.dependency()))
+				historyCheck(t, authorization.New(f.pool).WriteLeaseDependencies(f.ctx, barrier, authorization.Actor{UserID: f.admin}, in))
 				go func() { corrected <- httpFixture.call(command) }()
 				commercialWaiters(t, f.ctx, f.pool, holder, 1)
 				historyCheck(t, barrier.Commit(f.ctx))
@@ -309,7 +337,7 @@ func TestLeaseReviewHistoricalCorrectionRegistrationCommitOrdersHTTP(t *testing.
 					}
 				}
 				registered := make(chan error, 1)
-				go func() { registered <- f.register(authorization.Actor{UserID: f.admin}, f.dependency()) }()
+				go func() { registered <- f.register(authorization.Actor{UserID: f.admin}, in) }()
 				commercialWaiters(t, f.ctx, f.pool, corrector, 1)
 				historyCheck(t, barrier.Commit(f.ctx))
 				if response := <-corrected; response.Code != 303 {
@@ -324,6 +352,11 @@ func TestLeaseReviewHistoricalCorrectionRegistrationCommitOrdersHTTP(t *testing.
 			historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT count(*) FROM authorization_audit WHERE action='lease.dependencies.change'`).Scan(&registrations))
 			if first == "coverage" && (corrections != 0 || registrations != 1) || first == "correction" && (corrections != 1 || registrations != 0) {
 				t.Fatalf("wrong atomic outcome correction=%d registration=%d", corrections, registrations)
+			}
+			var conserved bool
+			historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT retained_race_state()=(SELECT state FROM retained_race_expected)`).Scan(&conserved))
+			if !conserved {
+				t.Fatal("losing correction/coverage writer changed committed winner state")
 			}
 			t.Logf("observed %s-first historical correction/registration holder=%d", first, holder)
 		})
@@ -512,9 +545,10 @@ func TestLeaseReviewValidTimelineWritesRollbackOnAuditFailure(t *testing.T) {
 	}
 }
 
-func TestLeaseReviewDeferredSQLChecksFinalTerminatedRepair(t *testing.T) {
+func TestLeaseReviewDeferredSQLRejectsTerminationAsHistoricalBypass(t *testing.T) {
 	f := newLeaseReviewFixture(t)
 	historyCheck(t, f.register(authorization.Actor{UserID: f.admin}, f.dependency()))
+	before := f.snapshot(t)
 	tx, err := f.pool.Begin(f.ctx)
 	historyCheck(t, err)
 	defer tx.Rollback(context.Background())
@@ -522,12 +556,10 @@ func TestLeaseReviewDeferredSQLChecksFinalTerminatedRepair(t *testing.T) {
 	historyCheck(t, err)
 	_, err = tx.Exec(f.ctx, `UPDATE lease_master_dependencies SET lifecycle='terminated' WHERE lease_id=63`)
 	historyCheck(t, err)
-	historyCheck(t, tx.Commit(f.ctx))
-	var valid bool
-	historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT e.customer_id=$2 AND f.customer_id=$3 AND a.customer_id IS NULL FROM asset_association_events e JOIN asset_association_facts f ON f.event_id=e.id JOIN assets a ON a.id=e.asset_id WHERE e.id=$1`, f.event, f.a, f.b).Scan(&valid))
-	if !valid {
-		t.Fatal("final-state repair overwrote original evidence or current placement")
+	if err := tx.Commit(f.ctx); err == nil {
+		t.Fatal("termination permitted a contradictory historical correction")
 	}
+	historyEqual(t, "failed final-state bypass retains all facts and audit", f.snapshot(t), before)
 }
 
 func TestLeaseReviewTerminatedReplacementUsesFinalSnapshot(t *testing.T) {
@@ -541,10 +573,16 @@ func TestLeaseReviewTerminatedReplacementUsesFinalSnapshot(t *testing.T) {
 	var today time.Time
 	historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT lease_dependency_today($1)`, f.company).Scan(&today))
 	fieldPost(t, f.web, f.cookie, fmt.Sprintf("/assets/%d/associations/place", f.asset), url.Values{"customer_id": {fmt.Sprint(f.b)}, "effective_date": {today.Format(time.DateOnly)}, "reason": {"New placement after past coverage ended"}, "revision": {"2"}}, 303)
-	// Terminated references have no placement effect. Replacing their projection
-	// must validate the final lifecycle, not transient old Active metadata.
+	// Terminated history cannot be moved across a different Customer's placement.
+	// Keeping the real ended interval does not affect legitimate current placement.
+	before := f.snapshot(t)
 	in.Lifecycle = "terminated"
 	in.Coverage[0].StartsOn, in.Coverage[0].EndsOn = today.Format(time.DateOnly), &f.end
+	if err := f.register(authorization.Actor{UserID: f.admin}, in); err == nil {
+		t.Fatal("Terminated replacement accepted contradictory retained dates")
+	}
+	historyEqual(t, "invalid retained coverage replacement is atomic", f.snapshot(t), before)
+	in.Coverage[0].StartsOn, in.Coverage[0].EndsOn = f.start, &oldEnd
 	historyCheck(t, f.register(authorization.Actor{UserID: f.admin}, in))
 	var owner int64
 	historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT customer_id FROM assets WHERE id=$1`, f.asset).Scan(&owner))

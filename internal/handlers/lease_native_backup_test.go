@@ -80,7 +80,14 @@ func TestLeaseNativeEncryptedBackupNormalRoles(t *testing.T) {
 	fieldPost(t, web, baseCookie, path+"/delete", nil, 303)
 	fieldPost(t, web, adminCookie, fmt.Sprintf("/locations/%d/delete", l.ID), nil, 303)
 	fieldPost(t, web, adminCookie, fmt.Sprintf("/assets/%d/delete", asset.ID), nil, 303)
-	_, err = src.pool.Exec(ctx, `SELECT set_lease_master_dependencies(900,$1,$2,NULL,'terminated',true,'[]')`, src.company, c.ID)
+	historical := src.client.Asset.Create().SetCompanyID(src.company).SetOwnershipClass("company_owned").SetAssetTypeID(typ.ID).SetName("Retained ended coverage").SaveX(ctx)
+	other := src.client.Customer.Create().SetCompanyID(src.company).SetDisplayName("Unrelated historical Customer").SaveX(ctx)
+	historicalPath := fmt.Sprintf("/assets/%d/associations/", historical.ID)
+	fieldPost(t, web, adminCookie, historicalPath+"place", url.Values{"customer_id": {fmt.Sprint(c.ID)}, "effective_date": {"2000-01-01"}, "reason": {"Original known placement"}, "revision": {"0"}}, 303)
+	fieldPost(t, web, adminCookie, historicalPath+"return", url.Values{"effective_date": {"2000-02-01"}, "reason": {"Original known return"}, "revision": {"1"}}, 303)
+	var historicalEvent int64
+	historyCheck(t, src.pool.QueryRow(ctx, `SELECT id FROM asset_association_events WHERE asset_id=$1 AND action='place'`, historical.ID).Scan(&historicalEvent))
+	_, err = src.pool.Exec(ctx, `SELECT set_lease_master_dependencies(900,$1,$2,NULL,'terminated',true,jsonb_build_array(jsonb_build_object('asset_id',$3::bigint,'starts_on','2000-01-01','ends_on','2000-01-31')))`, src.company, c.ID, historical.ID)
 	historyCheck(t, err)
 	var workflow int64
 	tx, err := src.pool.Begin(ctx)
@@ -94,7 +101,7 @@ func TestLeaseNativeEncryptedBackupNormalRoles(t *testing.T) {
 	historyCheck(t, tx.Commit(ctx))
 	finalized, finalizeValues := populateFinalizedLease(t, src.pool, src.client, web, adminCookie, src.company)
 	voidLeaseInvoiceAndReplay(t, src.pool, web, adminCookie, src.company, src.actor, finalized, finalizeValues)
-	tables := []string{"leases", "lease_intended_assets", "lease_draft_billing", "lease_draft_asset_terms", "lease_master_dependencies", "lease_asset_dependencies", "lease_finalizations", "lease_billing_obligations", "lease_invoice_generations", "invoices", "issued_document_numbers", "company_settings", "customers", "locations", "assets", "asset_types", "comments", "files", "tags", "tag_links", "custom_field_definitions", "users", "authorization_roles", "authorization_grants"}
+	tables := []string{"leases", "lease_intended_assets", "lease_draft_billing", "lease_draft_asset_terms", "lease_master_dependencies", "lease_asset_dependencies", "lease_finalizations", "lease_billing_obligations", "lease_invoice_generations", "invoices", "issued_document_numbers", "company_settings", "customers", "locations", "assets", "asset_types", "asset_association_origins", "asset_association_events", "asset_association_origin_revisions", "comments", "files", "tags", "tag_links", "custom_field_definitions", "users", "authorization_roles", "authorization_grants"}
 	snapshot := func(pool *pgxpool.Pool) map[string]string {
 		out := map[string]string{}
 		for _, table := range tables {
@@ -133,6 +140,8 @@ func TestLeaseNativeEncryptedBackupNormalRoles(t *testing.T) {
 	adminCookie = sessionCookie(t, ctx, dst.sessions, src.actor)
 	fieldPost(t, web, adminCookie, fmt.Sprintf("/leases/%d/finalize", finalized), finalizeValues, 303)
 	historyEqual(t, "restored Void replay preserves pending and generation IDs and numbering", snapshot(dst.pool), before)
+	fieldPost(t, web, adminCookie, historicalPath+"correct", url.Values{"customer_id": {fmt.Sprint(other.ID)}, "event_id": {fmt.Sprint(historicalEvent)}, "effective_date": {"2000-01-01"}, "reason": {"Attempt conflicting retained correction"}, "revision": {"2"}}, 409)
+	historyEqual(t, "restored archived coverage still protects real placement history", snapshot(dst.pool), before)
 	baseCookie = sessionCookie(t, ctx, dst.sessions, userIDs["base"])
 	billingCookie = sessionCookie(t, ctx, dst.sessions, userIDs["billing"])
 	body := requestBody(t, web, baseCookie, "GET", path, 200)

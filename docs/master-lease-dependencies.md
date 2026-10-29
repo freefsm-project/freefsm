@@ -85,8 +85,8 @@ keys; it is not an event ledger and cannot stand in for Lease history.
 
 `lease_asset_timeline_validate` is shared by registration/replacement and the
 existing association/correction command, including initial-observation factual
-revisions. It checks overlap between **every recorded** coverage interval of an
-unarchived Scheduled/Active/Month-to-Month Lease and each differently placed
+revisions. It checks overlap between **every recorded finalized** coverage interval,
+including retained Terminated and archived history, and each differently placed
 Customer period, not just `assets.customer_id` today. A return that leaves the
 Asset unplaced today cannot hide a conflicting earlier placement.
 
@@ -94,14 +94,18 @@ Association periods are `[starts_on, ends_before)`; coverage is
 `[starts_on, ends_on]` with an inclusive final company-calendar day. Coverage
 starting on a return day does not overlap the placement that ends before that
 day. Coverage ending on a placement's start day does overlap. Same-day empty
-placement periods do not conflict. Unknown initial starts remain NULL: the guard
-conservatively checks possible overlap using the existing unbounded lower bound,
-without writing or claiming an acquisition date. Unplaced periods do not conflict.
+placement periods do not conflict. Unknown initial starts remain NULL: if the
+known return is at or before commencement, the observation is disjoint. Otherwise
+a different Customer's unknown-start observation requires explicit mapping review;
+it is not asserted to be an infinite historical placement. Unplaced periods do
+not conflict. A Terminated coverage row with no known end likewise requires
+explicit mapping review rather than an invented end or infinite coverage.
 
-This timeline consistency rule includes earlier covered dates of live finalized
-Leases. It is distinct from archive eligibility: wholly past coverage does not
-block master archive, and Draft, archived or Terminated references do not block
-these placement corrections. Non-overlapping historical placements remain valid.
+This timeline consistency rule is distinct from archive eligibility: wholly past
+coverage and Terminated/archived references do not block ordinary master archive.
+They do protect overlapping historical placements. Draft intended selections
+reserve no coverage; non-overlapping historical corrections and new placement
+after the inclusive coverage end remain valid.
 Original association facts remain immutable; accepted corrections append a new
 revision and their actual audit rather than rewriting old dates/owners.
 
@@ -115,7 +119,10 @@ remain immediate. New Draft coverage still requires an active Asset at commit;
 retained stale Draft keys are not treated as new selections. Statement fences
 on association events/origin revisions use the same 190019 owner as the Lease
 projection writers. Migration 104 adds guards only; it does not rewrite existing
-facts, synthesize coverage, fill unknown starts or change grants.
+facts, synthesize coverage, fill unknown starts or change grants. Migration 112
+extends that shared historical validator to retained finalized intervals and
+preflights existing incompatible facts for explicit mapping review. It changes
+neither archive eligibility functions nor facts, dates or permissions.
 
 No rows are backfilled, no dates are inferred from Asset placement, and no grants
 are added. If an installed database already contains `leases`, `lease_assets` or

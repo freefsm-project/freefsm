@@ -69,7 +69,8 @@ func TestMasterLeaseCoverageAndPlacementHTTP(t *testing.T) {
 	values.Set("customer_id", fmt.Sprint(c.ID))
 	fieldPost(t, web, cookie, path+"/associations/place", values, 303)
 	// Termination ends the coverage blocker, never the independent placement.
-	write("terminated", "2099-01-01", nil)
+	terminatedEnd := "2000-12-31"
+	write("terminated", "2000-01-01", &terminatedEnd)
 	fieldPost(t, web, cookie, path+"/delete", nil, 409)
 	fieldPost(t, web, cookie, path+"/associations/return", url.Values{"effective_date": {time.Now().UTC().Format("2006-01-02")}, "reason": {"Return equipment"}, "revision": {"1"}}, 303)
 	fieldPost(t, web, cookie, path+"/delete", nil, 303)
