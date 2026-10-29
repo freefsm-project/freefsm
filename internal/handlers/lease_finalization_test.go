@@ -9,6 +9,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/commercial"
+	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -16,7 +17,7 @@ func TestLeaseFinalizationHTTP(t *testing.T) {
 	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Finalization Customer").SaveX(ctx)
-	l := client.Location.Create().SetCompanyID(company).SetObjectType("customer").SetObjectID(c.ID).SetTitle("Premises snapshot").SaveX(ctx)
+	l := client.Location.Create().SetCompanyID(company).SetObjectType("customer").SetObjectID(c.ID).SetTitle("Premises snapshot").SetAddress1("123 Original street").SetCity("Original city").SetZipCode("12345").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Equipment").SaveX(ctx)
 	a := client.Asset.Create().SetCompanyID(company).SetOwnershipClass("company_owned").SetAssetTypeID(typ.ID).SetName("Unplaced").SaveX(ctx)
 	cookie := sessionCookie(t, ctx, sessions, admin)
@@ -81,10 +82,15 @@ func TestLeaseFinalizationHTTP(t *testing.T) {
 	historyEqual(t, "failed finalization including number conservation", rows(), before)
 	_, err = pool.Exec(ctx, `DROP TRIGGER reject_finalization_audit ON authorization_audit`)
 	historyCheck(t, err)
-	queuedChildPost(t, pool, web, cookie, path+"/finalize", `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='lease.billing.manage'`, []any{role}, 403, values)
-	historyEqual(t, "authority revoked while waiting", rows(), before)
-	_, err = pool.Exec(ctx, `INSERT INTO authorization_grants(role_id,permission,scope) VALUES($1,'lease.billing.manage','A')`, role)
-	historyCheck(t, err)
+	for _, key := range []string{"lease.view", "lease.manage", "lease.billing.view", "lease.billing.manage"} {
+		t.Run("queued revocation "+key, func(t *testing.T) {
+			queuedChildPost(t, pool, web, cookie, path+"/finalize", `DELETE FROM authorization_grants WHERE role_id=$1 AND permission=$2`, []any{role, key}, 403, values)
+			historyEqual(t, "authority revoked while waiting", rows(), before)
+			requestBody(t, web, cookie, "GET", path+"/finalize", 403)
+			_, err = pool.Exec(ctx, `INSERT INTO authorization_grants(role_id,permission,scope) VALUES($1,$2,'A')`, role, key)
+			historyCheck(t, err)
+		})
+	}
 	fieldPost(t, web, cookie, path+"/finalize", values, 303)
 	after := rows()
 	fieldPost(t, web, cookie, path+"/finalize", values, 303)
@@ -123,22 +129,37 @@ func TestLeaseFinalizationHTTP(t *testing.T) {
 	}
 	// The retained source is independent of mutable ordinary Invoice lines and
 	// Location data; source rows and Customer anchors cannot be rewritten.
+	alternateCustomer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Valid alternate Invoice Customer").SaveX(ctx)
+	var number int64
+	var lines string
+	historyCheck(t, pool.QueryRow(ctx, `SELECT invoice_number,line_items::text FROM invoices WHERE id=$1`, invoice).Scan(&number, &lines))
+	before = rows()
+	invoicePath := fmt.Sprintf("/invoices/%d", invoice)
+	invoiceEdit := commercialReviewedValues(t, web, adminCookie, invoicePath, url.Values{"customer_id": {fmt.Sprint(alternateCustomer.ID)}, "invoice_number": {fmt.Sprint(number)}, "line_items": {lines}, "tax_rate": {"5"}, "customer_defaults_reviewed": {"true"}})
+	fieldPost(t, web, adminCookie, invoicePath, invoiceEdit, 409)
+	historyEqual(t, "Invoice Customer writer preserves immutable Lease source", rows(), before)
 	for _, query := range []string{
 		`UPDATE lease_finalizations SET terms='[]'`,
 		`DELETE FROM lease_invoice_generations`,
 		`UPDATE lease_billing_obligations SET financial='{}'`,
 		`UPDATE invoices SET lease_id=NULL WHERE lease_id IS NOT NULL`,
+		fmt.Sprintf(`UPDATE invoices SET customer_id=%d WHERE lease_id IS NOT NULL`, alternateCustomer.ID),
 	} {
 		if _, err := pool.Exec(ctx, query); err == nil {
 			t.Fatalf("immutable source accepted %s", query)
 		}
 	}
-	_, err = pool.Exec(ctx, `UPDATE locations SET title='Changed later' WHERE id=$1`, l.ID)
+	_, err = pool.Exec(ctx, `UPDATE locations SET title='Changed later',address_1='Changed street',city='Changed city',zip_code='99999' WHERE id=$1`, l.ID)
 	historyCheck(t, err)
 	var title string
 	historyCheck(t, pool.QueryRow(ctx, `SELECT premises_snapshot->>'title' FROM lease_finalizations WHERE lease_id=$1`, id).Scan(&title))
 	if title != "Premises snapshot" {
 		t.Fatal("premises snapshot drifted")
+	}
+	var addressStable bool
+	historyCheck(t, pool.QueryRow(ctx, `SELECT premises_snapshot->>'address_1'='123 Original street' AND premises_snapshot->>'city'='Original city' AND premises_snapshot->>'zip_code'='12345' FROM lease_finalizations WHERE lease_id=$1`, id).Scan(&addressStable))
+	if !addressStable {
+		t.Fatal("master address edit rewrote commencement snapshot")
 	}
 	fieldPost(t, web, sessionCookie(t, ctx, sessions, admin), path+"/delete", nil, 409)
 	// Replaying is still a currently authorized action.
@@ -158,6 +179,19 @@ func TestLeaseFinalizationHTTP(t *testing.T) {
 	before = rows()
 	fieldPost(t, web, adminCookie, secondPath+"/finalize", values, 409)
 	historyEqual(t, "native overlapping coverage rejected atomically", rows(), before)
+	// Lease origin does not bypass the ordinary Draft/settlement boundary.
+	payment := url.Values{"idempotency_key": {newOperationKey()}, "amount": {"0.01"}, "method": {"cash"}, "date": {date}}
+	fieldPost(t, web, adminCookie, invoicePath+"/payments", payment, 409)
+	historyCheck(t, statusflow.New(pool).FinalizeInvoice(ctx, statusflow.Actor{ID: admin, CompanyID: company, Role: "admin"}, invoice))
+	payment.Set("idempotency_key", newOperationKey())
+	fieldPost(t, web, adminCookie, invoicePath+"/payments", payment, 303)
+	before = rows()
+	for _, change := range []string{`title='Changed after settlement'`, `line_items='[]'`, `financial=''`, `tax_rate='9'`} {
+		if _, err := pool.Exec(ctx, `UPDATE invoices SET `+change+` WHERE id=$1`, invoice); err == nil {
+			t.Fatalf("Lease origin bypassed settlement lock: %s", change)
+		}
+	}
+	historyEqual(t, "settled generated Invoice rejects financial/content rewrites", rows(), before)
 }
 
 func TestLeaseFinalizationBoundariesHTTP(t *testing.T) {
@@ -243,6 +277,14 @@ func TestLeaseFinalizationBoundariesHTTP(t *testing.T) {
 			if finalized != 1 {
 				t.Fatal("no finalization")
 			}
+			// Native current and Scheduled coverage protect all master archive
+			// writers, including the Customer's cascade review/commit path.
+			adminCookie := sessionCookie(t, ctx, sessions, admin)
+			fieldPost(t, web, adminCookie, fmt.Sprintf("/assets/%d/delete", a.ID), nil, 409)
+			fieldPost(t, web, adminCookie, fmt.Sprintf("/locations/%d/delete", l.ID), nil, 409)
+			var preview authorization.CustomerArchivePreview
+			masterJSON(t, web, adminCookie, fmt.Sprintf("/customers/%d/archive", c.ID), &preview)
+			fieldPost(t, web, adminCookie, fmt.Sprintf("/customers/%d/delete", c.ID), url.Values{"archive_snapshot": {preview.Snapshot}}, 409)
 			base, err := svc.DraftLeaseBase(ctx, authorization.Actor{UserID: u.ID}, id)
 			historyCheck(t, err)
 			wantLifecycle := "active"

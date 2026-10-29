@@ -62,6 +62,9 @@ templ LeaseDetailsPage(data LeasePageData) {
 		if data.Choices.CanViewBilling {
 			<a href={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.ID)) }>Billing</a>
 		}
+		if p.CanReviewFinalization {
+			<a href={ templ.URL(fmt.Sprintf("/leases/%d/finalize",p.ID)) }>Finalization review and receipt</a>
+		}
 		@CustomFieldsWidget(CustomFieldsWidgetData{Fields:data.Fields})
 		if p.CanManage {
 			<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d",p.ID)) }>

@@ -25,6 +25,20 @@ type LeaseHandler struct {
 	fields    *services.CustomFieldDefinitionService
 }
 
+func (h *LeaseHandler) FinalizationReview(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	data, err := h.authority.ReviewLeaseFinalization(r.Context(), authorizationActor(r), id)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	templates.LeaseFinalizationPage(data).Render(r.Context(), w)
+}
+
 func (h *LeaseHandler) Finalize(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -47,7 +61,7 @@ func (h *LeaseHandler) Finalize(w http.ResponseWriter, r *http.Request) {
 		authorizationError(w, r, err)
 		return
 	}
-	http.Redirect(w, r, fmt.Sprintf("/leases/%d", id), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/leases/%d/finalize", id), http.StatusSeeOther)
 }
 
 func (h *LeaseHandler) List(w http.ResponseWriter, r *http.Request) {

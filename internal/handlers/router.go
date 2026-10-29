@@ -247,6 +247,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		r.Post("/leases/{id}/delete", leaseHandler.Archive)
 		r.Post("/leases/{id}/restore", leaseHandler.Restore)
 		r.Post("/leases/{id}/finalize", leaseHandler.Finalize)
+		r.Get("/leases/{id}/finalize", leaseHandler.FinalizationReview)
 		r.Get("/leases/{id}/billing", leaseHandler.Billing)
 		r.Post("/leases/{id}/billing", leaseHandler.Billing)
 		r.With(collectionRead("project")).Get("/projects", projectHandler.List)

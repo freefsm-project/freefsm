@@ -2,9 +2,10 @@
 
 The initial finalization command is `POST /leases/{id}/finalize`, browser-only,
 with `revision`, `billing_revision`, and an explicit ISO `managed_billing_start`.
-It requires current Lease View/Manage and Billing View/Manage. Selecting dated
-coverage uses the existing dependency writer and its independent Asset View
-check. Invoice Create, Customer View and Pricing View are not additional grants
+It requires current Lease View/Manage and Billing View/Manage. New dated
+coverage selections require independent Asset View; native commencement retains
+the saved Draft selections without expanding selection authority.
+Invoice Create, Customer View and Pricing View are not additional grants
 for this bounded consequence of approved Lease terms. Subsequent Invoice
 operations retain their independent permissions.
 
@@ -45,14 +46,26 @@ Invoice splitting occurs.
 
 ## Milestone boundary
 
-This slice supplies the transactional HTTP command and read-derived lifecycle
-detail, with unplaced/wrong-premises warnings. Draft edit/archive commands cannot
-rewrite a finalized agreement. Reasoned post-finalization revision commands,
-finalization browser form/recovery journey, renewal boundary examples, exhaustive
-native race/API checks, and populated upgrade/encrypted-backup qualification are
+This slice supplies the transactional HTTP command, browser review/receipt and
+read-derived lifecycle detail, with unplaced/wrong-premises warnings. Draft
+edit/archive commands cannot rewrite a finalized agreement. Reasoned
+post-finalization revision commands, exhaustive native race/API checks, and
+populated upgrade/encrypted-backup qualification are
 remaining milestones. The ongoing scheduler/retry worker belongs to #67 and
 must recheck current eligibility and tax facts without silently repricing retained
 snapshots. This is not full ticket or release qualification.
+
+## Browser review and recovery
+
+`GET /leases/{id}/finalize` requires the same joint Lease and Billing grants as
+the command. It reads both revisions under one authority fence, shows selected
+terms and placement warnings, and requires an explicit managed billing start.
+It is a review, not a promise of eligibility: the POST rechecks current facts.
+Successful POST redirects to this page's durable finalization receipt, including
+the cutoff and generated/pending obligation counts. It does not expose Invoice
+links or grant Invoice authority. The ordinary shared save interaction handles
+transport uncertainty; users can reopen this page to check committed state after
+a lost response. Exact replay remains a currently authorized no-op.
 
 ## Read-derived renewal calendar
 

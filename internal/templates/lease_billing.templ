@@ -12,7 +12,11 @@ templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 		if p.Archived {
 			<div role="status">Archived — read-only Billing history</div>
 		}
-		<p>Prospective Draft terms only. Saving creates no Invoice or billing obligation. Amounts are whole cents; tax is a percentage.</p>
+		if p.Finalized {
+			<p>Finalized billing terms — read-only. Generated Invoices retain their original commercial facts. Amounts are whole cents; tax is a percentage.</p>
+		} else {
+			<p>Prospective Draft terms only. Saving creates no Invoice or billing obligation. Amounts are whole cents; tax is a percentage.</p>
+		}
 		if len(p.Terms)==0 {
 			<p>No intended Assets. A base Lease manager can select them on the basic view.</p>
 		}

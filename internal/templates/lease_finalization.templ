@@ -1,0 +1,42 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ LeaseFinalizationPage(p authorization.LeaseFinalizationReview) {
+ @Layout(p.Base.Number+" finalization") {
+  <h1>{ p.Base.Number } finalization</h1>
+  <a href={ templ.URL(fmt.Sprintf("/leases/%d",p.Base.ID)) }>Lease</a>
+  <a href={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.Base.ID)) }>Billing</a>
+  if p.Finalized {
+   <h2>Finalization receipt</h2>
+   <p role="status">Finalization committed. Coverage and billing obligations were recorded atomically. Reopening this receipt does not generate another Invoice.</p>
+   <dl><dt>Managed billing start</dt><dd>{ p.ManagedBillingStart }</dd><dt>Generated Draft Invoices</dt><dd>{ fmt.Sprint(p.Generated) }</dd><dt>Pending obligations</dt><dd>{ fmt.Sprint(p.Pending) }</dd></dl>
+   <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+  } else {
+   <h2>Review finalization</h2>
+   <p>Coverage begins at commencement and continues monthly after the inclusive fixed end. Finalization does not place or move equipment.</p>
+   <p>Eligible obligations generate ordinary Draft Invoices, never issued, sent or settled. Invoice actions require separate permissions. Charges before your explicit managed billing start are excluded.</p>
+   <p>If a response is lost, reopen this page to check the durable finalization receipt before trying again.</p>
+   <dl><dt>Start</dt><dd>{ p.Base.StartsOn }</dd><dt>Inclusive fixed end</dt><dd>{ p.Base.EndsOn }</dd><dt>Initial due date</dt><dd>{ p.Billing.InitialDueOn }</dd></dl>
+   for _, term := range p.Billing.Terms {
+    if term.Selected {
+     <p>Asset { fmt.Sprint(term.AssetID) }: initial { leaseCents(term.InitialCents) } cents; monthly { leaseCents(term.RentCents) } cents; tax { term.TaxRate }%.</p>
+    }
+   }
+   <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/finalize",p.Base.ID)) } data-save-terminal>
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+    <input type="hidden" name="revision" value={ fmt.Sprint(p.Base.Revision) }/>
+    <input type="hidden" name="billing_revision" value={ fmt.Sprint(p.Billing.Revision) }/>
+    <label>Managed billing start<input type="date" name="managed_billing_start" required/></label>
+    <button type="submit">Finalize Lease</button>
+   </form>
+  }
+  for _, id := range p.Base.UnplacedAssetIDs {
+   <p role="status">Asset { fmt.Sprint(id) } is unplaced. Coverage does not place equipment.</p>
+  }
+  for _, id := range p.Base.WrongPremisesAssetIDs {
+   <p role="status">Asset { fmt.Sprint(id) } is placed at different premises.</p>
+  }
+ }
+}

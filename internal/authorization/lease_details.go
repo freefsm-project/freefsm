@@ -21,6 +21,7 @@ type DraftLeaseBase struct {
 	AssetIDs                                                  []int64
 	CustomFields                                              string
 	CanManage                                                 bool
+	CanReviewFinalization                                      bool
 	Archived, CanArchive, CanRestore, PremisesArchived        bool
 	ArchivedAssetIDs                                          []int64
 }
@@ -52,7 +53,7 @@ func readLeaseBase(ctx context.Context, tx pgx.Tx, p Principal, id int64) (Draft
 			out.LeaseCalendar, err = leaseCalendar(state, out.StartsOn, out.EndsOn, today)
 		}
 	}
-	if err == nil && out.Lifecycle != "draft" {
+	if err == nil {
 		err = tx.QueryRow(ctx, `SELECT ARRAY(SELECT a.id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id WHERE i.lease_id=$1 AND a.customer_id IS NULL ORDER BY a.id),ARRAY(SELECT a.id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id JOIN leases l ON l.id=i.lease_id WHERE i.lease_id=$1 AND a.customer_id=l.customer_id AND a.location_id IS DISTINCT FROM l.premises_id ORDER BY a.id)`, id).Scan(&out.UnplacedAssetIDs, &out.WrongPremisesAssetIDs)
 	}
 	return out, err
@@ -70,6 +71,7 @@ func (s *Service) DraftLeaseBase(ctx context.Context, a Actor, id int64) (DraftL
 			return err
 		}
 		out.CanManage = !out.Archived && out.Lifecycle == "draft" && p.Allows("lease.manage", All)
+		out.CanReviewFinalization = !out.Archived && p.Allows("lease.manage", All) && p.Allows("lease.billing.view", All) && p.Allows("lease.billing.manage", All)
 		out.CanArchive = !out.Archived && out.Lifecycle == "draft" && p.Allows("lease.archive", All)
 		if out.Archived && p.Allows("lease.restore", All) {
 			out.CanRestore, err = customerLifecycleState(ctx, tx, p, out.CustomerID, true)
