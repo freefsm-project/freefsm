@@ -47,6 +47,11 @@ not reacquire selection authority. Revising the end of a retained coverage key
 keeps that selection; moving its start or re-adding a removed interval is a new
 selection. Every retained reference still undergoes domain validation: this
 exception does not finalize stale archived selections or bypass placement rules.
+Native Drafts store selected Assets separately from coverage. Opening their first
+open-ended commencement coverage at the saved Draft start retains those selections
+without Asset View; the adapter verifies the saved selection, Customer, premises
+and Draft lifecycle under the same fence. New Assets and changed coverage starts
+still require Asset View, and all coverage undergoes the same domain validation.
 Terminated retained history may reference archived masters without reviving them.
 
 The database seam `set_lease_master_dependencies` is available to transactional

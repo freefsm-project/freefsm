@@ -34,7 +34,8 @@ func TestLeaseFinalizationHTTP(t *testing.T) {
 	svc := authorization.New(pool)
 	historyCheck(t, svc.SaveDraftLeaseBilling(ctx, authorization.Actor{UserID: admin}, id, 0, date, authorization.DraftLeaseTerms{AssetID: a.ID, InitialCents: &amount, RentCents: &rent, TaxRate: "5"}, 0))
 	grants := []authorization.Grant{}
-	for _, key := range []string{"lease.view", "lease.manage", "lease.billing.view", "lease.billing.manage", "asset.view"} {
+	// Saved selections need no Asset View; bounded generation needs no Invoice Create.
+	for _, key := range []string{"lease.view", "lease.manage", "lease.billing.view", "lease.billing.manage"} {
 		grants = append(grants, authorization.Grant{Permission: key, Scope: authorization.All})
 	}
 	role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Lease finalizer", grants)
@@ -43,6 +44,25 @@ func TestLeaseFinalizationHTTP(t *testing.T) {
 	historyCheck(t, svc.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role))
 	cookie = sessionCookie(t, ctx, sessions, u.ID)
 	values := url.Values{"revision": {"1"}, "billing_revision": {"1"}, "managed_billing_start": {date}}
+	other := client.Asset.Create().SetCompanyID(company).SetOwnershipClass("company_owned").SetAssetTypeID(typ.ID).SetName("Not selected").SaveX(ctx)
+	fieldPost(t, web, cookie, path, url.Values{"revision": {"1"}, "starts_on": {date}, "ends_on": {today.AddDate(1, 0, 0).Format(time.DateOnly)}, "premises_id": {fmt.Sprint(l.ID)}, "asset_ids": {fmt.Sprint(a.ID), fmt.Sprint(other.ID)}}, 404)
+	for _, tc := range []struct {
+		name  string
+		asset int64
+		start string
+	}{
+		{"new Asset coverage", other.ID, date},
+		{"changed commencement", a.ID, today.AddDate(0, 0, 1).Format(time.DateOnly)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := svc.WithinActor(ctx, authorization.Actor{UserID: u.ID}, func(tx pgx.Tx, _ authorization.Principal) error {
+				return svc.WriteLeaseDependencies(ctx, tx, authorization.Actor{UserID: u.ID}, authorization.LeaseDependencies{LeaseID: id, CustomerID: c.ID, PremisesID: &l.ID, Lifecycle: "active", Coverage: []authorization.LeaseAssetDependency{{AssetID: tc.asset, StartsOn: tc.start}}})
+			})
+			if err != authorization.ErrNotFound {
+				t.Fatalf("new selection without Asset View: %v", err)
+			}
+		})
+	}
 	// Inject a late failure after numbering and generation, proving all-or-zero.
 	_, err = pool.Exec(ctx, `CREATE FUNCTION reject_finalization_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='lease.finalize' THEN RAISE EXCEPTION 'injected finalization audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_finalization_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION reject_finalization_audit()`)
 	historyCheck(t, err)
@@ -200,6 +220,17 @@ func TestLeaseFinalizationBoundariesHTTP(t *testing.T) {
 				_, err := pool.Exec(ctx, `UPDATE lease_draft_billing SET initial_due_on=initial_due_on+1 WHERE lease_id=$1`, id)
 				historyCheck(t, err)
 			}
+			// Finalization rechecks every domain invariant even when the actor
+			// cannot select/view Assets independently.
+			grants := []authorization.Grant{}
+			for _, key := range []string{"lease.view", "lease.manage", "lease.billing.view", "lease.billing.manage"} {
+				grants = append(grants, authorization.Grant{Permission: key, Scope: authorization.All})
+			}
+			role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Bounded finalizer", grants)
+			historyCheck(t, err)
+			u := client.User.Create().SetCompanyID(company).SetName("Finalizer").SetEmail("boundary-finalizer66@test").SetPasswordHash("x").SetRole("tech").SaveX(ctx)
+			historyCheck(t, svc.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role))
+			cookie = sessionCookie(t, ctx, sessions, u.ID)
 			fieldPost(t, web, cookie, path+"/finalize", url.Values{"revision": {"1"}, "billing_revision": {"2"}, "managed_billing_start": {today.AddDate(0, 0, tc.cutoffDays).Format(time.DateOnly)}}, tc.want)
 			var finalized, invoices, initial int
 			historyCheck(t, pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM lease_finalizations),(SELECT count(*) FROM invoices),(SELECT count(*) FROM lease_billing_obligations WHERE kind='initial')`).Scan(&finalized, &invoices, &initial))

@@ -125,6 +125,20 @@ func (s *Service) WriteLeaseDependencies(ctx context.Context, tx pgx.Tx, a Actor
 		if retained[coverageKey{row.AssetID, row.StartsOn}] {
 			continue
 		}
+		// Native Drafts save selection intent without reserving coverage. Opening
+		// commencement coverage for that exact saved selection is not a new master
+		// selection. Derive this from fenced persisted state, never caller flags;
+		// later start changes/re-additions still require selection authority.
+		if len(prior.Coverage) == 0 && row.EndsOn == nil && (in.Lifecycle == "scheduled" || in.Lifecycle == "active" || in.Lifecycle == "month_to_month") {
+			var savedCommencement bool
+			err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM leases l JOIN lease_intended_assets i ON i.lease_id=l.id JOIN lease_master_dependencies d ON d.lease_id=l.id WHERE l.id=$1 AND l.company_id=$2 AND l.lifecycle='draft' AND d.lifecycle='draft' AND l.deleted_at IS NULL AND l.customer_id=$3 AND l.premises_id IS NOT DISTINCT FROM $4::bigint AND i.asset_id=$5 AND l.starts_on=$6::date)`, in.LeaseID, p.CompanyID, in.CustomerID, in.PremisesID, row.AssetID, row.StartsOn).Scan(&savedCommencement)
+			if err != nil {
+				return err
+			}
+			if savedCommencement {
+				continue
+			}
+		}
 		if !p.Allows("asset.view", All) {
 			return ErrNotFound
 		}
