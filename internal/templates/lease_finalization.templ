@@ -14,7 +14,7 @@ templ LeaseFinalizationPage(p authorization.LeaseFinalizationReview) {
     <p role="alert">{ p.GenerationFailure } Automatic retries retain the same billing obligation.</p>
    }
    <p role="status">Finalization committed. Coverage and billing obligations were recorded atomically. Reopening this receipt does not generate another Invoice.</p>
-   <dl><dt>Managed billing start</dt><dd>{ p.ManagedBillingStart }</dd><dt>Generated Draft Invoices</dt><dd>{ fmt.Sprint(p.Generated) }</dd><dt>Pending obligations</dt><dd>{ fmt.Sprint(p.Pending) }</dd></dl>
+   <dl><dt>Managed billing start</dt><dd>{ p.ManagedBillingStart }</dd><dt>Generated obligations</dt><dd>{ fmt.Sprint(p.Generated) }</dd><dt>Ungenerated retained obligations</dt><dd>{ fmt.Sprint(p.Pending) }</dd></dl>
    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
   } else {
    <h2>Review finalization</h2>

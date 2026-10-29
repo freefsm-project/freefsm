@@ -16,7 +16,7 @@ import (
 // fixture-generated production coverage. PostgreSQL blocking edges establish
 // the order; wall-clock sleeps do not stand in for observed contention.
 func TestLeaseBillingWorkerCommitRaces(t *testing.T) {
-	for _, kind := range []string{"worker", "archive", "placement", "timeline", "replace-reactivate", "reactivate-replace"} {
+	for _, kind := range []string{"worker", "retry", "retry-first", "archive", "placement", "timeline", "replace-reactivate", "reactivate-replace"} {
 		t.Run(kind, func(t *testing.T) {
 			pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
 			ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -77,7 +77,7 @@ func TestLeaseBillingWorkerCommitRaces(t *testing.T) {
 				if kind == "timeline" {
 					command = creditCommand{path: fmt.Sprintf("/assets/%d/associations/correct", asset.ID), values: url.Values{"customer_id": {fmt.Sprint(other.ID)}, "effective_date": {"2024-01-01"}, "event_id": {fmt.Sprint(event)}, "reason": {"Competing historical correction"}, "revision": {"2"}}}
 				}
-				if kind != "worker" {
+				if kind != "worker" && kind != "retry" && kind != "retry-first" {
 					second = func() error {
 						r := (&creditMatrix{ctx: ctx, pool: pool, web: web, cookie: cookie}).call(command)
 						if r.Code == 303 {
@@ -87,6 +87,19 @@ func TestLeaseBillingWorkerCommitRaces(t *testing.T) {
 							return fmt.Errorf("unexpected HTTP status %d: %s", r.Code, r.Body.String())
 						}
 						return authorization.ErrConflict
+					}
+				}
+				if kind == "retry" || kind == "retry-first" {
+					var obligation int64
+					historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM lease_billing_obligations WHERE lease_id=$1 AND kind='monthly'`, lease).Scan(&obligation))
+					review, err := svc.ReviewLeaseBillingPeriod(ctx, authorization.Actor{UserID: admin}, lease, obligation)
+					historyCheck(t, err)
+					second = func() error {
+						_, err := svc.RetryLeaseBillingPeriod(ctx, authorization.Actor{UserID: admin}, lease, obligation, review.ReviewHash, review.OperationKey)
+						return err
+					}
+					if kind == "retry-first" {
+						first, second = second, first
 					}
 				}
 			}
@@ -102,7 +115,7 @@ func TestLeaseBillingWorkerCommitRaces(t *testing.T) {
 			commercialWaiters(t, ctx, pool, holder, 1)
 			var writer int
 			historyCheck(t, pool.QueryRow(ctx, `SELECT pid FROM pg_stat_activity WHERE application_name=$2 AND $1=ANY(pg_blocking_pids(pid))`, holder, pool.Config().ConnConfig.RuntimeParams["application_name"]).Scan(&writer))
-			if kind != "replace-reactivate" && kind != "reactivate-replace" {
+			if kind != "replace-reactivate" && kind != "reactivate-replace" && kind != "retry-first" {
 				var obligations, generated int
 				historyCheck(t, pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM lease_billing_obligations),(SELECT count(*) FROM lease_invoice_generations)`).Scan(&obligations, &generated))
 				historyEqual(t, "materialization committed before paused Invoice attempt", obligations, 5)
@@ -113,12 +126,12 @@ func TestLeaseBillingWorkerCommitRaces(t *testing.T) {
 			historyCheck(t, barrier.Commit(ctx))
 			historyCheck(t, <-done1)
 			secondErr := <-done2
-			if kind == "worker" {
+			if kind == "worker" || kind == "retry-first" {
 				historyCheck(t, secondErr)
 			} else if secondErr == nil {
 				t.Fatal("competing ineligible effect committed")
 			}
-			if (kind == "archive" || kind == "placement" || kind == "timeline" || kind == "reactivate-replace") && !errors.Is(secondErr, authorization.ErrConflict) {
+			if (kind == "archive" || kind == "placement" || kind == "timeline" || kind == "reactivate-replace" || kind == "retry") && !errors.Is(secondErr, authorization.ErrConflict) {
 				t.Fatalf("unexpected competitor failure: %v", secondErr)
 			}
 			var competing bool

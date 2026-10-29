@@ -48,6 +48,7 @@ const {chromium} = require('playwright-core');
   assert.equal(await page.getByRole('button',{name:'Replace reviewed Void generation',exact:true}).count(),0);
   assert.equal((await page.context().request.post(base+'/test/coverage')).status(),204);
   await page.reload();assert.match(await page.content(),/Manual review required/);
+  assert.equal(await page.locator('a[href^="/invoices/"]').count(),0);
   await viewer.goto(base+period);assert.match(await viewer.content(),/Manual review required/);
   assert.equal((await denied.goto(base+period)).status(),404);
   console.log('billing-only review; base-only denial; visible failure; explicit retry and replacement; real lost responses reconciled to durable receipts; same-operation replay');

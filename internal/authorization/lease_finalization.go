@@ -163,9 +163,24 @@ func (s *Service) createLeaseObligation(ctx context.Context, tx pgx.Tx, a Actor,
 }
 
 func materializeLeaseObligation(ctx context.Context, tx pgx.Tx, base DraftLeaseBase, terms []DraftLeaseTerms, kind string, due time.Time, input commercial.Input) (int64, string, string, error) {
-	financial, err := commercial.Accept(input)
+	financial, encoded, err := leaseObligationSnapshot(base, terms, kind, due, input)
 	if err != nil {
 		return 0, "", "", err
+	}
+	var obligation int64
+	err = tx.QueryRow(ctx, `SELECT id FROM lease_billing_obligations WHERE lease_id=$1 AND kind=$2 AND due_on=$3`, base.ID, kind, due).Scan(&obligation)
+	if err == pgx.ErrNoRows {
+		err = tx.QueryRow(ctx, `INSERT INTO lease_billing_obligations(lease_id,kind,due_on,financial,line_items) VALUES($1,$2,$3,$4,$5) RETURNING id`, base.ID, kind, due, financial, encoded).Scan(&obligation)
+	} else if err == nil {
+		err = reconcileLeaseSnapshot(ctx, tx, obligation, financial, encoded)
+	}
+	return obligation, financial, encoded, err
+}
+
+func leaseObligationSnapshot(base DraftLeaseBase, terms []DraftLeaseTerms, kind string, due time.Time, input commercial.Input) (string, string, error) {
+	financial, err := commercial.Accept(input)
+	if err != nil {
+		return "", "", err
 	}
 	lines := make([]map[string]any, 0, len(input.Lines))
 	for _, term := range terms {
@@ -177,14 +192,26 @@ func materializeLeaseObligation(ctx context.Context, tx pgx.Tx, base DraftLeaseB
 	}
 	encoded, err := json.Marshal(lines)
 	if err != nil {
-		return 0, "", "", err
+		return "", "", err
 	}
-	var obligation int64
-	err = tx.QueryRow(ctx, `SELECT id FROM lease_billing_obligations WHERE lease_id=$1 AND kind=$2 AND due_on=$3`, base.ID, kind, due).Scan(&obligation)
-	if err == pgx.ErrNoRows {
-		err = tx.QueryRow(ctx, `INSERT INTO lease_billing_obligations(lease_id,kind,due_on,financial,line_items) VALUES($1,$2,$3,$4,$5) RETURNING id`, base.ID, kind, due, financial, encoded).Scan(&obligation)
+	return financial, string(encoded), nil
+}
+
+// Original approval rows stay immutable. Only an ungenerated obligation may
+// append a current-source snapshot; identical retries allocate no revision ID.
+func reconcileLeaseSnapshot(ctx context.Context, tx pgx.Tx, obligation int64, financial, lines string) error {
+	var same, generated bool
+	if err := tx.QueryRow(ctx, `SELECT financial=$2 AND line_items=$3::jsonb,EXISTS(SELECT 1 FROM lease_invoice_generations WHERE obligation_id=$1) FROM lease_billing_obligation_current WHERE id=$1`, obligation, financial, lines).Scan(&same, &generated); err != nil {
+		return err
 	}
-	return obligation, financial, string(encoded), err
+	if same {
+		return nil
+	}
+	if generated {
+		return ErrConflict
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO lease_billing_obligation_revisions(obligation_id,financial,line_items,source) SELECT o.id,$2,$3::jsonb,jsonb_build_object('approval',to_jsonb(f),'agreement',to_jsonb(l),'dependency',to_jsonb(d),'coverage',(SELECT jsonb_agg(to_jsonb(c) ORDER BY asset_id,starts_on) FROM lease_asset_dependencies c WHERE c.lease_id=l.id),'tax_exempt',c.tax_exempt,'source_change_id',(SELECT max(id) FROM lease_billing_source_changes WHERE lease_id=l.id)) FROM lease_billing_obligations o JOIN lease_finalizations f ON f.lease_id=o.lease_id JOIN leases l ON l.id=o.lease_id JOIN lease_master_dependencies d ON d.lease_id=l.id JOIN customers c ON c.id=l.customer_id WHERE o.id=$1`, obligation, financial, lines)
+	return err
 }
 
 func recordLeaseGeneration(ctx context.Context, tx pgx.Tx, lease, obligation, invoice int64) error {

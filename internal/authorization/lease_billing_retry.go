@@ -41,6 +41,20 @@ func (s *Service) RetryLeaseBillingPeriod(ctx context.Context, a Actor, lease, o
 		}
 		document, attemptErr := approvedLeasePeriod(ctx, work, p, lease, obligation)
 		if attemptErr == nil {
+			attemptErr = reconcileLeaseSnapshot(ctx, work, obligation, document.Financial, document.LineItems)
+		}
+		if attemptErr == nil {
+			// Retain the approved source revision even if the separate Invoice
+			// attempt fails. The outer command commits it with its failure record.
+			if err := work.Commit(ctx); err != nil {
+				return err
+			}
+			work, err = tx.Begin(ctx)
+			if err != nil {
+				return err
+			}
+		}
+		if attemptErr == nil {
 			invoice, attemptErr = s.createBoundDocument(ctx, work, a, p, "invoice", document, func(string) (string, error) { return "unpaid", nil }, obligation)
 		}
 		if attemptErr == nil {
@@ -63,9 +77,16 @@ func (s *Service) RetryLeaseBillingPeriod(ctx context.Context, a Actor, lease, o
 			if _, err := tx.Exec(ctx, `INSERT INTO lease_billing_attempts(obligation_id,failure) VALUES($1,'Draft generation failed; review current agreement, coverage and billing terms, then retry.') ON CONFLICT(obligation_id) DO UPDATE SET attempted_at=clock_timestamp(),failure=excluded.failure`, obligation); err != nil {
 				return err
 			}
+			if _, err := tx.Exec(ctx, `INSERT INTO lease_billing_period_failures(lease_id,kind,due_on,failure) SELECT lease_id,kind,due_on,'Draft generation failed; review current agreement, coverage and billing terms, then retry.' FROM lease_billing_obligations WHERE id=$1 ON CONFLICT(lease_id,kind,due_on) DO UPDATE SET attempted_at=clock_timestamp(),failure=excluded.failure`, obligation); err != nil {
+				return err
+			}
 			return audit(ctx, tx, a, p, "lease.billing.retry_failed", All, "lease", lease, map[string]any{"obligation_id": obligation, "operation_key": key})
 		}
-		return work.Commit(ctx)
+		if err := work.Commit(ctx); err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `DELETE FROM lease_billing_period_failures f USING lease_billing_obligations o WHERE o.id=$1 AND f.lease_id=o.lease_id AND f.kind=o.kind AND f.due_on=o.due_on`, obligation)
+		return err
 	})
 	if err != nil {
 		return 0, err

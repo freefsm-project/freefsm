@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -21,6 +22,14 @@ type LeaseBillingPeriod struct {
 	Disposition, TaxRate                           string
 	TaxExempt                                      bool
 	Lines                                          []LeaseBillingPeriodLine
+	EligibilityMessage                             string
+	OriginalTotalCents                             int64
+	Revisions                                      []LeaseBillingRevision
+}
+
+type LeaseBillingRevision struct {
+	ID, TotalCents int64
+	RecordedAt     string
 }
 
 type LeaseBillingPeriodLine struct {
@@ -46,12 +55,29 @@ func billingReviewHash(ctx context.Context, tx pgx.Tx, obligation, invoice int64
 func readLeaseBillingPeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, obligation int64) (LeaseBillingPeriod, error) {
 	out := LeaseBillingPeriod{LeaseID: lease, ObligationID: obligation}
 	var financial string
-	err := tx.QueryRow(ctx, `SELECT o.kind,o.due_on::text,o.financial,coalesce(g.invoice_id,0),coalesce(s.category_key='invoice:void',false),CASE WHEN g.invoice_id IS NULL THEN coalesce(a.failure,'') ELSE '' END FROM lease_billing_obligations o JOIN leases l ON l.id=o.lease_id LEFT JOIN lease_invoice_generations g ON g.obligation_id=o.id AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations n WHERE n.predecessor_invoice_id=g.invoice_id) LEFT JOIN invoices i ON i.id=g.invoice_id LEFT JOIN statuses s ON s.id=i.status_id LEFT JOIN lease_billing_attempts a ON a.obligation_id=o.id WHERE o.id=$1 AND o.lease_id=$2 AND l.company_id=$3 AND l.deleted_at IS NULL`, obligation, lease, p.CompanyID).Scan(&out.Kind, &out.DueOn, &financial, &out.InvoiceID, &out.Void, &out.Failure)
+	err := tx.QueryRow(ctx, `SELECT o.kind,o.due_on::text,o.financial,coalesce(g.invoice_id,0),coalesce(s.category_key='invoice:void',false),CASE WHEN g.invoice_id IS NULL THEN coalesce(a.failure,'') ELSE '' END FROM lease_billing_obligation_current o JOIN leases l ON l.id=o.lease_id LEFT JOIN lease_invoice_generations g ON g.obligation_id=o.id AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations n WHERE n.predecessor_invoice_id=g.invoice_id) LEFT JOIN invoices i ON i.id=g.invoice_id LEFT JOIN statuses s ON s.id=i.status_id LEFT JOIN lease_billing_attempts a ON a.obligation_id=o.id WHERE o.id=$1 AND o.lease_id=$2 AND l.company_id=$3 AND l.deleted_at IS NULL`, obligation, lease, p.CompanyID).Scan(&out.Kind, &out.DueOn, &financial, &out.InvoiceID, &out.Void, &out.Failure)
 	if err == pgx.ErrNoRows {
 		return out, ErrNotFound
 	}
 	if err != nil {
 		return out, err
+	}
+	var lines []byte
+	if err := tx.QueryRow(ctx, `SELECT line_items FROM lease_billing_obligation_current WHERE id=$1`, obligation).Scan(&lines); err != nil {
+		return out, err
+	}
+	// A review previews the whole current approved source without writing it.
+	// The authorized retry then captures that exact source under the same fence.
+	if out.InvoiceID == 0 {
+		preview, err := approvedLeasePeriod(ctx, tx, p, lease, obligation)
+		if err == nil {
+			financial = preview.Financial
+			lines = []byte(preview.LineItems)
+		} else if errors.Is(err, ErrConflict) || errors.Is(err, ErrNotFound) {
+			out.EligibilityMessage = "Current sources do not permit generation yet; review dates, coverage and active masters. The original obligation is retained."
+		} else {
+			return out, err
+		}
 	}
 	snapshot, err := commercial.Read(financial)
 	if err != nil {
@@ -60,8 +86,37 @@ func readLeaseBillingPeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, 
 	out.TotalCents = snapshot.Result.TotalCents
 	out.TaxRate = snapshot.Input.TaxRate
 	out.TaxExempt = snapshot.Input.TaxExempt
-	var lines []byte
-	if err := tx.QueryRow(ctx, `SELECT line_items FROM lease_billing_obligations WHERE id=$1`, obligation).Scan(&lines); err != nil {
+	var original string
+	if err := tx.QueryRow(ctx, `SELECT financial FROM lease_billing_obligations WHERE id=$1`, obligation).Scan(&original); err != nil {
+		return out, err
+	}
+	originalSnapshot, err := commercial.Read(original)
+	if err != nil {
+		return out, err
+	}
+	out.OriginalTotalCents = originalSnapshot.Result.TotalCents
+	rows, err := tx.Query(ctx, `SELECT id,recorded_at::text,financial FROM lease_billing_obligation_revisions WHERE obligation_id=$1 ORDER BY id`, obligation)
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var revision LeaseBillingRevision
+		var value string
+		if err := rows.Scan(&revision.ID, &revision.RecordedAt, &value); err != nil {
+			rows.Close()
+			return out, err
+		}
+		snapshot, err := commercial.Read(value)
+		if err != nil {
+			rows.Close()
+			return out, err
+		}
+		revision.TotalCents = snapshot.Result.TotalCents
+		out.Revisions = append(out.Revisions, revision)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
 		return out, err
 	}
 	if err := json.Unmarshal(lines, &out.Lines); err != nil {
@@ -83,7 +138,7 @@ func readLeaseBillingPeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, 
 	hash := sha256.Sum256([]byte(fmt.Sprintf("lease-replacement:%d:%d:%d:%s", p.UserID, obligation, out.InvoiceID, out.ReviewHash)))
 	out.OperationKey = hex.EncodeToString(hash[:])
 	out.CanReplace = out.Void && p.Allows("lease.manage", All) && p.Allows("lease.billing.manage", All)
-	out.CanRetry = out.InvoiceID == 0 && out.Disposition == "" && p.Allows("lease.manage", All) && p.Allows("lease.billing.manage", All)
+	out.CanRetry = out.InvoiceID == 0 && out.Disposition == "" && out.EligibilityMessage == "" && p.Allows("lease.manage", All) && p.Allows("lease.billing.manage", All)
 	return out, nil
 }
 
@@ -100,9 +155,9 @@ func (s *Service) ReviewLeaseBillingPeriod(ctx context.Context, a Actor, lease, 
 	return out, err
 }
 
-// approvedLeasePeriod revalidates the exact immutable obligation against current
-// agreement/coverage/masters. It never blends an old amount with new coverage or
-// silently changes tax exemption after approval/materialization.
+// approvedLeasePeriod derives one complete current-source snapshot for an
+// ungenerated obligation. Generated snapshots remain fixed and incompatible
+// replacements require review rather than silently rewriting their history.
 func approvedLeasePeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, obligation int64) (DocumentCreation, error) {
 	var out DocumentCreation
 	base, err := readLeaseBase(ctx, tx, p, lease)
@@ -114,7 +169,7 @@ func approvedLeasePeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, obl
 	var start, end, cutoff, due, today time.Time
 	var kind, financial, lines string
 	var valid, exempt bool
-	err = tx.QueryRow(ctx, `SELECT f.terms,f.starts_on,f.fixed_ends_on,f.managed_billing_start,o.kind,o.due_on,o.financial,o.line_items::text,lease_dependency_today(l.company_id),c.tax_exempt,NOT d.archived AND d.lifecycle<>'draft' AND d.customer_id=l.customer_id AND d.premises_id IS NOT DISTINCT FROM l.premises_id AND c.deleted_at IS NULL AND p.deleted_at IS NULL AND p.company_id=l.company_id AND p.object_type='customer' AND p.object_id=l.customer_id FROM lease_billing_obligations o JOIN lease_finalizations f ON f.lease_id=o.lease_id JOIN leases l ON l.id=o.lease_id JOIN lease_master_dependencies d ON d.lease_id=l.id JOIN customers c ON c.id=l.customer_id JOIN locations p ON p.id=l.premises_id WHERE o.id=$1 AND o.lease_id=$2 FOR SHARE OF c,p,d`, obligation, lease).Scan(&raw, &start, &end, &cutoff, &kind, &due, &financial, &lines, &today, &exempt, &valid)
+	err = tx.QueryRow(ctx, `SELECT f.terms,f.starts_on,f.fixed_ends_on,f.managed_billing_start,o.kind,o.due_on,o.financial,o.line_items::text,lease_dependency_today(l.company_id),c.tax_exempt,NOT d.archived AND d.lifecycle<>'draft' AND d.customer_id=l.customer_id AND d.premises_id IS NOT DISTINCT FROM l.premises_id AND c.deleted_at IS NULL AND p.deleted_at IS NULL AND p.company_id=l.company_id AND p.object_type='customer' AND p.object_id=l.customer_id FROM lease_billing_obligation_current o JOIN lease_finalizations f ON f.lease_id=o.lease_id JOIN leases l ON l.id=o.lease_id JOIN lease_master_dependencies d ON d.lease_id=l.id JOIN customers c ON c.id=l.customer_id JOIN locations p ON p.id=l.premises_id WHERE o.id=$1 AND o.lease_id=$2 FOR SHARE OF c,p,d`, obligation, lease).Scan(&raw, &start, &end, &cutoff, &kind, &due, &financial, &lines, &today, &exempt, &valid)
 	if err != nil {
 		return out, err
 	}
@@ -160,16 +215,20 @@ func approvedLeasePeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, obl
 	if err != nil {
 		return out, err
 	}
-	expected, err := commercial.Accept(input)
+	expected, expectedLines, err := leaseObligationSnapshot(base, terms, kind, due, input)
 	if err != nil {
 		return out, err
+	}
+	var generated bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_invoice_generations WHERE obligation_id=$1)`, obligation).Scan(&generated); err != nil {
+		return out, err
+	}
+	if !generated {
+		financial = expected
+		lines = expectedLines
 	}
 	if expected != financial {
-		return out, &LeaseValidationError{Message: "Current billing facts differ from this obligation; review the source change"}
-	}
-	_, _, expectedLines, err := materializeLeaseObligation(ctx, tx, base, terms, kind, due, input)
-	if err != nil {
-		return out, err
+		return out, &LeaseValidationError{Message: "Generated facts differ from current source; manual review required"}
 	}
 	if err = tx.QueryRow(ctx, `SELECT $1::jsonb=$2::jsonb`, lines, expectedLines).Scan(&valid); err != nil {
 		return out, err

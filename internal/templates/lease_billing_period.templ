@@ -8,6 +8,16 @@ templ LeaseBillingPeriodPage(p authorization.LeaseBillingPeriod) {
   <h1>Lease billing period</h1>
   <a href={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.LeaseID)) }>Billing</a>
   <p>{ p.Kind } due { p.DueOn }; approved total { fmt.Sprint(p.TotalCents) } cents.</p>
+  if p.EligibilityMessage != "" {
+   <p role="status">{ p.EligibilityMessage }</p>
+  }
+  if len(p.Revisions) > 0 {
+   <h2>Pending source reconciliation history</h2>
+   <p>Original approval: { fmt.Sprint(p.OriginalTotalCents) } cents. Its identity and facts remain retained.</p>
+   for _, revision := range p.Revisions {
+    <p>Revision { fmt.Sprint(revision.ID) } recorded { revision.RecordedAt }: { fmt.Sprint(revision.TotalCents) } cents.</p>
+   }
+  }
   <p>Approved document tax rate: { p.TaxRate }%.</p>
   if p.TaxExempt {
    <p>Customer exemption applies to the approved obligation.</p>

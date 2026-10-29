@@ -14,7 +14,14 @@ templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 			<div role="status">Archived — read-only Billing history</div>
 		}
 		if p.GenerationFailure != "" {
+			<h2>Last scheduler failure</h2>
 			<p role="alert">{ p.GenerationFailure }</p>
+		}
+		if len(p.Failures) > 0 {
+			<h2>Periods requiring retry (up to 100)</h2>
+			for _, failure := range p.Failures {
+				<p role="alert">{ failure.Kind } due { failure.DueOn }: { failure.Message }</p>
+			}
 		}
 		if len(p.Periods) > 0 {
 			<h2>Recent billing obligations (up to 100)</h2>

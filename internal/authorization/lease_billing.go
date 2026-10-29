@@ -30,7 +30,10 @@ type DraftLeaseBilling struct {
 	Terms                []DraftLeaseTerms
 	GenerationFailure    string
 	Periods              []LeaseBillingPeriod
+	Failures             []LeaseBillingFailure
 }
+
+type LeaseBillingFailure struct{ Kind, DueOn, Message string }
 
 func readLeaseBilling(ctx context.Context, tx pgx.Tx, p Principal, id int64) (DraftLeaseBilling, error) {
 	var out DraftLeaseBilling
@@ -80,6 +83,23 @@ func (s *Service) DraftLeaseBilling(ctx context.Context, a Actor, id int64) (Dra
 			return err
 		}
 		if err = tx.QueryRow(ctx, `SELECT coalesce((SELECT failure FROM lease_billing_worker_state WHERE lease_id=$1),'')`, id).Scan(&out.GenerationFailure); err != nil {
+			return err
+		}
+		failed, err := tx.Query(ctx, `SELECT f.kind,f.due_on::text,f.failure FROM lease_billing_period_failures f WHERE f.lease_id=$1 AND NOT EXISTS(SELECT 1 FROM lease_billing_obligations o JOIN lease_invoice_generations g ON g.obligation_id=o.id WHERE o.lease_id=f.lease_id AND o.kind=f.kind AND o.due_on=f.due_on) AND NOT EXISTS(SELECT 1 FROM lease_billing_period_dispositions d WHERE d.lease_id=f.lease_id AND d.kind=f.kind AND d.due_on=f.due_on AND d.source_revision=(SELECT coalesce(max(id),0) FROM lease_billing_source_changes WHERE lease_id=f.lease_id)) ORDER BY f.due_on,f.kind LIMIT 100`, id)
+		if err != nil {
+			return err
+		}
+		for failed.Next() {
+			var failure LeaseBillingFailure
+			if err := failed.Scan(&failure.Kind, &failure.DueOn, &failure.Message); err != nil {
+				failed.Close()
+				return err
+			}
+			out.Failures = append(out.Failures, failure)
+		}
+		err = failed.Err()
+		failed.Close()
+		if err != nil {
 			return err
 		}
 		rows, err := tx.Query(ctx, `SELECT o.id,o.kind,o.due_on::text,ARRAY(SELECT c.reason FROM lease_invoice_review_flags r JOIN lease_billing_source_changes c ON c.id=r.change_id JOIN lease_invoice_generations g ON g.invoice_id=r.invoice_id WHERE g.obligation_id=o.id ORDER BY c.id) FROM lease_billing_obligations o WHERE o.lease_id=$1 ORDER BY o.due_on DESC,o.id DESC LIMIT 100`, id)
