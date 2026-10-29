@@ -25,6 +25,31 @@ type LeaseHandler struct {
 	fields    *services.CustomFieldDefinitionService
 }
 
+func (h *LeaseHandler) Finalize(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	details, e1 := strconv.ParseInt(r.FormValue("revision"), 10, 64)
+	billing, e2 := strconv.ParseInt(r.FormValue("billing_revision"), 10, 64)
+	if e1 != nil || e2 != nil {
+		http.Error(w, "Review current Lease and Billing revisions", 400)
+		return
+	}
+	err = h.authority.FinalizeLease(r.Context(), authorizationActor(r), id, authorization.LeaseFinalizationInput{DetailsRevision: details, BillingRevision: billing, ManagedBillingStart: r.FormValue("managed_billing_start")})
+	if err != nil {
+		var validation *authorization.LeaseValidationError
+		if errors.As(err, &validation) {
+			http.Error(w, validation.Message, http.StatusConflict)
+			return
+		}
+		authorizationError(w, r, err)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/leases/%d", id), http.StatusSeeOther)
+}
+
 func (h *LeaseHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("per_page"))

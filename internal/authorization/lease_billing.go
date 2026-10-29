@@ -20,6 +20,7 @@ type DraftLeaseTerms struct {
 
 // Billing has its own DTO and queries: it never loads base details/collaboration.
 type DraftLeaseBilling struct {
+	Finalized            bool
 	ID, Revision         int64
 	Number, InitialDueOn string
 	CanManage            bool
@@ -35,6 +36,9 @@ func readLeaseBilling(ctx context.Context, tx pgx.Tx, p Principal, id int64) (Dr
 		err = ErrNotFound
 	}
 	if err != nil {
+		return out, err
+	}
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_finalizations WHERE lease_id=$1)`, id).Scan(&out.Finalized); err != nil {
 		return out, err
 	}
 	if out.Archived && !p.Allows("lease.archived.view", All) {
@@ -63,7 +67,7 @@ func (s *Service) DraftLeaseBilling(ctx context.Context, a Actor, id int64) (Dra
 		}
 		var err error
 		out, err = readLeaseBilling(ctx, tx, p, id)
-		out.CanManage = !out.Archived && p.Allows("lease.billing.manage", All)
+		out.CanManage = !out.Archived && !out.Finalized && p.Allows("lease.billing.manage", All)
 		return err
 	})
 	return out, err
@@ -95,6 +99,9 @@ func (s *Service) SaveDraftLeaseBilling(ctx context.Context, a Actor, id, revisi
 		}
 		if old.Archived {
 			return ErrForbidden
+		}
+		if old.Finalized {
+			return ErrConflict
 		}
 		if old.LifecycleRevision != lifecycleRevision {
 			return ErrConflict

@@ -13,6 +13,8 @@ import (
 
 // DraftLeaseBase contains no financial fields, even for a fully privileged actor.
 type DraftLeaseBase struct {
+	Lifecycle                                                 string
+	UnplacedAssetIDs, WrongPremisesAssetIDs                   []int64
 	ID, CustomerID, Revision                                  int64
 	Number, Title, Reference, ExecutionDate, StartsOn, EndsOn string
 	PremisesID, AgreementFileID                               *int64
@@ -42,6 +44,12 @@ func readLeaseBase(ctx context.Context, tx pgx.Tx, p Principal, id int64) (Draft
 	if err == nil && out.Archived && !p.Allows("lease.archived.view", All) {
 		err = ErrNotFound
 	}
+	if err == nil {
+		err = tx.QueryRow(ctx, `SELECT CASE WHEN lifecycle IN ('draft','terminated') THEN lifecycle WHEN starts_on>lease_dependency_today(company_id) THEN 'scheduled' WHEN ends_on<lease_dependency_today(company_id) THEN 'month_to_month' ELSE 'active' END FROM leases WHERE id=$1`, id).Scan(&out.Lifecycle)
+	}
+	if err == nil && out.Lifecycle != "draft" {
+		err = tx.QueryRow(ctx, `SELECT ARRAY(SELECT a.id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id WHERE i.lease_id=$1 AND a.customer_id IS NULL ORDER BY a.id),ARRAY(SELECT a.id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id JOIN leases l ON l.id=i.lease_id WHERE i.lease_id=$1 AND a.customer_id=l.customer_id AND a.location_id IS DISTINCT FROM l.premises_id ORDER BY a.id)`, id).Scan(&out.UnplacedAssetIDs, &out.WrongPremisesAssetIDs)
+	}
 	return out, err
 }
 
@@ -56,8 +64,8 @@ func (s *Service) DraftLeaseBase(ctx context.Context, a Actor, id int64) (DraftL
 		if err != nil {
 			return err
 		}
-		out.CanManage = !out.Archived && p.Allows("lease.manage", All)
-		out.CanArchive = !out.Archived && p.Allows("lease.archive", All)
+		out.CanManage = !out.Archived && out.Lifecycle == "draft" && p.Allows("lease.manage", All)
+		out.CanArchive = !out.Archived && out.Lifecycle == "draft" && p.Allows("lease.archive", All)
 		if out.Archived && p.Allows("lease.restore", All) {
 			out.CanRestore, err = customerLifecycleState(ctx, tx, p, out.CustomerID, true)
 			if err != nil {
@@ -102,6 +110,9 @@ func (s *Service) SaveDraftLeaseDetails(ctx context.Context, a Actor, id int64, 
 		}
 		if old.Archived {
 			return ErrForbidden
+		}
+		if old.Lifecycle != "draft" {
+			return ErrConflict
 		}
 		for _, date := range []string{in.ExecutionDate, in.StartsOn, in.EndsOn} {
 			if date != "" {

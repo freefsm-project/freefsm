@@ -9,7 +9,7 @@ templ LeaseDetailsPage(data LeasePageData) {
 		if data.Error!="" {
 			<div role="alert" data-error-summary>{ data.Error }</div>
 		}
-		<h1>{ p.Number }</h1><p>Draft</p>
+		<h1>{ p.Number }</h1><p>{ p.Lifecycle }</p>
 		<p>Customer { fmt.Sprint(p.CustomerID) } — immutable; archive and replace a wrong-Customer agreement.</p>
 		<a href="/leases">Leases</a> <a href={templ.URL(fmt.Sprintf("/leases/%d/history",p.ID))}>Base history</a>
 		if p.Archived {
@@ -20,8 +20,18 @@ templ LeaseDetailsPage(data LeasePageData) {
 		} else if p.CanArchive {
 			<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/delete",p.ID)) } hx-confirm="Archive this Draft as read-only history? It will no longer block Customer or premises archive."><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><button>Archive Draft</button></form>
 		}
-		<p>External agreement. Draft selections reserve no coverage, move no Assets, and create no billing.</p>
+		if p.Lifecycle == "draft" {
+			<p>External agreement. Draft selections reserve no coverage, move no Assets, and create no billing.</p>
+		} else {
+			<p>Finalized external agreement. Coverage does not move equipment.</p>
+		}
 		<h2>{ p.Title }</h2><p>{ p.Reference }</p>
+		for _, id := range p.UnplacedAssetIDs {
+			<p role="status">Asset { fmt.Sprint(id) } is unplaced. Coverage does not place equipment.</p>
+		}
+		for _, id := range p.WrongPremisesAssetIDs {
+			<p role="status">Asset { fmt.Sprint(id) } is placed at different premises.</p>
+		}
 		<dl><dt>Execution date</dt><dd>{ p.ExecutionDate }</dd><dt>Start</dt><dd>{ p.StartsOn }</dd><dt>End</dt><dd>{ p.EndsOn }</dd></dl>
 		if p.PremisesID != nil {
 			<p>Selected premises: Location { fmt.Sprint(*p.PremisesID) }</p>
@@ -30,7 +40,12 @@ templ LeaseDetailsPage(data LeasePageData) {
 			}
 		}
 		if len(p.AssetIDs)>0 {
-			<p>Intended Assets (not reserved):</p><ul>
+			if p.Lifecycle == "draft" {
+				<p>Intended Assets (not reserved):</p>
+			} else {
+				<p>Commencement Assets:</p>
+			}
+			<ul>
 				for _,id:=range p.AssetIDs {
 					<li>Asset { fmt.Sprint(id) }</li>
 					if slices.Contains(p.ArchivedAssetIDs,id) {

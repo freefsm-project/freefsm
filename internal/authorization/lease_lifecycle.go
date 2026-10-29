@@ -30,6 +30,13 @@ func (s *Service) LeaseLifecycle(ctx context.Context, a Actor, id int64, restore
 		if err != nil {
 			return err
 		}
+		var finalized bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_finalizations WHERE lease_id=$1)`, id).Scan(&finalized); err != nil {
+			return err
+		}
+		if finalized {
+			return ErrConflict
+		}
 		if archived && !p.Allows("lease.archived.view", All) {
 			return ErrNotFound
 		}

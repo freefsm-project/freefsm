@@ -46,13 +46,30 @@ func (s *Service) CreateDocumentInTransaction(ctx context.Context, tx pgx.Tx, a 
 }
 
 func (s *Service) createDocument(ctx context.Context, tx pgx.Tx, a Actor, p Principal, kind string, in DocumentCreation, prepare func(string) (string, error)) (int64, error) {
+	return s.createBoundDocument(ctx, tx, a, p, kind, in, prepare, 0)
+}
+
+// obligation is server-owned and usable only for an exact, pending Lease charge.
+// Ordinary callers always pass zero and retain all independent Invoice grants.
+func (s *Service) createBoundDocument(ctx context.Context, tx pgx.Tx, a Actor, p Principal, kind string, in DocumentCreation, prepare func(string) (string, error), obligation int64) (int64, error) {
 	var id int64
 	err := func() error {
 		if kind != "invoice" && kind != "estimate" {
 			return ErrForbidden
 		}
 		scope := All
-		if !p.Allows(kind+".create", All) {
+		if obligation != 0 {
+			if kind != "invoice" || a.Channel == "api" || !p.Allows("lease.manage", All) || !p.Allows("lease.billing.manage", All) || in.JobID != 0 || in.EstimateID != 0 || in.Number != nil {
+				return ErrForbidden
+			}
+			var valid bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_billing_obligations o JOIN leases l ON l.id=o.lease_id WHERE o.id=$1 AND l.company_id=$2 AND l.customer_id=$3 AND l.deleted_at IS NULL AND o.financial=$4 AND o.line_items=$5::jsonb AND o.due_on=$6 AND o.due_on<=lease_dependency_today(l.company_id)+30 AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations g WHERE g.obligation_id=o.id))`, obligation, p.CompanyID, in.CustomerID, in.Financial, in.LineItems, in.DueDate).Scan(&valid); err != nil {
+				return err
+			}
+			if !valid {
+				return ErrConflict
+			}
+		} else if !p.Allows(kind+".create", All) {
 			if in.JobID < 1 || !p.Allows(kind+".create", Assigned) {
 				return ErrForbidden
 			}
@@ -88,10 +105,10 @@ func (s *Service) createDocument(ctx context.Context, tx pgx.Tx, a Actor, p Prin
 		if scope == Assigned && !assigned {
 			return ErrForbidden
 		}
-		if !p.Allows("customer.view", All) && !(assigned && p.Allows("customer.view", Context)) {
+		if obligation == 0 && !p.Allows("customer.view", All) && !(assigned && p.Allows("customer.view", Context)) {
 			return ErrNotFound
 		}
-		if !p.Allows("pricing.view", All) && !(assigned && p.Allows("pricing.view", Assigned)) {
+		if obligation == 0 && !p.Allows("pricing.view", All) && !(assigned && p.Allows("pricing.view", Assigned)) {
 			return ErrForbidden
 		}
 		if in.EstimateID > 0 {
@@ -121,6 +138,9 @@ func (s *Service) createDocument(ctx context.Context, tx pgx.Tx, a Actor, p Prin
 			snapshot, err := commercial.Read(in.Financial)
 			if err != nil {
 				return err
+			}
+			if obligation != 0 && snapshot.Input.TaxExempt != exempt {
+				return ErrConflict
 			}
 			snapshot.Input.TaxExempt = exempt
 			in.Financial, err = commercial.Accept(snapshot.Input)
@@ -167,7 +187,12 @@ func (s *Service) createDocument(ctx context.Context, tx pgx.Tx, a Actor, p Prin
 		if in.Financial != "" {
 			detail["financial"] = json.RawMessage(in.Financial)
 		}
-		return audit(ctx, tx, a, p, kind+".create", scope, kind, id, detail)
+		action := kind + ".create"
+		if obligation != 0 {
+			action = "lease.invoice.generate"
+			detail["obligation_id"] = obligation
+		}
+		return audit(ctx, tx, a, p, action, scope, kind, id, detail)
 	}()
 	return id, err
 }

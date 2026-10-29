@@ -133,9 +133,9 @@ func (s *Service) LeaseHistory(ctx context.Context, a Actor, id int64, billing b
 		if archived && !p.Allows("lease.archived.view", All) {
 			return ErrNotFound
 		}
-		actions := []string{"lease.create", "lease.details.change", "lease.archive", "lease.restore"}
+		actions := []string{"lease.create", "lease.details.change", "lease.finalize", "lease.archive", "lease.restore"}
 		if billing {
-			actions = []string{"lease.billing.change", "lease.archive", "lease.restore"}
+			actions = []string{"lease.billing.change", "lease.billing.finalize", "lease.archive", "lease.restore"}
 		}
 		rows, err := tx.Query(ctx, `SELECT action,recorded_at,coalesce(actor_id,0),detail FROM authorization_audit WHERE target_type='lease' AND target_id=$1 AND action=ANY($2::text[]) ORDER BY id`, id, actions)
 		if err != nil {
@@ -158,7 +158,7 @@ func (s *Service) LeaseHistory(ctx context.Context, a Actor, id int64, billing b
 			}
 			keys := []string{"ID", "CustomerID", "Number", "Title", "Reference", "ExecutionDate", "StartsOn", "EndsOn", "PremisesID", "AssetIDs", "CustomFields"}
 			if billing {
-				keys = []string{"ID", "Number", "InitialDueOn", "Terms"}
+				keys = []string{"ID", "Number", "InitialDueOn", "Terms", "ManagedBillingStart"}
 			}
 			if event.Action == "lease.archive" || event.Action == "lease.restore" {
 				keys = []string{"archived"}
