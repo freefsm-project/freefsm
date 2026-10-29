@@ -13,7 +13,7 @@ import (
 
 // DraftLeaseBase contains no financial fields, even for a fully privileged actor.
 type DraftLeaseBase struct {
-	Lifecycle                                                 string
+	LeaseCalendar
 	UnplacedAssetIDs, WrongPremisesAssetIDs                   []int64
 	ID, CustomerID, Revision                                  int64
 	Number, Title, Reference, ExecutionDate, StartsOn, EndsOn string
@@ -45,7 +45,12 @@ func readLeaseBase(ctx context.Context, tx pgx.Tx, p Principal, id int64) (Draft
 		err = ErrNotFound
 	}
 	if err == nil {
-		err = tx.QueryRow(ctx, `SELECT CASE WHEN lifecycle IN ('draft','terminated') THEN lifecycle WHEN starts_on>lease_dependency_today(company_id) THEN 'scheduled' WHEN ends_on<lease_dependency_today(company_id) THEN 'month_to_month' ELSE 'active' END FROM leases WHERE id=$1`, id).Scan(&out.Lifecycle)
+		var state string
+		var today time.Time
+		err = tx.QueryRow(ctx, `SELECT lifecycle,lease_dependency_today(company_id) FROM leases WHERE id=$1`, id).Scan(&state, &today)
+		if err == nil {
+			out.LeaseCalendar, err = leaseCalendar(state, out.StartsOn, out.EndsOn, today)
+		}
 	}
 	if err == nil && out.Lifecycle != "draft" {
 		err = tx.QueryRow(ctx, `SELECT ARRAY(SELECT a.id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id WHERE i.lease_id=$1 AND a.customer_id IS NULL ORDER BY a.id),ARRAY(SELECT a.id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id JOIN leases l ON l.id=i.lease_id WHERE i.lease_id=$1 AND a.customer_id=l.customer_id AND a.location_id IS DISTINCT FROM l.premises_id ORDER BY a.id)`, id).Scan(&out.UnplacedAssetIDs, &out.WrongPremisesAssetIDs)

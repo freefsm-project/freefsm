@@ -53,3 +53,18 @@ native race/API checks, and populated upgrade/encrypted-backup qualification are
 remaining milestones. The ongoing scheduler/retry worker belongs to #67 and
 must recheck current eligibility and tax facts without silently repricing retained
 snapshots. This is not full ticket or release qualification.
+
+## Read-derived renewal calendar
+
+The base Lease domain read includes `LeaseCalendar`: lifecycle plus the current
+monthly renewal's inclusive `RenewalStartsOn` and `RenewalEndsOn`. Renewal dates
+are empty during Draft, Scheduled, Active and Terminated states. The company-local
+civil date comes from `lease_dependency_today`; reading never updates agreement
+state or generates billing. Field API access remains independently denied.
+
+The first renewal starts the day after the inclusive fixed end. Every later
+boundary is calculated from that original anchor, clamping to the target month's
+last day. A January 31, 2024 anchor therefore produces February 29 and March 31
+boundaries (not March 29). The January renewal ends February 28; the February
+renewal ends March 30. This agreement calendar is distinct from rent due on the
+first day of each month after commencement.

@@ -243,6 +243,15 @@ func TestLeaseFinalizationBoundariesHTTP(t *testing.T) {
 			if finalized != 1 {
 				t.Fatal("no finalization")
 			}
+			base, err := svc.DraftLeaseBase(ctx, authorization.Actor{UserID: u.ID}, id)
+			historyCheck(t, err)
+			wantLifecycle := "active"
+			if tc.startDays > 0 {
+				wantLifecycle = "scheduled"
+			}
+			if base.Lifecycle != wantLifecycle || base.RenewalStartsOn != "" || base.RenewalEndsOn != "" {
+				t.Fatalf("finalized read calendar: %+v", base.LeaseCalendar)
+			}
 			if tc.startDays > 30 && invoices != 0 {
 				t.Fatal("premature generation")
 			}
