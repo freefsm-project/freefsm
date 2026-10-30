@@ -101,7 +101,7 @@ func TestPDFPreLeaseUpgradePreservesKnownSourceHTTP(t *testing.T) {
 		historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS()))
 	}
 	testutil.AssertNoInvoiceLeaseBackfill(t, ctx, pool)
-	testutil.AssertSequenceUpgrade(t, ctx, pool, sequences, "lease_billing_obligations_id_seq", "lease_billing_source_changes_id_seq", "lease_billing_obligation_revisions_id_seq")
+	testutil.AssertSequenceUpgrade(t, ctx, pool, sequences, "lease_billing_obligations_id_seq", "lease_billing_source_changes_id_seq", "lease_billing_obligation_revisions_id_seq", "lease_coverage_events_id_seq", "lease_coverage_revisions_id_seq")
 	sourceAfter, err := svc.DocumentPDFSource(ctx, actor, "invoice", id)
 	historyCheck(t, err)
 	historyEqual(t, "schema-only upgrade preserves current render source bytes", string(sourceAfter.Snapshot), string(sourceBefore.Snapshot))
