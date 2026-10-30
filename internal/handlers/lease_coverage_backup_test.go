@@ -1,0 +1,61 @@
+package handlers
+
+import (
+	"context"
+	"os"
+	"testing"
+
+	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/middleware"
+	"github.com/freefsm-project/freefsm/internal/services"
+	"github.com/jackc/pgx/v5"
+)
+
+func TestLeaseCoverageEncryptedRestore(t *testing.T) {
+	dsn := os.Getenv("FREEFSM_BACKUP_TEST_ADMIN_URL")
+	if dsn == "" {
+		t.Skip("FREEFSM_BACKUP_TEST_ADMIN_URL required")
+	}
+	ctx := context.Background()
+	admin, err := pgx.Connect(ctx, dsn)
+	historyCheck(t, err)
+	t.Cleanup(func() { historyCheck(t, admin.Close(ctx)) })
+	src := newHistoryBackupInstance(t, admin, dsn, "Coverage source")
+	dst := newHistoryBackupInstance(t, admin, dsn, "Coverage destination")
+	web := middleware.Company(services.NewCompanySettingsService(src.client))(New(src.pool, src.client, src.sessions, &config.Config{UploadDir: src.uploadDir, MaxUploadSize: 25 << 20}))
+	var workflow int64
+	tx, err := src.pool.Begin(ctx)
+	historyCheck(t, err)
+	defer tx.Rollback(ctx)
+	historyCheck(t, tx.QueryRow(ctx, `INSERT INTO status_workflows(company_id,name,object_type) VALUES($1,'Invoices','invoice') RETURNING id`, src.company).Scan(&workflow))
+	for _, category := range []string{"draft", "invoiced", "sent", "partially_paid", "paid", "void"} {
+		_, err = tx.Exec(ctx, `INSERT INTO statuses(company_id,workflow_id,name,category_key,category_order,is_category_default) VALUES($1,$2,$3,$4,1,true)`, src.company, workflow, category, "invoice:"+category)
+		historyCheck(t, err)
+	}
+	historyCheck(t, tx.Commit(ctx))
+	var originalClock string
+	historyCheck(t, src.pool.QueryRow(ctx, `SELECT pg_get_functiondef('lease_dependency_today(bigint)'::regprocedure)`).Scan(&originalClock))
+	_, err = src.pool.Exec(ctx, `CREATE OR REPLACE FUNCTION lease_dependency_today(company bigint) RETURNS date LANGUAGE sql STABLE AS $$ SELECT '2024-01-01'::date $$`)
+	historyCheck(t, err)
+	lease, _ := populateFinalizedLease(t, src.pool, src.client, web, sessionCookie(t, ctx, src.sessions, src.actor), src.company)
+	var outgoing, typ int64
+	historyCheck(t, src.pool.QueryRow(ctx, `SELECT a.id,a.asset_type_id FROM assets a JOIN lease_asset_dependencies d ON d.asset_id=a.id WHERE d.lease_id=$1`, lease).Scan(&outgoing, &typ))
+	incoming := src.client.Asset.Create().SetCompanyID(src.company).SetOwnershipClass("company_owned").SetAssetTypeID(typ).SetName("Replacement retained").SaveX(ctx)
+	svc := authorization.New(src.pool)
+	actor := authorization.Actor{UserID: src.actor}
+	in := authorization.LeaseCoverageInput{LeaseCoverageEvent: authorization.LeaseCoverageEvent{Kind: "replace", EffectiveOn: "2024-02-10", OutgoingID: outgoing, IncomingID: incoming.ID}, Action: "create", Reason: "Retained replacement", OperationKey: "restored-coverage-event-0001"}
+	event, err := svc.ChangeLeaseCoverage(ctx, actor, lease, in)
+	historyCheck(t, err)
+	_, err = src.pool.Exec(ctx, originalClock)
+	historyCheck(t, err)
+	tables := []string{"leases", "lease_finalizations", "lease_coverage_events", "lease_coverage_revisions", "lease_asset_dependencies", "lease_master_dependencies", "lease_billing_source_changes", "lease_invoice_review_flags", "lease_billing_obligations", "lease_invoice_generations", "invoices", "authorization_roles", "authorization_grants", "assets", "customers", "locations", "issued_document_numbers", "company_settings"}
+	before := leasePreservationRows(t, src.pool, tables)
+	src.roundTripTo(t, dst, func() {})
+	historyCheck(t, dst.manager.RefreshConnections())
+	historyEqual(t, "encrypted restore retains coverage membership, immutable intent and financial provenance", leasePreservationRows(t, dst.pool, tables), before)
+	replay, err := authorization.New(dst.pool).ChangeLeaseCoverage(ctx, actor, lease, in)
+	historyCheck(t, err)
+	historyEqual(t, "restored exact submission returns original event", replay, event)
+	historyEqual(t, "restored replay creates no effects", leasePreservationRows(t, dst.pool, tables), before)
+}

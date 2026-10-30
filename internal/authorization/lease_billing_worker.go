@@ -226,7 +226,8 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64,
 	}
 	rows, err := tx.Query(ctx, `SELECT c.kind,c.due_on FROM (
  SELECT o.kind,o.due_on FROM lease_billing_obligations o WHERE o.lease_id=$1
- UNION SELECT 'monthly',d::date FROM generate_series($5::date,($2::date+30)::timestamp,interval '1 month') d WHERE $4::boolean AND d::date >= $6::date
+  UNION SELECT 'monthly',d::date FROM generate_series($5::date,($2::date+30)::timestamp,interval '1 month') d WHERE $4::boolean AND d::date >= $6::date
+  UNION SELECT 'coverage',(payload->>'effective_on')::date FROM lease_coverage_current WHERE lease_id=$1 AND action<>'withdraw' AND payload->>'kind'='add' AND (payload->>'charge_cents')::bigint>0 AND (payload->>'effective_on')::date >= $6::date AND $4::boolean
  ) c LEFT JOIN lease_billing_obligations o ON o.lease_id=$1 AND o.kind=c.kind AND o.due_on=c.due_on
  LEFT JOIN lease_billing_period_failures f ON f.lease_id=$1 AND f.kind=c.kind AND f.due_on=c.due_on
  WHERE c.due_on<=$2::date+30 AND NOT EXISTS(SELECT 1 FROM lease_invoice_generations g WHERE g.obligation_id=o.id)
@@ -271,14 +272,21 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64,
 				coveredAt = start
 			}
 			selected := append([]DraftLeaseTerms(nil), terms...)
+			selected, eventBilling, err := currentCoverageBillingTerms(ctx, tx, id, selected, period.due, period.kind)
+			if err != nil {
+				return err
+			}
 			selectedCount := 0
 			for i := range selected {
 				approved := selected[i].Selected
-				selected[i].Selected = false
+				selected[i].Selected = eventBilling && approved
 				if !approved {
 					continue
 				}
 				for _, coverage := range base.Coverage {
+					if eventBilling {
+						break
+					}
 					day := coveredAt.Format(time.DateOnly)
 					if coverage.AssetID == selected[i].AssetID && coverage.StartsOn <= day && (coverage.EndsOn == nil || *coverage.EndsOn >= day) {
 						selected[i].Selected = true
@@ -299,6 +307,9 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64,
 				}
 			}
 			for _, coverage := range base.Coverage {
+				if eventBilling {
+					break
+				}
 				day := coveredAt.Format(time.DateOnly)
 				if coverage.StartsOn > day || (coverage.EndsOn != nil && *coverage.EndsOn < day) {
 					continue

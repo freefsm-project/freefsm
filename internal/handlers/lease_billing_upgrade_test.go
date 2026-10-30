@@ -18,6 +18,7 @@ func TestLeaseBillingPopulatedNativeUpgrade(t *testing.T) {
 	historyCheck(t, err)
 	lease, values := populateFinalizedLease(t, pool, client, web, cookie, company)
 	voidLeaseInvoiceAndReplay(t, pool, web, cookie, company, admin, lease, values)
+	removeEmptyCoverageSchema(t, pool)
 	// Capture real native finalization/ordinary Void effects. Remove only empty
 	// post-112 technical structures to form the previous installed schema; no
 	// agreement, coverage, Invoice, approval, audit, permission or ID is invented.
@@ -53,7 +54,7 @@ func TestLeaseBillingPopulatedNativeUpgrade(t *testing.T) {
 	var afterGenerations, afterSequences string
 	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(g)-ARRAY['predecessor_invoice_id','operation_key','review_hash','actor_id','obligation_revision_id'] ORDER BY invoice_id)::text FROM lease_invoice_generations g`).Scan(&afterGenerations))
 	historyEqual(t, "old generation IDs and recorded history survive", afterGenerations, generations)
-	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(jsonb_build_array(sequencename,last_value) ORDER BY sequencename)::text FROM pg_sequences WHERE schemaname=current_schema() AND sequencename NOT IN('lease_billing_source_changes_id_seq','lease_billing_obligation_revisions_id_seq')`).Scan(&afterSequences))
+	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(jsonb_build_array(sequencename,last_value) ORDER BY sequencename)::text FROM pg_sequences WHERE schemaname=current_schema() AND sequencename NOT IN('lease_billing_source_changes_id_seq','lease_billing_obligation_revisions_id_seq','lease_coverage_events_id_seq','lease_coverage_revisions_id_seq')`).Scan(&afterSequences))
 	historyEqual(t, "all prior sequence values preserved", afterSequences, sequences)
 	var newFacts bool
 	historyCheck(t, pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_invoice_generations WHERE predecessor_invoice_id IS NOT NULL OR obligation_revision_id IS NOT NULL) OR EXISTS(SELECT 1 FROM lease_billing_source_changes) OR EXISTS(SELECT 1 FROM lease_billing_obligation_revisions)`).Scan(&newFacts))

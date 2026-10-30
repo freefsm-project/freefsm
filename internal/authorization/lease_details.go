@@ -67,7 +67,7 @@ func readLeaseBase(ctx context.Context, tx pgx.Tx, p Principal, id int64) (Draft
 		err = rows.Err()
 	}
 	if err == nil {
-		err = tx.QueryRow(ctx, `SELECT ARRAY(SELECT a.id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id WHERE i.lease_id=$1 AND a.customer_id IS NULL ORDER BY a.id),ARRAY(SELECT a.id FROM lease_intended_assets i JOIN assets a ON a.id=i.asset_id JOIN leases l ON l.id=i.lease_id WHERE i.lease_id=$1 AND a.customer_id=l.customer_id AND a.location_id IS DISTINCT FROM l.premises_id ORDER BY a.id)`, id).Scan(&out.UnplacedAssetIDs, &out.WrongPremisesAssetIDs)
+		err = tx.QueryRow(ctx, `WITH selected AS (SELECT i.asset_id FROM lease_intended_assets i WHERE i.lease_id=$1 AND NOT EXISTS(SELECT 1 FROM lease_finalizations WHERE lease_id=$1) UNION SELECT d.asset_id FROM lease_asset_dependencies d JOIN leases l ON l.id=d.lease_id WHERE d.lease_id=$1 AND (d.ends_on IS NULL OR d.ends_on>=lease_dependency_today(l.company_id))) SELECT ARRAY(SELECT a.id FROM selected i JOIN assets a ON a.id=i.asset_id WHERE a.customer_id IS NULL ORDER BY a.id),ARRAY(SELECT a.id FROM selected i JOIN assets a ON a.id=i.asset_id JOIN leases l ON l.id=$1 WHERE a.customer_id=l.customer_id AND a.location_id IS DISTINCT FROM l.premises_id ORDER BY a.id)`, id).Scan(&out.UnplacedAssetIDs, &out.WrongPremisesAssetIDs)
 	}
 	return out, err
 }

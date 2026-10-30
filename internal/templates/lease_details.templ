@@ -82,6 +82,9 @@ templ LeaseDetailsPage(data LeasePageData) {
 		if p.CanReviewFinalization {
 			<a href={ templ.URL(fmt.Sprintf("/leases/%d/finalize",p.ID)) }>Finalization review and receipt</a>
 		}
+		if p.Lifecycle != "draft" {
+			<a href={ templ.URL(fmt.Sprintf("/leases/%d/coverage",p.ID)) }>Coverage changes</a>
+		}
 		@CustomFieldsWidget(CustomFieldsWidgetData{Fields:data.Fields})
 		if p.CanManage {
 			<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d",p.ID)) }>

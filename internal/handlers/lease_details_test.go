@@ -101,7 +101,7 @@ func TestLeaseFourCollaborationsHTTP(t *testing.T) {
 	token, err := sessions.CreateMobile(ctx, u.ID, "Lease denial device")
 	historyCheck(t, err)
 	api := apiv1.NewRouter(pool, client, sessions, services.NewFileService(client, objectref.NewLeaseDirectory(objectref.NewEntDirectory(client), pool), t.TempDir(), 0))
-	for _, route := range []string{"/leases", "/leases/new", path, path + "/billing", path + "/comments", path + "/custom-fields", path + "/history", path + "/billing/history", path + "/delete", path + "/restore", fmt.Sprintf("%s/tags/%d/attach", path, tag.ID), fmt.Sprintf("/files/%d/metadata", file), fmt.Sprintf("/files/%d", file), fmt.Sprintf("/files/%d/rename", file), fmt.Sprintf("/files/%d/remove", file)} {
+	for _, route := range []string{"/leases", "/leases/new", path, path + "/coverage", path + "/billing", path + "/comments", path + "/custom-fields", path + "/history", path + "/billing/history", path + "/delete", path + "/restore", fmt.Sprintf("%s/tags/%d/attach", path, tag.ID), fmt.Sprintf("/files/%d/metadata", file), fmt.Sprintf("/files/%d", file), fmt.Sprintf("/files/%d/rename", file), fmt.Sprintf("/files/%d/remove", file)} {
 		for _, method := range []string{"GET", "POST"} {
 			body := `{}`
 			if method == "POST" && strings.HasPrefix(route, "/files/") && (strings.HasSuffix(route, "/rename") || strings.HasSuffix(route, "/remove")) {

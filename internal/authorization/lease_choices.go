@@ -34,8 +34,8 @@ func (s *Service) DraftLeaseChoices(ctx context.Context, a Actor, id int64) (Lea
 			query := `SELECT id,title FROM locations WHERE company_id=$1 AND object_type='customer' AND object_id=$2 AND deleted_at IS NULL ORDER BY title,id`
 			args := []any{p.CompanyID, base.CustomerID}
 			if kind == "asset" {
-				query = `SELECT id,number||' — '||name FROM assets WHERE company_id=$1 AND ownership_class='company_owned' AND deleted_at IS NULL ORDER BY number,id`
-				args = []any{p.CompanyID}
+				query = `SELECT id,number||' — '||name||CASE WHEN customer_id IS NULL THEN ' — unplaced' WHEN customer_id<>$2 THEN ' — placed with another Customer (unavailable for coverage)' WHEN location_id IS DISTINCT FROM $3::bigint THEN ' — different premises' ELSE '' END FROM assets WHERE company_id=$1 AND ownership_class='company_owned' AND deleted_at IS NULL ORDER BY number,id`
+				args = []any{p.CompanyID, base.CustomerID, base.PremisesID}
 			}
 			rows, err := tx.Query(ctx, query, args...)
 			if err != nil {

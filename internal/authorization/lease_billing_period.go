@@ -188,6 +188,10 @@ func approvedLeasePeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, obl
 	if err = json.Unmarshal(raw, &terms); err != nil {
 		return out, err
 	}
+	terms, eventBilling, err := currentCoverageBillingTerms(ctx, tx, lease, terms, due, kind)
+	if err != nil {
+		return out, err
+	}
 	at := due.Format(time.DateOnly)
 	if kind == "initial" {
 		at = start.Format(time.DateOnly)
@@ -202,7 +206,7 @@ func approvedLeasePeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, obl
 		}
 	}
 	for i := range terms {
-		terms[i].Selected = terms[i].Selected && covered[terms[i].AssetID]
+		terms[i].Selected = terms[i].Selected && (eventBilling || covered[terms[i].AssetID])
 		if !terms[i].Selected {
 			continue
 		}
@@ -217,7 +221,7 @@ func approvedLeasePeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, obl
 			return out, err
 		}
 	}
-	if len(covered) > 0 {
+	if len(covered) > 0 && !eventBilling {
 		return out, ErrConflict
 	}
 	input, err := leaseObligationInput(terms, kind == "monthly", exempt)

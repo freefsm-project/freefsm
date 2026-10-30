@@ -1,0 +1,93 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ LeaseCoveragePage(p authorization.LeaseCoverageReview, choices authorization.LeaseChoices, key string) {
+ @Layout(p.Base.Number+" coverage") {
+  <h1>Coverage changes — { p.Base.Number }</h1>
+  <a href={ templ.URL(fmt.Sprintf("/leases/%d",p.Base.ID)) }>Lease</a>
+  if choices.CanViewBilling {
+   <a href={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.Base.ID)) }>Billing review</a>
+  }
+  <p>Coverage never moves equipment. Add starts ordinary rent next month and may include an explicit one-time charge. Remove retains this month's charge. Replace retains the outgoing charge this month and carries its rate to the incoming Asset next month, with no extra charge.</p>
+  <h2>Recorded coverage timeline</h2>
+  for _, row := range p.Base.Coverage {
+   <p>Asset { fmt.Sprint(row.AssetID) }: { row.StartsOn } through
+    if row.EndsOn != nil {
+     { *row.EndsOn }
+    } else {
+     ongoing
+    }
+   </p>
+  }
+  for _, id := range p.Base.UnplacedAssetIDs {
+   <p role="status">Asset { fmt.Sprint(id) } is unplaced. Coverage does not place equipment.</p>
+  }
+  for _, id := range p.Base.WrongPremisesAssetIDs {
+   <p role="status">Asset { fmt.Sprint(id) } is placed at different premises.</p>
+  }
+  if p.CanManage {
+   <h2>New change</h2>
+   @leaseCoverageForm(p,choices,authorization.LeaseCoverageInput{Action:"create",OperationKey:key+"-new",ExpectedRevision:p.Revision})
+  }
+  <h2>Accepted changes</h2>
+  for _, event := range p.Events {
+   <section>
+    <h3>Event { fmt.Sprint(event.ID) } — { event.Kind } on { event.EffectiveOn }</h3>
+    <p>Outgoing Asset { fmt.Sprint(event.OutgoingID) }; incoming Asset { fmt.Sprint(event.IncomingID) }. { event.Action }: { event.Reason }</p>
+    if p.CanManage && event.Action != "withdraw" {
+     if event.EffectiveOn > p.Today {
+      <p>Pending: revise or withdraw with a reason.</p>
+     } else {
+      <p>Effective: correct a factual date error only. For a genuine later change, create a new event.</p>
+     }
+     @leaseCoverageForm(p,choices,leaseCoverageFormInput(event.LeaseCoverageInput,key))
+    }
+   </section>
+  }
+  <h2>Immutable revision history</h2>
+  for _, event := range p.History {
+   <p>Event { fmt.Sprint(event.ID) }, revision { fmt.Sprint(event.Revision) }: { event.Action }, { event.Kind }, effective { event.EffectiveOn }, outgoing { fmt.Sprint(event.OutgoingID) }, incoming { fmt.Sprint(event.IncomingID) }; { event.Reason } — { event.RecordedAt }</p>
+   if choices.CanViewBilling && event.Kind == "add" {
+    <p>Recorded monthly rent: { leaseCents(event.RentCents) } cents; explicit charge: { leaseCents(event.ChargeCents) } cents; tax: { event.TaxRate }%.</p>
+   }
+  }
+ }
+}
+
+func leaseCoverageFormInput(in authorization.LeaseCoverageInput,key string) authorization.LeaseCoverageInput {
+ in.OperationKey=key
+ return in
+}
+
+templ leaseCoverageForm(p authorization.LeaseCoverageReview, choices authorization.LeaseChoices, in authorization.LeaseCoverageInput) {
+ <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/coverage",p.Base.ID)) }>
+  <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+  <input type="hidden" name="event_id" value={ fmt.Sprint(in.ID) }/>
+  <input type="hidden" name="revision" value={ fmt.Sprint(in.Revision) }/>
+  <input type="hidden" name="expected_revision" value={ fmt.Sprint(p.Revision) }/>
+  <input type="hidden" name="operation_key" value={ fmt.Sprintf("%s-%d-%d",in.OperationKey,p.Revision,in.ID) }/>
+  if in.ID == 0 {
+   <input type="hidden" name="action" value="create"/>
+  } else if in.EffectiveOn > p.Today {
+   <label>Action<select name="action"><option value="revise">Revise pending change</option><option value="withdraw">Withdraw pending change</option></select></label>
+  } else {
+   <input type="hidden" name="action" value="correct"/>
+  }
+  <label>Change<select name="kind"><option value="add" selected?={ in.Kind=="add" }>Add</option><option value="remove" selected?={ in.Kind=="remove" }>Remove</option><option value="replace" selected?={ in.Kind=="replace" }>Replace</option></select></label>
+  <label>Effective date<input type="date" name="effective_on" value={ in.EffectiveOn } required/></label>
+  <label>Outgoing Asset ID (Remove or Replace)<input type="number" min="0" name="outgoing_id" value={ fmt.Sprint(in.OutgoingID) }/></label>
+  <label>Incoming Asset (Add or Replace)<select name="incoming_id"><option value="0">None</option>
+   for _, choice := range choices.Assets {
+    <option value={ fmt.Sprint(choice.ID) } selected?={ choice.ID==in.IncomingID }>{ choice.Label }</option>
+   }
+  </select></label>
+  <p>Only Add takes new billing terms. Leave these fields blank for Remove or Replace.</p>
+  <label>Monthly rent in cents (Add)<input type="number" min="0" name="rent_cents" value={ leaseCents(in.RentCents) }/></label>
+  <label>Optional one-time charge in cents (Add)<input type="number" min="0" name="charge_cents" value={ leaseCents(in.ChargeCents) }/></label>
+  <label>Tax rate percent (Add)<input name="tax_rate" value={ in.TaxRate }/></label>
+  <label>Reason<textarea name="reason" required></textarea></label>
+  <button type="submit">Save coverage change</button>
+ </form>
+}
