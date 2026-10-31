@@ -276,7 +276,11 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 		}
 		// Validate the complete rate succession before changing the dependency
 		// projection. Replacements inherit the outgoing allocation at that event.
-		if _, err = coverageBillingTerms(terms, records, "9999-12-31", false); err != nil {
+		billingRevisions, err := readLeaseBillingRevisions(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if _, err = coverageBillingTerms(terms, records, "9999-12-31", false, billingRevisions...); err != nil {
 			return err
 		}
 		var exempt bool
@@ -301,7 +305,7 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 			if end != nil && due > *end {
 				continue
 			}
-			selected, err := coverageBillingTerms(terms, records, due, false)
+			selected, err := coverageBillingTerms(terms, records, due, false, billingRevisions...)
 			if err != nil {
 				return err
 			}
@@ -321,6 +325,15 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 		if _, err = tx.Exec(ctx, `INSERT INTO lease_coverage_revisions(event_id,actor_id,operation_key,intent,action,reason,payload) VALUES($1,$2,$3,$4,$5,$6,$7)`, eventID, p.UserID, in.OperationKey, intent, in.Action, in.Reason, payload); err != nil {
 			return err
 		}
+		if len(billingRevisions) > 0 {
+			var due string
+			if err = tx.QueryRow(ctx, `SELECT initial_due_on::text FROM lease_finalizations WHERE lease_id=$1`, id).Scan(&due); err != nil {
+				return err
+			}
+			if err = validateLeaseBillingSchedule(ctx, tx, id, terms, exempt, due); err != nil {
+				return err
+			}
+		}
 		first := in.EffectiveOn
 		if priorDate != "" && priorDate < first {
 			first = priorDate
@@ -335,11 +348,27 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 
 // Coverage billing applies every action from the preceding month. This keeps
 // the outgoing current-month allocation intact even for a first-day action.
-func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageRecord, due string, initialCharge bool) ([]DraftLeaseTerms, error) {
+func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageRecord, due string, initialCharge bool, revisions ...LeaseBillingRevisionRecord) ([]DraftLeaseTerms, error) {
 	active := map[int64]DraftLeaseTerms{}
 	for _, term := range initial {
 		if term.Selected {
 			active[term.AssetID] = term
+		}
+	}
+	// Replay pricing and membership in effective order. A replacement carries
+	// the outgoing terms at its event, not its original finalization allocation.
+	nextRevision := 0
+	applyThrough := func(day string) {
+		for nextRevision < len(revisions) && revisions[nextRevision].EffectiveOn <= day {
+			r := revisions[nextRevision]
+			for _, change := range r.After {
+				if term, ok := active[change.AssetID]; ok {
+					rent := change.RentCents
+					term.RentCents, term.TaxRate, term.BillingRevisionID = &rent, change.TaxRate, r.ID
+					active[change.AssetID] = term
+				}
+			}
+			nextRevision++
 		}
 	}
 	if !initialCharge {
@@ -354,6 +383,7 @@ func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageReco
 			if r.Action == "withdraw" || r.EffectiveOn >= due {
 				continue
 			}
+			applyThrough(r.EffectiveOn)
 			var term DraftLeaseTerms
 			switch r.Kind {
 			case "add":
@@ -387,6 +417,7 @@ func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageReco
 			active[term.AssetID] = term
 		}
 	}
+	applyThrough(due)
 	var out []DraftLeaseTerms
 	for _, term := range active {
 		out = append(out, term)
@@ -397,6 +428,10 @@ func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageReco
 
 // This helper is shared by automatic generation and reviewed manual retry.
 func currentCoverageBillingTerms(ctx context.Context, tx pgx.Tx, lease int64, initial []DraftLeaseTerms, due time.Time, kind string) ([]DraftLeaseTerms, bool, error) {
+	revisions, err := readLeaseBillingRevisions(ctx, tx, lease)
+	if err != nil {
+		return nil, false, err
+	}
 	var unowed bool
 	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_notice_current WHERE lease_id=$1 AND action<>'withdraw' AND (category='cancel_before_start' OR ($3<>'initial' AND effective_on<$2::date)))`, lease, due, kind).Scan(&unowed); err != nil {
 		return nil, false, err
@@ -406,7 +441,7 @@ func currentCoverageBillingTerms(ctx context.Context, tx pgx.Tx, lease int64, in
 	}
 	records, err := readCoverageEvents(ctx, tx, lease, false)
 	if err != nil || len(records) == 0 {
-		return initial, false, err
+		return applyLeaseBillingRevisions(initial, revisions, due.Format(time.DateOnly)), false, err
 	}
 	var ended bool
 	if err = tx.QueryRow(ctx, `SELECT lifecycle='terminated' AND $2::date>coalesce((SELECT max(ends_on) FROM lease_asset_dependencies WHERE lease_id=$1),'-infinity'::date) FROM lease_master_dependencies WHERE lease_id=$1`, lease, due).Scan(&ended); err != nil {
@@ -416,9 +451,9 @@ func currentCoverageBillingTerms(ctx context.Context, tx pgx.Tx, lease int64, in
 		return nil, true, nil
 	}
 	if kind == "coverage" {
-		return coverageChargeTerms(records, due.Format(time.DateOnly)), true, nil
+		return applyLeaseBillingRevisions(coverageChargeTerms(records, due.Format(time.DateOnly)), revisions, due.Format(time.DateOnly)), true, nil
 	}
-	terms, err := coverageBillingTerms(initial, records, due.Format(time.DateOnly), kind == "initial")
+	terms, err := coverageBillingTerms(initial, records, due.Format(time.DateOnly), kind == "initial", revisions...)
 	return terms, true, err
 }
 

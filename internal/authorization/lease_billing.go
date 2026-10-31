@@ -11,6 +11,7 @@ import (
 )
 
 type DraftLeaseTerms struct {
+	BillingRevisionID       int64 `json:",omitempty"`
 	AssetID                 int64
 	InitialCents, RentCents *int64
 	TaxRate                 string

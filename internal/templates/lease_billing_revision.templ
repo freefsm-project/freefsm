@@ -1,0 +1,94 @@
+package templates
+
+import "fmt"
+import "net/url"
+import "slices"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+func leaseBillingUnknownAssets(p authorization.LeaseBillingRevisionReview, values url.Values) []string {
+ var out []string
+ for _,submitted:=range values["asset_id"] {
+  known:=false
+  for _,asset:=range p.Assets { if fmt.Sprint(asset)==submitted { known=true } }
+  if !known && !slices.Contains(out,submitted) { out=append(out,submitted) }
+ }
+ return out
+}
+
+templ LeaseBillingRevisionPage(p authorization.LeaseBillingRevisionReview, values url.Values, message string, conflict bool, uncertain bool) {
+ @Layout(p.Number+" billing revisions") {
+  <h1>Revise billing — { p.Number }</h1>
+  <a href={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.ID)) }>Billing</a>
+  <p>Effective-dated rent and tax apply only to ungenerated charges. Full monthly rent uses the terms applicable on the first day, without proration. Initial amounts and due dates remain unchanged. Generated Invoices require explicit manual adjustment or void.</p>
+  <h2>Current saved revision { fmt.Sprint(p.Revision) }</h2>
+  <h3>Original approved allocations</h3>
+  for _,term:=range p.Original {
+   if term.Selected {
+    <p>{ fmt.Sprintf("Asset %d: original monthly rent %s cents; tax %s%%. Later effective revisions and coverage succession govern ungenerated periods.",term.AssetID,leaseCents(term.RentCents),term.TaxRate) }</p>
+   }
+  }
+  if p.CanManage {
+   <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/billing/revisions",p.ID)) }>
+    if message!="" {
+     <div role="alert" data-error-summary tabindex="-1">{ message }</div>
+    }
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+    <input type="hidden" name="expected_revision" value={ values.Get("expected_revision") }/>
+    <input type="hidden" name="operation_key" value={ values.Get("operation_key") }/>
+    <fieldset disabled?={ uncertain }>
+     <label>Effective date<input type="date" name="effective_on" value={ values.Get("effective_on") } required/></label>
+     <p>Select each Asset whose terms change; enter the complete new rent and tax for each selected Asset.</p>
+     for _,asset:=range p.Assets {
+      <fieldset>
+       <legend>Asset { fmt.Sprint(asset) }</legend>
+       <label><input type="checkbox" name="asset_id" value={ fmt.Sprint(asset) } checked?={ slices.Contains(values["asset_id"],fmt.Sprint(asset)) }/>Revise this Asset</label>
+       <label>Monthly rent (USD cents)<input type="number" min="0" step="1" name={ fmt.Sprintf("rent_cents_%d",asset) } value={ values.Get(fmt.Sprintf("rent_cents_%d",asset)) }/></label>
+       <label>Tax rate (%)<input type="text" inputmode="decimal" name={ fmt.Sprintf("tax_rate_%d",asset) } value={ values.Get(fmt.Sprintf("tax_rate_%d",asset)) }/></label>
+      </fieldset>
+     }
+     for _,asset:=range leaseBillingUnknownAssets(p,values) {
+      <fieldset>
+       <legend>Submitted Asset { asset } is unavailable in the current billing selection</legend>
+       <p>Your submitted values are retained. Clear this selection and review an eligible Asset before saving.</p>
+       <label><input type="checkbox" name="asset_id" value={ asset } checked/>Retain submitted selection</label>
+       <label>Submitted rent (USD cents)<input name={ "rent_cents_"+asset } value={ values.Get("rent_cents_"+asset) }/></label>
+       <label>Submitted tax rate (%)<input name={ "tax_rate_"+asset } value={ values.Get("tax_rate_"+asset) }/></label>
+      </fieldset>
+     }
+     <label>Reason<textarea name="reason" required>{ values.Get("reason") }</textarea></label>
+     if conflict {
+      <button name="recovery" value="revise">Revise against current terms</button>
+     } else {
+      <button type="submit">Save billing revision</button>
+     }
+    </fieldset>
+    if uncertain {
+     for name,entries:=range values {
+      if name!="csrf_token" && name!="expected_revision" && name!="operation_key" && name!="recovery" {
+       for _,entry:=range entries {
+        <input type="hidden" name={ name } value={ entry }/>
+       }
+      }
+     }
+     <button type="submit">Retry exact submission</button>
+    }
+    <a href={ templ.URL(fmt.Sprintf("/leases/%d/billing/revisions",p.ID)) }>Discard proposed revision</a>
+   </form>
+  }
+  <h2>Immutable billing revisions</h2>
+  for _,event:=range p.History {
+   <section>
+    <h3>{ fmt.Sprintf("Revision %d effective %s",event.ID,event.EffectiveOn) }</h3>
+    <p>{ fmt.Sprintf("Actor %d; accepted %s; %s",event.ActorID,event.RecordedAt,event.Reason) }</p>
+    <h4>Before</h4>
+    for _,term:=range event.Before {
+     <p>{ fmt.Sprintf("Asset %d: rent %d cents; tax %s%%",term.AssetID,term.RentCents,term.TaxRate) }</p>
+    }
+    <h4>After</h4>
+    for _,term:=range event.After {
+     <p>{ fmt.Sprintf("Asset %d: rent %d cents; tax %s%%",term.AssetID,term.RentCents,term.TaxRate) }</p>
+    }
+   </section>
+  }
+ }
+}

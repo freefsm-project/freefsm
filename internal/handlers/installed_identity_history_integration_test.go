@@ -234,7 +234,7 @@ func TestInstalledIdentityHistoryHTTP(t *testing.T) {
 			t.Fatal(err)
 		}
 		testutil.AssertNoInvoiceLeaseBackfill(t, ctx, pool)
-		testutil.AssertSequenceUpgrade(t, ctx, pool, sequences, "asset_association_events_id_seq", "asset_service_entries_id_seq", "job_asset_links_id_seq", "lease_billing_obligations_id_seq", "leases_id_seq", "time_entry_history_id_seq", "lease_billing_source_changes_id_seq", "lease_billing_obligation_revisions_id_seq", "lease_coverage_events_id_seq", "lease_coverage_revisions_id_seq", "lease_notice_revisions_id_seq", "lease_fact_corrections_id_seq")
+		testutil.AssertSequenceUpgrade(t, ctx, pool, sequences, "asset_association_events_id_seq", "asset_service_entries_id_seq", "job_asset_links_id_seq", "lease_billing_obligations_id_seq", "leases_id_seq", "time_entry_history_id_seq", "lease_billing_source_changes_id_seq", "lease_billing_obligation_revisions_id_seq", "lease_coverage_events_id_seq", "lease_coverage_revisions_id_seq", "lease_notice_revisions_id_seq", "lease_fact_corrections_id_seq", "lease_billing_revisions_id_seq")
 		if snapshot() != before {
 			t.Fatal("upgrade rewrote installed receipts/effects/transport")
 		}

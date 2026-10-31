@@ -34,6 +34,9 @@ templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 			<h2>Last scheduler failure</h2>
 			<p role="alert">{ p.GenerationFailure }</p>
 		}
+		if p.Finalized {
+			<a href={ templ.URL(fmt.Sprintf("/leases/%d/billing/revisions",p.ID)) }>Revise billing and view effective terms</a>
+		}
 		if p.Finalized && !p.Archived {
 			<h2>Billing periods</h2>
 			<nav aria-label="Billing period filters">
@@ -86,7 +89,7 @@ templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 			</nav>
 		}
 		if p.Finalized || p.Lifecycle != "draft" {
-			<p>Finalized billing terms — read-only. Generated Invoices retain their original commercial facts. Amounts are whole cents; tax is a percentage.</p>
+			<p>Original finalized billing terms — read-only. Effective billing revisions and coverage changes govern later ungenerated charges; consult the revision history and each period preview. Generated Invoices retain their original commercial facts. Amounts are whole cents; tax is a percentage.</p>
 		} else {
 			<p>Prospective Draft terms only. Saving creates no Invoice or billing obligation. Amounts are whole cents; tax is a percentage.</p>
 		}

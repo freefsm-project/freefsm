@@ -24,6 +24,10 @@ func TestLeaseFactCorrectionEncryptedRestore(t *testing.T) {
 	leaseCoverageEncryptedRestore(t, true, true)
 }
 
+func TestLeaseBillingRevisionEncryptedRestore(t *testing.T) {
+	leaseCoverageEncryptedRestore(t, true, true, true)
+}
+
 func leaseCoverageEncryptedRestore(t *testing.T, withNotice bool, withFacts ...bool) {
 	dsn := os.Getenv("FREEFSM_BACKUP_TEST_ADMIN_URL")
 	if dsn == "" {
@@ -72,10 +76,15 @@ func leaseCoverageEncryptedRestore(t *testing.T, withNotice bool, withFacts ...b
 		correction = authorization.LeaseFactInput{ExpectedRevision: base.Revision, StartsOn: "2024-02-01", EndsOn: base.EndsOn, PremisesID: *base.PremisesID, Factual: true, Reason: "Retained commencement correction", OperationKey: "restored-fact-correction-0001"}
 		historyCheck(t, svc.CorrectLeaseFacts(ctx, actor, lease, correction))
 	}
+	var billingRevision authorization.LeaseBillingRevisionInput
+	if len(withFacts) > 1 && withFacts[1] {
+		billingRevision = authorization.LeaseBillingRevisionInput{EffectiveOn: "2024-03-01", Reason: "Retained future rent", OperationKey: "restored-billing-revision-0001", Changes: []authorization.LeaseBillingChange{{AssetID: incoming.ID, RentCents: 6700, TaxRate: "5"}}}
+		historyCheck(t, svc.ReviseLeaseBilling(ctx, actor, lease, billingRevision))
+	}
 	_, err = src.pool.Exec(ctx, originalClock)
 	historyCheck(t, err)
 	tables := []string{"leases", "lease_finalizations", "lease_coverage_events", "lease_coverage_revisions", "lease_asset_dependencies", "lease_master_dependencies", "lease_billing_source_changes", "lease_invoice_review_flags", "lease_billing_obligations", "lease_invoice_generations", "invoices", "authorization_roles", "authorization_grants", "assets", "customers", "locations", "issued_document_numbers", "company_settings"}
-	tables = append(tables, "lease_notice_revisions", "lease_fact_corrections")
+	tables = append(tables, "lease_notice_revisions", "lease_fact_corrections", "lease_billing_revisions")
 	before := leasePreservationRows(t, src.pool, tables)
 	src.roundTripTo(t, dst, func() {})
 	historyCheck(t, dst.manager.RefreshConnections())
@@ -88,6 +97,9 @@ func leaseCoverageEncryptedRestore(t *testing.T, withNotice bool, withFacts ...b
 	}
 	if len(withFacts) > 0 && withFacts[0] {
 		historyCheck(t, authorization.New(dst.pool).CorrectLeaseFacts(ctx, actor, lease, correction))
+	}
+	if len(withFacts) > 1 && withFacts[1] {
+		historyCheck(t, authorization.New(dst.pool).ReviseLeaseBilling(ctx, actor, lease, billingRevision))
 	}
 	historyEqual(t, "restored replay creates no effects", leasePreservationRows(t, dst.pool, tables), before)
 }

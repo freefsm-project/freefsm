@@ -17,6 +17,10 @@ func removeEmptyNoticeSchema(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
 	var empty bool
+	historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM lease_billing_revisions)`).Scan(&empty))
+	historyEqual(t, "no billing revision history in predecessor fixture", empty, true)
+	_, billingErr := pool.Exec(ctx, `DROP TABLE lease_billing_revisions; DELETE FROM schema_migrations WHERE name='123_lease_billing_revisions'`)
+	historyCheck(t, billingErr)
 	historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM lease_fact_corrections)`).Scan(&empty))
 	historyEqual(t, "no correction history in predecessor fixture", empty, true)
 	_, err := pool.Exec(ctx, `DROP TABLE lease_fact_corrections; DELETE FROM schema_migrations WHERE name='122_lease_fact_corrections'`)

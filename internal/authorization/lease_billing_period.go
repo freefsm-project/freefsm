@@ -34,9 +34,10 @@ type LeaseBillingRevision struct {
 }
 
 type LeaseBillingPeriodLine struct {
-	AssetID int64  `json:"asset_id"`
-	Amount  string `json:"unit_price_decimal"`
-	Taxable bool   `json:"taxable"`
+	BillingRevisionID int64  `json:"lease_billing_revision_id"`
+	AssetID           int64  `json:"asset_id"`
+	Amount            string `json:"unit_price_decimal"`
+	Taxable           bool   `json:"taxable"`
 }
 
 func billingReviewHash(ctx context.Context, tx pgx.Tx, obligation, invoice int64) (string, error) {

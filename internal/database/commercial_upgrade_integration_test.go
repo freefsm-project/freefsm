@@ -78,7 +78,7 @@ func TestCommercialUpgradePreservesFactsAndRepairsFutureSequence(t *testing.T) {
 			added := []string{"asset_association_events_id_seq", "job_asset_links_id_seq", "subtask_history_id_seq"}
 			if !invalid {
 				testutil.AssertNoInvoiceLeaseBackfill(t, ctx, db.Pool)
-				added = append(added, "asset_service_entries_id_seq", "lease_billing_obligations_id_seq", "leases_id_seq", "time_entry_history_id_seq", "lease_billing_source_changes_id_seq", "lease_billing_obligation_revisions_id_seq", "lease_coverage_events_id_seq", "lease_coverage_revisions_id_seq", "lease_notice_revisions_id_seq", "lease_fact_corrections_id_seq")
+				added = append(added, "asset_service_entries_id_seq", "lease_billing_obligations_id_seq", "leases_id_seq", "time_entry_history_id_seq", "lease_billing_source_changes_id_seq", "lease_billing_obligation_revisions_id_seq", "lease_coverage_events_id_seq", "lease_coverage_revisions_id_seq", "lease_notice_revisions_id_seq", "lease_fact_corrections_id_seq", "lease_billing_revisions_id_seq")
 			}
 			testutil.AssertSequenceUpgrade(t, ctx, db.Pool, sequences, added...)
 			if before != after {

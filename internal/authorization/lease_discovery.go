@@ -149,7 +149,7 @@ func (s *Service) LeaseHistory(ctx context.Context, a Actor, id int64, billing b
 		out.Lifecycle = calendar.Lifecycle
 		actions := []string{"lease.create", "lease.details.change", "lease.finalize", "lease.archive", "lease.restore"}
 		if billing {
-			actions = []string{"lease.billing.change", "lease.billing.finalize", "lease.billing.replace", "lease.billing.retry", "lease.billing.retry_failed", "lease.billing.source_change", "lease.archive", "lease.restore"}
+			actions = []string{"lease.billing.change", "lease.billing.finalize", "lease.billing.replace", "lease.billing.retry", "lease.billing.retry_failed", "lease.billing.source_change", "lease.billing.revise", "lease.archive", "lease.restore"}
 		}
 		rows, err := tx.Query(ctx, `SELECT action,recorded_at,coalesce(actor_id,0),detail FROM authorization_audit WHERE target_type='lease' AND target_id=$1 AND action=ANY($2::text[]) ORDER BY id`, id, actions)
 		if err != nil {
@@ -173,6 +173,10 @@ func (s *Service) LeaseHistory(ctx context.Context, a Actor, id int64, billing b
 			keys := []string{"ID", "CustomerID", "Number", "Title", "Reference", "ExecutionDate", "StartsOn", "EndsOn", "PremisesID", "AssetIDs", "Coverage", "CustomFields"}
 			if billing {
 				keys = []string{"ID", "Number", "InitialDueOn", "Terms", "ManagedBillingStart"}
+				if event.Action == "lease.billing.revise" {
+					before, after = nil, detail
+					keys = []string{"effective_on", "reason", "before", "after"}
+				}
 				if event.Action == "lease.billing.replace" || event.Action == "lease.billing.retry" || event.Action == "lease.billing.retry_failed" || event.Action == "lease.billing.source_change" {
 					after = detail
 					keys = []string{"obligation_id", "previous_invoice_id", "invoice_id", "operation_key", "change_id", "starts_on", "ends_on", "reason"}

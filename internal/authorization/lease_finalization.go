@@ -189,6 +189,9 @@ func leaseObligationSnapshot(base DraftLeaseBase, terms []DraftLeaseTerms, kind 
 		}
 		line := input.Lines[len(lines)]
 		lines = append(lines, map[string]any{"title": fmt.Sprintf("%s — Asset %d", base.Number, term.AssetID), "quantity": 1, "quantity_decimal": "1", "unit_price": json.Number(line.UnitPrice), "unit_price_decimal": line.UnitPrice, "taxable": line.Taxable, "lease_id": base.ID, "asset_id": term.AssetID, "period": due.Format(time.DateOnly), "charge_kind": kind})
+		if term.BillingRevisionID != 0 {
+			lines[len(lines)-1]["lease_billing_revision_id"] = term.BillingRevisionID
+		}
 	}
 	encoded, err := json.Marshal(lines)
 	if err != nil {
