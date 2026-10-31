@@ -73,7 +73,7 @@ func TestOfficePaymentUpgradePreservesSourcesAndUnknownFacts(t *testing.T) {
 		historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, source))
 	}
 	testutil.AssertNoInvoiceLeaseBackfill(t, ctx, pool)
-	testutil.AssertSequenceUpgrade(t, ctx, pool, sequences, "lease_billing_obligations_id_seq", "leases_id_seq", "lease_billing_source_changes_id_seq", "lease_billing_obligation_revisions_id_seq", "lease_coverage_events_id_seq", "lease_coverage_revisions_id_seq", "lease_notice_revisions_id_seq")
+	testutil.AssertSequenceUpgrade(t, ctx, pool, sequences, "lease_billing_obligations_id_seq", "leases_id_seq", "lease_billing_source_changes_id_seq", "lease_billing_obligation_revisions_id_seq", "lease_coverage_events_id_seq", "lease_coverage_revisions_id_seq", "lease_notice_revisions_id_seq", "lease_fact_corrections_id_seq")
 	historyEqual(t, "installed source identities, unknown facts, reversals and grants", preLeaseUpgradeRows(t, pool, tables), before)
 	if reversalSnapshot() != reversalsBefore {
 		t.Fatal("migration changed installed reversal history")

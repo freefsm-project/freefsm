@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/templates"
@@ -14,6 +15,11 @@ import (
 )
 
 func (h *LeaseHandler) Notice(w http.ResponseWriter, r *http.Request) {
+	correction := strings.HasSuffix(r.URL.Path, "/termination-correction")
+	suffix := "notice"
+	if correction {
+		suffix = "termination-correction"
+	}
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
 		http.NotFound(w, r)
@@ -36,9 +42,14 @@ func (h *LeaseHandler) Notice(w http.ResponseWriter, r *http.Request) {
 				conflict = true
 			} else {
 				in := authorization.LeaseNoticeInput{ExpectedRevision: revision, Action: values.Get("action"), Category: values.Get("category"), Initiator: values.Get("initiator"), NoticeOn: values.Get("notice_on"), EffectiveOn: values.Get("effective_on"), Reason: values.Get("reason"), OperationKey: values.Get("operation_key")}
-				err = h.authority.ChangeLeaseNotice(r.Context(), authorizationActor(r), id, in)
+				in.Factual = correction && values.Get("factual") == "true"
+				if correction && !in.Factual {
+					err = &authorization.LeaseValidationError{Message: "Confirm a factual correction; renegotiation requires a new Lease"}
+				} else {
+					err = h.authority.ChangeLeaseNotice(r.Context(), authorizationActor(r), id, in)
+				}
 				if err == nil {
-					http.Redirect(w, r, fmt.Sprintf("/leases/%d/notice", id), http.StatusSeeOther)
+					http.Redirect(w, r, fmt.Sprintf("/leases/%d/%s", id, suffix), http.StatusSeeOther)
 					return
 				}
 				var validation *authorization.LeaseValidationError
@@ -74,6 +85,7 @@ func (h *LeaseHandler) Notice(w http.ResponseWriter, r *http.Request) {
 		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
+	data.Correction = correction
 	if values == nil {
 		values = url.Values{"expected_revision": {fmt.Sprint(data.Revision)}, "operation_key": {rand.Text()}, "action": {"create"}, "notice_on": {data.Today}, "category": {"customer_ordinary"}, "initiator": {"customer"}}
 		if len(data.History) > 0 && data.History[0].Action != "withdraw" {
@@ -84,12 +96,12 @@ func (h *LeaseHandler) Notice(w http.ResponseWriter, r *http.Request) {
 			values.Set("notice_on", current.NoticeOn)
 			values.Set("effective_on", current.EffectiveOn)
 		}
-	} else if values.Get("recovery") == "revise" && data.Base.Lifecycle != "terminated" {
+	} else if values.Get("recovery") == "revise" && (data.Base.Lifecycle != "terminated" || correction) {
 		values.Set("expected_revision", fmt.Sprint(data.Revision))
 		values.Set("operation_key", rand.Text())
 		message = "Current revision loaded. Review your proposal before saving."
 	}
-	if data.Base.Lifecycle == "terminated" && r.Method == http.MethodPost && !uncertain {
+	if data.Base.Lifecycle == "terminated" && r.Method == http.MethodPost && !uncertain && !correction {
 		message = "Notice was not saved. This Lease has ended. Your proposal is read-only: compare current saved facts, then discard it or return to the Lease. Notice changes cannot correct an effective termination."
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

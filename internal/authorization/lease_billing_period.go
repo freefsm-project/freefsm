@@ -178,11 +178,14 @@ func approvedLeasePeriod(ctx context.Context, tx pgx.Tx, p Principal, lease, obl
 	var start, end, cutoff, due, today time.Time
 	var kind, financial, lines string
 	var valid, exempt bool
-	err = tx.QueryRow(ctx, `SELECT f.terms,f.starts_on,f.fixed_ends_on,f.managed_billing_start,o.kind,o.due_on,o.financial,o.line_items::text,lease_dependency_today(l.company_id),c.tax_exempt,NOT d.archived AND d.lifecycle<>'draft' AND d.customer_id=l.customer_id AND d.premises_id IS NOT DISTINCT FROM l.premises_id AND c.deleted_at IS NULL AND p.deleted_at IS NULL AND p.company_id=l.company_id AND p.object_type='customer' AND p.object_id=l.customer_id FROM lease_billing_obligation_current o JOIN lease_finalizations f ON f.lease_id=o.lease_id JOIN leases l ON l.id=o.lease_id JOIN lease_master_dependencies d ON d.lease_id=l.id JOIN customers c ON c.id=l.customer_id JOIN locations p ON p.id=l.premises_id WHERE o.id=$1 AND o.lease_id=$2 FOR SHARE OF c,p,d`, obligation, lease).Scan(&raw, &start, &end, &cutoff, &kind, &due, &financial, &lines, &today, &exempt, &valid)
+	err = tx.QueryRow(ctx, `SELECT f.terms,l.starts_on,l.ends_on,f.managed_billing_start,o.kind,o.due_on,o.financial,o.line_items::text,lease_dependency_today(l.company_id),c.tax_exempt,NOT d.archived AND d.lifecycle<>'draft' AND d.customer_id=l.customer_id AND d.premises_id IS NOT DISTINCT FROM l.premises_id AND c.deleted_at IS NULL AND p.deleted_at IS NULL AND p.company_id=l.company_id AND p.object_type='customer' AND p.object_id=l.customer_id FROM lease_billing_obligation_current o JOIN lease_finalizations f ON f.lease_id=o.lease_id JOIN leases l ON l.id=o.lease_id JOIN lease_master_dependencies d ON d.lease_id=l.id JOIN customers c ON c.id=l.customer_id JOIN locations p ON p.id=l.premises_id WHERE o.id=$1 AND o.lease_id=$2 FOR SHARE OF c,p,d`, obligation, lease).Scan(&raw, &start, &end, &cutoff, &kind, &due, &financial, &lines, &today, &exempt, &valid)
 	if err != nil {
 		return out, err
 	}
 	if !valid || base.Archived || base.Lifecycle == "draft" || base.StartsOn != start.Format(time.DateOnly) || base.EndsOn != end.Format(time.DateOnly) || due.Before(cutoff) || due.After(today.AddDate(0, 0, 30)) {
+		return out, ErrConflict
+	}
+	if kind == "monthly" && !due.After(start) {
 		return out, ErrConflict
 	}
 	if err = json.Unmarshal(raw, &terms); err != nil {

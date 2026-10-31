@@ -1,0 +1,71 @@
+package templates
+
+import "fmt"
+import "net/url"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+func leaseCorrectionPremisesKnown(p authorization.LeaseFactReview, value string) bool {
+ if p.Base.PremisesID!=nil && fmt.Sprint(*p.Base.PremisesID)==value { return true }
+ for _,choice:=range p.Premises { if fmt.Sprint(choice.ID)==value { return true } }
+ return false
+}
+
+templ LeaseCorrectionPage(p authorization.LeaseFactReview, values url.Values, message string, conflict bool, uncertain bool) {
+ @Layout(p.Base.Number+" correction") {
+  <h1>Correct agreement facts — { p.Base.Number }</h1>
+  <a href={ templ.URL(fmt.Sprintf("/leases/%d",p.Base.ID)) }>Lease</a>
+  <a href={ templ.URL(fmt.Sprintf("/leases/%d/termination-correction",p.Base.ID)) }>Correct factual termination</a>
+  <p>Customer and Number are immutable. A wrong Customer requires archiving an eligible Lease and creating a replacement. Renegotiation requires a new Lease. Corrections never move Assets or rewrite generated Invoices.</p>
+  <h2>Current saved facts — revision { fmt.Sprint(p.Base.Revision) }</h2>
+  <p>Start { p.Base.StartsOn }; fixed end { p.Base.EndsOn }; lifecycle { p.Base.Lifecycle }.</p>
+  if p.Base.PremisesID!=nil {
+   <p>Premises Location { fmt.Sprint(*p.Base.PremisesID) }</p>
+  }
+  if p.CanManage {
+   <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/correction",p.Base.ID)) }>
+    if message!="" {
+     <div role="alert" data-error-summary tabindex="-1"><h2>Your proposal needs review</h2><p>{ message }</p></div>
+    }
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+    <input type="hidden" name="expected_revision" value={ values.Get("expected_revision") }/>
+    <input type="hidden" name="operation_key" value={ values.Get("operation_key") }/>
+    <fieldset disabled?={ uncertain }>
+     <label>Correct start<input type="date" name="starts_on" value={ values.Get("starts_on") } required/></label>
+     <label>Correct fixed end<input type="date" name="ends_on" value={ values.Get("ends_on") } required/></label>
+     <label>Active same-Customer premises<select name="premises_id" required>
+      if !leaseCorrectionPremisesKnown(p,values.Get("premises_id")) {
+       <option value={ values.Get("premises_id") } selected>Submitted premises unavailable — select an authorized active Location</option>
+      }
+      if p.Base.PremisesID!=nil {
+       <option value={ fmt.Sprint(*p.Base.PremisesID) } selected?={ values.Get("premises_id")==fmt.Sprint(*p.Base.PremisesID) }>Retain saved premises</option>
+      }
+      for _,choice:=range p.Premises {
+       <option value={ fmt.Sprint(choice.ID) } selected?={ values.Get("premises_id")==fmt.Sprint(choice.ID) }>{ choice.Label }</option>
+      }
+     </select></label>
+     <label>Reason<textarea name="reason" required>{ values.Get("reason") }</textarea></label>
+     <label><input type="checkbox" name="factual" value="true" checked?={ values.Get("factual")=="true" } required/>This is a factual correction, not renegotiation.</label>
+     if conflict {
+      <button name="recovery" value="revise">Revise against current facts</button>
+     } else {
+      <button type="submit">Save factual correction</button>
+     }
+    </fieldset>
+    if uncertain {
+     for _,name:=range []string{"starts_on","ends_on","premises_id","reason","factual"} {
+      <input type="hidden" name={ name } value={ values.Get(name) }/>
+     }
+     <button type="submit">Retry exact submission</button>
+    }
+    <a href={ templ.URL(fmt.Sprintf("/leases/%d/correction",p.Base.ID)) }>Discard proposed correction</a>
+   </form>
+  }
+  <h2>Immutable corrections</h2>
+  for _,event:=range p.History {
+   <p>{ fmt.Sprintf("Revision %d; actor %d; %s; %s. Start %s to %s; fixed end %s to %s.", event.ID, event.ActorID, event.RecordedAt, event.Reason, event.BeforeStart, event.AfterStart, event.BeforeEnd, event.AfterEnd) }</p>
+   if event.BeforePremises!=nil && event.AfterPremises!=nil {
+    <p>{ fmt.Sprintf("Premises Location %d to %d; the accepted address snapshots are retained with this revision.",*event.BeforePremises,*event.AfterPremises) }</p>
+   }
+  }
+ }
+}

@@ -19,6 +19,7 @@ type LeaseNoticeInput struct {
 	EffectiveOn      string `json:"effective_on"`
 	Reason           string `json:"reason"`
 	OperationKey     string `json:"operation_key"`
+	Factual          bool   `json:"factual,omitempty"`
 }
 
 type LeaseNoticeRecord struct {
@@ -28,11 +29,12 @@ type LeaseNoticeRecord struct {
 }
 
 type LeaseNoticeReview struct {
-	Base      DraftLeaseBase
-	Today     string
-	Revision  int64
-	CanManage bool
-	History   []LeaseNoticeRecord
+	Correction bool
+	Base       DraftLeaseBase
+	Today      string
+	Revision   int64
+	CanManage  bool
+	History    []LeaseNoticeRecord
 }
 
 func readLeaseNotices(ctx context.Context, tx pgx.Tx, id int64) ([]LeaseNoticeRecord, error) {
@@ -133,17 +135,17 @@ func (s *Service) ChangeLeaseNotice(ctx context.Context, a Actor, id int64, in L
 		if err = tx.QueryRow(ctx, `SELECT lease_dependency_today($1)::text`, p.CompanyID).Scan(&today); err != nil {
 			return err
 		}
-		if base.Lifecycle == "terminated" {
+		if base.Lifecycle == "terminated" && !in.Factual {
 			return invalid("Effective termination requires a separate factual correction")
 		}
 		active := revision != 0 && prior.Action != "withdraw"
 		switch in.Action {
 		case "create":
-			if active {
+			if active || in.Factual {
 				return ErrConflict
 			}
 		case "revise", "withdraw":
-			if !active || prior.Category == "cancel_before_start" || prior.EffectiveOn < today {
+			if !active || (!in.Factual && (prior.Category == "cancel_before_start" || prior.EffectiveOn < today)) {
 				return ErrConflict
 			}
 		default:
@@ -155,6 +157,7 @@ func (s *Service) ChangeLeaseNotice(ctx context.Context, a Actor, id int64, in L
 			saved.Reason = in.Reason
 			saved.OperationKey = in.OperationKey
 			saved.ExpectedRevision = in.ExpectedRevision
+			saved.Factual = in.Factual
 			in = saved
 		} else {
 			initiators := map[string]string{"cancel_before_start": "", "customer_ordinary": "customer", "company_ordinary": "company", "customer_early": "customer", "company_default": "company", "mutual_early": "mutual", "other_early": "other"}
@@ -170,12 +173,15 @@ func (s *Service) ChangeLeaseNotice(ctx context.Context, a Actor, id int64, in L
 				return invalid("Notice date must be a valid current or past company date")
 			}
 			if in.Category == "cancel_before_start" {
-				if base.StartsOn <= today {
+				if (!in.Factual && base.StartsOn <= today) || (in.Factual && in.NoticeOn >= base.StartsOn) {
 					return invalid("Cancel Before Start requires a Scheduled Lease")
 				}
 				in.EffectiveOn = today
+				if in.Factual {
+					in.EffectiveOn = in.NoticeOn
+				}
 			} else {
-				if base.StartsOn > today {
+				if base.StartsOn > today && !in.Factual {
 					return invalid("Use Cancel Before Start for a Scheduled Lease")
 				}
 				if strings.HasSuffix(in.Category, "_ordinary") {
@@ -212,9 +218,12 @@ func (s *Service) ChangeLeaseNotice(ctx context.Context, a Actor, id int64, in L
 		if active {
 			oldEnd = &prior.EffectiveOn
 		}
-		previous, err := projectLeaseCoverage(initial, base.StartsOn, oldEnd, coverageActions(coverageEvents))
-		if err != nil {
-			return err
+		var previous []LeaseAssetDependency
+		if !active || prior.Category != "cancel_before_start" {
+			previous, err = projectLeaseCoverage(initial, base.StartsOn, oldEnd, coverageActions(coverageEvents))
+			if err != nil {
+				return err
+			}
 		}
 		if !reflect.DeepEqual(previous, base.Coverage) {
 			return invalid("Existing coverage differs from recorded history; repair source mapping before termination")

@@ -183,7 +183,7 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64,
 	var company int64
 	var start, end, cutoff, anchor, today time.Time
 	var raw []byte
-	if err := tx.QueryRow(ctx, `SELECT l.company_id,f.starts_on,f.fixed_ends_on,f.managed_billing_start,f.monthly_anchor,f.terms,lease_dependency_today(l.company_id) FROM lease_finalizations f JOIN leases l ON l.id=f.lease_id WHERE f.lease_id=$1 FOR UPDATE OF l`, id).Scan(&company, &start, &end, &cutoff, &anchor, &raw, &today); err != nil {
+	if err := tx.QueryRow(ctx, `SELECT l.company_id,l.starts_on,l.ends_on,f.managed_billing_start,(date_trunc('month',l.starts_on)+interval '1 month')::date,f.terms,lease_dependency_today(l.company_id) FROM lease_finalizations f JOIN leases l ON l.id=f.lease_id WHERE f.lease_id=$1 FOR UPDATE OF l`, id).Scan(&company, &start, &end, &cutoff, &anchor, &raw, &today); err != nil {
 		return err
 	}
 	p := Principal{CompanyID: company}
@@ -266,6 +266,12 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64,
 			}
 			if period.due.Before(cutoff) {
 				return ErrConflict
+			}
+			// A corrected commencement can move an already materialized month
+			// before recurring entitlement. Retain its identity without charging.
+			if period.kind == "monthly" && period.due.Before(anchor) {
+				_, err := tx.Exec(ctx, `INSERT INTO lease_billing_period_dispositions(lease_id,kind,due_on,source_revision,reason) VALUES($1,$2,$3,$4,'Monthly rent begins in the month after corrected commencement') ON CONFLICT(lease_id,kind,due_on) DO UPDATE SET source_revision=excluded.source_revision,reason=excluded.reason`, id, period.kind, period.due, sourceRevision)
+				return err
 			}
 			coveredAt := period.due
 			if period.kind == "initial" {

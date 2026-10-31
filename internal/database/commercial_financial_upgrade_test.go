@@ -66,7 +66,7 @@ func TestCommercialFinancialUpgradePreservesLegacyAmountsAndPDF(t *testing.T) {
 	// lease_id is new non-rendering provenance, not a recorded legacy fact.
 	// Compare every old key and separately reject fabricated provenance.
 	testutil.AssertNoInvoiceLeaseBackfill(t, ctx, db.Pool)
-	testutil.AssertSequenceUpgrade(t, ctx, db.Pool, sequences, "asset_service_entries_id_seq", "lease_billing_obligations_id_seq", "leases_id_seq", "time_entry_history_id_seq", "lease_billing_source_changes_id_seq", "lease_billing_obligation_revisions_id_seq", "lease_coverage_events_id_seq", "lease_coverage_revisions_id_seq", "lease_notice_revisions_id_seq")
+	testutil.AssertSequenceUpgrade(t, ctx, db.Pool, sequences, "asset_service_entries_id_seq", "lease_billing_obligations_id_seq", "leases_id_seq", "time_entry_history_id_seq", "lease_billing_source_changes_id_seq", "lease_billing_obligation_revisions_id_seq", "lease_coverage_events_id_seq", "lease_coverage_revisions_id_seq", "lease_notice_revisions_id_seq", "lease_fact_corrections_id_seq")
 	mustMigrationScan(t, db.Pool.QueryRow(ctx, `SELECT ((to_jsonb(i)-ARRAY['updated_at','financial','lease_id'])||jsonb_build_object('tax_rate',tax_rate::numeric))::text FROM invoices i WHERE id=$1`, invoice), &newPDFDocument)
 	if oldPDFDocument != newPDFDocument {
 		t.Fatal("schema-only upgrade changed the legacy PDF document source projection")

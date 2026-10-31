@@ -17,6 +17,10 @@ func removeEmptyNoticeSchema(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
 	ctx := context.Background()
 	var empty bool
+	historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM lease_fact_corrections)`).Scan(&empty))
+	historyEqual(t, "no correction history in predecessor fixture", empty, true)
+	_, err := pool.Exec(ctx, `DROP TABLE lease_fact_corrections; DELETE FROM schema_migrations WHERE name='122_lease_fact_corrections'`)
+	historyCheck(t, err)
 	historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM lease_notice_revisions)`).Scan(&empty))
 	historyEqual(t, "no notice history in predecessor fixture", empty, true)
 	for _, definition := range []struct{ file, name string }{
@@ -38,7 +42,7 @@ func removeEmptyNoticeSchema(t *testing.T, pool *pgxpool.Pool) {
 		_, err = pool.Exec(ctx, sql)
 		historyCheck(t, err)
 	}
-	_, err := pool.Exec(ctx, `DROP VIEW lease_notice_current; DROP TABLE lease_notice_revisions; DROP FUNCTION lease_has_ended(bigint); DELETE FROM schema_migrations WHERE name='121_lease_notice_history'`)
+	_, err = pool.Exec(ctx, `DROP VIEW lease_notice_current; DROP TABLE lease_notice_revisions; DROP FUNCTION lease_has_ended(bigint); DELETE FROM schema_migrations WHERE name='121_lease_notice_history'`)
 	historyCheck(t, err)
 }
 
