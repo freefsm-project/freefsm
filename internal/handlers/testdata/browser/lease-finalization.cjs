@@ -52,7 +52,8 @@ const {chromium} = require('playwright-core');
   assert.equal(replay.status(),303);
   await page.reload();await page.getByText('Finalization receipt',{exact:true}).waitFor();
   await page.goto(base+`/leases/${id}/billing`);
-  assert.match(await page.content(),/Finalized billing terms/);
+   assert.match(await page.locator('main').innerText(),/Original finalized billing terms — read-only\./);
+   assert.equal(await page.getByRole('link',{name:'Revise billing and view effective terms',exact:true}).count(),1);
   assert.equal(await page.getByRole('button',{name:'Save Billing terms',exact:true}).count(),0);
   console.log('restricted grants; validation rejection; real grant and session loss purge billing/input; review terms/unplaced warning; lost response persisted receipt; exact replay');
  } finally {await browser.close();}

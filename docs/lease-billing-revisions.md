@@ -34,6 +34,10 @@ re-adding the same Asset starts a new explicit allocation: an older allocation's
 tax revision cannot override the new Add's optional charge or its provenance.
 Optional Add charges on one date remain grouped in one obligation; monthly and
 one-time charge resolution share the same effective-event replay.
+Each optional charge belongs to its Add event, even if a same-day Remove or
+Replace ends that allocation. Re-adding the same Asset on that date retains each
+explicit charge and its own tax basis; it does not merge or overwrite the earlier
+charge. Recurring billing separately follows the surviving allocation next month.
 
 Pending coverage revision, withdrawal, and factual date correction must keep
 every approved billing revision attached to its original allocation. A change

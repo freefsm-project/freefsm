@@ -16,6 +16,18 @@ import (
 )
 
 func TestLeaseBillingRevisionReAddChargeSuccession(t *testing.T) {
+	testLeaseBillingRevisionReAddChargeSuccession(t, "")
+}
+
+func TestLeaseBillingRevisionSameDayAddCharges(t *testing.T) {
+	for _, action := range []string{"replace", "remove", "re-add"} {
+		t.Run(action, func(t *testing.T) {
+			testLeaseBillingRevisionReAddChargeSuccession(t, action)
+		})
+	}
+}
+
+func testLeaseBillingRevisionReAddChargeSuccession(t *testing.T, sameDay string) {
 	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
 	svc := authorization.New(pool)
@@ -37,7 +49,7 @@ func TestLeaseBillingRevisionReAddChargeSuccession(t *testing.T) {
 		historyCheck(t, err)
 		in.ExpectedRevision = review.Revision
 		in.Action, in.Reason = "create", "Explicit allocation succession"
-		in.OperationKey = fmt.Sprintf("succession-coverage-%d-%s", in.IncomingID+in.OutgoingID, in.EffectiveOn)
+		in.OperationKey = fmt.Sprintf("succession-coverage-%d-%s-%d", in.IncomingID+in.OutgoingID, in.EffectiveOn, review.Revision)
 		_, err = svc.ChangeLeaseCoverage(ctx, actor, id, in)
 		historyCheck(t, err)
 	}
@@ -49,6 +61,21 @@ func TestLeaseBillingRevisionReAddChargeSuccession(t *testing.T) {
 	grouped := client.Asset.Create().SetCompanyID(company).SetOwnershipClass("company_owned").SetAssetTypeID(typ).SetName("Grouped zero tax charge").SaveX(ctx)
 	groupRent, groupCharge := int64(1000), int64(2000)
 	change(authorization.LeaseCoverageInput{LeaseCoverageEvent: authorization.LeaseCoverageEvent{Kind: "add", IncomingID: grouped.ID, EffectiveOn: "2024-06-10"}, RentCents: &groupRent, ChargeCents: &groupCharge, TaxRate: "0"})
+	wantCharge, wantMonthly, wantLines := int64(12500), int64(11250), 2
+	monthlyAsset := asset
+	if sameDay == "replace" {
+		replacement := client.Asset.Create().SetCompanyID(company).SetOwnershipClass("company_owned").SetAssetTypeID(typ).SetName("Same day replacement").SaveX(ctx)
+		monthlyAsset = replacement.ID
+		change(authorization.LeaseCoverageInput{LeaseCoverageEvent: authorization.LeaseCoverageEvent{Kind: "replace", OutgoingID: asset, IncomingID: replacement.ID, EffectiveOn: "2024-06-10"}})
+	} else if sameDay != "" {
+		change(authorization.LeaseCoverageInput{LeaseCoverageEvent: authorization.LeaseCoverageEvent{Kind: "remove", OutgoingID: asset, EffectiveOn: "2024-06-10"}})
+		wantMonthly = 6000
+		if sameDay == "re-add" {
+			newRent, newCharge := int64(1500), int64(3000)
+			change(authorization.LeaseCoverageInput{LeaseCoverageEvent: authorization.LeaseCoverageEvent{Kind: "add", IncomingID: asset, EffectiveOn: "2024-06-10"}, RentCents: &newRent, ChargeCents: &newCharge, TaxRate: "0"})
+			wantCharge, wantMonthly, wantLines = 15500, 7500, 3
+		}
+	}
 	historyEqual(t, "prior generated snapshots unchanged by succession", historyDurableRows(t, pool, []string{"invoices", "lease_finalizations", "lease_invoice_generations"}), original)
 	_, err := pool.Exec(ctx, `CREATE FUNCTION reject_succession_charge() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.line_items->0->>'charge_kind'='coverage' THEN RAISE EXCEPTION 'injected charge generation failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_succession_charge BEFORE INSERT ON invoices FOR EACH ROW EXECUTE FUNCTION reject_succession_charge()`)
 	historyCheck(t, err)
@@ -61,17 +88,51 @@ func TestLeaseBillingRevisionReAddChargeSuccession(t *testing.T) {
 	preview, err := svc.ReviewLeaseBillingPeriod(ctx, actor, id, obligation)
 	historyCheck(t, err)
 	historyEqual(t, "pending preview after rollback", preview.InvoiceID, int64(0))
-	historyEqual(t, "grouped Add charge uses explicit 5 percent plus zero tax line", preview.TotalCents, int64(12500))
-	historyEqual(t, "one grouped obligation with both Assets", len(preview.Lines), 2)
+	historyEqual(t, "grouped Add charge uses explicit 5 percent plus zero tax line", preview.TotalCents, wantCharge)
+	historyEqual(t, "one grouped obligation retains each Add", len(preview.Lines), wantLines)
+	historyEqual(t, "charge retains original Add Asset provenance", preview.Lines[0].AssetID, asset)
 	historyEqual(t, "explicit Add amount retained", preview.Lines[0].Amount, "100.00")
 	historyEqual(t, "new Add does not cite old allocation revision", preview.Lines[0].BillingRevisionID, int64(0))
+	if sameDay == "re-add" {
+		historyEqual(t, "second Add retains same Asset provenance", preview.Lines[1].AssetID, asset)
+		historyEqual(t, "second Add retains its distinct approved amount", preview.Lines[1].Amount, "30.00")
+		historyEqual(t, "second Add has fresh provenance", preview.Lines[1].BillingRevisionID, int64(0))
+	}
 	_, err = pool.Exec(ctx, `DROP TRIGGER reject_succession_charge ON invoices`)
 	historyCheck(t, err)
 	historyCheck(t, svc.GenerateLeaseDrafts(ctx))
 	generated, err := svc.ReviewLeaseBillingPeriod(ctx, actor, id, obligation)
 	historyCheck(t, err)
-	historyEqual(t, "generated grouped Add amount and tax", generated.TotalCents, int64(12500))
+	historyEqual(t, "generated grouped Add amount and tax", generated.TotalCents, wantCharge)
+	historyEqual(t, "generated charge lines match preview", generated.Lines, preview.Lines)
 	historyEqual(t, "generated Add provenance", generated.Lines[0].BillingRevisionID, int64(0))
+	if sameDay != "" {
+		snapshots := historyDurableRows(t, pool, []string{"invoices", "lease_finalizations", "lease_invoice_generations"})
+		historyCheck(t, svc.GenerateLeaseDrafts(ctx))
+		historyEqual(t, "worker replay preserves generated snapshots", historyDurableRows(t, pool, []string{"invoices", "lease_finalizations", "lease_invoice_generations"}), snapshots)
+		var monthly int64
+		historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM lease_billing_obligations WHERE lease_id=$1 AND kind='monthly' AND due_on='2024-07-01'`, id).Scan(&monthly))
+		july, err := svc.ReviewLeaseBillingPeriod(ctx, actor, id, monthly)
+		historyCheck(t, err)
+		historyEqual(t, "next month uses surviving allocation without proration", july.TotalCents, wantMonthly)
+		found := false
+		for _, line := range july.Lines {
+			if line.AssetID == monthlyAsset {
+				found = true
+				if sameDay == "remove" {
+					t.Fatal("removed Asset billed next month")
+				}
+				amount := "50.00"
+				if sameDay == "re-add" {
+					amount = "15.00"
+				}
+				historyEqual(t, "monthly inherited or fresh explicit rent", line.Amount, amount)
+				historyEqual(t, "old allocation revision not inherited", line.BillingRevisionID, int64(0))
+			}
+		}
+		historyEqual(t, "monthly surviving Asset provenance", found, sameDay != "remove")
+		return
+	}
 	before := historyDurableRows(t, pool, []string{"invoices", "lease_invoice_generations"})
 	billing, err := svc.ReviewLeaseBillingRevisions(ctx, actor, id)
 	historyCheck(t, err)

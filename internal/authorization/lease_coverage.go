@@ -373,18 +373,28 @@ func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageReco
 // All charge kinds replay the same allocation succession. An explicit Add
 // starts fresh terms, even when this Asset had an earlier allocation.
 func replayLeaseBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageRecord, due, kind string, revisions []LeaseBillingRevisionRecord) ([]DraftLeaseTerms, error) {
-	allocations, err := replayLeaseBillingAllocations(initial, records, due, kind, revisions)
+	state, err := replayLeaseBillingAllocations(initial, records, due, kind, revisions)
 	if err != nil {
 		return nil, err
 	}
-	var out []DraftLeaseTerms
+	allocations := state.active
+	if kind == "coverage" {
+		allocations = state.charges
+	}
+	var ordered []leaseBillingAllocation
 	for _, allocation := range allocations {
-		if kind == "coverage" && (allocation.chargeOn != due || allocation.InitialCents == nil || *allocation.InitialCents <= 0) {
-			continue
+		ordered = append(ordered, allocation)
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].AssetID == ordered[j].AssetID {
+			return ordered[i].eventID < ordered[j].eventID
 		}
+		return ordered[i].AssetID < ordered[j].AssetID
+	})
+	var out []DraftLeaseTerms
+	for _, allocation := range ordered {
 		out = append(out, allocation.DraftLeaseTerms)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].AssetID < out[j].AssetID })
 	return out, nil
 }
 
@@ -392,12 +402,20 @@ func replayLeaseBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageR
 // the reusable Asset ID. These are replay facts, never invented stored history.
 type leaseBillingAllocation struct {
 	DraftLeaseTerms
-	eventID  int64
-	chargeOn string
+	eventID int64
 }
 
-func replayLeaseBillingAllocations(initial []DraftLeaseTerms, records []LeaseCoverageRecord, due, kind string, revisions []LeaseBillingRevisionRecord) (map[int64]leaseBillingAllocation, error) {
-	active := map[int64]leaseBillingAllocation{}
+// Membership and one-time entitlement are separate projections: removing or
+// replacing an allocation does not withdraw its approved Add charge. Charges
+// are keyed by event, so even two same-day Adds of one Asset remain distinct.
+type leaseBillingReplay struct {
+	active  map[int64]leaseBillingAllocation
+	charges map[int64]leaseBillingAllocation
+}
+
+func replayLeaseBillingAllocations(initial []DraftLeaseTerms, records []LeaseCoverageRecord, due, kind string, revisions []LeaseBillingRevisionRecord) (leaseBillingReplay, error) {
+	state := leaseBillingReplay{active: map[int64]leaseBillingAllocation{}, charges: map[int64]leaseBillingAllocation{}}
+	active := state.active
 	for _, term := range initial {
 		if term.Selected {
 			active[term.AssetID] = leaseBillingAllocation{DraftLeaseTerms: term}
@@ -414,6 +432,9 @@ func replayLeaseBillingAllocations(initial []DraftLeaseTerms, records []LeaseCov
 					rent := change.RentCents
 					term.RentCents, term.TaxRate, term.BillingRevisionID = &rent, change.TaxRate, r.ID
 					active[change.AssetID] = term
+					if _, charged := state.charges[term.eventID]; charged {
+						state.charges[term.eventID] = term
+					}
 				}
 			}
 			nextRevision++
@@ -436,7 +457,7 @@ func replayLeaseBillingAllocations(initial []DraftLeaseTerms, records []LeaseCov
 			switch r.Kind {
 			case "add":
 				zero := int64(0)
-				term = leaseBillingAllocation{DraftLeaseTerms: DraftLeaseTerms{AssetID: r.IncomingID, Selected: true, InitialCents: &zero, RentCents: r.RentCents, TaxRate: r.TaxRate}, chargeOn: r.EffectiveOn}
+				term = leaseBillingAllocation{DraftLeaseTerms: DraftLeaseTerms{AssetID: r.IncomingID, Selected: true, InitialCents: &zero, RentCents: r.RentCents, TaxRate: r.TaxRate}}
 				if r.ChargeCents != nil {
 					term.InitialCents = r.ChargeCents
 				}
@@ -444,7 +465,7 @@ func replayLeaseBillingAllocations(initial []DraftLeaseTerms, records []LeaseCov
 				var ok bool
 				term, ok = active[r.OutgoingID]
 				if !ok {
-					return nil, &LeaseValidationError{Message: "Outgoing Asset has no approved billing allocation"}
+					return state, &LeaseValidationError{Message: "Outgoing Asset has no approved billing allocation"}
 				}
 				delete(active, r.OutgoingID)
 				if r.Kind == "remove" {
@@ -453,22 +474,24 @@ func replayLeaseBillingAllocations(initial []DraftLeaseTerms, records []LeaseCov
 				zero := int64(0)
 				term.AssetID = r.IncomingID
 				term.InitialCents = &zero
-				term.chargeOn = ""
 			default:
-				return nil, ErrConflict
+				return state, ErrConflict
 			}
 			term.eventID = r.ID
 			if _, err := leaseObligationInput([]DraftLeaseTerms{term.DraftLeaseTerms}, true, false); err != nil {
-				return nil, err
+				return state, err
 			}
 			if _, exists := active[term.AssetID]; exists {
-				return nil, ErrConflict
+				return state, ErrConflict
 			}
 			active[term.AssetID] = term
+			if r.Kind == "add" && r.EffectiveOn == due && *term.InitialCents > 0 {
+				state.charges[r.ID] = term
+			}
 		}
 	}
 	applyThrough(due)
-	return active, nil
+	return state, nil
 }
 
 func validateBillingAllocationSuccession(initial []DraftLeaseTerms, before, after []LeaseCoverageRecord, revisions []LeaseBillingRevisionRecord) error {
@@ -482,8 +505,8 @@ func validateBillingAllocationSuccession(initial []DraftLeaseTerms, before, afte
 			return err
 		}
 		for _, change := range revision.After {
-			oldAllocation, wasPresent := prior[change.AssetID]
-			newAllocation, isPresent := next[change.AssetID]
+			oldAllocation, wasPresent := prior.active[change.AssetID]
+			newAllocation, isPresent := next.active[change.AssetID]
 			if !wasPresent || !isPresent || oldAllocation.eventID != newAllocation.eventID {
 				return &LeaseValidationError{Message: fmt.Sprintf("This coverage change would detach approved billing revision %d for Asset %d effective %s from its billing allocation. Keep that Add or Replace before the revision date, or discard this proposal and review Billing revisions and Coverage together; approved terms cannot be silently reset.", revision.ID, change.AssetID, revision.EffectiveOn)}
 			}
