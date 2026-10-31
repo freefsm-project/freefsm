@@ -3,6 +3,7 @@ package authorization
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -280,6 +281,9 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 		if err != nil {
 			return err
 		}
+		if err = validateBillingAllocationSuccession(terms, previousRecords, records, billingRevisions); err != nil {
+			return err
+		}
 		if _, err = coverageBillingTerms(terms, records, "9999-12-31", false, billingRevisions...); err != nil {
 			return err
 		}
@@ -291,7 +295,10 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 			if record.Action == "withdraw" {
 				continue
 			}
-			charges := coverageChargeTerms(records, record.EffectiveOn)
+			charges, err := replayLeaseBillingTerms(terms, records, record.EffectiveOn, "coverage", billingRevisions)
+			if err != nil {
+				return err
+			}
 			if len(charges) > 0 {
 				if _, err = leaseObligationInput(charges, false, exempt); err != nil {
 					return err
@@ -349,10 +356,44 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 // Coverage billing applies every action from the preceding month. This keeps
 // the outgoing current-month allocation intact even for a first-day action.
 func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageRecord, due string, initialCharge bool, revisions ...LeaseBillingRevisionRecord) ([]DraftLeaseTerms, error) {
-	active := map[int64]DraftLeaseTerms{}
+	kind := "monthly"
+	if initialCharge {
+		kind = "initial"
+	}
+	return replayLeaseBillingTerms(initial, records, due, kind, revisions)
+}
+
+// All charge kinds replay the same allocation succession. An explicit Add
+// starts fresh terms, even when this Asset had an earlier allocation.
+func replayLeaseBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageRecord, due, kind string, revisions []LeaseBillingRevisionRecord) ([]DraftLeaseTerms, error) {
+	allocations, err := replayLeaseBillingAllocations(initial, records, due, kind, revisions)
+	if err != nil {
+		return nil, err
+	}
+	var out []DraftLeaseTerms
+	for _, allocation := range allocations {
+		if kind == "coverage" && (allocation.chargeOn != due || allocation.InitialCents == nil || *allocation.InitialCents <= 0) {
+			continue
+		}
+		out = append(out, allocation.DraftLeaseTerms)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].AssetID < out[j].AssetID })
+	return out, nil
+}
+
+// Allocation identity is its initial Asset or its Add/Replace event, not just
+// the reusable Asset ID. These are replay facts, never invented stored history.
+type leaseBillingAllocation struct {
+	DraftLeaseTerms
+	eventID  int64
+	chargeOn string
+}
+
+func replayLeaseBillingAllocations(initial []DraftLeaseTerms, records []LeaseCoverageRecord, due, kind string, revisions []LeaseBillingRevisionRecord) (map[int64]leaseBillingAllocation, error) {
+	active := map[int64]leaseBillingAllocation{}
 	for _, term := range initial {
 		if term.Selected {
-			active[term.AssetID] = term
+			active[term.AssetID] = leaseBillingAllocation{DraftLeaseTerms: term}
 		}
 	}
 	// Replay pricing and membership in effective order. A replacement carries
@@ -371,7 +412,7 @@ func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageReco
 			nextRevision++
 		}
 	}
-	if !initialCharge {
+	if kind != "initial" {
 		ordered := append([]LeaseCoverageRecord(nil), records...)
 		sort.Slice(ordered, func(i, j int) bool {
 			if ordered[i].EffectiveOn == ordered[j].EffectiveOn {
@@ -380,15 +421,15 @@ func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageReco
 			return ordered[i].EffectiveOn < ordered[j].EffectiveOn
 		})
 		for _, r := range ordered {
-			if r.Action == "withdraw" || r.EffectiveOn >= due {
+			if r.Action == "withdraw" || r.EffectiveOn > due || (r.EffectiveOn == due && kind != "coverage") {
 				continue
 			}
 			applyThrough(r.EffectiveOn)
-			var term DraftLeaseTerms
+			var term leaseBillingAllocation
 			switch r.Kind {
 			case "add":
 				zero := int64(0)
-				term = DraftLeaseTerms{AssetID: r.IncomingID, Selected: true, InitialCents: &zero, RentCents: r.RentCents, TaxRate: r.TaxRate}
+				term = leaseBillingAllocation{DraftLeaseTerms: DraftLeaseTerms{AssetID: r.IncomingID, Selected: true, InitialCents: &zero, RentCents: r.RentCents, TaxRate: r.TaxRate}, chargeOn: r.EffectiveOn}
 				if r.ChargeCents != nil {
 					term.InitialCents = r.ChargeCents
 				}
@@ -405,10 +446,12 @@ func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageReco
 				zero := int64(0)
 				term.AssetID = r.IncomingID
 				term.InitialCents = &zero
+				term.chargeOn = ""
 			default:
 				return nil, ErrConflict
 			}
-			if _, err := leaseObligationInput([]DraftLeaseTerms{term}, true, false); err != nil {
+			term.eventID = r.ID
+			if _, err := leaseObligationInput([]DraftLeaseTerms{term.DraftLeaseTerms}, true, false); err != nil {
 				return nil, err
 			}
 			if _, exists := active[term.AssetID]; exists {
@@ -418,12 +461,28 @@ func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageReco
 		}
 	}
 	applyThrough(due)
-	var out []DraftLeaseTerms
-	for _, term := range active {
-		out = append(out, term)
+	return active, nil
+}
+
+func validateBillingAllocationSuccession(initial []DraftLeaseTerms, before, after []LeaseCoverageRecord, revisions []LeaseBillingRevisionRecord) error {
+	for _, revision := range revisions {
+		prior, err := replayLeaseBillingAllocations(initial, before, revision.EffectiveOn, "monthly", nil)
+		if err != nil {
+			return err
+		}
+		next, err := replayLeaseBillingAllocations(initial, after, revision.EffectiveOn, "monthly", nil)
+		if err != nil {
+			return err
+		}
+		for _, change := range revision.After {
+			oldAllocation, wasPresent := prior[change.AssetID]
+			newAllocation, isPresent := next[change.AssetID]
+			if !wasPresent || !isPresent || oldAllocation.eventID != newAllocation.eventID {
+				return &LeaseValidationError{Message: fmt.Sprintf("This coverage change would detach approved billing revision %d for Asset %d effective %s from its billing allocation. Keep that Add or Replace before the revision date, or discard this proposal and review Billing revisions and Coverage together; approved terms cannot be silently reset.", revision.ID, change.AssetID, revision.EffectiveOn)}
+			}
+		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].AssetID < out[j].AssetID })
-	return out, nil
+	return nil
 }
 
 // This helper is shared by automatic generation and reviewed manual retry.
@@ -440,8 +499,8 @@ func currentCoverageBillingTerms(ctx context.Context, tx pgx.Tx, lease int64, in
 		return nil, true, nil
 	}
 	records, err := readCoverageEvents(ctx, tx, lease, false)
-	if err != nil || len(records) == 0 {
-		return applyLeaseBillingRevisions(initial, revisions, due.Format(time.DateOnly)), false, err
+	if err != nil {
+		return nil, false, err
 	}
 	var ended bool
 	if err = tx.QueryRow(ctx, `SELECT lifecycle='terminated' AND $2::date>coalesce((SELECT max(ends_on) FROM lease_asset_dependencies WHERE lease_id=$1),'-infinity'::date) FROM lease_master_dependencies WHERE lease_id=$1`, lease, due).Scan(&ended); err != nil {
@@ -450,19 +509,6 @@ func currentCoverageBillingTerms(ctx context.Context, tx pgx.Tx, lease int64, in
 	if ended && kind != "initial" {
 		return nil, true, nil
 	}
-	if kind == "coverage" {
-		return applyLeaseBillingRevisions(coverageChargeTerms(records, due.Format(time.DateOnly)), revisions, due.Format(time.DateOnly)), true, nil
-	}
-	terms, err := coverageBillingTerms(initial, records, due.Format(time.DateOnly), kind == "initial", revisions...)
-	return terms, true, err
-}
-
-func coverageChargeTerms(records []LeaseCoverageRecord, day string) []DraftLeaseTerms {
-	var terms []DraftLeaseTerms
-	for _, r := range records {
-		if r.Action != "withdraw" && r.Kind == "add" && r.EffectiveOn == day && r.ChargeCents != nil && *r.ChargeCents > 0 {
-			terms = append(terms, DraftLeaseTerms{AssetID: r.IncomingID, Selected: true, InitialCents: r.ChargeCents, RentCents: r.RentCents, TaxRate: r.TaxRate})
-		}
-	}
-	return terms
+	terms, err := replayLeaseBillingTerms(initial, records, due.Format(time.DateOnly), kind, revisions)
+	return terms, len(records) > 0, err
 }

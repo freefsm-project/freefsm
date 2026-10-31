@@ -29,6 +29,21 @@ charges retain their approved amount; applicable revised tax may affect an
 ungenerated charge. Generated line provenance identifies the governing billing
 revision where applicable, and the period page links to its immutable history.
 
+An allocation begins with initial terms, an Add, or a Replace. Removing and
+re-adding the same Asset starts a new explicit allocation: an older allocation's
+tax revision cannot override the new Add's optional charge or its provenance.
+Optional Add charges on one date remain grouped in one obligation; monthly and
+one-time charge resolution share the same effective-event replay.
+
+Pending coverage revision, withdrawal, and factual date correction must keep
+every approved billing revision attached to its original allocation. A change
+that moves the incoming Add/Replace to or beyond that revision's effective date,
+or changes which allocation it would revise, rejects atomically with the revision,
+Asset and date to review. Coverage on the exact billing date still belongs to the
+outgoing monthly allocation, so moving an incoming event to that date does not
+silently transfer its approved revision. The retained browser proposal can be
+corrected to a compatible date or discarded; accepted history is never reset.
+
 Already generated Draft, finalized, Void, and settled Invoices remain snapshots.
 Source-change flags identify generated periods for explicit manual adjustment or
 void under the ordinary Invoice contract. A July Draft generated June 1 remains

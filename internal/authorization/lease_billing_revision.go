@@ -108,26 +108,6 @@ func (s *Service) ReviewLeaseBillingRevisions(ctx context.Context, a Actor, id i
 	return out, err
 }
 
-func applyLeaseBillingRevisions(terms []DraftLeaseTerms, history []LeaseBillingRevisionRecord, day string) []DraftLeaseTerms {
-	out := append([]DraftLeaseTerms(nil), terms...)
-	for _, r := range history {
-		if r.EffectiveOn > day {
-			continue
-		}
-		for _, change := range r.After {
-			for i := range out {
-				if out[i].AssetID == change.AssetID {
-					rent := change.RentCents
-					out[i].RentCents = &rent
-					out[i].TaxRate = change.TaxRate
-					out[i].BillingRevisionID = r.ID
-				}
-			}
-		}
-	}
-	return out
-}
-
 func (s *Service) ReviseLeaseBilling(ctx context.Context, a Actor, id int64, in LeaseBillingRevisionInput) error {
 	return s.transactOutcome(ctx, a, false, false, func(tx pgx.Tx, p Principal) error {
 		if a.Channel == "api" || !p.Allows("lease.billing.view", All) || !p.Allows("lease.billing.manage", All) {
