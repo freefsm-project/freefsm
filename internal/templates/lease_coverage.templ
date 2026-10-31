@@ -1,11 +1,34 @@
 package templates
 
 import "fmt"
+import "net/url"
 import "github.com/freefsm-project/freefsm/internal/authorization"
 
 templ LeaseCoveragePage(p authorization.LeaseCoverageReview, choices authorization.LeaseChoices, key string) {
+ @leaseCoveragePage(p, choices, key, nil, "", false) {}
+}
+
+templ LeaseCoverageRecoveryPage(p authorization.LeaseCoverageReview, choices authorization.LeaseChoices, values url.Values, message string, conflict bool) {
+ @leaseCoveragePage(p, choices, "", values, message, conflict) {}
+}
+
+templ leaseCoveragePage(p authorization.LeaseCoverageReview, choices authorization.LeaseChoices, key string, values url.Values, message string, conflict bool) {
  @Layout(p.Base.Number+" coverage") {
-  <h1>Coverage changes — { p.Base.Number }</h1>
+   <h1>Coverage changes — { p.Base.Number }</h1>
+   if values != nil {
+    <h2>Your proposed change</h2>
+    @leaseCoverageRecoveryForm(p, choices, values, message, conflict)
+    <h2>Current saved coverage — revision { fmt.Sprint(p.Revision) }</h2>
+    <p>Compare the saved timeline and accepted changes below with your proposal above. No rejected change has been saved.</p>
+    <script>
+     document.querySelectorAll('[data-error-summary] a[href^="#coverage-"]').forEach(link => {
+      link.addEventListener('click', event => {
+       event.preventDefault();
+       document.getElementById(link.getAttribute('href').slice(1))?.focus();
+      });
+     });
+    </script>
+   }
   <a href={ templ.URL(fmt.Sprintf("/leases/%d",p.Base.ID)) }>Lease</a>
   if choices.CanViewBilling {
    <a href={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.Base.ID)) }>Billing review</a>
@@ -27,7 +50,7 @@ templ LeaseCoveragePage(p authorization.LeaseCoverageReview, choices authorizati
   for _, id := range p.Base.WrongPremisesAssetIDs {
    <p role="status">Asset { fmt.Sprint(id) } is placed at different premises.</p>
   }
-  if p.CanManage {
+   if p.CanManage && values == nil {
    <h2>New change</h2>
    @leaseCoverageForm(p,choices,authorization.LeaseCoverageInput{Action:"create",OperationKey:key+"-new",ExpectedRevision:p.Revision})
   }
@@ -36,7 +59,7 @@ templ LeaseCoveragePage(p authorization.LeaseCoverageReview, choices authorizati
    <section>
     <h3>Event { fmt.Sprint(event.ID) } — { event.Kind } on { event.EffectiveOn }</h3>
     <p>Outgoing Asset { fmt.Sprint(event.OutgoingID) }; incoming Asset { fmt.Sprint(event.IncomingID) }. { event.Action }: { event.Reason }</p>
-    if p.CanManage && event.Action != "withdraw" {
+     if p.CanManage && values == nil && event.Action != "withdraw" {
      if event.EffectiveOn > p.Today {
       <p>Pending: revise or withdraw with a reason.</p>
      } else {
@@ -54,6 +77,62 @@ templ LeaseCoveragePage(p authorization.LeaseCoverageReview, choices authorizati
    }
   }
  }
+}
+
+var coverageRecoveryFields = []struct { Name, Label string }{
+ {"effective_on", "Effective date (YYYY-MM-DD)"},
+ {"outgoing_id", "Outgoing Asset ID (Remove or Replace)"},
+ {"rent_cents", "Monthly rent in cents (Add)"},
+ {"charge_cents", "Optional one-time charge in cents (Add)"},
+ {"tax_rate", "Tax rate percent (Add)"},
+ {"reason", "Reason"},
+}
+
+templ leaseCoverageRecoveryForm(p authorization.LeaseCoverageReview, choices authorization.LeaseChoices, values url.Values, message string, conflict bool) {
+ <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/coverage",p.Base.ID)) } id="coverage-recovery">
+  <div role="alert" data-error-summary tabindex="-1" class="error-summary">
+   <h2>Coverage change needs review</h2><p>{ message }</p>
+   <ul>
+    for _, field := range coverageRecoveryFields {
+     <li><a href={ templ.URL("#coverage-"+field.Name) }>{ field.Label }</a></li>
+    }
+   </ul>
+  </div>
+  <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+  for _, name := range []string{"event_id","revision","expected_revision","operation_key"} {
+   <input type="hidden" name={ name } value={ values.Get(name) }/>
+  }
+  <label>Action<select name="action">
+   for _, action := range []string{"create","revise","withdraw","correct"} {
+    <option value={ action } selected?={ values.Get("action")==action }>{ action }</option>
+   }
+  </select></label>
+  <label>Change<select name="kind">
+   for _, kind := range []string{"add","remove","replace"} {
+    <option value={ kind } selected?={ values.Get("kind")==kind }>{ kind }</option>
+   }
+  </select></label>
+  <label>Incoming Asset<select name="incoming_id"><option value="0">None</option>
+   for _, asset := range choices.Assets {
+    <option value={ fmt.Sprint(asset.ID) } selected?={ values.Get("incoming_id")==fmt.Sprint(asset.ID) }>{ asset.Label }</option>
+   }
+  </select></label>
+  for _, field := range coverageRecoveryFields {
+   <label for={ "coverage-"+field.Name }>{ field.Label }</label>
+   if field.Name == "reason" {
+    <textarea id={ "coverage-"+field.Name } name={ field.Name } required>{ values.Get(field.Name) }</textarea>
+   } else {
+    <input id={ "coverage-"+field.Name } name={ field.Name } value={ values.Get(field.Name) }/>
+   }
+  }
+  if conflict {
+   <p>Saving is blocked until you compare the current saved facts and explicitly revise. Revising loads the current revision without saving; review the proposal again before Save.</p>
+   <button type="submit" name="recovery" value="revise">Revise against current coverage</button>
+  } else {
+   <button type="submit">Save coverage change</button>
+  }
+  <a href={ templ.URL(fmt.Sprintf("/leases/%d/coverage",p.Base.ID)) }>Discard proposed change</a>
+ </form>
 }
 
 func leaseCoverageFormInput(in authorization.LeaseCoverageInput,key string) authorization.LeaseCoverageInput {
