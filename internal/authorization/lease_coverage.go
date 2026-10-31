@@ -322,7 +322,14 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 				}
 			}
 		}
-		if err = s.WriteLeaseDependencies(ctx, tx, a, LeaseDependencies{LeaseID: id, CustomerID: base.CustomerID, PremisesID: base.PremisesID, Lifecycle: base.Lifecycle, Coverage: coverage}); err != nil {
+		// Coverage changes preserve the agreement's stored lifecycle. The current
+		// lifecycle used above is derived from dates/notices and can advance without
+		// a write; persisting it only in dependencies would split the agreement.
+		var storedState string
+		if err = tx.QueryRow(ctx, `SELECT lifecycle FROM leases WHERE id=$1`, id).Scan(&storedState); err != nil {
+			return err
+		}
+		if err = s.WriteLeaseDependencies(ctx, tx, a, LeaseDependencies{LeaseID: id, CustomerID: base.CustomerID, PremisesID: base.PremisesID, Lifecycle: storedState, Coverage: coverage}); err != nil {
 			return err
 		}
 		payload, err := json.Marshal(in)

@@ -95,6 +95,14 @@ func TestLeaseBillingRevisionReAddChargeSuccession(t *testing.T) {
 }
 
 func TestLeaseBillingRevisionCoverageReschedule(t *testing.T) {
+	testLeaseBillingRevisionCoverageReschedule(t, "2024-02-01", "active")
+}
+
+func TestLeaseBillingRevisionScheduledCoverageCorrection(t *testing.T) {
+	testLeaseBillingRevisionCoverageReschedule(t, "2024-01-01", "scheduled")
+}
+
+func testLeaseBillingRevisionCoverageReschedule(t *testing.T, finalizedOn, storedState string) {
 	for _, action := range []string{"revise", "correct"} {
 		for _, date := range []string{"2024-03-10", "2024-03-01"} {
 			t.Run(action+"/"+date, func(t *testing.T) {
@@ -107,7 +115,7 @@ func TestLeaseBillingRevisionCoverageReschedule(t *testing.T) {
 					_, err := pool.Exec(ctx, `CREATE OR REPLACE FUNCTION lease_dependency_today(company bigint) RETURNS date LANGUAGE sql STABLE AS $$ SELECT '`+date+`'::date $$`)
 					historyCheck(t, err)
 				}
-				clock("2024-02-01")
+				clock(finalizedOn)
 				cookie := sessionCookie(t, ctx, sessions, admin)
 				customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Reschedule customer").SaveX(ctx)
 				location := client.Location.Create().SetCompanyID(company).SetObjectType("customer").SetObjectID(customer.ID).SetTitle("Premises").SaveX(ctx)
@@ -121,12 +129,20 @@ func TestLeaseBillingRevisionCoverageReschedule(t *testing.T) {
 				initial, rent := int64(101), int64(5000)
 				historyCheck(t, svc.SaveDraftLeaseBilling(ctx, actor, id, 0, "2024-01-31", authorization.DraftLeaseTerms{AssetID: asset, InitialCents: &initial, RentCents: &rent, TaxRate: "5"}, 0))
 				historyCheck(t, svc.FinalizeLease(ctx, actor, id, authorization.LeaseFinalizationInput{DetailsRevision: 1, BillingRevision: 1, ManagedBillingStart: "2024-01-31"}))
+				var persisted string
+				historyCheck(t, pool.QueryRow(ctx, `SELECT lifecycle FROM leases WHERE id=$1`, id).Scan(&persisted))
+				historyEqual(t, "finalized lifecycle", persisted, storedState)
 				incoming := client.Asset.Create().SetCompanyID(company).SetOwnershipClass("company_owned").SetAssetTypeID(typ).SetName("Rescheduled incoming allocation").SaveX(ctx)
 				_, err = svc.ChangeLeaseCoverage(ctx, actor, id, authorization.LeaseCoverageInput{LeaseCoverageEvent: authorization.LeaseCoverageEvent{Kind: "replace", EffectiveOn: "2024-02-20", OutgoingID: asset, IncomingID: incoming.ID}, Action: "create", Reason: "Scheduled replacement", OperationKey: "reschedule-replacement-0001"})
 				historyCheck(t, err)
 				historyCheck(t, svc.ReviseLeaseBilling(ctx, actor, id, authorization.LeaseBillingRevisionInput{EffectiveOn: "2024-03-01", Reason: "Approved incoming rent", OperationKey: "reschedule-incoming-rent-0001", Changes: []authorization.LeaseBillingChange{{AssetID: incoming.ID, RentCents: 6000, TaxRate: "5"}}}))
 				if action == "correct" {
 					clock("2024-03-20")
+					current, err := svc.ReviewLeaseCoverage(ctx, actor, id)
+					historyCheck(t, err)
+					historyEqual(t, "time passage derives Active without a worker", current.Base.Lifecycle, "active")
+					historyCheck(t, pool.QueryRow(ctx, `SELECT lifecycle FROM leases WHERE id=$1`, id).Scan(&persisted))
+					historyEqual(t, "read does not persist a lifecycle transition", persisted, storedState)
 					historyCheck(t, svc.GenerateLeaseDrafts(ctx))
 				}
 				review, err := svc.ReviewLeaseCoverage(ctx, actor, id)
@@ -154,6 +170,8 @@ func TestLeaseBillingRevisionCoverageReschedule(t *testing.T) {
 				accepted := leasePreservationRows(t, pool, tables)
 				fieldPost(t, web, cookie, path, values, 303)
 				historyEqual(t, "accepted reschedule replay", leasePreservationRows(t, pool, tables), accepted)
+				historyCheck(t, pool.QueryRow(ctx, `SELECT l.lifecycle||':'||d.lifecycle FROM leases l JOIN lease_master_dependencies d ON d.lease_id=l.id WHERE l.id=$1`, id).Scan(&persisted))
+				historyEqual(t, "coverage correction preserves stored lifecycle agreement", persisted, storedState+":"+storedState)
 				historyEqual(t, "accepted coverage edit preserves generated snapshots", historyDurableRows(t, pool, []string{"invoices", "lease_invoice_generations", "lease_finalizations"}), snapshots)
 				if date == "2024-03-10" {
 					t.Run("browser recovery", func(t *testing.T) {
