@@ -10,12 +10,24 @@ import (
 // The dependency projection retains termination facts, including imported
 // agreements. Scheduled/Active/Month-to-Month are never trusted as a clock.
 const leaseCalendarColumns = `CASE WHEN EXISTS(SELECT 1 FROM lease_master_dependencies d WHERE d.lease_id=l.id AND d.lifecycle='terminated') THEN 'terminated' ELSE l.lifecycle END,coalesce(l.starts_on::text,''),coalesce(l.ends_on::text,''),lease_dependency_today(l.company_id)`
+const leaseNoticeCalendarColumns = `CASE WHEN lease_has_ended(l.id) THEN 'terminated' ELSE l.lifecycle END,coalesce(l.starts_on::text,''),coalesce(l.ends_on::text,''),lease_dependency_today(l.company_id)`
 
 func readLeaseCalendar(ctx context.Context, tx pgx.Tx, id int64) (LeaseCalendar, error) {
 	var state, start, end string
 	var today time.Time
 	if err := tx.QueryRow(ctx, `SELECT `+leaseCalendarColumns+` FROM leases l WHERE l.id=$1`, id).Scan(&state, &start, &end, &today); err != nil {
 		return LeaseCalendar{}, err
+	}
+	// Draft has no notice history. Keeping its read independent also lets the
+	// installed native-Draft migration fixture populate actual predecessor facts.
+	if state != "draft" && state != "terminated" {
+		var ended bool
+		if err := tx.QueryRow(ctx, `SELECT lease_has_ended($1)`, id).Scan(&ended); err != nil {
+			return LeaseCalendar{}, err
+		}
+		if ended {
+			state = "terminated"
+		}
 	}
 	return leaseCalendar(state, start, end, today)
 }

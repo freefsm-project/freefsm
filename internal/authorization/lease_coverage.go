@@ -242,7 +242,14 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 			}
 		}
 		var end *string
-		if base.Lifecycle == "terminated" {
+		var cancelled bool
+		if err = tx.QueryRow(ctx, `SELECT (SELECT effective_on::text FROM lease_notice_current WHERE lease_id=$1 AND action<>'withdraw'),EXISTS(SELECT 1 FROM lease_notice_current WHERE lease_id=$1 AND action<>'withdraw' AND category='cancel_before_start')`, id).Scan(&end, &cancelled); err != nil {
+			return err
+		}
+		if cancelled {
+			return ErrConflict
+		}
+		if base.Lifecycle == "terminated" && end == nil {
 			for _, row := range base.Coverage {
 				if row.EndsOn == nil {
 					return ErrConflict
@@ -390,6 +397,13 @@ func coverageBillingTerms(initial []DraftLeaseTerms, records []LeaseCoverageReco
 
 // This helper is shared by automatic generation and reviewed manual retry.
 func currentCoverageBillingTerms(ctx context.Context, tx pgx.Tx, lease int64, initial []DraftLeaseTerms, due time.Time, kind string) ([]DraftLeaseTerms, bool, error) {
+	var unowed bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_notice_current WHERE lease_id=$1 AND action<>'withdraw' AND (category='cancel_before_start' OR ($3<>'initial' AND effective_on<$2::date)))`, lease, due, kind).Scan(&unowed); err != nil {
+		return nil, false, err
+	}
+	if unowed {
+		return nil, true, nil
+	}
 	records, err := readCoverageEvents(ctx, tx, lease, false)
 	if err != nil || len(records) == 0 {
 		return initial, false, err

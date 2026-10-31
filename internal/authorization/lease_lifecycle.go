@@ -34,13 +34,21 @@ func (s *Service) LeaseLifecycle(ctx context.Context, a Actor, id int64, restore
 		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_finalizations WHERE lease_id=$1)`, id).Scan(&finalized); err != nil {
 			return err
 		}
+		state := "draft"
 		if finalized {
-			return ErrConflict
+			calendar, err := readLeaseCalendar(ctx, tx, id)
+			if err != nil {
+				return err
+			}
+			if calendar.Lifecycle != "terminated" {
+				return ErrConflict
+			}
+			state = "terminated"
 		}
 		if archived && !p.Allows("lease.archived.view", All) {
 			return ErrNotFound
 		}
-		if restore {
+		if restore && !finalized {
 			active, err := customerLifecycleState(ctx, tx, p, customer, true)
 			if err != nil {
 				return err
@@ -54,7 +62,7 @@ func (s *Service) LeaseLifecycle(ctx context.Context, a Actor, id int64, restore
 		}
 		// SQL seam and native state share the current authority/master fence.
 		// No intended Asset or retained premises is selected again or restored.
-		if _, err := tx.Exec(ctx, `SELECT set_lease_master_dependencies($1,$2,$3,$4,'draft',$5,'[]'::jsonb)`, id, p.CompanyID, customer, premises, !restore); err != nil {
+		if _, err := tx.Exec(ctx, `SELECT set_lease_master_dependencies($1,$2,$3,$4,$6,$5,coalesce((SELECT jsonb_agg(jsonb_build_object('asset_id',asset_id,'starts_on',starts_on,'ends_on',ends_on)) FROM lease_asset_dependencies WHERE lease_id=$1),'[]'::jsonb))`, id, p.CompanyID, customer, premises, !restore, state); err != nil {
 			return err
 		}
 		value := "clock_timestamp()"

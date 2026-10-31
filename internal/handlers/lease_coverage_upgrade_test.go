@@ -12,6 +12,7 @@ import (
 // predecessor. All native approvals, invoices, identities and grants survive.
 func removeEmptyCoverageSchema(t *testing.T, pool *pgxpool.Pool) {
 	t.Helper()
+	removeEmptyNoticeSchema(t, pool)
 	ctx := context.Background()
 	var empty bool
 	historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM lease_coverage_events) AND NOT EXISTS(SELECT 1 FROM lease_coverage_revisions) AND NOT EXISTS(SELECT 1 FROM lease_billing_obligations WHERE kind='coverage')`).Scan(&empty))

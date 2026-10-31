@@ -1,0 +1,59 @@
+package templates
+
+import "fmt"
+import "net/url"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ LeaseNoticePage(p authorization.LeaseNoticeReview, values url.Values, message string, conflict bool) {
+ @Layout(p.Base.Number+" notice") {
+  <h1>Notice and termination — { p.Base.Number }</h1>
+  <a href={ templ.URL(fmt.Sprintf("/leases/%d",p.Base.ID)) }>Lease</a>
+  <p>Current lifecycle: { p.Base.Lifecycle }. Company date: { p.Today }.</p>
+  <p>Notice leaves the Lease in force through its inclusive ending date. Ordinary notice selects the first eligible boundary at least 30 days after notice. Cancel Before Start ends a Scheduled Lease immediately. Neither action returns equipment, reverses receipts, nor changes generated Invoices.</p>
+  <h2>Current saved facts — revision { fmt.Sprint(p.Revision) }</h2>
+  if len(p.History)>0 && p.History[0].Action!="withdraw" {
+   <p>Ending date: { p.History[0].EffectiveOn }; { p.History[0].Category }; initiator { p.History[0].Initiator }. { p.History[0].Reason }</p>
+  } else {
+   <p>No pending notice.</p>
+  }
+  if p.CanManage && p.Base.Lifecycle!="terminated" {
+   <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/notice",p.Base.ID)) }>
+    if message!="" {
+     <div role="alert" data-error-summary tabindex="-1"><h2>Your proposal needs review</h2><p>{ message }</p><a href="#notice-reason">Review reason and dates</a></div>
+    }
+    <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+    <input type="hidden" name="expected_revision" value={ values.Get("expected_revision") }/>
+    <input type="hidden" name="operation_key" value={ values.Get("operation_key") }/>
+    <label>Action<select name="action">
+     for _, action := range []string{"create","revise","withdraw"} {
+      <option value={ action } selected?={ values.Get("action")==action }>{ action }</option>
+     }
+    </select></label>
+    <label>Category<select name="category">
+     for _, category := range []string{"customer_ordinary","company_ordinary","customer_early","company_default","mutual_early","other_early","cancel_before_start"} {
+      <option value={ category } selected?={ values.Get("category")==category }>{ category }</option>
+     }
+    </select></label>
+    <label>Initiator<select name="initiator">
+     for _, initiator := range []string{"customer","company","mutual","other"} {
+      <option value={ initiator } selected?={ values.Get("initiator")==initiator }>{ initiator }</option>
+     }
+    </select></label>
+    <label>Notice date<input name="notice_on" type="date" value={ values.Get("notice_on") } required/></label>
+    <label>Inclusive effective date (early termination)<input name="effective_on" type="date" value={ values.Get("effective_on") }/></label>
+    <label for="notice-reason">Reason</label><textarea id="notice-reason" name="reason" required>{ values.Get("reason") }</textarea>
+    if conflict {
+     <p>Compare the saved facts above with your proposal. Revising updates its revision without saving.</p>
+     <button name="recovery" value="revise">Revise against current notice</button>
+    } else {
+     <button type="submit">Save notice change</button>
+    }
+    <a href={ templ.URL(fmt.Sprintf("/leases/%d/notice",p.Base.ID)) }>Discard proposed change</a>
+   </form>
+  }
+  <h2>Immutable notice history</h2>
+  for _, event := range p.History {
+   <p>Revision { fmt.Sprint(event.Revision) }: { event.Action }, { event.Category }, initiator { event.Initiator }, notice { event.NoticeOn }, ending { event.EffectiveOn }; { event.Reason } — { event.RecordedAt }</p>
+  }
+ }
+}

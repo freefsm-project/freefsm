@@ -57,7 +57,7 @@ func (s *Service) LeaseList(ctx context.Context, a Actor, billing bool, search, 
 		if err := tx.QueryRow(ctx, `SELECT count(*)`+where, p.CompanyID, out.State, search).Scan(&out.Total); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT id,number_label,`+title+`,deleted_at IS NOT NULL,`+leaseCalendarColumns+where+` ORDER BY document_number,id LIMIT $4 OFFSET $5`, p.CompanyID, out.State, search, out.PerPage, (out.Page-1)*out.PerPage)
+		rows, err := tx.Query(ctx, `SELECT id,number_label,`+title+`,deleted_at IS NOT NULL,`+leaseNoticeCalendarColumns+where+` ORDER BY document_number,id LIMIT $4 OFFSET $5`, p.CompanyID, out.State, search, out.PerPage, (out.Page-1)*out.PerPage)
 		if err != nil {
 			return err
 		}

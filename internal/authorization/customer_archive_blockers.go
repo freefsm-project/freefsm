@@ -57,7 +57,7 @@ UNION
 SELECT 'asset',id::text,name,'Company-owned placement requires explicit return or transfer' FROM assets WHERE customer_id=$1 AND ownership_class='company_owned'
 UNION
 SELECT 'lease',l.lease_id::text,'','Unarchived Lease must be explicitly resolved; archive never terminates a Lease' FROM lease_master_dependencies l
- WHERE NOT l.archived AND l.lifecycle<>'terminated' AND (l.customer_id=$1 OR l.premises_id IN (SELECT id FROM places)
+ WHERE NOT l.archived AND NOT lease_has_ended(l.lease_id) AND (l.customer_id=$1 OR l.premises_id IN (SELECT id FROM places)
  OR (l.lifecycle IN ('scheduled','active','month_to_month') AND EXISTS(SELECT 1 FROM lease_asset_dependencies x WHERE x.lease_id=l.lease_id AND x.asset_id IN (SELECT id FROM equipment) AND (x.ends_on IS NULL OR x.ends_on>=lease_dependency_today(l.company_id)))))
 UNION
 SELECT 'credit',c.id::text,'','Available Customer Credit or retainer must be applied or refunded' FROM customer_credits c WHERE c.customer_id=$1

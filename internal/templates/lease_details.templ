@@ -83,7 +83,8 @@ templ LeaseDetailsPage(data LeasePageData) {
 			<a href={ templ.URL(fmt.Sprintf("/leases/%d/finalize",p.ID)) }>Finalization review and receipt</a>
 		}
 		if p.Lifecycle != "draft" {
-			<a href={ templ.URL(fmt.Sprintf("/leases/%d/coverage",p.ID)) }>Coverage changes</a>
+   <a href={ templ.URL(fmt.Sprintf("/leases/%d/coverage",p.ID)) }>Coverage changes</a>
+   <a href={ templ.URL(fmt.Sprintf("/leases/%d/notice",p.ID)) }>Notice and termination</a>
 		}
 		@CustomFieldsWidget(CustomFieldsWidgetData{Fields:data.Fields})
 		if p.CanManage {

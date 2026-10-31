@@ -13,6 +13,14 @@ import (
 )
 
 func TestLeaseCoverageEncryptedRestore(t *testing.T) {
+	leaseCoverageEncryptedRestore(t, false)
+}
+
+func TestLeaseNoticeEncryptedRestore(t *testing.T) {
+	leaseCoverageEncryptedRestore(t, true)
+}
+
+func leaseCoverageEncryptedRestore(t *testing.T, withNotice bool) {
 	dsn := os.Getenv("FREEFSM_BACKUP_TEST_ADMIN_URL")
 	if dsn == "" {
 		t.Skip("FREEFSM_BACKUP_TEST_ADMIN_URL required")
@@ -47,9 +55,16 @@ func TestLeaseCoverageEncryptedRestore(t *testing.T) {
 	in := authorization.LeaseCoverageInput{LeaseCoverageEvent: authorization.LeaseCoverageEvent{Kind: "replace", EffectiveOn: "2024-02-10", OutgoingID: outgoing, IncomingID: incoming.ID}, Action: "create", Reason: "Retained replacement", OperationKey: "restored-coverage-event-0001"}
 	event, err := svc.ChangeLeaseCoverage(ctx, actor, lease, in)
 	historyCheck(t, err)
+	notice := authorization.LeaseNoticeInput{Action: "create", Category: "mutual_early", Initiator: "mutual", NoticeOn: "2024-01-01", EffectiveOn: "2024-06-30", Reason: "Retained ending agreement", OperationKey: "restored-notice-event-0001"}
+	if withNotice {
+		_, err = src.pool.Exec(ctx, `CREATE OR REPLACE FUNCTION lease_dependency_today(company bigint) RETURNS date LANGUAGE sql STABLE AS $$ SELECT '2024-02-01'::date $$`)
+		historyCheck(t, err)
+		historyCheck(t, svc.ChangeLeaseNotice(ctx, actor, lease, notice))
+	}
 	_, err = src.pool.Exec(ctx, originalClock)
 	historyCheck(t, err)
 	tables := []string{"leases", "lease_finalizations", "lease_coverage_events", "lease_coverage_revisions", "lease_asset_dependencies", "lease_master_dependencies", "lease_billing_source_changes", "lease_invoice_review_flags", "lease_billing_obligations", "lease_invoice_generations", "invoices", "authorization_roles", "authorization_grants", "assets", "customers", "locations", "issued_document_numbers", "company_settings"}
+	tables = append(tables, "lease_notice_revisions")
 	before := leasePreservationRows(t, src.pool, tables)
 	src.roundTripTo(t, dst, func() {})
 	historyCheck(t, dst.manager.RefreshConnections())
@@ -57,5 +72,8 @@ func TestLeaseCoverageEncryptedRestore(t *testing.T) {
 	replay, err := authorization.New(dst.pool).ChangeLeaseCoverage(ctx, actor, lease, in)
 	historyCheck(t, err)
 	historyEqual(t, "restored exact submission returns original event", replay, event)
+	if withNotice {
+		historyCheck(t, authorization.New(dst.pool).ChangeLeaseNotice(ctx, actor, lease, notice))
+	}
 	historyEqual(t, "restored replay creates no effects", leasePreservationRows(t, dst.pool, tables), before)
 }
