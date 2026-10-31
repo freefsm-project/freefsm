@@ -291,37 +291,6 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 		if err = tx.QueryRow(ctx, `SELECT tax_exempt FROM customers WHERE id=$1`, base.CustomerID).Scan(&exempt); err != nil {
 			return err
 		}
-		for _, record := range records {
-			if record.Action == "withdraw" {
-				continue
-			}
-			charges, err := replayLeaseBillingTerms(terms, records, record.EffectiveOn, "coverage", billingRevisions)
-			if err != nil {
-				return err
-			}
-			if len(charges) > 0 {
-				if _, err = leaseObligationInput(charges, false, exempt); err != nil {
-					return err
-				}
-			}
-			date, err := time.Parse(time.DateOnly, record.EffectiveOn)
-			if err != nil {
-				return err
-			}
-			due := time.Date(date.Year(), date.Month()+1, 1, 0, 0, 0, 0, time.UTC).Format(time.DateOnly)
-			if end != nil && due > *end {
-				continue
-			}
-			selected, err := coverageBillingTerms(terms, records, due, false, billingRevisions...)
-			if err != nil {
-				return err
-			}
-			if len(selected) > 0 {
-				if _, err = leaseObligationInput(selected, true, exempt); err != nil {
-					return err
-				}
-			}
-		}
 		// Coverage changes preserve the agreement's stored lifecycle. The current
 		// lifecycle used above is derived from dates/notices and can advance without
 		// a write; persisting it only in dependencies would split the agreement.
@@ -339,14 +308,15 @@ func (s *Service) ChangeLeaseCoverage(ctx context.Context, a Actor, id int64, in
 		if _, err = tx.Exec(ctx, `INSERT INTO lease_coverage_revisions(event_id,actor_id,operation_key,intent,action,reason,payload) VALUES($1,$2,$3,$4,$5,$6,$7)`, eventID, p.UserID, in.OperationKey, intent, in.Action, in.Reason, payload); err != nil {
 			return err
 		}
-		if len(billingRevisions) > 0 {
-			var due string
-			if err = tx.QueryRow(ctx, `SELECT initial_due_on::text FROM lease_finalizations WHERE lease_id=$1`, id).Scan(&due); err != nil {
-				return err
-			}
-			if err = validateLeaseBillingSchedule(ctx, tx, id, terms, exempt, due); err != nil {
-				return err
-			}
+		// Raw terms and allocation succession were checked above. Validate tax
+		// compatibility only for eligible, ungenerated obligations, using the same
+		// schedule as billing revisions even when no pricing revision exists yet.
+		var due string
+		if err = tx.QueryRow(ctx, `SELECT initial_due_on::text FROM lease_finalizations WHERE lease_id=$1`, id).Scan(&due); err != nil {
+			return err
+		}
+		if err = validateLeaseBillingSchedule(ctx, tx, id, terms, exempt, due); err != nil {
+			return err
 		}
 		first := in.EffectiveOn
 		if priorDate != "" && priorDate < first {
