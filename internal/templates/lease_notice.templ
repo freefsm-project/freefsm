@@ -4,7 +4,7 @@ import "fmt"
 import "net/url"
 import "github.com/freefsm-project/freefsm/internal/authorization"
 
-templ LeaseNoticePage(p authorization.LeaseNoticeReview, values url.Values, message string, conflict bool) {
+templ LeaseNoticePage(p authorization.LeaseNoticeReview, values url.Values, message string, conflict bool, uncertain bool) {
  @Layout(p.Base.Number+" notice") {
   <h1>Notice and termination — { p.Base.Number }</h1>
   <a href={ templ.URL(fmt.Sprintf("/leases/%d",p.Base.ID)) }>Lease</a>
@@ -16,14 +16,15 @@ templ LeaseNoticePage(p authorization.LeaseNoticeReview, values url.Values, mess
   } else {
    <p>No pending notice.</p>
   }
-  if p.CanManage && p.Base.Lifecycle!="terminated" {
+   if p.CanManage && (p.Base.Lifecycle!="terminated" || message!="") {
    <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/notice",p.Base.ID)) }>
     if message!="" {
      <div role="alert" data-error-summary tabindex="-1"><h2>Your proposal needs review</h2><p>{ message }</p><a href="#notice-reason">Review reason and dates</a></div>
     }
     <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
     <input type="hidden" name="expected_revision" value={ values.Get("expected_revision") }/>
-    <input type="hidden" name="operation_key" value={ values.Get("operation_key") }/>
+     <input type="hidden" name="operation_key" value={ values.Get("operation_key") }/>
+     <fieldset disabled?={ p.Base.Lifecycle=="terminated" || uncertain }>
     <label>Action<select name="action">
      for _, action := range []string{"create","revise","withdraw"} {
       <option value={ action } selected?={ values.Get("action")==action }>{ action }</option>
@@ -42,12 +43,21 @@ templ LeaseNoticePage(p authorization.LeaseNoticeReview, values url.Values, mess
     <label>Notice date<input name="notice_on" type="date" value={ values.Get("notice_on") } required/></label>
     <label>Inclusive effective date (early termination)<input name="effective_on" type="date" value={ values.Get("effective_on") }/></label>
     <label for="notice-reason">Reason</label><textarea id="notice-reason" name="reason" required>{ values.Get("reason") }</textarea>
-    if conflict {
+     if p.Base.Lifecycle=="terminated" {
+      <p>This ended Lease cannot accept notice changes.</p>
+     } else if conflict {
      <p>Compare the saved facts above with your proposal. Revising updates its revision without saving.</p>
      <button name="recovery" value="revise">Revise against current notice</button>
     } else {
-     <button type="submit">Save notice change</button>
-    }
+      <button type="submit">Save notice change</button>
+     }
+     </fieldset>
+     if uncertain {
+      for _, name := range []string{"action","category","initiator","notice_on","effective_on","reason"} {
+       <input type="hidden" name={ name } value={ values.Get(name) }/>
+      }
+      <button type="submit">Retry exact submission</button>
+     }
     <a href={ templ.URL(fmt.Sprintf("/leases/%d/notice",p.Base.ID)) }>Discard proposed change</a>
    </form>
   }

@@ -86,7 +86,7 @@ func (s *Service) ReviewLeaseNotice(ctx context.Context, a Actor, id int64) (Lea
 // Notice is base agreement authority. It neither edits billing terms nor grants
 // access to resulting Invoices; source review flags are an invariant side effect.
 func (s *Service) ChangeLeaseNotice(ctx context.Context, a Actor, id int64, in LeaseNoticeInput) error {
-	return s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
+	return s.transactOutcome(ctx, a, false, false, func(tx pgx.Tx, p Principal) error {
 		if a.Channel == "api" || !p.Allows("lease.view", All) || !p.Allows("lease.manage", All) {
 			return ErrForbidden
 		}

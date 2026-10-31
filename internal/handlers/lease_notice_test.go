@@ -73,7 +73,13 @@ func TestLeaseNoticeProduction(t *testing.T) {
 		}
 		_, err = pool.Exec(ctx, `CREATE FUNCTION reject_notice_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action LIKE 'lease.notice.%' THEN RAISE EXCEPTION 'injected notice audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_notice_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION reject_notice_audit()`)
 		historyCheck(t, err)
-		fieldPost(t, web, cookie, fmt.Sprintf("/leases/%d/notice", lease.ID), values, 409)
+		for range 2 {
+			response := fieldPost(t, web, cookie, fmt.Sprintf("/leases/%d/notice", lease.ID), values, 409)
+			for _, text := range []string{"Private proposal", "data-error-summary", "transaction was rolled back", values.Get("operation_key")} {
+				assertContains(t, response.Body.String(), text)
+			}
+			assertNotContains(t, response.Body.String(), "injected notice audit failure")
+		}
 		_, err = pool.Exec(ctx, `DROP TRIGGER reject_notice_audit ON authorization_audit`)
 		historyCheck(t, err)
 		historyEqual(t, "denials and audit failure are all-or-zero", historyDurableRows(t, pool, tables), before)
@@ -83,13 +89,55 @@ func TestLeaseNoticeProduction(t *testing.T) {
 			t.Skip("BROWSER_TESTS=1 required")
 		}
 		mux := http.NewServeMux()
+		lossDone := make(chan map[string]string, 1)
+		lossTables := []string{"lease_notice_revisions", "lease_asset_dependencies", "lease_master_dependencies", "lease_billing_source_changes", "lease_invoice_review_flags", "invoices", "assets", "authorization_audit"}
 		mux.HandleFunc("/test-snapshot", func(w http.ResponseWriter, r *http.Request) {
 			var count int
 			historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM lease_notice_revisions WHERE lease_id=$1`, lease.ID).Scan(&count))
 			fmt.Fprint(w, count)
 		})
 		mux.HandleFunc("/test-revoke", func(w http.ResponseWriter, r *http.Request) {
-			_, err := pool.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='lease.manage'`, role)
+			// Fail the real audit write while a revocation is already queued on
+			// the authority fence. Recovery must read after that revocation.
+			_, err := pool.Exec(ctx, `CREATE OR REPLACE FUNCTION reject_notice_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action LIKE 'lease.notice.%' THEN PERFORM pg_advisory_xact_lock(690069); RAISE EXCEPTION 'private audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reject_notice_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION reject_notice_audit()`)
+			historyCheck(t, err)
+			holder, err := pool.Begin(ctx)
+			historyCheck(t, err)
+			_, err = holder.Exec(ctx, `SELECT pg_advisory_xact_lock(690069)`)
+			historyCheck(t, err)
+			var blocker int32
+			historyCheck(t, holder.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blocker))
+			before := historyDurableRows(t, pool, lossTables)
+			go func() {
+				defer holder.Rollback(context.Background())
+				defer func() { lossDone <- before }()
+				auditPID := timeExportDMLWaiter(t, ctx, pool, blocker, 690069, "INSERT INTO authorization_audit")
+				revoked := make(chan error, 1)
+				go func() {
+					tx, err := pool.Begin(ctx)
+					if err == nil {
+						defer tx.Rollback(context.Background())
+						_, err = tx.Exec(ctx, authorityWriterStatement)
+						if err == nil {
+							_, err = tx.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='lease.manage'`, role)
+						}
+						if err == nil {
+							err = tx.Commit(ctx)
+						}
+					}
+					revoked <- err
+				}()
+				waitAuthorityRequest(t, ctx, pool, auditPID, authorityWriterStatement)
+				historyCheck(t, holder.Commit(ctx))
+				historyCheck(t, <-revoked)
+			}()
+		})
+		mux.HandleFunc("/test-audit-failure", func(w http.ResponseWriter, r *http.Request) {
+			_, err := pool.Exec(ctx, `CREATE TRIGGER reject_notice_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION reject_notice_audit()`)
+			historyCheck(t, err)
+		})
+		mux.HandleFunc("/test-audit-repair", func(w http.ResponseWriter, r *http.Request) {
+			_, err := pool.Exec(ctx, `DROP TRIGGER reject_notice_audit ON authorization_audit`)
 			historyCheck(t, err)
 		})
 		defer func() {
@@ -105,6 +153,12 @@ func TestLeaseNoticeProduction(t *testing.T) {
 		output, err := exec.CommandContext(browserCtx, "node", "testdata/browser/lease-notice.cjs", server.URL, sessionCookie(t, ctx, sessions, user.ID).Value, fmt.Sprint(lease.ID), today.Format(time.DateOnly)).CombinedOutput()
 		t.Logf("notice browser: %s", output)
 		historyCheck(t, err)
+		select {
+		case before := <-lossDone:
+			historyEqual(t, "audit rollback then access loss preserves durable effects", historyDurableRows(t, pool, lossTables), before)
+		case <-browserCtx.Done():
+			t.Fatal("access loss recovery proof did not complete")
+		}
 	})
 	if err = svc.ChangeLeaseNotice(ctx, authorization.Actor{UserID: admin, Channel: "api"}, lease.ID, in); !errors.Is(err, authorization.ErrForbidden) {
 		t.Fatalf("API denial: %v", err)
@@ -166,6 +220,47 @@ func TestLeaseNoticeHTTPBillingAndCancellation(t *testing.T) {
 	review, err = svc.ReviewLeaseNotice(ctx, actor, id)
 	historyCheck(t, err)
 	historyEqual(t, "following date", review.Base.Lifecycle, "terminated")
+	checkEnded := func(id int64, values url.Values) {
+		t.Helper()
+		tables := []string{"lease_notice_revisions", "lease_asset_dependencies", "lease_billing_source_changes", "lease_invoice_review_flags", "invoices", "authorization_audit"}
+		before := historyDurableRows(t, pool, tables)
+		path := fmt.Sprintf("/leases/%d/notice", id)
+		for _, recovery := range []string{"", "revise"} {
+			values.Set("recovery", recovery)
+			response := fieldPost(t, web, cookie, path, values, 409)
+			for _, text := range []string{values.Get("reason"), "data-error-summary", "This Lease has ended", "Discard proposed change", "<fieldset disabled"} {
+				assertContains(t, response.Body.String(), text)
+			}
+			assertNotContains(t, response.Body.String(), "Save notice change")
+			assertNotContains(t, response.Body.String(), "Revise against current notice")
+		}
+		historyEqual(t, "ended recovery cannot mutate", historyDurableRows(t, pool, tables), before)
+	}
+	checkEnded(id, values)
+	endedBrowser := func(t *testing.T, id int64, end func()) {
+		t.Helper()
+		if os.Getenv("BROWSER_TESTS") != "1" {
+			t.Skip("BROWSER_TESTS=1 required")
+		}
+		mux := http.NewServeMux()
+		mux.HandleFunc("/test-end", func(w http.ResponseWriter, r *http.Request) { end() })
+		mux.HandleFunc("/test-snapshot", func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprint(w, historyDurableRows(t, pool, []string{"lease_notice_revisions", "lease_asset_dependencies", "lease_billing_source_changes", "lease_invoice_review_flags", "invoices", "authorization_audit"}))
+		})
+		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
+		mux.Handle("/", middleware.BrowserCSRF(middleware.CSRFToken(web)))
+		server := httptest.NewServer(mux)
+		defer server.Close()
+		browserCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		defer cancel()
+		output, err := exec.CommandContext(browserCtx, "node", "testdata/browser/lease-notice-ended.cjs", server.URL, cookie.Value, fmt.Sprint(id)).CombinedOutput()
+		t.Logf("ended notice browser: %s", output)
+		historyCheck(t, err)
+	}
+	t.Run("rollover recovery browser", func(t *testing.T) {
+		clock("2024-06-30")
+		endedBrowser(t, id, func() { clock("2024-07-01") })
+	})
 	clock("2024-08-01")
 	historyCheck(t, svc.GenerateLeaseDrafts(ctx))
 	var later int
@@ -177,7 +272,11 @@ func TestLeaseNoticeHTTPBillingAndCancellation(t *testing.T) {
 	cancelled := create("2024-06-20", "2025-06-19")
 	before := historyDurableRows(t, pool, []string{"invoices", "assets", "asset_association_periods"})
 	cancel := authorization.LeaseNoticeInput{Action: "create", Category: "cancel_before_start", Initiator: "mutual", NoticeOn: "2024-06-10", Reason: "Agreement cancelled before commencement", OperationKey: "notice-cancel-start-0001"}
+	t.Run("cancellation recovery browser", func(t *testing.T) {
+		endedBrowser(t, cancelled, func() { historyCheck(t, svc.ChangeLeaseNotice(ctx, actor, cancelled, cancel)) })
+	})
 	historyCheck(t, svc.ChangeLeaseNotice(ctx, actor, cancelled, cancel))
+	checkEnded(cancelled, url.Values{"action": {"create"}, "category": {"cancel_before_start"}, "initiator": {"mutual"}, "notice_on": {"2024-06-10"}, "reason": {"Retained concurrent cancellation"}, "operation_key": {"notice-cancel-stale-0001"}, "expected_revision": {"0"}})
 	review, err = svc.ReviewLeaseNotice(ctx, actor, cancelled)
 	historyCheck(t, err)
 	historyEqual(t, "immediate cancellation", review.Base.Lifecycle, "terminated")
@@ -250,5 +349,51 @@ func TestLeaseNoticeHTTPBillingAndCancellation(t *testing.T) {
 		}
 		historyEqual(t, "one concurrent notice wins", passed, 1)
 		historyEqual(t, "other notice requires explicit review", conflicted, 1)
+	})
+	t.Run("withdrawal overlapping reserved coverage recovery", func(t *testing.T) {
+		id := create("2024-01-01", "2024-12-31")
+		input := authorization.LeaseNoticeInput{Action: "create", Category: "mutual_early", Initiator: "mutual", NoticeOn: "2024-06-10", EffectiveOn: "2024-06-30", Reason: "Release coverage", OperationKey: "notice-release-coverage-0001"}
+		historyCheck(t, svc.ChangeLeaseNotice(ctx, actor, id, input))
+		review, err := svc.ReviewLeaseNotice(ctx, actor, id)
+		historyCheck(t, err)
+		asset := review.Base.Coverage[0].AssetID
+		next, err := svc.RegisterDraftLease(ctx, actor, c.ID)
+		historyCheck(t, err)
+		historyCheck(t, svc.SaveDraftLeaseDetails(ctx, actor, next.ID, authorization.DraftLeaseDetailsInput{StartsOn: "2024-07-01", EndsOn: "2025-06-30", PremisesID: &l.ID, AssetIDs: []int64{asset}}))
+		zero, rent := int64(0), int64(3200)
+		historyCheck(t, svc.SaveDraftLeaseBilling(ctx, actor, next.ID, 0, "2024-07-01", authorization.DraftLeaseTerms{AssetID: asset, InitialCents: &zero, RentCents: &rent, TaxRate: "0"}, 0))
+		historyCheck(t, svc.FinalizeLease(ctx, actor, next.ID, authorization.LeaseFinalizationInput{DetailsRevision: 1, BillingRevision: 1, ManagedBillingStart: "2024-07-01"}))
+		values := url.Values{"action": {"withdraw"}, "category": {"mutual_early"}, "initiator": {"mutual"}, "notice_on": {"2024-06-10"}, "effective_on": {"2024-06-30"}, "reason": {"Retained withdrawal overlapping reservation"}, "operation_key": {"notice-overlap-withdraw-0001"}, "expected_revision": {fmt.Sprint(review.Revision)}}
+		path := fmt.Sprintf("/leases/%d/notice", id)
+		tables := []string{"lease_notice_revisions", "lease_asset_dependencies", "lease_master_dependencies", "lease_billing_source_changes", "lease_invoice_review_flags", "invoices", "authorization_audit"}
+		before := historyDurableRows(t, pool, tables)
+		for range 2 {
+			response := fieldPost(t, web, cookie, path, values, 409)
+			for _, text := range []string{"transaction was rolled back", values.Get("reason"), values.Get("operation_key"), "data-error-summary"} {
+				assertContains(t, response.Body.String(), text)
+			}
+			historyEqual(t, "database conflict has no durable effects", historyDurableRows(t, pool, tables), before)
+		}
+		if os.Getenv("BROWSER_TESTS") != "1" {
+			t.Skip("BROWSER_TESTS=1 required")
+		}
+		mux := http.NewServeMux()
+		mux.HandleFunc("/test-repair", func(w http.ResponseWriter, r *http.Request) {
+			historyCheck(t, svc.ChangeLeaseNotice(ctx, actor, next.ID, authorization.LeaseNoticeInput{Action: "create", Category: "cancel_before_start", Initiator: "mutual", NoticeOn: "2024-06-10", Reason: "Explicitly release reservation", OperationKey: "notice-release-reservation-0001"}))
+		})
+		mux.HandleFunc("/test-snapshot", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, historyDurableRows(t, pool, tables)) })
+		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
+		mux.Handle("/", middleware.BrowserCSRF(middleware.CSRFToken(web)))
+		server := httptest.NewServer(mux)
+		defer server.Close()
+		browserCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		defer cancel()
+		output, err := exec.CommandContext(browserCtx, "node", "testdata/browser/lease-notice-rollback.cjs", server.URL, cookie.Value, fmt.Sprint(id)).CombinedOutput()
+		t.Logf("database rollback browser: %s", output)
+		historyCheck(t, err)
+		review, err = svc.ReviewLeaseNotice(ctx, actor, id)
+		historyCheck(t, err)
+		historyEqual(t, "one withdrawal after explicit coverage repair", len(review.History), 2)
+		historyEqual(t, "withdrawal accepted", review.History[0].Action, "withdraw")
 	})
 }

@@ -213,6 +213,21 @@ func (s *Service) transaction(ctx context.Context, a Actor, transition bool, fn 
 }
 
 func (s *Service) transact(ctx context.Context, a Actor, transition, consumingSelf bool, fn func(pgx.Tx, Principal) error) error {
+	err := s.transactOutcome(ctx, a, transition, consumingSelf, fn)
+	var failure *TransactionFailure
+	if errors.As(err, &failure) {
+		return failure.Err
+	}
+	return err
+}
+
+func (s *Service) transactOutcome(ctx context.Context, a Actor, transition, consumingSelf bool, fn func(pgx.Tx, Principal) error) (result error) {
+	commitAttempted := false
+	defer func() {
+		if result != nil {
+			result = &TransactionFailure{Err: result, RolledBack: !commitAttempted || commitRejected(result)}
+		}
+	}()
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -258,6 +273,7 @@ func (s *Service) transact(ctx context.Context, a Actor, transition, consumingSe
 		saveaction.RolledBack(ctx)
 		return err
 	}
+	commitAttempted = true
 	return tx.Commit(ctx)
 }
 func audit(ctx context.Context, tx pgx.Tx, a Actor, p Principal, permission string, scope Scope, typ string, id int64, detail any) error {

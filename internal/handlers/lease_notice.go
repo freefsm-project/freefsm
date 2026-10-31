@@ -22,6 +22,7 @@ func (h *LeaseHandler) Notice(w http.ResponseWriter, r *http.Request) {
 	var values url.Values
 	message := ""
 	conflict := false
+	uncertain := false
 	if r.Method == http.MethodPost {
 		if err = r.ParseForm(); err != nil {
 			http.Error(w, "Invalid form", http.StatusBadRequest)
@@ -41,12 +42,21 @@ func (h *LeaseHandler) Notice(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				var validation *authorization.LeaseValidationError
+				var failure *authorization.TransactionFailure
 				switch {
+				case errors.Is(err, authorization.ErrForbidden), errors.Is(err, authorization.ErrNotFound):
+					authorizationError(w, r, err)
+					return
 				case errors.As(err, &validation):
 					message = validation.Message
 				case errors.Is(err, authorization.ErrConflict):
 					message = "Notice was not saved. Compare current facts, then revise or discard your proposal."
 					conflict = true
+				case errors.As(err, &failure) && failure.RolledBack:
+					message = "Notice was not saved; the transaction was rolled back. Review current facts and repair any coverage conflict, then retry your proposal with the same submission identity, or discard it."
+				case errors.As(err, &failure):
+					message = "The save outcome is uncertain. Compare current saved facts. Retry the exact submission to reconcile its original identity; do not start a new proposal until the outcome is confirmed."
+					uncertain = true
 				default:
 					authorizationError(w, r, err)
 					return
@@ -74,15 +84,18 @@ func (h *LeaseHandler) Notice(w http.ResponseWriter, r *http.Request) {
 			values.Set("notice_on", current.NoticeOn)
 			values.Set("effective_on", current.EffectiveOn)
 		}
-	} else if values.Get("recovery") == "revise" {
+	} else if values.Get("recovery") == "revise" && data.Base.Lifecycle != "terminated" {
 		values.Set("expected_revision", fmt.Sprint(data.Revision))
 		values.Set("operation_key", rand.Text())
 		message = "Current revision loaded. Review your proposal before saving."
+	}
+	if data.Base.Lifecycle == "terminated" && r.Method == http.MethodPost && !uncertain {
+		message = "Notice was not saved. This Lease has ended. Your proposal is read-only: compare current saved facts, then discard it or return to the Lease. Notice changes cannot correct an effective termination."
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
 	if message != "" {
 		w.WriteHeader(http.StatusConflict)
 	}
-	templates.LeaseNoticePage(data, values, message, conflict).Render(r.Context(), w)
+	templates.LeaseNoticePage(data, values, message, conflict, uncertain).Render(r.Context(), w)
 }
