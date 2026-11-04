@@ -106,7 +106,7 @@ func TestLeaseWorkspaceRelationshipSearchHTTP(t *testing.T) {
 		defer server.Close()
 		browserCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 		defer cancel()
-		output, err := exec.CommandContext(browserCtx, "node", "testdata/browser/lease-workspace.cjs", server.URL, cookie.Value).CombinedOutput()
+		output, err := exec.CommandContext(browserCtx, "node", "testdata/browser/lease-workspace.cjs", server.URL, cookie.Value, fmt.Sprint(c.ID), fmt.Sprint(l.ID)).CombinedOutput()
 		t.Logf("workspace browser: %s", output)
 		historyCheck(t, err)
 	})

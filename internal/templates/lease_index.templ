@@ -19,7 +19,7 @@ templ LeaseIndex(p authorization.LeaseList) {
 			<p>Billing view — search by Number.</p>
 		}
 		if p.CanRegister {
-			<a href="/leases/new">Register Draft</a>
+			<a class="navigation-link" href="/leases/new">Register Draft</a>
 		}
 		<form method="get" action="/leases">
 			if p.Billing {
@@ -58,15 +58,23 @@ templ LeaseIndex(p authorization.LeaseList) {
 				}
 			</select></label><button>Apply</button>
 		</form>
-		<a href="/leases?reset=1">Reset filters</a>
+		<a class="navigation-link" href="/leases?reset=1">Reset filters</a>
+		if p.Total==0 {
+			if p.HasVisibleLeases {
+				<p>No Leases match these filters.</p>
+				<a class="navigation-link" href="/leases?reset=1">Clear filters</a>
+			} else {
+				<p>No Leases in this view yet.</p>
+			}
+		}
 		<p>{fmt.Sprint(p.Total)} visible Leases</p><ul>
 			for _,row:=range p.Rows {
 				<li>
 					<span>{row.Lifecycle}</span>
 					if p.Billing {
-						<a href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>{row.Number} Billing</a>
+						<a class="navigation-link" href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>{row.Number} Billing</a>
 					} else {
-						<a href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>{row.Number} {row.Title}</a>
+						<a class="navigation-link" href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>{row.Number} {row.Title}</a>
 						if row.StartsOn!="" {
 							<span>Starts {row.StartsOn}; fixed term ends {row.EndsOn}</span>
 						}
@@ -74,7 +82,7 @@ templ LeaseIndex(p authorization.LeaseList) {
 							<span>Notice ending date: {row.NoticeEndsOn}</span>
 						}
 						if p.CanViewBilling {
-							<a href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>Billing</a>
+							<a class="navigation-link" href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>Billing</a>
 						}
 					}
 					if row.Archived {
@@ -84,10 +92,10 @@ templ LeaseIndex(p authorization.LeaseList) {
 			}
 		</ul>
 		if p.Page>1 {
-			<a href={templ.URL(leaseListURL(p,p.Page-1))}>Previous</a>
+			<a class="navigation-link" href={templ.URL(leaseListURL(p,p.Page-1))}>Previous</a>
 		}
 		if p.Page*p.PerPage<p.Total {
-			<a href={templ.URL(leaseListURL(p,p.Page+1))}>Next</a>
+			<a class="navigation-link" href={templ.URL(leaseListURL(p,p.Page+1))}>Next</a>
 		}
 	}
 }

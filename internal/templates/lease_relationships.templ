@@ -7,18 +7,54 @@ templ RelatedLeaseCard(p authorization.RelatedLeases) {
 	if p.Visible {
 		<section aria-label="Related Leases">
 			if p.Kind=="asset" {
-				<h2>Lease coverage history</h2><p>Coverage is independent of placement history.</p>
+				<h2 id="lease-coverage">Current Lease coverage</h2>
+				if p.Current != nil {
+					<ul aria-label="Current Lease coverage">@relatedLeaseRow(*p.Current)</ul>
+				} else {
+					<p>No current Lease coverage.</p>
+				}
+				<h3>Lease coverage history</h3><p>Coverage is independent of placement history. Dates are inclusive; restricted archived agreements show a reference only.</p>
+				<p>{fmt.Sprint(p.Total)} coverage entries</p>
+				<form method="get" action={templ.URL(fmt.Sprintf("/assets/%d#lease-coverage",p.SourceID))}>
+					<label>Coverage entries per page<select name="coverage_per_page">
+						for _,size:=range []int{25,50,100} {
+							<option value={fmt.Sprint(size)} selected?={p.PerPage==size}>{fmt.Sprint(size)}</option>
+						}
+					</select></label><button>Apply coverage page size</button>
+				</form>
 			} else if p.Kind=="location" {
 				<h2>Premises Leases</h2>
 			} else {
 				<h2>Leases</h2>
 			}
-			<p>{fmt.Sprint(p.Total)} related Leases</p>
-			<ul>
+			if p.Kind!="asset" {
+				<p>{fmt.Sprint(p.Total)} related Leases</p>
+			}
+			<ul aria-label="Lease relationship history">
 				for _,row:=range p.Rows {
-					<li>
+					@relatedLeaseRow(row)
+				}
+			</ul>
+			if p.Kind=="asset" {
+				<nav aria-label="Coverage history pages">
+					if p.Page>1 {
+						<a href={templ.URL(p.CoverageURL(p.Page-1))}>Previous coverage</a>
+					}
+					if p.Page*p.PerPage<p.Total {
+						<a href={templ.URL(p.CoverageURL(p.Page+1))}>Next coverage</a>
+					}
+				</nav>
+			} else {
+				<a class="navigation-link" href={templ.URL(p.URL())}>View all unarchived Leases</a>
+			}
+		</section>
+	}
+}
+
+templ relatedLeaseRow(row authorization.RelatedLease) {
+	<li>
 						if row.CanOpen {
-							<a href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>{row.Number} {row.Title}</a>
+							<a class="navigation-link" href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>{row.Number} {row.Title}</a>
 						} else {
 							<span>{row.Number} {row.Title}</span>
 						}
@@ -29,12 +65,7 @@ templ RelatedLeaseCard(p authorization.RelatedLeases) {
 							<span>Coverage: {row.StartsOn} through {row.EndsOn}</span>
 						}
 						if row.CanBilling {
-							<a href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>Billing</a>
+							<a class="navigation-link" href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>Billing</a>
 						}
-					</li>
-				}
-			</ul>
-			<a href={templ.URL(p.URL())}>View all unarchived Leases</a>
-		</section>
-	}
+	</li>
 }

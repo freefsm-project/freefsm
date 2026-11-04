@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -130,17 +131,19 @@ func (h *LeaseHandler) List(w http.ResponseWriter, r *http.Request) {
 	// shared browser identity. Explicit URLs win and every restored query goes
 	// through current service authorization before rows or counts are returned.
 	name := fmt.Sprintf("lease_query_%d", authorizationActor(r).UserID)
+	q := r.URL.Query()
+	remembered := false
 	if r.URL.RawQuery == "" {
 		if cookie, err := r.Cookie(name); err == nil {
 			if saved, err := base64.RawURLEncoding.DecodeString(cookie.Value); err == nil && len(saved) > 0 && len(saved) < 3000 {
-				http.Redirect(w, r, "/leases?"+string(saved), http.StatusSeeOther)
-				return
+				if parsed, err := url.ParseQuery(string(saved)); err == nil {
+					q, remembered = parsed, true
+				}
 			}
 		}
 	}
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	size, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
-	q := r.URL.Query()
+	page, _ := strconv.Atoi(q.Get("page"))
+	size, _ := strconv.Atoi(q.Get("per_page"))
 	for _, key := range []string{"customer", "asset", "premises"} {
 		if q.Get(key) != "" {
 			id, err := strconv.ParseInt(q.Get(key), 10, 64)
@@ -155,7 +158,18 @@ func (h *LeaseHandler) List(w http.ResponseWriter, r *http.Request) {
 	premises, _ := strconv.ParseInt(q.Get("premises"), 10, 64)
 	data, err := h.authority.LeaseList(r.Context(), authorizationActor(r), q.Get("facet") == "billing", q.Get("search"), q.Get("state"), page, size, authorization.LeaseWorkspaceQuery{Lifecycle: q.Get("lifecycle"), Queue: q.Get("queue"), Customer: customer, Asset: asset, Premises: premises, EndingFrom: q.Get("ending_from"), EndingThrough: q.Get("ending_through"), Placement: q.Get("placement"), Billing: q.Get("billing")})
 	if err != nil {
+		if remembered && errors.Is(err, authorization.ErrForbidden) {
+			// A preference is not an explicit request for restricted data. Drop
+			// stale state; the default destination rechecks current authority.
+			http.SetCookie(w, &http.Cookie{Name: name, Path: "/leases", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil, MaxAge: -1})
+			http.Redirect(w, r, "/leases?reset=1", http.StatusSeeOther)
+			return
+		}
 		authorizationError(w, r, err)
+		return
+	}
+	if remembered {
+		http.Redirect(w, r, "/leases?"+q.Encode(), http.StatusSeeOther)
 		return
 	}
 	q.Del("reset")

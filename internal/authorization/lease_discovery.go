@@ -20,6 +20,7 @@ type LeaseList struct {
 	Query                                 LeaseWorkspaceQuery
 	Queues                                []LeaseWorkspaceQueue
 	CanViewBilling                        bool
+	HasVisibleLeases                      bool
 	Rows                                  []LeaseListRow
 	Billing, CanRegister, CanViewArchived bool
 	Page, PerPage, Total                  int
@@ -59,6 +60,11 @@ func (s *Service) LeaseList(ctx context.Context, a Actor, billing bool, search, 
 		out.CanRegister = !out.Billing && p.Allows("lease.manage", All) && p.Allows("customer.view", All)
 		out.CanViewBilling = p.Allows("lease.billing.view", All)
 		if err := out.Query.validate(out.Billing, out.CanViewBilling); err != nil {
+			return err
+		}
+		// Empty-state existence uses the same authorized archive scope, before
+		// optional matching filters. Hidden history cannot change the message.
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM leases WHERE company_id=$1 AND ($2='all' OR ($2='archived')=(deleted_at IS NOT NULL)))`, p.CompanyID, out.State).Scan(&out.HasVisibleLeases); err != nil {
 			return err
 		}
 		args := []any{p.CompanyID, out.State, search}

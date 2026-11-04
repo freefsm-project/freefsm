@@ -1,9 +1,26 @@
 const { chromium } = require('playwright-core');
 const assert = require('node:assert/strict');
+const assertTargets = require('./lease-targets.cjs');
 (async () => {
-  const [base, session] = process.argv.slice(2);
+  const [base, session, customer, location] = process.argv.slice(2);
   const browser = await chromium.launch({ executablePath: process.env.BROWSER_EXECUTABLE, headless: true, args: ['--no-sandbox'] });
   try {
+    for (const coarse of [false, true]) {
+      const measured = await browser.newContext({ viewport: { width: 320, height: 740 }, hasTouch: coarse });
+      await measured.addCookies([{ name: 'session', value: session, url: base }]);
+      const targetPage = await measured.newPage();
+      await targetPage.goto(base + '/leases?reset=1');
+      await assertTargets(targetPage, '.page-body a[href^="/leases"]', coarse);
+      await targetPage.goto(base + '/leases?page=2');
+      await assertTargets(targetPage, '.page-body a[href^="/leases"]', coarse);
+      await targetPage.goto(base + '/leases?facet=billing');
+      await assertTargets(targetPage, '.page-body a[href^="/leases"]', coarse);
+      for (const route of ['/customers/' + customer, '/locations/' + location]) {
+        await targetPage.goto(base + route);
+        await assertTargets(targetPage, '[aria-label="Related Leases"] a', coarse);
+      }
+      await measured.close();
+    }
     const context = await browser.newContext({ viewport: { width: 320, height: 740 } });
     await context.addCookies([{ name: 'session', value: session, url: base }]);
     const page = await context.newPage();

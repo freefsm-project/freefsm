@@ -52,7 +52,7 @@ button:not(.outline), [role=button]:not(.outline) { border-color: var(--interact
 .leaflet-bar a[role=button] { border: 1px solid #52606d; color: #263341; background: #fff; }
 button, [role=button], select, summary, input:not([type=hidden]):not([type=checkbox]):not([type=radio]), .sidebar a { min-height: 24px; }
 button, [role=button], summary { min-width: 24px; }
-nav a { display: inline-flex; align-items: center; min-height: 24px; min-width: 24px; }
+nav a, .navigation-link { display: inline-flex; align-items: center; min-height: 24px; min-width: 24px; }
 label:has(input[type=checkbox]), label:has(input[type=radio]) { min-height: 24px; display: flex; align-items: center; gap: .35rem; }
 input[type=checkbox], input[type=radio] { min-width: 24px; min-height: 24px; flex-shrink: 0; }
 .line-items-scroll table { min-width: 900px; }
@@ -90,7 +90,7 @@ input, textarea, select { scroll-margin-block: 5rem; }
   .focused-list-content { --focused-list-control-height: 44px; }
   button, [role=button], summary, select, .sidebar a, input:not([type=hidden]):not([type=checkbox]):not([type=radio]) { min-height: 44px; }
   button, [role=button], summary, select, input:not([type=hidden]), textarea { min-width: 44px; }
-  nav a { min-height: 44px; min-width: 44px; }
+  nav a, .navigation-link { min-height: 44px; min-width: 44px; }
   input[type=checkbox], input[type=radio] { min-height: 44px; }
   label:has(input[type=checkbox]), label:has(input[type=radio]) { min-height: 44px; display: flex; align-items: center; }
 }

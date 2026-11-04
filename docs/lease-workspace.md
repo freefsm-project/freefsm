@@ -19,14 +19,24 @@ Lifecycle and notices derive from the authoritative company date and retained
 history. The last successful query is retained in an HTTP-only, user-specific
 browser cookie; an explicit URL overrides it and Reset clears it. Restored query
 state never substitutes for current authorization.
+Unavailable remembered filters are discarded on ordinary entry after grant loss;
+explicit forbidden URL filters still reject. Empty states distinguish no visible
+records in the selected archive scope from no matching filters, with current-grant
+registration and clear-filter actions. Inaccessible history cannot alter that message.
 
 Customer has a separate Leases section outside Related Work. Asset shows retained
 coverage intervals independently of its placement history; Location shows premises
-relationships. Cards show the first 25 Number-ordered Lease identities and link
-to filtered discovery. Archived related references without archived Lease View
+relationships. Customer and Location cards show the first 25 Number-ordered Lease
+identities and link to filtered discovery. Asset detail separately queries current
+in-force coverage and paginates coverage entries with 25/50/100 sizes, ordered by
+Lease Number, identity and interval start. Its `coverage_page` and
+`coverage_per_page` URL parameters retain history navigation. Archived related references without archived Lease View
 are bounded to Number/title/badge, with no details, coverage dates or navigation.
 Billing navigation is independently authorized. File and generated-Invoice access
 remain on their existing independently authorized surfaces.
+Restricted archived coverage contributes one reference per agreement, without
+disclosing interval dates, multiplicity or date-based ordering. History pages use
+bounded SQL retrieval rather than materializing every interval.
 
 The workspace adds no migration, permission, financial ledger or mutation domain.
 Archive/restore, master dependency serialization, coverage, placement, billing,

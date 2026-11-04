@@ -206,7 +206,9 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req, ok := authorization.FromContext(r.Context()); ok {
-		data.Leases, err = req.Service.RelatedLeases(r.Context(), req.Actor, "asset", id)
+		coveragePage, _ := strconv.Atoi(r.URL.Query().Get("coverage_page"))
+		coverageSize, _ := strconv.Atoi(r.URL.Query().Get("coverage_per_page"))
+		data.Leases, err = req.Service.RelatedLeases(r.Context(), req.Actor, "asset", id, authorization.LeaseCoveragePage{Page: coveragePage, PerPage: coverageSize})
 		if err != nil {
 			authorizationError(w, r, err)
 			return
