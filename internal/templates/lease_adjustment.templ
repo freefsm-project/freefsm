@@ -1,0 +1,85 @@
+package templates
+
+import "fmt"
+import "net/url"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ LeaseAdjustmentPage(p authorization.LeaseAdjustmentReview, values url.Values, message string, conflict bool, uncertain bool) {
+ @Layout(p.Number+" manual adjustments") {
+  <h1>Manual adjustments — { p.Number }</h1>
+  <a href={ templ.URL(fmt.Sprintf("/leases/%d/billing",p.ID)) }>Billing</a>
+  <p>Enter an explicit abatement, fee or damages amount and reason. Outage dates never calculate an entitlement or charge. No default or legal judgment is made.</p>
+  <p>Fully paid reductions must use an eligible unpaid or future Invoice. Settled Invoices and cash receipts remain unchanged; no Customer Credit is issued. Prepare a future Invoice through the separately authorized Invoice workflow if needed.</p>
+  <form method="get">
+   <label>Eligible Invoice<select name="invoice_id" required>
+    <option value="">Select an Invoice</option>
+    for _,invoice:=range p.Invoices {
+     <option value={ fmt.Sprint(invoice.ID) } selected?={ invoice.ID==p.Selected.ID }>{ invoice.Number }</option>
+    }
+   </select></label>
+   <button>Review selected Invoice</button>
+  </form>
+  if p.Selected.ID!=0 {
+   <h2>Current Invoice { p.Selected.Number }</h2>
+   <a href={ templ.URL(fmt.Sprintf("/invoices/%d",p.Selected.ID)) }>Open Invoice</a>
+   <details><summary>Compare current commercial values</summary><pre class="whitespace-pre-wrap break-words">{ p.Selected.Lines }</pre><pre class="whitespace-pre-wrap break-words">{ p.Selected.Financial }</pre></details>
+   if p.CanManage {
+    <form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/billing/adjustments?invoice_id=%d",p.ID,p.Selected.ID)) }>
+     <input type="hidden" name="section" value="lease_adjustment"/>
+     if message!="" {
+      <div role="alert" data-error-summary tabindex="-1">{ message }</div>
+     }
+     <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+     <input type="hidden" name="invoice_id" value={ values.Get("invoice_id") }/>
+     <input type="hidden" name="invoice_revision" value={ values.Get("invoice_revision") }/>
+     <input type="hidden" name="operation_key" value={ values.Get("operation_key") }/>
+     <fieldset disabled?={ uncertain }>
+      <label>Adjustment kind<select name="kind" required>
+       for _,kind:=range []string{"abatement","fee","damages"} {
+        <option value={ kind } selected?={ values.Get("kind")==kind }>{ kind }</option>
+       }
+      </select></label>
+      <label>Lease Asset<select name="asset_id" required>
+       <option value="">Select an Asset</option>
+       for _,asset:=range p.Assets {
+        <option value={ fmt.Sprint(asset) } selected?={ values.Get("asset_id")==fmt.Sprint(asset) }>Asset { fmt.Sprint(asset) }</option>
+       }
+      </select></label>
+      <label>Explicit amount (USD cents)<input type="number" min="1" step="1" name="amount_cents" value={ values.Get("amount_cents") } required/></label>
+      <label>Outage / relevant start date<input type="date" name="starts_on" value={ values.Get("starts_on") } required/></label>
+      <label>Outage / relevant end date<input type="date" name="ends_on" value={ values.Get("ends_on") } required/></label>
+      <label><input type="checkbox" name="taxable" value="true" checked?={ values.Get("taxable")=="true" }/>Apply this Invoice's tax rate to the adjustment</label>
+      <p>The signed line uses the Invoice's existing document adjustments and tax rules. Review the resulting before-and-after history.</p>
+      <label for="adjustment-reason">Reason</label>
+      <textarea id="adjustment-reason" name="reason" required>{ values.Get("reason") }</textarea>
+      if conflict {
+       <button name="recovery" value="revise">Revise against current Invoice</button>
+      } else {
+       <button type="submit">Apply adjustment</button>
+      }
+     </fieldset>
+     if uncertain {
+      for name,entries:=range values {
+       if name!="csrf_token"&&name!="invoice_id"&&name!="invoice_revision"&&name!="operation_key"&&name!="recovery" {
+        for _,entry:=range entries {
+         <input type="hidden" name={ name } value={ entry }/>
+        }
+       }
+      }
+      <button type="submit">Retry exact submission</button>
+     }
+     <a href={ templ.URL(fmt.Sprintf("/leases/%d/billing/adjustments",p.ID)) }>Discard proposed adjustment</a>
+    </form>
+   }
+  }
+  <h2>Immutable applications</h2>
+  for _,event:=range p.History {
+   <section>
+    <h3>{ fmt.Sprintf("%s: %d USD cents — Asset %d",event.Kind,event.AmountCents,event.AssetID) }</h3>
+    <p>{ fmt.Sprintf("%s through %s; Invoice %d; actor %d; accepted %s",event.StartsOn,event.EndsOn,event.InvoiceID,event.ActorID,event.RecordedAt) }</p>
+    <p>{ event.Reason }</p>
+    <details><summary>Before and after</summary><h4>Before</h4><pre class="whitespace-pre-wrap break-words">{ event.Before }</pre><h4>After</h4><pre class="whitespace-pre-wrap break-words">{ event.After }</pre></details>
+   </section>
+  }
+ }
+}

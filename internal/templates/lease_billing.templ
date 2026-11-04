@@ -36,6 +36,7 @@ templ LeaseBillingPage(p authorization.DraftLeaseBilling) {
 		}
 		if p.Finalized {
 			<a href={ templ.URL(fmt.Sprintf("/leases/%d/billing/revisions",p.ID)) }>Revise billing and view effective terms</a>
+			<a href={ templ.URL(fmt.Sprintf("/leases/%d/billing/adjustments",p.ID)) }>Manual abatements, fees and damages</a>
 		}
 		if p.Finalized && !p.Archived {
 			<h2>Billing periods</h2>
