@@ -27,6 +27,12 @@ type LeaseReportSettlement struct {
 }
 type LeaseReportPeriod struct{ Kind, DueOn, State string }
 
+// Negative generation predicates require complete authority, independently of
+// access to any particular Invoice. Hidden records never decide this capability.
+func leaseReportGenerationComplete(p Principal) bool {
+	return p.Allows("invoice.view", All) && p.Allows("pricing.view", All) && p.Allows("invoice.archived.view", All)
+}
+
 func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *LeaseReportRow, at string) error {
 	var cutoff time.Time
 	if err := tx.QueryRow(ctx, `SELECT ($1::date+1)::timestamp AT TIME ZONE coalesce((SELECT timezone FROM company_settings WHERE company_id=$2),'UTC')`, at, p.CompanyID).Scan(&cutoff); err != nil {
@@ -132,7 +138,7 @@ func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *Le
 	// managed schedule periods due by the effective date are listed as ungenerated.
 	// Absence is knowable only with complete current authority. Do not inspect
 	// hidden generations to decide whether a period exists or matches a filter.
-	out.GenerationStatusUnavailable = !p.Allows("invoice.view", All) || !p.Allows("pricing.view", All) || !p.Allows("invoice.archived.view", All)
+	out.GenerationStatusUnavailable = !leaseReportGenerationComplete(p)
 	if !out.GenerationStatusUnavailable {
 		rows, err = tx.Query(ctx, `WITH agreement AS (
  SELECT l.starts_on,f.initial_due_on,f.managed_billing_start FROM leases l JOIN lease_finalizations f ON f.lease_id=l.id WHERE l.id=$1

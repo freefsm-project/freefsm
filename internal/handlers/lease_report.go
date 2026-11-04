@@ -109,6 +109,9 @@ func (h *LeaseHandler) reportValidation(w http.ResponseWriter, r *http.Request, 
 		}
 		value := values.Get(key)
 		data.Inputs[key] = value
+		if key == "billing" && value == "ungenerated" && !data.CanUngeneratedFilter {
+			data.Errors[key] = "Ungenerated periods require All Records Invoice and Pricing access, including archived Invoices. Choose another Billing exception or clear filters."
+		}
 		if list, ok := choices[key]; ok && !slices.Contains(list, value) {
 			data.Errors[key] = "Choose one of the listed options."
 		}

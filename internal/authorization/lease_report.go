@@ -46,6 +46,7 @@ type LeaseReport struct {
 	Query                                                             LeaseReportQuery
 	UpdatedAt, AsOf                                                   string
 	BillingVisible                                                    bool
+	CanUngeneratedFilter                                              bool
 	CanCustomer, CanAsset, CanPremises, CanArchive, CanInvoiceFilters bool
 	Total                                                             int
 	RentCents                                                         int64
@@ -77,8 +78,12 @@ func (s *Service) LeaseReport(ctx context.Context, a Actor, q LeaseReportQuery) 
 			return err
 		}
 		out.CanInvoiceFilters = out.BillingVisible && p.Allows("invoice.view", Assigned) && p.Allows("pricing.view", Assigned)
+		out.CanUngeneratedFilter = out.BillingVisible && leaseReportGenerationComplete(p)
 		if q.Billing != "" && !out.CanInvoiceFilters {
 			return ErrForbidden
+		}
+		if q.Billing == "ungenerated" && !out.CanUngeneratedFilter {
+			return ErrConflict
 		}
 		if q.Customer != 0 && !p.Allows("customer.view", All) || q.Asset != 0 && !p.Allows("asset.view", All) || q.Premises != 0 && !p.Allows("location.view", All) || q.Placement != "" && !p.Allows("asset.view", All) {
 			return ErrForbidden

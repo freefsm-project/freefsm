@@ -48,6 +48,11 @@ requires current Invoice and Pricing access, and settlement entries require
 Settlement View. Archived Lease access is independent. Financial exception
 filters require compatible Invoice/Pricing and All Records Lease Billing grants
 before evaluation. Hidden related records contribute no report links or labels.
+The Ungenerated period filter additionally requires All Records Invoice and
+Pricing access plus archived-Invoice visibility. Its option is omitted otherwise;
+explicit incompatible requests receive actionable HTTP 422 validation, while a
+remembered filter resets after grant loss. Positive Invoice exception filters
+remain available under their independent, potentially Assigned, authority.
 
 One authority-fenced repeatable-read transaction supplies filters, matching
 totals, page rows and embedded details. Authorization is acquired before the

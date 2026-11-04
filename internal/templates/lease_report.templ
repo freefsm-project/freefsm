@@ -54,7 +54,11 @@ templ LeaseReportPage(p authorization.LeaseReport) {
     <label>Archive<select name="archive"><option value="">Active records</option><option value="all" selected?={p.Query.Archive=="all"}>All records</option><option value="archived" selected?={p.Query.Archive=="archived"}>Archived records</option></select></label>
    }
    if p.CanInvoiceFilters {
-    <label>Billing exception<select name="billing"><option value="">All</option><option value="review" selected?={p.Query.Billing=="review"}>Manual review</option><option value="void" selected?={p.Query.Billing=="void"}>Voided period</option><option value="ungenerated" selected?={p.Query.Billing=="ungenerated"}>Ungenerated period</option></select></label>
+     <label>Billing exception<select name="billing"><option value="">All</option><option value="review" selected?={p.Query.Billing=="review"}>Manual review</option><option value="void" selected?={p.Query.Billing=="void"}>Voided period</option>
+      if p.CanUngeneratedFilter {
+       <option value="ungenerated" selected?={p.Query.Billing=="ungenerated"}>Ungenerated period</option>
+      }
+     </select></label>
    }
     <button type="submit">Refresh report</button><a href="/leases/report?reset=1">Clear filters</a>
    </form>
@@ -189,10 +193,12 @@ templ leaseReportValidation(p authorization.LeaseReport) {
     if options,ok:=map[string][]string{"lifecycle":{"","draft","scheduled","active","month_to_month","terminated"},"sort":{"","number","number_desc"},"per_page":{"25","50","100"},"placement":{"","unplaced","wrong_premises"},"billing":{"","review","void","ungenerated"},"archive":{"","all","archived"}}[key]; ok {
      <select id={"report-"+key} name={key} aria-invalid?={p.Errors[key]!=""} aria-describedby={"report-error-"+key}>
       if p.Errors[key]!="" {
-       <option value={value} selected>Invalid selection: {value}</option>
+       <option value={value} selected disabled?={key=="billing" && value=="ungenerated" && !p.CanUngeneratedFilter}>Invalid selection: {value}</option>
       }
       for _,option:=range options {
-       <option value={option} selected?={value==option}>{option}</option>
+        if key!="billing" || option!="ungenerated" || p.CanUngeneratedFilter {
+         <option value={option} selected?={value==option}>{option}</option>
+        }
       }
      </select>
     } else {

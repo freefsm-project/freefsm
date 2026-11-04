@@ -239,7 +239,14 @@ func TestLeaseReportGenerationKnowledgeAuthorityHTTP(t *testing.T) {
 		assertContains(t, body, "Generation status unavailable under current Invoice permissions")
 		assertNotContains(t, body, "Recorded generation:")
 		assertNotContains(t, body, ": ungenerated")
-		assertContains(t, requestBody(t, web, reader, "GET", "/leases/report?billing=ungenerated", 200), "0 matching Leases")
+		assertNotContains(t, body, `value="ungenerated"`)
+		invalid := requestBody(t, web, reader, "GET", "/leases/report?billing=ungenerated&search=retained", 422)
+		assertContains(t, invalid, "Ungenerated periods require All Records Invoice and Pricing access, including archived Invoices. Choose another Billing exception or clear filters.")
+		assertContains(t, invalid, `value="retained"`)
+		assertNotContains(t, invalid, "matching Leases")
+		assertContains(t, invalid, "Clear filters")
+		requestBody(t, web, reader, "GET", "/leases/report?billing=review", 200)
+		requestBody(t, web, reader, "GET", "/leases/report?billing=void", 200)
 	}
 	checkUnknown() // The generated Invoice is not assigned to this reader.
 	voidLeaseInvoiceAndReplay(t, pool, web, cookie, company, admin, lease, finalization)
@@ -248,15 +255,65 @@ func TestLeaseReportGenerationKnowledgeAuthorityHTTP(t *testing.T) {
 	_, err = svc.SaveRole(ctx, actor, role, "Partial report generation visibility", grants, 1)
 	historyCheck(t, err)
 	checkUnknown() // All Records without archived visibility still cannot know absence.
+	// A later managed month is genuinely due without running the worker.
+	_, err = pool.Exec(ctx, fmt.Sprintf(`CREATE OR REPLACE FUNCTION lease_dependency_today(company bigint) RETURNS date LANGUAGE sql STABLE AS $$ SELECT ('%s'::date + interval '2 months')::date $$`, due))
+	historyCheck(t, err)
 	grants = append(grants, authorization.Grant{Permission: "invoice.archived.view", Scope: authorization.All})
 	_, err = svc.SaveRole(ctx, actor, role, "Partial report generation visibility", grants, 2)
 	historyCheck(t, err)
 	body := requestBody(t, web, reader, "GET", "/leases/report", 200)
 	assertContains(t, body, "Recorded generation: 1.06")
 	assertNotContains(t, body, "Generation status unavailable")
+	assertContains(t, body, `value="ungenerated"`)
+	assertContains(t, requestBody(t, web, reader, "GET", "/leases/report?billing=void", 200), "1 matching Leases")
+	// Save a successful full-authority negative filter before revoking archive
+	// visibility. The same persisted preference must recover on the next entry.
+	r := httptest.NewRequest("GET", "/leases/report?billing=ungenerated", nil)
+	r.AddCookie(reader)
+	w := httptest.NewRecorder()
+	web.ServeHTTP(w, r)
+	if w.Code != 200 {
+		t.Fatalf("complete generation filter: %d", w.Code)
+	}
+	assertContains(t, w.Body.String(), "1 matching Leases")
+	var saved *http.Cookie
+	for _, c := range w.Result().Cookies() {
+		if c.Path == "/leases/report" {
+			saved = c
+		}
+	}
+	if saved == nil {
+		t.Fatal("missing remembered generation filter")
+	}
 	_, err = svc.SaveRole(ctx, actor, role, "Partial report generation visibility", grants[:4], 3)
 	historyCheck(t, err)
 	checkUnknown() // Grant loss is effective on the very next report request.
+	r = httptest.NewRequest("GET", "/leases/report", nil)
+	r.AddCookie(reader)
+	r.AddCookie(saved)
+	w = httptest.NewRecorder()
+	web.ServeHTTP(w, r)
+	if w.Code != 303 || w.Header().Get("Location") != "/leases/report?reset=1" {
+		t.Fatalf("remembered generation recovery: %d %s", w.Code, w.Body.String())
+	}
+	if cookies := w.Result().Cookies(); len(cookies) == 0 || cookies[0].MaxAge != -1 {
+		t.Fatal("incompatible remembered filter was not cleared")
+	}
+	t.Run("generation filter browser recovery", func(t *testing.T) {
+		if os.Getenv("BROWSER_TESTS") != "1" {
+			t.Skip("BROWSER_TESTS=1 required")
+		}
+		mux := http.NewServeMux()
+		mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("../../cmd/freefsm/static"))))
+		mux.Handle("/", middleware.BrowserCSRF(middleware.CSRFToken(web)))
+		server := httptest.NewServer(mux)
+		defer server.Close()
+		browserCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+		defer cancel()
+		output, err := exec.CommandContext(browserCtx, "node", "testdata/browser/lease-report.cjs", server.URL, reader.Value, "generation", saved.Name, saved.Value, cookie.Value).CombinedOutput()
+		t.Logf("generation filter browser: %s", output)
+		historyCheck(t, err)
+	})
 	grants[2].Scope, grants[3].Scope = authorization.Assigned, authorization.Assigned
 	_, err = svc.SaveRole(ctx, actor, role, "Partial report generation visibility", grants[:4], 4)
 	historyCheck(t, err)
