@@ -7,7 +7,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -88,15 +87,14 @@ func (h *handler) customerContext(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "not_found", "not found")
 		return
 	}
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	id, err := resolveJobRoute(r.Context(), req.Service, chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, 404, "not_found", "not found")
+		serviceEntryAPIError(w, err)
 		return
 	}
 	c, err := req.Service.JobCustomer(r.Context(), req.Actor, id)
 	if err != nil {
-		slog.Warn("authorization request rejected", "actor_id", req.Actor.UserID, "path", r.URL.Path, "channel", "api", "status", http.StatusNotFound)
-		writeError(w, 404, "not_found", "not found")
+		serviceEntryAPIError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, c)
@@ -108,14 +106,14 @@ func (h *handler) masterContext(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "not_found", "not found")
 		return
 	}
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	id, err := resolveJobRoute(r.Context(), req.Service, chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, 404, "not_found", "not found")
+		serviceEntryAPIError(w, err)
 		return
 	}
 	c, err := req.Service.JobMasters(r.Context(), req.Actor, id)
 	if err != nil {
-		writeError(w, 404, "not_found", "not found")
+		serviceEntryAPIError(w, err)
 		return
 	}
 	writeJSON(w, 200, c)

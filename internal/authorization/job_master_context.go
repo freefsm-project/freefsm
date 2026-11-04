@@ -64,6 +64,7 @@ type JobProjectContext struct {
 // JobAssetContext is deliberately not an Asset entity. The explicit allowlist
 // excludes master Custom Fields, collaboration, audit and association history.
 type JobAssetContext struct {
+	LeaseCoverage    *FieldLeaseCoverage   `json:"lease_coverage,omitempty"`
 	ServiceEntryPath string                `json:"-"`
 	ServiceEntries   []ServiceEntry        `json:"service_entries,omitempty"`
 	ID               int64                 `json:"id"`
@@ -203,16 +204,25 @@ func jobMasters(ctx context.Context, q queryer, p Principal, a Actor, jobID int6
 		if err = rows.Err(); err != nil {
 			return out, err
 		}
-		if p.Allows("service_entry.view", Assigned) {
-			var customer int64
-			if err = q.QueryRow(ctx, `SELECT customer_id FROM jobs WHERE id=$1`, jobID).Scan(&customer); err != nil {
+		var customer int64
+		if err = q.QueryRow(ctx, `SELECT customer_id FROM jobs WHERE id=$1`, jobID).Scan(&customer); err != nil {
+			return out, err
+		}
+		for i := range out.Assets {
+			out.Assets[i].LeaseCoverage, err = fieldLeaseCoverage(ctx, q, p.CompanyID, customer, out.Assets[i].ID)
+			if err != nil {
 				return out, err
 			}
+		}
+		if p.Allows("service_entry.view", Assigned) {
 			for i := range out.Assets {
 				out.Assets[i].ServiceEntryPath = fmt.Sprintf("/jobs/%d/assets/%d/service-entries", jobID, out.Assets[i].ID)
 				out.Assets[i].ServiceEntries, err = serviceEntryHistory(ctx, q, out.Assets[i].ID, customer)
 				if err != nil {
 					return out, err
+				}
+				for j := range out.Assets[i].ServiceEntries {
+					out.Assets[i].ServiceEntries[j].LeaseCoverage = out.Assets[i].LeaseCoverage
 				}
 			}
 		}

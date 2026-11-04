@@ -1,0 +1,42 @@
+# Bounded field Lease observation
+
+`GET /jobs/{id}/master-context` and the Job-bound Service Entry collection expose
+`lease_coverage: {"covered": true, "as_of": "2026-11-04T12:00:00Z"}` only on
+authorized operational Assets and authorized history rows. Job keys accept the
+nonreused opaque ID returned by `/sync/jobs`, with installed decimal compatibility.
+Asset and Service Entry keys remain their own identities. Resolution grants no
+authority; current actor, assignment, Customer relationship and coverage are read
+under the existing domain authority fence.
+
+The answer is for the Job Customer on the current company date, using inclusive
+coverage and read-derived Lease lifecycle. Placement is not coverage. Returning an
+Asset preserves its Lease but removes operational field access; it does not yield
+a fabricated No. History includes only the Job Customer's association periods.
+Lease base/Billing grants never expand these field records or expose Lease routes.
+The closed OpenAPI `FieldLeaseCoverage`, `FieldLeaseAsset`,
+`FieldLeaseServiceEntry` and `FieldServiceEntryRevision` schemas are executable
+allowlists. No Lease identity, Number, terms, notice, rates, Files, other Assets or
+Lease history is included. Responsible IDs appear only for independently
+authorized Service Entry revision on its exact current relationship.
+
+Malformed, unknown and inaccessible Job keys are nondisclosing. Infrastructure
+failure is retryable 503, never a denial or covered=false. Token and restore-epoch
+rules run before disclosure. Service Entry create/revise retain original
+operation identity, revision conflicts, commit-time authority and atomic audit.
+
+The protected executable reference stores only the boolean and as-of observation
+inside its existing encrypted Job cache. Display is **Last synced: Yes/No — as
+of …**. Offline start, renewal or termination never recomputes it from local dates.
+A failed refresh clears the observation and displays Unavailable. Synchronization
+purges replaced/removed context after assignment, scope or operational loss;
+session expiry/logout/restore retain their existing stronger purge/lock rules.
+
+This slice's snapshot/delta handoff is the same closed observation schema, not a
+Lease resource. Later coherent Service Entry synchronization must materialize it
+under the same current-authority fence and carry its original as-of timestamp;
+replacement/removal must purge old observations atomically. No production client
+or unrestricted Lease endpoint is introduced here.
+
+Conformance: persisted HTTP schema/forbidden-field cases, actual opaque sync keys,
+numeric and opaque writer replay/revision preservation, authority-fence races,
+company-date boundaries and a persisted protected Chromium reference journey.

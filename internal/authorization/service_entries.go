@@ -19,17 +19,18 @@ type ServiceEntryInput struct {
 }
 
 type ServiceEntry struct {
-	LinkID           int64     `json:"-"`
-	CanRevise        bool      `json:"-"`
-	JobID            int64     `json:"-"`
-	ResponsibleUsers []int64   `json:"-"`
-	ID               int64     `json:"id"`
-	Revision         string    `json:"revision"`
-	ServiceDate      string    `json:"service_date"`
-	Summary          string    `json:"summary"`
-	JobTitle         string    `json:"job_title"`
-	ResponsibleNames []string  `json:"responsible_names"`
-	RevisedAt        time.Time `json:"revised_at"`
+	LeaseCoverage    *FieldLeaseCoverage `json:"lease_coverage,omitempty"`
+	LinkID           int64               `json:"-"`
+	CanRevise        bool                `json:"-"`
+	JobID            int64               `json:"-"`
+	ResponsibleUsers []int64             `json:"-"`
+	ID               int64               `json:"id"`
+	Revision         string              `json:"revision"`
+	ServiceDate      string              `json:"service_date"`
+	Summary          string              `json:"summary"`
+	JobTitle         string              `json:"job_title"`
+	ResponsibleNames []string            `json:"responsible_names"`
+	RevisedAt        time.Time           `json:"revised_at"`
 }
 
 type ServiceEntryRevision struct {
@@ -146,8 +147,13 @@ func (s *Service) ServiceEntryPage(ctx context.Context, a Actor, jobID, assetID 
 		}
 		out.CanCreate = p.Allows("service_entry.create", scope)
 		out.CanRevise = p.Allows("service_entry.revise", scope)
+		coverage, err := fieldLeaseCoverage(ctx, tx, p.CompanyID, customer, assetID)
+		if err != nil {
+			return err
+		}
 		for i := range out.Entries {
 			entry := &out.Entries[i]
+			entry.LeaseCoverage = coverage
 			entry.CanRevise = out.CanRevise && entry.JobID == jobID && entry.LinkID == link
 		}
 		rows, err := tx.Query(ctx, `SELECT id,name FROM users u WHERE company_id=$1 AND (id=$2 OR EXISTS(SELECT 1 FROM job_assignments WHERE job_id=$3 AND user_id=u.id) OR $4) ORDER BY name,id`, p.CompanyID, a.UserID, jobID, p.Allows("directory.view", All))

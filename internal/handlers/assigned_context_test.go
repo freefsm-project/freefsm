@@ -108,9 +108,17 @@ func TestAssignedContextClosedProjectionAndReferencePurge(t *testing.T) {
 	}
 	keys(cache["location"].(map[string]any), "id title address_1 address_2 city state zip_code latitude longitude access_notes service_notes")
 	keys(cache["project"].(map[string]any), "name description status progress planned_start_date planned_end_date location service_notes")
-	keys(cache["asset"].(map[string]any), "id number name ownership_class type status serial_number manufacturer model installed_at warranty_expires location service_notes")
+	keys(cache["asset"].(map[string]any), "id number name ownership_class type status serial_number manufacturer model installed_at warranty_expires location service_notes lease_coverage")
+	coverage := cache["asset"].(map[string]any)["lease_coverage"].(map[string]any)
+	keys(coverage, "covered as_of")
+	if coverage["covered"] != false {
+		t.Fatalf("uncovered Asset: %v", coverage)
+	}
+	if _, err := time.Parse(time.RFC3339Nano, coverage["as_of"].(string)); err != nil {
+		t.Fatal(err)
+	}
 	for _, v := range cache["assets"].([]any) {
-		keys(v.(map[string]any), "id number name ownership_class type status serial_number manufacturer model installed_at warranty_expires location service_notes")
+		keys(v.(map[string]any), "id number name ownership_class type status serial_number manufacturer model installed_at warranty_expires location service_notes lease_coverage")
 	}
 	for _, suffix := range []string{"/customer-context", "/master-context"} {
 		body := requestBody(t, f.router, cookie, "GET", base+suffix, 200)

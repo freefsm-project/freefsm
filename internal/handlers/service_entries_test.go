@@ -46,21 +46,51 @@ func serviceEntryPost(t *testing.T, router http.Handler, cookie *http.Cookie, pa
 }
 
 func TestServiceEntryFieldAPIAndOfflineReference(t *testing.T) {
+	serviceEntryFieldAPIReference(t, false)
+}
+
+func TestServiceEntryOpaqueJobAPIAndOfflineReference(t *testing.T) {
+	serviceEntryFieldAPIReference(t, true)
+}
+
+func serviceEntryFieldAPIReference(t *testing.T, opaque bool) {
+	t.Helper()
 	pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("API Customer").SaveX(ctx)
 	typ := client.AssetType.Create().SetCompanyID(company).SetName("Equipment").SaveX(ctx)
 	a := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetOwnershipClass("customer_owned").SetName("Pump").SetAssetTypeID(typ.ID).SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetID(a.ID).SetJobType("API service").SaveX(ctx)
+	client.JobAssignment.Create().SetJobID(j.ID).SetUserID(admin).SaveX(ctx)
 	token, err := sessions.CreateMobile(ctx, admin, "Service reference")
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(apiv1.NewRouter(pool, client, sessions))
+	api := apiv1.NewRouter(pool, client, sessions)
+	job := fmt.Sprint(j.ID)
+	if opaque {
+		response := serviceAPIRequest(api, token, "GET", "/sync/jobs", nil)
+		if response.Code != 200 {
+			t.Fatalf("sync: %d %s", response.Code, response.Body.String())
+		}
+		var envelope struct {
+			Data struct {
+				Records []struct {
+					ID string `json:"id"`
+				} `json:"records"`
+			} `json:"data"`
+		}
+		historyCheck(t, json.Unmarshal(response.Body.Bytes(), &envelope))
+		if len(envelope.Data.Records) != 1 {
+			t.Fatal("expected assigned synchronized Job")
+		}
+		job = envelope.Data.Records[0].ID
+	}
+	server := httptest.NewServer(api)
 	defer server.Close()
 	runCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(runCtx, "node", "testdata/browser/service-entry-reference.cjs", server.URL, token, fmt.Sprint(j.ID), fmt.Sprint(a.ID), fmt.Sprint(admin), time.Now().UTC().Format("2006-01-02"), filepath.Join(t.TempDir(), "service-pending.json")).CombinedOutput()
+	out, err := exec.CommandContext(runCtx, "node", "testdata/browser/service-entry-reference.cjs", server.URL, token, job, fmt.Sprint(a.ID), fmt.Sprint(admin), time.Now().UTC().Format("2006-01-02"), filepath.Join(t.TempDir(), "service-pending.json")).CombinedOutput()
 	t.Logf("reference: %s", out)
 	if err != nil {
 		t.Fatal(err)
@@ -358,7 +388,7 @@ func TestServiceEntryRevisionRejectsABAAndRetainsIdentityHTTP(t *testing.T) {
 }
 
 func TestServiceEntryLifetimeAndCustomerHistoryAfterTransferHTTP(t *testing.T) {
-	_, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
 	ctx := context.Background()
 	old := client.Customer.Create().SetCompanyID(company).SetDisplayName("Old owner").SaveX(ctx)
 	next := client.Customer.Create().SetCompanyID(company).SetDisplayName("New owner").SaveX(ctx)
@@ -390,4 +420,35 @@ func TestServiceEntryLifetimeAndCustomerHistoryAfterTransferHTTP(t *testing.T) {
 	// Even after departure, Customer reassignment cannot erase the original
 	// service provenance. This exercises the actual planning route.
 	masterPost(t, router, cookie, fmt.Sprintf("/jobs/%d", j.ID), url.Values{"form_mode": {"edit"}, "job_id": {fmt.Sprint(j.ID)}, "job_type": {"Old owner service"}, "customer_id": {fmt.Sprint(next.ID)}, "replace_customer": {"true"}}, 409)
+	client.JobAssignment.Create().SetJobID(newJob.ID).SetUserID(admin).SaveX(ctx)
+	token, err := sessions.CreateMobile(ctx, admin, "Association field history")
+	historyCheck(t, err)
+	api := apiv1.NewRouter(pool, client, sessions)
+	validate := fieldLeaseSchema(t)
+	checkField := func(job int64, included, excluded string) {
+		t.Helper()
+		response := serviceAPIRequest(api, token, "GET", fmt.Sprintf("/jobs/%d/assets/%d/service-entries", job, a.ID), nil)
+		if response.Code != 200 {
+			t.Fatalf("field history: %d %s", response.Code, response.Body.String())
+		}
+		assertContains(t, response.Body.String(), included)
+		assertNotContains(t, response.Body.String(), excluded)
+		var envelope struct {
+			Data struct {
+				Entries []map[string]any `json:"entries"`
+			} `json:"data"`
+		}
+		historyCheck(t, json.Unmarshal(response.Body.Bytes(), &envelope))
+		for _, row := range envelope.Data.Entries {
+			validate("FieldLeaseServiceEntry", row)
+			if row["lease_coverage"].(map[string]any)["covered"] != false {
+				t.Fatal("another Customer cannot supply coverage")
+			}
+		}
+	}
+	checkField(newJob.ID, "New owner private service", "Original private service")
+	fieldPost(t, router, cookie, fmt.Sprintf("/assets/%d/associations/transfer", a.ID), url.Values{"customer_id": {fmt.Sprint(old.ID)}, "effective_date": {today}, "reason": {"Return to previous Customer"}, "revision": {"1"}}, 303)
+	returnJob := client.Job.Create().SetCompanyID(company).SetCustomerID(old.ID).SetAssetID(a.ID).SetJobType("Later association period").SaveX(ctx)
+	client.JobAssignment.Create().SetJobID(returnJob.ID).SetUserID(admin).SaveX(ctx)
+	checkField(returnJob.ID, "Original private service", "New owner private service")
 }

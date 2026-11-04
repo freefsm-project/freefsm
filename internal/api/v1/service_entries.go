@@ -30,9 +30,9 @@ func (h *handler) serviceEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Cache-Control", "no-store")
-	job, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil || job <= 0 {
-		writeError(w, 404, "not_found", "not found")
+	job, err := resolveJobRoute(r.Context(), req.Service, chi.URLParam(r, "id"))
+	if err != nil {
+		serviceEntryAPIError(w, err)
 		return
 	}
 	asset, err := strconv.ParseInt(chi.URLParam(r, "assetID"), 10, 64)
@@ -103,9 +103,9 @@ func (h *handler) serviceEntryRevisions(w http.ResponseWriter, r *http.Request) 
 		writeError(w, 503, "unavailable", "authorization unavailable")
 		return
 	}
-	job, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	job, err := resolveJobRoute(r.Context(), req.Service, chi.URLParam(r, "id"))
 	if err != nil {
-		writeError(w, 404, "not_found", "not found")
+		serviceEntryAPIError(w, err)
 		return
 	}
 	asset, err := strconv.ParseInt(chi.URLParam(r, "assetID"), 10, 64)

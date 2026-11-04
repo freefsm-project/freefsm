@@ -249,7 +249,12 @@ func TestJobSyncClosedMastersAndArchivedProject(t *testing.T) {
 	}
 	keys(m["contact"], "email,id,name,phone,role_title,service_notes")
 	keys(m["location"], "access_notes,address_1,address_2,city,id,latitude,longitude,service_notes,state,title,zip_code")
-	keys(m["asset"], "id,installed_at,location,manufacturer,model,name,number,ownership_class,serial_number,service_notes,status,type,warranty_expires")
+	keys(m["asset"], "id,installed_at,lease_coverage,location,manufacturer,model,name,number,ownership_class,serial_number,service_notes,status,type,warranty_expires")
+	coverage := m["asset"].(map[string]any)["lease_coverage"]
+	keys(coverage, "as_of,covered")
+	if coverage.(map[string]any)["covered"] != false {
+		t.Fatal("uncovered sync Asset must be No")
+	}
 }
 
 func TestJobSyncAdditiveUpgrade(t *testing.T) {
