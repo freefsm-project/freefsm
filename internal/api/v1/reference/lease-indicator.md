@@ -8,6 +8,10 @@ Asset and Service Entry keys remain their own identities. Resolution grants no
 authority; current actor, assignment, Customer relationship and coverage are read
 under the existing domain authority fence.
 
+The field Service Entry collection requires current Job assignment even with
+All Records Job, Asset and Service Entry grants. The separate office history
+page retains All Records access without adding the field observation.
+
 The answer is for the Job Customer on the current company date, using inclusive
 coverage and read-derived Lease lifecycle. Placement is not coverage. Returning an
 Asset preserves its Lease but removes operational field access; it does not yield
@@ -31,11 +35,14 @@ A failed refresh clears the observation and displays Unavailable. Synchronizatio
 purges replaced/removed context after assignment, scope or operational loss;
 session expiry/logout/restore retain their existing stronger purge/lock rules.
 
-This slice's snapshot/delta handoff is the same closed observation schema, not a
-Lease resource. Later coherent Service Entry synchronization must materialize it
-under the same current-authority fence and carry its original as-of timestamp;
-replacement/removal must purge old observations atomically. No production client
-or unrestricted Lease endpoint is introduced here.
+Populated snapshots and deltas include authorized `service_entries` on
+`SyncAsset`. The closed `SyncServiceEntry` schema uses opaque row IDs and the
+same `FieldLeaseCoverage` observation. Direct field responses retain installed
+integer row IDs; synchronized opaque IDs must not be used as installed IDs.
+Synchronization materializes observations under the current-authority fence and
+carries their original as-of timestamps; replacement/removal purges old
+observations atomically. No production client or unrestricted Lease endpoint is
+introduced here.
 
 Conformance: persisted HTTP schema/forbidden-field cases, actual opaque sync keys,
 numeric and opaque writer replay/revision preservation, authority-fence races,

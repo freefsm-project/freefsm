@@ -134,11 +134,24 @@ func (page ServiceEntryPage) FieldEntries() []ServiceEntryFieldRecord {
 }
 
 func (s *Service) ServiceEntryPage(ctx context.Context, a Actor, jobID, assetID int64) (ServiceEntryPage, error) {
+	return s.serviceEntryPage(ctx, a, jobID, assetID, false)
+}
+
+// FieldServiceEntryPage is Assigned Job Context, even for readers with All
+// Records grants. Office history retains its independent All Records access.
+func (s *Service) FieldServiceEntryPage(ctx context.Context, a Actor, jobID, assetID int64) (ServiceEntryPage, error) {
+	return s.serviceEntryPage(ctx, a, jobID, assetID, true)
+}
+
+func (s *Service) serviceEntryPage(ctx context.Context, a Actor, jobID, assetID int64, field bool) (ServiceEntryPage, error) {
 	var out ServiceEntryPage
 	err := s.WithinActor(ctx, a, func(tx pgx.Tx, p Principal) error {
 		scope, link, customer, _, err := serviceEntryRelationship(ctx, tx, p, a, jobID, assetID, "view")
 		if err != nil {
 			return err
+		}
+		if field && scope != Assigned {
+			return ErrNotFound
 		}
 		out.Entries, err = serviceEntryHistory(ctx, tx, assetID, customer)
 		out.LinkID = link
@@ -147,9 +160,12 @@ func (s *Service) ServiceEntryPage(ctx context.Context, a Actor, jobID, assetID 
 		}
 		out.CanCreate = p.Allows("service_entry.create", scope)
 		out.CanRevise = p.Allows("service_entry.revise", scope)
-		coverage, err := fieldLeaseCoverage(ctx, tx, p.CompanyID, customer, assetID)
-		if err != nil {
-			return err
+		var coverage *FieldLeaseCoverage
+		if field {
+			coverage, err = fieldLeaseCoverage(ctx, tx, p.CompanyID, customer, assetID)
+			if err != nil {
+				return err
+			}
 		}
 		for i := range out.Entries {
 			entry := &out.Entries[i]

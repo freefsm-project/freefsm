@@ -41,7 +41,7 @@ func (h *handler) serviceEntries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.Method == http.MethodGet {
-		page, err := req.Service.ServiceEntryPage(r.Context(), req.Actor, job, asset)
+		page, err := req.Service.FieldServiceEntryPage(r.Context(), req.Actor, job, asset)
 		if err != nil {
 			serviceEntryAPIError(w, err)
 			return

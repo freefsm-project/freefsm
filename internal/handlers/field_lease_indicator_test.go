@@ -75,7 +75,48 @@ func TestFieldLeaseIndicatorServiceHistoryHTTP(t *testing.T) {
 	check(get(masterPath, 200)["asset"].(map[string]any))
 	check(get(entriesPath, 200)["entries"].([]any)[0].(map[string]any))
 	// Use the actual synchronized key, never a numeric stand-in for opaque IDs.
-	synced := get("/sync/jobs", 200)["records"].([]any)
+	snapshot := get("/sync/jobs", 200)
+	validate("JobSyncEnvelope", map[string]any{"data": snapshot})
+	checkSync := func(data map[string]any, count int) string {
+		t.Helper()
+		records := data["records"].([]any)
+		if len(records) != 1 {
+			t.Fatalf("populated sync records: %v", records)
+		}
+		masters := records[0].(map[string]any)["masters"].(map[string]any)
+		asset := masters["asset"].(map[string]any)
+		validate("SyncAsset", asset)
+		entries := asset["service_entries"].([]any)
+		if len(entries) != count {
+			t.Fatalf("populated sync entries: %v", entries)
+		}
+		var first string
+		for _, value := range entries {
+			entry := value.(map[string]any)
+			validate("SyncServiceEntry", entry)
+			validate("FieldLeaseCoverage", entry["lease_coverage"])
+			check(entry)
+			id, ok := entry["id"].(string)
+			if !ok || id == "" {
+				t.Fatalf("sync row identity is not opaque: %v", entry)
+			}
+			if entry["summary"] == "Authorized row fact" {
+				first = id
+			}
+		}
+		if first == "" {
+			t.Fatal("original synchronized row missing")
+		}
+		return first
+	}
+	firstRowID := checkSync(snapshot, 1)
+	serviceEntryPost(t, f.router, cookie, entriesPath, url.Values{"service_date": {date}, "summary": {"Delta row fact"}, "responsible_user_id": {fmt.Sprint(f.admin)}}, 303)
+	delta := get("/sync/jobs?cursor="+url.QueryEscape(snapshot["completion_cursor"].(string)), 200)
+	validate("JobSyncEnvelope", map[string]any{"data": delta})
+	if checkSync(delta, 2) != firstRowID {
+		t.Fatal("synchronized row identity changed across delta")
+	}
+	synced := snapshot["records"].([]any)
 	if len(synced) != 1 {
 		t.Fatalf("assigned sync: %v", synced)
 	}
@@ -187,17 +228,30 @@ func fieldLeaseSchema(t *testing.T) func(string, any) {
 	compiler.AssertFormat()
 	historyCheck(t, compiler.AddResource("https://field.test/openapi.json", spec))
 	schemas := map[string]*jsonschema.Schema{}
-	for _, name := range []string{"FieldLeaseAsset", "FieldLeaseServiceEntry", "FieldServiceEntryRevision"} {
-		schemas[name], err = compiler.Compile("https://field.test/openapi.json#/components/schemas/" + name)
-		historyCheck(t, err)
-	}
 	return func(name string, value any) {
 		t.Helper()
+		if schemas[name] == nil {
+			schemas[name], err = compiler.Compile("https://field.test/openapi.json#/components/schemas/" + name)
+			historyCheck(t, err)
+		}
 		raw, err := json.Marshal(value)
 		historyCheck(t, err)
 		decoded, err := jsonschema.UnmarshalJSON(strings.NewReader(string(raw)))
 		historyCheck(t, err)
 		historyCheck(t, schemas[name].Validate(decoded))
+		if name == "SyncServiceEntry" || name == "FieldLeaseServiceEntry" {
+			object := decoded.(map[string]any)
+			id := object["id"]
+			if name == "SyncServiceEntry" {
+				object["id"] = 1
+			} else {
+				object["id"] = "opaque-row"
+			}
+			if schemas[name].Validate(object) == nil {
+				t.Fatalf("%s accepts the other identity representation", name)
+			}
+			object["id"] = id
+		}
 		// Every forbidden commercial facet must be rejected, not merely absent
 		// in a conveniently empty fixture.
 		for _, key := range []string{"lease_id", "lease_number", "starts_on", "ends_on", "notice", "rates", "files", "covered_assets", "lease_history"} {

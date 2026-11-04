@@ -167,6 +167,9 @@ func TestServiceEntryLifecycleRacesRetainAttributableOutcome(t *testing.T) {
 				typ := client.AssetType.Create().SetCompanyID(company).SetName("Equipment").SaveX(ctx)
 				asset := client.Asset.Create().SetCompanyID(company).SetCustomerID(c.ID).SetOwnershipClass("customer_owned").SetName("Pump").SetAssetTypeID(typ.ID).SaveX(ctx)
 				job := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetAssetID(asset.ID).SetJobType("Completed service").SaveX(ctx)
+				// The field collection requires assignment even for All Records
+				// administrators; retain the lifecycle/write race assertions below.
+				client.JobAssignment.Create().SetJobID(job.ID).SetUserID(admin).SaveX(ctx)
 				// Completion with zero entries remains valid and does not manufacture one.
 				flow := statusflow.New(pool)
 				completed, err := flow.Default(ctx, company, statusflow.Job, statusflow.JobCompleted)
