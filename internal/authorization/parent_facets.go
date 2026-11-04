@@ -10,7 +10,13 @@ func (s *Service) ParentFacet(ctx context.Context, actor Actor, typ string, id i
 	if err != nil {
 		return err
 	}
-	if _, err := parentAccess(ctx, s.Pool, p, typ, id, "", false); err != nil {
+	return parentFacet(ctx, s.Pool, p, typ, id, permission, false)
+}
+
+// parentFacet also supports callers already holding the authority fence: use
+// their transaction and current principal rather than opening a separate read.
+func parentFacet(ctx context.Context, q queryer, p Principal, typ string, id int64, permission string, locking bool) error {
+	if _, err := parentAccess(ctx, q, p, typ, id, "", locking); err != nil {
 		return err
 	}
 	if p.Allows(permission, All) {
@@ -21,13 +27,13 @@ func (s *Service) ParentFacet(ctx context.Context, actor Actor, typ string, id i
 	}
 	jobID := id
 	if typ == "estimate" || typ == "invoice" {
-		if err := s.Pool.QueryRow(ctx, `SELECT coalesce(job_id,0) FROM `+typ+`s WHERE id=$1 AND company_id=$2`, id, p.CompanyID).Scan(&jobID); err != nil {
+		if err := q.QueryRow(ctx, `SELECT coalesce(job_id,0) FROM `+typ+`s WHERE id=$1 AND company_id=$2`, id, p.CompanyID).Scan(&jobID); err != nil {
 			return err
 		}
 	} else if typ != "job" {
 		return ErrForbidden
 	}
-	allowed, err := assignedJobAccess(ctx, s.Pool, p.UserID, jobID, false)
+	allowed, err := assignedJobAccess(ctx, q, p.UserID, jobID, locking)
 	if err != nil {
 		return err
 	}

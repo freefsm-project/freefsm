@@ -53,7 +53,7 @@ func leaseAdjustmentInvoiceAccess(ctx context.Context, tx pgx.Tx, p Principal, i
 	if err != nil {
 		return "", err
 	}
-	if _, err = parentAccess(ctx, tx, p, "invoice", id, "pricing.view", true); err != nil {
+	if err = parentFacet(ctx, tx, p, "invoice", id, "pricing.view", true); err != nil {
 		return "", err
 	}
 	return scope, nil
