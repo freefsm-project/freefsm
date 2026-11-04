@@ -239,6 +239,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		leaseHandler := &LeaseHandler{authority: authority, files: fileSvc, tags: tagSvc, tagLinks: tagLinkSvc, fields: defSvc}
 		r.Post("/leases", leaseHandler.Register)
 		r.Get("/leases", leaseHandler.List)
+		r.Get("/leases/report", leaseHandler.Report)
 		r.Get("/leases/new", leaseHandler.New)
 		r.Get("/leases/{id}/history", leaseHandler.History)
 		r.Get("/leases/{id}/billing/history", leaseHandler.History)

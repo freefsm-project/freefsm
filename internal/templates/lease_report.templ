@@ -1,0 +1,136 @@
+package templates
+
+import "fmt"
+import "net/url"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+import "github.com/freefsm-project/freefsm/internal/commercial"
+
+func leaseReportURL(q authorization.LeaseReportQuery,page int) string {
+ v:=url.Values{"as_of":{q.AsOf},"search":{q.Search},"lifecycle":{q.Lifecycle},"placement":{q.Placement},"billing":{q.Billing},"archive":{q.Archive},"sort":{q.Sort},"page":{fmt.Sprint(page)},"per_page":{fmt.Sprint(q.PerPage)}}
+ for name,id:=range map[string]int64{"customer":q.Customer,"asset":q.Asset,"premises":q.Premises}{if id>0{v.Set(name,fmt.Sprint(id))}}
+ return "/leases/report?"+v.Encode()
+}
+
+templ LeaseReportFailure(q authorization.LeaseReportQuery) {
+ @Layout("Lease report unavailable") {
+  <h1>Lease report unavailable</h1><p role="alert">The report could not be refreshed. No new results are available.</p>
+  <a class="navigation-link" href={templ.URL(leaseReportURL(q,q.Page))}>Retry with these filters</a>
+ }
+}
+
+templ LeaseReportPage(p authorization.LeaseReport) {
+ @Layout("Lease position report") {
+  <h1>Lease position report</h1>
+  <p>Effective position on {p.AsOf} using corrected domain history. Dates use the company timezone.</p>
+  <p>Updated at {p.UpdatedAt}</p>
+  <form method="get" action="/leases/report">
+   <label>As of company date<input type="date" name="as_of" value={p.Query.AsOf}/></label>
+   <label>Search<input name="search" value={p.Query.Search}/></label>
+   <label>Lifecycle<select name="lifecycle"><option value="">All lifecycles</option>
+    for _,state:=range []string{"draft","scheduled","active","month_to_month","terminated"} {
+     <option value={state} selected?={p.Query.Lifecycle==state}>{state}</option>
+    }
+   </select></label>
+   <label>Order<select name="sort"><option value="number" selected?={p.Query.Sort!="number_desc"}>Number ascending</option><option value="number_desc" selected?={p.Query.Sort=="number_desc"}>Number descending</option></select></label>
+   <label>Rows per page<select name="per_page">
+    for _,size:=range []int{25,50,100} {
+     <option value={fmt.Sprint(size)} selected?={p.Query.PerPage==size}>{fmt.Sprint(size)}</option>
+    }
+   </select></label>
+   if p.CanCustomer {
+    <label>Customer ID<input type="number" name="customer" min="1" value={leaseRelationshipValue(p.Query.Customer)}/></label>
+   }
+   if p.CanAsset {
+    <label>Asset ID<input type="number" name="asset" min="1" value={leaseRelationshipValue(p.Query.Asset)}/></label>
+    <label>Placement<select name="placement"><option value="">Any placement</option><option value="unplaced" selected?={p.Query.Placement=="unplaced"}>Unplaced</option><option value="wrong_premises" selected?={p.Query.Placement=="wrong_premises"}>Wrong premises</option></select></label>
+   }
+   if p.CanPremises {
+    <label>Premises ID<input type="number" name="premises" min="1" value={leaseRelationshipValue(p.Query.Premises)}/></label>
+   }
+   if p.CanArchive {
+    <label>Archive<select name="archive"><option value="">Active records</option><option value="all" selected?={p.Query.Archive=="all"}>All records</option><option value="archived" selected?={p.Query.Archive=="archived"}>Archived records</option></select></label>
+   }
+   if p.CanInvoiceFilters {
+    <label>Billing exception<select name="billing"><option value="">All</option><option value="review" selected?={p.Query.Billing=="review"}>Manual review</option><option value="void" selected?={p.Query.Billing=="void"}>Voided period</option><option value="ungenerated" selected?={p.Query.Billing=="ungenerated"}>Ungenerated period</option></select></label>
+   }
+   <button type="submit">Refresh report</button><a href="/leases/report">Clear filters</a>
+  </form>
+  <p>{fmt.Sprint(p.Total)} matching Leases</p>
+  if p.BillingVisible {
+   <p>Matching monthly rent: {commercial.FormatCents(p.RentCents)} (in-force Leases)</p>
+  }
+  for _,row:=range p.Rows{
+   <section class="card">
+    <h2><a href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>{row.Number} {row.Title}</a></h2>
+    <p>Lifecycle: {row.Lifecycle}</p>
+    if row.Archived {
+     <p>Archived</p>
+    }
+    <p>Commencement: {row.StartsOn} — Fixed term ends: {row.EndsOn}</p>
+    if row.EndingOn!="" {
+     <p>Inclusive termination date: {row.EndingOn}</p>
+    }
+    if row.RenewalStartsOn!="" {
+     <p>Renewal: {row.RenewalStartsOn} through {row.RenewalEndsOn}</p>
+    }
+    if row.CustomerID>0 {
+     <p>Customer: <a href={templ.URL(fmt.Sprintf("/customers/%d",row.CustomerID))}>{row.Customer}</a></p>
+    }
+    if row.PremisesID>0 {
+     <p>Premises: <a href={templ.URL(fmt.Sprintf("/locations/%d",row.PremisesID))}>{row.Premises}</a></p>
+    }
+    for _,asset:=range row.Assets{
+     <p>Covered Asset: <a href={templ.URL(fmt.Sprintf("/assets/%d",asset.ID))}>{asset.Number} {asset.Name}</a> — {asset.Placement}</p>
+    }
+    if p.BillingVisible {
+     <p>Monthly rent: {commercial.FormatCents(row.RentCents)}</p>
+     if row.Lifecycle=="scheduled" {
+      <p>Scheduled monthly rent: {commercial.FormatCents(row.ScheduledRentCents)} — coverage begins {row.StartsOn}</p>
+     }
+     for _,invoice:=range row.Invoices {
+      <section>
+       <h3><a href={templ.URL(fmt.Sprintf("/invoices/%d",invoice.ID))}>Invoice {invoice.Number}</a></h3>
+       <p>{invoice.Kind} due {invoice.DueOn} — {invoice.Status}</p>
+       <p>Recorded generation: {commercial.FormatCents(invoice.RecordedCents)}</p>
+       <p>Generated at {invoice.GeneratedAt}. Recorded generation is not a current balance.</p>
+       for _,asset:=range invoice.Assets {
+        <p>Source Asset: {asset.Name} — <a href={templ.URL(fmt.Sprintf("/assets/%d",asset.ID))}>{asset.Number}</a></p>
+       }
+       if invoice.Review {
+        <p>Generated-Invoice exception — manual review required</p>
+       }
+       for _,entry:=range invoice.Settlements {
+        <p>{entry.Kind}: {commercial.FormatCents(entry.AmountCents)} on {entry.EffectiveOn} — {entry.ID}</p>
+        if entry.ReversedOn!="" {
+         <p>Reversed on {entry.ReversedOn}</p>
+        }
+       }
+      </section>
+     }
+     for _,period:=range row.Periods {
+      <p>{period.Kind} due {period.DueOn}: {period.State} — no Invoice balance inferred</p>
+     }
+     for _,adjustment:=range row.Adjustments {
+      <p>Manual {adjustment.Kind}: {commercial.FormatCents(adjustment.AmountCents)} — {adjustment.StartsOn} through {adjustment.EndsOn} — {adjustment.Reason}</p>
+      <p>Recorded at {adjustment.RecordedAt} on <a href={templ.URL(fmt.Sprintf("/invoices/%d",adjustment.InvoiceID))}>Invoice {fmt.Sprint(adjustment.InvoiceID)}</a></p>
+      if adjustment.AssetID>0 {
+       <p>Adjustment Asset: <a href={templ.URL(fmt.Sprintf("/assets/%d",adjustment.AssetID))}>{fmt.Sprint(adjustment.AssetID)}</a></p>
+      }
+      if adjustment.ActorID>0 {
+       <p>Recorded by Product User {fmt.Sprint(adjustment.ActorID)}</p>
+      }
+     }
+    }
+   </section>
+  }
+  if len(p.Rows)==0 {
+   <p>No matching Leases on this page.</p>
+  }
+  if p.Query.Page>1 {
+   <a href={templ.URL(leaseReportURL(p.Query,p.Query.Page-1))}>Previous</a>
+  }
+  if p.Query.Page*p.Query.PerPage<p.Total {
+   <a href={templ.URL(leaseReportURL(p.Query,p.Query.Page+1))}>Next</a>
+  }
+ }
+}

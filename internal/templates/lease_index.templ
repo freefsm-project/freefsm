@@ -15,6 +15,9 @@ func leaseListURL(p authorization.LeaseList,page int) string {
 templ LeaseIndex(p authorization.LeaseList) {
 	@Layout("Leases") {
 		<h1>Leases</h1>
+		if !p.Billing {
+			<a class="navigation-link" href="/leases/report">Current and historical Lease report</a>
+		}
 		if p.Billing {
 			<p>Billing view — search by Number.</p>
 		}
