@@ -3,26 +3,34 @@ package authorization
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 )
 
 type LeaseListRow struct {
-	Lifecycle     string
-	ID            int64
-	Number, Title string
-	Archived      bool
+	StartsOn, EndsOn, NoticeEndsOn string
+	Lifecycle                      string
+	ID                             int64
+	Number, Title                  string
+	Archived                       bool
 }
 type LeaseList struct {
+	Query                                 LeaseWorkspaceQuery
+	Queues                                []LeaseWorkspaceQueue
+	CanViewBilling                        bool
 	Rows                                  []LeaseListRow
 	Billing, CanRegister, CanViewArchived bool
 	Page, PerPage, Total                  int
 	Search, State                         string
 }
 
-func (s *Service) LeaseList(ctx context.Context, a Actor, billing bool, search, state string, page, size int) (LeaseList, error) {
+func (s *Service) LeaseList(ctx context.Context, a Actor, billing bool, search, state string, page, size int, queries ...LeaseWorkspaceQuery) (LeaseList, error) {
 	out := LeaseList{Search: search, State: state, Page: page, PerPage: size}
+	if len(queries) > 0 {
+		out.Query = queries[0]
+	}
 	if out.Page < 1 {
 		out.Page = 1
 	}
@@ -49,15 +57,51 @@ func (s *Service) LeaseList(ctx context.Context, a Actor, billing bool, search, 
 			return ErrForbidden
 		}
 		out.CanRegister = !out.Billing && p.Allows("lease.manage", All) && p.Allows("customer.view", All)
-		title, searchExpr := "title", "number_label||' '||title||' '||reference"
-		if out.Billing {
-			title, searchExpr = "''::text", "number_label"
-		}
-		where := ` FROM leases l WHERE company_id=$1 AND ($2='all' OR ($2='archived')=(deleted_at IS NOT NULL)) AND strpos(lower(` + searchExpr + `),lower($3))>0`
-		if err := tx.QueryRow(ctx, `SELECT count(*)`+where, p.CompanyID, out.State, search).Scan(&out.Total); err != nil {
+		out.CanViewBilling = p.Allows("lease.billing.view", All)
+		if err := out.Query.validate(out.Billing, out.CanViewBilling); err != nil {
 			return err
 		}
-		rows, err := tx.Query(ctx, `SELECT id,number_label,`+title+`,deleted_at IS NOT NULL,`+leaseNoticeCalendarColumns+where+` ORDER BY document_number,id LIMIT $4 OFFSET $5`, p.CompanyID, out.State, search, out.PerPage, (out.Page-1)*out.PerPage)
+		args := []any{p.CompanyID, out.State, search}
+		bind := func(value any) string { args = append(args, value); return fmt.Sprintf("$%d", len(args)) }
+		title, searchExpr := "l.title", "l.number_label||' '||l.title||' '||l.reference"
+		// Related search never expands access to an archived target. Its bounded
+		// source reference may still be shown on details, but is not discovery.
+		if p.Allows("customer.view", All) {
+			searchExpr += `||' '||coalesce((SELECT display_name FROM customers c WHERE c.id=l.customer_id AND (c.deleted_at IS NULL OR ` + bind(p.Allows("customer.archived.view", All)) + `)), '')`
+		}
+		if p.Allows("location.view", All) {
+			searchExpr += `||' '||coalesce((SELECT concat_ws(' ',title,address_1,address_2,city,state,zip_code) FROM locations x WHERE x.id=l.premises_id AND (x.deleted_at IS NULL OR ` + bind(p.Allows("location.archived.view", All)) + `)), '')`
+		}
+		if p.Allows("asset.view", All) {
+			searchExpr += `||' '||coalesce((SELECT string_agg(x.number,' ') FROM assets x WHERE (x.deleted_at IS NULL OR ` + bind(p.Allows("asset.archived.view", All)) + `) AND (EXISTS(SELECT 1 FROM lease_intended_assets i WHERE i.lease_id=l.id AND i.asset_id=x.id) OR EXISTS(SELECT 1 FROM lease_asset_dependencies d WHERE d.lease_id=l.id AND d.asset_id=x.id))), '')`
+		}
+		if out.Billing {
+			title, searchExpr = "''::text", "number_label"
+			args = args[:3]
+		}
+		where := ` FROM leases l WHERE company_id=$1 AND ($2='all' OR ($2='archived')=(deleted_at IS NOT NULL)) AND strpos(lower(` + searchExpr + `),lower($3))>0`
+		where += out.Query.where(bind)
+		for _, queue := range leaseWorkspaceQueues {
+			if queue.Billing && !out.CanViewBilling || !queue.Billing && out.Billing {
+				continue
+			}
+			if err := tx.QueryRow(ctx, `SELECT count(*)`+where+` AND (`+queue.predicate+`)`, args...).Scan(&queue.Count); err != nil {
+				return err
+			}
+			out.Queues = append(out.Queues, queue)
+		}
+		if out.Query.Queue != "" {
+			for _, queue := range leaseWorkspaceQueues {
+				if queue.Key == out.Query.Queue {
+					where += ` AND (` + queue.predicate + `)`
+				}
+			}
+		}
+		if err := tx.QueryRow(ctx, `SELECT count(*)`+where, args...).Scan(&out.Total); err != nil {
+			return err
+		}
+		limit, offset := bind(out.PerPage), bind((out.Page-1)*out.PerPage)
+		rows, err := tx.Query(ctx, `SELECT id,number_label,`+title+`,deleted_at IS NOT NULL,`+leaseNoticeCalendarColumns+where+` ORDER BY document_number,id LIMIT `+limit+` OFFSET `+offset, args...)
 		if err != nil {
 			return err
 		}
@@ -74,9 +118,25 @@ func (s *Service) LeaseList(ctx context.Context, a Actor, billing bool, search, 
 				return err
 			}
 			row.Lifecycle = calendar.Lifecycle
+			if !out.Billing {
+				row.StartsOn = start
+				row.EndsOn = end
+			}
 			out.Rows = append(out.Rows, row)
 		}
-		return rows.Err()
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		if !out.Billing {
+			for i := range out.Rows {
+				if err := tx.QueryRow(ctx, `SELECT coalesce((SELECT effective_on::text FROM lease_notice_current WHERE lease_id=$1 AND action<>'withdraw'),'')`, out.Rows[i].ID).Scan(&out.Rows[i].NoticeEndsOn); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	})
 	return out, err
 }

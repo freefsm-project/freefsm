@@ -4,6 +4,7 @@ import "fmt"
 
 templ AssetShow(p AssetShowPageData) {
 	@Layout(p.Asset.Name) {
+		@RelatedLeaseCard(p.Leases)
 		<div class="work-item-detail">
 		<div class="work-item-detail-actions">
 			<h2>{ p.Asset.Name }</h2>

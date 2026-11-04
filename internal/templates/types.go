@@ -211,6 +211,7 @@ type CustomerAssetServiceHistory struct {
 }
 
 type CustomerShowPageData struct {
+	Leases              authorization.RelatedLeases
 	AssetServiceHistory []CustomerAssetServiceHistory
 	ShowServiceEntries  bool
 	SectionErrors       map[string]bool
@@ -1868,6 +1869,7 @@ type AssetRow struct {
 }
 
 type AssetShowPageData struct {
+	Leases                authorization.RelatedLeases
 	Asset                 AssetDetail
 	LinkedJobs            []JobRow
 	CanViewServiceEntries bool

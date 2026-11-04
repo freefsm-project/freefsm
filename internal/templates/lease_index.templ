@@ -6,6 +6,9 @@ import "github.com/freefsm-project/freefsm/internal/authorization"
 
 func leaseListURL(p authorization.LeaseList,page int) string {
 	q:=url.Values{"search":{p.Search},"state":{p.State},"page":{fmt.Sprint(page)},"per_page":{fmt.Sprint(p.PerPage)}}
+	q.Set("lifecycle",p.Query.Lifecycle);q.Set("queue",p.Query.Queue);q.Set("placement",p.Query.Placement);q.Set("billing",p.Query.Billing)
+	q.Set("ending_from",p.Query.EndingFrom);q.Set("ending_through",p.Query.EndingThrough)
+	if p.Query.Customer>0 {q.Set("customer",fmt.Sprint(p.Query.Customer))};if p.Query.Asset>0 {q.Set("asset",fmt.Sprint(p.Query.Asset))};if p.Query.Premises>0 {q.Set("premises",fmt.Sprint(p.Query.Premises))}
 	if p.Billing {q.Set("facet","billing")};return "/leases?"+q.Encode()
 }
 
@@ -23,6 +26,27 @@ templ LeaseIndex(p authorization.LeaseList) {
 				<input type="hidden" name="facet" value="billing"/>
 			}
 			<label>Search<input name="search" value={ p.Search }/></label>
+			<label>Queue<select name="queue"><option value="">All Leases</option>
+				for _,queue:=range p.Queues {
+					<option value={queue.Key} selected?={p.Query.Queue==queue.Key}>{queue.Label} ({fmt.Sprint(queue.Count)})</option>
+				}
+			</select></label>
+			<label>Lifecycle<select name="lifecycle"><option value="">All lifecycles</option>
+				for _,state:=range []string{"draft","scheduled","active","month_to_month","terminated"} {
+					<option value={state} selected?={p.Query.Lifecycle==state}>{state}</option>
+				}
+			</select></label>
+			if !p.Billing {
+				<label>Customer ID<input name="customer" type="number" min="1" value={leaseRelationshipValue(p.Query.Customer)}/></label>
+				<label>Asset ID<input name="asset" type="number" min="1" value={leaseRelationshipValue(p.Query.Asset)}/></label>
+				<label>Premises Location ID<input name="premises" type="number" min="1" value={leaseRelationshipValue(p.Query.Premises)}/></label>
+				<label>Ending from<input name="ending_from" type="date" value={p.Query.EndingFrom}/></label>
+				<label>Ending through<input name="ending_through" type="date" value={p.Query.EndingThrough}/></label>
+				<label>Placement<select name="placement"><option value="">Any placement</option><option value="unplaced" selected?={p.Query.Placement=="unplaced"}>Unplaced</option><option value="wrong_premises" selected?={p.Query.Placement=="wrong_premises"}>Wrong premises</option></select></label>
+			}
+			if p.CanViewBilling {
+				<label>Billing exceptions<select name="billing"><option value="">Any billing</option><option value="failed" selected?={p.Query.Billing=="failed"}>Generation failure</option><option value="review" selected?={p.Query.Billing=="review"}>Manual review</option></select></label>
+			}
 			<label>State<select name="state"><option value="active" selected?={p.State=="active"}>Unarchived</option>
 				if p.CanViewArchived {
 					<option value="archived" selected?={p.State=="archived"}>Archived</option><option value="all" selected?={p.State=="all"}>All</option>
@@ -34,6 +58,7 @@ templ LeaseIndex(p authorization.LeaseList) {
 				}
 			</select></label><button>Apply</button>
 		</form>
+		<a href="/leases?reset=1">Reset filters</a>
 		<p>{fmt.Sprint(p.Total)} visible Leases</p><ul>
 			for _,row:=range p.Rows {
 				<li>
@@ -42,6 +67,15 @@ templ LeaseIndex(p authorization.LeaseList) {
 						<a href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>{row.Number} Billing</a>
 					} else {
 						<a href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>{row.Number} {row.Title}</a>
+						if row.StartsOn!="" {
+							<span>Starts {row.StartsOn}; fixed term ends {row.EndsOn}</span>
+						}
+						if row.NoticeEndsOn!="" {
+							<span>Notice ending date: {row.NoticeEndsOn}</span>
+						}
+						if p.CanViewBilling {
+							<a href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>Billing</a>
+						}
 					}
 					if row.Archived {
 						<span>Archived</span>
@@ -56,6 +90,10 @@ templ LeaseIndex(p authorization.LeaseList) {
 			<a href={templ.URL(leaseListURL(p,p.Page+1))}>Next</a>
 		}
 	}
+}
+
+func leaseRelationshipValue(id int64) string {
+	if id==0 { return "" }; return fmt.Sprint(id)
 }
 
 templ LeaseRegistrationForm(customers []authorization.LeaseChoice) {

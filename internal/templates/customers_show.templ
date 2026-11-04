@@ -157,6 +157,11 @@ templ CustomerShow(p CustomerShowPageData) {
 		} else if p.ShowCredit {
 			<article class="dashboard-panel"><h3>Customer Credit</h3><p>Available: { cents(p.CreditCents) }</p></article>
 		}
+		if p.SectionErrors["Leases"] {
+			@CustomerSectionUnavailable(p.Customer.ID,"Leases")
+		} else {
+			@RelatedLeaseCard(p.Leases)
+		}
 		if canCustomerRelatedWork(ctx) {
 			if p.SectionErrors["Related Work"] {
 				@CustomerSectionUnavailable(p.Customer.ID,"Related Work")

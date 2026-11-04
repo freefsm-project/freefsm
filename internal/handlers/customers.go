@@ -188,7 +188,10 @@ func (h *CustomerHandler) Show(w http.ResponseWriter, r *http.Request) {
 	ctx := middleware.WithPageHeaderTitle(r.Context(), c.DisplayName)
 	work, err := request.Service.CustomerRelatedWork(r.Context(), request.Actor, c.ID)
 	sectionFailed("Related Work", err)
+	leases, err := request.Service.RelatedLeases(r.Context(), request.Actor, "customer", c.ID)
+	sectionFailed("Leases", err)
 	templates.CustomerShow(templates.CustomerShowPageData{
+		Leases:              leases,
 		ShowServiceEntries:  showServiceEntries,
 		AssetServiceHistory: assetServiceHistory,
 		SectionErrors:       sectionErrors,

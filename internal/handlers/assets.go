@@ -205,6 +205,13 @@ func (h *AssetHandler) Show(w http.ResponseWriter, r *http.Request) {
 		FileList:              templates.FileListPageData{Files: filesToRows(r.Context(), files), ObjectID: id, ObjectType: "asset"},
 	}
 
+	if req, ok := authorization.FromContext(r.Context()); ok {
+		data.Leases, err = req.Service.RelatedLeases(r.Context(), req.Actor, "asset", id)
+		if err != nil {
+			authorizationError(w, r, err)
+			return
+		}
+	}
 	templates.AssetShow(data).Render(r.Context(), w)
 }
 

@@ -1,0 +1,40 @@
+package templates
+
+import "fmt"
+import "github.com/freefsm-project/freefsm/internal/authorization"
+
+templ RelatedLeaseCard(p authorization.RelatedLeases) {
+	if p.Visible {
+		<section aria-label="Related Leases">
+			if p.Kind=="asset" {
+				<h2>Lease coverage history</h2><p>Coverage is independent of placement history.</p>
+			} else if p.Kind=="location" {
+				<h2>Premises Leases</h2>
+			} else {
+				<h2>Leases</h2>
+			}
+			<p>{fmt.Sprint(p.Total)} related Leases</p>
+			<ul>
+				for _,row:=range p.Rows {
+					<li>
+						if row.CanOpen {
+							<a href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>{row.Number} {row.Title}</a>
+						} else {
+							<span>{row.Number} {row.Title}</span>
+						}
+						if row.Archived {
+							<span>Archived</span>
+						}
+						if row.StartsOn!="" {
+							<span>Coverage: {row.StartsOn} through {row.EndsOn}</span>
+						}
+						if row.CanBilling {
+							<a href={templ.URL(fmt.Sprintf("/leases/%d/billing",row.ID))}>Billing</a>
+						}
+					</li>
+				}
+			</ul>
+			<a href={templ.URL(p.URL())}>View all unarchived Leases</a>
+		</section>
+	}
+}

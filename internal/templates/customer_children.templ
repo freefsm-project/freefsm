@@ -6,6 +6,7 @@ import "net/url"
 import "github.com/freefsm-project/freefsm/internal/authorization"
 
 type CustomerChildrenData struct {
+	Leases authorization.RelatedLeases
 	CanViewCustomer bool
 	Search string
 	Page, PerPage, Total int
@@ -19,6 +20,7 @@ type CustomerChildrenData struct {
 
 templ CustomerChildrenPage(p CustomerChildrenData) {
 	@Layout(capitalize(p.Kind) + "s") {
+		@RelatedLeaseCard(p.Leases)
 		if p.CanViewCustomer {
 			<a href={ templ.URL(fmt.Sprintf("/customers/%d",p.CustomerID)) }>Back to Customer</a>
 		}

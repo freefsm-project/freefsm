@@ -159,6 +159,13 @@ func customerChildren(kind string) http.HandlerFunc {
 				data.Editing = true
 			}
 		}
+		if data.Selected != nil && kind == "location" && !data.Editing {
+			data.Leases, err = req.Service.RelatedLeases(r.Context(), req.Actor, "location", id)
+			if err != nil {
+				authorizationError(w, r, err)
+				return
+			}
+		}
 		if data.Selected == nil && !strings.HasSuffix(r.URL.Path, "/options") {
 			data.Search = r.URL.Query().Get("search")
 			filtered := []authorization.CustomerChild{}

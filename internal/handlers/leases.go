@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -125,12 +126,49 @@ func (h *LeaseHandler) Finalize(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *LeaseHandler) List(w http.ResponseWriter, r *http.Request) {
+	// Presentation state belongs to this Product User, never to a Role or a
+	// shared browser identity. Explicit URLs win and every restored query goes
+	// through current service authorization before rows or counts are returned.
+	name := fmt.Sprintf("lease_query_%d", authorizationActor(r).UserID)
+	if r.URL.RawQuery == "" {
+		if cookie, err := r.Cookie(name); err == nil {
+			if saved, err := base64.RawURLEncoding.DecodeString(cookie.Value); err == nil && len(saved) > 0 && len(saved) < 3000 {
+				http.Redirect(w, r, "/leases?"+string(saved), http.StatusSeeOther)
+				return
+			}
+		}
+	}
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("per_page"))
-	data, err := h.authority.LeaseList(r.Context(), authorizationActor(r), r.URL.Query().Get("facet") == "billing", r.URL.Query().Get("search"), r.URL.Query().Get("state"), page, size)
+	q := r.URL.Query()
+	for _, key := range []string{"customer", "asset", "premises"} {
+		if q.Get(key) != "" {
+			id, err := strconv.ParseInt(q.Get(key), 10, 64)
+			if err != nil || id < 1 {
+				http.Error(w, "Select a valid relationship", http.StatusBadRequest)
+				return
+			}
+		}
+	}
+	customer, _ := strconv.ParseInt(q.Get("customer"), 10, 64)
+	asset, _ := strconv.ParseInt(q.Get("asset"), 10, 64)
+	premises, _ := strconv.ParseInt(q.Get("premises"), 10, 64)
+	data, err := h.authority.LeaseList(r.Context(), authorizationActor(r), q.Get("facet") == "billing", q.Get("search"), q.Get("state"), page, size, authorization.LeaseWorkspaceQuery{Lifecycle: q.Get("lifecycle"), Queue: q.Get("queue"), Customer: customer, Asset: asset, Premises: premises, EndingFrom: q.Get("ending_from"), EndingThrough: q.Get("ending_through"), Placement: q.Get("placement"), Billing: q.Get("billing")})
 	if err != nil {
 		authorizationError(w, r, err)
 		return
+	}
+	q.Del("reset")
+	for key := range q {
+		switch key {
+		case "search", "state", "facet", "page", "per_page", "lifecycle", "queue", "customer", "asset", "premises", "ending_from", "ending_through", "placement", "billing":
+		default:
+			q.Del(key)
+		}
+	}
+	value := base64.RawURLEncoding.EncodeToString([]byte(q.Encode()))
+	if len(value) < 3800 {
+		http.SetCookie(w, &http.Cookie{Name: name, Value: value, Path: "/leases", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil, MaxAge: 365 * 24 * 60 * 60})
 	}
 	templates.LeaseIndex(data).Render(r.Context(), w)
 }
