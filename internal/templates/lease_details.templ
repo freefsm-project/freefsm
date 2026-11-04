@@ -15,10 +15,22 @@ templ LeaseDetailsPage(data LeasePageData) {
 		if p.Archived {
 			<div role="status">Archived — read-only history</div>
 			if p.CanRestore {
-				<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/restore",p.ID)) }><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><button>Restore Draft</button></form>
+				<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/restore",p.ID)) }><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><button>
+					if p.Lifecycle == "draft" {
+						Restore Draft
+					} else {
+						Restore Lease
+					}
+				</button></form>
 			}
 		} else if p.CanArchive {
-			<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/delete",p.ID)) } hx-confirm="Archive this Draft as read-only history? It will no longer block Customer or premises archive."><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><button>Archive Draft</button></form>
+			<form method="post" action={ templ.URL(fmt.Sprintf("/leases/%d/delete",p.ID)) } hx-confirm={"Archive "+p.Number+" as read-only history? Coverage, placement, billing and retained history will not change."}><input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/><button>
+				if p.Lifecycle == "draft" {
+					Archive Draft
+				} else {
+					Archive Lease
+				}
+			</button></form>
 		}
 		if p.Lifecycle == "draft" {
 			<p>External agreement. Draft selections reserve no coverage, move no Assets, and create no billing.</p>

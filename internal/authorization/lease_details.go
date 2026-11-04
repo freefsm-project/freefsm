@@ -85,11 +85,16 @@ func (s *Service) DraftLeaseBase(ctx context.Context, a Actor, id int64) (DraftL
 		}
 		out.CanManage = !out.Archived && out.Lifecycle == "draft" && p.Allows("lease.manage", All)
 		out.CanReviewFinalization = !out.Archived && p.Allows("lease.manage", All) && p.Allows("lease.billing.view", All) && p.Allows("lease.billing.manage", All)
-		out.CanArchive = !out.Archived && out.Lifecycle == "draft" && p.Allows("lease.archive", All)
+		out.CanArchive = !out.Archived && (out.Lifecycle == "draft" || out.Lifecycle == "terminated") && p.Allows("lease.archive", All)
 		if out.Archived && p.Allows("lease.restore", All) {
-			out.CanRestore, err = customerLifecycleState(ctx, tx, p, out.CustomerID, true)
-			if err != nil {
-				return err
+			if out.Lifecycle == "terminated" {
+				// Restoring retained history has no operational Customer prerequisite.
+				out.CanRestore = true
+			} else if out.Lifecycle == "draft" {
+				out.CanRestore, err = customerLifecycleState(ctx, tx, p, out.CustomerID, true)
+				if err != nil {
+					return err
+				}
 			}
 		}
 		if !p.Allows("file.download", All) {
