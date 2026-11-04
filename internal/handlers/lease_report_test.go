@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -40,6 +41,9 @@ func TestLeaseReportHistoricalPositionHTTP(t *testing.T) {
 	for _, want := range []string{"Historical report agreement", "active", "Updated at", "Report asset", "123.45", "1 matching Leases"} {
 		assertContains(t, body, want)
 	}
+	assertContains(t, body, fmt.Sprintf(`href="#lease-report-%d"`, lease.ID))
+	assertContains(t, body, fmt.Sprintf(`id="lease-report-%d"`, lease.ID))
+	assertContains(t, body, "Current Lease workspace")
 	body = requestBody(t, web, cookie, "GET", "/leases/report?as_of="+today.AddDate(0, 0, -11).Format(time.DateOnly), 200)
 	assertContains(t, body, "scheduled")
 	assertContains(t, body, "Scheduled monthly rent: 123.45")
@@ -56,8 +60,8 @@ func TestLeaseReportHistoricalPositionHTTP(t *testing.T) {
 	}
 	requestBody(t, web, reader, "GET", "/leases/report?billing=review", 403)
 	requestBody(t, web, reader, "GET", fmt.Sprintf("/leases/report?asset=%d", asset.ID), 403)
-	requestBody(t, web, cookie, "GET", "/leases/report?as_of=bad", 400)
-	requestBody(t, web, cookie, "GET", "/leases/report?as_of="+url.QueryEscape(today.AddDate(0, 0, 1).Format(time.DateOnly)), 400)
+	requestBody(t, web, cookie, "GET", "/leases/report?as_of=bad", 422)
+	requestBody(t, web, cookie, "GET", "/leases/report?as_of="+url.QueryEscape(today.AddDate(0, 0, 1).Format(time.DateOnly)), 422)
 	t.Run("placement is independent effective history", func(t *testing.T) {
 		historyCheck(t, svc.ChangeAssetAssociation(ctx, actor, asset.ID, authorization.AssetAssociationInput{Action: "place", EffectiveDate: today.AddDate(0, 0, -5).Format(time.DateOnly), Reason: "Recorded placement", CustomerID: customer.ID, LocationID: location.ID}))
 		body := requestBody(t, web, cookie, "GET", "/leases/report?as_of="+start+"&placement=unplaced", 200)
@@ -94,7 +98,9 @@ func TestLeaseReportHistoricalPositionHTTP(t *testing.T) {
 		historyCheck(t, svc.ReviseLeaseBilling(ctx, actor, lease.ID, authorization.LeaseBillingRevisionInput{EffectiveOn: future, Reason: "Future rent", OperationKey: newOperationKey(), Changes: []authorization.LeaseBillingChange{{AssetID: asset.ID, RentCents: 99999, TaxRate: "0"}}}))
 		body := requestBody(t, web, cookie, "GET", "/leases/report?search=Historical", 200)
 		assertContains(t, body, "Monthly rent: 123.45")
-		assertNotContains(t, body, "999.99")
+		assertContains(t, body, "Approved rent schedule")
+		assertContains(t, body, "999.99")
+		assertContains(t, body, "Matching monthly rent: 123.45")
 		assertNotContains(t, body, "Future report Asset secret")
 		assertContains(t, requestBody(t, web, cookie, "GET", fmt.Sprintf("/leases/report?asset=%d", incoming.ID), 200), "0 matching Leases")
 	})
@@ -188,6 +194,7 @@ func TestLeaseReportRecordedInvoiceHTTP(t *testing.T) {
 	body = requestBody(t, web, reader, "GET", "/leases/report", 200)
 	assertNotContains(t, body, "Recorded generation")
 	assertNotContains(t, body, "Report retained allowance")
+	assertContains(t, body, "Generation status unavailable under current Invoice permissions")
 	requestBody(t, web, reader, "GET", "/leases/report?billing=review", 403)
 	voidLeaseInvoiceAndReplay(t, pool, web, cookie, company, admin, lease, finalization)
 	body = requestBody(t, web, cookie, "GET", "/leases/report?billing=void", 200)
@@ -203,4 +210,71 @@ func TestLeaseReportRecordedInvoiceHTTP(t *testing.T) {
 	assertContains(t, requestBody(t, web, cookie, "GET", "/leases/report?archive=archived", 200), "1 matching Leases")
 	assertContains(t, requestBody(t, web, reader, "GET", "/leases/report", 200), "0 matching Leases")
 	requestBody(t, web, reader, "GET", "/leases/report?archive=all", 403)
+}
+
+func TestLeaseReportGenerationKnowledgeAuthorityHTTP(t *testing.T) {
+	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	ctx := context.Background()
+	cookie := sessionCookie(t, ctx, sessions, admin)
+	lease, finalization := populateFinalizedLease(t, pool, client, web, cookie, company)
+	var invoice int64
+	historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM invoices WHERE lease_id=$1`, lease).Scan(&invoice))
+	var due string
+	historyCheck(t, pool.QueryRow(ctx, `SELECT initial_due_on::text FROM lease_finalizations WHERE lease_id=$1`, lease).Scan(&due))
+	// Advance the fixture company clock to the actual managed due date, so
+	// generation-dependent period membership is exercised, not a future period.
+	_, err := pool.Exec(ctx, fmt.Sprintf(`CREATE OR REPLACE FUNCTION lease_dependency_today(company bigint) RETURNS date LANGUAGE sql STABLE AS $$ SELECT '%s'::date $$`, due))
+	historyCheck(t, err)
+	svc := authorization.New(pool)
+	actor := authorization.Actor{UserID: admin}
+	grants := []authorization.Grant{{Permission: "lease.view", Scope: authorization.All}, {Permission: "lease.billing.view", Scope: authorization.All}, {Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "pricing.view", Scope: authorization.Assigned}}
+	role, err := svc.SaveRole(ctx, actor, 0, "Partial report generation visibility", grants)
+	historyCheck(t, err)
+	user := client.User.Create().SetCompanyID(company).SetName("Partial report reader").SetEmail("report-partial74@test").SetPasswordHash("x").SetRole("tech").SaveX(ctx)
+	historyCheck(t, svc.AssignUser(ctx, actor, user.ID, role))
+	reader := sessionCookie(t, ctx, sessions, user.ID)
+	checkUnknown := func() {
+		t.Helper()
+		body := requestBody(t, web, reader, "GET", "/leases/report", 200)
+		assertContains(t, body, "Generation status unavailable under current Invoice permissions")
+		assertNotContains(t, body, "Recorded generation:")
+		assertNotContains(t, body, ": ungenerated")
+		assertContains(t, requestBody(t, web, reader, "GET", "/leases/report?billing=ungenerated", 200), "0 matching Leases")
+	}
+	checkUnknown() // The generated Invoice is not assigned to this reader.
+	voidLeaseInvoiceAndReplay(t, pool, web, cookie, company, admin, lease, finalization)
+	fieldPost(t, web, cookie, fmt.Sprintf("/invoices/%d/delete", invoice), nil, 303)
+	grants[2].Scope, grants[3].Scope = authorization.All, authorization.All
+	_, err = svc.SaveRole(ctx, actor, role, "Partial report generation visibility", grants, 1)
+	historyCheck(t, err)
+	checkUnknown() // All Records without archived visibility still cannot know absence.
+	grants = append(grants, authorization.Grant{Permission: "invoice.archived.view", Scope: authorization.All})
+	_, err = svc.SaveRole(ctx, actor, role, "Partial report generation visibility", grants, 2)
+	historyCheck(t, err)
+	body := requestBody(t, web, reader, "GET", "/leases/report", 200)
+	assertContains(t, body, "Recorded generation: 1.06")
+	assertNotContains(t, body, "Generation status unavailable")
+	_, err = svc.SaveRole(ctx, actor, role, "Partial report generation visibility", grants[:4], 3)
+	historyCheck(t, err)
+	checkUnknown() // Grant loss is effective on the very next report request.
+	grants[2].Scope, grants[3].Scope = authorization.Assigned, authorization.Assigned
+	_, err = svc.SaveRole(ctx, actor, role, "Partial report generation visibility", grants[:4], 4)
+	historyCheck(t, err)
+	readerActor := authorization.Actor{UserID: user.ID}
+	before, err := svc.LeaseReport(ctx, readerActor, authorization.LeaseReportQuery{})
+	historyCheck(t, err)
+	var generatedBefore, generatedAfter int
+	historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM lease_invoice_generations`).Scan(&generatedBefore))
+	historyCheck(t, svc.GenerateLeaseDrafts(ctx))
+	historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM lease_invoice_generations`).Scan(&generatedAfter))
+	if generatedAfter <= generatedBefore {
+		t.Fatal("comparison did not create a previously absent hidden generation")
+	}
+	after, err := svc.LeaseReport(ctx, readerActor, authorization.LeaseReportQuery{})
+	historyCheck(t, err)
+	before.UpdatedAt, after.UpdatedAt = "", ""
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("hidden generation changed authorized report rows, totals, membership or periods")
+	}
+	checkUnknown()
 }

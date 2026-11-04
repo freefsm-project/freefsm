@@ -2,16 +2,19 @@ package authorization
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/commercial"
+	invoiceStatus "github.com/freefsm-project/freefsm/internal/statusflow/invoice"
 	"github.com/jackc/pgx/v5"
 )
 
 type LeaseReportInvoice struct {
 	ID                                       int64
 	Number, Kind, DueOn, GeneratedAt, Status string
+	ManualStatus                             string
 	RecordedCents                            int64
 	Review                                   bool
 	SettlementVisible                        bool
@@ -66,6 +69,7 @@ func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *Le
 			return err
 		}
 		c.row.RecordedCents = snapshot.Result.TotalCents
+		c.row.ManualStatus = c.row.Status
 		if p.Allows("asset.view", All) {
 			assetRows, err := tx.Query(ctx, `SELECT a.id,a.number,a.name FROM assets a WHERE a.company_id=$2 AND (a.deleted_at IS NULL OR $3) AND a.id IN (
  SELECT (line->>'asset_id')::bigint FROM lease_invoice_generations g JOIN lease_billing_obligations o ON o.id=g.obligation_id LEFT JOIN lease_billing_obligation_revisions r ON r.id=g.obligation_revision_id CROSS JOIN LATERAL jsonb_array_elements(coalesce(r.line_items,o.line_items)) line WHERE g.invoice_id=$1) ORDER BY a.number,a.id`, c.row.ID, p.CompanyID, p.Allows("asset.archived.view", All))
@@ -93,36 +97,93 @@ func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *Le
 			if err != nil {
 				return err
 			}
+			// Commercial edits have their own immutable before/after history.
+			// Generation remains the fallback and is displayed separately.
+			var financial string
+			err = tx.QueryRow(ctx, `SELECT coalesce((SELECT detail->'after'->>'financial' FROM authorization_audit WHERE target_type='invoice' AND target_id=$1 AND recorded_at<$2 AND detail->'after' ? 'financial' ORDER BY id DESC LIMIT 1),$3)`, c.row.ID, cutoff, c.financial).Scan(&financial)
+			if err != nil {
+				return err
+			}
+			position, err := commercial.Read(financial)
+			if err != nil {
+				return err
+			}
+			var settled int64
+			for _, entry := range c.row.Settlements {
+				if entry.ReversedOn == "" {
+					settled += entry.AmountCents
+				}
+			}
+			state := "unpaid"
+			if position.Result.TotalCents == 0 || settled >= position.Result.TotalCents {
+				state = "paid"
+			} else if settled > 0 {
+				state = "partially_paid"
+			}
+			c.row.Status = invoiceStatus.EffectiveCategory(c.row.ManualStatus, state, settled > 0)
 		} else if !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrForbidden) {
 			return err
+		} else {
+			c.row.Status = ""
 		}
 		out.Invoices = append(out.Invoices, c.row)
 	}
 	// A missing Invoice is never a zero Invoice or an invented receivable. Only
 	// managed schedule periods due by the effective date are listed as ungenerated.
-	rows, err = tx.Query(ctx, `WITH agreement AS (
+	// Absence is knowable only with complete current authority. Do not inspect
+	// hidden generations to decide whether a period exists or matches a filter.
+	out.GenerationStatusUnavailable = !p.Allows("invoice.view", All) || !p.Allows("pricing.view", All) || !p.Allows("invoice.archived.view", All)
+	if !out.GenerationStatusUnavailable {
+		rows, err = tx.Query(ctx, `WITH agreement AS (
  SELECT l.starts_on,f.initial_due_on,f.managed_billing_start FROM leases l JOIN lease_finalizations f ON f.lease_id=l.id WHERE l.id=$1
  ), keys AS (
- SELECT kind,due_on FROM lease_billing_obligations WHERE lease_id=$1
+  SELECT kind,due_on FROM lease_billing_obligations WHERE lease_id=$1
+ UNION SELECT kind,due_on FROM lease_billing_period_failures WHERE lease_id=$1
  UNION SELECT 'initial',initial_due_on FROM agreement WHERE initial_due_on>=managed_billing_start
+ UNION SELECT 'coverage',(c.payload->>'effective_on')::date FROM lease_coverage_current c CROSS JOIN agreement a WHERE c.lease_id=$1 AND c.action<>'withdraw' AND c.payload->>'kind'='add' AND (c.payload->>'charge_cents')::bigint>0 AND (c.payload->>'effective_on')::date>=a.managed_billing_start
  UNION SELECT 'monthly',day::date FROM agreement a CROSS JOIN LATERAL generate_series(date_trunc('month',greatest(a.starts_on,a.managed_billing_start))::date,$2::date,interval '1 month') day WHERE day::date>a.starts_on AND day::date>=a.managed_billing_start
- ) SELECT k.kind,k.due_on::text,CASE WHEN EXISTS(SELECT 1 FROM lease_notice_current n WHERE n.lease_id=$1 AND n.action<>'withdraw' AND n.notice_on<=$2::date AND (n.category='cancel_before_start' OR k.kind<>'initial' AND k.due_on>n.effective_on)) THEN 'not owed — termination' ELSE 'ungenerated' END
+		) SELECT k.kind,k.due_on::text,'ungenerated'
  FROM keys k WHERE k.due_on<=$2::date AND NOT EXISTS(SELECT 1 FROM lease_billing_obligations o JOIN lease_invoice_generations g ON g.obligation_id=o.id WHERE o.lease_id=$1 AND o.kind=k.kind AND o.due_on=k.due_on AND g.recorded_at<$3) ORDER BY k.due_on,k.kind`, out.ID, at, cutoff)
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var period LeaseReportPeriod
-		if err = rows.Scan(&period.Kind, &period.DueOn, &period.State); err != nil {
-			rows.Close()
+		if err != nil {
 			return err
 		}
-		out.Periods = append(out.Periods, period)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return err
+		for rows.Next() {
+			var period LeaseReportPeriod
+			if err = rows.Scan(&period.Kind, &period.DueOn, &period.State); err != nil {
+				rows.Close()
+				return err
+			}
+			out.Periods = append(out.Periods, period)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		if len(out.Periods) > 0 {
+			var raw []byte
+			if err = tx.QueryRow(ctx, `SELECT terms FROM lease_finalizations WHERE lease_id=$1`, out.ID).Scan(&raw); err != nil {
+				return err
+			}
+			var initial []DraftLeaseTerms
+			if err = json.Unmarshal(raw, &initial); err != nil {
+				return err
+			}
+			for i := range out.Periods {
+				period := &out.Periods[i]
+				due, err := time.Parse(time.DateOnly, period.DueOn)
+				if err != nil {
+					return err
+				}
+				_, _, disposition, err := effectiveLeasePeriodTerms(ctx, tx, out.ID, initial, due, period.Kind, at)
+				if err != nil {
+					return err
+				}
+				if disposition != "" {
+					period.State = disposition
+				}
+			}
+		}
 	}
 	rows, err = tx.Query(ctx, `SELECT id,asset_id,invoice_id,actor_id,amount_cents,kind,starts_on::text,ends_on::text,reason,recorded_at::text FROM lease_manual_adjustments WHERE lease_id=$1 AND recorded_at<$2 ORDER BY id`, out.ID, cutoff)
 	if err != nil {

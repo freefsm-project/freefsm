@@ -22,8 +22,11 @@ templ LeaseReportPage(p authorization.LeaseReport) {
  @Layout("Lease position report") {
   <h1>Lease position report</h1>
   <p>Effective position on {p.AsOf} using corrected domain history. Dates use the company timezone.</p>
-  <p>Updated at {p.UpdatedAt}</p>
-  <form method="get" action="/leases/report">
+   <p>Updated at {p.UpdatedAt}</p>
+   if len(p.Errors)>0 {
+    @leaseReportValidation(p)
+   } else {
+   <form method="get" action="/leases/report">
    <label>As of company date<input type="date" name="as_of" value={p.Query.AsOf}/></label>
    <label>Search<input name="search" value={p.Query.Search}/></label>
    <label>Lifecycle<select name="lifecycle"><option value="">All lifecycles</option>
@@ -53,15 +56,25 @@ templ LeaseReportPage(p authorization.LeaseReport) {
    if p.CanInvoiceFilters {
     <label>Billing exception<select name="billing"><option value="">All</option><option value="review" selected?={p.Query.Billing=="review"}>Manual review</option><option value="void" selected?={p.Query.Billing=="void"}>Voided period</option><option value="ungenerated" selected?={p.Query.Billing=="ungenerated"}>Ungenerated period</option></select></label>
    }
-   <button type="submit">Refresh report</button><a href="/leases/report">Clear filters</a>
-  </form>
+    <button type="submit">Refresh report</button><a href="/leases/report?reset=1">Clear filters</a>
+   </form>
+   }
+   if len(p.Errors)==0 {
   <p>{fmt.Sprint(p.Total)} matching Leases</p>
-  if p.BillingVisible {
-   <p>Matching monthly rent: {commercial.FormatCents(p.RentCents)} (in-force Leases)</p>
-  }
-  for _,row:=range p.Rows{
-   <section class="card">
-    <h2><a href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>{row.Number} {row.Title}</a></h2>
+   if p.BillingVisible {
+    <p>Matching monthly rent: {commercial.FormatCents(p.RentCents)} (in-force Leases)</p>
+   }
+   <h2>Snapshot-linked details</h2>
+   <p>These detail links stay within this report's authorized filters and snapshot on {p.AsOf}, updated at {p.UpdatedAt}. Separately labelled current-workspace links open current records.</p>
+   <ul>
+    for _,row:=range p.Rows {
+     <li><a href={templ.URL(fmt.Sprintf("#lease-report-%d",row.ID))}>{row.Number} {row.Title} — {row.Lifecycle}</a></li>
+    }
+   </ul>
+   for _,row:=range p.Rows{
+    <section class="card" id={fmt.Sprintf("lease-report-%d",row.ID)} tabindex="-1">
+     <h2>{row.Number} {row.Title}</h2>
+     <p>Report detail on {p.AsOf}. <a href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>Current Lease workspace</a></p>
     <p>Lifecycle: {row.Lifecycle}</p>
     if row.Archived {
      <p>Archived</p>
@@ -74,27 +87,39 @@ templ LeaseReportPage(p authorization.LeaseReport) {
      <p>Renewal: {row.RenewalStartsOn} through {row.RenewalEndsOn}</p>
     }
     if row.CustomerID>0 {
-     <p>Customer: <a href={templ.URL(fmt.Sprintf("/customers/%d",row.CustomerID))}>{row.Customer}</a></p>
+      <p>Customer: {row.Customer} — <a href={templ.URL(fmt.Sprintf("/customers/%d",row.CustomerID))}>Current Customer workspace</a></p>
     }
     if row.PremisesID>0 {
-     <p>Premises: <a href={templ.URL(fmt.Sprintf("/locations/%d",row.PremisesID))}>{row.Premises}</a></p>
+      <p>Premises: {row.Premises} — <a href={templ.URL(fmt.Sprintf("/locations/%d",row.PremisesID))}>Current Location workspace</a></p>
     }
     for _,asset:=range row.Assets{
-     <p>Covered Asset: <a href={templ.URL(fmt.Sprintf("/assets/%d",asset.ID))}>{asset.Number} {asset.Name}</a> — {asset.Placement}</p>
+      <p>Covered Asset: {asset.Number} {asset.Name} — {asset.Placement} — <a href={templ.URL(fmt.Sprintf("/assets/%d",asset.ID))}>Current Asset workspace</a></p>
     }
     if p.BillingVisible {
-     <p>Monthly rent: {commercial.FormatCents(row.RentCents)}</p>
+      <p>Monthly rent: {commercial.FormatCents(row.RentCents)}</p>
+      <h3>Approved rent schedule</h3>
+      <p>Effective monthly rates, including approved upcoming changes. Future rates are excluded from selected-date totals; recorded Invoices retain their generation facts.</p>
+      for _,rate:=range row.RentSchedule {
+       <p>From {rate.EffectiveOn}: {commercial.FormatCents(rate.RentCents)}</p>
+      }
      if row.Lifecycle=="scheduled" {
       <p>Scheduled monthly rent: {commercial.FormatCents(row.ScheduledRentCents)} — coverage begins {row.StartsOn}</p>
      }
      for _,invoice:=range row.Invoices {
       <section>
-       <h3><a href={templ.URL(fmt.Sprintf("/invoices/%d",invoice.ID))}>Invoice {invoice.Number}</a></h3>
-       <p>{invoice.Kind} due {invoice.DueOn} — {invoice.Status}</p>
+        <h3>Invoice {invoice.Number}</h3>
+        <a href={templ.URL(fmt.Sprintf("/invoices/%d",invoice.ID))}>Current Invoice workspace</a>
+        <p>{invoice.Kind} due {invoice.DueOn}</p>
+        <p>Manual Invoice Status: {invoice.ManualStatus}</p>
+        if invoice.SettlementVisible {
+         <p>Effective Invoice Status: {invoice.Status}</p>
+        } else {
+         <p>Effective Invoice Status unavailable under current Settlement permissions</p>
+        }
        <p>Recorded generation: {commercial.FormatCents(invoice.RecordedCents)}</p>
        <p>Generated at {invoice.GeneratedAt}. Recorded generation is not a current balance.</p>
        for _,asset:=range invoice.Assets {
-        <p>Source Asset: {asset.Name} — <a href={templ.URL(fmt.Sprintf("/assets/%d",asset.ID))}>{asset.Number}</a></p>
+         <p>Source Asset: {asset.Name} — {asset.Number} — <a href={templ.URL(fmt.Sprintf("/assets/%d",asset.ID))}>Current Asset workspace</a></p>
        }
        if invoice.Review {
         <p>Generated-Invoice exception — manual review required</p>
@@ -110,11 +135,14 @@ templ LeaseReportPage(p authorization.LeaseReport) {
      for _,period:=range row.Periods {
       <p>{period.Kind} due {period.DueOn}: {period.State} — no Invoice balance inferred</p>
      }
+     if row.GenerationStatusUnavailable {
+      <p>Generation status unavailable under current Invoice permissions. No ungenerated periods inferred.</p>
+     }
      for _,adjustment:=range row.Adjustments {
       <p>Manual {adjustment.Kind}: {commercial.FormatCents(adjustment.AmountCents)} — {adjustment.StartsOn} through {adjustment.EndsOn} — {adjustment.Reason}</p>
-      <p>Recorded at {adjustment.RecordedAt} on <a href={templ.URL(fmt.Sprintf("/invoices/%d",adjustment.InvoiceID))}>Invoice {fmt.Sprint(adjustment.InvoiceID)}</a></p>
+       <p>Recorded at {adjustment.RecordedAt} on Invoice {fmt.Sprint(adjustment.InvoiceID)} — <a href={templ.URL(fmt.Sprintf("/invoices/%d",adjustment.InvoiceID))}>Current Invoice workspace</a></p>
       if adjustment.AssetID>0 {
-       <p>Adjustment Asset: <a href={templ.URL(fmt.Sprintf("/assets/%d",adjustment.AssetID))}>{fmt.Sprint(adjustment.AssetID)}</a></p>
+        <p>Adjustment Asset: {fmt.Sprint(adjustment.AssetID)} — <a href={templ.URL(fmt.Sprintf("/assets/%d",adjustment.AssetID))}>Current Asset workspace</a></p>
       }
       if adjustment.ActorID>0 {
        <p>Recorded by Product User {fmt.Sprint(adjustment.ActorID)}</p>
@@ -123,14 +151,56 @@ templ LeaseReportPage(p authorization.LeaseReport) {
     }
    </section>
   }
-  if len(p.Rows)==0 {
-   <p>No matching Leases on this page.</p>
+   if len(p.Rows)==0 {
+    if !p.HasLeases {
+     <p>No Leases available under your current permissions.</p>
+     if p.CanCreate {
+      <a href="/leases/new">Register a Lease</a>
+     }
+    } else if p.Total==0 {
+     <p>No Leases match these filters.</p><a href="/leases/report?reset=1">Clear filters</a>
+    } else {
+     <p>No matching Leases on this page.</p><a href={templ.URL(leaseReportURL(p.Query,1))}>Return to first page</a>
+    }
   }
   if p.Query.Page>1 {
    <a href={templ.URL(leaseReportURL(p.Query,p.Query.Page-1))}>Previous</a>
   }
-  if p.Query.Page*p.Query.PerPage<p.Total {
+   if p.Query.Page*p.Query.PerPage<p.Total {
    <a href={templ.URL(leaseReportURL(p.Query,p.Query.Page+1))}>Next</a>
+   }
+   }
   }
- }
+}
+
+templ leaseReportValidation(p authorization.LeaseReport) {
+ <form method="get" action="/leases/report">
+  <div class="error-summary" data-error-summary tabindex="-1" role="alert">
+   <h2>Review report filters</h2>
+   <ul>
+    for key,message:=range p.Errors {
+     <li><a href={templ.URL("#report-"+key)}>{key}: {message}</a></li>
+    }
+   </ul>
+  </div>
+  for _,key:=range []string{"as_of","search","lifecycle","sort","per_page","page","customer","asset","premises","placement","billing","archive"} {
+   if value,visible:=p.Inputs[key]; visible {
+    <label for={"report-"+key}>{map[string]string{"as_of":"As of company date","search":"Search","lifecycle":"Lifecycle","sort":"Order","per_page":"Rows per page","page":"Page","customer":"Customer ID","asset":"Asset ID","premises":"Premises ID","placement":"Placement","billing":"Billing exception","archive":"Archive"}[key]}</label>
+    if options,ok:=map[string][]string{"lifecycle":{"","draft","scheduled","active","month_to_month","terminated"},"sort":{"","number","number_desc"},"per_page":{"25","50","100"},"placement":{"","unplaced","wrong_premises"},"billing":{"","review","void","ungenerated"},"archive":{"","all","archived"}}[key]; ok {
+     <select id={"report-"+key} name={key} aria-invalid?={p.Errors[key]!=""} aria-describedby={"report-error-"+key}>
+      if p.Errors[key]!="" {
+       <option value={value} selected>Invalid selection: {value}</option>
+      }
+      for _,option:=range options {
+       <option value={option} selected?={value==option}>{option}</option>
+      }
+     </select>
+    } else {
+     <input id={"report-"+key} name={key} value={value} aria-invalid?={p.Errors[key]!=""} aria-describedby={"report-error-"+key}/>
+    }
+    <p id={"report-error-"+key} class="error-msg">{p.Errors[key]}</p>
+   }
+  }
+  <button type="submit">Refresh report</button><a href="/leases/report?reset=1">Clear filters</a>
+ </form>
 }

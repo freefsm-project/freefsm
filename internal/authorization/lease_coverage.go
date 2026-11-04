@@ -487,28 +487,78 @@ func validateBillingAllocationSuccession(initial []DraftLeaseTerms, before, afte
 
 // This helper is shared by automatic generation and reviewed manual retry.
 func currentCoverageBillingTerms(ctx context.Context, tx pgx.Tx, lease int64, initial []DraftLeaseTerms, due time.Time, kind string) ([]DraftLeaseTerms, bool, error) {
+	terms, eventBilling, _, err := leaseCoverageBillingTermsAt(ctx, tx, lease, initial, due, kind, "9999-12-31")
+	return terms, eventBilling, err
+}
+
+// effectiveLeasePeriodTerms projects entitlement from approved effective facts,
+// independently of obligation/disposition materialization. asOf bounds notice
+// applicability for historical reports; due still selects the period's rates.
+func effectiveLeasePeriodTerms(ctx context.Context, tx pgx.Tx, lease int64, initial []DraftLeaseTerms, due time.Time, kind, asOf string) ([]DraftLeaseTerms, bool, string, error) {
+	if kind == "monthly" {
+		var commenced bool
+		if err := tx.QueryRow(ctx, `SELECT starts_on<$2::date FROM leases WHERE id=$1`, lease, due).Scan(&commenced); err != nil {
+			return nil, false, "", err
+		}
+		if !commenced {
+			return nil, true, "Monthly rent begins in the month after corrected commencement", nil
+		}
+	}
+	return leaseCoverageBillingTermsAt(ctx, tx, lease, initial, due, kind, asOf)
+}
+
+// Allocation replay also serves billing-revision review on commencement itself;
+// period entitlement is an additional rule, not a restriction on reviewing terms.
+func leaseCoverageBillingTermsAt(ctx context.Context, tx pgx.Tx, lease int64, initial []DraftLeaseTerms, due time.Time, kind, asOf string) ([]DraftLeaseTerms, bool, string, error) {
+	var start time.Time
+	if err := tx.QueryRow(ctx, `SELECT starts_on FROM leases WHERE id=$1`, lease).Scan(&start); err != nil {
+		return nil, false, "", err
+	}
 	revisions, err := readLeaseBillingRevisions(ctx, tx, lease)
 	if err != nil {
-		return nil, false, err
+		return nil, false, "", err
 	}
 	var unowed bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_notice_current WHERE lease_id=$1 AND action<>'withdraw' AND (category='cancel_before_start' OR ($3<>'initial' AND effective_on<$2::date)))`, lease, due, kind).Scan(&unowed); err != nil {
-		return nil, false, err
+	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_notice_current WHERE lease_id=$1 AND action<>'withdraw' AND notice_on<=$4::date AND (category='cancel_before_start' OR ($3<>'initial' AND effective_on<$2::date)))`, lease, due, kind, asOf).Scan(&unowed); err != nil {
+		return nil, false, "", err
 	}
 	if unowed {
-		return nil, true, nil
+		return nil, true, "not owed — termination", nil
 	}
 	records, err := readCoverageEvents(ctx, tx, lease, false)
 	if err != nil {
-		return nil, false, err
+		return nil, false, "", err
 	}
 	var ended bool
-	if err = tx.QueryRow(ctx, `SELECT lifecycle='terminated' AND $2::date>coalesce((SELECT max(ends_on) FROM lease_asset_dependencies WHERE lease_id=$1),'-infinity'::date) FROM lease_master_dependencies WHERE lease_id=$1`, lease, due).Scan(&ended); err != nil {
-		return nil, true, err
+	if err = tx.QueryRow(ctx, `SELECT lifecycle='terminated' AND NOT EXISTS(SELECT 1 FROM lease_notice_current WHERE lease_id=$1 AND notice_on>$3::date) AND $2::date>coalesce((SELECT max(ends_on) FROM lease_asset_dependencies WHERE lease_id=$1),'-infinity'::date) FROM lease_master_dependencies WHERE lease_id=$1`, lease, due, asOf).Scan(&ended); err != nil {
+		return nil, true, "", err
 	}
 	if ended && kind != "initial" {
-		return nil, true, nil
+		return nil, true, "No Assets covered at period start; no charge owed", nil
 	}
 	terms, err := replayLeaseBillingTerms(initial, records, due.Format(time.DateOnly), kind, revisions)
-	return terms, len(records) > 0, err
+	if err != nil {
+		return nil, false, "", err
+	}
+	selected := 0
+	for i := range terms {
+		if len(records) == 0 {
+			coveredAt := due
+			if kind == "initial" {
+				coveredAt = start
+			}
+			var covered bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_asset_dependencies WHERE lease_id=$1 AND asset_id=$2 AND starts_on<=$3::date AND (ends_on IS NULL OR ends_on>=$3::date))`, lease, terms[i].AssetID, coveredAt).Scan(&covered); err != nil {
+				return nil, false, "", err
+			}
+			terms[i].Selected = terms[i].Selected && covered
+		}
+		if terms[i].Selected {
+			selected++
+		}
+	}
+	if selected == 0 {
+		return terms, true, "No Assets covered at period start; no charge owed", nil
+	}
+	return terms, len(records) > 0, "", nil
 }

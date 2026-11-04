@@ -22,6 +22,10 @@ type LeaseReportAsset struct {
 	ID                                        int64
 	Number, Name, StartsOn, EndsOn, Placement string
 }
+type LeaseReportRent struct {
+	EffectiveOn string
+	RentCents   int64
+}
 type LeaseReportRow struct {
 	LeaseCalendar
 	ID, CustomerID, PremisesID                                    int64
@@ -33,8 +37,12 @@ type LeaseReportRow struct {
 	Invoices                                                      []LeaseReportInvoice
 	Periods                                                       []LeaseReportPeriod
 	Adjustments                                                   []LeaseAdjustmentRecord
+	GenerationStatusUnavailable                                   bool
+	RentSchedule                                                  []LeaseReportRent
 }
 type LeaseReport struct {
+	Errors, Inputs                                                    map[string]string
+	HasLeases, CanCreate                                              bool
 	Query                                                             LeaseReportQuery
 	UpdatedAt, AsOf                                                   string
 	BillingVisible                                                    bool
@@ -64,6 +72,10 @@ func (s *Service) LeaseReport(ctx context.Context, a Actor, q LeaseReportQuery) 
 		out.CanAsset = p.Allows("asset.view", All)
 		out.CanPremises = p.Allows("location.view", All)
 		out.CanArchive = p.Allows("lease.archived.view", All)
+		out.CanCreate = p.Allows("lease.manage", All) && out.CanCustomer
+		if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM leases WHERE company_id=$1 AND (deleted_at IS NULL OR $2))`, p.CompanyID, out.CanArchive).Scan(&out.HasLeases); err != nil {
+			return err
+		}
 		out.CanInvoiceFilters = out.BillingVisible && p.Allows("invoice.view", Assigned) && p.Allows("pricing.view", Assigned)
 		if q.Billing != "" && !out.CanInvoiceFilters {
 			return ErrForbidden
@@ -133,7 +145,7 @@ func (s *Service) LeaseReport(ctx context.Context, a Actor, q LeaseReportQuery) 
 					matched = matched || q.Billing == "ungenerated" && period.State == "ungenerated"
 				}
 				for _, invoice := range row.Invoices {
-					matched = matched || q.Billing == "review" && invoice.Review || q.Billing == "void" && invoice.Status == "invoice:void"
+					matched = matched || q.Billing == "review" && invoice.Review || q.Billing == "void" && invoice.ManualStatus == "invoice:void"
 				}
 				if !matched {
 					continue
@@ -237,7 +249,7 @@ func readLeaseReportRow(ctx context.Context, tx pgx.Tx, p Principal, id int64, a
 			return out, err
 		}
 	}
-	if billing && out.Lifecycle != "terminated" {
+	if billing {
 		var raw []byte
 		err = tx.QueryRow(ctx, `SELECT terms FROM lease_finalizations WHERE lease_id=$1`, id).Scan(&raw)
 		if err == pgx.ErrNoRows {
@@ -258,12 +270,44 @@ func readLeaseReportRow(ctx context.Context, tx pgx.Tx, p Principal, id int64, a
 		if err != nil {
 			return out, err
 		}
+		// Approved future changes are a separately labelled schedule, never part
+		// of the selected-date amount or any matching-set total.
+		dates := []string{out.StartsOn}
+		for _, revision := range revisions {
+			dates = append(dates, revision.EffectiveOn)
+		}
+		for _, record := range records {
+			if record.Action != "withdraw" {
+				day, err := time.Parse(time.DateOnly, record.EffectiveOn)
+				if err != nil {
+					return out, err
+				}
+				dates = append(dates, time.Date(day.Year(), day.Month()+1, 1, 0, 0, 0, 0, time.UTC).Format(time.DateOnly))
+			}
+		}
+		slices.Sort(dates)
+		for _, effective := range slices.Compact(dates) {
+			if effective < out.StartsOn || out.EndingOn != "" && effective > out.EndingOn {
+				continue
+			}
+			selected, err := replayLeaseBillingTerms(terms, records, effective, "monthly", revisions)
+			if err != nil {
+				return out, err
+			}
+			entry := LeaseReportRent{EffectiveOn: effective}
+			for _, term := range selected {
+				if term.Selected && term.RentCents != nil {
+					entry.RentCents += *term.RentCents
+				}
+			}
+			out.RentSchedule = append(out.RentSchedule, entry)
+		}
 		terms, err = replayLeaseBillingTerms(terms, records, at, "monthly", revisions)
 		if err != nil {
 			return out, err
 		}
 		for _, term := range terms {
-			if term.Selected && term.RentCents != nil {
+			if term.Selected && term.RentCents != nil && out.Lifecycle != "terminated" {
 				if out.Lifecycle == "scheduled" {
 					out.ScheduledRentCents += *term.RentCents
 				} else {

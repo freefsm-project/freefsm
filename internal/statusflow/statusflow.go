@@ -17,6 +17,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/protectedaudit"
 	"github.com/freefsm-project/freefsm/internal/saveaction"
+	invoiceStatus "github.com/freefsm-project/freefsm/internal/statusflow/invoice"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -601,12 +602,30 @@ func (s *Service) Delete(ctx context.Context, a Actor, statusID, replacementID i
 }
 
 func (s *Service) EffectiveInvoiceStatus(ctx context.Context, companyID, invoiceID int64) (Status, error) {
+	rows, err := s.db.Query(ctx, `SELECT s.id,s.workflow_id,s.name,s.color,s.category_key,s.category_order,s.is_category_default,m.category_key,i.settlement_state,invoice_has_active_settlement(i.id) FROM invoices i JOIN statuses m ON m.id=i.status_id JOIN statuses s ON s.workflow_id=m.workflow_id WHERE i.company_id=$1 AND i.id=$2`, companyID, invoiceID)
+	if err != nil {
+		return Status{}, err
+	}
+	defer rows.Close()
 	var out Status
-	err := s.db.QueryRow(ctx, `SELECT s.id,s.workflow_id,s.name,s.color,s.category_key,s.category_order,s.is_category_default FROM invoice_effective_status e JOIN statuses s ON s.id=e.status_id WHERE e.company_id=$1 AND e.invoice_id=$2`, companyID, invoiceID).Scan(&out.ID, &out.WorkflowID, &out.Name, &out.Color, &out.Category, &out.Order, &out.Default)
-	if errors.Is(err, pgx.ErrNoRows) {
+	for rows.Next() {
+		var candidate Status
+		var manual, settlement string
+		var active bool
+		if err := rows.Scan(&candidate.ID, &candidate.WorkflowID, &candidate.Name, &candidate.Color, &candidate.Category, &candidate.Order, &candidate.Default, &manual, &settlement, &active); err != nil {
+			return Status{}, err
+		}
+		if string(candidate.Category) == invoiceStatus.EffectiveCategory(manual, settlement, active) {
+			out = candidate
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return Status{}, err
+	}
+	if out.ID == 0 {
 		return Status{}, ErrNotFound
 	}
-	return out, err
+	return out, nil
 }
 
 func (s *Service) CurrentCategory(ctx context.Context, companyID int64, typ ObjectType, id int64) (CategoryKey, error) {

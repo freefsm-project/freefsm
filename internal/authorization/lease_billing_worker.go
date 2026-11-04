@@ -267,19 +267,17 @@ func (s *Service) generateLeasePeriods(ctx context.Context, tx pgx.Tx, id int64,
 			if period.due.Before(cutoff) {
 				return ErrConflict
 			}
-			// A corrected commencement can move an already materialized month
-			// before recurring entitlement. Retain its identity without charging.
-			if period.kind == "monthly" && period.due.Before(anchor) {
-				_, err := tx.Exec(ctx, `INSERT INTO lease_billing_period_dispositions(lease_id,kind,due_on,source_revision,reason) VALUES($1,$2,$3,$4,'Monthly rent begins in the month after corrected commencement') ON CONFLICT(lease_id,kind,due_on) DO UPDATE SET source_revision=excluded.source_revision,reason=excluded.reason`, id, period.kind, period.due, sourceRevision)
-				return err
-			}
 			coveredAt := period.due
 			if period.kind == "initial" {
 				coveredAt = start
 			}
 			selected := append([]DraftLeaseTerms(nil), terms...)
-			selected, eventBilling, err := currentCoverageBillingTerms(ctx, tx, id, selected, period.due, period.kind)
+			selected, eventBilling, disposition, err := effectiveLeasePeriodTerms(ctx, tx, id, selected, period.due, period.kind, "9999-12-31")
 			if err != nil {
+				return err
+			}
+			if disposition != "" {
+				_, err := tx.Exec(ctx, `INSERT INTO lease_billing_period_dispositions(lease_id,kind,due_on,source_revision,reason) VALUES($1,$2,$3,$4,$5) ON CONFLICT(lease_id,kind,due_on) DO UPDATE SET source_revision=excluded.source_revision,reason=excluded.reason`, id, period.kind, period.due, sourceRevision, disposition)
 				return err
 			}
 			selectedCount := 0
