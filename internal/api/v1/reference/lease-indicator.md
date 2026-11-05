@@ -31,7 +31,11 @@ operation identity, revision conflicts, commit-time authority and atomic audit.
 The protected executable reference stores only the boolean and as-of observation
 inside its existing encrypted Job cache. Display is **Last synced: Yes/No — as
 of …**. Offline start, renewal or termination never recomputes it from local dates.
-A failed refresh clears the observation and displays Unavailable. Synchronization
+A refresh durably clears the observation before contacting policy or master
+context, so failure of either request displays Unavailable, including after
+restart. Failed invalidation persistence locks the protected store rather than
+reviving an old observation. Offline display without a refresh retains the last
+synced value within its authorization window. Synchronization
 purges replaced/removed context after assignment, scope or operational loss;
 session expiry/logout/restore retain their existing stronger purge/lock rules.
 

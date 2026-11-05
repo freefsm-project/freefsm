@@ -6,9 +6,13 @@ const {OfflineFieldClient,ProtectedStore}=require('./offline-notes-client.cjs');
 // apply. No commercial dates or Lease references are stored or inferred.
 class FieldLeaseClient extends OfflineFieldClient {
  async readLeaseIndicators(job){return this.transaction(async s=>{
-  await this.enforceOfflineAccessWindow(s);await this.policy(s);
+  await this.enforceOfflineAccessWindow(s);
+  // A refresh invalidates the saved observation before any network prerequisite,
+  // including policy. Failed durable invalidation quarantines the store; ordinary
+  // offline display without a refresh still retains its last synced observation.
+  if(s.cache[job]){delete s.cache[job].lease_indicators;await this.persistAuthorityLoss(s);}
+  await this.policy(s);
   if(!s.cache[job])throw Error('inaccessible_target');
-  delete s.cache[job].lease_indicators;await this.persistAuthorityLoss(s);
   const r=await this.contact(s,`/jobs/${encodeURIComponent(job)}/master-context`);
   if(r.status===404){this.purgeSensitiveTarget(s,job);await this.persistAuthorityLoss(s);throw Error('inaccessible_target');}
   if(r.status!==200||!r.data||typeof r.data!=='object')throw Error('indicator_unavailable');
