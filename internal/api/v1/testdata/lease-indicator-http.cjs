@@ -19,35 +19,85 @@ const {FieldLeaseClient,ProtectedStore}=require('../reference/lease-indicator-cl
   if(auth.epoch)headers['X-FreeFSM-Session-Epoch']=auth.epoch;
   if(auth.operation)headers['Operation-ID']=auth.operation;
   if(body!==undefined)headers['Content-Type']='application/json';
-  const r=await fetch(input.url+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
-  return {status:r.status,...await r.json()};
+   const request=()=>fetch(input.url+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
+   let r=await request();
+   if(r.status===429){
+    const limited=await r.json();
+    assert.equal(limited.error.retry_after_seconds,60);
+    console.log('Production request budget: waiting indicated 60 seconds before one retry');
+    await new Promise(resolve=>setTimeout(resolve,60000));
+    r=await request();
+   }
+   const result={status:r.status,...await r.json()};
+   if(path.startsWith('/sync/jobs'))assert.equal(r.status,200,JSON.stringify(result));
+   return result;
  };
  let client=new FieldLeaseClient(store,transport,()=>Date.now()+offset);
  try{
   await client.initialize();await client.authenticate(input.token);await client.synchronize();
-   const job=Object.keys((await client.view()).cache)[0];
-   const failures=[];
-   const checkRefreshFailures=async expected=>{
+    const initialCache=(await client.view()).cache;
+    const job=Object.keys(initialCache).find(id=>initialCache[id].title==='Reference job');
+    const otherJob=Object.keys(initialCache).find(id=>initialCache[id].title==='Independent cached job');
+    assert(job&&otherJob&&job!==otherJob);
+    refreshFailure={path:'/offline/policy',transport:true};
+    await assert.rejects(client.readLeaseIndicators(input.job),/inaccessible_target/);
+    assert.deepEqual((await client.view()).cache,initialCache,'unknown cache keys cannot retarget a Job');
+    refreshFailure=null;
+    const failures=[];
+    const observations=value=>{
+     if(!value||typeof value!=='object')return [];
+     return Object.entries(value).flatMap(([key,child])=>key==='lease_coverage'?[child]:observations(child));
+    };
+    const facts=record=>JSON.parse(JSON.stringify(record,(key,value)=>['lease_coverage','lease_indicators'].includes(key)?undefined:value));
+    const checkRefreshFailures=async expected=>{
     for(const failure of [
      {path:'/offline/policy',error:/reauthorization_unavailable/},
      {path:'/offline/policy',transport:true,error:/refresh_transport_failure/},
      {path:'/master-context',error:/indicator_unavailable/},
      {path:'/master-context',transport:true,error:/refresh_transport_failure/}
-    ]){
-     await client.readLeaseIndicators(job);
-     assert.equal((await client.leaseIndicator(job,input.asset)).value,expected);
+     ]){
+      await client.synchronize(failure.transport===true);
+      const synced=(await client.view()).cache[job];
+      let otherBefore=(await client.view()).cache[otherJob];
+      const opaqueAsset=synced.masters.asset.id;
+      assert.equal(typeof opaqueAsset,'string');
+      assert.notEqual(opaqueAsset,input.asset);
+      assert.equal((await client.leaseIndicator(job,opaqueAsset)).value,expected,'sync restores opaque observation');
+      assert.equal((await client.leaseIndicator(job,input.asset)).value,'Unavailable','sync does not guess numeric aliases');
+      assert.equal(synced.masters.asset.service_entries[0].summary,'Retained authorized service fact');
+      assert.equal(observations(synced).length,4,'singleton, collection, and both nested Service Entry copies populated');
+      for(const c of observations(synced))assert.equal(c.covered,expected==='Yes');
+      await client.readLeaseIndicators(job);
+      assert.equal((await client.leaseIndicator(job,input.asset)).value,expected);
+      assert.equal((await client.leaseIndicator(job,opaqueAsset)).value,'Unavailable','direct refresh does not misassociate numeric and opaque IDs');
+      assert.equal(observations((await client.view()).cache[job]).length,0,'successful direct refresh also retires old synchronized observations');
+     for(const synchronized of [false,true]){
+      if(synchronized){
+       await client.synchronize(true);
+       const restored=(await client.view()).cache;
+       assert.equal(observations(restored[job]).length,4,'failed refresh starts with populated synchronized observations too');
+       assert.equal((await client.leaseIndicator(job,opaqueAsset)).value,expected);
+       otherBefore=restored[otherJob];
+      }
      refreshFailure=failure;
      await assert.rejects(client.readLeaseIndicators(job),failure.error);
      for(const restarted of [false,true]){
       if(restarted)client=new FieldLeaseClient(new ProtectedStore(input.directory,store.id),transport,()=>Date.now()+offset);
       const observed=await client.leaseIndicator(job,input.asset);
       if(observed.value!=='Unavailable')failures.push({expected,prerequisite:failure.path,transport:!!failure.transport,restarted,actual:observed.value});
-      const view=await client.view();
-      if(view.cache[job].lease_indicators)failures.push({expected,prerequisite:failure.path,restarted,cache:'retained'});
+       const view=await client.view();
+       assert.deepEqual(facts(view.cache[job]),facts(synced),'all unrelated authorized facts/history retained');
+       assert.deepEqual(view.cache[otherJob],otherBefore,'refresh cannot invalidate another Job even for the same Asset');
+       assert.equal((await client.leaseIndicator(job,opaqueAsset)).value,'Unavailable');
+       if(view.cache[job].lease_indicators)failures.push({expected,prerequisite:failure.path,restarted,cache:'retained'});
+       if(observations(view.cache[job]).length)failures.push({expected,prerequisite:failure.path,restarted,synchronized:'retained'});
+       assert.equal(view.cache[job].masters.asset.service_entries[0].summary,'Retained authorized service fact');
      }
      refreshFailure=null;
-    }
-    await client.readLeaseIndicators(job);
+     }
+     }
+     assert.deepEqual(failures,[],'all public observations unavailable after failed refresh');
+     await client.readLeaseIndicators(job);
    };
    await checkRefreshFailures('No');
    // A second client cannot observe or republish the old value while the first
@@ -63,7 +113,9 @@ const {FieldLeaseClient,ProtectedStore}=require('../reference/lease-indicator-cl
    await contacting;
    try{
     await assert.rejects(client.leaseIndicator(job,input.asset),/store_busy/);
-    await assert.rejects(client.readLeaseIndicators(job),/store_busy/);
+     await assert.rejects(client.readLeaseIndicators(job),/store_busy/);
+     await assert.rejects(client.view(),/store_busy/);
+     await assert.rejects(client.synchronize(true),/store_busy/);
    }finally{release({status:503});await refresh;}
    assert.equal((await client.leaseIndicator(job,input.asset)).value,'Unavailable');
    await client.readLeaseIndicators(job);
@@ -116,7 +168,9 @@ const {FieldLeaseClient,ProtectedStore}=require('../reference/lease-indicator-cl
     await assert.rejects(faultClient.leaseIndicator(job,input.asset),/store_busy/);
     const restarted=new FieldLeaseClient(new ProtectedStore(directory,faultStore.id),transport,()=>Date.now()+offset);
     await assert.rejects(restarted.leaseIndicator(job,input.asset),/store_busy/);
-    await assert.rejects(restarted.readLeaseIndicators(job),/store_busy/);
+     await assert.rejects(restarted.readLeaseIndicators(job),/store_busy/);
+     await assert.rejects(restarted.view(),/store_busy/);
+     await assert.rejects(restarted.synchronize(true),/store_busy/);
    }finally{disk.rename=rename;await faultStore.destroy();}
    await fetch(input.url+'/__fixture/revoke',{method:'POST'});
   await client.synchronize();

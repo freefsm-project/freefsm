@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"testing"
@@ -44,8 +45,12 @@ func fieldLeaseProtectedReference(t *testing.T, loss string) {
 	zero, rent := int64(0), int64(5000)
 	historyCheck(t, svc.SaveDraftLeaseBilling(ctx, actor, lease.ID, 0, start.Format(time.DateOnly), authorization.DraftLeaseTerms{AssetID: a.ID, InitialCents: &zero, RentCents: &rent, TaxRate: "0"}, 0))
 	historyCheck(t, svc.FinalizeLease(ctx, actor, lease.ID, authorization.LeaseFinalizationInput{DetailsRevision: 1, BillingRevision: 1, ManagedBillingStart: start.Format(time.DateOnly)}))
-	uid, role, _ := f.reader(t, []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "asset.view", Scope: authorization.Context}})
+	cookie := sessionCookie(t, ctx, f.sessions, f.admin)
+	serviceEntryPost(t, f.router, cookie, fmt.Sprintf("/jobs/%d/assets/%d/service-entries", j.ID, a.ID), url.Values{"service_date": {today.Format(time.DateOnly)}, "summary": {"Retained authorized service fact"}, "responsible_user_id": {fmt.Sprint(f.admin)}}, 303)
+	uid, role, _ := f.reader(t, []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "asset.view", Scope: authorization.Context}, {Permission: "service_entry.view", Scope: authorization.Assigned}})
 	f.client.JobAssignment.Create().SetJobID(j.ID).SetUserID(uid).SaveX(ctx)
+	other := f.client.Job.Create().SetCompanyID(f.company).SetCustomerID(c.ID).SetAssetID(a.ID).SetJobType("Independent cached job").SaveX(ctx)
+	f.client.JobAssignment.Create().SetJobID(other.ID).SetUserID(uid).SaveX(ctx)
 	token, err := f.sessions.CreateMobile(ctx, uid, "Indicator harness")
 	historyCheck(t, err)
 	api := apiv1.NewRouter(f.pool, f.client, f.sessions)
@@ -96,9 +101,9 @@ func fieldLeaseProtectedReference(t *testing.T, loss string) {
 	defer server.Close()
 	directory := t.TempDir()
 	historyCheck(t, os.Chmod(directory, 0700))
-	input, err := json.Marshal(map[string]any{"url": server.URL, "token": token, "asset": fmt.Sprint(a.ID), "directory": directory})
+	input, err := json.Marshal(map[string]any{"url": server.URL, "token": token, "job": fmt.Sprint(j.ID), "asset": fmt.Sprint(a.ID), "directory": directory})
 	historyCheck(t, err)
-	runCtx, cancel := context.WithTimeout(ctx, 180*time.Second)
+	runCtx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, "node", "../api/v1/testdata/lease-indicator-http.cjs")
 	cmd.Stdin = bytes.NewReader(input)

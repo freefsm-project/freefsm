@@ -39,6 +39,23 @@ synced value within its authorization window. Synchronization
 purges replaced/removed context after assignment, scope or operational loss;
 session expiry/logout/restore retain their existing stronger purge/lock rules.
 
+The reference refresh accepts an exact synchronized Job cache key. Its complete
+Job-scoped invalidation removes the direct observation map, both singleton and
+collection Asset observations, and their nested Service Entry observations in
+one protected transaction before any network prerequisite. Other authorized
+facts/history and other Jobs (even for the same Asset) are preserved. The store
+writer lock also excludes concurrent views, refreshes and synchronization.
+
+Direct Asset IDs are numeric; synchronized Asset IDs are opaque. The reference
+never guesses aliases from position, names or Number. A successful direct refresh
+restores observations for its returned numeric Asset IDs; old opaque observations
+remain unavailable until a successful snapshot/delta restores them. Conversely,
+sync retires direct numeric observations, including inherited unchanged delta
+records, and display can use the synchronized opaque Asset key. This prevents
+two identity spaces from presenting conflicting saved answers. A failed refresh
+leaves neither representation accessible, including through the inherited cache
+view after a fresh store/client restart.
+
 Populated snapshots and deltas include authorized `service_entries` on
 `SyncAsset`. The closed `SyncServiceEntry` schema uses opaque row IDs and the
 same `FieldLeaseCoverage` observation. Direct field responses retain installed
