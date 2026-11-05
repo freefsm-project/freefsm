@@ -202,6 +202,11 @@ func serviceEntryRelationship(ctx context.Context, tx pgx.Tx, p Principal, a Act
 	if err != nil {
 		return "", 0, 0, 0, err
 	}
+	// Field API access always retains its assigned, active Job anchor, even
+	// when the same Product User has broader office permissions.
+	if a.Channel == "api" && (!assigned || !active) {
+		return "", 0, 0, 0, ErrNotFound
+	}
 	scope := All
 	if assigned && active {
 		scope = Assigned

@@ -79,12 +79,16 @@ type BatchClockOperation struct {
 // A batch member retains its domain-specific reviewed intent. Clock commands
 // are not Notes commands and do not acquire revision/target substitution rules.
 type BatchOperation struct {
-	Job   *BatchFieldOperation
-	Clock *BatchClockOperation
-	File  *BatchFileOperation
+	ServiceEntry *BatchServiceEntryOperation
+	Job          *BatchFieldOperation
+	Clock        *BatchClockOperation
+	File         *BatchFileOperation
 }
 
 func (op BatchOperation) id() string {
+	if op.ServiceEntry != nil {
+		return op.ServiceEntry.OperationID
+	}
 	if op.File != nil {
 		return op.File.OperationID
 	}
@@ -105,6 +109,18 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 		positions[member.id()] = i
 	}
 	for i, member := range ops {
+		if member.ServiceEntry != nil {
+			op := member.ServiceEntry
+			batch := serviceEntryBatchExecution{operation: *op, dependencies: batchDependencies{dependsOn: op.DependsOn, positions: positions, index: i, successful: successful}}
+			receipt, err := s.submitServiceEntryBound(ctx, a, ServiceEntryCommand{OperationID: op.OperationID}, &batch)
+			result := BatchOperationResult{OperationID: op.OperationID, Err: err}
+			if receipt.Code != "" {
+				result.Receipt = receipt
+			}
+			results = append(results, result)
+			successful[op.OperationID] = err == nil && receipt.Code == "accepted"
+			continue
+		}
 		if member.File != nil {
 			op := *member.File
 			batch := batchExecution{operation: BatchNotesOperation{OperationID: op.OperationID, Type: op.Type, Target: op.Target, DependsOn: op.DependsOn, OccurredAt: op.OccurredAt}, dependencies: batchDependencies{dependsOn: op.DependsOn, positions: positions, index: i, successful: successful}}

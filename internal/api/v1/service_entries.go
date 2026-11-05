@@ -3,7 +3,6 @@ package v1
 import (
 	"errors"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -24,6 +23,10 @@ func serviceEntryAPIError(w http.ResponseWriter, err error) {
 }
 
 func (h *handler) serviceEntries(w http.ResponseWriter, r *http.Request) {
+	if r.URL.RawQuery != "" {
+		writeError(w, 400, "invalid_request", "Service Entry requests have no query parameters")
+		return
+	}
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {
 		writeError(w, 503, "unavailable", "authorization unavailable")
@@ -35,9 +38,9 @@ func (h *handler) serviceEntries(w http.ResponseWriter, r *http.Request) {
 		serviceEntryAPIError(w, err)
 		return
 	}
-	asset, err := strconv.ParseInt(chi.URLParam(r, "assetID"), 10, 64)
-	if err != nil || asset <= 0 {
-		writeError(w, 404, "not_found", "not found")
+	asset, err := req.Service.ResolveServiceEntryReference(r.Context(), "asset", chi.URLParam(r, "assetID"))
+	if err != nil {
+		serviceEntryAPIError(w, err)
 		return
 	}
 	if r.Method == http.MethodGet {
@@ -68,9 +71,9 @@ func (h *handler) serviceEntries(w http.ResponseWriter, r *http.Request) {
 	in.OccurredAt = body.OccurredAt
 	in.Content.LinkID = body.LinkID
 	if target := chi.URLParam(r, "entryID"); target != "" {
-		in.EntryID, err = strconv.ParseInt(target, 10, 64)
-		if err != nil || in.EntryID <= 0 {
-			writeError(w, 404, "not_found", "not found")
+		in.EntryID, err = req.Service.ResolveServiceEntryReference(r.Context(), "service_entries", target)
+		if err != nil {
+			serviceEntryAPIError(w, err)
 			return
 		}
 	}
@@ -83,6 +86,10 @@ func (h *handler) serviceEntries(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) serviceEntryReceipt(w http.ResponseWriter, r *http.Request) {
+	if r.URL.RawQuery != "" {
+		writeError(w, 400, "invalid_request", "Service Entry receipts have no query parameters")
+		return
+	}
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {
 		writeError(w, 503, "unavailable", "authorization unavailable")
@@ -98,6 +105,10 @@ func (h *handler) serviceEntryReceipt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) serviceEntryRevisions(w http.ResponseWriter, r *http.Request) {
+	if r.URL.RawQuery != "" {
+		writeError(w, 400, "invalid_request", "Service Entry revisions have no query parameters")
+		return
+	}
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {
 		writeError(w, 503, "unavailable", "authorization unavailable")
@@ -108,14 +119,14 @@ func (h *handler) serviceEntryRevisions(w http.ResponseWriter, r *http.Request) 
 		serviceEntryAPIError(w, err)
 		return
 	}
-	asset, err := strconv.ParseInt(chi.URLParam(r, "assetID"), 10, 64)
+	asset, err := req.Service.ResolveServiceEntryReference(r.Context(), "asset", chi.URLParam(r, "assetID"))
 	if err != nil {
-		writeError(w, 404, "not_found", "not found")
+		serviceEntryAPIError(w, err)
 		return
 	}
-	entry, err := strconv.ParseInt(chi.URLParam(r, "entryID"), 10, 64)
+	entry, err := req.Service.ResolveServiceEntryReference(r.Context(), "service_entries", chi.URLParam(r, "entryID"))
 	if err != nil {
-		writeError(w, 404, "not_found", "not found")
+		serviceEntryAPIError(w, err)
 		return
 	}
 	rows, err := req.Service.ServiceEntryRevisions(r.Context(), req.Actor, job, asset, entry)

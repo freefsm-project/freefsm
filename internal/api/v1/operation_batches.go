@@ -113,6 +113,40 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			operations = append(operations, authorization.BatchOperation{File: &op})
 			continue
 		}
+		if discriminator.Type == "service_entry.create" || discriminator.Type == "service_entry.revise" {
+			part := r.Clone(r.Context())
+			part.Body = io.NopCloser(bytes.NewReader(raw))
+			var op authorization.BatchServiceEntryOperation
+			if !decodeExactJSON(w, part, &op, "operation_id", "type", "depends_on", "job_id", "asset_id", "entry_id", "revision", "occurred_at", "link_id", "service_date", "summary", "responsible_user_ids") {
+				return
+			}
+			id, e := uuid.Parse(op.OperationID)
+			valid := e == nil && id != uuid.Nil && id.String() == op.OperationID && !seen[op.OperationID] && op.DependsOn != nil && op.JobID != "" && op.AssetID != "" && op.LinkID > 0
+			if op.Type == "service_entry.create" {
+				valid = valid && op.EntryID == "" && op.Revision == ""
+			} else {
+				valid = valid && op.EntryID != "" && op.Revision != ""
+			}
+			var fields map[string]json.RawMessage
+			_ = json.Unmarshal(raw, &fields)
+			for _, key := range []string{"service_date", "summary", "responsible_user_ids"} {
+				valid = valid && fields[key] != nil && string(fields[key]) != "null"
+			}
+			var dependencies []*string
+			if json.Unmarshal(fields["depends_on"], &dependencies) != nil {
+				valid = false
+			}
+			for _, dep := range dependencies {
+				valid = valid && dep != nil
+			}
+			if !valid {
+				writeError(w, 400, "invalid_request", "A complete Service Entry intent is required")
+				return
+			}
+			seen[op.OperationID] = true
+			operations = append(operations, authorization.BatchOperation{ServiceEntry: &op})
+			continue
+		}
 		if discriminator.Type == "clock.in" || discriminator.Type == "clock.out" {
 			op, ok := decodeBatchClock(w, r, raw)
 			if !ok {
@@ -219,6 +253,9 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 				status, code = 409, "comment_parent_changed"
 			case errors.Is(result.Err, authorization.ErrConflict):
 				status, code = 409, "subtask_conflict"
+				if operations[index].ServiceEntry != nil {
+					code = "service_entry_conflict"
+				}
 				if operations[index].File != nil {
 					code = "file_conflict"
 				}

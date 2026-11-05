@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -157,10 +158,10 @@ func TestServiceEntryAPICommitFenceAndLostResponseScopeLoss(t *testing.T) {
 }
 
 func TestServiceEntryLifecycleRacesRetainAttributableOutcome(t *testing.T) {
-	for _, lifecycle := range []string{"archive", "transfer"} {
+	for _, lifecycle := range []string{"archive", "transfer", "unlink"} {
 		for _, mutation := range []string{"create", "revise"} {
 			t.Run(lifecycle+"/"+mutation, func(t *testing.T) {
-				pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
+				pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
 				ctx := context.Background()
 				c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Archive Customer").SaveX(ctx)
 				next := client.Customer.Create().SetCompanyID(company).SetDisplayName("Next Customer").SaveX(ctx)
@@ -220,6 +221,17 @@ func TestServiceEntryLifecycleRacesRetainAttributableOutcome(t *testing.T) {
 					delete(command, "revision")
 				}
 				start := make(chan struct{})
+				cookie := sessionCookie(t, ctx, sessions, admin)
+				unlinkPath := fmt.Sprintf("/jobs/%d/assets", job.ID)
+				unlinkValues := url.Values{"action": {"unlink"}, "link_id": {fmt.Sprint(collection.Data.LinkID)}}
+				var unlinkRequest *http.Request
+				if lifecycle == "unlink" {
+					values := currentJobFormValues(t, router, cookie, unlinkPath, unlinkValues)
+					unlinkRequest = httptest.NewRequest("POST", unlinkPath, strings.NewReader(values.Encode()))
+					unlinkRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+					unlinkRequest.AddCookie(cookie)
+				}
+				unlinkConflict := false
 				archive := make(chan error, 1)
 				revise := make(chan *httptest.ResponseRecorder, 1)
 				go func() {
@@ -227,6 +239,15 @@ func TestServiceEntryLifecycleRacesRetainAttributableOutcome(t *testing.T) {
 					auth := authorization.New(pool)
 					if lifecycle == "archive" {
 						archive <- auth.AssetLifecycle(ctx, authorization.Actor{UserID: admin}, asset.ID, false)
+					} else if lifecycle == "unlink" {
+						w := httptest.NewRecorder()
+						router.ServeHTTP(w, unlinkRequest)
+						unlinkConflict = w.Code == 409
+						if w.Code != 303 && w.Code != 409 {
+							archive <- fmt.Errorf("unlink: %d %s", w.Code, w.Body.String())
+						} else {
+							archive <- nil
+						}
 					} else {
 						archive <- auth.ChangeAssetAssociation(ctx, authorization.Actor{UserID: admin}, asset.ID, authorization.AssetAssociationInput{Action: "transfer", CustomerID: next.ID, EffectiveDate: time.Now().UTC().Format("2006-01-02"), Reason: "Racing departure", Revision: 0})
 					}
@@ -243,9 +264,21 @@ func TestServiceEntryLifecycleRacesRetainAttributableOutcome(t *testing.T) {
 				if response.Code != 200 && response.Code != 409 {
 					t.Fatalf("revision/archive=%d %s", response.Code, response.Body.String())
 				}
+				// A newly accepted entry changes the Job's permanent blockers and
+				// can stale the office form. Explicitly reread that form before
+				// completing unlink; never bypass the production save witness.
+				if unlinkConflict {
+					fieldPost(t, router, cookie, unlinkPath, unlinkValues, 303)
+				}
 				var invalid int
 				if err = pool.QueryRow(ctx, `SELECT count(*) FROM asset_service_revisions r JOIN asset_service_entries e ON e.id=r.entry_id JOIN assets a ON a.id=e.asset_id WHERE r.actor_id<>$1 OR r.accepted_at>a.deleted_at`, admin).Scan(&invalid); err != nil || invalid != 0 {
 					t.Fatalf("unattributable/late revisions=%d err=%v", invalid, err)
+				}
+				if lifecycle == "unlink" {
+					historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM asset_service_revisions r JOIN asset_service_entries e ON e.id=r.entry_id JOIN job_asset_links l ON l.id=e.link_id WHERE e.job_id=$1 AND (l.unlinked_at IS NULL OR r.accepted_at>l.unlinked_at)`, job.ID).Scan(&invalid))
+					if invalid != 0 {
+						t.Fatalf("unlinked relationship accepted late revisions: %d", invalid)
+					}
 				}
 				command["operation_id"] = newOperationKey()
 				response = serviceAPIRequest(api, token, "POST", target, command)

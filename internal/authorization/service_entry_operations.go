@@ -36,6 +36,8 @@ func serviceEntryOutcome(code string) error {
 		return ErrForbidden
 	case "service_entry_conflict":
 		return ErrConflict
+	case "invalid_dependency", "failed_dependency", "invalid_occurrence":
+		return executionError(code)
 	}
 	return nil
 }
@@ -43,6 +45,10 @@ func serviceEntryOutcome(code string) error {
 // SubmitServiceEntry commits a domain effect, audit and immutable domain receipt
 // together, admitted by the shared cross-family operation registry.
 func (s *Service) SubmitServiceEntry(ctx context.Context, a Actor, in ServiceEntryCommand) (ServiceEntryReceipt, error) {
+	return s.submitServiceEntryBound(ctx, a, in, nil)
+}
+
+func (s *Service) submitServiceEntryBound(ctx context.Context, a Actor, in ServiceEntryCommand, batch *serviceEntryBatchExecution) (ServiceEntryReceipt, error) {
 	result := ServiceEntryReceipt{OperationID: in.OperationID}
 	op, err := uuid.Parse(in.OperationID)
 	if err != nil || op == uuid.Nil {
@@ -51,6 +57,9 @@ func (s *Service) SubmitServiceEntry(ctx context.Context, a Actor, in ServiceEnt
 	in.OperationID = op.String()
 	result.OperationID = in.OperationID
 	raw, err := json.Marshal(in)
+	if batch != nil {
+		raw, err = json.Marshal(batch.operation)
+	}
 	if err != nil {
 		return result, err
 	}
@@ -67,6 +76,9 @@ func (s *Service) SubmitServiceEntry(ctx context.Context, a Actor, in ServiceEnt
 		kind := "service_entry.create"
 		if in.EntryID != 0 {
 			kind = "service_entry.revise"
+		}
+		if batch != nil {
+			kind = batch.operation.Type
 		}
 		if err := AdmitOperation(ctx, tx, a, in.OperationID, kind, intent); err != nil {
 			return err
@@ -88,7 +100,12 @@ func (s *Service) SubmitServiceEntry(ctx context.Context, a Actor, in ServiceEnt
 		if err != nil {
 			return err
 		}
-		result.EntryID, outcome = applyServiceEntry(ctx, effect, p, a, in.JobID, in.AssetID, in.EntryID, in.Revision, in.Content, in.OperationID, in.OccurredAt)
+		if batch != nil {
+			in, outcome = batch.command(ctx, effect, a)
+		}
+		if outcome == nil {
+			result.EntryID, outcome = applyServiceEntry(ctx, effect, p, a, in.JobID, in.AssetID, in.EntryID, in.Revision, in.Content, in.OperationID, in.OccurredAt)
+		}
 		if outcome == nil {
 			if err = effect.Commit(ctx); err != nil {
 				return err
@@ -99,7 +116,10 @@ func (s *Service) SubmitServiceEntry(ctx context.Context, a Actor, in ServiceEnt
 				return err
 			}
 			result.EntryID = 0
+			var dependency *JobExecutionConflict
 			switch {
+			case errors.As(outcome, &dependency):
+				result.Code = dependency.Code
 			case errors.Is(outcome, ErrNotFound):
 				result.Code = "not_found"
 			case errors.Is(outcome, ErrForbidden):

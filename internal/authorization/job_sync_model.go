@@ -131,6 +131,9 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 			if err != nil {
 				return nil, err
 			}
+			if err := syncServiceEntryContext(ctx, tx, p, a, e.InstalledID, masters, v); err != nil {
+				return nil, err
+			}
 			e.Data["masters"] = v
 			// Membership, lifecycle, and linked-location changes invalidate old context.
 			// Field edits do not: they appear in the following state delta.
