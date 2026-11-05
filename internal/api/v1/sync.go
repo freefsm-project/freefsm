@@ -19,6 +19,24 @@ func (h *handler) syncClocks(w http.ResponseWriter, r *http.Request) {
 	h.syncProjection(w, r, true)
 }
 
+func (h *handler) syncItems(w http.ResponseWriter, r *http.Request) {
+	req, ok := authorization.FromContext(r.Context())
+	if !ok {
+		unauthorized(w)
+		return
+	}
+	query, err := urlSyncQuery(r)
+	if r.URL.Query().Get("scope") == "" {
+		query.Scope = "all"
+	}
+	if err != nil || query.Scope != "all" {
+		writeError(w, 400, "invalid_request", "invalid synchronization query")
+		return
+	}
+	result, err := req.Service.SyncItems(r.Context(), req.Actor, query)
+	writeSyncResult(w, result, err)
+}
+
 func (h *handler) syncProjection(w http.ResponseWriter, r *http.Request, clocks bool) {
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {
@@ -36,6 +54,10 @@ func (h *handler) syncProjection(w http.ResponseWriter, r *http.Request, clocks 
 	} else {
 		result, err = req.Service.SyncJobs(r.Context(), req.Actor, query)
 	}
+	writeSyncResult(w, result, err)
+}
+
+func writeSyncResult(w http.ResponseWriter, result authorization.SyncPage, err error) {
 	switch {
 	case errors.Is(err, authorization.ErrSyncResnapshot):
 		writeSyncPurge(w, 409, "resnapshot_required", "purge_and_resnapshot")
