@@ -6,6 +6,17 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 // Executable API reference, sharing the established encrypted store, authority
 // lifecycle, explicit batch submission and observation invalidation rules.
 class ServiceEntryClient extends FieldLeaseClient {
+ async receiptAuthority(s,e,code,receiptOnly=false){
+  // A relationship conflict is not proof of continuing visibility: unlink,
+  // transfer and archive share this outcome with stale revisions. Withhold the
+  // whole cached snapshot (including every coverage observation alias) until a
+  // fresh authorized snapshot can purge inaccessible targets. Pending identities
+  // and original intent stay locked, not rewritten or automatically repaired.
+  if(e.family==='service_entry'&&['service_entry_conflict','failed_dependency'].includes(code)){
+   await this.withholdCache(s);return true;
+  }
+  return super.receiptAuthority(s,e,code,receiptOnly);
+ }
  projection(cache,job,asset){return cache[job]?.masters?.assets?.find(a=>a.id===asset);}
  pendingTargetVisible(e,records){
   if(e.family!=='service_entry')return super.pendingTargetVisible(e,records);

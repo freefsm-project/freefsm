@@ -71,7 +71,14 @@ immutable revisions. Local OpenAPI 3.1 defines requests, responses and errors.
    respecting retry timing. Same-intent replay cannot duplicate an accepted effect;
    changed intent under the old ID is rejected.
 3. Terminal `service_entry_conflict` requires current authorized reread and explicit
-   review. Call `repairServiceEntry(oldID, reviewed, dependencies)` to create a new
+   review. This code can mean unlink, transfer or archive, not only revision drift.
+   The reference client durably withholds its cached snapshot and pending comparison
+   until `synchronize()` completes a fresh current-authority snapshot; delta-only
+   synchronization cannot unlock it. Failed dependencies receive the same treatment.
+   All cached coverage copies are invalidated. Other-Job pending intent is retained
+   unchanged and becomes usable again after authorized synchronization. An unsuccessful
+   durable withholding write quarantines the encrypted store across process restart.
+   Call `repairServiceEntry(oldID, reviewed, dependencies)` to create a new
    ID. A failed dependency remains failed; repair each descendant explicitly with
    its own new ID and reviewed dependency list. Never silently refresh revisions,
    replace targets, or resubmit successful unrelated operations.
