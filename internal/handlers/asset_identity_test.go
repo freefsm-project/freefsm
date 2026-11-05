@@ -327,7 +327,9 @@ func TestAssetIdentityAPIContext(t *testing.T) {
 		}
 		return w.Body.String()
 	}
+	before := time.Now()
 	body := get(200)
+	after := time.Now()
 	var envelope struct {
 		Data struct {
 			Asset map[string]json.RawMessage `json:"asset"`
@@ -337,7 +339,7 @@ func TestAssetIdentityAPIContext(t *testing.T) {
 		t.Fatal(err)
 	}
 	projection := envelope.Data
-	allowed := strings.Fields("id number name ownership_class type status serial_number manufacturer model installed_at warranty_expires location service_notes")
+	allowed := strings.Fields("id number name ownership_class type status serial_number manufacturer model installed_at warranty_expires location service_notes lease_coverage")
 	if len(projection.Asset) != len(allowed) {
 		t.Fatalf("Asset context allowlist changed: %s", body)
 	}
@@ -345,6 +347,17 @@ func TestAssetIdentityAPIContext(t *testing.T) {
 		if _, ok := projection.Asset[key]; !ok {
 			t.Fatalf("missing Asset context field %s", key)
 		}
+	}
+	var coverage map[string]json.RawMessage
+	if err := json.Unmarshal(projection.Asset["lease_coverage"], &coverage); err != nil {
+		t.Fatal(err)
+	}
+	if len(coverage) != 2 || string(coverage["covered"]) != "false" {
+		t.Fatalf("expected bounded uncovered observation: %s", projection.Asset["lease_coverage"])
+	}
+	var asOf time.Time
+	if err := json.Unmarshal(coverage["as_of"], &asOf); err != nil || asOf.Before(before) || asOf.After(after) {
+		t.Fatalf("expected current observation time, got %s: %v", coverage["as_of"], err)
 	}
 	for _, method := range []string{"GET", "POST"} {
 		r := httptest.NewRequest(method, fmt.Sprintf("/assets/%d", a.ID), nil)
