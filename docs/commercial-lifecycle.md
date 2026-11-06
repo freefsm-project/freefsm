@@ -57,6 +57,37 @@ only currently authorized state. Keep the original revision until the user expli
 reviews a replacement intent with a new operation ID, or discards it. These server
 projections do not themselves supply an encrypted reference-client implementation.
 
+### Protected commercial reference
+
+`internal/api/v1/reference/commercial-client.cjs` exports `CommercialClient` and
+the existing `ProtectedStore`. Use a separate protected directory per document
+kind. Initialize, authenticate and explicitly `synchronize('estimate'|'invoice')`;
+`synchronize(kind, true)` advances a completed delta. `view()` requires a live
+offline lease and a completed synchronization.
+
+`stageEdit(opaqueID, reviewedRevision, changedValues)` captures the original
+revision, Job and Customer. `stageLifecycle(opaqueID, reviewedRevision, choice,
+'status'|'finalize')` captures the selected identity, category and meaning revision.
+Staging is offline and copies caller input. `submit(operationID)` is explicit.
+On uncertainty, `reconcile(operationID)` queries the original receipt first;
+fresh synchronization is then required. `compare(operationID)` refreshes current
+authority before exposing the original review, proposed intent and current state.
+`repair(operationID, newlyReviewedRevision, valuesOrChoice)` creates a new ID;
+`discard(operationID)` removes local intent. Neither refresh nor restart submits
+or rewrites work. Restore-only uncertain work additionally requires receipt lookup
+and explicit `acknowledgeUncertain` before replacement.
+
+The shared protected owner encrypts persisted state, locks on expiry and failed
+authority writes, purges ordinary revocation, and separates restored-epoch review.
+Failed refresh/comparison and receipt contact withhold persisted observations;
+successful commercial synchronization cannot unlock inherited private observations
+from another domain. The production HTTP/PostgreSQL regression
+`TestCommercialProtectedReferenceAPI` exercises encrypted restart, disjoint edit
+conflict, explicit repair, lost-response/scope-loss receipts, revocation, restore,
+workflow/zero-total behavior and failed comparison. Ordered commercial batch
+dispatch and the complete settlement/field/workflow-change reference matrix still
+require further implementation and conformance evidence.
+
 Retained documents without a recorded manual status remain readable: `status_id`, `manual_category` and an unknown `effective_category` are explicitly `null`. Their current revision, workflow choices and Invoice settlement lock remain available for deliberate review. A read never supplies Draft, creates a transition or invents financial history. Repair requires an explicit reviewed Status selection; its event preserves the unknown prior status rather than claiming a historical Draft or acceptance.
 
 POST `/api/v1/estimates/{id}/status`, `/api/v1/invoices/{id}/status`, or `/api/v1/invoices/{id}/finalize` with:
