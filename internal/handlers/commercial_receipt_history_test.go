@@ -7,6 +7,7 @@ import (
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/saveaction"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -43,8 +44,20 @@ func TestCommercialLegacyNumericIntentReceiptReplayAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := apiv1.NewRouter(pool, client, sessions)
+	var specification map[string]any
+	historyCheck(t, json.Unmarshal(serviceAPIRequest(api, "", "GET", "/openapi.json", nil).Body.Bytes(), &specification))
+	compiler := jsonschema.NewCompiler()
+	compiler.AssertFormat()
+	historyCheck(t, compiler.AddResource("https://history.test/openapi.json", specification))
+	createSchema, err := compiler.Compile("https://history.test/openapi.json#/components/requestBodies/CommercialCreate/content/application~1json/schema")
+	historyCheck(t, err)
 	call := func(method, path, body string, want int) string {
 		t.Helper()
+		if method == "POST" && path == "/invoices" {
+			value, err := jsonschema.UnmarshalJSON(strings.NewReader(body))
+			historyCheck(t, err)
+			historyCheck(t, createSchema.Validate(value))
+		}
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Content-Type", "application/json")
@@ -111,6 +124,8 @@ func TestCommercialLegacyNumericIntentReceiptReplayAPI(t *testing.T) {
 	}
 	// New exact numeric intents must not inherit the legacy float equivalence.
 	assignFieldDocumentCreator(t, pool, j.ID, actor.ID)
+	missingBinding := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"New unbound intent"}`, newOperationKey(), newOperationKey(), j.ID)
+	assertContains(t, call("POST", "/invoices", missingBinding, 428), "review_required")
 	body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Exact numeric intent","line_items":[{"title":"Exact","quantity":1.50000000000000001,"unit_price":"10.00"}]}`, newOperationKey(), newOperationKey(), j.ID, c.ID)
 	created := call("POST", "/invoices", body, 200)
 	if replay := call("POST", "/invoices", body, 200); replay != created {

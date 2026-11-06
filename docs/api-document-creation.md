@@ -9,9 +9,12 @@ It is an executable native protocol reference; the website remains online-only.
 ## Review and stage
 
 1. Initialize a private owned directory and authenticate through the existing
-   lease protocol. `synchronize()` reads complete authorized Job and Item
-   snapshots before publishing either cache. `synchronize(true)` applies their
-   respective coherent deltas. Item identity and permitted base/Pricebook fields
+   lease protocol. `synchronize()` discovers current `/capabilities` grants and
+   reads complete authorized Job and, only with Item View, Item snapshots before
+   publishing either cache. Without Item View, an empty catalog is a valid synced
+   state: authorized empty/free-text documents need no catalog grant.
+   `synchronize(true)` applies the available projections' coherent deltas.
+   Item identity and permitted base/Pricebook fields
    are retained; Cost is excluded even when the caller may view it separately.
 2. `view()` exposes current authorized inputs. Each Job's `document_creation`
    exposes independent Estimate/Invoice capabilities, exact reviewed Customer
@@ -73,6 +76,17 @@ authentication and synchronization establish current authority, then becomes
 `restore_uncertain`. A missing restored receipt cannot prove the historical
 effect never occurred. Explicit reconciliation, `acknowledgeUncertain`, and
 reviewed new-ID repair are required; blind replay is forbidden.
+
+An absent optional Item grant discovered during a fresh synchronization does not
+invalidate the session or unrelated permitted pending work. Old Item captures are
+withheld, and original receipt lookup remains available. Actual denied requests
+and scope-loss/resnapshot responses still follow the shared purge policy; use a
+fresh snapshot after authority changes rather than replaying stale delta cursors.
+
+The served `CommercialCreate` wire schema permits an omitted `customer_id` for
+unchanged historical terminal replay. New effects still require the explicitly
+reviewed binding and return typed `428 review_required` when it is missing. Never
+add today's Customer to a historical request: that changes its original intent.
 
 ## Executable evidence
 

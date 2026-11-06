@@ -14,12 +14,19 @@ class DocumentCreationClient extends OfflineFieldClient {
  async withholdCache(s){s.items={};s.itemCursor=null;return super.withholdCache(s);}
  purgeSensitiveOperation(e){super.purgeSensitiveOperation(e);delete e.reviewedInputs;delete e.items;}
  async synchronize(delta=false){return this.transaction(async s=>{
-  if(delta){await this.enforceOfflineAccessWindow(s);if(!s.syncCursor||!s.itemCursor)throw Error('synchronization_incomplete');}
+  if(delta){await this.enforceOfflineAccessWindow(s);if(!s.syncCursor)throw Error('synchronization_incomplete');}
   await this.policy(s);
   const jobs=delta?clone(s.cache):{},items=delta?clone(s.items||{}):{},jobCursor=delta?s.syncCursor:null,itemCursor=delta?s.itemCursor:null;
   await this.withholdCache(s);
+  // Catalog access is independent of document creation. Discover current grants
+  // on every contact, never infer them from a lease or a previous catalog. A
+  // denied capability request (or a race yielding 403 below) still uses the
+  // shared fail-closed purge path.
+  const capabilities=await this.contact(s,'/capabilities');
+  if(capabilities.status!==200||!Array.isArray(capabilities.data?.grants))throw Error('synchronization_incomplete');
+  const canReadItems=capabilities.data.grants.some(g=>g.permission==='item.view'&&g.scope==='A');
   const jobPage=await this.pages(s,'/sync/jobs?scope=assigned',jobCursor,jobs);
-  const itemPage=await this.pages(s,'/sync/items',itemCursor,items);
+  const itemPage=canReadItems?await this.pages(s,'/sync/items',itemCursor,items):{records:{},cursor:null};
   const catalog={};
   for(const [id,item]of Object.entries(itemPage.records))catalog[id]=Object.fromEntries(itemFields.filter(k=>Object.hasOwn(item,k)).map(k=>[k,item[k]]));
   for(const e of Object.values(s.pending)){

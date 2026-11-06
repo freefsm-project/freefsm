@@ -35,8 +35,53 @@ const {DocumentCreationClient,ProtectedStore}=require('../reference/document-cre
   await client.initialize();await client.authenticate(input.token);await client.synchronize();
   const view=await client.view(),job=Object.keys(view.cache).find(j=>String(view.cache[j].document_creation[input.kind].job_id)===input.job),item=Object.keys(view.items)[0];
   if(['grant','assignment','lost_grant'].includes(input.scenario))assert.deepEqual(view.cache[job].document_creation[input.kind==='invoice'?'estimate':'invoice'],{can_create:false});
-  assert(!JSON.stringify(view.items).includes('unit_cost'));
-  const line=await client.selectItem(item,'1.5');
+   assert(!JSON.stringify(view.items).includes('unit_cost'));
+   if(['no_catalog','no_catalog_restore','lost_item'].includes(input.scenario)){
+    await client.synchronize(true);
+    const other=Object.keys(view.cache).find(j=>j!==job);
+    const values=await client.prepareCreation(input.kind,job,{title:'Independent free text',line_items:[{title:'Free text',quantity:'2',unit_price:'3.25',taxable:false}]});
+    const unrelated=await client.stageCreation(input.kind,other,await client.prepareCreation(input.kind,other,{title:'Unrelated empty document'}));
+    const unrelatedIntent=(await client.view()).pending[unrelated].intent;
+    const id=await client.stageCreation(input.kind,job,values),original=(await client.view()).pending[id].intent;
+    restart(id,original);
+    let selected,selectedAccepted,selectedOriginal;
+    if(input.scenario==='lost_item'){
+     const selectedValues=await client.prepareCreation(input.kind,job,{title:'Private selected Item',line_items:[await client.selectItem(item,'1')]});
+     selected=await client.stageCreation(input.kind,job,selectedValues);
+     selectedAccepted=await client.stageCreation(input.kind,job,selectedValues);
+     selectedOriginal=(await client.view()).pending[selectedAccepted].intent;
+     lose=true;await assert.rejects(client.submitCreation(selectedAccepted),/lost_response/);
+    }else assert.deepEqual(view.items,{});
+    if(input.scenario==='no_catalog_restore'){
+     const changed=await fetch(input.url+'/__fixture/change',{method:'POST'}),restored=await changed.json();
+     await assert.rejects(client.synchronize(),/locked_review/);restart(id,null,'locked_review');
+     await client.authenticate(restored.token);await client.synchronize();
+     assert.deepEqual((await client.view()).pending[id].intent,original);
+     await assert.rejects(client.submitCreation(id),/reconciliation_or_review_required/);
+     await client.reconcile(id);await client.synchronize();await client.acknowledgeUncertain(id);
+     const next=await client.repairCreation(id,values);
+     assert.equal((await client.submitCreation(next)).receipt.outcome,'accepted');
+     assert.equal((await client.view()).pending[unrelated].state,'restore_uncertain');
+    }else{
+     lose=true;await assert.rejects(client.submitCreation(id),/lost_response/);
+     if(selected)assert.equal((await fetch(input.url+'/__fixture/change',{method:'POST'})).status,204);
+     await client.synchronize();
+     const current=await client.view();assert.deepEqual(current.items,{});
+     assert.deepEqual(current.pending[unrelated].intent,unrelatedIntent);
+     if(selected){assert(!current.pending[selected].intent);assert(!current.pending[selected].items);await assert.rejects(client.selectItem(item,'1'),/selection_unavailable/);}
+     const receipt=(await client.reconcile(id)).receipt;assert.equal(receipt.outcome,'accepted');
+     const replay=await transport('/'+input.kind+'s','POST',original,{token:input.token});assert.deepEqual(replay.data,receipt);
+     if(selectedAccepted){
+      const recovered=(await client.reconcile(selectedAccepted)).receipt;assert.equal(recovered.outcome,'accepted');
+      const originalReplay=await transport('/'+input.kind+'s','POST',selectedOriginal,{token:input.token});assert.deepEqual(originalReplay.data,recovered);
+     }
+     await client.synchronize();await client.synchronize(true);
+     assert.equal((await client.submitCreation(unrelated)).receipt.outcome,'accepted');
+     const document=await transport('/'+input.kind+'s/'+receipt.id,'GET',undefined,{token:input.token});assert.equal(document.data.totals.total,'6.50');
+    }
+    console.log('Independent catalog '+input.kind+' '+input.scenario+' PASS');return;
+   }
+   const line=await client.selectItem(item,'1.5');
   assert.equal(line.unit_price,'12.34');
   const reviewed=await client.prepareCreation(input.kind,job,{title:'ENCRYPTED-CREATION-SECRET',line_items:[line]});
   if(input.scenario==='creation'){

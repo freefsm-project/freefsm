@@ -22,7 +22,7 @@ import (
 func TestFieldDocumentProtectedReference(t *testing.T) {
 	for _, kind := range []string{"estimate", "invoice"} {
 		t.Run(kind, func(t *testing.T) {
-			for _, scenario := range []string{"creation", "archive", "binding", "required", "restore", "revoke", "quarantine", "grant", "assignment", "lost_grant"} {
+			for _, scenario := range []string{"creation", "archive", "binding", "required", "restore", "revoke", "quarantine", "grant", "assignment", "lost_grant", "no_catalog", "no_catalog_restore", "lost_item"} {
 				t.Run(scenario, func(t *testing.T) {
 					pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
 					ctx := context.Background()
@@ -47,7 +47,10 @@ func TestFieldDocumentProtectedReference(t *testing.T) {
 					actor := authorization.Actor{UserID: admin}
 					grants := []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "customer.view", Scope: authorization.Context}, {Permission: "pricing.view", Scope: authorization.Assigned}, {Permission: kind + ".view", Scope: authorization.Assigned}, {Permission: kind + ".create", Scope: authorization.Assigned}, {Permission: "item.view", Scope: authorization.All}, {Permission: "pricebook.view", Scope: authorization.All}}
 					var role int64
-					if scenario == "grant" || scenario == "assignment" || scenario == "lost_grant" {
+					if strings.HasPrefix(scenario, "no_catalog") {
+						grants = grants[:len(grants)-2]
+					}
+					if scenario == "grant" || scenario == "assignment" || scenario == "lost_grant" || scenario == "lost_item" || strings.HasPrefix(scenario, "no_catalog") {
 						u := client.User.Create().SetCompanyID(company).SetName("Scoped creator").SetEmail("encrypted-creator@test").SetPasswordHash("x").SetRole("tech").SaveX(ctx)
 						user = u.ID
 						var err error
@@ -94,11 +97,11 @@ func TestFieldDocumentProtectedReference(t *testing.T) {
 								if err == nil {
 									_, err = pool.Exec(ctx, `UPDATE custom_field_definitions SET options='["Reviewed"]' WHERE company_id=$1 AND object_type=$2`, company, kind)
 								}
-							case "restore":
+							case "restore", "no_catalog_restore":
 								_, err = pool.Exec(ctx, `UPDATE session_instance SET epoch=gen_random_uuid(); DELETE FROM sessions`)
 								if err == nil {
 									var fresh string
-									fresh, err = sessions.CreateMobile(ctx, admin, "Restored creation reference")
+									fresh, err = sessions.CreateMobile(ctx, user, "Restored creation reference")
 									if err == nil {
 										_ = json.NewEncoder(w).Encode(map[string]string{"token": fresh})
 										return
@@ -108,6 +111,8 @@ func TestFieldDocumentProtectedReference(t *testing.T) {
 								_, err = pool.Exec(ctx, `DELETE FROM sessions`)
 							case "grant", "lost_grant":
 								_, err = auth.SaveRole(ctx, actor, role, "Scoped encrypted creator", grants[:len(grants)-1], 1)
+							case "lost_item":
+								_, err = auth.SaveRole(ctx, actor, role, "Scoped encrypted creator", grants[:len(grants)-2], 1)
 							case "assignment":
 								var review authorization.DispatchReview
 								review, err = auth.ReviewDispatch(ctx, actor, job.ID, authorization.DispatchPlan{})
