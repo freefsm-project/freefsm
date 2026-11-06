@@ -248,6 +248,18 @@ func (s *Service) CommercialTransitionOperation(ctx context.Context, a Actor, ki
 
 func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string, id int64, permission string, in CommercialIntent, intent []byte, legacyIntent func() ([]byte, error), write func(context.Context, pgx.Tx, int64, Principal) (int64, error), transition *CommercialTransition) (CommercialReceipt, error) {
 	r := CommercialReceipt{OperationID: in.OperationID}
+	batch, _ := ctx.Value(commercialBatchKey{}).(*commercialBatchExecution)
+	if batch != nil {
+		if batch.operation.OperationID != in.OperationID || id <= 0 {
+			return r, ErrCommercialInput
+		}
+		var err error
+		intent, err = json.Marshal(map[string]any{"type": batch.operation.Type, "target": batch.operation.Target, "depends_on": batch.operation.DependsOn, "commercial": json.RawMessage(intent)})
+		if err != nil {
+			return r, err
+		}
+		legacyIntent = nil
+	}
 	if kind != "estimate" && kind != "invoice" {
 		return r, ErrNotFound
 	}
@@ -291,6 +303,11 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 			return err
 		}
 		effect := func() error {
+			if batch != nil {
+				if err := batch.dependencies.validate(ctx, sp, a); err != nil {
+					return err
+				}
+			}
 			if (a.Channel != "api" || in.JobID <= 0) && (transition == nil || a.Channel != "web") {
 				return ErrCommercialInput
 			}
@@ -393,10 +410,13 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 			r.Number = ""
 			r.Revision = ""
 			var field *customfields.FieldError
+			var dependency *JobExecutionConflict
 			// Only the originating domain boundary can reject commercial intent.
 			// A CHECK/FK error can also originate in audit, projection or storage;
 			// its SQLSTATE alone must never consume an operation identity.
 			switch {
+			case errors.As(effect, &dependency):
+				r.Outcome = dependency.Code
 			case errors.Is(effect, ErrNotFound):
 				r.Outcome = "not_found"
 			case errors.Is(effect, ErrForbidden):
@@ -427,5 +447,11 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 		_, err = tx.Exec(ctx, `INSERT INTO commercial_operations(user_id,client_hash,operation_id,document_type,requested_id,intent,receipt,intent_version) VALUES($1,$2,$3,$4,$5,$6,$7,1)`, a.UserID, commercialReceiptClient(a), in.OperationID, kind, id, canonical, raw)
 		return err
 	})
+	// A populated draft is not a receipt until the enclosing transaction commits.
+	// This also covers a failed receipt insert or an uncertain Commit: callers
+	// must reconcile the original identity, never acknowledge an uncommitted effect.
+	if err != nil {
+		return CommercialReceipt{OperationID: in.OperationID}, err
+	}
 	return r, err
 }

@@ -9,8 +9,8 @@ The supported operations are `job.field_notes`, `job.status`, `job.subtask`,
 [Custom Field Values synchronization](api-job-custom-field-sync.md) and
 [File synchronization](api-offline-files.md) and [own clock synchronization](api-clock-sync.md).
 [Comment synchronization](api-comment-sync.md) defines exact parent/thread intent.
-Operation-specific synchronization for documents and Service Entries remains
-with its owning tickets.
+Commercial edits and workflow actions also support `estimate.edit`, `invoice.edit`,
+`estimate.status`, `invoice.status`, and `invoice.finalize`, as described below.
 
 ```json
 {"operations":[{"operation_id":"80000000-0000-4000-8000-000000000001","type":"job.field_notes","target":"42","depends_on":[],"notes_revision":"original-opaque-revision","field_notes":"Reviewed original text","occurred_at":"2026-10-15T12:00:00Z"}]}
@@ -80,6 +80,44 @@ owning effect identity as `effect_id`; a Subtask's individual receipt remains at
 to the same immutable receipt/effect. Original operation family determines lookup.
 
 ## Encrypted executable
+
+### Commercial server contract
+
+Commercial members carry `operation_id`, `type`, canonical positive decimal-string
+`target`, explicit `depends_on` array, and a closed `commercial` object. Edits use
+the existing commercial patch fields (including changed Custom Fields); workflow
+uses `job_id`, `revision`, `status_id`, `meaning_revision`, and optional
+`occurred_at`. The inner object does not accept another operation/client ID.
+Omitted patch fields remain unchanged. Omitted domain preconditions receive the
+existing terminal domain rejection; malformed/omitted/null payloads, null supplied
+fields, and malformed dependency arrays reject the entire envelope before dispatch.
+
+Dependencies retain their submitted order and duplicates as immutable intent.
+Duplicate references are allowed and checked; reordering or deduplicating them
+under the same operation ID is changed intent. No normalization migrates an ID.
+Commercial batch canonical intent wraps the existing canonical domain intent with
+type, target and dependencies. Therefore even an empty-dependency batch operation
+cannot reuse a standalone operation's ID (or vice versa). Reconcile at
+`/commercial-operations/{operation}` and replay through the original transport;
+historical standalone receipt formats remain supported there. A transport switch
+for a terminally rejected action requires explicit current review and a new ID.
+
+Commercial receipts retain their existing `outcome`, document identity and revision
+shape, including `invalid_dependency` and `failed_dependency`. They disclose no
+document content. Historical terminal replay precedes NEW-effect authority,
+revision, workflow meaning and dependency checks. Each new effect uses the existing
+commercial transaction, audit and receipt owners; original anchors/revisions/meanings
+are never substituted from predecessor results. Same-ID replay and desired-state
+no-ops do not duplicate activity or alter transition attribution.
+
+Audit, receipt-insert and commit failures expose no draft terminal receipt alongside
+`retryable_failure`. A known rollback leaves no admission/effect/audit/receipt; an
+uncertain commit still requires original receipt reconciliation before same-ID retry.
+A transient predecessor is unsuccessful for this submission: its processed
+descendants receive terminal `failed_dependency`, while unrelated work continues.
+Retrying that predecessor does not revive descendants; each needs explicit reviewed
+new-ID repair or discard. Encrypted commercial ordered staging and interrupted
+recovery remain a separate reference-client implementation unit.
 
 Use the [existing protected Notes executable](api-offline-notes.md):
 

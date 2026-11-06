@@ -79,6 +79,7 @@ type BatchClockOperation struct {
 // A batch member retains its domain-specific reviewed intent. Clock commands
 // are not Notes commands and do not acquire revision/target substitution rules.
 type BatchOperation struct {
+	Commercial   *BatchCommercialOperation
 	ServiceEntry *BatchServiceEntryOperation
 	Job          *BatchFieldOperation
 	Clock        *BatchClockOperation
@@ -86,6 +87,9 @@ type BatchOperation struct {
 }
 
 func (op BatchOperation) id() string {
+	if op.Commercial != nil {
+		return op.Commercial.OperationID
+	}
 	if op.ServiceEntry != nil {
 		return op.ServiceEntry.OperationID
 	}
@@ -101,7 +105,7 @@ func (op BatchOperation) id() string {
 // SubmitOperationBatch deliberately has no enclosing transaction. Each existing
 // domain transaction independently fences current authority and commits its own
 // immutable receipt. Cancellation leaves unprocessed identities unreconciled.
-func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []BatchOperation, files FileBatchExecutor) []BatchOperationResult {
+func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []BatchOperation, files FileBatchExecutor, commercial ...CommercialBatchExecutor) []BatchOperationResult {
 	results := make([]BatchOperationResult, 0, len(ops))
 	positions := map[string]int{}
 	successful := map[string]bool{}
@@ -109,6 +113,24 @@ func (s *Service) SubmitOperationBatch(ctx context.Context, a Actor, ops []Batch
 		positions[member.id()] = i
 	}
 	for i, member := range ops {
+		if member.Commercial != nil {
+			op := *member.Commercial
+			batch := commercialBatchExecution{operation: op, dependencies: batchDependencies{dependsOn: op.DependsOn, positions: positions, index: i, successful: successful}}
+			var receipt CommercialReceipt
+			var err error
+			if len(commercial) != 1 || commercial[0] == nil {
+				err = ErrCommercialInput
+			} else {
+				receipt, err = commercial[0](context.WithValue(ctx, commercialBatchKey{}, &batch), op)
+			}
+			result := BatchOperationResult{OperationID: op.OperationID, Err: err}
+			if receipt.Outcome != "" {
+				result.Receipt = receipt
+			}
+			results = append(results, result)
+			successful[op.OperationID] = err == nil && receipt.Outcome == "accepted"
+			continue
+		}
 		if member.ServiceEntry != nil {
 			op := member.ServiceEntry
 			batch := serviceEntryBatchExecution{operation: *op, dependencies: batchDependencies{dependsOn: op.DependsOn, positions: positions, index: i, successful: successful}}

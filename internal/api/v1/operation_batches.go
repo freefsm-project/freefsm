@@ -67,6 +67,19 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 			writeError(w, 400, "invalid_request", "Invalid operation")
 			return
 		}
+		if strings.HasPrefix(discriminator.Type, "estimate.") || strings.HasPrefix(discriminator.Type, "invoice.") {
+			op, ok := decodeBatchCommercial(w, r, raw)
+			if !ok {
+				return
+			}
+			if seen[op.OperationID] {
+				writeError(w, 400, "invalid_request", "Duplicate operation identity")
+				return
+			}
+			seen[op.OperationID] = true
+			operations = append(operations, authorization.BatchOperation{Commercial: op})
+			continue
+		}
 		if strings.HasPrefix(discriminator.Type, "file.") {
 			var wire struct {
 				authorization.BatchFileOperation
@@ -223,7 +236,7 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 		seen[op.OperationID] = true
 		operations = append(operations, authorization.BatchOperation{Job: &op})
 	}
-	results := req.Service.SubmitOperationBatch(r.Context(), req.Actor, operations, h.deps.Files.SubmitBatchOperation)
+	results := req.Service.SubmitOperationBatch(r.Context(), req.Actor, operations, h.deps.Files.SubmitBatchOperation, executeBatchCommercial)
 	out := make([]batchResult, 0, len(results))
 	for index, result := range results {
 		item := batchResult{OperationID: result.OperationID, Receipt: result.Receipt}
@@ -253,6 +266,9 @@ func (h *handler) operationBatch(w http.ResponseWriter, r *http.Request) {
 				status, code = 409, "comment_parent_changed"
 			case errors.Is(result.Err, authorization.ErrConflict):
 				status, code = 409, "subtask_conflict"
+				if operations[index].Commercial != nil {
+					code = "operation_intent_changed"
+				}
 				if operations[index].ServiceEntry != nil {
 					code = "service_entry_conflict"
 				}
