@@ -101,6 +101,11 @@ uncertain identities after lost responses, queries receipts before retry, and
 requires explicit same-target repair after conflict. It does not implement a
 production encrypted mobile cache or claim the broader synchronization protocol.
 
+Document creation additionally has an encrypted native reference adapter,
+`internal/api/v1/reference/document-creation-client.cjs`. See
+[encrypted creation and recovery](api-document-creation.md) for its explicit
+preparation, staging, receipt reconciliation and reviewed repair contract.
+
 ### Reviewed conversion and reversion
 
 Conversion commands use the same operation admission and immutable commercial

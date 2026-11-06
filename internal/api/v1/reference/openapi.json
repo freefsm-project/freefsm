@@ -1,7 +1,7 @@
 {
  "openapi":"3.1.0",
  "jsonSchemaDialect":"https://json-schema.org/draft/2020-12/schema",
-  "info":{"title":"FreeFSM v1 pairing, own sessions, Job sync and field protocols","version":"1.1.0","description":"Interactive user protocol. Ten-minute pairing, authenticated hosted browser approval, one-use opaque bearer, coherent read-only authorized Job-context synchronization, exact-identity Subtask completion and immutable operation receipts. Field mutations and File transfers use their own documented endpoints. No API password or refresh-token flow."},
+  "info":{"title":"FreeFSM v1 pairing, own sessions, Job sync and field protocols","version":"1.1.0","description":"Interactive user protocol. Ten-minute pairing, authenticated hosted browser approval, one-use opaque bearer, coherent read-only authorized Job-context synchronization, exact-identity Subtask completion and immutable operation receipts. Field mutations and File transfers use their own documented endpoints. Job-linked document creation binds reviewed Customer identity, explicit commercial snapshots and offline UUIDs; the native document-creation-client.cjs reference shares encrypted storage, finite leases, ordinary purge and restore-only locked reconciliation. See locally served docs and repository docs/api-document-creation.md. No API password or refresh-token flow."},
  "servers":[{"url":"/api/v1"}],
  "security":[{"bearer":[]}],
  "paths":{
