@@ -55,6 +55,8 @@ func lifecycleCall(t *testing.T, api http.Handler, token, method, path, body str
 	}
 	if strings.HasSuffix(path, "/status") || strings.HasSuffix(path, "/finalize") {
 		validate("CommercialLifecycleCommand", body)
+	} else if method == http.MethodPatch {
+		validate("CommercialCommand", body)
 	}
 	name := "CommercialReceiptEnvelope"
 	if want >= 400 {

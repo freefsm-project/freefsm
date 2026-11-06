@@ -307,6 +307,13 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 				if job != in.JobID && a.Channel == "api" {
 					return ErrConflict
 				}
+				// An optional reviewed Customer is a precondition, never a
+				// replacement anchor. Older edit clients omit it and remain
+				// guarded by the whole-commercial revision. Terminal replay
+				// above must precede this current-state validation.
+				if in.CustomerID != 0 && in.CustomerID != customer {
+					return ErrConflict
+				}
 				current, err := saveaction.Revision(ctx, sp, a.UserID, fmt.Sprintf("/%ss/%d", kind, id))
 				if err != nil {
 					return err
