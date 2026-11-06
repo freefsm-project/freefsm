@@ -64,27 +64,9 @@ func (h *handler) commercial(kind string) http.HandlerFunc {
 				commercialError(w, err)
 				return
 			}
-			if raw, ok := state["line_items"].(json.RawMessage); ok {
-				financial := ""
-				version := 0
-				if value, ok := state["financial"].(json.RawMessage); ok {
-					financial = string(value)
-					version = 1
-				}
-				tax, _ := state["tax_rate"].(string)
-				totals, err := services.FinancialTotals(financial, string(raw), tax)
-				if err != nil {
-					commercialError(w, err)
-					return
-				}
-				state["arithmetic_version"] = version
-				state["totals"] = map[string]string{"subtotal": totals.Subtotal.Format(), "tax": totals.Tax.Format(), "total": totals.Total.Format()}
-				lines, err := services.PublicCommercialLines(string(raw))
-				if err != nil {
-					commercialError(w, err)
-					return
-				}
-				state["line_items"] = lines
+			if err := publicCommercialState(state); err != nil {
+				commercialError(w, err)
+				return
 			}
 			writeJSON(w, 200, state)
 			return
@@ -105,6 +87,40 @@ func (h *handler) commercial(kind string) http.HandlerFunc {
 		}
 		writeJSON(w, status, receipt)
 	}
+}
+
+// Both direct reads and durable sync pages render the captured financial inputs
+// through the same existing totals/line services, without reading newer state.
+func publicCommercialState(state map[string]any) error {
+	value, ok := state["line_items"]
+	if !ok {
+		return nil
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	financial, version := "", 0
+	if value, ok := state["financial"]; ok {
+		b, err := json.Marshal(value)
+		if err != nil {
+			return err
+		}
+		financial, version = string(b), 1
+	}
+	tax, _ := state["tax_rate"].(string)
+	totals, err := services.FinancialTotals(financial, string(raw), tax)
+	if err != nil {
+		return err
+	}
+	lines, err := services.PublicCommercialLines(string(raw))
+	if err != nil {
+		return err
+	}
+	state["arithmetic_version"] = version
+	state["totals"] = map[string]string{"subtotal": totals.Subtotal.Format(), "tax": totals.Tax.Format(), "total": totals.Total.Format()}
+	state["line_items"] = lines
+	return nil
 }
 
 func (h *handler) commercialReceipt(w http.ResponseWriter, r *http.Request) {

@@ -159,6 +159,8 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/sync/jobs", h.syncJobs)
 		r.Get("/sync/clocks", h.syncClocks)
 		r.Get("/sync/items", h.syncItems)
+		r.Get("/sync/estimates", h.syncCommercial("estimate"))
+		r.Get("/sync/invoices", h.syncCommercial("invoice"))
 		r.Post("/sync/operations", h.operationBatch)
 		// Synchronization routes remain within this authenticated budget boundary.
 		r.HandleFunc("/sync", func(w http.ResponseWriter, r *http.Request) {

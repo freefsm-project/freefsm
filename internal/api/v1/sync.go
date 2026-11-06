@@ -37,6 +37,30 @@ func (h *handler) syncItems(w http.ResponseWriter, r *http.Request) {
 	writeSyncResult(w, result, err)
 }
 
+func (h *handler) syncCommercial(kind string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		req, ok := authorization.FromContext(r.Context())
+		if !ok {
+			unauthorized(w)
+			return
+		}
+		query, err := urlSyncQuery(r)
+		if err != nil {
+			writeError(w, 400, "invalid_request", "invalid synchronization query")
+			return
+		}
+		result, err := req.Service.SyncCommercial(r.Context(), req.Actor, kind, query)
+		if err == nil {
+			for _, state := range result.Records {
+				if err = publicCommercialState(state); err != nil {
+					break
+				}
+			}
+		}
+		writeSyncResult(w, result, err)
+	}
+}
+
 func (h *handler) syncProjection(w http.ResponseWriter, r *http.Request, clocks bool) {
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {

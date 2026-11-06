@@ -1,6 +1,7 @@
 package authorization
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -87,6 +88,18 @@ func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id i
 		return nil, ErrNotFound
 	}
 	err := s.WithinParent(ctx, a, kind, id, "", func(tx pgx.Tx, p Principal) error {
+		var err error
+		state, err = readCommercial(ctx, tx, p, a, kind, id)
+		return err
+	})
+	return state, err
+}
+
+// readCommercial is shared by direct reads and durable repeatable-read snapshots.
+// Its caller owns the transaction and has already authorized this document.
+func readCommercial(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind string, id int64) (map[string]any, error) {
+	var state map[string]any
+	err := func() error {
 		var raw []byte
 		var job int64
 		err := tx.QueryRow(ctx, `SELECT coalesce(job_id,0),jsonb_build_object('id',id,'number',number_label,'job_id',job_id,'title',title,'notes',notes,'terms',terms,'custom_fields',custom_fields,'status_id',status_id) || CASE WHEN $2='invoice' THEN jsonb_build_object('invoice_date',to_jsonb(d)->'invoice_date','due_date',CASE WHEN to_jsonb(d)->>'due_date' LIKE '0001-01-01%' THEN NULL ELSE to_jsonb(d)->'due_date' END) ELSE jsonb_build_object('valid_through',to_jsonb(d)->'valid_through') END FROM `+kind+`s d WHERE id=$1`, id, kind).Scan(&job, &raw)
@@ -98,7 +111,9 @@ func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id i
 		}
 		// The retained anchor grants no Job context, and does not add a Job
 		// View prerequisite to independent All Records document authority.
-		if err := json.Unmarshal(raw, &state); err != nil {
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		if err := decoder.Decode(&state); err != nil {
 			return err
 		}
 		// Retained documents can have an explicitly unknown manual status.
@@ -110,6 +125,8 @@ func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id i
 		}
 		state["manual_category"] = manual
 		state["effective_category"] = manual
+		state["effective_status_id"] = state["status_id"]
+		state["settlement_locked"] = false
 		var workflow json.RawMessage
 		if err := tx.QueryRow(ctx, `SELECT coalesce(jsonb_agg(jsonb_build_object('id',s.id,'name',s.name,'color',s.color,'category',s.category_key,'meaning_revision',s.meaning_revision::text) ORDER BY s.category_key,s.category_order,s.id),'[]'::jsonb) FROM statuses s JOIN status_workflows w ON w.id=s.workflow_id WHERE w.company_id=$1 AND w.object_type=$2 AND s.category_key NOT IN ('invoice:paid','invoice:partially_paid')`, p.CompanyID, kind).Scan(&workflow); err != nil {
 			return err
@@ -122,15 +139,35 @@ func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id i
 			}
 			state["cycle_id"] = cycle
 			var effective *string
+			var effectiveID *int64
 			var locked bool
-			if err := tx.QueryRow(ctx, `SELECT s.category_key,invoice_has_active_settlement(i.id) FROM invoices i LEFT JOIN invoice_effective_status e ON e.invoice_id=i.id LEFT JOIN statuses s ON s.id=e.status_id WHERE i.id=$1`, id).Scan(&effective, &locked); err != nil {
+			if err := tx.QueryRow(ctx, `SELECT s.id,s.category_key,invoice_has_active_settlement(i.id) FROM invoices i LEFT JOIN invoice_effective_status e ON e.invoice_id=i.id LEFT JOIN statuses s ON s.id=e.status_id WHERE i.id=$1`, id).Scan(&effectiveID, &effective, &locked); err != nil {
 				return err
 			}
 			state["effective_category"], state["settlement_locked"] = effective, locked
+			state["effective_status_id"] = effectiveID
 		}
 		assigned, err := assignedJobAccess(ctx, tx, p.UserID, job, true)
 		if err != nil {
 			return err
+		}
+		var active bool
+		var customer int64
+		if err := tx.QueryRow(ctx, `SELECT d.customer_id,d.deleted_at IS NULL AND j.deleted_at IS NULL AND c.deleted_at IS NULL FROM `+kind+`s d JOIN jobs j ON j.id=d.job_id JOIN customers c ON c.id=d.customer_id WHERE d.id=$1`, id).Scan(&customer, &active); err != nil {
+			return err
+		}
+		state["customer_id"] = customer
+		eligible := active && state["settlement_locked"] == false
+		allows := func(permission string) bool {
+			return p.Allows(permission, All) || assigned && p.Allows(permission, Assigned)
+		}
+		draft := manual != nil && *manual == "invoice:draft"
+		// Discovery is advisory; mutation admission and the owning workflow and
+		// settlement services still enforce all current invariants at commit.
+		state["actions"] = map[string]bool{
+			"edit":     eligible && allows(kind+".edit"),
+			"status":   eligible && allows(kind+".status") && !draft,
+			"finalize": eligible && kind == "invoice" && draft && allows("invoice.finalize"),
 		}
 		if p.Allows("pricing.view", All) || assigned && p.Allows("pricing.view", Assigned) {
 			var lines json.RawMessage
@@ -147,7 +184,7 @@ func (s *Service) ReadCommercial(ctx context.Context, a Actor, kind string, id i
 		revision, err := saveaction.Revision(ctx, tx, a.UserID, fmt.Sprintf("/%ss/%d", kind, id))
 		state["revision"] = revision
 		return err
-	})
+	}()
 	return state, err
 }
 
