@@ -131,6 +131,38 @@ processes, validating served batch request/response/error schemas and statuses.
 Its prefix-interruption seam commits the first operation through the production
 router, omits the rest and severs the response; it does not kill the server process.
 
+The same protected harness covers standalone commercial reconciliation:
+
+- Whole-revision disjoint edits, ABA, Custom Fields, Status and Finalize drift;
+  Comments and Files leave the reviewed commercial revision valid.
+- Configured Estimate choices remain editable without automatic acceptance.
+  Nonzero Invoice manual transitions retain their totals; zero-total Finalize,
+  Draft and Void projections create no financial records. Desired-state no-ops
+  preserve both the revision and transition activity.
+- Allocation and Credit application lock staged content and manual workflow.
+  Deterministic database admission barriers exercise both commit orders against
+  protected edits and Void proposals; no losing action partially persists or
+  automatically unwinds settlement.
+- Changed-only Custom Field requiredness, every supported value type, current
+  precision, retired field/option history and reactivation. Workflow replacement,
+  category changes and ABA require explicit new-ID reselection; cosmetic renaming
+  preserves the reviewed meaning.
+- Assignment, Job archive, Edit, pricing and Pricebook authority loss; encrypted
+  delta resnapshot/purge; captured Item prices, archived-input rejection and
+  explicit replacement/removal. Pricing loss does not remove independently
+  authorized nonfinancial editing, but never exposes previously cached prices.
+- Receipt-first transient and lost-response recovery, immutable pending intent,
+  explicit new-ID repair/discard, and authority-write failure quarantine across
+  restart. Ordinary purge and restore-only locked review remain distinct.
+
+These tests use production HTTP and migrated PostgreSQL with separately restarted
+encrypted-store readers. The settlement competitor uses the existing Payment or
+Credit application owner; the admission barrier controls order, not outcomes.
+Existing server conformance additionally verifies permitted collaboration, PDF
+and send on settled documents, field before/after audit, historical receipts and
+installed-data compatibility. Focused conformance is not full-suite or independent
+acceptance evidence.
+
 Retained documents without a recorded manual status remain readable: `status_id`, `manual_category` and an unknown `effective_category` are explicitly `null`. Their current revision, workflow choices and Invoice settlement lock remain available for deliberate review. A read never supplies Draft, creates a transition or invents financial history. Repair requires an explicit reviewed Status selection; its event preserves the unknown prior status rather than claiming a historical Draft or acceptance.
 
 POST `/api/v1/estimates/{id}/status`, `/api/v1/invoices/{id}/status`, or `/api/v1/invoices/{id}/finalize` with:
