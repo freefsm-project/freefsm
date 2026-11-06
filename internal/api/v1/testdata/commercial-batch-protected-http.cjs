@@ -109,7 +109,7 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
    assert.notEqual(next,b);assert.equal((await client.submitBatch([next]))[0].receipt.outcome,'accepted');
    await client.discard(b);assert(!(await store.load()).pending[b]);return;
   }
-  if(['batch_scope_loss','batch_restore','batch_revoke'].includes(input.scenario)){
+   if(['batch_scope_loss','batch_restore','batch_revoke'].includes(input.scenario)||input.scenario.startsWith('batch_repeated_restore_')){
    lose=true;await assert.rejects(client.submitBatch([a,b]),/lost_response/);
    const changed=await fixture('change');
    if(input.scenario==='batch_scope_loss'){
@@ -127,10 +127,29 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
    await client.authenticate((await changed.json()).token);await sync();
    assert.deepEqual((await client.view()).pending[c].intent,original[c].intent);
    await assert.rejects(client.submitBatch([c]),/reconciliation_required/);
-   for(const id of [a,b,c]){
-    await client.reconcile(id);await sync();
-    if((await client.view()).pending[id].state==='restore_uncertain')await client.acknowledgeUncertain(id);
-   }
+    for(const id of [a,b,c]){
+     await client.reconcile(id);await sync();
+     if((await client.view()).pending[id].state==='restore_uncertain')await client.acknowledgeUncertain(id);
+    }
+    if(input.scenario.startsWith('batch_repeated_restore_')){
+     const token=(await (await fixture('change')).json()).token,sent=posts;
+     if(input.scenario.endsWith('_contact'))await assert.rejects(sync(),{message:'locked_review'});
+     await client.authenticate(token);restart('locked',{lock:'locked_review'});await sync();
+     for(let attempt=0;attempt<2;attempt++){
+      await client.authenticate(token);await sync();
+      assert.deepEqual(restart().pending[c].intent,original[c].intent);
+      assert.deepEqual(restart().pending[c].batch,original[c].batch);
+      await assert.rejects(client.acknowledgeUncertain(c),{message:'restore_reconciliation_required'});
+      await assert.rejects(client.repairBatch(c,docs[2].revision,{notes:'Explicit restored review'},[]),{message:'restore_reconciliation_required'});
+     }
+     assert.equal(posts,sent,'authentication and synchronization must not replay batch');
+     // Receipts are deployment/client-bound: the new history cannot inherit
+     // the old client's accepted receipt as current reconciliation evidence.
+     for(const id of [a,b,c]){
+      assert.equal(restart('reconcile',{id}).state,'restore_uncertain');await sync();await client.acknowledgeUncertain(id);
+     }
+     assert.deepEqual(restart().pending[c].intent,original[c].intent);
+    }
    const next=await client.repairBatch(c,docs[2].revision,{notes:'Explicit restored review'},[]);
    assert.notEqual(next,c);assert.equal((await client.submitBatch([next]))[0].receipt.outcome,'accepted');return;
   }

@@ -331,16 +331,31 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
    }
    return;
   }
-  if(input.scenario==='restore'||input.scenario==='revoke'){
+   if(input.scenario==='restore'||input.scenario==='revoke'||input.scenario.startsWith('repeated_restore_')){
    const changed=await fetch(input.url+'/__fixture/change',{method:'POST'});
-   await assert.rejects(client.synchronize(input.kind),input.scenario==='restore'?/locked_review/:/authorization_purged/);
+    await assert.rejects(client.synchronize(input.kind),input.scenario==='revoke'?/authorization_purged/:/locked_review/);
    restart(id,null,'locked_review');
    const persisted=await store.load();assert.deepEqual(persisted.documents,{});
    if(input.scenario==='revoke'){assert(!persisted.pending[id].intent);assert(!persisted.token);return;}
    const fresh=await changed.json();await client.authenticate(fresh.token);await client.synchronize(input.kind);
    assert.deepEqual((await client.view()).pending[id].intent,original);
    await assert.rejects(client.submit(id),/reconciliation_or_review_required/);
-   await client.reconcile(id);await client.synchronize(input.kind);await client.acknowledgeUncertain(id);
+    await client.reconcile(id);await client.synchronize(input.kind);await client.acknowledgeUncertain(id);
+    if(input.scenario.startsWith('repeated_restore_')){
+     const again=await fetch(input.url+'/__fixture/change',{method:'POST'}),token=(await again.json()).token;
+     if(input.scenario.endsWith('_contact'))await assert.rejects(client.synchronize(input.kind),{message:'locked_review'});
+     await client.authenticate(token);restart(id,null,'locked_review');
+     await client.synchronize(input.kind);
+     for(let attempt=0;attempt<2;attempt++){
+      await client.authenticate(token);await client.synchronize(input.kind);restart(id,original);
+      assert.deepEqual((await client.view()).pending[id].intent,original);
+      await assert.rejects(client.acknowledgeUncertain(id),{message:'restore_reconciliation_required'});
+      await assert.rejects(client.repair(id,(await client.view()).documents[target].revision,{notes:original.notes}),{message:'restore_reconciliation_required'});
+     }
+     assert.equal(writes,0,'authentication and synchronization must not replay intent');
+     assert.equal((await client.reconcile(id)).state,'restore_uncertain');
+     await client.synchronize(input.kind);await client.acknowledgeUncertain(id);restart(id,original);
+    }
    const next=await client.repair(id,(await client.view()).documents[target].revision,{notes:original.notes});
    assert.notEqual(next,id);assert.equal((await client.submit(next)).receipt.outcome,'accepted');return;
   }

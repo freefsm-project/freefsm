@@ -40,13 +40,22 @@ class ProtectedFieldClient {
   await this.purge(s,{id:receipt.operation_id,state:'terminal',code:receipt.code});
   throw Error('authorization_purged');
  }
+ beginRestore(s){
+  // Missing-receipt lookup and its acknowledgement describe one server history.
+  // Neither can authorize repair after another restore, even across restart.
+  s.restore=true;
+  for(const e of Object.values(s.pending)){
+   delete e.lookupMissing;delete e.reconciled;
+   if(e.state!=='replaced')e.state='locked_review';
+  }
+ }
  async contact(s,path,method='GET',body,operation){
   if(!s.token)throw Error('authentication_required');
   const r=await this.transport(path,method,body,{token:s.token,epoch:s.contactEpoch||s.lease?.epoch,operation});
   // Inspect disposition before generic 401 purge. Persist before returning data.
   if(r.error?.code==='instance_restored'&&r.error?.recovery_disposition==='locked_review'){
    s.token=null;s.lease=null;s.contactEpoch=null;s.restore=true;s.synced=false;s.cache={};s.notes={};s.clocks={};s.clockJobs={};s.clockCapabilities=null;s.clockLease=null;s.clockIssuance=null;s.clockCursor=null;
-   for(const e of Object.values(s.pending)){if(e.state!=='replaced')e.state='locked_review';}
+    this.beginRestore(s);
    await this.persistAuthorityLoss(s);throw Error('locked_review');
   }
   if(r.status===401||r.status===403){await this.purge(s);throw Error('authorization_purged');}
@@ -101,7 +110,7 @@ class ProtectedFieldClient {
   if(l?.operation_id===operation&&['offline_disabled','forbidden'].includes(l.code))await this.purgeDeniedIssuance(s,l);
   if(l?.code!=='accepted'||l.operation_id!==operation||!l.id||!l.user_id||!l.epoch||!Number.isFinite(issued)||!Number.isFinite(expires)||expires<=issued||expires-issued>72*3600000||this.now()>=expires){s.token=null;await this.persist(s);throw Error('invalid_lease');}
   if(oldUser&&oldUser!==l.user_id){await this.purge(s);s.pending={};s.token=token;}
-  else if(previous&&previous.epoch!==l.epoch)s.restore=true;
+   else if(previous&&previous.epoch!==l.epoch)this.beginRestore(s);
   else if(previous&&previous.client!==clientIdentity(token)&&!s.restore){
    // A new session at the same epoch is ordinary reauthorization, not restore.
    // Old-client intent cannot be rebound; keep only safe receipt identities.

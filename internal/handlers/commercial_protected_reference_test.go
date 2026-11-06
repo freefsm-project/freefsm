@@ -28,6 +28,7 @@ func TestCommercialProtectedReferenceAPI(t *testing.T) {
 	for _, kind := range []string{"estimate", "invoice"} {
 		scenarios := []string{"conflict", "restore", "revoke", "lifecycle", "failed_comparison", "scope_loss", "revision_aba", "revision_fields", "revision_status", "revision_finalize", "collaboration", "nonzero_lifecycle", "changed_fields", "semantic_category", "semantic_aba", "semantic_replacement", "semantic_rename", "settlement_allocation", "settlement_credit", "authority_pricing", "authority_edit", "authority_assignment", "authority_archive", "batch_success", "batch_recovery", "batch_transient", "batch_scope_loss", "batch_restore", "batch_revoke", "batch_lifecycle", "batch_storage", "batch_purge_storage", "batch_restore_storage"}
 		scenarios = append(scenarios, "authority_pricebook", "authority_pricing_snapshot", "input_archive", "input_price", "transient", "purge_storage", "restore_storage")
+		scenarios = append(scenarios, "repeated_restore_contact", "repeated_restore_lease", "batch_repeated_restore_contact", "batch_repeated_restore_lease")
 		if kind == "invoice" {
 			for _, source := range []string{"allocation", "credit"} {
 				for _, action := range []string{"edit", "void"} {
@@ -278,7 +279,7 @@ func TestCommercialProtectedReferenceAPI(t *testing.T) {
 							_, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, role, "Scoped commercial reference", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}}, 1)
 							historyCheck(t, err)
 							w.WriteHeader(204)
-						} else if scenario == "restore" || scenario == "restore_storage" || scenario == "batch_restore" || scenario == "batch_restore_storage" {
+						} else if scenario == "restore" || scenario == "restore_storage" || scenario == "batch_restore" || scenario == "batch_restore_storage" || strings.Contains(scenario, "repeated_restore_") {
 							_, err := pool.Exec(ctx, `UPDATE session_instance SET epoch=gen_random_uuid(); DELETE FROM sessions`)
 							historyCheck(t, err)
 							fresh, err := sessions.CreateMobile(ctx, admin, "Restored commercial reference")
