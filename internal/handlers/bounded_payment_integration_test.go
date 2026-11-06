@@ -141,12 +141,13 @@ func TestBoundedPaymentReceiptAPI(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Receipt Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Receipt Job").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	api := apiv1.NewRouter(pool, client, sessions)
 	token, err := sessions.CreateMobile(ctx, admin, "Bounded payment")
 	if err != nil {
 		t.Fatal(err)
 	}
-	created := lifecycleCall(t, api, token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Fixed receipt","line_items":[{"title":"Work","quantity":"1","unit_price":"100.00"}]}`, newOperationKey(), newOperationKey(), j.ID), 200)
+	created := lifecycleCall(t, api, token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Fixed receipt","line_items":[{"title":"Work","quantity":"1","unit_price":"100.00"}]}`, newOperationKey(), newOperationKey(), j.ID, c.ID), 200)
 	var document struct {
 		Data struct {
 			ID int64 `json:"id"`

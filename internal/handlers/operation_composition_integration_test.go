@@ -27,6 +27,7 @@ func TestOperationCompositionCrossFamilyHTTP(t *testing.T) {
 				ctx := context.Background()
 				c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Binding owner").SaveX(ctx)
 				j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Binding target").SaveX(ctx)
+				assignFieldDocumentCreator(t, pool, j.ID, admin)
 				token, err := sessions.CreateMobile(ctx, admin, "Composition")
 				if err != nil {
 					t.Fatal(err)
@@ -54,7 +55,7 @@ func TestOperationCompositionCrossFamilyHTTP(t *testing.T) {
 				}
 				if family == "commercial" {
 					otherPath = "/estimates"
-					other = map[string]any{"operation_id": op, "client_id": uuid.NewString(), "job_id": j.ID, "title": "Exactly once document"}
+					other = map[string]any{"operation_id": op, "client_id": uuid.NewString(), "job_id": j.ID, "customer_id": c.ID, "title": "Exactly once document"}
 				}
 				call := func(path string, body any) *httptest.ResponseRecorder {
 					raw, _ := json.Marshal(body)

@@ -118,7 +118,7 @@ func (s *Service) createApprovedDocument(ctx context.Context, tx pgx.Tx, a Actor
 				return ErrNotFound
 			}
 		}
-		if scope == Assigned && !assigned {
+		if (scope == Assigned || a.Channel == "api") && !assigned {
 			return ErrForbidden
 		}
 		if obligation == 0 && !p.Allows("customer.view", All) && !(assigned && p.Allows("customer.view", Context)) {

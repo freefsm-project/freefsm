@@ -104,11 +104,12 @@ func testInstalledPaymentUpgrade(t *testing.T, collision bool) {
 	var bindingBefore string
 	if collision {
 		job := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Installed collision Job").SaveX(ctx)
+		assignFieldDocumentCreator(t, pool, job.ID, admin)
 		token, err := sessions.CreateMobile(ctx, admin, "Installed other-family client")
 		if err != nil {
 			t.Fatal(err)
 		}
-		lifecycleCall(t, apiv1.NewRouter(pool, client, sessions), token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Installed other-family effect","line_items":[]}`, op, newOperationKey(), job.ID), 200)
+		lifecycleCall(t, apiv1.NewRouter(pool, client, sessions), token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Installed other-family effect","line_items":[]}`, op, newOperationKey(), job.ID, c.ID), 200)
 		if err := pool.QueryRow(ctx, `SELECT to_jsonb(a)::text FROM operation_admissions a WHERE operation_id=$1`, op).Scan(&bindingBefore); err != nil {
 			t.Fatal(err)
 		}

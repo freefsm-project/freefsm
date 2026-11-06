@@ -90,7 +90,7 @@ func (h *handler) commercial(kind string) http.HandlerFunc {
 			return
 		}
 		var in services.CommercialInput
-		if !decodeExactJSON(w, r, &in, "operation_id", "job_id", "client_id", "revision", "occurred_at", "title", "notes", "terms", "tax_rate", "invoice_date", "due_date", "valid_through", "line_items", "custom_fields", "adjustments") {
+		if !decodeExactJSON(w, r, &in, "operation_id", "job_id", "customer_id", "client_id", "revision", "occurred_at", "title", "notes", "terms", "tax_rate", "invoice_date", "due_date", "valid_through", "line_items", "custom_fields", "adjustments") {
 			return
 		}
 		receipt, err := services.SaveCommercialAPI(r.Context(), kind, id, in)

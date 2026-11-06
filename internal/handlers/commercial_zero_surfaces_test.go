@@ -40,6 +40,7 @@ func TestCommercialZeroAdjustmentsSurviveMetadataBrowser(t *testing.T) {
 	defer cancel()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Recorded zero Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Recorded zero Job").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	token, err := sessions.CreateMobile(ctx, admin, "Zero adjustment API author")
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +49,7 @@ func TestCommercialZeroAdjustmentsSurviveMetadataBrowser(t *testing.T) {
 	ids := map[string]int64{}
 	before := map[string]string{}
 	for _, kind := range []string{"estimate", "invoice"} {
-		body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Recorded zero adjustment","tax_rate":"10","adjustments":{"discount":{"kind":"percentage","value":"0"},"surcharge":{"kind":"fixed","value":"0.00"}},"line_items":[{"title":"One","quantity":"1","unit_price":"0.05","taxable":true,"discount_adjustment":{"kind":"fixed","value":"0.00"},"surcharge_adjustment":{"kind":"percentage","value":"0"}},{"title":"Two","quantity":"1","unit_price":"0.05","taxable":true}]}`, newOperationKey(), newOperationKey(), j.ID)
+		body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Recorded zero adjustment","tax_rate":"10","adjustments":{"discount":{"kind":"percentage","value":"0"},"surcharge":{"kind":"fixed","value":"0.00"}},"line_items":[{"title":"One","quantity":"1","unit_price":"0.05","taxable":true,"discount_adjustment":{"kind":"fixed","value":"0.00"},"surcharge_adjustment":{"kind":"percentage","value":"0"}},{"title":"Two","quantity":"1","unit_price":"0.05","taxable":true}]}`, newOperationKey(), newOperationKey(), j.ID, c.ID)
 		request := httptest.NewRequest("POST", "/"+kind+"s", strings.NewReader(body))
 		request.Header.Set("Authorization", "Bearer "+token)
 		request.Header.Set("Content-Type", "application/json")

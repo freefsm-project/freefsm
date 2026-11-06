@@ -8,6 +8,7 @@ class CommercialReference {
   constructor(request) { this.request = request; }
   stageCreate(kind, job, values) {
     if (!['estimate', 'invoice'].includes(kind) || !Number.isSafeInteger(job) || job < 1) throw new Error('Job required; no Customer-only fallback');
+    if (!Number.isSafeInteger(values?.customer_id) || values.customer_id < 1) throw new Error('Explicitly reviewed Customer required');
     return this.entry(kind, 0, { ...values, job_id: job, client_id: randomUUID(), operation_id: randomUUID() });
   }
   stageEdit(kind, snapshot, values) {

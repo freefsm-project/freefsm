@@ -15,6 +15,7 @@ func TestCommercialExactPrecisionPersistsThroughAPI(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Exact precision Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Exact precision Job").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	api := apiv1.NewRouter(pool, client, sessions)
 	token, err := sessions.CreateMobile(ctx, admin, "Exact precision")
 	if err != nil {
@@ -44,7 +45,7 @@ func TestCommercialExactPrecisionPersistsThroughAPI(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Exact precision","tax_rate":%q,"line_items":[{"title":"Exact capture","quantity":%s,"unit_price":%q,"taxable":%t}]}`, newOperationKey(), newOperationKey(), j.ID, tc.rate, tc.quantityJSON, tc.price, tc.taxable)
+			body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Exact precision","tax_rate":%q,"line_items":[{"title":"Exact capture","quantity":%s,"unit_price":%q,"taxable":%t}]}`, newOperationKey(), newOperationKey(), j.ID, c.ID, tc.rate, tc.quantityJSON, tc.price, tc.taxable)
 			var receipt struct {
 				Data struct {
 					ID int64 `json:"id"`

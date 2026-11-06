@@ -105,6 +105,7 @@ func TestCommercialLifecycleFinalizeAPI(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("API lifecycle Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("API lifecycle Job").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	api := apiv1.NewRouter(pool, client, sessions)
 	token, err := sessions.CreateMobile(ctx, admin, "Lifecycle device")
 	if err != nil {
@@ -122,7 +123,7 @@ func TestCommercialLifecycleFinalizeAPI(t *testing.T) {
 		}
 		return w.Body.String()
 	}
-	created := call("POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"API lifecycle Invoice","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID), 200)
+	created := call("POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"API lifecycle Invoice","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID, c.ID), 200)
 	var receipt struct {
 		Data struct {
 			ID       int64  `json:"id"`

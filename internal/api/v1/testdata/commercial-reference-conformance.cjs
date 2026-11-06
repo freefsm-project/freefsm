@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const { CommercialReference } = require('./commercial-reference-harness.cjs');
 (async () => {
-  const [base, token, job] = process.argv.slice(2);
+  const [base, token, job, customer] = process.argv.slice(2);
   let calls = 0, lose = false;
   const request = async (method, path, body) => {
     calls++;
@@ -12,9 +12,10 @@ const { CommercialReference } = require('./commercial-reference-harness.cjs');
   };
   const client = new CommercialReference(request);
   assert.throws(() => client.stageCreate('invoice', 0, { title: 'No fallback' }));
+  assert.throws(() => client.stageCreate('invoice', Number(job), { title: 'Missing reviewed Customer' }));
   for (const kind of ['estimate', 'invoice']) {
     const before = calls;
-    const entry = client.stageCreate(kind, Number(job), { title: `Offline ${kind}`, line_items: [{ title: 'Captured work', quantity: 2, unit_price: '17.25', taxable: false }] });
+    const entry = client.stageCreate(kind, Number(job), { customer_id: Number(customer), title: `Offline ${kind}`, line_items: [{ title: 'Captured work', quantity: 2, unit_price: '17.25', taxable: false }] });
     assert.equal(calls, before, 'offline staging contacted server');
     lose = true;
     await client.submit(entry);

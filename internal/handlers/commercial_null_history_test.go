@@ -56,6 +56,7 @@ func TestCommercialLegacyNullRejectionReplayAPI(t *testing.T) {
 	}
 	type command struct{ kind, operation, body string }
 	var old, current []command
+	assignFieldDocumentCreator(t, pool, j.ID, actor.ID)
 	for _, kind := range []string{"estimate", "invoice"} {
 		op, identity := newOperationKey(), newOperationKey()
 		intent := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Historical rejected quantity","tax_rate":"0","line_items":[{"title":"Work","quantity":0,"unit_price":"1.00","taxable":false}]}`, op, identity, j.ID)
@@ -69,6 +70,7 @@ func TestCommercialLegacyNullRejectionReplayAPI(t *testing.T) {
 		old = append(old, command{kind, op, strings.Replace(intent, `"quantity":0`, `"quantity":null`, 1)})
 		newOp := newOperationKey()
 		body := strings.Replace(strings.Replace(old[len(old)-1].body, op, newOp, 1), identity, newOperationKey(), 1)
+		body = strings.Replace(body, `"job_id":`, fmt.Sprintf(`"customer_id":%d,"job_id":`, c.ID), 1)
 		current = append(current, command{kind, newOp, body})
 	}
 	snapshot := func() string {

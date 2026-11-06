@@ -16,6 +16,7 @@ func TestCommercialFinancialAPIControls(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Financial control Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Financial control Job").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	api := apiv1.NewRouter(pool, client, sessions)
 	token, err := sessions.CreateMobile(ctx, admin, "Financial controls")
 	if err != nil {
@@ -34,12 +35,12 @@ func TestCommercialFinancialAPIControls(t *testing.T) {
 		return w.Body.String()
 	}
 	create := func(lines string) string {
-		return fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Financial control","tax_rate":"10","line_items":%s}`, newOperationKey(), newOperationKey(), j.ID, lines)
+		return fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Financial control","tax_rate":"10","line_items":%s}`, newOperationKey(), newOperationKey(), j.ID, c.ID, lines)
 	}
 	for _, lines := range []string{`[{"title":"Invalid","quantity":"0","unit_price":"1.00"}]`, `[{"title":"Negative","quantity":"1","unit_price":"-1.00"}]`, `[{"title":"Negative adjusted","quantity":"0.001","unit_price":"-0.01","discount_adjustment":{"kind":"fixed","value":"0.00"}}]`, `[{"title":"Untaxed","quantity":"1","unit_price":"0.10"},{"title":"Taxable correction","quantity":"1","unit_price":"-0.10","taxable":true}]`} {
 		call(token, "POST", "/invoices", create(lines), 422)
 	}
-	call(token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"No allocation targets","adjustments":{"surcharge":{"kind":"fixed","value":"0.01"}},"line_items":[]}`, newOperationKey(), newOperationKey(), j.ID), 422)
+	call(token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"No allocation targets","adjustments":{"surcharge":{"kind":"fixed","value":"0.01"}},"line_items":[]}`, newOperationKey(), newOperationKey(), j.ID, c.ID), 422)
 	var untouched bool
 	if err := pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM invoices WHERE company_id=$1) AND NOT EXISTS(SELECT 1 FROM issued_document_numbers WHERE company_id=$1 AND document_type='invoice') AND NOT EXISTS(SELECT 1 FROM commercial_client_identities WHERE user_id=$2 AND document_type='invoice')`, company, admin).Scan(&untouched); err != nil {
 		t.Fatal(err)

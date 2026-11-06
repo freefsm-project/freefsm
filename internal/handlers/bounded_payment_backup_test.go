@@ -37,8 +37,9 @@ func TestBoundedPaymentBackupRestoreReconciliationAPI(t *testing.T) {
 	historyCheck(t, tx.Commit(ctx))
 	c := src.client.Customer.Create().SetCompanyID(src.company).SetDisplayName("Restored bounded Customer").SaveX(ctx)
 	j := src.client.Job.Create().SetCompanyID(src.company).SetCustomerID(c.ID).SetJobType("Restored bounded Job").SaveX(ctx)
+	assignFieldDocumentCreator(t, src.pool, j.ID, src.actor)
 	api := apiv1.NewRouter(src.pool, src.client, src.sessions)
-	created := lifecycleCall(t, api, src.mobile, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Restored fixed payment","line_items":[{"title":"Work","quantity":"1","unit_price":"100.00"}]}`, newOperationKey(), newOperationKey(), j.ID), 200)
+	created := lifecycleCall(t, api, src.mobile, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Restored fixed payment","line_items":[{"title":"Work","quantity":"1","unit_price":"100.00"}]}`, newOperationKey(), newOperationKey(), j.ID, c.ID), 200)
 	var document struct {
 		Data struct {
 			ID int64 `json:"id"`

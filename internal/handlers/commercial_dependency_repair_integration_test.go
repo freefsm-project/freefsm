@@ -19,6 +19,7 @@ func TestCommercialConstraintDependencyRecoveryAPI(t *testing.T) {
 					ctx := context.Background()
 					c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Recovery Customer").SaveX(ctx)
 					j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Recovery Job").SaveX(ctx)
+					assignFieldDocumentCreator(t, pool, j.ID, admin)
 					token, err := sessions.CreateMobile(ctx, admin, "Recovery device")
 					if err != nil {
 						t.Fatal(err)
@@ -37,7 +38,7 @@ func TestCommercialConstraintDependencyRecoveryAPI(t *testing.T) {
 						return w.Body.String()
 					}
 					op, identity := newOperationKey(), newOperationKey()
-					body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Recovery","line_items":[]}`, op, identity, j.ID)
+					body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Recovery","line_items":[]}`, op, identity, j.ID, c.ID)
 					sql := fmt.Sprintf(`CREATE FUNCTION repair_dependency_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'dependency unavailable' USING ERRCODE='%s'; END $$; CREATE TRIGGER repair_dependency_failure BEFORE INSERT ON %s FOR EACH ROW EXECUTE FUNCTION repair_dependency_failure()`, state, boundary)
 					if _, err := pool.Exec(ctx, sql); err != nil {
 						t.Fatal(err)
@@ -71,7 +72,7 @@ func TestCommercialConstraintDependencyRecoveryAPI(t *testing.T) {
 					if err := pool.QueryRow(ctx, `SELECT count(*) FROM commercial_operations WHERE receipt->>'outcome'='commercial_conflict'`).Scan(&count); err != nil || count != 1 {
 						t.Errorf("domain rejection receipts=%d err=%v", count, err)
 					}
-					invalid := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":" ","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID)
+					invalid := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":" ","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID, c.ID)
 					call("POST", "/"+kind+"s", invalid, 422)
 					call("POST", "/"+kind+"s", invalid, 422)
 					if err := pool.QueryRow(ctx, `SELECT count(*) FROM commercial_operations WHERE receipt->>'outcome'='invalid_document'`).Scan(&count); err != nil || count != 1 {

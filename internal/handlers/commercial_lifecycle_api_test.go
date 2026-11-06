@@ -71,12 +71,13 @@ func TestCommercialLifecycleAuditFailureIsRetryableAPI(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Atomic lifecycle Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Atomic lifecycle Job").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	api := apiv1.NewRouter(pool, client, sessions)
 	token, err := sessions.CreateMobile(ctx, admin, "Lifecycle failure")
 	if err != nil {
 		t.Fatal(err)
 	}
-	created := lifecycleCall(t, api, token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Atomic lifecycle","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID), 200)
+	created := lifecycleCall(t, api, token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Atomic lifecycle","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID, c.ID), 200)
 	var receipt struct {
 		Data struct {
 			ID       int64  `json:"id"`
@@ -122,12 +123,13 @@ func TestCommercialLifecycleSettlementVoidRaceAPI(t *testing.T) {
 			defer cancel()
 			c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Void race Customer").SaveX(ctx)
 			j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Void race Job").SaveX(ctx)
+			assignFieldDocumentCreator(t, pool, j.ID, admin)
 			api := apiv1.NewRouter(pool, client, sessions)
 			token, err := sessions.CreateMobile(ctx, admin, "Void race")
 			if err != nil {
 				t.Fatal(err)
 			}
-			created := lifecycleCall(t, api, token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Void race","line_items":[{"title":"Work","quantity":"1","unit_price":"100.00"}]}`, newOperationKey(), newOperationKey(), j.ID), 200)
+			created := lifecycleCall(t, api, token, "POST", "/invoices", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Void race","line_items":[{"title":"Work","quantity":"1","unit_price":"100.00"}]}`, newOperationKey(), newOperationKey(), j.ID, c.ID), 200)
 			var receipt struct {
 				Data struct {
 					ID       int64  `json:"id"`
@@ -250,6 +252,7 @@ func TestCommercialLifecycleSemanticReviewAndIndependentGrantAPI(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Semantic Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Semantic Job").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	u := client.User.Create().SetCompanyID(company).SetName("Workflow only").SetEmail("lifecycle-only@test").SetPasswordHash("x").SetRole("tech").SaveX(ctx)
 	auth := authorization.New(pool)
 	grants := []authorization.Grant{{Permission: "estimate.view", Scope: authorization.All}, {Permission: "estimate.status", Scope: authorization.All}}
@@ -269,7 +272,7 @@ func TestCommercialLifecycleSemanticReviewAndIndependentGrantAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created := lifecycleCall(t, api, adminToken, "POST", "/estimates", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Semantic Estimate","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID), 200)
+	created := lifecycleCall(t, api, adminToken, "POST", "/estimates", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Semantic Estimate","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID, c.ID), 200)
 	var effect struct {
 		Data struct {
 			ID int64 `json:"id"`

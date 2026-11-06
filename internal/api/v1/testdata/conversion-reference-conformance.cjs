@@ -1,7 +1,7 @@
 'use strict';
 const assert = require('node:assert/strict');
 const { CommercialReference } = require('./commercial-reference-harness.cjs');
-const [base, token, job] = process.argv.slice(2);
+const [base, token, job, customer] = process.argv.slice(2);
 (async () => {
   let online = true, lose = false, calls = 0;
   const request = async (method, path, body) => {
@@ -12,7 +12,7 @@ const [base, token, job] = process.argv.slice(2);
     return result;
   };
   const client = new CommercialReference(request);
-  const created = client.stageCreate('estimate', Number(job), { title: 'Reference conversion source', line_items: [] });
+  const created = client.stageCreate('estimate', Number(job), { customer_id: Number(customer), title: 'Reference conversion source', line_items: [] });
   await client.submit(created); assert.equal(created.state, 'accepted');
   const path = `/estimates/${created.receipt.id}`;
   let source = (await request('GET', path)).body.data;

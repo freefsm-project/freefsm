@@ -48,8 +48,11 @@ Authenticated routes:
 - `POST /api/v1/invoices/{id}/revert-to-estimate`
 
 Every command carries a UUID `operation_id`. Creation additionally carries a
-UUID `client_id`, a nonzero `job_id`, and a title. The server derives Customer
-from the current authorized Job and allocates the number. No endpoint falls back
+UUID `client_id`, a nonzero `job_id`, the explicitly reviewed `customer_id`, and a
+title. The server compares that Customer with the locked current Job Customer
+and allocates the number. Field creation requires current Job assignment even
+with All Records grants; office/web All Records creation retains its scope.
+No endpoint falls back
 to Customer-only creation. Patch carries the originally read `job_id` and
 opaque `revision`; it cannot choose new anchors or source provenance.
 
@@ -58,6 +61,7 @@ opaque `revision`; it cannot choose new anchors or source provenance.
   "operation_id": "47000000-0000-4000-8000-000000000001",
   "client_id": "47000000-0000-4000-8000-000000000002",
   "job_id": 123,
+  "customer_id": 456,
   "title": "Inspection proposal",
   "line_items": [
     {"title": "Inspection", "quantity": 2, "unit_price": "17.25", "taxable": false}
@@ -71,6 +75,16 @@ values win over Customer defaults and company defaults. Omitted Invoice date
 uses company today. Empty optional date input explicitly means no date; Invoice
 read `due_date: null` represents No Due Date. Estimate Valid Through is a
 discovery value, not a workflow transition.
+
+### Reviewed-Customer compatibility tightening
+
+The explicitly authorized creation contract requires reviewed Customer identity
+for new effects. Missing identity returns typed `428 review_required`; drift
+returns `409 commercial_conflict`, without reanchoring. Review current state and
+use a new operation UUID after a terminal rejection. Historical terminal replay
+and receipt lookup run before this new validation: original payloads without
+`customer_id` retain their exact intent identity and immutable receipts, numbers,
+and history. Do not add the field to an already submitted historical intent.
 
 Accepted responses contain immutable effect identity and disposition. Replay
 returns that same receipt without duplicate effects or audit. Changed intent

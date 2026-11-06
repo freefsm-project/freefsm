@@ -41,6 +41,7 @@ func TestReviewedConversionPreviewPairingAndAtomicFailureAPI(t *testing.T) {
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Pair preview").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Pair preview").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	fieldPost(t, web, cookie, "/settings/custom-fields", url.Values{"name": {"Source label"}, "object_type": {"estimate"}, "field_type": {"text"}, "conversion_key": {"explicit"}}, 303)
 	fieldPost(t, web, cookie, "/settings/custom-fields", url.Values{"name": {"Different target label"}, "object_type": {"invoice"}, "field_type": {"text"}, "conversion_key": {"explicit"}}, 303)
 	fieldPost(t, web, cookie, "/settings/custom-fields", url.Values{"name": {"Unpaired default"}, "object_type": {"invoice"}, "field_type": {"text"}, "default_value": {"Default value"}}, 303)
@@ -53,7 +54,7 @@ func TestReviewedConversionPreviewPairingAndAtomicFailureAPI(t *testing.T) {
 	call := func(method, path string, in any, status int) map[string]any {
 		return conversionAPICall(t, api, token, method, path, in, status)
 	}
-	created := call("POST", "/estimates", map[string]any{"operation_id": newOperationKey(), "client_id": newOperationKey(), "job_id": j.ID, "title": "Preview source", "custom_fields": []any{map[string]any{"definition_id": 1, "value": "Source wins"}}}, 200)
+	created := call("POST", "/estimates", map[string]any{"operation_id": newOperationKey(), "client_id": newOperationKey(), "job_id": j.ID, "customer_id": c.ID, "title": "Preview source", "custom_fields": []any{map[string]any{"definition_id": 1, "value": "Source wins"}}}, 200)
 	path := fmt.Sprintf("/estimates/%.0f", created["id"])
 	preview := call("GET", path+"/conversion-preview", nil, 200)
 	if preview["invoice_date"] == nil {
@@ -165,6 +166,7 @@ func TestReviewedConversionCycleAndContentDriftAPI(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Reviewed conversion").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Reviewed conversion").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	api := apiv1.NewRouter(pool, client, sessions)
 	token, err := sessions.CreateMobile(ctx, admin, "Conversion")
 	if err != nil {
@@ -190,7 +192,7 @@ func TestReviewedConversionCycleAndContentDriftAPI(t *testing.T) {
 		}
 		return out["data"].(map[string]any)
 	}
-	created := call("POST", "/estimates", map[string]any{"operation_id": newOperationKey(), "client_id": newOperationKey(), "job_id": j.ID, "title": "Original", "line_items": []any{}}, 200)
+	created := call("POST", "/estimates", map[string]any{"operation_id": newOperationKey(), "client_id": newOperationKey(), "job_id": j.ID, "customer_id": c.ID, "title": "Original", "line_items": []any{}}, 200)
 	e := fmt.Sprintf("/estimates/%.0f", created["id"])
 	intent := func(state map[string]any) map[string]any {
 		return map[string]any{"operation_id": newOperationKey(), "job_id": j.ID, "revision": state["revision"]}

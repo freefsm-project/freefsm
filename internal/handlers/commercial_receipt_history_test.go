@@ -110,7 +110,8 @@ func TestCommercialLegacyNumericIntentReceiptReplayAPI(t *testing.T) {
 		t.Fatal("historical replay created another document")
 	}
 	// New exact numeric intents must not inherit the legacy float equivalence.
-	body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Exact numeric intent","line_items":[{"title":"Exact","quantity":1.50000000000000001,"unit_price":"10.00"}]}`, newOperationKey(), newOperationKey(), j.ID)
+	assignFieldDocumentCreator(t, pool, j.ID, actor.ID)
+	body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Exact numeric intent","line_items":[{"title":"Exact","quantity":1.50000000000000001,"unit_price":"10.00"}]}`, newOperationKey(), newOperationKey(), j.ID, c.ID)
 	created := call("POST", "/invoices", body, 200)
 	if replay := call("POST", "/invoices", body, 200); replay != created {
 		t.Fatal("new exact numeric intent did not retain its receipt")

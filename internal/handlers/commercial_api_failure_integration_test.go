@@ -38,6 +38,9 @@ func TestCommercialReceiptAfterScopeLossAndAtomicAuditFailureAPI(t *testing.T) {
 		t.Fatal(err)
 	}
 	api := apiv1.NewRouter(pool, client, sessions)
+	if _, err := pool.Exec(ctx, `INSERT INTO job_assignments(job_id,user_id) VALUES($1,$2)`, j.ID, u.ID); err != nil {
+		t.Fatal(err)
+	}
 	call := func(method, path, body string, want int) string {
 		t.Helper()
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
@@ -51,7 +54,7 @@ func TestCommercialReceiptAfterScopeLossAndAtomicAuditFailureAPI(t *testing.T) {
 		return w.Body.String()
 	}
 	operation := newOperationKey()
-	body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"SECRET commercial title","notes":"SECRET terms","line_items":[]}`, operation, newOperationKey(), j.ID)
+	body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"SECRET commercial title","notes":"SECRET terms","line_items":[]}`, operation, newOperationKey(), j.ID, c.ID)
 	if _, err := pool.Exec(ctx, `CREATE FUNCTION commercial_audit_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.target_type='estimate' THEN RAISE EXCEPTION 'injected commercial audit failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER commercial_audit_failure BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION commercial_audit_failure()`); err != nil {
 		t.Fatal(err)
 	}
@@ -95,6 +98,9 @@ func TestCommercialAPIDefaultsAreCreationSnapshots(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Default Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Default Job").SaveX(ctx)
+	if _, err := pool.Exec(ctx, `INSERT INTO job_assignments(job_id,user_id) VALUES($1,$2)`, j.ID, admin); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := pool.Exec(ctx, `UPDATE company_settings SET default_invoice_notes='Company note',invoice_payment_terms='Company terms',default_line_description='Company description',default_due_days=30 WHERE company_id=$1`, company); err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +113,7 @@ func TestCommercialAPIDefaultsAreCreationSnapshots(t *testing.T) {
 	}
 	api := apiv1.NewRouter(pool, client, sessions)
 	for _, description := range []string{"", `,"description":""`} {
-		body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Defaults","notes":"","due_date":"","line_items":[{"title":"Snapshot","quantity":1,"unit_price":"17.25"%s}]}`, newOperationKey(), newOperationKey(), j.ID, description)
+		body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Defaults","notes":"","due_date":"","line_items":[{"title":"Snapshot","quantity":1,"unit_price":"17.25"%s}]}`, newOperationKey(), newOperationKey(), j.ID, c.ID, description)
 		r := httptest.NewRequest("POST", "/invoices", strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+token)
 		r.Header.Set("Content-Type", "application/json")
@@ -205,6 +211,9 @@ func TestCommercialSingleConnectionTransactionAPI(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Single connection Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Single connection Job").SaveX(ctx)
+	if _, err := pool.Exec(ctx, `INSERT INTO job_assignments(job_id,user_id) VALUES($1,$2)`, j.ID, admin); err != nil {
+		t.Fatal(err)
+	}
 	token, err := sessions.CreateMobile(ctx, admin, "Bound transaction")
 	if err != nil {
 		t.Fatal(err)
@@ -219,7 +228,7 @@ func TestCommercialSingleConnectionTransactionAPI(t *testing.T) {
 	api := apiv1.NewRouter(limited, client, sessions)
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"One connection","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID)
+	body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"One connection","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID, c.ID)
 	r := httptest.NewRequest("POST", "/estimates", strings.NewReader(body)).WithContext(ctx)
 	r.Header.Set("Authorization", "Bearer "+token)
 	r.Header.Set("Content-Type", "application/json")
@@ -235,6 +244,9 @@ func TestCommercialAPISelectedItemAuditSharesOperationIdentity(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Selection Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Selection Job").SaveX(ctx)
+	if _, err := pool.Exec(ctx, `INSERT INTO job_assignments(job_id,user_id) VALUES($1,$2)`, j.ID, admin); err != nil {
+		t.Fatal(err)
+	}
 	item := client.Item.Create().SetCompanyID(company).SetName("Selected Item").SetUnitPrice(22).SaveX(ctx)
 	token, err := sessions.CreateMobile(ctx, admin, "Selection tablet")
 	if err != nil {
@@ -242,7 +254,7 @@ func TestCommercialAPISelectedItemAuditSharesOperationIdentity(t *testing.T) {
 	}
 	api := apiv1.NewRouter(pool, client, sessions)
 	operation := newOperationKey()
-	body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Selection","line_items":[{"item_id":%d,"title":"Reviewed snapshot","quantity":1,"unit_price":"17.25"}]}`, operation, newOperationKey(), j.ID, item.ID)
+	body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Selection","line_items":[{"item_id":%d,"title":"Reviewed snapshot","quantity":1,"unit_price":"17.25"}]}`, operation, newOperationKey(), j.ID, c.ID, item.ID)
 	r := httptest.NewRequest("POST", "/estimates", strings.NewReader(body))
 	r.Header.Set("Authorization", "Bearer "+token)
 	r.Header.Set("Content-Type", "application/json")

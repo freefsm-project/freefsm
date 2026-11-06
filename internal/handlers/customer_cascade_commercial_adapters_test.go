@@ -23,6 +23,7 @@ func TestCustomerCascadeCommercialCopyAndFieldAdapters(t *testing.T) {
 			cookie := sessionCookie(t, ctx, sessions, admin)
 			c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Legacy owner").SaveX(ctx)
 			j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Retained Job copy source").SaveX(ctx)
+			assignFieldDocumentCreator(t, pool, j.ID, admin)
 			copy := func() error {
 				if kind == "estimate" {
 					_, err := services.NewEstimateService(client).CreateFromJob(ctx, j.ID, services.NewStatusService(client), "0")
@@ -66,7 +67,7 @@ func TestCustomerCascadeCommercialCopyAndFieldAdapters(t *testing.T) {
 			}
 			historyEqual(t, "copy denial retains captured source and number history", cascadeCommercialFacts(t, pool), before)
 			createBody := func() string {
-				return fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Field creation","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID)
+				return fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Field creation","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID, c.ID)
 			}
 			for _, mutation := range []struct{ method, path, body string }{
 				{"POST", "/" + kind + "s", createBody()},

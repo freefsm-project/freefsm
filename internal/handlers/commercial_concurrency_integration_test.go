@@ -45,6 +45,7 @@ func TestCommercialConcurrentNumberingAndReplayAPI(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Concurrent commercial Customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Concurrent commercial Job").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	token, err := sessions.CreateMobile(ctx, admin, "Concurrent acceptance")
 	if err != nil {
 		t.Fatal(err)
@@ -59,7 +60,7 @@ func TestCommercialConcurrentNumberingAndReplayAPI(t *testing.T) {
 				if !replay {
 					key, clientID = newOperationKey(), newOperationKey()
 				}
-				body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Concurrent","line_items":[]}`, key, clientID, j.ID)
+				body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Concurrent","line_items":[]}`, key, clientID, j.ID, c.ID)
 				go func() {
 					r := httptest.NewRequest("POST", "/"+kind+"s", strings.NewReader(body))
 					r.Header.Set("Authorization", "Bearer "+token)

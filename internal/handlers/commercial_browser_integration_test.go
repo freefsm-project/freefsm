@@ -20,13 +20,14 @@ func TestCommercialReferencePersistedAPI(t *testing.T) {
 	defer cancel()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Reference customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Reference Job").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	token, err := sessions.CreateMobile(ctx, admin, "Commercial reference acceptance")
 	if err != nil {
 		t.Fatal(err)
 	}
 	server := httptest.NewServer(apiv1.NewRouter(pool, client, sessions))
 	defer server.Close()
-	out, err := exec.CommandContext(ctx, "node", "../api/v1/testdata/commercial-reference-conformance.cjs", server.URL, token, fmt.Sprint(j.ID)).CombinedOutput()
+	out, err := exec.CommandContext(ctx, "node", "../api/v1/testdata/commercial-reference-conformance.cjs", server.URL, token, fmt.Sprint(j.ID), fmt.Sprint(c.ID)).CombinedOutput()
 	t.Logf("reference: %s", out)
 	if err != nil {
 		t.Fatal(err)

@@ -17,11 +17,13 @@ var ErrCommercialInput = errors.New("invalid commercial document")
 var ErrConversionCycle = errors.New("reviewed conversion cycle is no longer active")
 
 type CommercialIntent struct {
-	OperationID string     `json:"operation_id"`
-	ClientID    string     `json:"client_id,omitempty"`
-	JobID       int64      `json:"job_id"`
-	Revision    string     `json:"revision,omitempty"`
-	OccurredAt  *time.Time `json:"occurred_at,omitempty"`
+	OperationID string `json:"operation_id"`
+	ClientID    string `json:"client_id,omitempty"`
+	JobID       int64  `json:"job_id"`
+	// Omission must retain historical canonical intent bytes for receipt replay.
+	CustomerID int64      `json:"customer_id,omitempty"`
+	Revision   string     `json:"revision,omitempty"`
+	OccurredAt *time.Time `json:"occurred_at,omitempty"`
 }
 
 // Receipts deliberately contain only effect identity and disposition. Replaying
@@ -260,14 +262,20 @@ func (s *Service) commercialOperation(ctx context.Context, a Actor, kind string,
 			}
 			var customer int64
 			if id == 0 {
+				if in.CustomerID <= 0 {
+					return saveaction.ErrRevisionRequired
+				}
 				if _, err := parentAccess(ctx, sp, p, "job", in.JobID, "", true); err != nil {
 					return err
 				}
-				if err := sp.QueryRow(ctx, `SELECT customer_id FROM jobs WHERE id=$1 AND deleted_at IS NULL`, in.JobID).Scan(&customer); err != nil {
+				if err := sp.QueryRow(ctx, `SELECT customer_id FROM jobs WHERE id=$1 AND deleted_at IS NULL FOR SHARE`, in.JobID).Scan(&customer); err != nil {
 					if err == pgx.ErrNoRows {
 						return ErrNotFound
 					}
 					return err
+				}
+				if customer != in.CustomerID {
+					return ErrConflict
 				}
 				if key, err := uuid.Parse(in.ClientID); err != nil || key == uuid.Nil {
 					return ErrCommercialInput

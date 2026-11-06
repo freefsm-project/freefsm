@@ -59,6 +59,7 @@ func TestCommercialCreateOnceAPI(t *testing.T) {
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Field customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Field job").SaveX(ctx)
+	assignFieldDocumentCreator(t, pool, j.ID, admin)
 	api := apiv1.NewRouter(pool, client, sessions)
 	token, err := sessions.CreateMobile(ctx, admin, "Commercial acceptance tablet")
 	if err != nil {
@@ -78,7 +79,7 @@ func TestCommercialCreateOnceAPI(t *testing.T) {
 	}
 	for _, kind := range []string{"estimate", "invoice"} {
 		operation, identity := newOperationKey(), newOperationKey()
-		body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Field document","line_items":[]}`, operation, identity, j.ID)
+		body := fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Field document","line_items":[]}`, operation, identity, j.ID, c.ID)
 		first := call("POST", "/"+kind+"s", body, 200)
 		replay := call("POST", "/"+kind+"s", body, 200)
 		if first != replay {

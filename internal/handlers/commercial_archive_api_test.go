@@ -16,10 +16,11 @@ func TestCommercialRestoreRequiresFreshFieldIntentAPI(t *testing.T) {
 			ctx := context.Background()
 			c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Field archive Customer").SaveX(ctx)
 			j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Field archive Job").SaveX(ctx)
+			assignFieldDocumentCreator(t, pool, j.ID, admin)
 			api := apiv1.NewRouter(pool, client, sessions)
 			token, err := sessions.CreateMobile(ctx, admin, "Archive field intent")
 			historyCheck(t, err)
-			created := lifecycleCall(t, api, token, "POST", "/"+kind+"s", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"title":"Field history","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID), 200)
+			created := lifecycleCall(t, api, token, "POST", "/"+kind+"s", fmt.Sprintf(`{"operation_id":%q,"client_id":%q,"job_id":%d,"customer_id":%d,"title":"Field history","line_items":[]}`, newOperationKey(), newOperationKey(), j.ID, c.ID), 200)
 			var result struct {
 				Data struct {
 					ID       int64  `json:"id"`
