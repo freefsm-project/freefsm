@@ -49,7 +49,8 @@ class CommercialClient extends ProtectedFieldClient {
   for(const e of Object.values(pending))if(e.withheld){delete e.intent;delete e.reviewed;}
   return clone({documents:s.documents||{},pending});
  });}
- stageIn(s,target,revision,values,action='edit'){
+  stageIn(s,target,revision,values,action='edit'){
+   this.requireReconciled(s);
   const doc=s.documents?.[target];
   if(!doc||doc.revision!==revision||!doc.job_id||!doc.customer_id||!doc.actions?.[action])throw Error('review_required');
   if(!values||typeof values!=='object'||Array.isArray(values))throw Error('review_required');
@@ -68,7 +69,27 @@ class CommercialClient extends ProtectedFieldClient {
   return id;
  }
  async stageEdit(target,revision,values){return this.stage(target,revision,values,'edit');}
- async stageLifecycle(target,revision,choice,action){return this.stage(target,revision,choice,action);}
+  async stageLifecycle(target,revision,choice,action){return this.stage(target,revision,choice,action);}
+  requireReconciled(s){
+   if(Object.values(s.pending).some(e=>e.family==='commercial'&&(e.state==='unknown'||e.state==='restore_uncertain'&&!e.reconciled)))throw Error('reconciliation_required');
+  }
+  validateBatch(s){this.requireReconciled(s);}
+  // Persist the entire unknown group and withhold observations in one protected
+  // transition. A failed checkpoint quarantines the store before any transport.
+  async batchCheckpoint(s){await this.withholdCache(s);}
+  async batchFailure(s){await this.withholdCache(s);}
+  async stageBatch(target,revision,values,action,dependencies){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);
+   const depends_on=this.reviewedDependencies(dependencies);
+   const id=this.stageIn(s,target,revision,values,action),e=s.pending[id];
+   e.batch={type:e.kind+'.'+e.action,target:String(e.reviewed.legacy_id),depends_on};
+   await this.persist(s);return id;
+  });}
+  batchOperation(e,id){
+   if(e.family!=='commercial'||e.withheld)throw Error('reconciliation_or_review_required');
+   const commercial=clone(e.intent);delete commercial.operation_id;
+   return {operation_id:id,...clone(e.batch),commercial};
+  }
  async stage(target,revision,values,action){return this.transaction(async s=>{
   await this.enforceOfflineAccessWindow(s);const id=this.stageIn(s,target,revision,values,action);await this.persist(s);return id;
  });}
@@ -84,9 +105,11 @@ class CommercialClient extends ProtectedFieldClient {
   if(outcome!=='accepted'){await this.withholdCache(s);return true;}
   return false;
  }
- async submit(id){return this.transaction(async s=>{
-  await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
-  if(e?.family!=='commercial'||e.state!=='pending'||!e.intent||e.withheld)throw Error('reconciliation_or_review_required');
+  async submit(id){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);const e=s.pending[id];
+   if(e?.batch)throw Error('transport_identity_mismatch');
+   if(e?.family!=='commercial'||e.state!=='pending'||!e.intent||e.withheld)throw Error('reconciliation_or_review_required');
+   this.requireReconciled(s);
   if(e.retryNotBefore&&this.now()<e.retryNotBefore)throw Error('retry_after_required');
   await this.policy(s);e.state='unknown';await this.persist(s);
   const path='/'+e.kind+'s/'+e.reviewed.legacy_id+(e.action==='edit'?'':'/'+e.action);
@@ -107,11 +130,22 @@ class CommercialClient extends ProtectedFieldClient {
    return clone({reviewed:e.reviewed,current,proposed:e.intent});
   });
  }
- async repair(id,revision,values){return this.transaction(async s=>{
-  await this.enforceOfflineAccessWindow(s);const e=s.pending[id],doc=s.documents?.[e?.target];
-  if(e?.family!=='commercial'||!['terminal','restore_uncertain'].includes(e.state)||!e.intent||e.withheld||!doc||doc.job_id!==e.intent.job_id||doc.customer_id!==e.customer)throw Error('review_required');
-  if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
-  const next=this.stageIn(s,e.target,revision,values,e.action);e.state='replaced';await this.persist(s);return next;
- });}
+  repairIn(s,id,revision,values,dependencies){
+   const e=s.pending[id],doc=s.documents?.[e?.target];
+   if(!!e?.batch!==(dependencies!==undefined))throw Error('transport_identity_mismatch');
+   if(e?.family!=='commercial'||!['terminal','restore_uncertain'].includes(e.state)||!e.intent||e.withheld||!doc||doc.job_id!==e.intent.job_id||doc.customer_id!==e.customer)throw Error('review_required');
+   if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
+   const depends_on=dependencies===undefined?undefined:this.reviewedDependencies(dependencies);
+   const next=this.stageIn(s,e.target,revision,values,e.action);
+   if(depends_on)s.pending[next].batch={type:e.batch.type,target:e.batch.target,depends_on};
+   e.state='replaced';return next;
+  }
+  async repair(id,revision,values){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);const next=this.repairIn(s,id,revision,values);await this.persist(s);return next;
+  });}
+  async repairBatch(id,revision,values,dependencies){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);
+   const next=this.repairIn(s,id,revision,values,this.reviewedDependencies(dependencies));await this.persist(s);return next;
+  });}
 }
 module.exports={CommercialClient,ProtectedStore};

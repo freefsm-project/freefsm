@@ -84,9 +84,52 @@ successful commercial synchronization cannot unlock inherited private observatio
 from another domain. The production HTTP/PostgreSQL regression
 `TestCommercialProtectedReferenceAPI` exercises encrypted restart, disjoint edit
 conflict, explicit repair, lost-response/scope-loss receipts, revocation, restore,
-workflow/zero-total behavior and failed comparison. Ordered commercial batch
-dispatch and the complete settlement/field/workflow-change reference matrix still
-require further implementation and conformance evidence.
+workflow/zero-total behavior and failed comparison. The complete protected
+settlement/field/workflow-change reference matrix remains a separate qualification
+unit.
+
+### Encrypted ordered commercial batches
+
+`stageBatch(opaqueID, reviewedRevision, valuesOrChoice, action, dependencies)`
+captures the same original commercial review with an explicit batch transport
+identity. `action` is `edit`, `status` or `finalize`; dependencies are operation
+UUIDs whose order and duplicates are retained exactly. Staging copies caller
+values, dependencies, revision, anchors and workflow meaning. Use
+`submitBatch([operationID, ...])` in the reviewed order (at most 100 operations and
+1 MiB encoded JSON). A standalone intent cannot be submitted as a batch, nor a
+batch intent through `submit`.
+
+Before transmission the whole selected group is durably marked `unknown` and
+cached observations are withheld. A lost response or interrupted prefix never
+implies failure: restart does not send anything. Query each original receipt with
+`reconcile`, then synchronize current authority before retrying or staging new
+effects. Unknown operations block new commercial work even after synchronization.
+A missing receipt can make an unchanged transient operation retryable with its
+same ID, respecting retry timing. Accepted receipts remain queryable after target
+scope loss without exposing restricted document content.
+
+Batches are ordered and per-operation atomic, not all-or-nothing. A transient
+predecessor can leave a terminal `failed_dependency` descendant while unrelated
+operations succeed. Retrying the predecessor never rehabilitates that descendant.
+After authorized comparison, explicitly call
+`repairBatch(oldID, newlyReviewedRevision, valuesOrChoice, dependencies)` to create
+a new ID, or `discard(oldID)`. Repair never silently changes the original target,
+anchors, revision, amount, workflow meaning or dependency list. Restore-only
+uncertainty requires original receipt reconciliation and explicit acknowledgement
+before new-ID review; ordinary revocation purges sensitive pending intent.
+
+If the unknown checkpoint or an authority-loss write fails, the shared store is
+quarantined and the already-durable `.writer` marker is retained. The failing
+action reports `protected_store_locked`; later actions, including in a restarted
+process, report `store_busy`. Never automatically remove the marker or use a
+timeout takeover: operator verification is required. No batch is transmitted when
+its unknown checkpoint fails, and old ciphertext is not exposed through `view`.
+
+`TestCommercialProtectedReferenceAPI` exercises both document kinds through real
+HTTP, migrated PostgreSQL and separate encrypted-state reader/reconciliation
+processes, validating served batch request/response/error schemas and statuses.
+Its prefix-interruption seam commits the first operation through the production
+router, omits the rest and severs the response; it does not kill the server process.
 
 Retained documents without a recorded manual status remain readable: `status_id`, `manual_category` and an unknown `effective_category` are explicitly `null`. Their current revision, workflow choices and Invoice settlement lock remain available for deliberate review. A read never supplies Draft, creates a transition or invents financial history. Repair requires an explicit reviewed Status selection; its event preserves the unknown prior status rather than claiming a historical Draft or acceptance.
 

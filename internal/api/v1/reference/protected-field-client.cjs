@@ -118,17 +118,18 @@ class ProtectedFieldClient {
    if(!Array.isArray(dependencies)||dependencies.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)))throw Error('review_required');
    return clone(dependencies);
   }
- async submitBatch(ids){return this.transaction(async s=>{
-   await this.enforceOfflineAccessWindow(s);
+  async submitBatch(ids){return this.transaction(async s=>{
+    await this.enforceOfflineAccessWindow(s);
+    this.validateBatch(s);
    if(!Array.isArray(ids)||ids.length>100||new Set(ids).size!==ids.length)throw Error('batch_limit');
    const operations=ids.map(id=>{
     const e=s.pending[id];if(!e||e.state!=='pending'||!e.intent||!e.batch)throw Error('reconciliation_or_review_required');
     if(e.retryNotBefore&&this.now()<e.retryNotBefore)throw Error('retry_after_required');
-    return {...clone(e.intent),...clone(e.batch)};
+     return this.batchOperation(e,id);
    });
    const body={operations};if(Buffer.byteLength(JSON.stringify(body),'utf8')>1048576)throw Error('batch_limit');
    await this.policy(s);
-   for(const id of ids)s.pending[id].state='unknown';await this.persist(s);
+    for(const id of ids)s.pending[id].state='unknown';await this.batchCheckpoint(s);
    const r=await this.contact(s,'/sync/operations','POST',body);
    if(r.status===200){
     if(!Array.isArray(r.data?.results)||r.data.results.length!==ids.length||r.data.results.some((v,i)=>v.operation_id!==ids[i]||(v.receipt&&v.receipt.operation_id!==ids[i])))throw Error('receipt_mismatch');
@@ -148,7 +149,10 @@ class ProtectedFieldClient {
    }
    return ids.map(id=>({operation_id:id,state:s.pending[id].state,receipt:s.pending[id].receipt}));
   });}
- retryDelay(error){const seconds=error?.retry_after_seconds;return (Number.isSafeInteger(seconds)&&seconds>0&&seconds<Number.MAX_SAFE_INTEGER/1000?seconds:5)*1000;}
+  retryDelay(error){const seconds=error?.retry_after_seconds;return (Number.isSafeInteger(seconds)&&seconds>0&&seconds<Number.MAX_SAFE_INTEGER/1000?seconds:5)*1000;}
+  validateBatch(s){}
+  async batchCheckpoint(s){await this.persist(s);}
+  batchOperation(e,id){return {...clone(e.intent),...clone(e.batch)};}
  async batchFailure(s,ids,response){}
  receipt(e,id,r){
   if(r?.operation_id!==id||!r.accepted_at||typeof r.code!=='string')throw Error('receipt_mismatch');
