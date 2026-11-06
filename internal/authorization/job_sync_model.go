@@ -104,6 +104,16 @@ func syncReadModel(ctx context.Context, tx pgx.Tx, p Principal, a Actor, scope s
 			return nil, err
 		}
 		e.Data["custom_fields"] = fieldData
+		creation, err := documentCreationInputs(ctx, tx, p, e.InstalledID)
+		if err != nil {
+			return nil, err
+		}
+		creationData, err := syncJSONObject(creation)
+		if err != nil {
+			return nil, err
+		}
+		e.Data["document_creation"] = creationData
+		e.Anchor += fmt.Sprintf("/create:%t:%t", creation["estimate"].CanCreate, creation["invoice"].CanCreate)
 		if p.Allows("time.clock_in", Own) {
 			e.Data["clock_job_id"] = strconv.FormatInt(e.InstalledID, 10)
 		}

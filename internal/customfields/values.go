@@ -79,20 +79,6 @@ func Validate(ctx context.Context, tx pgx.Tx, typ string, old string, input *str
 	for _, v := range previous {
 		values[v.DefinitionID] = v.Value
 	}
-	if creating {
-		for _, d := range defs {
-			if d.Default != nil && !d.Retired {
-				v, err := DefaultValue(d)
-				if err != nil {
-					return "", err
-				}
-				values[d.ID] = v
-				if err := ValidateSelection(d, nil, v); err != nil {
-					return "", err
-				}
-			}
-		}
-	}
 	seen := map[int64]bool{}
 	if input != nil {
 		var entered []Value
@@ -117,6 +103,27 @@ func Validate(ctx context.Context, tx pgx.Tx, typ string, old string, input *str
 				return "", err
 			}
 			values[v.DefinitionID] = v.Value
+		}
+	}
+	// Explicit values, including explicit empty values, supersede defaults.
+	// Validate only defaults actually selected for this new document; installed
+	// invalid or retired defaults must neither override nor reject a valid choice.
+	if creating {
+		for _, d := range defs {
+			if d.Default == nil || d.Retired || seen[d.ID] {
+				continue
+			}
+			v, err := DefaultValue(d)
+			if err != nil {
+				return "", err
+			}
+			if err := ValidateValue(d, v); err != nil {
+				return "", err
+			}
+			if err := ValidateSelection(d, nil, v); err != nil {
+				return "", err
+			}
+			values[d.ID] = v
 		}
 	}
 	for _, d := range defs {
