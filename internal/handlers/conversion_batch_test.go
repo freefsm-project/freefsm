@@ -118,3 +118,59 @@ func TestConversionBatchMalformedAPI(t *testing.T) {
 		})
 	}
 }
+
+func TestConversionReversionBatchDependenciesAPI(t *testing.T) {
+	for _, scenario := range []string{"stale", "unknown", "transient"} {
+		t.Run(scenario, func(t *testing.T) {
+			f := newBatchCommercialFixture(t, "estimate")
+			f.api = conversionContract(t, f.api)
+			invoice := f
+			invoice.kind = "invoice"
+			var operations []map[string]any
+			var states []commercialMatrixState
+			for i := 0; i < 3; i++ {
+				converted := batchResults(t, f, f.operation(f.create(t), "convert", map[string]any{}))[0]
+				batchOutcome(t, converted, "accepted")
+				state := matrixState(t, invoice.read(t, int64(converted.Receipt["id"].(float64))))
+				states = append(states, state)
+				operations = append(operations, invoice.operation(state, "revert", map[string]any{"cycle_id": converted.Receipt["cycle_id"]}))
+			}
+			parent, child, unrelated := operations[0], operations[1], operations[2]
+			child["depends_on"] = []string{parent["operation_id"].(string)}
+			want := "stale_commercial_revision"
+			switch scenario {
+			case "stale":
+				batchOutcome(t, batchResults(t, invoice, invoice.operation(states[0], "edit", map[string]any{"notes": "Review changed Invoice"}))[0], "accepted")
+			case "unknown":
+				parent["depends_on"] = []string{newOperationKey()}
+				want = "invalid_dependency"
+			case "transient":
+				_, err := f.pool.Exec(context.Background(), fmt.Sprintf(`CREATE FUNCTION reversion_batch_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_id='%s'::uuid THEN RAISE EXCEPTION 'reversion receipt failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER reversion_batch_failure BEFORE INSERT ON commercial_operations FOR EACH ROW EXECUTE FUNCTION reversion_batch_failure()`, parent["operation_id"]))
+				historyCheck(t, err)
+			}
+			results := batchResults(t, invoice, parent, child, unrelated)
+			if scenario == "transient" {
+				if results[0].Error.Code != "retryable_failure" || results[0].Receipt != nil {
+					t.Fatalf("reversion unknown: %+v", results[0])
+				}
+				_, err := f.pool.Exec(context.Background(), `DROP TRIGGER reversion_batch_failure ON commercial_operations`)
+				historyCheck(t, err)
+			} else {
+				batchOutcome(t, results[0], want)
+			}
+			batchOutcome(t, results[1], "failed_dependency")
+			batchOutcome(t, results[2], "accepted")
+			invoice.read(t, states[0].ID)
+			invoice.read(t, states[1].ID)
+			if scenario != "transient" {
+				cycle := parent["commercial"].(map[string]any)["cycle_id"]
+				parent = invoice.operation(matrixState(t, invoice.read(t, states[0].ID)), "revert", map[string]any{"cycle_id": cycle})
+			}
+			batchOutcome(t, batchResults(t, invoice, parent)[0], "accepted")
+			batchOutcome(t, batchResults(t, invoice, child)[0], "failed_dependency")
+			child["operation_id"] = newOperationKey()
+			child["depends_on"] = []string{parent["operation_id"].(string)}
+			batchOutcome(t, batchResults(t, invoice, child)[0], "accepted")
+		})
+	}
+}

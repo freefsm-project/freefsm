@@ -73,8 +73,9 @@ class CommercialClient extends ProtectedFieldClient {
    if(!choice)throw Error('workflow_reselection_required');
    intent={status_id:choice.id,meaning_revision:choice.meaning_revision};
   }
-  const id=randomUUID();
-  s.pending[id]={family:'commercial',kind:s.commercialKind,target,customer:doc.customer_id,action,state:'pending',reviewed:clone(doc),intent:{...intent,job_id:doc.job_id,revision:doc.revision,operation_id:id}};
+   const id=randomUUID();
+   const reviewed=clone(doc);delete reviewed.conversion_history;
+   s.pending[id]={family:'commercial',kind:s.commercialKind,target,customer:doc.customer_id,action,state:'pending',reviewed,intent:{...intent,job_id:doc.job_id,revision:doc.revision,operation_id:id}};
   return id;
  }
  async stageEdit(target,revision,values){return this.stage(target,revision,values,'edit');}
@@ -99,6 +100,18 @@ class CommercialClient extends ProtectedFieldClient {
    const id=this.stageIn(s,target,revision,values,action),e=s.pending[id];
    e.batch={type:e.kind+'.'+e.action,target:String(e.reviewed.legacy_id),depends_on};
    await this.persist(s);return id;
+  });}
+  async conversionHistory(target,cursor=''){return this.transaction(async s=>{
+   await this.enforceOfflineAccessWindow(s);
+   const doc=s.documents?.[target];
+   if(!s.synced||!doc||typeof cursor!=='string')throw Error('review_required');
+   await this.policy(s);
+   const r=await this.contact(s,'/'+s.commercialKind+'s/'+doc.legacy_id+'/conversion-history'+(cursor?'?cursor='+encodeURIComponent(cursor):''),'GET');
+   if(r.status!==200){await this.withholdCache(s);throw Error(r.error?.code||'history_unavailable');}
+   // One bounded page, encrypted with its current parent. Synchronization,
+   // expiry and authority loss use the same withholding/purge owner as documents.
+   doc.conversion_history=clone(r.data);await this.persist(s);
+   return clone(doc.conversion_history);
   });}
   batchOperation(e,id){
    if(e.family!=='commercial'||e.withheld)throw Error('reconciliation_or_review_required');

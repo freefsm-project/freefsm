@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -21,19 +22,19 @@ import (
 )
 
 func TestConversionProtectedReferenceAPI(t *testing.T) {
-	for _, scenario := range []string{"history", "fields", "origin_refund", "settlement", "revoke", "restore", "repeated_restore_contact", "repeated_restore_lease", "authority_convert", "authority_assignment", "authority_archive", "authority_input"} {
+	for _, scenario := range []string{"history", "provenance", "fields", "fields_unsafe", "archived_invoice", "origin_refund", "settlement", "revoke", "restore", "repeated_restore_contact", "repeated_restore_lease", "authority_convert", "authority_assignment", "authority_archive", "authority_input"} {
 		t.Run(scenario, func(t *testing.T) { conversionProtectedReference(t, scenario) })
 	}
 }
 
 func TestConversionProtectedBatchAPI(t *testing.T) {
-	for _, scenario := range []string{"batch_history", "batch_transient", "batch_interruption", "batch_restore"} {
+	for _, scenario := range []string{"batch_history", "batch_transient", "batch_interruption", "batch_restore", "batch_reversion_transient", "batch_reversion_interruption", "batch_reversion_stale", "batch_fields", "batch_authority_input"} {
 		t.Run(scenario, func(t *testing.T) { conversionProtectedReference(t, scenario) })
 	}
 }
 
 func conversionProtectedReference(t *testing.T, scenario string) {
-	pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
+	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Protected conversion").SaveX(ctx)
@@ -43,13 +44,17 @@ func conversionProtectedReference(t *testing.T, scenario string) {
 	historyCheck(t, err)
 	creationToken := token
 	var role, scopedUser int64
-	if strings.HasPrefix(scenario, "authority_") {
+	if strings.HasPrefix(scenario, "authority_") || scenario == "batch_authority_input" || scenario == "provenance" {
 		auth := authorization.New(pool)
 		u := client.User.Create().SetCompanyID(company).SetName("Scoped conversion").SetEmail("protected-conversion@test").SetPasswordHash("x").SetRole("tech").SaveX(ctx)
 		scopedUser = u.ID
 		role, err = auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Scoped conversion", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "estimate.view", Scope: authorization.Assigned}, {Permission: "estimate.create", Scope: authorization.Assigned}, {Permission: "estimate.convert", Scope: authorization.Assigned}, {Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "invoice.create", Scope: authorization.Assigned}, {Permission: "pricing.view", Scope: authorization.Assigned}})
 		historyCheck(t, err)
 		historyCheck(t, auth.AssignUser(ctx, authorization.Actor{UserID: admin}, u.ID, role))
+		if scenario == "provenance" {
+			_, err = pool.Exec(ctx, `INSERT INTO authorization_grants(role_id,permission,scope) VALUES($1,'invoice.provenance.view',$2)`, role, authorization.Assigned)
+			historyCheck(t, err)
+		}
 		assignFieldDocumentCreator(t, pool, job.ID, u.ID)
 		token, err = sessions.CreateMobile(ctx, u.ID, "Scoped conversion")
 		historyCheck(t, err)
@@ -57,7 +62,7 @@ func conversionProtectedReference(t *testing.T, scenario string) {
 	api := conversionContract(t, apiv1.NewConfiguredRouter(pool, client, sessions, config.APIConfig{SyncPerClient: 100}))
 	fields := map[string]int64{}
 	var payment, refund settlement.Result
-	if scenario == "fields" {
+	if strings.HasPrefix(scenario, "fields") || scenario == "batch_fields" || scenario == "batch_authority_input" {
 		for _, f := range []struct {
 			key, kind, pairing string
 			required           bool
@@ -106,6 +111,32 @@ func conversionProtectedReference(t *testing.T, scenario string) {
 			return
 		}
 		switch scenario {
+		case "provenance":
+			_, err = pool.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='invoice.provenance.view'`, role)
+		case "fields_unsafe":
+			var in struct{ Repair bool }
+			historyCheck(t, json.NewDecoder(r.Body).Decode(&in))
+			kind := "number"
+			if in.Repair {
+				kind = "text"
+			}
+			// Installed configuration drift must fail closed even when it could
+			// not be introduced through today's guarded configuration editor.
+			_, err = pool.Exec(ctx, `UPDATE custom_field_definitions SET conversion_key=NULL WHERE id IN ($1,$2)`, fields["source"], fields["paired"])
+			historyCheck(t, err)
+			_, err = pool.Exec(ctx, `UPDATE custom_field_definitions SET field_type=$2 WHERE id=$1`, fields["source"], kind)
+		case "archived_invoice":
+			var in struct {
+				Invoice int64
+				Action  string
+			}
+			historyCheck(t, json.NewDecoder(r.Body).Decode(&in))
+			if in.Action != "delete" && in.Action != "restore" {
+				t.Error("invalid archive action")
+				w.WriteHeader(400)
+				return
+			}
+			fieldPost(t, web, sessionCookie(t, ctx, sessions, admin), fmt.Sprintf("/invoices/%d/%s", in.Invoice, in.Action), url.Values{}, 303)
 		case "origin_refund", "settlement":
 			var in struct {
 				Invoice int64  `json:"invoice"`

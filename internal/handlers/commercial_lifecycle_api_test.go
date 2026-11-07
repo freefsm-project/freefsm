@@ -61,6 +61,8 @@ func lifecycleCall(t *testing.T, api http.Handler, token, method, path, body str
 	name := "CommercialReceiptEnvelope"
 	if want >= 400 {
 		name = "ErrorEnvelope"
+	} else if method == "GET" && strings.Contains(path, "/conversion-history") {
+		name = "ConversionHistoryEnvelope"
 	} else if method == "GET" && !strings.HasPrefix(path, "/commercial-operations/") {
 		name = "CommercialReadEnvelope"
 	}

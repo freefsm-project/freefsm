@@ -173,8 +173,9 @@ func readCommercial(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind s
 			"finalize": eligible && kind == "invoice" && draft && allows("invoice.finalize"),
 			// Conversion alone may retain an archived Job under independent
 			// All Records authority. assigned excludes archived Jobs.
-			"convert": kind == "estimate" && conversionActive && allows("estimate.convert") && allows("invoice.create"),
-			"revert":  kind == "invoice" && eligible && hasActiveCycle && allows("invoice.revert"),
+			"convert":    kind == "estimate" && conversionActive && allows("estimate.convert") && allows("invoice.create"),
+			"revert":     kind == "invoice" && eligible && hasActiveCycle && allows("invoice.revert"),
+			"provenance": active && (kind == "estimate" || hasActiveCycle) && allows(kind+".provenance.view"),
 		}
 		if p.Allows("pricing.view", All) || assigned && p.Allows("pricing.view", Assigned) {
 			var lines json.RawMessage

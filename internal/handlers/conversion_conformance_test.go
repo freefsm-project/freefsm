@@ -53,8 +53,14 @@ func conversionContract(t *testing.T, api http.Handler) http.Handler {
 				match = match && (strings.HasPrefix(part, "{") || part == actual[i])
 			}
 			if match {
-				operation, _ = path.(map[string]any)[strings.ToLower(r.Method)].(map[string]any)
+				item := path.(map[string]any)
 				pointer = "/paths/" + escape(template) + "/" + strings.ToLower(r.Method)
+				if ref, ok := item["$ref"].(string); ok {
+					name := strings.TrimPrefix(ref, "#/components/pathItems/")
+					item = spec["components"].(map[string]any)["pathItems"].(map[string]any)[name].(map[string]any)
+					pointer = "/components/pathItems/" + escape(name) + "/" + strings.ToLower(r.Method)
+				}
+				operation, _ = item[strings.ToLower(r.Method)].(map[string]any)
 				break
 			}
 		}

@@ -99,3 +99,28 @@ the original target and exact reviewed cycle. It never rewrites descendants.
 Whole-instance restore keeps pending intent locked until fresh authentication,
 synchronization, and receipt reconciliation; repeated restore invalidates that
 reconciliation again. Neither restore nor authentication resubmits a batch.
+# Safe conversion history
+
+`GET /api/v1/estimates/{id}/conversion-history` and
+`GET /api/v1/invoices/{id}/conversion-history` resolve lineage through the
+currently visible, active Job-linked parent. Parent View and independent
+Provenance View are required; `actions.provenance` is advisory discovery.
+Customer-only documents and archived Jobs are outside this field projection.
+
+History uses the existing authorized activity projection, not raw Timeline
+metadata or immutable source snapshots. Hidden-parent conversion events expose
+only retained event/document identity, actor label and acceptance time, with
+empty facts and `provenance_estimate_id`; they confer no ordinary document access.
+Visible-parent events retain independent facet filtering. Missing occurrence
+means unknown or not projected, never acceptance-time inference.
+
+Pages are descending acceptance time/ID, default 50, maximum 200 (`limit`).
+Supported filters are `actor`, `action`, `from` (inclusive), `until` (exclusive)
+and opaque `cursor`. Follow `next_cursor` with unchanged filters; authority is
+rechecked on every page. This is current-authority history, not a frozen sync
+snapshot. Unknown/repeated filters and invalid/filter-mismatched cursors reject.
+
+The protected commercial adapter's `conversionHistory(target, cursor)` stores
+one encrypted page with its current parent. Reopen obeys the offline lease;
+synchronization replaces the parent projection, and authority/parent loss
+withholds or purges history through the existing commercial cache owner.

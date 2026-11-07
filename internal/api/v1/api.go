@@ -207,6 +207,8 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/estimates/{id}/conversion-preview", h.conversionPreview)
 		r.Post("/estimates/{id}/conversion-preview", h.conversionPreview)
 		r.Post("/invoices/{id}/revert-to-estimate", h.conversion("invoice"))
+		r.Get("/estimates/{id}/conversion-history", h.activityHistory("estimate", true))
+		r.Get("/invoices/{id}/conversion-history", h.activityHistory("invoice", true))
 		r.Get("/commercial-operations/{operation}", h.commercialReceipt)
 		r.Get("/pdf-operations/{operation}", h.pdfReceipt)
 		r.Get("/delivery-operations/{operation}", h.deliveryReceipt)

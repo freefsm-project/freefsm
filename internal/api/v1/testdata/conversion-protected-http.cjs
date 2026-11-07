@@ -7,10 +7,11 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
 (async()=>{
  const input=JSON.parse(fs.readFileSync(0,'utf8')),key=input.key||randomUUID();
  const store=new ProtectedStore(input.directory,key);
- if(input.restart){
-  const client=new CommercialClient(store,async()=>{throw Error('unexpected_network');});
-  if(input.lock)await assert.rejects(client.view(),{message:input.lock});
-  else assert.deepEqual((await client.view()).pending[input.id].intent,input.intent);
+  if(input.restart){
+   const client=new CommercialClient(store,async()=>{throw Error('unexpected_network');});
+   if(input.lock)await assert.rejects(client.view(),{message:input.lock});
+   else if(input.history)assert.deepEqual((await client.view()).documents[input.target].conversion_history,input.history);
+   else assert.deepEqual((await client.view()).pending[input.id].intent,input.intent);
   return;
  }
  const restart=(id,intent,lock)=>{
@@ -36,11 +37,21 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
  let client=new CommercialClient(store,transport);
  await client.initialize();await client.authenticate(input.token);
  const creation={operation_id:randomUUID(),client_id:randomUUID(),job_id:input.job,customer_id:input.customer,title:'PROTECTED-CONVERSION-SECRET'};
- if(input.scenario==='fields')creation.custom_fields=[{definition_id:input.fields.source,value:'Captured shared'},{definition_id:input.fields.original,value:'Original only'}];
+  if(input.scenario.startsWith('fields'))creation.custom_fields=[{definition_id:input.fields.source,value:'Captured shared'},{definition_id:input.fields.original,value:'Original only'}];
  if(input.scenario==='settlement')creation.line_items=[{title:'Work',quantity:'1',unit_price:'100.00'}];
  const created=await request('/estimates','POST',creation,{token:input.creationToken});
- assert.equal(created.status,200);
- const path='/estimates/'+created.data.id;
+  assert.equal(created.status,200);
+  const path='/estimates/'+created.data.id;
+  if(input.scenario==='provenance'){
+   const converted=await request(path+'/convert','POST',{operation_id:randomUUID(),job_id:input.job,revision:created.data.revision},{token:input.creationToken});assert.equal(converted.status,200);
+   await client.synchronize('invoice');const target=Object.keys((await client.view()).documents)[0];
+   const history=await client.conversionHistory(target);assert(history.records.some(e=>e.provenance_estimate_id===created.data.id));
+   const child=spawnSync(process.execPath,[__filename],{input:JSON.stringify({...input,key,restart:true,target,history}),encoding:'utf8',timeout:30000});assert.equal(child.status,0,child.stderr);
+   for(const name of fs.readdirSync(input.directory))assert(!fs.readFileSync(input.directory+'/'+name).includes(Buffer.from('provenance_estimate_id')));
+   assert.equal((await fetch(input.url+'/__fixture/change',{method:'POST'})).status,204);
+   await assert.rejects(client.conversionHistory(target),{message:'authorization_purged'});
+   restart(null,null,'locked_review');assert.deepEqual((await store.load()).documents,{});return;
+  }
  await client.synchronize('estimate');
  let view=await client.view(),target=Object.keys(view.documents)[0],source=view.documents[target];
  assert.equal(source.actions.convert,true);
@@ -52,7 +63,7 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
  assert(original.occurred_at);restart(stale,original);
  for(const name of fs.readdirSync(input.directory))assert(!fs.readFileSync(input.directory+'/'+name).includes(Buffer.from('PROTECTED-CONVERSION-SECRET')));
  offline=false;
- if(['origin_refund','settlement'].includes(input.scenario)){
+  if(['origin_refund','settlement','archived_invoice'].includes(input.scenario)){
   const converted=(await client.submit(stale)).receipt;assert.equal(converted.outcome,'accepted');
   const invoicePath='/invoices/'+converted.id;
   let invoice=(await request(invoicePath)).data;
@@ -69,7 +80,19 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
    const child=spawnSync(process.execPath,[__filename],{input:JSON.stringify({...input,directory,key,restart:true,id:operation,intent}),encoding:'utf8',timeout:30000});assert.equal(child.status,0,child.stderr);
    inv=new CommercialClient(new ProtectedStore(directory,key),request);
   };
-  await restartInvoice();
+   await restartInvoice();
+   if(input.scenario==='archived_invoice'){
+    const lifecycle=async action=>{const r=await fetch(input.url+'/__fixture/change',{method:'POST',body:JSON.stringify({action,invoice:converted.id})});assert.equal(r.status,204);};
+    await lifecycle('delete');
+    await assert.rejects(inv.submit(operation),{message:'authorization_purged'});
+    await inv.authenticate(input.token);assert.equal((await inv.reconcile(operation)).receipt.outcome,'forbidden');
+    await lifecycle('restore');await inv.authenticate(input.token);await inv.synchronize('invoice');
+    assert(!(await inv.view()).pending[operation].intent,'restore revived original intent');
+    const current=(await inv.view()).documents[target];assert.notEqual(current.revision,invoice.revision);
+    const next=await inv.stageConversion(target,current.revision,{cycle_id:current.cycle_id});assert.notEqual(next,operation);
+    operation=next;await restartInvoice();assert.equal((await inv.submit(next)).receipt.outcome,'accepted');
+    assert.equal((await request(invoicePath)).status,404);return;
+   }
   const financial=async action=>{const r=await fetch(input.url+'/__fixture/change',{method:'POST',body:JSON.stringify({action,invoice:converted.id})});assert.equal(r.status,204);};
   await financial('payment');
   assert.equal((await inv.submit(operation)).status,input.scenario==='origin_refund'?422:409);
@@ -96,7 +119,7 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
   assert.equal((await inv.submit(operation)).receipt.outcome,'accepted');assert.equal((await request(invoicePath)).status,404);
   console.log('protected exact-cycle financial prerequisites and explicit unwind PASS');return;
  }
- if(input.scenario==='fields'){
+  if(input.scenario.startsWith('fields')){
   assert.equal((await client.submit(stale)).status,422);
   assert.equal((await client.reconcile(stale)).receipt.outcome,'invalid_document');
   let comparison=await client.compare(stale);assert.deepEqual(comparison.proposed,original);
@@ -111,14 +134,23 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
   const field=(doc,id)=>doc.custom_fields.find(v=>v.definition_id===id)?.value;
   assert.equal(field(invoice,input.fields.paired),'Captured shared');assert.equal(field(invoice,input.fields.entered),'ENCRYPTED-ENTERED-SECRET');
   assert.equal((await request(invoicePath,'PATCH',{operation_id:randomUUID(),job_id:input.job,revision:invoice.revision,custom_fields:[{definition_id:input.fields.paired,value:'Current shared'}]})).status,200);
-  const changed=await fetch(input.url+'/__fixture/change',{method:'POST'});const required=(await changed.json()).required;
+   let required;
+   if(input.scenario==='fields'){const changed=await fetch(input.url+'/__fixture/change',{method:'POST'});required=(await changed.json()).required;}
   const directory=input.directory+'/invoice';fs.mkdirSync(directory,{mode:0o700});
   let inv=new CommercialClient(new ProtectedStore(directory,key),request);await inv.initialize();await inv.authenticate(input.token);await inv.synchronize('invoice');
   let v=await inv.view(),target=Object.keys(v.documents)[0];invoice=v.documents[target];
-  const revert=await inv.stageConversion(target,invoice.revision,{cycle_id:converted.cycle_id});
+   let revert=await inv.stageConversion(target,invoice.revision,{cycle_id:converted.cycle_id});
   const revertIntent=(await inv.view()).pending[revert].intent;
   const child=spawnSync(process.execPath,[__filename],{input:JSON.stringify({...input,directory,key,restart:true,id:revert,intent:revertIntent}),encoding:'utf8',timeout:30000});assert.equal(child.status,0,child.stderr);
-  inv=new CommercialClient(new ProtectedStore(directory,key),request);
+   inv=new CommercialClient(new ProtectedStore(directory,key),request);
+   if(input.scenario==='fields_unsafe'){
+    const evolve=async repair=>{const r=await fetch(input.url+'/__fixture/change',{method:'POST',body:JSON.stringify({repair})});assert.equal(r.status,204);};
+    await evolve(false);assert.equal((await inv.submit(revert)).status,422);
+    assert.equal((await inv.reconcile(revert)).receipt.outcome,'invalid_document');
+    assert.equal((await request(invoicePath)).status,200,'unsafe recovery hid Invoice');
+    await evolve(true);const comparison=await inv.compare(revert);
+    const next=await inv.repair(revert,comparison.current.revision,{cycle_id:converted.cycle_id});assert.notEqual(next,revert);revert=next;
+   }
   assert.equal((await inv.submit(revert)).receipt.outcome,'accepted');
   const recovered=(await request(path)).data;
   assert.equal(field(recovered,input.fields.source),'Current shared');assert.equal(field(recovered,input.fields.original),'Original only');
@@ -183,11 +215,17 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
   if(mutation&&lose){lose=false;throw Error('lost_response');}return result;
  });
  await invoiceClient.initialize();await invoiceClient.authenticate(input.token);await invoiceClient.synchronize('invoice');
- view=await invoiceClient.view();const invoiceTarget=Object.keys(view.documents)[0],invoice=view.documents[invoiceTarget];
+  view=await invoiceClient.view();const invoiceTarget=Object.keys(view.documents)[0],invoice=view.documents[invoiceTarget];
+  const history=await invoiceClient.conversionHistory(invoiceTarget);
+  assert(history.records.some(e=>e.provenance_estimate_id===created.data.id&&e.action==='estimate_converted'&&e.facts.length===0));
+  const historyRestart=spawnSync(process.execPath,[__filename],{input:JSON.stringify({...input,directory:invoiceDirectory,key,restart:true,target:invoiceTarget,history}),encoding:'utf8',timeout:30000});
+  assert.equal(historyRestart.status,0,historyRestart.stderr);
+  for(const name of fs.readdirSync(invoiceDirectory))assert(!fs.readFileSync(invoiceDirectory+'/'+name).includes(Buffer.from('provenance_estimate_id')));
  assert.equal(invoice.cycle_id,first.cycle_id);
  const revert=await invoiceClient.stageConversion(invoiceTarget,invoice.revision,{cycle_id:invoice.cycle_id});
  const obsolete=await invoiceClient.stageConversion(invoiceTarget,invoice.revision,{cycle_id:invoice.cycle_id});
- const revertIntent=(await invoiceClient.view()).pending[revert].intent;
+  const revertIntent=(await invoiceClient.view()).pending[revert].intent;
+  assert.equal((await invoiceClient.view()).pending[revert].reviewed.conversion_history,undefined,'provenance must not become retained mutation intent');
  assert.equal(revertIntent.cycle_id,first.cycle_id);
  const child=spawnSync(process.execPath,[__filename],{input:JSON.stringify({...input,directory:invoiceDirectory,key,restart:true,id:revert,intent:revertIntent}),encoding:'utf8',timeout:30000});assert.equal(child.status,0,child.stderr);
  lose=true;await assert.rejects(invoiceClient.submit(revert),{message:'lost_response'});
@@ -202,7 +240,10 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
  await assert.rejects(invoiceClient.submit(obsolete),{message:'reconciliation_or_review_required'});
  assert(!(await invoiceClient.view()).pending[obsolete].intent,'lost original parent retained replayable intent');
  await assert.rejects(invoiceClient.repair(obsolete,(await request('/invoices/'+second.id)).data.revision,{cycle_id:second.cycle_id}),{message:'review_required'});
- await invoiceClient.synchronize('invoice');view=await invoiceClient.view();const later=Object.values(view.documents)[0],laterTarget=Object.keys(view.documents)[0];
+  await invoiceClient.synchronize('invoice');view=await invoiceClient.view();const later=Object.values(view.documents)[0],laterTarget=Object.keys(view.documents)[0];
+  assert.equal(view.documents[invoiceTarget],undefined,'hidden parent retained cached history');
+  const laterHistory=await invoiceClient.conversionHistory(laterTarget);
+  assert(laterHistory.records.some(e=>e.type==='invoice'&&e.record_id===first.id&&e.action==='invoice_conversion_reverted'));
  await assert.rejects(invoiceClient.stageConversion(laterTarget,later.revision,{cycle_id:first.cycle_id}),{message:'exact_cycle_review_required'});
  assert.equal((await request('/invoices/'+second.id)).status,200);
  assert.equal(writes,4);

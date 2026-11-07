@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/conversion"
+	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )
@@ -21,6 +23,10 @@ type activityAPICursor struct {
 }
 
 func (h *handler) activity(typ string) http.HandlerFunc {
+	return h.activityHistory(typ, false)
+}
+
+func (h *handler) activityHistory(typ string, provenance bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		auth, ok := authorization.FromContext(r.Context())
 		if !ok {
@@ -33,6 +39,19 @@ func (h *handler) activity(typ string) http.HandlerFunc {
 			return
 		}
 		f := authorization.ActivityFilter{Types: []string{typ}, RecordID: id}
+		if provenance {
+			p, err := auth.Service.Principal(r.Context(), auth.Actor)
+			if err != nil {
+				commentAPIError(w, err)
+				return
+			}
+			root, err := conversion.New(auth.Service.Pool).ActivityEstimateID(r.Context(), conversion.Actor{ID: p.UserID, CompanyID: p.CompanyID}, objectref.New(objectref.Type(typ), id))
+			if err != nil {
+				commercialError(w, err)
+				return
+			}
+			f = authorization.ActivityFilter{ProvenanceEstimateID: root}
+		}
 		limit := 50
 		for key, values := range r.URL.Query() {
 			if len(values) != 1 {
