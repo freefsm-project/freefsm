@@ -33,6 +33,12 @@ func TestConversionProtectedBatchAPI(t *testing.T) {
 	}
 }
 
+func TestConversionProtectedDirectSuccessAPI(t *testing.T) {
+	for _, scenario := range []string{"direct_convert", "direct_revert", "direct_convert_persistence", "direct_revert_persistence"} {
+		t.Run(scenario, func(t *testing.T) { conversionProtectedReference(t, scenario) })
+	}
+}
+
 func conversionProtectedReference(t *testing.T, scenario string) {
 	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
@@ -62,7 +68,7 @@ func conversionProtectedReference(t *testing.T, scenario string) {
 	api := conversionContract(t, apiv1.NewConfiguredRouter(pool, client, sessions, config.APIConfig{SyncPerClient: 100}))
 	fields := map[string]int64{}
 	var payment, refund settlement.Result
-	if strings.HasPrefix(scenario, "fields") || scenario == "batch_fields" || scenario == "batch_authority_input" {
+	if strings.HasPrefix(scenario, "fields") || strings.HasPrefix(scenario, "direct_") || scenario == "batch_fields" || scenario == "batch_authority_input" {
 		for _, f := range []struct {
 			key, kind, pairing string
 			required           bool
@@ -195,6 +201,9 @@ func conversionProtectedReference(t *testing.T, scenario string) {
 	harness := "../api/v1/testdata/conversion-protected-http.cjs"
 	if strings.HasPrefix(scenario, "batch_") {
 		harness = "../api/v1/testdata/conversion-batch-protected-http.cjs"
+	}
+	if strings.HasPrefix(scenario, "direct_") {
+		harness = "../api/v1/testdata/conversion-direct-protected-http.cjs"
 	}
 	cmd := exec.CommandContext(ctx, "node", harness)
 	cmd.Stdin = bytes.NewReader(input)

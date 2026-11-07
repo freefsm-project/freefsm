@@ -127,10 +127,18 @@ class CommercialClient extends ProtectedFieldClient {
   e.receipt=clone(r);if(e.state!=='replaced')e.state=r.outcome==='accepted'?'accepted':'terminal';
   if(e.state==='accepted'){delete e.intent;delete e.reviewed;}
  }
- async receiptAuthority(s,e,code){
-  const outcome=e.receipt?.outcome||code;
-  if(outcome==='forbidden'){await this.purge(s);return true;}
-  if(outcome!=='accepted'){await this.withholdCache(s);return true;}
+  async receiptAuthority(s,e,code){
+   const outcome=e.receipt?.outcome||code;
+   if(outcome==='forbidden'){await this.purge(s);return true;}
+   if(outcome==='accepted'&&['convert','revert'].includes(e.action)){
+    // The receipt establishes parent loss now, not at the next synchronization.
+    // Other original-parent reviews cannot follow the new active document.
+    for(const [id,pending] of Object.entries(s.pending)){
+     if(pending!==e&&pending.family==='commercial'&&pending.kind===e.kind&&pending.target===e.target)s.pending[id]=this.purgedOperation(pending);
+    }
+    await this.withholdCache(s);return true;
+   }
+   if(outcome!=='accepted'){await this.withholdCache(s);return true;}
   return false;
  }
   async submit(id){return this.transaction(async s=>{
@@ -158,10 +166,11 @@ class CommercialClient extends ProtectedFieldClient {
    return clone({reviewed:e.reviewed,current,proposed:e.intent});
   });
  }
-  repairIn(s,id,revision,values,dependencies){
-   const e=s.pending[id],doc=s.documents?.[e?.target];
-   if(!!e?.batch!==(dependencies!==undefined))throw Error('transport_identity_mismatch');
-   if(e?.family!=='commercial'||!['terminal','restore_uncertain'].includes(e.state)||!e.intent||e.withheld||!doc||doc.job_id!==e.intent.job_id||doc.customer_id!==e.customer)throw Error('review_required');
+   repairIn(s,id,revision,values,dependencies){
+    const e=s.pending[id],doc=s.documents?.[e?.target];
+    if(e?.family!=='commercial'||!['terminal','restore_uncertain'].includes(e.state)||!e.intent||e.withheld)throw Error('review_required');
+    if(!!e?.batch!==(dependencies!==undefined))throw Error('transport_identity_mismatch');
+    if(!doc||doc.job_id!==e.intent.job_id||doc.customer_id!==e.customer)throw Error('review_required');
    if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
    if(e.action==='revert'&&(doc.cycle_id!==e.intent.cycle_id||values?.cycle_id!==e.intent.cycle_id))throw Error('exact_cycle_review_required');
    const depends_on=dependencies===undefined?undefined:this.reviewedDependencies(dependencies);
