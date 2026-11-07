@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 	"github.com/google/uuid"
@@ -42,6 +43,17 @@ func decodeBatchCommercial(w http.ResponseWriter, r *http.Request, raw []byte) (
 	}
 	part.Body = io.NopCloser(bytes.NewReader(op.Commercial))
 	switch op.Type {
+	case "estimate.convert", "invoice.revert":
+		var in conversion.ReviewedIntent
+		properties := []string{"job_id", "revision", "occurred_at"}
+		if op.Type == "estimate.convert" {
+			properties = append(properties, "custom_fields")
+		} else {
+			properties = append(properties, "cycle_id")
+		}
+		if !decodeExactJSON(w, part, &in, properties...) {
+			return nil, false
+		}
 	case "estimate.edit", "invoice.edit":
 		var in services.CommercialInput
 		if !decodeExactJSON(w, part, &in, "job_id", "customer_id", "revision", "occurred_at", "title", "notes", "terms", "tax_rate", "invoice_date", "due_date", "valid_through", "line_items", "custom_fields", "adjustments") {
@@ -70,19 +82,31 @@ func decodeBatchCommercial(w http.ResponseWriter, r *http.Request, raw []byte) (
 func executeBatchCommercial(ctx context.Context, op authorization.BatchCommercialOperation) (authorization.CommercialReceipt, error) {
 	id, _ := strconv.ParseInt(op.Target, 10, 64)
 	kind, action, _ := strings.Cut(op.Type, ".")
-	if action == "edit" {
+	switch op.Type {
+	case "estimate.convert", "invoice.revert":
+		var in conversion.ReviewedIntent
+		if err := json.Unmarshal(op.Commercial, &in); err != nil {
+			return authorization.CommercialReceipt{}, err
+		}
+		in.OperationID = op.OperationID
+		req, _ := authorization.FromContext(ctx)
+		return conversion.New(req.Service.Pool).ExecuteReviewed(ctx, kind, id, in)
+	case "estimate.edit", "invoice.edit":
 		var in services.CommercialInput
 		if err := json.Unmarshal(op.Commercial, &in); err != nil {
 			return authorization.CommercialReceipt{}, err
 		}
 		in.OperationID = op.OperationID
 		return services.SaveCommercialAPI(ctx, kind, id, in)
+	case "estimate.status", "invoice.status", "invoice.finalize":
+		var in statusflow.CommercialIntent
+		if err := json.Unmarshal(op.Commercial, &in); err != nil {
+			return authorization.CommercialReceipt{}, err
+		}
+		in.OperationID = op.OperationID
+		req, _ := authorization.FromContext(ctx)
+		return statusflow.New(req.Service.Pool).ApplyCommercial(ctx, req.Actor, statusflow.ObjectType(kind), id, action == "finalize", in)
+	default:
+		return authorization.CommercialReceipt{}, authorization.ErrCommercialInput
 	}
-	var in statusflow.CommercialIntent
-	if err := json.Unmarshal(op.Commercial, &in); err != nil {
-		return authorization.CommercialReceipt{}, err
-	}
-	in.OperationID = op.OperationID
-	req, _ := authorization.FromContext(ctx)
-	return statusflow.New(req.Service.Pool).ApplyCommercial(ctx, req.Actor, statusflow.ObjectType(kind), id, action == "finalize", in)
 }

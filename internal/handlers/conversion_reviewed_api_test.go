@@ -21,7 +21,7 @@ func conversionAPICall(t *testing.T, api http.Handler, token, method, path strin
 	r.Header.Set("Authorization", "Bearer "+token)
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
-	api.ServeHTTP(w, r)
+	conversionContract(t, api).ServeHTTP(w, r)
 	if w.Code != status {
 		t.Fatalf("%s %s=%d want%d: %s", method, path, w.Code, status, w.Body.String())
 	}

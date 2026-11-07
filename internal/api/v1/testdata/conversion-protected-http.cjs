@@ -44,9 +44,9 @@ const {CommercialClient,ProtectedStore}=require('../reference/commercial-client.
  await client.synchronize('estimate');
  let view=await client.view(),target=Object.keys(view.documents)[0],source=view.documents[target];
  assert.equal(source.actions.convert,true);
- await assert.rejects(client.stageBatch(target,source.revision,{},'convert',[]),{message:'unsupported_batch_action'});
+  await assert.rejects(client.stageBatch(target,source.revision,{},'send',[]),{message:'unsupported_batch_action'});
  offline=true;
- const stale=await client.stageConversion(target,source.revision,{});
+  const stale=await client.stageConversion(target,source.revision,input.scenario==='authority_input'?{custom_fields:[]}:{});
  const original=(await client.view()).pending[stale].intent;
  assert.equal(original.job_id,input.job);assert.equal(original.revision,source.revision);assert.equal(original.operation_id,stale);
  assert(original.occurred_at);restart(stale,original);

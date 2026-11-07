@@ -70,3 +70,32 @@ parent returns `409 resnapshot_required` with `purge: all`; purge and obtain a f
 authorized snapshot rather than retaining tombstone content. A restored Estimate
 keeps its stable synchronization identity. Neither snapshot replacement nor an
 operation receipt grants access to hidden snapshots or revives dependent intent.
+
+## Ordered batches and protected staging
+
+`POST /sync/operations` supports `estimate.convert` and `invoice.revert` alongside
+the existing commercial operations. Each member carries `operation_id`, `type`,
+the original numeric document ID as a string `target`, `depends_on`, and a closed
+`commercial` payload. The payload contains `job_id`, `revision`, optional
+`occurred_at`, and either conversion `custom_fields` or reversion `cycle_id`.
+The operation ID belongs only in the outer member. Omitted domain preconditions
+produce terminal receipts; malformed/null/unknown properties reject the envelope
+before any member executes.
+
+Each member commits independently through the existing commercial receipt and
+conversion transaction. Only earlier or known-success dependencies are eligible.
+Failed or unknown predecessors block descendants; unrelated members continue.
+Changing transport, target, ordered dependencies, cycle, revision, occurrence, or
+entered values under an existing ID is rejected. Retry a transient operation with
+its original ID only after reconciliation; repair a terminal operation and its
+descendants explicitly with reviewed new IDs.
+
+The protected `CommercialClient.stageBatch` supports `convert` and `revert`,
+encrypting the complete reviewed intent before transport. `submitBatch` durably
+marks the group unknown before network I/O. Reopen the store and reconcile each
+original receipt after interruption or a lost response; never infer that an
+unreceived result failed. `repairBatch` requires explicit dependencies and retains
+the original target and exact reviewed cycle. It never rewrites descendants.
+Whole-instance restore keeps pending intent locked until fresh authentication,
+synchronization, and receipt reconciliation; repeated restore invalidates that
+reconciliation again. Neither restore nor authentication resubmits a batch.

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,7 +21,13 @@ import (
 )
 
 func TestConversionProtectedReferenceAPI(t *testing.T) {
-	for _, scenario := range []string{"history", "fields", "origin_refund", "settlement", "revoke", "restore", "repeated_restore_contact", "repeated_restore_lease", "authority_convert", "authority_assignment", "authority_archive"} {
+	for _, scenario := range []string{"history", "fields", "origin_refund", "settlement", "revoke", "restore", "repeated_restore_contact", "repeated_restore_lease", "authority_convert", "authority_assignment", "authority_archive", "authority_input"} {
+		t.Run(scenario, func(t *testing.T) { conversionProtectedReference(t, scenario) })
+	}
+}
+
+func TestConversionProtectedBatchAPI(t *testing.T) {
+	for _, scenario := range []string{"batch_history", "batch_transient", "batch_interruption", "batch_restore"} {
 		t.Run(scenario, func(t *testing.T) { conversionProtectedReference(t, scenario) })
 	}
 }
@@ -46,7 +54,7 @@ func conversionProtectedReference(t *testing.T, scenario string) {
 		token, err = sessions.CreateMobile(ctx, u.ID, "Scoped conversion")
 		historyCheck(t, err)
 	}
-	api := apiv1.NewConfiguredRouter(pool, client, sessions, config.APIConfig{SyncPerClient: 100})
+	api := conversionContract(t, apiv1.NewConfiguredRouter(pool, client, sessions, config.APIConfig{SyncPerClient: 100}))
 	fields := map[string]int64{}
 	var payment, refund settlement.Result
 	if scenario == "fields" {
@@ -62,6 +70,37 @@ func conversionProtectedReference(t *testing.T, scenario string) {
 		}
 	}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/__fixture/fault" {
+			var in struct{ ID string }
+			historyCheck(t, json.NewDecoder(r.Body).Decode(&in))
+			_, err := pool.Exec(ctx, fmt.Sprintf(`CREATE FUNCTION conversion_batch_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.operation_id='%s'::uuid THEN RAISE EXCEPTION 'conversion receipt failure'; END IF; RETURN NEW; END $$; CREATE TRIGGER conversion_batch_failure BEFORE INSERT ON commercial_operations FOR EACH ROW EXECUTE FUNCTION conversion_batch_failure()`, in.ID))
+			historyCheck(t, err)
+			w.WriteHeader(204)
+			return
+		}
+		if r.URL.Path == "/__fixture/clear" {
+			_, err := pool.Exec(ctx, `DROP TRIGGER conversion_batch_failure ON commercial_operations`)
+			historyCheck(t, err)
+			w.WriteHeader(204)
+			return
+		}
+		if r.URL.Path == "/sync/operations" && r.Header.Get("X-Batch-Interrupt") == "yes" {
+			var body map[string][]json.RawMessage
+			historyCheck(t, json.NewDecoder(r.Body).Decode(&body))
+			body["operations"] = body["operations"][:1]
+			raw, err := json.Marshal(body)
+			historyCheck(t, err)
+			r.Body = io.NopCloser(bytes.NewReader(raw))
+			response := httptest.NewRecorder()
+			api.ServeHTTP(response, r)
+			if response.Code != 200 {
+				t.Errorf("prefix status %d: %s", response.Code, response.Body.String())
+			}
+			conn, _, err := w.(http.Hijacker).Hijack()
+			historyCheck(t, err)
+			historyCheck(t, conn.Close())
+			return
+		}
 		if r.URL.Path != "/__fixture/change" {
 			api.ServeHTTP(w, r)
 			return
@@ -103,6 +142,9 @@ func conversionProtectedReference(t *testing.T, scenario string) {
 			_, err = pool.Exec(ctx, `DELETE FROM job_assignments WHERE user_id=$1 AND job_id=$2`, scopedUser, job.ID)
 		case "authority_archive":
 			_, err = pool.Exec(ctx, `UPDATE jobs SET deleted_at=clock_timestamp() WHERE id=$1`, job.ID)
+		case "authority_input":
+			// Existing Convert/Create authority never implies Invoice Edit for
+			// entered values, even an explicitly supplied empty field selection.
 		default:
 			_, err = pool.Exec(ctx, `UPDATE session_instance SET epoch=gen_random_uuid(); DELETE FROM sessions`)
 			historyCheck(t, err)
@@ -119,7 +161,11 @@ func conversionProtectedReference(t *testing.T, scenario string) {
 	historyCheck(t, os.Chmod(directory, 0700))
 	input, err := json.Marshal(map[string]any{"url": server.URL, "token": token, "creationToken": creationToken, "directory": directory, "job": job.ID, "customer": customer.ID, "scenario": scenario, "fields": fields})
 	historyCheck(t, err)
-	cmd := exec.CommandContext(ctx, "node", "../api/v1/testdata/conversion-protected-http.cjs")
+	harness := "../api/v1/testdata/conversion-protected-http.cjs"
+	if strings.HasPrefix(scenario, "batch_") {
+		harness = "../api/v1/testdata/conversion-batch-protected-http.cjs"
+	}
+	cmd := exec.CommandContext(ctx, "node", harness)
 	cmd.Stdin = bytes.NewReader(input)
 	out, err := cmd.CombinedOutput()
 	if err != nil {

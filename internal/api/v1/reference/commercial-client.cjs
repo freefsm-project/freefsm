@@ -94,7 +94,7 @@ class CommercialClient extends ProtectedFieldClient {
   async batchFailure(s){await this.withholdCache(s);}
   async stageBatch(target,revision,values,action,dependencies){return this.transaction(async s=>{
    await this.enforceOfflineAccessWindow(s);
-   if(!['edit','status','finalize'].includes(action))throw Error('unsupported_batch_action');
+   if(!['edit','status','finalize','convert','revert'].includes(action))throw Error('unsupported_batch_action');
    const depends_on=this.reviewedDependencies(dependencies);
    const id=this.stageIn(s,target,revision,values,action),e=s.pending[id];
    e.batch={type:e.kind+'.'+e.action,target:String(e.reviewed.legacy_id),depends_on};
