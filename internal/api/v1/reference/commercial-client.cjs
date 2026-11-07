@@ -58,6 +58,15 @@ class CommercialClient extends ProtectedFieldClient {
   if(action==='edit'){
    if(!Object.keys(values).length||Object.keys(values).some(k=>!editFields.has(k)))throw Error('review_required');
    intent={...clone(values),customer_id:doc.customer_id};
+  }else if(action==='convert'||action==='revert'){
+   if(action==='convert'){
+    if(s.commercialKind!=='estimate'||Object.keys(values).some(k=>k!=='custom_fields'))throw Error('review_required');
+    intent=clone(values);
+   }else{
+    if(s.commercialKind!=='invoice'||Object.keys(values).some(k=>k!=='cycle_id')||!doc.cycle_id||values.cycle_id!==doc.cycle_id)throw Error('exact_cycle_review_required');
+    intent={cycle_id:doc.cycle_id};
+   }
+   intent.occurred_at=new Date(this.now()).toISOString();
   }else{
    if(!['status','finalize'].includes(action)||Object.keys(values).some(k=>!['id','meaning_revision','category'].includes(k)))throw Error('review_required');
    const choice=doc.workflow?.find(w=>w.id===values.id&&w.meaning_revision===values.meaning_revision&&w.category===values.category);
@@ -69,6 +78,11 @@ class CommercialClient extends ProtectedFieldClient {
   return id;
  }
  async stageEdit(target,revision,values){return this.stage(target,revision,values,'edit');}
+ async stageConversion(target,revision,values){return this.transaction(async s=>{
+  await this.enforceOfflineAccessWindow(s);
+  const id=this.stageIn(s,target,revision,values,s.commercialKind==='estimate'?'convert':'revert');
+  await this.persist(s);return id;
+ });}
   async stageLifecycle(target,revision,choice,action){return this.stage(target,revision,choice,action);}
   requireReconciled(s){
    if(Object.values(s.pending).some(e=>e.family==='commercial'&&(e.state==='unknown'||e.state==='restore_uncertain'&&!e.reconciled)))throw Error('reconciliation_required');
@@ -80,6 +94,7 @@ class CommercialClient extends ProtectedFieldClient {
   async batchFailure(s){await this.withholdCache(s);}
   async stageBatch(target,revision,values,action,dependencies){return this.transaction(async s=>{
    await this.enforceOfflineAccessWindow(s);
+   if(!['edit','status','finalize'].includes(action))throw Error('unsupported_batch_action');
    const depends_on=this.reviewedDependencies(dependencies);
    const id=this.stageIn(s,target,revision,values,action),e=s.pending[id];
    e.batch={type:e.kind+'.'+e.action,target:String(e.reviewed.legacy_id),depends_on};
@@ -112,7 +127,7 @@ class CommercialClient extends ProtectedFieldClient {
    this.requireReconciled(s);
   if(e.retryNotBefore&&this.now()<e.retryNotBefore)throw Error('retry_after_required');
   await this.policy(s);e.state='unknown';await this.persist(s);
-  const path='/'+e.kind+'s/'+e.reviewed.legacy_id+(e.action==='edit'?'':'/'+e.action);
+  const path='/'+e.kind+'s/'+e.reviewed.legacy_id+(e.action==='edit'?'':'/'+(e.action==='revert'?'revert-to-estimate':e.action));
   const r=await this.contact(s,path,e.action==='edit'?'PATCH':'POST',e.intent);
   if(r.status===200){this.receipt(e,id,r.data);await this.receiptAuthority(s,e,r.data.outcome);await this.persist(s);}
   else{if(r.status===429||r.status>=500)e.retryNotBefore=this.now()+this.retryDelay(r.error);await this.withholdCache(s);}
@@ -135,6 +150,7 @@ class CommercialClient extends ProtectedFieldClient {
    if(!!e?.batch!==(dependencies!==undefined))throw Error('transport_identity_mismatch');
    if(e?.family!=='commercial'||!['terminal','restore_uncertain'].includes(e.state)||!e.intent||e.withheld||!doc||doc.job_id!==e.intent.job_id||doc.customer_id!==e.customer)throw Error('review_required');
    if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
+   if(e.action==='revert'&&(doc.cycle_id!==e.intent.cycle_id||values?.cycle_id!==e.intent.cycle_id))throw Error('exact_cycle_review_required');
    const depends_on=dependencies===undefined?undefined:this.reviewedDependencies(dependencies);
    const next=this.stageIn(s,e.target,revision,values,e.action);
    if(depends_on)s.pending[next].batch={type:e.batch.type,target:e.batch.target,depends_on};
