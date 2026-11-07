@@ -132,12 +132,14 @@ func readCommercial(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind s
 			return err
 		}
 		state["workflow"] = workflow
+		hasActiveCycle := false
 		if kind == "invoice" {
 			var cycle *string
 			if err := tx.QueryRow(ctx, `SELECT (SELECT id::text FROM estimate_invoice_conversion_cycles WHERE invoice_id=$1 AND reverted_at IS NULL)`, id).Scan(&cycle); err != nil {
 				return err
 			}
 			state["cycle_id"] = cycle
+			hasActiveCycle = cycle != nil
 			var effective *string
 			var effectiveID *int64
 			var locked bool
@@ -152,8 +154,9 @@ func readCommercial(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind s
 			return err
 		}
 		var active bool
+		var conversionActive bool
 		var customer int64
-		if err := tx.QueryRow(ctx, `SELECT d.customer_id,d.deleted_at IS NULL AND j.deleted_at IS NULL AND c.deleted_at IS NULL FROM `+kind+`s d JOIN jobs j ON j.id=d.job_id JOIN customers c ON c.id=d.customer_id WHERE d.id=$1`, id).Scan(&customer, &active); err != nil {
+		if err := tx.QueryRow(ctx, `SELECT d.customer_id,d.deleted_at IS NULL AND j.deleted_at IS NULL AND c.deleted_at IS NULL,d.deleted_at IS NULL AND c.deleted_at IS NULL AND j.customer_id=d.customer_id FROM `+kind+`s d JOIN jobs j ON j.id=d.job_id JOIN customers c ON c.id=d.customer_id WHERE d.id=$1`, id).Scan(&customer, &active, &conversionActive); err != nil {
 			return err
 		}
 		state["customer_id"] = customer
@@ -168,6 +171,10 @@ func readCommercial(ctx context.Context, tx pgx.Tx, p Principal, a Actor, kind s
 			"edit":     eligible && allows(kind+".edit"),
 			"status":   eligible && allows(kind+".status") && !draft,
 			"finalize": eligible && kind == "invoice" && draft && allows("invoice.finalize"),
+			// Conversion alone may retain an archived Job under independent
+			// All Records authority. assigned excludes archived Jobs.
+			"convert": kind == "estimate" && conversionActive && allows("estimate.convert") && allows("invoice.create"),
+			"revert":  kind == "invoice" && eligible && hasActiveCycle && allows("invoice.revert"),
 		}
 		if p.Allows("pricing.view", All) || assigned && p.Allows("pricing.view", Assigned) {
 			var lines json.RawMessage
