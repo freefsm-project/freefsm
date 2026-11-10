@@ -112,13 +112,36 @@ func pdfSourceFingerprint(kind string, raw []byte) (string, bool) {
 			lines = append(lines, text)
 		}
 	}
+	// Rendered settlement consists of the two active totals. Retained immutable
+	// ledger provenance separately guards review identity, including payment ABA.
+	settlement := map[string]string{}
+	for _, key := range []string{"allocations", "credit_applications"} {
+		total := new(big.Int)
+		if entries, ok := source[key].([]any); ok {
+			for _, entry := range entries {
+				value, ok := entry.(map[string]any)
+				if !ok {
+					return "", false
+				}
+				if value["reversed"] == true {
+					continue
+				}
+				amount, ok := new(big.Int).SetString(fmt.Sprint(value["amount_cents"]), 10)
+				if !ok || amount.Sign() < 0 {
+					return "", false
+				}
+				total.Add(total, amount)
+			}
+		}
+		settlement[key] = total.String()
+	}
 	canonical := map[string]any{"document": doc, "presentation": presentation,
 		"customer":           project(source["customer"], "display_name", "company_name", "email", "phone"),
 		"job":                project(source["job"], "job_type", "subtitle", "start_time", "due_date"),
 		"asset":              project(source["asset"], "manufacturer", "model", "serial_number"),
 		"status":             project(source["status"], "id", "name", "color", "category_key"),
 		"custom_field_lines": lines, "logo": source["logo"], "logo_unavailable": source["logo_unavailable"],
-		"allocations": source["allocations"], "credit_applications": source["credit_applications"]}
+		"settlement": settlement}
 	encoded, err := json.Marshal(pdfCanonicalNumbers(canonical))
 	if err != nil {
 		return "", false

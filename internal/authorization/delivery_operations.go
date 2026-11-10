@@ -72,9 +72,12 @@ func (s *Service) AcceptDeliveryOperation(ctx context.Context, a Actor, id, kind
 		}
 		ids, effect := fn(sp, p)
 		var invalid *FileValidationError
+		var dependency *JobExecutionConflict
 		if effect != nil {
 			_ = sp.Rollback(ctx)
 			switch {
+			case errors.As(effect, &dependency):
+				r.Outcome = dependency.Code
 			case errors.Is(effect, ErrConflict):
 				r.Outcome = "source_drift"
 			case errors.Is(effect, ErrForbidden):

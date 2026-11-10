@@ -27,10 +27,11 @@ type MessageIntent struct {
 }
 type ReviewedIntent struct {
 	MessageIntent
-	OperationID string     `json:"operation_id"`
-	ReviewToken string     `json:"review_token"`
-	JobID       int64      `json:"job_id"`
-	OccurredAt  *time.Time `json:"occurred_at,omitempty"`
+	OperationID    string     `json:"operation_id"`
+	ReviewToken    string     `json:"review_token"`
+	JobID          int64      `json:"job_id"`
+	OccurredAt     *time.Time `json:"occurred_at,omitempty"`
+	PDFOperationID string     `json:"pdf_operation_id,omitempty"`
 }
 type FileReview struct {
 	ID          int64  `json:"id"`
@@ -153,6 +154,9 @@ func (s *Service) QueueReviewed(ctx context.Context, document DocumentRef, in Re
 	}
 	defer release()
 	return request.Service.AcceptDeliveryOperation(ctx, request.Actor, in.OperationID, document.Type, document.ID, in, in.OccurredAt, func(tx pgx.Tx, p authorization.Principal) ([]int64, error) {
+		if err := request.Service.BindDeliveryPDFOperation(ctx, tx, request.Actor, in.OperationID, in.PDFOperationID, document.Type, document.ID, in.PDFVersionID); err != nil {
+			return nil, err
+		}
 		// A legacy outbox key is not evidence that this API/user/client intent
 		// was accepted. Only the original bound receipt can reconcile it.
 		var legacy bool

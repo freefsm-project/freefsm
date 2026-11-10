@@ -2,6 +2,7 @@ package authorization
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -124,6 +125,8 @@ func pdfDocumentAccess(ctx context.Context, q queryer, p Principal, kind string,
 func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int64) (PDFSource, error) {
 	var settings, snapshot []byte
 	var presentationRevision int64
+	var documentRevision int64
+	var relatedRevisions []byte
 	// Only rendering presentation participates: editing future numbering/defaults
 	// or collaboration does not invalidate an already generated version.
 	settlement := ""
@@ -134,7 +137,12 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 	if kind == "invoice" {
 		statusJoin = `LEFT JOIN invoice_effective_status es ON es.invoice_id=d.id LEFT JOIN statuses st ON st.id=es.status_id`
 	}
-	query := `SELECT presentation,snapshot,cs.pdf_presentation_revision FROM ` + kind + `s d LEFT JOIN customers c ON c.id=d.customer_id LEFT JOIN jobs j ON j.id=d.job_id
+	query := `SELECT presentation,snapshot,cs.pdf_presentation_revision,pdf_review_revision($3||'s',d.id),
+ jsonb_build_array(pdf_review_revision('customers',c.id),pdf_review_revision('jobs',j.id),pdf_review_revision('statuses',st.id),
+ CASE WHEN $3='invoice' THEN jsonb_build_array(pdf_review_revision('job_asset',j.id),pdf_review_revision('assets',asset.id),
+ (SELECT jsonb_agg(jsonb_build_array(al.id,pdf_review_revision('job_asset_links',al.id)) ORDER BY al.id) FROM job_asset_links al WHERE al.job_id=j.id AND al.asset_id=j.asset_id)) END,
+ coalesce((SELECT revision FROM pdf_field_source_revisions WHERE document_type=$3 AND document_id=d.id),1))
+ FROM ` + kind + `s d LEFT JOIN customers c ON c.id=d.customer_id LEFT JOIN jobs j ON j.id=d.job_id
  LEFT JOIN assets asset ON asset.id=j.asset_id AND asset.customer_id=j.customer_id AND asset.deleted_at IS NULL AND EXISTS(SELECT 1 FROM job_asset_links al WHERE al.job_id=j.id AND al.asset_id=asset.id AND al.operational AND al.unlinked_at IS NULL)
  ` + statusJoin + ` JOIN company_settings cs ON cs.company_id=d.company_id
  CROSS JOIN LATERAL (SELECT jsonb_build_object('business_name',cs.business_name,'address',cs.address,'city',cs.city,'state',cs.state,'zip',cs.zip,'phone',cs.phone,'email',cs.email,'tax_id',cs.tax_id,'invoice_color',cs.invoice_color,'invoice_footer',cs.invoice_footer,'invoice_logo_path',cs.invoice_logo_path,'pdf_show_line_item_descriptions',cs.pdf_show_line_item_descriptions,'timezone',cs.timezone,'date_format',cs.date_format,'invoice_payment_terms',d.terms) AS presentation) presentation
@@ -147,7 +155,7 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
  'status',CASE WHEN st.id IS NOT NULL THEN jsonb_build_object('id',st.id,'name',st.name,'color',st.color,'category_key',st.category_key) END,
  'custom_field_values',(SELECT coalesce(jsonb_agg(jsonb_build_object('name',f.name,'type',f.field_type,'value',v->'value') ORDER BY f.sort_order,f.id),'[]'::jsonb) FROM jsonb_array_elements(d.custom_fields) v JOIN custom_field_definitions f ON f.id=(v->>'definition_id')::bigint WHERE f.include_pdf),
  'presentation',presentation` + settlement + `) AS snapshot) source WHERE d.id=$1 AND d.company_id=$2`
-	if err := q.QueryRow(ctx, query, id, p.CompanyID, kind).Scan(&settings, &snapshot, &presentationRevision); err != nil {
+	if err := q.QueryRow(ctx, query, id, p.CompanyID, kind).Scan(&settings, &snapshot, &presentationRevision, &documentRevision, &relatedRevisions); err != nil {
 		return PDFSource{}, err
 	}
 	cs := new(ent.CompanySettings)
@@ -231,7 +239,12 @@ func pdfSource(ctx context.Context, q queryer, p Principal, kind string, id int6
 	if !known {
 		return PDFSource{}, fmt.Errorf("incomplete captured PDF source")
 	}
-	return PDFSource{LogoUnavailable: logoUnavailable, Logo: logo, Asset: financial.Asset, Token: token, ReviewToken: fmt.Sprintf("%s:%d", token, presentationRevision), Settings: cs, Snapshot: snapshot, SettledCents: settled, AllocatedCents: allocated, AppliedCents: applied, FieldLines: fieldLines}, nil
+	// Rendering equivalence can return to its former value; the review clocks
+	// cannot. Keep their opaque identity out of immutable content provenance.
+	// Append-only settlement facts cannot return to an earlier identity after a
+	// reversal, even when their rendered totals return to the earlier amounts.
+	review := sha256.Sum256([]byte(fmt.Sprintf("%s:%d:%d:%s:%s:%s", token, presentationRevision, documentRevision, relatedRevisions, captured["allocations"], captured["credit_applications"])))
+	return PDFSource{LogoUnavailable: logoUnavailable, Logo: logo, Asset: financial.Asset, Token: token, ReviewToken: fmt.Sprintf("%x", review), Settings: cs, Snapshot: snapshot, SettledCents: settled, AllocatedCents: allocated, AppliedCents: applied, FieldLines: fieldLines}, nil
 }
 
 func (s *Service) DocumentPDFSource(ctx context.Context, a Actor, kind string, id int64) (PDFSource, error) {

@@ -8,13 +8,14 @@ const editFields=new Set(['title','notes','terms','tax_rate','invoice_date','due
 // are separate explicit actions; synchronization never rewrites staged intent.
 class CommercialClient extends ProtectedFieldClient {
  async withholdCache(s){
-  s.synced=false;s.documents={};s.commercialCursor=null;
+  s.synced=false;s.documents={};s.commercialCursor=null;s.pdfSources={};s.pdfSelections={};
   // A shared-store observation from another field adapter is not fresh authority.
   s.cache={};s.notes={};s.items={};s.clocks={};s.clockJobs={};
   s.clockCapabilities=null;s.clockLease=null;s.clockIssuance=null;s.clockCursor=null;s.syncCursor=null;
   await this.persistAuthorityLoss(s);
  }
- async purge(s,issuance=null){s.documents={};s.commercialCursor=null;s.items={};return super.purge(s,issuance);}
+ async purge(s,issuance=null){s.documents={};s.commercialCursor=null;s.items={};s.pdfSources={};s.pdfSelections={};s.pdfChoices={};delete s.pdfDownloadWarning;return super.purge(s,issuance);}
+ beginRestore(s){delete s.pdfDownloadWarning;super.beginRestore(s);}
  async contact(s,...args){
   try{return await super.contact(s,...args);}
   catch(error){if(!this.store.quarantined)await this.withholdCache(s);throw error;}
@@ -33,15 +34,32 @@ class CommercialClient extends ProtectedFieldClient {
   for(const [id,e] of Object.entries(s.pending)){
    // This adapter has not refreshed another domain's authority. Never unlock
    // inherited private intent merely because this commercial snapshot succeeded.
-   if(e.family!=='commercial'){s.pending[id]=this.purgedOperation(e);continue;}
+    if(!['commercial','pdf'].includes(e.family)){s.pending[id]=this.purgedOperation(e);continue;}
    const current=page.records[e.target];
-   if(e.intent&&(!current||current.job_id!==e.intent.job_id||current.customer_id!==e.customer||e.reviewed?.totals&&!current.totals)){
-    delete e.intent;delete e.reviewed;e.state='purged';
-   }else if(e.intent){
-    if(s.restore&&!['replaced','purged'].includes(e.state))e.state='restore_uncertain';
+    if(e.intent&&(!current||e.kind!==kind||current.job_id!==e.intent.job_id||current.customer_id!==e.customer||e.reviewed?.totals&&!current.totals)){
+     if(e.family==='pdf')s.pending[id]=this.purgedOperation(e);
+     else{delete e.intent;delete e.reviewed;e.state='purged';}
+    }else if(e.intent){
+     if(e.family==='pdf'){
+      // Unknown outcomes are receipt-first. A document sync must not turn an
+      // uninspected request into a fresh source review or expose its old preview.
+      if(e.state==='unknown'){e.withheld=true;continue;}
+      // PDF preview authority is independent of commercial pricing. Refresh its
+      // original parent's Generate authority without replacing the reviewed token.
+      const r=await this.contact(s,'/'+kind+'s/'+current.legacy_id+'/pdf/source');
+      if(r.status===404){s.pending[id]=this.purgedOperation(e);await this.persistAuthorityLoss(s);continue;}
+      if(r.status!==200)throw Error('synchronization_incomplete');
+      if(r.data?.document_id!==e.reviewed.document_id||r.data.job_id!==e.intent.job_id){s.pending[id]=this.purgedOperation(e);continue;}
+      delete e.withheld;
+     }
+     if(s.restore&&!['replaced','purged'].includes(e.state))e.state='restore_uncertain';
    }
   }
-  s.documents=page.records;s.commercialCursor=page.cursor;s.commercialKind=kind;s.synced=true;s.restore=false;
+   for(const [target,choice] of Object.entries(s.pdfChoices||{})){
+    const doc=page.records[target];
+    if(!doc||choice.kind!==kind||choice.document!==doc.legacy_id||choice.job!==doc.job_id||choice.customer!==doc.customer_id)delete s.pdfChoices[target];
+   }
+   s.documents=page.records;s.commercialCursor=page.cursor;s.commercialKind=kind;s.synced=true;s.restore=false;
   await this.persistAuthorityLoss(s);return {state:'synchronized',count:Object.keys(s.documents).length};
  });}
  async view(){return this.transaction(async s=>{
@@ -130,11 +148,12 @@ class CommercialClient extends ProtectedFieldClient {
   async receiptAuthority(s,e,code){
    const outcome=e.receipt?.outcome||code;
    if(outcome==='forbidden'){await this.purge(s);return true;}
-   if(outcome==='accepted'&&['convert','revert'].includes(e.action)){
+    if(outcome==='accepted'&&['convert','revert'].includes(e.action)){
+     if(s.pdfChoices)delete s.pdfChoices[e.target];
     // The receipt establishes parent loss now, not at the next synchronization.
     // Other original-parent reviews cannot follow the new active document.
     for(const [id,pending] of Object.entries(s.pending)){
-     if(pending!==e&&pending.family==='commercial'&&pending.kind===e.kind&&pending.target===e.target)s.pending[id]=this.purgedOperation(pending);
+     if(pending!==e&&['commercial','pdf'].includes(pending.family)&&pending.kind===e.kind&&pending.target===e.target)s.pending[id]=this.purgedOperation(pending);
     }
     await this.withholdCache(s);return true;
    }

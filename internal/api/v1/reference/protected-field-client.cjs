@@ -180,8 +180,7 @@ class ProtectedFieldClient {
   const e=s.pending[id];
   if(r.status===200){this.receipt(e,id,r.data);await this.receiptAuthority(s,e,r.data.code,true);}
   else if(r.status===404&&r.error?.code==='not_found'){
-   if(e.state==='unknown')e.state='pending';
-   if(e.state==='restore_uncertain')e.lookupMissing=true;
+    this.receiptMissing(e);
   }
   // restore_uncertain + missing receipt remains uncertain, never retryable.
    await this.persist(s);return clone({state:e.state,receipt:e.receipt,requires_synchronization:!s.synced});
@@ -189,6 +188,7 @@ class ProtectedFieldClient {
   // Domain projections may require fresh synchronization after scope-independent
   // receipt contact, including transport failure. Persist that lock before return.
   async receiptContactComplete(s){}
+  receiptMissing(e){if(e.state==='unknown')e.state='pending';if(e.state==='restore_uncertain')e.lookupMissing=true;}
  receiptPath(){throw Error('unknown_operation');}
  async receiptAuthority(s,e,code){
   if(!['forbidden','not_found'].includes(code))return false;

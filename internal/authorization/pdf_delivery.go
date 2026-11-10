@@ -3,6 +3,8 @@ package authorization
 import (
 	"context"
 
+	"github.com/google/uuid"
+
 	"github.com/freefsm-project/freefsm/internal/objectref"
 	"github.com/jackc/pgx/v5"
 )
@@ -11,6 +13,42 @@ type PDFDeliverySelection struct {
 	CurrentToken string
 	Version      PDFVersion
 	Source       []byte
+}
+
+// BindDeliveryPDFOperation checks a prerequisite inside Delivery's admission and
+// publication transaction. A receipt supplies an exact version, never a default.
+func (s *Service) BindDeliveryPDFOperation(ctx context.Context, tx pgx.Tx, a Actor, deliveryID, operationID, kind string, document, version int64) error {
+	if operationID == "" {
+		return nil
+	}
+	key, err := uuid.Parse(operationID)
+	if err != nil || key == uuid.Nil || key.String() != operationID || operationID == deliveryID {
+		return &JobExecutionConflict{Code: "invalid_dependency"}
+	}
+	code, err := boundDependencyCode(ctx, tx, a, operationID)
+	if err != nil {
+		return err
+	}
+	if code == "" {
+		return &JobExecutionConflict{Code: "invalid_dependency"}
+	}
+	if code != "accepted" {
+		return &JobExecutionConflict{Code: "dependency_failed"}
+	}
+	var matches bool
+	err = tx.QueryRow(ctx, `SELECT EXISTS(
+	 SELECT 1 FROM operation_admissions a JOIN pdf_operations p USING(operation_id)
+	 JOIN document_pdf_versions v ON v.id=(p.receipt->>'version_id')::bigint
+	 WHERE a.operation_id=$1 AND a.operation_type=$2 AND v.document_type=$3
+	 AND v.document_id=$4 AND v.id=$5 AND p.user_id=$6 AND p.client_key=$7
+	)`, operationID, kind+".pdf.generate", kind, document, version, a.UserID, operationClientKey(a)).Scan(&matches)
+	if err != nil {
+		return err
+	}
+	if !matches {
+		return &JobExecutionConflict{Code: "invalid_dependency"}
+	}
+	return nil
 }
 
 // Retry authorizes the already frozen communication, without reloading live

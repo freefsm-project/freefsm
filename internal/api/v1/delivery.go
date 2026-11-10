@@ -57,7 +57,7 @@ func (h *handler) deliveryQueue(kind string) http.HandlerFunc {
 			return
 		}
 		var in delivery.ReviewedIntent
-		fields := append(append([]string{}, deliveryFields...), "operation_id", "review_token", "job_id", "occurred_at")
+		fields := append(append([]string{}, deliveryFields...), "operation_id", "review_token", "job_id", "occurred_at", "pdf_operation_id")
 		if !decodeExactJSON(w, r, &in, fields...) {
 			return
 		}
