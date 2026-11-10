@@ -19,7 +19,7 @@ import (
 )
 
 func TestPDFProtectedReferenceHTTP(t *testing.T) {
-	for _, scenario := range []string{"lifecycle", "retry", "drift", "checkpoint", "acceptance_checkpoint", "restore", "revoke", "exact", "expiry", "conversion", "reversion", "download_only", "scope_loss", "scope_receipt", "archived", "read_loss_versions", "read_loss_download", "read_loss_versions_storage", "read_loss_download_storage", "read_loss_versions_purge_storage", "read_loss_download_purge_storage", "read_ambiguous_versions", "read_ambiguous_download", "read_malformed_versions", "read_malformed_download", "read_transport_versions", "read_transport_download"} {
+	for _, scenario := range []string{"lifecycle", "retry", "drift", "checkpoint", "acceptance_checkpoint", "restore", "revoke", "exact", "expiry", "conversion", "reversion", "download_only", "scope_loss", "scope_receipt", "archived", "read_loss_versions", "read_loss_download", "read_loss_versions_storage", "read_loss_download_storage", "read_loss_versions_purge_storage", "read_loss_download_purge_storage", "read_ambiguous_versions", "read_ambiguous_download", "read_malformed_versions", "read_malformed_download", "read_transport_versions", "read_transport_download", "checkpoint_write", "checkpoint_rename", "restore_repeated", "read_loss_versions_write", "read_loss_versions_rename", "read_loss_versions_purge_write", "read_loss_versions_purge_rename", "read_loss_download_write", "read_loss_download_rename", "read_loss_download_purge_write", "read_loss_download_purge_rename"} {
 		t.Run(scenario, func(t *testing.T) {
 			pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
 			ctx := context.Background()

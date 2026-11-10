@@ -22,6 +22,11 @@ func TestPDFServedSchemaConformanceHTTP(t *testing.T) {
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Schema Job").SaveX(ctx)
 	invoice := client.Invoice.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobID(j.ID).SetTitle("Reviewed schema").SetInvoiceDate(time.Now()).SetDueDate(time.Now()).SaveX(ctx)
 	api := apiv1.NewRouter(pool, client, sessions)
+	docs := httptest.NewRecorder()
+	api.ServeHTTP(docs, httptest.NewRequest("GET", "/docs", nil))
+	if docs.Code != 200 || !strings.Contains(docs.Body.String(), "already-terminal operations in the shared supported-operation registry") {
+		t.Fatal("served PDF dependency contract must describe the shared supported-operation registry")
+	}
 	token, err := sessions.CreateMobile(ctx, admin, "PDF schema")
 	historyCheck(t, err)
 	served := httptest.NewRecorder()
@@ -214,6 +219,11 @@ func TestPDFServedSchemaConformanceHTTP(t *testing.T) {
 			t.Fatalf("unexpected prerequisite receipt: %v", receipt)
 		}
 	}
+	// A terminal Delivery operation is a valid cross-family prerequisite. Both
+	// requests and their actual responses must conform to the served schemas.
+	estimateIntent["operation_id"] = newOperationKey()
+	estimateIntent["depends_on"] = []string{message["operation_id"].(string)}
+	call("POST", estimatePath+"/generate", matrixBody(t, estimateIntent), "PDFAcceptedEnvelope", 200)
 	auth := authorization.New(pool)
 	role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "PDF view only", []authorization.Grant{{Permission: "invoice.view", Scope: authorization.All}})
 	historyCheck(t, err)

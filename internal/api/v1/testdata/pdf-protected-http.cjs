@@ -1,6 +1,7 @@
 'use strict';
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
+const fsp=require('node:fs/promises');
 const {randomUUID}=require('node:crypto');
 const {spawnSync}=require('node:child_process');
 const {PDFClient,ProtectedStore}=require('../reference/pdf-client.cjs');
@@ -8,7 +9,17 @@ const {CommercialClient}=require('../reference/commercial-client.cjs');
 (async()=>{
  const input=JSON.parse(fs.readFileSync(0,'utf8'));
  const store=new ProtectedStore(input.directory,input.key||randomUUID());
- let offline=false,lose=false,posts=0,readFault=null;
+ let offline=false,lose=false,posts=0,readFault=null,ioArmed=false,ioFailure=null,armPolicy=false;
+ const ioMode=input.scenario.endsWith('_write')?'write':input.scenario.endsWith('_rename')?'rename':null;
+ const originalOpen=fsp.open,originalRename=fsp.rename;
+ // Select an IO boundary, then let the real filesystem deny the production
+ // write/rename. ProtectedStore.save still executes its real implementation.
+ const denied=async(fn,args)=>{
+  ioArmed=false;fs.chmodSync(input.directory,0o500);
+  try{return await fn(...args);}catch(error){ioFailure=error.code;throw error;}
+ };
+ fsp.open=async(...args)=>ioArmed&&ioMode==='write'&&String(args[0]).startsWith(input.directory+'/.cache-')?denied(originalOpen,args):originalOpen(...args);
+ fsp.rename=async(...args)=>ioArmed&&ioMode==='rename'&&String(args[1])===input.directory+'/cache'?denied(originalRename,args):originalRename(...args);
  const transport=async(path,method='GET',body,auth)=>{
   assert(!offline,'offline staging contacted server');
   if(path.endsWith('/pdf/generate')){
@@ -24,6 +35,7 @@ const {CommercialClient}=require('../reference/commercial-client.cjs');
   const requestPath=pdfRead?path.replace(/\/pdf\/versions.*$/,'/pdf/versions/999999999'):path;
   const r=await fetch(input.url+requestPath,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
   const result=r.headers.get('content-type')?.startsWith('application/pdf')?{status:r.status,bytes:Buffer.from(await r.arrayBuffer())}:{status:r.status,...await r.json()};
+  if(ioMode&&((armPolicy&&path==='/offline/policy')||(input.scenario.startsWith('read_loss_')&&result.status===404&&(input.scenario.includes('_purge_')?!path.includes('/pdf/'):path.includes('/pdf/')))))ioArmed=true;
   if(lose&&path.endsWith('/pdf/generate')){lose=false;throw Error('lost_response');}
   if(pdfRead&&readFault==='malformed')return {status:404,error:{code:'not_found'}};
   if(pdfRead&&readFault==='transport')throw Error('transport_failed');
@@ -31,7 +43,11 @@ const {CommercialClient}=require('../reference/commercial-client.cjs');
  };
  let pdf=new PDFClient(store,transport);
   if(input.restart){
-   if(input.lock)await assert.rejects(pdf.view(),{message:input.lock});
+   if(input.lock){
+    await assert.rejects(pdf.view(),{message:input.lock});
+    await assert.rejects(pdf.submit(input.id),{message:input.lock});
+    if(input.lock==='store_busy')await assert.rejects(pdf.initialize(),{message:input.lock});
+   }
    if(input.lock!=='store_busy'){assert.equal((await pdf.reconcile(input.id)).receipt.outcome,'accepted');assert.equal(posts,0);}
    return;
   }
@@ -79,6 +95,19 @@ const {CommercialClient}=require('../reference/commercial-client.cjs');
    await assert.rejects(new PDFClient(new ProtectedStore(input.directory,store.id),transport).view(),{message:'store_busy'});
    store.save=save;store.quarantined=false;fs.unlinkSync(input.directory+'/.writer');return;
   }
+  if(input.scenario==='checkpoint_write'||input.scenario==='checkpoint_rename'){
+   armPolicy=true;
+   try{
+    await assert.rejects(pdf.submit(id),{message:'protected_store_locked'});
+    assert.equal(ioFailure,'EACCES');assert.equal(posts,0,'failed unknown checkpoint reached generation transport');
+    fs.chmodSync(input.directory,0o700);
+    const child=spawnSync(process.execPath,[__filename],{input:JSON.stringify({...input,key:store.id,id,restart:true,lock:'store_busy'}),encoding:'utf8',timeout:30000});
+    assert.equal(child.status,0,child.stdout+child.stderr);
+    const receipt=await transport('/pdf-operations/'+id,'GET',undefined,{token:input.token});
+    assert.equal(receipt.status,404);assert.equal(posts,0);
+   }finally{armPolicy=false;ioArmed=false;fs.chmodSync(input.directory,0o700);store.quarantined=false;fs.unlinkSync(input.directory+'/.writer');}
+   return;
+  }
   if(input.scenario==='conversion'||input.scenario==='reversion'){
    const doc=(await commercial.view()).documents[target];
    const conversion=await commercial.stageConversion(target,doc.revision,input.kind==='invoice'?{cycle_id:doc.cycle_id}:{});
@@ -108,12 +137,25 @@ const {CommercialClient}=require('../reference/commercial-client.cjs');
    const receipt=(await pdf.reconcile(id)).receipt;assert.equal(receipt.outcome,'accepted');assert(receipt.version_id>0);
    const state=await store.load();assert(!state.pending[id].reviewed);assert(!state.pending[id].intent);assert.deepEqual(state.documents,{});assert.equal(posts,1);return;
   }
-  if(input.scenario==='restore'){
+  if(input.scenario==='restore'||input.scenario==='restore_repeated'){
    const fresh=await (await control('restore')).json();
    await assert.rejects(pdf.reconcile(id),{message:'locked_review'});
    await pdf.authenticate(fresh.token);await pdf.synchronize(input.kind);
    assert.equal((await pdf.reconcile(id)).state,'restore_uncertain');assert.equal(posts,1);
    await pdf.synchronize(input.kind);await pdf.acknowledgeUncertain(id);
+   if(input.scenario==='restore_repeated'){
+    const second=await (await control('restore')).json();
+    await assert.rejects(pdf.reconcile(id),{message:'locked_review'});
+    pdf=new PDFClient(new ProtectedStore(input.directory,store.id),transport);
+    await assert.rejects(pdf.view(),{message:'locked_review'});
+    await pdf.authenticate(second.token);await pdf.synchronize(input.kind);
+    const state=await store.load();assert(!state.pending[id].lookupMissing);assert(!state.pending[id].reconciled);
+    await assert.rejects(pdf.acknowledgeUncertain(id),{message:'restore_reconciliation_required'});
+    const reviewed=await pdf.reviewSource(target);
+    await assert.rejects(pdf.repair(id,reviewed.source_token),{message:'restore_reconciliation_required'});
+    assert.equal((await pdf.reconcile(id)).state,'restore_uncertain');
+    await pdf.synchronize(input.kind);await pdf.acknowledgeUncertain(id);assert.equal(posts,1);
+   }
    const comparison=await pdf.compare(id);
    await assert.rejects(pdf.retryUnreceived(id,{confirm:true}),{message:'review_required'});
    const next=await pdf.repair(id,comparison.current.source_token);assert.notEqual(next,id);
@@ -135,18 +177,24 @@ const {CommercialClient}=require('../reference/commercial-client.cjs');
    assert((await pdf.view()).pending[pending].reviewed.source);
    const lost=input.scenario.startsWith('read_loss_');
    if(lost)await control('scope-loss');else readFault=input.scenario.split('_')[1];
-   const failStorage=input.scenario.endsWith('_storage'),save=pdf.store.save.bind(pdf.store);
-   if(failStorage)pdf.store.save=async s=>{
+   const failStorage=input.scenario.endsWith('_storage')||!!ioMode,save=pdf.store.save.bind(pdf.store);
+   if(failStorage&&!ioMode)pdf.store.save=async s=>{
     const fail=input.scenario.includes('_purge_storage')?s.pending[pending].state==='purged':!s.synced||!s.documents?.[target];
     if(fail)throw Error('purge_checkpoint_failed');return save(s);
    };
    try{
     const action=()=>input.scenario.includes('_versions')?pdf.versions(target):pdf.download(target);
     await assert.rejects(action(),{message:failStorage?'protected_store_locked':readFault==='transport'?'transport_failed':'not_found'});
+    if(ioMode){assert.equal(ioFailure,'EACCES');fs.chmodSync(input.directory,0o700);}
     const lock=failStorage?'store_busy':'locked_review';
     await assert.rejects(pdf.view(),{message:lock});
     const child=spawnSync(process.execPath,[__filename],{input:JSON.stringify({...input,key:store.id,id,restart:true,lock}),encoding:'utf8',timeout:30000});
     assert.equal(child.status,0,child.stdout+child.stderr);
+    if(ioMode){
+     const safe=await transport('/pdf-operations/'+id,'GET',undefined,{token:input.token});
+     assert.equal(safe.status,200);assert.equal(safe.data.version_id,accepted.version_id);
+     assert(!JSON.stringify(safe).includes('ENCRYPTED-PDF-REVIEW'));
+    }
     if(!failStorage){
      const state=await store.load();assert.deepEqual(state.documents,{});assert.deepEqual(state.pdfSources,{});assert.deepEqual(state.pdfSelections,{});
      if(lost){assert.deepEqual(state.pending[pending],{family:'pdf',state:'purged'});assert(!state.pending[id].target);}
@@ -160,7 +208,7 @@ const {CommercialClient}=require('../reference/commercial-client.cjs');
     assert.equal(posts,1);
    }finally{
     // Test-only cleanup after proving the durable quarantine blocks restart.
-    if(failStorage){pdf.store.save=save;pdf.store.quarantined=false;if(fs.existsSync(input.directory+'/.writer'))fs.unlinkSync(input.directory+'/.writer');}
+    if(failStorage){ioArmed=false;fs.chmodSync(input.directory,0o700);pdf.store.save=save;pdf.store.quarantined=false;if(fs.existsSync(input.directory+'/.writer'))fs.unlinkSync(input.directory+'/.writer');}
    }
    return;
   }
@@ -194,5 +242,5 @@ const {CommercialClient}=require('../reference/commercial-client.cjs');
    assert.equal(posts,2);assert(!fs.readFileSync(input.directory+'/cache').includes(download.bytes));
   }
   console.log('protected PDF staging, shared synchronization and lost-response restart passed');
- }finally{await pdf.logout();assert(!fs.existsSync(input.directory+'/cache'));assert.throws(()=>store.key(),{message:'key_protection_unavailable'});}
+ }finally{fsp.open=originalOpen;fsp.rename=originalRename;fs.chmodSync(input.directory,0o700);await pdf.logout();assert(!fs.existsSync(input.directory+'/cache'));assert.throws(()=>store.key(),{message:'key_protection_unavailable'});}
 })().catch(error=>{console.error(error);process.exitCode=1;});
