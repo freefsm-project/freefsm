@@ -34,13 +34,16 @@ class CommercialClient extends ProtectedFieldClient {
   for(const [id,e] of Object.entries(s.pending)){
    // This adapter has not refreshed another domain's authority. Never unlock
    // inherited private intent merely because this commercial snapshot succeeded.
-    if(!['commercial','pdf'].includes(e.family)){s.pending[id]=this.purgedOperation(e);continue;}
+     if(!this.ownsPending(e)){s.pending[id]=this.purgedOperation(e);continue;}
    const current=page.records[e.target];
     if(e.intent&&(!current||e.kind!==kind||current.job_id!==e.intent.job_id||current.customer_id!==e.customer||e.reviewed?.totals&&!current.totals)){
-     if(e.family==='pdf')s.pending[id]=this.purgedOperation(e);
+      if(e.family!=='commercial')s.pending[id]=this.purgedOperation(e);
      else{delete e.intent;delete e.reviewed;e.state='purged';}
     }else if(e.intent){
-     if(e.family==='pdf'){
+      if(e.family!=='commercial'&&e.state==='unknown'){e.withheld=true;continue;}
+      delete e.withheld;
+      if(!await this.refreshPendingAuthority(s,e,current,kind)){continue;}
+      if(e.family==='pdf'){
       // Unknown outcomes are receipt-first. A document sync must not turn an
       // uninspected request into a fresh source review or expose its old preview.
       if(e.state==='unknown'){e.withheld=true;continue;}
@@ -119,6 +122,8 @@ class CommercialClient extends ProtectedFieldClient {
    e.batch={type:e.kind+'.'+e.action,target:String(e.reviewed.legacy_id),depends_on};
    await this.persist(s);return id;
   });}
+  ownsPending(e){return ['commercial','pdf'].includes(e.family);}
+  async refreshPendingAuthority(s,e,current,kind){return true;}
   async conversionHistory(target,cursor=''){return this.transaction(async s=>{
    await this.enforceOfflineAccessWindow(s);
    const doc=s.documents?.[target];

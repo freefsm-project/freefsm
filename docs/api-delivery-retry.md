@@ -29,14 +29,18 @@ receipt or reuse its UUID. Same-intent replay never sends again.
 
 ## Batch boundary
 
-API-05 requires bounded ordered per-operation atomic batches; it does not require
-every domain endpoint to execute inside that dispatcher. As with PDF generation
-and Delivery creation, retry uses its dedicated domain-owned admission transaction.
+API-05 requires bounded ordered per-operation atomic batches. The current implementation,
+as with PDF generation and Delivery creation, uses a dedicated domain-owned retry
+admission transaction.
 The generic batch currently dispatches authorization/File/commercial operations;
-putting retry there would invert Delivery ownership or introduce a second admission
-transaction. OFF-11 staging reconciles this dedicated endpoint. Retry has no
+Retry is not dispatched by the generic batch. OFF-11 staging in this reference
+reconciles the dedicated endpoint. Retry has no
 dependent byte transfer or PDF generation: it refers only to an existing frozen
-Delivery. Clients must not submit `delivery.retry` to `/operations/batch`.
+Delivery. Clients must not submit `delivery.retry` to `/sync/operations`.
+This is an evidenced implementation boundary, not proof that the complete API-05
+batch requirement is satisfied. Independent Spec review must assess whether retry
+must also participate in ordered batches and dependency lookup; the generic
+dependency lookup currently recognizes creation receipts, but not retry receipts.
 
 ## Protected reference handoff
 
@@ -46,4 +50,18 @@ staging, receipt-first reconciliation and explicit same-intent retry only after
 authoritative absence. On scope loss retain only permitted reconciliation identity;
 never silently replace document/Job/Delivery IDs. Handle all terminal receipt
 outcomes, including creation's `invalid_dependency` and `dependency_failed`.
-Protected reference implementation and full qualification are the next job.
+`DeliveryClient` in `internal/api/v1/reference/delivery-client.cjs` implements this
+using `CommercialClient` and `ProtectedStore`. `reviewDelivery` records the exact
+message review; `stageDelivery` and `stageRetry` only persist pending intent.
+`submit` performs an explicit online command. After uncertainty, `reconcile`
+queries the receipt before any target review, and `retryUnreceived({confirm:true})`
+rechecks absence before submitting the unchanged original identity. Terminal repair
+uses `repairDelivery` or `repairRetry` with new IDs; retry repair keeps the original
+Delivery target. These accepted receipts acknowledge commands, not SMTP acceptance.
+
+Use one document kind per store. The executable protected reference requires the
+platform Secret Service key backend and a private, real directory; it is not a
+browser offline feature. Ordinary authority loss purges restricted intent; restore
+requires fresh authentication/synchronization, receipt lookup and explicit uncertain
+outcome acknowledgement before new-ID repair. Full qualification and independent
+acceptance remain separate gates.
