@@ -63,7 +63,13 @@ func TestBoundedPaymentBackupRestoreReconciliationAPI(t *testing.T) {
 	protected := func(phase, token string) string {
 		server := httptest.NewServer(api)
 		defer server.Close()
-		input, err := json.Marshal(map[string]string{"url": server.URL, "token": token, "directory": directory, "key": key, "phase": phase})
+		var reauth string
+		if phase == "recover" {
+			var err error
+			reauth, err = dst.sessions.CreateMobile(ctx, src.actor, "Ordinary reauthentication during restore review")
+			historyCheck(t, err)
+		}
+		input, err := json.Marshal(map[string]string{"url": server.URL, "token": token, "reauth": reauth, "directory": directory, "key": key, "phase": phase})
 		historyCheck(t, err)
 		bounded, cancel := context.WithTimeout(ctx, time.Minute)
 		defer cancel()

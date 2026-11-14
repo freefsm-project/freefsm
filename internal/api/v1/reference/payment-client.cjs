@@ -9,22 +9,43 @@ const fields=['amount','method','date','other_description','reference','note'];
 // absent receipt is not evidence that money was not received, even after restore.
 class PaymentClient extends CommercialClient {
   ownsPending(e){return e.family==='payment'||super.ownsPending(e);}
-  purgedOperation(e){return {...super.purgedOperation(e),...(e.family==='payment'?{historicalReceipts:e.historicalReceipts,financialUncertain:!!e.financialUncertain||['unknown','unreceived','locked_review','restore_uncertain'].includes(e.state)}:{})};}
+  purgedOperation(e){
+    const safe=super.purgedOperation(e);
+    if(e.family!=='payment')return safe;
+    // Restore provenance is not authority or private financial intent. Keep it
+    // across ordinary loss, but never carry lookup/acknowledgment through purge.
+    const restoreReview=e.restoreReview||(['locked_review','restore_uncertain'].includes(e.state)?{epoch:null}:undefined);
+    return {...safe,historicalReceipts:e.historicalReceipts,restoreReview,financialUncertain:!!e.financialUncertain||['unknown','unreceived','locked_review','restore_uncertain'].includes(e.state)};
+  }
   beginRestore(s){
-    for(const e of Object.values(s.pending))if(e.family==='payment'&&e.receipt){
+    for(const e of Object.values(s.pending))if(e.family==='payment'){
+      if(e.state!=='replaced')e.restoreReview={epoch:null};
       // This is evidence of a prior server history, not a receipt in the restored
       // history. Retain only the same safe allowlist used by receipt lookup.
-      e.historicalReceipts||=[];
-      if(!e.historicalReceipts.some(r=>JSON.stringify(r)===JSON.stringify(e.receipt)))e.historicalReceipts.push(clone(e.receipt));
-      delete e.receipt;
+      if(e.receipt){
+        e.historicalReceipts||=[];
+        if(!e.historicalReceipts.some(r=>JSON.stringify(r)===JSON.stringify(e.receipt)))e.historicalReceipts.push(clone(e.receipt));
+        delete e.receipt;
+      }
     }
     super.beginRestore(s);
+  }
+  refreshRestoreReview(s,e){
+    if(!e.restoreReview||e.state==='replaced')return;
+    // A purge removes shared authority. The safe marker still binds review to
+    // its server generation, including a later restore discovered after purge.
+    if(e.restoreReview.epoch!==s.lease?.epoch){
+      e.restoreReview={epoch:s.lease?.epoch||null};
+      delete e.lookupMissing;delete e.reconciled;
+    }
+    if(!e.receipt)e.state='restore_uncertain';
   }
   async refreshCompletedPending(s,e){
     if(e.family!=='payment')return super.refreshCompletedPending(s,e);
     // No old financial values are needed or reconstructed. This transition only
     // enables receipt-first human review; staging separately checks current scope.
-    if(e.state==='locked_review')e.state='restore_uncertain';
+    if(e.state==='locked_review'&&!e.restoreReview)e.restoreReview={epoch:null};
+    this.refreshRestoreReview(s,e);
   }
   requirePaymentReconciled(s){
     if(Object.values(s.pending).some(e=>e.family==='payment'&&!(e.state==='restore_uncertain'&&e.reconciled)&&(e.financialUncertain||['unknown','unreceived','locked_review','restore_uncertain'].includes(e.state))))throw Error('reconciliation_required');
@@ -47,6 +68,7 @@ class PaymentClient extends CommercialClient {
     if(e.family!=='payment')return super.refreshPendingAuthority(s,e,current,kind);
     const r=await this.contact(s,'/invoices/'+current.legacy_id+'/payment-methods');
     if(r.status!==200){e.withheld=true;return false;}
+    this.refreshRestoreReview(s,e);
     return true;
   }
   stagePaymentIn(s,target,values){
@@ -67,6 +89,7 @@ class PaymentClient extends CommercialClient {
     if(r?.operation_id!==id||!outcomes.includes(r.outcome)||typeof r.accepted_at!=='string'||!Number.isFinite(Date.parse(r.accepted_at))||r.outcome==='accepted'&&(typeof r.payment_id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(r.payment_id)||r.payment_id==='00000000-0000-0000-0000-000000000000'))throw Error('receipt_mismatch');
     e.receipt={operation_id:id,outcome:r.outcome,accepted_at:r.accepted_at,...(r.outcome==='accepted'?{payment_id:r.payment_id}:{})};
     delete e.financialUncertain;
+    delete e.restoreReview;
     delete e.lookupMissing;delete e.reconciled;
     if(e.state!=='replaced')e.state=r.outcome==='accepted'?'accepted':'terminal';
     if(e.state==='accepted'){delete e.intent;delete e.reviewed;}

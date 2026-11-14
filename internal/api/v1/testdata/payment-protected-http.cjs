@@ -60,7 +60,7 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
       await client.authenticate(await fresh('other-user'));await client.synchronize();assert.equal((await store.load()).pending[id],undefined);
       await assert.rejects(client.reconcile(id),/unknown_operation/);assert.equal(posts,1);return;
      }
-     await client.authenticate(await fresh('new-session'));await restart();await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);await client.synchronize();
+     await client.authenticate(await fresh(input.scenario==='restore_purge_before_lookup'?'restore':'new-session'));await restart();await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);await client.synchronize();
      await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);
      await assert.rejects(client.acknowledgeUncertain(id),/restore_reconciliation_required/);
      const result=await client.reconcile(id);assert.equal(result.receipt,undefined);await restart();await client.synchronize();
@@ -85,7 +85,7 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
     if(!existing)await control('forget-receipt');
     if(input.scenario==='restore_completed_scope_loss')await control('scope-loss');
     if(input.scenario==='restore_completed_grant_loss')await control('grant-loss');
-    for(let cycle=0;cycle<(input.scenario==='restore_completed_repeated'?2:1);cycle++){
+     for(let cycle=0;cycle<(['restore_completed_repeated','restore_completed_grant_loss'].includes(input.scenario)?2:1);cycle++){
      const token=await fresh('restore');
      client=new PaymentClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();
      await client.authenticate(token);await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);

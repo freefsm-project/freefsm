@@ -39,6 +39,14 @@ for retained private intent. Every subsequent restore invalidates the lookup and
 acknowledgment; safe historical receipts survive access-loss purges. Receipt-only
 review does not grant access to the former Invoice or permit staging against it.
 
+Ordinary grant or session loss during restore review also retains a safe
+`restoreReview` marker bound to the reviewed server epoch, without target, amount
+or other private intent. Purge clears lookup and acknowledgment. Regaining access
+requires fresh authentication, synchronization, original-ID lookup, resynchronization
+and a new explicit acknowledgment. A later restore resets these gates even when
+the prior authority was purged. Ordinary unknown/purged operations without restore
+provenance do not acquire this recovery path; changing users removes prior-user work.
+
 No synchronization, restart or authentication automatically submits work. Uncertain
 financial operation identities cannot be discarded to bypass reconciliation.
 There are no Credit, refund or reversal operations in this adapter.

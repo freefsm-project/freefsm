@@ -35,7 +35,15 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
  const result=await client.reconcile(id);
  assert.equal(result.state,'restore_uncertain');assert.equal(result.receipt,undefined);
  assert.deepEqual((await store.load()).pending[id].historicalReceipts,[prior]);
- assert(!(await store.load()).pending[id].intent);assert.equal(posts,0);
+  assert(!(await store.load()).pending[id].intent);assert.equal(posts,0);
+  // Ordinary session replacement during actual restored-missing review must
+  // purge private cache without destroying the safe recovery path.
+  await client.authenticate(input.reauth);await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);
+  assert(!(await store.load()).pending[id].intent);await client.synchronize();
+  await assert.rejects(client.acknowledgeUncertain(id),/restore_reconciliation_required/);
+  await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);
+  assert.equal((await client.reconcile(id)).state,'restore_uncertain');
+  assert.deepEqual((await store.load()).pending[id].historicalReceipts,[prior]);assert.equal(posts,0);
  await client.synchronize();await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);
  await assert.rejects(client.discard(id),/reconciliation_required/);
  await client.acknowledgeUncertain(id);assert.equal(posts,0);
