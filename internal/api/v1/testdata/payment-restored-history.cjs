@@ -14,7 +14,9 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
   const r=await fetch(input.url+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body)});
   return {status:r.status,...await r.json()};
  };
- const client=new PaymentClient(store,transport);await client.initialize();
+ const client=new PaymentClient(store,transport);
+ if(input.phase==='cleanup'){await client.logout();return;}
+ await client.initialize();
  const values={amount:'25.00',method:'cash',date:'2026-01-02',note:'PRIVATE-RESTORE-PAYMENT'};
  if(input.phase==='accept'){
   await client.authenticate(input.token);await client.synchronize();
@@ -40,6 +42,6 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
  const next=await client.stagePayment(target,values);assert.notEqual(next,id);assert.equal(posts,0);
  assert.equal((await client.submit(next)).receipt.outcome,'accepted');assert.equal(posts,1);
  assert.deepEqual((await store.load()).pending[id].historicalReceipts,[prior]);
- await client.logout();
+ // The Go fixture owns unconditional cleanup across both child processes.
  console.log('PASS actual backup completed Payment recovery');
 })().catch(e=>{console.error(e);process.exit(1);});

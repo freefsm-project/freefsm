@@ -75,6 +75,9 @@ func TestBoundedPaymentBackupRestoreReconciliationAPI(t *testing.T) {
 		}
 		return strings.TrimSpace(string(output))
 	}
+	// The encrypted store spans child processes and the restore. Always remove its
+	// native key as well as ciphertext, including failed assertions in either phase.
+	t.Cleanup(func() { protected("cleanup", "") })
 	path := fmt.Sprintf("/invoices/%d/payments", id)
 	command := func(op string) string {
 		return fmt.Sprintf(`{"operation_id":%q,"job_id":%d,"amount":"25.00","method":"cash","date":"2026-01-02"}`, op, j.ID)
