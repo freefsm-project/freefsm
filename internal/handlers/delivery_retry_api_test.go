@@ -128,13 +128,72 @@ func TestDeliveryRetryAPIAtomicReceipts(t *testing.T) {
 	_, err = auth.SaveRole(ctx, actor, role, "Retry API role", grants, revision+1)
 	historyCheck(t, err)
 	in.OperationID = newOperationKey()
+	t.Run("original_document_lock_failure_is_nonterminal", func(t *testing.T) {
+		// Admission's trigger applies only a transaction-local timeout. Holding the
+		// original row forces the real retry FOR SHARE query to fail in PostgreSQL.
+		_, err := pool.Exec(ctx, `CREATE FUNCTION retry_document_timeout() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM set_config('lock_timeout','100ms',true); RETURN NEW; END $$; CREATE TRIGGER retry_document_timeout BEFORE INSERT ON operation_admissions FOR EACH ROW EXECUTE FUNCTION retry_document_timeout()`)
+		historyCheck(t, err)
+		defer func() {
+			_, err := pool.Exec(ctx, `DROP TRIGGER retry_document_timeout ON operation_admissions; DROP FUNCTION retry_document_timeout()`)
+			historyCheck(t, err)
+		}()
+		lock, err := pool.Begin(ctx)
+		historyCheck(t, err)
+		defer lock.Rollback(ctx)
+		_, err = lock.Exec(ctx, `SELECT id FROM estimates WHERE id=$1 FOR UPDATE`, doc.ID)
+		historyCheck(t, err)
+		probe := in
+		probe.OperationID = newOperationKey()
+		// Use the production HTTP router; do not synthesize an authorization error.
+		raw, err := json.Marshal(probe)
+		historyCheck(t, err)
+		req, err := http.NewRequest("POST", server.URL+"/delivery-retries", strings.NewReader(string(raw)))
+		historyCheck(t, err)
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		res, err := http.DefaultClient.Do(req)
+		historyCheck(t, err)
+		body, err := io.ReadAll(res.Body)
+		res.Body.Close()
+		historyCheck(t, err)
+		if res.StatusCode != 503 {
+			t.Errorf("original document lock failure: HTTP %d want 503: %s", res.StatusCode, body)
+		}
+		var durable int
+		historyCheck(t, pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM operation_admissions WHERE operation_id=$1)+(SELECT count(*) FROM delivery_operations WHERE operation_id=$1)+(SELECT count(*) FROM authorization_audit WHERE detail->>'operation_id'=$1::text)+(SELECT count(*) FROM document_delivery_events WHERE evidence->>'manual'='true')+(SELECT count(*) FROM activity_logs WHERE action='document_delivery_retried')`, probe.OperationID).Scan(&durable))
+		if durable != 0 {
+			t.Errorf("transient failure retained %d admission/receipt/audit/retry effects", durable)
+		}
+		var state string
+		var cycle int
+		historyCheck(t, pool.QueryRow(ctx, `SELECT state,retry_cycle FROM document_deliveries WHERE id=$1`, id).Scan(&state, &cycle))
+		if state != "failed" || cycle != 0 {
+			t.Errorf("transient failure changed delivery: %s cycle %d", state, cycle)
+		}
+		historyCheck(t, lock.Rollback(ctx))
+		if t.Failed() {
+			return
+		}
+		call("GET", "/delivery-operations/"+probe.OperationID, nil, 404)
+		call("POST", "/delivery-retries", probe, 200)
+		call("POST", "/delivery-retries", probe, 200)
+		historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM authorization_audit WHERE detail->>'operation_id'=$1`, probe.OperationID).Scan(&durable))
+		if durable != 1 {
+			t.Fatal("same-ID recovery audit count", durable)
+		}
+		// Return to a failed transport state for the independent audit regression.
+		_, err = svc.ProcessOne(ctx, deliveryTestSender(func(context.Context, delivery.Delivery) (delivery.SendResult, error) {
+			return delivery.SendResult{}, &delivery.SendError{Kind: delivery.SendPermanent, Err: errors.New("recovered retry failed transport")}
+		}), nil)
+		historyCheck(t, err)
+	})
 	_, err = pool.Exec(ctx, `CREATE FUNCTION fail_retry_api_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='estimate.delivery.retry' THEN RAISE EXCEPTION 'retry audit fault'; END IF; RETURN NEW; END $$; CREATE TRIGGER retry_api_fault BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION fail_retry_api_audit()`)
 	historyCheck(t, err)
 	call("POST", "/delivery-retries", in, 503)
 	call("GET", "/delivery-operations/"+in.OperationID, nil, 404)
 	var count int
 	historyCheck(t, pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM operation_admissions WHERE operation_id=$1)+(SELECT count(*) FROM document_delivery_events WHERE evidence->>'manual'='true')`, in.OperationID).Scan(&count))
-	if count != 0 {
+	if count != 1 { // Only the earlier recovered lock-failure retry remains.
 		t.Fatal("audit failure retained admission or retry event")
 	}
 	_, err = pool.Exec(ctx, `DROP TRIGGER retry_api_fault ON authorization_audit`)
@@ -178,7 +237,7 @@ func TestDeliveryRetryAPIAtomicReceipts(t *testing.T) {
 		t.Fatalf("duplicate admission: %s / %s", a, b)
 	}
 	historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM document_delivery_events WHERE evidence->>'manual'='true'`).Scan(&count))
-	if count != 1 {
+	if count != 2 { // Recovery plus this concurrently admitted retry.
 		t.Fatal("duplicate retry effects", count)
 	}
 	historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM authorization_audit WHERE detail->>'operation_id'=$1 AND detail->>'occurred_at'='2026-01-02T03:04:05Z'`, in.OperationID).Scan(&count))
@@ -187,7 +246,7 @@ func TestDeliveryRetryAPIAtomicReceipts(t *testing.T) {
 	}
 	var lifetime, cycle int
 	historyCheck(t, pool.QueryRow(ctx, `SELECT lifetime_attempt_count,cycle_attempt_count FROM document_deliveries WHERE id=$1`, id).Scan(&lifetime, &cycle))
-	if lifetime != 1 || cycle != 1 {
+	if lifetime != 2 || cycle != 2 {
 		t.Fatal("automatic budget reset")
 	}
 	changed := in
@@ -234,7 +293,7 @@ func TestDeliveryRetryAPIAtomicReceipts(t *testing.T) {
 	bounce.OperationID = newOperationKey()
 	call("POST", "/delivery-retries", bounce, 200)
 	historyCheck(t, pool.QueryRow(ctx, `SELECT lifetime_attempt_count,cycle_attempt_count FROM document_deliveries WHERE id=$1`, id).Scan(&lifetime, &cycle))
-	if lifetime != 2 || cycle != 2 {
+	if lifetime != 3 || cycle != 3 {
 		t.Fatal("Bounced retry reset budget")
 	}
 	// Archive cancels prehandoff retry; restoring does not revive it.

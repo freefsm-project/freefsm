@@ -753,9 +753,9 @@ func (s *Service) manualRetryTx(ctx context.Context, tx pgx.Tx, a Actor, id int6
 	if err != nil {
 		return err
 	}
-	jobID, active := documentJobID(ctx, tx, d)
-	if !active {
-		return ErrNotFound
+	jobID, err := documentJobID(ctx, tx, d)
+	if err != nil {
+		return err
 	}
 	request, migrated := authorization.FromContext(ctx)
 	if migrated {
@@ -859,10 +859,13 @@ func (s *Service) manualRetryTx(ctx context.Context, tx pgx.Tx, a Actor, id int6
 	}
 	return nil
 }
-func documentJobID(ctx context.Context, tx pgx.Tx, d Delivery) (*int64, bool) {
+func documentJobID(ctx context.Context, tx pgx.Tx, d Delivery) (*int64, error) {
 	var id *int64
 	err := tx.QueryRow(ctx, fmt.Sprintf(`SELECT o.job_id FROM %ss o JOIN customers c ON c.id=o.customer_id AND c.company_id=o.company_id WHERE o.id=$1 AND o.company_id=$2 AND o.deleted_at IS NULL AND o.conversion_hidden_at IS NULL AND c.deleted_at IS NULL FOR SHARE OF o,c`, d.DocumentType), d.DocumentID, d.CompanyID).Scan(&id)
-	return id, err == nil
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return id, err
 }
 
 func (s *Service) RecordProviderEvidence(ctx context.Context, p ProviderEvent) error {

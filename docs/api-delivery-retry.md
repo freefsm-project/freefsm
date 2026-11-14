@@ -29,18 +29,18 @@ receipt or reuse its UUID. Same-intent replay never sends again.
 
 ## Batch boundary
 
-API-05 requires bounded ordered per-operation atomic batches. The current implementation,
-as with PDF generation and Delivery creation, uses a dedicated domain-owned retry
-admission transaction.
-The generic batch currently dispatches authorization/File/commercial operations;
-Retry is not dispatched by the generic batch. OFF-11 staging in this reference
-reconciles the dedicated endpoint. Retry has no
-dependent byte transfer or PDF generation: it refers only to an existing frozen
-Delivery. Clients must not submit `delivery.retry` to `/sync/operations`.
-This is an evidenced implementation boundary, not proof that the complete API-05
-batch requirement is satisfied. Independent Spec review must assess whether retry
-must also participate in ordered batches and dependency lookup; the generic
-dependency lookup currently recognizes creation receipts, but not retry receipts.
+Retry uses a dedicated domain-owned admission transaction. Clients stage and
+reconcile it through the dedicated endpoint, not by submitting `delivery.retry`
+as a member of `/sync/operations`.
+
+A later batch member may name a committed retry operation ID in `depends_on`.
+The resolver checks deployment, user and client binding before reading the owning
+receipt: `accepted` satisfies the prerequisite; a terminal rejection produces
+`failed_dependency`. Foreign-bound and genuinely unknown IDs both produce
+`invalid_dependency`, without exposing the retry's target or receipt. Unrelated
+batch members continue independently. Repair a rejected descendant explicitly
+with a new operation ID and reviewed dependencies, preserving its original target
+and intent; a later successful prerequisite never revives its terminal receipt.
 
 ## Protected reference handoff
 

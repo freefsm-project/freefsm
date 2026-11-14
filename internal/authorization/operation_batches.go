@@ -345,7 +345,7 @@ func boundDependencyCode(ctx context.Context, tx pgx.Tx, a Actor, id string) (st
 		query = `SELECT receipt->>'outcome' FROM commercial_operations WHERE operation_id=$1`
 	case "invoice.pdf.generate", "estimate.pdf.generate":
 		query = `SELECT receipt->>'outcome' FROM pdf_operations WHERE operation_id=$1`
-	case "invoice.delivery.request", "estimate.delivery.request":
+	case "invoice.delivery.request", "estimate.delivery.request", "delivery.retry":
 		query = `SELECT receipt->>'outcome' FROM delivery_operations WHERE operation_id=$1`
 	case "file.transport.start", "file.transport.chunk":
 		query = `SELECT code FROM file_transport_receipts WHERE operation_id=$1`
