@@ -57,7 +57,11 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 				case "/__fixture/grant-loss":
 					_, err = pool.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='payment.record'`, role)
 				case "/__fixture/grant-regain":
-					_, err = auth.SaveRole(ctx, authorization.Actor{UserID: admin}, role, "Protected collector", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "payment.record", Scope: authorization.Assigned}})
+					var revision int64
+					err = pool.QueryRow(ctx, `SELECT revision FROM authorization_roles WHERE id=$1`, role).Scan(&revision)
+					if err == nil {
+						_, err = auth.SaveRole(ctx, authorization.Actor{UserID: admin}, role, "Protected collector", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "payment.record", Scope: authorization.Assigned}}, revision)
+					}
 				case "/__fixture/session-loss":
 					_, err = pool.Exec(ctx, `DELETE FROM sessions`)
 				case "/__fixture/rename":

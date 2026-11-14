@@ -84,8 +84,8 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
     const existing=input.scenario==='restore_completed_existing';
     if(!existing)await control('forget-receipt');
     if(input.scenario==='restore_completed_scope_loss')await control('scope-loss');
-    if(input.scenario==='restore_completed_grant_loss')await control('grant-loss');
      for(let cycle=0;cycle<(['restore_completed_repeated','restore_completed_grant_loss'].includes(input.scenario)?2:1);cycle++){
+      if(input.scenario==='restore_completed_grant_loss')await control('grant-loss');
      const token=await fresh('restore');
      client=new PaymentClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();
      await client.authenticate(token);await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);
