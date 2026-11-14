@@ -116,3 +116,62 @@ func (s *Service) AcceptDeliveryOperation(ctx context.Context, a Actor, id, kind
 	})
 	return r, err
 }
+
+// AcceptDeliveryRetry commits admission, the domain effect and its terminal
+// receipt together under the current authorization fence. Receipt replay precedes
+// target authorization so scope loss cannot turn a committed retry into absence.
+func (s *Service) AcceptDeliveryRetry(ctx context.Context, a Actor, id string, deliveryID int64, intent any, occurred *time.Time, fn func(pgx.Tx, Principal) error) (DeliveryReceipt, error) {
+	r := DeliveryReceipt{OperationID: id}
+	if key, err := uuid.Parse(id); err != nil || key == uuid.Nil || key.String() != id || a.Channel != "api" || occurred != nil && (occurred.IsZero() || occurred.After(time.Now())) {
+		return r, ErrCommercialInput
+	}
+	err := s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
+		if err := admitOperation(ctx, tx, a, id, "delivery.retry", intent); err != nil {
+			return err
+		}
+		prior, err := deliveryReceipt(ctx, tx, a, id)
+		if err == nil {
+			r = prior
+			return nil
+		}
+		if !errors.Is(err, ErrNotFound) {
+			return err
+		}
+		sp, err := tx.Begin(ctx)
+		if err != nil {
+			return err
+		}
+		effect := fn(sp, p)
+		if effect != nil {
+			if err := sp.Rollback(ctx); err != nil {
+				return err
+			}
+			var state *JobExecutionConflict
+			switch {
+			case errors.Is(effect, ErrForbidden):
+				r.Outcome = "forbidden"
+			case errors.Is(effect, ErrNotFound):
+				r.Outcome = "not_found"
+			case errors.Is(effect, ErrConflict):
+				r.Outcome = "source_drift"
+			case errors.As(effect, &state):
+				r.Outcome = state.Code
+			default:
+				return effect
+			}
+		} else {
+			if err := sp.Commit(ctx); err != nil {
+				return err
+			}
+			r.Outcome = "accepted"
+			r.DeliveryIDs = []int64{deliveryID}
+		}
+		raw, err := json.Marshal(r)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `INSERT INTO delivery_operations(operation_id,user_id,client_key,receipt) VALUES($1,$2,$3,$4)`, id, a.UserID, operationClientKey(a), raw)
+		return err
+	})
+	return r, err
+}

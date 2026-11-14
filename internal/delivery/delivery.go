@@ -735,6 +735,17 @@ func (s *Service) ManualRetry(ctx context.Context, a Actor, id int64, reason str
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err := s.manualRetryTx(ctx, tx, a, id, reason, nil, keys...); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// manualRetryTx applies the frozen Delivery effect in its caller's transaction.
+// expected binds API intent to its original document and Job. Browser callers
+// retain their historical event-key semantics.
+func (s *Service) manualRetryTx(ctx context.Context, tx pgx.Tx, a Actor, id int64, reason string, expected *RetryIntent, keys ...uuid.UUID) error {
+	var err error
 	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(190019)`); err != nil {
 		return err
 	}
@@ -764,10 +775,26 @@ func (s *Service) ManualRetry(ctx context.Context, a Actor, id int64, reason str
 	if err != nil {
 		return err
 	}
+	if expected != nil && (d.DocumentType != expected.DocumentType || d.DocumentID != expected.DocumentID || jobID == nil || *jobID != expected.JobID) {
+		return authorization.ErrConflict
+	}
+	attribution := map[string]any{}
+	if expected != nil {
+		attribution["operation_id"] = expected.OperationID
+		if expected.OccurredAt != nil {
+			attribution["occurred_at"] = expected.OccurredAt.UTC()
+		}
+	}
 	if d.State == "accepted" {
-		return tx.Commit(ctx)
+		if expected != nil && migrated {
+			return request.Service.AuditDeliveryRetry(ctx, tx, request.Actor, d.DocumentType, d.DocumentID, d.ID, reason, attribution)
+		}
+		return nil
 	}
 	if d.State == "cancelled" {
+		if expected != nil {
+			return &authorization.JobExecutionConflict{Code: "cancelled"}
+		}
 		return ErrInvalid
 	}
 	if d.From == "" {
@@ -788,7 +815,7 @@ func (s *Service) ManualRetry(ctx context.Context, a Actor, id int64, reason str
 			if originalID != id || originalReason != reason {
 				return ErrIdempotencyConflict
 			}
-			return tx.Commit(ctx)
+			return nil
 		}
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
@@ -798,7 +825,7 @@ func (s *Service) ManualRetry(ctx context.Context, a Actor, id int64, reason str
 			return err
 		}
 		if previous != nil && *previous == key {
-			return tx.Commit(ctx)
+			return nil
 		}
 	}
 	if d.State != "failed" && d.State != "bounced" {
@@ -826,11 +853,11 @@ func (s *Service) ManualRetry(ctx context.Context, a Actor, id int64, reason str
 		return err
 	}
 	if migrated {
-		if err = request.Service.AuditDeliveryRetry(ctx, tx, request.Actor, d.DocumentType, d.DocumentID, d.ID, reason); err != nil {
+		if err = request.Service.AuditDeliveryRetry(ctx, tx, request.Actor, d.DocumentType, d.DocumentID, d.ID, reason, attribution); err != nil {
 			return err
 		}
 	}
-	return tx.Commit(ctx)
+	return nil
 }
 func documentJobID(ctx context.Context, tx pgx.Tx, d Delivery) (*int64, bool) {
 	var id *int64

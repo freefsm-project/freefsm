@@ -81,7 +81,7 @@ func (s *Service) AuthorizeDeliveryRetry(ctx context.Context, tx pgx.Tx, a Actor
 	return nil
 }
 
-func (s *Service) AuditDeliveryRetry(ctx context.Context, tx pgx.Tx, a Actor, kind string, id, delivery int64, reason string) error {
+func (s *Service) AuditDeliveryRetry(ctx context.Context, tx pgx.Tx, a Actor, kind string, id, delivery int64, reason string, attribution ...map[string]any) error {
 	p, err := principal(ctx, tx, a, false)
 	if err != nil {
 		return err
@@ -90,7 +90,13 @@ func (s *Service) AuditDeliveryRetry(ctx context.Context, tx pgx.Tx, a Actor, ki
 	if err != nil {
 		return err
 	}
-	return audit(ctx, tx, a, p, kind+".delivery.retry", scope, kind, id, map[string]any{"delivery_id": delivery, "reason": reason})
+	detail := map[string]any{"delivery_id": delivery, "reason": reason}
+	for _, fields := range attribution {
+		for key, value := range fields {
+			detail[key] = value
+		}
+	}
+	return audit(ctx, tx, a, p, kind+".delivery.retry", scope, kind, id, detail)
 }
 
 func selectDeliveryPDF(ctx context.Context, q queryer, p Principal, kind string, id, version int64) (PDFDeliverySelection, error) {

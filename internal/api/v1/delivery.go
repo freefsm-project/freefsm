@@ -116,3 +116,35 @@ func deliveryError(w http.ResponseWriter, err error) {
 	}
 	commercialError(w, err)
 }
+
+func (h *handler) deliveryRetry(w http.ResponseWriter, r *http.Request) {
+	if r.URL.RawQuery != "" {
+		writeError(w, 400, "invalid_request", "Delivery retries accept no query parameters")
+		return
+	}
+	var in delivery.RetryIntent
+	if !decodeExactJSON(w, r, &in, "operation_id", "document_type", "document_id", "job_id", "delivery_id", "reason", "occurred_at") {
+		return
+	}
+	if h.deps.Delivery == nil {
+		writeError(w, 503, "unavailable", "Delivery service unavailable")
+		return
+	}
+	receipt, err := h.deps.Delivery.Retry(r.Context(), in)
+	if err != nil {
+		commercialError(w, err)
+		return
+	}
+	if receipt.Outcome != "accepted" {
+		status := 409
+		if receipt.Outcome == "forbidden" {
+			status = 403
+		}
+		if receipt.Outcome == "not_found" {
+			status = 404
+		}
+		writeError(w, status, receipt.Outcome, "Reconcile the original retry receipt; repair requires new reviewed intent")
+		return
+	}
+	writeJSON(w, 200, receipt)
+}
