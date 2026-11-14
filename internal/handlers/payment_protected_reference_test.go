@@ -22,7 +22,7 @@ import (
 )
 
 func TestPaymentProtectedReferenceHTTP(t *testing.T) {
-	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_completed_grant_loss", "restore_terminal_missing", "restore_purge_before_lookup", "restore_purge_after_lookup", "restore_purge_after_ack", "restore_purge_other_user", "ordinary_purge_missing", "generation_session_missing", "generation_grant_missing", "generation_terminal_missing", "generation_existing", "generation_other_user", "invalid_receipt", "tampered_store"} {
+	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_completed_grant_loss", "restore_terminal_missing", "restore_purge_before_lookup", "restore_purge_after_lookup", "restore_purge_after_ack", "restore_purge_other_user", "ordinary_purge_missing", "generation_session_missing", "generation_grant_missing", "generation_terminal_missing", "generation_terminal_existing", "generation_existing", "generation_other_user", "invalid_receipt", "tampered_store"} {
 		t.Run(scenario, func(t *testing.T) {
 			pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
 			ctx := context.Background()
@@ -172,7 +172,7 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 			}
 			t.Log(string(output))
 			want := 1
-			if scenario == "absent" || scenario == "ordinary_purge_missing" || scenario == "generation_terminal_missing" || scenario == "expiry" || scenario == "revoked" || scenario == "tampered_store" {
+			if scenario == "absent" || scenario == "ordinary_purge_missing" || strings.HasPrefix(scenario, "generation_terminal_") || scenario == "expiry" || scenario == "revoked" || scenario == "tampered_store" {
 				want = 0
 			}
 			var payments, credits int

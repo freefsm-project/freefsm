@@ -35,7 +35,7 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
   offline=true;
   for(const amount of ['0.00','-1.00','NaN','1.001'])await assert.rejects(client.stagePayment(target,{...values,amount}),/review_required/);
   await assert.rejects(client.stagePayment(target,{...values,method:'other'}),/review_required/);
-    const id=await client.stagePayment(target,{...values,...(['terminal','restore_terminal_missing','generation_terminal_missing'].includes(input.scenario)?{date:'2999-01-01'}:{})});offline=false;
+    const id=await client.stagePayment(target,{...values,...(['terminal','restore_terminal_missing'].includes(input.scenario)||input.scenario.startsWith('generation_terminal_')?{date:'2999-01-01'}:{})});offline=false;
   const original=structuredClone((await store.load()).pending[id].intent);
   for(const name of fs.readdirSync(input.directory))for(const secret of ['PRIVATE-PAYMENT',input.token])assert(!fs.readFileSync(input.directory+'/'+name).includes(Buffer.from(secret)));
   if(input.scenario==='tampered_store'){
@@ -47,7 +47,8 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
      if(input.scenario.startsWith('generation_')){
       const restart=async()=>{client=new PaymentClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();};
       await client.submit(id);const prior=(await client.reconcile(id)).receipt;
-      assert.equal(prior.outcome,input.scenario==='generation_terminal_missing'?'invalid_payment':'accepted');
+      const terminal=input.scenario.startsWith('generation_terminal_');
+      assert.equal(prior.outcome,terminal?'invalid_payment':'accepted');
       // Resolve a restore against an existing receipt before ordinary purge.
       await client.authenticate(await fresh('restore'));await client.synchronize();
       assert.deepEqual((await client.reconcile(id)).receipt,prior);await restart();await client.synchronize();
@@ -62,7 +63,7 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
       await client.authenticate(await fresh('new-session'));await client.synchronize();
       assert.deepEqual((await client.reconcile(id)).receipt,prior);
       await control('session-loss');await assert.rejects(client.reconcile(id),/authorization_purged/);await restart();
-      const existing=input.scenario==='generation_existing';
+      const existing=input.scenario.endsWith('_existing');
       if(!existing)await control('forget-receipt');
       const token=await fresh('restore');
       if(input.scenario==='generation_other_user'){
@@ -72,12 +73,13 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
       await client.authenticate(token);await restart();
       assert.equal((await store.load()).pending[id].receipt,undefined,'old-generation receipt must not remain current after authentication');
       await safe();await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);
+      if(!existing){assert.equal((await client.reconcile(id)).receipt,undefined);await restart();}
       await client.synchronize();assert.equal((await client.view()).pending[id].receipt,undefined);
       await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);
       await assert.rejects(client.acknowledgeUncertain(id),/restore_reconciliation_required/);
       calls.length=0;const result=await client.reconcile(id);assert.deepEqual(calls[0],['GET','/payment-operations/'+id]);assert.equal(posts,1);
       assert.deepEqual(result.historicalReceipts,[prior]);await restart();await safe();
-      if(existing){assert.deepEqual(result.receipt,prior);assert.equal(result.state,'accepted');return;}
+      if(existing){assert.deepEqual(result.receipt,prior);assert.equal(result.state,terminal?'terminal':'accepted');return;}
       assert.equal(result.receipt,undefined);assert.equal(result.state,'restore_uncertain');
       await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);await client.synchronize();await client.acknowledgeUncertain(id);await restart();
       // A subsequent epoch invalidates durable lookup and acknowledgment again.
