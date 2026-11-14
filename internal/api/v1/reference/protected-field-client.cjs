@@ -183,7 +183,7 @@ class ProtectedFieldClient {
     this.receiptMissing(e);
   }
   // restore_uncertain + missing receipt remains uncertain, never retryable.
-   await this.persist(s);return clone({state:e.state,receipt:e.receipt,requires_synchronization:!s.synced});
+   await this.persist(s);return clone({state:e.state,receipt:e.receipt,...(e.historicalReceipts?{historicalReceipts:e.historicalReceipts}:{}),requires_synchronization:!s.synced});
   });}
   // Domain projections may require fresh synchronization after scope-independent
   // receipt contact, including transport failure. Persist that lock before return.

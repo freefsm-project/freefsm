@@ -52,16 +52,26 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
     const existing=input.scenario==='restore_completed_existing';
     if(!existing)await control('forget-receipt');
     if(input.scenario==='restore_completed_scope_loss')await control('scope-loss');
+    if(input.scenario==='restore_completed_grant_loss')await control('grant-loss');
     for(let cycle=0;cycle<(input.scenario==='restore_completed_repeated'?2:1);cycle++){
      const token=await fresh('restore');
      client=new PaymentClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();
      await client.authenticate(token);await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);
+     if(input.scenario==='restore_completed_grant_loss'){
+      await assert.rejects(client.synchronize(),/authorization_purged/);
+      assert.deepEqual((await store.load()).pending[id].historicalReceipts,[prior]);
+      assert(!(await store.load()).pending[id].intent);
+      await assert.rejects(client.stagePayment(target,values),/locked_review/);
+      await assert.rejects(client.discard(id),/reconciliation_required/);assert.equal(posts,1);return;
+     }
      await client.synchronize();
+     await assert.rejects(client.acknowledgeUncertain(id),/restore_reconciliation_required/);
      await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);
      const result=await client.reconcile(id);
      assert.equal(posts,1);assert(!(await store.load()).pending[id].intent);
      if(existing){assert.deepEqual(result.receipt,prior);assert.equal(result.state,'accepted');break;}
      assert.equal(result.state,'restore_uncertain');assert.equal(result.receipt,undefined);
+     assert.deepEqual(result.historicalReceipts,[prior]);
      assert.deepEqual((await store.load()).pending[id].historicalReceipts,[prior]);
      await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);
      await client.synchronize();await assert.rejects(client.discard(id),/reconciliation_required/);

@@ -9,9 +9,25 @@ const fields=['amount','method','date','other_description','reference','note'];
 // absent receipt is not evidence that money was not received, even after restore.
 class PaymentClient extends CommercialClient {
   ownsPending(e){return e.family==='payment'||super.ownsPending(e);}
-  purgedOperation(e){return {...super.purgedOperation(e),...(e.family==='payment'?{financialUncertain:!!e.financialUncertain||['unknown','unreceived','locked_review','restore_uncertain'].includes(e.state)}:{})};}
+  purgedOperation(e){return {...super.purgedOperation(e),...(e.family==='payment'?{historicalReceipts:e.historicalReceipts,financialUncertain:!!e.financialUncertain||['unknown','unreceived','locked_review','restore_uncertain'].includes(e.state)}:{})};}
+  beginRestore(s){
+    for(const e of Object.values(s.pending))if(e.family==='payment'&&e.receipt){
+      // This is evidence of a prior server history, not a receipt in the restored
+      // history. Retain only the same safe allowlist used by receipt lookup.
+      e.historicalReceipts||=[];
+      if(!e.historicalReceipts.some(r=>JSON.stringify(r)===JSON.stringify(e.receipt)))e.historicalReceipts.push(clone(e.receipt));
+      delete e.receipt;
+    }
+    super.beginRestore(s);
+  }
+  async refreshCompletedPending(s,e){
+    if(e.family!=='payment')return super.refreshCompletedPending(s,e);
+    // No old financial values are needed or reconstructed. This transition only
+    // enables receipt-first human review; staging separately checks current scope.
+    if(e.state==='locked_review')e.state='restore_uncertain';
+  }
   requirePaymentReconciled(s){
-    if(Object.values(s.pending).some(e=>e.family==='payment'&&(e.financialUncertain||['unknown','unreceived','locked_review'].includes(e.state)||e.state==='restore_uncertain'&&!e.reconciled)))throw Error('reconciliation_required');
+    if(Object.values(s.pending).some(e=>e.family==='payment'&&!(e.state==='restore_uncertain'&&e.reconciled)&&(e.financialUncertain||['unknown','unreceived','locked_review','restore_uncertain'].includes(e.state))))throw Error('reconciliation_required');
   }
   async synchronize(kind='invoice',delta=false){
     if(kind!=='invoice')throw Error('document_kind_mismatch');
@@ -51,6 +67,7 @@ class PaymentClient extends CommercialClient {
     if(r?.operation_id!==id||!outcomes.includes(r.outcome)||typeof r.accepted_at!=='string'||!Number.isFinite(Date.parse(r.accepted_at))||r.outcome==='accepted'&&(typeof r.payment_id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(r.payment_id)||r.payment_id==='00000000-0000-0000-0000-000000000000'))throw Error('receipt_mismatch');
     e.receipt={operation_id:id,outcome:r.outcome,accepted_at:r.accepted_at,...(r.outcome==='accepted'?{payment_id:r.payment_id}:{})};
     delete e.financialUncertain;
+    delete e.lookupMissing;delete e.reconciled;
     if(e.state!=='replaced')e.state=r.outcome==='accepted'?'accepted':'terminal';
     if(e.state==='accepted'){delete e.intent;delete e.reviewed;}
   }

@@ -22,7 +22,7 @@ import (
 )
 
 func TestPaymentProtectedReferenceHTTP(t *testing.T) {
-	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_terminal_missing", "invalid_receipt", "tampered_store"} {
+	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_completed_grant_loss", "restore_terminal_missing", "invalid_receipt", "tampered_store"} {
 		t.Run(scenario, func(t *testing.T) {
 			pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
 			ctx := context.Background()

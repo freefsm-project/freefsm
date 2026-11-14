@@ -27,6 +27,18 @@ receipt lookup, explicit `acknowledgeUncertain(id)`, and reviewed new intent. An
 absent restored receipt cannot establish that money was never received; the human
 review must account for the possibility of lost post-backup financial history.
 
+For completed entries, restore moves the safe former receipt to
+`historicalReceipts`; `receipt` denotes only a receipt found in the current server
+history. Historical acceptance is not proof that the restored server has the
+Payment, and a missing receipt is not proof that money was never received.
+Completed entries retain no private financial intent. After lookup, synchronize
+again, explicitly acknowledge the uncertainty, then use `stagePayment` with freshly
+reviewed values and a currently authorized Invoice. This creates a new identity
+without replaying or reconstructing old values. `repairPayment` remains the path
+for retained private intent. Every subsequent restore invalidates the lookup and
+acknowledgment; safe historical receipts survive access-loss purges. Receipt-only
+review does not grant access to the former Invoice or permit staging against it.
+
 No synchronization, restart or authentication automatically submits work. Uncertain
 financial operation identities cannot be discarded to bypass reconciliation.
 There are no Credit, refund or reversal operations in this adapter.

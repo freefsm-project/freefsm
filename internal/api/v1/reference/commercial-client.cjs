@@ -56,7 +56,7 @@ class CommercialClient extends ProtectedFieldClient {
       delete e.withheld;
      }
      if(s.restore&&!['replaced','purged'].includes(e.state))e.state='restore_uncertain';
-   }
+   }else await this.refreshCompletedPending(s,e);
   }
    for(const [target,choice] of Object.entries(s.pdfChoices||{})){
     const doc=page.records[target];
@@ -122,7 +122,10 @@ class CommercialClient extends ProtectedFieldClient {
    e.batch={type:e.kind+'.'+e.action,target:String(e.reviewed.legacy_id),depends_on};
    await this.persist(s);return id;
   });}
-  ownsPending(e){return ['commercial','pdf'].includes(e.family);}
+   ownsPending(e){return ['commercial','pdf'].includes(e.family);}
+   // Completed operations have no private intent to reauthorize. Adapters may
+   // reconcile their safe evidence after this current, authorized snapshot.
+   async refreshCompletedPending(s,e){}
   async refreshPendingAuthority(s,e,current,kind){return true;}
   async conversionHistory(target,cursor=''){return this.transaction(async s=>{
    await this.enforceOfflineAccessWindow(s);
