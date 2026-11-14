@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -11,13 +12,16 @@ import (
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
+	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/google/uuid"
+	"golang.org/x/net/html"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -113,6 +117,13 @@ func TestClockOwnAuthorityCloseoutAndAuditHTTP(t *testing.T) {
 	if entry.UserID != user.ID {
 		t.Fatal("clock targeted submitted user")
 	}
+	// A real correction persists a legitimate fractional history timestamp whose
+	// seconds collide with the latitude. Do not depend on the wall clock landing
+	// on second 51, or mistake this history text for a location disclosure.
+	collision := time.Now().UTC().Add(-time.Hour).Truncate(time.Minute).Add(51500 * time.Millisecond)
+	if err := svc.CorrectTimeEntry(ctx, authorization.Actor{UserID: admin}, entry.ID, authorization.TimeEntryCorrection{Reason: "Review recorded start", ClockIn: &collision}); err != nil {
+		t.Fatal(err)
+	}
 	otherOut := httptest.NewRequest("POST", "/time-entries/clock-out", strings.NewReader(url.Values{"entry_id": {fmt.Sprint(entry.ID)}}.Encode()))
 	otherOut.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	otherOut.AddCookie(sessionCookie(t, ctx, sessions, admin))
@@ -134,8 +145,23 @@ func TestClockOwnAuthorityCloseoutAndAuditHTTP(t *testing.T) {
 		t.Fatal("closeout lost Job association")
 	}
 	show := fmt.Sprintf("/time-entries/%d", entry.ID)
-	assertNotContains(t, requestBody(t, router, cookie, "GET", show, 200), "51.5")
-	assertContains(t, requestBody(t, router, sessionCookie(t, ctx, sessions, admin), "GET", show, 200), "Clock-out GPS")
+	var gpsCount int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM time_clock_gps WHERE entry_id=$1 AND latitude=51.5 AND longitude=-0.12`, entry.ID).Scan(&gpsCount); err != nil || gpsCount != 1 {
+		t.Fatalf("persisted GPS count=%d error=%v", gpsCount, err)
+	}
+	body := requestBody(t, router, cookie, "GET", show, 200)
+	assertContains(t, body, collision.Format(time.RFC3339Nano))
+	if disclosures := clockGPSDisclosures(t, body); len(disclosures) != 0 {
+		t.Fatalf("non-GPS authority disclosed location: %v", disclosures)
+	}
+	t.Log("HTTP non-GPS authority: persisted GPS=1; matching timestamp text is in Immutable time history/p; structural disclosures=0")
+	authorized := requestBody(t, router, sessionCookie(t, ctx, sessions, admin), "GET", show, 200)
+	assertContains(t, authorized, "Clock-out GPS")
+	assertContains(t, authorized, "51.5000000, -0.1200000")
+	if len(clockGPSDisclosures(t, authorized)) == 0 {
+		t.Fatal("negative control failed to detect actual authorized HTTP GPS disclosure")
+	}
+	t.Log("negative control: actual authorized HTTP GPS row and coordinates detected")
 	post(path, nil, 404)
 	if _, err := pool.Exec(ctx, `CREATE FUNCTION fail_clock_audit() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.action='time.clock_in' THEN RAISE EXCEPTION 'injected'; END IF; RETURN NEW; END $$; CREATE TRIGGER fail_clock_audit BEFORE INSERT ON authorization_audit FOR EACH ROW EXECUTE FUNCTION fail_clock_audit()`); err != nil {
 		t.Fatal(err)
@@ -151,6 +177,74 @@ func TestClockOwnAuthorityCloseoutAndAuditHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	post("/time-entries/clock-in", nil, 403)
+}
+
+// Inspect decoded DOM text and attributes, rather than searching the serialized
+// body for a number that can also occur in a legitimate history timestamp.
+// Only valid RFC3339 timestamps in the immutable history section are exempted;
+// coordinates elsewhere, including hidden attributes, remain disclosures.
+func clockGPSDisclosures(t *testing.T, body string) []string {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	timestamps := regexp.MustCompile(`\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z`)
+	coordinates := regexp.MustCompile(`(^|[^0-9.])(51\.50*|-0\.120*)([^0-9.]|$)`)
+	var found []string
+	var walk func(*html.Node, bool)
+	walk = func(n *html.Node, history bool) {
+		for _, attr := range n.Attr {
+			if n.Data == "section" && attr.Key == "aria-label" && attr.Val == "Immutable time history" {
+				history = true
+			}
+			if coordinates.MatchString(attr.Val) {
+				found = append(found, n.Data+"/@"+attr.Key)
+			}
+		}
+		if n.Type == html.TextNode {
+			value := n.Data
+			if history && n.Parent != nil && n.Parent.Data == "p" {
+				value = timestamps.ReplaceAllStringFunc(value, func(s string) string {
+					if _, err := time.Parse(time.RFC3339Nano, s); err == nil {
+						return "[timestamp]"
+					}
+					return s
+				})
+			}
+			if coordinates.MatchString(value) || (n.Parent != nil && n.Parent.Data == "th" && strings.Contains(value, "GPS")) {
+				found = append(found, n.Parent.Data+"/text")
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c, history)
+		}
+	}
+	walk(doc, false)
+	return found
+}
+
+func TestClockGPSPrivacyAssertionNegativeControls(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		data templates.TimeEntryShowPageData
+	}{
+		{"legacy", templates.TimeEntryShowPageData{GPSLat: "51.500000", GPSLon: "-0.120000"}},
+		{"clock-in", templates.TimeEntryShowPageData{GPSIn: "51.5000000, -0.1200000"}},
+		{"clock-out", templates.TimeEntryShowPageData{GPSOut: "51.5000000, -0.1200000"}},
+		{"unlabelled-coordinate", templates.TimeEntryShowPageData{Notes: "51.5, -0.12"}},
+		{"history-coordinate", templates.TimeEntryShowPageData{History: []templates.TimeEntryHistoryRow{{After: "2026-01-01T00:00:51.5Z; 51.5, -0.12"}}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var body bytes.Buffer
+			if err := templates.TimeEntryShow(test.data).Render(context.Background(), &body); err != nil {
+				t.Fatal(err)
+			}
+			if len(clockGPSDisclosures(t, body.String())) == 0 {
+				t.Fatal("privacy assertion missed deliberately disclosed production-rendered GPS")
+			}
+		})
+	}
 }
 
 func TestClockConcurrentHTTP(t *testing.T) {
