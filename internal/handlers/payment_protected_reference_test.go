@@ -22,7 +22,7 @@ import (
 )
 
 func TestPaymentProtectedReferenceHTTP(t *testing.T) {
-	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_completed_grant_loss", "restore_terminal_missing", "invalid_receipt", "tampered_store"} {
+	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_completed_grant_loss", "restore_terminal_missing", "restore_purge_before_lookup", "restore_purge_after_lookup", "restore_purge_after_ack", "restore_purge_other_user", "ordinary_purge_missing", "invalid_receipt", "tampered_store"} {
 		t.Run(scenario, func(t *testing.T) {
 			pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
 			ctx := context.Background()
@@ -56,6 +56,10 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 					_, err = pool.Exec(ctx, `DELETE FROM job_assignments WHERE job_id=$1 AND user_id=$2`, job.ID, user.ID)
 				case "/__fixture/grant-loss":
 					_, err = pool.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='payment.record'`, role)
+				case "/__fixture/grant-regain":
+					_, err = auth.SaveRole(ctx, authorization.Actor{UserID: admin}, role, "Protected collector", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "payment.record", Scope: authorization.Assigned}})
+				case "/__fixture/session-loss":
+					_, err = pool.Exec(ctx, `DELETE FROM sessions`)
 				case "/__fixture/rename":
 					_, err = pool.Exec(ctx, `INSERT INTO payment_method_labels(company_id,method,label) VALUES($1,'cash','Renamed cash') ON CONFLICT(company_id,method) DO UPDATE SET label=excluded.label`, company)
 				case "/__fixture/fail":
@@ -68,13 +72,17 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 					// Deliberate receipt-loss simulation, not a database restore. The
 					// real backup journey is covered by the backup reconciliation test.
 					_, err = pool.Exec(ctx, `ALTER TABLE bounded_payment_operations DISABLE TRIGGER USER; DELETE FROM bounded_payment_operations; ALTER TABLE bounded_payment_operations ENABLE TRIGGER USER`)
-				case "/__fixture/restore", "/__fixture/new-session":
+				case "/__fixture/restore", "/__fixture/new-session", "/__fixture/other-user":
 					if r.URL.Path == "/__fixture/restore" {
 						_, err = pool.Exec(ctx, `UPDATE session_instance SET epoch=gen_random_uuid(); DELETE FROM sessions`)
 					}
 					if err == nil {
 						var fresh string
-						fresh, err = sessions.CreateMobile(ctx, user.ID, "Recovered Payment")
+						subject := user.ID
+						if r.URL.Path == "/__fixture/other-user" {
+							subject = admin
+						}
+						fresh, err = sessions.CreateMobile(ctx, subject, "Recovered Payment")
 						if err == nil {
 							_ = json.NewEncoder(w).Encode(map[string]string{"token": fresh})
 							return
@@ -133,7 +141,22 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 			defer server.Close()
 			directory := t.TempDir()
 			historyCheck(t, os.Chmod(directory, 0700))
-			input, err := json.Marshal(map[string]any{"url": server.URL, "token": token, "directory": directory, "scenario": scenario})
+			key := newOperationKey()
+			// Own the native key outside the child so assertion/timeout failures also
+			// clean it. The child has exited before cleanup can touch this store.
+			t.Cleanup(func() {
+				cleanup, err := json.Marshal(map[string]any{"directory": directory, "key": key, "cleanup": true})
+				historyCheck(t, err)
+				bounded, cancel := context.WithTimeout(ctx, time.Minute)
+				defer cancel()
+				cmd := exec.CommandContext(bounded, "node", "../api/v1/testdata/payment-protected-http.cjs")
+				cmd.Stdin = bytes.NewReader(cleanup)
+				output, err := cmd.CombinedOutput()
+				if err != nil {
+					t.Errorf("owned Payment key cleanup: %v\n%s", err, output)
+				}
+			})
+			input, err := json.Marshal(map[string]any{"url": server.URL, "token": token, "directory": directory, "key": key, "scenario": scenario})
 			historyCheck(t, err)
 			bounded, cancel := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancel()
@@ -145,7 +168,7 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 			}
 			t.Log(string(output))
 			want := 1
-			if scenario == "absent" || scenario == "expiry" || scenario == "revoked" || scenario == "tampered_store" {
+			if scenario == "absent" || scenario == "ordinary_purge_missing" || scenario == "expiry" || scenario == "revoked" || scenario == "tampered_store" {
 				want = 0
 			}
 			var payments, credits int

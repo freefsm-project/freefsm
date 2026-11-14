@@ -6,7 +6,8 @@ const {spawnSync}=require('node:child_process');
 const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
 (async()=>{
  const input=JSON.parse(fs.readFileSync(0,'utf8'));
- const store=new ProtectedStore(input.directory,input.key||randomUUID());
+  const store=new ProtectedStore(input.directory,input.key||randomUUID());
+  if(input.cleanup){await store.destroy();assert(!fs.existsSync(input.directory+'/cache'));return;}
  let offline=false,loss=null,posts=0,invalid=false;
  const calls=[];
  const transport=async(path,method='GET',body,auth)=>{
@@ -43,7 +44,38 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
   }
   if(input.scenario==='expiry'){client.now=()=>Date.now()+73*3600000;await assert.rejects(client.view(),/authorization_lease_expired/);await assert.rejects(client.submit(id),/authorization_lease_expired/);assert.equal(posts,0);return;}
    if(input.scenario==='revoked'){await control('revoke');await assert.rejects(client.submit(id),/authorization_purged/);assert(!(await store.load()).pending[id].intent);return;}
-   if(input.scenario.startsWith('restore_completed_')||input.scenario==='restore_terminal_missing'){
+    if(input.scenario.startsWith('restore_purge_')||input.scenario==='ordinary_purge_missing'){
+     const ordinary=input.scenario==='ordinary_purge_missing';
+     let prior;
+     if(ordinary){loss='before';await assert.rejects(client.submit(id),/lost_request/);}
+     else {await client.submit(id);prior=(await client.reconcile(id)).receipt;await control('forget-receipt');await client.authenticate(await fresh('restore'));await client.synchronize();}
+     const restart=async()=>{client=new PaymentClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();};
+     const safe=async()=>{const e=(await store.load()).pending[id];for(const field of ['intent','reviewed','target','customer'])assert.equal(e[field],undefined);if(prior)assert.deepEqual(e.historicalReceipts,[prior]);assert(!JSON.stringify(e).includes('PRIVATE-'));};
+     if(input.scenario!=='restore_purge_before_lookup'&&!ordinary){await client.reconcile(id);await restart();await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);await client.synchronize();}
+     if(input.scenario==='restore_purge_after_ack')await client.acknowledgeUncertain(id);
+     await control('session-loss');await assert.rejects(client.reconcile(id),/authorization_purged/);await restart();await safe();
+     await assert.rejects(client.stagePayment(target,values),/locked_review/);
+     await assert.rejects(client.discard(id),/reconciliation_required/);
+     if(input.scenario==='restore_purge_other_user'){
+      await client.authenticate(await fresh('other-user'));await client.synchronize();assert.equal((await store.load()).pending[id],undefined);
+      await assert.rejects(client.reconcile(id),/unknown_operation/);assert.equal(posts,1);return;
+     }
+     await client.authenticate(await fresh('new-session'));await restart();await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);await client.synchronize();
+     await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);
+     await assert.rejects(client.acknowledgeUncertain(id),/restore_reconciliation_required/);
+     const result=await client.reconcile(id);assert.equal(result.receipt,undefined);await restart();await client.synchronize();
+     if(ordinary){assert.equal(result.state,'purged');await assert.rejects(client.acknowledgeUncertain(id),/restore_reconciliation_required/);await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);return;}
+     assert.equal(result.state,'restore_uncertain');await safe();
+     await client.acknowledgeUncertain(id);await restart();assert.equal(posts,1);
+     // A later restore must invalidate even a durable acknowledgment.
+     await client.authenticate(await fresh('restore'));await restart();await client.synchronize();
+     await assert.rejects(client.acknowledgeUncertain(id),/restore_reconciliation_required/);await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);
+     assert.equal((await client.reconcile(id)).state,'restore_uncertain');await restart();await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);
+     await client.synchronize();await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);await client.acknowledgeUncertain(id);
+     const next=await client.stagePayment(target,{...values,amount:'1.00'});assert.notEqual(next,id);assert.equal(posts,1);await safe();
+     await assert.rejects(client.discard(id),/reconciliation_required/);return;
+    }
+    if(input.scenario.startsWith('restore_completed_')||input.scenario==='restore_terminal_missing'){
     const terminal=input.scenario==='restore_terminal_missing';
     await client.submit(id);const prior=(await client.reconcile(id)).receipt;
     assert.equal(prior.outcome,terminal?'invalid_payment':'accepted');
@@ -62,7 +94,10 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
       assert.deepEqual((await store.load()).pending[id].historicalReceipts,[prior]);
       assert(!(await store.load()).pending[id].intent);
       await assert.rejects(client.stagePayment(target,values),/locked_review/);
-      await assert.rejects(client.discard(id),/reconciliation_required/);assert.equal(posts,1);return;
+       await assert.rejects(client.discard(id),/reconciliation_required/);assert.equal(posts,1);
+       await control('grant-regain');
+       client=new PaymentClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();
+       await client.authenticate(await fresh('new-session'));
      }
      await client.synchronize();
      await assert.rejects(client.acknowledgeUncertain(id),/restore_reconciliation_required/);
@@ -128,6 +163,6 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
    if(input.scenario==='scope_loss'){await client.synchronize();assert.deepEqual((await client.view()).documents,{});}
    if(input.scenario==='grant_loss'){await assert.rejects(client.synchronize(),/authorization_purged/);assert(!(await store.load()).pending[id].intent);}
   }
- }finally{await client.logout();assert(!fs.existsSync(input.directory+'/cache'));}
+ }finally{if(!input.key){await client.logout();assert(!fs.existsSync(input.directory+'/cache'));}}
  console.log('PASS protected Payment '+input.scenario);
 })().catch(e=>{console.error(e);process.exit(1);});
