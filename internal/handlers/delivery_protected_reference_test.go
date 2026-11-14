@@ -25,7 +25,7 @@ import (
 )
 
 func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
-	for _, scenario := range []string{"create_lost", "retry_lost", "create_absent", "retry_absent", "dependency", "dependency_failed", "scope_receipt", "parent_loss", "retry_parent_loss", "denial", "retry_denial", "retry_invalid_state", "retry_cancelled", "revoked", "expiry", "restore"} {
+	for _, scenario := range []string{"create_lost", "retry_lost", "create_absent", "retry_absent", "dependency", "dependency_failed", "scope_receipt", "parent_loss", "retry_parent_loss", "denial", "retry_denial", "retry_invalid_state", "retry_cancelled", "revoked", "expiry", "restore", "authority_view_only", "authority_no_delivery", "authority_no_pdf", "authority_no_file", "authority_permitted", "authority_file_loss", "authority_pdf_loss", "retry_sync_denial", "retry_scope_receipt", "retry_unknown_sync_denial", "retry_expiry", "retry_renewal", "retry_session", "retry_restore"} {
 		t.Run(scenario, func(t *testing.T) {
 			pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
 			ctx := context.Background()
@@ -39,8 +39,40 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 			expectStatus(t, web, cookie, "POST", path+"/pdf/save", 303)
 			version, err := strconv.Atoi(compositionInput(t, requestBody(t, web, cookie, "GET", path+"/pdf/preview", 200), "version"))
 			historyCheck(t, err)
+			var frozenDelivery int64
+			var frozenSnapshot string
+			frozenSQL := `SELECT jsonb_build_array(sender_address,recipients_to,recipients_cc,recipients_bcc,subject,text_body,html_body,pdf_data,pdf_filename,message_id,pdf_version_id,attachment_snapshots,composition_snapshot,lifetime_attempt_count,cycle_attempt_count)::text FROM document_deliveries WHERE id=$1`
+			if strings.HasPrefix(scenario, "authority_") {
+				conversionUpload(t, web, cookie, "estimate", doc.ID, "frozen.txt", "PRIVATE-FROZEN-EXTRA")
+				var file int64
+				var filePath string
+				historyCheck(t, pool.QueryRow(ctx, `SELECT id,file_path FROM files WHERE object_type='estimate' AND object_id=$1`, doc.ID).Scan(&file, &filePath))
+				fieldPost(t, web, cookie, path+"/email", url.Values{"pdf_version": {fmt.Sprint(version)}, "idempotency_key": {newOperationKey()}, "to": {"frozen@example.test"}, "subject": {"Frozen"}, "body": {"Frozen body"}, "extra_file_id": {fmt.Sprint(file)}}, 303)
+				_, err = delivery.New(pool, "").ProcessOne(ctx, deliveryTestSender(func(context.Context, delivery.Delivery) (delivery.SendResult, error) {
+					return delivery.SendResult{}, &delivery.SendError{Kind: delivery.SendPermanent, Err: errors.New("fixture failure")}
+				}), nil)
+				historyCheck(t, err)
+				historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM document_deliveries`).Scan(&frozenDelivery))
+				historyCheck(t, pool.QueryRow(ctx, frozenSQL, frozenDelivery).Scan(&frozenSnapshot))
+				_, err = pool.Exec(ctx, `UPDATE files SET removed_at=clock_timestamp(),removed_by=$2 WHERE id=$1`, file, admin)
+				historyCheck(t, err)
+				historyCheck(t, os.Remove(filePath)) // Review/retry must use the frozen extra.
+			}
 			auth := authorization.New(pool)
-			role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Protected Delivery role", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "estimate.view", Scope: authorization.Assigned}, {Permission: "estimate.delivery.request", Scope: authorization.Assigned}, {Permission: "estimate.pdf.download", Scope: authorization.Assigned}, {Permission: "estimate.pdf.generate", Scope: authorization.Assigned}})
+			grants := []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "estimate.view", Scope: authorization.Assigned}}
+			if scenario != "authority_view_only" && scenario != "authority_no_delivery" {
+				grants = append(grants, authorization.Grant{Permission: "estimate.delivery.request", Scope: authorization.Assigned})
+			}
+			if scenario != "authority_view_only" && scenario != "authority_no_pdf" {
+				grants = append(grants, authorization.Grant{Permission: "estimate.pdf.download", Scope: authorization.Assigned})
+			}
+			if !strings.HasPrefix(scenario, "authority_") {
+				grants = append(grants, authorization.Grant{Permission: "estimate.pdf.generate", Scope: authorization.Assigned})
+			}
+			if scenario == "authority_permitted" || scenario == "authority_file_loss" || scenario == "authority_pdf_loss" {
+				grants = append(grants, authorization.Grant{Permission: "file.download", Scope: authorization.Assigned})
+			}
+			role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Protected Delivery role", grants)
 			historyCheck(t, err)
 			user := client.User.Create().SetCompanyID(company).SetEmail("protected-delivery@test").SetName("Field").SetPasswordHash("hash").SetRole("tech").SaveX(ctx)
 			historyCheck(t, auth.AssignUser(ctx, authorization.Actor{UserID: admin}, user.ID, role))
@@ -56,7 +88,7 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 			compiler.AssertFormat()
 			historyCheck(t, compiler.AddResource("https://delivery.test/openapi.json", spec))
 			schemas := map[string]*jsonschema.Schema{}
-			for _, name := range []string{"DeliveryMessage", "ReviewedDelivery", "DeliveryRetry", "DeliveryReceiptEnvelope", "DeliveryReviewEnvelope", "ErrorEnvelope"} {
+			for _, name := range []string{"DeliveryMessage", "ReviewedDelivery", "DeliveryRetry", "DeliveryRetryTarget", "DeliveryReceiptEnvelope", "DeliveryReviewEnvelope", "ErrorEnvelope"} {
 				schemas[name], err = compiler.Compile("https://delivery.test/openapi.json#/components/schemas/" + name)
 				historyCheck(t, err)
 			}
@@ -88,8 +120,19 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 					_, err = pool.Exec(ctx, `UPDATE estimates SET deleted_at=clock_timestamp() WHERE id=$1`, doc.ID)
 				case "/__fixture/deny":
 					_, err = pool.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='estimate.delivery.request'`, role)
+				case "/__fixture/deny-file":
+					_, err = pool.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='file.download'`, role)
+				case "/__fixture/deny-pdf":
+					_, err = pool.Exec(ctx, `DELETE FROM authorization_grants WHERE role_id=$1 AND permission='estimate.pdf.download'`, role)
 				case "/__fixture/revoke":
 					err = sessions.RevokeMobile(ctx, token)
+				case "/__fixture/new-session":
+					var fresh string
+					fresh, err = sessions.CreateMobile(ctx, user.ID, "New Delivery client")
+					if err == nil {
+						_ = json.NewEncoder(w).Encode(map[string]string{"token": fresh})
+						return
+					}
 				case "/__fixture/cancel":
 					fieldPost(t, web, cookie, path+"/delete", url.Values{}, 303)
 					fieldPost(t, web, cookie, path+"/restore", url.Values{}, 303)
@@ -125,7 +168,9 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 					historyCheck(t, err)
 					r.Body = io.NopCloser(bytes.NewReader(raw))
 					name := "ReviewedDelivery"
-					if strings.HasSuffix(r.URL.Path, "/review") {
+					if r.URL.Path == "/delivery-retries/review" {
+						name = "DeliveryRetryTarget"
+					} else if strings.HasSuffix(r.URL.Path, "/review") {
 						name = "DeliveryMessage"
 					} else if r.URL.Path == "/delivery-retries" {
 						name = "DeliveryRetry"
@@ -134,13 +179,17 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 				}
 				recorder := httptest.NewRecorder()
 				api.ServeHTTP(recorder, r)
-				if recorder.Code != 200 {
-					validate("ErrorEnvelope", recorder.Body.Bytes())
-				} else if !strings.HasSuffix(r.URL.Path, "/review") {
-					validate("DeliveryReceiptEnvelope", recorder.Body.Bytes())
-				} else {
-					validate("DeliveryReviewEnvelope", recorder.Body.Bytes())
+				operationPath := r.URL.Path
+				if strings.HasPrefix(operationPath, "/estimates/") {
+					operationPath = "/estimates/{id}/deliveries"
+					if strings.HasSuffix(r.URL.Path, "/review") {
+						operationPath += "/review"
+					}
 				}
+				if strings.HasPrefix(operationPath, "/delivery-operations/") {
+					operationPath = "/delivery-operations/{operation}"
+				}
+				deliveryResponseContract(t, spec, compiler, "https://delivery.test/openapi.json", operationPath, r.Method, recorder.Code, recorder.Body.Bytes())
 				for k, values := range recorder.Header() {
 					w.Header()[k] = values
 				}
@@ -151,7 +200,7 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 			defer server.Close()
 			directory := t.TempDir()
 			historyCheck(t, os.Chmod(directory, 0700))
-			input, err := json.Marshal(map[string]any{"url": server.URL, "token": token, "directory": directory, "scenario": scenario, "version": version})
+			input, err := json.Marshal(map[string]any{"url": server.URL, "token": token, "directory": directory, "scenario": scenario, "version": version, "frozenDelivery": frozenDelivery})
 			historyCheck(t, err)
 			bounded, cancel := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancel()
@@ -162,6 +211,27 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 				t.Fatalf("protected Delivery: %v\n%s", err, output)
 			}
 			t.Log(string(output))
+			if frozenDelivery != 0 {
+				var after string
+				historyCheck(t, pool.QueryRow(ctx, frozenSQL, frozenDelivery).Scan(&after))
+				if after != frozenSnapshot {
+					t.Fatal("retry changed frozen message, PDF, extras or automatic budget")
+				}
+				var cycles int
+				historyCheck(t, pool.QueryRow(ctx, `SELECT retry_cycle FROM document_deliveries WHERE id=$1`, frozenDelivery).Scan(&cycles))
+				want := 0
+				if scenario == "authority_permitted" {
+					want = 1
+				}
+				if cycles != want {
+					t.Fatalf("retry cycles %d want %d", cycles, want)
+				}
+				var admissions, receipts, effects int
+				historyCheck(t, pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM operation_admissions WHERE operation_type='delivery.retry'),(SELECT count(*) FROM delivery_operations),(SELECT count(*) FROM activity_logs WHERE action='document_delivery_retried')`).Scan(&admissions, &receipts, &effects))
+				if admissions != want || receipts != want || effects != want {
+					t.Fatalf("unexpected review/retry writes: admissions=%d receipts=%d effects=%d want=%d", admissions, receipts, effects, want)
+				}
+			}
 		})
 	}
 }

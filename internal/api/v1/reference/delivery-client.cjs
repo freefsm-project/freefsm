@@ -11,8 +11,34 @@ const messageOf=intent=>Object.fromEntries(messageFields.filter(k=>Object.hasOwn
 // Uses the same encrypted store, finite lease and original-parent projection as
 // commercial work. Receipt reconciliation never submits a Delivery command.
 class DeliveryClient extends CommercialClient {
+  retryAuthority(s){return {lease:s.lease?.id,...s.authority};}
+  hasRetryAuthority(s,capability){const current=this.retryAuthority(s);return !!s.lease?.id&&!!s.authority&&['lease','epoch','user','client'].every(k=>capability?.authority?.[k]===current[k]);}
+  async retryReviewIn(s,kind,doc,delivery){
+    const target={document_type:kind,document_id:doc.legacy_id,job_id:doc.job_id,delivery_id:delivery};
+    const r=await this.contact(s,'/delivery-retries/review','POST',target);
+    if(r.status!==200)return r;
+    if(r.data?.action!=='delivery.retry'||Object.entries(target).some(([k,v])=>r.data[k]!==v))throw Error('review_mismatch');
+    const capability={review:clone(r.data),authority:this.retryAuthority(s)};
+    (doc.retryReviews??={})[delivery]=capability;
+    return {...r,capability};
+  }
+  async reviewRetry(target,delivery){return this.transaction(async s=>{
+    await this.enforceOfflineAccessWindow(s);this.requireDeliveryReconciled(s);const doc=s.documents?.[target];
+    if(!doc?.job_id||!Number.isSafeInteger(delivery)||delivery<=0)throw Error('review_required');
+    await this.policy(s);
+    const r=await this.retryReviewIn(s,s.commercialKind,doc,delivery);
+    if(r.status!==200){await this.withholdCache(s);throw Error(r.error?.code||'review_unavailable');}
+    await this.persist(s);return clone(r.data);
+  });}
   ownsPending(e){return ['delivery','delivery_retry'].includes(e.family)||super.ownsPending(e);}
   async refreshPendingAuthority(s,e,current,kind){
+    if(e.family==='delivery_retry'){
+      const r=await this.retryReviewIn(s,kind,current,e.intent.delivery_id);
+      if(r.status===404){Object.assign(e,this.purgedOperation(e));delete e.intent;delete e.reviewed;return false;}
+      if(r.status!==200){e.withheld=true;delete e.reviewed.authority;return false;}
+      if(r.data.document_id!==e.reviewed.document_id||r.data.job_id!==e.intent.job_id){Object.assign(e,this.purgedOperation(e));delete e.intent;delete e.reviewed;return false;}
+      e.reviewed.authority=r.capability.authority;return true;
+    }
     if(e.family!=='delivery')return super.refreshPendingAuthority(s,e,current,kind);
     const r=await this.contact(s,'/'+kind+'s/'+current.legacy_id+'/deliveries/review','POST',messageOf(e.intent));
     if(r.status===404){Object.assign(e,this.purgedOperation(e));delete e.intent;delete e.reviewed;return false;}
@@ -46,8 +72,10 @@ class DeliveryClient extends CommercialClient {
   stageRetryIn(s,target,delivery,reason){
     this.requireDeliveryReconciled(s);const doc=s.documents?.[target];
     if(!doc?.job_id||!Number.isSafeInteger(delivery)||delivery<=0||typeof reason!=='string'||!reason.trim())throw Error('review_required');
+    const capability=doc.retryReviews?.[delivery];
+    if(!this.hasRetryAuthority(s,capability)||capability.review.document_type!==s.commercialKind||capability.review.document_id!==doc.legacy_id||capability.review.job_id!==doc.job_id||capability.review.delivery_id!==delivery)throw Error('review_required');
     const id=randomUUID();
-    s.pending[id]={family:'delivery_retry',kind:s.commercialKind,target,customer:doc.customer_id,state:'pending',reviewed:{document_id:doc.legacy_id,job_id:doc.job_id},intent:{operation_id:id,document_type:s.commercialKind,document_id:doc.legacy_id,job_id:doc.job_id,delivery_id:delivery,reason,occurred_at:new Date(this.now()).toISOString()}};
+    s.pending[id]={family:'delivery_retry',kind:s.commercialKind,target,customer:doc.customer_id,state:'pending',reviewed:{...clone(capability.review),authority:clone(capability.authority)},intent:{operation_id:id,document_type:s.commercialKind,document_id:doc.legacy_id,job_id:doc.job_id,delivery_id:delivery,reason,occurred_at:new Date(this.now()).toISOString()}};
     return id;
   }
   async stageRetry(target,delivery,reason){return this.transaction(async s=>{
@@ -73,6 +101,7 @@ class DeliveryClient extends CommercialClient {
     return this.postDeliveryIn(s,e,id);
   });}
   async postDeliveryIn(s,e,id){
+    if(e.family==='delivery_retry'&&!this.hasRetryAuthority(s,e.reviewed))throw Error('review_required');
     if(e.retryNotBefore&&this.now()<e.retryNotBefore)throw Error('retry_after_required');
     await this.policy(s);e.state='unknown';await this.persistAuthorityLoss(s);
     const path=e.family==='delivery_retry'?'/delivery-retries':'/'+e.kind+'s/'+e.reviewed.document_id+'/deliveries';

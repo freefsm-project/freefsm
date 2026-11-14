@@ -99,6 +99,14 @@ func TestDeliveryRetryAPIAtomicReceipts(t *testing.T) {
 		if res.StatusCode != want {
 			t.Fatalf("%s %s: %d want %d: %s", method, path, res.StatusCode, want, body)
 		}
+		operationPath := path
+		if strings.HasPrefix(path, "/delivery-operations/") {
+			operationPath = "/delivery-operations/{operation}"
+		}
+		if strings.HasPrefix(path, "/estimates/") {
+			operationPath = "/estimates/{id}/deliveries"
+		}
+		deliveryResponseContract(t, spec, compiler, "https://retry.test/openapi.json", operationPath, method, res.StatusCode, body)
 		var out map[string]any
 		historyCheck(t, json.Unmarshal(body, &out))
 		value, err := jsonschema.UnmarshalJSON(strings.NewReader(string(body)))
@@ -113,6 +121,75 @@ func TestDeliveryRetryAPIAtomicReceipts(t *testing.T) {
 	in := delivery.RetryIntent{OperationID: newOperationKey(), DocumentType: "estimate", DocumentID: doc.ID, JobID: job.ID, DeliveryID: id, Reason: "Retry frozen communication"}
 	occurred := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 	in.OccurredAt = &occurred
+	t.Run("rejected_input_has_no_admission_receipt_or_effect", func(t *testing.T) {
+		var initialAdmissions int
+		historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM operation_admissions`).Scan(&initialAdmissions))
+		base, err := json.Marshal(in)
+		historyCheck(t, err)
+		cases := []struct {
+			name, raw string
+			status    int
+		}{
+			{"malformed", "{", 400},
+			{"unknown_field", strings.TrimSuffix(string(base), "}") + `,"unknown":true}`, 400},
+			{"wrong_wire_type", strings.Replace(string(base), `"document_id":`+fmt.Sprint(doc.ID), `"document_id":"wrong"`, 1), 400},
+			{"missing", `{}`, 422},
+			{"blank_reason", strings.Replace(string(base), in.Reason, "   ", 1), 422},
+			{"invalid_kind", strings.Replace(string(base), `"estimate"`, `"job"`, 1), 422},
+			{"nil_identity", strings.Replace(string(base), in.OperationID, "00000000-0000-0000-0000-000000000000", 1), 422},
+			{"noncanonical_identity", strings.Replace(string(base), in.OperationID, "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA", 1), 422},
+			{"future_occurrence", strings.Replace(string(base), occurred.Format(time.RFC3339), time.Now().Add(time.Hour).UTC().Format(time.RFC3339), 1), 422},
+			{"review_malformed", "{", 400},
+			{"review_unknown_field", `{"unknown":true}`, 400},
+			{"review_wrong_wire_type", `{"document_id":"wrong"}`, 400},
+			{"review_missing", `{}`, 422},
+			{"review_invalid_kind", `{"document_type":"job","document_id":1,"job_id":1,"delivery_id":1}`, 422},
+			{"review_invalid_identity", `{"document_type":"estimate","document_id":0,"job_id":1,"delivery_id":1}`, 422},
+		}
+		for _, test := range cases {
+			t.Run(test.name, func(t *testing.T) {
+				endpoint := "/delivery-retries"
+				if strings.HasPrefix(test.name, "review_") {
+					endpoint += "/review"
+				}
+				req, err := http.NewRequest("POST", server.URL+endpoint, strings.NewReader(test.raw))
+				historyCheck(t, err)
+				req.Header.Set("Authorization", "Bearer "+token)
+				req.Header.Set("Content-Type", "application/json")
+				res, err := http.DefaultClient.Do(req)
+				historyCheck(t, err)
+				defer res.Body.Close()
+				body, err := io.ReadAll(res.Body)
+				historyCheck(t, err)
+				if res.StatusCode != test.status {
+					t.Fatalf("HTTP%d want %d: %s", res.StatusCode, test.status, body)
+				}
+				deliveryResponseContract(t, spec, compiler, "https://retry.test/openapi.json", endpoint, "POST", res.StatusCode, body)
+				var out map[string]any
+				historyCheck(t, json.Unmarshal(body, &out))
+				code := "invalid_json"
+				if strings.HasSuffix(test.name, "malformed") {
+					code = "invalid_request"
+				}
+				if test.status == 422 {
+					code = "invalid_document"
+				}
+				if out["error"].(map[string]any)["code"] != code {
+					t.Fatal(string(body))
+				}
+				var admissions, receipts, retries, audits int
+				historyCheck(t, pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM operation_admissions),(SELECT count(*) FROM delivery_operations),(SELECT retry_cycle FROM document_deliveries WHERE id=$1),(SELECT count(*) FROM authorization_audit WHERE action='estimate.delivery.retry')`, id).Scan(&admissions, &receipts, &retries, &audits))
+				if admissions != initialAdmissions || receipts+retries+audits != 0 {
+					t.Fatalf("rejected input persisted: %d %d %d %d", admissions, receipts, retries, audits)
+				}
+				var effects int
+				historyCheck(t, pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM document_delivery_events WHERE evidence->>'manual'='true')+(SELECT count(*) FROM activity_logs WHERE action='document_delivery_retried')`).Scan(&effects))
+				if effects != 0 {
+					t.Fatal("rejected input created effects", effects)
+				}
+			})
+		}
+	})
 	call("POST", "/delivery-retries", in, 403)
 	if got := call("GET", "/delivery-operations/"+in.OperationID, nil, 200)["data"].(map[string]any)["outcome"]; got != "forbidden" {
 		t.Fatal(got)

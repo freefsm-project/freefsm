@@ -28,7 +28,34 @@ const {DeliveryClient,ProtectedStore}=require('../reference/delivery-client.cjs'
  }
  try{
   await client.initialize();await client.authenticate(input.token);await client.synchronize('estimate');
-  const target=Object.keys((await client.view()).documents)[0];
+   const target=Object.keys((await client.view()).documents)[0];
+   if(input.scenario.startsWith('authority_')){
+    const delivery=input.frozenDelivery;
+    offline=true;await assert.rejects(client.stageRetry(target,delivery,'PRIVATE-RETRY-REASON'),/review_required/);offline=false;
+    assert.deepEqual((await store.load()).pending,{});
+    if(!['authority_permitted','authority_file_loss','authority_pdf_loss'].includes(input.scenario)){
+     await assert.rejects(client.reviewRetry(target,delivery),/authorization_purged/);
+     await assert.rejects(client.stageRetry(target,delivery,'PRIVATE-RETRY-REASON'),/locked_review/);
+     await client.authenticate(input.token);await client.synchronize('estimate');
+     offline=true;await assert.rejects(client.stageRetry(target,delivery,'PRIVATE-RETRY-REASON'),/review_required/);offline=false;
+     assert.deepEqual((await store.load()).pending,{});assert.equal(posts,0);return;
+    }
+    const review=await client.reviewRetry(target,delivery),s=await store.load();
+    for(const key of ['document_id','job_id','delivery_id']){
+     const {action,...wrong}=review;wrong[key]+=1000000;
+     assert.equal((await transport('/delivery-retries/review','POST',wrong,{token:s.token,epoch:s.contactEpoch})).status,404);
+    }
+    offline=true;const id=await client.stageRetry(target,delivery,'PRIVATE-RETRY-REASON');offline=false;
+    if(input.scenario!=='authority_permitted'){
+     await control(input.scenario==='authority_file_loss'?'deny-file':'deny-pdf');
+     await assert.rejects(client.synchronize('estimate'),/authorization_purged/);
+     assert(!(await store.load()).pending[id].intent);
+     await client.authenticate(input.token);await client.synchronize('estimate');
+     offline=true;await assert.rejects(client.stageRetry(target,delivery,'unauthorized repair'),/review_required/);offline=false;
+     assert.equal(posts,0);return;
+    }
+    assert.equal((await client.submit(id)).receipt.outcome,'accepted');assert.equal(posts,1);return;
+   }
   const message={pdf_version_id:input.version,confirm_stale_pdf:false,to:['private-delivery@example.test'],cc:[],bcc:[],subject:'PRIVATE-DELIVERY-MESSAGE',text_body:'PRIVATE-DELIVERY-BODY',html_body:'',extra_file_ids:[]};
   const review=await client.reviewDelivery(target,message);
   let dependency=input.scenario==='dependency'?randomUUID():undefined;
@@ -39,7 +66,9 @@ const {DeliveryClient,ProtectedStore}=require('../reference/delivery-client.cjs'
   offline=true;let id=await client.stageDelivery(target,review.review_token,dependency);offline=false;
   if(input.scenario.startsWith('retry_')){
    const receipt=(await client.submit(id)).receipt;if(input.scenario!=='retry_invalid_state'&&input.scenario!=='retry_cancelled')await control('fail');
-   offline=true;id=await client.stageRetry(target,receipt.delivery_ids[0],'PRIVATE-RETRY-REASON');offline=false;
+    offline=true;await assert.rejects(client.stageRetry(target,receipt.delivery_ids[0],'PRIVATE-RETRY-REASON'),/review_required/);offline=false;
+    await client.reviewRetry(target,receipt.delivery_ids[0]);
+    offline=true;id=await client.stageRetry(target,receipt.delivery_ids[0],'PRIVATE-RETRY-REASON');offline=false;
   }
   const original=structuredClone((await store.load()).pending[id].intent);
   for(const name of fs.readdirSync(input.directory)){
@@ -47,23 +76,49 @@ const {DeliveryClient,ProtectedStore}=require('../reference/delivery-client.cjs'
    for(const secret of ['PRIVATE-DELIVERY','private-delivery@example.test','PRIVATE-RETRY',input.token])assert(!raw.includes(Buffer.from(secret)));
   }
   const before=posts;
-  if(input.scenario==='expiry'){
+   if(input.scenario==='expiry'||input.scenario==='retry_expiry'){
    client.now=()=>Date.now()+73*3600000;
    await assert.rejects(client.view(),/authorization_lease_expired/);await assert.rejects(client.submit(id),/authorization_lease_expired/);assert.equal(posts,before);return;
-  }
+   }
+   if(input.scenario==='retry_sync_denial'){
+    await control('deny');await assert.rejects(client.synchronize('estimate'),/authorization_purged/);
+    assert(!(await store.load()).pending[id].intent);
+    await client.authenticate(input.token);await client.synchronize('estimate');
+    offline=true;await assert.rejects(client.stageRetry(target,original.delivery_id,'still unauthorized'),/review_required/);offline=false;
+    await assert.rejects(client.submit(id),/reconciliation_or_review_required/);assert.equal(posts,before);return;
+   }
+   if(input.scenario==='retry_renewal'){
+    const oldLease=(await store.load()).lease.id;await client.authenticate(input.token);
+    assert.notEqual((await store.load()).lease.id,oldLease);
+    await assert.rejects(client.stageRetry(target,original.delivery_id,'renewal'),/locked_review/);
+    await client.synchronize('estimate');
+   assert.deepEqual((await store.load()).pending[id].intent,original);
+    assert.equal((await store.load()).pending[id].reviewed.authority.lease,(await store.load()).lease.id);
+    assert.equal((await client.submit(id)).receipt.outcome,'accepted');return;
+   }
+   if(input.scenario==='retry_session'){
+    const fresh=await (await control('new-session')).json();await client.authenticate(fresh.token);await client.synchronize('estimate');
+    assert(!(await store.load()).pending[id].intent);
+    offline=true;await assert.rejects(client.stageRetry(target,original.delivery_id,'new session'),/review_required/);offline=false;
+    assert.equal(posts,before);return;
+   }
   if(input.scenario==='parent_loss'||input.scenario==='retry_parent_loss'){
    await control('parent-loss');await client.synchronize('estimate');const e=(await client.view()).pending[id];
    assert(!e.intent&&!e.reviewed);await assert.rejects(client.repairDelivery(id,review.review_token),/review_required/);assert.equal(posts,before);return;
   }
-  if(input.scenario==='restore'){
+   if(input.scenario==='restore'||input.scenario==='retry_restore'){
    const fresh=await (await control('restore')).json();await assert.rejects(client.submit(id),/locked_review/);
    client=new DeliveryClient(new ProtectedStore(input.directory,store.id),transport);
    await client.authenticate(fresh.token);await client.synchronize('estimate');
    assert.equal((await client.view()).pending[id].state,'restore_uncertain');
-   await assert.rejects(client.repairDelivery(id,review.review_token),/restore_reconciliation_required/);
+    const repair=()=>input.scenario==='retry_restore'?client.repairRetry(id,'Explicit restored retry'):client.repairDelivery(id,review.review_token);
+    await assert.rejects(repair(),/restore_reconciliation_required/);
    assert.equal((await client.reconcile(id)).state,'restore_uncertain');
    await client.synchronize('estimate');await client.acknowledgeUncertain(id);
-   const current=await client.reviewDelivery(target,message);const next=await client.repairDelivery(id,current.review_token);assert.notEqual(next,id);assert.equal(posts,before);
+    let next;
+    if(input.scenario==='retry_restore')next=await repair();
+    else {const current=await client.reviewDelivery(target,message);next=await client.repairDelivery(id,current.review_token);}
+    assert.notEqual(next,id);assert.equal(posts,before);
    assert.equal((await client.submit(next)).receipt.outcome,'accepted');return;
   }
   if(input.scenario==='revoked'){
@@ -91,20 +146,29 @@ const {DeliveryClient,ProtectedStore}=require('../reference/delivery-client.cjs'
   }
   loss=input.scenario.endsWith('_absent')?'before':'after';
   await assert.rejects(client.submit(id),/lost_/);assert.equal(posts,before+1);
-  client=new DeliveryClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();
-  assert.deepEqual((await store.load()).pending[id].intent,original);
+   client=new DeliveryClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();
+   assert.deepEqual((await store.load()).pending[id].intent,original);
+   if(input.scenario==='retry_unknown_sync_denial'){
+    await control('deny');calls.length=0;await client.synchronize('estimate');
+    assert(!calls.some(([,path])=>path==='/delivery-retries/review'));
+    assert.equal((await store.load()).pending[id].state,'unknown');
+    assert((await store.load()).pending[id].withheld);assert.equal(posts,before+1);
+   }
   if(input.scenario==='create_lost'||input.scenario==='retry_lost'){
    const child=spawnSync(process.execPath,[__filename],{input:JSON.stringify({...input,key:store.id,id,restart:true}),encoding:'utf8',timeout:30000});
    assert.equal(child.status,0,child.stdout+child.stderr);
   }
-  if(input.scenario==='scope_receipt')await control('scope-loss');
+   if(input.scenario==='scope_receipt'||input.scenario==='retry_scope_receipt')await control('scope-loss');
   calls.length=0;const result=await client.reconcile(id);assert.deepEqual(calls[0],['GET','/delivery-operations/'+id]);assert.equal(posts,before+1);
   if(input.scenario.endsWith('_absent')){
    assert.equal(result.state,'unreceived');await assert.rejects(client.retryUnreceived(id),/review_required/);
    assert.equal((await client.retryUnreceived(id,{confirm:true})).receipt.outcome,'accepted');assert.equal(posts,before+2);
   }else{
    assert.equal(result.receipt.outcome,'accepted');assert.deepEqual(Object.keys(result.receipt).sort(),['delivery_ids','operation_id','outcome']);
-   if(input.scenario==='scope_receipt'){await client.synchronize('estimate');assert.deepEqual((await client.view()).documents,{});assert(!(await store.load()).pending[id].intent);}
+    if(input.scenario==='scope_receipt'||input.scenario==='retry_scope_receipt'){
+     assert(!calls.some(([,path])=>path==='/delivery-retries/review'));
+     await client.synchronize('estimate');assert.deepEqual((await client.view()).documents,{});assert(!(await store.load()).pending[id].intent);
+    }
   }
  }finally{await client.logout();assert(!fs.existsSync(input.directory+'/cache'));}
  console.log('PASS protected Delivery '+input.scenario);

@@ -213,6 +213,7 @@ func New(deps Dependencies) http.Handler {
 		r.Get("/pdf-operations/{operation}", h.pdfReceipt)
 		r.Get("/delivery-operations/{operation}", h.deliveryReceipt)
 		r.Post("/delivery-retries", h.deliveryRetry)
+		r.Post("/delivery-retries/review", h.deliveryRetryReview)
 		r.Post("/invoices/{id}/payments", h.boundedPayment)
 		r.Get("/invoices/{id}/payment-methods", h.paymentMethods)
 		r.Get("/payment-operations/{operation}", h.paymentReceipt)

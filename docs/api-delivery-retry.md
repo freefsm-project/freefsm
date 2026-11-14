@@ -16,8 +16,12 @@ original Job binding under the authorization commit fence.
 200 returns `{ "data": { "operation_id": "…", "outcome": "accepted",
 "delivery_ids": [123] } }`. This acknowledges the command, not mail handoff.
 403/404/409 domain rejection retains a terminal receipt (`forbidden`, `not_found`,
-`source_drift`, `cancelled`, or `invalid_state`). Invalid wire input is 400;
-identity/type/client/intent misuse is 409. Infrastructure/audit failure is 503 and
+`source_drift`, `cancelled`, or `invalid_state`). Malformed JSON is 400
+`invalid_request`; unknown or incorrectly typed wire fields are 400 `invalid_json`.
+Missing/invalid semantic input, blank reason, nil or noncanonical operation UUID,
+and future `occurred_at` are 422 `invalid_document`, with no admission, receipt or
+effect. Reuse of an admitted identity with different type/client/intent is 409.
+Infrastructure/audit failure is 503 and
 rolls back admission, effect and receipt together.
 
 Always reconcile `GET /api/v1/delivery-operations/{operation_id}` after response
@@ -44,6 +48,25 @@ and intent; a later successful prerequisite never revives its terminal receipt.
 
 ## Protected reference handoff
 
+Before offline retry staging, call `POST /api/v1/delivery-retries/review` with
+`document_type`, `document_id`, `job_id`, and `delivery_id`. Its read-only response
+contains those exact identities and `action: "delivery.retry"` under `data`.
+It checks current independent Delivery Request and PDF Download grants, plus
+File Download when the **frozen** Delivery has extras. It never reloads live or
+removed File bytes, selects another PDF, or requires PDF Generate. Wrong original
+parent/inaccessible target is 404; denied action on a visible target is 403.
+Wire and semantic validation use the same 400/422 distinction described above.
+Review creates no admission, receipt, or retry effect. It establishes staging
+authority; current lifecycle and authorization still govern command acceptance.
+
+The protected client binds this capability to its current lease identity and
+deployment/user/client authority. Document View synchronization and lease issuance
+alone cannot authorize staging. Cache withholding, synchronization, renewal,
+session change, expiry, and restore invalidate old cached reviews; pending intent
+is exposed only after its exact target passes a fresh authorized retry review.
+Unknown outcomes remain receipt-first, including after scope loss, before any
+pending authority refresh or explicit unchanged resubmission.
+
 Persist the complete retry intent in the existing encrypted store under the
 original deployment/user/client. Use finite lease and original-scope rules for
 staging, receipt-first reconciliation and explicit same-intent retry only after
@@ -52,7 +75,9 @@ never silently replace document/Job/Delivery IDs. Handle all terminal receipt
 outcomes, including creation's `invalid_dependency` and `dependency_failed`.
 `DeliveryClient` in `internal/api/v1/reference/delivery-client.cjs` implements this
 using `CommercialClient` and `ProtectedStore`. `reviewDelivery` records the exact
-message review; `stageDelivery` and `stageRetry` only persist pending intent.
+message review; `reviewRetry(target, deliveryID)` records independently authorized
+retry capability. `stageDelivery` and `stageRetry` only persist pending intent;
+`stageRetry` refuses without that lease-bound capability.
 `submit` performs an explicit online command. After uncertainty, `reconcile`
 queries the receipt before any target review, and `retryUnreceived({confirm:true})`
 rechecks absence before submitting the unchanged original identity. Terminal repair

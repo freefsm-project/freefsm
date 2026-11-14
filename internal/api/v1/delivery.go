@@ -148,3 +148,24 @@ func (h *handler) deliveryRetry(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, 200, receipt)
 }
+
+func (h *handler) deliveryRetryReview(w http.ResponseWriter, r *http.Request) {
+	if r.URL.RawQuery != "" {
+		writeError(w, 400, "invalid_request", "Delivery retry review accepts no query parameters")
+		return
+	}
+	var in delivery.RetryTarget
+	if !decodeExactJSON(w, r, &in, "document_type", "document_id", "job_id", "delivery_id") {
+		return
+	}
+	if h.deps.Delivery == nil {
+		writeError(w, 503, "unavailable", "Delivery service unavailable")
+		return
+	}
+	review, err := h.deps.Delivery.ReviewRetry(r.Context(), in)
+	if err != nil {
+		commercialError(w, err)
+		return
+	}
+	writeJSON(w, 200, review)
+}
