@@ -1,11 +1,16 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http/httptest"
 	"os"
+	"os/exec"
+	"strings"
 	"testing"
+	"time"
 
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -51,7 +56,25 @@ func TestBoundedPaymentBackupRestoreReconciliationAPI(t *testing.T) {
 	methods, err := settlement.New(src.pool).ConfiguredPaymentMethods(ctx, authorization.Actor{UserID: src.actor, Channel: "web"})
 	historyCheck(t, err)
 	historyCheck(t, settlement.New(src.pool).RenamePaymentMethod(ctx, authorization.Actor{UserID: src.actor, Channel: "web"}, settlement.Cash, "Notes and coins", methods[0].Revision))
-	op, uncertain := newOperationKey(), newOperationKey()
+	op := newOperationKey()
+	var uncertain string
+	directory, key := t.TempDir(), newOperationKey()
+	historyCheck(t, os.Chmod(directory, 0700))
+	protected := func(phase, token string) string {
+		server := httptest.NewServer(api)
+		defer server.Close()
+		input, err := json.Marshal(map[string]string{"url": server.URL, "token": token, "directory": directory, "key": key, "phase": phase})
+		historyCheck(t, err)
+		bounded, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+		cmd := exec.CommandContext(bounded, "node", "../api/v1/testdata/payment-restored-history.cjs")
+		cmd.Stdin = bytes.NewReader(input)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("protected backup %s: %v\n%s", phase, err, output)
+		}
+		return strings.TrimSpace(string(output))
+	}
 	path := fmt.Sprintf("/invoices/%d/payments", id)
 	command := func(op string) string {
 		return fmt.Sprintf(`{"operation_id":%q,"job_id":%d,"amount":"25.00","method":"cash","date":"2026-01-02"}`, op, j.ID)
@@ -63,10 +86,7 @@ func TestBoundedPaymentBackupRestoreReconciliationAPI(t *testing.T) {
 	tables := []string{"invoice_payments", "payment_invoice_allocations", "invoices", "bounded_payment_operations", "operation_admissions", "payment_method_labels"}
 	before := historyDurableRows(t, src.pool, tables)
 	src.roundTripTo(t, dst, func() {
-		w := boundedAPICall(api, src.mobile, "POST", path, command(uncertain))
-		if w.Code != 200 {
-			t.Fatalf("post-backup effect %d: %s", w.Code, w.Body.String())
-		}
+		uncertain = protected("accept", src.mobile)
 	})
 	historyCheck(t, dst.manager.RefreshConnections())
 	historyEqual(t, "bounded settlement and operation identity", historyDurableRows(t, dst.pool, tables), before)
@@ -88,4 +108,12 @@ func TestBoundedPaymentBackupRestoreReconciliationAPI(t *testing.T) {
 	}
 	// No replacement/replay is submitted for that uncertain post-backup intent.
 	historyEqual(t, "reconciliation remains read only", historyDurableRows(t, dst.pool, tables), before)
+	t.Log(protected("recover", fresh))
+	var payments, credits int
+	var amount int64
+	historyCheck(t, dst.pool.QueryRow(ctx, `SELECT count(*),sum(amount_cents) FROM invoice_payments WHERE invoice_id=$1`, id).Scan(&payments, &amount))
+	historyCheck(t, dst.pool.QueryRow(ctx, `SELECT count(*) FROM customer_credits`).Scan(&credits))
+	if payments != 2 || amount != 5000 || credits != 0 {
+		t.Fatalf("reviewed recovery effects: payments=%d amount=%d credits=%d", payments, amount, credits)
+	}
 }

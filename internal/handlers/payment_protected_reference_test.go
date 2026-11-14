@@ -22,7 +22,7 @@ import (
 )
 
 func TestPaymentProtectedReferenceHTTP(t *testing.T) {
-	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "invalid_receipt", "tampered_store"} {
+	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_terminal_missing", "invalid_receipt", "tampered_store"} {
 		t.Run(scenario, func(t *testing.T) {
 			pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
 			ctx := context.Background()
@@ -64,6 +64,10 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 					_, err = pool.Exec(ctx, `DROP TRIGGER protected_payment_failure ON bounded_payment_operations; DROP FUNCTION protected_payment_failure()`)
 				case "/__fixture/revoke":
 					err = sessions.RevokeMobile(ctx, token)
+				case "/__fixture/forget-receipt":
+					// Deliberate receipt-loss simulation, not a database restore. The
+					// real backup journey is covered by the backup reconciliation test.
+					_, err = pool.Exec(ctx, `ALTER TABLE bounded_payment_operations DISABLE TRIGGER USER; DELETE FROM bounded_payment_operations; ALTER TABLE bounded_payment_operations ENABLE TRIGGER USER`)
 				case "/__fixture/restore", "/__fixture/new-session":
 					if r.URL.Path == "/__fixture/restore" {
 						_, err = pool.Exec(ctx, `UPDATE session_instance SET epoch=gen_random_uuid(); DELETE FROM sessions`)

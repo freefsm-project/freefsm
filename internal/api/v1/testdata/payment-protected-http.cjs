@@ -34,7 +34,7 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
   offline=true;
   for(const amount of ['0.00','-1.00','NaN','1.001'])await assert.rejects(client.stagePayment(target,{...values,amount}),/review_required/);
   await assert.rejects(client.stagePayment(target,{...values,method:'other'}),/review_required/);
-  const id=await client.stagePayment(target,{...values,...(input.scenario==='terminal'?{date:'2999-01-01'}:{})});offline=false;
+   const id=await client.stagePayment(target,{...values,...(['terminal','restore_terminal_missing'].includes(input.scenario)?{date:'2999-01-01'}:{})});offline=false;
   const original=structuredClone((await store.load()).pending[id].intent);
   for(const name of fs.readdirSync(input.directory))for(const secret of ['PRIVATE-PAYMENT',input.token])assert(!fs.readFileSync(input.directory+'/'+name).includes(Buffer.from(secret)));
   if(input.scenario==='tampered_store'){
@@ -42,7 +42,40 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
    await assert.rejects(client.view(),/protected_store_invalid/);assert.equal(posts,0);return;
   }
   if(input.scenario==='expiry'){client.now=()=>Date.now()+73*3600000;await assert.rejects(client.view(),/authorization_lease_expired/);await assert.rejects(client.submit(id),/authorization_lease_expired/);assert.equal(posts,0);return;}
-  if(input.scenario==='revoked'){await control('revoke');await assert.rejects(client.submit(id),/authorization_purged/);assert(!(await store.load()).pending[id].intent);return;}
+   if(input.scenario==='revoked'){await control('revoke');await assert.rejects(client.submit(id),/authorization_purged/);assert(!(await store.load()).pending[id].intent);return;}
+   if(input.scenario.startsWith('restore_completed_')||input.scenario==='restore_terminal_missing'){
+    const terminal=input.scenario==='restore_terminal_missing';
+    await client.submit(id);const prior=(await client.reconcile(id)).receipt;
+    assert.equal(prior.outcome,terminal?'invalid_payment':'accepted');
+    if(terminal)await client.authenticate(await fresh('new-session')); // ordinary purge removes private terminal intent
+    assert(!(await store.load()).pending[id].intent);
+    const existing=input.scenario==='restore_completed_existing';
+    if(!existing)await control('forget-receipt');
+    if(input.scenario==='restore_completed_scope_loss')await control('scope-loss');
+    for(let cycle=0;cycle<(input.scenario==='restore_completed_repeated'?2:1);cycle++){
+     const token=await fresh('restore');
+     client=new PaymentClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();
+     await client.authenticate(token);await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);
+     await client.synchronize();
+     await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);
+     const result=await client.reconcile(id);
+     assert.equal(posts,1);assert(!(await store.load()).pending[id].intent);
+     if(existing){assert.deepEqual(result.receipt,prior);assert.equal(result.state,'accepted');break;}
+     assert.equal(result.state,'restore_uncertain');assert.equal(result.receipt,undefined);
+     assert.deepEqual((await store.load()).pending[id].historicalReceipts,[prior]);
+     await assert.rejects(client.acknowledgeUncertain(id),/locked_review/);
+     await client.synchronize();await assert.rejects(client.discard(id),/reconciliation_required/);
+     await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);
+     await client.acknowledgeUncertain(id);assert.equal(posts,1);
+    }
+    await client.synchronize();
+    if(input.scenario==='restore_completed_scope_loss')await assert.rejects(client.stagePayment(target,values),/review_required/);
+    else {const next=await client.stagePayment(target,values);assert.notEqual(next,id);assert.equal(posts,1);}
+    // Staging never submits, and retained uncertainty is never discarded.
+    if(!existing)await assert.rejects(client.discard(id),/reconciliation_required/);
+    if(terminal){const next=Object.keys((await store.load()).pending).find(k=>k!==id);assert.equal((await client.submit(next)).receipt.outcome,'accepted');}
+    return;
+   }
   if(input.scenario==='restore'){
    const token=await fresh('restore');await assert.rejects(client.submit(id),/locked_review/);
    client=new PaymentClient(new ProtectedStore(input.directory,store.id),transport);
