@@ -47,6 +47,15 @@ and a new explicit acknowledgment. A later restore resets these gates even when
 the prior authority was purged. Ordinary unknown/purged operations without restore
 provenance do not acquire this recovery path; changing users removes prior-user work.
 
+Each Payment also retains its observed server `generation` independently of a
+resolved review or cached authority. Finding a receipt resolves `restoreReview`
+but does not erase this provenance. After ordinary purge, validated same-user
+authentication compares that generation before returning: a later epoch archives
+the former receipt and renews locked review immediately, even before synchronization
+or lookup. Same-epoch login does not manufacture restore uncertainty. A legacy
+receipt with no recoverable generation is treated as historical until lookup;
+an ordinary unknown operation gains no review path merely from a missing receipt.
+
 No synchronization, restart or authentication automatically submits work. Uncertain
 financial operation identities cannot be discarded to bypass reconciliation.
 There are no Credit, refund or reversal operations in this adapter.

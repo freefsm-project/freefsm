@@ -9,24 +9,46 @@ const fields=['amount','method','date','other_description','reference','note'];
 // absent receipt is not evidence that money was not received, even after restore.
 class PaymentClient extends CommercialClient {
   ownsPending(e){return e.family==='payment'||super.ownsPending(e);}
+  async purge(s,issuance=null){
+    // Upgrade existing protected entries from established authority before that
+    // authority is discarded. This is provenance, never a reusable grant.
+    for(const e of Object.values(s.pending))if(e.family==='payment'&&!e.generation&&s.authority?.epoch)e.generation=s.authority.epoch;
+    return super.purge(s,issuance);
+  }
+  archiveReceipt(e){
+    if(!e.receipt)return;
+    e.historicalReceipts||=[];
+    if(!e.historicalReceipts.some(r=>JSON.stringify(r)===JSON.stringify(e.receipt)))e.historicalReceipts.push(clone(e.receipt));
+    delete e.receipt;
+  }
+  authenticated(s,previous){
+    super.authenticated(s,previous);
+    for(const e of Object.values(s.pending))if(e.family==='payment'){
+      const generation=e.generation||previous?.epoch;
+      // A legacy purged receipt without an epoch is historical evidence only;
+      // fresh login cannot certify it as current without original-ID lookup.
+      if(generation&&generation!==s.authority.epoch||!generation&&e.receipt){
+        this.archiveReceipt(e);
+        delete e.lookupMissing;delete e.reconciled;
+        if(e.state!=='replaced'){e.restoreReview={epoch:null};e.state='locked_review';}
+      }
+      e.generation=s.authority.epoch;
+    }
+  }
   purgedOperation(e){
     const safe=super.purgedOperation(e);
     if(e.family!=='payment')return safe;
     // Restore provenance is not authority or private financial intent. Keep it
     // across ordinary loss, but never carry lookup/acknowledgment through purge.
     const restoreReview=e.restoreReview||(['locked_review','restore_uncertain'].includes(e.state)?{epoch:null}:undefined);
-    return {...safe,historicalReceipts:e.historicalReceipts,restoreReview,financialUncertain:!!e.financialUncertain||['unknown','unreceived','locked_review','restore_uncertain'].includes(e.state)};
+    return {...safe,generation:e.generation,historicalReceipts:e.historicalReceipts,restoreReview,financialUncertain:!!e.financialUncertain||['unknown','unreceived','locked_review','restore_uncertain'].includes(e.state)};
   }
   beginRestore(s){
     for(const e of Object.values(s.pending))if(e.family==='payment'){
       if(e.state!=='replaced')e.restoreReview={epoch:null};
       // This is evidence of a prior server history, not a receipt in the restored
       // history. Retain only the same safe allowlist used by receipt lookup.
-      if(e.receipt){
-        e.historicalReceipts||=[];
-        if(!e.historicalReceipts.some(r=>JSON.stringify(r)===JSON.stringify(e.receipt)))e.historicalReceipts.push(clone(e.receipt));
-        delete e.receipt;
-      }
+      this.archiveReceipt(e);
     }
     super.beginRestore(s);
   }
@@ -79,7 +101,7 @@ class PaymentClient extends CommercialClient {
     const method=doc.paymentMethods.find(m=>m.id===values.method);
     if(!method||values.method==='other'&&(typeof values.other_description!=='string'||!values.other_description.trim())||fields.some(k=>values[k]!==undefined&&typeof values[k]!=='string'))throw Error('review_required');
     const id=randomUUID();
-    s.pending[id]={family:'payment',kind:'invoice',target,customer:doc.customer_id,state:'pending',reviewed:{document_id:doc.legacy_id,method:clone(method)},intent:{...clone(values),operation_id:id,job_id:doc.job_id,occurred_at:new Date(this.now()).toISOString()}};
+    s.pending[id]={family:'payment',generation:s.lease.epoch,kind:'invoice',target,customer:doc.customer_id,state:'pending',reviewed:{document_id:doc.legacy_id,method:clone(method)},intent:{...clone(values),operation_id:id,job_id:doc.job_id,occurred_at:new Date(this.now()).toISOString()}};
     return id;
   }
   async stagePayment(target,values){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const id=this.stagePaymentIn(s,target,values);await this.persist(s);return id;});}

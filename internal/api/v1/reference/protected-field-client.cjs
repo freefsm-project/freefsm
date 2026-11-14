@@ -119,10 +119,12 @@ class ProtectedFieldClient {
   s.clocks={};s.clockJobs={};s.clockCapabilities=null;s.clockLease=null;s.clockIssuance=null;s.clockCursor=null;
   s.authority={epoch:l.epoch,user:l.user_id,client:clientIdentity(token)};s.syncCursor=null;
   s.issuance={id:operation,state:'accepted'};s.user=l.user_id;s.lease=l;s.contactEpoch=l.epoch;s.leaseLocked=false;s.synced=false;s.cache={};s.notes={};s.highWater=Math.max(this.now(),issued);
-  // Accepted issuance can reveal a restored epoch. Its review lock must survive
-  // a failed final write, not just the earlier unknown-issuance checkpoint.
-  await this.persistAuthorityLoss(s);return {expires_at:l.expires_at,state:'synchronization_required'};
- });}
+   // Accepted issuance can reveal a restored epoch. Its review lock must survive
+   // a failed final write, not just the earlier unknown-issuance checkpoint.
+   this.authenticated(s,previous);
+   await this.persistAuthorityLoss(s);return {expires_at:l.expires_at,state:'synchronization_required'};
+  });}
+  authenticated(s,previous){}
  reviewedDependencies(dependencies){
    if(!Array.isArray(dependencies)||dependencies.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)))throw Error('review_required');
    return clone(dependencies);
