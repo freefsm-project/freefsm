@@ -201,7 +201,7 @@ func (s *Service) AcceptBoundedPayment(ctx context.Context, a authorization.Acto
 				r.Outcome = "not_found"
 			case errors.Is(effect, authorization.ErrForbidden):
 				r.Outcome = "forbidden"
-			case errors.Is(effect, ErrVoid), errors.Is(effect, ErrArchived), errors.Is(effect, ErrHidden):
+			case errors.Is(effect, ErrVoid), errors.Is(effect, ErrArchived), errors.Is(effect, ErrHidden), errors.Is(effect, ErrCustomerArchived):
 				r.Outcome = "invoice_ineligible"
 			case errors.Is(effect, ErrInvalidAmount):
 				r.Outcome = "invalid_payment"

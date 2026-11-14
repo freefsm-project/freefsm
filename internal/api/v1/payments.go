@@ -11,6 +11,9 @@ import (
 )
 
 func (h *handler) boundedPayment(w http.ResponseWriter, r *http.Request) {
+	if !paymentQuery(w, r) {
+		return
+	}
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {
 		writeError(w, 403, "forbidden", "Permission denied")
@@ -49,6 +52,9 @@ func (h *handler) boundedPayment(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) paymentReceipt(w http.ResponseWriter, r *http.Request) {
+	if !paymentQuery(w, r) {
+		return
+	}
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {
 		writeError(w, 403, "forbidden", "Permission denied")
@@ -63,6 +69,9 @@ func (h *handler) paymentReceipt(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) paymentMethods(w http.ResponseWriter, r *http.Request) {
+	if !paymentQuery(w, r) {
+		return
+	}
 	req, ok := authorization.FromContext(r.Context())
 	if !ok {
 		writeError(w, 403, "forbidden", "Permission denied")
@@ -84,6 +93,14 @@ func (h *handler) paymentMethods(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, 200, choices)
+}
+
+func paymentQuery(w http.ResponseWriter, r *http.Request) bool {
+	if r.URL.RawQuery != "" {
+		writeError(w, 400, "invalid_request", "Payment endpoints accept no query parameters")
+		return false
+	}
+	return true
 }
 
 func paymentError(w http.ResponseWriter, err error) {
