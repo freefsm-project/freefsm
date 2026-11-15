@@ -7,7 +7,7 @@ const clientIdentity=token=>token?createHash('sha256').update(token).digest('hex
 // Only this envelope survives projection invalidation. Every other top-level
 // field belongs to the active adapter's disposable projection, including future
 // fields. Pending work has its own domain-specific recovery policy.
-const envelope=()=>({version:1,user:null,token:null,lease:null,authority:null,contactEpoch:null,issuance:null,leaseLocked:false,pending:{},restore:false,highWater:0});
+const envelope=()=>({version:1,server:null,workflow:null,user:null,token:null,lease:null,authority:null,contactEpoch:null,issuance:null,leaseLocked:false,pending:{},restore:false,highWater:0});
 const envelopeFields=new Set(Object.keys(envelope()));
 const emptyProjection=()=>({cache:{},notes:{},clocks:{},clockJobs:{},clockCapabilities:null,clockLease:null,clockIssuance:null,syncCursor:null,clockCursor:null,synced:false});
 const fresh=()=>({...envelope(),...emptyProjection()});
@@ -64,9 +64,9 @@ class ProtectedFieldClient {
    paymentRecovery.preserveGeneration(s);
   // Retain only nonsensitive operation identities/dispositions for safe lookup.
   const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]=this.purgedOperation(e);
-   const user=s.user;
+   const user=s.user,server=s.server,workflow=s.workflow;
    for(const key of Object.keys(s))delete s[key];
-   Object.assign(s,fresh(),{pending:safe,user,issuance});this.invalidateProjection(s);await this.persistAuthorityLoss(s);
+   Object.assign(s,fresh(),{pending:safe,user,issuance,server,workflow});this.invalidateProjection(s);await this.persistAuthorityLoss(s);
  }
   purgedOperation(e){return paymentRecovery.purged(e,{state:'purged',receipt:e.receipt,family:e.family,receipt_family:e.receipt_family});}
  async purgeDeniedIssuance(s,receipt){

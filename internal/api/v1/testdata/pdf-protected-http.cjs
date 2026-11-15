@@ -62,8 +62,10 @@ const {CommercialClient}=require('../reference/commercial-client.cjs');
   assert.equal(posts,0);assert.equal((await pdf.view()).pending[id].state,'pending');
   for(const name of fs.readdirSync(input.directory))assert(!fs.readFileSync(input.directory+'/'+name).includes(Buffer.from('ENCRYPTED-PDF-REVIEW')));
   offline=false;
-  const commercial=new CommercialClient(store,transport);
-  await commercial.synchronize(input.kind);
+   const commercial=new CommercialClient(store,transport);
+   await commercial.synchronize(input.kind);
+   await assert.rejects(pdf.view(),{message:'locked_review'},'Commercial synchronization cannot authorize PDF cached reads');
+   await pdf.synchronize(input.kind);
   assert.deepEqual((await pdf.view()).pending[id].intent,original,'commercial sync purged supported PDF intent');
   if(input.scenario==='scope_loss'){
    await control('scope-loss');await pdf.synchronize(input.kind);
@@ -108,7 +110,8 @@ const {CommercialClient}=require('../reference/commercial-client.cjs');
    }finally{armPolicy=false;ioArmed=false;fs.chmodSync(input.directory,0o700);store.quarantined=false;fs.unlinkSync(input.directory+'/.writer');}
    return;
   }
-  if(input.scenario==='conversion'||input.scenario==='reversion'){
+   if(input.scenario==='conversion'||input.scenario==='reversion'){
+    await commercial.synchronize(input.kind);
    const doc=(await commercial.view()).documents[target];
    const conversion=await commercial.stageConversion(target,doc.revision,input.kind==='invoice'?{cycle_id:doc.cycle_id}:{});
    assert.equal((await commercial.submit(conversion)).receipt.outcome,'accepted');
