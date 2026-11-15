@@ -64,9 +64,13 @@ func TestBackupCrashChild(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	m.checkpoint = func(point string) error {
-		if point == spec.Checkpoint {
-			if e := atomicJSON(spec.Ready, point); e != nil {
+	committed := false
+	checkpoint := func(point string) error {
+		if point == "committed-durable" {
+			committed = true
+		}
+		if point == spec.Checkpoint || (committed && spec.Checkpoint == "selected-status-directory-sync" && point == "status-directory-sync") {
+			if e := atomicJSON(spec.Ready, spec.Checkpoint); e != nil {
 				return e
 			}
 			select {}
@@ -74,6 +78,7 @@ func TestBackupCrashChild(t *testing.T) {
 		return nil
 	}
 	if spec.Mode == "recover" {
+		m.checkpoint = checkpoint
 		if spec.Archive != "" {
 			t.Fatal("recovery must not receive an archive")
 		}
@@ -86,6 +91,7 @@ func TestBackupCrashChild(t *testing.T) {
 	if e = m.Recover(context.Background()); e != nil {
 		t.Fatal(e)
 	}
+	m.checkpoint = checkpoint
 	f, e := os.Open(spec.Archive)
 	if e != nil {
 		t.Fatal(e)
@@ -99,6 +105,9 @@ func TestBackupCrashChild(t *testing.T) {
 	op = awaitOperation(t, m, 1, op.ID)
 	if op.Phase != "ready" {
 		t.Fatalf("stage: %+v", op)
+	}
+	if e = atomicJSON(spec.Ready+".operation", op.ID); e != nil {
+		t.Fatal(e)
 	}
 	op, e = m.StartRestoreFor(context.Background(), actor, op.ID, "destination", "destination")
 	if e != nil {
@@ -119,7 +128,7 @@ func awaitOperation(t *testing.T, m *Manager, actor int64, id string) Operation 
 		if e != nil {
 			t.Fatal(e)
 		}
-		if op.Phase == "ready" || op.Phase == "complete" || op.Phase == "failed" {
+		if op.Phase == "ready" || op.Phase == "complete" || op.Phase == "failed" || op.Phase == "recovery-required" {
 			m.wg.Wait() // terminal status is published immediately before releasing the flock
 			return op
 		}
@@ -264,7 +273,7 @@ func stageCrashArchive(t *testing.T, m *Manager, p string) Operation {
 	return op
 }
 
-func runCrashChild(t *testing.T, m *Manager, archive, mode, checkpoint string) {
+func runCrashChild(t *testing.T, m *Manager, archive, mode, checkpoint string) string {
 	t.Helper()
 	dir := t.TempDir()
 	spec := crashChildSpec{DSN: m.cfg.DSN, UploadDir: m.cfg.UploadDir, StateDir: m.cfg.StateDir, Archive: archive, Mode: mode, Checkpoint: checkpoint, Ready: filepath.Join(dir, "ready.json"), Activity: m.cfg.ActivitySink != nil}
@@ -317,7 +326,14 @@ func runCrashChild(t *testing.T, m *Manager, archive, mode, checkpoint string) {
 				if !ok || status.Signal() != syscall.SIGKILL {
 					t.Fatalf("child not SIGKILLed: %v", e)
 				}
-				return
+				var id string
+				if mode == "restore" {
+					b, err := os.ReadFile(spec.Ready + ".operation")
+					if err != nil || json.Unmarshal(b, &id) != nil || id == "" {
+						t.Fatalf("missing original operation capability: %v", err)
+					}
+				}
+				return id
 			}
 		}
 		select {
@@ -326,7 +342,7 @@ func runCrashChild(t *testing.T, m *Manager, archive, mode, checkpoint string) {
 			if checkpoint != "" || e != nil {
 				t.Fatalf("child exited before expected checkpoint %q: %v\n%s", checkpoint, e, output.String())
 			}
-			return
+			return ""
 		case <-deadline.C:
 			t.Fatalf("child did not reach %q\n%s", checkpoint, output.String())
 		case <-ticker.C:

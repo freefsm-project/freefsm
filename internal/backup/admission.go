@@ -195,8 +195,14 @@ func (m *Manager) finishAdmission(ctx context.Context) error {
 	if err = m.advanceResolution(b, resolutionReady); err != nil {
 		return err
 	}
+	if err = m.check("release-ready"); err != nil {
+		return err
+	}
 	m.releaseBinding = &b
-	return m.clear()
+	if err = m.clear(); err != nil {
+		return err
+	}
+	return m.check("admission-opened")
 }
 
 // Startup retains operation and exclusive maintenance through recovery and the

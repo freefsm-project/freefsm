@@ -276,10 +276,16 @@ func (m *Manager) resolve(ctx context.Context, j journal) error {
 	if e = m.advanceResolution(binding, resolutionResolved); e != nil {
 		return e
 	}
+	if e = m.check("resolution-resolved"); e != nil {
+		return e
+	}
 	if e := m.cleanupRecovery(dir); e != nil {
 		return e
 	}
 	if e := os.Remove(m.journalPath()); e != nil {
+		return e
+	}
+	if e := m.check("journal-removed"); e != nil {
 		return e
 	}
 	return syncDir(m.root)
@@ -318,6 +324,9 @@ func (m *Manager) cleanupRecovery(dir string) error {
 		}
 	}
 	if err = os.Remove(dir); err != nil {
+		return err
+	}
+	if err = m.check("recovery-directory-sync"); err != nil {
 		return err
 	}
 	return syncDir(m.root)
