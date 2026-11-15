@@ -22,7 +22,7 @@ import (
 )
 
 func TestPaymentProtectedReferenceHTTP(t *testing.T) {
-	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_completed_grant_loss", "restore_terminal_missing", "restore_purge_before_lookup", "restore_purge_after_lookup", "restore_purge_after_ack", "restore_purge_other_user", "ordinary_purge_missing", "generation_session_missing", "generation_grant_missing", "generation_terminal_missing", "generation_terminal_existing", "generation_existing", "generation_other_user", "invalid_receipt", "tampered_store"} {
+	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_completed_grant_loss", "restore_terminal_missing", "restore_purge_before_lookup", "restore_purge_after_lookup", "restore_purge_after_ack", "restore_purge_other_user", "ordinary_purge_missing", "generation_session_missing", "generation_grant_missing", "generation_terminal_missing", "generation_terminal_existing", "generation_existing", "generation_other_user", "invalid_receipt", "tampered_store", "shared_commercial", "shared_pdf", "shared_delivery", "shared_notes", "shared_clocks", "shared_creation", "shared_purge", "shared_other_user", "shared_ordinary_missing", "shared_restore_before_lookup", "shared_restore_after_lookup", "shared_restore_after_ack", "shared_generation"} {
 		t.Run(scenario, func(t *testing.T) {
 			pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
 			ctx := context.Background()
@@ -172,14 +172,18 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 			}
 			t.Log(string(output))
 			want := 1
-			if scenario == "absent" || scenario == "ordinary_purge_missing" || strings.HasPrefix(scenario, "generation_terminal_") || scenario == "expiry" || scenario == "revoked" || scenario == "tampered_store" {
+			if scenario == "absent" || scenario == "ordinary_purge_missing" || scenario == "shared_ordinary_missing" || strings.HasPrefix(scenario, "generation_terminal_") || scenario == "expiry" || scenario == "revoked" || scenario == "tampered_store" {
 				want = 0
 			}
 			var payments, credits int
 			var amount int64
 			historyCheck(t, pool.QueryRow(ctx, `SELECT count(*),coalesce(sum(amount_cents),0) FROM invoice_payments WHERE invoice_id=$1`, created.Data.ID).Scan(&payments, &amount))
 			historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM customer_credits`).Scan(&credits))
-			if payments != want || amount != int64(want)*10000 || credits != 0 {
+			wantAmount := int64(want) * 10000
+			if strings.HasPrefix(scenario, "shared_") {
+				wantAmount = int64(want) * 2500 // Remaining due cannot mask duplicate new-ID acceptance.
+			}
+			if payments != want || amount != wantAmount || credits != 0 {
 				t.Fatalf("effects: payments=%d amount=%d credits=%d", payments, amount, credits)
 			}
 			if scenario == "rename" {

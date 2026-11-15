@@ -27,18 +27,75 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
  // JSON-returning controls need their body intact.
  const fresh=async action=>{const r=await fetch(input.url+'/__fixture/'+action,{method:'POST',headers:{Authorization:'Bearer '+input.token}});assert(r.ok);return (await r.json()).token;};
  let client=new PaymentClient(store,transport);
- if(input.restart){await client.initialize();assert.equal((await client.reconcile(input.id)).receipt.outcome,'accepted');assert.equal(posts,0);return;}
+  if(input.restart){await client.initialize();assert.equal((await client.reconcile(input.id)).receipt.outcome,'accepted');assert.equal(posts,0);return;}
+  if(input.sharedRestart){await client.initialize();await client.synchronize();await assert.rejects(client.stagePayment(input.target,input.values),/reconciliation_required/);await assert.rejects(client.discard(input.id),/reconciliation_required/);assert.equal(posts,0);return;}
  try{
   await client.initialize();await client.authenticate(input.token);await client.synchronize();
   const target=Object.keys((await client.view()).documents)[0];assert(target);
-  const values={amount:'100.00',method:'cash',date:'2026-01-02',reference:'PRIVATE-PAYMENT-REFERENCE',note:'PRIVATE-PAYMENT-NOTE'};
+   const values={amount:input.scenario.startsWith('shared_')?'25.00':'100.00',method:'cash',date:'2026-01-02',reference:'PRIVATE-PAYMENT-REFERENCE',note:'PRIVATE-PAYMENT-NOTE'};
   offline=true;
   for(const amount of ['0.00','-1.00','NaN','1.001'])await assert.rejects(client.stagePayment(target,{...values,amount}),/review_required/);
   await assert.rejects(client.stagePayment(target,{...values,method:'other'}),/review_required/);
     const id=await client.stagePayment(target,{...values,...(['terminal','restore_terminal_missing'].includes(input.scenario)||input.scenario.startsWith('generation_terminal_')?{date:'2999-01-01'}:{})});offline=false;
   const original=structuredClone((await store.load()).pending[id].intent);
   for(const name of fs.readdirSync(input.directory))for(const secret of ['PRIVATE-PAYMENT',input.token])assert(!fs.readFileSync(input.directory+'/'+name).includes(Buffer.from(secret)));
-  if(input.scenario==='tampered_store'){
+   if(input.scenario.startsWith('shared_')){
+    const adapters={
+     commercial:require('../reference/commercial-client.cjs').CommercialClient,
+     pdf:require('../reference/pdf-client.cjs').PDFClient,
+     delivery:require('../reference/delivery-client.cjs').DeliveryClient,
+     notes:require('../reference/offline-notes-client.cjs').OfflineFieldClient,
+     clocks:require('../reference/offline-clocks-client.cjs').OfflineClocks,
+     creation:require('../reference/document-creation-client.cjs').DocumentCreationClient,
+    };
+    const family=input.scenario.slice(7),Adapter=adapters[family]||adapters.commercial;
+    const reopen=async()=>{client=new PaymentClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();};
+    const other=()=>new Adapter(new ProtectedStore(input.directory,store.id),transport);
+    const syncOther=async()=>{const c=other();await c.initialize();await c.synchronize(['notes','clocks','creation'].includes(family)?false:'invoice');return c;};
+    const safe=async()=>{const e=(await store.load()).pending[id];assert(e);for(const k of ['intent','reviewed','target','customer'])assert.equal(e[k],undefined,k);assert(!JSON.stringify(e).includes('PRIVATE-'));return e;};
+    const blocked=async()=>{await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);await assert.rejects(client.discard(id),/reconciliation_required/);};
+    const restored=family.startsWith('restore_')||family==='generation';
+    let prior;
+    if(restored){
+     await client.submit(id);prior=(await client.reconcile(id)).receipt;
+     if(family!=='generation'){
+      await control('forget-receipt');await client.authenticate(await fresh('restore'));await client.synchronize();
+      if(family!=='restore_before_lookup'){await client.reconcile(id);await client.synchronize();}
+      if(family==='restore_after_ack')await client.acknowledgeUncertain(id);
+     }
+    }else{loss=family==='ordinary_missing'?'before':'after';await assert.rejects(client.submit(id),/lost_/);}
+    if(family==='purge'){
+     await control('session-loss');await assert.rejects(syncOther(),/authorization_purged/);
+     await other().authenticate(await fresh('new-session'));
+    }else await syncOther();
+    if(family==='other_user'){
+     await other().authenticate(await fresh('other-user'));await reopen();await client.synchronize();
+     assert.equal((await store.load()).pending[id],undefined);await assert.rejects(client.reconcile(id),/unknown_operation/);assert.equal(posts,1);return;
+    }
+    if(family==='generation'){
+     await control('session-loss');await assert.rejects(syncOther(),/authorization_purged/);
+     await control('forget-receipt');await other().authenticate(await fresh('restore'));
+     assert.equal((await safe()).receipt,undefined,'other adapter must archive old generation before returning');
+    }
+    await reopen();await client.synchronize();await blocked();
+    const preserved=await safe();assert(preserved.generation);assert(preserved.financialUncertain||restored);
+    await assert.rejects(other().discard(id),/reconciliation_required/);
+    // A separate process must observe the same durable receipt-first boundary.
+    const child=spawnSync(process.execPath,[__filename],{input:JSON.stringify({...input,key:store.id,id,target,values,sharedRestart:true}),encoding:'utf8',timeout:30000});assert.equal(child.status,0,child.stdout+child.stderr);
+    calls.length=0;const result=await client.reconcile(id);assert.deepEqual(calls[0],['GET','/payment-operations/'+id]);assert.equal(posts,1);
+    await reopen();await client.synchronize();await safe();
+    if(restored){
+     assert.equal(result.state,'restore_uncertain');assert.equal(result.receipt,undefined);assert.deepEqual(result.historicalReceipts,[prior]);
+     await client.acknowledgeUncertain(id);
+     await other().authenticate(await fresh('restore'));await reopen();await client.synchronize();
+     await blocked();await assert.rejects(client.acknowledgeUncertain(id),/restore_reconciliation_required/);
+     assert.equal((await client.reconcile(id)).state,'restore_uncertain');await client.synchronize();await client.acknowledgeUncertain(id);
+    }else if(family==='ordinary_missing'){
+     assert.equal(result.receipt,undefined);await blocked();await assert.rejects(client.acknowledgeUncertain(id),/restore_reconciliation_required/);return;
+    }else{assert.equal(result.receipt.outcome,'accepted');assert.deepEqual(Object.keys(result.receipt).sort(),['accepted_at','operation_id','outcome','payment_id']);}
+    const next=await client.stagePayment(target,{...values,amount:'1.00'});assert.notEqual(next,id);assert.equal(posts,1);return;
+   }
+   if(input.scenario==='tampered_store'){
    const raw=fs.readFileSync(input.directory+'/cache');raw[raw.length-1]^=1;fs.writeFileSync(input.directory+'/cache',raw);
    await assert.rejects(client.view(),/protected_store_invalid/);assert.equal(posts,0);return;
   }
