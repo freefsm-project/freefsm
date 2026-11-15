@@ -1,7 +1,7 @@
 package backup
 
-// UNINTEGRATED: this is the backup owner's durable evidence component, not an
-// admission authority. See resolution_contract.md for the required call sites.
+// This is the backup owner's durable evidence component, not an admission
+// authority. See resolution_contract.md for integrated and pending call sites.
 
 import (
 	"bytes"

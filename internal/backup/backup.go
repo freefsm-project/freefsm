@@ -271,6 +271,12 @@ func (m *Manager) resolve(ctx context.Context, j journal) error {
 	default:
 		return engineFailure(FailureRecoveryRequired, "unknown recovery phase")
 	}
+	if e := m.selectedResolution(j); e != nil {
+		return e
+	}
+	if e := m.check("resolution-selected"); e != nil {
+		return e
+	}
 	if j.Start != nil {
 		if e := m.publish(ctx, *j.Start); e != nil {
 			return e
@@ -494,7 +500,10 @@ func (m *Manager) run(j *job, unlock func(), fn func(context.Context) error) {
 		if e != nil {
 			j.Phase = "failed"
 			if j.committed {
-				j.Phase = "complete"
+				// The journal selects the restored generation; it does not prove
+				// cleanup or admission release succeeded. Keep this operation
+				// unresolved until recovery verifies its release disposition.
+				j.Phase = "recovery-required"
 			}
 			j.Failure = failure
 			j.Error = failure.Message

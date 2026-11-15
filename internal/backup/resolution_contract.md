@@ -1,9 +1,12 @@
-# Durable resolution evidence — UNINTEGRATED
+# Durable resolution evidence — PARTIALLY INTEGRATED
 
 This component does not repair runtime admission yet. It is private to the existing
 backup owner; no exported constructor grants verified-generation authority.
-`Control.New`, `Manager.clear/run/Recover/resolve`, startup and status callers still
-need the sequential integration job. Filesystem tests are not real-engine proof.
+`Manager.resolve` now persists selected journal identity before activity/cleanup;
+`Manager.run` projects committed errors as recovery-required rather than complete.
+Resolved/release-ready advancement, verified release, restart/status reconciliation,
+Control and startup composition still need integration. Filesystem adapter tests
+are not whole-engine proof.
 
 ## Representation and persistence
 
