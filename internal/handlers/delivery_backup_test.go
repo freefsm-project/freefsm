@@ -23,6 +23,7 @@ import (
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/delivery"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/google/uuid"
@@ -125,6 +126,16 @@ func TestDeliveryEncryptedBackupDrainAndRestoreGates(t *testing.T) {
 		}
 	}()
 	historyCheck(t, outbox.ManualRetry(ctx, delivery.Actor{ID: src.actor, CompanyID: src.company, Role: "admin"}, pendingID, "explicit pending retry before backup", uuid.New()))
+	// Archive a distinct queued communication through its real browser route.
+	// Its terminal cancellation must survive restore and global enablement.
+	cancelledDoc := src.client.Estimate.Create().SetCompanyID(src.company).SetCustomerID(customer.ID).SetTitle("Cancelled before archive").SaveX(ctx)
+	cancelledPath := fmt.Sprintf("/estimates/%d", cancelledDoc.ID)
+	expectStatus(t, web, cookie, "POST", cancelledPath+"/pdf/save", 303)
+	var cancelledPDF, cancelledID int64
+	historyCheck(t, src.pool.QueryRow(ctx, `SELECT id FROM document_pdf_versions WHERE document_type='estimate' AND document_id=$1`, cancelledDoc.ID).Scan(&cancelledPDF))
+	fieldPost(t, web, cookie, cancelledPath+"/email", url.Values{"pdf_version": {fmt.Sprint(cancelledPDF)}, "idempotency_key": {newOperationKey()}, "to": {"cancelled@example.test"}, "subject": {"Cancelled"}, "body": {"Never resume"}}, 303)
+	historyCheck(t, src.pool.QueryRow(ctx, `SELECT id FROM document_deliveries WHERE document_type='estimate' AND document_id=$1`, cancelledDoc.ID).Scan(&cancelledID))
+	expectStatus(t, web, cookie, "POST", cancelledPath+"/delete", 303)
 	started := src.request("create", strings.NewReader(url.Values{"archive_password": {"history-archive-secret"}}.Encode()), false, "")
 	deadline := time.Now().Add(10 * time.Second)
 	for {
@@ -227,7 +238,10 @@ func TestDeliveryEncryptedBackupDrainAndRestoreGates(t *testing.T) {
 		t.Fatal("SMTP before Administrator enable")
 	default:
 	}
-	r := httptest.NewRequest("POST", "/settings/enable-email", nil)
+	policy, err := emailpolicy.Read(ctx, dst.pool, false)
+	historyCheck(t, err)
+	r := httptest.NewRequest("POST", "/settings/enable-email", strings.NewReader(url.Values{"save_action_id": {newOperationKey()}, "save_revision": {policy.Review()}}.Encode()))
+	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	r.Header.Set("X-CSRF-Token", dst.csrf)
 	r.Header.Set("Sec-Fetch-Site", "same-origin")
 	r.AddCookie(dst.cookie)
@@ -282,4 +296,16 @@ func TestDeliveryEncryptedBackupDrainAndRestoreGates(t *testing.T) {
 	if attempts != 2 || cycle != 2 || state != "accepted" || delivered != nil {
 		t.Fatalf("restored history=%d/%d %s delivered=%v", attempts, cycle, state, delivered)
 	}
+	var cancelledState string
+	historyCheck(t, dst.pool.QueryRow(ctx, `SELECT state FROM document_deliveries WHERE id=$1`, cancelledID).Scan(&cancelledState))
+	if cancelledState != "cancelled" {
+		t.Fatalf("restored cancellation=%s", cancelledState)
+	}
+	if err := restored.ManualRetry(ctx, delivery.Actor{ID: src.actor, CompanyID: src.company, Role: "admin"}, cancelledID, "must remain terminal", uuid.New()); err == nil {
+		t.Fatal("cancelled restored communication retried")
+	}
+	if more, err := restored.ProcessOne(ctx, sender, nil); err != nil || more {
+		t.Fatalf("terminal/accepted work resumed: %v %v", more, err)
+	}
+	t.Logf("restored eligible ID=%d attempts=%d/%d state=%s; cancelled ID=%d state=%s", pendingID, attempts, cycle, state, cancelledID, cancelledState)
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/database"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
@@ -131,6 +132,7 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 		if err := db.Migrate(ctx, database.MigrationFS()); err != nil {
 			t.Fatal(err)
 		}
+		importFixtureEmailPolicy(t, f.pool, f.control, f.manager)
 		if err := startup.Finish(ctx); err != nil {
 			t.Fatal(err)
 		}
@@ -417,6 +419,11 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 	if err := dst.manager.RefreshConnections(); err != nil {
 		t.Fatal(err)
 	}
+	restoredPolicy, err := emailpolicy.Read(ctx, dst.pool, false)
+	if err != nil || restoredPolicy.Enabled || restoredPolicy.Epoch == sourceEpoch || restoredPolicy.Epoch == destinationEpoch {
+		t.Fatalf("restored generation/policy: %+v %v", restoredPolicy, err)
+	}
+	t.Logf("source epoch=%s destination epoch=%s restored policy=%+v", sourceEpoch, destinationEpoch, restoredPolicy)
 	for _, token := range []string{src.web, dst.web} {
 		if _, err := dst.sessions.Validate(ctx, token); err == nil {
 			t.Fatal("web session survived")
@@ -481,6 +488,7 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 		t.Fatalf("original capability after map loss: %+v", reconstructed)
 	}
 	recoverAdmission(t, restarted)
+	bindFixtureEmailPolicy(dst.pool, reopened, restarted)
 	if next := queryReconstructed(); next.Phase == "complete" || next.Release == "verified-open" {
 		t.Fatalf("later startup transition acknowledged old release: %+v", next)
 	}
@@ -493,6 +501,15 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 		}
 		csrf.ServeHTTP(w, r)
 	}))
+	for _, old := range []string{src.web, dst.web} {
+		r := httptest.NewRequest("GET", "/sessions", nil)
+		r.AddCookie(&http.Cookie{Name: "session", Value: old})
+		w := httptest.NewRecorder()
+		web.ServeHTTP(w, r)
+		if w.Code != http.StatusSeeOther || !strings.HasPrefix(w.Header().Get("Location"), "/login") {
+			t.Fatalf("old browser ordinary route: %d %s", w.Code, w.Header().Get("Location"))
+		}
+	}
 	user := dst.client.User.Query().OnlyX(ctx)
 	login := url.Values{"email": {user.Email}, "password": {"account-0"}}
 	post := func(path string, form url.Values, session *http.Cookie, token string) *httptest.ResponseRecorder {
@@ -521,6 +538,43 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 	if session == nil {
 		t.Fatal("restored login missing session")
 	}
+	// Fresh mobile credentials must come through the production pairing protocol,
+	// approved by the freshly authenticated restored browser, not direct DB issuance.
+	started := pairingCall(api, "/pairings", `{"device_name":"Restored phone","operation_id":"`+newOperationKey()+`"}`)
+	var pairing struct {
+		Data struct {
+			DeviceCode string `json:"device_code"`
+			UserCode   string `json:"user_code"`
+		}
+	}
+	if started.Code != 201 || json.Unmarshal(started.Body.Bytes(), &pairing) != nil {
+		t.Fatalf("fresh pairing start: %d", started.Code)
+	}
+	review := post("/pair/review", url.Values{"code": {pairing.Data.UserCode}}, session, dst.csrf)
+	match := regexp.MustCompile(`name="review_token" value="([^"]+)"`).FindStringSubmatch(review.Body.String())
+	if review.Code != 200 || len(match) != 2 {
+		t.Fatalf("fresh pairing review: %d", review.Code)
+	}
+	if approved := post("/pair/approve", url.Values{"review_token": {html.UnescapeString(match[1])}, "device_name": {"Restored phone"}}, session, dst.csrf); approved.Code != 200 {
+		t.Fatalf("fresh pairing approval: %d", approved.Code)
+	}
+	redeemed := pairingCall(api, "/pairings/redeem", `{"device_code":"`+pairing.Data.DeviceCode+`","operation_id":"`+newOperationKey()+`"}`)
+	var credential struct {
+		Data struct {
+			Token string `json:"token"`
+		}
+	}
+	if redeemed.Code != 201 || json.Unmarshal(redeemed.Body.Bytes(), &credential) != nil || credential.Data.Token == "" {
+		t.Fatalf("fresh pairing redemption: %d", redeemed.Code)
+	}
+	probe := httptest.NewRequest("GET", "/me", nil)
+	probe.Header.Set("Authorization", "Bearer "+credential.Data.Token)
+	probe.Header.Set("X-FreeFSM-Session-Epoch", restoredPolicy.Epoch)
+	allowed := httptest.NewRecorder()
+	api.ServeHTTP(allowed, probe)
+	if allowed.Code != 200 {
+		t.Fatalf("fresh paired ordinary access: %d", allowed.Code)
+	}
 	r := httptest.NewRequest("GET", "/settings", nil)
 	r.AddCookie(session)
 	w = httptest.NewRecorder()
@@ -528,13 +582,17 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "Outbound email is disabled.") {
 		t.Fatalf("persistent notice: %d", w.Code)
 	}
-	if w := post("/settings/test-email", nil, session, dst.csrf); w.Code != 503 {
+	if w := post("/settings/test-email", url.Values{"recipient": {"test@example.test"}}, session, dst.csrf); w.Code != 503 {
 		t.Fatalf("disabled test-email: %d", w.Code)
 	}
 	if w := post("/settings/enable-email", nil, session, ""); w.Code != 400 || !reopened.EmailDisabled() {
 		t.Fatal("enable lacked CSRF protection")
 	}
-	if w := post("/settings/enable-email", nil, session, dst.csrf); w.Code != 303 || reopened.EmailDisabled() {
+	policy, err := emailpolicy.Read(ctx, dst.pool, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := post("/settings/enable-email", url.Values{"save_action_id": {newOperationKey()}, "save_revision": {policy.Review()}}, session, dst.csrf); w.Code != 303 || reopened.EmailDisabled() {
 		t.Fatalf("explicit enable: %d", w.Code)
 	}
 }

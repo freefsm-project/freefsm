@@ -22,9 +22,11 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/freefsm-project/freefsm/internal/backup"
+	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/conversion"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/delivery"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/objectref"
@@ -165,6 +167,8 @@ func TestBackupHistoricalDomainRoundTrip(t *testing.T) {
 	_, err = src.pool.Exec(ctx, `UPDATE company_settings SET smtp_host='localhost',smtp_from='history@example.test' WHERE company_id=$1`, src.company)
 	historyCheck(t, err)
 	outbox := delivery.New(src.pool, "https://history.example.test")
+	outbox.SetInstanceControl(src.control)
+	outbox.SetBeforeWork(src.manager.RefreshConnections)
 	deliveryActor := delivery.Actor{ID: src.actor, CompanyID: src.company, Role: "admin"}
 	queue := func(invoiceID int64, title string) delivery.Delivery {
 		t.Helper()
@@ -303,7 +307,14 @@ func TestBackupHistoricalDomainRoundTrip(t *testing.T) {
 		}
 	}
 	historyEqual(t, "paused work and replay leave history untouched", historyDurableRows(t, dst.pool, tables), before)
-	historyCheck(t, reopened.EnableEmail())
+	policy, err := emailpolicy.Read(ctx, dst.pool, false)
+	historyCheck(t, err)
+	web := reopened.Middleware(New(dst.pool, dst.client, dst.sessions, &config.Config{UploadDir: dst.uploadDir}, reopened))
+	cookie := sessionCookie(t, ctx, dst.sessions, src.actor)
+	w := credentialPost(web, "/settings/enable-email", url.Values{"save_action_id": {newOperationKey()}, "save_revision": {policy.Review()}}, cookie)
+	if w.Code != http.StatusSeeOther || reopened.EmailDisabled() {
+		t.Fatalf("reviewed history email enable: %d", w.Code)
+	}
 	processed, err = outbox.ProcessOne(ctx, restoredSender, delivery.NopAcceptanceHook{})
 	historyCheck(t, err)
 	if !processed || len(restoredSender.sent) != 1 {
@@ -386,6 +397,7 @@ func newHistoryBackupInstance(t *testing.T, admin *pgx.Conn, dsn, name string) *
 	historyCheck(t, err)
 	defer startup.Close()
 	historyCheck(t, db.Migrate(ctx, database.MigrationFS()))
+	importFixtureEmailPolicy(t, f.pool, f.control, f.manager)
 	historyCheck(t, startup.Finish(ctx))
 	pgcfg, err := pgx.ParseConfig(u.String())
 	historyCheck(t, err)
@@ -437,6 +449,7 @@ func (f *historyBackupInstance) recoverControl(t *testing.T, control *instanceco
 	historyCheck(t, err)
 	t.Cleanup(m.Shutdown)
 	recoverAdmission(t, m)
+	bindFixtureEmailPolicy(f.pool, control, m)
 	return m
 }
 

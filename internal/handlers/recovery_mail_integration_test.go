@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -48,7 +49,8 @@ func (s stalledRecoverySMTP) Accept() (net.Conn, error) {
 func TestRecoveryDurableDispatchNonEnumerationHTTP(t *testing.T) {
 	for _, failure := range []bool{false, true} {
 		t.Run(fmt.Sprint("SMTP failure=", failure), func(t *testing.T) {
-			pool, client, router, _, company, _ := permissionHTTPFixture(t)
+			f := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, router, company := f.pool, f.client, f.web, f.company
 			ctx := context.Background()
 			client.User.Create().SetCompanyID(company).SetEmail("disabled@test").SetName("Disabled").SetRole("tech").SetIsActive(false).SetPasswordHash("old").SaveX(ctx)
 			client.User.Create().SetCompanyID(company).SetEmail("pending@test").SetName("Pending").SetRole("tech").SetIsActive(false).SetPasswordHash("unusable").SetWelcomeEmailSentAt(time.Now()).SaveX(ctx)
@@ -77,8 +79,10 @@ func TestRecoveryDurableDispatchNonEnumerationHTTP(t *testing.T) {
 			}
 			// A fresh service resumes the persisted queue, independent of the HTTP handler.
 			resets := services.NewPasswordResetService(client, pool)
-			mail := services.NewEmailService(services.NewCompanySettingsService(client))
+			mail := f.email
 			stalled := stalledRecoverySMTP{listener, make(chan struct{}), make(chan struct{})}
+			allowSMTP := sync.OnceFunc(func() { close(stalled.release) })
+			defer allowSMTP()
 			messages := make(chan []byte, 1)
 			smtpDone := make(chan error, 1)
 			go func() {
@@ -99,6 +103,8 @@ func TestRecoveryDurableDispatchNonEnumerationHTTP(t *testing.T) {
 			go func() { _, e := resets.DispatchOne(ctx, mail); done <- e }()
 			select {
 			case <-stalled.entered:
+			case err := <-done:
+				t.Fatalf("dispatch exited before SMTP admission: %v", err)
 			case <-time.After(5 * time.Second):
 				t.Fatal("SMTP worker did not start")
 			}
@@ -116,11 +122,11 @@ func TestRecoveryDurableDispatchNonEnumerationHTTP(t *testing.T) {
 						t.Fatal("response changed during SMTP wait")
 					}
 				case <-time.After(2 * time.Second):
-					close(stalled.release)
+					allowSMTP()
 					t.Fatal("public request waited for account-specific SMTP")
 				}
 			}
-			close(stalled.release)
+			allowSMTP()
 			if err = <-done; err != nil {
 				t.Fatal(err)
 			}

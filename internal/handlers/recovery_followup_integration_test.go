@@ -82,15 +82,10 @@ func TestSetupSessionPublicationRechecksCommittedCredential(t *testing.T) {
 }
 
 func TestRecoveryRefreshRunsInsideAdmissionAndFailureDoesNotClaim(t *testing.T) {
-	pool, client, _, _, _, admin := permissionHTTPInstanceFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, admin, control := f.pool, f.client, f.admin, f.control
 	ctx := context.Background()
-	control, err := instancecontrol.New(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	recoverAdmission(t, admissionManager(t, pool, control))
-	email := services.NewEmailService(services.NewCompanySettingsService(client))
-	email.SetInstanceControl(control)
+	email := f.email
 	var settingsQueries atomic.Int64
 	client.CompanySettings.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
 		return ent.QuerierFunc(func(ctx context.Context, q ent.Query) (ent.Value, error) {
@@ -99,10 +94,10 @@ func TestRecoveryRefreshRunsInsideAdmissionAndFailureDoesNotClaim(t *testing.T) 
 		})
 	}))
 	resets := services.NewPasswordResetService(client, pool)
-	if err = resets.Request(ctx, "admin@test", "http://localhost/reset-password"); err != nil {
+	if err := resets.Request(ctx, "admin@test", "http://localhost/reset-password"); err != nil {
 		t.Fatal(err)
 	}
-	if err = control.DisableEmail(); err != nil {
+	if _, err := pool.Exec(ctx, `UPDATE restore_email_policy SET enabled=false,revision=revision+1`); err != nil {
 		t.Fatal(err)
 	}
 	var generation atomic.Int64
@@ -113,6 +108,13 @@ func TestRecoveryRefreshRunsInsideAdmissionAndFailureDoesNotClaim(t *testing.T) 
 	}
 	observed := make(chan observation, 4)
 	refresh := func() error {
+		if err := f.manager.RefreshConnections(); err != nil {
+			return err
+		}
+		if generation.Load() == 1 {
+			observed <- observation{generation: 1}
+			return nil
+		}
 		// If admission is held, a concurrent restore cannot pass its drain while
 		// refreshing this process's generation. Failed refresh must not touch DB work.
 		probe, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
@@ -130,14 +132,19 @@ func TestRecoveryRefreshRunsInsideAdmissionAndFailureDoesNotClaim(t *testing.T) 
 	defer func() { stop(); <-done }()
 	select {
 	case o := <-observed:
-		t.Fatalf("refresh ran before email admission: %+v", o)
-	case <-time.After(1200 * time.Millisecond):
+		if o.generation != 1 {
+			t.Fatalf("wrong disabled generation refreshed: %+v", o)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("worker did not refresh before reading disabled policy")
+	}
+	if n := settingsQueries.Load(); n != 0 {
+		t.Fatalf("disabled policy queried settings: %d", n)
 	}
 	// Model the completed replacement generation before explicit email re-enable.
+	f.enableEmail(t)
+	settingsQueries.Store(0)
 	generation.Store(2)
-	if err = control.EnableEmail(); err != nil {
-		t.Fatal(err)
-	}
 	select {
 	case o := <-observed:
 		if o.generation != 2 || !o.held {
@@ -147,7 +154,7 @@ func TestRecoveryRefreshRunsInsideAdmissionAndFailureDoesNotClaim(t *testing.T) 
 		t.Fatal("worker did not refresh after re-enable")
 	}
 	var clean bool
-	if err = pool.QueryRow(ctx, `SELECT claimed_until IS NULL AND completed_at IS NULL AND NOT EXISTS(SELECT 1 FROM password_reset_tokens WHERE user_id=$1) FROM password_recovery_requests`, admin).Scan(&clean); err != nil || !clean {
+	if err := pool.QueryRow(ctx, `SELECT claimed_until IS NULL AND completed_at IS NULL AND NOT EXISTS(SELECT 1 FROM password_reset_tokens WHERE user_id=$1) FROM password_recovery_requests`, admin).Scan(&clean); err != nil || !clean {
 		t.Fatalf("failed refresh claimed/sent work: clean=%v %v", clean, err)
 	}
 	if n := settingsQueries.Load(); n != 0 {
@@ -156,7 +163,8 @@ func TestRecoveryRefreshRunsInsideAdmissionAndFailureDoesNotClaim(t *testing.T) 
 }
 
 func TestRecoveryLookupStorageFailureKeepsDurableRequestResumable(t *testing.T) {
-	pool, client, _, _, _, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, admin := f.pool, f.client, f.admin
 	ctx := context.Background()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -165,7 +173,7 @@ func TestRecoveryLookupStorageFailureKeepsDurableRequestResumable(t *testing.T) 
 	defer listener.Close()
 	client.CompanySettings.Update().SetSMTPHost("127.0.0.1").SetSMTPPort(listener.Addr().(*net.TCPAddr).Port).SetSMTPFrom("sender@example.test").SaveX(ctx)
 	resets := services.NewPasswordResetService(client, pool)
-	email := services.NewEmailService(services.NewCompanySettingsService(client))
+	email := f.email
 	if err = resets.Request(ctx, "admin@test", "http://localhost/reset-password"); err != nil {
 		t.Fatal(err)
 	}
@@ -220,19 +228,16 @@ func TestRecoveryLookupStorageFailureKeepsDurableRequestResumable(t *testing.T) 
 }
 
 func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *testing.T) {
-	pool, client, _, sessions, company, admin := permissionHTTPInstanceFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, company, admin, control := f.pool, f.client, f.company, f.admin, f.control
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	control, err := instancecontrol.New(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
 	otherProcess, err := instancecontrol.New(control.StateDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	recoverAdmission(t, admissionManager(t, pool, control))
 	manager := admissionManager(t, pool, otherProcess)
+	bindFixtureEmailPolicy(pool, otherProcess, manager)
 	current := client.User.Create().SetCompanyID(company).SetName("Current recipient").SetEmail("current-recipient@test").SetRole("tech").SetPasswordHash("unchanged").SaveX(ctx)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -240,8 +245,7 @@ func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *t
 	}
 	defer listener.Close()
 	client.CompanySettings.Update().SetSMTPHost("127.0.0.1").SetSMTPPort(listener.Addr().(*net.TCPAddr).Port).SetSMTPFrom("sender@example.test").SaveX(ctx)
-	email := services.NewEmailService(services.NewCompanySettingsService(client))
-	email.SetInstanceControl(control)
+	email := f.email
 	resets := services.NewPasswordResetService(client, pool)
 	for _, address := range []string{"admin@test", "admin@test", current.Email} {
 		if err = resets.Request(ctx, address, "http://localhost/reset-password"); err != nil {
@@ -264,7 +268,7 @@ func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *t
 		t.Fatalf("closed maintenance admitted dispatch: %v %v", worked, e)
 	}
 	assertQueue(0, 0)
-	if err = control.DisableEmail(); err != nil {
+	if _, err = pool.Exec(ctx, `UPDATE restore_email_policy SET enabled=false,revision=revision+1`); err != nil {
 		t.Fatal(err)
 	}
 	maintenanceRelease()
@@ -274,12 +278,7 @@ func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *t
 	}
 	assertQueue(0, 0)
 	// Real protected HTTP action explicitly enables email; no direct gate bypass.
-	router := New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()}, control)
-	adminCookie := sessionCookie(t, ctx, sessions, admin)
-	w := credentialPost(router, "/settings/enable-email", nil, adminCookie)
-	if w.Code != 303 || control.EmailDisabled() {
-		t.Fatalf("explicit enable failed: %d", w.Code)
-	}
+	f.enableEmail(t)
 	delayed := delayedRecoverySMTP{listener, make(chan struct{}), make(chan struct{})}
 	allowSMTP := sync.OnceFunc(func() { close(delayed.release) })
 	defer allowSMTP()
@@ -289,6 +288,8 @@ func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *t
 	go func() { _, e := resets.DispatchOne(ctx, email); dispatchDone <- e }()
 	select {
 	case <-delayed.entered:
+	case err := <-dispatchDone:
+		t.Fatalf("dispatch exited before SMTP admission: %v", err)
 	case <-ctx.Done():
 		t.Fatal("admitted SMTP never started")
 	}
@@ -347,7 +348,7 @@ func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *t
 		t.Fatal("maintenance failed to drain completed dispatch")
 	}
 	assertQueue(1, 1)
-	if err = control.DisableEmail(); err != nil {
+	if _, err = pool.Exec(ctx, `UPDATE restore_email_policy SET enabled=false,revision=revision+1`); err != nil {
 		t.Fatal(err)
 	}
 	// A restored/current identity decision makes one pending request obsolete.
@@ -374,10 +375,7 @@ func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *t
 			}
 		}
 	}()
-	w = credentialPost(router, "/settings/enable-email", nil, adminCookie)
-	if w.Code != 303 || control.EmailDisabled() {
-		t.Fatalf("resume enable failed: %d", w.Code)
-	}
+	f.enableEmail(t)
 	for i := 0; i < 2; i++ {
 		if worked, e := resets.DispatchOne(ctx, email); !worked || e != nil {
 			t.Fatalf("resume %d: %v %v", i, worked, e)

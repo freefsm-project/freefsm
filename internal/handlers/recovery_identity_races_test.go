@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http/httptest"
 	"regexp"
+	"sync"
 	"testing"
 	"time"
 
@@ -16,7 +17,8 @@ import (
 func TestRecoveryIdentityChangeWhileIssuanceWaitsHTTP(t *testing.T) {
 	for _, adminRequest := range []bool{false, true} {
 		t.Run(fmt.Sprint("Administrator=", adminRequest), func(t *testing.T) {
-			pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+			f := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 			ctx := context.Background()
 			u := client.User.Create().SetCompanyID(company).SetName("Old").SetEmail("old-race@test").SetPasswordHash("old").SetRole("tech").SaveX(ctx)
 			client.CompanySettings.Update().SetSMTPHost("127.0.0.1").SetSMTPPort(12345).SetSMTPFrom("sender@example.test").SaveX(ctx)
@@ -41,7 +43,7 @@ func TestRecoveryIdentityChangeWhileIssuanceWaitsHTTP(t *testing.T) {
 					done <- requestRecoveryHTTP(router, u.Email)
 				}
 			}()
-			waitCredentialBlock(t, pool, pid)
+			waitCredentialBlock(t, pool, pid, done)
 			if _, err = tx.Exec(ctx, `UPDATE users SET email='new-race@test' WHERE id=$1`, u.ID); err != nil {
 				t.Fatal(err)
 			}
@@ -63,7 +65,8 @@ func TestRecoveryIdentityChangeWhileIssuanceWaitsHTTP(t *testing.T) {
 }
 
 func TestAdministratorInFlightRecoveryCannotRedeemAfterEmailEdit(t *testing.T) {
-	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	u := client.User.Create().SetCompanyID(company).SetName("Old recipient").SetEmail("old-inflight@test").SetPasswordHash("original").SetRole("tech").SaveX(ctx)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -73,6 +76,8 @@ func TestAdministratorInFlightRecoveryCannotRedeemAfterEmailEdit(t *testing.T) {
 	defer listener.Close()
 	client.CompanySettings.Update().SetSMTPHost("127.0.0.1").SetSMTPPort(listener.Addr().(*net.TCPAddr).Port).SetSMTPFrom("sender@example.test").SaveX(ctx)
 	delayed := delayedRecoverySMTP{listener, make(chan struct{}), make(chan struct{})}
+	allowSMTP := sync.OnceFunc(func() { close(delayed.release) })
+	defer allowSMTP()
 	message := make(chan []byte, 1)
 	go func() { b, _ := receiveTestSMTP(delayed); message <- b }()
 	cookie := sessionCookie(t, ctx, sessions, admin)
@@ -80,13 +85,15 @@ func TestAdministratorInFlightRecoveryCannotRedeemAfterEmailEdit(t *testing.T) {
 	go func() { done <- credentialPost(router, fmt.Sprintf("/users/%d/resend-recovery", u.ID), nil, cookie) }()
 	select {
 	case <-delayed.entered:
+	case w := <-done:
+		t.Fatalf("recovery returned before SMTP admission: status=%d location=%s", w.Code, w.Header().Get("Location"))
 	case <-time.After(5 * time.Second):
 		t.Fatal("Administrator SMTP not reached")
 	}
 	if err = authorization.New(pool).EditIdentity(ctx, authorization.Actor{UserID: admin}, u.ID, u.Name, "new-inflight@test"); err != nil {
 		t.Fatal(err)
 	}
-	close(delayed.release)
+	allowSMTP()
 	<-done
 	match := regexp.MustCompile(`token=([a-f0-9]{64})`).FindSubmatch(<-message)
 	if len(match) != 2 {

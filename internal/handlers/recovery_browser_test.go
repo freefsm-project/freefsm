@@ -24,7 +24,8 @@ func TestRecoveryPersistedChromium(t *testing.T) {
 	if os.Getenv("BROWSER_TESTS") != "1" {
 		t.Skip("set BROWSER_TESTS=1")
 	}
-	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	hash, err := bcrypt.GenerateFromPassword([]byte("BrowserOriginal1!"), bcrypt.MinCost)
 	if err != nil {
@@ -72,7 +73,7 @@ func TestRecoveryPersistedChromium(t *testing.T) {
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
-		_ = resets.RunDispatch(workerCtx, services.NewEmailService(services.NewCompanySettingsService(client)), nil)
+		_ = resets.RunDispatch(workerCtx, f.email, f.manager.RefreshConnections)
 	}()
 	defer func() { stopWorker(); <-workerDone }()
 	adminCookie := sessionCookie(t, ctx, sessions, admin)
@@ -116,7 +117,7 @@ func TestRecoveryPersistedChromium(t *testing.T) {
 		t.Fatal("recovery survived")
 	}
 	// A rebuilt production router observes the committed credential, not browser state.
-	restarted := New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()})
+	restarted := f.control.Middleware(New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()}, f.control))
 	r := httptest.NewRequest("GET", "/change-password", nil)
 	r.AddCookie(acting)
 	w := httptest.NewRecorder()

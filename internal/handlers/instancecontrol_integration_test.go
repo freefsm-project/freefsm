@@ -19,26 +19,21 @@ import (
 )
 
 func TestDisabledEmailForgotPasswordDoesNotDiscloseAccount(t *testing.T) {
-	client, pool := openHandlerTestDB(t, admissionDatabase(t))
-	defer client.Close()
-	defer pool.Close()
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	client, pool := f.client, f.pool
 	ctx := context.Background()
-	client.User.Create().SetCompanyID(77).SetEmail("present@example.test").SetName("Present").SetPasswordHash("unused").SetRole("admin").SaveX(ctx)
-	dir := t.TempDir()
-	control, err := instancecontrol.New(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := control.DisableEmail(); err != nil {
+	client.User.Create().SetCompanyID(f.company).SetEmail("present@example.test").SetName("Present").SetPasswordHash("unused").SetRole("tech").SaveX(ctx)
+	if _, err := pool.Exec(ctx, `UPDATE restore_email_policy SET enabled=false,revision=revision+1`); err != nil {
 		t.Fatal(err)
 	}
 	// Reopen to exercise the durable gate, rather than an in-memory setting.
-	recoverAdmission(t, admissionManager(t, pool, control))
-	control, err = instancecontrol.New(dir)
+	control, err := instancecontrol.New(f.control.StateDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	admissionManager(t, pool, control)
+	manager := admissionManager(t, pool, control)
+	recoverAdmission(t, manager)
+	bindFixtureEmailPolicy(pool, control, manager)
 	email := services.NewEmailService(services.NewCompanySettingsService(client))
 	email.SetInstanceControl(control)
 	h := NewAuthHandler(pool, nil, services.NewUserService(client), nil, email, services.NewPasswordResetService(client), nil, nil, nil)
@@ -175,41 +170,35 @@ func TestMaintenanceDrainsHTTPWorkAndRequiresExplicitRecovery(t *testing.T) {
 }
 
 func TestDisabledEmailBlocksWelcomeAndWorkerBeforeMutation(t *testing.T) {
-	client, pool := openHandlerTestDB(t, admissionDatabase(t))
-	defer client.Close()
-	defer pool.Close()
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	client, pool, control := f.client, f.pool, f.control
 	ctx := context.Background()
-	control, err := instancecontrol.New(t.TempDir())
-	if err != nil {
+	beforeUsers := client.User.Query().CountX(ctx)
+	if _, err := pool.Exec(ctx, `UPDATE restore_email_policy SET enabled=false,revision=revision+1`); err != nil {
 		t.Fatal(err)
 	}
-	if err := control.DisableEmail(); err != nil {
-		t.Fatal(err)
-	}
-	recoverAdmission(t, admissionManager(t, pool, control))
 	settings := services.NewCompanySettingsService(client)
-	email := services.NewEmailService(settings)
-	email.SetInstanceControl(control)
+	email := f.email
 	h := NewUserHandler(services.NewUserService(client), email, services.NewInvitationService(client), settings, nil, nil)
 	form := url.Values{"name": {"Invited"}, "email": {"invited@example.test"}, "role": {"tech"}, "send_welcome_email": {"on"}}
 	r := httptest.NewRequest(http.MethodPost, "/users", strings.NewReader(form.Encode()))
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	r = r.WithContext(context.WithValue(ctx, middleware.UserKey, &middleware.UserInfo{ID: 100, CompanyID: 77, Role: "admin"}))
+	r = r.WithContext(context.WithValue(ctx, middleware.UserKey, &middleware.UserInfo{ID: f.admin, CompanyID: f.company, Role: "admin"}))
 	w := httptest.NewRecorder()
 	h.Create(w, r)
 	location, _ := url.QueryUnescape(w.Header().Get("Location"))
 	if !strings.Contains(location, instancecontrol.ErrEmailDisabled.Error()) {
 		t.Fatalf("missing disabled notice: %s", location)
 	}
-	if client.User.Query().CountX(ctx) != 0 || client.InvitationToken.Query().CountX(ctx) != 0 {
+	if client.User.Query().CountX(ctx) != beforeUsers || client.InvitationToken.Query().CountX(ctx) != 0 {
 		t.Fatal("disabled welcome created account or invitation")
 	}
-	u, err := services.NewUserService(client).Create(ctx, services.UserCreateParams{CompanyID: 77, Name: "Pending", Email: "pending@example.test", Role: "tech", SendWelcomeEmail: true})
+	u, err := services.NewUserService(client).Create(ctx, services.UserCreateParams{CompanyID: f.company, Name: "Pending", Email: "pending@example.test", Role: "tech", SendWelcomeEmail: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	inviteSvc := services.NewInvitationService(client)
-	if _, err := inviteSvc.CreateInvite(ctx, 77, u.ID); err != nil {
+	if _, err := inviteSvc.CreateInvite(ctx, f.company, u.ID); err != nil {
 		t.Fatal(err)
 	}
 	before := client.InvitationToken.Query().OnlyX(ctx)
@@ -228,6 +217,7 @@ func TestDisabledEmailBlocksWelcomeAndWorkerBeforeMutation(t *testing.T) {
 	}
 	workerService := delivery.New(pool, "https://example.test")
 	workerService.SetInstanceControl(control)
+	workerService.SetBeforeWork(f.manager.RefreshConnections)
 	// A nil sender is intentional: disabled processing must never reach transport.
 	if processed, err := workerService.ProcessOne(ctx, nil, nil); err != nil || processed {
 		t.Fatalf("disabled worker: %v, %v", processed, err)
@@ -235,9 +225,7 @@ func TestDisabledEmailBlocksWelcomeAndWorkerBeforeMutation(t *testing.T) {
 	if err := email.SendEmail(ctx, "target@example.test", "Subject", "Body"); !errors.Is(err, instancecontrol.ErrEmailDisabled) {
 		t.Fatalf("transport gate: %v", err)
 	}
-	if err := control.EnableEmail(); err != nil {
-		t.Fatal(err)
-	}
+	f.enableEmail(t)
 	if err := email.CheckAvailability(ctx); err != nil {
 		t.Fatal(err)
 	}

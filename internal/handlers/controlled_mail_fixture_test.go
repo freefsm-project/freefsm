@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/delivery"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
@@ -63,4 +65,17 @@ func (f *controlledMailInstance) start(t *testing.T) {
 	f.outbox.SetBeforeWork(f.manager.RefreshConnections)
 	f.api = f.control.Middleware(apiv1.NewRouterWithDelivery(f.pool, f.client, f.sessions, config.APIConfig{}, nil, f.outbox))
 	f.email = services.NewControlledEmailService(services.NewCompanySettingsService(f.client), f.control)
+}
+
+// enableEmail exercises the sealed, reviewed action rather than the obsolete
+// installation marker. It is only used after a test has established disabled policy.
+func (f *controlledMailInstance) enableEmail(t *testing.T) {
+	t.Helper()
+	policy, err := emailpolicy.Read(context.Background(), f.pool, false)
+	historyCheck(t, err)
+	cookie := sessionCookie(t, context.Background(), f.sessions, f.admin)
+	w := credentialPost(f.web, "/settings/enable-email", url.Values{"save_action_id": {newOperationKey()}, "save_revision": {policy.Review()}}, cookie)
+	if w.Code != http.StatusSeeOther || f.control.EmailDisabled() {
+		t.Fatalf("reviewed email enable: status=%d disposition=%s", w.Code, w.Header().Get("X-FreeFSM-Disposition"))
+	}
 }

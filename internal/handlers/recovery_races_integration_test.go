@@ -63,10 +63,17 @@ func TestRecoveryCommitTimeInvariantsHTTP(t *testing.T) {
 	}
 }
 
-func waitCredentialBlock(t *testing.T, pool *pgxpool.Pool, pid int) {
+func waitCredentialBlock(t *testing.T, pool *pgxpool.Pool, pid int, responses ...<-chan *httptest.ResponseRecorder) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
+		for _, response := range responses {
+			select {
+			case w := <-response:
+				t.Fatalf("credential action returned before transaction fence: status=%d location=%s", w.Code, w.Header().Get("Location"))
+			default:
+			}
+		}
 		var blocked bool
 		// Other test packages use the same database and authority lock, but a
 		// different fixture application_name. Their waiter is not evidence that

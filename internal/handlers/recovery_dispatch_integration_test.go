@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,7 +32,8 @@ func (l delayedRecoverySMTP) Accept() (net.Conn, error) {
 }
 
 func TestRecoveryDurableDispatchDoesNotEnumerateWithDelayedSMTP(t *testing.T) {
-	pool, client, router, _, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, company, admin := f.pool, f.client, f.web, f.company, f.admin
 	ctx := context.Background()
 	for _, name := range []string{"disabled", "pending"} {
 		client.User.Create().SetCompanyID(company).SetName(name).SetEmail(name + "@test").SetRole("tech").SetPasswordHash("unchanged").SetIsActive(false).SaveX(ctx)
@@ -70,8 +72,10 @@ func TestRecoveryDurableDispatchDoesNotEnumerateWithDelayedSMTP(t *testing.T) {
 	// Reconstruct the dispatcher after HTTP acknowledgement: persisted jobs survive
 	// service restart, and a stalled provider cannot delay any public response.
 	resets := services.NewPasswordResetService(client, pool)
-	email := services.NewEmailService(services.NewCompanySettingsService(client))
+	email := f.email
 	delayed := delayedRecoverySMTP{listener, make(chan struct{}), make(chan struct{})}
+	allowSMTP := sync.OnceFunc(func() { close(delayed.release) })
+	defer allowSMTP()
 	messages := make(chan []byte, 1)
 	smtpErr := make(chan error, 1)
 	go func() { b, e := receiveTestSMTP(delayed); messages <- b; smtpErr <- e }()
@@ -79,6 +83,8 @@ func TestRecoveryDurableDispatchDoesNotEnumerateWithDelayedSMTP(t *testing.T) {
 	go func() { _, e := resets.DispatchOne(ctx, email); dispatched <- e }()
 	select {
 	case <-delayed.entered:
+	case err := <-dispatched:
+		t.Fatalf("dispatch exited before SMTP admission: %v", err)
 	case <-time.After(5 * time.Second):
 		t.Fatal("SMTP not reached")
 	}
@@ -91,14 +97,14 @@ func TestRecoveryDurableDispatchDoesNotEnumerateWithDelayedSMTP(t *testing.T) {
 				t.Fatal("delayed SMTP leaked account")
 			}
 		case <-time.After(2 * time.Second):
-			close(delayed.release)
+			allowSMTP()
 			t.Fatal("public response waited for account SMTP")
 		}
 	}
 	if err = authorization.New(pool).EditIdentity(ctx, authorization.Actor{UserID: admin}, admin, "Admin", "new-admin@test"); err != nil {
 		t.Fatal(err)
 	}
-	close(delayed.release)
+	allowSMTP()
 	if err = <-dispatched; err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +136,8 @@ func TestRecoveryDurableDispatchDoesNotEnumerateWithDelayedSMTP(t *testing.T) {
 }
 
 func TestRecoveryFailedSMTPIsGenericAndQueueResumes(t *testing.T) {
-	pool, client, router, _, _, _ := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router := f.pool, f.client, f.web
 	ctx := context.Background()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -139,7 +146,7 @@ func TestRecoveryFailedSMTPIsGenericAndQueueResumes(t *testing.T) {
 	defer listener.Close()
 	client.CompanySettings.Update().SetSMTPHost("127.0.0.1").SetSMTPPort(listener.Addr().(*net.TCPAddr).Port).SetSMTPFrom("sender@example.test").SaveX(ctx)
 	resets := services.NewPasswordResetService(client, pool)
-	email := services.NewEmailService(services.NewCompanySettingsService(client))
+	email := f.email
 	for _, address := range []string{"admin@test", "unknown@test"} {
 		r := httptest.NewRequest("POST", "/forgot-password", strings.NewReader(url.Values{"email": {address}}.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")

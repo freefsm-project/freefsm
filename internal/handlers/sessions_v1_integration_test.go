@@ -109,7 +109,7 @@ func TestSessionRevocationFencesInflightAPIAction(t *testing.T) {
 		api.ServeHTTP(w, r)
 		done <- w
 	}()
-	waitCredentialBlock(t, pool, pid)
+	waitCredentialBlock(t, pool, pid, done)
 	if _, err := tx.Exec(ctx, `UPDATE sessions SET revoked_at=clock_timestamp() WHERE user_id=$1`, admin); err != nil {
 		t.Fatal(err)
 	}
