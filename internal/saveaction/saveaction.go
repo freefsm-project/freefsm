@@ -54,6 +54,11 @@ func ReadOnly(ctx context.Context) {
 // and observed the requested state already holds under its transaction locks.
 func ConfirmNoChange(ctx context.Context, tx pgx.Tx) error {
 	a, ok := ctx.Value(key{}).(Action)
+	if ok && a.ExecutionToken == "" {
+		if err := LockExecution(ctx, tx); err != nil {
+			return err
+		}
+	}
 	if !ok || !a.Atomic || !a.NoChange {
 		return nil
 	}
@@ -83,6 +88,13 @@ func RolledBack(ctx context.Context) {
 // An HTTP dispatch or a read-only transaction cannot produce this confirmation.
 func ConfirmDomain(ctx context.Context, tx pgx.Tx) error {
 	a, ok := ctx.Value(key{}).(Action)
+	if ok && a.ExecutionToken == "" {
+		// A dropped token must not turn a suppressed execution-owned receipt
+		// update into generic success after domain work has already occurred.
+		if err := LockExecution(ctx, tx); err != nil {
+			return err
+		}
+	}
 	if !ok || !a.Atomic {
 		return nil
 	}
@@ -141,8 +153,22 @@ func RecordEffect(ctx context.Context, tx executor, userID int64, action, target
 	if a.UserID != userID {
 		return errors.New("online action actor mismatch")
 	}
-	_, err := tx.Exec(ctx, `INSERT INTO online_save_effects(user_id,operation_id,action,target_type,target_id) VALUES($1,$2,$3,$4,$5)`, a.UserID, a.ID, action, target, id)
-	return err
+	// Serialize evidence insertion with reconciliation even for callers outside
+	// the authorization owner. Installed execution commands already hold this
+	// row before domain locks; the predicate also rejects lost/replaced tokens.
+	tag, err := tx.Exec(ctx, `WITH owned AS (
+		SELECT * FROM online_save_actions WHERE user_id=$1 AND operation_id=$2 FOR UPDATE
+	) INSERT INTO online_save_effects(user_id,operation_id,action,target_type,target_id)
+	SELECT user_id,operation_id,$3,$4,$5 FROM owned
+	WHERE (execution_token IS NULL AND $6='') OR
+	(execution_token=nullif($6,'')::uuid AND $7 AND request_path=$8 AND NOT execution_fenced AND domain_committed_at IS NULL AND completed_at IS NULL)`, a.UserID, a.ID, action, target, id, a.ExecutionToken, a.Atomic, a.Path)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrExecutionFenced
+	}
+	return nil
 }
 
 type Receipt struct {

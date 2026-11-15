@@ -43,20 +43,36 @@ func (s Store) AdmitExecution(ctx context.Context, a Action, digest, method, pat
 // LockExecution runs after the authority mutex and before any domain row lock
 // or effect. Reconciliation locks this same row, so a paused admitted dispatch
 // cannot execute after reconciliation has declared its nonexecution.
+// A present identity is checked even when an adapter loses its token. Generic
+// callers without an Action remain supported; execution-owning commands must
+// separately require Action/token at their entry point before calling services.
 func LockExecution(ctx context.Context, tx pgx.Tx) error {
 	a, ok := ctx.Value(key{}).(Action)
-	if !ok || a.ExecutionToken == "" {
+	if !ok {
 		return nil
+	}
+	var owned bool
+	var executable bool
+	err := tx.QueryRow(ctx, `SELECT execution_token IS NOT NULL,coalesce(execution_token=nullif($4,'')::uuid AND NOT execution_fenced AND domain_committed_at IS NULL AND completed_at IS NULL AND request_path=$3,false) FROM online_save_actions WHERE user_id=$1 AND operation_id=$2 FOR UPDATE`, a.UserID, a.ID, a.Path, a.ExecutionToken).Scan(&owned, &executable)
+	if errors.Is(err, pgx.ErrNoRows) && a.ExecutionToken == "" {
+		return nil // preserve generic commands without admitted receipt history
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrExecutionFenced
+	}
+	if err != nil {
+		return err
+	}
+	if !owned && a.ExecutionToken == "" {
+		return nil // legacy rows never acquire invented execution ownership
+	}
+	if !executable {
+		return ErrExecutionFenced
 	}
 	if !a.Atomic {
 		return ErrIdentity
 	}
-	var executable bool
-	err := tx.QueryRow(ctx, `SELECT execution_token=$3 AND NOT execution_fenced AND domain_committed_at IS NULL AND completed_at IS NULL AND request_path=$4 FROM online_save_actions WHERE user_id=$1 AND operation_id=$2 FOR UPDATE`, a.UserID, a.ID, a.ExecutionToken, a.Path).Scan(&executable)
-	if errors.Is(err, pgx.ErrNoRows) || err == nil && !executable {
-		return ErrExecutionFenced
-	}
-	return err
+	return nil
 }
 
 // FenceExecution is called by the owning command's terminal reconciliation
@@ -67,7 +83,8 @@ func LockExecution(ctx context.Context, tx pgx.Tx) error {
 func FenceExecution(ctx context.Context, tx pgx.Tx, userID int64, id, path string) (string, error) {
 	var token *string
 	var committed bool
-	err := tx.QueryRow(ctx, `SELECT execution_token,domain_committed_at IS NOT NULL FROM online_save_actions WHERE user_id=$1 AND operation_id=$2 AND request_path=$3 FOR UPDATE`, userID, id, path).Scan(&token, &committed)
+	var outcome string
+	err := tx.QueryRow(ctx, `SELECT execution_token,domain_committed_at IS NOT NULL,coalesce(domain_outcome,'saved') FROM online_save_actions WHERE user_id=$1 AND operation_id=$2 AND request_path=$3 FOR UPDATE`, userID, id, path).Scan(&token, &committed, &outcome)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return "unknown", nil
 	}
@@ -78,7 +95,7 @@ func FenceExecution(ctx context.Context, tx pgx.Tx, userID int64, id, path strin
 		return "unknown", ErrIdentity
 	}
 	if committed {
-		return "saved", nil
+		return outcome, nil
 	}
 	tag, err := tx.Exec(ctx, `UPDATE online_save_actions a SET execution_fenced=true,disposition='rejected' WHERE user_id=$1 AND operation_id=$2 AND completed_at IS NULL AND domain_committed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, userID, id)
 	if err != nil {
