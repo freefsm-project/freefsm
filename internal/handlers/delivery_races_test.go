@@ -17,7 +17,8 @@ func TestDeliveryObservedQueueMutationOrderHTTP(t *testing.T) {
 	for _, change := range []string{"archive", "remove", "rename", "convert", "revoke", "revoke-send", "revoke-download", "revoke-file"} {
 		for _, queueFirst := range []bool{true, false} {
 			t.Run(fmt.Sprintf("%s/queue_first_%v", change, queueFirst), func(t *testing.T) {
-				pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+				fixture := permissionHTTPControlledMailInstanceFixture(t)
+				pool, client, web, sessions, company, admin := fixture.pool, fixture.client, fixture.web, fixture.sessions, fixture.company, fixture.admin
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 				adminCookie := sessionCookie(t, ctx, sessions, admin)
@@ -98,7 +99,7 @@ func TestDeliveryObservedQueueMutationOrderHTTP(t *testing.T) {
 				if accepted && queued.Code != 303 || !accepted && queued.Code != 403 && queued.Code != 404 {
 					t.Fatalf("queue=%d %s", queued.Code, queued.Body.String())
 				}
-				history, err := delivery.New(pool, "").History(ctx, company, delivery.DocumentRef{Type: "estimate", ID: doc.ID})
+				history, err := fixture.outbox.History(ctx, company, delivery.DocumentRef{Type: "estimate", ID: doc.ID})
 				historyCheck(t, err)
 				if len(history) != 2*boolInt(accepted) {
 					t.Fatalf("partial fanout: %+v", history)

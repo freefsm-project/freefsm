@@ -13,13 +13,13 @@ import (
 	"testing"
 	"time"
 
-	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/google/uuid"
 )
 
 func TestReviewedDeliveryAPIReceiptAndDrift(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Customer").SaveX(ctx)
 	job := client.Job.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetJobType("Work").SaveX(ctx)
@@ -34,7 +34,7 @@ func TestReviewedDeliveryAPIReceiptAndDrift(t *testing.T) {
 	originalPDF := requestBody(t, web, cookie, "GET", path+"/pdf?version="+version, 200)
 	var versionID int64
 	fmt.Sscan(version, &versionID)
-	api := apiv1.NewRouter(pool, client, sessions)
+	api := f.api
 	token, err := sessions.CreateMobile(ctx, admin, "Delivery client")
 	historyCheck(t, err)
 	call := func(method, path string, input any, status int) map[string]any {

@@ -6,14 +6,14 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/statusflow"
 )
 
 func TestDeliveryAcceptanceCommercialABAHTTP(t *testing.T) {
 	for _, change := range []string{"unchanged", "edited", "ABA"} {
 		t.Run(change, func(t *testing.T) {
-			pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+			f := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 			ctx := context.Background()
 			cookie := sessionCookie(t, ctx, sessions, admin)
 			customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Acceptance customer").SaveX(ctx)
@@ -36,7 +36,7 @@ func TestDeliveryAcceptanceCommercialABAHTTP(t *testing.T) {
 				}
 			}
 			capture := &compositionSender{}
-			worked, err := delivery.New(pool, "").ProcessOne(ctx, capture, statusflow.NewAcceptanceHook(statusflow.New(pool)))
+			worked, err := f.outbox.ProcessOne(ctx, capture, statusflow.NewAcceptanceHook(statusflow.New(pool)))
 			historyCheck(t, err)
 			if !worked || len(capture.messages) != 1 {
 				t.Fatal("missing immutable send")

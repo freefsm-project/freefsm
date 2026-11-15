@@ -19,6 +19,11 @@ import (
 // request is blocked by that transaction, not merely by an earlier read check.
 func conversionOrderedEffects(t *testing.T, f *creditMatrix, first, second creditCommand, event string) (*httptest.ResponseRecorder, *httptest.ResponseRecorder) {
 	t.Helper()
+	ctx, cancel := context.WithTimeout(f.ctx, 30*time.Second)
+	defer cancel()
+	owned := *f
+	owned.ctx = ctx
+	f = &owned
 	_, err := f.pool.Exec(f.ctx, `CREATE FUNCTION conversion_effect_barrier() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(540054); RETURN NEW; END $$; CREATE TRIGGER conversion_effect_barrier BEFORE `+event+` FOR EACH ROW EXECUTE FUNCTION conversion_effect_barrier()`)
 	historyCheck(t, err)
 	tx, err := f.pool.Begin(f.ctx)
@@ -28,15 +33,49 @@ func conversionOrderedEffects(t *testing.T, f *creditMatrix, first, second credi
 	historyCheck(t, tx.QueryRow(f.ctx, `SELECT pg_backend_pid() FROM pg_advisory_xact_lock(540054)`).Scan(&holder))
 	a, b := make(chan *httptest.ResponseRecorder, 1), make(chan *httptest.ResponseRecorder, 1)
 	go func() { a <- f.call(first) }()
-	commercialWaiters(t, f.ctx, f.pool, holder, 1)
+	waitEffect := func(blocker int, done <-chan *httptest.ResponseRecorder, path string) {
+		t.Helper()
+		for {
+			select {
+			case response := <-done:
+				t.Fatalf("POST %s returned before advisory fence: status=%d body=%s", path, response.Code, response.Body.String())
+			case <-ctx.Done():
+				t.Fatalf("POST %s did not reach advisory fence behind PID %d: %v", path, blocker, ctx.Err())
+			default:
+			}
+			var n int
+			historyCheck(t, f.pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND application_name=$2 AND $1=ANY(pg_blocking_pids(pid)) AND wait_event='advisory'`, blocker, f.pool.Config().ConnConfig.RuntimeParams["application_name"]).Scan(&n))
+			if n > 0 {
+				return
+			}
+			select {
+			case response := <-done:
+				t.Fatalf("POST %s returned before advisory fence: status=%d body=%s", path, response.Code, response.Body.String())
+			case <-ctx.Done():
+				t.Fatalf("POST %s did not reach advisory fence behind PID %d: %v", path, blocker, ctx.Err())
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+	}
+	waitEffect(holder, a, first.path)
 	app := f.pool.Config().ConnConfig.RuntimeParams["application_name"]
 	historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT pid FROM pg_stat_activity WHERE application_name=$2 AND $1=ANY(pg_blocking_pids(pid)) AND wait_event='advisory'`, holder, app).Scan(&firstPID))
 	go func() { b <- f.call(second) }()
-	commercialWaiters(t, f.ctx, f.pool, firstPID, 1)
+	waitEffect(firstPID, b, second.path)
 	historyCheck(t, f.pool.QueryRow(f.ctx, `SELECT pid FROM pg_stat_activity WHERE application_name=$2 AND $1=ANY(pg_blocking_pids(pid)) AND wait_event='advisory'`, firstPID, app).Scan(&secondPID))
 	t.Logf("observed actual-effect barrier holder=%d first_writer=%d second=%d event=%s first=%s second_path=%s", holder, firstPID, secondPID, event, first.path, second.path)
 	historyCheck(t, tx.Commit(f.ctx))
-	return <-a, <-b
+	response := func(done <-chan *httptest.ResponseRecorder, path string) *httptest.ResponseRecorder {
+		t.Helper()
+		select {
+		case result := <-done:
+			return result
+		case <-ctx.Done():
+			t.Fatalf("POST %s did not finish after fence release: %v", path, ctx.Err())
+			return nil
+		}
+	}
+	return response(a, first.path), response(b, second.path)
 }
 
 func TestConversionQueuedGrantRevocationHTTP(t *testing.T) {
