@@ -1,6 +1,7 @@
 'use strict';
 const {randomUUID,createHash}=require('node:crypto');
 const {ProtectedStore}=require('./protected-store.cjs');
+const paymentRecovery=require('./payment-recovery.cjs');
 const clone=x=>JSON.parse(JSON.stringify(x));
 const clientIdentity=token=>token?createHash('sha256').update(token).digest('hex'):null;
 const fresh=()=>({version:1,user:null,token:null,lease:null,authority:null,contactEpoch:null,issuance:null,leaseLocked:false,cache:{},notes:{},clocks:{},clockJobs:{},clockCapabilities:null,clockLease:null,clockIssuance:null,pending:{},syncCursor:null,clockCursor:null,synced:false,restore:false,highWater:0});
@@ -10,7 +11,18 @@ const fresh=()=>({version:1,user:null,token:null,lease:null,authority:null,conta
 class ProtectedFieldClient {
  constructor(store,transport,now=()=>Date.now()){this.store=store;this.transport=transport;this.now=now;}
  async initialize(){return this.store.exclusive(async()=>{await this.store.create();try{await this.store.load();}catch(e){if(e.code!=='ENOENT')throw e;await this.store.save(fresh());}});}
- async transaction(fn){return this.store.exclusive(async()=>{const s=await this.store.load();return fn(s);});}
+  async transaction(fn){return this.store.exclusive(async()=>{
+   const s=await this.store.load();
+   // An adapter handoff cannot authorize or expose another family's financial
+   // intent. Persist its safe recovery record before any action or network call.
+   if(!this.ownsPaymentIntent()&&Object.values(s.pending).some(e=>e.family==='payment')){
+    paymentRecovery.preserveGeneration(s);
+    for(const [id,e] of Object.entries(s.pending))if(e.family==='payment')s.pending[id]=this.purgedOperation(e);
+    await this.persistAuthorityLoss(s);
+   }
+   return fn(s);
+  });}
+  ownsPaymentIntent(){return false;}
  async persist(s){await this.store.save(s);}
  async persistAuthorityLoss(s){
   try{await this.persist(s);}catch{
@@ -28,19 +40,21 @@ class ProtectedFieldClient {
   }
   s.highWater=now;await this.persist(s);
  }
- async purge(s,issuance=null){
+  async purge(s,issuance=null){
+   paymentRecovery.preserveGeneration(s);
   // Retain only nonsensitive operation identities/dispositions for safe lookup.
   const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]=this.purgedOperation(e);
   Object.assign(s,fresh(),{pending:safe,user:s.user,issuance});await this.persistAuthorityLoss(s);
  }
- purgedOperation(e){return {state:'purged',receipt:e.receipt,family:e.family,receipt_family:e.receipt_family};}
+  purgedOperation(e){return paymentRecovery.purged(e,{state:'purged',receipt:e.receipt,family:e.family,receipt_family:e.receipt_family});}
  async purgeDeniedIssuance(s,receipt){
   // A recovered terminal denial is ordinary authority loss, just like its 403.
   // Keep only the original issuance identity/disposition, never prior authority.
   await this.purge(s,{id:receipt.operation_id,state:'terminal',code:receipt.code});
   throw Error('authorization_purged');
  }
- beginRestore(s){
+  beginRestore(s){
+   paymentRecovery.beginRestore(s);
   // Missing-receipt lookup and its acknowledgement describe one server history.
   // Neither can authorize repair after another restore, even across restart.
   s.restore=true;
@@ -124,7 +138,7 @@ class ProtectedFieldClient {
    this.authenticated(s,previous);
    await this.persistAuthorityLoss(s);return {expires_at:l.expires_at,state:'synchronization_required'};
   });}
-  authenticated(s,previous){}
+   authenticated(s,previous){paymentRecovery.authenticated(s,previous);}
  reviewedDependencies(dependencies){
    if(!Array.isArray(dependencies)||dependencies.some(id=>typeof id!=='string'||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)))throw Error('review_required');
    return clone(dependencies);
@@ -196,8 +210,8 @@ class ProtectedFieldClient {
   if(!['forbidden','not_found'].includes(code))return false;
   await this.purge(s);return true;
  }
- async acknowledgeUncertain(id){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const e=s.pending[id];if(!e||e.state!=='restore_uncertain'||!e.lookupMissing)throw Error('restore_reconciliation_required');e.reconciled=true;await this.persist(s);});}
- async discard(id){return this.transaction(async s=>{delete s.pending[id];await this.persist(s);});}
+  async acknowledgeUncertain(id){return this.transaction(async s=>{await this.enforceOfflineAccessWindow(s);const e=s.pending[id];if(!e||e.family==='payment'&&!this.ownsPaymentIntent()||e.state!=='restore_uncertain'||!e.lookupMissing)throw Error('restore_reconciliation_required');e.reconciled=true;await this.persist(s);});}
+  async discard(id){return this.transaction(async s=>{if(s.pending[id]&&paymentRecovery.uncertain(s.pending[id]))throw Error('reconciliation_required');delete s.pending[id];await this.persist(s);});}
  async logout(){return this.store.exclusive(()=>this.store.destroy());}
 }
 module.exports={ProtectedFieldClient,ProtectedStore};

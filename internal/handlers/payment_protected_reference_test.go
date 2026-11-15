@@ -37,7 +37,11 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 			historyCheck(t, json.Unmarshal([]byte(raw), &created))
 			historyCheck(t, statusflow.New(pool).FinalizeInvoice(ctx, statusflow.Actor{ID: admin, CompanyID: company}, created.Data.ID))
 			auth := authorization.New(pool)
-			role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Protected collector", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "payment.record", Scope: authorization.Assigned}})
+			grants := []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}, {Permission: "invoice.view", Scope: authorization.Assigned}, {Permission: "payment.record", Scope: authorization.Assigned}}
+			if scenario == "shared_clocks" {
+				grants = append(grants, authorization.Grant{Permission: "time.view", Scope: authorization.Own})
+			}
+			role, err := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Protected collector", grants)
 			historyCheck(t, err)
 			user := client.User.Create().SetCompanyID(company).SetEmail("protected-payment@test").SetName("Collector").SetRole("tech").SetPasswordHash("fixture").SaveX(ctx)
 			historyCheck(t, auth.AssignUser(ctx, authorization.Actor{UserID: admin}, user.ID, role))

@@ -8,50 +8,8 @@ const fields=['amount','method','date','other_description','reference','note'];
 // Financial intent is never replayed by synchronization or receipt lookup. An
 // absent receipt is not evidence that money was not received, even after restore.
 class PaymentClient extends CommercialClient {
+  ownsPaymentIntent(){return true;}
   ownsPending(e){return e.family==='payment'||super.ownsPending(e);}
-  async purge(s,issuance=null){
-    // Upgrade existing protected entries from established authority before that
-    // authority is discarded. This is provenance, never a reusable grant.
-    for(const e of Object.values(s.pending))if(e.family==='payment'&&!e.generation&&s.authority?.epoch)e.generation=s.authority.epoch;
-    return super.purge(s,issuance);
-  }
-  archiveReceipt(e){
-    if(!e.receipt)return;
-    e.historicalReceipts||=[];
-    if(!e.historicalReceipts.some(r=>JSON.stringify(r)===JSON.stringify(e.receipt)))e.historicalReceipts.push(clone(e.receipt));
-    delete e.receipt;
-  }
-  authenticated(s,previous){
-    super.authenticated(s,previous);
-    for(const e of Object.values(s.pending))if(e.family==='payment'){
-      const generation=e.generation||previous?.epoch;
-      // A legacy purged receipt without an epoch is historical evidence only;
-      // fresh login cannot certify it as current without original-ID lookup.
-      if(generation&&generation!==s.authority.epoch||!generation&&e.receipt){
-        this.archiveReceipt(e);
-        delete e.lookupMissing;delete e.reconciled;
-        if(e.state!=='replaced'){e.restoreReview={epoch:null};e.state='locked_review';}
-      }
-      e.generation=s.authority.epoch;
-    }
-  }
-  purgedOperation(e){
-    const safe=super.purgedOperation(e);
-    if(e.family!=='payment')return safe;
-    // Restore provenance is not authority or private financial intent. Keep it
-    // across ordinary loss, but never carry lookup/acknowledgment through purge.
-    const restoreReview=e.restoreReview||(['locked_review','restore_uncertain'].includes(e.state)?{epoch:null}:undefined);
-    return {...safe,generation:e.generation,historicalReceipts:e.historicalReceipts,restoreReview,financialUncertain:!!e.financialUncertain||['unknown','unreceived','locked_review','restore_uncertain'].includes(e.state)};
-  }
-  beginRestore(s){
-    for(const e of Object.values(s.pending))if(e.family==='payment'){
-      if(e.state!=='replaced')e.restoreReview={epoch:null};
-      // This is evidence of a prior server history, not a receipt in the restored
-      // history. Retain only the same safe allowlist used by receipt lookup.
-      this.archiveReceipt(e);
-    }
-    super.beginRestore(s);
-  }
   refreshRestoreReview(s,e){
     if(!e.restoreReview||e.state==='replaced')return;
     // A purge removes shared authority. The safe marker still binds review to
@@ -158,11 +116,6 @@ class PaymentClient extends CommercialClient {
     if(e?.family!=='payment'||!['terminal','restore_uncertain'].includes(e.state)||!e.intent||e.withheld||!doc||doc.legacy_id!==e.reviewed.document_id||doc.job_id!==e.intent.job_id||doc.customer_id!==e.customer)throw Error('review_required');
     if(e.state==='restore_uncertain'&&!e.reconciled)throw Error('restore_reconciliation_required');
     const next=this.stagePaymentIn(s,e.target,values);e.state='replaced';await this.persist(s);return next;
-  });}
-  async discard(id){return this.transaction(async s=>{
-    const e=s.pending[id];
-    if(e?.family==='payment'&&(e.financialUncertain||['unknown','unreceived','locked_review','restore_uncertain'].includes(e.state)))throw Error('reconciliation_required');
-    delete s.pending[id];await this.persist(s);
   });}
 }
 module.exports={PaymentClient,ProtectedStore};

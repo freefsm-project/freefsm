@@ -56,6 +56,16 @@ or lookup. Same-epoch login does not manufacture restore uncertainty. A legacy
 receipt with no recoverable generation is treated as historical until lookup;
 an ordinary unknown operation gains no review path merely from a missing receipt.
 
+Shared adapters use the same Payment recovery lifecycle (`payment-recovery.cjs`),
+including purge, restore, authentication and uncertain-discard protection. Before
+another adapter operates on a store containing Payment work, its transaction removes
+private Payment intent and retains only safe recovery metadata. This handoff resets
+lookup/acknowledgment; another domain's synchronization cannot authorize Payment
+review. Reopen with `PaymentClient`, synchronize current Invoice/Payment authority,
+and reconcile the original IDs. Notes, Clocks, document creation, Commercial, PDF
+and Delivery adapters cannot erase the uncertainty or present an old-generation
+receipt as current by authenticating on behalf of the shared store.
+
 No synchronization, restart or authentication automatically submits work. Uncertain
 financial operation identities cannot be discarded to bypass reconciliation.
 There are no Credit, refund or reversal operations in this adapter.
