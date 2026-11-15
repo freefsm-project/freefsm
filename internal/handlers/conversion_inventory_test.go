@@ -66,7 +66,7 @@ type conversionHistory struct {
 // Drives the installed HTTP surfaces. The same scenario is used before a real
 // encrypted backup, so restoration is verified against real command receipts,
 // immutable PDFs/deliveries, field captures and durable uploaded bytes.
-func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Client, web http.Handler, cookie *http.Cookie, company int64) conversionHistory {
+func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Client, web http.Handler, cookie *http.Cookie, company int64, worker *delivery.Service) conversionHistory {
 	t.Helper()
 	ctx := context.Background()
 	out := conversionHistory{}
@@ -184,7 +184,7 @@ func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cli
 	noResurrection := func() {
 		t.Helper()
 		sender := &compositionSender{}
-		worked, err := delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+		worked, err := worker.ProcessOne(ctx, sender, nil)
 		historyCheck(t, err)
 		if worked || len(sender.messages) != 0 {
 			t.Fatal("conversion/reversion resurrected or retargeted original mail")
@@ -237,6 +237,6 @@ func exerciseConversionHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cli
 }
 
 func TestConversionCollaborationAndOriginalDeliveryInventoryHTTP(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
-	exerciseConversionHistory(t, pool, client, web, sessionCookie(t, context.Background(), sessions, admin), company)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	exerciseConversionHistory(t, f.pool, f.client, f.web, sessionCookie(t, context.Background(), f.sessions, f.admin), f.company, f.newWorker())
 }

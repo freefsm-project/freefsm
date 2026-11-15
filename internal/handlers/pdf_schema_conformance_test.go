@@ -10,18 +10,18 @@ import (
 	"testing"
 	"time"
 
-	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 func TestPDFServedSchemaConformanceHTTP(t *testing.T) {
-	pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, sessions, company, admin := f.pool, f.client, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Schema customer").SaveX(ctx)
 	j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Schema Job").SaveX(ctx)
 	invoice := client.Invoice.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobID(j.ID).SetTitle("Reviewed schema").SetInvoiceDate(time.Now()).SetDueDate(time.Now()).SaveX(ctx)
-	api := apiv1.NewRouter(pool, client, sessions)
+	api := f.api
 	docs := httptest.NewRecorder()
 	api.ServeHTTP(docs, httptest.NewRequest("GET", "/docs", nil))
 	if docs.Code != 200 || !strings.Contains(docs.Body.String(), "already-terminal operations in the shared supported-operation registry") {

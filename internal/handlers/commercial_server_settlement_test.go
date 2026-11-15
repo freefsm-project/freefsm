@@ -18,7 +18,8 @@ import (
 func TestCommercialServerSettlementLocksAPI(t *testing.T) {
 	for _, source := range []string{"allocation", "credit application"} {
 		t.Run(source, func(t *testing.T) {
-			pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+			f := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 			ctx := context.Background()
 			c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Locked customer").SaveX(ctx)
 			other := client.Customer.Create().SetCompanyID(company).SetDisplayName("Other customer").SaveX(ctx)
@@ -27,7 +28,7 @@ func TestCommercialServerSettlementLocksAPI(t *testing.T) {
 			assignFieldDocumentCreator(t, pool, j.ID, admin)
 			token, err := sessions.CreateMobile(ctx, admin, "Settlement matrix")
 			historyCheck(t, err)
-			api := apiv1.NewRouter(pool, client, sessions)
+			api := f.api
 			created := matrixState(t, lifecycleCall(t, api, token, "POST", "/invoices", matrixBody(t, map[string]any{"operation_id": newOperationKey(), "client_id": newOperationKey(), "job_id": j.ID, "customer_id": c.ID, "title": "Locked invoice", "line_items": []map[string]any{{"title": "Work", "quantity": "1", "unit_price": "100.00"}}}), 200))
 			path := fmt.Sprintf("/invoices/%d", created.ID)
 			read := func() string { return lifecycleCall(t, api, token, "GET", path, "", 200) }

@@ -7,13 +7,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/testutil"
@@ -67,7 +67,7 @@ func sameStatus(a, b *int64) bool {
 func TestQueueWorkerTrackingAndEvidenceIntegration(t *testing.T) {
 	f := newDeliveryFixture(t, testutil.InstanceDatabase(t))
 	ctx := context.Background()
-	svc := New(f.db.Pool, "https://example.test")
+	svc := f.service("https://example.test")
 	largePDF := make([]byte, 2<<20)
 	copy(largePDF, "pdf-v1")
 	request := QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"customer@example.test"}, Subject: "Frozen", TextBody: strings.Repeat("body-v1", 10000), HTMLBody: "<html><body>" + strings.Repeat("body-v1", 10000) + "</body></html>", PDF: largePDF, PDFFilename: "estimate.pdf"}}
@@ -121,20 +121,10 @@ func TestQueueWorkerTrackingAndEvidenceIntegration(t *testing.T) {
 	}
 	sender := &fakeSender{}
 	hook := &fakeHook{}
-	control, err := instancecontrol.New(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := control.DisableEmail(); err != nil {
-		t.Fatal(err)
-	}
-	bootstrapDeliveryAdmission(t, f, control)
-	control, err = instancecontrol.New(control.StateDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	bootstrapDeliveryAdmission(t, f, control)
-	svc.SetInstanceControl(control)
+	f.disableEmail(t)
+	f.manager.Shutdown()
+	f.control, f.manager = deliveryAdmission(t, f.db.Pool, f.control.StateDir())
+	svc = f.service("https://example.test")
 	if processed, err := svc.ProcessOne(ctx, sender, hook); processed || err != nil {
 		t.Fatalf("disabled processing = %v, %v", processed, err)
 	}
@@ -152,9 +142,7 @@ func TestQueueWorkerTrackingAndEvidenceIntegration(t *testing.T) {
 	if err := svc.ManualRetry(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, d.ID, "retry"); !errors.Is(err, instancecontrol.ErrEmailDisabled) {
 		t.Fatalf("disabled retry: %v", err)
 	}
-	if err := control.EnableEmail(); err != nil {
-		t.Fatal(err)
-	}
+	f.enableEmail(t)
 	ok, err := svc.ProcessOne(ctx, sender, hook)
 	if err != nil || !ok || hook.calls != 1 || !hook.changed {
 		t.Fatalf("process = %v %v, hook=%+v", ok, err, hook)
@@ -189,7 +177,7 @@ func TestQueueWorkerTrackingAndEvidenceIntegration(t *testing.T) {
 func TestAuthorizationRetryConcurrencyAndStaleStatusIntegration(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	actor := Actor{ID: f.tech, CompanyID: f.company, Role: "tech"}
 	base := QueueRequest{Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"x@y.test"}, Subject: "S", TextBody: "B", PDF: []byte("pdf-v1"), PDFFilename: "x.pdf"}}
 	base.Key = uuid.New()
@@ -296,7 +284,7 @@ func TestAuthorizationRetryConcurrencyAndStaleStatusIntegration(t *testing.T) {
 func TestLeaseCASMaxRecoveryAndStateGuardIntegration(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	actor := Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
 	r := QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"x@y.test"}, Subject: "S", TextBody: "B", PDF: []byte("pdf-v1"), PDFFilename: "x.pdf"}}
 	d, err := svc.Queue(ctx, actor, r)
@@ -364,19 +352,20 @@ func TestTrackingHandlerRejectsHEADAndSetsPrivacyHeaders(t *testing.T) {
 
 type deliveryFixture struct {
 	db                                                        *database.DB
+	control                                                   *instancecontrol.Control
+	manager                                                   *backup.Manager
 	company, otherCompany, admin, tech, job, estimate, status int64
 }
 
 func newDeliveryFixture(t *testing.T, instanceDSN ...string) *deliveryFixture {
 	t.Helper()
-	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set FREEFSM_TEST_DATABASE_URL to run PostgreSQL delivery tests")
-	}
-	schema := fmt.Sprintf("freefsm_delivery_%d", time.Now().UnixNano())
+	var dsn string
 	if len(instanceDSN) != 0 {
-		dsn, schema = instanceDSN[0], "public"
+		dsn = instanceDSN[0]
+	} else {
+		dsn = testutil.InstanceDatabase(t)
 	}
+	schema := "public"
 	ctx := context.Background()
 	adminPool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
@@ -423,6 +412,7 @@ func newDeliveryFixture(t *testing.T, instanceDSN ...string) *deliveryFixture {
 	if err = db.Pool.QueryRow(ctx, `INSERT INTO estimates(company_id,customer_id,job_id,status_id,title) VALUES($1,$2,$3,$4,'Estimate') RETURNING id`, f.company, customer, f.job, f.status).Scan(&f.estimate); err != nil {
 		t.Fatal(err)
 	}
+	f.control, f.manager = deliveryAdmission(t, db.Pool, t.TempDir())
 	return f
 }
 func deliverySearchPath(t *testing.T, dsn, schema string) string {

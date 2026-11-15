@@ -16,9 +16,7 @@ import (
 	"time"
 
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
-	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/database"
-	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/settlement"
 )
 
@@ -236,14 +234,15 @@ func pdfIdentityCall(t *testing.T, api http.Handler, token, method, path, body s
 func TestPDFPublicationFaultsRetrySameIdentityAPI(t *testing.T) {
 	for _, fault := range []string{"storage", "audit", "receipt", "renderer"} {
 		t.Run(fault, func(t *testing.T) {
-			pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
+			f := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, sessions, company, admin := f.pool, f.client, f.sessions, f.company, f.admin
 			ctx := context.Background()
 			c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Fault customer").SaveX(ctx)
 			j := client.Job.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobType("Fault Job").SaveX(ctx)
 			i := client.Invoice.Create().SetCompanyID(company).SetCustomerID(c.ID).SetJobID(j.ID).SetTitle("Durable invoice").SetInvoiceDate(time.Now()).SetDueDate(time.Now()).SaveX(ctx)
 			token, err := sessions.CreateMobile(ctx, admin, "Fault client")
 			historyCheck(t, err)
-			api := apiv1.NewRouterWithDelivery(pool, client, sessions, config.APIConfig{}, nil, delivery.New(pool, ""))
+			api := f.api
 			call := func(method, path, body string, status int) map[string]any {
 				t.Helper()
 				r := httptest.NewRequest(method, path, strings.NewReader(body))

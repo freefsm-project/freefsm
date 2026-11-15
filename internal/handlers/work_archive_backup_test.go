@@ -42,7 +42,7 @@ func TestWorkArchiveEncryptedBackupPreservesHistory(t *testing.T) {
 		}
 		historyCheck(t, tx.Commit(ctx))
 	}
-	web := middleware.Company(services.NewCompanySettingsService(src.client))(New(src.pool, src.client, src.sessions, &config.Config{UploadDir: src.uploadDir, MaxUploadSize: 25 << 20}))
+	web := src.control.Middleware(middleware.Company(services.NewCompanySettingsService(src.client))(New(src.pool, src.client, src.sessions, &config.Config{UploadDir: src.uploadDir, MaxUploadSize: 25 << 20}, src.control)))
 	h := exerciseWorkArchiveHistory(t, src.pool, src.client, web, sessionCookie(t, ctx, src.sessions, src.actor), src.company)
 	_, err = authorization.New(src.pool).SaveRole(ctx, authorization.Actor{UserID: src.actor}, 0, "Work history without Restore", []authorization.Grant{{Permission: "job.view", Scope: authorization.All}, {Permission: "job.archived.view", Scope: authorization.All}, {Permission: "project.view", Scope: authorization.All}, {Permission: "project.archived.view", Scope: authorization.All}})
 	historyCheck(t, err)

@@ -28,7 +28,7 @@ func TestIntegrationWorkflowIntentPreservesSelectedPDF(t *testing.T) {
 	if err := f.db.Pool.QueryRow(ctx, `INSERT INTO document_pdf_versions(company_id,document_type,document_id,source_token,filename,content,generated_by,source_snapshot) VALUES($1,'estimate',$2,'historical-source','selected.pdf',$3,$4,'{}') RETURNING id`, f.company, f.estimate, []byte("selected immutable bytes"), f.admin).Scan(&version); err != nil {
 		t.Fatal(err)
 	}
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	a := Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
 	r := QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, PDFVersionID: version, ConfirmStalePDF: true, Snapshot: Snapshot{To: []string{"recipient@example.com"}, Subject: "Frozen", PDF: []byte("untrusted caller bytes"), PDFFilename: "untrusted.pdf"}}
 	d, err := svc.Queue(ctx, a, r)
@@ -64,7 +64,7 @@ func TestIntegrationWorkflowIntentPreservesSelectedPDF(t *testing.T) {
 func TestIntegrationAcceptancePersistenceRetryAndFrozenIntent(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	r := QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"recipient@example.com"}, Subject: "Frozen", PDF: []byte("pdf-v1"), PDFFilename: "frozen.pdf"}}
 	a := Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
 	d, err := svc.Queue(ctx, a, r)

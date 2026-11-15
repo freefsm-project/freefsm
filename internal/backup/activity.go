@@ -1,6 +1,7 @@
 package backup
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -22,6 +23,30 @@ type pendingActivity struct {
 }
 
 func (m *Manager) pendingPath() string { return filepath.Join(m.root, "pending-activity.json") }
+
+// Only the exact active producer's fallback may coexist with capture admission
+// release. This does not authorize replay, a new job, or replacement. The global
+// operation lock remains held until finishActivity records the actual outcome.
+func (m *Manager) requireNoPendingExceptOwner(active *job) error {
+	if _, err := os.Lstat(m.pendingPath()); errors.Is(err, os.ErrNotExist) {
+		if active == nil || active.outcome.Key == "" {
+			return nil
+		}
+		return ErrRecoveryRequired
+	}
+	if active == nil || !active.active || active.Kind != "backup" || active.outcome.Key == "" {
+		return ErrRecoveryRequired
+	}
+	want, err := json.Marshal(pendingActivity{Destination: m.destinationIdentity(), Event: active.outcome, Operation: resolutionHash("status", active.ID)})
+	if err != nil {
+		return err
+	}
+	got, err := os.ReadFile(m.pendingPath())
+	if err != nil || !bytes.Equal(bytes.TrimSpace(got), want) {
+		return ErrRecoveryRequired
+	}
+	return nil
+}
 
 func (m *Manager) validActor(actor ActivityActor) bool {
 	return actor.ID > 0 && (m.cfg.ActivitySink == nil || (strings.TrimSpace(actor.Name) != "" && len(actor.Name) <= 1024 && len(actor.CompanyName) <= 1024))

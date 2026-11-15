@@ -19,6 +19,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/database"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/handlers"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/testutil"
@@ -59,6 +60,21 @@ func engineInstance(t *testing.T, label string) (backup.Config, *backup.Manager)
 	}
 	defer db.Close()
 	if err = db.Migrate(context.Background(), database.MigrationFS()); err != nil {
+		t.Fatal(err)
+	}
+	tx, err := db.Pool.Begin(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(context.Background())
+	control, err := instancecontrol.New(cfg.StateDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = emailpolicy.Import(context.Background(), tx, control.LegacyEmailDisabled); err != nil {
+		t.Fatal(err)
+	}
+	if err = tx.Commit(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if _, err = db.Pool.Exec(context.Background(), "CREATE TABLE release_probe(value text NOT NULL); INSERT INTO release_probe VALUES ('"+label+"')"); err != nil {

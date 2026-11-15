@@ -44,7 +44,11 @@ func TestDeliveryStagedProcessHelper(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer pool.Close()
-	worked, err := New(pool, "").ProcessOne(ctx, processSender{os.Getenv("FREEFSM_DELIVERY_PROCESS_MODE") == "crash"}, nil)
+	control, manager := deliveryAdmission(t, pool, os.Getenv("FREEFSM_DELIVERY_PROCESS_STATE"), true)
+	svc := New(pool, "")
+	svc.SetInstanceControl(control)
+	svc.SetBeforeWork(manager.RefreshConnections)
+	worked, err := svc.ProcessOne(ctx, processSender{os.Getenv("FREEFSM_DELIVERY_PROCESS_MODE") == "crash"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,14 +61,14 @@ func TestDeliveryStagedCrashRestartAndConcurrentProcesses(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	d, err := svc.Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"owned@example.test"}, Subject: "Process", PDF: []byte("pdf-v1 exact restart"), PDFFilename: "x.pdf"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	command := func(mode string) *exec.Cmd {
 		cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestDeliveryStagedProcessHelper$", "-test.count=1")
-		cmd.Env = append(os.Environ(), "FREEFSM_DELIVERY_PROCESS_DSN="+f.db.Pool.Config().ConnString(), "FREEFSM_DELIVERY_PROCESS_MODE="+mode)
+		cmd.Env = append(os.Environ(), "FREEFSM_DELIVERY_PROCESS_DSN="+f.db.Pool.Config().ConnString(), "FREEFSM_DELIVERY_PROCESS_MODE="+mode, "FREEFSM_DELIVERY_PROCESS_STATE="+f.control.StateDir())
 		return cmd
 	}
 	parse := func(raw []byte) processObservation {

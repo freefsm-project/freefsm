@@ -20,12 +20,16 @@ import (
 	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/ent"
-	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/freefsm-project/freefsm/internal/settlement"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
 )
+
+// The archived producer compiles this harness alone and never invokes current
+// destination composition. The current test binary installs the instance owner.
+var pdfHistoricalInstanceDSN func(*testing.T) string
+var pdfHistoricalInstanceRouter func(*testing.T, *pgxpool.Pool, *ent.Client) http.Handler
 
 // This accepted source contains the old production PDF/Delivery producers, not
 // merely an older subset of today's migration files.
@@ -139,7 +143,10 @@ func TestPDFExactHistoricalProducerUpgradeReplayAPI(t *testing.T) {
 	historyCheck(t, err)
 	var capture pdfHistoricalCapture
 	historyCheck(t, json.Unmarshal(raw, &capture))
-	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
+	if pdfHistoricalInstanceDSN == nil || pdfHistoricalInstanceRouter == nil {
+		t.Fatal("current historical replay requires its instance fixture")
+	}
+	dsn := pdfHistoricalInstanceDSN(t)
 	root, err := pgxpool.New(ctx, dsn)
 	historyCheck(t, err)
 	t.Cleanup(func() {
@@ -148,21 +155,23 @@ func TestPDFExactHistoricalProducerUpgradeReplayAPI(t *testing.T) {
 		root.Close()
 	})
 	pdfHistoricalCommand(t, dir, nil, "psql", dsn, "-Xq", "-v", "ON_ERROR_STOP=1", "-f", filepath.Join(dir, "history.sql"))
-	scoped, err := dsnWithSearchPath(dsn, capture.Schema)
+	// The dump's isolated historical schema becomes the sole instance schema;
+	// rows and immutable producer facts are not rewritten.
+	_, err = root.Exec(ctx, "DROP SCHEMA public; ALTER SCHEMA "+pgx.Identifier{capture.Schema}.Sanitize()+" RENAME TO public")
 	historyCheck(t, err)
-	pool, err := pgxpool.New(ctx, scoped)
+	pool, err := pgxpool.New(ctx, dsn)
 	historyCheck(t, err)
 	t.Cleanup(pool.Close)
-	config, err := pgx.ParseConfig(scoped)
+	config, err := pgx.ParseConfig(dsn)
 	historyCheck(t, err)
 	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, stdlib.OpenDB(*config))))
 	t.Cleanup(func() { historyCheck(t, client.Close()) })
-	api := apiv1.NewRouter(pool, client, services.NewSessionService(pool))
 	historyEqual(t, "restored producer facts", historyDurableRows(t, pool, pdfHistoricalTables), capture.Rows)
 	for range 2 {
 		historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS()))
 		historyEqual(t, "upgrade preserves exact historical facts", historyDurableRows(t, pool, pdfHistoricalTables), capture.Rows)
 	}
+	api := pdfHistoricalInstanceRouter(t, pool, client)
 	for _, original := range capture.Terminal {
 		replay := pdfHistoricalCall(t, api, capture.Token, original.Method, original.Path, original.Request, original.Status)
 		// Error envelopes have a fresh HTTP request ID; the receipt fetched below

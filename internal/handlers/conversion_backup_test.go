@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5"
@@ -39,8 +40,11 @@ func TestConversionBackupRestoresCapturedCyclesAndSharedReceipts(t *testing.T) {
 		}
 		historyCheck(t, tx.Commit(ctx))
 	}
-	web := middleware.Company(services.NewCompanySettingsService(src.client))(New(src.pool, src.client, src.sessions, &config.Config{UploadDir: src.uploadDir, MaxUploadSize: 25 << 20}))
-	history := exerciseConversionHistory(t, src.pool, src.client, web, sessionCookie(t, ctx, src.sessions, src.actor), src.company)
+	web := src.control.Middleware(middleware.Company(services.NewCompanySettingsService(src.client))(New(src.pool, src.client, src.sessions, &config.Config{UploadDir: src.uploadDir, MaxUploadSize: 25 << 20}, src.control)))
+	worker := delivery.New(src.pool, "")
+	worker.SetInstanceControl(src.control)
+	worker.SetBeforeWork(src.manager.RefreshConnections)
+	history := exerciseConversionHistory(t, src.pool, src.client, web, sessionCookie(t, ctx, src.sessions, src.actor), src.company, worker)
 	tables := []string{"estimates", "invoices", "estimate_invoice_conversion_cycles", "commercial_operations", "operation_admissions", "custom_field_definitions", "files", "comments", "tag_links", "document_pdf_versions", "document_deliveries", "document_delivery_events", "activity_logs"}
 	before := historyDurableRows(t, src.pool, tables)
 	var auditThrough int64

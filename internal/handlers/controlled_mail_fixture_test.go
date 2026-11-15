@@ -79,3 +79,11 @@ func (f *controlledMailInstance) enableEmail(t *testing.T) {
 		t.Fatalf("reviewed email enable: status=%d disposition=%s", w.Code, w.Header().Get("X-FreeFSM-Disposition"))
 	}
 }
+
+// Reconstruct a worker over the same durable instance and admission owner.
+func (f *controlledMailInstance) newWorker() *delivery.Service {
+	s := delivery.New(f.pool, "")
+	s.SetInstanceControl(f.control)
+	s.SetBeforeWork(f.manager.RefreshConnections)
+	return s
+}

@@ -18,7 +18,7 @@ func TestArchiveCancelsPendingAndClaimedDelivery(t *testing.T) {
 			t.Run(target+map[bool]string{false: "/queued", true: "/claimed"}[claim], func(t *testing.T) {
 				f := newDeliveryFixture(t)
 				ctx := context.Background()
-				svc := New(f.db.Pool, "")
+				svc := f.service("")
 				a := Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
 				r := QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"one@example.test", "two@example.test"}, Subject: "Frozen", TextBody: "Body", PDF: []byte("pdf-v1"), PDFFilename: "original.pdf"}}
 				d, err := svc.Queue(ctx, a, r)
@@ -71,7 +71,7 @@ func TestArchiveDuringAdmittedTransportRetainsTruthfulOutcome(t *testing.T) {
 		t.Run(map[bool]string{true: "accepted", false: "failed"}[accepted], func(t *testing.T) {
 			f := newDeliveryFixture(t)
 			ctx := context.Background()
-			svc := New(f.db.Pool, "")
+			svc := f.service("")
 			r := QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"one@example.test"}, Subject: "Frozen", TextBody: "Body", PDF: []byte("pdf-v1"), PDFFilename: "original.pdf"}}
 			if _, err := svc.Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, r); err != nil {
 				t.Fatal(err)
@@ -108,7 +108,7 @@ func TestJobAndProjectArchiveDoNotCancelActiveDocumentMail(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			f := newDeliveryFixture(t)
 			ctx := context.Background()
-			svc := New(f.db.Pool, "")
+			svc := f.service("")
 			r := QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"one@example.test", "two@example.test"}, Subject: "Frozen", TextBody: "Body", PDF: []byte("pdf-v1"), PDFFilename: "original.pdf"}}
 			if _, err := svc.Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, r); err != nil {
 				t.Fatal(err)

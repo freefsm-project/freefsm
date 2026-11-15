@@ -35,9 +35,7 @@ func TestEngineRecoveryFaultOutcomes(t *testing.T) {
 				dst := f.manager(t, "destination")
 				seedCrashSessions(t, dst, "destination")
 				if disabled {
-					if err := dst.cfg.Control.DisableEmail(); err != nil {
-						t.Fatal(err)
-					}
+					disableCrashEmail(t, dst)
 				}
 				op := stageCrashArchive(t, dst, archive)
 				if scenario.point == "archive-changed" {
@@ -68,7 +66,7 @@ func TestEngineRecoveryFaultOutcomes(t *testing.T) {
 				if scenario.outcome == "restore" {
 					assertCommittedCrashState(t, dst)
 					assertCrashMaintenance(t, dst)
-				} else if dst.cfg.Control.EmailDisabled() != disabled {
+				} else if crashEmailDisabled(t, dst) != disabled {
 					t.Fatal("prior email policy not restored")
 				}
 				if scenario.outcome != "restore" {
@@ -164,7 +162,7 @@ func TestEngineRecoveryLateBoundaries(t *testing.T) {
 
 func TestEngineRecoveryLegacyJournalAndInstalledMarker(t *testing.T) {
 	f := newCrashFixture(t)
-	src := f.manager(t, "source")
+	src := f.manager(t, "source", true)
 	archive := createCrashArchive(t, src)
 	for _, disabled := range []bool{false, true} {
 		name := "enabled"
@@ -172,7 +170,7 @@ func TestEngineRecoveryLegacyJournalAndInstalledMarker(t *testing.T) {
 			name = "disabled"
 		}
 		t.Run(name, func(t *testing.T) {
-			dst := f.manager(t, "destination")
+			dst := f.manager(t, "destination", true)
 			if disabled {
 				if err := dst.cfg.Control.DisableEmail(); err != nil {
 					t.Fatal(err)
@@ -191,7 +189,7 @@ func TestEngineRecoveryLegacyJournalAndInstalledMarker(t *testing.T) {
 			for range 2 {
 				runCrashChild(t, dst, "", "recover", "")
 				assertCrashState(t, dst, "destination")
-				if dst.cfg.Control.EmailDisabled() != disabled {
+				if crashEmailDisabled(t, dst) != disabled {
 					t.Fatal("legacy recovery changed prior enabled/disabled policy")
 				}
 				if _, err := dst.StatusCapability(id); !errors.Is(err, ErrNotFound) {
@@ -211,7 +209,7 @@ func TestEngineRecoveryLegacyInstalledBootstrap(t *testing.T) {
 				name = marker + "/disabled"
 			}
 			t.Run(name, func(t *testing.T) {
-				m := f.manager(t, "installed")
+				m := f.manager(t, "installed", true)
 				if disabled {
 					if err := m.cfg.Control.DisableEmail(); err != nil {
 						t.Fatal(err)
@@ -233,7 +231,7 @@ func TestEngineRecoveryLegacyInstalledBootstrap(t *testing.T) {
 				for range 2 {
 					runCrashChild(t, m, "", "recover", "")
 					assertCrashState(t, m, "installed")
-					if m.cfg.Control.EmailDisabled() != disabled {
+					if crashEmailDisabled(t, m) != disabled {
 						t.Fatal("installed legacy email state changed")
 					}
 				}

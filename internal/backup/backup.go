@@ -168,8 +168,12 @@ func (m *Manager) writeJournal(j journal) error {
 
 // Caller must hold OperationLock. Lstat also rejects dangling journal symlinks.
 func (m *Manager) requireNoJournal() error {
-	if _, err := os.Lstat(m.pendingPath()); !errors.Is(err, os.ErrNotExist) {
-		return ErrRecoveryRequired
+	return m.requireNoJournalExceptOwner(nil)
+}
+
+func (m *Manager) requireNoJournalExceptOwner(active *job) error {
+	if err := m.requireNoPendingExceptOwner(active); err != nil {
+		return err
 	}
 	if _, err := os.Lstat(m.journalPath()); !errors.Is(err, os.ErrNotExist) {
 		return ErrRecoveryRequired
@@ -634,7 +638,7 @@ func (m *Manager) startBackupFor(actor ActivityActor, source, password, action s
 		}
 		defer release()
 		man, e := m.capture(ctx, j.dir, source)
-		clearErr := m.finishAdmission(ctx)
+		clearErr := m.finishAdmission(ctx, j)
 		if clearErr != nil {
 			return classified(FailureRecoveryRequired, errors.Join(e, clearErr))
 		}
@@ -1063,7 +1067,7 @@ func (m *Manager) restore(ctx context.Context, j *job) error {
 	if e = m.resolve(recoveryCtx, state); e != nil {
 		return classified(FailureRecoveryRequired, errors.Join(workErr, e))
 	}
-	if e = m.finishAdmission(recoveryCtx); e != nil {
+	if e = m.finishAdmission(recoveryCtx, nil); e != nil {
 		return classified(FailureRecoveryRequired, errors.Join(workErr, e))
 	}
 	if workErr != nil {

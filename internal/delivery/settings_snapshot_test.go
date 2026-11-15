@@ -13,7 +13,7 @@ func TestSettingsChangesPreserveQueuedSnapshot(t *testing.T) {
 	if _, err := f.db.Pool.Exec(ctx, `UPDATE company_settings SET smtp_host='old.example',smtp_from='original@example.com' WHERE company_id=$1`, f.company); err != nil {
 		t.Fatal(err)
 	}
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	d, err := svc.Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"recipient@example.com"}, Subject: "Frozen subject", TextBody: "Frozen body", PDF: []byte("original bytes"), PDFFilename: "original.pdf"}})
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestQueueRejectsMissingTransportWithoutInventingSnapshot(t *testing.T) {
 	if _, err := f.db.Pool.Exec(ctx, `UPDATE company_settings SET smtp_host='' WHERE company_id=$1`, f.company); err != nil {
 		t.Fatal(err)
 	}
-	_, err := New(f.db.Pool, "").Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"recipient@example.com"}, Subject: "Subject", PDF: []byte("bytes"), PDFFilename: "file.pdf"}})
+	_, err := f.service("").Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"recipient@example.com"}, Subject: "Subject", PDF: []byte("bytes"), PDFFilename: "file.pdf"}})
 	if err == nil {
 		t.Fatal("queued without a configured transport")
 	}

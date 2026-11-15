@@ -4,10 +4,19 @@ The existing backup Manager owns verification. `resolve` retains selected identi
 in the scoped closed lease before installed-state verification, activity publication
 and resolved advancement; only then can recovery/journal cleanup run.
 `finishAdmission` reconciles retained identity even without a journal, verifies the
-installed destination, replays pending activity, finishes cleanup and pool reset,
+installed destination, replays abandoned pending activity, finishes cleanup and pool reset,
 and persists release-ready. Only that private path sets `releaseBinding`.
 Control's lease invokes `PrepareAdmission` with its exact identity; caller strings
 or a syntactically ready record cannot create the Manager's release entitlement.
+
+Ordinary backup capture may release product admission before encryption finishes.
+That active producer still owns OperationLock and its job lease; its exact durable
+interruption fallback is not an observed outcome and must not be replayed. Only
+that owner's matching destination/event/status binding may remain pending at this
+release. The owner publishes the actual outcome before releasing OperationLock.
+Startup has no active producer entitlement and must replay pending evidence before
+opening admission. New operations and restore replacement still reject any pending
+event. Immutable activity keys never permit rewriting an already published outcome.
 
 Ordinary Enter takes shared intent then shared admission, synchronizes the exact
 versioned discriminator and invokes Manager.VerifyAdmission to synchronize the

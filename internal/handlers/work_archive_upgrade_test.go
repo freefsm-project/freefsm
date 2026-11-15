@@ -10,7 +10,8 @@ import (
 )
 
 func TestWorkArchiveInstalledStartupPreservesRecordedFacts(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	h := exerciseWorkArchiveHistory(t, pool, client, web, sessionCookie(t, ctx, sessions, admin), company)
 	// This ticket changes committing commands, not the installed schema. The

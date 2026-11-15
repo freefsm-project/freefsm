@@ -73,7 +73,8 @@ func exerciseWorkArchiveHistory(t *testing.T, pool *pgxpool.Pool, client *ent.Cl
 }
 
 func TestWorkArchivePreservesIndependentHistoryHTTP(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	h := exerciseWorkArchiveHistory(t, pool, client, web, cookie, company)
@@ -94,7 +95,8 @@ func TestWorkArchivePreservesIndependentHistoryHTTP(t *testing.T) {
 }
 
 func TestWorkArchiveReopenRepairsMastersWithoutRestoringProjectHTTP(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	h := exerciseWorkArchiveHistory(t, pool, client, web, cookie, company)

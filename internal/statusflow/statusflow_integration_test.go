@@ -344,9 +344,12 @@ func withTx(t *testing.T, db *pgxpool.Pool, fn func(pgx.Tx) error) {
 	}
 }
 
-func statusDB(t *testing.T) (*pgxpool.Pool, int64, int64, int64, int64) {
+func statusDB(t *testing.T, instanceDSN ...string) (*pgxpool.Pool, int64, int64, int64, int64) {
 	t.Helper()
 	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
+	if len(instanceDSN) != 0 {
+		dsn = instanceDSN[0]
+	}
 	if dsn == "" {
 		t.Skip("set FREEFSM_TEST_DATABASE_URL")
 	}
@@ -357,7 +360,10 @@ func statusDB(t *testing.T) (*pgxpool.Pool, int64, int64, int64, int64) {
 	}
 	t.Cleanup(adminPool.Close)
 	schema := fmt.Sprintf("freefsm_statusflow_%d", time.Now().UnixNano())
-	if _, err = adminPool.Exec(ctx, `CREATE SCHEMA `+schema); err != nil {
+	if len(instanceDSN) != 0 {
+		schema = "public"
+	}
+	if _, err = adminPool.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS `+schema); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = adminPool.Exec(ctx, `DROP SCHEMA `+schema+` CASCADE`) })

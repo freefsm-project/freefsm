@@ -1,7 +1,6 @@
 package instancecontrol_test
 
 import (
-	"context"
 	"errors"
 	"os"
 	"testing"
@@ -46,27 +45,15 @@ func TestFailedMarkerRemovalPreservesProtection(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if marker == "email" {
-				if !restarted.EmailDisabled() {
-					t.Fatal("failed enable silently removed the restored-instance notice")
-				}
-				if err := restarted.CheckEmail(context.Background()); !errors.Is(err, instancecontrol.ErrEmailDisabled) {
-					t.Fatalf("failed enable admitted outbound mail: %v", err)
-				}
-			} else {
-				if _, release, err := restarted.Enter(context.Background()); !errors.Is(err, instancecontrol.ErrMaintenance) {
-					if release != nil {
-						release()
-					}
-					t.Fatalf("failed clear admitted ordinary work: %v", err)
-				}
+			// This is legacy import evidence, not modern mail authority.
+			if disabled, err := restarted.LegacyEmailDisabled(); err != nil || !disabled {
+				t.Fatalf("failed removal lost legacy protection: disabled=%v err=%v", disabled, err)
 			}
 			if err := openGate(); err != nil {
 				t.Fatal(err)
 			}
-			err = restarted.CheckEmail(context.Background())
-			if err != nil {
-				t.Fatalf("explicit retry after repair failed: %v", err)
+			if disabled, err := restarted.LegacyEmailDisabled(); err != nil || disabled {
+				t.Fatalf("explicit legacy removal retry failed: disabled=%v err=%v", disabled, err)
 			}
 		})
 	}

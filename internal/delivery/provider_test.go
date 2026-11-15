@@ -15,7 +15,7 @@ import (
 func TestProviderTrustedAdapterExactAttemptAndMessage(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	a := Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
 	d, err := svc.Queue(ctx, a, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"owned@example.test"}, Subject: "Provider", PDF: []byte("pdf-v1"), PDFFilename: "x.pdf"}})
 	if err != nil {
@@ -137,7 +137,7 @@ type providerSender struct{ id string }
 func TestProviderLegacyAcceptanceKeepsAttemptUnknown(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	d, err := svc.Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"owned@example.test"}, Subject: "Legacy provider", PDF: []byte("pdf-v1"), PDFFilename: "x.pdf"}})
 	if err != nil {
 		t.Fatal(err)
@@ -170,7 +170,7 @@ func TestProviderLegacyAcceptanceKeepsAttemptUnknown(t *testing.T) {
 func TestProviderEvidenceBeforeAcceptanceIsRetainedAndReconciled(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	_, err := svc.Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"owned@example.test"}, Subject: "Provider", PDF: []byte("pdf-v1"), PDFFilename: "x.pdf"}})
 	if err != nil {
 		t.Fatal(err)
@@ -202,7 +202,7 @@ func (s providerSender) Send(_ context.Context, _ Delivery) (SendResult, error) 
 func TestProviderDelayedEvidenceRetainsOriginalAttempt(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	a := Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
 	d, err := svc.Queue(ctx, a, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"recipient@example.test"}, Subject: "S", PDF: []byte("pdf-v1"), PDFFilename: "x.pdf"}})
 	if err != nil {

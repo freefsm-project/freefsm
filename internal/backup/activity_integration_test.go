@@ -90,8 +90,8 @@ func TestRestoreActivityDurablePublication(t *testing.T) {
 				t.Fatal(err)
 			}
 			op = awaitOperation(t, dst, actor.ID, op.ID)
-			if scenario != "rollback" && op.Phase != "complete" {
-				t.Fatalf("committed restore marked failed: %+v", op)
+			if scenario != "rollback" && (op.Phase != "recovery-required" || op.Release != "unresolved") {
+				t.Fatalf("committed but unreleased restore must remain unresolved: %+v", op)
 			}
 			if scenario == "rollback" && op.Phase != "failed" {
 				t.Fatalf("rollback status: %+v", op)

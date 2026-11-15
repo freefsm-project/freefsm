@@ -137,7 +137,10 @@ func (m *Manager) retainedBinding() (resolutionBinding, error) {
 	return b, nil
 }
 
-func (m *Manager) finishAdmission(ctx context.Context) error {
+// active is the ordinary backup owner still holding OperationLock. Its capture
+// can release admission before encryption finishes, but its interruption fallback
+// is not yet an observed outcome. Startup has no active owner and must replay it.
+func (m *Manager) finishAdmission(ctx context.Context, active *job) error {
 	b, bindingErr := m.retainedBinding()
 	if bindingErr != nil && !errors.Is(bindingErr, os.ErrNotExist) {
 		return bindingErr
@@ -166,13 +169,15 @@ func (m *Manager) finishAdmission(ctx context.Context) error {
 	if b.Generation != generation {
 		return ErrRecoveryRequired
 	}
-	if err = m.replayPending(ctx); err != nil {
-		return err
+	if active == nil {
+		if err = m.replayPending(ctx); err != nil {
+			return err
+		}
 	}
 	if err = m.advanceResolution(b, resolutionResolved); err != nil {
 		return err
 	}
-	if err = m.requireNoJournal(); err != nil {
+	if err = m.requireNoJournalExceptOwner(active); err != nil {
 		return err
 	}
 	entries, err := os.ReadDir(m.root)
@@ -242,7 +247,7 @@ func (s *Startup) Finish(ctx context.Context) error {
 	if s.done {
 		return ErrRecoveryRequired
 	}
-	if err := s.m.finishAdmission(ctx); err != nil {
+	if err := s.m.finishAdmission(ctx, nil); err != nil {
 		return err
 	}
 	s.Close()

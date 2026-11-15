@@ -3,6 +3,8 @@ package backup
 import (
 	"context"
 	"crypto/rand"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -192,28 +194,46 @@ func TestEncryptedCrossRoleRestoreAndRecovery(t *testing.T) {
 	if e = c.QueryRow(ctx, "SELECT expires_at < now() AND revoked_at IS NOT NULL FROM sessions").Scan(&valid); e != nil || !valid {
 		t.Fatalf("sessions: %v %v", valid, e)
 	}
-	if !dst.cfg.Control.EmailDisabled() {
+	if disabled, err := dst.cfg.Control.LegacyEmailDisabled(); err != nil || !disabled {
 		t.Fatal("email enabled")
 	}
-	// Capture rollback material, simulate an interrupted destructive replacement,
-	// and recover twice without the uploaded password or a live originating job.
-	recovery := filepath.Join(dst.root, "crash-recovery")
-	if e = privateDir(recovery); e != nil {
-		t.Fatal(e)
-	}
-	if _, e = dst.capture(ctx, recovery, "rollback"); e != nil {
-		t.Fatal(e)
-	}
-	items, e := inventory(recovery)
+	// Let the actual restore owner capture and bind rollback evidence, then
+	// interrupt replacement and rollback. Recovery receives no archive password.
+	reader, _, _, e = src.OpenDownload(1, op.ID)
 	if e != nil {
 		t.Fatal(e)
 	}
-	if e = atomicJSON(filepath.Join(recovery, "recovery.json"), items); e != nil {
+	staged, e = dst.StageUpload(ctx, 2, reader, "long archive password")
+	_ = reader.Close()
+	if e != nil {
 		t.Fatal(e)
 	}
-	if e = dst.writeJournal(journal{Phase: "replacing", Recovery: "crash-recovery", EmailDisabled: true}); e != nil {
+	staged = awaitOperation(t, dst, 2, staged.ID)
+	if staged.Phase != "ready" {
+		t.Fatalf("second stage: %+v", staged)
+	}
+	dst.checkpoint = func(point string) error {
+		if point == "protections-applied" || point == "rollback-start" {
+			return errors.New("interrupt actual cross-role replacement")
+		}
+		return nil
+	}
+	if _, e = dst.StartRestore(ctx, 2, staged.ID, "destination", "destination"); e != nil {
 		t.Fatal(e)
 	}
+	failed := awaitOperation(t, dst, 2, staged.ID)
+	if failed.Phase != "recovery-required" {
+		t.Fatalf("interrupted replacement: %+v", failed)
+	}
+	var durable journal
+	b, e = os.ReadFile(dst.journalPath())
+	if e != nil || json.Unmarshal(b, &durable) != nil || durable.Phase != "replacing" || durable.Recovery != staged.ID+"-recovery" {
+		t.Fatalf("unbound recovery journal: %+v %v", durable, e)
+	}
+	if e = mVerifyRecovery(filepath.Join(dst.root, durable.Recovery)); e != nil {
+		t.Fatal(e)
+	}
+	dst.checkpoint = nil
 	if _, e = c.Exec(ctx, "DROP SCHEMA public CASCADE; CREATE SCHEMA public"); e != nil {
 		t.Fatal(e)
 	}

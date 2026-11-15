@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -107,21 +108,42 @@ func TestActivityFailureDiagnosticCorrelation(t *testing.T) {
 			if scenario.publicationFails {
 				wantStatusCategory, wantReports = FailureRecoveryRequired, 2
 			}
-			if op.Phase != "failed" || op.Failure.Category != wantStatusCategory || op.Failure.DiagnosticID == "" {
+			wantPhase := "failed"
+			if kind == "restore" && scenario.publicationFails {
+				wantPhase = "recovery-required"
+			}
+			if kind == "restore" {
+				// Reconstructed public status retains the diagnostic set, without
+				// exposing operator phases or selecting the latest as the cause.
+				wantStatusCategory = wantCategory
+			}
+			if op.Phase != wantPhase || op.Failure.Category != wantStatusCategory || op.Failure.DiagnosticID == "" {
 				t.Fatalf("failure status: %+v", op)
 			}
-			if len(reports) != wantReports || reports[len(reports)-1].Failure != op.Failure {
-				t.Fatalf("expected one diagnostic per failure, latest shared with status: reports=%+v status=%+v", reports, op.Failure)
+			if len(reports) != wantReports {
+				t.Fatalf("expected one diagnostic per failure: reports=%+v status=%+v", reports, op.Failure)
+			}
+			if kind == "restore" {
+				var want []Failure
+				for _, report := range reports {
+					f := report.Failure
+					want = append(want, Failure{Category: f.Category, DiagnosticID: f.DiagnosticID, Message: failureMessages[f.Category]})
+				}
+				if !reflect.DeepEqual(op.Diagnostics, want) || op.Failure != want[0] {
+					t.Fatalf("public diagnostic set: got=%+v want=%+v", op, want)
+				}
+			} else if reports[len(reports)-1].Failure != op.Failure {
+				t.Fatalf("ordinary status diagnostic changed: %+v", op)
 			}
 			original := reports[0].Failure
 			if original.Category != wantCategory {
 				t.Fatalf("original cause lost: %+v", original)
 			}
-			if scenario.publicationFails && original.DiagnosticID == op.Failure.DiagnosticID {
+			if scenario.publicationFails && original.DiagnosticID == reports[len(reports)-1].Failure.DiagnosticID {
 				t.Fatal("publication failure reused original cause's diagnostic")
 			}
-			if durable := readActivityDiagnostic(t, m); durable.Failure != op.Failure {
-				t.Fatalf("durable/status mismatch: %+v %+v", durable.Failure, op.Failure)
+			if durable := readActivityDiagnostic(t, m); durable.Failure != reports[len(reports)-1].Failure {
+				t.Fatalf("durable/operator mismatch: %+v %+v", durable.Failure, reports)
 			}
 			var event ActivityEvent
 			for _, candidate := range events {

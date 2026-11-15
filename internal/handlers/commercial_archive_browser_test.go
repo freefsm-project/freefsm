@@ -22,7 +22,8 @@ func TestCommercialArchiveRestorePersistedBrowser(t *testing.T) {
 	if os.Getenv("BROWSER_TESTS") != "1" {
 		t.Skip("set BROWSER_TESTS=1 and FREEFSM_TEST_DATABASE_URL")
 	}
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	adminCookie := sessionCookie(t, ctx, sessions, admin)
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Restore browser owner").SaveX(ctx)

@@ -6,8 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/delivery"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/settlement"
+	"github.com/freefsm-project/freefsm/internal/testutil"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -41,6 +45,8 @@ type integrationDeliveryFixture struct {
 	db            *pgxpool.Pool
 	svc           *Service
 	outbox        *delivery.Service
+	control       *instancecontrol.Control
+	manager       *backup.Manager
 	a             Actor
 	d             delivery.Delivery
 	sent, initial int64
@@ -48,8 +54,33 @@ type integrationDeliveryFixture struct {
 
 func integrationDelivery(t *testing.T, typ string, initialCategories ...string) integrationDeliveryFixture {
 	t.Helper()
-	db, company, admin, _, customer := statusDB(t)
+	db, company, admin, _, customer := statusDB(t, testutil.InstanceDatabase(t))
 	ctx := context.Background()
+	control, err := instancecontrol.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := backup.New(backup.Config{DSN: db.Config().ConnString(), StateDir: control.StateDir(), UploadDir: t.TempDir(), Control: control, BuildKind: backup.BuildDevelopment, ResetConnections: db.Reset})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(manager.Shutdown)
+	startup, err := manager.BeginStartup(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer startup.Close()
+	withTx(t, db, func(tx pgx.Tx) error { return emailpolicy.Import(ctx, tx, control.LegacyEmailDisabled) })
+	control.SetEmailPolicy(func(ctx context.Context) (bool, error) {
+		if err := manager.RefreshConnections(); err != nil {
+			return false, err
+		}
+		p, err := emailpolicy.Read(ctx, db, false)
+		return p.Enabled, err
+	})
+	if err := startup.Finish(ctx); err != nil {
+		t.Fatal(err)
+	}
 	var workflow, initial, sent, document int64
 	mustScan(t, db.QueryRow(ctx, `INSERT INTO status_workflows(company_id,name,object_type) VALUES($1,$2,$2) RETURNING id`, company, typ), &workflow)
 	categories := []string{"draft", "estimate", "sent", "accepted", "rejected", "completed"}
@@ -76,11 +107,13 @@ func integrationDelivery(t *testing.T, typ string, initialCategories ...string) 
 		t.Fatal(err)
 	}
 	outbox := delivery.New(db, "")
+	outbox.SetInstanceControl(control)
+	outbox.SetBeforeWork(manager.RefreshConnections)
 	d, err := outbox.Queue(ctx, delivery.Actor{ID: admin, CompanyID: company, Role: "admin"}, delivery.QueueRequest{Key: uuid.New(), Document: delivery.DocumentRef{Type: typ, ID: document}, Snapshot: delivery.Snapshot{To: []string{"customer@example.com"}, Subject: "Frozen", PDF: []byte("selected PDF"), PDFFilename: "selected.pdf"}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return integrationDeliveryFixture{db, New(db), outbox, Actor{ID: admin, CompanyID: company}, d, sent, initial}
+	return integrationDeliveryFixture{db: db, svc: New(db), outbox: outbox, control: control, manager: manager, a: Actor{ID: admin, CompanyID: company}, d: d, sent: sent, initial: initial}
 }
 
 func TestDeliveryEligibleProposalAndDraftInvoiceReview(t *testing.T) {
@@ -262,6 +295,9 @@ func TestIntegrationDeliveryAcceptanceFencePrecedesRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer workerPool.Close()
+	worker := delivery.New(workerPool, "")
+	worker.SetInstanceControl(f.control)
+	worker.SetBeforeWork(f.manager.RefreshConnections)
 	tx, err := f.db.Begin(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -275,7 +311,7 @@ func TestIntegrationDeliveryAcceptanceFencePrecedesRows(t *testing.T) {
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := delivery.New(workerPool, "").ProcessOne(ctx, integrationSender(integrationSend), NewAcceptanceHook(f.svc))
+		_, err := worker.ProcessOne(ctx, integrationSender(integrationSend), NewAcceptanceHook(f.svc))
 		done <- err
 	}()
 	for {

@@ -14,7 +14,7 @@ func TestRetryWindowSurvivesRestartAndExplicitManualRetry(t *testing.T) {
 		t.Run(map[bool]string{false: "temporary_failure", true: "ambiguous_crash"}[crash], func(t *testing.T) {
 			f := newDeliveryFixture(t)
 			ctx := context.Background()
-			svc := New(f.db.Pool, "")
+			svc := f.service("")
 			actor := Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
 			r := QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"x@y.test"}, Subject: "Frozen", TextBody: "B", PDF: []byte("pdf-v1"), PDFFilename: "x.pdf"}}
 			d, err := svc.Queue(ctx, actor, r)
@@ -31,7 +31,7 @@ func TestRetryWindowSurvivesRestartAndExplicitManualRetry(t *testing.T) {
 				t.Fatal(err)
 			}
 			// A newly constructed worker has only durable history to consult.
-			restarted := New(f.db.Pool, "")
+			restarted := f.service("")
 			restarted.now = func() time.Time { return time.Now().Add(25 * time.Hour) }
 			before := sender.calls
 			worked, err := restarted.ProcessOne(ctx, sender, nil)
@@ -63,7 +63,7 @@ func TestRetryWindowSurvivesRestartAndExplicitManualRetry(t *testing.T) {
 func TestManualRetryCannotInventUnknownOriginalWindow(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	a := Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
 	d, err := svc.Queue(ctx, a, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"owned@example.test"}, Subject: "Legacy", PDF: []byte("pdf-v1"), PDFFilename: "x.pdf"}})
 	if err != nil {

@@ -94,7 +94,8 @@ func (s *compositionSender) Send(_ context.Context, d delivery.Delivery) (delive
 }
 
 func TestIntegrationDeliveryFanoutHTMLOnlyHTTP(t *testing.T) {
-	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Customer").SaveX(ctx)
@@ -109,7 +110,7 @@ func TestIntegrationDeliveryFanoutHTMLOnlyHTTP(t *testing.T) {
 	values := url.Values{"pdf_version": {version}, "idempotency_key": {uuid.NewString()}, "to": {"external@example.test, other@example.test"}, "bcc": {"private@example.test"}, "subject": {"Reviewed"}, "html_body": {"<p>HTML only</p>"}}
 	fieldPost(t, router, cookie, path+"/email", values, 303)
 	fieldPost(t, router, cookie, path+"/email", values, 303)
-	worker := delivery.New(pool, "")
+	worker := f.newWorker()
 	history, err := worker.History(ctx, company, delivery.DocumentRef{Type: "estimate", ID: id})
 	if err != nil || len(history) != 3 {
 		t.Fatalf("fanout/replay = %+v, %v", history, err)
@@ -130,7 +131,8 @@ func TestIntegrationDeliveryFanoutHTMLOnlyHTTP(t *testing.T) {
 func TestIntegrationSelectedPDFHTMLCompositionHTTP(t *testing.T) {
 	for _, kind := range []string{"invoice", "estimate"} {
 		t.Run(kind, func(t *testing.T) {
-			pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+			f := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 			ctx := context.Background()
 			cookie := sessionCookie(t, ctx, sessions, admin)
 			c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Captured & customer").SetEmail("captured@example.test").SaveX(ctx)
@@ -179,7 +181,7 @@ func TestIntegrationSelectedPDFHTMLCompositionHTTP(t *testing.T) {
 			if _, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_from='changed@example.test', invoice_email_html='changed', estimate_email_html='changed' WHERE company_id=$1`, company); err != nil {
 				t.Fatal(err)
 			}
-			worker := delivery.New(pool, "")
+			worker := f.newWorker()
 			transport := &compositionSender{}
 			worked, err := worker.ProcessOne(ctx, transport, delivery.NopAcceptanceHook{})
 			if err != nil || !worked || len(transport.messages) != 1 {

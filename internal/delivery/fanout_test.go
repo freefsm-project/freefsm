@@ -12,7 +12,7 @@ import (
 func TestQueueFanoutImmutableRecipients(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "https://example.test")
+	svc := f.service("https://example.test")
 	a := Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}
 	r := QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{
 		To: []string{"outside@example.test", "second@example.test"}, CC: []string{"copy@example.test"}, BCC: []string{"private@example.test", "outside@example.test"},
@@ -85,7 +85,7 @@ func (s *recipientCapture) Send(_ context.Context, d Delivery) (SendResult, erro
 func TestQueueRejectsInvalidRecipientWithoutPartialFanout(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	r := QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"valid@example.test"}, BCC: []string{"not-an-address"}, Subject: "Reviewed", TextBody: "Body", PDF: []byte("pdf-v1"), PDFFilename: "estimate.pdf"}}
 	if _, err := svc.Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, r); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("invalid recipient accepted: %v", err)
@@ -99,7 +99,7 @@ func TestQueueRejectsInvalidRecipientWithoutPartialFanout(t *testing.T) {
 func TestQueueFanoutFailureRollsBackWholeRequest(t *testing.T) {
 	f := newDeliveryFixture(t)
 	ctx := context.Background()
-	svc := New(f.db.Pool, "")
+	svc := f.service("")
 	// Inject a storage failure on the second recipient, after the first insert
 	// and its events have executed. Retrying the same intent must queue both.
 	_, err := f.db.Pool.Exec(ctx, `CREATE FUNCTION fail_second_recipient() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW.recipients_to=ARRAY['z@example.test'] THEN RAISE EXCEPTION 'injected fanout failure'; END IF; RETURN NEW; END $$;

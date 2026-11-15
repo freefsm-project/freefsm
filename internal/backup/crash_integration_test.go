@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/database"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5"
@@ -92,6 +93,14 @@ func TestBackupCrashChild(t *testing.T) {
 		t.Fatal(e)
 	}
 	m.checkpoint = checkpoint
+	if spec.Mode == "backup" {
+		op, err := m.StartBackupFor(ActivityActor{ID: 1, Name: "Administrator"}, "source", crashArchivePassword)
+		if err != nil {
+			t.Fatal(err)
+		}
+		op = awaitOperation(t, m, 1, op.ID)
+		t.Fatalf("backup reached terminal phase instead of crash barrier: %+v", op)
+	}
 	f, e := os.Open(spec.Archive)
 	if e != nil {
 		t.Fatal(e)
@@ -158,7 +167,7 @@ func newCrashFixture(t *testing.T) *crashFixture {
 	t.Cleanup(func() { _ = c.Close(context.Background()) })
 	return &crashFixture{c, url}
 }
-func (f *crashFixture) manager(t *testing.T, label string) *Manager {
+func (f *crashFixture) manager(t *testing.T, label string, legacy ...bool) *Manager {
 	t.Helper()
 	ctx := context.Background()
 	name := fmt.Sprintf("crash_%d", time.Now().UnixNano())
@@ -207,6 +216,24 @@ func (f *crashFixture) manager(t *testing.T, label string) *Manager {
 	defer db.Close()
 	if e = db.Migrate(ctx, os.DirFS("../database/migrations")); e != nil {
 		t.Fatal(e)
+	}
+	if len(legacy) != 0 && legacy[0] {
+		// Explicit pre-policy installation for legacy journal/import scenarios.
+		if _, e = db.Pool.Exec(ctx, `DROP TABLE restore_email_policy; DROP TABLE restore_email_policy_import; ALTER TABLE online_save_actions DROP COLUMN execution_review; DELETE FROM schema_migrations WHERE name='127_restore_email_policy'`); e != nil {
+			t.Fatal(e)
+		}
+	} else {
+		tx, err := db.Pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback(ctx)
+		if err = emailpolicy.Import(ctx, tx, c.LegacyEmailDisabled); err != nil {
+			t.Fatal(err)
+		}
+		if err = tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if _, e = db.Pool.Exec(ctx, `CREATE TABLE public.engine_crash_probe (id bigserial PRIMARY KEY, value text NOT NULL)`); e != nil {
 		t.Fatal(e)
@@ -404,11 +431,9 @@ func TestProcessCrashAndRepeatedInterruptedRollback(t *testing.T) {
 			dst := f.manager(t, "destination")
 			ctx := context.Background()
 			if checkpoint == "database-dropped" {
-				if e := dst.cfg.Control.DisableEmail(); e != nil {
-					t.Fatal(e)
-				}
+				disableCrashEmail(t, dst)
 			}
-			priorEmail := dst.cfg.Control.EmailDisabled()
+			priorEmail := crashEmailDisabled(t, dst)
 			runCrashChild(t, dst, archive, "restore", checkpoint)
 			original := recoveryEvidence(t, dst)
 			// Establish that this was an actual partial native restore, not just a
@@ -465,7 +490,7 @@ func TestProcessCrashAndRepeatedInterruptedRollback(t *testing.T) {
 			}
 			runCrashChild(t, dst, "", "recover", "")
 			assertCrashState(t, dst, "destination")
-			if dst.cfg.Control.EmailDisabled() != priorEmail {
+			if crashEmailDisabled(t, dst) != priorEmail {
 				t.Fatal("rollback failed to restore prior email gate")
 			}
 			if _, e = os.Stat(dst.journalPath()); !errors.Is(e, os.ErrNotExist) {
@@ -495,7 +520,7 @@ func TestProcessCrashAfterCommitAndDuringCleanup(t *testing.T) {
 		t.Run(point, func(t *testing.T) {
 			dst := f.manager(t, "destination")
 			seedCrashSessions(t, dst, "destination")
-			if dst.cfg.Control.EmailDisabled() {
+			if crashEmailDisabled(t, dst) {
 				t.Fatal("fixture must start with email enabled")
 			}
 			runCrashChild(t, dst, archive, "restore", point)
@@ -594,7 +619,7 @@ func assertCommittedCrashState(t *testing.T, m *Manager) {
 	if err != nil || total != 2 || protected != 2 || sourceWeb != 1 || sourceMobile != 1 {
 		t.Fatalf("committed session protections lost: total=%d protected=%d web=%d mobile=%d err=%v", total, protected, sourceWeb, sourceMobile, err)
 	}
-	if !m.cfg.Control.EmailDisabled() {
+	if !crashEmailDisabled(t, m) {
 		t.Fatal("committed email gate reopened")
 	}
 }
@@ -735,7 +760,7 @@ func TestStagedRestoreCannotOverwriteFailedRecovery(t *testing.T) {
 	}
 	a = awaitOperation(t, dst, 1, a.ID)
 	dst.wg.Wait()
-	if a.Phase != "failed" || a.Failure.Category != FailureRecoveryRequired {
+	if a.Phase != "recovery-required" || a.Failure.Category != FailureRecoveryRequired {
 		t.Fatalf("first restore failure: %+v", a)
 	}
 	journalBefore := recoveryEvidence(t, dst)

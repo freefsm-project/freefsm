@@ -38,7 +38,8 @@ func TestCommercialLifecycleVoidReversibleHTTP(t *testing.T) {
 }
 
 func TestCommercialLifecycleVoidPDFPreservesPriorBytesHTTP(t *testing.T) {
-	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Void PDF Customer").SaveX(ctx)

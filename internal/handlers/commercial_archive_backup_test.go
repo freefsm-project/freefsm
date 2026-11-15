@@ -9,6 +9,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5"
@@ -40,9 +41,12 @@ func TestCommercialArchiveBackupPreservesClosedHistoryAndRestore(t *testing.T) {
 		}
 		historyCheck(t, tx.Commit(ctx))
 	}
-	web := middleware.Company(services.NewCompanySettingsService(src.client))(New(src.pool, src.client, src.sessions, &config.Config{UploadDir: src.uploadDir, MaxUploadSize: 25 << 20}))
+	web := src.control.Middleware(middleware.Company(services.NewCompanySettingsService(src.client))(New(src.pool, src.client, src.sessions, &config.Config{UploadDir: src.uploadDir, MaxUploadSize: 25 << 20}, src.control)))
 	cookie := sessionCookie(t, ctx, src.sessions, src.actor)
-	history := exerciseConversionHistory(t, src.pool, src.client, web, cookie, src.company)
+	worker := delivery.New(src.pool, "")
+	worker.SetInstanceControl(src.control)
+	worker.SetBeforeWork(src.manager.RefreshConnections)
+	history := exerciseConversionHistory(t, src.pool, src.client, web, cookie, src.company, worker)
 	path := fmt.Sprintf("/invoices/%d", history.current)
 	fieldPost(t, web, cookie, path+"/delete", nil, 303)
 	_, err = authorization.New(src.pool).SaveRole(ctx, authorization.Actor{UserID: src.actor}, 0, "Archived history viewer without Restore", []authorization.Grant{{Permission: "invoice.view", Scope: authorization.All}, {Permission: "invoice.archived.view", Scope: authorization.All}})

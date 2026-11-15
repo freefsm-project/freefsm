@@ -17,7 +17,8 @@ import (
 func TestCustomerCascadeRetainedMailRetryRestoreHTTP(t *testing.T) {
 	for _, retryFirst := range []bool{true, false} {
 		t.Run(fmt.Sprintf("retryFirst=%v", retryFirst), func(t *testing.T) {
-			pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+			mail := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, web, sessions, company, admin := mail.pool, mail.client, mail.web, mail.sessions, mail.company, mail.admin
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			cookie := sessionCookie(t, ctx, sessions, admin)
@@ -25,7 +26,7 @@ func TestCustomerCascadeRetainedMailRetryRestoreHTTP(t *testing.T) {
 			base := fmt.Sprintf("/customers/%d", c.ID)
 			_, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_host='localhost',smtp_from='sender@example.test' WHERE company_id=$1`, company)
 			historyCheck(t, err)
-			svc := delivery.New(pool, "")
+			svc := mail.newWorker()
 			var retry creditCommand
 			for _, kind := range []string{"paid", "void"} {
 				fieldPost(t, web, cookie, "/invoices", url.Values{"customer_id": {fmt.Sprint(c.ID)}, "title": {kind + " retained history"}, "line_items": {"[]"}}, 303)
