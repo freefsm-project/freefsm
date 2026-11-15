@@ -6,7 +6,7 @@ import "github.com/freefsm-project/freefsm/internal/authorization"
 templ CompanyConfiguration(view authorization.ConfigurationView, message string) {
 	@Layout("Company and document settings") {
 		<h1>Company and document settings</h1>
-		@EmailDisabledBanner(view.EmailDisabled)
+		@EmailDisabledBanner(view.EmailStatus)
 		if view.Administrator {
 			<nav><a href="/settings/advanced">Mail, maps and security</a> · <a href="/settings/backup">Backup</a> · <a href="/settings/authorization">Roles and permissions</a></nav>
 		}

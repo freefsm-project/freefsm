@@ -103,11 +103,16 @@
   function rememberActions() {
     // Only opaque receipt identities survive navigation; never drafts, request
     // bodies, file names, record labels, prior responses or cached authority.
-    try { sessionStorage.setItem(actionStorage, JSON.stringify([...actions.values()].filter(a => ['pending','unknown','review'].includes(a.state)).map(a => ({id:a.id, url:a.url, state:a.state, history:a.history})))); } catch (_) {}
+    try { sessionStorage.setItem(actionStorage, JSON.stringify([...actions.values()].filter(a => ['pending','unknown','review'].includes(a.state)).map(a => ({id:a.id, url:a.url, state:a.state, history:a.history, emailEnable:a.emailEnable === true})))); } catch (_) {}
   }
   function actionOwner(source) { return source?.closest('[data-action-scope],form,dialog') || source || document.querySelector('.page-body') || document.body; }
   function begin(source, id) {
     const owner = actionOwner(source);
+    const emailEnable = owner.matches('form') && new URL(owner.getAttribute('action') || location.href, location.href).pathname === '/settings/enable-email';
+    if (emailEnable) {
+      const unresolved = [...actions.values()].find(a => a.emailEnable && ['pending','unknown','review'].includes(a.state));
+      if (unresolved) { reconcile(unresolved); return null; }
+    }
     const previous = owners.get(owner);
     if (previous && ['pending','unknown','review'].includes(previous.state)) return null;
     const intent = owner.matches('form') ? snapshot(owner) : null;
@@ -122,6 +127,7 @@
     if (field) field.value = id;
     const historyTag = owner.querySelector('[name=save_history]')?.value || document.querySelector('meta[name=freefsm-save-history]')?.content || '';
     const action = {id, owner, intent, history:historyTag, pageURL:location.pathname + location.search, url: '/save-actions/' + id, state:'pending'};
+    action.emailEnable = emailEnable;
     if (owner.dataset.saveStatusUrl) action.url = owner.dataset.saveStatusUrl;
     owners.set(owner, action); actions.set(id, action);
     showAction(action, 'pending', 'Saving—waiting for confirmation');
@@ -218,6 +224,32 @@
       return true;
     } catch (_) { return false; }
   }
+  function emailReceipt(action, receipt) {
+    if (['saved','completed'].includes(receipt.disposition)) {
+      const node = showAction(action, receipt.disposition, receipt.disposition === 'saved' ? 'Outbound email enablement confirmed.' : 'Request completed—no change was applied.');
+      actionButton(node, 'View current mail status', () => { leaving = true; location.href = '/settings/mail'; });
+      return;
+    }
+    const node = showAction(action, 'unknown', 'Email enable status unknown. Keep this original action identity; no replacement action has been sent.');
+    actionButton(node, 'Reconcile this email enable action', () => emailCommand(action, 'reconcile'));
+    // Only the protected reconciliation endpoint supplies a fenced token/review.
+    // Generic own-receipt evidence never grants retry, including after sign-in.
+    if (receipt.disposition === 'rejected' && receipt.execution_token && receipt.review) {
+      node.firstChild.textContent = 'This attempt was fenced before any effect. You may explicitly retry this same reviewed enable action.';
+      actionButton(node, 'Retry same email enable action', () => emailCommand(action, 'retry', receipt));
+    }
+  }
+  async function emailCommand(action, command, receipt = {}) {
+    showAction(action, 'unknown', 'Checking this original email enable action—no automatic retry.');
+    try {
+      const csrf = document.querySelector('[name=csrf_token]')?.value || '';
+      const body = new URLSearchParams({csrf_token:csrf, execution_token:receipt.execution_token || '', review:receipt.review || ''});
+      const response = await nativeFetch('/settings/enable-email/' + encodeURIComponent(action.id) + '/' + command, {method:'POST', body, cache:'no-store', headers:{Accept:'application/json'}});
+      if ([401,403].includes(response.status) || response.redirected) { purge(response.status === 403 ? 403 : 401); return; }
+      if (!response.ok) throw new Error('unavailable');
+      emailReceipt(action, await response.json());
+    } catch (_) { emailReceipt(action, {disposition:'unknown'}); }
+  }
   async function reconcile(action) {
     showAction(action, 'unknown', 'Save status unknown—checking');
     try {
@@ -225,6 +257,7 @@
       if ([401,403].includes(response.status) || response.redirected) { purge(response.status === 403 ? 403 : 401); return; }
       if (!response.ok) throw new Error('unavailable');
       const receipt = await response.json();
+      if (action.emailEnable) { emailReceipt(action, receipt); return; }
       const disposition = receipt.history_changed ? 'review' : receipt.response_status === 202 ? 'pending' : receipt.disposition;
       const destination = receipt.location && safeURL(receipt.location);
       if (['saved','completed'].includes(disposition) && destination && (new URL(destination).pathname !== location.pathname || action.owner.hasAttribute('data-save-terminal') || (action.owner.matches('form') && !editable(action.owner)))) {
@@ -361,7 +394,7 @@
         if (!['saved','completed'].includes(action.state)) throw new Error('The action needs reconciliation. Review its status before continuing.');
         return response;
       }
-      if (response.status >= 500 || response.status === 0) { await reconcile(action); return response; }
+      if (action.emailEnable || response.status >= 500 || response.status === 0) { await reconcile(action); return response; }
       if (response.status === 409) {
         showAction(action, 'conflict', 'Conflict—compare the current authorized record, then revise or discard your input.');
         if (response.headers.get('Content-Type')?.includes('application/json')) await reconcile(action);
@@ -628,7 +661,7 @@
     if ([401,403,404].includes(code)) {
       e.detail.shouldSwap = false; purge(code);
     } else if (code >= 400 && action && !e.detail.shouldSwap) {
-      if (code >= 500 || (code === 409 && !html)) reconcile(action);
+      if (action.emailEnable || code >= 500 || (code === 409 && !html)) reconcile(action);
       else { showAction(action, code === 409 ? 'conflict' : 'rejected', code === 409 ? 'Conflict—review the current record before revising or discarding your changes.' : 'Request failed. Your changes have not been confirmed.'); if (code === 409) conflictControls(action); }
     }
   });

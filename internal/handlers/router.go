@@ -147,8 +147,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 	projectHandler.statusflow = statusflowService
 	scheduleHandler := NewScheduleHandler(userService, cfg)
 	companySettingsSvc := services.NewCompanySettingsService(entClient)
-	emailSvc := services.NewEmailService(companySettingsSvc)
-	emailSvc.SetInstanceControl(control)
+	emailSvc := services.NewControlledEmailService(companySettingsSvc, control)
 	inviteSvc := services.NewInvitationService(entClient, db)
 	estimateHandler := NewEstimateHandler(estimateService, customerService, jobService, statusService, itemService, invoiceService, tagSvc, tagLinkSvc, defSvc, fileSvc, deliveryService, activitySvc, policySvc, conversionService)
 	invoiceHandler := NewInvoiceHandler(invoiceService, customerService, jobService, assetSvc, statusService, itemService, tagSvc, tagLinkSvc, defSvc, fileSvc, deliveryService, activitySvc, policySvc, settlementService, conversionService)
@@ -574,6 +573,8 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 			r.Get("/setup/company", settingsHandler.Show)
 			r.Post("/setup/company", settingsHandler.Save)
 			r.Post("/settings/enable-email", integrations.enableEmail)
+			r.Post("/settings/enable-email/{operation}/reconcile", integrations.reconcileEmail)
+			r.Post("/settings/enable-email/{operation}/retry", integrations.retryEmail)
 			r.Get("/users", userHandler.List)
 			r.Get("/users/new", userHandler.Create)
 			r.Post("/users", userHandler.Create)

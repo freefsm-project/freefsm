@@ -228,7 +228,7 @@ func (h *BackupHandler) page(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Settings unavailable", 503)
 		return
 	}
-	render(w, r, templates.BackupPage(companyName(cs), h.disabledReason, h.control.EmailDisabled()))
+	render(w, r, templates.BackupPage(companyName(cs), h.disabledReason, string(h.control.EmailStatus(r.Context()))))
 }
 
 func (h *BackupHandler) actor(w http.ResponseWriter, r *http.Request, reauthenticate bool) (*ent.User, bool) {

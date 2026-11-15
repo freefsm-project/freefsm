@@ -48,7 +48,7 @@ func CompanyConfiguration(view authorization.ConfigurationView, message string) 
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = EmailDisabledBanner(view.EmailDisabled).Render(ctx, templ_7745c5c3_Buffer)
+			templ_7745c5c3_Err = EmailDisabledBanner(view.EmailStatus).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

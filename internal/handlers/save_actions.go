@@ -41,7 +41,7 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Pairing, Job execution and checklist commands own their committing
 			// protocols; do not journal secrets or impose whole-Job revisions.
-			if r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") || jobExecutionPath(r.URL.Path) || subtaskProtocolPath(r.URL.Path) || conversionProtocolPath(r.URL.Path) {
+			if strings.HasPrefix(r.URL.Path, authorization.EmailEnablePath+"/") || r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") || jobExecutionPath(r.URL.Path) || subtaskProtocolPath(r.URL.Path) || conversionProtocolPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -132,7 +132,8 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 					if supplied := submittedSaveHistory(r); supplied != "" && !sameSaveHistory(r, supplied) {
 						receipt, err := store.Receipt(r.Context(), action)
 						if err != nil {
-							http.Error(w, "Save status unavailable. Check the same action again.", 503)
+							http.Error(capture, "Save status unavailable. Check the same action again.", 503)
+							capture.finish(nil)
 							return
 						}
 						if receipt.Disposition == "not_received" {
@@ -172,7 +173,8 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 					if !admitted {
 						receipt, lookupErr := store.Receipt(r.Context(), action)
 						if lookupErr != nil {
-							http.Error(w, "Save status unavailable. Check the same action again.", 503)
+							http.Error(capture, "Save status unavailable. Check the same action again.", 503)
+							capture.finish(nil)
 							return
 						}
 						if errors.Is(err, saveaction.ErrIdentity) {

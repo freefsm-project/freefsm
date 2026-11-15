@@ -15,9 +15,10 @@ import (
 )
 
 var (
-	ErrMaintenance   = errors.New("instance maintenance in progress; please try again later")
-	ErrEmailDisabled = errors.New("Outbound email is disabled. Contact an administrator to enable it.")
-	ErrOperationBusy = errors.New("another instance operation is in progress")
+	ErrMaintenance      = errors.New("instance maintenance in progress; please try again later")
+	ErrEmailDisabled    = errors.New("Outbound email is disabled. Contact an administrator to enable it.")
+	ErrEmailUnavailable = errors.New("Outbound email status is unavailable. Email is paused until its current policy can be confirmed.")
+	ErrOperationBusy    = errors.New("another instance operation is in progress")
 )
 
 type Control struct {
@@ -57,7 +58,7 @@ func New(stateDir string) (*Control, error) {
 		return nil, err
 	}
 	c := &Control{stateDir: dir}
-	for _, name := range []string{"admission.lock", "intent.lock", "operation.lock"} {
+	for _, name := range []string{"admission.lock", "intent.lock", "operation.lock", "email.lock"} {
 		f, err := c.openLock(name)
 		if err != nil {
 			return nil, err
@@ -202,22 +203,109 @@ func (c *Control) Middleware(next http.Handler) http.Handler {
 	})
 }
 
-// EnterEmail holds admission while checking the persistent email gate. Callers
-// must release admission after the complete email lifecycle. A nil Control
-// preserves the ungated behavior of services constructed without instance control.
+type emailLeaseKey string
+
+// EnterEmailAfterRefresh establishes ordinary admission before refreshing a
+// worker's generation, and only then reads its email policy.
+func (c *Control) EnterEmailAfterRefresh(ctx context.Context, refresh func() error) (context.Context, func(), error) {
+	if c == nil {
+		return ctx, nil, ErrEmailUnavailable
+	}
+	ctx, leave, err := c.Enter(ctx)
+	if err != nil {
+		return ctx, nil, err
+	}
+	if refresh != nil {
+		if err = refresh(); err != nil {
+			leave()
+			return ctx, nil, err
+		}
+	}
+	ctx, release, err := c.EnterEmail(ctx)
+	if err != nil {
+		leave()
+		return ctx, nil, err
+	}
+	return ctx, sync.OnceFunc(func() { release(); leave() }), nil
+}
+
+type EmailStatus string
+
+const (
+	EmailEnabled     EmailStatus = "enabled"
+	EmailDisabled    EmailStatus = "disabled"
+	EmailUnavailable EmailStatus = "unavailable"
+)
+
+func (c *Control) EmailStatus(ctx context.Context) EmailStatus {
+	err := c.CheckEmail(ctx)
+	if err == nil {
+		return EmailEnabled
+	}
+	if errors.Is(err, ErrEmailDisabled) {
+		return EmailDisabled
+	}
+	return EmailUnavailable
+}
+
+// EnterEmail retains admission and one context-nested shared email lease through
+// handoff. Nested sends reuse the lease rather than waiting behind a transition.
 func (c *Control) EnterEmail(ctx context.Context) (context.Context, func(), error) {
 	if c == nil {
-		return ctx, func() {}, nil
+		return ctx, nil, ErrEmailUnavailable
 	}
 	ctx, release, err := c.Enter(ctx)
 	if err != nil {
 		return ctx, nil, err
 	}
-	if err := c.CheckEmail(ctx); err != nil {
+	key := emailLeaseKey(c.stateDir)
+	if a, ok := ctx.Value(key).(*admission); ok && a.retain() {
+		return ctx, sync.OnceFunc(func() { a.release(); release() }), nil
+	}
+	f, err := c.openLock("email.lock")
+	if err != nil {
 		release()
 		return ctx, nil, err
 	}
-	return ctx, release, nil
+	if err = waitLock(ctx, f, syscall.LOCK_SH); err != nil {
+		_ = f.Close()
+		release()
+		return ctx, nil, err
+	}
+	if err := c.readEmail(ctx); err != nil {
+		_ = f.Close()
+		release()
+		return ctx, nil, err
+	}
+	a := &admission{refs: 1, file: f}
+	return context.WithValue(ctx, key, a), sync.OnceFunc(func() { a.release(); release() }), nil
+}
+
+// EnterEmailTransition must precede authority acquisition. It never upgrades an
+// ordinary mail lease or requests exclusive ordinary admission.
+func (c *Control) EnterEmailTransition(ctx context.Context) (context.Context, func(), error) {
+	if c == nil {
+		return ctx, nil, ErrEmailUnavailable
+	}
+	if ctx.Value(emailLeaseKey(c.stateDir)) != nil {
+		return ctx, nil, errors.New("cannot upgrade an email lease")
+	}
+	ctx, release, err := c.Enter(ctx)
+	if err != nil {
+		return ctx, nil, err
+	}
+	f, err := c.openLock("email.lock")
+	if err == nil {
+		err = waitLock(ctx, f, syscall.LOCK_EX)
+	}
+	if err != nil {
+		if f != nil {
+			_ = f.Close()
+		}
+		release()
+		return ctx, nil, err
+	}
+	return ctx, sync.OnceFunc(func() { _ = f.Close(); release() }), nil
 }
 
 // SetEmailPolicy installs the production reader before admission opens. The
@@ -227,9 +315,6 @@ func (c *Control) SetEmailPolicy(reader func(context.Context) (bool, error)) {
 }
 
 func (c *Control) EmailDisabled() bool {
-	if c.emailPolicy == nil {
-		return c.marker("email-disabled")
-	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return c.CheckEmail(ctx) != nil
@@ -263,39 +348,29 @@ func (c *Control) LegacyEmailDisabled() (bool, error) {
 func (c *Control) DisableEmail() error { return c.writeMarker("email-disabled") }
 func (c *Control) EnableEmail() error  { return c.removeMarker("email-disabled") }
 func (c *Control) CheckEmail(ctx context.Context) error {
+	_, release, err := c.EnterEmail(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return nil
+}
+
+func (c *Control) readEmail(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	if c.emailPolicy != nil {
-		ctx, release, err := c.Enter(ctx)
-		if err != nil {
-			return err
-		}
-		defer release()
 		enabled, err := c.emailPolicy(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %v", ErrEmailUnavailable, err)
 		}
 		if !enabled {
 			return ErrEmailDisabled
 		}
 		return nil
 	}
-	if c.marker("email-disabled") {
-		return ErrEmailDisabled
-	}
-	return nil
-}
-
-func (c *Control) marker(name string) bool {
-	// A missing/inaccessible state directory is not an enabled state.
-	f, err := os.Open(c.stateDir)
-	if err != nil {
-		return true
-	}
-	_ = f.Close()
-	_, err = os.Lstat(filepath.Join(c.stateDir, name))
-	return !errors.Is(err, os.ErrNotExist)
+	return ErrEmailUnavailable
 }
 
 func (c *Control) openLock(name string) (*os.File, error) {

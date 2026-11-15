@@ -33,16 +33,24 @@ var ErrEmailAcceptanceUncertain = errors.New("final DATA acceptance is uncertain
 // SetInstanceControl must be called during startup before serving requests.
 func (s *EmailService) SetInstanceControl(control *instancecontrol.Control) { s.control = control }
 
+// Enter retains the mail lease before producer authorization/token transactions.
+func (s *EmailService) Enter(ctx context.Context) (context.Context, func(), error) {
+	if s == nil {
+		return ctx, nil, instancecontrol.ErrEmailUnavailable
+	}
+	return s.control.EnterEmail(ctx)
+}
+
 // CheckAvailability exposes the global email gate without querying account data.
 func (s *EmailService) CheckAvailability(ctx context.Context) error {
 	if s == nil || s.control == nil {
-		return nil
+		return instancecontrol.ErrEmailUnavailable
 	}
 	return s.control.CheckEmail(ctx)
 }
 
 func (s *EmailService) EmailDisabled() bool {
-	return s != nil && s.control != nil && s.control.EmailDisabled()
+	return s == nil || s.control == nil || s.control.EmailDisabled()
 }
 
 // ValidateConfiguration performs no network I/O and discloses no provider data.
@@ -75,6 +83,12 @@ type EmailRecipients struct {
 
 func NewEmailService(svc *CompanySettingsService) *EmailService {
 	return &EmailService{svc: svc}
+}
+
+// NewControlledEmailService is the production composition. Missing control or
+// policy reader remains fail-closed at every availability and transport entry.
+func NewControlledEmailService(svc *CompanySettingsService, control *instancecontrol.Control) *EmailService {
+	return &EmailService{svc: svc, control: control}
 }
 
 func (s *EmailService) SendTestEmail(ctx context.Context, to, name string) error {

@@ -23,9 +23,9 @@ func TestBackupBrowserWorkflow(t *testing.T) {
 	if os.Getenv("BROWSER_TESTS") != "1" {
 		t.Skip("set BROWSER_TESTS=1 with Chromium and testdata/browser dependencies")
 	}
-	page := renderComponent(t, BackupPage("Destination", "", false))
-	settings := renderComponent(t, SettingsPage(SettingsPageData{Settings: &ent.CompanySettings{BusinessName: "Destination"}, EmailDisabled: true}))
-	mail := renderComponent(t, IntegrationSettingsPage("mail", authorization.IntegrationSettings{Revision: "mail-revision"}, true, true, false, false))
+	page := renderComponent(t, BackupPage("Destination", "", "enabled"))
+	settings := renderComponent(t, SettingsPage(SettingsPageData{Settings: &ent.CompanySettings{BusinessName: "Destination"}, EmailStatus: "disabled"}))
+	mail := renderComponent(t, IntegrationSettingsPage("mail", authorization.IntegrationSettings{Revision: "mail-revision"}, true, true, "enabled", false))
 	setup := renderComponent(t, SettingsPage(SettingsPageData{Settings: &ent.CompanySettings{}, IsSetup: true}))
 	var activityLoads atomic.Int64
 	activity := func() ActivityPageData {

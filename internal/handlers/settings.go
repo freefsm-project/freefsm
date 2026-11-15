@@ -43,7 +43,7 @@ func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
 			authorizationError(w, r, err)
 			return
 		}
-		view.EmailDisabled = h.control != nil && h.control.EmailDisabled()
+		view.EmailStatus = string(h.control.EmailStatus(r.Context()))
 		if r.URL.Path == "/setup/company" {
 			view.FormAction = "/setup/company"
 			for _, section := range view.Sections {
@@ -77,7 +77,7 @@ func (h *SettingsHandler) Show(w http.ResponseWriter, r *http.Request) {
 		RecoveryReviewCount: recoveryReviewCount,
 		Settings:            cs,
 		IsSetup:             r.URL.Path == "/setup/company",
-		EmailDisabled:       h.control != nil && h.control.EmailDisabled(),
+		EmailStatus:         string(h.control.EmailStatus(r.Context())),
 	}))
 }
 
@@ -105,6 +105,7 @@ func (h *SettingsHandler) Save(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			view.Revision = revision
+			view.EmailStatus = string(h.control.EmailStatus(r.Context()))
 			w.WriteHeader(422)
 			render(w, r, templates.CompanyConfiguration(view, err.Error()))
 			return

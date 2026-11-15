@@ -28,7 +28,7 @@ func (h *integrationHandler) enableEmail(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "Email gate unavailable", 503)
 		return
 	}
-	ctx, release, err := h.control.Enter(r.Context())
+	ctx, release, err := h.control.EnterEmailTransition(r.Context())
 	if err != nil {
 		http.Error(w, "Instance is in maintenance", 503)
 		return
@@ -123,7 +123,7 @@ func (h *integrationHandler) settings(w http.ResponseWriter, r *http.Request) {
 	if section == "open-tracking" {
 		manage = p.Allows("security.open_tracking.manage", authorization.Sealed)
 	}
-	render(w, r, templates.IntegrationSettingsPage(section, v, manage, p.Allows("configuration.mail.test", authorization.Configuration), h.email.EmailDisabled(), p.Allows("email.enable", authorization.Sealed)))
+	render(w, r, templates.IntegrationSettingsPage(section, v, manage, p.Allows("configuration.mail.test", authorization.Configuration), string(h.control.EmailStatus(r.Context())), p.Allows("email.enable", authorization.Sealed)))
 }
 
 func (h *integrationHandler) testMail(w http.ResponseWriter, r *http.Request) {
@@ -138,17 +138,20 @@ func (h *integrationHandler) testMail(w http.ResponseWriter, r *http.Request) {
 		authorizationError(w, r, authorization.ErrForbidden)
 		return
 	}
-	if err := h.email.CheckAvailability(r.Context()); err != nil {
-		saveaction.RejectBeforeWrite(r.Context())
-		http.Error(w, "Outbound email is disabled; an Administrator must re-enable email", 503)
-		return
-	}
 	recipients, err := services.ParseEmailList(r.FormValue("recipient"))
 	if err != nil || len(recipients) != 1 {
 		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, "Enter one recipient email address", 400)
 		return
 	}
+	ctx, release, err := h.control.EnterEmail(r.Context())
+	if err != nil {
+		saveaction.RejectBeforeWrite(r.Context())
+		http.Error(w, err.Error(), 503)
+		return
+	}
+	defer release()
+	r = r.WithContext(ctx)
 	if err := h.email.ValidateConfiguration(r.Context()); err != nil {
 		saveaction.RejectBeforeWrite(r.Context())
 		http.Error(w, err.Error(), 503)

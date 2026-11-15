@@ -49,7 +49,7 @@ func selectedEmailHTML(text, htmlBody string) string {
 
 func writeDeliveryError(w http.ResponseWriter, r *http.Request, err error, data templates.DocumentEmailData) {
 	switch {
-	case errors.Is(err, instancecontrol.ErrEmailDisabled), errors.Is(err, instancecontrol.ErrMaintenance):
+	case errors.Is(err, instancecontrol.ErrEmailDisabled), errors.Is(err, instancecontrol.ErrEmailUnavailable), errors.Is(err, instancecontrol.ErrMaintenance):
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 	case errors.Is(err, delivery.ErrForbidden):
 		http.Error(w, "Forbidden", http.StatusForbidden)
@@ -128,7 +128,7 @@ func retryDocumentDelivery(svc *delivery.Service, objectType string, w http.Resp
 		switch {
 		case errors.Is(err, authorization.ErrForbidden), errors.Is(err, authorization.ErrNotFound), errors.Is(err, authorization.ErrPending):
 			authorizationError(w, r, err)
-		case errors.Is(err, instancecontrol.ErrEmailDisabled), errors.Is(err, instancecontrol.ErrMaintenance):
+		case errors.Is(err, instancecontrol.ErrEmailDisabled), errors.Is(err, instancecontrol.ErrEmailUnavailable), errors.Is(err, instancecontrol.ErrMaintenance):
 			http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		case errors.Is(err, delivery.ErrForbidden):
 			http.Error(w, "Forbidden", http.StatusForbidden)

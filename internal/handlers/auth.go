@@ -118,10 +118,13 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		render(w, r, templates.ForgotPasswordPage(templates.ForgotPasswordData{}))
 		return
 	}
-	if err := h.emailSvc.CheckAvailability(r.Context()); err != nil {
+	ctx, release, err := h.emailSvc.Enter(r.Context())
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 		return
 	}
+	defer release()
+	r = r.WithContext(ctx)
 	if err := h.emailSvc.ValidateConfiguration(r.Context()); err != nil {
 		http.Error(w, "Recovery email is unavailable. Contact an Administrator for a temporary password.", http.StatusServiceUnavailable)
 		return

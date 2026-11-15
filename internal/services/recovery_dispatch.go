@@ -33,16 +33,11 @@ func (s *PasswordResetService) DispatchOne(ctx context.Context, email *EmailServ
 // Refresh restored connection metadata only after admission, before any settings
 // or claim query, and keep that same admission through the entire attempt.
 func (s *PasswordResetService) dispatchOne(ctx context.Context, email *EmailService, beforeWork func() error) (bool, error) {
-	ctx, release, err := email.control.EnterEmail(ctx)
+	ctx, release, err := email.control.EnterEmailAfterRefresh(ctx, beforeWork)
 	if err != nil {
 		return false, err
 	}
 	defer release()
-	if beforeWork != nil {
-		if err = beforeWork(); err != nil {
-			return false, err
-		}
-	}
 	if err = email.ValidateConfiguration(ctx); err != nil {
 		return false, err
 	}

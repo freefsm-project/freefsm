@@ -28,7 +28,7 @@ templ SettingsTab(name, label, active string) {
 
 templ SettingsPage(p SettingsPageData) {
 	@Layout("Settings") {
-		@EmailDisabledBanner(p.EmailDisabled)
+		@EmailDisabledBanner(p.EmailStatus)
 		@SettingsTabs("company", p.IsSetup)
 		<form action={ templ.URL(settingsFormAction(p.IsSetup)) } method="post">
 			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>

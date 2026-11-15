@@ -32,7 +32,7 @@ type ConfigurationSection struct {
 type ConfigurationView struct {
 	ReviewIssues    []string
 	FormAction      string
-	EmailDisabled   bool
+	EmailStatus     string
 	LegacyNumbers   []LegacyNumber
 	ManageDocuments bool
 	Administrator   bool

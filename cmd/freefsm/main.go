@@ -281,8 +281,7 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	workerEmail := services.NewEmailService(services.NewCompanySettingsService(entClient))
-	workerEmail.SetInstanceControl(control)
+	workerEmail := services.NewControlledEmailService(services.NewCompanySettingsService(entClient), control)
 	worker := &delivery.Worker{
 		Service: deliveryService,
 		Sender:  delivery.NewSMTPSender(workerEmail),

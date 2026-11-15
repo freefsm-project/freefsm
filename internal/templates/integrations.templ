@@ -3,11 +3,14 @@ package templates
 import "fmt"
 import "github.com/freefsm-project/freefsm/internal/authorization"
 
-templ IntegrationSettingsPage(section string, v authorization.IntegrationSettings, manage, test, disabled, canEnable bool) {
+templ IntegrationSettingsPage(section string, v authorization.IntegrationSettings, manage, test bool, emailStatus string, canEnable bool) {
  @Layout("Integration settings") {
-  if disabled {
+  if emailStatus != "enabled" && emailStatus != "disabled" {
+   @EmailDisabledBanner(emailStatus)
+  }
+  if emailStatus == "disabled" {
    if canEnable {
-    @EmailDisabledBanner(true)
+    @EmailDisabledBanner(emailStatus)
    } else {
     <p role="alert">Outbound email is disabled after restore. An Administrator must explicitly enable it.</p>
    }

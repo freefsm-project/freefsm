@@ -2,8 +2,11 @@ package templates
 
 import "github.com/freefsm-project/freefsm/internal/config"
 
-templ EmailDisabledBanner(disabled bool) {
-	if disabled {
+templ EmailDisabledBanner(status string) {
+	if status != "enabled" && status != "disabled" {
+		<article role="alert"><strong>Outbound email status is unavailable.</strong><p>Email is paused until the current policy can be confirmed. Check again after the connection or database is available.</p></article>
+	}
+	if status == "disabled" {
 		<article role="alert">
 			<strong>Outbound email is disabled.</strong>
 			<p>Review the restored SMTP settings and pending work before enabling email. Enabling permits eligible queued messages and retries, account invitations and password resets to send.</p>
@@ -15,9 +18,9 @@ templ EmailDisabledBanner(disabled bool) {
 	}
 }
 
-templ BackupPage(destination, disabledReason string, emailDisabled bool) {
+templ BackupPage(destination, disabledReason, emailStatus string) {
 	@Layout("Settings") {
-		@EmailDisabledBanner(emailDisabled)
+		@EmailDisabledBanner(emailStatus)
 		@SettingsTabs("backup", false)
 		<h2>Backup and restore</h2>
 		<p>Destination: <strong>{ destination }</strong></p>

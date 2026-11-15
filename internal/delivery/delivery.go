@@ -551,7 +551,7 @@ func (s *Service) Claim(ctx context.Context) (Delivery, error) {
 }
 
 func (s *Service) ProcessOne(ctx context.Context, sender Sender, hook AcceptanceHook) (bool, error) {
-	ctx, release, err := s.control.EnterEmail(ctx)
+	ctx, release, err := s.control.EnterEmailAfterRefresh(ctx, s.beforeWork)
 	if errors.Is(err, instancecontrol.ErrMaintenance) || errors.Is(err, instancecontrol.ErrEmailDisabled) {
 		return false, nil
 	}
@@ -559,11 +559,6 @@ func (s *Service) ProcessOne(ctx context.Context, sender Sender, hook Acceptance
 		return false, err
 	}
 	defer release()
-	if s.beforeWork != nil {
-		if err := s.beforeWork(); err != nil {
-			return false, err
-		}
-	}
 	d, err := s.Claim(ctx)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil

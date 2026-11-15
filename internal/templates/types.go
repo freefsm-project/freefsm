@@ -870,7 +870,7 @@ func companyPasswordMinLength(ctx context.Context) int {
 
 type SettingsPageData struct {
 	RecoveryReviewCount int
-	EmailDisabled       bool
+	EmailStatus         string
 	Settings            *ent.CompanySettings
 	IsSetup             bool
 }

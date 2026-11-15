@@ -88,6 +88,13 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	sendWelcome := r.FormValue("send_welcome_email") == "on"
 	if sendWelcome {
+		ctx, release, err := h.emailSvc.Enter(r.Context())
+		if err != nil {
+			http.Redirect(w, r, "/users/new?flash="+url.QueryEscape("Email unavailable. Use manual onboarding with a temporary password. "+err.Error()), http.StatusSeeOther)
+			return
+		}
+		defer release()
+		r = r.WithContext(ctx)
 		if err := h.invitationMailAvailable(r); err != nil {
 			http.Redirect(w, r, "/users/new?flash="+url.QueryEscape("Email unavailable. Use manual onboarding with a temporary password, or configure mail and try again. "+err.Error()), http.StatusSeeOther)
 			return
@@ -368,6 +375,13 @@ func (h *UserHandler) ResendWelcome(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "welcome invitation cannot be resent", http.StatusConflict)
 		return
 	}
+	ctx, release, err := h.emailSvc.Enter(r.Context())
+	if err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	defer release()
+	r = r.WithContext(ctx)
 	if err := h.invitationMailAvailable(r); err != nil {
 		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape("Email unavailable. Configure mail and resend this pending invitation. "+err.Error()), http.StatusSeeOther)
 		return
@@ -423,7 +437,14 @@ func (h *UserHandler) ResendRecovery(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if err := h.emailSvc.CheckAvailability(r.Context()); err != nil {
+	ctx, release, err := h.emailSvc.Enter(r.Context())
+	if err != nil {
+		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape(err.Error()), http.StatusSeeOther)
+		return
+	}
+	defer release()
+	r = r.WithContext(ctx)
+	if err := h.emailSvc.ValidateConfiguration(ctx); err != nil {
 		http.Redirect(w, r, fmt.Sprintf("/users/%d?flash=", id)+url.QueryEscape(err.Error()), http.StatusSeeOther)
 		return
 	}
