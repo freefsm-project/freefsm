@@ -22,7 +22,8 @@ initialization and host recovery. Finish verifies before opening; Close alone ke
 closed. Explicit `-migrate` uses the same startup path. Bootstrap's transition is
 retained in the closed discriminator before verification and reused on retry.
 
-Durable actor-bound status/UI reconciliation remains pending. `run` never marks
+Durable actor-bound status is described in `status_contract.md`; routed UI and
+whole-engine qualification remain pending. `run` never marks
 committed cleanup/release errors complete; ready evidence alone is not terminal
 success. Filesystem adapter tests are not whole-engine or native-reboot proof.
 

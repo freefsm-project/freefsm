@@ -211,6 +211,33 @@ func (c *Control) verifyOpen() error {
 	return nil
 }
 
+// ConfirmResolution observes one exact current verified-open decision. It grants
+// no admission lease and performs no recovery. Publication is frozen through the
+// matching summary/generation verification, using the same D1 lock order as Enter.
+func (c *Control) ConfirmResolution(transition string, want json.RawMessage) error {
+	intent, err := c.openLock("intent.lock")
+	if err != nil {
+		return ErrMaintenance
+	}
+	defer intent.Close()
+	if syscall.Flock(int(intent.Fd()), syscall.LOCK_SH|syscall.LOCK_NB) != nil {
+		return ErrMaintenance
+	}
+	admission, err := c.openLock("admission.lock")
+	if err != nil {
+		return ErrMaintenance
+	}
+	defer admission.Close()
+	if syscall.Flock(int(admission.Fd()), syscall.LOCK_SH|syscall.LOCK_NB) != nil {
+		return ErrMaintenance
+	}
+	s, err := c.readAdmission()
+	if err != nil || s.Decision != "verified-open" || s.Transition != transition || c.owner == nil || !bytes.Equal(s.Resolution, want) {
+		return ErrMaintenance
+	}
+	return c.owner.VerifyAdmission(s.Resolution)
+}
+
 func (c *Control) writeAdmission(s admissionState) error {
 	dir, err := c.admissionDirectory()
 	if err != nil {

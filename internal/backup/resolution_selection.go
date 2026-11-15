@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -60,6 +61,9 @@ func (m *Manager) selectedResolution(j journal) error {
 		}
 	}
 	if err = m.persistResolution(r); err != nil {
+		return err
+	}
+	if err = m.bindStatus(strings.TrimSuffix(j.Recovery, "-recovery"), binding, r.Diagnostics...); err != nil {
 		return err
 	}
 	return m.retainResolution(binding)

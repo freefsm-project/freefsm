@@ -118,6 +118,9 @@ func TestResolutionCommittedErrorNeverCompletes(t *testing.T) {
 	m, _ := resolutionFixture(t)
 	id := strings.Repeat("ab", 32)
 	j := &job{Operation: Operation{ID: id, Kind: "restore", Phase: "committing", ExpiresAt: time.Now().Add(time.Hour)}, actor: 7, committed: true, active: true, dir: filepath.Join(m.root, id)}
+	if err := m.startStatus(j); err != nil {
+		t.Fatal(err)
+	}
 	m.jobs[id] = j
 	m.wg.Add(1)
 	m.run(j, func() {}, func(context.Context) error { return syscall.EIO })
@@ -145,6 +148,9 @@ func TestResolutionUncommittedRecoveryErrorRemainsUnresolved(t *testing.T) {
 			m, _ := resolutionFixture(t)
 			id := strings.Repeat("cd", 32)
 			j := &job{Operation: Operation{ID: id, Kind: kind, Phase: "capturing", ExpiresAt: time.Now().Add(time.Hour)}, actor: 7, active: true, dir: filepath.Join(m.root, id)}
+			if err := m.startStatus(j); err != nil {
+				t.Fatal(err)
+			}
 			m.jobs[id] = j
 			m.wg.Add(1)
 			m.run(j, func() {}, func(context.Context) error {

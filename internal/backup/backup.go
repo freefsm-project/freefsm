@@ -49,6 +49,10 @@ type Config struct {
 	ActivitySink func(context.Context, ActivityEvent) error
 }
 type Operation struct {
+	Reconstructed                                                      bool
+	ActivityPending                                                    bool
+	Outcome, Release                                                   string
+	Diagnostics                                                        []Failure
 	ID, Kind, Phase, Error, SourceName, Version, Commit, ArchiveDigest string
 	BuildKind                                                          BuildKind
 	CapturedAt, ExpiresAt                                              time.Time
@@ -432,6 +436,12 @@ func (m *Manager) newJob(actor int64, kind string, action ...string) (*job, func
 	}
 	j := &job{Operation: Operation{ID: id, Kind: kind, Phase: "queued", ExpiresAt: time.Now().Add(7 * time.Hour)}, actor: actor, dir: dir, active: true, lease: lease}
 	j.initiation = len(action) > 0 && action[0] != ""
+	if e = m.startStatus(j); e != nil {
+		_ = lease.Close()
+		unlock()
+		_ = os.RemoveAll(dir)
+		return nil, nil, e
+	}
 	m.jobs[id] = j
 	m.wg.Add(1)
 	return j, unlock, nil
@@ -463,12 +473,15 @@ func (m *Manager) run(j *job, unlock func(), fn func(context.Context) error) {
 		if e != nil {
 			failure = m.reportFailure(e, phase)
 		}
+		originalFailure := failure
+		activityPending := false
 		// An unresolved generation/release must not look terminal. Ordinary
 		// outcome publication can also require startup replay, but does not
 		// turn a preflight rejection into an unresolved generation decision.
 		recoveryUnresolved := failure.Category == FailureRecoveryRequired
 		if j.Kind != "restore" {
 			if auditErr := m.finishActivity(j, failure); auditErr != nil {
+				activityPending = true
 				e = classified(FailureRecoveryRequired, errors.Join(auditErr, e))
 				failure = m.reportFailure(e, phase)
 			}
@@ -482,6 +495,10 @@ func (m *Manager) run(j *job, unlock func(), fn func(context.Context) error) {
 			}
 		}()
 		j.active = false
+		j.ActivityPending = activityPending
+		if originalFailure.DiagnosticID != "" {
+			j.Diagnostics = append(j.Diagnostics, originalFailure)
+		}
 		if e != nil {
 			j.Phase = "failed"
 			if j.committed || recoveryUnresolved {
@@ -498,6 +515,9 @@ func (m *Manager) run(j *job, unlock func(), fn func(context.Context) error) {
 			j.Phase = "complete"
 		}
 		j.ExpiresAt = time.Now().Add(time.Hour)
+		if statusErr := m.finishStatus(j); statusErr != nil {
+			j.Phase = "recovery-required"
+		}
 		initiationErr = m.finishInitiation(j)
 		time.AfterFunc(time.Hour, func() { m.mu.Lock(); defer m.mu.Unlock(); m.expireLocked() })
 		if j.Phase == "failed" || j.Kind == "restore" {
@@ -514,10 +534,20 @@ func (m *Manager) Status(actor int64, id string) (Operation, error) {
 	defer m.mu.Unlock()
 	m.expireLocked()
 	j := m.jobs[id]
-	if j == nil || j.actor != actor {
+	if j == nil {
+		return m.reconstructedStatus(actor, id, false)
+	}
+	if j.actor != actor {
 		return Operation{}, ErrNotFound
 	}
-	return j.Operation, nil
+	if !j.active && j.Kind == "restore" {
+		op, err := m.reconstructedStatus(actor, id, false)
+		op.Reconstructed = false
+		return op, err
+	}
+	op := j.Operation
+	op.Diagnostics = append([]Failure(nil), j.Diagnostics...)
+	return op, nil
 }
 
 // StatusCapability accepts the 256-bit operation ID as a bearer status-only
@@ -528,9 +558,16 @@ func (m *Manager) StatusCapability(id string) (Operation, error) {
 	m.expireLocked()
 	j := m.jobs[id]
 	if j == nil {
-		return Operation{}, ErrNotFound
+		return m.reconstructedStatus(0, id, true)
 	}
-	return j.Operation, nil
+	if !j.active && j.Kind == "restore" {
+		op, err := m.reconstructedStatus(0, id, true)
+		op.Reconstructed = false
+		return op, err
+	}
+	op := j.Operation
+	op.Diagnostics = append([]Failure(nil), j.Diagnostics...)
+	return op, nil
 }
 func (m *Manager) StartBackup(actor int64, source, password string) (Operation, error) {
 	return m.StartBackupFor(ActivityActor{ID: actor}, source, password)
@@ -792,6 +829,16 @@ func (m *Manager) StartRestoreFor(ctx context.Context, actor ActivityActor, id, 
 		return Operation{}, e
 	}
 	if e = m.requireNoJournal(); e != nil {
+		unlock()
+		m.mu.Unlock()
+		return Operation{}, e
+	}
+	status, e := m.loadStatus(id)
+	if e == nil {
+		status.Kind, status.Phase = "restore", "queued"
+		e = m.storeStatus(id, status, false)
+	}
+	if e != nil {
 		unlock()
 		m.mu.Unlock()
 		return Operation{}, e

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -744,7 +745,7 @@ func TestStagedRestoreCannotOverwriteFailedRecovery(t *testing.T) {
 	if _, e := dst.StartRestore(context.Background(), 1, b.ID, "destination", "destination"); !errors.Is(e, ErrRecoveryRequired) {
 		t.Fatalf("second restore did not reject outstanding recovery: %v", e)
 	}
-	if got, e := dst.Status(1, b.ID); e != nil || got != b {
+	if got, e := dst.Status(1, b.ID); e != nil || !reflect.DeepEqual(got, b) {
 		t.Fatalf("second staged operation changed: %+v %v", got, e)
 	}
 	if after := recoveryEvidence(t, dst); !bytes.Equal(after, journalBefore) {

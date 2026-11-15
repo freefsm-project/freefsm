@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -178,7 +179,7 @@ func TestStartRestoreRejectsAnyJournalEntryBeforeMutatingJob(t *testing.T) {
 			if _, e = m.StartRestore(context.Background(), 7, j.ID, "destination", "destination"); !errors.Is(e, ErrRecoveryRequired) {
 				t.Fatalf("guard: %v", e)
 			}
-			if j.Operation != before || j.active {
+			if !reflect.DeepEqual(j.Operation, before) || j.active {
 				t.Fatal("rejected restore consumed staged operation")
 			}
 			release, e := m.cfg.Control.OperationLock()
