@@ -20,7 +20,17 @@ var (
 	ErrOperationBusy = errors.New("another instance operation is in progress")
 )
 
-type Control struct{ stateDir string }
+type Control struct {
+	stateDir string
+	// Package tests install barriers before starting concurrent work.
+	checkpoint func(string)
+}
+
+func (c *Control) check(point string) {
+	if c.checkpoint != nil {
+		c.checkpoint(point)
+	}
+}
 
 func New(stateDir string) (*Control, error) {
 	if stateDir == "" {
@@ -98,6 +108,10 @@ func (a *admission) release() {
 
 // Enter rejects new work during maintenance. Nested calls carrying the returned
 // context retain the same admission, allowing already-admitted work to drain.
+// Fresh readers hold shared intent through their admission decision. That decision
+// linearizes before a subsequent maintainer acquires exclusive intent, even when
+// scheduling delays the reader's return. Never wait for intent while holding
+// admission: maintenance holds intent while draining admitted work.
 func (c *Control) Enter(ctx context.Context) (context.Context, func(), error) {
 	if err := ctx.Err(); err != nil {
 		return ctx, nil, err
@@ -105,6 +119,14 @@ func (c *Control) Enter(ctx context.Context) (context.Context, func(), error) {
 	key := admissionKey(c.stateDir)
 	if a, ok := ctx.Value(key).(*admission); ok && a.retain() {
 		return ctx, sync.OnceFunc(a.release), nil
+	}
+	intent, err := c.openLock("intent.lock")
+	if err != nil {
+		return ctx, nil, err
+	}
+	defer intent.Close()
+	if err := syscall.Flock(int(intent.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
+		return ctx, nil, fmt.Errorf("%w: %v", ErrMaintenance, err)
 	}
 	if c.marker("maintenance") {
 		return ctx, nil, ErrMaintenance
@@ -117,11 +139,14 @@ func (c *Control) Enter(ctx context.Context) (context.Context, func(), error) {
 		_ = f.Close()
 		return ctx, nil, fmt.Errorf("%w: %v", ErrMaintenance, err)
 	}
+	c.check("reader-before-decision")
 	if c.marker("maintenance") {
 		_ = f.Close()
 		return ctx, nil, ErrMaintenance
 	}
 	a := &admission{refs: 1, file: f}
+	_ = intent.Close()
+	c.check("reader-admitted")
 	return context.WithValue(ctx, key, a), sync.OnceFunc(a.release), nil
 }
 
@@ -143,6 +168,7 @@ func (c *Control) Maintenance(ctx context.Context) (func(), error) {
 		_ = intent.Close()
 		return nil, err
 	}
+	c.check("maintenance-closed")
 	f, err := c.openLock("admission.lock")
 	if err != nil {
 		_ = intent.Close()
