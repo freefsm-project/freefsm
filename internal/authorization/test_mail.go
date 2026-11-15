@@ -30,14 +30,7 @@ func (s *Service) TestMail(ctx context.Context, a Actor, send func() error) erro
 	return result
 }
 
-// AuthorizeEmailEnable durably records the sealed decision before the external
-// restore marker is removed. A crash or filesystem failure between these steps
-// leaves email disabled; an uncommitted decision can never open the gate.
+// AuthorizeEmailEnable retains the old adapter name but owns the complete action.
 func (s *Service) AuthorizeEmailEnable(ctx context.Context, a Actor) error {
-	return s.transaction(ctx, a, false, func(tx pgx.Tx, p Principal) error {
-		if !p.Protected || !p.Allows("email.enable", Sealed) {
-			return ErrForbidden
-		}
-		return audit(ctx, tx, a, p, "email.enable", Sealed, "company_settings", p.CompanyID, map[string]string{"phase": "authorized", "external_effect": "remove_restore_email_disable_marker"})
-	})
+	return s.EnableEmail(ctx, a)
 }

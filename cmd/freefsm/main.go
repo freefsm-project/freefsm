@@ -23,6 +23,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/delivery"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/exports"
 	"github.com/freefsm-project/freefsm/internal/handlers"
@@ -206,6 +207,24 @@ func run() error {
 		return err
 	}
 	slog.Info("database migrations applied")
+	policyTx, err := db.Pool.Begin(startupCtx)
+	if err != nil {
+		return err
+	}
+	defer policyTx.Rollback(context.Background())
+	if err := emailpolicy.Import(startupCtx, policyTx, control.LegacyEmailDisabled); err != nil {
+		return err
+	}
+	if err := policyTx.Commit(startupCtx); err != nil {
+		return err
+	}
+	control.SetEmailPolicy(func(ctx context.Context) (bool, error) {
+		if err := manager.RefreshConnections(); err != nil {
+			return false, err
+		}
+		policy, err := emailpolicy.Read(ctx, db.Pool, false)
+		return policy.Enabled, err
+	})
 	if *migrateFlag {
 		return startup.Finish(startupCtx)
 	}

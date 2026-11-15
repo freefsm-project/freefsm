@@ -12,6 +12,35 @@ import (
 // It says nothing about a different dispatch or a historical committed receipt.
 var ErrExecutionFenced = errors.New("online action execution is fenced; reconcile the same identity")
 
+// RequireExecution is the mandatory boundary for execution-owning commands.
+func RequireExecution(ctx context.Context, userID int64, path string) (Action, error) {
+	a, ok := ctx.Value(key{}).(Action)
+	if !ok || a.UserID != userID || a.Path != path || !a.Atomic || !a.NoChange || a.IntentHash == "" || a.Revision == "" {
+		return Action{}, ErrIdentity
+	}
+	for _, value := range []string{a.ID, a.ExecutionToken} {
+		id, err := uuid.Parse(value)
+		if err != nil || id == uuid.Nil {
+			return Action{}, ErrIdentity
+		}
+	}
+	return a, nil
+}
+
+// MatchExecution binds the trusted dispatch metadata to its admitted intent.
+// The authority and action row locks must already be held by the owner.
+func MatchExecution(ctx context.Context, tx pgx.Tx, a Action) error {
+	var matches bool
+	err := tx.QueryRow(ctx, `SELECT intent_hash=$3 AND method='POST' AND request_path=$4 AND execution_token=$5 AND execution_review=$6 FROM online_save_actions WHERE user_id=$1 AND operation_id=$2`, a.UserID, a.ID, a.IntentHash, a.Path, a.ExecutionToken, a.Revision).Scan(&matches)
+	if err != nil {
+		return err
+	}
+	if !matches {
+		return ErrIdentity
+	}
+	return nil
+}
+
 // AdmitExecution admits a single dispatch, identified before its INSERT. A lost
 // response is unknown: callers must query the identity, not dispatch on error.
 // Duplicate requests never acquire execution authority from a receipt lookup.
@@ -22,7 +51,7 @@ func (s Store) AdmitExecution(ctx context.Context, a Action, digest, method, pat
 	if _, err := uuid.Parse(a.ExecutionToken); err != nil {
 		return false, ErrIdentity
 	}
-	tag, err := s.Pool.Exec(ctx, `INSERT INTO online_save_actions(user_id,operation_id,intent_hash,method,request_path,review_path,execution_token) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, a.UserID, a.ID, digest, method, path, review, a.ExecutionToken)
+	tag, err := s.Pool.Exec(ctx, `INSERT INTO online_save_actions(user_id,operation_id,intent_hash,method,request_path,review_path,execution_token,execution_review) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT DO NOTHING`, a.UserID, a.ID, digest, method, path, review, a.ExecutionToken, a.Revision)
 	if err != nil {
 		return false, err
 	}

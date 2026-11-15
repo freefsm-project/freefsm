@@ -21,9 +21,10 @@ var (
 )
 
 type Control struct {
-	stateDir string
-	owner    ResolutionOwner
-	fault    func(string) error
+	stateDir    string
+	owner       ResolutionOwner
+	fault       func(string) error
+	emailPolicy func(context.Context) (bool, error)
 	// Package tests install barriers before starting concurrent work.
 	checkpoint func(string)
 }
@@ -219,14 +220,68 @@ func (c *Control) EnterEmail(ctx context.Context) (context.Context, func(), erro
 	return ctx, release, nil
 }
 
-func (c *Control) EmailDisabled() bool { return c.marker("email-disabled") }
+// SetEmailPolicy installs the production reader before admission opens. The
+// reader refreshes connections before consulting the current database policy.
+func (c *Control) SetEmailPolicy(reader func(context.Context) (bool, error)) {
+	c.emailPolicy = reader
+}
+
+func (c *Control) EmailDisabled() bool {
+	if c.emailPolicy == nil {
+		return c.marker("email-disabled")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return c.CheckEmail(ctx) != nil
+}
+
+// LegacyEmailDisabled is an upgrade observation, never modern mail authority.
+// ReadDir distinguishes an absent marker from inaccessible directory contents.
+func (c *Control) LegacyEmailDisabled() (bool, error) {
+	entries, err := os.ReadDir(c.stateDir)
+	if err != nil {
+		return false, err
+	}
+	for _, entry := range entries {
+		if entry.Name() != "email-disabled" {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return false, err
+		}
+		if !info.Mode().IsRegular() {
+			return false, errors.New("invalid legacy email marker")
+		}
+		if _, err := os.ReadFile(filepath.Join(c.stateDir, entry.Name())); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
+}
 func (c *Control) DisableEmail() error { return c.writeMarker("email-disabled") }
 func (c *Control) EnableEmail() error  { return c.removeMarker("email-disabled") }
 func (c *Control) CheckEmail(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if c.EmailDisabled() {
+	if c.emailPolicy != nil {
+		ctx, release, err := c.Enter(ctx)
+		if err != nil {
+			return err
+		}
+		defer release()
+		enabled, err := c.emailPolicy(ctx)
+		if err != nil {
+			return err
+		}
+		if !enabled {
+			return ErrEmailDisabled
+		}
+		return nil
+	}
+	if c.marker("email-disabled") {
 		return ErrEmailDisabled
 	}
 	return nil

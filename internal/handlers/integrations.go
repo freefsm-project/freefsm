@@ -8,6 +8,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/credentials"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/services"
@@ -34,11 +35,17 @@ func (h *integrationHandler) enableEmail(w http.ResponseWriter, r *http.Request)
 	}
 	defer release()
 	if err := h.authority.AuthorizeEmailEnable(ctx, authorizationActor(r)); err != nil {
+		var failure *authorization.TransactionFailure
+		if errors.As(err, &failure) && !failure.RolledBack {
+			w.Header().Set("X-FreeFSM-Disposition", "unknown")
+			http.Error(w, "enable_outcome_unknown: Check the same save action before retrying.", http.StatusServiceUnavailable)
+			return
+		}
+		if errors.Is(err, emailpolicy.ErrUnavailable) {
+			http.Error(w, "Email policy unavailable. Check the same save action before retrying.", http.StatusServiceUnavailable)
+			return
+		}
 		authorizationError(w, r, err)
-		return
-	}
-	if err := h.control.EnableEmail(); err != nil {
-		http.Error(w, "Email re-enable could not be persisted; retry after correcting instance storage", 503)
 		return
 	}
 	http.Redirect(w, r, "/settings/mail?flash=Outbound+email+enabled", 303)

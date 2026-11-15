@@ -22,6 +22,7 @@ import (
 	"github.com/a-h/templ"
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/config"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/saveaction"
 	"github.com/freefsm-project/freefsm/internal/templates"
 	"github.com/go-chi/chi/v5"
@@ -155,9 +156,17 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 						}
 					}
 					review := saveReviewPath(r)
-					admitted, err := store.Admit(r.Context(), action, digest, r.Method, r.URL.Path, review)
+					action.IntentHash = digest
+					var admitted bool
+					if r.URL.Path == authorization.EmailEnablePath {
+						action.ExecutionToken = uuid.NewString()
+						admitted, err = store.AdmitExecution(r.Context(), action, digest, r.Method, r.URL.Path, review)
+					} else {
+						admitted, err = store.Admit(r.Context(), action, digest, r.Method, r.URL.Path, review)
+					}
 					if err != nil && !errors.Is(err, saveaction.ErrIdentity) {
-						http.Error(w, "Save status unavailable. Keep this action identity and check again.", 503)
+						http.Error(capture, "Save status unknown. Keep this action identity and check again.", 503)
+						capture.finish(nil)
 						return
 					}
 					if !admitted {
@@ -168,6 +177,9 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 						}
 						if errors.Is(err, saveaction.ErrIdentity) {
 							receipt.Disposition = "identity_conflict"
+						}
+						if r.URL.Path == authorization.EmailEnablePath && receipt.Disposition == "not_received" {
+							receipt.Disposition = "unknown"
 						}
 						if saveFormPath(receipt.RequestPath) == "" {
 							receipt.InputAccessURL = ""
@@ -223,6 +235,13 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 							path = r.URL.ResolveReference(u).Path
 						}
 					}
+					if path == authorization.EmailEnablePath {
+						policy, err := emailpolicy.Read(r.Context(), s.Pool, false)
+						if err != nil {
+							return ""
+						}
+						return policy.Review()
+					}
 					if saveParentPath(path) == saveParentPath(r.URL.Path) {
 						return pageRevision
 					}
@@ -237,6 +256,9 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 // authorization/DetailsTransaction boundary. Legacy multi-step actions are
 // deliberately excluded from rollback-to-revise assurances.
 func atomicSavePath(path string) bool {
+	if path == authorization.EmailEnablePath {
+		return true
+	}
 	// Customer lifecycle commands own one fenced transaction containing the
 	// entire cascade, immutable audit and the original action's receipt.
 	if parts := strings.Split(strings.Trim(path, "/"), "/"); len(parts) == 3 && parts[0] == "customers" && (parts[2] == "delete" || parts[2] == "restore") {
@@ -297,6 +319,9 @@ func timeEntrySavePath(path string) bool {
 }
 
 func noChangeSavePath(path string) bool {
+	if path == authorization.EmailEnablePath {
+		return true
+	}
 	parts := strings.Split(strings.Trim(path, "/"), "/")
 	if len(parts) == 3 && parts[0] == "jobs" && (parts[2] == "dispatch" || parts[2] == "custom-fields") {
 		return true

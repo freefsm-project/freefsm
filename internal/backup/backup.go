@@ -87,6 +87,7 @@ type Manager struct {
 }
 type journal struct {
 	Phase, Recovery        string
+	EmailPolicyVersion     int
 	EmailDisabled          bool
 	UploadDir, Destination string
 	Start, Outcome         *ActivityEvent `json:",omitempty"`
@@ -205,6 +206,9 @@ func (m *Manager) Recover(ctx context.Context) (retErr error) {
 	return startup.Finish(ctx)
 }
 func (m *Manager) resolve(ctx context.Context, j journal) error {
+	if j.EmailPolicyVersion != 0 && j.EmailPolicyVersion != 1 {
+		return engineFailure(FailureRecoveryRequired, "unknown email policy journal version")
+	}
 	if j.UploadDir != m.cfg.UploadDir || j.Destination != m.destinationIdentity() {
 		return engineFailure(FailureRecoveryRequired, "recovery destination configuration changed")
 	}
@@ -226,7 +230,11 @@ func (m *Manager) resolve(ctx context.Context, j journal) error {
 		if e := m.replaceFiles(filepath.Join(dir, "uploads")); e != nil {
 			return e
 		}
-		if j.EmailDisabled {
+		if j.EmailPolicyVersion == 1 {
+			if _, e := m.currentEmailPolicy(ctx); e != nil {
+				return e
+			}
+		} else if j.EmailDisabled {
 			if e := m.cfg.Control.DisableEmail(); e != nil {
 				return e
 			}
@@ -245,6 +253,11 @@ func (m *Manager) resolve(ctx context.Context, j journal) error {
 	case "capturing", "committed", "rolled-back":
 	default:
 		return engineFailure(FailureRecoveryRequired, "unknown recovery phase")
+	}
+	if j.EmailPolicyVersion == 1 {
+		if _, e := m.currentEmailPolicy(ctx); e != nil {
+			return e
+		}
 	}
 	if e := m.selectedResolution(j); e != nil {
 		return e
@@ -903,7 +916,20 @@ func (m *Manager) restore(ctx context.Context, j *job) error {
 		return classified(FailureRecoveryRequired, e)
 	}
 	defer release()
-	state.EmailDisabled = m.cfg.Control.EmailDisabled()
+	state.EmailPolicyVersion, e = m.emailPolicyVersion(ctx)
+	if e != nil {
+		return e
+	}
+	if state.EmailPolicyVersion == 1 {
+		if _, e = m.currentEmailPolicy(ctx); e != nil {
+			return e
+		}
+	} else {
+		state.EmailDisabled, e = m.cfg.Control.LegacyEmailDisabled()
+		if e != nil {
+			return e
+		}
+	}
 	if e := m.writeJournal(state); e != nil {
 		return e
 	}
@@ -981,8 +1007,10 @@ func (m *Manager) restore(ctx context.Context, j *job) error {
 		if e = m.protect(ctx, j.manifest.Paths); e != nil {
 			return e
 		}
-		if e = m.cfg.Control.DisableEmail(); e != nil {
-			return e
+		if state.EmailPolicyVersion == 0 {
+			if e = m.cfg.Control.DisableEmail(); e != nil {
+				return e
+			}
 		}
 		if e = m.check("protections-applied"); e != nil {
 			return e

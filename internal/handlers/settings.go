@@ -320,25 +320,11 @@ func (h *SettingsHandler) TestEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SettingsHandler) EnableEmail(w http.ResponseWriter, r *http.Request) {
-	u, ok := middleware.UserFromContext(r.Context())
-	if !ok || u == nil || !u.ProtectedAdministrator {
-		http.Error(w, "Forbidden", 403)
-		return
-	}
-	if h.users == nil {
+	if h.authority == nil {
 		http.Error(w, "Administrator verification unavailable", 503)
 		return
 	}
-	active, err := h.users.GetByID(r.Context(), u.ID)
-	if err != nil || !active.IsActive || active.AuthorizationRoleID == nil || *active.AuthorizationRoleID != 1 || active.ForcePasswordChange {
-		http.Error(w, "Forbidden", 403)
-		return
-	}
-	if h.control == nil || h.control.EnableEmail() != nil {
-		http.Error(w, "Email could not be enabled", 503)
-		return
-	}
-	http.Redirect(w, r, "/settings?flash=Outbound+email+enabled", http.StatusSeeOther)
+	(&integrationHandler{authority: h.authority, control: h.control}).enableEmail(w, r)
 }
 
 func (h *SettingsHandler) UploadInvoiceLogo(w http.ResponseWriter, r *http.Request) {

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"io"
 	"net/url"
 	"os"
@@ -439,6 +440,10 @@ func (m *Manager) mappings(ctx context.Context) ([]pathMapping, error) {
 	return out, rows.Err()
 }
 func (m *Manager) protect(ctx context.Context, paths []pathMapping) error {
+	version, e := m.emailPolicyVersion(ctx)
+	if e != nil {
+		return e
+	}
 	c, e := m.connect(ctx)
 	if e != nil {
 		return e
@@ -449,6 +454,15 @@ func (m *Manager) protect(ctx context.Context, paths []pathMapping) error {
 		return e
 	}
 	defer tx.Rollback(ctx)
+	modern := version == 1
+	if modern {
+		if e = emailpolicy.Durable(ctx, tx); e != nil {
+			return e
+		}
+		if _, e = emailpolicy.Read(ctx, tx, true); e != nil {
+			return e
+		}
+	}
 	if _, e = tx.Exec(ctx, "CREATE TEMP TABLE backup_paths (original text PRIMARY KEY, destination text NOT NULL) ON COMMIT DROP"); e != nil {
 		return e
 	}
@@ -474,6 +488,15 @@ func (m *Manager) protect(ctx context.Context, paths []pathMapping) error {
 	// rotates its epoch atomically with restored-token invalidation.
 	if _, e = tx.Exec(ctx, `DO $$ BEGIN IF to_regclass('public.session_instance') IS NOT NULL THEN UPDATE public.session_instance SET epoch=gen_random_uuid(); END IF; END $$`); e != nil {
 		return e
+	}
+	if modern {
+		tag, err := tx.Exec(ctx, `UPDATE public.restore_email_policy SET epoch=(SELECT epoch FROM public.session_instance),enabled=false,revision=revision+1,last_enable_operation=NULL WHERE singleton`)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return emailpolicy.ErrUnavailable
+		}
 	}
 	return tx.Commit(ctx)
 }

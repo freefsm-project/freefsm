@@ -18,10 +18,11 @@ var ErrIdentity = errors.New("action identity belongs to a different intent")
 
 type key struct{}
 type Action struct {
-	UserID   int64
-	ID       string
-	Revision string
-	Path     string
+	UserID     int64
+	ID         string
+	Revision   string
+	Path       string
+	IntentHash string // trusted admission digest, never a new authorization grant
 	// Outcome is request-local rollback evidence from an installed committing
 	// boundary, not a substitute for the durable receipt.
 	Outcome        *Outcome
