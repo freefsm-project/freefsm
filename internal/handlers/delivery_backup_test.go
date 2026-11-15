@@ -48,6 +48,7 @@ func TestDeliveryEncryptedBackupDrainAndRestoreGates(t *testing.T) {
 	t.Cleanup(func() { historyCheck(t, admin.Close(context.Background())) })
 	src := newHistoryBackupInstance(t, admin, dsn, "Delivery source")
 	dst := newHistoryBackupInstance(t, admin, dsn, "Delivery destination")
+	verifyExistingWorkers := prepareEmailGenerationWorkers(t, ctx, dst)
 	customer := src.client.Customer.Create().SetCompanyID(src.company).SetDisplayName("Backup customer").SaveX(ctx)
 	job := src.client.Job.Create().SetCompanyID(src.company).SetCustomerID(customer.ID).SetJobType("Backup Job").SaveX(ctx)
 	doc := src.client.Estimate.Create().SetCompanyID(src.company).SetCustomerID(customer.ID).SetJobID(job.ID).SetTitle("Frozen backup").SaveX(ctx)
@@ -169,6 +170,7 @@ func TestDeliveryEncryptedBackupDrainAndRestoreGates(t *testing.T) {
 	if op.Phase != "complete" {
 		t.Fatal(op)
 	}
+	verifyExistingWorkers()
 	historyCheck(t, dst.manager.RefreshConnections())
 	historyEqual(t, "encrypted restore preserves snapshots IDs attempts message IDs receipts and event history", historyDurableRows(t, dst.pool, tables), before)
 	var restoredName, restoredType, restoredPath string

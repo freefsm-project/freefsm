@@ -121,7 +121,7 @@ func TestBackupCreateUnsupportedLayout(t *testing.T) {
 	}
 }
 
-func preflightFixture(t *testing.T) (*Manager, *database.DB) {
+func preflightFixture(t *testing.T, cliEncoding ...bool) (*Manager, *database.DB) {
 	t.Helper()
 	dsn := os.Getenv("FREEFSM_BACKUP_TEST_ADMIN_URL")
 	if dsn == "" {
@@ -148,6 +148,9 @@ func preflightFixture(t *testing.T) (*Manager, *database.DB) {
 		t.Fatal(err)
 	}
 	u.User, u.Path = url.User(name), "/"+name
+	if len(cliEncoding) != 0 && cliEncoding[0] {
+		u.User = url.UserPassword(name, "")
+	}
 	root := t.TempDir()
 	control, err := instancecontrol.New(filepath.Join(root, "state"))
 	if err != nil {
