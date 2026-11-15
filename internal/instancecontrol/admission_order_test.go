@@ -29,6 +29,7 @@ func TestAdmissionReaderLinearizesBeforeClose(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bootstrapAdmissionFixture(t, c)
 	before, decide, admitted, returnReader := make(chan struct{}), make(chan struct{}), make(chan struct{}), make(chan struct{})
 	allowDecision, allowReturn := sync.OnceFunc(func() { close(decide) }), sync.OnceFunc(func() { close(returnReader) })
 	t.Cleanup(allowDecision)
@@ -121,6 +122,7 @@ func TestAdmissionWriterLinearizesBeforeReaders(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bootstrapAdmissionFixture(t, c)
 	ctx, original, err := c.Enter(context.Background())
 	if err != nil {
 		t.Fatal(err)

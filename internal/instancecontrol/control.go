@@ -22,6 +22,8 @@ var (
 
 type Control struct {
 	stateDir string
+	owner    ResolutionOwner
+	fault    func(string) error
 	// Package tests install barriers before starting concurrent work.
 	checkpoint func(string)
 }
@@ -128,9 +130,6 @@ func (c *Control) Enter(ctx context.Context) (context.Context, func(), error) {
 	if err := syscall.Flock(int(intent.Fd()), syscall.LOCK_SH|syscall.LOCK_NB); err != nil {
 		return ctx, nil, fmt.Errorf("%w: %v", ErrMaintenance, err)
 	}
-	if c.marker("maintenance") {
-		return ctx, nil, ErrMaintenance
-	}
 	f, err := c.openLock("admission.lock")
 	if err != nil {
 		return ctx, nil, err
@@ -140,9 +139,9 @@ func (c *Control) Enter(ctx context.Context) (context.Context, func(), error) {
 		return ctx, nil, fmt.Errorf("%w: %v", ErrMaintenance, err)
 	}
 	c.check("reader-before-decision")
-	if c.marker("maintenance") {
+	if err := c.verifyOpen(); err != nil {
 		_ = f.Close()
-		return ctx, nil, ErrMaintenance
+		return ctx, nil, err
 	}
 	a := &admission{refs: 1, file: f}
 	_ = intent.Close()
@@ -150,41 +149,29 @@ func (c *Control) Enter(ctx context.Context) (context.Context, func(), error) {
 	return context.WithValue(ctx, key, a), sync.OnceFunc(a.release), nil
 }
 
-// Maintenance persists intent before draining readers. Its release ONLY releases
-// locks: the marker remains closed until the engine explicitly calls
-// ClearMaintenance after verified success/rollback, while still holding these
-// locks and OperationLock. Acquisition works with a crash-left marker present.
-// Never call Maintenance from a context currently holding Enter admission.
+// Maintenance is a closure-only compatibility adapter. Production verification
+// uses BeginMaintenance's scoped lease. Releasing these locks never opens access.
 func (c *Control) Maintenance(ctx context.Context) (func(), error) {
-	intent, err := c.openLock("intent.lock")
+	l, err := c.BeginMaintenance(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if err := waitLock(ctx, intent, syscall.LOCK_EX); err != nil {
-		_ = intent.Close()
-		return nil, err
-	}
-	if err := c.writeMarker("maintenance"); err != nil {
-		_ = intent.Close()
-		return nil, err
-	}
-	c.check("maintenance-closed")
-	f, err := c.openLock("admission.lock")
-	if err != nil {
-		_ = intent.Close()
-		return nil, err
-	}
-	if err := waitLock(ctx, f, syscall.LOCK_EX); err != nil {
-		_ = f.Close()
-		_ = intent.Close()
-		return nil, err
-	}
-	return sync.OnceFunc(func() { _ = f.Close(); _ = intent.Close() }), nil
+	return l.Close, nil
 }
 
-// KeepClosed is also useful if the engine encounters an error after clearing.
-func (c *Control) KeepClosed() error       { return c.writeMarker("maintenance") }
-func (c *Control) ClearMaintenance() error { return c.removeMarker("maintenance") }
+// KeepClosed only closes. It is not compensation for an unresolved release.
+func (c *Control) KeepClosed() error {
+	l, err := c.BeginMaintenance(context.Background())
+	if err != nil {
+		return err
+	}
+	l.Close()
+	return nil
+}
+
+// ClearMaintenance no longer grants authority. Legacy callers must use the
+// Manager's verified startup/recovery path; absence is never an open decision.
+func (c *Control) ClearMaintenance() error { return ErrMaintenance }
 
 func (c *Control) OperationLock() (func(), error) {
 	f, err := c.openLock("operation.lock")

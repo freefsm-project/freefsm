@@ -61,15 +61,15 @@ func TestResolutionSelectionPrecedesCleanup(t *testing.T) {
 				t.Fatal(err)
 			}
 			m.checkpoint = nil
-			if err := m.resolve(context.Background(), j); err != nil {
-				t.Fatal(err)
+			if err := m.resolve(context.Background(), j); err == nil {
+				t.Fatal("synthetic journal bypassed installed database verification")
 			}
-			if _, err := os.Stat(m.journalPath()); !errors.Is(err, os.ErrNotExist) {
-				t.Fatal("journal not cleaned", err)
+			if _, err := os.Stat(m.journalPath()); err != nil {
+				t.Fatal("unverified destination lost journal", err)
 			}
 			fresh := &Manager{root: m.root, cfg: m.cfg}
 			if _, err := fresh.readResolution(binding, resolutionSelected); err != nil {
-				t.Fatal("identity lost after journal removal", err)
+				t.Fatal("retained selected identity lost", err)
 			}
 			if _, err := fresh.readResolution(binding, resolutionReady); err == nil {
 				t.Fatal("selection became release authority")
@@ -106,8 +106,11 @@ func TestResolutionSelectionFaultRetainsJournalAndCopy(t *testing.T) {
 		}
 	}
 	m.checkpoint = nil
-	if err := m.resolve(context.Background(), j); err != nil {
+	if err := m.selectedResolution(j); err != nil {
 		t.Fatal("could not reconcile selection publication", err)
+	}
+	if err := m.resolve(context.Background(), j); err == nil {
+		t.Fatal("synthetic journal authorized release without installed verification")
 	}
 }
 

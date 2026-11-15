@@ -13,12 +13,11 @@ import (
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/hostrecovery"
-	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 )
 
 // Called after interrupted-restore recovery, while holding OperationLock, before
 // migrations, HTTP admission, or workers. Passwords never appear in argv or logs.
-func recoverAdminPassword(cfg *config.Config, control *instancecontrol.Control, email string) (result error) {
+func recoverAdminPassword(cfg *config.Config, email string) (result error) {
 	info, err := os.Stdin.Stat()
 	if err != nil {
 		return errors.New("cannot read password input")
@@ -44,14 +43,8 @@ func recoverAdminPassword(cfg *config.Config, control *instancecontrol.Control, 
 	if err := db.CheckCompatibility(ctx); err != nil {
 		return err
 	}
-	// OperationLock is held and Recover has reconciled any prior maintenance.
-	// Maintenance drains all old-password actions before the reset transaction.
-	release, err := control.Maintenance(ctx)
-	if err != nil {
-		return err
-	}
-	defer release()
-	defer func() { result = errors.Join(result, control.ClearMaintenance()) }()
+	// The startup owner retains exclusive maintenance through this transaction
+	// and verifies the installed instance before publishing admission afterward.
 	if err := hostrecovery.ResetExistingAdmin(ctx, db.Pool, email, lines[0], strconv.Itoa(os.Getuid())); err != nil {
 		return err
 	}

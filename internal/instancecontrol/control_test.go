@@ -16,7 +16,7 @@ func TestFailedMarkerRemovalPreservesProtection(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("requires unprivileged filesystem permission enforcement")
 	}
-	for _, marker := range []string{"email", "maintenance"} {
+	for _, marker := range []string{"email"} {
 		t.Run(marker, func(t *testing.T) {
 			dir := t.TempDir()
 			control, err := instancecontrol.New(dir)
@@ -24,9 +24,6 @@ func TestFailedMarkerRemovalPreservesProtection(t *testing.T) {
 				t.Fatal(err)
 			}
 			closeGate, openGate := control.DisableEmail, control.EnableEmail
-			if marker == "maintenance" {
-				closeGate, openGate = control.KeepClosed, control.ClearMaintenance
-			}
 			if err := closeGate(); err != nil {
 				t.Fatal(err)
 			}
@@ -53,10 +50,7 @@ func TestFailedMarkerRemovalPreservesProtection(t *testing.T) {
 				if !restarted.EmailDisabled() {
 					t.Fatal("failed enable silently removed the restored-instance notice")
 				}
-				if _, release, err := restarted.EnterEmail(context.Background()); !errors.Is(err, instancecontrol.ErrEmailDisabled) {
-					if release != nil {
-						release()
-					}
+				if err := restarted.CheckEmail(context.Background()); !errors.Is(err, instancecontrol.ErrEmailDisabled) {
 					t.Fatalf("failed enable admitted outbound mail: %v", err)
 				}
 			} else {
@@ -70,11 +64,10 @@ func TestFailedMarkerRemovalPreservesProtection(t *testing.T) {
 			if err := openGate(); err != nil {
 				t.Fatal(err)
 			}
-			_, release, err := restarted.EnterEmail(context.Background())
+			err = restarted.CheckEmail(context.Background())
 			if err != nil {
 				t.Fatalf("explicit retry after repair failed: %v", err)
 			}
-			release()
 		})
 	}
 }

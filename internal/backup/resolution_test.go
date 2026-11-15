@@ -32,7 +32,7 @@ func resolutionFixture(t *testing.T) (*Manager, resolutionRecord) {
 		t.Fatal(err)
 	}
 	t.Cleanup(unlock)
-	release, err := c.Maintenance(context.Background())
+	release, err := m.beginMaintenance(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}

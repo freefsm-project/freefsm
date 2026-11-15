@@ -68,14 +68,16 @@ type job struct {
 	initiation    bool
 }
 type Manager struct {
-	cfg        Config
-	root       string
-	mu         sync.Mutex
-	jobs       map[string]*job
-	wg         sync.WaitGroup
-	closed     bool
-	poolMu     sync.Mutex
-	generation string
+	cfg            Config
+	root           string
+	mu             sync.Mutex
+	jobs           map[string]*job
+	wg             sync.WaitGroup
+	closed         bool
+	poolMu         sync.Mutex
+	generation     string
+	maintenance    *instancecontrol.MaintenanceLease
+	releaseBinding *resolutionBinding
 	// Set only by package tests, before jobs start. No environment/config bypass.
 	checkpoint func(string) error
 }
@@ -124,7 +126,11 @@ func New(cfg Config) (*Manager, error) {
 	if e = os.Chmod(root, 0700); e != nil {
 		return nil, e
 	}
-	return &Manager{cfg: cfg, root: root, jobs: map[string]*job{}}, syncDir(cfg.StateDir)
+	m := &Manager{cfg: cfg, root: root, jobs: map[string]*job{}}
+	if e = cfg.Control.BindResolutionOwner(m); e != nil {
+		return nil, e
+	}
+	return m, syncDir(cfg.StateDir)
 }
 
 // Missing kinds are legacy release identities, never inferred development.
@@ -172,62 +178,27 @@ func (m *Manager) check(point string) error {
 	return nil
 }
 func (m *Manager) clear() error {
-	if e := m.cfg.Control.ClearMaintenance(); e != nil {
-		_ = m.cfg.Control.KeepClosed()
-		return e
+	if m.maintenance == nil {
+		return ErrRecoveryRequired
 	}
-	return nil
+	return m.maintenance.Open(context.Background())
 }
 
 // Recover MUST run before migrations, admissions and workers. It also discards
 // interrupted predestructive transfers. Never call while this manager has jobs.
 func (m *Manager) Recover(ctx context.Context) (retErr error) {
-	unlock, e := m.cfg.Control.OperationLock()
+	startup, e := m.BeginStartup(ctx)
 	if e != nil {
 		return e
 	}
-	defer unlock()
+	defer startup.Close()
 	defer func() {
 		if retErr != nil {
 			retErr = classified(FailureRecoveryRequired, retErr)
 			m.reportFailure(retErr, "recovering")
 		}
 	}()
-	release, e := m.cfg.Control.Maintenance(ctx)
-	if e != nil {
-		return e
-	}
-	defer release()
-	b, e := os.ReadFile(m.journalPath())
-	if e == nil {
-		var j journal
-		if e = json.Unmarshal(b, &j); e != nil {
-			return e
-		}
-		if e = m.resolve(ctx, j); e != nil {
-			return e
-		}
-	} else if !errors.Is(e, os.ErrNotExist) {
-		return e
-	}
-	if e = m.replayPending(ctx); e != nil {
-		return e
-	}
-	entries, e := os.ReadDir(m.root)
-	if e != nil {
-		return e
-	}
-	for _, v := range entries {
-		if v.IsDir() {
-			if e = cleanupAbandoned(filepath.Join(m.root, v.Name())); e != nil {
-				return e
-			}
-		}
-	}
-	if e = syncDir(m.root); e != nil {
-		return e
-	}
-	return m.clear()
+	return startup.Finish(ctx)
 }
 func (m *Manager) resolve(ctx context.Context, j journal) error {
 	if j.UploadDir != m.cfg.UploadDir || j.Destination != m.destinationIdentity() {
@@ -277,6 +248,9 @@ func (m *Manager) resolve(ctx context.Context, j journal) error {
 	if e := m.check("resolution-selected"); e != nil {
 		return e
 	}
+	if e := m.verifyInstalled(ctx); e != nil {
+		return e
+	}
 	if j.Start != nil {
 		if e := m.publish(ctx, *j.Start); e != nil {
 			return e
@@ -290,6 +264,13 @@ func (m *Manager) resolve(ctx context.Context, j journal) error {
 		if e := m.check("activity-published"); e != nil {
 			return e
 		}
+	}
+	binding, e := m.retainedBinding()
+	if e != nil {
+		return e
+	}
+	if e = m.advanceResolution(binding, resolutionResolved); e != nil {
+		return e
 	}
 	if e := m.cleanupRecovery(dir); e != nil {
 		return e
@@ -499,7 +480,7 @@ func (m *Manager) run(j *job, unlock func(), fn func(context.Context) error) {
 		j.active = false
 		if e != nil {
 			j.Phase = "failed"
-			if j.committed {
+			if j.committed || failure.Category == FailureRecoveryRequired {
 				// The journal selects the restored generation; it does not prove
 				// cleanup or admission release succeeded. Keep this operation
 				// unresolved until recovery verifies its release disposition.
@@ -574,13 +555,13 @@ func (m *Manager) startBackupFor(actor ActivityActor, source, password, action s
 			return e
 		}
 		m.phase(j, "capturing")
-		release, e := m.cfg.Control.Maintenance(ctx)
+		release, e := m.beginMaintenance(ctx)
 		if e != nil {
 			return e
 		}
 		defer release()
 		man, e := m.capture(ctx, j.dir, source)
-		clearErr := m.clear()
+		clearErr := m.finishAdmission(ctx)
 		if clearErr != nil {
 			return classified(FailureRecoveryRequired, errors.Join(e, clearErr))
 		}
@@ -824,7 +805,7 @@ func (m *Manager) StartRestoreFor(ctx context.Context, actor ActivityActor, id, 
 func (m *Manager) restore(ctx context.Context, j *job) error {
 	recovery := j.ID + "-recovery"
 	dir := filepath.Join(m.root, recovery)
-	state := journal{Phase: "capturing", Recovery: recovery, EmailDisabled: m.cfg.Control.EmailDisabled()}
+	state := journal{Phase: "capturing", Recovery: recovery}
 	if m.cfg.ActivitySink != nil {
 		start, err := m.activity(j.activityActor, "restore_started")
 		if err != nil {
@@ -837,16 +818,17 @@ func (m *Manager) restore(ctx context.Context, j *job) error {
 		setActivityFailure(&outcome, interruptedActivityFailure("recovering"))
 		state.Start, state.Outcome = &start, &outcome
 	}
-	if e := m.writeJournal(state); e != nil {
-		return e
-	}
-	release, e := m.cfg.Control.Maintenance(ctx)
+	release, e := m.beginMaintenance(ctx)
 	if e != nil {
 		// The accepted attempt has durable evidence even when draining normal
 		// admissions fails. Startup will publish its interrupted outcome.
 		return classified(FailureRecoveryRequired, e)
 	}
 	defer release()
+	state.EmailDisabled = m.cfg.Control.EmailDisabled()
+	if e := m.writeJournal(state); e != nil {
+		return e
+	}
 	workErr := func() error {
 		if state.Start != nil {
 			if e := m.publish(ctx, *state.Start); e != nil {
@@ -975,7 +957,7 @@ func (m *Manager) restore(ctx context.Context, j *job) error {
 	if e = m.resolve(recoveryCtx, state); e != nil {
 		return classified(FailureRecoveryRequired, errors.Join(workErr, e))
 	}
-	if e = m.clear(); e != nil {
+	if e = m.finishAdmission(recoveryCtx); e != nil {
 		return classified(FailureRecoveryRequired, errors.Join(workErr, e))
 	}
 	if workErr != nil {

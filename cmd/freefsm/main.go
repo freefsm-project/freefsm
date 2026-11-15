@@ -50,11 +50,12 @@ func main() {
 func run() error {
 	configFile := flag.String("config", "", "path to config file (optional)")
 	seedFlag := flag.Bool("seed", false, "seed demo data and exit")
+	migrateFlag := flag.Bool("migrate", false, "recover, migrate and verify the instance, then exit")
 	recoverAdmin := flag.String("recover-admin", "", "reset an existing enabled Admin by email; read password and confirmation from stdin, then exit")
 	workflowPreflight := flag.String("workflow-preflight", "", "write pre-044 workflow evidence to a new restricted JSON file and exit")
 	flag.Parse()
-	if *recoverAdmin != "" && *seedFlag {
-		return errors.New("-recover-admin cannot be combined with -seed")
+	if (*recoverAdmin != "" && (*seedFlag || *migrateFlag)) || (*seedFlag && *migrateFlag) {
+		return errors.New("-recover-admin, -seed and -migrate are mutually exclusive")
 	}
 
 	if *configFile != "" {
@@ -135,24 +136,18 @@ func run() error {
 		return err
 	}
 	defer manager.Shutdown()
-	if err := manager.Recover(context.Background()); err != nil {
-		return err
-	}
-	// Reserve startup against another process's operation until all migrations,
-	// seed work and client construction are finished. No session access can race.
-	startupUnlock, err := control.OperationLock()
+	startup, err := manager.BeginStartup(context.Background())
 	if err != nil {
 		return err
 	}
-	defer startupUnlock()
+	defer startup.Close()
 	if *recoverAdmin != "" {
-		return recoverAdminPassword(cfg, control, *recoverAdmin)
+		if err := recoverAdminPassword(cfg, *recoverAdmin); err != nil {
+			return err
+		}
+		return startup.Finish(context.Background())
 	}
-	startupCtx, startupRelease, err := control.Enter(context.Background())
-	if err != nil {
-		return err
-	}
-	defer startupRelease()
+	startupCtx := context.Background()
 	if err := manager.RefreshConnections(); err != nil {
 		return err
 	}
@@ -211,6 +206,9 @@ func run() error {
 		return err
 	}
 	slog.Info("database migrations applied")
+	if *migrateFlag {
+		return startup.Finish(startupCtx)
+	}
 
 	if *seedFlag {
 		sqldb, err := openEntDB(cfg.DSN())
@@ -225,7 +223,7 @@ func run() error {
 			return err
 		}
 		slog.Info("demo data seeded successfully")
-		return nil
+		return startup.Finish(startupCtx)
 	}
 
 	sessions := services.NewSessionService(db.Pool)
@@ -271,8 +269,9 @@ func run() error {
 		Sender:  delivery.NewSMTPSender(workerEmail),
 		Hook:    statusflow.NewAcceptanceHook(statusflow.New(db.Pool)),
 	}
-	startupRelease()
-	startupUnlock()
+	if err := startup.Finish(startupCtx); err != nil {
+		return err
+	}
 	workerDone := make(chan struct{})
 	recoveryDone := make(chan struct{})
 	exportDone := make(chan struct{})

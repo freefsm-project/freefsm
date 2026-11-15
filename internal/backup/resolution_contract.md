@@ -1,12 +1,30 @@
-# Durable resolution evidence — PARTIALLY INTEGRATED
+# Durable resolution evidence and persistent admission
 
-This component does not repair runtime admission yet. It is private to the existing
-backup owner; no exported constructor grants verified-generation authority.
-`Manager.resolve` now persists selected journal identity before activity/cleanup;
-`Manager.run` projects committed errors as recovery-required rather than complete.
-Resolved/release-ready advancement, verified release, restart/status reconciliation,
-Control and startup composition still need integration. Filesystem adapter tests
-are not whole-engine proof.
+The existing backup Manager owns verification. `resolve` retains selected identity
+in the scoped closed lease before installed-state verification, activity publication
+and resolved advancement; only then can recovery/journal cleanup run.
+`finishAdmission` reconciles retained identity even without a journal, verifies the
+installed destination, replays pending activity, finishes cleanup and pool reset,
+and persists release-ready. Only that private path sets `releaseBinding`.
+Control's lease invokes `PrepareAdmission` with its exact identity; caller strings
+or a syntactically ready record cannot create the Manager's release entitlement.
+
+Ordinary Enter takes shared intent then shared admission, synchronizes the exact
+versioned discriminator and invokes Manager.VerifyAdmission to synchronize the
+exact referenced summary and current generation. Missing/legacy/unknown/corrupt
+or inaccessible state denies. New never opens. No successful-sync cache exists.
+Open publication errors after rename are release-unresolved, with no compensating
+write. A later closed publication supersedes prior open evidence. ClearMaintenance
+is a rejecting compatibility shim, not an authorization path.
+
+BeginStartup owns operation and exclusive maintenance through recovery, migration,
+initialization and host recovery. Finish verifies before opening; Close alone keeps
+closed. Explicit `-migrate` uses the same startup path. Bootstrap's transition is
+retained in the closed discriminator before verification and reused on retry.
+
+Durable actor-bound status/UI reconciliation remains pending. `run` never marks
+committed cleanup/release errors complete; ready evidence alone is not terminal
+success. Filesystem adapter tests are not whole-engine or native-reboot proof.
 
 ## Representation and persistence
 
@@ -52,7 +70,7 @@ there is no successful-sync cache. Missing/corrupt/unsupported/mismatch/stage/
 persistence errors return no usable evidence. `resolutionError.Error` is fixed
 vocabulary and never includes identities; raw causes are internal only.
 
-## Required integration at actual seams (all five D3 points)
+## D3 obligations at actual seams (qualification checklist)
 
 1. **Original identity:** at `Manager.restore` retain the journal identity through
    every `writeJournal` and recovery. `Manager.resolve` uses `journalResolution`

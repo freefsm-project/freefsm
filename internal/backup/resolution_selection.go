@@ -59,7 +59,10 @@ func (m *Manager) selectedResolution(j journal) error {
 			r.Diagnostics = append(r.Diagnostics, d)
 		}
 	}
-	return m.persistResolution(r)
+	if err = m.persistResolution(r); err != nil {
+		return err
+	}
+	return m.retainResolution(binding)
 }
 
 // Read and synchronize the exact generation publication, not a cached pool
