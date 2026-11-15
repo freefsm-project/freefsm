@@ -84,6 +84,9 @@ const { chromium } = require('playwright-core');
           assert.equal(body.get('current_password'), 'account-secret');
           assert.equal(body.get('operation'), op.ID);
           return route.fulfill({ headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename="freefsm-backup.age"' }, body: 'encrypted-archive' });
+        case '/settings/backup/review':
+          assert.equal(request.headers()['x-backup-operation'], op.ID);
+          return route.fulfill({ json: { ...op, Kind: 'upload', Phase: 'ready' } });
         case '/settings/backup/upload':
           assert.match(request.headers()['x-backup-action'] || '',/^[0-9a-f]{64}$/,'upload identity exists before transfer');
           assert.equal(request.headers()['content-type'], 'application/octet-stream');
@@ -98,8 +101,8 @@ const { chromium } = require('playwright-core');
           assert.equal(body.get('operation'), op.ID);
           assert.equal(body.get('archive_digest'), op.ArchiveDigest);
           assert.equal(body.get('confirmation'), 'Destination');
-          last = { ...op, Kind: 'restore', Phase: initial.restore };
-          if (initial.restore === 'complete') last = { ...last, Failure: recoveryFailure, Error: recoveryFailure.Message };
+          last = { ...op, Kind: 'restore', Phase: initial.restore, Release: 'verified-open' };
+          if (initial.restore === 'complete') last = { ...last, Release: 'unresolved', Failure: recoveryFailure, Error: recoveryFailure.Message };
           pending = [{ ...last, Phase: 'complete' }];
           return route.fulfill({ json: last });
         default: throw new Error('Unexpected POST ' + url.pathname);
@@ -230,8 +233,8 @@ const { chromium } = require('playwright-core');
         assert.equal(await page.locator('form, #backup-progress script, #backup-progress safe').count(), 0);
         assert.equal(activityRequests, beforeRestore, 'closed-maintenance status must not load activity');
       }
-      // Only a subsequent coherent status without a failure may offer login.
-      last = { ...op, Kind: 'restore', Phase: 'complete' };
+      // Repaired matching release retains history without treating it as a current failure.
+      last = { ...op, Kind: 'restore', Phase: 'complete', Release: 'verified-open', Outcome: 'restore', Reconstructed: true, Failure: recoveryFailure, Diagnostics: [recoveryFailure] };
       await page.reload();
       console.log('Committed restore needing recovery: safe message, no login/controls/activity until recovered passed');
     }
@@ -274,5 +277,39 @@ const { chromium } = require('playwright-core');
     console.log('Recent Activity initial load, completion refresh, instance-filtered global link, DB-free status shell; backup/download, upload/review, restore/login passed:', initial);
     await page.close();
     }
+    const page = await browser.newPage();
+    const base = JSON.parse(process.argv[3]);
+    let status = { ...base, Reconstructed: true, SourceName: '', ArchiveDigest: '', Kind: 'backup', Phase: 'complete' };
+    let mutations = 0;
+    await page.route('**/settings/backup/*', async route => {
+      const request = route.request();
+      if (request.method() !== 'POST') return route.continue();
+      const path = new URL(request.url()).pathname;
+      if (path.endsWith('/action-status')) return route.fulfill({ json: { status_available: true, available: false, operation_id: base.ID } });
+      if (path.endsWith('/status')) return route.fulfill({ json: status });
+      mutations++; return route.abort();
+    });
+    await page.goto(process.argv[2] + '/settings/backup/status-page');
+    await page.evaluate(() => sessionStorage.setItem('freefsm.backup.status', JSON.stringify({ action: 'a3'.repeat(32), kind: 'backup' })));
+    await page.reload();
+    await page.waitForFunction(() => document.getElementById('backup-progress').textContent.includes('Reconstructed durable status'));
+    assert.match(await page.locator('#backup-progress').textContent(), /artifacts are unavailable/);
+    assert.equal(await page.locator('form').count(), 0);
+    status = { ...status, Kind: 'restore', Phase: 'recovery-required', Outcome: 'restore', Release: 'unresolved', ActivityPending: true, Diagnostics: [{ Message: 'Retained safe diagnostic', Category: 'storage', DiagnosticID: 'original-diagnostic' }] };
+    await page.reload();
+    await page.getByRole('button', { name: 'Check operation status' }).waitFor();
+    assert.equal(await page.locator('#backup-progress a[href="/login"]').count(), 0);
+    assert.match(await page.locator('#backup-progress').textContent(), /Selected outcome: restore.*unresolved.*Activity publication pending.*original-diagnostic/);
+    status = { ...status, Phase: 'complete', Release: 'verified-open', ActivityPending: false };
+    await page.getByRole('button', { name: 'Check operation status' }).click();
+    await page.locator('#backup-progress a[href="/login"]').waitFor();
+    assert.match(await page.locator('#backup-progress').textContent(), /original-diagnostic/);
+    status = { ...status, Phase: 'recovery-required', Release: 'unresolved' };
+    await page.reload();
+    await page.getByRole('button', { name: 'Check operation status' }).waitFor();
+    assert.equal(await page.locator('#backup-progress a[href="/login"]').count(), 0);
+    assert.equal(mutations, 0, 'reconstructed status never replays commands');
+    await page.close();
+    console.log('Reconstructed initiation/status, unavailable artifacts, retained diagnostics, repaired and later closed release passed');
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exit(1); });

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"syscall"
 	"testing"
@@ -237,5 +238,120 @@ func TestDurableStatusKnownFailureWithPendingActivity(t *testing.T) {
 	b, _ := json.Marshal(op)
 	if strings.Contains(string(b), "private") {
 		t.Fatal("private diagnostic leaked")
+	}
+	before := op.Diagnostics
+	if err := n.replayPending(context.Background()); err == nil {
+		t.Fatal("failed sink reconciled status")
+	}
+	op, _ = n.Status(17, j.ID)
+	if !op.ActivityPending {
+		t.Fatal("failed replay cleared pending")
+	}
+	n.cfg.ActivitySink = func(context.Context, ActivityEvent) error { return nil }
+	n.checkpoint = func(p string) error {
+		if p == "status-write" {
+			return syscall.EIO
+		}
+		return nil
+	}
+	if err := n.replayPending(context.Background()); !errors.Is(err, syscall.EIO) {
+		t.Fatal("status persistence failure ignored", err)
+	}
+	if _, err := os.Stat(n.pendingPath()); err != nil {
+		t.Fatal("lost replay evidence", err)
+	}
+	n.checkpoint = nil
+	if err := n.replayPending(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for _, manager := range []*Manager{m, n, statusRestart(t, n)} {
+		op, err = manager.Status(17, j.ID)
+		if err != nil || op.ActivityPending || op.Phase != "failed" {
+			t.Fatalf("replay did not reconcile same operation: %+v %v", op, err)
+		}
+		if manager != m && !reflect.DeepEqual(before, op.Diagnostics) {
+			t.Fatal("replay changed diagnostics")
+		}
+	}
+}
+
+func TestDurableStatusCommandPersistenceFailures(t *testing.T) {
+	for _, point := range []string{"status-write", "status-file-sync", "status-rename", "status-directory-sync"} {
+		t.Run(point, func(t *testing.T) {
+			m := storageManager(t)
+			m.checkpoint = func(p string) error {
+				if p == point {
+					return syscall.EIO
+				}
+				return nil
+			}
+			if j, _, err := m.newJob(17, "backup"); err == nil || j != nil || len(m.jobs) != 0 {
+				t.Fatalf("unbound job accepted: %v %v", j, err)
+			}
+			m.checkpoint = nil
+			j, unlock, err := m.newJob(17, "upload")
+			if err != nil {
+				t.Fatal(err)
+			}
+			m.run(j, unlock, func(context.Context) error { return nil })
+			m.wg.Wait()
+			m.cfg.ResetConnections = func() { t.Fatal("failed acceptance dispatched restore") }
+			m.checkpoint = func(p string) error {
+				if p == point {
+					return syscall.EIO
+				}
+				return nil
+			}
+			if _, err := m.StartRestore(context.Background(), 17, j.ID, "destination", "destination"); err == nil {
+				t.Fatal("accepted failed persistence")
+			}
+			if j.active || j.Kind != "upload" {
+				t.Fatal("mutated live job on failed acceptance")
+			}
+			m.checkpoint = nil
+			j2, unlock2, err := m.newJob(17, "backup")
+			if err != nil {
+				t.Fatal("operation reservation leaked", err)
+			}
+			m.checkpoint = func(p string) error {
+				if p == point {
+					return syscall.EIO
+				}
+				return nil
+			}
+			m.run(j2, unlock2, func(context.Context) error { return nil })
+			m.wg.Wait()
+			op, err := m.Status(17, j2.ID)
+			if err != nil || op.Phase == "complete" {
+				t.Fatalf("false completion: %+v %v", op, err)
+			}
+		})
+	}
+}
+
+func TestDurableStatusInitiationCompatibility(t *testing.T) {
+	m := storageManager(t)
+	id := strings.Repeat("fa", 32)
+	if err := m.admitInitiation(ActivityActor{ID: 17}, id, "backup"); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := m.InitiationStatus(id)
+	if err != nil || legacy.Disposition != "unknown" || legacy.StatusAvailable {
+		t.Fatalf("legacy receipt changed: %+v %v", legacy, err)
+	}
+	j, unlock, err := m.newJob(17, "backup", id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.phase(j, "preflight")
+	live, err := m.InitiationStatus(id)
+	if err != nil || live.Disposition != "accepted" || !live.Available || !live.StatusAvailable || live.Phase != "preflight" {
+		t.Fatalf("active receipt changed: %+v %v", live, err)
+	}
+	m.run(j, unlock, func(context.Context) error { return nil })
+	m.wg.Wait()
+	reconstructed, err := statusRestart(t, m).InitiationStatus(id)
+	if err != nil || reconstructed.Disposition != "complete" || reconstructed.Available || !reconstructed.StatusAvailable {
+		t.Fatalf("reconstructed receipt: %+v %v", reconstructed, err)
 	}
 }

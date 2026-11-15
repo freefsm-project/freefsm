@@ -18,6 +18,7 @@ import (
 type pendingActivity struct {
 	Destination string
 	Event       ActivityEvent
+	Operation   string `json:",omitempty"`
 }
 
 func (m *Manager) pendingPath() string { return filepath.Join(m.root, "pending-activity.json") }
@@ -55,8 +56,12 @@ func (m *Manager) publish(ctx context.Context, event ActivityEvent) error {
 	return nil
 }
 
-func (m *Manager) savePending(event ActivityEvent) error {
-	if err := atomicJSON(m.pendingPath(), pendingActivity{m.destinationIdentity(), event}); err != nil {
+func (m *Manager) savePending(event ActivityEvent, operation ...string) error {
+	pending := pendingActivity{Destination: m.destinationIdentity(), Event: event}
+	if len(operation) > 0 {
+		pending.Operation = operation[0]
+	}
+	if err := atomicJSON(m.pendingPath(), pending); err != nil {
 		return classified(FailureRecoveryRequired, err)
 	}
 	return nil
@@ -80,6 +85,21 @@ func (m *Manager) replayPending(ctx context.Context) error {
 	if err = m.publish(ctx, pending.Event); err != nil {
 		return err
 	}
+	// Keep the replay evidence until the same operation's status is durable.
+	// Legacy pending events have no operation binding and cannot invent one.
+	if pending.Operation != "" {
+		s, err := m.loadStatusDigest(pending.Operation)
+		if err != nil {
+			return err
+		}
+		if s.Actor != pending.Event.Actor.ID || s.Binding != nil {
+			return ErrRecoveryRequired
+		}
+		s.ActivityPending = false
+		if err := m.writeStatusDigest(pending.Operation, s); err != nil {
+			return err
+		}
+	}
 	if err = os.Remove(m.pendingPath()); err != nil {
 		return err
 	}
@@ -97,7 +117,7 @@ func (m *Manager) beginActivity(j *job, actor ActivityActor, action string) erro
 	}
 	setActivityFailure(&event, interruptedActivityFailure("interrupted"))
 	j.outcome = event
-	return m.savePending(event)
+	return m.savePending(event, resolutionHash("status", j.ID))
 }
 
 func (m *Manager) finishActivity(j *job, failure Failure) error {
@@ -114,7 +134,7 @@ func (m *Manager) finishActivity(j *job, failure Failure) error {
 			event.Action = "backup_validated"
 		}
 	}
-	if err := m.savePending(event); err != nil {
+	if err := m.savePending(event, resolutionHash("status", j.ID)); err != nil {
 		return err
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

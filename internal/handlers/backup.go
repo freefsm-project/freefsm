@@ -130,6 +130,7 @@ func (h *BackupHandler) controlRoutes(auth func(http.Handler) http.Handler) http
 	r.Post("/settings/backup/upload", h.upload)
 	r.Post("/settings/backup/restore", h.restore)
 	r.Post("/settings/backup/download", h.download)
+	r.Post("/settings/backup/review", h.review)
 	return h.routeDispatch(r, auth)
 }
 
@@ -204,6 +205,9 @@ func (h *BackupHandler) routeDispatch(routes http.Handler, auth func(http.Handle
 				return
 			}
 			op, err := h.manager.StatusCapability(id)
+			// A status capability is not current authority to inspect an archive.
+			op.SourceName, op.Version, op.Commit, op.ArchiveDigest = "", "", "", ""
+			op.BuildKind, op.CapturedAt = "", time.Time{}
 			h.result(w, op, err)
 			return
 		}
@@ -345,6 +349,15 @@ func (h *BackupHandler) restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	op, err = h.manager.StartRestoreFor(r.Context(), backupActorSnapshot(u, name), id, name, r.PostFormValue("confirmation"))
+	h.result(w, op, err)
+}
+
+func (h *BackupHandler) review(w http.ResponseWriter, r *http.Request) {
+	u, ok := h.actor(w, r, false)
+	if !ok {
+		return
+	}
+	op, err := h.manager.Status(u.ID, r.Header.Get("X-Backup-Operation"))
 	h.result(w, op, err)
 }
 func (h *BackupHandler) download(w http.ResponseWriter, r *http.Request) {

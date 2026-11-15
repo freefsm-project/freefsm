@@ -37,13 +37,27 @@ sync. History is append-only and bounded at 256 references; exhaustion stops wri
 Legacy journals without status evidence remain recoverable but cannot invent actor
 bindings or status. No automatic pruning or replay authority is added.
 
-## Remaining integration/qualification
+## Routing and activity reconciliation
 
-Routed UI must render reconstructed provenance, selected outcome, release and activity
-dispositions, retained diagnostics, and unavailable transfer artifacts. Existing
-initiation-status routing still needs consistent durable projection integration.
-Pending ordinary activity replay needs an explicit same-operation status update;
-the retained pending flag is conservative until that command-owner work is complete.
-Actual whole-engine crash/recovery qualification, routed browser/API tests, D2/email,
+Initiation lookup keeps legacy dispatch receipts but projects current durable status
+when available, including upload-to-restore changes. `available` continues to describe
+live artifacts; `status_available` permits querying reconstructed status without
+recreating those artifacts. Missing legacy status does not invent a binding.
+
+The HTTP capability route strips source/build/archive review metadata even for live
+jobs. The protected actor-bound review route requires current admission and authority.
+The status-only shell renders reconstructed provenance, selected outcome, release,
+pending activity and retained diagnostics; it cannot restore or download. Only exact
+verified-open release offers restored-account login, even with retained diagnostics.
+
+New pending ordinary activity records link the operation digest, never its bearer.
+After successful idempotent publication, replay durably clears that operation's pending
+flag before removing replay evidence. A failed status write retains replay evidence;
+legacy events cannot invent a status binding. Diagnostic history and known failure
+remain unchanged. Synchronous upload failures also retain their known durable outcome.
+
+## Remaining qualification
+
+Actual whole-engine crash/recovery qualification, D2/email,
 native and original full-scope acceptance remain separate mandatory jobs. Filesystem
 tests with test-local verification entitlement are not installed-engine proof.

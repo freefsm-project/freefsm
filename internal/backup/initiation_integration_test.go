@@ -78,7 +78,7 @@ func (panicUploadReader) Read([]byte) (int, error) {
 	panic("duplicate upload body must not be consumed")
 }
 
-func TestInitiationInterruptedResultRemainsUnknownAfterRealBackupRestart(t *testing.T) {
+func TestInitiationInterruptedReceiptUsesDurableStatusAfterRealBackupRestart(t *testing.T) {
 	m := newCrashFixture(t).manager(t, "unknown initiation")
 	m.checkpoint = func(point string) error {
 		if point == "initiation-result" {
@@ -110,8 +110,8 @@ func TestInitiationInterruptedResultRemainsUnknownAfterRealBackupRestart(t *test
 		t.Fatal(err)
 	}
 	receipt, err := restarted.InitiationStatus(id)
-	if err != nil || receipt.Disposition != "unknown" || receipt.Available {
-		t.Fatalf("unknown restart %+v %v", receipt, err)
+	if err != nil || receipt.Disposition != "complete" || receipt.Available || !receipt.StatusAvailable {
+		t.Fatalf("durable status reconciliation %+v %v", receipt, err)
 	}
 	if _, err := restarted.StartBackupAction(ActivityActor{ID: 1}, id, "changed input", crashArchivePassword); !errors.Is(err, ErrInitiated) {
 		t.Fatalf("unknown redispatched %v", err)

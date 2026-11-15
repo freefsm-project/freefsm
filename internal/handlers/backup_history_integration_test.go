@@ -447,7 +447,8 @@ func (f *historyBackupInstance) request(action string, body io.Reader, raw bool,
 	r.AddCookie(f.cookie)
 	if capability != "" {
 		r.Header.Set("X-Backup-Operation", capability)
-	} else {
+	}
+	if capability == "" || action == "review" {
 		r.AddCookie(&http.Cookie{Name: "session", Value: f.web})
 	}
 	r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -471,6 +472,10 @@ func (f *historyBackupInstance) operation(t *testing.T, w *httptest.ResponseReco
 		historyCheck(t, json.Unmarshal(w.Body.Bytes(), &op))
 		switch op.Phase {
 		case "ready", "complete":
+			if op.Kind == "upload" && op.Phase == "ready" && op.ArchiveDigest == "" {
+				w = f.request("review", nil, false, op.ID)
+				continue
+			}
 			return op
 		case "failed":
 			t.Fatalf("backup operation failed: %+v", op)

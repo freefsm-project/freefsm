@@ -175,7 +175,7 @@ templ BackupProgressScript() {
 					progress.textContent = 'Save status unknown—checking backup initiation';
 					try {
 						const receipt = await post('action-status', null, {'X-Backup-Action': saved.action});
-						if (receipt.available && receipt.operation_id) {
+						if ((receipt.status_available || receipt.available) && receipt.operation_id) {
 							const op = await post('status', null, {'X-Backup-Operation': receipt.operation_id});
 							initiation = null;
 							if (remember(op)) history.replaceState(null, '', '/settings/backup/status-page');
@@ -202,8 +202,21 @@ templ BackupProgressScript() {
 					setBusy(true);
 					dismiss.hidden = false;
 					for (; current === generation && root.isConnected;) {
+						hideControls();
 						progress.textContent = op.Kind + ': ' + op.Phase;
-						if (op.Phase === 'failed') { progress.textContent = op.Error; setBusy(false); refreshActivity(); return; }
+						const details = () => {
+							if (op.Reconstructed) progress.append(document.createTextNode(' Reconstructed durable status. Download and staged restore artifacts are unavailable; this status cannot repeat the operation.'));
+							if (op.Outcome) progress.append(document.createTextNode(' Selected outcome: ' + op.Outcome + '. Admission release: ' + op.Release + '.'));
+							progress.append(document.createTextNode(op.ActivityPending ? ' Activity publication pending recovery.' : ' No pending activity publication recorded.'));
+							for (const diagnostic of op.Diagnostics || []) progress.append(document.createTextNode(' Retained diagnostic: ' + diagnostic.Message + ' [' + diagnostic.Category + '; ' + diagnostic.DiagnosticID + '].'));
+						};
+						if (op.Phase === 'failed') { progress.textContent = op.Error || 'Operation failed.'; details(); setBusy(false); refreshActivity(); return; }
+						if (op.Reconstructed && op.Kind !== 'restore' || op.Phase === 'recovery-required') {
+							details();
+							progress.append(document.createTextNode(' Retain this status and ask the deployment operator to complete recovery if needed. Do not repeat an unresolved operation.'));
+							statusButton('Check operation status', async () => { try { await follow(await post('status', null, {'X-Backup-Operation': op.ID})); } catch (_) { progress.append(document.createTextNode(' Status unavailable; retain this capability and check again.')); } });
+							setBusy(op.Phase === 'recovery-required'); return;
+						}
 						if (op.Kind === 'restore' && op.Phase === 'complete') {
 							// Replace any pre-restore administrator DOM with the status-only shell.
 							if (!root.dataset.statusOnly) {
@@ -215,13 +228,14 @@ templ BackupProgressScript() {
 							}
 							const controls = document.getElementById('backup-controls');
 							if (controls) controls.hidden = true;
-							if (op.Failure?.Category || op.Failure?.Message || op.Error) {
+							if (op.Release !== 'verified-open') {
 								progress.textContent = 'Restore committed, but the instance is unavailable pending recovery. Ask the deployment operator to restart the server and complete recovery before signing in.';
 								const message = op.Failure?.Message || op.Error;
 								if (message) progress.append(document.createTextNode(' ' + message));
 								setBusy(false); return;
 							}
 							progress.textContent = 'Restore complete. Email is disabled. Log in again with a restored account.';
+							details();
 							const a = document.createElement('a'); a.href = '/login'; a.textContent = ' Log in';
 							a.addEventListener('click', () => sessionStorage.removeItem(storageKey));
 							progress.append(a); setBusy(false); return;
@@ -236,9 +250,13 @@ templ BackupProgressScript() {
 						}
 						if (op.Kind === 'upload' && op.Phase === 'ready') {
 							refreshActivity();
-							setBusy(false);
 							const review = document.getElementById('backup-review');
-							if (!review) { progress.textContent = 'Upload validated. Return to administrator controls to review and confirm restore.'; return; }
+							if (!review) { setBusy(false); progress.textContent = 'Upload validated. Return to administrator controls to review and confirm restore.'; return; }
+							try { op = await post('review', null, {'X-Backup-Operation': op.ID}); }
+							catch (_) { if (current === generation) { setBusy(false); progress.textContent = 'Archive review requires current administrator authentication. Sign in again; no restore has been submitted.'; } return; }
+							if (current !== generation || !root.isConnected) return;
+							setBusy(false);
+							if (op.Reconstructed || op.Kind !== 'upload' || op.Phase !== 'ready' || !op.ArchiveDigest) { progress.textContent = 'Staged restore artifacts are unavailable. No restore has been submitted.'; return; }
 							review.hidden = false;
 							document.getElementById('backup-metadata').textContent = 'Source: ' + op.SourceName + '\nSource build: ' + op.BuildKind + '\nCaptured: ' + op.CapturedAt + '\nVersion: ' + op.Version + '\nCommit: ' + op.Commit;
 							const form = document.getElementById('backup-restore'); form.elements.operation.value = op.ID; form.elements.archive_digest.value = op.ArchiveDigest;

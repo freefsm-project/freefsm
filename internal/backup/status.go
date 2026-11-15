@@ -25,11 +25,15 @@ type statusEvidence struct {
 }
 
 func (m *Manager) statusPath(id string) string {
-	return filepath.Join(m.initiationRoot(), "status-"+resolutionHash("status", id)+".json")
+	return m.statusDigestPath(resolutionHash("status", id))
+}
+
+func (m *Manager) statusDigestPath(operation string) string {
+	return filepath.Join(m.initiationRoot(), "status-"+operation+".json")
 }
 
 func (m *Manager) validateStatus(s statusEvidence, id string) error {
-	if !resolutionHex(id, 32) || s.Version != 1 || s.Operation != resolutionHash("status", id) || s.Actor <= 0 || s.Destination != m.destinationIdentity() || s.UploadRoot != resolutionHash("upload-root", m.cfg.UploadDir) {
+	if !resolutionHex(id, 32) || s.Version != 1 || s.Operation != id || s.Actor <= 0 || s.Destination != m.destinationIdentity() || s.UploadRoot != resolutionHash("upload-root", m.cfg.UploadDir) {
 		return ErrNotFound
 	}
 	if s.Kind != "backup" && s.Kind != "upload" && s.Kind != "restore" {
@@ -60,11 +64,20 @@ func (m *Manager) validateStatus(s statusEvidence, id string) error {
 }
 
 func (m *Manager) loadStatus(id string) (statusEvidence, error) {
+	if !resolutionHex(id, 32) {
+		return statusEvidence{}, ErrNotFound
+	}
+	return m.loadStatusDigest(resolutionHash("status", id))
+}
+
+// Internal activity reconciliation uses the digest, never a persisted bearer.
+// Public queries must always enter through loadStatus.
+func (m *Manager) loadStatusDigest(id string) (statusEvidence, error) {
 	var s statusEvidence
 	if !resolutionHex(id, 32) {
 		return s, ErrNotFound
 	}
-	path := m.statusPath(id)
+	path := m.statusDigestPath(id)
 	dirFD, err := syscall.Open(m.initiationRoot(), syscall.O_RDONLY|syscall.O_DIRECTORY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		return s, err
@@ -117,7 +130,7 @@ func (m *Manager) loadStatus(id string) (statusEvidence, error) {
 // Caller owns OperationLock. Missing/corrupt prior evidence cannot be repaired by
 // an outcome write. Atomic write ambiguity must propagate to the command owner.
 func (m *Manager) storeStatus(id string, next statusEvidence, initial bool) error {
-	if err := m.validateStatus(next, id); err != nil {
+	if err := m.validateStatus(next, resolutionHash("status", id)); err != nil {
 		return err
 	}
 	if err := privateDir(m.initiationRoot()); err != nil {
@@ -151,6 +164,10 @@ func (m *Manager) storeStatus(id string, next statusEvidence, initial bool) erro
 }
 
 func (m *Manager) writeStatus(id string, s statusEvidence) error {
+	return m.writeStatusDigest(resolutionHash("status", id), s)
+}
+
+func (m *Manager) writeStatusDigest(operation string, s statusEvidence) error {
 	data, err := json.Marshal(s)
 	if err != nil || len(data) > resolutionLimit {
 		return ErrInvalid
@@ -177,7 +194,7 @@ func (m *Manager) writeStatus(id string, s statusEvidence) error {
 		err = m.check("status-rename")
 	}
 	if err == nil {
-		err = os.Rename(f.Name(), m.statusPath(id))
+		err = os.Rename(f.Name(), m.statusDigestPath(operation))
 	}
 	if err == nil {
 		err = m.check("status-directory-sync")

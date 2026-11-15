@@ -380,6 +380,21 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 	if scenario == "release-to-development" {
 		wantKind = backup.BuildRelease
 	}
+	// Capability polling omits archive metadata. Review uses current authority.
+	reviewRequest := httptest.NewRequest("POST", "/settings/backup/review", nil)
+	reviewRequest.Header.Set("Sec-Fetch-Site", "same-origin")
+	reviewRequest.Header.Set("X-CSRF-Token", dst.csrf)
+	reviewRequest.Header.Set("X-Backup-Operation", op.ID)
+	reviewRequest.AddCookie(dst.cookie)
+	reviewResponse := httptest.NewRecorder()
+	dst.router.ServeHTTP(reviewResponse, reviewRequest)
+	if reviewResponse.Code != 401 {
+		t.Fatalf("sessionless review: %d", reviewResponse.Code)
+	}
+	reviewRequest.AddCookie(&http.Cookie{Name: "session", Value: dst.web})
+	reviewResponse = httptest.NewRecorder()
+	dst.router.ServeHTTP(reviewResponse, reviewRequest)
+	op = decode(reviewResponse)
 	if op.SourceName != "Instance 0" || op.ArchiveDigest == "" || op.BuildKind != wantKind {
 		t.Fatalf("review %+v", op)
 	}
@@ -450,7 +465,25 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 		t.Fatal(err)
 	}
 	defer restarted.Shutdown()
+	statusRouter := NewBackupRouter(nil, restarted, reopened, nil, nil, nil, "", nil)
+	queryReconstructed := func() backup.Operation {
+		r := httptest.NewRequest("POST", "/settings/backup/status", nil)
+		r.Header.Set("Sec-Fetch-Site", "same-origin")
+		r.Header.Set("X-CSRF-Token", dst.csrf)
+		r.Header.Set("X-Backup-Operation", op.ID)
+		r.AddCookie(dst.cookie)
+		w := httptest.NewRecorder()
+		statusRouter.ServeHTTP(w, r)
+		return decode(w)
+	}
+	reconstructed := queryReconstructed()
+	if !reconstructed.Reconstructed || reconstructed.Phase != "complete" || reconstructed.Release != "verified-open" || reconstructed.Outcome != "restore" || reconstructed.SourceName != "" || reconstructed.ArchiveDigest != "" {
+		t.Fatalf("original capability after map loss: %+v", reconstructed)
+	}
 	recoverAdmission(t, restarted)
+	if next := queryReconstructed(); next.Phase == "complete" || next.Release == "verified-open" {
+		t.Fatalf("later startup transition acknowledged old release: %+v", next)
+	}
 	web := New(dst.pool, dst.client, dst.sessions, &config.Config{UploadDir: dst.uploads}, reopened)
 	csrf := nosurf.New(middleware.CSRFToken(web))
 	csrf.SetIsTLSFunc(func(*http.Request) bool { return false })

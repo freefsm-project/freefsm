@@ -547,6 +547,11 @@ func (m *Manager) Status(actor int64, id string) (Operation, error) {
 	}
 	op := j.Operation
 	op.Diagnostics = append([]Failure(nil), j.Diagnostics...)
+	if !j.active && j.ActivityPending {
+		if s, err := m.loadStatus(id); err == nil {
+			op.ActivityPending = s.ActivityPending
+		}
+	}
 	return op, nil
 }
 
@@ -567,6 +572,11 @@ func (m *Manager) StatusCapability(id string) (Operation, error) {
 	}
 	op := j.Operation
 	op.Diagnostics = append([]Failure(nil), j.Diagnostics...)
+	if !j.active && j.ActivityPending {
+		if s, err := m.loadStatus(id); err == nil {
+			op.ActivityPending = s.ActivityPending
+		}
+	}
 	return op, nil
 }
 func (m *Manager) StartBackup(actor int64, source, password string) (Operation, error) {
@@ -716,14 +726,22 @@ func (m *Manager) stageUploadFor(ctx context.Context, actor ActivityActor, r io.
 	}
 	if e != nil {
 		failure := m.reportFailure(e, "uploading")
+		diagnostics := []Failure{failure}
+		pending := false
 		if auditErr := m.finishActivity(j, failure); auditErr != nil {
+			pending = true
 			e = classified(FailureRecoveryRequired, errors.Join(auditErr, e))
-			m.reportFailure(e, "uploading")
+			diagnostics = append(diagnostics, m.reportFailure(e, "uploading"))
 		}
-		unlock()
 		m.mu.Lock()
+		j.Phase, j.Failure, j.Error = "failed", failure, failure.Message
+		j.Diagnostics, j.ActivityPending = diagnostics, pending
+		if statusErr := m.finishStatus(j); statusErr != nil {
+			e = errors.Join(e, statusErr)
+		}
 		delete(m.jobs, j.ID)
 		m.mu.Unlock()
+		unlock()
 		m.wg.Done()
 		_ = os.RemoveAll(j.dir)
 		if j.lease != nil {

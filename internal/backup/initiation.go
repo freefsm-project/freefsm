@@ -17,13 +17,14 @@ var initiationID = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // InitiationReceipt is a status-only capability projection. Unlike Operation it
 // intentionally contains no actor/source/filename or historical private values.
 type InitiationReceipt struct {
-	ActionID    string `json:"action_id"`
-	OperationID string `json:"operation_id,omitempty"`
-	Kind        string `json:"kind,omitempty"`
-	Disposition string `json:"disposition"`
-	Phase       string `json:"phase,omitempty"`
-	Available   bool   `json:"available"`
-	Code        string `json:"code,omitempty"`
+	ActionID        string `json:"action_id"`
+	OperationID     string `json:"operation_id,omitempty"`
+	Kind            string `json:"kind,omitempty"`
+	Disposition     string `json:"disposition"`
+	Phase           string `json:"phase,omitempty"`
+	Available       bool   `json:"available"`
+	StatusAvailable bool   `json:"status_available,omitempty"`
+	Code            string `json:"code,omitempty"`
 }
 type initiationEvidence struct {
 	Receipt     InitiationReceipt
@@ -94,7 +95,6 @@ func (m *Manager) InitiationStatus(id string) (InitiationReceipt, error) {
 		return InitiationReceipt{}, err
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	m.expireLocked()
 	if j := m.jobs[id]; j != nil && j.Kind == e.Receipt.Kind {
 		e.Receipt.Phase = j.Phase
@@ -103,6 +103,28 @@ func (m *Manager) InitiationStatus(id string) (InitiationReceipt, error) {
 		if !j.active {
 			e.Receipt.Disposition = j.Phase
 		}
+	}
+	m.mu.Unlock()
+	// The legacy receipt remains dispatch deduplication evidence. Current status
+	// comes from the same durable operation, including upload-to-restore changes.
+	if _, err := m.loadStatus(id); err == nil {
+		op, err := m.StatusCapability(id)
+		if err != nil {
+			return InitiationReceipt{}, err
+		}
+		e.Receipt.StatusAvailable = true
+		e.Receipt.Kind, e.Receipt.Phase = op.Kind, op.Phase
+		e.Receipt.Disposition = "accepted"
+		switch op.Phase {
+		case "ready", "complete", "failed", "recovery-required":
+			e.Receipt.Disposition = op.Phase
+		}
+		e.Receipt.Code = string(op.Failure.Category)
+		if op.Reconstructed || op.Kind == "restore" {
+			e.Receipt.Available = false
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return InitiationReceipt{}, ErrNotFound
 	}
 	return e.Receipt, nil
 }
