@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -10,6 +11,28 @@ import (
 
 func TestWorkerRefreshFailurePreventsClaim(t *testing.T) {
 	c, err := instancecontrol.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This adapter fixture proves refresh ordering only. The owner is a local
+	// mock, not evidence of an installed database generation or engine recovery.
+	owner := &refreshAdmissionOwner{}
+	if err := c.BindResolutionOwner(owner); err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := c.OperationLock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err := c.BeginMaintenance(context.Background())
+	if err != nil {
+		unlock()
+		t.Fatal(err)
+	}
+	owner.lease = lease
+	err = lease.Open(context.Background())
+	lease.Close()
+	unlock()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,4 +52,22 @@ func TestWorkerRefreshFailurePreventsClaim(t *testing.T) {
 	if processed || err != nil || calls != 1 {
 		t.Fatal("refresh ran without admission")
 	}
+}
+
+type refreshAdmissionOwner struct {
+	lease *instancecontrol.MaintenanceLease
+}
+
+func (o *refreshAdmissionOwner) PrepareAdmission(_ context.Context, lease *instancecontrol.MaintenanceLease) (json.RawMessage, error) {
+	if lease != o.lease {
+		return nil, instancecontrol.ErrMaintenance
+	}
+	return json.RawMessage(`{"adapter":"worker-refresh"}`), nil
+}
+
+func (*refreshAdmissionOwner) VerifyAdmission(b json.RawMessage) error {
+	if string(b) != `{"adapter":"worker-refresh"}` {
+		return instancecontrol.ErrMaintenance
+	}
+	return nil
 }

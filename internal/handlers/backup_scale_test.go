@@ -123,8 +123,11 @@ func TestBackupBrowserNginxScale(t *testing.T) {
 		f.manager, err = backup.New(f.cfg)
 		scaleCheck(t, err)
 		defer f.manager.Shutdown()
-		scaleCheck(t, f.manager.Recover(ctx))
+		startup, err := f.manager.BeginStartup(ctx)
+		scaleCheck(t, err)
+		defer startup.Close()
 		scaleCheck(t, db.Migrate(ctx, os.DirFS("../database/migrations")))
+		scaleCheck(t, startup.Finish(ctx))
 		pgcfg, e := pgx.ParseConfig(u.String())
 		scaleCheck(t, e)
 		pgcfg.DefaultQueryExecMode = pgx.QueryExecModeExec
@@ -307,7 +310,10 @@ func TestBackupBrowserNginxScale(t *testing.T) {
 	// cleanup after closing its manager rather than waiting an hour or changing TTL.
 	for _, f := range instances {
 		f.manager.Shutdown()
-		reopened, e := backup.New(f.cfg)
+		cfg := f.cfg
+		cfg.Control, err = instancecontrol.New(cfg.StateDir)
+		scaleCheck(t, err)
+		reopened, e := backup.New(cfg)
 		scaleCheck(t, e)
 		scaleCheck(t, reopened.Recover(ctx))
 		reopened.Shutdown()

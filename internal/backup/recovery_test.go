@@ -40,9 +40,11 @@ func TestRecoveryOnlyStartsWithoutCreatingUploadRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer m.Shutdown()
-	if err := m.Recover(context.Background()); err != nil {
+	startup, err := m.BeginStartup(context.Background())
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer startup.Close()
 	if _, err := os.Stat(upload); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("upload root created before recovery: %v", err)
 	}
@@ -172,7 +174,7 @@ func TestCompetingManagerOperationRejected(t *testing.T) {
 }
 
 func TestStartupCleanupPreservesAnotherProcessTransfer(t *testing.T) {
-	m := storageManager(t)
+	m, _ := preflightFixture(t)
 	j, release, e := m.newJob(1, "backup")
 	if e != nil {
 		t.Fatal(e)
@@ -184,7 +186,7 @@ func TestStartupCleanupPreservesAnotherProcessTransfer(t *testing.T) {
 	if e = os.WriteFile(filepath.Join(j.dir, "archive.age"), []byte("encrypted bytes"), 0600); e != nil {
 		t.Fatal(e)
 	}
-	other, e := New(m.cfg)
+	other, e := restartFixtureManager(m)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -231,8 +233,10 @@ func TestStartupCleanupPreservesAnotherProcessTransfer(t *testing.T) {
 func TestRecoveryPredestructiveAndCommittedCleanup(t *testing.T) {
 	for _, phase := range []string{"capturing", "committed", "rolled-back"} {
 		t.Run(phase, func(t *testing.T) {
-			m := storageManager(t)
-			if e := m.writeJournal(journal{Phase: phase, Recovery: "safe-cleanup"}); e != nil {
+			m, _ := preflightFixture(t)
+			// Synthetic legacy-journal cleanup coverage, not proof of a real
+			// destructive restore. Installed verification still uses the real DB.
+			if e := m.writeJournal(journal{Phase: phase, Recovery: strings.Repeat("a", 64) + "-recovery"}); e != nil {
 				t.Fatal(e)
 			}
 			if e := m.Recover(context.Background()); e != nil {
@@ -248,6 +252,16 @@ func TestRecoveryPredestructiveAndCommittedCleanup(t *testing.T) {
 			}
 		})
 	}
+}
+
+func restartFixtureManager(m *Manager) (*Manager, error) {
+	cfg := m.cfg
+	c, err := instancecontrol.New(cfg.StateDir)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Control = c
+	return New(cfg)
 }
 
 func TestAuthenticatedEOFAndWrongPassword(t *testing.T) {

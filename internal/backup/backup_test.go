@@ -57,9 +57,11 @@ func TestEncryptedCrossRoleRestoreAndRecovery(t *testing.T) {
 			t.Fatal(e)
 		}
 		managers = append(managers, m)
-		if e = m.Recover(ctx); e != nil {
+		startup, e := m.BeginStartup(ctx)
+		if e != nil {
 			t.Fatal(e)
 		}
+		defer startup.Close()
 		if e = os.MkdirAll(m.cfg.UploadDir, 0700); e != nil {
 			t.Fatal(e)
 		}
@@ -93,6 +95,9 @@ func TestEncryptedCrossRoleRestoreAndRecovery(t *testing.T) {
 			t.Fatal(e)
 		}
 		_ = c.Close(ctx)
+		if e = startup.Finish(ctx); e != nil {
+			t.Fatal(e)
+		}
 	}
 	src, dst := managers[0], managers[1]
 	for _, m := range managers {
@@ -270,9 +275,16 @@ func TestReleaseAndRoots(t *testing.T) {
 		}
 		cfg.BuildKind = BuildDevelopment
 		cfg.Commit = ""
-		if _, e := New(cfg); e != nil {
+		var e error
+		cfg.Control, e = instancecontrol.New(cfg.StateDir)
+		if e != nil {
+			t.Fatal(e)
+		}
+		other, e := New(cfg)
+		if e != nil {
 			t.Fatalf("rejected development identity %q: %v", v, e)
 		}
+		other.Shutdown()
 	}
 	for _, v := range []string{"none", "dev", "", "123"} {
 		cfg := m.cfg

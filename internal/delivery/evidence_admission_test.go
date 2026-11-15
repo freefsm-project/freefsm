@@ -7,17 +7,19 @@ import (
 	"testing"
 
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
+	"github.com/freefsm-project/freefsm/internal/testutil"
 	"github.com/google/uuid"
 )
 
 func TestDeliveryEvidenceDrainsAndRetainsDuringEmailDisable(t *testing.T) {
-	f := newDeliveryFixture(t)
+	f := newDeliveryFixture(t, testutil.InstanceDatabase(t))
 	ctx := context.Background()
 	svc := New(f.db.Pool, "")
 	control, err := instancecontrol.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
+	bootstrapDeliveryAdmission(t, f, control)
 	svc.SetInstanceControl(control)
 	d, err := svc.Queue(ctx, Actor{ID: f.admin, CompanyID: f.company, Role: "admin"}, QueueRequest{Key: uuid.New(), Document: DocumentRef{Type: "estimate", ID: f.estimate}, Snapshot: Snapshot{To: []string{"owned@example.test"}, Subject: "Evidence", HTMLBody: "<body>Signal</body>", PDF: []byte("pdf-v1"), PDFFilename: "x.pdf"}})
 	if err != nil {

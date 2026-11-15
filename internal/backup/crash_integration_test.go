@@ -182,9 +182,11 @@ func (f *crashFixture) manager(t *testing.T, label string) *Manager {
 		t.Fatal(e)
 	}
 	t.Cleanup(m.Shutdown)
-	if e = m.Recover(ctx); e != nil {
+	startup, e := m.BeginStartup(ctx)
+	if e != nil {
 		t.Fatal(e)
 	}
+	defer startup.Close()
 	if e = os.MkdirAll(m.cfg.UploadDir, 0700); e != nil {
 		t.Fatal(e)
 	}
@@ -206,6 +208,9 @@ func (f *crashFixture) manager(t *testing.T, label string) *Manager {
 		if e = os.WriteFile(filepath.Join(m.cfg.UploadDir, name), []byte(label+":"+name), 0600); e != nil {
 			t.Fatal(e)
 		}
+	}
+	if e = startup.Finish(ctx); e != nil {
+		t.Fatal(e)
 	}
 	return m
 }
@@ -625,6 +630,11 @@ func TestAsyncFailuresAreActionableAndSanitized(t *testing.T) {
 	t.Run("release-mismatch", func(t *testing.T) {
 		cfg := m.cfg
 		cfg.Version = "v9.9.9"
+		var e error
+		cfg.Control, e = instancecontrol.New(cfg.StateDir)
+		if e != nil {
+			t.Fatal(e)
+		}
 		other, e := New(cfg)
 		if e != nil {
 			t.Fatal(e)

@@ -163,13 +163,18 @@ func preflightFixture(t *testing.T) (*Manager, *database.DB) {
 		t.Fatal(err)
 	}
 	t.Cleanup(m.Shutdown)
-	if err := m.Recover(ctx); err != nil {
+	startup, err := m.BeginStartup(ctx)
+	if err != nil {
 		t.Fatal(err)
 	}
+	defer startup.Close()
 	if err := os.MkdirAll(m.cfg.UploadDir, 0700); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Migrate(ctx, database.MigrationFS()); err != nil {
+		t.Fatal(err)
+	}
+	if err := startup.Finish(ctx); err != nil {
 		t.Fatal(err)
 	}
 	return m, db

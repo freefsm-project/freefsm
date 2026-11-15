@@ -287,9 +287,10 @@ func TestBackupHistoricalDomainRoundTrip(t *testing.T) {
 	if !reopened.EmailDisabled() {
 		t.Fatal("restore did not durably pause outbound delivery")
 	}
+	restarted := dst.recoverControl(t, reopened)
 	outbox = delivery.New(dst.pool, "https://destination.example.test")
 	outbox.SetInstanceControl(reopened)
-	outbox.SetBeforeWork(dst.manager.RefreshConnections)
+	outbox.SetBeforeWork(restarted.RefreshConnections)
 	afterDelivered, err := outbox.History(ctx, src.company, delivery.DocumentRef{Type: "invoice", ID: paid.ID})
 	historyCheck(t, err)
 	historyEqual(t, "delivery history and evidence state", afterDelivered, beforeDelivered)
@@ -341,6 +342,7 @@ type historyBackupInstance struct {
 	pool                          *pgxpool.Pool
 	client                        *ent.Client
 	manager                       *backup.Manager
+	managerConfig                 backup.Config
 	control                       *instancecontrol.Control
 	sessions                      *services.SessionService
 	router                        http.Handler
@@ -376,11 +378,15 @@ func newHistoryBackupInstance(t *testing.T, admin *pgx.Conn, dsn, name string) *
 	uploads := filepath.Join(root, "uploads")
 	f.uploadDir = uploads
 	historyCheck(t, os.MkdirAll(uploads, 0700))
-	f.manager, err = backup.New(backup.Config{DSN: u.String(), UploadDir: uploads, StateDir: f.control.StateDir(), Version: "v1.2.3", Commit: "abcdef1234567", Control: f.control, ResetConnections: db.Pool.Reset})
+	f.managerConfig = backup.Config{DSN: u.String(), UploadDir: uploads, StateDir: f.control.StateDir(), Version: "v1.2.3", Commit: "abcdef1234567", Control: f.control, ResetConnections: db.Pool.Reset}
+	f.manager, err = backup.New(f.managerConfig)
 	historyCheck(t, err)
 	t.Cleanup(f.manager.Shutdown)
-	historyCheck(t, f.manager.Recover(ctx))
+	startup, err := f.manager.BeginStartup(ctx)
+	historyCheck(t, err)
+	defer startup.Close()
 	historyCheck(t, db.Migrate(ctx, database.MigrationFS()))
+	historyCheck(t, startup.Finish(ctx))
 	pgcfg, err := pgx.ParseConfig(u.String())
 	historyCheck(t, err)
 	pgcfg.DefaultQueryExecMode = pgx.QueryExecModeExec
@@ -421,6 +427,17 @@ func newHistoryBackupInstance(t *testing.T, admin *pgx.Conn, dsn, name string) *
 	}
 	f.csrf = html.UnescapeString(match[1])
 	return f
+}
+
+func (f *historyBackupInstance) recoverControl(t *testing.T, control *instancecontrol.Control) *backup.Manager {
+	t.Helper()
+	cfg := f.managerConfig
+	cfg.Control = control
+	m, err := backup.New(cfg)
+	historyCheck(t, err)
+	t.Cleanup(m.Shutdown)
+	recoverAdmission(t, m)
+	return m
 }
 
 func (f *historyBackupInstance) request(action string, body io.Reader, raw bool, capability string) *httptest.ResponseRecorder {

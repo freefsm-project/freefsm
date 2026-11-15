@@ -20,6 +20,7 @@ func TestAPIAdmissionFailuresUseTypedProtocolErrors(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			bootstrapRouteAdmission(t, control)
 			if maintenance {
 				if err := control.KeepClosed(); err != nil {
 					t.Fatal(err)
@@ -56,6 +57,7 @@ func TestAPIAdmissionConfiguredCORS(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		bootstrapRouteAdmission(t, control)
 		if maintenance {
 			if err := control.KeepClosed(); err != nil {
 				t.Fatal(err)

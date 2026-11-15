@@ -23,7 +23,7 @@ func TestSharedAccessibilityPersistedBrowser(t *testing.T) {
 	if os.Getenv("ACCESSIBILITY_TESTS") != "1" {
 		t.Skip("set ACCESSIBILITY_TESTS=1, NODE_PATH and FREEFSM_TEST_DATABASE_URL")
 	}
-	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	pool, client, router, sessions, company, admin := permissionHTTPInstanceFixture(t)
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Measured accessibility customer").SaveX(context.Background())
 	entry := client.TimeEntry.Create().SetCompanyID(company).SetUserID(admin).SetClockIn(time.Now().Add(-time.Hour)).SetClockOut(time.Now()).SetNotes("Measured time record").SaveX(context.Background())
 	cookie := sessionCookie(t, context.Background(), sessions, admin)
@@ -33,11 +33,12 @@ func TestSharedAccessibilityPersistedBrowser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manager, err := backup.New(backup.Config{DSN: os.Getenv("FREEFSM_TEST_DATABASE_URL"), UploadDir: t.TempDir(), StateDir: control.StateDir(), BuildKind: backup.BuildDevelopment, Version: "dev", Commit: "ui-measurements", Control: control, ResetConnections: pool.Reset})
+	manager, err := backup.New(backup.Config{DSN: pool.Config().ConnString(), UploadDir: t.TempDir(), StateDir: control.StateDir(), BuildKind: backup.BuildDevelopment, Version: "dev", Commit: "ui-measurements", Control: control, ResetConnections: pool.Reset})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer manager.Shutdown()
+	recoverAdmission(t, manager)
 	objects := objectref.NewEntDirectory(client)
 	activity := NewActivityHandler(services.NewActivityService(client, objects), services.NewActivityResolver(client), services.NewPolicyService(client, objects), nil)
 	backupRouter := NewBackupRouter(pool, manager, control, services.NewUserService(client), services.NewCompanySettingsService(client), sessions, "", activity)

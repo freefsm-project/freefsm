@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -30,6 +31,7 @@ func TestBackupActivityRouteIsCompanyScopedAndAdminOnly(t *testing.T) {
 	}
 	lister := &activityListFake{page: services.ActivityPage{HasOlder: true, Entries: []services.ActivityEntry{{ID: 1, Action: "restore_completed", Target: objectref.Instance(), Metadata: `{"actor_name":"Original administrator"}`}}}}
 	h := &BackupHandler{control: c, refresh: func() error { return nil }, activity: NewActivityHandler(lister, &activityResolverFake{}, nil, nil)}
+	bootstrapBackupAdapter(t, c)
 	role := "admin"
 	auth := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +69,48 @@ func TestBackupActivityRouteIsCompanyScopedAndAdminOnly(t *testing.T) {
 type statusBackup struct {
 	backupEngine
 	calls int
+}
+
+// Fake-engine adapter tests establish only route/authorization behavior, not
+// installed generation verification. Integration fixtures use the real Manager.
+type backupAdapterOwner struct {
+	lease *instancecontrol.MaintenanceLease
+}
+
+func (o *backupAdapterOwner) PrepareAdmission(_ context.Context, l *instancecontrol.MaintenanceLease) (json.RawMessage, error) {
+	if l != o.lease {
+		return nil, instancecontrol.ErrMaintenance
+	}
+	return json.RawMessage(`{"adapter":"backup-route"}`), nil
+}
+
+func (*backupAdapterOwner) VerifyAdmission(b json.RawMessage) error {
+	if string(b) != `{"adapter":"backup-route"}` {
+		return instancecontrol.ErrMaintenance
+	}
+	return nil
+}
+
+func bootstrapBackupAdapter(t *testing.T, c *instancecontrol.Control) {
+	t.Helper()
+	o := &backupAdapterOwner{}
+	if err := c.BindResolutionOwner(o); err != nil {
+		t.Fatal(err)
+	}
+	unlock, err := c.OperationLock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	l, err := c.BeginMaintenance(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	o.lease = l
+	if err := l.Open(context.Background()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 type backupUserFixture struct{ user ent.User }
@@ -121,6 +165,7 @@ func TestBackupAuthorizationAndFreshConfirmation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bootstrapBackupAdapter(t, c)
 	hash, err := bcrypt.GenerateFromPassword([]byte("current-password"), bcrypt.MinCost)
 	if err != nil {
 		t.Fatal(err)

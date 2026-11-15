@@ -463,6 +463,10 @@ func (m *Manager) run(j *job, unlock func(), fn func(context.Context) error) {
 		if e != nil {
 			failure = m.reportFailure(e, phase)
 		}
+		// An unresolved generation/release must not look terminal. Ordinary
+		// outcome publication can also require startup replay, but does not
+		// turn a preflight rejection into an unresolved generation decision.
+		recoveryUnresolved := failure.Category == FailureRecoveryRequired
 		if j.Kind != "restore" {
 			if auditErr := m.finishActivity(j, failure); auditErr != nil {
 				e = classified(FailureRecoveryRequired, errors.Join(auditErr, e))
@@ -480,7 +484,7 @@ func (m *Manager) run(j *job, unlock func(), fn func(context.Context) error) {
 		j.active = false
 		if e != nil {
 			j.Phase = "failed"
-			if j.committed || failure.Category == FailureRecoveryRequired {
+			if j.committed || recoveryUnresolved {
 				// The journal selects the restored generation; it does not prove
 				// cleanup or admission release succeeded. Keep this operation
 				// unresolved until recovery verifies its release disposition.

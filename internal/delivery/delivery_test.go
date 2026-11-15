@@ -16,6 +16,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
+	"github.com/freefsm-project/freefsm/internal/testutil"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -64,7 +65,7 @@ func sameStatus(a, b *int64) bool {
 }
 
 func TestQueueWorkerTrackingAndEvidenceIntegration(t *testing.T) {
-	f := newDeliveryFixture(t)
+	f := newDeliveryFixture(t, testutil.InstanceDatabase(t))
 	ctx := context.Background()
 	svc := New(f.db.Pool, "https://example.test")
 	largePDF := make([]byte, 2<<20)
@@ -127,10 +128,12 @@ func TestQueueWorkerTrackingAndEvidenceIntegration(t *testing.T) {
 	if err := control.DisableEmail(); err != nil {
 		t.Fatal(err)
 	}
+	bootstrapDeliveryAdmission(t, f, control)
 	control, err = instancecontrol.New(control.StateDir())
 	if err != nil {
 		t.Fatal(err)
 	}
+	bootstrapDeliveryAdmission(t, f, control)
 	svc.SetInstanceControl(control)
 	if processed, err := svc.ProcessOne(ctx, sender, hook); processed || err != nil {
 		t.Fatalf("disabled processing = %v, %v", processed, err)
@@ -364,11 +367,15 @@ type deliveryFixture struct {
 	company, otherCompany, admin, tech, job, estimate, status int64
 }
 
-func newDeliveryFixture(t *testing.T) *deliveryFixture {
+func newDeliveryFixture(t *testing.T, instanceDSN ...string) *deliveryFixture {
 	t.Helper()
 	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("set FREEFSM_TEST_DATABASE_URL to run PostgreSQL delivery tests")
+	}
+	schema := fmt.Sprintf("freefsm_delivery_%d", time.Now().UnixNano())
+	if len(instanceDSN) != 0 {
+		dsn, schema = instanceDSN[0], "public"
 	}
 	ctx := context.Background()
 	adminPool, err := pgxpool.New(ctx, dsn)
@@ -376,8 +383,7 @@ func newDeliveryFixture(t *testing.T) *deliveryFixture {
 		t.Fatal(err)
 	}
 	t.Cleanup(adminPool.Close)
-	schema := fmt.Sprintf("freefsm_delivery_%d", time.Now().UnixNano())
-	if _, err = adminPool.Exec(ctx, `CREATE SCHEMA `+schema); err != nil {
+	if _, err = adminPool.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS `+schema); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = adminPool.Exec(ctx, `DROP SCHEMA `+schema+` CASCADE`) })

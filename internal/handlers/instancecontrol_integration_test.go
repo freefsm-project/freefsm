@@ -19,7 +19,7 @@ import (
 )
 
 func TestDisabledEmailForgotPasswordDoesNotDiscloseAccount(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
+	client, pool := openHandlerTestDB(t, admissionDatabase(t))
 	defer client.Close()
 	defer pool.Close()
 	ctx := context.Background()
@@ -33,10 +33,12 @@ func TestDisabledEmailForgotPasswordDoesNotDiscloseAccount(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Reopen to exercise the durable gate, rather than an in-memory setting.
+	recoverAdmission(t, admissionManager(t, pool, control))
 	control, err = instancecontrol.New(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	admissionManager(t, pool, control)
 	email := services.NewEmailService(services.NewCompanySettingsService(client))
 	email.SetInstanceControl(control)
 	h := NewAuthHandler(pool, nil, services.NewUserService(client), nil, email, services.NewPasswordResetService(client), nil, nil, nil)
@@ -63,10 +65,12 @@ func TestDisabledEmailForgotPasswordDoesNotDiscloseAccount(t *testing.T) {
 }
 
 func TestMaintenanceDrainsHTTPWorkAndRequiresExplicitRecovery(t *testing.T) {
+	pool, _, _, _, _, _ := permissionHTTPInstanceFixture(t)
 	control, err := instancecontrol.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
+	recoverAdmission(t, admissionManager(t, pool, control))
 	peer, err := instancecontrol.New(control.StateDir())
 	if err != nil {
 		t.Fatal(err)
@@ -161,14 +165,8 @@ func TestMaintenanceDrainsHTTPWorkAndRequiresExplicitRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	release, err = restarted.Maintenance(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := restarted.ClearMaintenance(); err != nil {
-		t.Fatal(err)
-	}
-	release()
+	operation()
+	recoverAdmission(t, admissionManager(t, pool, restarted))
 	w = httptest.NewRecorder()
 	restarted.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })).ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/write", nil))
 	if w.Code != http.StatusNoContent {
@@ -177,7 +175,7 @@ func TestMaintenanceDrainsHTTPWorkAndRequiresExplicitRecovery(t *testing.T) {
 }
 
 func TestDisabledEmailBlocksWelcomeAndWorkerBeforeMutation(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
+	client, pool := openHandlerTestDB(t, admissionDatabase(t))
 	defer client.Close()
 	defer pool.Close()
 	ctx := context.Background()
@@ -188,6 +186,7 @@ func TestDisabledEmailBlocksWelcomeAndWorkerBeforeMutation(t *testing.T) {
 	if err := control.DisableEmail(); err != nil {
 		t.Fatal(err)
 	}
+	recoverAdmission(t, admissionManager(t, pool, control))
 	settings := services.NewCompanySettingsService(client)
 	email := services.NewEmailService(settings)
 	email.SetInstanceControl(control)

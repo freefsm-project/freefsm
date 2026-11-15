@@ -48,7 +48,16 @@ func permissionHTTPFixtureMigrations(t *testing.T, migrations fs.FS, legacy ...b
 
 func permissionHTTPFixtureConfigured(t *testing.T, migrations fs.FS, seed func(*pgxpool.Pool), legacy ...bool) (*pgxpool.Pool, *ent.Client, http.Handler, *services.SessionService, int64, int64) {
 	t.Helper()
-	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
+	return permissionHTTPFixtureDatabase(t, os.Getenv("FREEFSM_TEST_DATABASE_URL"), "", migrations, seed, legacy...)
+}
+
+func permissionHTTPInstanceFixture(t *testing.T) (*pgxpool.Pool, *ent.Client, http.Handler, *services.SessionService, int64, int64) {
+	t.Helper()
+	return permissionHTTPFixtureDatabase(t, admissionDatabase(t), "public", database.MigrationFS(), nil)
+}
+
+func permissionHTTPFixtureDatabase(t *testing.T, dsn, schema string, migrations fs.FS, seed func(*pgxpool.Pool), legacy ...bool) (*pgxpool.Pool, *ent.Client, http.Handler, *services.SessionService, int64, int64) {
+	t.Helper()
 	if dsn == "" {
 		t.Skip("set FREEFSM_TEST_DATABASE_URL")
 	}
@@ -57,8 +66,10 @@ func permissionHTTPFixtureConfigured(t *testing.T, migrations fs.FS, seed func(*
 	if err != nil {
 		t.Fatal(err)
 	}
-	schema := fmt.Sprintf("permission_http_%d", time.Now().UnixNano())
-	if _, err := root.Exec(ctx, `CREATE SCHEMA `+pgx.Identifier{schema}.Sanitize()); err != nil {
+	if schema == "" {
+		schema = fmt.Sprintf("permission_http_%d", time.Now().UnixNano())
+	}
+	if _, err := root.Exec(ctx, `CREATE SCHEMA IF NOT EXISTS `+pgx.Identifier{schema}.Sanitize()); err != nil {
 		t.Fatal(err)
 	}
 	scoped, err := dsnWithSearchPath(dsn, schema)

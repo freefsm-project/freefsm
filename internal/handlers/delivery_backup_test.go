@@ -175,9 +175,10 @@ func TestDeliveryEncryptedBackupDrainAndRestoreGates(t *testing.T) {
 	if !reopened.EmailDisabled() {
 		t.Fatal("persistent restore mail gate absent")
 	}
+	restarted := dst.recoverControl(t, reopened)
 	restored := delivery.New(dst.pool, "")
 	restored.SetInstanceControl(reopened)
-	restored.SetBeforeWork(dst.manager.RefreshConnections)
+	restored.SetBeforeWork(restarted.RefreshConnections)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	historyCheck(t, err)
 	defer listener.Close()

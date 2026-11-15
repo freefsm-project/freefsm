@@ -10,7 +10,12 @@ import (
 )
 
 func TestPendingActivityBlocksNewWorkAndReplaysExactly(t *testing.T) {
-	m := storageManager(t)
+	m, db := preflightFixture(t)
+	// Fail preflight without changing the destination identity retained by
+	// pending activity and the verified admission record.
+	if _, err := db.Pool.Exec(context.Background(), "CREATE SCHEMA unsupported_activity_fixture"); err != nil {
+		t.Fatal(err)
+	}
 	actor := ActivityActor{ID: 1, Name: "Administrator", CompanyName: "Company"}
 	var first ActivityEvent
 	m.cfg.ActivitySink = func(_ context.Context, event ActivityEvent) error {
@@ -24,7 +29,11 @@ func TestPendingActivityBlocksNewWorkAndReplaysExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	op = awaitOperation(t, m, actor.ID, op.ID)
+	m.wg.Wait()
+	op, err = m.Status(actor.ID, op.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if op.Phase != "failed" || op.Failure.Category != FailureRecoveryRequired {
 		t.Fatalf("status: %+v", op)
 	}
@@ -44,6 +53,9 @@ func TestPendingActivityBlocksNewWorkAndReplaysExactly(t *testing.T) {
 		}
 	}
 	calls := 0
+	if _, err := db.Pool.Exec(context.Background(), "DROP SCHEMA unsupported_activity_fixture"); err != nil {
+		t.Fatal(err)
+	}
 	m.cfg.ActivitySink = func(_ context.Context, event ActivityEvent) error {
 		calls++
 		if !reflect.DeepEqual(first, event) {

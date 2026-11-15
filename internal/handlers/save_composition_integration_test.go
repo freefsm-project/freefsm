@@ -127,7 +127,7 @@ func TestGuardedConflictComparisonTracksControlStateHTTP(t *testing.T) {
 }
 
 func TestBackupControlsUsePersistedPresentationAndCurrentNavigationHTTP(t *testing.T) {
-	pool, client, main, sessions, company, admin := permissionHTTPFixture(t)
+	pool, client, main, sessions, company, admin := permissionHTTPInstanceFixture(t)
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	itemPost(t, main, cookie, "/preferences", url.Values{"theme": {"dark"}, "font_size": {"large"}}, 303)
@@ -141,6 +141,7 @@ func TestBackupControlsUsePersistedPresentationAndCurrentNavigationHTTP(t *testi
 		t.Fatal(err)
 	}
 	defer manager.Shutdown()
+	recoverAdmission(t, manager)
 	router := NewBackupRouter(pool, manager, control, services.NewUserService(client), services.NewCompanySettingsService(client), sessions, "", backupTestActivityHandler(client))
 	get := func(path string, want int) *httptest.ResponseRecorder {
 		t.Helper()

@@ -48,6 +48,7 @@ func TestApplicationAdmissionPrecedesEveryDatabaseRoute(t *testing.T) {
 		t.Fatal(err)
 	}
 	refreshed, accessed := 0, 0
+	bootstrapRouteAdmission(t, c)
 	app := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if refreshed <= accessed {
 			t.Fatal("database access before refresh")

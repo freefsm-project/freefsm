@@ -111,6 +111,62 @@ func TestPersistentAdmissionMissingCorruptAndStaleDeny(t *testing.T) {
 	deny()
 }
 
+func TestPersistentAdmissionRejectsDiscriminatorReplacementDuringSync(t *testing.T) {
+	for _, replacement := range []string{"inode", "content", "path", "symlink"} {
+		t.Run(replacement, func(t *testing.T) {
+			c, err := New(filepath.Join(t.TempDir(), "state"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			bootstrapAdmissionFixture(t, c)
+			path := filepath.Join(c.StateDir(), "maintenance")
+			original, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			changed := false
+			c.checkpoint = func(point string) {
+				if point != "admission-read-directory-sync" || changed {
+					return
+				}
+				changed = true
+				switch replacement {
+				case "inode":
+					err = os.WriteFile(path+".replacement", original, 0600)
+					if err == nil {
+						err = os.Rename(path+".replacement", path)
+					}
+				case "content":
+					err = os.WriteFile(path, []byte("closed\n"), 0600)
+				case "path":
+					err = os.Rename(c.StateDir(), c.StateDir()+".old")
+					if err == nil {
+						err = os.Mkdir(c.StateDir(), 0700)
+					}
+					if err == nil {
+						err = os.WriteFile(path, original, 0600)
+					}
+				case "symlink":
+					err = os.Rename(path, path+".old")
+					if err == nil {
+						err = os.Symlink(path+".old", path)
+					}
+				}
+			}
+			_, release, admissionErr := c.Enter(context.Background())
+			if release != nil {
+				release()
+			}
+			if err != nil || !changed {
+				t.Fatalf("replacement not exercised: changed=%v err=%v", changed, err)
+			}
+			if !errors.Is(admissionErr, ErrMaintenance) {
+				t.Fatalf("replacement admitted: %v", admissionErr)
+			}
+		})
+	}
+}
+
 func TestPersistentAdmissionPublicationBarrierAndReconciliation(t *testing.T) {
 	c, err := New(t.TempDir())
 	if err != nil {

@@ -29,13 +29,14 @@ func TestLeaseBillingRestartAndDrain(t *testing.T) {
 		defer pool.Close()
 		control, err := instancecontrol.New(os.Getenv("FREEFSM_LEASE_CHILD_STATE"))
 		historyCheck(t, err)
+		admissionManager(t, pool, control)
 		err = authorization.New(pool).RunLeaseBilling(ctx, control, func() error { return nil })
 		if !errors.Is(err, context.Canceled) {
 			historyCheck(t, err)
 		}
 		return
 	}
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	pool, client, web, sessions, company, admin := permissionHTTPInstanceFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	_, err := pool.Exec(ctx, `CREATE OR REPLACE FUNCTION lease_dependency_today(company bigint) RETURNS date LANGUAGE sql STABLE AS $$ SELECT '2024-01-01'::date $$`)
@@ -52,7 +53,9 @@ func TestLeaseBillingRestartAndDrain(t *testing.T) {
 	historyCheck(t, barrier.QueryRow(ctx, `SELECT pg_backend_pid() FROM pg_advisory_xact_lock(670301)`).Scan(&holder))
 	control, err := instancecontrol.New(t.TempDir())
 	historyCheck(t, err)
-	dsn, err := dsnWithSearchPath(os.Getenv("FREEFSM_TEST_DATABASE_URL"), pool.Config().ConnConfig.RuntimeParams["search_path"])
+	manager := admissionManager(t, pool, control)
+	recoverAdmission(t, manager)
+	dsn, err := dsnWithSearchPath(pool.Config().ConnString(), pool.Config().ConnConfig.RuntimeParams["search_path"])
 	historyCheck(t, err)
 	start := func() (*exec.Cmd, func()) {
 		childCtx, kill := context.WithCancel(ctx)
@@ -81,11 +84,6 @@ func TestLeaseBillingRestartAndDrain(t *testing.T) {
 	operationRelease, err := control.OperationLock()
 	historyCheck(t, err)
 	defer operationRelease()
-	historyCheck(t, control.KeepClosed())
-	if _, release, err := control.Enter(ctx); err == nil {
-		release()
-		t.Fatal("maintenance admitted new work")
-	}
 	// Observe the actual cross-process shared admission lock, not a sleep.
 	lock, err := os.OpenFile(filepath.Join(control.StateDir(), "admission.lock"), os.O_RDWR, 0600)
 	historyCheck(t, err)
@@ -103,6 +101,19 @@ func TestLeaseBillingRestartAndDrain(t *testing.T) {
 		}
 		drained <- release
 	}()
+	for {
+		_, release, err := control.Enter(ctx)
+		if errors.Is(err, instancecontrol.ErrMaintenance) {
+			break
+		}
+		historyCheck(t, err)
+		release()
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-time.After(time.Millisecond):
+		}
+	}
 	stop()
 	var release func()
 	select {
@@ -116,9 +127,9 @@ func TestLeaseBillingRestartAndDrain(t *testing.T) {
 	historyCheck(t, pool.QueryRow(ctx, `SELECT (SELECT count(*) FROM lease_invoice_generations),(SELECT count(*) FROM invoices)`).Scan(&generated, &invoices))
 	historyEqual(t, "canceled generation has no success marker", generated, 1)
 	historyEqual(t, "canceled generation has no Invoice", invoices, 1)
-	historyCheck(t, control.ClearMaintenance())
 	release()
 	operationRelease()
+	recoverAdmission(t, manager)
 	historyCheck(t, barrier.Commit(ctx))
 	_, err = pool.Exec(ctx, `DROP TRIGGER process_billing_barrier ON authorization_audit; CREATE FUNCTION process_billing_committed() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_notify('lease67_process_committed',NEW.obligation_id::text); RETURN NEW; END $$; CREATE TRIGGER process_billing_committed AFTER INSERT ON lease_invoice_generations FOR EACH ROW EXECUTE FUNCTION process_billing_committed()`)
 	historyCheck(t, err)

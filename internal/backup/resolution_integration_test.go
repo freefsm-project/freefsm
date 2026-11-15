@@ -139,6 +139,26 @@ func TestResolutionCommittedErrorNeverCompletes(t *testing.T) {
 	}
 }
 
+func TestResolutionUncommittedRecoveryErrorRemainsUnresolved(t *testing.T) {
+	for _, kind := range []string{"backup", "restore"} {
+		t.Run(kind, func(t *testing.T) {
+			m, _ := resolutionFixture(t)
+			id := strings.Repeat("cd", 32)
+			j := &job{Operation: Operation{ID: id, Kind: kind, Phase: "capturing", ExpiresAt: time.Now().Add(time.Hour)}, actor: 7, active: true, dir: filepath.Join(m.root, id)}
+			m.jobs[id] = j
+			m.wg.Add(1)
+			m.run(j, func() {}, func(context.Context) error {
+				return classified(FailureRecoveryRequired, syscall.EIO)
+			})
+			m.wg.Wait()
+			op, err := m.Status(7, id)
+			if err != nil || op.Phase != "recovery-required" || op.Failure.Category != FailureRecoveryRequired || op.Failure.DiagnosticID == "" {
+				t.Fatalf("unresolved engine failure became terminal: %+v %v", op, err)
+			}
+		})
+	}
+}
+
 func TestResolutionSelectionRejectsLostGeneration(t *testing.T) {
 	for _, contents := range []string{"", `"not-a-generation"`, `null`} {
 		t.Run(contents, func(t *testing.T) {

@@ -360,7 +360,7 @@ func TestIntegrationSaveRechecksWaitingAuthorityHTTP(t *testing.T) {
 }
 
 func TestRestoreMailGateRequiresAuditedAdministratorEnableHTTP(t *testing.T) {
-	pool, client, _, sessions, _, admin := permissionHTTPFixture(t)
+	pool, client, _, sessions, _, admin := permissionHTTPInstanceFixture(t)
 	ctx := context.Background()
 	dir := t.TempDir()
 	control, err := instancecontrol.New(dir)
@@ -370,10 +370,12 @@ func TestRestoreMailGateRequiresAuditedAdministratorEnableHTTP(t *testing.T) {
 	if err := control.DisableEmail(); err != nil {
 		t.Fatal(err)
 	}
+	recoverAdmission(t, admissionManager(t, pool, control))
 	control, err = instancecontrol.New(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	admissionManager(t, pool, control)
 	router := New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()}, control)
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	post := func(path string) *httptest.ResponseRecorder {

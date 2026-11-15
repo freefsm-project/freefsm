@@ -82,12 +82,13 @@ func TestSetupSessionPublicationRechecksCommittedCredential(t *testing.T) {
 }
 
 func TestRecoveryRefreshRunsInsideAdmissionAndFailureDoesNotClaim(t *testing.T) {
-	pool, client, _, _, _, admin := permissionHTTPFixture(t)
+	pool, client, _, _, _, admin := permissionHTTPInstanceFixture(t)
 	ctx := context.Background()
 	control, err := instancecontrol.New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
+	recoverAdmission(t, admissionManager(t, pool, control))
 	email := services.NewEmailService(services.NewCompanySettingsService(client))
 	email.SetInstanceControl(control)
 	var settingsQueries atomic.Int64
@@ -219,7 +220,7 @@ func TestRecoveryLookupStorageFailureKeepsDurableRequestResumable(t *testing.T) 
 }
 
 func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *testing.T) {
-	pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
+	pool, client, _, sessions, company, admin := permissionHTTPInstanceFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	control, err := instancecontrol.New(t.TempDir())
@@ -230,6 +231,8 @@ func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
+	recoverAdmission(t, admissionManager(t, pool, control))
+	manager := admissionManager(t, pool, otherProcess)
 	current := client.User.Create().SetCompanyID(company).SetName("Current recipient").SetEmail("current-recipient@test").SetRole("tech").SetPasswordHash("unchanged").SaveX(ctx)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -264,10 +267,8 @@ func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *t
 	if err = control.DisableEmail(); err != nil {
 		t.Fatal(err)
 	}
-	if err = otherProcess.ClearMaintenance(); err != nil {
-		t.Fatal(err)
-	}
 	maintenanceRelease()
+	recoverAdmission(t, manager)
 	if worked, e := resets.DispatchOne(ctx, email); worked || !errors.Is(e, instancecontrol.ErrEmailDisabled) {
 		t.Fatalf("disabled mail claimed work: %v %v", worked, e)
 	}
@@ -353,11 +354,9 @@ func TestRecoveryDispatchInstanceLifecycleDrainGateAndCurrentIdentityResume(t *t
 	if err = authorization.New(pool).EditIdentity(ctx, authorization.Actor{UserID: admin}, admin, "Admin", "current-admin@test"); err != nil {
 		t.Fatal(err)
 	}
-	if err = otherProcess.ClearMaintenance(); err != nil {
-		t.Fatal(err)
-	}
 	releaseMaintenance()
 	<-maintenanceReleased
+	recoverAdmission(t, manager)
 	if worked, e := resets.DispatchOne(ctx, email); worked || !errors.Is(e, instancecontrol.ErrEmailDisabled) {
 		t.Fatalf("restore email gate bypassed: %v %v", worked, e)
 	}

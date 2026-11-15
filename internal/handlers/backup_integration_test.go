@@ -60,6 +60,7 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 	type fixture struct {
 		router            http.Handler
 		manager           *backup.Manager
+		managerConfig     backup.Config
 		control           *instancecontrol.Control
 		client            *ent.Client
 		pool              *pgxpool.Pool
@@ -118,13 +119,19 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 			t.Fatal(err)
 		}
 		defer f.manager.Shutdown()
-		if err := f.manager.Recover(ctx); err != nil {
+		f.managerConfig = managerConfig
+		startup, err := f.manager.BeginStartup(ctx)
+		if err != nil {
 			t.Fatal(err)
 		}
+		defer startup.Close()
 		if err := os.MkdirAll(f.uploads, 0700); err != nil {
 			t.Fatal(err)
 		}
 		if err := db.Migrate(ctx, database.MigrationFS()); err != nil {
+			t.Fatal(err)
+		}
+		if err := startup.Finish(ctx); err != nil {
 			t.Fatal(err)
 		}
 		pgcfg, err := pgx.ParseConfig(u.String())
@@ -436,11 +443,19 @@ func backupHTTPRoundTrip(t *testing.T, scenario string) {
 	if err != nil || !reopened.EmailDisabled() {
 		t.Fatalf("durable gate: %v", err)
 	}
+	restartConfig := dst.managerConfig
+	restartConfig.Control = reopened
+	restarted, err := backup.New(restartConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restarted.Shutdown()
+	recoverAdmission(t, restarted)
 	web := New(dst.pool, dst.client, dst.sessions, &config.Config{UploadDir: dst.uploads}, reopened)
 	csrf := nosurf.New(middleware.CSRFToken(web))
 	csrf.SetIsTLSFunc(func(*http.Request) bool { return false })
 	web = reopened.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := dst.manager.RefreshConnections(); err != nil {
+		if err := restarted.RefreshConnections(); err != nil {
 			t.Fatal(err)
 		}
 		csrf.ServeHTTP(w, r)

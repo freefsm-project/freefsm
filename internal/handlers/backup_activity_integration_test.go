@@ -16,7 +16,7 @@ import (
 )
 
 func TestBackupActivityHTTPVisibilityIntegration(t *testing.T) {
-	client, pool := openHandlerTestDB(t)
+	client, pool := openHandlerTestDB(t, admissionDatabase(t))
 	defer client.Close()
 	defer pool.Close()
 	ctx := context.Background()
@@ -45,11 +45,12 @@ func TestBackupActivityHTTPVisibilityIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manager, err := backup.New(backup.Config{DSN: pool.Config().ConnString(), UploadDir: t.TempDir(), StateDir: control.StateDir(), Control: control, BuildKind: backup.BuildDevelopment})
+	manager, err := backup.New(backup.Config{DSN: pool.Config().ConnString(), UploadDir: t.TempDir(), StateDir: control.StateDir(), Control: control, BuildKind: backup.BuildDevelopment, ResetConnections: pool.Reset})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer manager.Shutdown()
+	recoverAdmission(t, manager)
 	backupRouter := NewBackupRouter(pool, manager, control, services.NewUserService(client), services.NewCompanySettingsService(client), sessions, "", backupTestActivityHandler(client))
 	globalRouter := New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()})
 	for _, surface := range []struct {

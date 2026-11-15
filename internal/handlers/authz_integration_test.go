@@ -226,7 +226,7 @@ func TestHTTPAuthorizationBoundaries(t *testing.T) {
 	})
 }
 
-func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
+func openHandlerTestDB(t *testing.T, instanceDSN ...string) (*ent.Client, *pgxpool.Pool) {
 	t.Helper()
 	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -234,11 +234,14 @@ func openHandlerTestDB(t *testing.T) (*ent.Client, *pgxpool.Pool) {
 	}
 
 	schemaName := fmt.Sprintf("freefsm_handler_test_%d", time.Now().UnixNano())
+	if len(instanceDSN) != 0 {
+		dsn, schemaName = instanceDSN[0], "public"
+	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}
-	if _, err := db.Exec(`CREATE SCHEMA ` + schemaName); err != nil {
+	if _, err := db.Exec(`CREATE SCHEMA IF NOT EXISTS ` + schemaName); err != nil {
 		_ = db.Close()
 		t.Fatalf("create test schema: %v", err)
 	}

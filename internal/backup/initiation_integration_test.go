@@ -55,7 +55,7 @@ func TestInitiationCapabilityReconcilesRealBackupUploadAndRestart(t *testing.T) 
 		t.Fatalf("ready receipt %+v %v", status, err)
 	}
 	m.Shutdown()
-	restarted, err := New(m.cfg)
+	restarted, err := restartFixtureManager(m)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func TestInitiationInterruptedResultRemainsUnknownAfterRealBackupRestart(t *test
 	}
 	r.Close()
 	m.Shutdown()
-	restarted, err := New(m.cfg)
+	restarted, err := restartFixtureManager(m)
 	if err != nil {
 		t.Fatal(err)
 	}
