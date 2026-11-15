@@ -11,6 +11,7 @@ const messageOf=intent=>Object.fromEntries(messageFields.filter(k=>Object.hasOwn
 // Uses the same encrypted store, finite lease and original-parent projection as
 // commercial work. Receipt reconciliation never submits a Delivery command.
 class DeliveryClient extends CommercialClient {
+ projectionFamily(){return 'delivery';}
   retryAuthority(s){return {lease:s.lease?.id,...s.authority};}
   hasRetryAuthority(s,capability){const current=this.retryAuthority(s);return !!s.lease?.id&&!!s.authority&&['lease','epoch','user','client'].every(k=>capability?.authority?.[k]===current[k]);}
   async retryReviewIn(s,kind,doc,delivery){

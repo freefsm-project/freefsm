@@ -7,6 +7,7 @@ const editFields=new Set(['title','notes','terms','tax_rate','invoice_date','due
 // One document kind per protected store. Network, review, staging and submission
 // are separate explicit actions; synchronization never rewrites staged intent.
 class CommercialClient extends ProtectedFieldClient {
+ projectionFamily(){return 'commercial';}
  async withholdCache(s){
   s.synced=false;s.documents={};s.commercialCursor=null;s.pdfSources={};s.pdfSelections={};
   // A shared-store observation from another field adapter is not fresh authority.

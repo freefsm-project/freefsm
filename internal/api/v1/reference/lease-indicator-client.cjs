@@ -5,6 +5,7 @@ const {OfflineFieldClient,ProtectedStore}=require('./offline-notes-client.cjs');
 // cache, so existing logout, expiry, restore and synchronization purge rules
 // apply. No commercial dates or Lease references are stored or inferred.
 class FieldLeaseClient extends OfflineFieldClient {
+ projectionFamily(){return 'lease-indicators';}
  async pages(...args){
   const snapshot=await super.pages(...args);
   // A sync commits only observations in its opaque identity space, including

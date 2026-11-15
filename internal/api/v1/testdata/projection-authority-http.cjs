@@ -23,7 +23,7 @@ module.exports=async({input,store,transport,control,fresh})=>{
  const values={amount:'25.00',method:'cash',date:'2026-01-02',note:'PRIVATE-PAYMENT-PROJECTION'};
  const pending=input.scenario.endsWith('_pending');
  const id=pending?await client.stagePayment(target,values):null;
- if(pending){loseRequest=true;await assert.rejects(client.submit(id),/lost_request/);}
+ if(pending){loseRequest=true;await assert.rejects(client.submit(id),/lost_request/);await client.synchronize();}
  const mode=input.scenario.split('_')[1];
  const notes=new OfflineFieldClient(new ProtectedStore(input.directory,store.id),transport);
  await notes.initialize();

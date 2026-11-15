@@ -8,6 +8,7 @@ const fields=['amount','method','date','other_description','reference','note'];
 // Financial intent is never replayed by synchronization or receipt lookup. An
 // absent receipt is not evidence that money was not received, even after restore.
 class PaymentClient extends CommercialClient {
+  projectionFamily(){return 'payment';}
   ownsPaymentIntent(){return true;}
   ownsPending(e){return e.family==='payment'||super.ownsPending(e);}
   refreshRestoreReview(s,e){

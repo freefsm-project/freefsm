@@ -4,7 +4,13 @@ const {ProtectedStore}=require('./protected-store.cjs');
 const paymentRecovery=require('./payment-recovery.cjs');
 const clone=x=>JSON.parse(JSON.stringify(x));
 const clientIdentity=token=>token?createHash('sha256').update(token).digest('hex'):null;
-const fresh=()=>({version:1,user:null,token:null,lease:null,authority:null,contactEpoch:null,issuance:null,leaseLocked:false,cache:{},notes:{},clocks:{},clockJobs:{},clockCapabilities:null,clockLease:null,clockIssuance:null,pending:{},syncCursor:null,clockCursor:null,synced:false,restore:false,highWater:0});
+// Only this envelope survives projection invalidation. Every other top-level
+// field belongs to the active adapter's disposable projection, including future
+// fields. Pending work has its own domain-specific recovery policy.
+const envelope=()=>({version:1,user:null,token:null,lease:null,authority:null,contactEpoch:null,issuance:null,leaseLocked:false,pending:{},restore:false,highWater:0});
+const envelopeFields=new Set(Object.keys(envelope()));
+const emptyProjection=()=>({cache:{},notes:{},clocks:{},clockJobs:{},clockCapabilities:null,clockLease:null,clockIssuance:null,syncCursor:null,clockCursor:null,synced:false});
+const fresh=()=>({...envelope(),...emptyProjection()});
 
 // Each action is explicit and serialized, including its network round trips.
 // Nothing in construction/restart, authentication or synchronization submits work.
@@ -13,6 +19,12 @@ class ProtectedFieldClient {
  async initialize(){return this.store.exclusive(async()=>{await this.store.create();try{await this.store.load();}catch(e){if(e.code!=='ENOENT')throw e;await this.store.save(fresh());}});}
   async transaction(fn){return this.store.exclusive(async()=>{
    const s=await this.store.load();
+   if(!this.hasProjectionOwner(s)){
+    this.invalidateProjection(s);
+    paymentRecovery.preserveGeneration(s);
+    for(const [id,e] of Object.entries(s.pending))if(!this.ownsPending(e))s.pending[id]=this.purgedOperation(e);
+    await this.persistAuthorityLoss(s);
+   }
    // An adapter handoff cannot authorize or expose another family's financial
    // intent. Persist its safe recovery record before any action or network call.
    if(!this.ownsPaymentIntent()&&Object.values(s.pending).some(e=>e.family==='payment')){
@@ -23,6 +35,14 @@ class ProtectedFieldClient {
    return fn(s);
   });}
   ownsPaymentIntent(){return false;}
+  projectionFamily(){throw Error('projection_owner_required');}
+  ownsPending(){return false;}
+  projectionOwner(s){return {family:this.projectionFamily(),user:s.user,epoch:s.authority?.epoch||null,client:s.authority?.client||null};}
+  hasProjectionOwner(s){const owner=this.projectionOwner(s);return Object.keys(owner).every(k=>s.projectionOwner?.[k]===owner[k]);}
+  invalidateProjection(s){
+   for(const key of Object.keys(s))if(!envelopeFields.has(key))delete s[key];
+   Object.assign(s,emptyProjection(),{projectionOwner:this.projectionOwner(s)});
+  }
  async persist(s){await this.store.save(s);}
  async persistAuthorityLoss(s){
   try{await this.persist(s);}catch{
@@ -33,7 +53,7 @@ class ProtectedFieldClient {
  }
  // Durably locks observed expiry/clock rollback and advances the high-water mark.
  async enforceOfflineAccessWindow(s){
-  if(s.restore||!s.synced)throw Error('locked_review');
+   if(s.restore||!s.synced||!this.hasProjectionOwner(s))throw Error('locked_review');
   const now=this.now();
   if(s.leaseLocked||!s.lease||!Number.isFinite(now)||now<s.highWater||now>=Date.parse(s.lease.expires_at)){
    s.leaseLocked=true;await this.persistAuthorityLoss(s);throw Error('authorization_lease_expired');
@@ -44,7 +64,9 @@ class ProtectedFieldClient {
    paymentRecovery.preserveGeneration(s);
   // Retain only nonsensitive operation identities/dispositions for safe lookup.
   const safe={};for(const [id,e]of Object.entries(s.pending))safe[id]=this.purgedOperation(e);
-  Object.assign(s,fresh(),{pending:safe,user:s.user,issuance});await this.persistAuthorityLoss(s);
+   const user=s.user;
+   for(const key of Object.keys(s))delete s[key];
+   Object.assign(s,fresh(),{pending:safe,user,issuance});this.invalidateProjection(s);await this.persistAuthorityLoss(s);
  }
   purgedOperation(e){return paymentRecovery.purged(e,{state:'purged',receipt:e.receipt,family:e.family,receipt_family:e.receipt_family});}
  async purgeDeniedIssuance(s,receipt){
@@ -55,6 +77,7 @@ class ProtectedFieldClient {
  }
   beginRestore(s){
    paymentRecovery.beginRestore(s);
+   this.invalidateProjection(s);
   // Missing-receipt lookup and its acknowledgement describe one server history.
   // Neither can authorize repair after another restore, even across restart.
   s.restore=true;
@@ -68,7 +91,7 @@ class ProtectedFieldClient {
   const r=await this.transport(path,method,body,{token:s.token,epoch:s.contactEpoch||s.lease?.epoch,operation});
   // Inspect disposition before generic 401 purge. Persist before returning data.
   if(r.error?.code==='instance_restored'&&r.error?.recovery_disposition==='locked_review'){
-   s.token=null;s.lease=null;s.contactEpoch=null;s.restore=true;s.synced=false;s.cache={};s.notes={};s.clocks={};s.clockJobs={};s.clockCapabilities=null;s.clockLease=null;s.clockIssuance=null;s.clockCursor=null;
+    s.token=null;s.lease=null;s.contactEpoch=null;
     this.beginRestore(s);
    await this.persistAuthorityLoss(s);throw Error('locked_review');
   }
@@ -111,8 +134,8 @@ class ProtectedFieldClient {
   const previous=retry?s.issuance.previous:(s.authority||(old?{epoch:old.epoch,user:oldUser,client:clientIdentity(oldToken)}:null));
   // Renewal must retain the last server epoch even while its lease is absent.
   s.contactEpoch=oldToken===token?(s.contactEpoch||old?.epoch):null;
-  s.token=token;s.lease=null;s.synced=false;
-  s.issuance={id:operation,state:'unknown',previous};await this.persist(s);
+   s.token=token;s.lease=null;this.invalidateProjection(s);
+   s.issuance={id:operation,state:'unknown',previous};await this.persistAuthorityLoss(s);
   let r;
   if(retry){
    r=await this.contact(s,'/offline-authorization-operations/'+operation);
@@ -130,12 +153,12 @@ class ProtectedFieldClient {
    // Old-client intent cannot be rebound; keep only safe receipt identities.
    await this.purge(s);s.token=token;
   }
-  s.clocks={};s.clockJobs={};s.clockCapabilities=null;s.clockLease=null;s.clockIssuance=null;s.clockCursor=null;
-  s.authority={epoch:l.epoch,user:l.user_id,client:clientIdentity(token)};s.syncCursor=null;
+   s.authority={epoch:l.epoch,user:l.user_id,client:clientIdentity(token)};s.syncCursor=null;
   s.issuance={id:operation,state:'accepted'};s.user=l.user_id;s.lease=l;s.contactEpoch=l.epoch;s.leaseLocked=false;s.synced=false;s.cache={};s.notes={};s.highWater=Math.max(this.now(),issued);
    // Accepted issuance can reveal a restored epoch. Its review lock must survive
    // a failed final write, not just the earlier unknown-issuance checkpoint.
-   this.authenticated(s,previous);
+    this.authenticated(s,previous);
+    this.invalidateProjection(s);
    await this.persistAuthorityLoss(s);return {expires_at:l.expires_at,state:'synchronization_required'};
   });}
    authenticated(s,previous){paymentRecovery.authenticated(s,previous);}

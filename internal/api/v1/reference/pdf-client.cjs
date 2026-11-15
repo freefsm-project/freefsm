@@ -9,6 +9,7 @@ const matchesSource=(source,document,intent)=>source?.document_id===document&&so
 // The protected document adapter owns durable intent. No constructor, sync,
 // receipt lookup or source comparison sends a generation request.
 class PDFClient extends CommercialClient {
+ projectionFamily(){return 'pdf';}
  async view(){return this.transaction(async s=>{
   await this.enforceOfflineAccessWindow(s);const pending=clone(s.pending);
   for(const e of Object.values(pending))if(e.withheld){delete e.intent;delete e.reviewed;}

@@ -10,6 +10,8 @@ const lineFields=['item_id','title','description','quantity','unit_price','taxab
 // Explicit preparation, review, staging and submission are separate actions.
 // The shared protected owner controls encryption, leases, purge and recovery.
 class DocumentCreationClient extends OfflineFieldClient {
+ projectionFamily(){return 'document-creation';}
+ ownsPending(e){return e.family==='document.create'||super.ownsPending(e);}
  async purge(s,issuance=null){delete s.items;delete s.itemCursor;return super.purge(s,issuance);}
  async withholdCache(s){s.items={};s.itemCursor=null;return super.withholdCache(s);}
  purgeSensitiveOperation(e){super.purgeSensitiveOperation(e);delete e.reviewedInputs;delete e.items;}

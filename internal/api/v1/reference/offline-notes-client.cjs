@@ -7,6 +7,8 @@ const jobCategories=new Set(['job:new','job:travel_time','job:in_progress','job:
 // Job fields own their target/revision rules. Both Job and Clock workflows use
 // the same protected authority, receipt recovery and quarantine implementation.
 class OfflineFieldClient extends ProtectedFieldClient {
+ projectionFamily(){return 'job-fields';}
+ ownsPending(e){return !e.family||['comment','job.execution','job.subtask'].includes(e.family);}
  async withholdCache(s){
   s.synced=false;s.cache={};s.notes={};s.syncCursor=null;
   if(!this.store.quarantined)await this.persistAuthorityLoss(s);

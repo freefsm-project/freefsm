@@ -6,6 +6,8 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 // Clock workflows extend the accepted protected authority/receipt state machine.
 // They use the same store, quarantine, expiry, restore and explicit batch retry.
 class OfflineClocks extends ProtectedFieldClient {
+ projectionFamily(){return 'clocks';}
+ ownsPending(e){return e.family==='clock';}
  async batchFailure(s,ids,response){
   // Whole-envelope shape rejection is before every effect. It has no server
   // receipt, but permits explicit reviewed repair, unlike transport uncertainty.

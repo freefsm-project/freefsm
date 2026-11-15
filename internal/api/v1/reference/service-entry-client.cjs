@@ -6,6 +6,8 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 // Executable API reference, sharing the established encrypted store, authority
 // lifecycle, explicit batch submission and observation invalidation rules.
 class ServiceEntryClient extends FieldLeaseClient {
+ projectionFamily(){return 'service-entries';}
+ ownsPending(e){return e.family==='service_entry'||super.ownsPending(e);}
  async receiptAuthority(s,e,code,receiptOnly=false){
   // A relationship conflict is not proof of continuing visibility: unlink,
   // transfer and archive share this outcome with stale revisions. Withhold the

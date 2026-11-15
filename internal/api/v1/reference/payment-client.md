@@ -69,3 +69,13 @@ receipt as current by authenticating on behalf of the shared store.
 No synchronization, restart or authentication automatically submits work. Uncertain
 financial operation identities cannot be discarded to bypass reconciliation.
 There are no Credit, refund or reversal operations in this adapter.
+# Shared protected projection ownership
+
+The protected store has one active adapter projection, bound to its adapter family,
+authenticated user, server epoch and client identity. Switching adapters discards
+the previous projection and requires the new adapter's synchronization. An unrelated
+adapter's successful synchronization never authorizes cached Invoices, methods,
+PDF selections or pending financial intent. Authentication and restore invalidate
+all projection fields; ordinary purge removes them completely. Legacy stores without
+projection ownership require fresh synchronization while retaining safe recovery
+identities and history. Different-user authentication clears pending work.

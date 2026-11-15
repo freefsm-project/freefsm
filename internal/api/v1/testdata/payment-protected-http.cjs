@@ -47,12 +47,15 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
      delivery:require('../reference/delivery-client.cjs').DeliveryClient,
      notes:require('../reference/offline-notes-client.cjs').OfflineFieldClient,
      clocks:require('../reference/offline-clocks-client.cjs').OfflineClocks,
-     creation:require('../reference/document-creation-client.cjs').DocumentCreationClient,
+      creation:require('../reference/document-creation-client.cjs').DocumentCreationClient,
+      files:require('../reference/offline-files-client.cjs').OfflineFiles,
+      service:require('../reference/service-entry-client.cjs').ServiceEntryClient,
+      lease:require('../reference/lease-indicator-client.cjs').FieldLeaseClient,
     };
     const family=input.scenario.slice(7),Adapter=adapters[family]||adapters.commercial;
     const reopen=async()=>{client=new PaymentClient(new ProtectedStore(input.directory,store.id),transport);await client.initialize();};
     const other=()=>new Adapter(new ProtectedStore(input.directory,store.id),transport);
-    const syncOther=async()=>{const c=other();await c.initialize();await c.synchronize(['notes','clocks','creation'].includes(family)?false:'invoice');return c;};
+    const syncOther=async()=>{const c=other();await c.initialize();await c.synchronize(['notes','clocks','creation','files','service','lease'].includes(family)?false:'invoice');return c;};
     const safe=async()=>{const e=(await store.load()).pending[id];assert(e);for(const k of ['intent','reviewed','target','customer'])assert.equal(e[k],undefined,k);assert(!JSON.stringify(e).includes('PRIVATE-'));return e;};
     const blocked=async()=>{await assert.rejects(client.stagePayment(target,values),/reconciliation_required/);await assert.rejects(client.discard(id),/reconciliation_required/);};
     const restored=family.startsWith('restore_')||family==='generation';
@@ -78,7 +81,12 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
      await control('forget-receipt');await other().authenticate(await fresh('restore'));
      assert.equal((await safe()).receipt,undefined,'other adapter must archive old generation before returning');
     }
-    await reopen();await client.synchronize();await blocked();
+    await reopen();await assert.rejects(client.view(),/locked_review/);await client.synchronize();await blocked();
+    if(adapters[family]){
+     // The reverse handoff must not borrow Payment's synchronization either.
+     await assert.rejects(other().view(),/locked_review/);
+     await reopen();await client.synchronize();await blocked();
+    }
     const preserved=await safe();assert(preserved.generation);assert(preserved.financialUncertain||restored);
     await assert.rejects(other().discard(id),/reconciliation_required/);
     // A separate process must observe the same durable receipt-first boundary.
