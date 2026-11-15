@@ -30,6 +30,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/backup"
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/database"
+	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/ent"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/middleware"
@@ -127,6 +128,7 @@ func TestBackupBrowserNginxScale(t *testing.T) {
 		scaleCheck(t, err)
 		defer startup.Close()
 		scaleCheck(t, db.Migrate(ctx, os.DirFS("../database/migrations")))
+		importFixtureEmailPolicy(t, db.Pool, f.control, f.manager)
 		scaleCheck(t, startup.Finish(ctx))
 		pgcfg, e := pgx.ParseConfig(u.String())
 		scaleCheck(t, e)
@@ -286,6 +288,11 @@ func TestBackupBrowserNginxScale(t *testing.T) {
 	conn, err := pgx.Connect(ctx, dst.cfg.DSN)
 	scaleCheck(t, err)
 	defer conn.Close(ctx)
+	policy, err := emailpolicy.Read(ctx, conn, false)
+	scaleCheck(t, err)
+	if policy.Enabled {
+		t.Fatal("restored current-epoch email policy is enabled")
+	}
 	var count, bytes int64
 	scaleCheck(t, conn.QueryRow(ctx, "SELECT count(*),sum(file_size) FROM files WHERE file_path LIKE $1", dst.uploads+"/%").Scan(&count, &bytes))
 	if count != int64(len(want)) || bytes != logical {
@@ -308,14 +315,28 @@ func TestBackupBrowserNginxScale(t *testing.T) {
 	metrics.AfterRestoreLogicalBytes, _ = scaleStorage(root)
 	// Download retention is intentional (one hour). Exercise documented restart
 	// cleanup after closing its manager rather than waiting an hour or changing TTL.
-	for _, f := range instances {
+	for i, f := range instances {
 		f.manager.Shutdown()
 		cfg := f.cfg
 		cfg.Control, err = instancecontrol.New(cfg.StateDir)
 		scaleCheck(t, err)
+		// Reconstruct the current-policy reader as production startup does. A
+		// missing reader would also deny mail, but would not prove persistence.
+		db, e := database.Connect(ctx, cfg.DSN)
+		scaleCheck(t, e)
+		defer db.Close()
+		cfg.ResetConnections = db.Pool.Reset
 		reopened, e := backup.New(cfg)
 		scaleCheck(t, e)
+		defer reopened.Shutdown()
+		bindFixtureEmailPolicy(db.Pool, cfg.Control, reopened)
 		scaleCheck(t, reopened.Recover(ctx))
+		restoredPolicy, e := emailpolicy.Read(ctx, db.Pool, false)
+		scaleCheck(t, e)
+		if restoredPolicy.Enabled != (i == 0) || cfg.Control.EmailDisabled() == restoredPolicy.Enabled {
+			t.Fatal("current-epoch email policy changed after restart cleanup")
+		}
+		db.Close()
 		reopened.Shutdown()
 		scaleAssertClean(t, f.control.StateDir())
 	}

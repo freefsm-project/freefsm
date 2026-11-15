@@ -77,13 +77,19 @@ const { chromium } = require('playwright-core');
     const metadata = await destination.locator('#backup-metadata').textContent();
     assert.match(metadata, /Source: Instance 0/);
     assert.match(metadata, /Captured: \d{4}-/);
-    assert.match(metadata, /Release: v1\.2\.3/);
+    assert.match(metadata, /Source build: release/);
+    assert.match(metadata, /Version: v1\.2\.3/);
     assert.match(metadata, /Commit: abcdef1234567/);
     assert.match(await destination.locator('#backup-restore').textContent(), /Instance 1/);
     await destination.locator('#backup-restore [name=current_password]').fill('account-1');
     await destination.locator('#backup-restore [name=confirmation]').fill('Instance 1');
     const restoreStart = Date.now();
     await destination.locator('#backup-restore button').click();
+    await destination.waitForFunction(() => document.querySelector('#backup-progress a[href="/login"]') ||
+      document.querySelector('#backup-restore button:enabled') ||
+      /recovery-required/.test(document.querySelector('#backup-progress').textContent));
+    assert.equal(await destination.locator('#backup-progress a[href="/login"]').isVisible(), true,
+      await destination.locator('#backup-progress').textContent());
     await destination.locator('#backup-progress a[href="/login"]').waitFor();
     measurements.restoreSeconds = (Date.now() - restoreStart) / 1000;
     assert.ok(measurements.statusCalls > 0, 'real capability polling required');
@@ -100,6 +106,7 @@ const { chromium } = require('playwright-core');
       const token = document.querySelector('input[name=csrf_token]').value;
       const response = await fetch('/settings/test-email', {
         method: 'POST', headers: { 'X-CSRF-Token': token },
+        body: new URLSearchParams({ recipient: 'test@example.test' }),
       });
       return { status: response.status, text: await response.text() };
     });
