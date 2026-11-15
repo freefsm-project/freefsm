@@ -143,6 +143,11 @@ func TestInvitationRedemptionRechecksPendingDecisionAfterFenceHTTP(t *testing.T)
 			}()
 			deadline := time.Now().Add(5 * time.Second)
 			for {
+				select {
+				case w := <-done:
+					t.Fatalf("redemption returned before account decision fence: %d %s", w.Code, w.Body.String())
+				default:
+				}
 				var waiting bool
 				if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)) AND wait_event='advisory')`, pid).Scan(&waiting); err != nil {
 					t.Fatal(err)
@@ -217,7 +222,8 @@ func TestInvitationActivationAuditFailureRollsBackHTTP(t *testing.T) {
 }
 
 func TestInvitationKnownUnavailableMailCreatesNoAccountHTTP(t *testing.T) {
-	pool, client, router, sessions, _, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, admin := f.pool, f.client, f.web, f.sessions, f.admin
 	ctx := context.Background()
 	role, err := authorization.New(pool).SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Onboarding", nil)
 	if err != nil {
@@ -272,7 +278,8 @@ func TestInvitationPendingDisableInvalidatesLinkHTTP(t *testing.T) {
 }
 
 func TestInvitationUnexpectedMailFailureRetainsResendablePendingHTTP(t *testing.T) {
-	pool, client, router, sessions, _, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, admin := f.pool, f.client, f.web, f.sessions, f.admin
 	ctx := context.Background()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -343,7 +350,8 @@ func TestOnboardingPersistedBrowser(t *testing.T) {
 	if os.Getenv("BROWSER_TESTS") != "1" {
 		t.Skip("set BROWSER_TESTS=1")
 	}
-	pool, client, router, sessions, _, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, admin := f.pool, f.client, f.web, f.sessions, f.admin
 	ctx := context.Background()
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -398,7 +406,7 @@ func TestOnboardingPersistedBrowser(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Fresh application reads the durable outcome, not browser-local state.
-	restarted := New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()})
+	restarted := f.control.Middleware(middleware.Company(services.NewCompanySettingsService(client))(New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()}, f.control)))
 	for _, email := range []string{"browser-invited21@example.test", "browser-manual21@example.test"} {
 		u := client.User.Query().Where(user.EmailEQ(email)).OnlyX(ctx)
 		if !u.IsActive || u.ForcePasswordChange || u.OnboardingCompletedAt == nil {
@@ -542,6 +550,11 @@ func TestInvitationRechecksPolicyAtCommitWithoutConsumingHTTP(t *testing.T) {
 	}()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
+		select {
+		case w := <-done:
+			t.Fatalf("redemption returned before policy fence: %d %s", w.Code, w.Body.String())
+		default:
+		}
 		var waiting bool
 		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)) AND wait_event='advisory')`, pid).Scan(&waiting); err != nil {
 			t.Fatal(err)

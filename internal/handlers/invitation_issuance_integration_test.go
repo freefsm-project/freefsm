@@ -19,12 +19,21 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func waitOnboardingFence(t *testing.T, pool *pgxpool.Pool, pid int) {
+func waitOnboardingFence(t *testing.T, pool *pgxpool.Pool, pid int, responses ...<-chan *httptest.ResponseRecorder) {
 	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
+		for i, response := range responses {
+			select {
+			case w := <-response:
+				t.Fatalf("request %d returned before database fence: status=%d location=%q body=%s", i, w.Code, w.Header().Get("Location"), w.Body.String())
+			default:
+			}
+		}
 		var waiting bool
-		if err := pool.QueryRow(context.Background(), `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)))`, pid).Scan(&waiting); err != nil {
+		if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid)))`, pid).Scan(&waiting); err != nil {
 			t.Fatal(err)
 		}
 		if waiting {
@@ -42,7 +51,8 @@ func TestInvitationUncertainSMTPAcceptanceIsTruthfulHTTP(t *testing.T) {
 			previous := slog.Default()
 			slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
 			t.Cleanup(func() { slog.SetDefault(previous) })
-			pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+			f := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 			ctx := context.Background()
 			listener, err := net.Listen("tcp", "127.0.0.1:0")
 			if err != nil {
@@ -123,7 +133,8 @@ func TestInvitationUncertainSMTPAcceptanceIsTruthfulHTTP(t *testing.T) {
 func TestInvitationInitialIssuanceCannotUndoNewerDecisionHTTP(t *testing.T) {
 	for _, decision := range []string{"disable", "email", "resend"} {
 		t.Run(decision, func(t *testing.T) {
-			pool, client, router, sessions, _, admin := permissionHTTPFixture(t)
+			f := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, router, sessions, admin := f.pool, f.client, f.web, f.sessions, f.admin
 			ctx := context.Background()
 			listener, err := net.Listen("tcp", "127.0.0.1:0")
 			if err != nil {
@@ -166,7 +177,7 @@ func TestInvitationInitialIssuanceCannotUndoNewerDecisionHTTP(t *testing.T) {
 			go func() {
 				done <- onboardingPost(router, cookie, "/users", url.Values{"name": {"Initial issuance"}, "email": {"initial21@example.test"}, "role_id": {"3"}, "send_welcome_email": {"on"}})
 			}()
-			waitOnboardingFence(t, pool, pid)
+			waitOnboardingFence(t, pool, pid, done)
 			u := client.User.Query().Where(user.EmailEQ("initial21@example.test")).OnlyX(ctx)
 			var replacement string
 			switch decision {
@@ -216,7 +227,8 @@ func TestInvitationIssuanceFailureIsAtomicHTTP(t *testing.T) {
 	for _, resend := range []bool{false, true} {
 		for _, failure := range []string{"token", "audit"} {
 			t.Run(fmt.Sprintf("resend=%v/%s", resend, failure), func(t *testing.T) {
-				pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+				f := permissionHTTPControlledMailInstanceFixture(t)
+				pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 				ctx := context.Background()
 				if _, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_host='127.0.0.1',smtp_port=1,smtp_from='sender@example.test'`); err != nil {
 					t.Fatal(err)
@@ -261,7 +273,8 @@ func TestInvitationIssuanceRechecksAuthorityAfterWaitHTTP(t *testing.T) {
 	for _, resend := range []bool{false, true} {
 		for _, loss := range []string{"role", "session"} {
 			t.Run(fmt.Sprintf("resend=%v/%s", resend, loss), func(t *testing.T) {
-				pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+				f := permissionHTTPControlledMailInstanceFixture(t)
+				pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 				ctx := context.Background()
 				client.User.Create().SetCompanyID(company).SetName("Replacement Administrator").SetEmail("replacement21@example.test").SetPasswordHash(client.User.GetX(ctx, admin).PasswordHash).SetRole("tech").SetAuthorizationRoleID(1).SaveX(ctx)
 				if _, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_host='127.0.0.1',smtp_port=1,smtp_from='sender@example.test'`); err != nil {
@@ -291,7 +304,7 @@ func TestInvitationIssuanceRechecksAuthorityAfterWaitHTTP(t *testing.T) {
 				}
 				done := make(chan *httptest.ResponseRecorder, 1)
 				go func() { done <- onboardingPost(router, cookie, path, values) }()
-				waitOnboardingFence(t, pool, pid)
+				waitOnboardingFence(t, pool, pid, done)
 				query := `DELETE FROM sessions WHERE user_id=$1`
 				if loss == "role" {
 					query = `UPDATE users SET authorization_role_id=3 WHERE id=$1`
@@ -318,7 +331,8 @@ func TestInvitationIssuanceRechecksAuthorityAfterWaitHTTP(t *testing.T) {
 }
 
 func TestInvitationResendAndRedemptionSerializeHTTP(t *testing.T) {
-	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	u, token, _ := pendingInvitationHTTP(t, pool, client, company, admin, "resend-race21")
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -351,6 +365,13 @@ func TestInvitationResendAndRedemptionSerializeHTTP(t *testing.T) {
 	go func() { resend <- onboardingPost(router, cookie, fmt.Sprintf("/users/%d/resend-welcome", u.ID), nil) }()
 	deadline := time.Now().Add(10 * time.Second)
 	for {
+		select {
+		case w := <-accept:
+			t.Fatalf("redemption returned before concurrent fence: %d %s", w.Code, w.Body.String())
+		case w := <-resend:
+			t.Fatalf("resend returned before concurrent fence: %d location=%q body=%s", w.Code, w.Header().Get("Location"), w.Body.String())
+		default:
+		}
 		var waiting int
 		if err := pool.QueryRow(ctx, `SELECT count(*) FROM pg_stat_activity WHERE $1::integer=ANY(pg_blocking_pids(pid))`, pid).Scan(&waiting); err != nil {
 			t.Fatal(err)

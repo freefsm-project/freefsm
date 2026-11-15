@@ -82,7 +82,9 @@ func reviewOnboardingFixtureWorkflows(t *testing.T, pool *pgxpool.Pool) {
 }
 
 func TestInvitationPre040UpgradePreservesRecordedEvidenceHTTP(t *testing.T) {
-	pool, client, router, sessions, company, admin := permissionHTTPFixtureMigrations(t, onboardingMigrationsThrough(t, "039_user_schedule_preferences.up.sql"))
+	f := &controlledMailInstance{}
+	f.pool, f.client, _, f.sessions, f.company, f.admin = permissionHTTPFixtureDatabase(t, admissionDatabase(t), "public", onboardingMigrationsThrough(t, "039_user_schedule_preferences.up.sql"), nil)
+	pool, client, sessions, company, admin := f.pool, f.client, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	ids := map[string]int64{}
 	for _, name := range []string{"unknown", "replaced", "expired", "completed-disabled", "active"} {
@@ -155,15 +157,6 @@ func TestInvitationPre040UpgradePreservesRecordedEvidenceHTTP(t *testing.T) {
 		if u.ID != id || u.PasswordHash != adminHash || u.WelcomeEmailSentAt == nil || u.Name != name || u.IsActive != (name == "active") {
 			t.Fatalf("upgrade changed original identity/credential facts for %s", name)
 		}
-		body := requestBody(t, router, cookie, "GET", fmt.Sprintf("/users/%d", id), 200)
-		if name == "completed-disabled" || name == "active" {
-			assertNotContains(t, body, "Resend Welcome</button>")
-		} else {
-			assertContains(t, body, "Resend Welcome</button>")
-		}
-		if name == "unknown" || name == "replaced" {
-			assertContains(t, body, "Legacy onboarding needs review")
-		}
 	}
 	var preserved bool
 	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM password_reset_tokens WHERE id=$1 AND user_id=$2 AND token_hash=$3 AND created_at='2024-01-01T00:00:00Z')`, resetID, ids["unknown"], unknownHash).Scan(&preserved); err != nil || !preserved {
@@ -174,6 +167,20 @@ func TestInvitationPre040UpgradePreservesRecordedEvidenceHTTP(t *testing.T) {
 	}
 	if err := pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM sessions WHERE user_id=$1 AND token_hash='recorded-session21')`, ids["completed-disabled"]).Scan(&preserved); err != nil || !preserved {
 		t.Fatalf("recorded session relationship changed: %v", err)
+	}
+	// Verify migration evidence before current startup imports installation policy.
+	f.start(t)
+	router := f.web
+	for name, id := range ids {
+		body := requestBody(t, router, cookie, "GET", fmt.Sprintf("/users/%d", id), 200)
+		if name == "completed-disabled" || name == "active" {
+			assertNotContains(t, body, "Resend Welcome</button>")
+		} else {
+			assertContains(t, body, "Resend Welcome</button>")
+		}
+		if name == "unknown" || name == "replaced" {
+			assertContains(t, body, "Legacy onboarding needs review")
+		}
 	}
 	if w := onboardingPost(router, nil, "/accept-invite", url.Values{"token": {unknownToken}, "password": {"ChosenPassword1!"}, "confirm_password": {"ChosenPassword1!"}}); w.Code != 400 {
 		t.Fatal("legacy reset-table token repurposed as invitation")

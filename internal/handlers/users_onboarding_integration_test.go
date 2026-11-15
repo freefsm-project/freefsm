@@ -132,7 +132,8 @@ func TestCreateDirectUserValidatesActingCompanyPasswordPolicy(t *testing.T) {
 }
 
 func TestCreateWelcomeUserDoesNotRequirePasswordConfirmation(t *testing.T) {
-	pool, client, router, sessions, _, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, admin := f.pool, f.client, f.web, f.sessions, f.admin
 	ctx := context.Background()
 	if _, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_host='127.0.0.1',smtp_port=1,smtp_from='sender@example.test'`); err != nil {
 		t.Fatal(err)
