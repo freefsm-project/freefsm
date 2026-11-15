@@ -296,9 +296,18 @@ func (c *Control) writeMarker(name string) error {
 }
 
 func (c *Control) removeMarker(name string) error {
-	err := os.Remove(filepath.Join(c.stateDir, name))
+	// Acquire the directory needed for durable removal before changing the gate.
+	// Otherwise an open failure (for example write/search but no read permission)
+	// reports failure after removing protection, and repairing storage silently
+	// enables mail or ordinary admission without a successful explicit retry.
+	dir, err := os.Open(c.stateDir)
+	if err != nil {
+		return err
+	}
+	defer dir.Close()
+	err = os.Remove(filepath.Join(c.stateDir, name))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	return c.syncDir()
+	return dir.Sync()
 }
