@@ -17,14 +17,14 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/middleware"
-	"github.com/freefsm-project/freefsm/internal/services"
 )
 
 func TestDeliveryPersistedChromiumRetryHistoryLocalSMTP(t *testing.T) {
 	if os.Getenv("BROWSER_TESTS") != "1" {
 		t.Skip("set BROWSER_TESTS=1 and FREEFSM_TEST_DATABASE_URL")
 	}
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("History browser").SaveX(ctx)
@@ -96,10 +96,10 @@ func TestDeliveryPersistedChromiumRetryHistoryLocalSMTP(t *testing.T) {
 		t.Log(string(out))
 		historyCheck(t, err)
 	}
-	sender := delivery.NewSMTPSender(services.NewEmailService(services.NewCompanySettingsService(client)))
+	sender := delivery.NewSMTPSender(f.email)
 	process := func() {
 		t.Helper()
-		worked, err := delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+		worked, err := f.outbox.ProcessOne(ctx, sender, nil)
 		historyCheck(t, err)
 		if !worked {
 			t.Fatal("missing queued intent")

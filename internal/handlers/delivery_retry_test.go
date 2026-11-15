@@ -13,7 +13,8 @@ import (
 )
 
 func TestDeliveryAutomaticRetryBudgetSurvivesManualRetryHTTP(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Retry budget").SaveX(ctx)
@@ -37,7 +38,7 @@ func TestDeliveryAutomaticRetryBudgetSurvivesManualRetryHTTP(t *testing.T) {
 	})
 	for attempt := 1; attempt <= 5; attempt++ {
 		// Recreate the worker each time: the budget must be durable.
-		worked, err := delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+		worked, err := f.outbox.ProcessOne(ctx, sender, nil)
 		historyCheck(t, err)
 		if !worked {
 			t.Fatalf("attempt %d missing", attempt)
@@ -66,7 +67,7 @@ func TestDeliveryAutomaticRetryBudgetSurvivesManualRetryHTTP(t *testing.T) {
 	command := url.Values{"idempotency_key": {newOperationKey()}, "reason": {"explicit retry after exhaustion"}}
 	fieldPost(t, web, cookie, retry, command, 303)
 	fieldPost(t, web, cookie, retry, command, 303)
-	worked, err := delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+	worked, err := f.outbox.ProcessOne(ctx, sender, nil)
 	historyCheck(t, err)
 	if !worked || sends != 6 {
 		t.Fatalf("manual attempt: worked=%v sends=%d", worked, sends)
@@ -76,14 +77,14 @@ func TestDeliveryAutomaticRetryBudgetSurvivesManualRetryHTTP(t *testing.T) {
 	if state != "failed" {
 		t.Fatalf("manual retry reset automatic budget: %s", state)
 	}
-	worked, err = delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+	worked, err = f.outbox.ProcessOne(ctx, sender, nil)
 	historyCheck(t, err)
 	if worked || sends != 6 {
 		t.Fatal("exhausted delivery sent automatically")
 	}
 	second := url.Values{"idempotency_key": {newOperationKey()}, "reason": {"another explicit retry"}}
 	fieldPost(t, web, cookie, retry, second, 303)
-	worked, err = delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+	worked, err = f.outbox.ProcessOne(ctx, sender, nil)
 	historyCheck(t, err)
 	if !worked || sends != 7 {
 		t.Fatal("second explicit manual retry missing")
@@ -91,7 +92,7 @@ func TestDeliveryAutomaticRetryBudgetSurvivesManualRetryHTTP(t *testing.T) {
 	// A delayed lost-response replay must remain the original accepted command,
 	// even after a later manual retry has replaced the latest-key projection.
 	fieldPost(t, web, cookie, retry, command, 303)
-	worked, err = delivery.New(pool, "").ProcessOne(ctx, sender, nil)
+	worked, err = f.outbox.ProcessOne(ctx, sender, nil)
 	historyCheck(t, err)
 	if worked || sends != 7 {
 		t.Fatal("old manual receipt replay caused another attempt")
@@ -99,7 +100,8 @@ func TestDeliveryAutomaticRetryBudgetSurvivesManualRetryHTTP(t *testing.T) {
 }
 
 func TestDeliveryManualRetryUsesCurrentIndependentGrantsHTTP(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	adminCookie := sessionCookie(t, ctx, sessions, admin)
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Retry customer").SaveX(ctx)
@@ -113,7 +115,7 @@ func TestDeliveryManualRetryUsesCurrentIndependentGrantsHTTP(t *testing.T) {
 	expectStatus(t, web, adminCookie, "POST", path+"/pdf/save", 303)
 	version := compositionInput(t, requestBody(t, web, adminCookie, "GET", path+"/pdf/preview", 200), "version")
 	fieldPost(t, web, adminCookie, path+"/email", url.Values{"pdf_version": {version}, "idempotency_key": {newOperationKey()}, "to": {"retry@example.test"}, "subject": {"Frozen"}, "body": {"Body"}, "extra_file_id": {fmt.Sprint(file)}}, 303)
-	svc := delivery.New(pool, "")
+	svc := f.outbox
 	_, err = svc.ProcessOne(ctx, deliveryTestSender(func(context.Context, delivery.Delivery) (delivery.SendResult, error) {
 		return delivery.SendResult{}, &delivery.SendError{Kind: delivery.SendPermanent, Err: errors.New("owned rejection")}
 	}), nil)

@@ -133,7 +133,8 @@ func TestGeocodingRequiresReviewedExplicitUpdateHTTP(t *testing.T) {
 }
 
 func TestSavedTransportExplicitRecipientHTTP(t *testing.T) {
-	pool, _, router, sessions, _, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, router, sessions, admin := f.pool, f.web, f.sessions, f.admin
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -370,16 +371,33 @@ func TestRestoreMailGateRequiresAuditedAdministratorEnableHTTP(t *testing.T) {
 	if err := control.DisableEmail(); err != nil {
 		t.Fatal(err)
 	}
-	recoverAdmission(t, admissionManager(t, pool, control))
+	manager := admissionManager(t, pool, control)
+	startup, err := manager.BeginStartup(ctx)
+	historyCheck(t, err)
+	importFixtureEmailPolicy(t, pool, control, manager)
+	historyCheck(t, startup.Finish(ctx))
+	startup.Close()
+	manager.Shutdown()
 	control, err = instancecontrol.New(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	admissionManager(t, pool, control)
+	manager = admissionManager(t, pool, control)
+	startup, err = manager.BeginStartup(ctx)
+	historyCheck(t, err)
+	importFixtureEmailPolicy(t, pool, control, manager)
+	historyCheck(t, startup.Finish(ctx))
+	startup.Close()
 	router := New(pool, client, sessions, &config.Config{UploadDir: t.TempDir()}, control)
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	post := func(path string) *httptest.ResponseRecorder {
-		r := httptest.NewRequest("POST", path, strings.NewReader("recipient=explicit%40example.com"))
+		values := url.Values{"recipient": {"explicit@example.com"}}
+		if path == "/settings/enable-email" {
+			body := requestBody(t, router, cookie, "GET", "/settings/mail", 200)
+			values.Set("save_action_id", compositionInput(t, body, "save_action_id"))
+			values.Set("save_revision", compositionInput(t, body, "save_revision"))
+		}
+		r := httptest.NewRequest("POST", path, strings.NewReader(values.Encode()))
 		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		r.AddCookie(cookie)
 		w := httptest.NewRecorder()

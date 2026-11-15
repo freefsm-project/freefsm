@@ -27,7 +27,8 @@ import (
 func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 	for _, scenario := range []string{"create_lost", "retry_lost", "create_absent", "retry_absent", "dependency", "dependency_failed", "scope_receipt", "parent_loss", "retry_parent_loss", "denial", "retry_denial", "retry_invalid_state", "retry_cancelled", "revoked", "expiry", "restore", "authority_view_only", "authority_no_delivery", "authority_no_pdf", "authority_no_file", "authority_permitted", "authority_file_loss", "authority_pdf_loss", "retry_sync_denial", "retry_scope_receipt", "retry_unknown_sync_denial", "retry_expiry", "retry_renewal", "retry_session", "retry_restore"} {
 		t.Run(scenario, func(t *testing.T) {
-			pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+			f := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 			ctx := context.Background()
 			customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Protected Delivery").SaveX(ctx)
 			job := client.Job.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetJobType("Work").SaveX(ctx)
@@ -48,7 +49,7 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 				var filePath string
 				historyCheck(t, pool.QueryRow(ctx, `SELECT id,file_path FROM files WHERE object_type='estimate' AND object_id=$1`, doc.ID).Scan(&file, &filePath))
 				fieldPost(t, web, cookie, path+"/email", url.Values{"pdf_version": {fmt.Sprint(version)}, "idempotency_key": {newOperationKey()}, "to": {"frozen@example.test"}, "subject": {"Frozen"}, "body": {"Frozen body"}, "extra_file_id": {fmt.Sprint(file)}}, 303)
-				_, err = delivery.New(pool, "").ProcessOne(ctx, deliveryTestSender(func(context.Context, delivery.Delivery) (delivery.SendResult, error) {
+				_, err = f.outbox.ProcessOne(ctx, deliveryTestSender(func(context.Context, delivery.Delivery) (delivery.SendResult, error) {
 					return delivery.SendResult{}, &delivery.SendError{Kind: delivery.SendPermanent, Err: errors.New("fixture failure")}
 				}), nil)
 				historyCheck(t, err)
@@ -79,7 +80,7 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 			assignFieldDocumentCreator(t, pool, job.ID, user.ID)
 			token, err := sessions.CreateMobile(ctx, user.ID, "Protected Delivery reference")
 			historyCheck(t, err)
-			api := apiv1.NewConfiguredRouter(pool, client, sessions, config.APIConfig{SyncPerClient: 100})
+			api := f.control.Middleware(apiv1.NewRouterWithDelivery(pool, client, sessions, config.APIConfig{SyncPerClient: 100}, nil, f.outbox))
 			specRequest := httptest.NewRecorder()
 			api.ServeHTTP(specRequest, httptest.NewRequest("GET", "/openapi.json", nil))
 			var spec map[string]any
@@ -111,7 +112,7 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 				var err error
 				switch r.URL.Path {
 				case "/__fixture/fail":
-					_, err = delivery.New(pool, "").ProcessOne(ctx, deliveryTestSender(func(context.Context, delivery.Delivery) (delivery.SendResult, error) {
+					_, err = f.outbox.ProcessOne(ctx, deliveryTestSender(func(context.Context, delivery.Delivery) (delivery.SendResult, error) {
 						return delivery.SendResult{}, &delivery.SendError{Kind: delivery.SendPermanent, Err: errors.New("permanent fixture failure")}
 					}), nil)
 				case "/__fixture/scope-loss":
@@ -137,7 +138,21 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 					fieldPost(t, web, cookie, path+"/delete", url.Values{}, 303)
 					fieldPost(t, web, cookie, path+"/restore", url.Values{}, 303)
 				case "/__fixture/restore":
-					_, err = pool.Exec(ctx, `UPDATE session_instance SET epoch=gen_random_uuid(); DELETE FROM sessions`)
+					_, err = pool.Exec(ctx, `UPDATE session_instance SET epoch=gen_random_uuid(); DELETE FROM sessions; UPDATE restore_email_policy SET epoch=(SELECT epoch FROM session_instance),enabled=false,revision=revision+1,last_enable_operation=NULL`)
+					if err == nil {
+						// The client restore simulation must also establish the new
+						// generation's disabled policy. Resume only through a fresh
+						// administrator's reviewed, sealed HTTP enable action.
+						if !f.control.EmailDisabled() {
+							t.Error("restored generation admitted mail before enable")
+						}
+						adminCookie := sessionCookie(t, ctx, sessions, admin)
+						body := requestBody(t, web, adminCookie, "GET", "/settings/mail", 200)
+						fieldPost(t, web, adminCookie, "/settings/enable-email", url.Values{
+							"save_action_id": {compositionInput(t, body, "save_action_id")},
+							"save_revision":  {compositionInput(t, body, "save_revision")},
+						}, 303)
+					}
 					if err == nil {
 						var fresh string
 						fresh, err = sessions.CreateMobile(ctx, user.ID, "Restored Delivery client")
@@ -200,7 +215,19 @@ func TestDeliveryProtectedReferenceHTTP(t *testing.T) {
 			defer server.Close()
 			directory := t.TempDir()
 			historyCheck(t, os.Chmod(directory, 0700))
-			input, err := json.Marshal(map[string]any{"url": server.URL, "token": token, "directory": directory, "scenario": scenario, "version": version, "frozenDelivery": frozenDelivery})
+			keyID := "t94-delivery-" + newOperationKey()
+			// The native client owns only this fresh Secret Service entry. Retain
+			// exact-key cleanup even when its bounded child exits before logout.
+			t.Cleanup(func() {
+				cleanup, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+				defer cancel()
+				_ = exec.CommandContext(cleanup, "secret-tool", "clear", "application", "org.freefsm.offline-reference", "store", keyID).Run()
+				output, err := exec.CommandContext(cleanup, "secret-tool", "lookup", "application", "org.freefsm.offline-reference", "store", keyID).Output()
+				if err == nil || len(output) != 0 || cleanup.Err() != nil {
+					t.Error("owned protected Delivery key removal could not be verified")
+				}
+			})
+			input, err := json.Marshal(map[string]any{"url": server.URL, "token": token, "directory": directory, "key": keyID, "scenario": scenario, "version": version, "frozenDelivery": frozenDelivery})
 			historyCheck(t, err)
 			bounded, cancel := context.WithTimeout(ctx, 2*time.Minute)
 			defer cancel()

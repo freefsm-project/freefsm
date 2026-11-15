@@ -20,7 +20,8 @@ func TestIntegrationsPersistedBrowser(t *testing.T) {
 		t.Skip("set BROWSER_TESTS=1 and FREEFSM_TEST_DATABASE_URL")
 	}
 	t.Setenv("FREEFSM_CREDENTIAL_KEYS", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
-	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	svc := authorization.New(pool)
 	role, err := svc.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Mail browser reviewer", []authorization.Grant{{Permission: "configuration.mail.view", Scope: authorization.Configuration}})

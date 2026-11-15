@@ -9,13 +9,13 @@ import (
 	"strings"
 	"testing"
 
-	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/delivery"
 )
 
 func TestDeliveryRetryDependenciesHTTP(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Retry dependencies").SaveX(ctx)
 	job := client.Job.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetJobType("Original").SaveX(ctx)
@@ -27,13 +27,13 @@ func TestDeliveryRetryDependenciesHTTP(t *testing.T) {
 	expectStatus(t, web, cookie, "POST", path+"/pdf/save", 303)
 	version := compositionInput(t, requestBody(t, web, cookie, "GET", path+"/pdf/preview", 200), "version")
 	fieldPost(t, web, cookie, path+"/email", url.Values{"pdf_version": {version}, "idempotency_key": {newOperationKey()}, "to": {"retry@example.test"}, "subject": {"Frozen"}, "body": {"Body"}}, 303)
-	_, err = delivery.New(pool, "").ProcessOne(ctx, &compositionSender{}, nil)
+	_, err = f.outbox.ProcessOne(ctx, &compositionSender{}, nil)
 	historyCheck(t, err)
 	var id int64
 	historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM document_deliveries`).Scan(&id))
 	token, err := sessions.CreateMobile(ctx, admin, "Retry dependencies")
 	historyCheck(t, err)
-	api := apiv1.NewRouter(pool, client, sessions)
+	api := f.api
 	retry := func(in delivery.RetryIntent, want int) {
 		t.Helper()
 		raw, err := json.Marshal(in)
@@ -134,7 +134,8 @@ func TestDeliveryRetryDependenciesHTTP(t *testing.T) {
 		// immutable identity and foreign-key constraints.
 		var original string
 		historyCheck(t, pool.QueryRow(ctx, `SELECT id::text FROM operation_deployment`).Scan(&original))
-		otherPool, otherClient, _, otherSessions, otherCompany, otherAdmin := permissionHTTPFixture(t)
+		otherFixture := permissionHTTPControlledMailInstanceFixture(t)
+		otherPool, otherClient, otherSessions, otherCompany, otherAdmin := otherFixture.pool, otherFixture.client, otherFixture.sessions, otherFixture.company, otherFixture.admin
 		var other string
 		historyCheck(t, otherPool.QueryRow(ctx, `SELECT id::text FROM operation_deployment`).Scan(&other))
 		if original == other {
@@ -143,7 +144,7 @@ func TestDeliveryRetryDependenciesHTTP(t *testing.T) {
 		otherCustomer := otherClient.Customer.Create().SetCompanyID(otherCompany).SetDisplayName("Other deployment").SaveX(ctx)
 		otherJob := otherClient.Job.Create().SetCompanyID(otherCompany).SetCustomerID(otherCustomer.ID).SetJobType("Other").SaveX(ctx)
 		pool, job = otherPool, otherJob
-		api = apiv1.NewRouter(otherPool, otherClient, otherSessions)
+		api = otherFixture.api
 		token, err = otherSessions.CreateMobile(ctx, otherAdmin, "Other deployment")
 		historyCheck(t, err)
 		submit(t, []string{"invalid_dependency", "invalid_dependency", "invalid_dependency"}, newOp(accepted.OperationID), newOp(failed.OperationID), newOp(newOperationKey()))

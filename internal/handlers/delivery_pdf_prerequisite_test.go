@@ -7,12 +7,11 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 )
 
 func TestDeliveryPDFPrerequisiteAPI(t *testing.T) {
-	pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, sessions, company, admin := f.pool, f.client, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Prerequisite customer").SaveX(ctx)
 	job := client.Job.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetJobType("Work").SaveX(ctx)
@@ -21,7 +20,7 @@ func TestDeliveryPDFPrerequisiteAPI(t *testing.T) {
 	historyCheck(t, err)
 	token, err := sessions.CreateMobile(ctx, admin, "PDF prerequisite")
 	historyCheck(t, err)
-	api := apiv1.NewRouter(pool, client, sessions)
+	api := f.api
 	call := func(method, path string, input any, status int) map[string]any {
 		t.Helper()
 		raw, err := json.Marshal(input)

@@ -26,7 +26,9 @@ func TestDeliveryInstalledOutboxUpgradePreservesKnownAndUnknown(t *testing.T) {
 		historyCheck(t, err)
 		prior[entry.Name()] = &fstest.MapFile{Data: raw}
 	}
-	pool, client, web, sessions, company, admin := permissionHTTPFixtureMigrations(t, prior)
+	f := &controlledMailInstance{}
+	f.pool, f.client, _, f.sessions, f.company, f.admin = permissionHTTPFixtureDatabase(t, admissionDatabase(t), "public", prior, nil)
+	pool, client, sessions, company, admin := f.pool, f.client, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Installed customer").SaveX(ctx)
 	doc := client.Estimate.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetTitle("Current title must not be rendered").SaveX(ctx)
@@ -60,7 +62,8 @@ func TestDeliveryInstalledOutboxUpgradePreservesKnownAndUnknown(t *testing.T) {
 	if invented {
 		t.Fatal("upgrade invented historical snapshots/dispatch")
 	}
-	svc := delivery.New(pool, "")
+	f.start(t)
+	web, svc := f.web, f.outbox
 	history, err := svc.History(ctx, company, delivery.DocumentRef{Type: "estimate", ID: doc.ID})
 	historyCheck(t, err)
 	unknown := false
@@ -141,7 +144,9 @@ func TestDeliveryUpgradeCancelsCurrentlyUnavailablePendingWork(t *testing.T) {
 		historyCheck(t, err)
 		prior[entry.Name()] = &fstest.MapFile{Data: raw}
 	}
-	pool, client, _, _, company, admin := permissionHTTPFixtureMigrations(t, prior)
+	f := &controlledMailInstance{}
+	f.pool, f.client, _, f.sessions, f.company, f.admin = permissionHTTPFixtureDatabase(t, admissionDatabase(t), "public", prior, nil)
+	pool, client, company, admin := f.pool, f.client, f.company, f.admin
 	ctx := context.Background()
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Unavailable installed source").SaveX(ctx)
 	doc := client.Estimate.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetTitle("Original").SaveX(ctx)
@@ -169,8 +174,9 @@ func TestDeliveryUpgradeCancelsCurrentlyUnavailablePendingWork(t *testing.T) {
 		t.Fatal("upgrade invented historical handoff knowledge")
 	}
 	client.Estimate.UpdateOne(doc).ClearDeletedAt().SaveX(ctx)
+	f.start(t)
 	capture := &compositionSender{}
-	worked, err := delivery.New(pool, "").ProcessOne(ctx, capture, nil)
+	worked, err := f.outbox.ProcessOne(ctx, capture, nil)
 	historyCheck(t, err)
 	if worked || len(capture.messages) != 0 {
 		t.Fatal("restoring the source restarted cancelled installed mail")

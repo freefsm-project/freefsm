@@ -21,12 +21,12 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/delivery"
-	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/google/uuid"
 )
 
 func TestCompanyConfigurationEmailPreservesSelectedPDFHTTP(t *testing.T) {
-	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	adminCookie := sessionCookie(t, ctx, sessions, admin)
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Selected PDF customer").SaveX(ctx)
@@ -88,8 +88,8 @@ func TestCompanyConfigurationEmailPreservesSelectedPDFHTTP(t *testing.T) {
 	assertContains(t, stale, `name="pdf_version" value="`+version+`"`)
 	values.Set("confirm_stale_pdf", "1")
 	post(303)
-	worker := delivery.New(pool, "")
-	worked, err := worker.ProcessOne(ctx, delivery.NewSMTPSender(services.NewEmailService(services.NewCompanySettingsService(client))), delivery.NopAcceptanceHook{})
+	worker := f.outbox
+	worked, err := worker.ProcessOne(ctx, delivery.NewSMTPSender(f.email), delivery.NopAcceptanceHook{})
 	if err != nil || !worked {
 		t.Fatalf("delivery worked=%v err=%v", worked, err)
 	}
@@ -134,7 +134,7 @@ func TestCompanyConfigurationEmailPreservesSelectedPDFHTTP(t *testing.T) {
 		t.Fatal("SMTP PDF attachment missing")
 	}
 	post(303) // Same accepted intent does not create another outbox effect.
-	worked, err = worker.ProcessOne(ctx, delivery.NewSMTPSender(services.NewEmailService(services.NewCompanySettingsService(client))), delivery.NopAcceptanceHook{})
+	worked, err = worker.ProcessOne(ctx, delivery.NewSMTPSender(f.email), delivery.NopAcceptanceHook{})
 	if err != nil || worked {
 		t.Fatalf("replay produced another delivery: %v %v", worked, err)
 	}
@@ -143,7 +143,7 @@ func TestCompanyConfigurationEmailPreservesSelectedPDFHTTP(t *testing.T) {
 	}
 	values.Set("idempotency_key", uuid.NewString())
 	post(500)
-	worked, err = worker.ProcessOne(ctx, delivery.NewSMTPSender(services.NewEmailService(services.NewCompanySettingsService(client))), delivery.NopAcceptanceHook{})
+	worked, err = worker.ProcessOne(ctx, delivery.NewSMTPSender(f.email), delivery.NopAcceptanceHook{})
 	if err != nil || worked {
 		t.Fatalf("audit failure published an outbox effect: %v %v", worked, err)
 	}

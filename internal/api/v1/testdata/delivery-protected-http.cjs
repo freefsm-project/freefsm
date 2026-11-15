@@ -119,7 +119,9 @@ const {DeliveryClient,ProtectedStore}=require('../reference/delivery-client.cjs'
     if(input.scenario==='retry_restore')next=await repair();
     else {const current=await client.reviewDelivery(target,message);next=await client.repairDelivery(id,current.review_token);}
     assert.notEqual(next,id);assert.equal(posts,before);
-   assert.equal((await client.submit(next)).receipt.outcome,'accepted');return;
+   const repaired=await client.submit(next);
+   assert.equal(repaired.status,200,'restored repaired Delivery must be admitted');
+   assert.equal(repaired.receipt.outcome,'accepted');return;
   }
   if(input.scenario==='revoked'){
    await control('revoke');await assert.rejects(client.submit(id),/authorization_purged/);const s=await store.load();assert(!s.token&&!s.pending[id].intent&&!s.pending[id].reviewed);return;

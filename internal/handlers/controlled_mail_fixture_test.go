@@ -39,6 +39,14 @@ func permissionHTTPControlledMailInstanceFixture(t *testing.T) *controlledMailIn
 	t.Helper()
 	f := &controlledMailInstance{}
 	f.pool, f.client, _, f.sessions, f.company, f.admin = permissionHTTPInstanceFixture(t)
+	f.start(t)
+	return f
+}
+
+// start composes admission only after an owned public-schema fixture has reached
+// the current schema. Upgrade tests can record and verify old facts first.
+func (f *controlledMailInstance) start(t *testing.T) {
+	t.Helper()
 	var err error
 	f.control, err = instancecontrol.New(filepath.Join(t.TempDir(), "state"))
 	historyCheck(t, err)
@@ -55,5 +63,4 @@ func permissionHTTPControlledMailInstanceFixture(t *testing.T) *controlledMailIn
 	f.outbox.SetBeforeWork(f.manager.RefreshConnections)
 	f.api = f.control.Middleware(apiv1.NewRouterWithDelivery(f.pool, f.client, f.sessions, config.APIConfig{}, nil, f.outbox))
 	f.email = services.NewControlledEmailService(services.NewCompanySettingsService(f.client), f.control)
-	return f
 }

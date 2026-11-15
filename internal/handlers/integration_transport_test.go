@@ -14,12 +14,12 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/credentials"
 	"github.com/freefsm-project/freefsm/internal/delivery"
-	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/google/uuid"
 )
 
 func TestQueuedSMTPUsesCurrentTransportAndFrozenSender(t *testing.T) {
-	pool, client, _, _, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, company, admin := f.pool, f.client, f.company, f.admin
 	ctx := context.Background()
 	_, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_host='old.invalid',smtp_from='original@example.com'`)
 	if err != nil {
@@ -27,7 +27,7 @@ func TestQueuedSMTPUsesCurrentTransportAndFrozenSender(t *testing.T) {
 	}
 	c := client.Customer.Create().SetCompanyID(company).SetDisplayName("Transport customer").SaveX(ctx)
 	doc := client.Estimate.Create().SetCompanyID(company).SetCustomerID(c.ID).SetTitle("Frozen estimate").SaveX(ctx)
-	svc := delivery.New(pool, "")
+	svc := f.outbox
 	d, err := svc.Queue(ctx, delivery.Actor{ID: admin, CompanyID: company, Role: "admin"}, delivery.QueueRequest{Key: uuid.New(), Document: delivery.DocumentRef{Type: "estimate", ID: doc.ID}, Snapshot: delivery.Snapshot{To: []string{"original-recipient@example.com"}, Subject: "Original subject", TextBody: "Original text", HTMLBody: "<p>Original HTML</p>", PDF: []byte("frozen attachment"), PDFFilename: "original.pdf"}})
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestQueuedSMTPUsesCurrentTransportAndFrozenSender(t *testing.T) {
 	if _, err := pool.Exec(ctx, `UPDATE company_settings SET smtp_host='127.0.0.1',smtp_port=$1,smtp_from='replacement@example.com',estimate_email_body='Replacement body',estimate_email_html='<p>Replacement HTML</p>'`, listener.Addr().(*net.TCPAddr).Port); err != nil {
 		t.Fatal(err)
 	}
-	processed, err := svc.ProcessOne(ctx, delivery.NewSMTPSender(services.NewEmailService(services.NewCompanySettingsService(client))), delivery.NopAcceptanceHook{})
+	processed, err := svc.ProcessOne(ctx, delivery.NewSMTPSender(f.email), delivery.NopAcceptanceHook{})
 	if err != nil || !processed {
 		t.Fatalf("worker: %v %v", processed, err)
 	}
@@ -93,7 +93,8 @@ func TestQueuedSMTPUsesCurrentTransportAndFrozenSender(t *testing.T) {
 }
 
 func TestProviderFailureCannotDiscloseStoredCredentialHTTP(t *testing.T) {
-	pool, _, router, sessions, _, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, router, sessions, admin := f.pool, f.web, f.sessions, f.admin
 	ctx := context.Background()
 	t.Setenv("FREEFSM_CREDENTIAL_KEYS", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
 	encrypted, err := credentials.Seal("smtp-provider-secret-canary")

@@ -22,14 +22,14 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/delivery"
 	"github.com/freefsm-project/freefsm/internal/middleware"
-	"github.com/freefsm-project/freefsm/internal/services"
 )
 
 func TestDeliveryPersistedChromiumAttachmentsAndLocalSMTP(t *testing.T) {
 	if os.Getenv("BROWSER_TESTS") != "1" {
 		t.Skip("set BROWSER_TESTS=1 and FREEFSM_TEST_DATABASE_URL")
 	}
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Browser customer").SaveX(ctx)
 	doc := client.Estimate.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetTitle("Browser Delivery").SaveX(ctx)
@@ -55,7 +55,7 @@ func TestDeliveryPersistedChromiumAttachmentsAndLocalSMTP(t *testing.T) {
 	output, err := exec.CommandContext(bounded, "node", "testdata/browser/delivery-compose.cjs", server.URL, cookie.Value, fmt.Sprint(doc.ID), version, fmt.Sprint(fileID)).CombinedOutput()
 	t.Log(string(output))
 	historyCheck(t, err)
-	history, err := delivery.New(pool, "").History(ctx, company, delivery.DocumentRef{Type: "estimate", ID: doc.ID})
+	history, err := f.outbox.History(ctx, company, delivery.DocumentRef{Type: "estimate", ID: doc.ID})
 	historyCheck(t, err)
 	if len(history) != 2 {
 		t.Fatalf("browser fanout=%+v", history)
@@ -106,8 +106,8 @@ func TestDeliveryPersistedChromiumAttachmentsAndLocalSMTP(t *testing.T) {
 	}()
 	_, err = pool.Exec(ctx, `UPDATE company_settings SET smtp_host='127.0.0.1',smtp_port=$1,smtp_from='changed@example.test' WHERE company_id=$2`, listener.Addr().(*net.TCPAddr).Port, company)
 	historyCheck(t, err)
-	worker := delivery.New(pool, "")
-	sender := delivery.NewSMTPSender(services.NewEmailService(services.NewCompanySettingsService(client)))
+	worker := f.outbox
+	sender := delivery.NewSMTPSender(f.email)
 	for range 2 {
 		worked, err := worker.ProcessOne(ctx, sender, nil)
 		historyCheck(t, err)
