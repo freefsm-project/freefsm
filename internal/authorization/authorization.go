@@ -240,6 +240,9 @@ func (s *Service) transactOutcome(ctx context.Context, a Actor, transition, cons
 	if err != nil {
 		return err
 	}
+	if err := saveaction.LockExecution(ctx, tx); err != nil {
+		return err
+	}
 	// Capture the pre-write revision under the same fence. Let the command's
 	// current object/permission checks take precedence over comparison errors;
 	// otherwise a revoked editor could retain inaccessible input on a conflict.

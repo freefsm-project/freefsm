@@ -26,8 +26,9 @@ type Action struct {
 	// boundary, not a substitute for the durable receipt.
 	Outcome        *Outcome
 	Atomic         bool
-	NoChange       bool // the installed owning command, not an incidental nested no-op
-	RetryTransient bool // installed atomic command with typed transient failures
+	NoChange       bool   // the installed owning command, not an incidental nested no-op
+	RetryTransient bool   // installed atomic command with typed transient failures
+	ExecutionToken string // nonempty only for an installed durable execution-fenced command
 }
 
 type Outcome struct{ RolledBack, ReadOnly, RejectedBeforeWrite atomic.Bool }
@@ -56,7 +57,17 @@ func ConfirmNoChange(ctx context.Context, tx pgx.Tx) error {
 	if !ok || !a.Atomic || !a.NoChange {
 		return nil
 	}
-	_, err := tx.Exec(ctx, `UPDATE online_save_actions a SET domain_committed_at=clock_timestamp(),domain_outcome='completed' WHERE user_id=$1 AND operation_id=$2 AND domain_committed_at IS NULL AND completed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID)
+	if a.ExecutionToken != "" {
+		tag, err := tx.Exec(ctx, `UPDATE online_save_actions a SET domain_committed_at=clock_timestamp(),domain_outcome='completed' WHERE user_id=$1 AND operation_id=$2 AND execution_token=$3 AND NOT execution_fenced AND domain_committed_at IS NULL AND completed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID, a.ExecutionToken)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrExecutionFenced
+		}
+		return nil
+	}
+	_, err := tx.Exec(ctx, `UPDATE online_save_actions a SET domain_committed_at=clock_timestamp(),domain_outcome='completed' WHERE user_id=$1 AND operation_id=$2 AND execution_token IS NULL AND domain_committed_at IS NULL AND completed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID)
 	return err
 }
 
@@ -75,7 +86,26 @@ func ConfirmDomain(ctx context.Context, tx pgx.Tx) error {
 	if !ok || !a.Atomic {
 		return nil
 	}
-	_, err := tx.Exec(ctx, `UPDATE online_save_actions a SET domain_committed_at=clock_timestamp() WHERE user_id=$1 AND operation_id=$2 AND domain_committed_at IS NULL AND completed_at IS NULL AND EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID)
+	if a.ExecutionToken != "" {
+		if a.NoChange {
+			var sealed bool
+			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM online_save_actions a WHERE user_id=$1 AND operation_id=$2 AND execution_token=$3 AND NOT execution_fenced AND domain_committed_at IS NOT NULL AND domain_outcome='completed' AND completed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id))`, a.UserID, a.ID, a.ExecutionToken).Scan(&sealed); err != nil {
+				return err
+			}
+			if sealed {
+				return nil
+			}
+		}
+		tag, err := tx.Exec(ctx, `UPDATE online_save_actions a SET domain_committed_at=clock_timestamp() WHERE user_id=$1 AND operation_id=$2 AND execution_token=$3 AND NOT execution_fenced AND domain_committed_at IS NULL AND completed_at IS NULL AND EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID, a.ExecutionToken)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() != 1 {
+			return ErrExecutionFenced
+		}
+		return nil
+	}
+	_, err := tx.Exec(ctx, `UPDATE online_save_actions a SET domain_committed_at=clock_timestamp() WHERE user_id=$1 AND operation_id=$2 AND execution_token IS NULL AND domain_committed_at IS NULL AND completed_at IS NULL AND EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID)
 	return err
 }
 
@@ -157,7 +187,7 @@ func (s Store) Admit(ctx context.Context, a Action, digest, method, path, review
 		return false, ErrIdentity
 	}
 	if a.RetryTransient {
-		tag, err := s.Pool.Exec(ctx, `UPDATE online_save_actions a SET transient_retry=false,response_status=NULL WHERE user_id=$1 AND operation_id=$2 AND transient_retry AND completed_at IS NULL AND domain_committed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID)
+		tag, err := s.Pool.Exec(ctx, `UPDATE online_save_actions a SET transient_retry=false,response_status=NULL WHERE user_id=$1 AND operation_id=$2 AND execution_token IS NULL AND transient_retry AND completed_at IS NULL AND domain_committed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID)
 		return tag.RowsAffected() == 1, err
 	}
 	return false, nil
@@ -168,14 +198,19 @@ func (s Store) Receipt(ctx context.Context, a Action) (Receipt, error) {
 	if _, err := uuid.Parse(a.ID); err != nil {
 		return r, ErrIdentity
 	}
-	err := s.Pool.QueryRow(ctx, `SELECT CASE WHEN domain_committed_at IS NOT NULL THEN coalesce(domain_outcome,'saved') ELSE disposition END,location,review_path,request_path,coalesce(response_status,0),(SELECT count(*) FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id),transient_retry AND completed_at IS NULL AND domain_committed_at IS NULL FROM online_save_actions a WHERE user_id=$1 AND operation_id=$2`, a.UserID, a.ID).Scan(&r.Disposition, &r.Location, &r.ReviewPath, &r.RequestPath, &r.ResponseStatus, &r.CommittedSteps, &r.RetrySameOperation)
+	var executionOwned bool
+	err := s.Pool.QueryRow(ctx, `SELECT CASE WHEN domain_committed_at IS NOT NULL THEN coalesce(domain_outcome,'saved') ELSE disposition END,location,review_path,request_path,coalesce(response_status,0),(SELECT count(*) FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id),transient_retry AND completed_at IS NULL AND domain_committed_at IS NULL,execution_token IS NOT NULL FROM online_save_actions a WHERE user_id=$1 AND operation_id=$2`, a.UserID, a.ID).Scan(&r.Disposition, &r.Location, &r.ReviewPath, &r.RequestPath, &r.ResponseStatus, &r.CommittedSteps, &r.RetrySameOperation, &executionOwned)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return r, nil
 	}
 	if err != nil {
 		return r, err
 	}
-	r.RetrySafe = r.Disposition == "rejected"
+	r.RetrySafe = r.Disposition == "rejected" && !executionOwned
+	if executionOwned {
+		// Only the owning reconciliation command may grant a reviewed retry.
+		r.RetrySameOperation = false
+	}
 	r.InputAccessURL = fmt.Sprintf("/save-actions/%s/input-access", a.ID)
 	rows, err := s.Pool.Query(ctx, `SELECT action,target_type,target_id FROM online_save_effects WHERE user_id=$1 AND operation_id=$2 ORDER BY id`, a.UserID, a.ID)
 	if err != nil {
@@ -200,12 +235,17 @@ func (s Store) Receipt(ctx context.Context, a Action) (Receipt, error) {
 // that later steps in the request completed. HTTP 202 is acceptance, not proof
 // that the asynchronously dispatched command finished.
 func (s Store) Complete(ctx context.Context, a Action, status int, location string, safeBoundary bool) error {
+	// Owning execution-fenced commands reconcile under authority/action/domain
+	// locks. HTTP completion cannot make an uncertain dispatch terminal.
+	if a.ExecutionToken != "" {
+		return nil
+	}
 	rejected := a.Outcome != nil && (safeBoundary && a.Outcome.RolledBack.Load() || a.Outcome.RejectedBeforeWrite.Load())
 	if a.RetryTransient && status >= 500 && rejected {
-		_, err := s.Pool.Exec(ctx, `UPDATE online_save_actions a SET response_status=$3,transient_retry=true WHERE user_id=$1 AND operation_id=$2 AND completed_at IS NULL AND domain_committed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID, status)
+		_, err := s.Pool.Exec(ctx, `UPDATE online_save_actions a SET response_status=$3,transient_retry=true WHERE user_id=$1 AND operation_id=$2 AND execution_token IS NULL AND completed_at IS NULL AND domain_committed_at IS NULL AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id)`, a.UserID, a.ID, status)
 		return err
 	}
 	readOnly := a.Outcome != nil && a.Outcome.ReadOnly.Load()
-	_, err := s.Pool.Exec(ctx, `UPDATE online_save_actions a SET response_status=$3,location=$4,completed_at=now(),disposition=CASE WHEN $3>=200 AND $3<400 AND $3<>202 AND EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id) THEN 'saved' WHEN $3>=200 AND $3<400 AND $3<>202 AND $6 THEN 'completed' WHEN $3>=400 AND ($5 OR $6) AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id) THEN 'rejected' ELSE 'review' END WHERE user_id=$1 AND operation_id=$2 AND completed_at IS NULL`, a.UserID, a.ID, status, location, rejected, readOnly)
+	_, err := s.Pool.Exec(ctx, `UPDATE online_save_actions a SET response_status=$3,location=$4,completed_at=now(),disposition=CASE WHEN $3>=200 AND $3<400 AND $3<>202 AND EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id) THEN 'saved' WHEN $3>=200 AND $3<400 AND $3<>202 AND $6 THEN 'completed' WHEN $3>=400 AND ($5 OR $6) AND NOT EXISTS(SELECT 1 FROM online_save_effects e WHERE e.user_id=a.user_id AND e.operation_id=a.operation_id) THEN 'rejected' ELSE 'review' END WHERE user_id=$1 AND operation_id=$2 AND execution_token IS NULL AND completed_at IS NULL`, a.UserID, a.ID, status, location, rejected, readOnly)
 	return err
 }
