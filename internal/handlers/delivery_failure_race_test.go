@@ -20,7 +20,8 @@ func TestDeliveryFailureCannotRequeueBehindArchiveCancellation(t *testing.T) {
 }
 
 func deliveryFailureBehindArchive(t *testing.T, customerArchive bool) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	fixture := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := fixture.pool, fixture.client, fixture.web, fixture.sessions, fixture.company, fixture.admin
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cookie := sessionCookie(t, ctx, sessions, admin)
@@ -55,7 +56,7 @@ func deliveryFailureBehindArchive(t *testing.T, customerArchive bool) {
 	historyCheck(t, barrier.QueryRow(ctx, `SELECT pg_backend_pid() FROM pg_advisory_xact_lock(560057)`).Scan(&holder))
 	entered, release := make(chan struct{}), make(chan struct{})
 	workerDone := make(chan error, 1)
-	svc := delivery.New(pool, "")
+	svc := fixture.outbox
 	go func() {
 		_, err := svc.ProcessOne(ctx, deliveryTestSender(func(context.Context, delivery.Delivery) (delivery.SendResult, error) {
 			close(entered)
@@ -70,6 +71,8 @@ func deliveryFailureBehindArchive(t *testing.T, customerArchive bool) {
 	}()
 	select {
 	case <-entered:
+	case err := <-workerDone:
+		t.Fatalf("worker finished before transport barrier: %v", err)
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}

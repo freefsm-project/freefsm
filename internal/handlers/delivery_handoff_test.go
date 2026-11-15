@@ -16,7 +16,8 @@ func TestDeliveryArchiveDispatchBoundaryHTTP(t *testing.T) {
 	for _, customerArchive := range []bool{false, true} {
 		for _, transportFirst := range []bool{false, true} {
 			t.Run(fmt.Sprintf("customer_%v/dispatch_first_%v", customerArchive, transportFirst), func(t *testing.T) {
-				pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+				fixture := permissionHTTPControlledMailInstanceFixture(t)
+				pool, client, web, sessions, company, admin := fixture.pool, fixture.client, fixture.web, fixture.sessions, fixture.company, fixture.admin
 				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 				defer cancel()
 				cookie := sessionCookie(t, ctx, sessions, admin)
@@ -78,7 +79,7 @@ func TestDeliveryArchiveDispatchBoundaryHTTP(t *testing.T) {
 				sent := make(chan result, 1)
 				f := &creditMatrix{ctx: ctx, pool: pool, web: web, cookie: cookie}
 				sender := &compositionSender{}
-				svc := delivery.New(pool, "")
+				svc := fixture.outbox
 				runArchive := func() { archived <- f.call(archive) }
 				runWorker := func() { worked, err := svc.ProcessOne(ctx, sender, nil); sent <- result{worked, err} }
 				if transportFirst {
@@ -131,7 +132,8 @@ func TestDeliveryArchiveDispatchBoundaryHTTP(t *testing.T) {
 func TestDeliveryCustomerArchiveQueueBoundaryHTTP(t *testing.T) {
 	for _, queueFirst := range []bool{true, false} {
 		t.Run(fmt.Sprint(queueFirst), func(t *testing.T) {
-			pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+			fixture := permissionHTTPControlledMailInstanceFixture(t)
+			pool, client, web, sessions, company, admin := fixture.pool, fixture.client, fixture.web, fixture.sessions, fixture.company, fixture.admin
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			cookie := sessionCookie(t, ctx, sessions, admin)
@@ -181,7 +183,8 @@ func TestDeliveryCustomerArchiveQueueBoundaryHTTP(t *testing.T) {
 }
 
 func TestDeliveryInvoiceReversionCancelsWithoutRetargetingHTTP(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	fixture := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := fixture.pool, fixture.client, fixture.web, fixture.sessions, fixture.company, fixture.admin
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Conversion Customer").SaveX(ctx)
@@ -206,7 +209,7 @@ func TestDeliveryInvoiceReversionCancelsWithoutRetargetingHTTP(t *testing.T) {
 	fieldPost(t, web, cookie, revert, conversionReview(t, web, cookie, revert), 303)
 	message.Set("idempotency_key", newOperationKey())
 	fieldPost(t, web, cookie, path+"/email", message, 403)
-	svc := delivery.New(pool, "")
+	svc := fixture.outbox
 	history, err := svc.History(ctx, company, delivery.DocumentRef{Type: "invoice", ID: invoice})
 	historyCheck(t, err)
 	if len(history) != 1 || history[0].State != "cancelled" {

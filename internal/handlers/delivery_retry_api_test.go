@@ -15,13 +15,13 @@ import (
 	"testing"
 	"time"
 
-	apiv1 "github.com/freefsm-project/freefsm/internal/api/v1"
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/delivery"
 )
 
 func TestDeliveryRetryAPIAtomicReceipts(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+	fixture := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, web, sessions, company, admin := fixture.pool, fixture.client, fixture.web, fixture.sessions, fixture.company, fixture.admin
 	ctx := context.Background()
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Retry API").SaveX(ctx)
 	job := client.Job.Create().SetCompanyID(company).SetCustomerID(customer.ID).SetJobType("Work").SaveX(ctx)
@@ -36,7 +36,7 @@ func TestDeliveryRetryAPIAtomicReceipts(t *testing.T) {
 	var file int64
 	historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM files`).Scan(&file))
 	fieldPost(t, web, cookie, path+"/email", url.Values{"pdf_version": {version}, "idempotency_key": {newOperationKey()}, "to": {"retry@example.test"}, "subject": {"Frozen"}, "body": {"Body"}, "extra_file_id": {fmt.Sprint(file)}}, 303)
-	svc := delivery.New(pool, "")
+	svc := fixture.outbox
 	frozen := func(d delivery.Delivery) string {
 		raw, err := json.Marshal([]any{d.From, d.To, d.CC, d.BCC, d.Subject, d.TextBody, d.HTMLBody, d.PDF, d.PDFFilename, d.Attachments, d.MessageID, d.TrackingEnabled})
 		historyCheck(t, err)
@@ -60,7 +60,7 @@ func TestDeliveryRetryAPIAtomicReceipts(t *testing.T) {
 	historyCheck(t, auth.AssignUser(ctx, actor, user.ID, role))
 	token, err := sessions.CreateMobile(ctx, user.ID, "Retry client")
 	historyCheck(t, err)
-	server := httptest.NewServer(apiv1.NewRouter(pool, client, sessions))
+	server := httptest.NewServer(fixture.api)
 	defer server.Close()
 	specResponse, err := http.Get(server.URL + "/openapi.json")
 	historyCheck(t, err)

@@ -25,7 +25,8 @@ import (
 )
 
 func TestDeliveryAttachmentLimitsAndContentHTTP(t *testing.T) {
-	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Recipient").SaveX(ctx)
@@ -320,7 +321,8 @@ func deliveryODFContent(body string) string {
 }
 
 func TestDeliveryAttachmentSnapshotHTTP(t *testing.T) {
-	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	f := permissionHTTPControlledMailInstanceFixture(t)
+	pool, client, router, sessions, company, admin := f.pool, f.client, f.web, f.sessions, f.company, f.admin
 	ctx := context.Background()
 	cookie := sessionCookie(t, ctx, sessions, admin)
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Recipient").SaveX(ctx)
@@ -354,7 +356,7 @@ func TestDeliveryAttachmentSnapshotHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	transport := &compositionSender{}
-	if worked, err := delivery.New(pool, "").ProcessOne(ctx, transport, nil); !worked || err != nil {
+	if worked, err := f.outbox.ProcessOne(ctx, transport, nil); !worked || err != nil {
 		t.Fatalf("worker: %v %v", worked, err)
 	}
 	extras := transport.messages[0].Attachments
