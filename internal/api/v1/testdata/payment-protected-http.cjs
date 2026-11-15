@@ -26,7 +26,8 @@ const {PaymentClient,ProtectedStore}=require('../reference/payment-client.cjs');
  const control=async action=>{const r=await fetch(input.url+'/__fixture/'+action,{method:'POST',headers:{Authorization:'Bearer '+input.token}});assert(r.ok,action+': '+await r.text().then(x=>{return r.status===204?x:'';}));return r;};
  // JSON-returning controls need their body intact.
  const fresh=async action=>{const r=await fetch(input.url+'/__fixture/'+action,{method:'POST',headers:{Authorization:'Bearer '+input.token}});assert(r.ok);return (await r.json()).token;};
- let client=new PaymentClient(store,transport);
+  let client=new PaymentClient(store,transport);
+  if(input.scenario.startsWith('projection_')){await require('./projection-authority-http.cjs')({input,store,transport,control,fresh});assert.equal(posts,0);return;}
   if(input.restart){await client.initialize();assert.equal((await client.reconcile(input.id)).receipt.outcome,'accepted');assert.equal(posts,0);return;}
   if(input.sharedRestart){await client.initialize();await client.synchronize();await assert.rejects(client.stagePayment(input.target,input.values),/reconciliation_required/);await assert.rejects(client.discard(input.id),/reconciliation_required/);assert.equal(posts,0);return;}
  try{

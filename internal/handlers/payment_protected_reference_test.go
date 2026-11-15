@@ -22,7 +22,7 @@ import (
 )
 
 func TestPaymentProtectedReferenceHTTP(t *testing.T) {
-	for _, scenario := range []string{"lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_completed_grant_loss", "restore_terminal_missing", "restore_purge_before_lookup", "restore_purge_after_lookup", "restore_purge_after_ack", "restore_purge_other_user", "ordinary_purge_missing", "generation_session_missing", "generation_grant_missing", "generation_terminal_missing", "generation_terminal_existing", "generation_existing", "generation_other_user", "invalid_receipt", "tampered_store", "shared_commercial", "shared_pdf", "shared_delivery", "shared_notes", "shared_clocks", "shared_creation", "shared_purge", "shared_other_user", "shared_ordinary_missing", "shared_restore_before_lookup", "shared_restore_after_lookup", "shared_restore_after_ack", "shared_generation"} {
+	for _, scenario := range []string{"projection_user_empty", "projection_user_pending", "projection_grant_empty", "projection_grant_pending", "projection_assignment_empty", "projection_assignment_pending", "projection_restore_empty", "projection_restore_pending", "lost", "scope_loss", "grant_loss", "new_session", "absent", "transient", "terminal", "rename", "expiry", "revoked", "restore", "restore_completed_existing", "restore_completed_missing", "restore_completed_repeated", "restore_completed_scope_loss", "restore_completed_grant_loss", "restore_terminal_missing", "restore_purge_before_lookup", "restore_purge_after_lookup", "restore_purge_after_ack", "restore_purge_other_user", "ordinary_purge_missing", "generation_session_missing", "generation_grant_missing", "generation_terminal_missing", "generation_terminal_existing", "generation_existing", "generation_other_user", "invalid_receipt", "tampered_store", "shared_commercial", "shared_pdf", "shared_delivery", "shared_notes", "shared_clocks", "shared_creation", "shared_purge", "shared_other_user", "shared_ordinary_missing", "shared_restore_before_lookup", "shared_restore_after_lookup", "shared_restore_after_ack", "shared_generation"} {
 		t.Run(scenario, func(t *testing.T) {
 			pool, client, _, sessions, company, admin := permissionHTTPFixture(t)
 			ctx := context.Background()
@@ -56,6 +56,31 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 				}
 				var err error
 				switch r.URL.Path {
+				case "/__fixture/invoice-loss":
+					var revision int64
+					err = pool.QueryRow(ctx, `SELECT revision FROM authorization_roles WHERE id=$1`, role).Scan(&revision)
+					if err == nil {
+						_, err = auth.SaveRole(ctx, authorization.Actor{UserID: admin}, role, "Protected collector", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}}, revision)
+					}
+				case "/__fixture/scope-regain":
+					assignFieldDocumentCreator(t, pool, job.ID, user.ID)
+				case "/__fixture/notes-user":
+					notesRole, roleErr := auth.SaveRole(ctx, authorization.Actor{UserID: admin}, 0, "Notes only", []authorization.Grant{{Permission: "job.view", Scope: authorization.Assigned}})
+					if roleErr != nil {
+						err = roleErr
+						break
+					}
+					other := client.User.Create().SetCompanyID(company).SetEmail("notes-only@test").SetName("Notes only").SetRole("tech").SetPasswordHash("fixture").SaveX(ctx)
+					err = auth.AssignUser(ctx, authorization.Actor{UserID: admin}, other.ID, notesRole)
+					if err == nil {
+						assignFieldDocumentCreator(t, pool, job.ID, other.ID)
+						var fresh string
+						fresh, err = sessions.CreateMobile(ctx, other.ID, "Notes only")
+						if err == nil {
+							_ = json.NewEncoder(w).Encode(map[string]string{"token": fresh})
+							return
+						}
+					}
 				case "/__fixture/scope-loss":
 					_, err = pool.Exec(ctx, `DELETE FROM job_assignments WHERE job_id=$1 AND user_id=$2`, job.ID, user.ID)
 				case "/__fixture/grant-loss":
@@ -176,6 +201,9 @@ func TestPaymentProtectedReferenceHTTP(t *testing.T) {
 			}
 			t.Log(string(output))
 			want := 1
+			if strings.HasPrefix(scenario, "projection_") {
+				want = 0
+			}
 			if scenario == "absent" || scenario == "ordinary_purge_missing" || scenario == "shared_ordinary_missing" || strings.HasPrefix(scenario, "generation_terminal_") || scenario == "expiry" || scenario == "revoked" || scenario == "tampered_store" {
 				want = 0
 			}
