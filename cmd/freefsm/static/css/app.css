@@ -2881,8 +2881,11 @@ table.week-view td.hour, table.day-view td.hour {
   padding: 0.45rem;
   margin-bottom: 0.45rem;
   border-radius: var(--pico-border-radius);
-  background: var(--pico-primary);
-  color: var(--pico-primary-inverse);
+  /* Status badges use theme text over a translucent tint. Keep their backing
+     surface theme-aware too; primary is a link color, not a card surface. */
+  background: var(--pico-card-background-color);
+  color: var(--interaction-text);
+  border-left: 0.25rem solid var(--pico-primary);
   text-decoration: none;
   cursor: grab;
   font-size: 0.78rem;

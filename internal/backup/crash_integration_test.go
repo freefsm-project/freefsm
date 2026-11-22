@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/database"
 	"github.com/freefsm-project/freefsm/internal/emailpolicy"
 	"github.com/freefsm-project/freefsm/internal/instancecontrol"
@@ -123,6 +124,13 @@ func TestBackupCrashChild(t *testing.T) {
 		t.Fatal(e)
 	}
 	op = awaitOperation(t, m, 1, op.ID)
+	if spec.Mode == "restore-complete" && op.Phase == "complete" {
+		m.Shutdown()
+		if e = atomicJSON(spec.Ready, "complete"); e != nil {
+			t.Fatal(e)
+		}
+		return
+	}
 	t.Fatalf("restore unexpectedly reached terminal phase instead of crash barrier: %+v", op)
 }
 
@@ -168,6 +176,12 @@ func newCrashFixture(t *testing.T) *crashFixture {
 	return &crashFixture{c, url}
 }
 func (f *crashFixture) manager(t *testing.T, label string, legacy ...bool) *Manager {
+	return f.managerAt(t, label, t.TempDir(), false, legacy...)
+}
+
+// Persistent fixtures are opt-in callers' responsibility; their fresh guest is
+// discarded after qualification instead of deleting resources at test exit.
+func (f *crashFixture) managerAt(t *testing.T, label, root string, persistent bool, legacy ...bool) *Manager {
 	t.Helper()
 	ctx := context.Background()
 	name := fmt.Sprintf("crash_%d", time.Now().UnixNano())
@@ -178,20 +192,26 @@ func (f *crashFixture) manager(t *testing.T, label string, legacy ...bool) *Mana
 	if _, e := f.admin.Exec(ctx, "CREATE DATABASE "+ident+" OWNER "+ident+" TEMPLATE template0 ENCODING 'UTF8'"); e != nil {
 		t.Fatal(e)
 	}
-	t.Cleanup(func() {
-		if _, e := f.admin.Exec(ctx, "DROP DATABASE "+ident+" WITH (FORCE)"); e != nil {
-			t.Error(e)
-		}
-		if _, e := f.admin.Exec(ctx, "DROP ROLE "+ident); e != nil {
-			t.Error(e)
-		}
-	})
+	if !persistent {
+		t.Cleanup(func() {
+			if _, e := f.admin.Exec(ctx, "DROP DATABASE "+ident+" WITH (FORCE)"); e != nil {
+				t.Error(e)
+			}
+			if _, e := f.admin.Exec(ctx, "DROP ROLE "+ident); e != nil {
+				t.Error(e)
+			}
+		})
+	}
 	parsed, e := pgx.ParseConfig(f.adminURL)
 	if e != nil {
 		t.Fatal(e)
 	}
 	dsn := fmt.Sprintf("postgres://%s@%s:%d/%s?sslmode=disable", name, parsed.Host, parsed.Port, name)
-	root := t.TempDir()
+	if persistent {
+		// Recovery binds the exact DSN bytes. Use production encoding, including
+		// the empty password, so cmd/freefsm can recover this persisted fixture.
+		dsn = (&config.Config{DBHost: parsed.Host, DBPort: int(parsed.Port), DBName: name, DBUser: name}).DSN()
+	}
 	c, e := instancecontrol.New(filepath.Join(root, "state"))
 	if e != nil {
 		t.Fatal(e)
@@ -214,7 +234,7 @@ func (f *crashFixture) manager(t *testing.T, label string, legacy ...bool) *Mana
 		t.Fatal(e)
 	}
 	defer db.Close()
-	if e = db.Migrate(ctx, os.DirFS("../database/migrations")); e != nil {
+	if e = db.Migrate(ctx, database.MigrationFS()); e != nil {
 		t.Fatal(e)
 	}
 	if len(legacy) != 0 && legacy[0] {

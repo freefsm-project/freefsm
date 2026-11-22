@@ -2,55 +2,84 @@ package handlers
 
 import (
 	"context"
-	"io/fs"
-	"strings"
+	"crypto/sha256"
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/database"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func TestLeaseBillingPopulatedNativeUpgrade(t *testing.T) {
-	pool, client, web, sessions, company, admin := permissionHTTPFixture(t)
+// The last installed source before migration 113, including its native Lease
+// writers and initializer. Never turn today's schema into a predecessor by
+// deleting ledger entries while leaving later columns and effects behind.
+const leaseBillingPredecessor = "0f91c0a329a57033bcc05feefeaf6aee5185cb97"
+
+func populatedLeasePredecessor(t *testing.T) (*pgxpool.Pool, int64) {
+	t.Helper()
+	dsn := os.Getenv("FREEFSM_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set FREEFSM_TEST_DATABASE_URL")
+	}
+	dir := t.TempDir()
+	run := func(cwd string, env []string, name string, args ...string) {
+		t.Helper()
+		cmd := exec.Command(name, args...)
+		cmd.Dir, cmd.Env = cwd, append(os.Environ(), env...)
+		out, err := cmd.CombinedOutput()
+		t.Logf("historical %s output:\n%s", name, out)
+		historyCheck(t, err)
+	}
+	archive := filepath.Join(dir, "predecessor.tar")
+	run("../..", nil, "git", "archive", "--format=tar", "--output="+archive, leaseBillingPredecessor)
+	data, err := os.ReadFile(archive)
+	historyCheck(t, err)
+	t.Logf("historical production commit=%s archive_sha256=%x", leaseBillingPredecessor, sha256.Sum256(data))
+	source := filepath.Join(dir, "source")
+	historyCheck(t, os.Mkdir(source, 0700))
+	run(dir, nil, "tar", "-xf", archive, "-C", source)
+	producer, err := os.ReadFile("testdata/lease-history/producer.go")
+	historyCheck(t, err)
+	historyCheck(t, os.WriteFile(filepath.Join(source, "internal/handlers/lease_upgrade_producer_test.go"), producer, 0600))
+	run(source, []string{"FREEFSM_LEASE_HISTORY_OUTPUT=" + dir}, "go", "test", "-v", "-race", "-count=1", "-timeout=10m", "./internal/handlers", "-run", "^TestLeaseUpgradeProducer$")
+	var capture struct {
+		Schema string
+		Lease  int64
+	}
+	data, err = os.ReadFile(filepath.Join(dir, "capture.json"))
+	historyCheck(t, err)
+	historyCheck(t, json.Unmarshal(data, &capture))
 	ctx := context.Background()
-	cookie := sessionCookie(t, ctx, sessions, admin)
-	_, err := pool.Exec(ctx, `CREATE OR REPLACE FUNCTION lease_dependency_today(company bigint) RETURNS date LANGUAGE sql STABLE AS $$ SELECT '2024-01-01'::date $$`)
+	root, err := pgxpool.New(ctx, dsn)
 	historyCheck(t, err)
-	lease, values := populateFinalizedLease(t, pool, client, web, cookie, company)
-	voidLeaseInvoiceAndReplay(t, pool, web, cookie, company, admin, lease, values)
-	// This predecessor predates manual adjustments. Remove only verified-empty
-	// new structures; retained commercial facts must never be reconstructed.
+	t.Cleanup(func() {
+		_, err := root.Exec(ctx, "DROP SCHEMA IF EXISTS "+pgx.Identifier{capture.Schema}.Sanitize()+" CASCADE")
+		historyCheck(t, err)
+		root.Close()
+	})
+	// The historical test has normally cleaned its schema; restore its fresh,
+	// test-owned dump without rewriting any captured business rows or identities.
+	run(dir, nil, "pg_restore", "--exit-on-error", "--no-owner", "--no-acl", "--dbname", dsn, filepath.Join(dir, "history.dump"))
+	scoped, err := dsnWithSearchPath(dsn, capture.Schema)
+	historyCheck(t, err)
+	pool, err := pgxpool.New(ctx, scoped)
+	historyCheck(t, err)
+	t.Cleanup(pool.Close)
+	var predecessor bool
+	historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM schema_migrations WHERE name>='113_') AND EXISTS(SELECT 1 FROM schema_migrations WHERE name='112_retained_lease_placement_timeline') AND NOT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=current_schema() AND table_name='online_save_actions' AND column_name='execution_token')`).Scan(&predecessor))
+	historyEqual(t, "actual pre-113 ledger and schema", predecessor, true)
+	return pool, capture.Lease
+}
+
+func TestLeaseBillingPopulatedNativeUpgrade(t *testing.T) {
+	pool, lease := populatedLeasePredecessor(t)
+	ctx := context.Background()
 	var adjustments int
-	historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM lease_manual_adjustments`).Scan(&adjustments))
-	historyEqual(t, "predecessor has no manual adjustments", adjustments, 0)
-	_, err = pool.Exec(ctx, `DROP TRIGGER lease_adjustment_customer_guard ON invoices; DROP FUNCTION lease_adjustment_customer_guard(); DROP TABLE lease_manual_adjustments`)
-	historyCheck(t, err)
-	removeEmptyCoverageSchema(t, pool)
-	// Capture real native finalization/ordinary Void effects. Remove only empty
-	// post-112 technical structures to form the previous installed schema; no
-	// agreement, coverage, Invoice, approval, audit, permission or ID is invented.
-	var empty bool
-	historyCheck(t, pool.QueryRow(ctx, `SELECT NOT EXISTS(SELECT 1 FROM lease_billing_worker_state) AND NOT EXISTS(SELECT 1 FROM lease_billing_attempts) AND NOT EXISTS(SELECT 1 FROM lease_billing_source_changes) AND NOT EXISTS(SELECT 1 FROM lease_billing_retry_receipts) AND NOT EXISTS(SELECT 1 FROM lease_billing_period_dispositions) AND NOT EXISTS(SELECT 1 FROM lease_billing_obligation_revisions)`).Scan(&empty))
-	historyEqual(t, "fixture contains no later billing effects", empty, true)
-	_, err = pool.Exec(ctx, `DROP FUNCTION lease_generation_revision_guard() CASCADE;
- DROP FUNCTION lease_pending_revision_guard() CASCADE;
- DROP FUNCTION lease_billing_exemption_review() CASCADE;
- DROP FUNCTION lease_billing_coverage_review() CASCADE;
- DROP FUNCTION lease_billing_agreement_review() CASCADE;
- DROP FUNCTION record_lease_billing_source_change(bigint,date,date,text) CASCADE;
- DROP FUNCTION lease_generation_chain_guard() CASCADE;
- DROP TRIGGER lease_generation_fence ON lease_invoice_generations;
- DROP VIEW lease_billing_obligation_current;
- DROP TABLE lease_billing_worker_state,lease_billing_attempts,lease_billing_retry_receipts,lease_invoice_review_flags,lease_billing_source_changes,lease_billing_period_dispositions,lease_billing_period_failures,lease_billing_obligation_revisions CASCADE;
- ALTER TABLE lease_invoice_generations DROP COLUMN obligation_revision_id,DROP COLUMN predecessor_invoice_id,DROP COLUMN operation_key,DROP COLUMN review_hash,DROP COLUMN actor_id;
- ALTER TABLE lease_invoice_generations DROP CONSTRAINT lease_invoice_generations_pkey;
- ALTER TABLE lease_invoice_generations ADD PRIMARY KEY(obligation_id);
- DELETE FROM schema_migrations WHERE name>='113_';`)
-	historyCheck(t, err)
-	attribution, err := fs.ReadFile(database.MigrationFS(), "074_device_pairing.up.sql")
-	historyCheck(t, err)
-	_, err = pool.Exec(ctx, string(attribution[strings.Index(string(attribution), "ALTER TABLE authorization_audit DROP"):]))
-	historyCheck(t, err)
 	tables := []string{"leases", "lease_finalizations", "lease_billing_obligations", "lease_asset_dependencies", "lease_master_dependencies", "invoices", "issued_document_numbers", "company_settings", "authorization_audit", "authorization_roles", "authorization_grants"}
 	before := historyDurableRows(t, pool, tables)
 	var generations, sequences string
@@ -75,7 +104,7 @@ func TestLeaseBillingPopulatedNativeUpgrade(t *testing.T) {
 	historyEqual(t, "migration replay preserves original business facts", historyDurableRows(t, pool, tables), before)
 	var pending int64
 	historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM lease_billing_obligations WHERE lease_id=$1 AND kind='monthly'`, lease).Scan(&pending))
-	_, err = pool.Exec(ctx, `CREATE OR REPLACE FUNCTION lease_dependency_today(company bigint) RETURNS date LANGUAGE sql STABLE AS $$ SELECT '2024-01-02'::date $$`)
+	_, err := pool.Exec(ctx, `CREATE OR REPLACE FUNCTION lease_dependency_today(company bigint) RETURNS date LANGUAGE sql STABLE AS $$ SELECT '2024-01-02'::date $$`)
 	historyCheck(t, err)
 	historyCheck(t, authorization.New(pool).GenerateLeaseDrafts(ctx))
 	var generated bool

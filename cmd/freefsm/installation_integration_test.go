@@ -24,6 +24,7 @@ import (
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/database"
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/services"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -213,6 +214,57 @@ func recoveryFixture(t *testing.T, db *pgx.Conn) int64 {
 		t.Fatalf("executable host fixture proof invalid before reset: target=%d err=%v", target, err)
 	}
 	return id
+}
+
+func TestHostRecoveryRejectsUnreadyStorage(t *testing.T) {
+	for _, scenario := range []string{"blocked-root", "unsafe-entry"} {
+		t.Run(scenario, func(t *testing.T) {
+			binary, env, db := installationFixture(t)
+			id := recoveryFixture(t, db)
+			var uploads, state string
+			for _, value := range env {
+				if strings.HasPrefix(value, "FREEFSM_UPLOAD_DIR=") {
+					uploads = strings.TrimPrefix(value, "FREEFSM_UPLOAD_DIR=")
+				}
+				if strings.HasPrefix(value, "FREEFSM_STATE_DIR=") {
+					state = strings.TrimPrefix(value, "FREEFSM_STATE_DIR=")
+				}
+			}
+			if scenario == "blocked-root" {
+				if err := os.WriteFile(uploads, []byte("retain storage blocker"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			} else {
+				if err := os.MkdirAll(uploads, 0750); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(t.TempDir(), filepath.Join(uploads, "unsafe")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			output, err := runInstallationCLI(binary, env, "Temporary-107!\nTemporary-107!\n", "-recover-admin", "admin@example.test")
+			if err == nil {
+				t.Fatalf("unready storage admitted: %s", output)
+			}
+			if bytes.Contains(output, []byte("existing Admin password recovered;")) {
+				t.Errorf("success reported before admission verification: %s", output)
+			}
+			control, err := instancecontrol.New(state)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, release, err := control.Enter(context.Background()); err == nil {
+				release()
+				t.Fatal("failed recovery opened ordinary admission")
+			}
+			if scenario == "blocked-root" {
+				var unchanged bool
+				if err := db.QueryRow(context.Background(), `SELECT password_hash=$1 AND NOT force_password_change AND (SELECT count(*) FROM sessions WHERE revoked_at IS NULL)=2 AND (SELECT count(*) FROM password_reset_tokens)=1 AND (SELECT count(*) FROM authorization_audit)=0 FROM users WHERE id=$2`, recoveryOldHash, id).Scan(&unchanged); err != nil || !unchanged {
+					t.Fatalf("storage initialization failure changed credentials: unchanged=%v err=%v", unchanged, err)
+				}
+			}
+		})
+	}
 }
 
 func TestHostRecoveryResetsExistingAdminAtomically(t *testing.T) {

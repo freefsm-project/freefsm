@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -70,6 +71,10 @@ func TestFreeBSDInstallRejectsConfigSymlink(t *testing.T) {
 	if err := os.WriteFile(target, []byte("retained"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	// Establish the exact mode even when the test runner has a restrictive umask.
+	if err := os.Chmod(target, 0644); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.MkdirAll(filepath.Join(root, "usr/local/etc"), 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -79,10 +84,18 @@ func TestFreeBSDInstallRejectsConfigSymlink(t *testing.T) {
 	cmd := exec.Command("sh", "freebsd/install.sh", root, strconv.Itoa(os.Getuid()), strconv.Itoa(os.Getgid()))
 	if out, err := cmd.CombinedOutput(); err == nil {
 		t.Fatalf("symlink accepted: %s", out)
+	} else if !strings.Contains(string(out), "Live FreeFSM configuration must be a regular file, not a symlink") {
+		t.Fatalf("unexpected install failure: %v: %s", err, out)
 	}
 	stat, err := os.Stat(target)
-	if err != nil || stat.Mode().Perm() != 0644 {
-		t.Fatal("symlink target modified")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stat.Mode().Perm() != 0644 {
+		t.Fatalf("symlink target mode %o; want 644", stat.Mode().Perm())
+	}
+	if value, err := os.ReadFile(target); err != nil || string(value) != "retained" {
+		t.Fatalf("symlink target content modified: %q: %v", value, err)
 	}
 }
 

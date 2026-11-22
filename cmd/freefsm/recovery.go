@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -48,6 +47,5 @@ func recoverAdminPassword(cfg *config.Config, email string) (result error) {
 	if err := hostrecovery.ResetExistingAdmin(ctx, db.Pool, email, lines[0], strconv.Itoa(os.Getuid())); err != nil {
 		return err
 	}
-	slog.Info("existing Admin password recovered; password change required at next browser login; all sessions and recovery links revoked")
 	return nil
 }

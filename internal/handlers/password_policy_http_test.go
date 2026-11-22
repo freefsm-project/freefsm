@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
+	"github.com/freefsm-project/freefsm/internal/instancecontrol"
 	"github.com/freefsm-project/freefsm/internal/services"
 )
 
@@ -47,20 +48,36 @@ func TestPasswordPolicySealedProspectiveAndExplicitForceHTTP(t *testing.T) {
 }
 
 func TestRecoveryUnavailableDoesNotEnumerateHTTP(t *testing.T) {
-	_, _, router, _, _, _ := permissionHTTPFixture(t)
-	var body string
-	for _, email := range []string{"admin@test", "unknown@test"} {
-		r := httptest.NewRequest("POST", "/forgot-password", strings.NewReader(url.Values{"email": {email}}.Encode()))
-		r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		w := httptest.NewRecorder()
-		router.ServeHTTP(w, r)
-		if w.Code != 503 || !strings.Contains(w.Body.String(), "Recovery email is unavailable") {
-			t.Fatalf("unavailable email status=%d body=%s", w.Code, w.Body.String())
-		}
-		if body != "" && body != w.Body.String() {
-			t.Fatal("unavailable response enumerates account")
-		}
-		body = w.Body.String()
+	for _, scenario := range []struct{ name, setup, notice string }{
+		{"smtp-unconfigured", "", "Recovery email is unavailable"},
+		{"policy-disabled", "UPDATE restore_email_policy SET enabled=false,revision=revision+1", instancecontrol.ErrEmailDisabled.Error()},
+		{"policy-unavailable", "DELETE FROM restore_email_policy", instancecontrol.ErrEmailUnavailable.Error()},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			f := permissionHTTPControlledMailInstanceFixture(t)
+			if scenario.setup != "" {
+				_, err := f.pool.Exec(context.Background(), scenario.setup)
+				historyCheck(t, err)
+			}
+			var body string
+			for _, email := range []string{"admin@test", "unknown@test"} {
+				r := httptest.NewRequest("POST", "/forgot-password", strings.NewReader(url.Values{"email": {email}}.Encode()))
+				r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				w := httptest.NewRecorder()
+				f.web.ServeHTTP(w, r)
+				if w.Code != 503 || !strings.Contains(w.Body.String(), scenario.notice) {
+					t.Fatalf("unavailable email status=%d body=%s", w.Code, w.Body.String())
+				}
+				if body != "" && body != w.Body.String() {
+					t.Fatal("unavailable response enumerates account")
+				}
+				body = w.Body.String()
+			}
+			var requests, tokens int
+			historyCheck(t, f.pool.QueryRow(context.Background(), `SELECT (SELECT count(*) FROM password_recovery_requests), (SELECT count(*) FROM password_reset_tokens)`).Scan(&requests, &tokens))
+			historyEqual(t, "unavailable recovery creates no queued requests", requests, 0)
+			historyEqual(t, "unavailable recovery creates no tokens", tokens, 0)
+		})
 	}
 }
 

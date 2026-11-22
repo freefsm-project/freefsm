@@ -142,26 +142,35 @@ func run() error {
 		return err
 	}
 	defer startup.Close()
+	// Interrupted-restore recovery must precede filesystem initialization. Both
+	// host recovery and normal startup need this root before Finish verifies the
+	// installed instance and opens admission.
+	if err := os.MkdirAll(cfg.UploadDir, 0750); err != nil {
+		slog.Error("create upload directory", "dir", cfg.UploadDir, "error", err)
+		return err
+	}
+	if stat, err := os.Stat(cfg.UploadDir); err != nil {
+		slog.Error("upload directory not accessible", "dir", cfg.UploadDir, "error", err)
+		return err
+	} else if !stat.IsDir() {
+		return errors.New("upload root is not a directory")
+	}
+	slog.Info("upload directory ready", "dir", cfg.UploadDir)
+
 	if *recoverAdmin != "" {
 		if err := recoverAdminPassword(cfg, *recoverAdmin); err != nil {
 			return err
 		}
-		return startup.Finish(context.Background())
+		if err := startup.Finish(context.Background()); err != nil {
+			return err
+		}
+		slog.Info("existing Admin password recovered; password change required at next browser login; all sessions and recovery links revoked")
+		return nil
 	}
 	startupCtx := context.Background()
 	if err := manager.RefreshConnections(); err != nil {
 		return err
 	}
-
-	if err := os.MkdirAll(cfg.UploadDir, 0750); err != nil {
-		slog.Error("create upload directory", "dir", cfg.UploadDir, "error", err)
-		return err
-	}
-	if stat, err := os.Stat(cfg.UploadDir); err != nil || !stat.IsDir() {
-		slog.Error("upload directory not accessible", "dir", cfg.UploadDir, "error", err)
-		return err
-	}
-	slog.Info("upload directory ready", "dir", cfg.UploadDir)
 
 	db, err := database.Connect(startupCtx, cfg.DSN())
 	if err != nil {

@@ -48,6 +48,7 @@ function recordContrast(result,label) {
   for(const violation of result.violations) report.violations.push({label,axe:violation.id,nodes:violation.nodes.map(n=>({target:n.target,summary:n.failureSummary}))});
 }
 function interactionTargets(route) {
+  if(route==='/schedule?tab=dispatch&period=day')return ['.dispatch-card'];
   const primary=route==='/tags'?'a[href="/tags/new"][role=button]':route==='/settings/custom-fields'?'a[href="/settings/custom-fields/new"][role=button]':/^\/jobs\/\d+$/.test(route)?'form[action$="/create-estimate"] button':/^\/estimates\/\d+$/.test(route)?'form[action$="/convert"] button':null;
   return primary ? [primary,'.page-body a[href]:not([role=button])','#sidebar nav a.active'] : [];
 }
@@ -110,6 +111,9 @@ async function chromiumChecks() {
       const detailPath=/\/\d+$/.test(current) ? current : await page.getByText('Measured '+kind+' record',{exact:true}).first().getAttribute('href');
       paths.push(detailPath);
       if(kind==='jobs') {
+        // Schedule and equal assignees belong to the current dispatch editor,
+        // rather than the removed Visit/Assignment rows on the creation form.
+        paths.push(detailPath+'/dispatch');
         await page.goto(base+detailPath);
         let statusPosts=0; const observe=request=>{if(request.method()==='POST' && request.url().endsWith('/status'))statusPosts++;};page.on('request',observe);
         const select=page.locator('.job-status-select');
@@ -143,7 +147,7 @@ async function chromiumChecks() {
       for (const route of paths) {
         assert.equal((await page.goto(base + route)).status(),200,route+' is a real installed authorized page');
         await page.evaluate(theme => { document.documentElement.dataset.theme = theme; const preference=document.querySelector('[data-theme-preference]');if(preference)preference.dataset.themePreference=theme; }, theme);
-        if(route==='/jobs/new') for(const name of ['+ Add Visit','+ Add Assignment','+ Add Subtask']) await page.getByRole('button',{name,exact:true}).click();
+        if(route==='/jobs/new') await page.getByRole('button',{name:'+ Add Subtask',exact:true}).click();
         if(interactionTargets(route).length)await cdp.send('Browser.setWindowBounds',{windowId,bounds:{width:2000,height:1000}});
         await page.mouse.move(0,0);
         await page.addScriptTag({ content: axe.source });
@@ -196,7 +200,7 @@ async function chromiumChecks() {
     phone.on('dialog',dialog=>dialog.accept());
     for (const route of paths) {
       await phone.goto(base + route);
-      if(route==='/jobs/new') for(const name of ['+ Add Visit','+ Add Assignment','+ Add Subtask']) await phone.getByRole('button',{name,exact:true}).click();
+      if(route==='/jobs/new') await phone.getByRole('button',{name:'+ Add Subtask',exact:true}).click();
       for(const theme of ['light','dark']) {
         await phone.evaluate(theme=>{document.documentElement.dataset.theme=theme;const preference=document.querySelector('[data-theme-preference]');if(preference)preference.dataset.themePreference=theme},theme);
         for(const size of [{width:320,height:640},{width:640,height:320},{width:1280,height:800}]) {
@@ -232,7 +236,7 @@ async function firefoxChecks() {
       for (const route of paths) {
         await driver.get(base + route);
         await driver.executeScript('document.documentElement.dataset.theme=arguments[0]; const preference=document.querySelector("[data-theme-preference]");if(preference)preference.dataset.themePreference=arguments[0]', theme);
-        if(route==='/jobs/new') for(const name of ['+ Add Visit','+ Add Assignment','+ Add Subtask']) await driver.findElement(By.xpath(`//button[normalize-space(.)='${name}']`)).click();
+        if(route==='/jobs/new') await driver.findElement(By.xpath("//button[normalize-space(.)='+ Add Subtask']")).click();
         if(interactionTargets(route).length)await driver.manage().window().setRect({width:2000,height:1000});
         await driver.actions().move({x:0,y:0,origin:'viewport'}).perform();
         await driver.executeScript(axe.source);
