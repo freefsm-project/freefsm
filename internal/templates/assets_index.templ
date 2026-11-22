@@ -21,6 +21,8 @@ templ AssetIndex(p AssetListPageData) {
 
 templ AssetListContent(p AssetListPageData) {
 	<div id="asset-list-content" class="focused-list-content">
+		@MasterExportLink("/assets/export", assetExportQuery(p))
+		@MasterExportLink("/service-entries/export", nil)
 		if navigationPermission(ctx, "asset.archived.view", "A") {
 			<nav aria-label="Asset archive views">
 				<a href="/assets">Current Assets</a>
@@ -54,6 +56,16 @@ templ AssetListContent(p AssetListPageData) {
 		}
 		@AssetTable(p)
 	</div>
+}
+
+func assetExportQuery(p AssetListPageData) url.Values {
+	q := assetListScope(p)
+	q.Set("search", p.Search)
+	q.Set("sort", "updated")
+	q.Set("asset_type_id", fmt.Sprint(p.AssetTypeID))
+	q.Set("asset_status_id", fmt.Sprint(p.AssetStatusID))
+	if p.Archived { q.Set("archived_only", "1") }
+	return q
 }
 
 templ AssetTable(p AssetListPageData) {

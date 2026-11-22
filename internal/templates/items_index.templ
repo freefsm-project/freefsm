@@ -2,6 +2,7 @@ package templates
 
 import "fmt"
 import "net/url"
+import "context"
 
 func itemListScope(archived bool) url.Values {
 	if archived { return url.Values{"archived": {"1"}} }
@@ -20,6 +21,9 @@ templ ItemsIndex(p ItemListPageData) {
 
 templ ItemsListContent(p ItemListPageData) {
 	<div id="item-list-content" class="focused-list-content">
+		@MasterExportLink("/items/export", itemExportQuery(ctx, p))
+		@MasterExportLink("/pricebook/export", itemExportQuery(ctx, p))
+		@MasterExportLink("/items/cost/export", itemExportQuery(ctx, p))
 		if itemPermission(ctx, "item.archived.view") {
 			<nav aria-label="Item archive views">
 				<a href="/items">Current Items</a>
@@ -36,6 +40,13 @@ templ ItemsListContent(p ItemListPageData) {
 		}
 		@ItemsTable(p)
 	</div>
+}
+
+func itemExportQuery(ctx context.Context, p ItemListPageData) url.Values {
+	q := url.Values{"search":{p.Search}, "sort":{"name"}}
+	if p.Archived { q.Set("archived", "1"); q.Set("archived_only", "1") }
+	if p.Search != "" && itemPermission(ctx, "pricebook.view") { q.Set("search_sku", "1") }
+	return q
 }
 
 templ ItemsTable(p ItemListPageData) {

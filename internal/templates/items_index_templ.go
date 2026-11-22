@@ -10,6 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import "fmt"
 import "net/url"
+import "context"
 
 func itemListScope(archived bool) url.Values {
 	if archived {
@@ -94,6 +95,18 @@ func ItemsListContent(p ItemListPageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
+		templ_7745c5c3_Err = MasterExportLink("/items/export", itemExportQuery(ctx, p)).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = MasterExportLink("/pricebook/export", itemExportQuery(ctx, p)).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = MasterExportLink("/items/cost/export", itemExportQuery(ctx, p)).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
 		if itemPermission(ctx, "item.archived.view") {
 			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<nav aria-label=\"Item archive views\"><a href=\"/items\">Current Items</a> <a href=\"/items?archived=1\">Archived Items</a></nav>")
 			if templ_7745c5c3_Err != nil {
@@ -124,6 +137,18 @@ func ItemsListContent(p ItemListPageData) templ.Component {
 		}
 		return nil
 	})
+}
+
+func itemExportQuery(ctx context.Context, p ItemListPageData) url.Values {
+	q := url.Values{"search": {p.Search}, "sort": {"name"}}
+	if p.Archived {
+		q.Set("archived", "1")
+		q.Set("archived_only", "1")
+	}
+	if p.Search != "" && itemPermission(ctx, "pricebook.view") {
+		q.Set("search_sku", "1")
+	}
+	return q
 }
 
 func ItemsTable(p ItemListPageData) templ.Component {
@@ -185,7 +210,7 @@ func ItemsTable(p ItemListPageData) templ.Component {
 			var templ_7745c5c3_Var5 templ.SafeURL
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/items/%d", i.ID)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 68, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 79, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -198,7 +223,7 @@ func ItemsTable(p ItemListPageData) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(i.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 68, Col: 94}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 79, Col: 94}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -221,7 +246,7 @@ func ItemsTable(p ItemListPageData) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(i.Type)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 73, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 84, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -239,7 +264,7 @@ func ItemsTable(p ItemListPageData) templ.Component {
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(i.Sku)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 75, Col: 18}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 86, Col: 18}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -252,7 +277,7 @@ func ItemsTable(p ItemListPageData) templ.Component {
 				var templ_7745c5c3_Var9 string
 				templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("$%.2f", i.UnitPrice))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 75, Col: 64}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 86, Col: 64}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 				if templ_7745c5c3_Err != nil {
@@ -290,7 +315,7 @@ func ItemsTable(p ItemListPageData) templ.Component {
 				var templ_7745c5c3_Var10 templ.SafeURL
 				templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/items/%d/edit", i.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 86, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 97, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 				if templ_7745c5c3_Err != nil {
@@ -303,7 +328,7 @@ func ItemsTable(p ItemListPageData) templ.Component {
 				var templ_7745c5c3_Var11 string
 				templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Edit %s", i.Name))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 86, Col: 145}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 97, Col: 145}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 				if templ_7745c5c3_Err != nil {
@@ -322,7 +347,7 @@ func ItemsTable(p ItemListPageData) templ.Component {
 				var templ_7745c5c3_Var12 templ.SafeURL
 				templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(fmt.Sprintf("/items/%d/delete", i.ID)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 89, Col: 70}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 100, Col: 70}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 				if templ_7745c5c3_Err != nil {
@@ -335,7 +360,7 @@ func ItemsTable(p ItemListPageData) templ.Component {
 				var templ_7745c5c3_Var13 string
 				templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.ResolveAttributeValue(csrfToken(ctx))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 90, Col: 69}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 101, Col: 69}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var13)
 				if templ_7745c5c3_Err != nil {
@@ -348,7 +373,7 @@ func ItemsTable(p ItemListPageData) templ.Component {
 				var templ_7745c5c3_Var14 string
 				templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("Archive %s", i.Name))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 91, Col: 93}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/templates/items_index.templ`, Line: 102, Col: 93}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 				if templ_7745c5c3_Err != nil {

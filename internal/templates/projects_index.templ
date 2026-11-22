@@ -14,6 +14,7 @@ templ ProjectIndex(p ProjectListPageData) {
 
 templ ProjectListContent(p ProjectListPageData) {
 	<div id="project-list-content" class="focused-list-content">
+		@MasterExportLink("/projects/export", filterValues("search", p.Search, "status_id", fmt.Sprint(p.StatusID), "sort", "updated"))
 		@ListToolbar(ListToolbarData{
 			Action: "/projects", Target: "#project-list-content", Search: p.Search,
 			SearchPlaceholder: "Search projects...", NewURL: operationalNewURL(ctx, "/projects/new"), NewLabel: "New Project",

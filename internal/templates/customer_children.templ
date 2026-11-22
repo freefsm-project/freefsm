@@ -30,6 +30,7 @@ templ CustomerChildrenPage(p CustomerChildrenData) {
 		}
 		if p.Selected == nil {
 			<h2>{ capitalize(p.Kind) }s</h2>
+			@MasterExportLink("/"+p.Kind+"s/export", childExportQuery(p))
 			<form method="get" action={ templ.URL(p.BaseURL) }>
 				<label>Search<input name="search" value={ p.Search }/></label>
 				<label>Page size<select name="per_page">
@@ -134,5 +135,12 @@ func capitalize(s string) string {
 func childListQuery(p CustomerChildrenData) url.Values {
 	q:=filterValues("search",p.Search,"per_page",fmt.Sprint(p.PerPage))
 	if p.Archived{q.Set("archived","1")}
+	return q
+}
+
+func childExportQuery(p CustomerChildrenData) url.Values {
+	q := childListQuery(p)
+	q.Del("per_page")
+	if p.CustomerID > 0 { q.Set("customer_id", fmt.Sprint(p.CustomerID)) }
 	return q
 }

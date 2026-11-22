@@ -59,6 +59,35 @@ func operationalLinks(ctx context.Context) []navigationLink {
 	if navigationPermission(ctx, "lease.view", "A") || navigationPermission(ctx, "lease.billing.view", "A") {
 		links = append(links, navigationLink{"/leases", "Leases"})
 	}
+	if len(masterExportLinks(ctx)) > 0 {
+		links = append(links, navigationLink{"/exports", "CSV exports"})
+	}
+	return links
+}
+
+func masterExportLinks(ctx context.Context) []navigationLink {
+	var links []navigationLink
+	for _, entry := range []struct{ permission, view, path, label string }{
+		{"contact.export", "contact.view", "/contacts/export", "Contacts"},
+		{"location.export", "location.view", "/locations/export", "Locations"},
+		{"asset.export", "asset.view", "/assets/export", "Assets"},
+		{"project.export", "project.view", "/projects/export", "Projects"},
+		{"service_entry.export", "service_entry.view", "/service-entries/export", "Asset Service Entries"},
+		{"item.export", "item.view", "/items/export", "Item base"},
+		{"pricebook.export", "pricebook.view", "/pricebook/export", "Pricebook"},
+		{"cost.export", "cost.view", "/items/cost/export", "Item Cost"},
+	} {
+		if !navigationPermission(ctx, entry.permission, "A") || !navigationPermission(ctx, entry.view, "A") {
+			continue
+		}
+		if (entry.permission == "pricebook.export" || entry.permission == "cost.export") && !navigationPermission(ctx, "item.view", "A") {
+			continue
+		}
+		if entry.permission == "service_entry.export" && !navigationPermission(ctx, "asset.view", "A") {
+			continue
+		}
+		links = append(links, navigationLink{entry.path, entry.label})
+	}
 	return links
 }
 

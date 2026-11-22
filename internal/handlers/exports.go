@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -20,6 +21,7 @@ func registerExports(r chi.Router, pool *pgxpool.Pool) {
 	registerActivityExports(r, pool)
 	registerTimeExports(r, pool)
 	svc := exports.Product(pool)
+	registerMasterExports(r, svc)
 	r.Get("/exports", func(w http.ResponseWriter, r *http.Request) {
 		auth, ok := authorization.FromContext(r.Context())
 		if !ok {
@@ -114,6 +116,116 @@ func registerExports(r chi.Router, pool *pgxpool.Pool) {
 		}
 		templates.ExportStatus(status).Render(r.Context(), w)
 	})
+}
+
+// These are office collection exports. Domain definitions, also registered in
+// exports.Product, own selection and whole-artifact authority at every stage.
+func registerMasterExports(r chi.Router, svc *exports.Service) {
+	for _, route := range []struct {
+		path, title, back, defaultSort string
+		definition                     exports.Definition
+		ids                            []string
+	}{
+		{"/contacts/export", "Contacts", "/contacts", "name", exports.Contact{}, []string{"customer_id"}},
+		{"/locations/export", "Locations", "/locations", "name", exports.Location{}, []string{"customer_id"}},
+		{"/projects/export", "Projects", "/projects", "name", exports.Project{}, []string{"status_id"}},
+		{"/assets/export", "Assets", "/assets", "name", exports.Asset{}, []string{"customer_id", "asset_type_id", "asset_status_id"}},
+		{"/service-entries/export", "Asset Service Entries", "/assets", "date", exports.ServiceEntry{}, []string{"asset_id"}},
+		{"/items/export", "Item base", "/items", "name", exports.ItemBase{}, nil},
+		{"/pricebook/export", "Pricebook", "/items", "name", exports.Pricebook{}, nil},
+		{"/items/cost/export", "Item Cost", "/items", "name", exports.Cost{}, nil},
+	} {
+		handler := func(w http.ResponseWriter, r *http.Request) {
+			auth, ok := authorization.FromContext(r.Context())
+			if !ok {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			raw, fields, err := masterExportOptions(r, route.defaultSort, route.ids)
+			if err == nil {
+				err = route.definition.Validate(raw)
+			}
+			if err != nil {
+				exportError(w, r, err)
+				return
+			}
+			w.Header().Set("Cache-Control", "no-store")
+			if r.Method == http.MethodPost {
+				id, err := svc.Accept(r.Context(), auth.Actor, r.FormValue("operation_id"), route.definition.Kind(), raw)
+				if err != nil {
+					exportError(w, r, err)
+					return
+				}
+				http.Redirect(w, r, fmt.Sprintf("/exports/%d", id), http.StatusSeeOther)
+				return
+			}
+			p, err := auth.Service.Principal(r.Context(), auth.Actor)
+			if err == nil {
+				err = route.definition.Authorize(p, raw)
+			}
+			if err != nil {
+				exportError(w, r, err)
+				return
+			}
+			templates.MasterExportReview(route.title, route.path, route.back, newOperationKey(), fields, route.definition.Columns()).Render(r.Context(), w)
+		}
+		r.Get(route.path, handler)
+		r.Post(route.path, handler)
+	}
+}
+
+func masterExportOptions(r *http.Request, defaultSort string, ids []string) (json.RawMessage, url.Values, error) {
+	if err := r.ParseForm(); err != nil {
+		return nil, nil, exports.ErrConflict
+	}
+	allowed := map[string]bool{"search": true, "sort": true, "archived": true, "archived_only": true, "search_sku": true, "operation_id": true, "csrf_token": true}
+	for _, key := range ids {
+		allowed[key] = true
+	}
+	for key, values := range r.Form {
+		if !allowed[key] || len(values) != 1 {
+			return nil, nil, exports.ErrConflict
+		}
+	}
+	sort := r.Form.Get("sort")
+	if sort == "" {
+		sort = defaultSort
+	}
+	archived := r.Form.Get("archived")
+	if archived != "" && archived != "0" && archived != "1" {
+		return nil, nil, exports.ErrConflict
+	}
+	options := map[string]any{"search": r.Form.Get("search"), "sort": sort, "archived": archived == "1"}
+	fields := url.Values{"search": {r.Form.Get("search")}, "sort": {sort}, "archived": {"0"}}
+	if archived == "1" {
+		fields.Set("archived", "1")
+	}
+	if value := r.Form.Get("archived_only"); value != "" {
+		if value != "0" && value != "1" || value == "1" && archived != "1" {
+			return nil, nil, exports.ErrConflict
+		}
+		options["archived_only"] = value == "1"
+		fields.Set("archived_only", value)
+	}
+	if value := r.Form.Get("search_sku"); value != "" {
+		if value != "0" && value != "1" {
+			return nil, nil, exports.ErrConflict
+		}
+		options["search_sku"] = value == "1"
+		fields.Set("search_sku", value)
+	}
+	for _, key := range ids {
+		if value := r.Form.Get(key); value != "" {
+			id, err := strconv.ParseInt(value, 10, 64)
+			if err != nil || id < 0 {
+				return nil, nil, exports.ErrConflict
+			}
+			options[key] = id
+			fields.Set(key, strconv.FormatInt(id, 10))
+		}
+	}
+	raw, err := json.Marshal(options)
+	return raw, fields, err
 }
 func customerExportOptions(r *http.Request) exports.CustomerOptions {
 	sort := r.FormValue("sort")

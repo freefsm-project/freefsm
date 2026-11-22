@@ -1,6 +1,8 @@
 package templates
 
 import "fmt"
+import "net/url"
+import "strings"
 import "github.com/freefsm-project/freefsm/internal/exports"
 
 templ ExportUnavailable() {
@@ -9,6 +11,53 @@ templ ExportUnavailable() {
   <p>This result cannot be downloaded. Generate a new export with your current access.</p>
    @ExportOrigins()
   <a href="/exports">My CSV exports</a>
+ }
+}
+
+templ MasterExportReview(title, action, back, operation string, fields url.Values, columns []string) {
+ @Layout("Export " + title) {
+  <h1>Export { title }</h1>
+  <p>All matching rows, not only the current page. Scope: All Records.</p>
+  <dl>
+   for key, values := range fields {
+    <dt>{ key }</dt><dd>{ strings.Join(values, ", ") }</dd>
+   }
+  </dl>
+  if fields.Get("archived_only") == "1" {
+   <p>Archived records only, with explicit archived visibility.</p>
+  } else if fields.Get("archived") == "1" {
+   <p>Include archived records with explicit archived visibility.</p>
+  } else {
+   <p>Active records only.</p>
+  }
+  <p>Fixed columns: { strings.Join(columns, ", ") }.</p>
+  if fields.Get("search_sku") == "1" {
+   <p>Search includes SKU matches. Pricebook View must remain authorized even when the CSV contains only Item base or Cost columns.</p>
+  }
+  <p>Item base excludes Pricebook and Cost; Pricebook excludes Cost. Customer financial exports use the separate receivables and settlement workflow.</p>
+  <p>Ready files are requester-only for 24 hours. Every download rechecks access to the entire snapshot. Downloaded copies are outside subsequent access control.</p>
+  <p>Spreadsheet safety: formula-leading text (including after whitespace) and text starting with an apostrophe receive one leading apostrophe. Remove exactly that added apostrophe to recover the original value.</p>
+  <p>A click alone is not acceptance. Check My CSV exports after an interrupted response.</p>
+  <form method="post" action={ templ.URL(action) } hx-boost="false">
+   <input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+   <input type="hidden" name="operation_id" value={ operation }/>
+   for key, values := range fields {
+    for _, value := range values {
+     <input type="hidden" name={ key } value={ value }/>
+    }
+   }
+   <button type="submit" class="btn btn-primary">Confirm export</button>
+  </form>
+  <a href={ templ.URL(back) }>Cancel</a>
+  <a href="/exports">My CSV exports</a>
+ }
+}
+
+templ MasterExportLink(path string, query url.Values) {
+ for _, link := range masterExportLinks(ctx) {
+  if link.URL == path {
+   <a href={ templ.URL(path+"?"+query.Encode()) }>Export { link.Label } CSV</a>
+  }
  }
 }
 
@@ -77,6 +126,9 @@ templ ExportStatus(status exports.Status) {
 }
 
 templ ExportOrigins() {
+ for _,link := range masterExportLinks(ctx) {
+  <a href={ templ.URL(link.URL) }>Export { link.Label } CSV</a>
+ }
  if navigationPermission(ctx,"time.export","O","J","A") {
   <a href="/time-entries/export">Generate a new Timesheet export</a>
  }
@@ -96,7 +148,8 @@ templ ExportOrigins() {
 
 templ ExportList(statuses []exports.Status) {
  @Layout("My CSV exports") {
-  <h1>My CSV exports</h1>
+   <h1>My CSV exports</h1>
+   @ExportOrigins()
   <p>Only committed requests appear here. Refresh after an interrupted request to check acceptance; a click alone is not acceptance.</p>
   if len(statuses)==0 {
    <p>No accepted exports.</p>

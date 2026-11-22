@@ -75,6 +75,11 @@ templ AssetShow(p AssetShowPageData) {
 		if p.CanViewServiceEntries {
 			<h3>Service Entries</h3>
 			<a href={templ.URL(fmt.Sprintf("/assets/%d/service-entries",p.Asset.ID))}>View lifetime service history</a>
+			if p.Asset.ArchivedAt != "" {
+				@MasterExportLink("/service-entries/export", filterValues("asset_id", fmt.Sprint(p.Asset.ID), "archived", "1"))
+			} else {
+				@MasterExportLink("/service-entries/export", filterValues("asset_id", fmt.Sprint(p.Asset.ID)))
+			}
 		}
 		<h3>Linked Job history</h3>
 		<p>Job links are retained work provenance, not recorded Service Entries.</p>
