@@ -14,10 +14,12 @@ templ EstimatesIndex(p EstimateListPageData) {
 
 templ EstimatesListContent(p EstimateListPageData) {
 	<div id="estimate-list-content" class="focused-list-content">
+		<p>Current active Estimates. Archived and retained conversion sources are excluded from this operational list; authorized retained sources appear separately in the creation cohort.</p>
+		@OperationalExportLinks("estimate","/estimates",p.Search,p.StatusID,p.CustomerID,p.Validity,p.Sort)
 		@ListToolbar(ListToolbarData{
 			Action: "/estimates", Target: "#estimate-list-content", Search: p.Search,
 			SearchPlaceholder: "Search by title...", NewURL: operationalNewURL(ctx, "/estimates/new"), NewLabel: "New Estimate",
-			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID),"valid",p.Validity), Scope: customerScope(p.CustomerID),
+			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID),"valid",p.Validity), Scope: operationalListScope(p.CustomerID,p.Scope,p.Sort),
 			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID),"valid",p.Validity)),
 		}) {
 			<label>Estimate status
@@ -79,7 +81,7 @@ templ EstimatesTable(p EstimateListPageData) {
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
 			BaseURL:     "/estimates",
-			Query:       listQuery(p.Search, filterValues("status_id", fmt.Sprintf("%d", p.StatusID),"valid",p.Validity), customerScope(p.CustomerID)),
+			Query:       listQuery(p.Search, filterValues("status_id", fmt.Sprintf("%d", p.StatusID),"valid",p.Validity), operationalListScope(p.CustomerID,p.Scope,p.Sort)),
 			Target:      "#estimate-list-content",
 		})
 	</div>

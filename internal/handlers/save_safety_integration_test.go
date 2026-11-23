@@ -87,10 +87,15 @@ func TestSaveSafetyNativeInitialReadFailureHTTP(t *testing.T) {
 			}
 			defer pool.Exec(ctx, `ALTER TABLE safety_unavailable_records RENAME TO `+table)
 			sort := "name_desc"
-			if table == "time_entries" {
-				// Exercise the read fault with a valid report selector, rather
-				// than an unrelated validation rejection before the database read.
+			// Exercise the read fault with each shared selector's valid order,
+			// not an unrelated validation rejection before the database read.
+			switch table {
+			case "time_entries":
 				sort = "start_desc"
+			case "jobs":
+				sort = "schedule_desc"
+			case "estimates", "invoices":
+				sort = "created_desc"
 			}
 			path := "/" + strings.ReplaceAll(table, "_", "-") + "?search=Keep+filter&sort=" + sort + "&page=2"
 			w := safetyRequest(router, cookie, "GET", path, nil, "")

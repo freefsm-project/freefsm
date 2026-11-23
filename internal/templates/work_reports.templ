@@ -1,0 +1,141 @@
+package templates
+
+import "net/url"
+import "strings"
+
+templ WorkReport(p WorkReportPageData) {
+	@Layout(p.Title) {
+		<h1>{ p.Title }</h1>
+		<p>{ p.Description }</p>
+		<form action={ p.Path } method="get" hx-boost="false">
+			<label>Scope<select name="scope">
+				for _, scope := range p.Scopes {
+					<option value={ scope } selected?={ p.Filters.Get("scope") == scope }>{ map[string]string{"A":"All authorized records", "J":"Assigned Jobs"}[scope] }</option>
+				}
+			</select></label>
+			for _, field := range p.Fields {
+				<label>{ field.Label }
+					if len(field.Options) > 0 {
+						<select name={ field.Name }>
+							for _, option := range field.Options {
+								<option value={ option.Value } selected?={ p.Filters.Get(field.Name) == option.Value }>{ option.Label }</option>
+							}
+						</select>
+					} else {
+						<input type={ field.Type } name={ field.Name } value={ p.Filters.Get(field.Name) }/>
+					}
+				</label>
+			}
+			<button type="submit">Apply filters / Refresh</button>
+			<a href={ templ.URL(p.Path) }>Clear filters</a>
+		</form>
+		if p.Error != "" {
+			<div role="alert"><h2>Report unavailable</h2><p>{ p.Error }</p><a href={ templ.URL(workReportURL(p.Path,p.Filters,"","")) }>Retry</a></div>
+		} else {
+			<p>Updated at <time>{ p.UpdatedAt }</time>. Company timezone: { p.Timezone }. Current snapshot; refresh to see changes.</p>
+			if p.ExportURL != "" {
+				<a href={ templ.URL(p.ExportURL) } role="button">Review CSV export</a>
+			}
+			<h2>Overall totals</h2>
+			<dl>
+				for _, measure := range p.Summary {
+					<dt>{ measure.Label }</dt><dd>
+						if measure.URL != "" {
+							<a href={ templ.URL(measure.URL) }>{ measure.Value }</a>
+						} else {
+							{ measure.Value }
+						}
+					</dd>
+				}
+			</dl>
+			if p.Nonadditive {
+				<h2>By assignee — nonadditive</h2>
+				<p>Each Job counts once overall and once in each matching assignee group. Group totals overlap: do not add them. Unassigned is a separate group. Schedule, overdue and completed measures may overlap.</p>
+			}
+			for _, group := range p.Groups {
+				<section><h3>{ group.Label }</h3><dl>
+					for _, measure := range group.Measures {
+						<dt>{ measure.Label }</dt><dd><a href={ templ.URL(measure.URL) }>{ measure.Value }</a></dd>
+					}
+				</dl></section>
+			}
+			<h2>Matching rows</h2>
+			if len(p.Rows) == 0 {
+				<p>No matching records for these filters.</p>
+			} else {
+				<div class="work-queue-wrap"><table><thead><tr>
+					for _, header := range p.Headers {
+						<th scope="col">{ header }</th>
+					}
+					if p.RelatedHeader!="" {
+						<th scope="col">{ p.RelatedHeader }</th>
+					}
+				</tr></thead><tbody>
+					for _, row := range p.Rows {
+						<tr><th scope="row">
+							if row.URL != "" {
+								<a href={ templ.URL(row.URL) }>{ row.Label }</a>
+							} else {
+								{ row.Label }
+							}
+						</th>
+							for _, cell := range row.Cells {
+								<td>{ cell }</td>
+							}
+							if p.RelatedHeader!="" {
+								<td>
+									if row.RelatedURL!="" {
+										<a href={ templ.URL(row.RelatedURL) }>{ row.RelatedLabel }</a>
+									}
+								</td>
+							}
+						</tr>
+					}
+				</tbody></table></div>
+			}
+		}
+	}
+}
+
+templ OperationalExportLinks(kind, path, search string, statusID, customerID int64, valid, sort string) {
+	if navigationPermission(ctx,kind+".export","A") && navigationPermission(ctx,kind+".view","A") {
+		<a href={ templ.URL(operationalExportURL(path,search,statusID,customerID,valid,"A",sort)) }>Review CSV export — All Records</a>
+	}
+	if navigationPermission(ctx,kind+".export","A","J") && navigationPermission(ctx,kind+".view","A","J") {
+		<a href={ templ.URL(operationalExportURL(path,search,statusID,customerID,valid,"J",sort)) }>Review CSV export — Assigned Jobs</a>
+	}
+}
+
+templ WorkExportReview(title, path, description, scope, operation string, filters url.Values, columns []string, failure string) {
+	@Layout("Export " + title) {
+		<h1>Review { title } CSV export</h1>
+		if failure != "" {
+			<p role="alert">{ failure }</p>
+		}
+		<p>{ description }</p>
+		<p>Scope: { map[string]string{"A":"All authorized records", "J":"Assigned Jobs"}[scope] }. All matching rows, not only the current page. Current active records only; archived records are excluded.</p>
+		<dl>
+			for key, values := range filters {
+				<dt>{ key }</dt>
+				for _, value := range values {
+					<dd>{ value }</dd>
+				}
+			}
+		</dl>
+		<p>Fixed operational columns (no financial amounts): { strings.Join(columns, ", ") }.</p>
+		<p>The worker captures one consistent generation-time snapshot. Changes after this review may affect that snapshot. Generation time and company timezone are recorded in the output. Stable ordering includes an identity tie-break.</p>
+		<p>All sizes use Pending / Running / Ready / Failed. Ready files are requester-only for 24 hours. Every download rechecks all included records and fields; access loss blocks the whole file. Downloaded copies are outside subsequent access control.</p>
+		<form action={ path } method="post" hx-boost="false">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="operation_id" value={ operation }/>
+			for key, values := range filters {
+				for _, value := range values {
+					<input type="hidden" name={ key } value={ value }/>
+				}
+			}
+			<button type="submit">Confirm CSV export</button>
+		</form>
+		<a href={ templ.URL(workReportURL(strings.TrimSuffix(path,"/export"),filters,"","")) }>Back to filters</a>
+		<a href="/exports">My CSV exports</a>
+	}
+}

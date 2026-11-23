@@ -63,49 +63,41 @@ func (h *InvoiceHandler) authorizeInvoice(w http.ResponseWriter, r *http.Request
 }
 
 func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
 	perPage := 25
-	search := r.URL.Query().Get("search")
-	statusID, _ := strconv.ParseInt(r.URL.Query().Get("status_id"), 10, 64)
-	customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
-
-	var invoices []*ent.Invoice
-	var total int
-	var err error
-	if customerID > 0 {
-		invoices, total, err = h.svc.ListForCustomer(r.Context(), customerID, search, statusID, page, perPage)
-	} else {
-		invoices, total, err = h.svc.List(r.Context(), search, statusID, page, perPage)
-	}
+	f, err := parseDocumentListFilter("invoice", r.URL.Query())
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		http.Error(w, "Invalid list filters", 400)
 		return
 	}
-
+	scope, _, err := workReportScope(r, "invoice.view")
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	auth, _ := authorization.FromContext(r.Context())
+	report, err := auth.Service.DocumentList(r.Context(), auth.Actor, "invoice", f, scope)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	total := len(report.Rows)
+	page, start, end := reportPageBounds(r, total)
 	statuses := h.statusesForSelect(r.Context())
-	customers, _ := h.custSvc.ListAll(r.Context())
-	custMap := customerMap(customers)
-
-	rows := make([]templates.InvoiceRow, len(invoices))
-	for i, inv := range invoices {
-		rows[i] = invoiceRow(r.Context(), h.effectiveInvoice(r.Context(), inv), statuses, custMap)
-		if p, current := authorization.NavigationPrincipal(r.Context()); current && !p.Allows("settlement.view", authorization.All) {
-			rows[i].SettlementState = ""
-		}
+	rows := make([]templates.InvoiceRow, 0, end-start)
+	for _, inv := range report.Rows[start:end] {
+		rows = append(rows, templates.InvoiceRow{ID: inv.ID, Number: inv.Number, NumberLabel: inv.NumberLabel, Title: inv.Title, CustomerID: inv.CustomerID, Customer: inv.Customer, StatusID: inv.StatusID, StatusName: inv.StatusName, StatusColor: inv.StatusColor, SettlementState: inv.SettlementState, InvoiceDate: displayReportDate(r.Context(), inv.InvoiceDate), DueDate: displayReportDate(r.Context(), inv.DueDate)})
 	}
 
 	data := templates.InvoiceListPageData{
+		Scope: string(scope), Sort: report.Filter.Sort,
 		Invoices:   rows,
 		Page:       page,
 		PerPage:    perPage,
 		Total:      total,
 		TotalPages: services.InvoicePaginationTotalPages(total, perPage),
-		Search:     search,
-		StatusID:   statusID,
-		CustomerID: customerID,
+		Search:     report.Filter.Search,
+		StatusID:   report.Filter.StatusID,
+		CustomerID: report.Filter.CustomerID,
 		Statuses:   statusOptions(statuses),
 	}
 
@@ -114,6 +106,17 @@ func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	templates.InvoicesIndex(data).Render(r.Context(), w)
+}
+
+func displayReportDate(ctx context.Context, value string) string {
+	if value == "" {
+		return ""
+	}
+	date, err := time.Parse("2006-01-02", value)
+	if err != nil {
+		return "Date requires review"
+	}
+	return services.FormatLocalDate(date, middleware.CompanyFromContext(ctx))
 }
 
 func (h *InvoiceHandler) Show(w http.ResponseWriter, r *http.Request) {

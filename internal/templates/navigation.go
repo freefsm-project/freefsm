@@ -35,6 +35,10 @@ func operationalLinks(ctx context.Context) []navigationLink {
 	var links []navigationLink
 	if navigationPermission(ctx, "job.view", "A", "J") {
 		links = append(links, navigationLink{"/schedule", "Schedule"})
+		links = append(links, navigationLink{"/reports/workload", "Workload"})
+	}
+	if navigationPermission(ctx, "estimate.view", "A", "J") {
+		links = append(links, navigationLink{"/reports/estimate-cohort", "Estimate creation cohort"})
 	}
 	for _, domain := range []struct {
 		name, label string

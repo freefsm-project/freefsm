@@ -68,46 +68,51 @@ func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, 
 }
 
 func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
-	}
 	perPage := 25
-	search := r.URL.Query().Get("search")
-	statusID, _ := strconv.ParseInt(r.URL.Query().Get("status_id"), 10, 64)
-	customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
-
-	var jobs []*ent.Job
-	var total int
-	var err error
-	if customerID > 0 {
-		jobs, total, err = h.svc.ListForCustomer(r.Context(), customerID, search, statusID, page, perPage)
-	} else {
-		jobs, total, err = h.svc.List(r.Context(), search, statusID, page, perPage)
-	}
+	f, err := parseJobOperationalFilter(r.URL.Query())
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		http.Error(w, "Invalid list filters", 400)
 		return
 	}
-
+	scope, _, err := workReportScope(r, "job.view")
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	auth, _ := authorization.FromContext(r.Context())
+	report, err := auth.Service.JobOperational(r.Context(), auth.Actor, f, scope)
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
+	total := len(report.Rows)
+	page, start, end := reportPageBounds(r, total)
 	statuses := h.statusesForSelect(r.Context())
-	customers, _ := h.custSvc.ListAll(r.Context())
-	custMap := customerMap(customers)
-
-	rows := make([]templates.JobRow, len(jobs))
-	for i, j := range jobs {
-		rows[i] = jobRow(r.Context(), j, statuses, custMap)
+	rows := make([]templates.JobRow, 0, end-start)
+	for _, j := range report.Rows[start:end] {
+		row := templates.JobRow{ID: j.ID, DisplayName: j.Title, JobType: j.Title, Customer: j.Customer, StatusID: j.StatusID, StatusName: j.Status, StatusColor: j.Color}
+		if j.Subtitle != "" {
+			row.DisplayName += " — " + j.Subtitle
+		}
+		if j.Start != nil {
+			row.StartTime = displayDateTime(r.Context(), *j.Start)
+		}
+		// Independently authorized by the selector in this same snapshot;
+		// the operational CSV never includes billing or pricing.
+		row.BillingType = report.UIBillingTypes[j.ID]
+		rows = append(rows, row)
 	}
 
 	data := templates.JobListPageData{
+		Scope: string(scope), Sort: report.Filter.Sort,
 		Jobs:       rows,
 		Page:       page,
 		PerPage:    perPage,
 		Total:      total,
 		TotalPages: services.JobPaginationTotalPages(total, perPage),
-		Search:     search,
-		StatusID:   statusID,
-		CustomerID: customerID,
+		Search:     report.Filter.Search,
+		StatusID:   report.Filter.StatusID,
+		CustomerID: report.Filter.CustomerID,
 		Statuses:   statusOptions(statuses),
 	}
 

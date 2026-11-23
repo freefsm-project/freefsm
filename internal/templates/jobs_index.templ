@@ -16,10 +16,12 @@ templ JobsIndex(p JobListPageData) {
 
 templ JobsListContent(p JobListPageData) {
 	<div id="job-list-content" class="focused-list-content">
+		<p>Current active Jobs. Archived records are excluded.</p>
+		@OperationalExportLinks("job","/jobs",p.Search,p.StatusID,p.CustomerID,"",p.Sort)
 		@ListToolbar(ListToolbarData{
 			Action: "/jobs", Target: "#job-list-content", Search: p.Search,
 			SearchPlaceholder: "Search by type or subtitle...", NewURL: operationalNewURL(ctx, "/jobs/new"), NewLabel: "New Job",
-			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), Scope: customerScope(p.CustomerID),
+			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), Scope: operationalListScope(p.CustomerID,p.Scope,p.Sort),
 			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
 		}) {
 			<label>Job status
@@ -85,7 +87,7 @@ templ JobsTable(p JobListPageData) {
 			CurrentPage: p.Page,
 			TotalPages:  p.TotalPages,
 			BaseURL:     "/jobs",
-			Query:       listQuery(p.Search, filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), customerScope(p.CustomerID)),
+			Query:       listQuery(p.Search, filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), operationalListScope(p.CustomerID,p.Scope,p.Sort)),
 			Target:      "#job-list-content",
 		})
 	</div>

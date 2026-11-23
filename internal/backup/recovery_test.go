@@ -21,7 +21,8 @@ func storageManager(t *testing.T) *Manager {
 	if e != nil {
 		t.Fatal(e)
 	}
-	m, e := New(Config{DSN: "postgres://unused/unused", UploadDir: filepath.Join(root, "uploads"), StateDir: c.StateDir(), Version: "v1.2.3", Commit: "abcdef1234567", Control: c})
+	// Keep unavailable-database preflight deterministic without external DNS.
+	m, e := New(Config{DSN: "postgres://unused/unused?host=" + filepath.Join(root, "missing-postgres-socket") + "&sslmode=disable", UploadDir: filepath.Join(root, "uploads"), StateDir: c.StateDir(), Version: "v1.2.3", Commit: "abcdef1234567", Control: c})
 	if e != nil {
 		t.Fatal(e)
 	}

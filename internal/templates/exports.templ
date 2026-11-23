@@ -3,10 +3,11 @@ package templates
 import "fmt"
 import "github.com/freefsm-project/freefsm/internal/exports"
 
-templ ExportUnavailable() {
+templ ExportUnavailable(recovery ...string) {
  @Layout("Export unavailable") {
   <h1>Export unavailable</h1>
-  <p>This result cannot be downloaded. Generate a new export with your current access.</p>
+   <p>This result cannot be downloaded. Generate a new export with your current access.</p>
+   @WorkExportRecovery(recovery)
    @ExportOrigins()
   <a href="/exports">My CSV exports</a>
  }
@@ -41,7 +42,7 @@ templ ExportReview(options exports.CustomerOptions, operation string) {
  }
 }
 
-templ ExportStatus(status exports.Status) {
+templ ExportStatus(status exports.Status, recovery ...string) {
   @Layout("CSV export") {
    <h1>CSV export</h1>
   <p role="status">{ status.State }</p>
@@ -70,6 +71,7 @@ templ ExportStatus(status exports.Status) {
   }
   <p>Downloaded copies are outside subsequent access control.</p>
   <a href={ templ.URL(fmt.Sprintf("/exports/%d",status.ID)) }>Refresh status</a>
+   @WorkExportRecovery(recovery)
    @ExportOrigins()
    <a href="/customers">Customers</a>
    <a href="/exports">My CSV exports</a>
@@ -77,6 +79,19 @@ templ ExportStatus(status exports.Status) {
 }
 
 templ ExportOrigins() {
+ if navigationPermission(ctx,"job.export","A","J") && navigationPermission(ctx,"job.view","A","J") {
+  <a href="/jobs/export">Review a new Job export</a>
+  <a href="/reports/workload/export">Review a new Workload export</a>
+ }
+ if navigationPermission(ctx,"estimate.export","A","J") && navigationPermission(ctx,"estimate.view","A","J") {
+  <a href="/estimates/export">Review a new Estimate list export</a>
+  if navigationPermission(ctx,"invoice.export","A","J") && navigationPermission(ctx,"invoice.view","A","J") {
+   <a href="/reports/estimate-cohort/export">Review a new Estimate creation cohort export</a>
+  }
+ }
+ if navigationPermission(ctx,"invoice.export","A","J") && navigationPermission(ctx,"invoice.view","A","J") {
+  <a href="/invoices/export">Review a new Invoice list export</a>
+ }
  if navigationPermission(ctx,"time.export","O","J","A") {
   <a href="/time-entries/export">Generate a new Timesheet export</a>
  }
@@ -91,6 +106,13 @@ templ ExportOrigins() {
  }
  if navigationPermission(ctx,"audit.export","S") {
   <a href="/settings/audit">Generate a new audit export</a>
+ }
+}
+
+templ WorkExportRecovery(recovery []string) {
+ if len(recovery)>0 && recovery[0]!="" {
+  <a href={ templ.URL(recovery[0]) }>Review a new export with these filters and scope</a>
+  <p>The new export captures a fresh generation-time snapshot; it does not reproduce the old file.</p>
  }
 }
 

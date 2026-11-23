@@ -611,15 +611,16 @@ type SelectOption struct {
 type FormInput struct{ Name, Value string }
 
 type JobListPageData struct {
-	Jobs       []JobRow
-	Page       int
-	PerPage    int
-	Total      int
-	TotalPages int
-	Search     string
-	StatusID   int64
-	CustomerID int64
-	Statuses   []SelectOption
+	Scope, Sort string
+	Jobs        []JobRow
+	Page        int
+	PerPage     int
+	Total       int
+	TotalPages  int
+	Search      string
+	StatusID    int64
+	CustomerID  int64
+	Statuses    []SelectOption
 }
 
 type JobFormPageData struct {
@@ -703,16 +704,17 @@ type EstimateDetail struct {
 }
 
 type EstimateListPageData struct {
-	Validity   string
-	Estimates  []EstimateRow
-	Page       int
-	PerPage    int
-	Total      int
-	TotalPages int
-	Search     string
-	StatusID   int64
-	CustomerID int64
-	Statuses   []SelectOption
+	Scope, Sort string
+	Validity    string
+	Estimates   []EstimateRow
+	Page        int
+	PerPage     int
+	Total       int
+	TotalPages  int
+	Search      string
+	StatusID    int64
+	CustomerID  int64
+	Statuses    []SelectOption
 }
 
 type EstimateFormPageData struct {
@@ -792,15 +794,16 @@ type InvoiceDetail struct {
 }
 
 type InvoiceListPageData struct {
-	Invoices   []InvoiceRow
-	Page       int
-	PerPage    int
-	Total      int
-	TotalPages int
-	Search     string
-	StatusID   int64
-	CustomerID int64
-	Statuses   []SelectOption
+	Scope, Sort string
+	Invoices    []InvoiceRow
+	Page        int
+	PerPage     int
+	Total       int
+	TotalPages  int
+	Search      string
+	StatusID    int64
+	CustomerID  int64
+	Statuses    []SelectOption
 }
 
 type UserRow struct {
