@@ -1,0 +1,142 @@
+package templates
+
+import "strings"
+import "strconv"
+
+templ FinancialReport(p FinancialReportPageData) {
+	@Layout(p.Title) {
+		<h1>{ p.Title }</h1>
+		<p>{ p.Description }</p>
+		<form action={ p.Path } method="get" hx-boost="false">
+			<label>View<select name="view">
+				for _, view := range p.Views {
+					<option value={ view.Value } selected?={ p.View == view.Value }>{ view.Label }</option>
+				}
+			</select></label>
+			if p.Filters.Get("customer_id") != "" {
+				<input type="hidden" name="customer_id" value={ p.Filters.Get("customer_id") }/>
+			}
+			<button type="submit">Change view</button>
+		</form>
+		<form action={ p.Path } method="get" hx-boost="false">
+			<input type="hidden" name="view" value={ p.View }/>
+			for _, field := range p.Fields {
+				<label>{ field.Label }
+					if len(field.Options) > 0 {
+						<select name={ field.Name }>
+							for _, option := range field.Options {
+								<option value={ option.Value } selected?={ p.Filters.Get(field.Name) == option.Value }>{ option.Label }</option>
+							}
+						</select>
+					} else {
+						<input type={ field.Type } name={ field.Name } value={ p.Filters.Get(field.Name) }/>
+					}
+				</label>
+			}
+			<button type="submit">Apply filters / Refresh</button>
+			<a href={ templ.URL(workReportURL(p.Path, nil, "view", p.View)) }>Clear filters</a>
+		</form>
+		if p.Error != "" {
+			<div role="alert"><h2>Report unavailable</h2><p>{ p.Error }</p><a href={ templ.URL(workReportURL(p.Path, p.Filters, "view", p.View)) }>Retry</a></div>
+		} else {
+			<p>Updated at <time>{ p.UpdatedAt }</time>. Company timezone: { p.Timezone }. Current snapshot; refresh to see changes.</p>
+			for _, export := range p.Exports {
+				if export.URL != "" {
+					<a href={ templ.URL(export.URL) } role="button">{ export.Text }</a>
+				}
+			}
+			for _, section := range p.Sections {
+				@financialSection(section)
+			}
+		}
+	}
+}
+
+templ financialSection(s FinancialSection) {
+	<section>
+		<h2>{ s.Title }</h2><p>{ s.Description }</p>
+		<dl>
+			for _, measure := range s.Measures {
+				<dt>{ measure.Label }</dt><dd>
+					if measure.URL != "" {
+						<a href={ templ.URL(measure.URL) }>{ measure.Value }</a>
+					} else {
+						{ measure.Value }
+					}
+				</dd>
+			}
+		</dl>
+		if len(s.Rows) == 0 {
+			<p>No matching records for these filters.</p>
+		} else {
+			<div class="work-queue-wrap"><table>
+				<caption>{ s.Title }</caption>
+				<thead><tr>
+					for _, header := range s.Headers {
+						<th scope="col">{ header }</th>
+					}
+				</tr></thead>
+				<tbody>
+					for _, row := range s.Rows {
+						<tr>
+							for _, cell := range row.Cells {
+								<td>
+									if cell.Unknown {
+										<span>Unknown</span>
+									} else if cell.URL != "" {
+										<a href={ templ.URL(cell.URL) }>{ cell.Text }</a>
+									} else {
+										{ cell.Text }
+									}
+								</td>
+							}
+						</tr>
+						if len(row.Allocations) > 0 {
+							<tr><td colspan={ strconv.Itoa(len(s.Headers)) }><ul aria-label="Immutable source allocations">
+								for _, source := range row.Allocations {
+									<li>{ source.Kind } { source.ID }; Invoice identity { source.InvoiceID }; Credit { source.CreditID }; Payment { source.PaymentID }; source date { source.SourceDate }; portion { source.Amount }</li>
+								}
+							</ul></td></tr>
+						}
+					}
+				</tbody>
+			</table></div>
+		}
+	</section>
+}
+
+templ FinancialExportReview(p FinancialExportReviewData) {
+	@Layout("Export " + p.Title) {
+		<h1>Review { p.Title } CSV export</h1>
+		if p.Error != "" {
+			<p role="alert">{ p.Error }</p>
+		}
+		<p>{ p.Description }</p>
+		<p>All matching authorized rows, not only the current page. Archived history is included only when explicitly selected and authorized. Current receivables include eligible active Invoices only.</p>
+		<dl>
+			for key, values := range p.Filters {
+				<dt>{ key }</dt>
+				for _, value := range values {
+					<dd>{ value }</dd>
+				}
+			}
+		</dl>
+		<p>Fixed columns: { strings.Join(p.Columns, ", ") }.</p>
+		<p>Spreadsheet protection prefixes formula-leading cells, including negative amounts, with an apostrophe. Remove exactly that added apostrophe when decoding typed values.</p>
+		<p>The worker captures one consistent generation-time snapshot. Changes after review may affect that snapshot. Generation time and company timezone are recorded in the output.</p>
+		<p>Activity uses recording time, not effective date. Unknown recording times remain separately identified and excluded from period totals. Current Available Credit is independent of the activity period. Cash effects, source portions and current balances are distinct measures; do not add them together.</p>
+		<p>All sizes use Pending / Running / Ready / Failed. Ready files are requester-only for 24 hours. Every download rechecks all included records and fields; access loss blocks the whole file. Downloaded copies are outside subsequent access control.</p>
+		<form action={ p.Path } method="post" hx-boost="false">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="operation_id" value={ p.Operation }/>
+			for key, values := range p.Filters {
+				for _, value := range values {
+					<input type="hidden" name={ key } value={ value }/>
+				}
+			}
+			<button type="submit">Confirm CSV export</button>
+		</form>
+		<a href={ templ.URL(p.BackURL) }>Back to filters</a>
+		<a href="/exports">My CSV exports</a>
+	}
+}

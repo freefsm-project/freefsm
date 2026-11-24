@@ -20,6 +20,7 @@ func registerExports(r chi.Router, pool *pgxpool.Pool) {
 	registerActivityExports(r, pool)
 	registerTimeExports(r, pool)
 	registerWorkExports(r, pool)
+	registerFinancialExports(r, pool)
 	svc := exports.Product(pool)
 	r.Get("/exports", func(w http.ResponseWriter, r *http.Request) {
 		auth, ok := authorization.FromContext(r.Context())
@@ -115,7 +116,7 @@ func registerExports(r chi.Router, pool *pgxpool.Pool) {
 		}
 		recovery := ""
 		if status.Expired || status.Blocked || status.State == "Failed" {
-			recovery = workExportRecoveryURL(r, svc, id)
+			recovery = exportRecoveryURL(r, svc, id)
 		}
 		templates.ExportStatus(status, recovery).Render(r.Context(), w)
 	})
@@ -141,7 +142,7 @@ func exportError(w http.ResponseWriter, r *http.Request, err error) {
 		if auth, ok := authorization.FromContext(r.Context()); ok {
 			id, _ := strconv.ParseInt(chi.URLParam(r, "export_id"), 10, 64)
 			if id > 0 {
-				recovery = workExportRecoveryURL(r, exports.Product(auth.Service.Pool), id)
+				recovery = exportRecoveryURL(r, exports.Product(auth.Service.Pool), id)
 			}
 		}
 		templates.ExportUnavailable(recovery).Render(r.Context(), w)

@@ -128,11 +128,11 @@ func CSRFToken(next http.Handler) http.Handler {
 
 // BrowserCSRF uses one instance-wide cookie even when the first page is a deep
 // link. Path-defaulted cookies cannot authorize cross-parent inline forms.
-func BrowserCSRF(next http.Handler) *nosurf.CSRFHandler {
+func BrowserCSRF(next http.Handler) *BrowserCSRFHandler {
 	h := nosurf.New(next)
 	h.SetBaseCookie(http.Cookie{Path: "/", MaxAge: nosurf.MaxAge})
 	h.SetIsTLSFunc(IsHTTPS)
-	return h
+	return &BrowserCSRFHandler{CSRFHandler: h}
 }
 
 func CSRFFromContext(ctx context.Context) string {

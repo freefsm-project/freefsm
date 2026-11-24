@@ -301,6 +301,7 @@ func NewWithRequestLimits(db *pgxpool.Pool, entClient *ent.Client, sessions *ser
 		registerCustomerChildren(r)
 		registerExports(r, db)
 		registerWorkReports(r)
+		registerFinancialReports(r)
 		registerAudit(r, db)
 		r.With(middleware.DispatcherOrAdmin).Get("/customers/{id}/projects/options", projectHandler.ProjectOptions)
 		r.With(collectionRead("asset")).Get("/customers/{id}/assets/options", jobHandler.AssetOptions)

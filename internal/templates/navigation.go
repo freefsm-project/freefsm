@@ -33,6 +33,21 @@ func navigationRecordPermission(ctx context.Context, typ string, id int64, actio
 
 func operationalLinks(ctx context.Context) []navigationLink {
 	var links []navigationLink
+	if navigationPermission(ctx, "customer.view", "A") && navigationPermission(ctx, "customer.financial.view", "A") {
+		if navigationPermission(ctx, "invoice.view", "A", "J") {
+			links = append(links, navigationLink{"/reports/invoice-aging", "Invoice Aging / Customer financial"})
+		}
+		settlement := navigationPermission(ctx, "settlement.view", "A")
+		credit := navigationPermission(ctx, "credit.view", "A")
+		switch {
+		case settlement && credit:
+			links = append(links, navigationLink{"/reports/payments-credits", "Payments/Credits"})
+		case settlement:
+			links = append(links, navigationLink{"/reports/payments-credits", "Settlement activity"})
+		case credit:
+			links = append(links, navigationLink{"/reports/payments-credits", "Current Credit"})
+		}
+	}
 	if navigationPermission(ctx, "job.view", "A", "J") {
 		links = append(links, navigationLink{"/schedule", "Schedule"})
 		links = append(links, navigationLink{"/reports/workload", "Workload"})

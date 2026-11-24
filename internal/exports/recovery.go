@@ -16,8 +16,8 @@ type RecoverySelection struct {
 	Options json.RawMessage
 }
 
-// RecoverySelection exposes filter-preserving recovery only for the operational
-// report adapters. Legacy receipt redaction remains unchanged. Expiry limits
+// RecoverySelection exposes filter-preserving recovery for fixed operational and
+// financial report adapters. Legacy receipt redaction remains unchanged. Expiry limits
 // artifact bytes, not recovery intent, but never bypasses current whole-snapshot
 // authority. No part of the selection escapes on any failed check.
 func (s *Service) RecoverySelection(ctx context.Context, actor authorization.Actor, id int64) (RecoverySelection, error) {
@@ -42,7 +42,8 @@ func (s *Service) RecoverySelection(ctx context.Context, actor authorization.Act
 			return ErrUnavailable
 		}
 		switch d.(type) {
-		case Jobs, Workload, Documents, EstimateCohorts:
+		case Jobs, Workload, Documents, EstimateCohorts,
+			InvoiceAging, CustomerFinancials, SettlementActivity, CurrentCredit, PaymentsCredits:
 		default:
 			return ErrUnavailable
 		}

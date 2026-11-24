@@ -84,9 +84,12 @@ templ DashboardPage(p DashboardData) {
 								<div><span>{ fmt.Sprintf("%d", p.Stats.NewJobsToday) }</span><small>Jobs</small></div>
 								<div><span>{ fmt.Sprintf("%d", p.Stats.NewQuotesToday) }</span><small>Quotes</small></div>
 								<div><span>{ fmt.Sprintf("%d", p.Stats.NewInvoicesToday) }</span><small>Invoices</small></div>
-								<div><span>{ dashboardAmount(p.Stats.PaymentsCollectedTodayExact,p.Stats.PaymentsCollectedToday) }</span><small>Payments</small></div>
+								<div><span>{ dashboardAmount(p.Stats.PaymentsCollectedTodayExact,p.Stats.PaymentsCollectedToday) }</span><small>Net Payments</small></div>
 								<div><span>{ fmt.Sprintf("%d", p.Stats.CustomersCreatedToday) }</span><small>Customers</small></div>
 							</div>
+							if p.Stats.NetPaymentsAttributionIncomplete {
+								<p role="status">Net Payments recording-time attribution is incomplete: historical cash events with unknown recording times are excluded from today's and this month's totals.</p>
+							}
 							<div class="dashboard-gauge-wrap">
 								<div class="dashboard-gauge" style={ fmt.Sprintf("--gauge-value:%d%%", p.Stats.JobsCompletedPercent) }>
 									<div class="dashboard-gauge-center">
@@ -163,8 +166,11 @@ templ DashboardPage(p DashboardData) {
 					@DashboardCardTop("Financial Summary", w, p.EditMode)
 					<div class="dashboard-financials">
 						<article class="dashboard-stat">
-							@DashboardSubcardTop("Revenue This Month")
+							@DashboardSubcardTop("Net Payments This Month")
 							<p class="dashboard-metric dashboard-metric-sm">{ dashboardAmount(p.Stats.RevenueMonthExact,p.Stats.RevenueMonth) }</p>
+							if p.Stats.NetPaymentsAttributionIncomplete {
+								<p role="status">Recording-time attribution is incomplete: historical cash events with unknown recording times are excluded from Net Payments.</p>
+							}
 						</article>
 						<article class="dashboard-stat">
 							@DashboardSubcardTop("Outstanding Receivables")

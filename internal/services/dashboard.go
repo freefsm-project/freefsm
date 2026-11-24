@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
@@ -15,6 +16,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/ent/predicate"
 	"github.com/freefsm-project/freefsm/internal/ent/project"
 	"github.com/freefsm-project/freefsm/internal/ent/status"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -57,6 +59,9 @@ type DashboardWidgetView struct {
 }
 
 type DashboardStats struct {
+	// NetPaymentsAttributionIncomplete means undated cash events are excluded
+	// from today's and this month's Net Payments and need a visible notice.
+	NetPaymentsAttributionIncomplete                                   bool
 	TotalCustomers                                                     int
 	NewCustomersThisMonth                                              int
 	CustomerMonths                                                     []DashboardMonthlyBar
@@ -635,20 +640,20 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 		Where(project.DeletedAtIsNil(), project.StatusIDIn(completedStatusIDs...)).
 		Count(ctx)
 
-	// Revenue this month (payments received)
+	// Net Payments by recording time, independent of receipt/effective dates.
 	var revenue, paymentsCollectedToday float64
 	var revenueMoney, todayMoney Money
-	financial := true
-	if p, current := authorization.NavigationPrincipal(ctx); current {
-		financial = p.Allows("customer.financial.view", authorization.All) && p.Allows("invoice.view", authorization.All) && p.Allows("pricing.view", authorization.All) && p.Allows("settlement.view", authorization.All)
-	}
-	if s.db != nil && financial {
-		monthCents, todayCents, err := s.paymentTotals(ctx, companyID, dashboardPeriod{monthStart: startOfMonth, todayStart: startOfToday, tomorrowStart: startOfTomorrow})
-		if err != nil {
+	var attributionIncomplete bool
+	financial := false
+	if s.db != nil {
+		monthCents, todayCents, unknown, err := s.paymentTotals(ctx, companyID, dashboardPaymentPeriod(now))
+		if err != nil && !errors.Is(err, authorization.ErrForbidden) {
 			return DashboardStats{}, err
 		}
+		financial = err == nil
 		revenue, paymentsCollectedToday = float64(monthCents)/100, float64(todayCents)/100
 		revenueMoney, todayMoney = Money{minorUnits: monthCents}, Money{minorUnits: todayCents}
+		attributionIncomplete = unknown
 	}
 
 	// Financial totals (exclude draft, paid, and void invoices)
@@ -728,35 +733,36 @@ func (s *DashboardService) Stats(ctx context.Context, companyID int64, loc *time
 	}
 
 	return DashboardStats{
-		TotalCustomers:              totalCustomers,
-		NewCustomersThisMonth:       newCustomers,
-		CustomerMonths:              customerMonths,
-		NewJobsToday:                newJobsToday,
-		NewQuotesToday:              newQuotesToday,
-		NewInvoicesToday:            newInvoicesToday,
-		PaymentsCollectedToday:      paymentsCollectedToday,
-		PaymentsCollectedTodayExact: todayMoney.Format(),
-		CustomersCreatedToday:       customersCreatedToday,
-		JobsCompletedToday:          jobsCompletedToday,
-		JobsScheduledToday:          jobsScheduledToday,
-		JobsCompletedPercent:        jobsCompletedPercent,
-		TotalJobs:                   totalJobs,
-		JobsOverdue:                 jobsOverdue,
-		JobMonths:                   jobMonths,
-		TotalEstimates:              totalEstimates,
-		TotalInvoices:               totalInvoices,
-		InvoicesPaid:                invoicesPaid,
-		InvoicesUnpaid:              invoicesUnpaid,
-		InvoicesOverdue:             invoicesOverdue,
-		InvoiceMonths:               invoiceMonths,
-		TotalProjects:               totalProjects,
-		ProjectsActive:              projectsActive,
-		ProjectsCompleted:           projectsCompleted,
-		ProjectMonths:               projectMonths,
-		RevenueMonth:                revenue,
-		OutstandingReceivables:      outstandingMoney.MajorUnits(),
-		OverdueAmount:               overdueMoney.MajorUnits(),
-		RevenueMonthExact:           revenueMoney.Format(), OutstandingReceivablesExact: outstandingMoney.Format(), OverdueAmountExact: overdueMoney.Format(),
+		NetPaymentsAttributionIncomplete: attributionIncomplete,
+		TotalCustomers:                   totalCustomers,
+		NewCustomersThisMonth:            newCustomers,
+		CustomerMonths:                   customerMonths,
+		NewJobsToday:                     newJobsToday,
+		NewQuotesToday:                   newQuotesToday,
+		NewInvoicesToday:                 newInvoicesToday,
+		PaymentsCollectedToday:           paymentsCollectedToday,
+		PaymentsCollectedTodayExact:      todayMoney.Format(),
+		CustomersCreatedToday:            customersCreatedToday,
+		JobsCompletedToday:               jobsCompletedToday,
+		JobsScheduledToday:               jobsScheduledToday,
+		JobsCompletedPercent:             jobsCompletedPercent,
+		TotalJobs:                        totalJobs,
+		JobsOverdue:                      jobsOverdue,
+		JobMonths:                        jobMonths,
+		TotalEstimates:                   totalEstimates,
+		TotalInvoices:                    totalInvoices,
+		InvoicesPaid:                     invoicesPaid,
+		InvoicesUnpaid:                   invoicesUnpaid,
+		InvoicesOverdue:                  invoicesOverdue,
+		InvoiceMonths:                    invoiceMonths,
+		TotalProjects:                    totalProjects,
+		ProjectsActive:                   projectsActive,
+		ProjectsCompleted:                projectsCompleted,
+		ProjectMonths:                    projectMonths,
+		RevenueMonth:                     revenue,
+		OutstandingReceivables:           outstandingMoney.MajorUnits(),
+		OverdueAmount:                    overdueMoney.MajorUnits(),
+		RevenueMonthExact:                revenueMoney.Format(), OutstandingReceivablesExact: outstandingMoney.Format(), OverdueAmountExact: overdueMoney.Format(),
 		RecentJobs:      s.toRecentJobs(recentJobs, custMap, loc, cs),
 		RecentInvoices:  s.toRecentInvoices(recentInvoices, custMap, statusMap, loc, cs),
 		RecentEstimates: s.toRecentEstimates(recentEstimates, custMap, loc, cs),
@@ -1001,13 +1007,40 @@ func (s *DashboardService) invoiceTotal(i *ent.Invoice) float64 {
 }
 
 type dashboardPeriod struct {
-	monthStart, todayStart, tomorrowStart time.Time
+	monthStart, nextMonthStart, todayStart, tomorrowStart time.Time
 }
 
-func (s *DashboardService) paymentTotals(ctx context.Context, companyID int64, period dashboardPeriod) (int64, int64, error) {
+func dashboardPaymentPeriod(now time.Time) dashboardPeriod {
+	loc := now.Location()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
+	month := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, loc)
+	return dashboardPeriod{monthStart: month, nextMonthStart: month.AddDate(0, 1, 0), todayStart: today, tomorrowStart: today.AddDate(0, 0, 1)}
+}
+
+func (s *DashboardService) paymentTotals(ctx context.Context, companyID int64, period dashboardPeriod) (int64, int64, bool, error) {
+	req, ok := authorization.FromContext(ctx)
+	if !ok || req.Service == nil || req.Actor.Channel == "api" {
+		return 0, 0, false, authorization.ErrForbidden
+	}
 	var monthCents, todayCents int64
-	err := s.db.QueryRow(ctx, `SELECT coalesce(sum(amount_cents) FILTER (WHERE received_date >= $2),0),coalesce(sum(amount_cents) FILTER (WHERE received_date >= $3 AND received_date < $4),0) FROM invoice_payments p WHERE p.company_id=$1 AND NOT EXISTS(SELECT 1 FROM settlement_reversals r WHERE r.company_id=$1 AND r.operation_type='payment' AND r.operation_id=p.id)`, companyID, period.monthStart, period.todayStart, period.tomorrowStart).Scan(&monthCents, &todayCents)
-	return monthCents, todayCents, err
+	var unknown bool
+	err := req.Service.WithinSnapshotPermission(ctx, req.Actor, "customer.financial.view", authorization.All, func(tx pgx.Tx, p authorization.Principal) error {
+		if p.CompanyID != companyID || !p.Allows("customer.view", authorization.All) || !p.Allows("invoice.view", authorization.All) || !p.Allows("pricing.view", authorization.All) || !p.Allows("settlement.view", authorization.All) {
+			return authorization.ErrForbidden
+		}
+		// Reuse the core event relation, applying the dashboard's authorized
+		// Customer population equally to dated totals and undated attribution.
+		return tx.QueryRow(ctx, `WITH events AS (`+recordedCashEventsSQL+`)
+		 SELECT coalesce(sum(e.net_cents) FILTER (WHERE e.recorded_at >= $2 AND e.recorded_at < $3),0),
+		 coalesce(sum(e.net_cents) FILTER (WHERE e.recorded_at >= $4 AND e.recorded_at < $5),0),
+		 coalesce(bool_or(e.recorded_at IS NULL),false)
+		 FROM events e JOIN customers c ON c.id=e.customer_id AND c.company_id=e.company_id
+		 WHERE e.company_id=$1 AND (c.deleted_at IS NULL OR $6)`, companyID, period.monthStart, period.nextMonthStart, period.todayStart, period.tomorrowStart, p.Allows("customer.archived.view", authorization.All)).Scan(&monthCents, &todayCents, &unknown)
+	})
+	if err != nil {
+		return 0, 0, false, err
+	}
+	return monthCents, todayCents, unknown, nil
 }
 
 func (s *DashboardService) invoiceSettledTotals(ctx context.Context, companyID int64) (map[int64]int64, error) {

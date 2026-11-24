@@ -24,17 +24,8 @@ func registerWorkExports(r chi.Router, pool *pgxpool.Pool) {
 	}
 }
 
-// RecoverySelection withholds both the kind and filters after access loss.
-// Decode only the five versioned operational definitions owned by this UI.
-func workExportRecoveryURL(r *http.Request, svc *exports.Service, id int64) string {
-	auth, ok := authorization.FromContext(r.Context())
-	if !ok {
-		return ""
-	}
-	selection, err := svc.RecoverySelection(r.Context(), auth.Actor, id)
-	if err != nil {
-		return ""
-	}
+// Decode only the versioned operational definitions owned by this UI.
+func workExportSelectionURL(selection exports.RecoverySelection) string {
 	for _, scope := range []authorization.Scope{authorization.All, authorization.Assigned} {
 		suffix := "-" + string(scope) + "-v1"
 		if !strings.HasSuffix(selection.Kind, suffix) {
