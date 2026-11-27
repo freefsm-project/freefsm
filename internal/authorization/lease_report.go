@@ -16,6 +16,7 @@ type LeaseReportQuery struct {
 	AsOf, Lifecycle, Search, Placement, Billing, Archive, Sort string
 	Customer, Asset, Premises                                  int64
 	Page, PerPage                                              int
+	EndingFrom, EndingThrough                                  string
 }
 
 type LeaseReportAsset struct {
@@ -39,6 +40,12 @@ type LeaseReportRow struct {
 	Adjustments                                                   []LeaseAdjustmentRecord
 	GenerationStatusUnavailable                                   bool
 	RentSchedule                                                  []LeaseReportRent
+	PositionUnavailable                                           bool
+	FirstMonthlyOn                                                string
+	FailureHistory                                                string
+	RentTerms                                                     []LeaseExportRentTerm
+	BillingRevisions                                              []LeaseExportBillingRevision
+	GeneratedInvoices                                             []LeaseExportGeneratedInvoice
 }
 type LeaseReport struct {
 	Errors, Inputs                                                    map[string]string
@@ -50,6 +57,7 @@ type LeaseReport struct {
 	CanCustomer, CanAsset, CanPremises, CanArchive, CanInvoiceFilters bool
 	Total                                                             int
 	RentCents                                                         int64
+	RentAvailable                                                     bool
 	Rows                                                              []LeaseReportRow
 }
 
@@ -59,16 +67,37 @@ func (s *Service) LeaseReport(ctx context.Context, a Actor, q LeaseReportQuery) 
 		return LeaseReport{}, ErrNotFound
 	}
 	err := s.WithinSnapshotPermission(ctx, a, "lease.view", All, func(tx pgx.Tx, p Principal) error {
-		if err := tx.QueryRow(ctx, `SELECT lease_dependency_today($1)::text,clock_timestamp()::text`, p.CompanyID).Scan(&out.AsOf, &out.UpdatedAt); err != nil {
+		var err error
+		out, err = readLeaseReport(ctx, tx, p, q, p.Allows("lease.billing.view", All), false)
+		return err
+	})
+	return out, err
+}
+
+// readLeaseReport uses only its caller's fenced snapshot. allMatching bypasses
+// presentation pagination, not selection or authorization.
+func readLeaseReport(ctx context.Context, tx pgx.Tx, p Principal, q LeaseReportQuery, billing, allMatching bool) (LeaseReport, error) {
+	var today, stamp string
+	if err := tx.QueryRow(ctx, `SELECT lease_dependency_today($1)::text,transaction_timestamp()::text`, p.CompanyID).Scan(&today, &stamp); err != nil {
+		return LeaseReport{}, err
+	}
+	return readLeaseReportAt(ctx, tx, p, q, billing, allMatching, today, stamp, nil)
+}
+
+func readLeaseReportAt(ctx context.Context, tx pgx.Tx, p Principal, q LeaseReportQuery, billing, allMatching bool, today, stamp string, emit func(LeaseReportRow) error) (LeaseReport, error) {
+	out := LeaseReport{Query: q, RentAvailable: true}
+	out.AsOf, out.UpdatedAt = today, stamp
+	err := func() error {
+		if _, err := normalizeLeaseReportSelection(leaseExportFilter(q)); err != nil {
 			return err
 		}
 		if q.AsOf != "" {
-			if _, err := time.Parse(time.DateOnly, q.AsOf); err != nil || q.AsOf > out.AsOf {
+			if q.AsOf > out.AsOf {
 				return ErrConflict
 			}
 			out.AsOf = q.AsOf
 		}
-		out.BillingVisible = p.Allows("lease.billing.view", All)
+		out.BillingVisible = billing && p.Allows("lease.billing.view", All)
 		out.CanCustomer = p.Allows("customer.view", All)
 		out.CanAsset = p.Allows("asset.view", All)
 		out.CanPremises = p.Allows("location.view", All)
@@ -82,13 +111,21 @@ func (s *Service) LeaseReport(ctx context.Context, a Actor, q LeaseReportQuery) 
 		if q.Billing != "" && !out.CanInvoiceFilters {
 			return ErrForbidden
 		}
-		if q.Billing == "ungenerated" && !out.CanUngeneratedFilter {
-			return ErrConflict
+		if slices.Contains([]string{"ungenerated", "pending", "failed"}, q.Billing) && !out.CanUngeneratedFilter {
+			if q.Billing == "ungenerated" {
+				return ErrConflict
+			}
+			return ErrForbidden
+		}
+		if q.Billing == "failed" || q.Billing == "pending" {
+			if out.AsOf < today {
+				return ErrConflict
+			}
 		}
 		if q.Customer != 0 && !p.Allows("customer.view", All) || q.Asset != 0 && !p.Allows("asset.view", All) || q.Premises != 0 && !p.Allows("location.view", All) || q.Placement != "" && !p.Allows("asset.view", All) {
 			return ErrForbidden
 		}
-		if q.Customer < 0 || q.Asset < 0 || q.Premises < 0 || q.Page > 1000000 || !slices.Contains([]string{"", "draft", "scheduled", "active", "month_to_month", "terminated"}, q.Lifecycle) || !slices.Contains([]string{"", "unplaced", "wrong_premises"}, q.Placement) || !slices.Contains([]string{"", "review", "void", "ungenerated"}, q.Billing) || !slices.Contains([]string{"", "all", "archived"}, q.Archive) || !slices.Contains([]string{"", "number", "number_desc"}, q.Sort) {
+		if q.Page > 1000000 {
 			return ErrConflict
 		}
 		if q.Archive != "" && !p.Allows("lease.archived.view", All) {
@@ -127,11 +164,21 @@ func (s *Service) LeaseReport(ctx context.Context, a Actor, q LeaseReportQuery) 
 			slices.Reverse(ids)
 		}
 		for _, id := range ids {
-			row, err := readLeaseReportRow(ctx, tx, p, id, out.AsOf, out.BillingVisible)
+			row, err := readLeaseReportRow(ctx, tx, p, id, out.AsOf, today, out.BillingVisible)
 			if err != nil {
 				return err
 			}
+			if row.PositionUnavailable && (q.Lifecycle != "" || q.EndingFrom != "" || q.EndingThrough != "" || q.Asset != 0 || q.Placement != "" || q.Billing != "") {
+				return ErrConflict
+			}
 			if q.Lifecycle != "" && row.Lifecycle != q.Lifecycle || q.Customer != 0 && row.CustomerID != q.Customer || q.Premises != 0 && row.PremisesID != q.Premises {
+				continue
+			}
+			ending := row.EndingOn
+			if ending == "" {
+				ending = row.EndsOn
+			}
+			if q.EndingFrom != "" && (ending == "" || ending < q.EndingFrom) || q.EndingThrough != "" && (ending == "" || ending > q.EndingThrough) {
 				continue
 			}
 			matchedAsset, matchedPlacement := q.Asset == 0, q.Placement == ""
@@ -147,7 +194,8 @@ func (s *Service) LeaseReport(ctx context.Context, a Actor, q LeaseReportQuery) 
 			if q.Billing != "" {
 				matched := false
 				for _, period := range row.Periods {
-					matched = matched || q.Billing == "ungenerated" && period.State == "ungenerated"
+					owed := slices.Contains([]string{"pending", "failed", "inactive", "ungenerated"}, period.State)
+					matched = matched || q.Billing == "ungenerated" && owed && period.DueOn <= out.AsOf || q.Billing == "pending" && (period.State == "pending" || period.State == "failed") || q.Billing == "failed" && period.State == "failed"
 				}
 				for _, invoice := range row.Invoices {
 					matched = matched || q.Billing == "review" && invoice.Review || q.Billing == "void" && invoice.ManualStatus == "invoice:void"
@@ -157,21 +205,31 @@ func (s *Service) LeaseReport(ctx context.Context, a Actor, q LeaseReportQuery) 
 				}
 			}
 			out.Total++
+			if row.PositionUnavailable {
+				out.RentAvailable = false
+			}
 			out.RentCents += row.RentCents
-			if out.Total > (q.Page-1)*q.PerPage && len(out.Rows) < q.PerPage {
+			if emit != nil {
+				if err := emit(row); err != nil {
+					return err
+				}
+				continue
+			}
+			if allMatching || out.Total > (q.Page-1)*q.PerPage && len(out.Rows) < q.PerPage {
 				out.Rows = append(out.Rows, row)
 			}
 		}
 		return nil
-	})
+	}()
 	if err != nil {
 		return LeaseReport{}, err
 	}
 	return out, nil
 }
 
-func readLeaseReportRow(ctx context.Context, tx pgx.Tx, p Principal, id int64, at string, billing bool) (LeaseReportRow, error) {
+func readLeaseReportRow(ctx context.Context, tx pgx.Tx, p Principal, id int64, at, today string, billing bool) (LeaseReportRow, error) {
 	var out LeaseReportRow
+	out.GenerationStatusUnavailable = billing
 	var state string
 	var customer, premises int64
 	err := tx.QueryRow(ctx, `SELECT l.id,l.number_label,l.title,l.lifecycle,coalesce(l.starts_on::text,''),coalesce(l.ends_on::text,''),l.customer_id,coalesce(l.premises_id,0),l.deleted_at IS NOT NULL FROM leases l WHERE l.id=$1`, id).Scan(&out.ID, &out.Number, &out.Title, &state, &out.StartsOn, &out.EndsOn, &customer, &premises, &out.Archived)
@@ -179,17 +237,14 @@ func readLeaseReportRow(ctx context.Context, tx pgx.Tx, p Principal, id int64, a
 		return out, err
 	}
 	if state == "draft" {
-		var historical bool
-		if err = tx.QueryRow(ctx, `SELECT $1::date<lease_dependency_today($2)`, at, p.CompanyID).Scan(&historical); err != nil {
-			return out, err
-		}
-		if historical {
+		if at < today {
 			var raw []byte
 			err = tx.QueryRow(ctx, `SELECT detail->'after' FROM authorization_audit WHERE target_type='lease' AND target_id=$1 AND action='lease.details.change' AND recorded_at<($2::date+1)::timestamp AT TIME ZONE coalesce((SELECT timezone FROM company_settings WHERE company_id=$3),'UTC') ORDER BY id DESC LIMIT 1`, id, at, p.CompanyID).Scan(&raw)
 			if err != nil && err != pgx.ErrNoRows {
 				return out, err
 			}
 			out.Title, out.StartsOn, out.EndsOn, premises = "Draft details unavailable for selected date", "", "", 0
+			out.PositionUnavailable = err == pgx.ErrNoRows
 			if err == nil {
 				var snapshot DraftLeaseBase
 				if err = json.Unmarshal(raw, &snapshot); err != nil {
@@ -202,21 +257,16 @@ func readLeaseReportRow(ctx context.Context, tx pgx.Tx, p Principal, id int64, a
 			}
 		}
 	}
-	var noticeAction, noticeCategory, noticeOn, ending string
-	err = tx.QueryRow(ctx, `SELECT action,category,notice_on::text,effective_on::text FROM lease_notice_current WHERE lease_id=$1`, id).Scan(&noticeAction, &noticeCategory, &noticeOn, &ending)
-	if err != nil && err != pgx.ErrNoRows {
-		return out, err
-	}
-	if err == nil && noticeAction != "withdraw" && noticeOn <= at {
-		out.EndingOn = ending
-		if ending < at || noticeCategory == "cancel_before_start" {
-			state = "terminated"
+	if state == "draft" {
+		out.Lifecycle = "draft"
+	} else {
+		position, err := readLeaseAgreementPosition(ctx, tx, id, at)
+		if err != nil {
+			return out, err
 		}
-	}
-	day, _ := time.Parse(time.DateOnly, at)
-	out.LeaseCalendar, err = leaseCalendar(state, out.StartsOn, out.EndsOn, day)
-	if err != nil {
-		return out, err
+		out.LeaseCalendar = position.LeaseCalendar
+		out.StartsOn, out.EndsOn, out.EndingOn, out.FirstMonthlyOn = position.StartsOn, position.EndsOn, position.EndingOn, position.FirstMonthlyOn
+		out.PositionUnavailable = position.Unavailable
 	}
 	if p.Allows("customer.view", All) {
 		err = tx.QueryRow(ctx, `SELECT id,display_name FROM customers WHERE id=$1 AND (deleted_at IS NULL OR $2)`, customer, p.Allows("customer.archived.view", All)).Scan(&out.CustomerID, &out.Customer)
@@ -235,7 +285,7 @@ func readLeaseReportRow(ctx context.Context, tx pgx.Tx, p Principal, id int64, a
 	}
 	// Coverage dependencies are the inclusive effective projection of immutable
 	// commencement, coverage revisions and factual corrections, not current Assets.
-	if p.Allows("asset.view", All) {
+	if p.Allows("asset.view", All) && !out.PositionUnavailable && out.Lifecycle != "terminated" {
 		rows, err := tx.Query(ctx, `SELECT a.id,a.number,a.name,d.starts_on::text,coalesce(d.ends_on::text,''),CASE WHEN ap.asset_id IS NULL THEN 'unknown' WHEN ap.customer_id IS NULL THEN 'unplaced' WHEN ap.customer_id=$3 AND ap.location_id IS DISTINCT FROM NULLIF($4,0) THEN 'wrong_premises' WHEN ap.customer_id=$3 THEN 'placed' ELSE 'other placement' END FROM lease_asset_dependencies d JOIN assets a ON a.id=d.asset_id LEFT JOIN asset_association_periods ap ON ap.asset_id=a.id AND (ap.starts_on IS NULL OR ap.starts_on<=$2::date) AND (ap.ends_before IS NULL OR ap.ends_before>$2::date) WHERE d.lease_id=$1 AND d.starts_on<=$2::date AND (d.ends_on IS NULL OR d.ends_on>=$2::date) AND (a.deleted_at IS NULL OR $5) ORDER BY a.number,a.id`, id, at, customer, premises, p.Allows("asset.archived.view", All))
 		if err != nil {
 			return out, err
@@ -254,6 +304,8 @@ func readLeaseReportRow(ctx context.Context, tx pgx.Tx, p Principal, id int64, a
 			return out, err
 		}
 	}
+	var selectedTerms []DraftLeaseTerms
+	var reportRevisions []LeaseBillingRevisionRecord
 	if billing {
 		var raw []byte
 		err = tx.QueryRow(ctx, `SELECT terms FROM lease_finalizations WHERE lease_id=$1`, id).Scan(&raw)
@@ -311,8 +363,9 @@ func readLeaseReportRow(ctx context.Context, tx pgx.Tx, p Principal, id int64, a
 		if err != nil {
 			return out, err
 		}
+		selectedTerms, reportRevisions = terms, revisions
 		for _, term := range terms {
-			if term.Selected && term.RentCents != nil && out.Lifecycle != "terminated" {
+			if term.Selected && term.RentCents != nil && out.Lifecycle != "terminated" && !out.PositionUnavailable {
 				if out.Lifecycle == "scheduled" {
 					out.ScheduledRentCents += *term.RentCents
 				} else {
@@ -322,9 +375,14 @@ func readLeaseReportRow(ctx context.Context, tx pgx.Tx, p Principal, id int64, a
 		}
 	}
 	if billing {
-		if err = readLeaseReportBilling(ctx, tx, p, &out, at); err != nil {
+		if err = readLeaseReportBilling(ctx, tx, p, &out, at, today); err != nil {
 			return out, err
 		}
+		entry := LeaseExportEntry{Lease: out}
+		if err = readLeaseReportBillingDetails(ctx, tx, p, &entry, at, today, selectedTerms, reportRevisions); err != nil {
+			return out, err
+		}
+		out.RentTerms, out.BillingRevisions, out.GeneratedInvoices = entry.RentTerms, entry.BillingRevisions, entry.GeneratedInvoices
 	}
 	return out, nil
 }

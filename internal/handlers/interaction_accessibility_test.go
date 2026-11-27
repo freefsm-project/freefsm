@@ -24,6 +24,8 @@ func TestSharedAccessibilityPersistedBrowser(t *testing.T) {
 		t.Skip("set ACCESSIBILITY_TESTS=1, NODE_PATH and FREEFSM_TEST_DATABASE_URL")
 	}
 	pool, client, router, sessions, company, admin := permissionHTTPFixture(t)
+	// Dispatch measurements require an enabled, real Product User choice.
+	client.User.UpdateOneID(admin).SetIsActive(true).SetName("Measured eligible assignee").SaveX(context.Background())
 	customer := client.Customer.Create().SetCompanyID(company).SetDisplayName("Measured accessibility customer").SaveX(context.Background())
 	entry := client.TimeEntry.Create().SetCompanyID(company).SetUserID(admin).SetClockIn(time.Now().Add(-time.Hour)).SetClockOut(time.Now()).SetNotes("Measured time record").SaveX(context.Background())
 	cookie := sessionCookie(t, context.Background(), sessions, admin)
@@ -46,9 +48,9 @@ func TestSharedAccessibilityPersistedBrowser(t *testing.T) {
 	mux.Handle("/", middleware.BrowserCSRF(middleware.CSRFToken(middleware.CurrentPath(middleware.Flash(router)))))
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, "node", "testdata/browser/accessibility.cjs", server.URL, cookie.Value, fmt.Sprint(customer.ID), fmt.Sprint(entry.ID)).CombinedOutput()
+	output, err := exec.CommandContext(ctx, "node", "testdata/browser/accessibility.cjs", server.URL, cookie.Value, fmt.Sprint(customer.ID), fmt.Sprint(entry.ID), fmt.Sprint(admin)).CombinedOutput()
 	t.Logf("browser: %s", output)
 	if err != nil {
 		t.Fatal(err)

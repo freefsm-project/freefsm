@@ -42,7 +42,7 @@ func (s *Service) RecoverySelection(ctx context.Context, actor authorization.Act
 			return ErrUnavailable
 		}
 		switch d.(type) {
-		case Jobs, Workload, Documents, EstimateCohorts,
+		case Leases, Jobs, Workload, Documents, EstimateCohorts,
 			InvoiceAging, CustomerFinancials, SettlementActivity, CurrentCredit, PaymentsCredits:
 		default:
 			return ErrUnavailable

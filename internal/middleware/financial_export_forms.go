@@ -29,7 +29,7 @@ func isFinancialExportPost(r *http.Request) bool {
 		return false
 	}
 	switch r.URL.Path {
-	case "/reports/invoice-aging/export", "/reports/customer-financials/export", "/reports/settlements/export", "/reports/credits/export", "/reports/payments-credits/export":
+	case "/reports/invoice-aging/export", "/reports/customer-financials/export", "/reports/settlements/export", "/reports/credits/export", "/reports/payments-credits/export", "/leases/report/export":
 		return true
 	}
 	return false

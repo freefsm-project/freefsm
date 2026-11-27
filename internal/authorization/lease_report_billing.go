@@ -25,7 +25,11 @@ type LeaseReportSettlement struct {
 	ID, Kind, EffectiveOn, ReversedOn string
 	AmountCents                       int64
 }
-type LeaseReportPeriod struct{ Kind, DueOn, State string }
+
+type LeaseReportPeriod struct {
+	Kind, DueOn, State, Reason string
+	ObligationID               int64
+}
 
 // Negative generation predicates require complete authority, independently of
 // access to any particular Invoice. Hidden records never decide this capability.
@@ -33,7 +37,19 @@ func leaseReportGenerationComplete(p Principal) bool {
 	return p.Allows("invoice.view", All) && p.Allows("pricing.view", All) && p.Allows("invoice.archived.view", All)
 }
 
-func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *LeaseReportRow, at string) error {
+func leaseReportInvoiceAccess(ctx context.Context, tx pgx.Tx, p Principal, id int64) error {
+	if _, err := parentAccess(ctx, tx, p, "invoice", id, "", false); err != nil {
+		return err
+	}
+	return parentFacet(ctx, tx, p, "invoice", id, "pricing.view", false)
+}
+
+func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *LeaseReportRow, at, today string) error {
+	historical := at < today
+	out.FailureHistory = "current"
+	if historical {
+		out.FailureHistory = "unavailable"
+	}
 	var cutoff time.Time
 	if err := tx.QueryRow(ctx, `SELECT ($1::date+1)::timestamp AT TIME ZONE coalesce((SELECT timezone FROM company_settings WHERE company_id=$2),'UTC')`, at, p.CompanyID).Scan(&cutoff); err != nil {
 		return err
@@ -64,7 +80,7 @@ func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *Le
 		return err
 	}
 	for _, c := range candidates {
-		if _, err = leaseAdjustmentInvoiceAccess(ctx, tx, p, c.row.ID, false); err != nil {
+		if err = leaseReportInvoiceAccess(ctx, tx, p, c.row.ID); err != nil {
 			if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) {
 				continue
 			}
@@ -96,7 +112,7 @@ func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *Le
 				return err
 			}
 		}
-		err = parentFacet(ctx, tx, p, "invoice", c.row.ID, "settlement.view", true)
+		err = parentFacet(ctx, tx, p, "invoice", c.row.ID, "settlement.view", false)
 		if err == nil {
 			c.row.SettlementVisible = true
 			c.row.Settlements, err = readLeaseReportSettlement(ctx, tx, c.row.ID, at)
@@ -147,15 +163,15 @@ func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *Le
  UNION SELECT kind,due_on FROM lease_billing_period_failures WHERE lease_id=$1
  UNION SELECT 'initial',initial_due_on FROM agreement WHERE initial_due_on>=managed_billing_start
  UNION SELECT 'coverage',(c.payload->>'effective_on')::date FROM lease_coverage_current c CROSS JOIN agreement a WHERE c.lease_id=$1 AND c.action<>'withdraw' AND c.payload->>'kind'='add' AND (c.payload->>'charge_cents')::bigint>0 AND (c.payload->>'effective_on')::date>=a.managed_billing_start
- UNION SELECT 'monthly',day::date FROM agreement a CROSS JOIN LATERAL generate_series(date_trunc('month',greatest(a.starts_on,a.managed_billing_start))::date,$2::date,interval '1 month') day WHERE day::date>a.starts_on AND day::date>=a.managed_billing_start
-		) SELECT k.kind,k.due_on::text,'ungenerated'
- FROM keys k WHERE k.due_on<=$2::date AND NOT EXISTS(SELECT 1 FROM lease_billing_obligations o JOIN lease_invoice_generations g ON g.obligation_id=o.id WHERE o.lease_id=$1 AND o.kind=k.kind AND o.due_on=k.due_on AND g.recorded_at<$3) ORDER BY k.due_on,k.kind`, out.ID, at, cutoff)
+ UNION SELECT 'monthly',day::date FROM agreement a CROSS JOIN LATERAL generate_series(date_trunc('month',greatest(a.starts_on,a.managed_billing_start))::date,$2::date+$4::integer,interval '1 month') day WHERE day::date>a.starts_on AND day::date>=a.managed_billing_start
+		) SELECT k.kind,k.due_on::text,'pending',coalesce((SELECT id FROM lease_billing_obligations o WHERE o.lease_id=$1 AND o.kind=k.kind AND o.due_on=k.due_on),0)
+ FROM keys k WHERE NOT EXISTS(SELECT 1 FROM lease_billing_obligations o JOIN lease_invoice_generations g ON g.obligation_id=o.id WHERE o.lease_id=$1 AND o.kind=k.kind AND o.due_on=k.due_on AND g.recorded_at<$3) ORDER BY k.due_on,k.kind`, out.ID, at, cutoff, leaseGenerationWindowDays)
 		if err != nil {
 			return err
 		}
 		for rows.Next() {
 			var period LeaseReportPeriod
-			if err = rows.Scan(&period.Kind, &period.DueOn, &period.State); err != nil {
+			if err = rows.Scan(&period.Kind, &period.DueOn, &period.State, &period.ObligationID); err != nil {
 				rows.Close()
 				return err
 			}
@@ -185,8 +201,24 @@ func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *Le
 				if err != nil {
 					return err
 				}
-				if disposition != "" {
-					period.State = disposition
+				if out.PositionUnavailable {
+					period.State, period.Reason = "unavailable", "Agreement position unavailable"
+				} else if disposition != "" {
+					period.State, period.Reason = "not_owed", disposition
+				} else if day, _ := time.Parse(time.DateOnly, at); due.After(day.AddDate(0, 0, leaseGenerationWindowDays)) {
+					period.State = "not_yet_eligible"
+				} else if historical {
+					period.State = "ungenerated"
+				} else if out.Archived {
+					period.State, period.Reason = "inactive", "Archived Lease; generation inactive"
+				} else if !historical {
+					var failed bool
+					if err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_billing_period_failures f WHERE f.lease_id=$1 AND f.kind=$2 AND f.due_on=$3::date AND NOT EXISTS(SELECT 1 FROM lease_billing_period_dispositions d WHERE d.lease_id=f.lease_id AND d.kind=f.kind AND d.due_on=f.due_on AND d.source_revision=(SELECT coalesce(max(id),0) FROM lease_billing_source_changes WHERE lease_id=$1)))`, out.ID, period.Kind, period.DueOn).Scan(&failed); err != nil {
+						return err
+					}
+					if failed {
+						period.State = "failed"
+					}
 				}
 			}
 		}
@@ -210,7 +242,7 @@ func readLeaseReportBilling(ctx context.Context, tx pgx.Tx, p Principal, out *Le
 		return err
 	}
 	for _, v := range adjustments {
-		if _, err = leaseAdjustmentInvoiceAccess(ctx, tx, p, v.InvoiceID, false); err != nil {
+		if err = leaseReportInvoiceAccess(ctx, tx, p, v.InvoiceID); err != nil {
 			if errors.Is(err, ErrNotFound) || errors.Is(err, ErrForbidden) {
 				continue
 			}

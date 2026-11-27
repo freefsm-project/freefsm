@@ -15,6 +15,7 @@ import (
 )
 
 func (h *LeaseHandler) Report(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	name := fmt.Sprintf("lease_report_query_%d", authorizationActor(r).UserID)
 	values := r.URL.Query()
 	remembered := false
@@ -30,7 +31,7 @@ func (h *LeaseHandler) Report(w http.ResponseWriter, r *http.Request) {
 	if values.Get("reset") != "" {
 		values = url.Values{}
 	}
-	q := authorization.LeaseReportQuery{AsOf: values.Get("as_of"), Lifecycle: values.Get("lifecycle"), Search: values.Get("search"), Placement: values.Get("placement"), Billing: values.Get("billing"), Archive: values.Get("archive"), Sort: values.Get("sort")}
+	q := authorization.LeaseReportQuery{AsOf: values.Get("as_of"), Lifecycle: values.Get("lifecycle"), Search: values.Get("search"), Placement: values.Get("placement"), Billing: values.Get("billing"), Archive: values.Get("archive"), Sort: values.Get("sort"), EndingFrom: values.Get("ending_from"), EndingThrough: values.Get("ending_through")}
 	invalid := false
 	for name, destination := range map[string]*int64{"customer": &q.Customer, "asset": &q.Asset, "premises": &q.Premises} {
 		if values.Get(name) != "" {
@@ -81,7 +82,7 @@ func (h *LeaseHandler) Report(w http.ResponseWriter, r *http.Request) {
 	}
 	for key := range values {
 		switch key {
-		case "as_of", "search", "lifecycle", "placement", "billing", "archive", "sort", "page", "per_page", "customer", "asset", "premises":
+		case "as_of", "search", "lifecycle", "placement", "billing", "archive", "sort", "page", "per_page", "customer", "asset", "premises", "ending_from", "ending_through":
 		default:
 			values.Del(key)
 		}
@@ -89,7 +90,11 @@ func (h *LeaseHandler) Report(w http.ResponseWriter, r *http.Request) {
 	if saved := base64.RawURLEncoding.EncodeToString([]byte(values.Encode())); len(saved) < 3800 {
 		http.SetCookie(w, &http.Cookie{Name: name, Value: saved, Path: "/leases/report", HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: r.TLS != nil, MaxAge: 365 * 24 * 60 * 60})
 	}
-	templates.LeaseReportPage(data).Render(r.Context(), w)
+	var controls []templates.LeaseExportLink
+	if principal, err := h.authority.Principal(r.Context(), authorizationActor(r)); err == nil {
+		controls = leaseExportControls(principal, data.Query)
+	}
+	templates.LeaseReportPage(data, controls...).Render(r.Context(), w)
 }
 
 func (h *LeaseHandler) reportValidation(w http.ResponseWriter, r *http.Request, values url.Values) {
@@ -101,16 +106,22 @@ func (h *LeaseHandler) reportValidation(w http.ResponseWriter, r *http.Request, 
 	}
 	data.Rows, data.Total, data.RentCents = nil, 0, 0
 	data.Inputs, data.Errors = map[string]string{}, map[string]string{}
-	allowed := map[string]bool{"as_of": true, "search": true, "lifecycle": true, "sort": true, "page": true, "per_page": true, "customer": data.CanCustomer, "asset": data.CanAsset, "premises": data.CanPremises, "placement": data.CanAsset, "billing": data.CanInvoiceFilters, "archive": data.CanArchive}
-	choices := map[string][]string{"lifecycle": {"", "draft", "scheduled", "active", "month_to_month", "terminated"}, "sort": {"", "number", "number_desc"}, "placement": {"", "unplaced", "wrong_premises"}, "billing": {"", "review", "void", "ungenerated"}, "archive": {"", "all", "archived"}}
+	allowed := map[string]bool{"as_of": true, "ending_from": true, "ending_through": true, "search": true, "lifecycle": true, "sort": true, "page": true, "per_page": true, "customer": data.CanCustomer, "asset": data.CanAsset, "premises": data.CanPremises, "placement": data.CanAsset, "billing": data.CanInvoiceFilters, "archive": data.CanArchive}
+	choices := map[string][]string{"lifecycle": {"", "draft", "scheduled", "active", "month_to_month", "terminated"}, "sort": {"", "number", "number_desc"}, "placement": {"", "unplaced", "wrong_premises"}, "billing": {"", "review", "void", "ungenerated", "pending", "failed"}, "archive": {"", "all", "archived"}}
 	for key, visible := range allowed {
 		if !visible {
 			continue
 		}
 		value := values.Get(key)
 		data.Inputs[key] = value
-		if key == "billing" && value == "ungenerated" && !data.CanUngeneratedFilter {
+		if key == "billing" && slices.Contains([]string{"ungenerated", "pending", "failed"}, value) && !data.CanUngeneratedFilter {
 			data.Errors[key] = "Ungenerated periods require All Records Invoice and Pricing access, including archived Invoices. Choose another Billing exception or clear filters."
+			if value != "ungenerated" {
+				data.Errors[key] = "Pending and failed periods require All Records Invoice and Pricing access, including archived Invoices. Choose another Billing exception or clear filters."
+			}
+		}
+		if key == "billing" && (value == "failed" || value == "pending") && values.Get("as_of") != "" && values.Get("as_of") < data.AsOf {
+			data.Errors[key] = "Past worker-queue history was not retained. Pending and failed require today's company date; choose Ungenerated for retained due-by-date absence."
 		}
 		if list, ok := choices[key]; ok && !slices.Contains(list, value) {
 			data.Errors[key] = "Choose one of the listed options."
@@ -118,6 +129,11 @@ func (h *LeaseHandler) reportValidation(w http.ResponseWriter, r *http.Request, 
 		if key == "as_of" && value != "" {
 			if _, err := time.Parse(time.DateOnly, value); err != nil || value > data.AsOf {
 				data.Errors[key] = "Enter a company date in YYYY-MM-DD format no later than " + data.AsOf + "."
+			}
+		}
+		if (key == "ending_from" || key == "ending_through") && value != "" {
+			if _, err := time.Parse(time.DateOnly, value); err != nil {
+				data.Errors[key] = "Enter a company date in YYYY-MM-DD format."
 			}
 		}
 		if slices.Contains([]string{"customer", "asset", "premises", "page", "per_page"}, key) && value != "" {
@@ -131,6 +147,9 @@ func (h *LeaseHandler) reportValidation(w http.ResponseWriter, r *http.Request, 
 				}
 			}
 		}
+	}
+	if values.Get("ending_from") != "" && values.Get("ending_through") != "" && values.Get("ending_from") > values.Get("ending_through") {
+		data.Errors["ending_through"] = "Ending through must be on or after ending from."
 	}
 	if len(data.Errors) == 0 {
 		data.Errors["as_of"] = "Review the authorized filters and refresh, or clear filters to start again."

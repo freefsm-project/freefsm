@@ -186,5 +186,8 @@ func exportRecoveryURL(r *http.Request, svc *exports.Service, id int64) string {
 	if recovery := workExportSelectionURL(selection); recovery != "" {
 		return recovery
 	}
+	if recovery := leaseExportSelectionURL(selection); recovery != "" {
+		return recovery
+	}
 	return financialExportSelectionURL(selection)
 }

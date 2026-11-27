@@ -11,7 +11,7 @@ import (
 )
 
 func TestFinancialExportBodyBeforeCSRF(t *testing.T) {
-	for _, path := range []string{"/reports/invoice-aging/export", "/reports/customer-financials/export", "/reports/settlements/export", "/reports/credits/export", "/reports/payments-credits/export"} {
+	for _, path := range []string{"/reports/invoice-aging/export", "/reports/customer-financials/export", "/reports/settlements/export", "/reports/credits/export", "/reports/payments-credits/export", "/leases/report/export"} {
 		t.Run(path, func(t *testing.T) {
 			called := false
 			h := BrowserCSRF(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -5,7 +5,7 @@ const { chromium } = require('playwright-core');
 const { Builder, By, Key } = require('selenium-webdriver');
 const firefox = require('selenium-webdriver/firefox');
 const axe = require('axe-core');
-const [base, cookie, customer, entry] = process.argv.slice(2);
+const [base, cookie, customer, entry, assignee] = process.argv.slice(2);
 const output = process.env.ACCESSIBILITY_OUTPUT || '/tmp/opencode/freefsm-ui-tools/evidence';
 fs.mkdirSync(output, { recursive: true });
 const report = { measurements: [], contrast: [], interactionStates: [], screenshots: [], violations: [] };
@@ -13,6 +13,48 @@ const paths = ['/customers', `/customers/${customer}`, '/customers/new', '/jobs/
 paths.push('/settings/authorization','/directory','/users','/settings/custom-fields','/activity',`/time-entries/${entry}`,`/time-entries/${entry}/edit`);
 paths.push('/schedule?tab=list&period=day','/schedule?tab=calendar&period=week','/schedule?tab=dispatch&period=day');
 paths.push('/settings/backup','/settings/backup/status-page');
+
+const dispatchTimes = {start:'2026-12-02T10:00',end:'2026-12-02T11:00',arrival_start:'2026-12-02T09:30',arrival_end:'2026-12-02T10:30'};
+const isDispatch = route => /^\/jobs\/\d+\/dispatch$/.test(route);
+async function chromiumDispatch(page) {
+  assert.equal(await page.locator('#dispatch-dialog').isVisible(),true);
+  for(const [name,value] of Object.entries(dispatchTimes)) {
+    const input=page.locator(`#dispatch-dialog [name=${name}]`);
+    assert.equal(await input.isEditable(),true,name+' is editable');
+    await input.fill(value);
+    assert.equal(await input.inputValue(),value);
+    await page.locator(`[name=${name}_offset]`).fill('+00:00');
+    assert.equal(await page.locator(`[name=${name}_offset]`).inputValue(),'+00:00');
+  }
+  const choice=page.locator(`input[name=assignee_ids][value="${assignee}"]`);
+  assert.equal(await choice.isEnabled(),true,'real enabled assignee');
+  await choice.check(); assert.equal(await choice.isChecked(),true);
+  await choice.uncheck(); assert.equal(await choice.isChecked(),false);
+  await choice.check();
+  assert.equal(await page.getByRole('button',{name:'Review dispatch',exact:true}).isEnabled(),true);
+}
+async function firefoxDispatch(driver) {
+  assert.equal(await driver.findElement(By.id('dispatch-dialog')).isDisplayed(),true);
+  for(const [name,value] of Object.entries(dispatchTimes)) {
+    const input=await driver.findElement(By.css(`#dispatch-dialog [name=${name}]`));
+    assert.equal(await input.isEnabled(),true);
+    assert.equal(await input.getAttribute('readonly'),null);
+    // Firefox WebDriver datetime segment typing is locale-dependent. Set the
+    // native control value and emit its normal input/change events instead.
+    await driver.executeScript('arguments[0].value=arguments[1];arguments[0].dispatchEvent(new Event("input",{bubbles:true}));arguments[0].dispatchEvent(new Event("change",{bubbles:true}));',input,value);
+    assert.equal(await input.getAttribute('value'),value);
+    const offset=await driver.findElement(By.css(`[name=${name}_offset]`));
+    await offset.clear(); await offset.sendKeys('+00:00');
+    assert.equal(await offset.getAttribute('value'),'+00:00');
+  }
+  const choice=await driver.findElement(By.css(`input[name=assignee_ids][value="${assignee}"]`));
+  assert.equal(await choice.isEnabled(),true,'Firefox real enabled assignee');
+  assert.equal(await choice.isSelected(),false);
+  await choice.click(); assert.equal(await choice.isSelected(),true);
+  await choice.click(); assert.equal(await choice.isSelected(),false);
+  await choice.click();
+  assert.equal(await driver.findElement(By.xpath("//button[normalize-space(.)='Review dispatch']")).isEnabled(),true);
+}
 
 // Measure painted text and actual hit rectangles. Inline prose links are exempt;
 // navigation, icon links, buttons and controls are not.
@@ -23,9 +65,24 @@ function measurements() {
     const r = (label || el).getBoundingClientRect();
     return { name: (el.getAttribute('aria-label') || el.textContent || el.name).trim().slice(0, 65), width: r.width, height: r.height };
   });
-  const rgb = color => { const c = document.createElement('canvas').getContext('2d'); c.fillStyle = color; c.fillRect(0,0,1,1); return [...c.getImageData(0,0,1,1).data].map((v,i) => i === 3 ? v/255 : v); };
+  // Cache only within this synchronous snapshot. Reallocating a default-sized
+  // canvas for every ancestor of every control exhausts the renderer on the
+  // authorization matrix after the preceding page measurements.
+  const canvas = document.createElement('canvas'); canvas.width=canvas.height=1;
+  const context = canvas.getContext('2d'), colors = new Map(), backgrounds = new WeakMap();
+  const rgb = color => {
+    if(!colors.has(color)) {
+      context.clearRect(0,0,1,1); context.fillStyle=color; context.fillRect(0,0,1,1);
+      colors.set(color,[...context.getImageData(0,0,1,1).data].map((v,i)=>i===3?v/255:v));
+    }
+    return colors.get(color);
+  };
   const blend = (c, bg) => c.slice(0,3).map((v,i) => v*c[3] + bg[i]*(1-c[3]));
-  const background = el => !el ? [255,255,255] : blend(rgb(getComputedStyle(el).backgroundColor), background(el.parentElement));
+  const background = el => {
+    if(!el)return [255,255,255];
+    if(!backgrounds.has(el))backgrounds.set(el,blend(rgb(getComputedStyle(el).backgroundColor),background(el.parentElement)));
+    return backgrounds.get(el);
+  };
   const luminance = c => c.map(v => v/255).map(v => v<=.04045 ? v/12.92 : ((v+.055)/1.055)**2.4).reduce((n,v,i) => n+v*[.2126,.7152,.0722][i],0);
   const contrast = (a,b) => { const x=luminance(a),y=luminance(b); return (Math.max(x,y)+.05)/(Math.min(x,y)+.05); };
   const boundaries = [...document.querySelectorAll('input:not([type=hidden]),select,textarea,button,[role=button]')].filter(visible).filter(el => !el.disabled).map(el => {
@@ -110,6 +167,8 @@ async function chromiumChecks() {
       const detailPath=/\/\d+$/.test(current) ? current : await page.getByText('Measured '+kind+' record',{exact:true}).first().getAttribute('href');
       paths.push(detailPath);
       if(kind==='jobs') {
+        // Scheduling and equal assignees belong to Dispatch Job; v1 has no Visits.
+        paths.push(detailPath+'/dispatch');
         await page.goto(base+detailPath);
         let statusPosts=0; const observe=request=>{if(request.method()==='POST' && request.url().endsWith('/status'))statusPosts++;};page.on('request',observe);
         const select=page.locator('.job-status-select');
@@ -141,13 +200,20 @@ async function chromiumChecks() {
     report.chromium = context.browser().version();
     for (const theme of ['light', 'dark']) {
       for (const route of paths) {
+        console.log(`Measuring Chromium ${theme} ${route}`);
         assert.equal((await page.goto(base + route)).status(),200,route+' is a real installed authorized page');
         await page.evaluate(theme => { document.documentElement.dataset.theme = theme; const preference=document.querySelector('[data-theme-preference]');if(preference)preference.dataset.themePreference=theme; }, theme);
-        if(route==='/jobs/new') for(const name of ['+ Add Visit','+ Add Assignment','+ Add Subtask']) await page.getByRole('button',{name,exact:true}).click();
+        if(isDispatch(route))await chromiumDispatch(page);
+        if(route==='/jobs/new') {
+          await page.getByRole('button',{name:'+ Add Subtask',exact:true}).click();
+          await page.getByRole('textbox',{name:'Subtask title',exact:true}).waitFor();
+        }
         if(interactionTargets(route).length)await cdp.send('Browser.setWindowBounds',{windowId,bounds:{width:2000,height:1000}});
         await page.mouse.move(0,0);
         await page.addScriptTag({ content: axe.source });
+        console.log(`Checking Chromium ${theme} ${route} contrast and labels`);
         const result = await page.evaluate(async () => axe.run(document, { runOnly: ['color-contrast', 'label', 'button-name', 'link-name', 'select-name', 'aria-dialog-name'] }));
+        console.log(`Checking Chromium ${theme} ${route} zoom and targets`);
         report.contrast.push({label: `Chromium ${theme} ${route}`, nodes: result.passes.filter(p => p.id === 'color-contrast').flatMap(p => p.nodes.map(n => ({target:n.target, data:n.any.map(a=>a.data)})))});
         for (const violation of result.violations) report.violations.push({ label: `Chromium ${theme} ${route}`, axe: violation.id, nodes: violation.nodes.map(n => ({ target: n.target, summary: n.failureSummary })) });
         await chromiumStates(page,route,theme);
@@ -195,8 +261,13 @@ async function chromiumChecks() {
     const phone = await touch.newPage();
     phone.on('dialog',dialog=>dialog.accept());
     for (const route of paths) {
+      console.log(`Measuring Chromium touch ${route}`);
       await phone.goto(base + route);
-      if(route==='/jobs/new') for(const name of ['+ Add Visit','+ Add Assignment','+ Add Subtask']) await phone.getByRole('button',{name,exact:true}).click();
+      if(isDispatch(route))await chromiumDispatch(phone);
+      if(route==='/jobs/new') {
+        await phone.getByRole('button',{name:'+ Add Subtask',exact:true}).click();
+        await phone.getByRole('textbox',{name:'Subtask title',exact:true}).waitFor();
+      }
       for(const theme of ['light','dark']) {
         await phone.evaluate(theme=>{document.documentElement.dataset.theme=theme;const preference=document.querySelector('[data-theme-preference]');if(preference)preference.dataset.themePreference=theme},theme);
         for(const size of [{width:320,height:640},{width:640,height:320},{width:1280,height:800}]) {
@@ -223,16 +294,24 @@ async function chromiumChecks() {
 async function firefoxChecks() {
   const driverPath = process.env.GECKODRIVER_PATH;
   assert.ok(driverPath, 'set GECKODRIVER_PATH to isolated dev driver');
-  const driver = await new Builder().forBrowser('firefox').setFirefoxService(new firefox.ServiceBuilder(driverPath)).setFirefoxOptions(new firefox.Options().setBinary(process.env.FIREFOX_EXECUTABLE || '/usr/bin/firefox').addArguments('-headless', '--remote-allow-system-access').setPreference('ui.prefersReducedMotion', 1).set('unhandledPromptBehavior','accept')).build();
+  const driver = await new Builder().forBrowser('firefox').setFirefoxService(new firefox.ServiceBuilder(driverPath).addArguments('--allow-system-access')).setFirefoxOptions(new firefox.Options().setBinary(process.env.FIREFOX_EXECUTABLE || '/usr/bin/firefox').addArguments('-headless').setPreference('ui.prefersReducedMotion', 1).set('unhandledPromptBehavior','accept')).build();
   try {
     report.firefox = (await driver.getCapabilities()).get('browserVersion');
     await driver.get(base + '/login');
     await driver.manage().addCookie({name: 'session', value: cookie, httpOnly: true});
     for (const theme of ['light', 'dark']) {
       for (const route of paths) {
+        console.log(`Measuring Firefox ${theme} ${route}`);
         await driver.get(base + route);
         await driver.executeScript('document.documentElement.dataset.theme=arguments[0]; const preference=document.querySelector("[data-theme-preference]");if(preference)preference.dataset.themePreference=arguments[0]', theme);
-        if(route==='/jobs/new') for(const name of ['+ Add Visit','+ Add Assignment','+ Add Subtask']) await driver.findElement(By.xpath(`//button[normalize-space(.)='${name}']`)).click();
+        if(isDispatch(route))await firefoxDispatch(driver);
+        if(route==='/jobs/new') {
+          await driver.findElement(By.xpath("//button[normalize-space(.)='+ Add Subtask']")).click();
+          await driver.wait(async()=>{
+            const inputs=await driver.findElements(By.css('input[aria-label="Subtask title"]'));
+            return inputs.length===1 && await inputs[0].isDisplayed();
+          },5000);
+        }
         if(interactionTargets(route).length)await driver.manage().window().setRect({width:2000,height:1000});
         await driver.actions().move({x:0,y:0,origin:'viewport'}).perform();
         await driver.executeScript(axe.source);

@@ -494,6 +494,55 @@ func currentCoverageBillingTerms(ctx context.Context, tx pgx.Tx, lease int64, in
 // effectiveLeasePeriodTerms projects entitlement from approved effective facts,
 // independently of obligation/disposition materialization. asOf bounds notice
 // applicability for historical reports; due still selects the period's rates.
+// Agreement position is corrected effective history, not today's lifecycle
+// copied backwards. It is shared by the report and owning period entitlement.
+type leaseAgreementPosition struct {
+	LeaseCalendar
+	StartsOn, EndsOn, EndingOn, FirstMonthlyOn string
+	Cancelled, Unavailable                     bool
+}
+
+func readLeaseAgreementPosition(ctx context.Context, tx pgx.Tx, id int64, at string) (leaseAgreementPosition, error) {
+	var out leaseAgreementPosition
+	var state, action, category, notice, ending string
+	var importedTermination bool
+	err := tx.QueryRow(ctx, `SELECT l.lifecycle,coalesce(l.starts_on::text,''),coalesce(l.ends_on::text,''),coalesce(n.action,''),coalesce(n.category,''),coalesce(n.notice_on::text,''),coalesce(n.effective_on::text,''),EXISTS(SELECT 1 FROM lease_master_dependencies d WHERE d.lease_id=l.id AND d.lifecycle='terminated') FROM leases l LEFT JOIN lease_notice_current n ON n.lease_id=l.id WHERE l.id=$1`, id).Scan(&state, &out.StartsOn, &out.EndsOn, &action, &category, &notice, &ending, &importedTermination)
+	if err != nil {
+		return out, err
+	}
+	if state != "draft" && (state == "terminated" || importedTermination) && action == "" {
+		out.Unavailable = true
+		out.Lifecycle = "unavailable"
+		return out, nil
+	}
+	if state == "terminated" {
+		state = "active"
+	}
+	if action != "" && action != "withdraw" && notice <= at {
+		out.EndingOn = ending
+		out.Cancelled = category == "cancel_before_start"
+		if ending < at || out.Cancelled {
+			state = "terminated"
+		}
+	}
+	day, err := time.Parse(time.DateOnly, at)
+	if err != nil {
+		return out, err
+	}
+	out.LeaseCalendar, err = leaseCalendar(state, out.StartsOn, out.EndsOn, day)
+	if err != nil {
+		return out, err
+	}
+	if state != "draft" {
+		end, err := time.Parse(time.DateOnly, out.EndsOn)
+		if err != nil {
+			return out, err
+		}
+		out.FirstMonthlyOn = end.AddDate(0, 0, 1).Format(time.DateOnly)
+	}
+	return out, nil
+}
+
 func effectiveLeasePeriodTerms(ctx context.Context, tx pgx.Tx, lease int64, initial []DraftLeaseTerms, due time.Time, kind, asOf string) ([]DraftLeaseTerms, bool, string, error) {
 	if kind == "monthly" {
 		var commenced bool
@@ -518,11 +567,11 @@ func leaseCoverageBillingTermsAt(ctx context.Context, tx pgx.Tx, lease int64, in
 	if err != nil {
 		return nil, false, "", err
 	}
-	var unowed bool
-	if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_notice_current WHERE lease_id=$1 AND action<>'withdraw' AND notice_on<=$4::date AND (category='cancel_before_start' OR ($3<>'initial' AND effective_on<$2::date)))`, lease, due, kind, asOf).Scan(&unowed); err != nil {
+	position, err := readLeaseAgreementPosition(ctx, tx, lease, asOf)
+	if err != nil {
 		return nil, false, "", err
 	}
-	if unowed {
+	if position.Cancelled || kind != "initial" && position.EndingOn != "" && position.EndingOn < due.Format(time.DateOnly) {
 		return nil, true, "not owed — termination", nil
 	}
 	records, err := readCoverageEvents(ctx, tx, lease, false)
@@ -541,6 +590,26 @@ func leaseCoverageBillingTermsAt(ctx context.Context, tx pgx.Tx, lease int64, in
 		return nil, false, "", err
 	}
 	selected := 0
+	// Current dependency rows can have been removed by a later cancellation.
+	// Replay retained commencement membership against this same selected-date
+	// notice position instead of letting that mutable projection erase old debt.
+	var coverage []LeaseAssetDependency
+	if !position.Unavailable {
+		var original []LeaseAssetDependency
+		for _, term := range initial {
+			if term.Selected {
+				original = append(original, LeaseAssetDependency{AssetID: term.AssetID, StartsOn: position.StartsOn})
+			}
+		}
+		var end *string
+		if position.EndingOn != "" {
+			end = &position.EndingOn
+		}
+		coverage, err = projectLeaseCoverage(original, position.StartsOn, end, coverageActions(records))
+		if err != nil {
+			return nil, false, "", err
+		}
+	}
 	for i := range terms {
 		if len(records) == 0 {
 			coveredAt := due
@@ -548,8 +617,15 @@ func leaseCoverageBillingTermsAt(ctx context.Context, tx pgx.Tx, lease int64, in
 				coveredAt = start
 			}
 			var covered bool
-			if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_asset_dependencies WHERE lease_id=$1 AND asset_id=$2 AND starts_on<=$3::date AND (ends_on IS NULL OR ends_on>=$3::date))`, lease, terms[i].AssetID, coveredAt).Scan(&covered); err != nil {
-				return nil, false, "", err
+			if position.Unavailable {
+				if err := tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_asset_dependencies WHERE lease_id=$1 AND asset_id=$2 AND starts_on<=$3::date AND (ends_on IS NULL OR ends_on>=$3::date))`, lease, terms[i].AssetID, coveredAt).Scan(&covered); err != nil {
+					return nil, false, "", err
+				}
+			} else {
+				date := coveredAt.Format(time.DateOnly)
+				for _, interval := range coverage {
+					covered = covered || interval.AssetID == terms[i].AssetID && interval.StartsOn <= date && (interval.EndsOn == nil || *interval.EndsOn >= date)
+				}
 			}
 			terms[i].Selected = terms[i].Selected && covered
 		}

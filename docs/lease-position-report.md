@@ -2,7 +2,9 @@
 
 `GET /leases/report` is an authenticated browser-only report. The Lease workspace
 links to it. `authorization.Service.LeaseReport` returns the authorized report
-rows and matching totals for later export integration; it does not create exports.
+rows and matching totals; it does not create exports. Separate operational and
+Billing review actions use the [fixed Lease CSV contracts](lease-csv-exports.md)
+and include every matching Lease, independently of the current page.
 
 ## Date and financial meaning
 
@@ -37,7 +39,17 @@ rows and matching totals for later export integration; it does not create export
   fees and damages retain their target Invoice, dates, amount and reason.
 - Drafts have no backdated effective agreement. A later-created Draft is omitted
   from an earlier date; historical Draft details come from retained detail-change
-  snapshots. Missing retained Draft details are explicitly unavailable.
+   snapshots. Missing retained Draft details are explicitly unavailable.
+
+Ending-from/through filters are inclusive and use termination when present,
+otherwise fixed-term end. Start, first Month-to-Month transition and renewal dates
+remain separate facts. Pending and Failed generation filters require today's
+company date: historical worker-queue history was not retained. Historical
+Ungenerated is retained due-by-date generation absence, not a past pending/failure
+assertion. Pending includes failed periods in the 30-day generation window;
+these are overlapping populations, not additive totals. Missing imported
+termination history is explicitly unavailable, never reconstructed from today's
+stored lifecycle.
 
 ## Authority and consistency
 
@@ -48,7 +60,7 @@ requires current Invoice and Pricing access, and settlement entries require
 Settlement View. Archived Lease access is independent. Financial exception
 filters require compatible Invoice/Pricing and All Records Lease Billing grants
 before evaluation. Hidden related records contribute no report links or labels.
-The Ungenerated period filter additionally requires All Records Invoice and
+The Ungenerated, Pending and Failed filters additionally require All Records Invoice and
 Pricing access plus archived-Invoice visibility. Its option is omitted otherwise;
 explicit incompatible requests receive actionable HTTP 422 validation, while a
 remembered filter resets after grant loss. Positive Invoice exception filters
@@ -79,7 +91,7 @@ messages and recovery actions without disclosing hidden counts.
 Production PostgreSQL/HTTP tests are in `lease_report_test.go` and
 `lease_report_history_test.go`, `lease_report_snapshot_test.go` and
 `lease_report_recovery_test.go`; the persisted responsive journey is
-`testdata/browser/lease-report.cjs`. The ticket's durable qualification runner
-records exact source/log hashes, prior required test roots and explicit database
-URLs. Full `make test` qualification and independent acceptance remain coordinator
-gates after the focused milestone.
+`testdata/browser/lease-report.cjs`. Lease export tests and the
+`testdata/browser/lease-exports.cjs` journey use the production workflow.
+Real-database, browser, lint and full `make test` checks remain acceptance gates;
+documentation alone does not establish their results.

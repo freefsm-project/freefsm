@@ -134,7 +134,7 @@ func TestOperationalActivityExcludesSealedAndRemovedTextHTTP(t *testing.T) {
 	for _, path := range []string{"/activity", fmt.Sprintf("/activity?object_type=customer&object_id=%d", customer.ID)} {
 		body := requestBody(t, router, cookie, "GET", path, 200)
 		assertContains(t, body, "Safe activity parent")
-		assertNotContains(t,body,"reset password")
+		assertNotContains(t, body, "reset password")
 		for _, secret := range []string{"REMOVED_COMMENT_SECRET", "SEALED_ADMIN_EVENT"} {
 			if strings.Contains(body, secret) {
 				t.Fatalf("ordinary history discloses %s", secret)

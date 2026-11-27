@@ -69,15 +69,38 @@ const { chromium } = require('playwright-core');
     await page.unroute('**/customers/*');
     await page.goto(base + '/customers?search=does-not-match&sort=name_desc&per_page=50');
     await page.getByText('No matches for these filters.', { exact: true }).waitFor();
+    // Boosted navigation updates the URL before HTMX initializes the new form.
+    // Wait for this navigation's settle, not the separate activity widget load.
+    await page.evaluate(() => {
+      window.customerListSettled = new Promise(resolve => {
+        const settled = event => {
+          if (event.detail.target !== document.body || new URL(event.detail.xhr.responseURL).pathname !== '/customers') return;
+          document.removeEventListener('htmx:afterSettle', settled);
+          resolve();
+        };
+        document.addEventListener('htmx:afterSettle', settled);
+      });
+    });
     await page.getByRole('link', { name: 'Clear filters', exact: true }).click();
     await page.waitForURL(/\/customers$/);
-    await page.route('**/customers?*', route => route.fulfill({ status: 503, contentType: 'text/plain', body: 'injected dependency failure' }));
+    await page.evaluate(() => window.customerListSettled);
+    const persistedRow = page.locator('#customer-list-content .work-queue-title').filter({ hasText: 'Accessible persisted customer' });
+    await persistedRow.waitFor();
+    const failedSearchURL = base + '/customers?per_page=25&sort=name&search=Accessible';
+    await page.route(failedSearchURL, route => route.fulfill({ status: 503, contentType: 'text/plain', body: 'injected dependency failure' }));
+    const failedSearch = page.waitForResponse(response => response.url() === failedSearchURL);
     await page.locator('.focused-list-search [name=search]').fill('Accessible');
     await page.locator('.focused-list-search [name=search]').press('Enter');
+    const failedResponse = await failedSearch;
+    assert.equal(failedResponse.status(), 503);
+    assert.equal(failedResponse.request().method(), 'GET');
+    assert.equal(failedResponse.request().headers()['hx-request'], 'true');
     await page.getByText('Results unavailable. Previous results are not current.', { exact: true }).waitFor();
-    await page.unroute('**/customers?*');
+    assert.equal(await persistedRow.count(), 1, 'the previous persisted result is retained');
+    assert.equal(await persistedRow.isVisible(), false, 'failed results cannot certify retained rows');
+    await page.unroute(failedSearchURL);
     await page.getByRole('button', { name: 'Retry results', exact: true }).click();
-    await page.waitForURL(/search=Accessible/);
+    await page.waitForURL(failedSearchURL);
     assert.match(await page.locator('.page-body').innerText(), /Accessible persisted customer/);
     const listURL = base + '/customers?search=Context&sort=name_desc&per_page=25&page=2';
     await page.goto(listURL);

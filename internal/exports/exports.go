@@ -131,6 +131,15 @@ func (s *Service) Accept(ctx context.Context, actor authorization.Actor, operati
 		if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
+		// Fresh temporal eligibility applies only to a new intent. Replaying an
+		// existing receipt and checking Ready artifacts must retain captured meaning.
+		if fresh, ok := d.(interface {
+			ValidateAcceptance(context.Context, pgx.Tx, authorization.Principal, json.RawMessage) error
+		}); ok {
+			if err := fresh.ValidateAcceptance(ctx, tx, p, options); err != nil {
+				return err
+			}
+		}
 		if err := tx.QueryRow(ctx, `INSERT INTO export_jobs(requester_id,company_id,operation_id,kind,options) VALUES($1,$2,$3,$4,$5) RETURNING id`, actor.UserID, p.CompanyID, operation, kind, options).Scan(&id); err != nil {
 			return err
 		}

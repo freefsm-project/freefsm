@@ -47,6 +47,11 @@ button:not(.outline), [role=button]:not(.outline) { border-color: var(--interact
 .flash-banner { background: #1b6535; color: #fff; }
 .schedule-tab.active, .schedule-period-tab.active, .grid-header.today { background: #075e8a; color: #fff; }
 .dispatch-matrix thead th { background: var(--pico-card-background-color); color: var(--interaction-text); border-bottom: 2px solid var(--interaction-boundary); }
+/* Unscheduled cards are filled surfaces, including their translucent badges. */
+.dispatch-unscheduled .dispatch-card {
+  background: var(--pico-primary-background);
+  --interaction-text: var(--pico-primary-inverse);
+}
 :is(.schedule-list-day-card,.schedule-map-list-card,.dispatch-scheduled-card) :is(a,span,small,strong), .schedule-map-list-card { color: var(--interaction-text); }
 .job-status-select { border-color: var(--interaction-boundary) !important; }
 .leaflet-bar a[role=button] { border: 1px solid #52606d; color: #263341; background: #fff; }

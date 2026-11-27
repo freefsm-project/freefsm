@@ -5,8 +5,16 @@ import "net/url"
 import "github.com/freefsm-project/freefsm/internal/authorization"
 import "github.com/freefsm-project/freefsm/internal/commercial"
 
+type LeaseExportLink struct { Text, URL string }
+
+func leaseReportPeriodLabel(period authorization.LeaseReportPeriod) string {
+ if period.Reason!="" { return period.Reason }
+ if period.State=="pending" || period.State=="failed" { return "ungenerated ("+period.State+")" }
+ return period.State
+}
+
 func leaseReportURL(q authorization.LeaseReportQuery,page int) string {
- v:=url.Values{"as_of":{q.AsOf},"search":{q.Search},"lifecycle":{q.Lifecycle},"placement":{q.Placement},"billing":{q.Billing},"archive":{q.Archive},"sort":{q.Sort},"page":{fmt.Sprint(page)},"per_page":{fmt.Sprint(q.PerPage)}}
+ v:=url.Values{"as_of":{q.AsOf},"search":{q.Search},"lifecycle":{q.Lifecycle},"placement":{q.Placement},"billing":{q.Billing},"archive":{q.Archive},"sort":{q.Sort},"page":{fmt.Sprint(page)},"per_page":{fmt.Sprint(q.PerPage)},"ending_from":{q.EndingFrom},"ending_through":{q.EndingThrough}}
  for name,id:=range map[string]int64{"customer":q.Customer,"asset":q.Asset,"premises":q.Premises}{if id>0{v.Set(name,fmt.Sprint(id))}}
  return "/leases/report?"+v.Encode()
 }
@@ -18,7 +26,7 @@ templ LeaseReportFailure(q authorization.LeaseReportQuery) {
  }
 }
 
-templ LeaseReportPage(p authorization.LeaseReport) {
+templ LeaseReportPage(p authorization.LeaseReport, exports ...LeaseExportLink) {
  @Layout("Lease position report") {
   <h1>Lease position report</h1>
   <p>Effective position on {p.AsOf} using corrected domain history. Dates use the company timezone.</p>
@@ -28,6 +36,9 @@ templ LeaseReportPage(p authorization.LeaseReport) {
    } else {
    <form method="get" action="/leases/report">
    <label>As of company date<input type="date" name="as_of" value={p.Query.AsOf}/></label>
+   <label>Ending from<input type="date" name="ending_from" value={p.Query.EndingFrom}/></label>
+   <label>Ending through<input type="date" name="ending_through" value={p.Query.EndingThrough}/></label>
+   <p>Inclusive ending range: termination date when present, otherwise fixed-term end.</p>
    <label>Search<input name="search" value={p.Query.Search}/></label>
    <label>Lifecycle<select name="lifecycle"><option value="">All lifecycles</option>
     for _,state:=range []string{"draft","scheduled","active","month_to_month","terminated"} {
@@ -56,7 +67,9 @@ templ LeaseReportPage(p authorization.LeaseReport) {
    if p.CanInvoiceFilters {
      <label>Billing exception<select name="billing"><option value="">All</option><option value="review" selected?={p.Query.Billing=="review"}>Manual review</option><option value="void" selected?={p.Query.Billing=="void"}>Voided period</option>
       if p.CanUngeneratedFilter {
-       <option value="ungenerated" selected?={p.Query.Billing=="ungenerated"}>Ungenerated period</option>
+        <option value="ungenerated" selected?={p.Query.Billing=="ungenerated"}>Ungenerated period</option>
+        <option value="pending" selected?={p.Query.Billing=="pending"}>Pending generation (current date, next 30 days including failures)</option>
+        <option value="failed" selected?={p.Query.Billing=="failed"}>Failed generation (current date only)</option>
       }
      </select></label>
    }
@@ -64,9 +77,19 @@ templ LeaseReportPage(p authorization.LeaseReport) {
    </form>
    }
    if len(p.Errors)==0 {
-  <p>{fmt.Sprint(p.Total)} matching Leases</p>
-   if p.BillingVisible {
-    <p>Matching monthly rent: {commercial.FormatCents(p.RentCents)} (in-force Leases)</p>
+   <p>{fmt.Sprint(p.Total)} matching Leases</p>
+   for _,link:=range exports {
+    <a class="navigation-link" href={templ.URL(link.URL)}>{link.Text}</a>
+   }
+   if p.Query.Billing!="" {
+    <p>Clear the Billing exception filter to review an operational-only export.</p>
+   }
+    if p.BillingVisible {
+     if p.RentAvailable {
+      <p>Matching monthly rent: {commercial.FormatCents(p.RentCents)} (in-force Leases)</p>
+     } else {
+      <p>Matching monthly rent unavailable: at least one matching Lease has incomplete retained agreement history, including matches beyond this page.</p>
+     }
    }
    <h2>Snapshot-linked details</h2>
    <p>These detail links stay within this report's authorized filters and snapshot on {p.AsOf}, updated at {p.UpdatedAt}. Separately labelled current-workspace links open current records.</p>
@@ -79,11 +102,17 @@ templ LeaseReportPage(p authorization.LeaseReport) {
     <section class="card" id={fmt.Sprintf("lease-report-%d",row.ID)} tabindex="-1">
      <h2>{row.Number} {row.Title}</h2>
      <p>Report detail on {p.AsOf}. <a href={templ.URL(fmt.Sprintf("/leases/%d",row.ID))}>Current Lease workspace</a></p>
-    <p>Lifecycle: {row.Lifecycle}</p>
+     <p>Lifecycle: {row.Lifecycle}</p>
+     if row.PositionUnavailable {
+      <p>Historical position unavailable: required agreement details were not retained.</p>
+     }
     if row.Archived {
      <p>Archived</p>
     }
-    <p>Commencement: {row.StartsOn} — Fixed term ends: {row.EndsOn}</p>
+     <p>Commencement: {row.StartsOn} — Fixed term ends: {row.EndsOn}</p>
+     if row.FirstMonthlyOn!="" {
+      <p>First Month-to-Month transition: {row.FirstMonthlyOn}</p>
+     }
     if row.EndingOn!="" {
      <p>Inclusive termination date: {row.EndingOn}</p>
     }
@@ -99,12 +128,56 @@ templ LeaseReportPage(p authorization.LeaseReport) {
     for _,asset:=range row.Assets{
       <p>Covered Asset: {asset.Number} {asset.Name} — {asset.Placement} — <a href={templ.URL(fmt.Sprintf("/assets/%d",asset.ID))}>Current Asset workspace</a></p>
     }
-    if p.BillingVisible {
-      <p>Monthly rent: {commercial.FormatCents(row.RentCents)}</p>
+     if p.BillingVisible {
+      if row.PositionUnavailable {
+       <p>Monthly rent unavailable: retained agreement position is incomplete.</p>
+      } else {
+       <p>Monthly rent: {commercial.FormatCents(row.RentCents)}</p>
+      }
+      if row.FailureHistory=="unavailable" {
+       <p>Historical worker-queue status unavailable: retry/failure history was not retained. Ungenerated periods indicate retained generation absence, not pending or no failure.</p>
+      }
       <h3>Approved rent schedule</h3>
       <p>Effective monthly rates, including approved upcoming changes. Future rates are excluded from selected-date totals; recorded Invoices retain their generation facts.</p>
       for _,rate:=range row.RentSchedule {
        <p>From {rate.EffectiveOn}: {commercial.FormatCents(rate.RentCents)}</p>
+       }
+      for _,term:=range row.RentTerms {
+       <p>Effective Asset terms on {term.EffectiveOn}:
+        if row.Lifecycle=="scheduled" {
+         scheduled monthly rent {commercial.FormatCents(term.RentCents)}
+        } else {
+         monthly rent {commercial.FormatCents(term.RentCents)}
+        }
+        — tax rate {term.TaxRate}.
+        if term.AssetID>0 {
+         Asset {fmt.Sprint(term.AssetID)}.
+        } else {
+         Asset identity unavailable under current permissions.
+        }
+       </p>
+      }
+      if len(row.BillingRevisions)>0 {
+       <h3>Retained Billing revisions</h3>
+       <p>Recorded by the selected company day's end. Future-effective revisions are labelled; effective terms use corrected history.</p>
+       for _,revision:=range row.BillingRevisions {
+        <section>
+         <h4>Revision {fmt.Sprint(revision.ID)}</h4>
+         <p>Effective {revision.EffectiveOn}; recorded {revision.RecordedAt}: {revision.Reason}</p>
+         if revision.ActorID>0 {
+          <p>Recorded by Product User {fmt.Sprint(revision.ActorID)}</p>
+         }
+         for _,change:=range revision.Changes {
+          <p>Retained line {fmt.Sprint(change.Ordinal)}:
+           rent {commercial.FormatCents(change.BeforeRentCents)} → {commercial.FormatCents(change.AfterRentCents)};
+           tax rate {change.BeforeTaxRate} → {change.AfterTaxRate}.
+           if change.AssetID>0 {
+            Asset {fmt.Sprint(change.AssetID)}.
+           }
+          </p>
+         }
+        </section>
+       }
       }
      if row.Lifecycle=="scheduled" {
       <p>Scheduled monthly rent: {commercial.FormatCents(row.ScheduledRentCents)} — coverage begins {row.StartsOn}</p>
@@ -121,7 +194,8 @@ templ LeaseReportPage(p authorization.LeaseReport) {
          <p>Effective Invoice Status unavailable under current Settlement permissions</p>
         }
        <p>Recorded generation: {commercial.FormatCents(invoice.RecordedCents)}</p>
-       <p>Generated at {invoice.GeneratedAt}. Recorded generation is not a current balance.</p>
+        <p>Generated at {invoice.GeneratedAt}. Recorded generation is not a current balance.</p>
+        @leaseReportGeneratedFacts(row.GeneratedInvoices, invoice.ID)
        for _,asset:=range invoice.Assets {
          <p>Source Asset: {asset.Name} — {asset.Number} — <a href={templ.URL(fmt.Sprintf("/assets/%d",asset.ID))}>Current Asset workspace</a></p>
        }
@@ -136,9 +210,15 @@ templ LeaseReportPage(p authorization.LeaseReport) {
        }
       </section>
      }
-     for _,period:=range row.Periods {
-      <p>{period.Kind} due {period.DueOn}: {period.State} — no Invoice balance inferred</p>
-     }
+      <p>Period details are due by the selected date. Pending and Failed selections also show future generation-period details.</p>
+      for _,period:=range row.Periods {
+       if period.DueOn=="" || period.DueOn<=p.AsOf || p.Query.Billing=="pending" || p.Query.Billing=="failed" {
+       <p>{period.Kind} due {period.DueOn}: {leaseReportPeriodLabel(period)} — no Invoice balance inferred</p>
+       if period.Reason!="" {
+        <p>Period state: {period.State}</p>
+       }
+       }
+      }
      if row.GenerationStatusUnavailable {
       <p>Generation status unavailable under current Invoice permissions. No ungenerated periods inferred.</p>
      }
@@ -177,6 +257,25 @@ templ LeaseReportPage(p authorization.LeaseReport) {
   }
 }
 
+templ leaseReportGeneratedFacts(generations []authorization.LeaseExportGeneratedInvoice, invoiceID int64) {
+ for _,generation:=range generations {
+  if generation.Invoice.ID==invoiceID {
+   <p>Captured generation tax: {commercial.FormatCents(generation.TaxCents)}; tax rate {generation.TaxRate}; tax exempt {fmt.Sprint(generation.TaxExempt)}.</p>
+   <p>Obligation {fmt.Sprint(generation.ObligationID)}, revision {fmt.Sprint(generation.ObligationRevisionID)} (0 means original obligation).</p>
+   for _,line:=range generation.Lines {
+    <p>Captured line {fmt.Sprint(line.Ordinal)}: {line.Amount}; taxable {fmt.Sprint(line.Taxable)}.
+     if line.AssetID>0 {
+      Asset {fmt.Sprint(line.AssetID)}.
+     }
+     if line.BillingRevisionID>0 {
+      Billing revision {fmt.Sprint(line.BillingRevisionID)}.
+     }
+    </p>
+   }
+  }
+ }
+}
+
 templ leaseReportValidation(p authorization.LeaseReport) {
  <form method="get" action="/leases/report">
   <div class="error-summary" data-error-summary tabindex="-1" role="alert">
@@ -187,16 +286,16 @@ templ leaseReportValidation(p authorization.LeaseReport) {
     }
    </ul>
   </div>
-  for _,key:=range []string{"as_of","search","lifecycle","sort","per_page","page","customer","asset","premises","placement","billing","archive"} {
+  for _,key:=range []string{"as_of","ending_from","ending_through","search","lifecycle","sort","per_page","page","customer","asset","premises","placement","billing","archive"} {
    if value,visible:=p.Inputs[key]; visible {
-    <label for={"report-"+key}>{map[string]string{"as_of":"As of company date","search":"Search","lifecycle":"Lifecycle","sort":"Order","per_page":"Rows per page","page":"Page","customer":"Customer ID","asset":"Asset ID","premises":"Premises ID","placement":"Placement","billing":"Billing exception","archive":"Archive"}[key]}</label>
-    if options,ok:=map[string][]string{"lifecycle":{"","draft","scheduled","active","month_to_month","terminated"},"sort":{"","number","number_desc"},"per_page":{"25","50","100"},"placement":{"","unplaced","wrong_premises"},"billing":{"","review","void","ungenerated"},"archive":{"","all","archived"}}[key]; ok {
+    <label for={"report-"+key}>{map[string]string{"as_of":"As of company date","ending_from":"Ending from","ending_through":"Ending through","search":"Search","lifecycle":"Lifecycle","sort":"Order","per_page":"Rows per page","page":"Page","customer":"Customer ID","asset":"Asset ID","premises":"Premises ID","placement":"Placement","billing":"Billing exception","archive":"Archive"}[key]}</label>
+    if options,ok:=map[string][]string{"lifecycle":{"","draft","scheduled","active","month_to_month","terminated"},"sort":{"","number","number_desc"},"per_page":{"25","50","100"},"placement":{"","unplaced","wrong_premises"},"billing":{"","review","void","ungenerated","pending","failed"},"archive":{"","all","archived"}}[key]; ok {
      <select id={"report-"+key} name={key} aria-invalid?={p.Errors[key]!=""} aria-describedby={"report-error-"+key}>
       if p.Errors[key]!="" {
-       <option value={value} selected disabled?={key=="billing" && value=="ungenerated" && !p.CanUngeneratedFilter}>Invalid selection: {value}</option>
+       <option value={value} selected disabled?={key=="billing" && (value=="ungenerated" || value=="pending" || value=="failed") && !p.CanUngeneratedFilter}>Invalid selection: {value}</option>
       }
       for _,option:=range options {
-        if key!="billing" || option!="ungenerated" || p.CanUngeneratedFilter {
+        if key!="billing" || (option!="ungenerated" && option!="pending" && option!="failed") || p.CanUngeneratedFilter {
          <option value={option} selected?={value==option}>{option}</option>
         }
       }

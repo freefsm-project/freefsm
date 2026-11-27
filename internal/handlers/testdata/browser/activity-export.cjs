@@ -11,6 +11,8 @@ const { chromium } = require('playwright-core');
     await page.goto(base + '/activity?from=2026-02-01&until=2026-03-01&action=updated');
     assert.equal(await page.locator('.activity-item').count(), 25);
     await page.getByRole('link', { name: 'Export activity CSV', exact: true }).click();
+    await page.waitForURL(/\/activity\/export\?/);
+    await page.getByRole('heading', { name: 'Export operational activity', exact: true }).waitFor();
     assert.match(await page.locator('body').innerText(), /All matching activity/);
     assert.match(await page.locator('body').innerText(), /All Records/);
     assert.match(await page.locator('body').innerText(), /2026-02-01/);

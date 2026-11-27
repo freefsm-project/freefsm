@@ -1,0 +1,100 @@
+package templates
+
+import "net/url"
+import "strings"
+
+type LeaseExportReviewData struct {
+	Mode, Kind, BackURL, Operation, Error string
+	Filters url.Values
+	Columns []string
+}
+
+func leaseExportReportURL(values url.Values) string {
+	filters := url.Values{}
+	for key, entries := range values {
+		if key != "mode" {
+			filters[key] = entries
+		}
+	}
+	return "/leases/report?" + filters.Encode()
+}
+
+templ LeaseExportReview(p LeaseExportReviewData) {
+	@Layout("Review Lease CSV export") {
+		<h1>Review Lease CSV export</h1>
+		if p.Error != "" {
+			<div class="error-summary" data-error-summary tabindex="-1" role="alert"><p>{ p.Error }</p></div>
+		}
+		<p>Mode: { p.Mode }. Scope: All Records. Contract: { p.Kind }.</p>
+		<p>Every matching Lease is exported, including matches beyond the current report page. Number order has an identity tie-breaker. Page and rows-per-page settings do not restrict this export.</p>
+		<h2>Full selection</h2>
+		<dl>
+			for _, key := range []string{"mode", "as_of", "search", "lifecycle", "customer", "asset", "premises", "ending_from", "ending_through", "archive", "placement", "billing", "sort"} {
+				<dt>{ key }</dt>
+				<dd>
+					if p.Filters.Get(key) != "" {
+						{ p.Filters.Get(key) }
+					} else if key == "as_of" {
+						Current company date at generation
+					} else if key == "archive" {
+						Active records only
+					} else {
+						No restriction
+					}
+				</dd>
+			}
+		</dl>
+		<p>Confirming queues work. Generation captures one consistent snapshot, with its company date, timezone and generation instant. A selected date is an effective position using corrected history, not a reconstruction of what was known then. Ending bounds are inclusive and use termination when present, otherwise fixed-term end.</p>
+		if p.Mode == "operational" {
+			<p>Operational rows contain Lease dates, independently visible related identities, coverage and placement. No Billing columns or financial predicates are included, even if you have Billing permission. Coverage does not imply placement.</p>
+		} else {
+			<p>Billing rows include authorized rent, retained revisions, periods, captured Invoice generation facts, ordinary settlement and manual adjustments. Invoice, Pricing, Settlement, Asset and Product User identities retain their independent permissions.</p>
+			<p>Only summary.matching_monthly_rent is the report's in-force selected-date rent total. Lease and per-Asset rent rows have different granularity; do not add them together. Scheduled and future rent, generated Invoice amounts, adjustments and settlements are not added to that total and are not a Lease balance.</p>
+			<p>Generated totals, tax and lines use retained generation snapshots, never today's terms. Billing revisions are bounded by recording date; effective rent uses corrected effective terms. Future-effective revisions remain labelled by effective date.</p>
+			<p>Pending includes owed ungenerated periods through 30 days after today, including failed periods; Ungenerated includes owed periods due by the selected date. These selections overlap. Pending does not guarantee writer eligibility. Pending and Failed are current-date only: past worker-queue history was not retained and is unavailable. Historical ungenerated means no retained generation by the selected cutoff, never pending or no failure. Archived Leases have no actionable pending queue.</p>
+			<p>Scheduled initial obligations and retained owed obligations on terminated nonarchived Leases retain their owning entitlement. Retained owed periods beyond the generation window are not_yet_eligible. Unavailable agreement positions make dependent rent totals unavailable, not zero.</p>
+		}
+		<p>Blank fields mean inapplicable or not independently visible, not numeric zero. Explicit unavailable history/status is not an assertion that no facts exist. Historical Draft/imported agreement details and unknown placement are never reconstructed from missing history.</p>
+		<h2>Fixed CSV columns</h2>
+		<p style="overflow-wrap:anywhere">{ strings.Join(p.Columns, ", ") }</p>
+		<p>One summary counts distinct matching Leases; child rows do not increase this count. Money uses exact two-decimal amounts. CSV preserves Unicode and quoted newlines; spreadsheet-formula-leading cells receive a reversible leading apostrophe.</p>
+		<p>Ready results are requester-only for 24 hours from Ready. Downloads recheck the entire artifact; lost requisite access blocks all bytes. A new export requires a fresh review. Downloaded copies are outside subsequent access control.</p>
+		<form method="post" action="/leases/report/export" hx-boost="false">
+			<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+			<input type="hidden" name="operation_id" value={ p.Operation }/>
+			for key, values := range p.Filters {
+				for _, value := range values {
+					<input type="hidden" name={ key } value={ value }/>
+				}
+			}
+			<button type="submit">Confirm Lease CSV export</button>
+		</form>
+		<a href={ templ.URL(p.BackURL) }>Cancel and return to report</a>
+		<a href="/exports">My CSV exports</a>
+	}
+}
+
+templ LeaseExportInvalid(values url.Values, message string) {
+	@Layout("Review Lease export filters") {
+		<h1>Review Lease export filters</h1>
+		<div class="error-summary" data-error-summary tabindex="-1" role="alert">
+			<p>{ message }</p>
+			<a href="#lease-export-as_of">Review selected date and filters</a>
+		</div>
+		<p>Your authorized inputs are retained. Correct them to review a new export; no export was accepted.</p>
+		<p>Mode: { values.Get("mode") }. Scope: All Records.</p>
+		<form method="get" action="/leases/report/export">
+			<input type="hidden" name="mode" value={ values.Get("mode") }/>
+			for _, key := range []string{"as_of", "ending_from", "ending_through", "search", "lifecycle", "customer", "asset", "premises", "placement", "archive", "billing", "sort"} {
+				if entries, visible := values[key]; visible {
+					<label for={ "lease-export-" + key }>{ key }</label>
+					<input id={ "lease-export-" + key } name={ key } value={ entries[0] }/>
+				}
+			}
+			<p>Lifecycle: draft, scheduled, active, month_to_month, terminated. Placement: unplaced or wrong_premises. Archive: all or archived; blank selects active records. Sort: number or number_desc. Billing: review, void, ungenerated, pending or failed, subject to independent permissions. Leave optional filters blank for no restriction.</p>
+			<button type="submit">Review corrected export</button>
+		</form>
+		<a href={ templ.URL(leaseExportReportURL(values)) }>Return to report with these filters</a>
+		<a href="/leases/report?reset=1">Clear filters and return to report</a>
+	}
+}
