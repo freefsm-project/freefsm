@@ -22,7 +22,7 @@ templ ItemsListContent(p ItemListPageData) {
 	<div id="item-list-content" class="focused-list-content">
 		if itemPermission(ctx, "item.archived.view") {
 			<nav aria-label="Item archive views">
-				<a href="/items">Current Items</a>
+				<a href="/items?q=&archived=0">Current Items</a>
 				<a href="/items?archived=1">Archived Items</a>
 			</nav>
 		}
@@ -56,10 +56,7 @@ templ ItemsTable(p ItemListPageData) {
 			<tbody>
 				if len(p.Items) == 0 {
 					<tr><td colspan="6" class="work-queue-empty">
-						<p>No items found.</p>
-						if itemPermission(ctx, "item.create") {
-							<a href="/items/new" role="button" class="outline">Create your first item</a>
-						}
+						@ListEmptyState(p.Total,p.Page,p.Search!="",operationalNewURL(ctx,"/items/new"),"Create your first item")
 					</td></tr>
 				}
 				for _, i := range p.Items {

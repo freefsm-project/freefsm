@@ -31,12 +31,22 @@ templ CustomerChildrenPage(p CustomerChildrenData) {
 		if p.Selected == nil {
 			<h2>{ capitalize(p.Kind) }s</h2>
 			<form method="get" action={ templ.URL(p.BaseURL) }>
+				for _, field := range listFormCarry(ctx,"per_page","sort","archived","state") {
+					<input type="hidden" name={ field.Name } value={ field.Value }/>
+				}
 				<label>Search<input name="search" value={ p.Search }/></label>
 				<label>Page size<select name="per_page">
 					for _,n := range []int{25,50,100} {
 						<option value={ fmt.Sprint(n) } selected?={ p.PerPage==n }>{ fmt.Sprint(n) }</option>
 					}
 				</select></label>
+				if state, ok := currentListPresentation(ctx); ok {
+					<label>Sort<select name="sort">
+						for _, sort := range state.Sorts {
+							<option value={ sort } selected?={ state.Values.Get("sort") == sort }>{ listSortLabel(sort) }</option>
+						}
+					</select></label>
+				}
 				if p.CanViewArchived {
 					<label><input type="checkbox" name="archived" value="1" checked?={ p.Archived }/>Include archived</label>
 				}
@@ -47,6 +57,10 @@ templ CustomerChildrenPage(p CustomerChildrenData) {
 			}
 			if p.CanViewArchived {
 				<a href={ templ.URL(p.BaseURL+"?archived=1") }>Include archived</a>
+			}
+			<div data-discovery-results>
+			if p.CustomerID == 0 && len(p.Rows) == 0 {
+				@ListEmptyState(p.Total,p.Page,p.Search!="","","")
 			}
 			<ul>
 			for _, c := range p.Rows {
@@ -61,6 +75,7 @@ templ CustomerChildrenPage(p CustomerChildrenData) {
 			}
 			</ul>
 			@Pagination(PaginationData{CurrentPage:p.Page,TotalPages:(p.Total+p.PerPage-1)/p.PerPage,BaseURL:p.BaseURL,Query:childListQuery(p)})
+			</div>
 		} else if p.Editing {
 			@CustomerChildForm(p, *p.Selected)
 		} else {

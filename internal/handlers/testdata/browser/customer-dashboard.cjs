@@ -38,7 +38,7 @@ const path = require('node:path');
     const activityPattern = `**/customers/${customer}/activity*`;
     await page.route(activityPattern, route => route.abort());
     await page.reload();
-    await page.getByText('Results unavailable. Previous results are not current.', { exact: true }).waitFor();
+    await page.getByText('Results unavailable. Previous results are unavailable until authority can be checked. Your filters are retained.', { exact: true }).waitFor();
     assert.equal(await page.getByRole('link', { name: 'Persisted direct Job', exact: true }).count(), 1);
     await page.unroute(activityPattern);
     await page.getByRole('button', { name: 'Retry results', exact: true }).click();

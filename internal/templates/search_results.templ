@@ -1,123 +1,116 @@
 package templates
 
-import "fmt"
+import "strconv"
 
-templ SearchResults(p SearchPageData) {
-	@Layout("Search Results") {
-		<h2>Search Results</h2>
-		if p.Query != "" {
-			<p><em>Showing results for "{ p.Query }"</em></p>
-		}
-
-		if len(p.Customers) == 0 && len(p.Jobs) == 0 && len(p.Projects) == 0 && len(p.Invoices) == 0 && len(p.Estimates) == 0 {
-			<div class="search-empty">
-				<p>No results found. Try broadening your search terms.</p>
+templ SearchResults(p DiscoveryPageData) {
+	@Layout("Search") {
+		<section data-discovery-page>
+			<h2>Search</h2>
+			<form method="get" action="/search" data-discovery-form hx-get="/search" hx-target=".main-content" hx-select=".main-content" hx-swap="outerHTML" hx-push-url="true" hx-sync="this:replace">
+				<label for="discovery-query">Search records</label>
+				<input id="discovery-query" type="search" name="q" value={ p.Values.Get("q") } maxlength="500"/>
+				<fieldset>
+					<legend>Record types (none selected means all available)</legend>
+					for _, choice := range p.Page.Types {
+						<label><input type="checkbox" name="type" value={ choice.Type } checked?={ p.Selected(choice.Type) }/>{ choice.Label }</label>
+					}
+				</fieldset>
+				<label>State
+					<select name="state">
+						<option value="active" selected?={ p.Values.Get("state") == "active" }>Active</option>
+						<option value="archived" selected?={ p.Values.Get("state") == "archived" }>Archived (requires permission)</option>
+						<option value="all" selected?={ p.Values.Get("state") == "all" }>All (requires archived permission)</option>
+					</select>
+				</label>
+				<label>Sort
+					<select name="sort">
+						<option value="relevance" selected?={ p.Values.Get("sort") == "relevance" }>Relevance</option>
+						<option value="name" selected?={ p.Values.Get("sort") == "name" }>Name A–Z</option>
+						<option value="name_desc" selected?={ p.Values.Get("sort") == "name_desc" }>Name Z–A</option>
+					</select>
+				</label>
+				<label>Results per page
+					<select name="per_page">
+						for _, size := range []string{"25","50","100"} {
+							<option value={ size } selected?={ p.Values.Get("per_page") == size }>{ size }</option>
+						}
+					</select>
+				</label>
+				if len(p.Values["type"]) == 1 && p.Selected("lease") {
+					<fieldset>
+						<legend>Lease filters</legend>
+						<label>Lifecycle<select name="lifecycle">
+							for _, choice := range []string{"","draft","scheduled","active","month_to_month","terminated"} {
+								<option value={ choice } selected?={ p.Values.Get("lifecycle") == choice }>{ choice }</option>
+							}
+						</select></label>
+						for _, key := range []string{"customer","asset","premises"} {
+							<label>{ key } identity<input name={ key } inputmode="numeric" value={ p.Values.Get(key) }/></label>
+						}
+						<label>Ending from<input type="date" name="ending_from" value={ p.Values.Get("ending_from") }/></label>
+						<label>Ending through<input type="date" name="ending_through" value={ p.Values.Get("ending_through") }/></label>
+						<label>Placement<select name="placement">
+							for _, choice := range []string{"","unplaced","wrong_premises"} {
+								<option value={ choice } selected?={ p.Values.Get("placement") == choice }>{ choice }</option>
+							}
+						</select></label>
+						<label>Billing<select name="billing">
+							for _, choice := range []string{"","failed","review"} {
+								<option value={ choice } selected?={ p.Values.Get("billing") == choice }>{ choice }</option>
+							}
+						</select></label>
+						<label>Queue<select name="queue">
+							for _, choice := range []string{"","starts","renewals","termination","placement","monthly","failed","review"} {
+								<option value={ choice } selected?={ p.Values.Get("queue") == choice }>{ choice }</option>
+							}
+						</select></label>
+					</fieldset>
+				}
+				<button type="submit">Search</button>
+			</form>
+			if state, ok := currentListPresentation(ctx); ok {
+				@ListReset(state)
+			}
+			<p role="status" aria-live="polite" data-discovery-status>{ p.Summary() }</p>
+			<div data-discovery-results>
+				if p.Page.Total == 0 {
+					if p.Page.HasVisibleRecords {
+						<p>No records match these filters.</p>
+					} else {
+						<p>No records are available.</p>
+					}
+				} else {
+					<ul>
+						for _, record := range p.Page.Results {
+							<li data-record-type={ record.Type } data-record-id={ strconv.FormatInt(record.ID,10) }>
+								<span>{ record.Type }</span>
+								<a href={ templ.URL(record.URL) }>{ record.Identifier } { record.Title }</a>
+								if record.Archived {
+									<span class="badge">Archived</span>
+								}
+								if record.Status != "" {
+									<span>{ record.Status }</span>
+								}
+								if record.Description != "" {
+									<p>{ record.Description }</p>
+								}
+								if record.Match != "" {
+									<p class="search-match">{ record.Match }</p>
+								}
+							</li>
+						}
+					</ul>
+				}
+				<nav aria-label="Search pages">
+					if p.Page.Query.Page > 1 {
+						<a href={ templ.URL(p.PageURL(p.Page.Query.Page-1)) }>Previous</a>
+					}
+					<span>Page { strconv.Itoa(p.Page.Query.Page) }</span>
+					if p.Page.Query.Page * p.Page.Query.PerPage < p.Page.Total {
+						<a href={ templ.URL(p.PageURL(p.Page.Query.Page+1)) }>Next</a>
+					}
+				</nav>
 			</div>
-		} else {
-			if len(p.Customers) > 0 {
-				<h3>Customers</h3>
-				<table>
-					<thead>
-						<tr><th>Name</th><th>Email</th></tr>
-					</thead>
-					<tbody>
-						for _, c := range p.Customers {
-							<tr>
-								<td><a href={ templ.URL(fmt.Sprintf("/customers/%d", c.ID)) }>{ c.Name }</a></td>
-								<td>{ c.Extra }</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			}
-
-			if len(p.Jobs) > 0 {
-				<h3>Jobs</h3>
-				<table>
-					<thead>
-						<tr><th>Job</th><th>Customer</th><th>Status</th></tr>
-					</thead>
-					<tbody>
-						for _, j := range p.Jobs {
-							<tr>
-								<td><a href={ templ.URL(fmt.Sprintf("/jobs/%d", j.ID)) }>{ j.Name }</a></td>
-								<td>{ j.Customer }</td>
-								<td>
-									if j.StatusName != "" {
-										<span class="status-badge" style={ badgeStyle(j.StatusColor) }>{ j.StatusName }</span>
-									}
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			}
-
-			if len(p.Projects) > 0 {
-				<h3>Projects</h3>
-				<table>
-					<thead>
-						<tr><th>Project</th><th>Customer</th><th>Status</th></tr>
-					</thead>
-					<tbody>
-						for _, pr := range p.Projects {
-							<tr>
-								<td><a href={ templ.URL(fmt.Sprintf("/projects/%d", pr.ID)) }>{ pr.Name }</a></td>
-								<td>{ pr.Customer }</td>
-								<td>
-									if pr.StatusName != "" {
-										<span class="status-badge" style={ badgeStyle(pr.StatusColor) }>{ pr.StatusName }</span>
-									}
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			}
-
-			if len(p.Invoices) > 0 {
-				<h3>Invoices</h3>
-				<table>
-					<thead>
-						<tr><th>Invoice</th><th>Customer</th><th>Status</th></tr>
-					</thead>
-					<tbody>
-						for _, i := range p.Invoices {
-							<tr>
-								<td><a href={ templ.URL(fmt.Sprintf("/invoices/%d", i.ID)) }>{ i.Name }</a></td>
-								<td>{ i.Customer }</td>
-								<td>
-									if i.StatusName != "" {
-										<span class="status-badge" style={ badgeStyle(i.StatusColor) }>{ i.StatusName }</span>
-									}
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			}
-
-			if len(p.Estimates) > 0 {
-				<h3>Estimates</h3>
-				<table>
-					<thead>
-						<tr><th>Estimate</th><th>Customer</th><th>Status</th></tr>
-					</thead>
-					<tbody>
-						for _, e := range p.Estimates {
-							<tr>
-								<td><a href={ templ.URL(fmt.Sprintf("/estimates/%d", e.ID)) }>{ e.Name }</a></td>
-								<td>{ e.Customer }</td>
-								<td>
-									if e.StatusName != "" {
-										<span class="status-badge" style={ badgeStyle(e.StatusColor) }>{ e.StatusName }</span>
-									}
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			}
-		}
+		</section>
 	}
 }

@@ -38,22 +38,26 @@ func NewProjectHandler(svc *services.ProjectService, custSvc *services.CustomerS
 }
 
 func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
+	query, valid := collectionQuery(w, r, "projects")
+	if !valid {
+		return
 	}
-	perPage := 25
-	search := r.URL.Query().Get("search")
-	statusID, _ := strconv.ParseInt(r.URL.Query().Get("status_id"), 10, 64)
+	page, perPage := collectionPagination(query)
+	search := query.Get("search")
+	statusID, _ := strconv.ParseInt(query.Get("status_id"), 10, 64)
 
 	projects, total, err := h.svc.List(r.Context(), search, statusID, page, perPage)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
 
 	statuses := h.statusesForSelect(r.Context())
-	customers, _ := h.custSvc.ListAll(r.Context())
+	customers, err := h.custSvc.ListAll(r.Context())
+	if err != nil {
+		authorizationError(w, r, err)
+		return
+	}
 	custMap := customerMap(customers)
 
 	rows := make([]templates.ProjectRow, len(projects))

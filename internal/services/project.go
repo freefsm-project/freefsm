@@ -60,7 +60,7 @@ func (s *ProjectService) List(ctx context.Context, search string, statusID int64
 	offset := PaginationOffset(page, perPage)
 
 	projects, err := q.
-		Order(ent.Desc(project.FieldUpdatedAt)).
+		Order(ent.Desc(project.FieldUpdatedAt), ent.Desc(project.FieldID)).
 		Offset(offset).
 		Limit(perPage).
 		All(ctx)

@@ -23,6 +23,7 @@ templ CustomerListContent(p CustomerListPageData) {
 			Action: "/customers", Target: "#customer-list-content", Search: p.Search,
 			SearchPlaceholder: "Search customers...", NewURL: customerNewURL(ctx), NewLabel: "New Customer",
 			ShowFilter: true, Filters: customerListFilters(p),
+			FilterFields: []string{"per_page","sort","archived"},
 			FilterCount: activeFilterCount(customerListFilters(p)),
 		}) {
 			<label>Page size
@@ -61,15 +62,7 @@ templ CustomerTable(p CustomerListPageData) {
 			<tbody>
 				if len(p.Customers) == 0 {
 					<tr><td colspan="5" class="work-queue-empty">
-						if p.Search != "" || p.StatusFilter != "" {
-							<p>No matches for these filters.</p>
-							<a href="/customers">Clear filters</a>
-						} else {
-							<p>No customers yet.</p>
-							if canCustomer(ctx,"create") {
-								<a href="/customers/new" role="button" class="outline">Create your first customer</a>
-							}
-						}
+						@ListEmptyState(p.Total,p.Page,p.Search!="" || p.StatusFilter!="",customerNewURL(ctx),"Create Customer")
 					</td></tr>
 				}
 				for _, c := range p.Customers {

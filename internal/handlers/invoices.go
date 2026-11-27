@@ -63,8 +63,12 @@ func (h *InvoiceHandler) authorizeInvoice(w http.ResponseWriter, r *http.Request
 }
 
 func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
-	perPage := 25
-	f, err := parseDocumentListFilter("invoice", r.URL.Query())
+	query, valid := collectionQuery(w, r, "invoices")
+	if !valid {
+		return
+	}
+	page, perPage := collectionPagination(query)
+	f, err := parseDocumentCollectionFilter("invoice", query)
 	if err != nil {
 		http.Error(w, "Invalid list filters", 400)
 		return
@@ -75,16 +79,15 @@ func (h *InvoiceHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth, _ := authorization.FromContext(r.Context())
-	report, err := auth.Service.DocumentList(r.Context(), auth.Actor, "invoice", f, scope)
+	report, err := auth.Service.DocumentListPage(r.Context(), auth.Actor, "invoice", f, scope, page, perPage)
 	if err != nil {
 		authorizationError(w, r, err)
 		return
 	}
-	total := len(report.Rows)
-	page, start, end := reportPageBounds(r, total)
+	total := report.Total
 	statuses := h.statusesForSelect(r.Context())
-	rows := make([]templates.InvoiceRow, 0, end-start)
-	for _, inv := range report.Rows[start:end] {
+	rows := make([]templates.InvoiceRow, 0, len(report.Rows))
+	for _, inv := range report.Rows {
 		rows = append(rows, templates.InvoiceRow{ID: inv.ID, Number: inv.Number, NumberLabel: inv.NumberLabel, Title: inv.Title, CustomerID: inv.CustomerID, Customer: inv.Customer, StatusID: inv.StatusID, StatusName: inv.StatusName, StatusColor: inv.StatusColor, SettlementState: inv.SettlementState, InvoiceDate: displayReportDate(r.Context(), inv.InvoiceDate), DueDate: displayReportDate(r.Context(), inv.DueDate)})
 	}
 

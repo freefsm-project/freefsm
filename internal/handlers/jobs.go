@@ -68,8 +68,12 @@ func NewJobHandler(svc *services.JobService, custSvc *services.CustomerService, 
 }
 
 func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
-	perPage := 25
-	f, err := parseJobOperationalFilter(r.URL.Query())
+	query, valid := collectionQuery(w, r, "jobs")
+	if !valid {
+		return
+	}
+	page, perPage := collectionPagination(query)
+	f, err := parseJobOperationalFilter(query)
 	if err != nil {
 		http.Error(w, "Invalid list filters", 400)
 		return
@@ -80,16 +84,15 @@ func (h *JobHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth, _ := authorization.FromContext(r.Context())
-	report, err := auth.Service.JobOperational(r.Context(), auth.Actor, f, scope)
+	report, err := auth.Service.JobOperationalPage(r.Context(), auth.Actor, f, scope, page, perPage)
 	if err != nil {
 		authorizationError(w, r, err)
 		return
 	}
-	total := len(report.Rows)
-	page, start, end := reportPageBounds(r, total)
+	total := report.Total
 	statuses := h.statusesForSelect(r.Context())
-	rows := make([]templates.JobRow, 0, end-start)
-	for _, j := range report.Rows[start:end] {
+	rows := make([]templates.JobRow, 0, len(report.Rows))
+	for _, j := range report.Rows {
 		row := templates.JobRow{ID: j.ID, DisplayName: j.Title, JobType: j.Title, Customer: j.Customer, StatusID: j.StatusID, StatusName: j.Status, StatusColor: j.Color}
 		if j.Subtitle != "" {
 			row.DisplayName += " — " + j.Subtitle

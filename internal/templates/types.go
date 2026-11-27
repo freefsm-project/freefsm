@@ -321,6 +321,7 @@ type ListToolbarData struct {
 	ShowFilter        bool
 	FilterCount       int
 	Filters           url.Values
+	FilterFields      []string
 	Scope             url.Values
 }
 
@@ -1654,15 +1655,6 @@ type CustomFieldDisplay struct {
 type CustomFieldsWidgetData struct {
 	Fields   []CustomFieldDisplay
 	EditMode bool
-}
-
-type SearchPageData struct {
-	Query     string
-	Customers []services.SearchResult
-	Jobs      []services.SearchResult
-	Projects  []services.SearchResult
-	Invoices  []services.SearchResult
-	Estimates []services.SearchResult
 }
 
 type ClockWidgetData struct {

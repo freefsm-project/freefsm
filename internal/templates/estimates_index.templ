@@ -20,6 +20,7 @@ templ EstimatesListContent(p EstimateListPageData) {
 			Action: "/estimates", Target: "#estimate-list-content", Search: p.Search,
 			SearchPlaceholder: "Search by title...", NewURL: operationalNewURL(ctx, "/estimates/new"), NewLabel: "New Estimate",
 			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID),"valid",p.Validity), Scope: operationalListScope(p.CustomerID,p.Scope,p.Sort),
+			FilterFields: []string{"status_id","valid"},
 			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID),"valid",p.Validity)),
 		}) {
 			<label>Estimate status
@@ -57,10 +58,7 @@ templ EstimatesTable(p EstimateListPageData) {
 			<tbody>
 				if len(p.Estimates) == 0 {
 					<tr><td colspan="5" class="work-queue-empty">
-						<p>No estimates found.</p>
-						if navigationPermission(ctx, "estimate.create", "A") {
-							<a href="/estimates/new" role="button" class="outline">Create your first estimate</a>
-						}
+						@ListEmptyState(p.Total,p.Page,p.Search!="" || p.StatusID>0 || p.Validity!="",operationalNewURL(ctx,"/estimates/new"),"Create Estimate")
 					</td></tr>
 				}
 				for _, e := range p.Estimates {

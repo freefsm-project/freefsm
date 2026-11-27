@@ -22,6 +22,7 @@ templ JobsListContent(p JobListPageData) {
 			Action: "/jobs", Target: "#job-list-content", Search: p.Search,
 			SearchPlaceholder: "Search by type or subtitle...", NewURL: operationalNewURL(ctx, "/jobs/new"), NewLabel: "New Job",
 			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), Scope: operationalListScope(p.CustomerID,p.Scope,p.Sort),
+			FilterFields: []string{"status_id"},
 			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
 		}) {
 			<label>Job status
@@ -55,16 +56,9 @@ templ JobsTable(p JobListPageData) {
 			</thead>
 			<tbody>
 				if len(p.Jobs) == 0 {
-					if navigationPermission(ctx, "job.create", "A") {
-						<tr><td colspan="6" class="work-queue-empty">
-							<p>No jobs found.</p>
-							<a href="/jobs/new" role="button" class="outline">Create your first job</a>
-						</td></tr>
-					} else {
-						<tr><td colspan="4" class="work-queue-empty">
-							<p>No jobs found.</p>
-						</td></tr>
-					}
+					<tr><td colspan="6" class="work-queue-empty">
+						@ListEmptyState(p.Total,p.Page,p.Search!="" || p.StatusID>0,operationalNewURL(ctx,"/jobs/new"),"Create Job")
+					</td></tr>
 				}
 				for _, j := range p.Jobs {
 					<tr>

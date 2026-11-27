@@ -26,12 +26,13 @@ func (h *ItemHandler) List(w http.ResponseWriter, r *http.Request) {
 	if !requireItemPermission(w, r, "item.view") {
 		return
 	}
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
+	query, valid := collectionQuery(w, r, "items")
+	if !valid {
+		return
 	}
-	search := r.URL.Query().Get("search")
-	archived := r.URL.Query().Get("archived") == "1"
+	page, perPage := collectionPagination(query)
+	search := query.Get("search")
+	archived := query.Get("archived") == "1"
 	list := h.svc.List
 	if archived {
 		if !requireItemPermission(w, r, "item.archived.view") {
@@ -39,7 +40,7 @@ func (h *ItemHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		list = h.svc.ListArchived
 	}
-	items, total, err := list(r.Context(), search, page, 25)
+	items, total, err := list(r.Context(), search, page, perPage)
 	if err != nil {
 		authorizationError(w, r, err)
 		return
@@ -48,7 +49,7 @@ func (h *ItemHandler) List(w http.ResponseWriter, r *http.Request) {
 	for n, i := range items {
 		rows[n] = itemRow(i)
 	}
-	d := templates.ItemListPageData{Items: rows, Page: page, PerPage: 25, Total: total, TotalPages: services.ItemPaginationTotalPages(total, 25), Search: search, Archived: archived}
+	d := templates.ItemListPageData{Items: rows, Page: page, PerPage: perPage, Total: total, TotalPages: services.ItemPaginationTotalPages(total, perPage), Search: search, Archived: archived}
 	if r.Header.Get("HX-Request") == "true" && r.Header.Get("HX-Boosted") != "true" {
 		templates.ItemsListContent(d).Render(r.Context(), w)
 		return

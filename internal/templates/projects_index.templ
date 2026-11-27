@@ -18,6 +18,7 @@ templ ProjectListContent(p ProjectListPageData) {
 			Action: "/projects", Target: "#project-list-content", Search: p.Search,
 			SearchPlaceholder: "Search projects...", NewURL: operationalNewURL(ctx, "/projects/new"), NewLabel: "New Project",
 			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)),
+			FilterFields: []string{"status_id"},
 			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
 		}) {
 			<label>Project status
@@ -49,10 +50,7 @@ templ ProjectTable(p ProjectListPageData) {
 			<tbody>
 				if len(p.Projects) == 0 {
 					<tr><td colspan="5" class="work-queue-empty">
-						<p>No projects found.</p>
-						if navigationPermission(ctx, "project.create", "A") {
-							<a href="/projects/new" role="button" class="outline">Create your first project</a>
-						}
+						@ListEmptyState(p.Total,p.Page,p.Search!="" || p.StatusID>0,operationalNewURL(ctx,"/projects/new"),"Create Project")
 					</td></tr>
 				}
 				for _, pr := range p.Projects {

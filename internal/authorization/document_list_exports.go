@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -45,12 +46,26 @@ type DocumentListReference struct {
 }
 
 func NormalizeDocumentListFilter(kind string, f DocumentListFilter) (DocumentListFilter, error) {
+	return normalizeDocumentFilter(kind, f, true)
+}
+
+// NormalizeDocumentCollectionFilter uses the browser collection's Unicode
+// character limit. Reports/exports retain their historical 1,000-byte limit.
+func NormalizeDocumentCollectionFilter(kind string, f DocumentListFilter) (DocumentListFilter, error) {
+	return normalizeDocumentFilter(kind, f, false)
+}
+
+func normalizeDocumentFilter(kind string, f DocumentListFilter, export bool) (DocumentListFilter, error) {
 	if kind != "estimate" && kind != "invoice" {
 		return f, ErrForbidden
 	}
 	f.Search = strings.TrimSpace(f.Search)
-	if f.StatusID < 0 || f.CustomerID < 0 || len(f.Search) > 1000 || (f.Valid != "" && (kind != "estimate" || f.Valid != "current")) {
-		return f, fmt.Errorf("invalid document list filter")
+	oversized := utf8.RuneCountInString(f.Search) > 500
+	if export {
+		oversized = len(f.Search) > 1000
+	}
+	if f.StatusID < 0 || f.CustomerID < 0 || !utf8.ValidString(f.Search) || oversized || (f.Valid != "" && (kind != "estimate" || f.Valid != "current")) {
+		return f, fmt.Errorf("%w: invalid document list filter", ErrConflict)
 	}
 	if f.Sort == "" {
 		f.Sort = "created_desc"
@@ -58,7 +73,7 @@ func NormalizeDocumentListFilter(kind string, f DocumentListFilter) (DocumentLis
 	switch f.Sort {
 	case "created_desc", "created_asc", "title_asc", "number_asc":
 	default:
-		return f, fmt.Errorf("invalid document list sort")
+		return f, fmt.Errorf("%w: invalid document list sort", ErrConflict)
 	}
 	return f, nil
 }
@@ -104,7 +119,7 @@ func AuthorizeDocumentListFilter(ctx context.Context, tx pgx.Tx, p Principal, ki
 		return err
 	}
 	var err error
-	if f, err = NormalizeDocumentListFilter(kind, f); err != nil {
+	if f, err = normalizeDocumentFilter(kind, f, export); err != nil {
 		return err
 	}
 	if err := documentReportCustomer(ctx, tx, p, f.CustomerID); err != nil {
@@ -126,7 +141,7 @@ func AuthorizeDocumentListFilter(ctx context.Context, tx pgx.Tx, p Principal, ki
 // Explicit Assigned selection stays bounded even with All View grants.
 func DocumentListSnapshot(ctx context.Context, tx pgx.Tx, p Principal, kind string, filter DocumentListFilter, scope Scope, export bool) (DocumentListReport, error) {
 	out := DocumentListReport{Rows: []DocumentListRow{}}
-	f, err := NormalizeDocumentListFilter(kind, filter)
+	f, err := normalizeDocumentFilter(kind, filter, export)
 	if err != nil {
 		return out, err
 	}

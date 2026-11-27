@@ -10,6 +10,14 @@ const { chromium } = require('playwright-core');
   try {
     await context.addCookies([{name:'session',value:workflowCookie,url:base,httpOnly:true}]);
     const page = await context.newPage();
+    const sorts = {'/jobs':'schedule_desc','/projects':'updated','/assets':'updated','/estimates':'created_desc','/invoices':'created_desc','/items':'name'};
+    async function expectCollection(path, state, authorized = true) {
+      await page.waitForURL(url=>url.origin===new URL(base).origin && url.pathname===path);
+      const url = new URL(page.url());
+      assert.equal(url.hash,'');
+      assert.deepEqual([...url.searchParams].sort(), Object.entries(state).sort(), 'canonical authorized state for '+path);
+      if (authorized) await page.locator('#main-content').waitFor();
+    }
     await page.goto(base+'/preferences');
     for (const path of ['/jobs','/customers','/projects','/assets','/estimates','/invoices','/schedule','/time-entries','/settings','/users']) {
       assert.equal(await page.locator(`#sidebar a[href="${path}"]`).count(),0,'workflow-only hides '+path);
@@ -37,19 +45,22 @@ const { chromium } = require('playwright-core');
     await page.goto(base+'/preferences');
     for (const path of ['/jobs','/projects','/assets','/estimates','/invoices','/items','/time-entries','/activity']) {
       await page.locator(`#sidebar a[href="${path}"]`).click();
-      await page.waitForURL(base+path);
+      if (sorts[path]) await expectCollection(path,{page:'1',per_page:'25',q:'',sort:sorts[path]});
+      else await page.waitForURL(base+path);
       assert.equal(await page.locator('#main-content').count(),1,'destination renders '+path);
       assert.equal(await page.locator(`#sidebar a[href="${path}"]`).getAttribute('aria-current'),'page');
     }
     const list = base+'/customers?search=Navigation&sort=name_desc&per_page=25&page=2';
     await page.goto(list);
+    const customerState = {page:'2',per_page:'25',q:'',search:'Navigation',sort:'name_desc'};
+    await expectCollection('/customers',customerState);
     const row = page.locator('.work-queue-title').nth(15);
     await row.scrollIntoViewIfNeeded();
     const scroll = await page.evaluate(()=>scrollY);
     await row.click();
     await page.waitForURL(/\/customers\/\d+$/);
     await page.goBack();
-    await page.waitForURL(list);
+    await expectCollection('/customers',customerState);
     await page.waitForFunction(y=>Math.abs(scrollY-y)<5,scroll);
     assert.match(await page.locator('.work-queue-title').first().innerText(),/Navigation return 055/);
     await page.goto(base+'/preferences');
@@ -66,8 +77,13 @@ const { chromium } = require('playwright-core');
     while(await checked.count()) await checked.first().uncheck();
     await form.getByRole('button',{name:'Save Role and grants',exact:true}).click();
     await administrator.getByRole('heading',{name:'Navigation permission removed',exact:true}).waitFor();
+    const deniedReturn = page.waitForResponse(response=>{
+      const url = new URL(response.url());
+      return url.origin===new URL(base).origin && url.pathname==='/customers' && response.status()===403;
+    });
     await page.goBack();
-    await page.waitForURL(list);
+    assert.equal((await deniedReturn).status(),403,'revoked collection return is denied');
+    await expectCollection('/customers',customerState,false);
     await page.waitForFunction(()=>!document.body.innerText.includes('Navigation return'));
     assert.doesNotMatch(await page.locator('body').innerText(),/Navigation return/,'Back never restores revoked records');
     await page.goto(base+'/preferences');

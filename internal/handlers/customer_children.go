@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -14,6 +15,14 @@ import (
 
 func customerChildren(kind string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		var mainQuery url.Values
+		if r.Method == http.MethodGet && r.URL.Path == "/"+kind+"s" {
+			var valid bool
+			mainQuery, valid = collectionQuery(w, r, kind+"s")
+			if !valid {
+				return
+			}
+		}
 		req, ok := authorization.FromContext(r.Context())
 		if !ok {
 			http.Error(w, "Forbidden", 403)
@@ -96,7 +105,14 @@ func customerChildren(kind string) http.HandlerFunc {
 			archived = true
 		}
 		var rows []authorization.CustomerChild
-		if id != 0 {
+		var mainPage authorization.CustomerChildrenPage
+		if mainQuery != nil {
+			page, size := collectionPagination(mainQuery)
+			mainPage, err = req.Service.CustomerChildrenPage(r.Context(), req.Actor, kind, authorization.CustomerChildPageFilter{
+				Search: mainQuery.Get("search"), Sort: mainQuery.Get("sort"), Archived: archived, Page: page, PerPage: size,
+			})
+			rows = mainPage.Rows
+		} else if id != 0 {
 			var c authorization.CustomerChild
 			c, err = req.Service.CustomerChild(r.Context(), req.Actor, customerID, id, kind)
 			rows = []authorization.CustomerChild{c}
@@ -166,7 +182,11 @@ func customerChildren(kind string) http.HandlerFunc {
 				return
 			}
 		}
-		if data.Selected == nil && !strings.HasSuffix(r.URL.Path, "/options") {
+		if mainQuery != nil {
+			data.Search = mainQuery.Get("search")
+			data.Page, data.PerPage = collectionPagination(mainQuery)
+			data.Total = mainPage.Total
+		} else if data.Selected == nil && !strings.HasSuffix(r.URL.Path, "/options") {
 			data.Search = r.URL.Query().Get("search")
 			filtered := []authorization.CustomerChild{}
 			for _, c := range rows {
@@ -227,7 +247,8 @@ func registerCustomerChildren(r chi.Router) {
 	r.Get("/customers/{id}/work", customerRelatedWork)
 	for _, kind := range []string{"contact", "location"} {
 		h := customerChildren(kind)
-		for _, suffix := range []string{"", "/options", "/{childID}", "/{childID}/edit"} {
+		// Main collections are registered with saved-state middleware by router.
+		for _, suffix := range []string{"/options", "/{childID}", "/{childID}/edit"} {
 			r.Get("/"+kind+"s"+suffix, h)
 		}
 		for _, suffix := range []string{"/{childID}", "/{childID}/delete", "/{childID}/restore"} {

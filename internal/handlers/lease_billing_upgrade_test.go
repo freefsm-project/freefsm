@@ -18,6 +18,15 @@ func TestLeaseBillingPopulatedNativeUpgrade(t *testing.T) {
 	historyCheck(t, err)
 	lease, values := populateFinalizedLease(t, pool, client, web, cookie, company)
 	voidLeaseInvoiceAndReplay(t, pool, web, cookie, company, admin, lease, values)
+	// permissionHTTPFixture installs the current schema. Reconstructing the
+	// predecessor below removes all migration markers from 113 onward, so the
+	// new 126 table must also be absent, rather than replayed over itself.
+	// Assert emptiness before fixture-only removal: never discard user state.
+	var preferences int
+	historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM list_states`).Scan(&preferences))
+	historyEqual(t, "predecessor has no presentation state", preferences, 0)
+	_, err = pool.Exec(ctx, `DROP TABLE list_states`)
+	historyCheck(t, err)
 	// This predecessor predates manual adjustments. Remove only verified-empty
 	// new structures; retained commercial facts must never be reconstructed.
 	var adjustments int
@@ -57,6 +66,8 @@ func TestLeaseBillingPopulatedNativeUpgrade(t *testing.T) {
 	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(g) ORDER BY invoice_id)::text FROM lease_invoice_generations g`).Scan(&generations))
 	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(jsonb_build_array(sequencename,last_value) ORDER BY sequencename)::text FROM pg_sequences WHERE schemaname=current_schema()`).Scan(&sequences))
 	historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS()))
+	historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM list_states`).Scan(&preferences))
+	historyEqual(t, "upgrade invents no presentation state", preferences, 0)
 	historyEqual(t, "populated native upgrade preserves source and grants", historyDurableRows(t, pool, tables), before)
 	var afterGenerations, afterSequences string
 	historyCheck(t, pool.QueryRow(ctx, `SELECT jsonb_agg(to_jsonb(g)-ARRAY['predecessor_invoice_id','operation_key','review_hash','actor_id','obligation_revision_id'] ORDER BY invoice_id)::text FROM lease_invoice_generations g`).Scan(&afterGenerations))
@@ -72,6 +83,8 @@ func TestLeaseBillingPopulatedNativeUpgrade(t *testing.T) {
 	historyCheck(t, pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM lease_invoice_generations WHERE predecessor_invoice_id IS NOT NULL OR obligation_revision_id IS NOT NULL) OR EXISTS(SELECT 1 FROM lease_billing_source_changes) OR EXISTS(SELECT 1 FROM lease_billing_obligation_revisions)`).Scan(&newFacts))
 	historyEqual(t, "upgrade infers no later billing facts", newFacts, false)
 	historyCheck(t, (&database.DB{Pool: pool}).Migrate(ctx, database.MigrationFS()))
+	historyCheck(t, pool.QueryRow(ctx, `SELECT count(*) FROM list_states`).Scan(&preferences))
+	historyEqual(t, "migration replay invents no presentation state", preferences, 0)
 	historyEqual(t, "migration replay preserves original business facts", historyDurableRows(t, pool, tables), before)
 	var pending int64
 	historyCheck(t, pool.QueryRow(ctx, `SELECT id FROM lease_billing_obligations WHERE lease_id=$1 AND kind='monthly'`, lease).Scan(&pending))

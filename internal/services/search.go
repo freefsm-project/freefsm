@@ -40,6 +40,15 @@ func NewSearchService(client *ent.Client, db ...*pgxpool.Pool) *SearchService {
 	return service
 }
 
+// Discover requires the current browser actor; the legacy role-based search
+// adapter is not used by the browser discovery route.
+func (s *SearchService) Discover(ctx context.Context, actor authorization.Actor, query authorization.DiscoveryQuery) (authorization.DiscoveryPage, error) {
+	if s.db == nil {
+		return authorization.DiscoveryPage{}, fmt.Errorf("discovery unavailable")
+	}
+	return authorization.New(s.db).Discover(ctx, actor, query)
+}
+
 func (s *SearchService) Search(ctx context.Context, q string, limit int, userID int64, role string) ([]SearchResult, []SearchResult, []SearchResult, []SearchResult, []SearchResult, error) {
 	canReadBilling := role == "admin" || role == "dispatcher"
 	if _, current := authorization.NavigationPrincipal(ctx); current {

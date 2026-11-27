@@ -6,10 +6,20 @@ const { chromium } = require('playwright-core');
   try {
     await context.addCookies([{name:'session',value:cookie,url:base,httpOnly:true}]);
     const page = await context.newPage();
+    const sorts = {'/projects':'updated','/assets':'updated','/jobs':'schedule_desc','/estimates':'created_desc','/invoices':'created_desc'};
+    async function expectCollection(collection) {
+      assert.ok(sorts[collection], 'known collection '+collection);
+      await page.waitForURL(url=>url.origin===new URL(base).origin && url.pathname===collection);
+      const url = new URL(page.url());
+      assert.equal(url.hash,'');
+      assert.deepEqual([...url.searchParams].sort(), [['page','1'],['per_page','25'],['q',''],['sort',sorts[collection]]]);
+      await page.locator('#main-content').waitFor();
+    }
     for(const path of JSON.parse(encoded)) {
       const collection = path.slice(0,path.lastIndexOf('/'));
       const response = await page.goto(base+collection);
       assert.equal(response.status(),200);
+      await expectCollection(collection);
       await page.locator(`#main-content a[href="${path}"]`).first().click();
       await page.waitForURL(base+path);
       assert.doesNotMatch(await page.locator('#main-content').innerText(),/DETAIL PRIVATE PRICING|\$123\.45|Record Payment|Create Next Occurrence/);
@@ -31,7 +41,8 @@ const { chromium } = require('playwright-core');
       await page.getByRole('button',{name:'Cancel',exact:true}).click();
       const leave = page.getByRole('dialog',{name:'Unsaved changes'});
       if(await leave.isVisible()) await leave.getByRole('button',{name:'Discard changes',exact:true}).click();
-      await page.waitForURL(base+collection);
+      await expectCollection(collection);
+      await page.locator(`#main-content a[href="${path}"]`).first().waitFor();
     }
     console.log('PASS persisted nonprotected tech collection -> detail -> granted edit -> return for Project, Asset, Job, Estimate, Invoice; undisclosed pricing absent from DOM/editors; ordinary Estimate details save succeeds without pricing input');
   } finally { await context.close(); }

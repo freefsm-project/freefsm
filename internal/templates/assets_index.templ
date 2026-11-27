@@ -23,7 +23,7 @@ templ AssetListContent(p AssetListPageData) {
 	<div id="asset-list-content" class="focused-list-content">
 		if navigationPermission(ctx, "asset.archived.view", "A") {
 			<nav aria-label="Asset archive views">
-				<a href="/assets">Current Assets</a>
+				<a href="/assets?q=&archived=0">Current Assets</a>
 				<a href="/assets?archived=1">Archived Assets</a>
 			</nav>
 		}
@@ -32,6 +32,7 @@ templ AssetListContent(p AssetListPageData) {
 			SearchPlaceholder: "Search assets...", NewURL: operationalNewURL(ctx, "/assets/new"), NewLabel: "New Asset",
 			ShowFilter: true,
 			Filters: filterValues("asset_type_id", fmt.Sprintf("%d", p.AssetTypeID), "asset_status_id", fmt.Sprintf("%d", p.AssetStatusID)),
+			FilterFields: []string{"asset_type_id","asset_status_id"},
 			Scope: assetListScope(p),
 			FilterCount: activeFilterCount(filterValues("asset_type_id", fmt.Sprintf("%d", p.AssetTypeID), "asset_status_id", fmt.Sprintf("%d", p.AssetStatusID))),
 		}) {
@@ -74,10 +75,7 @@ templ AssetTable(p AssetListPageData) {
 			<tbody>
 				if len(p.Assets) == 0 {
 					<tr><td colspan="7" class="work-queue-empty">
-						<p>No assets found.</p>
-						if navigationPermission(ctx, "asset.create", "A") {
-							<a href="/assets/new" role="button" class="outline">Create your first asset</a>
-						}
+						@ListEmptyState(p.Total,p.Page,p.Search!="" || p.AssetTypeID>0 || p.AssetStatusID>0,operationalNewURL(ctx,"/assets/new"),"Create Asset")
 					</td></tr>
 				}
 				for _, a := range p.Assets {

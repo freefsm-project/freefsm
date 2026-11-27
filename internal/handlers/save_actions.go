@@ -40,7 +40,7 @@ func guardedOnlineActions(s *authorization.Service, cfg *config.Config, current 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Pairing, Job execution and checklist commands own their committing
 			// protocols; do not journal secrets or impose whole-Job revisions.
-			if r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") || jobExecutionPath(r.URL.Path) || subtaskProtocolPath(r.URL.Path) || conversionProtocolPath(r.URL.Path) {
+			if r.URL.Path == "/pair" || strings.HasPrefix(r.URL.Path, "/pair/") || jobExecutionPath(r.URL.Path) || subtaskProtocolPath(r.URL.Path) || conversionProtocolPath(r.URL.Path) || listPresentationWritePath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -588,7 +588,7 @@ func installSaveForms(body []byte, revision func(string) string, history string)
 		if !strings.EqualFold(method, "post") {
 			continue
 		}
-		if jobExecutionPath(action) || conversionProtocolPath(action) {
+		if jobExecutionPath(action) || conversionProtocolPath(action) || listPresentationWritePath(action) {
 			continue
 		}
 		if action != "" {

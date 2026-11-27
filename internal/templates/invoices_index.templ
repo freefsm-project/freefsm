@@ -20,6 +20,7 @@ templ InvoicesListContent(p InvoiceListPageData) {
 			Action: "/invoices", Target: "#invoice-list-content", Search: p.Search,
 			SearchPlaceholder: "Search by title...", NewURL: operationalNewURL(ctx, "/invoices/new"), NewLabel: "New Invoice",
 			ShowFilter: true, Filters: filterValues("status_id", fmt.Sprintf("%d", p.StatusID)), Scope: operationalListScope(p.CustomerID,p.Scope,p.Sort),
+			FilterFields: []string{"status_id"},
 			FilterCount: activeFilterCount(filterValues("status_id", fmt.Sprintf("%d", p.StatusID))),
 		}) {
 			<label>Invoice status
@@ -53,10 +54,7 @@ templ InvoicesTable(p InvoiceListPageData) {
 			<tbody>
 				if len(p.Invoices) == 0 {
 					<tr><td colspan="7" class="work-queue-empty">
-						<p>No invoices found.</p>
-						if navigationPermission(ctx, "invoice.create", "A") {
-							<a href="/invoices/new" role="button" class="outline">Create your first invoice</a>
-						}
+						@ListEmptyState(p.Total,p.Page,p.Search!="" || p.StatusID>0,operationalNewURL(ctx,"/invoices/new"),"Create Invoice")
 					</td></tr>
 				}
 				for _, i := range p.Invoices {

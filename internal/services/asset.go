@@ -114,7 +114,7 @@ func (s *AssetService) list(ctx context.Context, search string, customerID, asse
 
 	offset := PaginationOffset(page, perPage)
 	assets, err := q.
-		Order(ent.Desc(asset.FieldUpdatedAt)).
+		Order(ent.Desc(asset.FieldUpdatedAt), ent.Desc(asset.FieldID)).
 		Limit(perPage).
 		Offset(offset).
 		All(ctx)

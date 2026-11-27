@@ -5,15 +5,47 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/freefsm-project/freefsm/internal/authorization"
 	"github.com/freefsm-project/freefsm/internal/middleware"
+	"golang.org/x/net/html"
 )
+
+func navigationHasPage(t *testing.T, body string, page int) bool {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var visit func(*html.Node) bool
+	visit = func(node *html.Node) bool {
+		if node.Type == html.ElementNode && node.Data == "a" {
+			for _, attr := range node.Attr {
+				if attr.Key != "href" {
+					continue
+				}
+				link, err := url.Parse(attr.Val)
+				if err == nil && link.Query().Get("page") == strconv.Itoa(page) {
+					return true
+				}
+			}
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			if visit(child) {
+				return true
+			}
+		}
+		return false
+	}
+	return visit(doc)
+}
 
 func sidebarHTML(t *testing.T, body string) string {
 	t.Helper()
@@ -136,8 +168,11 @@ func TestNavigationCollectionsFilterBeforePaginationHTTP(t *testing.T) {
 		} {
 			body := requestBody(t, router, cookie, "GET", dest.path, 200)
 			assertContains(t, body, dest.visible)
-			for _, hidden := range []string{"HIDDEN navigation", "FOREIGN", "UNDISCLOSED CUSTOMER", "PRIVATE FINANCIAL", "PRIVATE SNAPSHOT", `page=2`} {
+			for _, hidden := range []string{"HIDDEN navigation", "FOREIGN", "UNDISCLOSED CUSTOMER", "PRIVATE FINANCIAL", "PRIVATE SNAPSHOT"} {
 				assertNotContains(t, body, hidden)
+			}
+			if navigationHasPage(t, body, 2) {
+				t.Fatalf("hidden records created page 2 on %s", dest.path)
 			}
 		}
 		// A visible list entry is a real current-authority destination.
@@ -174,11 +209,15 @@ func TestNavigationCollectionsFilterBeforePaginationHTTP(t *testing.T) {
 	for _, path := range []string{"/jobs", "/estimates", "/invoices"} {
 		body := requestBody(t, router, cookie, "GET", path, 200)
 		assertContains(t, body, "HIDDEN navigation")
-		assertContains(t, body, "page=2")
+		if !navigationHasPage(t, body, 2) {
+			t.Fatalf("missing visible page 2 on %s", path)
+		}
 		assertNotContains(t, body, "FOREIGN")
 		body = requestBody(t, router, cookie, "GET", path+"?search=Visible", 200)
 		assertContains(t, body, "Visible navigation")
-		assertNotContains(t, body, "page=2")
+		if navigationHasPage(t, body, 2) {
+			t.Fatalf("unmatched records created page 2 on %s", path)
+		}
 	}
 	client.TimeEntry.Create().SetCompanyID(company).SetUserID(users[0]).SetClockIn(now).SetClockOut(now.Add(time.Hour)).SetNotes("Own navigation time").SaveX(ctx)
 	body := requestBody(t, router, cookie, "GET", "/time-entries", 200)

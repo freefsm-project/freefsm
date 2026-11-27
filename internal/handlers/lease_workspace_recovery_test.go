@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -52,6 +53,14 @@ func TestLeaseWorkspaceRememberedAuthorityBrowser(t *testing.T) {
 			historyCheck(t, svc.AssignUser(ctx, actor, u.ID, role))
 			cookie := sessionCookie(t, ctx, sessions, u.ID)
 			mux := http.NewServeMux()
+			mux.HandleFunc("/fixture/state", func(w http.ResponseWriter, r *http.Request) {
+				state, err := svc.LoadListState(r.Context(), authorization.Actor{UserID: u.ID}, "leases")
+				if err != nil {
+					http.Error(w, "fixture failed", 500)
+					return
+				}
+				_ = json.NewEncoder(w).Encode(state)
+			})
 			mux.HandleFunc("/fixture/revoke", func(w http.ResponseWriter, r *http.Request) {
 				_, err := svc.SaveRole(r.Context(), actor, role, "Recovery "+scenario.name, grants[:1], 1)
 				if err != nil {

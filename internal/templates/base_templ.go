@@ -446,6 +446,14 @@ func Layout(title string, children ...templ.Component) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
+		if state, ok := currentListPresentation(ctx); ok {
+			if state.Key == "search" || state.Key == "leases" || state.Key == "contacts" || state.Key == "locations" {
+				templ_7745c5c3_Err = ListStateControls(state).Render(ctx, templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+		}
 		templ_7745c5c3_Err = templ_7745c5c3_Var1.Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err

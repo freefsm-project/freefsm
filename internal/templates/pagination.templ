@@ -6,28 +6,28 @@ templ Pagination(p PaginationData) {
 	if p.TotalPages > 1 {
 		<nav aria-label="Pagination" class="pagination-nav">
 			if p.CurrentPage > 1 {
-				<a href={ templ.URL(listURL(p.BaseURL, p.Query, p.CurrentPage-1)) }
-					role="button" class="outline"
-					hx-get={ templ.URL(listURL(p.BaseURL, p.Query, p.CurrentPage-1)) }
-					hx-target={ p.Target }
-					hx-sync={ p.Target + ":replace" }
-					hx-swap="outerHTML"
-					hx-push-url="true"
-					hx-indicator="this"
-				>Previous</a>
+				@PaginationLink(p,p.CurrentPage-1,"Previous")
 			}
 			<small class="pagination-status">Page { fmt.Sprintf("%d", p.CurrentPage) } of { fmt.Sprintf("%d", p.TotalPages) }</small>
 			if p.CurrentPage < p.TotalPages {
-				<a href={ templ.URL(listURL(p.BaseURL, p.Query, p.CurrentPage+1)) }
-					role="button" class="outline"
-					hx-get={ templ.URL(listURL(p.BaseURL, p.Query, p.CurrentPage+1)) }
-					hx-target={ p.Target }
-					hx-sync={ p.Target + ":replace" }
-					hx-swap="outerHTML"
-					hx-push-url="true"
-					hx-indicator="this"
-				>Next</a>
+				@PaginationLink(p,p.CurrentPage+1,"Next")
 			}
 		</nav>
+	}
+}
+
+templ PaginationLink(p PaginationData, page int, label string) {
+	if p.Target == "" {
+		<a href={ templ.URL(listURL(p.BaseURL,listPaginationQuery(ctx,p.Query),page)) } class="outline" hx-boost="false">{ label }</a>
+	} else {
+		<a href={ templ.URL(listURL(p.BaseURL,listPaginationQuery(ctx,p.Query),page)) }
+			class="outline"
+			hx-get={ templ.URL(listURL(p.BaseURL,listPaginationQuery(ctx,p.Query),page)) }
+			hx-target={ p.Target }
+			hx-sync={ p.Target+":replace" }
+			hx-swap="outerHTML"
+			hx-push-url="true"
+			hx-indicator="this"
+		>{ label }</a>
 	}
 }

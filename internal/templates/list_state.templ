@@ -1,0 +1,96 @@
+package templates
+
+// Called only when the authorized page has no rows. An unfiltered zero total
+// establishes an empty authorized view; filtered totals never establish that
+// there are no records, and hidden records are not consulted for the wording.
+templ ListEmptyState(total, page int, filtered bool, newURL, newLabel string) {
+	if page > 1 || total > 0 {
+		<div class="empty-state" data-list-empty="out-of-range">
+			<p>No records on this page.</p>
+			if target := listRecoveryURL(ctx,false); target != "" {
+				<a href={ templ.URL(target) } hx-boost="false">Go to first page</a>
+			}
+		</div>
+	} else if listHasFilters(ctx,filtered) {
+		<div class="empty-state" data-list-empty="no-matches">
+			<p>No matches for these filters.</p>
+			if target := listRecoveryURL(ctx,true); target != "" {
+				<a href={ templ.URL(target) } hx-boost="false">Clear filters</a>
+			}
+		</div>
+	} else {
+		<div class="empty-state" data-list-empty="empty">
+			<p>No records are available in this view.</p>
+			if newURL != "" && listEmptyCreation(ctx) {
+				<a href={ templ.URL(newURL) } role="button" class="outline">{ newLabel }</a>
+			}
+		</div>
+	}
+}
+
+templ ListStateControls(p ListPresentation) {
+	<div data-list-state data-list-url={ p.CanonicalURL } data-list-key={ p.Key }>
+		@ListStateSave(p)
+		if p.Key != "search" {
+			@ListReset(p)
+		}
+		if p.Key != "search" && p.Key != "customers" && p.Key != "contacts" && p.Key != "locations" && p.Key != "leases" {
+			<form method="get" action={ templ.URL("/"+p.Key) }>
+				for _, field := range p.SizeSortFields() {
+					<input type="hidden" name={ field.Name } value={ field.Value }/>
+				}
+				<label>Results per page<select name="per_page">
+					for _, size := range []string{"25","50","100"} {
+						<option value={ size } selected?={ p.Values.Get("per_page") == size }>{ size }</option>
+					}
+				</select></label>
+				<label>Sort<select name="sort">
+					for _, sort := range p.Sorts {
+						<option value={ sort } selected?={ p.Values.Get("sort") == sort }>{ listSortLabel(sort) }</option>
+					}
+				</select></label>
+				<button type="submit">Apply size and sort</button>
+			</form>
+		}
+	</div>
+}
+
+templ ListStateSave(p ListPresentation) {
+	<form method="post" action={ templ.URL("/"+p.Key+"/state") } hx-boost="false" data-list-save>
+		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+		<input type="hidden" name="revision" value={ p.RevisionString() }/>
+		<input type="hidden" name="query" value={ p.Values.Encode() }/>
+		<noscript><button type="submit">Remember filters</button></noscript>
+		<span role="status" aria-live="polite" data-list-save-status></span>
+	</form>
+}
+
+templ ListReset(p ListPresentation) {
+	<form method="post" action={ templ.URL("/" + p.Key + "/reset") } hx-boost="false" data-list-reset>
+		<input type="hidden" name="csrf_token" value={ csrfToken(ctx) }/>
+		<input type="hidden" name="revision" value={ p.RevisionString() }/>
+		<button type="submit">Reset filters</button>
+	</form>
+}
+
+templ ListStateFailure(p ListPresentation, message string) {
+	@Layout("Filters unavailable") {
+		<section data-discovery-page>
+			<h2>Filters unavailable</h2>
+			<p role="alert">{ message }</p>
+			<p>Previous results are unavailable. No results have been shown for these filters.</p>
+			<form method="get" action={ templ.URL("/" + p.Key) } data-discovery-form>
+				for key, entries := range p.Values {
+					if key != "reset" && key != "flash" {
+						for _, value := range entries {
+							<label>{ key }<input name={ key } value={ value }/></label>
+						}
+					}
+				}
+				<button type="submit">Retry</button>
+			</form>
+			@ListReset(p)
+			<a class="navigation-link" href={ templ.URL("/"+p.Key+"?reset=1") }>Review Reset using current saved revision</a>
+		</section>
+	}
+}

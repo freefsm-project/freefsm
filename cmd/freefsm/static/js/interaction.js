@@ -40,6 +40,14 @@
   let undoBack;
   let changingPage = false;
   let returnedScroll;
+  let readSequence = 0;
+  const readRequests = new WeakMap();
+  const isListRead = detail => {
+    if (detail.requestConfig?.verb !== 'get') return false;
+    try { return /^\/(search|customers|contacts|locations|assets|jobs|projects|estimates|invoices|leases|items)$/.test(new URL(detail.requestConfig.path,location.href).pathname); }
+    catch (_) { return false; }
+  };
+  let preferenceRequest;
   try { returnedScroll = JSON.parse(sessionStorage.getItem('freefsm-return')); } catch (_) {}
   window.addEventListener('popstate', e => {
     if (undoBack) {
@@ -63,6 +71,7 @@
     // snapshot cache nor a restored DOM may resurrect revoked records or input.
     e.stopImmediatePropagation();
     changingPage = true;
+    document.querySelector('.main-content')?.replaceChildren();
     try { sessionStorage.setItem('freefsm-return', JSON.stringify({url: location.pathname + location.search, scroll: JSON.parse(sessionStorage.getItem(scrollKey()))})); } catch (_) {}
     location.reload();
   }, true);
@@ -76,7 +85,7 @@
   }
   window.addEventListener('scroll', rememberScroll, { passive: true });
   window.addEventListener('pageshow', e => {
-    if (e.persisted) { location.reload(); return; }
+    if (e.persisted) { document.querySelector('.main-content')?.replaceChildren(); location.reload(); return; }
     try { sessionStorage.removeItem('freefsm-return'); } catch (_) {}
     if (returnedScroll?.url === location.pathname + location.search && returnedScroll.scroll) {
       const saved = returnedScroll.scroll;
@@ -414,6 +423,13 @@
     else if (menuFocus?.isConnected) { menuFocus.focus(); menuFocus = null; }
   };
   function init(event) {
+    const canonical = document.querySelector('[data-list-url]')?.dataset.listUrl;
+    if (canonical && canonical !== location.pathname + location.search) history.replaceState(history.state, '', canonical);
+    const preference = document.querySelector('[data-list-save]:not([data-saving])');
+    if (preference) {
+      preference.dataset.saving = 'true';
+      saveListPreference(preference);
+    }
     leaving = false;
     changingPage = !!returnedScroll;
     applyTheme();
@@ -472,13 +488,18 @@
     if (!message) { message = document.createElement('div'); message.dataset.resultsState = ''; message.setAttribute('role','status'); target.prepend(message); }
     message.replaceChildren();
     const text = document.createElement('p');
-    text.textContent = failed ? 'Results unavailable. Previous results are not current.' : (target.querySelector('table') ? 'Updating—previous results shown until refreshed.' : 'Loading results…');
+    text.textContent = failed ? 'Results unavailable. Previous results are unavailable until authority can be checked. Your filters are retained.' : (target.querySelector('table,[data-discovery-results]') ? 'Updating—these are previous-query results until refreshed.' : 'Loading results…');
     message.append(text);
     target.setAttribute('aria-busy', String(!failed));
     if (failed) {
+      changingPage = false;
       // A failed refresh cannot certify that retained rows are still visible
       // under current grants. Do not redisplay them as fallback results.
-      [...target.children].filter(el=>el!==message).forEach(el => { el.hidden = true; });
+      if (target.querySelector('[data-list-state],[data-discovery-page]')) {
+        target.querySelectorAll('[data-discovery-results],.focused-list-results,table,.pagination-nav,.empty-state').forEach(el => { el.hidden = true; });
+      } else {
+        [...target.children].filter(el=>el!==message).forEach(el => { el.hidden = true; });
+      }
       const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Retry results';
       const url = detail.xhr?.responseURL || detail.pathInfo?.finalRequestPath || detail.requestConfig?.path;
       // Use the exact attempted URL, including filters/sort/page, not stale rows.
@@ -491,6 +512,36 @@
         } else if (url) location.href = url;
       };
       message.append(retry);
+    }
+  }
+  async function saveListPreference(form) {
+    preferenceRequest?.abort();
+    const controller = new AbortController();
+    preferenceRequest = controller;
+    const notice = form.querySelector('[data-list-save-status]');
+    notice.textContent = 'Remembering filters…';
+    try {
+      const response = await nativeFetch(form.action, {
+        method:'POST', body:new URLSearchParams(new FormData(form)), signal:controller.signal,
+        credentials:'same-origin', cache:'no-store',
+        headers:{'X-CSRF-Token':form.querySelector('[name=csrf_token]').value,'X-List-State':'save'}
+      });
+      if (!form.isConnected || controller !== preferenceRequest) return;
+      if ([401,403].includes(response.status) || (response.redirected && new URL(response.url).pathname === '/login')) {
+        document.querySelectorAll('[data-discovery-results],.focused-list-results,table,.pagination-nav,.empty-state').forEach(el => { el.hidden = true; });
+        throw new Error('Filters could not be authorized. Previous results are unavailable. Review filters or sign in again.');
+      }
+      if (!response.ok) throw new Error('Filters were not saved. Previous results are unavailable. Reload to retry with these filters.');
+      const revision = response.headers.get('X-List-State-Revision');
+      if (revision) document.querySelectorAll('[data-list-save] [name=revision],[data-list-reset] [name=revision]').forEach(el => { el.value = revision; });
+      notice.textContent = 'Filters remembered';
+    } catch (error) {
+      if (error.name === 'AbortError' || !form.isConnected || controller !== preferenceRequest) return;
+      document.querySelectorAll('[data-discovery-results],.focused-list-results,table,.pagination-nav,.empty-state').forEach(el => { el.hidden = true; });
+      notice.textContent = error instanceof TypeError ? 'Filters were not saved. Previous results are unavailable. Check your connection and retry.' : error.message;
+      const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Retry filters';
+      retry.onclick = () => location.reload();
+      notice.append(retry);
     }
   }
   function summary(form, errors) {
@@ -595,7 +646,14 @@
   });
   document.addEventListener('htmx:beforeRequest', e => {
     if (e.detail.target === document.body) { rememberScroll(); changingPage = true; }
-    if (e.detail.requestConfig.verb === 'get') resultsState(e.detail, false);
+    if (e.detail.requestConfig.verb === 'get') {
+      if (isListRead(e.detail)) {
+        rememberScroll(); changingPage = true;
+        readRequests.set(e.detail.xhr, ++readSequence);
+        preferenceRequest?.abort();
+      }
+      resultsState(e.detail, false);
+    }
   });
   document.addEventListener('htmx:afterRequest', e => {
     const owner = actionOwner(e.detail.requestConfig?.elt || e.detail.elt);
@@ -610,6 +668,17 @@
   });
   document.addEventListener('htmx:beforeSwap', e => {
     const code = e.detail.xhr.status;
+    const read = e.detail.requestConfig?.verb === 'get';
+    if (readRequests.has(e.detail.xhr) && readRequests.get(e.detail.xhr) !== readSequence) { e.detail.shouldSwap = false; return; }
+    if (read && e.detail.xhr.responseURL && new URL(e.detail.xhr.responseURL).pathname === '/login') { e.detail.shouldSwap = false; purge(401); return; }
+    // A structured failed list response retains filters and Reset, never rows.
+    if (read && code >= 400 && e.detail.xhr.responseText.includes('data-discovery-page')) {
+      e.detail.shouldSwap = true; e.detail.isError = false;
+      e.detail.target = document.querySelector('.page-body') || e.detail.target;
+      e.detail.selectOverride = '.page-body';
+      e.detail.swapOverride = 'outerHTML';
+      return;
+    }
     if (code >= 400 && e.detail.requestConfig.verb === 'get' && ![401,403,404].includes(code)) resultsState(e.detail, true);
     const owner = actionOwner(e.detail.requestConfig.elt);
     const action = owners.get(owner);
@@ -633,7 +702,10 @@
     }
   });
   function transportError(e) {
-    if (e.detail.requestConfig?.verb === 'get') { resultsState(e.detail, true); return; }
+    if (e.detail.requestConfig?.verb === 'get') {
+      if (!readRequests.has(e.detail.xhr) || readRequests.get(e.detail.xhr) === readSequence) resultsState(e.detail, true);
+      return;
+    }
     const action = owners.get(actionOwner(e.detail.requestConfig?.elt || e.detail.elt));
     if (action) reconcile(action);
   }

@@ -47,25 +47,19 @@ func NewCustomerHandler(svc *services.CustomerService, contactSvc *services.Cust
 }
 
 func (h *CustomerHandler) List(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
+	query, valid := collectionQuery(w, r, "customers")
+	if !valid {
+		return
 	}
-	perPage := 25
-	if size, _ := strconv.Atoi(r.URL.Query().Get("per_page")); size == 50 || size == 100 {
-		perPage = size
-	}
-	sort := r.URL.Query().Get("sort")
-	if sort != "name_desc" && sort != "updated" {
-		sort = "name"
-	}
-	search := r.URL.Query().Get("search")
+	page, perPage := collectionPagination(query)
+	sort := query.Get("sort")
+	search := query.Get("search")
 	request, ok := authorization.FromContext(r.Context())
 	if !ok {
 		http.Error(w, "Forbidden", 403)
 		return
 	}
-	archived := r.URL.Query().Get("archived") == "1"
+	archived := query.Get("archived") == "1"
 	customers, total, err := request.Service.FindCustomers(r.Context(), request.Actor, search, archived, page, perPage, sort)
 	if err != nil {
 		authorizationError(w, r, err)

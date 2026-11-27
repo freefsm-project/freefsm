@@ -77,8 +77,12 @@ func (h *EstimateHandler) authorizeEstimate(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
-	perPage := 25
-	f, err := parseDocumentListFilter("estimate", r.URL.Query())
+	query, valid := collectionQuery(w, r, "estimates")
+	if !valid {
+		return
+	}
+	page, perPage := collectionPagination(query)
+	f, err := parseDocumentCollectionFilter("estimate", query)
 	if err != nil {
 		http.Error(w, "Invalid list filters", 400)
 		return
@@ -89,16 +93,15 @@ func (h *EstimateHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	auth, _ := authorization.FromContext(r.Context())
-	report, err := auth.Service.DocumentList(r.Context(), auth.Actor, "estimate", f, scope)
+	report, err := auth.Service.DocumentListPage(r.Context(), auth.Actor, "estimate", f, scope, page, perPage)
 	if err != nil {
 		authorizationError(w, r, err)
 		return
 	}
-	total := len(report.Rows)
-	page, start, end := reportPageBounds(r, total)
+	total := report.Total
 	statuses := h.statusesForSelect(r.Context())
-	rows := make([]templates.EstimateRow, 0, end-start)
-	for _, e := range report.Rows[start:end] {
+	rows := make([]templates.EstimateRow, 0, len(report.Rows))
+	for _, e := range report.Rows {
 		rows = append(rows, templates.EstimateRow{ID: e.ID, Title: e.Title, CustomerID: e.CustomerID, Customer: e.Customer, StatusID: e.StatusID, StatusName: e.StatusName, StatusColor: e.StatusColor, CreatedAt: displayDate(r.Context(), e.CreatedAt)})
 	}
 

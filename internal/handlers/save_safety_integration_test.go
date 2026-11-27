@@ -15,6 +15,7 @@ import (
 	"github.com/freefsm-project/freefsm/internal/config"
 	"github.com/freefsm-project/freefsm/internal/middleware"
 	"github.com/freefsm-project/freefsm/internal/services"
+	"golang.org/x/net/html"
 )
 
 func safetyRequest(router http.Handler, cookie *http.Cookie, method, path string, values url.Values, history string) *httptest.ResponseRecorder {
@@ -85,13 +86,22 @@ func TestSaveSafetyNativeInitialReadFailureHTTP(t *testing.T) {
 			if _, err := pool.Exec(ctx, `ALTER TABLE `+table+` RENAME TO safety_unavailable_records`); err != nil {
 				t.Fatal(err)
 			}
-			defer pool.Exec(ctx, `ALTER TABLE safety_unavailable_records RENAME TO `+table)
+			restored := false
+			defer func() {
+				if !restored {
+					pool.Exec(ctx, `ALTER TABLE safety_unavailable_records RENAME TO `+table)
+				}
+			}()
 			sort := "name_desc"
 			// Exercise the read fault with each shared selector's valid order,
 			// not an unrelated validation rejection before the database read.
 			switch table {
 			case "time_entries":
 				sort = "start_desc"
+			case "items":
+				sort = "name"
+			case "assets", "projects":
+				sort = "updated"
 			case "jobs":
 				sort = "schedule_desc"
 			case "estimates", "invoices":
@@ -102,12 +112,95 @@ func TestSaveSafetyNativeInitialReadFailureHTTP(t *testing.T) {
 			if w.Code != 503 || !strings.Contains(w.Body.String(), "Retry") {
 				t.Fatalf("native initial read failure: %d %.300s", w.Code, w.Body.String())
 			}
-			assertContains(t, w.Body.String(), "search=Keep+filter")
+			retry := nativeReadRetryURL(t, w.Body.String())
+			if retry.Path != "/"+strings.ReplaceAll(table, "_", "-") || retry.Query().Get("search") != "Keep filter" || retry.Query().Get("sort") != sort || retry.Query().Get("page") != "2" {
+				t.Fatalf("Retry loses submitted filters: %s", retry)
+			}
 			for _, leak := range []string{"SQLSTATE", "does not exist", "No customers", "No matches"} {
 				assertNotContains(t, w.Body.String(), leak)
 			}
+			if _, err := pool.Exec(ctx, `ALTER TABLE safety_unavailable_records RENAME TO `+table); err != nil {
+				t.Fatal(err)
+			}
+			restored = true
+			recovered := safetyRequest(router, cookie, "GET", retry.String(), nil, "")
+			if recovered.Code != http.StatusOK {
+				t.Fatalf("actual retained-state Retry did not recover: %d", recovered.Code)
+			}
 		})
 	}
+}
+
+// Follow the browser's effective GET target whether recovery uses a link or an
+// editable form. This verifies semantics without requiring a particular layout.
+func nativeReadRetryURL(t *testing.T, body string) *url.URL {
+	t.Helper()
+	doc, err := html.Parse(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	attr := func(node *html.Node, key string) string {
+		for _, attribute := range node.Attr {
+			if attribute.Key == key {
+				return attribute.Val
+			}
+		}
+		return ""
+	}
+	var text func(*html.Node) string
+	text = func(node *html.Node) string {
+		if node.Type == html.TextNode {
+			return node.Data
+		}
+		var value string
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			value += text(child)
+		}
+		return value
+	}
+	var found *url.URL
+	var visit func(*html.Node)
+	visit = func(node *html.Node) {
+		if found != nil {
+			return
+		}
+		if node.Data == "a" && strings.TrimSpace(text(node)) == "Retry" {
+			found, err = url.Parse(attr(node, "href"))
+			return
+		}
+		if node.Data == "form" && (attr(node, "method") == "" || strings.EqualFold(attr(node, "method"), "get")) {
+			values := url.Values{}
+			retry := false
+			var fields func(*html.Node)
+			fields = func(field *html.Node) {
+				if field.Data == "button" && strings.TrimSpace(text(field)) == "Retry" {
+					retry = true
+				}
+				if field.Data == "input" && attr(field, "name") != "" {
+					values.Add(attr(field, "name"), attr(field, "value"))
+				}
+				for child := field.FirstChild; child != nil; child = child.NextSibling {
+					fields(child)
+				}
+			}
+			fields(node)
+			if retry {
+				found, err = url.Parse(attr(node, "action"))
+				if err == nil {
+					found.RawQuery = values.Encode()
+				}
+				return
+			}
+		}
+		for child := node.FirstChild; child != nil; child = child.NextSibling {
+			visit(child)
+		}
+	}
+	visit(doc)
+	if err != nil || found == nil {
+		t.Fatalf("missing usable native Retry: %v", err)
+	}
+	return found
 }
 
 func TestSaveSafetyCommitPrincipalDependencyHTTP(t *testing.T) {

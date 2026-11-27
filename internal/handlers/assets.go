@@ -59,17 +59,17 @@ func NewAssetHandler(
 }
 
 func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
+	query, valid := collectionQuery(w, r, "assets")
+	if !valid {
+		return
 	}
-	perPage := 25
-	search := r.URL.Query().Get("search")
-	customerID, _ := strconv.ParseInt(r.URL.Query().Get("customer_id"), 10, 64)
-	assetTypeID, _ := strconv.ParseInt(r.URL.Query().Get("asset_type_id"), 10, 64)
-	assetStatusID, _ := strconv.ParseInt(r.URL.Query().Get("asset_status_id"), 10, 64)
+	page, perPage := collectionPagination(query)
+	search := query.Get("search")
+	customerID, _ := strconv.ParseInt(query.Get("customer_id"), 10, 64)
+	assetTypeID, _ := strconv.ParseInt(query.Get("asset_type_id"), 10, 64)
+	assetStatusID, _ := strconv.ParseInt(query.Get("asset_status_id"), 10, 64)
 
-	archived := r.URL.Query().Get("archived") == "1"
+	archived := query.Get("archived") == "1"
 	list := h.svc.List
 	if archived {
 		if !allRecordsPermission(r, "asset.archived.view") {
@@ -80,7 +80,7 @@ func (h *AssetHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	assets, total, err := list(r.Context(), search, customerID, assetTypeID, assetStatusID, page, perPage)
 	if err != nil {
-		http.Error(w, err.Error(), 500)
+		authorizationError(w, r, err)
 		return
 	}
 

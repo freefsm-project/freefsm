@@ -95,7 +95,12 @@ func creationLinks(ctx context.Context) []navigationLink {
 }
 
 func navigationSearch(ctx context.Context) bool {
-	return len(operationalLinks(ctx)) > 0
+	req, ok := authorization.FromContext(ctx)
+	if !ok {
+		return false
+	}
+	principal, err := req.Service.Principal(ctx, req.Actor)
+	return err == nil && authorization.DiscoveryAllowed(principal)
 }
 
 func navigationDocuments(ctx context.Context) bool {

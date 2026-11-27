@@ -193,5 +193,7 @@ func TestMasterItemArchivedListPersistedBrowser(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertNotContains(t, requestBody(t, router, cookie, "GET", path, 200), "Archived on")
-	assertContains(t, requestBody(t, router, cookie, "GET", "/items", 200), "Browser archived catalog")
+	// The archived search remains remembered independently of restoring a record.
+	assertNotContains(t, requestBody(t, router, cookie, "GET", "/items", 200), "Browser archived catalog")
+	assertContains(t, requestBody(t, router, cookie, "GET", "/items?archived=0&search=", 200), "Browser archived catalog")
 }

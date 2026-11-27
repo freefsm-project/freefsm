@@ -25,6 +25,9 @@ templ LeaseIndex(p authorization.LeaseList) {
 			<a class="navigation-link" href="/leases/new">Register Draft</a>
 		}
 		<form method="get" action="/leases">
+			for _, field := range listFormCarry(ctx,"facet","queue","lifecycle","customer","asset","premises","ending_from","ending_through","placement","billing","state","per_page") {
+				<input type="hidden" name={ field.Name } value={ field.Value }/>
+			}
 			if p.Billing {
 				<input type="hidden" name="facet" value="billing"/>
 			}
@@ -62,10 +65,13 @@ templ LeaseIndex(p authorization.LeaseList) {
 			</select></label><button>Apply</button>
 		</form>
 		<a class="navigation-link" href="/leases?reset=1">Reset filters</a>
-		if p.Total==0 {
+		<div data-discovery-results>
+		if len(p.Rows)==0 && p.Page>1 {
+			@ListEmptyState(p.Total,p.Page,false,"","")
+		} else if p.Total==0 {
 			if p.HasVisibleLeases {
 				<p>No Leases match these filters.</p>
-				<a class="navigation-link" href="/leases?reset=1">Clear filters</a>
+				<a class="navigation-link" href={ templ.URL(listRecoveryURL(ctx,true)) }>Clear filters</a>
 			} else {
 				<p>No Leases in this view yet.</p>
 			}
@@ -95,11 +101,12 @@ templ LeaseIndex(p authorization.LeaseList) {
 			}
 		</ul>
 		if p.Page>1 {
-			<a class="navigation-link" href={templ.URL(leaseListURL(p,p.Page-1))}>Previous</a>
+			<a class="navigation-link" href={templ.URL(listPageURL(ctx,leaseListURL(p,p.Page-1),p.Page-1))}>Previous</a>
 		}
 		if p.Page*p.PerPage<p.Total {
-			<a class="navigation-link" href={templ.URL(leaseListURL(p,p.Page+1))}>Next</a>
+			<a class="navigation-link" href={templ.URL(listPageURL(ctx,leaseListURL(p,p.Page+1),p.Page+1))}>Next</a>
 		}
+		</div>
 	}
 }
 

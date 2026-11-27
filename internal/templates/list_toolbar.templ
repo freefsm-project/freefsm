@@ -3,6 +3,9 @@ package templates
 import "fmt"
 
 templ ListToolbar(p ListToolbarData) {
+	if state, ok := currentListPresentation(ctx); ok {
+		@ListStateControls(state)
+	}
 	<div class="focused-list-toolbar"
 		x-data="{ search: $el.dataset.search }"
 		data-search={ p.Search }
@@ -26,16 +29,16 @@ templ ListToolbar(p ListToolbarData) {
 						hx-swap="outerHTML"
 						hx-push-url="true">
 						<input id={ listFilterSearchID(p.Target) } type="hidden" name="search" value={ p.Search } x-bind:value="search"/>
-						for _, field := range queryFields(p.Scope) {
+						for _, field := range listFilterScope(ctx,p) {
 							<input type="hidden" name={ field.Name } value={ field.Value }/>
 						}
 						{ children... }
 						<div class="focused-list-filter-actions">
 							<button type="submit">Apply</button>
-							<a href={ templ.URL(listURL(p.Action, listQuery(p.Search, nil, p.Scope), 1)) }
+							<a href={ templ.URL(listClearURL(ctx,p)) }
 								role="button" class="secondary outline"
-								hx-get={ templ.URL(listURL(p.Action, p.Scope, 1)) }
-								hx-include={ "#" + listFilterSearchID(p.Target) }
+								hx-get={ templ.URL(listClearRequestURL(ctx,p)) }
+								hx-include={ listClearInclude(ctx,p) }
 								hx-target={ p.Target }
 								hx-swap="outerHTML"
 								hx-push-url="true">Clear</a>
@@ -51,10 +54,7 @@ templ ListToolbar(p ListToolbarData) {
 			hx-swap="outerHTML"
 			hx-push-url="true"
 			hx-indicator="find .spinner">
-			for _, field := range queryFields(p.Scope) {
-				<input type="hidden" name={ field.Name } value={ field.Value }/>
-			}
-			for _, field := range queryFields(p.Filters) {
+			for _, field := range listSearchFields(ctx,p) {
 				<input type="hidden" name={ field.Name } value={ field.Value }/>
 			}
 			<label class="visually-hidden" for={ listSearchID(p.Target) }>Search</label>
